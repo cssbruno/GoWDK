@@ -1,44 +1,46 @@
-package gowdk
+package publicapi_test
 
 import (
 	"strings"
 	"testing"
+
+	"github.com/cssbruno/gowdk"
 )
 
 func TestNewAddonAndEnabledFeatures(t *testing.T) {
-	addon := NewAddon("custom", FeatureStatic, FeatureCSS)
+	addon := gowdk.NewAddon("custom", gowdk.FeatureStatic, gowdk.FeatureCSS)
 
 	if addon.Name() != "custom" {
 		t.Fatalf("unexpected addon name: %q", addon.Name())
 	}
 	features := addon.Features()
-	features[0] = FeatureSSR
+	features[0] = gowdk.FeatureSSR
 
-	enabled := EnabledFeatures(Config{Addons: []Addon{addon}})
-	if !enabled.Has(FeatureStatic) || !enabled.Has(FeatureCSS) {
+	enabled := gowdk.EnabledFeatures(gowdk.Config{Addons: []gowdk.Addon{addon}})
+	if !enabled.Has(gowdk.FeatureStatic) || !enabled.Has(gowdk.FeatureCSS) {
 		t.Fatalf("expected static and css features, got %#v", enabled)
 	}
-	if enabled.Has(FeatureSSR) {
+	if enabled.Has(gowdk.FeatureSSR) {
 		t.Fatalf("addon features should be copied defensively, got %#v", enabled)
 	}
 }
 
 func TestConfigHasFeature(t *testing.T) {
-	config := Config{Addons: []Addon{NewAddon("ssr", FeatureSSR)}}
+	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}
 
-	if !config.HasFeature(FeatureSSR) {
+	if !config.HasFeature(gowdk.FeatureSSR) {
 		t.Fatal("expected SSR feature")
 	}
-	if config.HasFeature(FeatureActions) {
+	if config.HasFeature(gowdk.FeatureActions) {
 		t.Fatal("did not expect actions feature")
 	}
 }
 
 func TestRenderConfigDefaultMode(t *testing.T) {
-	if got := (RenderConfig{}).DefaultMode(); got != Static {
+	if got := (gowdk.RenderConfig{}).DefaultMode(); got != gowdk.Static {
 		t.Fatalf("expected static default, got %q", got)
 	}
-	if got := (RenderConfig{Default: Action}).DefaultMode(); got != Action {
+	if got := (gowdk.RenderConfig{Default: gowdk.Action}).DefaultMode(); got != gowdk.Action {
 		t.Fatalf("expected configured default, got %q", got)
 	}
 }
@@ -46,18 +48,18 @@ func TestRenderConfigDefaultMode(t *testing.T) {
 func TestParseRenderModeAndModePredicates(t *testing.T) {
 	cases := []struct {
 		value       string
-		mode        RenderMode
+		mode        gowdk.RenderMode
 		requiresSSR bool
 		buildTime   bool
 	}{
-		{"static", Static, false, true},
-		{"action", Action, false, true},
-		{"hybrid", Hybrid, true, false},
-		{"ssr", SSR, true, false},
+		{"static", gowdk.Static, false, true},
+		{"action", gowdk.Action, false, true},
+		{"hybrid", gowdk.Hybrid, true, false},
+		{"ssr", gowdk.SSR, true, false},
 	}
 
 	for _, tc := range cases {
-		mode, err := ParseRenderMode(tc.value)
+		mode, err := gowdk.ParseRenderMode(tc.value)
 		if err != nil {
 			t.Fatalf("ParseRenderMode(%q): %v", tc.value, err)
 		}
@@ -72,7 +74,7 @@ func TestParseRenderModeAndModePredicates(t *testing.T) {
 		}
 	}
 
-	_, err := ParseRenderMode("server")
+	_, err := gowdk.ParseRenderMode("server")
 	if err == nil || !strings.Contains(err.Error(), `unknown render mode "server"`) {
 		t.Fatalf("expected unknown mode error, got %v", err)
 	}

@@ -55,7 +55,15 @@ When opened inside the GOWDK source repository, the extension runs:
 go run ./cmd/gowdk <command>
 ```
 
-In normal use, set `gowdk.cliPath` to an installed `gowdk` binary or keep it empty to use `gowdk` from `PATH`.
+When opened inside a GOWDK app module whose `go.mod` requires
+`github.com/cssbruno/gowdk`, the extension runs:
+
+```sh
+go run github.com/cssbruno/gowdk/cmd/gowdk <command>
+```
+
+In other workspaces, set `gowdk.cliPath` to an installed `gowdk` binary or keep
+it empty to use `gowdk` from `PATH`.
 
 Check the extension entrypoint syntax with:
 
@@ -125,3 +133,11 @@ Do not commit Marketplace tokens or generated `.vsix` files.
 3. Run `node --test editors/vscode/*.test.js`.
 4. Package the extension with `vsce package`.
 5. Publish after the repository release artifacts are available.
+
+GitHub Actions can publish the extension through
+`.github/workflows/vscode-extension-publish.yml`. Configure the repository
+secret `VSCE_PAT` with a Visual Studio Marketplace Personal Access Token that
+has Marketplace Manage scope, then run the `Publish VS Code Extension` workflow
+manually or publish a GitHub release. The workflow verifies the extension,
+packages a `.vsix`, uploads the package as a workflow artifact, and publishes
+with `vsce publish`.

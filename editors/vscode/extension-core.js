@@ -1,5 +1,7 @@
 const path = require('path');
 
+const GOWDK_MODULE_PATH = 'github.com/cssbruno/gowdk';
+
 const SEMANTIC_TOKEN_TYPES = [
   'namespace',
   'keyword',
@@ -64,6 +66,19 @@ function projectCommandArgs(command, options = {}) {
     args.push(file);
   }
   return args;
+}
+
+function goModRequiresGOWDK(source) {
+  return String(source || '').split(/\r?\n/).some((line) => {
+    const text = line.replace(/\/\/.*$/, '').trim();
+    return text === GOWDK_MODULE_PATH ||
+      text.startsWith(`${GOWDK_MODULE_PATH} `) ||
+      text.startsWith(`require ${GOWDK_MODULE_PATH} `);
+  });
+}
+
+function gowdkModuleRunArgs(args) {
+  return ['run', `${GOWDK_MODULE_PATH}/cmd/gowdk`, ...args];
 }
 
 function groupDiagnosticsByFile(diagnostics) {
@@ -799,6 +814,7 @@ function escapeMarkdown(value) {
 }
 
 module.exports = {
+  GOWDK_MODULE_PATH,
   SEMANTIC_TOKEN_TYPES,
   completionEntries,
   completionContext,
@@ -810,6 +826,8 @@ module.exports = {
   diagnosticRange,
   diagnosticSeverity,
   escapeHTML,
+  goModRequiresGOWDK,
+  gowdkModuleRunArgs,
   groupDiagnosticsByFile,
   hoverMarkdown,
   parseDiagnostics,

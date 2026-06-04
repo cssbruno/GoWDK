@@ -679,7 +679,18 @@ function toolInvocation(args, document) {
   if (cwd && fs.existsSync(path.join(cwd, 'cmd', 'gowdk')) && fs.existsSync(path.join(cwd, 'go.mod'))) {
     return { command: 'go', args: ['run', './cmd/gowdk', ...args], cwd };
   }
+  if (cwd && workspaceRequiresGOWDK(cwd)) {
+    return { command: 'go', args: core.gowdkModuleRunArgs(args), cwd };
+  }
   return { command: 'gowdk', args, cwd };
+}
+
+function workspaceRequiresGOWDK(cwd) {
+  try {
+    return core.goModRequiresGOWDK(fs.readFileSync(path.join(cwd, 'go.mod'), 'utf8'));
+  } catch (_error) {
+    return false;
+  }
 }
 
 function workspaceRoot(document) {

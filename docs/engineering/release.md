@@ -1,8 +1,9 @@
 # Release
 
-GOWDK is currently pre-release compiler scaffolding. Release automation lives in
-`.github/workflows/release.yml` and creates draft releases from `v*` tags or a
-manual workflow dispatch.
+GOWDK is currently pre-release compiler scaffolding. Release packaging
+automation lives in `.github/workflows/release.yml` and creates draft releases
+from `v*` tags or a manual workflow dispatch. VS Code Marketplace publishing
+lives in `.github/workflows/vscode-extension-publish.yml`.
 
 ## Release Readiness
 
@@ -13,7 +14,8 @@ Before tagging a public release, confirm:
 - Release artifact list is still accurate.
 - GitHub artifact attestations are enabled for release artifacts.
 - Generated-output compatibility notes are documented when public releases begin.
-- VS Code extension package metadata is current.
+- VS Code extension package metadata and version are current.
+- The `VSCE_PAT` GitHub secret is present before publishing the extension.
 - Security advisory process is current.
 
 ## Current Manual Gates
@@ -50,7 +52,25 @@ gh attestation verify <artifact> -R <owner>/<repo>
 
 ## Extension Publishing
 
-The release workflow packages the extension but leaves Marketplace publication
-manual until publisher ownership and token storage are decided. Publish from
-`editors/vscode/` with `vsce publish` after the draft repository release is
-validated.
+The release workflow packages the extension into `gowdk-vscode-<version>.vsix`.
+Marketplace publishing is handled by the `Publish VS Code Extension` workflow.
+It can be run manually or by publishing a GitHub release.
+
+Before using the workflow:
+
+1. Create or confirm the Visual Studio Marketplace publisher that matches
+   `editors/vscode/package.json`.
+2. Create an Azure DevOps Personal Access Token with Marketplace Manage scope.
+3. Add the token as the repository secret `VSCE_PAT`.
+4. Update `editors/vscode/package.json` to a version that does not already exist
+   on the Marketplace.
+
+Manual publish:
+
+```sh
+gh workflow run vscode-extension-publish.yml
+```
+
+The workflow verifies the extension, packages a `.vsix`, uploads that package as
+a workflow artifact, then runs `vsce publish --pat "$VSCE_PAT"`. Use the
+workflow's `pre_release` input for Marketplace pre-release publishing.

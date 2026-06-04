@@ -95,6 +95,34 @@ test('projectCommandArgs builds config-aware CLI arguments', () => {
   }), ['sitemap', '/workspace/home.page.gwdk']);
 });
 
+test('goModRequiresGOWDK detects GOWDK app workspaces', () => {
+  assert.equal(core.goModRequiresGOWDK(`module example.com/app
+
+go 1.26
+
+require github.com/cssbruno/gowdk v0.0.0
+`), true);
+  assert.equal(core.goModRequiresGOWDK(`module example.com/app
+
+require (
+  github.com/cssbruno/gowdk v0.0.0
+)
+`), true);
+  assert.equal(core.goModRequiresGOWDK(`module example.com/app
+
+require github.com/cssbruno/other v0.0.0
+`), false);
+});
+
+test('gowdkModuleRunArgs builds a go run invocation for app workspaces', () => {
+  assert.deepEqual(core.gowdkModuleRunArgs(['check', '--json']), [
+    'run',
+    'github.com/cssbruno/gowdk/cmd/gowdk',
+    'check',
+    '--json'
+  ]);
+});
+
 test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
   const html = core.siteMapHTML({
     pages: [

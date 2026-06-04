@@ -1,0 +1,83 @@
+name: Publish VS Code Extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      pre_release:
+        description: Publish as a VS Code Marketplace pre-release
+        required: false
+        type: boolean
+        default: false
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vscode-extension-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish extension
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: editors/vscode
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Verify extension
+        run: |
+          node --check extension.js
+          node --test *.test.js
+
+      - name: Package extension
+        run: |
+          rm -f *.vsix
+          vsce package \
+            --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} \
+            --baseImagesUrl https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gowdk-vscode-vsix
+          path: editors/vscode/*.vsix
+          if-no-files-found: error
+
+      - name: Publish to Visual Studio Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          PRE_RELEASE: ${{ github.event_name == 'release' && github.event.release.prerelease || inputs.pre_release || false }}
+        run: |
+          if [ -z "${VSCE_PAT:-}" ]; then
+            echo "Missing VSCE_PAT secret. Create a Visual Studio Marketplace PAT with Marketplace Manage scope and add it as a repository or environment secret."
+            exit 1
+          fi
+
+          publish_args=(
+            publish
+            --pat "$VSCE_PAT"
+            --baseContentUrl "https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}"
+            --baseImagesUrl "https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}"
+          )
+
+          if [ "$PRE_RELEASE" = "true" ]; then
+            publish_args+=(--pre-release)
+          fi
+
+          vsce "${publish_args[@]}"

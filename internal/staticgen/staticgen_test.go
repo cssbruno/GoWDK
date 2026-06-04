@@ -746,6 +746,33 @@ func TestBuildRejectsUndeclaredRouteParamReferenceBeforeWriting(t *testing.T) {
 	}
 }
 
+func TestBuildRejectsRouteParamInDangerousAttributeBeforeWriting(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "blog.post",
+		Route: "/blog/{slug}",
+		Paths: true,
+		Blocks: manifest.Blocks{
+			PathsBody: `=> { slug: "alert(1)" }`,
+			View:      true,
+			ViewBody:  `<img src="x" onerror="{param(\"slug\")}" />`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected dangerous route param attribute error")
+	}
+	if !strings.Contains(err.Error(), `route param interpolation is not allowed in "onerror" attributes`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if entries, err := os.ReadDir(outputDir); err != nil {
+		t.Fatal(err)
+	} else if len(entries) != 0 {
+		t.Fatalf("expected no partial output, got %#v", entries)
+	}
+}
+
 func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 	outputDir := t.TempDir()
 	processor := &recordingCSSProcessor{}
@@ -1296,6 +1323,29 @@ func TestSSRArtifactsRenderDynamicSSRPageWithPlaceholders(t *testing.T) {
 	}
 	if !strings.Contains(artifact.HTML, artifact.Replacements[0].Placeholder) {
 		t.Fatalf("expected SSR HTML placeholder %q in %s", artifact.Replacements[0].Placeholder, artifact.HTML)
+	}
+}
+
+func TestSSRArtifactsRejectRouteParamInDangerousAttribute(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:     "blog.post",
+			Route:  "/blog/{slug}",
+			Render: gowdk.SSR,
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<img src="x" onerror="{param(\"slug\")}" />`,
+			},
+		}},
+	}
+
+	_, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected dangerous route param attribute error")
+	}
+	if !strings.Contains(err.Error(), `route param interpolation is not allowed in "onerror" attributes`) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

@@ -161,6 +161,41 @@ func TestRenderWithDataInterpolatesRouteParams(t *testing.T) {
 	}
 }
 
+func TestRenderWithDataRejectsRouteParamsInDangerousAttributes(t *testing.T) {
+	for _, source := range []string{
+		`<img src="x" onerror="{param(\"slug\")}" />`,
+		`<a href="/blog/{param(\"slug\")}">Post</a>`,
+		`<iframe srcdoc="{param(\"slug\")}"></iframe>`,
+		`<main style="color: {param(\"slug\")}">Post</main>`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			_, err := RenderWithData(source, nil, map[string]string{"slug": `alert(1)`})
+			if err == nil {
+				t.Fatal("expected dangerous route param attribute error")
+			}
+			if !strings.Contains(err.Error(), "route param interpolation is not allowed") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestRenderWithDataRejectsRouteParamPassedToDangerousComponentAttribute(t *testing.T) {
+	_, err := RenderWithData(`<Avatar handler="{param(\"slug\")}" />`, map[string]Component{
+		"Avatar": {
+			Name:  "Avatar",
+			Props: []string{"handler"},
+			Body:  `<img src="x" onerror="{handler}" />`,
+		},
+	}, map[string]string{"slug": `alert(1)`})
+	if err == nil {
+		t.Fatal("expected dangerous route param component prop error")
+	}
+	if !strings.Contains(err.Error(), `route param interpolation is not allowed in "onerror" attributes`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRenderWithDataRejectsUnknownRouteParam(t *testing.T) {
 	_, err := RenderWithData(`<main>{param("slug")}</main>`, nil, nil)
 	if err == nil {

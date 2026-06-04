@@ -58,9 +58,12 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		if directives.Route != "" && (attr.Name == "method" || attr.Name == "action") {
 			return fmt.Errorf("form with g:post must not declare %q", attr.Name)
 		}
-		value, err := interpolate(ctx, attr.Value)
+		value, tainted, err := interpolateValue(ctx, attr.Value)
 		if err != nil {
 			return err
+		}
+		if tainted && unsafeRouteParamAttr(attr.Name) {
+			return fmt.Errorf("route param interpolation is not allowed in %q attributes", attr.Name)
 		}
 		out.WriteByte(' ')
 		out.WriteString(attr.Name)
@@ -207,15 +210,19 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 	}
 
 	values := map[string]string{}
+	taintedValues := map[string]bool{}
 	for _, attr := range node.Attrs {
 		if attr.Boolean {
 			return fmt.Errorf("component %s prop %q requires a string value", node.Name, attr.Name)
 		}
-		value, err := interpolate(ctx, attr.Value)
+		value, tainted, err := interpolateValue(ctx, attr.Value)
 		if err != nil {
 			return err
 		}
 		values[attr.Name] = value
+		if tainted {
+			taintedValues[attr.Name] = true
+		}
 	}
 	for _, prop := range component.Props {
 		if _, ok := values[prop]; !ok {
@@ -235,6 +242,7 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 	childCtx := renderContext{
 		components: ctx.components,
 		values:     values,
+		tainted:    taintedValues,
 		actions:    ctx.actions,
 		stack:      cloneStack(ctx.stack),
 		slotHTML:   slotHTML,
@@ -728,6 +736,7 @@ func isStaticAssetReference(value string) bool {
 type renderContext struct {
 	components map[string]Component
 	values     map[string]string
+	tainted    map[string]bool
 	actions    map[string]string
 	stack      map[string]bool
 	slotHTML   string
@@ -1145,7 +1154,7 @@ func isShorthandPart(r rune) bool {
 }
 
 func renderText(ctx *renderContext, out *strings.Builder, value string) error {
-	text, err := interpolate(ctx, value)
+	text, _, err := interpolateValue(ctx, value)
 	if err != nil {
 		return err
 	}
@@ -1154,41 +1163,66 @@ func renderText(ctx *renderContext, out *strings.Builder, value string) error {
 }
 
 func interpolate(ctx *renderContext, value string) (string, error) {
+	resolved, _, err := interpolateValue(ctx, value)
+	return resolved, err
+}
+
+func interpolateValue(ctx *renderContext, value string) (string, bool, error) {
 	if !strings.Contains(value, "{") {
-		return value, nil
+		return value, false, nil
 	}
 	var out strings.Builder
+	tainted := false
 	for {
 		start := strings.Index(value, "{")
 		if start < 0 {
 			out.WriteString(value)
-			return out.String(), nil
+			return out.String(), tainted, nil
 		}
 		end := strings.Index(value[start:], "}")
 		if end < 0 {
-			return "", fmt.Errorf("unterminated interpolation")
+			return "", false, fmt.Errorf("unterminated interpolation")
 		}
 		end += start
 		out.WriteString(value[:start])
 		name := strings.TrimSpace(value[start+1 : end])
 		if name == "" {
-			return "", fmt.Errorf("empty interpolation")
+			return "", false, fmt.Errorf("empty interpolation")
 		}
 		if param, ok := routeParamExpression(name); ok {
 			resolved, ok := ctx.values[param]
 			if !ok {
-				return "", fmt.Errorf("unknown route param %q", param)
+				return "", false, fmt.Errorf("unknown route param %q", param)
 			}
+			tainted = true
 			out.WriteString(resolved)
 			value = value[end+1:]
 			continue
 		}
 		resolved, ok := ctx.values[name]
 		if !ok {
-			return "", fmt.Errorf("unknown interpolation %q", name)
+			return "", false, fmt.Errorf("unknown interpolation %q", name)
+		}
+		if ctx.tainted[name] {
+			tainted = true
 		}
 		out.WriteString(resolved)
 		value = value[end+1:]
+	}
+}
+
+func unsafeRouteParamAttr(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if strings.HasPrefix(name, "on") && len(name) > 2 {
+		return true
+	}
+	switch name {
+	case "style", "srcdoc":
+		return true
+	case "href", "src", "srcset", "action", "formaction", "poster", "cite", "data", "longdesc", "manifest", "xlink:href":
+		return true
+	default:
+		return false
 	}
 }
 

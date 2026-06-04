@@ -1,0 +1,16 @@
+@page dashboard
+@route "/dashboard"
+@layout root, dashboard
+@render ssr
+@guard auth.required
+
+load {
+  user := auth.User(ctx)?
+  => {user}
+}
+
+view {
+  <Page title="Dashboard">
+    <h1>Dashboard</h1>
+  </Page>
+}

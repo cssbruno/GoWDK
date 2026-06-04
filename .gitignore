@@ -1,0 +1,45 @@
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Logs and local runtime files
+*.log
+logs/
+tmp/
+temp/
+.cache/
+
+# LLM local/session files
+.codex-log/
+.llm/local/
+
+# Dependencies
+node_modules/
+vendor/
+.venv/
+venv/
+__pycache__/
+
+# Build and coverage output
+/gowdk
+dist/
+build/
+out/
+coverage/
+*.vsix
+.next/
+.nuxt/
+target/

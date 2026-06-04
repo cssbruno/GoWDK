@@ -1,0 +1,13 @@
+@page home
+@route "/"
+@layout root
+
+build {
+  => { title: "GOWDK", tagline: "Portable Go web compiler" }
+}
+
+view {
+  <main>
+    <Hero title="{title}" tagline="{tagline}" />
+  </main>
+}

@@ -1,0 +1,145 @@
+{
+  "name": "gowdk-vscode",
+  "displayName": "GOWDK",
+  "description": "Language tools for portable .gwdk files.",
+  "version": "0.1.0",
+  "publisher": "gowdk",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters"
+  ],
+  "activationEvents": [
+    "onLanguage:gwdk",
+    "onCommand:gowdk.checkCurrentFile",
+    "onCommand:gowdk.showManifest",
+    "onCommand:gowdk.showTokens",
+    "onCommand:gowdk.showSiteMap",
+    "onCommand:gowdk.refreshSiteMapTree",
+    "onCommand:gowdk.openPageFile",
+    "onCommand:gowdk.movePageFile",
+    "onView:gowdk.siteMapTree"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "gwdk",
+        "aliases": [
+          "GOWDK",
+          "gwdk"
+        ],
+        "extensions": [
+          ".gwdk"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "gwdk",
+        "scopeName": "source.gwdk",
+        "path": "./syntaxes/gwdk.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "gowdk.checkCurrentFile",
+        "title": "GOWDK: Check Current File"
+      },
+      {
+        "command": "gowdk.showManifest",
+        "title": "GOWDK: Show Manifest"
+      },
+      {
+        "command": "gowdk.showTokens",
+        "title": "GOWDK: Show Tokens"
+      },
+      {
+        "command": "gowdk.showSiteMap",
+        "title": "GOWDK: Show Site Map"
+      },
+      {
+        "command": "gowdk.refreshSiteMapTree",
+        "title": "GOWDK: Refresh Site Map"
+      },
+      {
+        "command": "gowdk.openPageFile",
+        "title": "GOWDK: Open Page File"
+      },
+      {
+        "command": "gowdk.movePageFile",
+        "title": "GOWDK: Move Page File"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "gowdk.siteMapTree",
+          "name": "GOWDK Site Map",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "gowdk.refreshSiteMapTree",
+          "when": "view == gowdk.siteMapTree",
+          "group": "navigation"
+        },
+        {
+          "command": "gowdk.showSiteMap",
+          "when": "view == gowdk.siteMapTree",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gowdk.openPageFile",
+          "when": "view == gowdk.siteMapTree && viewItem == gwdkPage",
+          "group": "inline"
+        },
+        {
+          "command": "gowdk.movePageFile",
+          "when": "view == gowdk.siteMapTree && viewItem == gwdkPage",
+          "group": "inline"
+        }
+      ]
+    },
+    "snippets": [
+      {
+        "language": "gwdk",
+        "path": "./snippets/gwdk.json"
+      }
+    ],
+    "configuration": {
+      "title": "GOWDK",
+      "properties": {
+        "gowdk.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the gowdk CLI. When empty, the extension uses `go run ./cmd/gowdk` inside source workspaces and falls back to `gowdk` on PATH."
+        },
+        "gowdk.enableDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run GOWDK diagnostics for .gwdk files."
+        },
+        "gowdk.enableFormatting": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable document formatting through `gowdk fmt`."
+        },
+        "gowdk.enableSsrAddon": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --ssr to check/manifest commands so SSR pages validate as if the SSR addon is enabled."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+@page newsletter
+@route "/newsletter"
+@layout root
+@render static
+
+act subscribe {
+  input := form SubscribeInput
+  valid(input)?
+  -> "/newsletter?ok=1"
+}
+
+view {
+  <form g:post={subscribe}>
+    <Input name="email" label="Email" />
+    <Button>Subscribe</Button>
+  </form>
+}

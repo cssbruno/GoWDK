@@ -1,0 +1,18 @@
+@page signup
+@route "/signup"
+@layout root
+@render action
+
+act submit {
+  input := form SignupInput
+  valid(input)?
+  -> "/signup?ok=1"
+}
+
+view {
+  <form g:post={submit}>
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" required />
+    <button type="submit">Sign up</button>
+  </form>
+}

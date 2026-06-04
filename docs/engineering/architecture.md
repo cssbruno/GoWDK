@@ -1,0 +1,192 @@
+# Architecture
+
+## Current Status
+
+GOWDK is compile-first. The current repository discovers `.gwdk` files, parses page metadata and component files, validates render-mode and duplicate identity rules, emits manifest/site-map JSON, plans route bindings, can emit static HTML plus static route and asset manifests for simple build-time pages, the first literal dynamic path subset, and literal build data through `gowdk build --out`, can generate an embedded static app through `gowdk build --app`, can compile that app through `--bin`, and can serve generated static output locally through `gowdk serve`.
+
+It does not yet emit real user Go type-bound action decoders, user action
+logic, CSRF, API handlers, partial fragment handlers, SSR output, or general
+request-time route handlers in the generated binary.
+
+## System Context
+
+GOWDK users write portable `.gwdk` pages and components. In the target architecture, the compiler discovers those files, builds a manifest, validates render rules, emits static assets and Go handlers, and packages output for static serving or one-binary deploy.
+
+The target core output can include static pages, components, typed actions, API handlers, server fragment handlers, embedded assets, and a Go binary. CSS tooling, including Tailwind, belongs in future plugins rather than the initial core. SSR is enabled only when `ssr.Addon()` is present and a page opts into request-time rendering.
+
+## Components
+
+| Component | Responsibility | Owner | Notes |
+| --- | --- | --- | --- |
+| `cmd/gowdk` | CLI entrypoint. | Core | Exposes `version`, `tokens`, `fmt`, `check`, `manifest`, `sitemap`, `build`, `serve`, and `lsp`. `build` can emit static files, generated embedded app source, and an optional binary. |
+| `gowdk` root package | Public config, render modes, addon registration, and CSS plugin contracts. | Core | Includes `Config`, `RenderMode`, `Addon`, and `CSSProcessor`. |
+| `internal/discover` | Find portable `.gwdk` files from include/exclude patterns. | Compiler | Recursive glob discovery implemented. |
+| `internal/parser` | Parse `.gwdk` page/component annotations and top-level block declarations. | Compiler | Minimal metadata parser implemented, including the first action body subset. |
+| `internal/view` | Parse and render the first static `view {}` markup subset. | Compiler | Lowercase HTML elements, static attributes, escaped text/attribute interpolation, self-closing component calls, and prop interpolation implemented. |
+| `internal/lang` | Language tooling for lexing, diagnostics, formatting, checking, and manifest output. | Tools | Initial CLI-backed tools implemented. |
+| `internal/lsp` | Language Server Protocol bridge for diagnostics, formatting, and completions. | Tools | Dependency-free stdio server implemented. |
+| `internal/manifest` | Normalize discovered pages, routes, blocks, layouts, render modes, paths, and guards. | Compiler | Initial page model implemented. Public manifest JSON is currently narrower than the internal model. |
+| `internal/project` | Load project-level config, module source groups, and future source roots. | Compiler | Static `gowdk.config.go` subset implemented for build discovery and output. |
+| `internal/compiler` | Validate manifests and coordinate compilation. | Compiler | Render-mode validation implemented. |
+| `internal/codegen` | Emit route behavior plans and future Go, HTML, CSS, and asset artifacts. | Compiler | Route-binding planning implemented; artifact emission is planned. |
+| `internal/staticgen` | Emit route-derived static HTML files for build-time pages. | Compiler | Initial simple page, literal build data, literal dynamic path expansion, component expansion, route manifest emission, and asset manifest emission implemented. |
+| `internal/appgen` | Emit dependency-free generated Go app source for embedded static output. | Compiler | Generates `go.mod`, `main.go`, copied static assets, first-slice POST redirect action handlers and form input decoders, and can invoke `go build` for the generated app. |
+| `internal/clientrt` | Emit client runtime for partial updates. | Runtime | Boundary exists; implementation pending. |
+| `runtime/render` | Core rendering engine used by static, actions, partials, and SSR. | Runtime | Initial renderer implemented. |
+| `runtime/component` | Generated component runtime contract. | Runtime | Initial component interface implemented. |
+| `runtime/html` | HTML escaping, attributes, and class helpers. | Runtime | Initial helpers implemented. |
+| `runtime/form` | Form value normalization and generated decoder support. | Runtime | Values and first-slice allowlist decoding helpers implemented. |
+| `runtime/validation` | Validation result and errors for actions. | Runtime | Initial result model implemented. |
+| `runtime/response` | HTML, redirect, fragment, and JSON response envelopes. | Runtime | Initial response model implemented. |
+| `runtime/asset` | Asset manifest resolution. | Runtime | Initial manifest helper implemented. |
+| `addons/static` | Build-time prerendering. | Addon | Capability boundary implemented; prerender execution is planned. |
+| `addons/actions` | Typed backend actions, form decoding, CSRF. | Addon | Capability boundary implemented; generated action execution is planned. |
+| `addons/partial` | Server fragments and swaps. | Addon | Capability boundary implemented; fragment execution is planned. |
+| `addons/ssr` | Request-time full-page rendering. | Addon | Capability boundary implemented; SSR router/load execution is planned. |
+| `addons/api` | Generated API handlers. | Addon | Capability boundary implemented; handler generation is planned. |
+| `addons/embed` | Embedded assets and one-binary serving. | Addon | Capability boundary implemented; generated embedding is planned. |
+| `addons/css` | Compile-time CSS processing. | Addon | CSS feature registration and processor aliases implemented; real CSS tools are future plugins. |
+
+## Data Model
+
+The internal compiler manifest includes page identity, source path, route, render mode, layouts, guard metadata, whether static paths exist, captured `paths {}` and `build {}` source text, and declared blocks. Current public manifest JSON is intentionally smaller: it includes route, effective render mode, layouts, paths presence, and guards. Site-map JSON includes source paths, dynamic params, and block presence for editor tooling.
+
+Generated static binaries embed this manifest with the rest of the static output,
+but request-time generated route handlers do not consume it yet.
+
+Example manifest shape:
+
+```json
+{
+  "pages": {
+    "home": {
+      "route": "/",
+      "render": "static",
+      "layouts": ["root"]
+    },
+    "blog.post": {
+      "route": "/blog/{slug}",
+      "render": "static",
+      "paths": true,
+      "layouts": ["root", "blog"]
+    },
+    "dashboard": {
+      "route": "/dashboard",
+      "render": "ssr",
+      "layouts": ["root", "dashboard"],
+      "guard": ["auth.required"]
+    }
+  }
+}
+```
+
+## API And Integration Contracts
+
+Application config:
+
+```go
+var Config = gowdk.Config{
+	AppName: "Clinic",
+	Source: gowdk.SourceConfig{
+		Include: []string{
+			"src/**/*.gwdk",
+		},
+	},
+	Modules: []gowdk.ModuleConfig{
+		{Name: "frontend", Type: "frontend"},
+		{
+			Name: "admin",
+			Type: "admin-ui",
+			Source: gowdk.SourceConfig{
+				Include: []string{"frontends/admin/**/*.gwdk"},
+			},
+		},
+		{
+			Name: "backendmicroservice",
+			Type: "backendmicroservice",
+			Source: gowdk.SourceConfig{
+				Include: []string{"services/backend/**/*.gwdk"},
+			},
+		},
+	},
+	Render: gowdk.RenderConfig{
+		Default: gowdk.Static,
+	},
+	Build: gowdk.BuildConfig{
+		Output: "dist/clinic",
+		Assets: gowdk.Embed,
+	},
+	Addons: []gowdk.Addon{
+		static.Addon(),
+		actions.Addon(),
+		partial.Addon(),
+		embed.Addon(),
+		ssr.Addon(),
+	},
+}
+```
+
+Block semantics:
+
+- `paths {}` runs at build time and declares dynamic static routes.
+- `build {}` runs at build time and feeds static rendering.
+- `load {}` runs at request time and requires SSR or hybrid rendering.
+- `act {}` runs POST/action requests.
+- `api {}` runs API requests.
+- `view {}` renders markup.
+
+Target generated route behavior:
+
+```go
+mux.HandleFunc("GET /", embedded.Static("pages/home.html"))
+mux.HandleFunc("POST /newsletter", actions.NewsletterSubscribe)
+mux.HandleFunc("GET /dashboard", ssr.RenderDashboard)
+mux.HandleFunc("GET /api/patients", api.PatientsIndex)
+```
+
+The current code can plan route bindings for these cases and can emit static HTML files, CSS assets from compile-time processors, stylesheet links, `gowdk-routes.json`, and `gowdk-assets.json` for simple build-time pages with explicit or discovered component files. It expands the first literal `paths {}` subset for dynamic static routes and binds those route params plus literal `build {}` data into the current static `view {}` interpolation context. It parses the first action body subset and can generate static POST redirect handlers plus first-slice form input decoder and required-field validation wrappers for concrete page routes. `gowdk build --app` can generate a static embedded Go app from that output, and `--bin` can compile it. `gowdk serve` can serve the generated static directory locally. It does not bind route params into `build {}` expressions or emit real user Go type-bound action decoders, user action logic, API/fragment/SSR handlers yet. Only pages marked `@render ssr` or future accepted hybrid request-time branches should use request-time full-page rendering.
+
+Guard annotations are metadata-only today. `@guard auth.required` is parsed and exposed in manifest/site-map output, but it does not enforce authentication or authorization until SSR/action/API guard contracts and generated execution are implemented.
+
+Language tool commands:
+
+```sh
+gowdk tokens <file.gwdk>
+gowdk fmt [--write] <file.gwdk>
+gowdk check [--ssr] <file.gwdk>
+gowdk manifest [--ssr] <file.gwdk>
+gowdk sitemap [--ssr] <files>
+gowdk build [--config <file>] [--ssr] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...]
+gowdk serve --dir <dir> [--addr <addr>]
+gowdk lsp [--ssr]
+```
+
+When `gowdk build` receives no explicit files, it loads literal root source and module source include/exclude settings from `gowdk.config.go` when present. A module with a name but no explicit include defaults to `<module-name>/**/*.gwdk`. `--module <name>` limits discovery to selected configured modules so user-owned deployment code can build only the modules it needs. Without configured root or module includes it discovers `**/*.gwdk` under the current working directory. Discovery excludes `.git`, `vendor`, `node_modules`, configured source excludes, and the selected output directory. Module type is user-defined metadata today; future generated-output work can use it to separate frontend, backend, and service artifacts. The VS Code extension uses `gowdk sitemap` to render a visual route map. Because routes are declared inside `.gwdk` files, the visualizer can move a page file without changing the page route.
+
+LSP-capable editors can use `gowdk lsp` over stdio for live buffer diagnostics, document formatting, and keyword completions. The first LSP version uses full-document synchronization and validates one open buffer at a time with the same parser and compiler rules as `gowdk check`.
+
+## Key Quality Attributes
+
+- Scalability: static output should serve without request-time page rendering.
+- Reliability: invalid render modes and missing addon requirements must fail at compile time.
+- Security: actions must own form decoding, validation, CSRF, and redirect behavior.
+- Observability: manifests and site maps should explain route behavior and render mode.
+- Maintainability: runtime render core stays separate from `addons/ssr`.
+
+## Diagrams
+
+```mermaid
+flowchart LR
+  Source[.gwdk files] --> Discover[internal/discover]
+  Discover --> Parser[internal/parser]
+  Parser --> Manifest[internal/manifest]
+  Manifest --> Compiler[internal/compiler]
+  Compiler --> Codegen[internal/codegen]
+  Codegen -. planned .-> Static[static pages/assets]
+  Codegen -. planned .-> Binary[one Go binary]
+
+  Render[runtime/render] --> StaticAddon[addons/static]
+  Render --> ActionsAddon[addons/actions]
+  Render --> PartialAddon[addons/partial]
+  Render --> SSRAddon[addons/ssr]
+```

@@ -1,0 +1,67 @@
+{
+  "Static page": {
+    "prefix": "page",
+    "body": [
+      "@page ${1:home}",
+      "@route \"${2:/}\"",
+      "@layout ${3:root}",
+      "",
+      "view {",
+      "  ${0:<h1>GOWDK</h1>}",
+      "}"
+    ],
+    "description": "Create a static GOWDK page"
+  },
+  "Static dynamic page with paths": {
+    "prefix": "paths",
+    "body": [
+      "@page ${1:blog.post}",
+      "@route \"${2:/blog/{slug}}\"",
+      "@layout ${3:root, blog}",
+      "@render static",
+      "",
+      "paths {",
+      "  ${4:path(slug: \"hello\")}",
+      "}",
+      "",
+      "build {",
+      "  ${5:// build-time data}",
+      "}",
+      "",
+      "view {",
+      "  ${0:<Article />}",
+      "}"
+    ],
+    "description": "Create a dynamic static page with paths"
+  },
+  "Action block": {
+    "prefix": "act",
+    "body": [
+      "act ${1:submit} {",
+      "  ${2:input := form ${3:Input}}",
+      "  ${4:valid(input)?}",
+      "  -> \"${5:/thanks}\"",
+      "}"
+    ],
+    "description": "Create an action block"
+  },
+  "SSR page": {
+    "prefix": "ssr",
+    "body": [
+      "@page ${1:dashboard}",
+      "@route \"${2:/dashboard}\"",
+      "@layout ${3:root, dashboard}",
+      "@render ssr",
+      "@guard ${4:auth.required}",
+      "",
+      "load {",
+      "  ${5:// request-time data}",
+      "}",
+      "",
+      "view {",
+      "  ${0:<Dashboard />}",
+      "}"
+    ],
+    "description": "Create an SSR page"
+  }
+}

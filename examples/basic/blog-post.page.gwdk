@@ -1,0 +1,16 @@
+@page blog.post
+@route "/blog/{slug}"
+@layout root, blog
+@render static
+
+paths {
+  => { slug: "hello-gowdk" }
+  => { slug: "static-first" }
+}
+
+view {
+  <main>
+    <h1>{slug}</h1>
+    <p data-slug="{slug}">Dynamic static route example.</p>
+  </main>
+}

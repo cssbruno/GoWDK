@@ -147,6 +147,113 @@ func TestWatchRejectsInvalidInterval(t *testing.T) {
 	}
 }
 
+func TestParseWatchOptionsSupportsRestart(t *testing.T) {
+	options, err := parseWatchOptions([]string{"--restart", "--interval", "250ms", "--out", "dist", "--app", ".gowdk/app", "--bin", "bin/app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !options.Restart {
+		t.Fatal("expected restart option")
+	}
+	if options.Interval != 250*time.Millisecond {
+		t.Fatalf("unexpected interval: %s", options.Interval)
+	}
+	if strings.Join(options.BuildArgs, " ") != "--out dist --app .gowdk/app --bin bin/app" {
+		t.Fatalf("unexpected build args: %#v", options.BuildArgs)
+	}
+}
+
+func TestWatchRestartRejectsOnce(t *testing.T) {
+	err := watch([]string{"--once", "--restart", "--out", t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "cannot be used with --once") {
+		t.Fatalf("expected once/restart error, got %v", err)
+	}
+}
+
+func TestWatchRestartBinaryPathUsesAdHocBinary(t *testing.T) {
+	binary, err := watchRestartBinaryPath([]string{"--out", "dist", "--app", ".gowdk/app", "--bin", "bin/app", "home.page.gwdk"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binary != "bin/app" {
+		t.Fatalf("unexpected restart binary: %q", binary)
+	}
+}
+
+func TestWatchRestartBinaryPathUsesConfiguredTarget(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Targets: []gowdk.BuildTargetConfig{
+			{Name: "admin", Output: "dist/admin", App: ".gowdk/admin", Binary: "bin/admin"},
+			{Name: "public", Output: "dist/public", App: ".gowdk/public", Binary: "bin/public"},
+		},
+	},
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		binary, err := watchRestartBinaryPath([]string{"--target", "admin"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if binary != "bin/admin" {
+			t.Fatalf("unexpected restart binary: %q", binary)
+		}
+	})
+}
+
+func TestWatchRestartBinaryPathRejectsAmbiguousTargets(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Targets: []gowdk.BuildTargetConfig{
+			{Name: "admin", Output: "dist/admin", App: ".gowdk/admin", Binary: "bin/admin"},
+			{Name: "public", Output: "dist/public", App: ".gowdk/public", Binary: "bin/public"},
+		},
+	},
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		_, err := watchRestartBinaryPath(nil)
+		if err == nil || !strings.Contains(err.Error(), "exactly one build target") {
+			t.Fatalf("expected ambiguous target error, got %v", err)
+		}
+	})
+}
+
+func TestWatchRestartBinaryPathRejectsTargetWithAdHocFlags(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Targets: []gowdk.BuildTargetConfig{
+			{Name: "admin", Output: "dist/admin", App: ".gowdk/admin", Binary: "bin/admin"},
+		},
+	},
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		_, err := watchRestartBinaryPath([]string{"--target", "admin", "--out", "dist/override"})
+		if err == nil || !strings.Contains(err.Error(), "--target cannot be combined") {
+			t.Fatalf("expected target/ad hoc flag error, got %v", err)
+		}
+	})
+}
+
 func TestBuildInputSnapshotDetectsFileChanges(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")
@@ -176,6 +283,148 @@ view {
 	}
 	if second.same(first) {
 		t.Fatalf("expected changed source snapshot: first=%#v second=%#v", first, second)
+	}
+}
+
+func TestBuildInputSnapshotIgnoresUnchangedFileTouches(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	content := `@page home
+@route "/"
+
+view {
+  <main>Same</main>
+}
+`
+	writeCLIFile(t, source, content)
+
+	first, err := buildInputSnapshot([]string{"--out", filepath.Join(root, "dist"), source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Millisecond)
+	writeCLIFile(t, source, content)
+	second, err := buildInputSnapshot([]string{"--out", filepath.Join(root, "dist"), source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.same(first) {
+		t.Fatalf("expected unchanged source snapshot: first=%#v second=%#v", first, second)
+	}
+}
+
+func TestInputSnapshotDiffReportsChangedAddedAndRemovedPaths(t *testing.T) {
+	current := inputSnapshot{
+		"/tmp/b.page.gwdk": "changed",
+		"/tmp/c.page.gwdk": "added",
+	}
+	previous := inputSnapshot{
+		"/tmp/a.page.gwdk": "removed",
+		"/tmp/b.page.gwdk": "before",
+	}
+
+	change := current.diff(previous)
+	if strings.Join(change.Changed, ",") != "/tmp/b.page.gwdk" {
+		t.Fatalf("unexpected changed paths: %#v", change.Changed)
+	}
+	if strings.Join(change.Added, ",") != "/tmp/c.page.gwdk" {
+		t.Fatalf("unexpected added paths: %#v", change.Added)
+	}
+	if strings.Join(change.Removed, ",") != "/tmp/a.page.gwdk" {
+		t.Fatalf("unexpected removed paths: %#v", change.Removed)
+	}
+}
+
+func TestBuildIncrementalStaticUsesChangedPageSources(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home.page.gwdk")
+	about := filepath.Join(root, "about.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, home, `@page home
+@route "/"
+
+view {
+  <main>Before</main>
+}
+`)
+	writeCLIFile(t, about, `@page about
+@route "/about"
+
+view {
+  <main>Stable</main>
+}
+`)
+
+	args := []string{"--out", outputDir, home, about}
+	if err := build(args); err != nil {
+		t.Fatal(err)
+	}
+	aboutPath := filepath.Join(outputDir, "about", "index.html")
+	aboutInfo, err := os.Stat(aboutPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	writeCLIFile(t, home, `@page home
+@route "/"
+
+view {
+  <main>After</main>
+}
+`)
+	used, err := buildIncrementalStatic(args, inputChange{Changed: []string{home}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !used {
+		t.Fatal("expected incremental static build to handle page source change")
+	}
+	homePayload, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(homePayload), "After") {
+		t.Fatalf("expected changed home output:\n%s", homePayload)
+	}
+	afterAboutInfo, err := os.Stat(aboutPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !afterAboutInfo.ModTime().Equal(aboutInfo.ModTime()) {
+		t.Fatalf("expected unchanged about output mod time: before=%s after=%s", aboutInfo.ModTime(), afterAboutInfo.ModTime())
+	}
+}
+
+func TestBuildIncrementalStaticFallsBackForComponentChanges(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	component := filepath.Join(root, "hero.cmp.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, page, `@page home
+@route "/"
+
+view {
+  <main><Hero title="GOWDK" /></main>
+}
+`)
+	writeCLIFile(t, component, `@component Hero
+
+props {
+  title string
+}
+
+view {
+  <h1>{title}</h1>
+}
+`)
+
+	used, err := buildIncrementalStatic([]string{"--out", outputDir, page, component}, inputChange{Changed: []string{component}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if used {
+		t.Fatal("expected component change to fall back to full build")
 	}
 }
 
@@ -564,6 +813,202 @@ view {
 	if _, err := os.Stat(filepath.Join(root, "dist", "index.html")); !os.IsNotExist(err) {
 		t.Fatalf("expected unselected frontend module to be skipped, stat err: %v", err)
 	}
+}
+
+func TestBuildCommandRunsConfiguredBuildTargets(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Modules: []gowdk.ModuleConfig{
+		{Name: "public"},
+		{Name: "admin"},
+		{Name: "api"},
+	},
+	Build: gowdk.BuildConfig{
+		Targets: []gowdk.BuildTargetConfig{
+			{
+				Name: "public",
+				Modules: []string{"public"},
+				Output: "dist/public",
+				App: ".gowdk/public",
+				Binary: "bin/public",
+			},
+			{
+				Name: "admin-api",
+				Modules: []string{"admin", "api"},
+				Output: "dist/admin-api",
+				App: ".gowdk/admin-api",
+			},
+		},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `@page home
+@route "/"
+
+view {
+  <main>Public module</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `@page dashboard
+@route "/admin"
+
+view {
+  <main>Admin module</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "api", "status.page.gwdk"), `@page status
+@route "/api/status"
+
+view {
+  <main>API module</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	for _, path := range []string{
+		filepath.Join(root, "dist", "public", "index.html"),
+		filepath.Join(root, ".gowdk", "public", "static", "index.html"),
+		filepath.Join(root, "bin", "public"),
+		filepath.Join(root, "dist", "admin-api", "admin", "index.html"),
+		filepath.Join(root, "dist", "admin-api", "api", "status", "index.html"),
+		filepath.Join(root, ".gowdk", "admin-api", "static", "admin", "index.html"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(root, "dist", "public", "admin", "index.html"),
+		filepath.Join(root, ".gowdk", "public", "static", "admin", "index.html"),
+		filepath.Join(root, "dist", "admin-api", "index.html"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("expected unselected target route %s to be absent, stat err: %v", path, err)
+		}
+	}
+}
+
+func TestBuildCommandRunsSelectedConfiguredTargetOnly(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Modules: []gowdk.ModuleConfig{
+		{Name: "public"},
+		{Name: "admin"},
+	},
+	Build: gowdk.BuildConfig{
+		Targets: []gowdk.BuildTargetConfig{
+			{Name: "public", Modules: []string{"public"}, Output: "dist/public"},
+			{Name: "admin", Modules: []string{"admin"}, Output: "dist/admin"},
+		},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `@page home
+@route "/"
+
+view {
+  <main>Public module</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `@page dashboard
+@route "/admin"
+
+view {
+  <main>Admin module</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build", "--target", "admin"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	if _, err := os.Stat(filepath.Join(root, "dist", "admin", "admin", "index.html")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "dist", "public", "index.html")); !os.IsNotExist(err) {
+		t.Fatalf("expected unselected public target to be skipped, stat err: %v", err)
+	}
+}
+
+func TestBuildCommandRunsConfiguredWASMTarget(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Modules: []gowdk.ModuleConfig{
+		{Name: "public"},
+	},
+	Build: gowdk.BuildConfig{
+		Targets: []gowdk.BuildTargetConfig{
+			{Name: "public", Modules: []string{"public"}, Output: "dist/public", App: ".gowdk/public", WASM: "bin/public.wasm"},
+		},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `@page home
+@route "/"
+
+view {
+  <main>Public WASM module</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build", "--target", "public"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	info, err := os.Stat(filepath.Join(root, "bin", "public.wasm"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() == 0 {
+		t.Fatal("expected configured wasm artifact to be non-empty")
+	}
+}
+
+func TestBuildCommandRejectsTargetWithAdHocBuildFlags(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Targets: []gowdk.BuildTargetConfig{
+			{Name: "public", Output: "dist/public"},
+		},
+	},
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		err := run([]string{"build", "--target", "public", "--out", "dist/override"})
+		if err == nil {
+			t.Fatal("expected target and ad hoc output to fail")
+		}
+		if !strings.Contains(err.Error(), "--target cannot be combined") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 }
 
 func TestBuildCommandOutFlagOverridesConfigOutput(t *testing.T) {
@@ -1038,6 +1483,16 @@ func TestBuildCommandBinRequiresGeneratedApp(t *testing.T) {
 	if err := run([]string{"build", "--out", t.TempDir(), "--app", filepath.Join(t.TempDir(), "app"), "--bin="}); err == nil {
 		t.Fatal("expected empty --bin to fail")
 	}
+	err = run([]string{"build", "--out", t.TempDir(), "--wasm", filepath.Join(t.TempDir(), "site.wasm")})
+	if err == nil {
+		t.Fatal("expected --wasm without --app to fail")
+	}
+	if !strings.Contains(err.Error(), "--wasm requires --app") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := run([]string{"build", "--out", t.TempDir(), "--app", filepath.Join(t.TempDir(), "app"), "--wasm="}); err == nil {
+		t.Fatal("expected empty --wasm to fail")
+	}
 }
 
 func TestBuildCommandBuildsRunnableEmbeddedBinary(t *testing.T) {
@@ -1078,6 +1533,32 @@ view {
 	}
 	if !strings.Contains(body, "<main>One binary</main>") {
 		t.Fatalf("unexpected response body: %s", body)
+	}
+}
+
+func TestBuildCommandBuildsWASMArtifact(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "app")
+	wasmPath := filepath.Join(root, "site.wasm")
+	writeCLIFile(t, page, `@page home
+@route "/"
+
+view {
+  <main>WASM artifact</main>
+}
+`)
+
+	if err := run([]string{"build", "--out", outputDir, "--app", appDir, "--wasm", wasmPath, page}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(wasmPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() == 0 {
+		t.Fatal("expected wasm artifact to be non-empty")
 	}
 }
 

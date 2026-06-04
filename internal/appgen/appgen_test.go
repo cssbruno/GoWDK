@@ -62,6 +62,57 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 	}
 }
 
+func TestGeneratePreservesUnchangedFilesAndRemovesStaleStaticFiles(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(staticDir, "old.html"), "<main>Old</main>")
+
+	result, err := Generate(staticDir, appDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{
+		result.MainPath,
+		result.ModulePath,
+		filepath.Join(result.StaticDir, "index.html"),
+	}
+	first := map[string]time.Time{}
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first[path] = info.ModTime()
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+	if err := os.Remove(filepath.Join(staticDir, "old.html")); err != nil {
+		t.Fatal(err)
+	}
+	result, err = Generate(staticDir, appDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(result.Files, ",") != "index.html" {
+		t.Fatalf("unexpected copied files: %#v", result.Files)
+	}
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.ModTime().Equal(first[path]) {
+			t.Fatalf("expected unchanged mod time for %s: before=%s after=%s", path, first[path], info.ModTime())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(result.StaticDir, "old.html")); !os.IsNotExist(err) {
+		t.Fatalf("expected stale embedded static file to be removed, stat err: %v", err)
+	}
+}
+
 func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 	root := t.TempDir()
 	staticDir := filepath.Join(root, "dist")
@@ -457,6 +508,33 @@ func TestBuildBinaryCompilesGeneratedApp(t *testing.T) {
 	}
 	if _, err := os.Stat(binaryPath); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBuildWASMCompilesGeneratedApp(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	wasmPath := filepath.Join(root, "site.wasm")
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(staticDir, "gowdk-assets.json"), `{"version":1,"files":{}}`)
+
+	if _, err := Generate(staticDir, appDir); err != nil {
+		t.Fatal(err)
+	}
+	built, err := BuildWASM(appDir, wasmPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if built != wasmPath {
+		t.Fatalf("unexpected wasm path: %q", built)
+	}
+	info, err := os.Stat(wasmPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() == 0 {
+		t.Fatal("expected wasm artifact to be non-empty")
 	}
 }
 

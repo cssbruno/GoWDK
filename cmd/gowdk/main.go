@@ -1,13 +1,16 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,11 +21,15 @@ import (
 	"github.com/cssbruno/gowdk/internal/discover"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/lsp"
+	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/project"
 	"github.com/cssbruno/gowdk/internal/staticgen"
 )
 
-const version = "0.1.0-dev"
+const (
+	version    = "0.1.0-dev"
+	buildUsage = "usage: gowdk build [--config <file>] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]"
+)
 
 var (
 	defaultSourceIncludes = []string{"**/*.gwdk"}
@@ -87,8 +94,8 @@ func usage() {
 	fmt.Println("  manifest [--config <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
 	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print generated route bindings JSON")
-	fmt.Println("  build [--config <file>] [--ssr] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...] emit static output")
-	fmt.Println("  watch [--once] [--interval <duration>] [build flags...] rebuild static output when inputs change")
+	fmt.Println("  build [--config <file>] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...] emit static output")
+	fmt.Println("  watch [--once] [--restart] [--interval <duration>] [build flags...] rebuild static output when inputs change")
 	fmt.Println("  serve --dir <dir> [--addr <addr>] serve generated static output locally")
 	fmt.Println("  lsp [--ssr]              start the language server over stdio")
 }
@@ -390,24 +397,56 @@ func routesJSON(args []string) error {
 }
 
 func build(args []string) error {
-	options, outputDir, appDir, binaryPath, configPath, moduleNames, paths, err := parseBuildOptions(args)
+	options, outputDir, appDir, binaryPath, wasmPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(binaryPath) != "" && strings.TrimSpace(appDir) == "" {
-		return fmt.Errorf("gowdk build --bin requires --app <dir>")
-	}
 	if err := loadBuildConfig(&options, configPath); err != nil {
 		return err
+	}
+	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+		return fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, or explicit files")
+	}
+	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+		return buildConfiguredTargets(options, targetNames)
+	}
+	return buildOnce(options, buildRequest{
+		OutputDir:  outputDir,
+		AppDir:     appDir,
+		BinaryPath: binaryPath,
+		WASMPath:   wasmPath,
+		Modules:    moduleNames,
+		Paths:      paths,
+	})
+}
+
+type buildRequest struct {
+	OutputDir  string
+	AppDir     string
+	BinaryPath string
+	WASMPath   string
+	Modules    []string
+	Paths      []string
+}
+
+func buildOnce(options cliOptions, request buildRequest) error {
+	outputDir := request.OutputDir
+	if strings.TrimSpace(request.BinaryPath) != "" && strings.TrimSpace(request.AppDir) == "" {
+		return fmt.Errorf("gowdk build --bin requires --app <dir>")
+	}
+	if strings.TrimSpace(request.WASMPath) != "" && strings.TrimSpace(request.AppDir) == "" {
+		return fmt.Errorf("gowdk build --wasm requires --app <dir>")
 	}
 	if outputDir == "" {
 		outputDir = options.Config.Build.Output
 	}
 	if outputDir == "" {
-		return fmt.Errorf("usage: gowdk build [--config <file>] [--ssr] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...]")
+		return fmt.Errorf(buildUsage)
 	}
+	options.Config.Build.Output = outputDir
+	paths := append([]string(nil), request.Paths...)
 	if len(paths) == 0 {
-		discovered, err := discoverBuildFiles(options.Config, outputDir, moduleNames)
+		discovered, err := discoverBuildFiles(options.Config, outputDir, request.Modules)
 		if err != nil {
 			return err
 		}
@@ -441,6 +480,9 @@ func build(args []string) error {
 	if result.AssetManifestPath != "" {
 		fmt.Println(result.AssetManifestPath)
 	}
+	appDir := request.AppDir
+	binaryPath := request.BinaryPath
+	wasmPath := request.WASMPath
 	if strings.TrimSpace(appDir) != "" {
 		actions, err := appgen.ActionRoutes(app)
 		if err != nil {
@@ -466,8 +508,104 @@ func build(args []string) error {
 			}
 			fmt.Println(built)
 		}
+		if strings.TrimSpace(wasmPath) != "" {
+			built, err := appgen.BuildWASM(app.AppDir, wasmPath)
+			if err != nil {
+				return err
+			}
+			fmt.Println(built)
+		}
 	}
 	return nil
+}
+
+func shouldBuildConfiguredTargets(config gowdk.Config, targetNames []string, outputDir, appDir, binaryPath, wasmPath string, moduleNames, paths []string) bool {
+	if len(targetNames) > 0 {
+		return true
+	}
+	if len(config.Build.Targets) == 0 {
+		return false
+	}
+	return strings.TrimSpace(outputDir) == "" &&
+		strings.TrimSpace(appDir) == "" &&
+		strings.TrimSpace(binaryPath) == "" &&
+		strings.TrimSpace(wasmPath) == "" &&
+		len(moduleNames) == 0 &&
+		len(paths) == 0
+}
+
+func hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath string, moduleNames, paths []string) bool {
+	return strings.TrimSpace(outputDir) != "" ||
+		strings.TrimSpace(appDir) != "" ||
+		strings.TrimSpace(binaryPath) != "" ||
+		strings.TrimSpace(wasmPath) != "" ||
+		len(moduleNames) > 0 ||
+		len(paths) > 0
+}
+
+func buildConfiguredTargets(options cliOptions, targetNames []string) error {
+	targets, err := selectBuildTargets(options.Config.Build.Targets, targetNames)
+	if err != nil {
+		return err
+	}
+	for _, target := range targets {
+		targetOptions := options
+		targetOptions.Config.Build.Output = target.Output
+		if err := buildOnce(targetOptions, buildRequest{
+			OutputDir:  target.Output,
+			AppDir:     target.App,
+			BinaryPath: target.Binary,
+			WASMPath:   target.WASM,
+			Modules:    target.Modules,
+		}); err != nil {
+			return fmt.Errorf("build target %q: %w", target.Name, err)
+		}
+	}
+	return nil
+}
+
+func selectBuildTargets(targets []gowdk.BuildTargetConfig, targetNames []string) ([]gowdk.BuildTargetConfig, error) {
+	byName := map[string]gowdk.BuildTargetConfig{}
+	var normalized []gowdk.BuildTargetConfig
+	for _, target := range targets {
+		name := strings.TrimSpace(target.Name)
+		if name == "" {
+			return nil, fmt.Errorf("build target is missing name")
+		}
+		if _, exists := byName[name]; exists {
+			return nil, fmt.Errorf("build target %q is configured more than once", name)
+		}
+		target.Name = name
+		target.Modules = cleanNames(target.Modules)
+		if strings.TrimSpace(target.Output) == "" {
+			return nil, fmt.Errorf("build target %q is missing output", name)
+		}
+		if strings.TrimSpace(target.Binary) != "" && strings.TrimSpace(target.App) == "" {
+			return nil, fmt.Errorf("build target %q binary requires app", name)
+		}
+		if strings.TrimSpace(target.WASM) != "" && strings.TrimSpace(target.App) == "" {
+			return nil, fmt.Errorf("build target %q wasm requires app", name)
+		}
+		target.Output = strings.TrimSpace(target.Output)
+		target.App = strings.TrimSpace(target.App)
+		target.Binary = strings.TrimSpace(target.Binary)
+		target.WASM = strings.TrimSpace(target.WASM)
+		byName[name] = target
+		normalized = append(normalized, target)
+	}
+
+	if len(targetNames) == 0 {
+		return normalized, nil
+	}
+	var selected []gowdk.BuildTargetConfig
+	for _, name := range cleanNames(targetNames) {
+		target, ok := byName[name]
+		if !ok {
+			return nil, fmt.Errorf("build target %q is not configured", name)
+		}
+		selected = append(selected, target)
+	}
+	return selected, nil
 }
 
 func ssrRoutes(artifacts []staticgen.SSRArtifact) []appgen.SSRRoute {
@@ -499,13 +637,34 @@ func watch(args []string) error {
 	if err != nil {
 		return err
 	}
+	if options.Once && options.Restart {
+		return fmt.Errorf("watch --restart cannot be used with --once")
+	}
 	if options.Once {
 		return build(options.BuildArgs)
+	}
+
+	var process *watchProcess
+	if options.Restart {
+		binaryPath, err := watchRestartBinaryPath(options.BuildArgs)
+		if err != nil {
+			return err
+		}
+		process = &watchProcess{Path: binaryPath}
+		defer func() {
+			if err := process.stop(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		}()
 	}
 
 	fmt.Printf("Watching GOWDK inputs every %s\n", options.Interval)
 	if err := build(options.BuildArgs); err != nil {
 		fmt.Fprintln(os.Stderr, err)
+	} else if process != nil {
+		if err := process.restart(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
 	}
 	previous, err := buildInputSnapshot(options.BuildArgs)
 	if err != nil {
@@ -521,11 +680,242 @@ func watch(args []string) error {
 		if current.same(previous) {
 			continue
 		}
+		change := current.diff(previous)
 		previous = current
 		fmt.Printf("Change detected at %s\n", time.Now().Format(time.RFC3339))
-		if err := build(options.BuildArgs); err != nil {
+		restart, err := buildWatchChange(options.BuildArgs, change, process == nil)
+		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
+			continue
 		}
+		if restart && process != nil {
+			if err := process.restart(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		}
+	}
+}
+
+func buildWatchChange(args []string, change inputChange, allowIncremental bool) (bool, error) {
+	if allowIncremental {
+		incremental, err := buildIncrementalStatic(args, change)
+		if incremental || err != nil {
+			return false, err
+		}
+	}
+	return true, build(args)
+}
+
+func buildIncrementalStatic(args []string, change inputChange) (bool, error) {
+	if len(change.Added) > 0 || len(change.Removed) > 0 || len(change.Changed) == 0 {
+		return false, nil
+	}
+
+	options, outputDir, appDir, binaryPath, wasmPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	if err != nil {
+		return true, err
+	}
+	if err := loadBuildConfig(&options, configPath); err != nil {
+		return true, err
+	}
+	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+		return true, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, or explicit files")
+	}
+	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+		return false, nil
+	}
+	if strings.TrimSpace(appDir) != "" || strings.TrimSpace(binaryPath) != "" || strings.TrimSpace(wasmPath) != "" {
+		return false, nil
+	}
+	if inputChangeTouchesConfig(change, configPath) {
+		return false, nil
+	}
+	if outputDir == "" {
+		outputDir = options.Config.Build.Output
+	}
+	if outputDir == "" {
+		return true, fmt.Errorf(buildUsage)
+	}
+	options.Config.Build.Output = outputDir
+	if len(paths) == 0 {
+		discovered, err := discoverBuildFiles(options.Config, outputDir, moduleNames)
+		if err != nil {
+			return true, err
+		}
+		if len(discovered) == 0 {
+			return true, fmt.Errorf("no .gwdk files found")
+		}
+		paths = discovered
+	}
+
+	app, diagnostics := lang.ParseBuildFiles(paths)
+	for _, diagnostic := range diagnostics {
+		fmt.Fprintln(os.Stderr, diagnostic.String())
+	}
+	if diagnostics.HasErrors() {
+		return true, fmt.Errorf("build failed")
+	}
+
+	pageSources, incremental := changedPageSources(app, change.Changed)
+	if !incremental {
+		return false, nil
+	}
+	result, err := staticgen.BuildIncremental(options.Config, app, outputDir, pageSources)
+	if err != nil {
+		return true, err
+	}
+	for _, artifact := range result.Artifacts {
+		if pageIDChanged(artifact.PageID, pageSources, app.Pages) {
+			fmt.Println(artifact.Path)
+		}
+	}
+	for _, artifact := range result.CSSArtifacts {
+		fmt.Println(artifact.Path)
+	}
+	if result.RouteManifestPath != "" {
+		fmt.Println(result.RouteManifestPath)
+	}
+	if result.AssetManifestPath != "" {
+		fmt.Println(result.AssetManifestPath)
+	}
+	return true, nil
+}
+
+func inputChangeTouchesConfig(change inputChange, configPath string) bool {
+	configAbs, ok := watchedConfigPath(configPath)
+	if !ok {
+		return false
+	}
+	for _, changedPath := range change.Changed {
+		if samePath(changedPath, configAbs) {
+			return true
+		}
+	}
+	return false
+}
+
+func watchedConfigPath(configPath string) (string, bool) {
+	if strings.TrimSpace(configPath) != "" {
+		abs, err := filepath.Abs(configPath)
+		return filepath.Clean(abs), err == nil
+	}
+	if _, err := os.Stat("gowdk.config.go"); err != nil {
+		return "", false
+	}
+	abs, err := filepath.Abs("gowdk.config.go")
+	return filepath.Clean(abs), err == nil
+}
+
+func changedPageSources(app manifest.Manifest, changedPaths []string) ([]string, bool) {
+	pageSources := map[string]string{}
+	for _, page := range app.Pages {
+		abs, ok := cleanAbs(page.Source)
+		if ok {
+			pageSources[abs] = page.Source
+		}
+	}
+
+	var changedPages []string
+	for _, changedPath := range changedPaths {
+		abs, ok := cleanAbs(changedPath)
+		if !ok {
+			return nil, false
+		}
+		source, ok := pageSources[abs]
+		if !ok {
+			return nil, false
+		}
+		changedPages = append(changedPages, source)
+	}
+	return changedPages, len(changedPages) > 0
+}
+
+func pageIDChanged(pageID string, changedSources []string, pages []manifest.Page) bool {
+	changed := map[string]bool{}
+	for _, source := range changedSources {
+		abs, ok := cleanAbs(source)
+		if ok {
+			changed[abs] = true
+		}
+	}
+	for _, page := range pages {
+		if page.ID != pageID {
+			continue
+		}
+		abs, ok := cleanAbs(page.Source)
+		return ok && changed[abs]
+	}
+	return false
+}
+
+func samePath(left, right string) bool {
+	leftAbs, leftOK := cleanAbs(left)
+	rightAbs, rightOK := cleanAbs(right)
+	return leftOK && rightOK && leftAbs == rightAbs
+}
+
+func cleanAbs(path string) (string, bool) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", false
+	}
+	return filepath.Clean(abs), true
+}
+
+type watchProcess struct {
+	Path        string
+	command     *exec.Cmd
+	stopTimeout time.Duration
+}
+
+func (process *watchProcess) restart() error {
+	if strings.TrimSpace(process.Path) == "" {
+		return fmt.Errorf("watch restart binary path is required")
+	}
+	if err := process.stop(); err != nil {
+		return err
+	}
+	command := exec.Command(process.Path)
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	command.Stdin = os.Stdin
+	command.Env = os.Environ()
+	if err := command.Start(); err != nil {
+		return fmt.Errorf("start %s: %w", process.Path, err)
+	}
+	process.command = command
+	fmt.Printf("Started %s pid=%d\n", process.Path, command.Process.Pid)
+	return nil
+}
+
+func (process *watchProcess) stop() error {
+	if process.command == nil || process.command.Process == nil {
+		process.command = nil
+		return nil
+	}
+
+	command := process.command
+	process.command = nil
+	if err := command.Process.Signal(os.Interrupt); err != nil {
+		_ = command.Process.Kill()
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- command.Wait()
+	}()
+
+	timeout := process.stopTimeout
+	if timeout <= 0 {
+		timeout = 2 * time.Second
+	}
+	select {
+	case <-done:
+		return nil
+	case <-time.After(timeout):
+		_ = command.Process.Kill()
+		<-done
+		return nil
 	}
 }
 
@@ -563,6 +953,7 @@ type watchOptions struct {
 	BuildArgs []string
 	Once      bool
 	Interval  time.Duration
+	Restart   bool
 }
 
 func parseWatchOptions(args []string) (watchOptions, error) {
@@ -572,10 +963,12 @@ func parseWatchOptions(args []string) (watchOptions, error) {
 		switch {
 		case arg == "--once":
 			options.Once = true
+		case arg == "--restart":
+			options.Restart = true
 		case arg == "--interval":
 			i++
 			if i >= len(args) {
-				return watchOptions{}, fmt.Errorf("usage: gowdk watch [--once] [--interval <duration>] [build flags...]")
+				return watchOptions{}, errors.New(watchUsage())
 			}
 			interval, err := parseWatchInterval(args[i])
 			if err != nil {
@@ -595,6 +988,40 @@ func parseWatchOptions(args []string) (watchOptions, error) {
 	return options, nil
 }
 
+func watchUsage() string {
+	return "usage: gowdk watch [--once] [--restart] [--interval <duration>] [build flags...]"
+}
+
+func watchRestartBinaryPath(args []string) (string, error) {
+	options, outputDir, appDir, binaryPath, wasmPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	if err != nil {
+		return "", err
+	}
+	if err := loadBuildConfig(&options, configPath); err != nil {
+		return "", err
+	}
+	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+		return "", fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, or explicit files")
+	}
+	if strings.TrimSpace(binaryPath) != "" {
+		return binaryPath, nil
+	}
+	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+		targets, err := selectBuildTargets(options.Config.Build.Targets, targetNames)
+		if err != nil {
+			return "", err
+		}
+		if len(targets) != 1 {
+			return "", fmt.Errorf("watch --restart requires exactly one build target with Binary")
+		}
+		if strings.TrimSpace(targets[0].Binary) == "" {
+			return "", fmt.Errorf("watch --restart target %q is missing Binary", targets[0].Name)
+		}
+		return targets[0].Binary, nil
+	}
+	return "", fmt.Errorf("watch --restart requires --bin <file> or one Build.Targets entry with Binary")
+}
+
 func parseWatchInterval(value string) (time.Duration, error) {
 	interval, err := time.ParseDuration(value)
 	if err != nil {
@@ -606,20 +1033,47 @@ func parseWatchInterval(value string) (time.Duration, error) {
 	return interval, nil
 }
 
-type inputSnapshot map[string]time.Time
+type inputSnapshot map[string]string
+
+type inputChange struct {
+	Changed []string
+	Added   []string
+	Removed []string
+}
 
 func buildInputSnapshot(args []string) (inputSnapshot, error) {
-	options, outputDir, _, _, configPath, moduleNames, paths, err := parseBuildOptions(args)
+	options, outputDir, appDir, binaryPath, wasmPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
 	if err != nil {
 		return nil, err
 	}
 	if err := loadBuildConfig(&options, configPath); err != nil {
 		return nil, err
 	}
-	if outputDir == "" {
-		outputDir = options.Config.Build.Output
+	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+		return nil, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, or explicit files")
 	}
-	if len(paths) == 0 {
+	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+		targets, err := selectBuildTargets(options.Config.Build.Targets, targetNames)
+		if err != nil {
+			return nil, err
+		}
+		for _, target := range targets {
+			discovered, err := discoverBuildFiles(options.Config, target.Output, target.Modules)
+			if err != nil {
+				return nil, err
+			}
+			paths = append(paths, discovered...)
+		}
+	} else if outputDir == "" {
+		outputDir = options.Config.Build.Output
+		if len(paths) == 0 {
+			discovered, err := discoverBuildFiles(options.Config, outputDir, moduleNames)
+			if err != nil {
+				return nil, err
+			}
+			paths = discovered
+		}
+	} else if len(paths) == 0 {
 		discovered, err := discoverBuildFiles(options.Config, outputDir, moduleNames)
 		if err != nil {
 			return nil, err
@@ -644,7 +1098,12 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 		if err != nil {
 			return nil, err
 		}
-		snapshot[abs] = info.ModTime()
+		payload, err := os.ReadFile(item)
+		if err != nil {
+			return nil, err
+		}
+		sum := sha256.Sum256(payload)
+		snapshot[abs] = fmt.Sprintf("%x", sum)
 	}
 	return snapshot, nil
 }
@@ -653,12 +1112,36 @@ func (snapshot inputSnapshot) same(other inputSnapshot) bool {
 	if len(snapshot) != len(other) {
 		return false
 	}
-	for path, modTime := range snapshot {
-		if !modTime.Equal(other[path]) {
+	for path, hash := range snapshot {
+		otherHash, ok := other[path]
+		if !ok || hash != otherHash {
 			return false
 		}
 	}
 	return true
+}
+
+func (snapshot inputSnapshot) diff(previous inputSnapshot) inputChange {
+	var change inputChange
+	for path, hash := range snapshot {
+		previousHash, ok := previous[path]
+		if !ok {
+			change.Added = append(change.Added, path)
+			continue
+		}
+		if hash != previousHash {
+			change.Changed = append(change.Changed, path)
+		}
+	}
+	for path := range previous {
+		if _, ok := snapshot[path]; !ok {
+			change.Removed = append(change.Removed, path)
+		}
+	}
+	sort.Strings(change.Changed)
+	sort.Strings(change.Added)
+	sort.Strings(change.Removed)
+	return change
 }
 
 func loadBuildConfig(options *cliOptions, configPath string) error {
@@ -927,12 +1410,14 @@ func languageServer(args []string) error {
 	return lsp.NewServer(options.Config).Serve(os.Stdin, os.Stdout)
 }
 
-func parseBuildOptions(args []string) (cliOptions, string, string, string, string, []string, []string, error) {
+func parseBuildOptions(args []string) (cliOptions, string, string, string, string, string, []string, []string, []string, error) {
 	var options cliOptions
 	var outputDir string
 	var appDir string
 	var binaryPath string
+	var wasmPath string
 	var configPath string
+	var targetNames []string
 	var moduleNames []string
 	var paths []string
 
@@ -944,7 +1429,7 @@ func parseBuildOptions(args []string) (cliOptions, string, string, string, strin
 		case arg == "--out":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", nil, nil, fmt.Errorf("usage: gowdk build [--config <file>] [--ssr] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...]")
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
 			outputDir = args[i]
 		case len(arg) > len("--out=") && arg[:len("--out=")] == "--out=":
@@ -952,66 +1437,104 @@ func parseBuildOptions(args []string) (cliOptions, string, string, string, strin
 		case arg == "--app":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", nil, nil, fmt.Errorf("usage: gowdk build [--config <file>] [--ssr] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...]")
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
 			appDir = args[i]
 			if strings.TrimSpace(appDir) == "" {
-				return options, "", "", "", "", nil, nil, fmt.Errorf("generated app directory is required")
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated app directory is required")
 			}
 		case len(arg) > len("--app=") && arg[:len("--app=")] == "--app=":
 			appDir = arg[len("--app="):]
 			if strings.TrimSpace(appDir) == "" {
-				return options, "", "", "", "", nil, nil, fmt.Errorf("generated app directory is required")
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated app directory is required")
 			}
 		case arg == "--bin":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", nil, nil, fmt.Errorf("usage: gowdk build [--config <file>] [--ssr] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...]")
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
 			binaryPath = args[i]
 			if strings.TrimSpace(binaryPath) == "" {
-				return options, "", "", "", "", nil, nil, fmt.Errorf("binary output path is required")
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("binary output path is required")
 			}
 		case len(arg) > len("--bin=") && arg[:len("--bin=")] == "--bin=":
 			binaryPath = arg[len("--bin="):]
 			if strings.TrimSpace(binaryPath) == "" {
-				return options, "", "", "", "", nil, nil, fmt.Errorf("binary output path is required")
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("binary output path is required")
+			}
+		case arg == "--wasm":
+			i++
+			if i >= len(args) {
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+			}
+			wasmPath = args[i]
+			if strings.TrimSpace(wasmPath) == "" {
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("wasm output path is required")
+			}
+		case len(arg) > len("--wasm=") && arg[:len("--wasm=")] == "--wasm=":
+			wasmPath = arg[len("--wasm="):]
+			if strings.TrimSpace(wasmPath) == "" {
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("wasm output path is required")
 			}
 		case arg == "--config":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", nil, nil, fmt.Errorf("usage: gowdk build [--config <file>] [--ssr] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...]")
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
 			configPath = args[i]
 		case len(arg) > len("--config=") && arg[:len("--config=")] == "--config=":
 			configPath = arg[len("--config="):]
+		case arg == "--target":
+			i++
+			if i >= len(args) {
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+			}
+			targetNames = appendNames(targetNames, args[i])
+		case len(arg) > len("--target=") && arg[:len("--target=")] == "--target=":
+			targetNames = appendNames(targetNames, arg[len("--target="):])
 		case arg == "--module":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", nil, nil, fmt.Errorf("usage: gowdk build [--config <file>] [--ssr] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...]")
+				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
-			moduleNames = appendModuleNames(moduleNames, args[i])
+			moduleNames = appendNames(moduleNames, args[i])
 		case len(arg) > len("--module=") && arg[:len("--module=")] == "--module=":
-			moduleNames = appendModuleNames(moduleNames, arg[len("--module="):])
+			moduleNames = appendNames(moduleNames, arg[len("--module="):])
 		case len(arg) > 0 && arg[0] == '-':
-			return options, "", "", "", "", nil, nil, fmt.Errorf("unknown build flag %q", arg)
+			return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("unknown build flag %q", arg)
 		default:
 			paths = append(paths, arg)
 		}
 	}
 
-	return options, outputDir, appDir, binaryPath, configPath, moduleNames, paths, nil
+	return options, outputDir, appDir, binaryPath, wasmPath, configPath, targetNames, moduleNames, paths, nil
 }
 
 func appendModuleNames(moduleNames []string, value string) []string {
+	return appendNames(moduleNames, value)
+}
+
+func appendNames(names []string, value string) []string {
 	for _, name := range strings.Split(value, ",") {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
-		moduleNames = append(moduleNames, name)
+		names = append(names, name)
 	}
-	return moduleNames
+	return names
+}
+
+func cleanNames(names []string) []string {
+	var cleaned []string
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		cleaned = append(cleaned, name)
+	}
+	return cleaned
 }
 
 type cliOptions struct {

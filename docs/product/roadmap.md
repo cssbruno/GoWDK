@@ -30,6 +30,13 @@ Partial Addon:
 
 Embed Addon:
   Ship frontend and backend in one binary.
+
+Build Selection:
+  Declare which configured modules are compiled into each generated binary.
+
+Watch Redeploy:
+  Rebuild, incrementally refresh page-local static edits, and restart generated
+  binaries during local development without retriggering on no-op writes.
 ```
 
 ## Final Rule Set
@@ -42,6 +49,10 @@ Embed Addon:
 6. Partial updates use server fragments, not full page SSR.
 7. SSR is an addon.
 8. One-binary deploy works with or without SSR.
+9. Static build targets define what each generated app or binary embeds.
+10. Local watch can rebuild and restart generated binaries without Air, using
+    content changes and page-local incremental output instead of timestamp-only
+    churn.
 
 ## Phase Roadmap
 
@@ -73,6 +84,10 @@ Current implementation status is summarized in `README.md` and
 - CSS/plugin extension points.
 - Embedded assets.
 - One-binary static serving.
+- Generated Go WASM deploy artifacts.
+- Static module-selected build targets for generated apps and binaries.
+- Dependency-free watch rebuild, page-local incremental static output,
+  generated-binary restart, and no-op output write skipping.
 - Hybrid render policy and cache/revalidation policy docs.
 
 ### v0.2

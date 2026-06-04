@@ -209,9 +209,62 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 			build.Output = parseString(keyValue.Value)
 		case "Stylesheets":
 			build.Stylesheets = parseStylesheets(keyValue.Value)
+		case "Targets":
+			build.Targets = parseBuildTargets(keyValue.Value)
 		}
 	}
 	return build
+}
+
+func parseBuildTargets(expression ast.Expr) []gowdk.BuildTargetConfig {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil
+	}
+
+	var targets []gowdk.BuildTargetConfig
+	for _, element := range literal.Elts {
+		target := parseBuildTarget(element)
+		if target.Name == "" && len(target.Modules) == 0 && target.Output == "" && target.App == "" && target.Binary == "" && target.WASM == "" {
+			continue
+		}
+		targets = append(targets, target)
+	}
+	return targets
+}
+
+func parseBuildTarget(expression ast.Expr) gowdk.BuildTargetConfig {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.BuildTargetConfig{}
+	}
+
+	var target gowdk.BuildTargetConfig
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "Name":
+			target.Name = parseString(keyValue.Value)
+		case "Modules":
+			target.Modules = parseStringList(keyValue.Value)
+		case "Output":
+			target.Output = parseString(keyValue.Value)
+		case "App":
+			target.App = parseString(keyValue.Value)
+		case "Binary":
+			target.Binary = parseString(keyValue.Value)
+		case "WASM", "Wasm":
+			target.WASM = parseString(keyValue.Value)
+		}
+	}
+	return target
 }
 
 func parseStylesheets(expression ast.Expr) []gowdk.Stylesheet {

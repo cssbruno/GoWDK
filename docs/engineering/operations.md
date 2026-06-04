@@ -40,12 +40,15 @@ Static deployment target:
 
 ```text
 gowdk build --out dist --app .gowdk/app --bin dist/<app> <files>
+gowdk build --out dist --app .gowdk/app --wasm dist/<app>.wasm <files>
 ```
 
 The current generated binary serves embedded prerendered HTML, CSS, static
 assets, and first-slice POST redirect action handlers from the selected output
-directory. Future generated binaries should also serve real typed action logic,
-API routes, partial fragment handlers, and optional SSR routes.
+directory. `--wasm` compiles the same generated app with `GOOS=js GOARCH=wasm`
+for hosts that can run Go WebAssembly; it is not browser WASM islands. Future
+generated artifacts should also serve real typed action logic, API routes,
+partial fragment handlers, and optional SSR routes.
 
 Current local development can serve generated static output with:
 
@@ -62,11 +65,33 @@ Current local development can rebuild generated static output on changes with:
 gowdk watch --out dist
 ```
 
-`watch` uses polling so it stays dependency-free and portable.
+`watch` uses polling so it stays dependency-free and portable. It compares
+input content hashes, so touching a file without changing its bytes does not
+trigger another rebuild. For plain static `--out` builds, edits to existing
+page source files use incremental static rendering: GOWDK still parses and
+validates the full manifest, but writes only the changed page output and
+refreshes manifests. Component, layout, CSS, config, source-set, target, app,
+binary, WASM, and restart changes use the full build path. For generated app
+development, `watch --restart` can rebuild and restart one generated binary
+after each successful build:
+
+```sh
+gowdk watch --restart --target admin
+gowdk watch --restart --out dist/app --app .gowdk/app --bin bin/app
+```
+
+Failed rebuilds leave the current process running. Generated static files,
+manifests, generated app source, and embedded static files are skipped when
+their bytes are unchanged, which reduces restart churn in the local redeploy
+loop. This is not browser HMR.
 
 GOWDK does not currently generate Kubernetes manifests or own deployment
 configuration. Users can drive their own container or Kubernetes deployment code
-by building selected configured modules with `gowdk build --module <name>`.
+by declaring static `Build.Targets` or by building selected configured modules
+with repeated or comma-separated `gowdk build --module <name>` flags. The
+selected modules define what is emitted to `--out`, copied into `--app`, and
+embedded into `--bin` or `--wasm`; use separate output/app/bin/wasm paths when
+separate artifacts need different module sets.
 Generated apps identify replicas through `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`,
 and `GOWDK_INSTANCE_ID`, expose that data through `/_gowdk/health`, and include
 it in `X-GOWDK-*` response headers. If `GOWDK_INSTANCE_ID` is omitted, the

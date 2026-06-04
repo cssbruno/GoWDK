@@ -47,6 +47,21 @@ var Config = gowdk.Config{
 			{Href: "/assets/app.css"},
 			{Href: "/assets/theme.css"},
 		},
+		Targets: []gowdk.BuildTargetConfig{
+			{
+				Name: "admin",
+				Modules: []string{"admin"},
+				Output: "dist/admin",
+				App: ".gowdk/admin",
+				Binary: "bin/admin",
+				WASM: "bin/admin.wasm",
+			},
+			{
+				Name: "public-admin",
+				Modules: []string{"public", "admin"},
+				Output: "dist/public-admin",
+			},
+		},
 	},
 	CSS: gowdk.CSSConfig{
 		Include: []string{"styles/**/*.css"},
@@ -95,6 +110,18 @@ var Config = gowdk.Config{
 	}
 	if len(config.Build.Stylesheets) != 2 || config.Build.Stylesheets[0].Href != "/assets/app.css" || config.Build.Stylesheets[1].Href != "/assets/theme.css" {
 		t.Fatalf("unexpected stylesheets: %#v", config.Build.Stylesheets)
+	}
+	if len(config.Build.Targets) != 2 {
+		t.Fatalf("unexpected build targets: %#v", config.Build.Targets)
+	}
+	if config.Build.Targets[0].Name != "admin" || config.Build.Targets[0].Output != "dist/admin" || config.Build.Targets[0].App != ".gowdk/admin" || config.Build.Targets[0].Binary != "bin/admin" || config.Build.Targets[0].WASM != "bin/admin.wasm" {
+		t.Fatalf("unexpected admin build target: %#v", config.Build.Targets[0])
+	}
+	if len(config.Build.Targets[0].Modules) != 1 || config.Build.Targets[0].Modules[0] != "admin" {
+		t.Fatalf("unexpected admin target modules: %#v", config.Build.Targets[0].Modules)
+	}
+	if config.Build.Targets[1].Name != "public-admin" || len(config.Build.Targets[1].Modules) != 2 || config.Build.Targets[1].Modules[0] != "public" || config.Build.Targets[1].Modules[1] != "admin" {
+		t.Fatalf("unexpected combined build target: %#v", config.Build.Targets[1])
 	}
 	if len(config.CSS.Include) != 1 || config.CSS.Include[0] != "styles/**/*.css" {
 		t.Fatalf("unexpected css includes: %#v", config.CSS.Include)

@@ -2,8 +2,8 @@
 package appgen
 
 import (
+	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -103,9 +103,6 @@ func GenerateWithOptions(staticDir, appDir string, options Options) (Result, err
 	if err := os.MkdirAll(absApp, 0o755); err != nil {
 		return Result{}, err
 	}
-	if err := os.RemoveAll(targetStatic); err != nil {
-		return Result{}, err
-	}
 	if err := os.MkdirAll(targetStatic, 0o755); err != nil {
 		return Result{}, err
 	}
@@ -114,10 +111,13 @@ func GenerateWithOptions(staticDir, appDir string, options Options) (Result, err
 	if err != nil {
 		return Result{}, err
 	}
-	if err := os.WriteFile(filepath.Join(absApp, modFileName), []byte(moduleSource), 0o644); err != nil {
+	if err := removeStaleStaticFiles(targetStatic, files); err != nil {
 		return Result{}, err
 	}
-	if err := os.WriteFile(filepath.Join(absApp, mainFileName), []byte(mainSource(options.Actions, options.SSR)), 0o644); err != nil {
+	if err := writeFileIfChanged(filepath.Join(absApp, modFileName), []byte(moduleSource)); err != nil {
+		return Result{}, err
+	}
+	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(mainSource(options.Actions, options.SSR))); err != nil {
 		return Result{}, err
 	}
 
@@ -206,6 +206,52 @@ func BuildBinary(appDir, binaryPath string) (string, error) {
 		return "", fmt.Errorf("go build generated app failed: %w\n%s", err, strings.TrimSpace(string(output)))
 	}
 	return absBinary, nil
+}
+
+// BuildWASM compiles the generated app into a Go js/wasm artifact.
+func BuildWASM(appDir, wasmPath string) (string, error) {
+	if strings.TrimSpace(appDir) == "" {
+		return "", fmt.Errorf("generated app directory is required")
+	}
+	if strings.TrimSpace(wasmPath) == "" {
+		return "", fmt.Errorf("wasm output path is required")
+	}
+	absApp, err := filepath.Abs(appDir)
+	if err != nil {
+		return "", err
+	}
+	absWASM, err := filepath.Abs(wasmPath)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(absWASM), 0o755); err != nil {
+		return "", err
+	}
+
+	command := exec.Command("go", "build", "-buildvcs=false", "-o", absWASM, ".")
+	command.Dir = absApp
+	command.Env = append(buildEnvWithout(os.Environ(), "GOOS", "GOARCH"), "GOOS=js", "GOARCH=wasm")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("go build generated wasm failed: %w\n%s", err, strings.TrimSpace(string(output)))
+	}
+	return absWASM, nil
+}
+
+func buildEnvWithout(env []string, names ...string) []string {
+	blocked := map[string]bool{}
+	for _, name := range names {
+		blocked[name] = true
+	}
+	var filtered []string
+	for _, entry := range env {
+		name, _, ok := strings.Cut(entry, "=")
+		if ok && blocked[name] {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
 }
 
 func validateDirectories(staticDir, appDir string) error {
@@ -304,23 +350,49 @@ func unsafeEmbeddedFile(rel string) bool {
 }
 
 func copyFile(sourcePath, targetPath string) error {
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return err
-	}
-	source, err := os.Open(sourcePath)
+	payload, err := os.ReadFile(sourcePath)
 	if err != nil {
 		return err
 	}
-	defer source.Close()
+	return writeFileIfChanged(targetPath, payload)
+}
 
-	target, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-	if err != nil {
+func removeStaleStaticFiles(targetRoot string, files []string) error {
+	keep := map[string]bool{}
+	for _, file := range files {
+		keep[file] = true
+	}
+	return filepath.WalkDir(targetRoot, func(filePath string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(targetRoot, filePath)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if keep[rel] {
+			return nil
+		}
+		return os.Remove(filePath)
+	})
+}
+
+func writeFileIfChanged(filePath string, contents []byte) error {
+	current, err := os.ReadFile(filePath)
+	if err == nil && bytes.Equal(current, contents) {
+		return nil
+	}
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	defer target.Close()
-
-	_, err = io.Copy(target, source)
-	return err
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, contents, 0o644)
 }
 
 func validateActionRoutes(routes []ActionRoute) error {

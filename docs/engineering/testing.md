@@ -64,7 +64,10 @@ Use `node --check` and `node --test editors/vscode/*.test.js` when editor extens
 - `internal/discover` tests cover recursive `.gwdk` include/exclude matching.
 - `internal/parser` tests cover page/component/layout annotations, `paths`, `build`, `load`, `view`, `props`, `act`, captured `paths`/`build`/`load`/`view` bodies, the first action input/redirect body subset, and render mode rejection.
 - `internal/view` tests cover static markup rendering, escaping, expression attributes, shorthand class/id normalization, component expansion, and missing component/prop errors.
-- `internal/staticgen` tests cover static HTML emission, literal build data, build-data route-param binding, literal dynamic paths, route and asset manifest output, component expansion, nested route output paths, and no partial output on unsupported pages.
+- `internal/staticgen` tests cover static HTML emission, literal build data,
+  imported Go build data functions, build-data route-param binding, literal
+  dynamic paths, route and asset manifest output, component expansion, nested
+  route output paths, and no partial output on unsupported pages.
 - `internal/lang` tests cover lexical tokenization, diagnostics, formatting, file checks, and manifest JSON from parsed source files.
 - `internal/lang` tests cover site-map JSON for movable page files.
 - `internal/manifest` tests cover route manifest JSON render/path/guard/action output.
@@ -74,11 +77,18 @@ Use `node --check` and `node --test editors/vscode/*.test.js` when editor extens
   `node` is available.
 - `internal/lsp` tests cover initialize, diagnostics, formatting, completion, shutdown, and exit protocol behavior.
 - `editors/vscode` tests cover extension route hierarchy helpers.
-- `cmd/gowdk` tests cover `build --out` writing `index.html`, expanding a component file, discovering build inputs when explicit paths are omitted, loading literal build config for source/output settings, and local static serving behavior.
-- `cmd/gowdk` tests cover `watch --once`, invalid watch intervals, and input
-  snapshot change detection.
+- `cmd/gowdk` tests cover `build --out` writing `index.html`, expanding a component file, discovering build inputs when explicit paths are omitted, loading literal build config for source/output settings, configured build targets, selected target builds, and local static serving behavior.
+- `cmd/gowdk` tests cover `watch --once`, invalid watch intervals, restart
+  option parsing, restart binary inference, content-hash input snapshots,
+  snapshot diffs, no-op touch detection, incremental static page rebuild
+  selection, and component-change fallback.
 - `cmd/gowdk` and `internal/appgen` tests cover generated embedded static app
-  source, binary compilation, live binary HTTP serving, and first-slice action
-  redirect routing.
+  source, binary compilation, WASM artifact compilation, live binary HTTP
+  serving, and first-slice action redirect routing.
+- `internal/staticgen` and `internal/appgen` tests cover preserving unchanged
+  generated file modification times so local watch loops do not retrigger on
+  identical output.
+- `internal/staticgen` tests cover incremental changed-page rendering, complete
+  route manifest refreshes, and stale route output cleanup.
 - `internal/project` tests cover static `gowdk.config.go` parsing for source
-  discovery, module source groups, and build output.
+  discovery, module source groups, build output, and build targets.

@@ -88,6 +88,17 @@ func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 	if len(firstDiagnostics) == 0 {
 		t.Fatal("expected diagnostics for invalid document")
 	}
+	first := firstDiagnostics[0].(map[string]any)
+	if first["code"] != "parse_error" {
+		t.Fatalf("expected parse_error code, got %#v", first)
+	}
+	firstRange := first["range"].(map[string]any)
+	start := firstRange["start"].(map[string]any)
+	end := firstRange["end"].(map[string]any)
+	if start["line"] != float64(1) || start["character"] != float64(0) ||
+		end["line"] != float64(1) || end["character"] != float64(12) {
+		t.Fatalf("expected full parse-error line range, got %#v", firstRange)
+	}
 	secondDiagnostics := messages[2]["params"].(map[string]any)["diagnostics"].([]any)
 	if len(secondDiagnostics) != 0 {
 		t.Fatalf("expected diagnostics to clear on close, got %#v", secondDiagnostics)

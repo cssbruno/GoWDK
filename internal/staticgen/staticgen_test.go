@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gowdk/gowdk"
+	"github.com/gowdk/gowdk/internal/lang"
 	"github.com/gowdk/gowdk/internal/manifest"
 	runtimeasset "github.com/gowdk/gowdk/runtime/asset"
 )
@@ -123,6 +124,75 @@ func TestBuildExpandsExplicitComponents(t *testing.T) {
 	}
 }
 
+func TestBuildExpandsWrapperComponentSlots(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "home",
+			Route: "/",
+			Blocks: manifest.Blocks{
+				Build:     true,
+				BuildBody: `=> { title: "Hello <slots>" }`,
+				View:      true,
+				ViewBody:  `<main><Panel title="Featured"><h1>{title}</h1></Panel></main>`,
+			},
+		}},
+		Components: []manifest.Component{{
+			Name:  "Panel",
+			Props: []manifest.Prop{{Name: "title", Type: "string"}},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<section .panel><h2>{title}</h2><slot /></section>`,
+			},
+		}},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := readFile(t, filepath.Join(outputDir, "index.html"))
+	want := `<main><section class="panel"><h2>Featured</h2><h1>Hello &lt;slots&gt;</h1></section></main>`
+	if !strings.Contains(html, want) {
+		t.Fatalf("expected wrapper component slot output %q in:\n%s", want, html)
+	}
+}
+
+func TestBuildCompilesRealisticFixtureProjectEndToEnd(t *testing.T) {
+	outputDir := t.TempDir()
+	app, diagnostics := lang.ParseBuildFiles([]string{
+		filepath.FromSlash("testdata/full_fixture/docs.page.gwdk"),
+		filepath.FromSlash("testdata/full_fixture/hero.cmp.gwdk"),
+	})
+	if diagnostics.HasErrors() {
+		t.Fatalf("unexpected diagnostics: %#v", diagnostics)
+	}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Artifacts) != 1 || result.Artifacts[0].Route != "/docs/getting-started" {
+		t.Fatalf("unexpected build artifacts: %#v", result.Artifacts)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "docs", "getting-started", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, expected := range []string{
+		`<section><h1>Getting Started</h1><p>Portable Go web compiler</p></section>`,
+		`<p>getting-started</p>`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in fixture output:\n%s", expected, output)
+		}
+	}
+	assertOutputMatchesFixture(t, outputDir, "docs/getting-started/index.html")
+	assertOutputMatchesFixture(t, outputDir, routeManifestFile)
+	assertOutputMatchesFixture(t, outputDir, assetManifestFile)
+}
+
 func TestBuildEmitsConfiguredStylesheetLinks(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{{
@@ -158,6 +228,134 @@ func TestBuildEmitsConfiguredStylesheetLinks(t *testing.T) {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected %q in output:\n%s", expected, output)
 		}
+	}
+}
+
+func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	if err := os.MkdirAll("styles", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "styles", "global.css"), "body { color: black; }\n")
+	writeFile(t, filepath.Join(root, "styles", "home.css"), ".home { display: grid; }\n")
+	writeFile(t, filepath.Join(root, "styles", "reset.css"), "* { box-sizing: border-box; }\n")
+	writeFile(t, filepath.Join(root, "styles", "tokens.css"), ":root { --brand: blue; }\n")
+	writeFile(t, filepath.Join(root, "styles", "forms.css"), "input { font: inherit; }\n")
+
+	outputDir := filepath.Join(root, "dist")
+	app := manifest.Manifest{Pages: []manifest.Page{
+		{
+			ID:    "home",
+			Route: "/",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main>Home</main>`,
+			},
+		},
+		{
+			ID:    "dashboard",
+			Route: "/dashboard",
+			CSS:   []string{"reset", "tokens", "forms"},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main>Dashboard</main>`,
+			},
+		},
+		{
+			ID:    "embed",
+			Route: "/embed",
+			CSS:   []string{"none"},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main>Embed</main>`,
+			},
+		},
+	}}
+
+	result, err := Build(gowdk.Config{
+		CSS: gowdk.CSSConfig{
+			Include: []string{"styles/*.css"},
+		},
+	}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.CSSArtifacts) != 2 {
+		t.Fatalf("expected page css for home and dashboard, got %#v", result.CSSArtifacts)
+	}
+
+	homeHTML := readFile(t, filepath.Join(outputDir, "index.html"))
+	if !strings.Contains(homeHTML, `<link rel="stylesheet" href="/assets/gowdk/home.css">`) {
+		t.Fatalf("expected home page css link:\n%s", homeHTML)
+	}
+	homeCSS := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "home.css"))
+	for _, expected := range []string{"gowdk css: global", "body { color: black; }", "gowdk css: home", ".home { display: grid; }"} {
+		if !strings.Contains(homeCSS, expected) {
+			t.Fatalf("expected %q in home css:\n%s", expected, homeCSS)
+		}
+	}
+	if strings.Contains(homeCSS, "input { font: inherit; }") {
+		t.Fatalf("did not expect forms css in default home css:\n%s", homeCSS)
+	}
+
+	dashboardHTML := readFile(t, filepath.Join(outputDir, "dashboard", "index.html"))
+	if !strings.Contains(dashboardHTML, `<link rel="stylesheet" href="/assets/gowdk/dashboard.css">`) {
+		t.Fatalf("expected dashboard page css link:\n%s", dashboardHTML)
+	}
+	dashboardCSS := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "dashboard.css"))
+	for _, expected := range []string{"gowdk css: reset", "gowdk css: tokens", "gowdk css: forms"} {
+		if !strings.Contains(dashboardCSS, expected) {
+			t.Fatalf("expected %q in dashboard css:\n%s", expected, dashboardCSS)
+		}
+	}
+	if strings.Contains(dashboardCSS, "gowdk css: global") {
+		t.Fatalf("did not expect global css in exact dashboard selection:\n%s", dashboardCSS)
+	}
+
+	embedHTML := readFile(t, filepath.Join(outputDir, "embed", "index.html"))
+	if strings.Contains(embedHTML, "/assets/gowdk/embed.css") {
+		t.Fatalf("did not expect embed page css link:\n%s", embedHTML)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "assets", "gowdk", "embed.css")); !os.IsNotExist(err) {
+		t.Fatalf("expected no embed css file, stat err: %v", err)
+	}
+}
+
+func TestBuildRejectsUnknownPageCSSReferenceBeforeWriting(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	if err := os.MkdirAll("styles", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "styles", "global.css"), "body {}\n")
+
+	outputDir := filepath.Join(root, "dist")
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "home",
+		Route: "/",
+		CSS:   []string{"missing"},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{
+		CSS: gowdk.CSSConfig{
+			Include: []string{"styles/*.css"},
+		},
+	}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected unknown css reference error")
+	}
+	if !strings.Contains(err.Error(), `home: unknown css input "missing"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if entries, err := os.ReadDir(outputDir); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	} else if len(entries) != 0 {
+		t.Fatalf("expected no partial output, got %#v", entries)
 	}
 }
 
@@ -197,6 +395,79 @@ func TestBuildRendersLiteralBuildData(t *testing.T) {
 	output := string(payload)
 	if !strings.Contains(output, `<main data-page="home"><section><h1>Portable Go web compiler</h1></section></main>`) {
 		t.Fatalf("expected build data in output:\n%s", output)
+	}
+}
+
+func TestBuildComposesPageLayouts(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:      "home",
+			Route:   "/",
+			Layouts: []string{"root", "marketing"},
+			Blocks: manifest.Blocks{
+				Build:     true,
+				BuildBody: `=> { title: "GOWDK & layouts" }`,
+				View:      true,
+				ViewBody:  `<main>{title}</main>`,
+			},
+		}},
+		Layouts: []manifest.Layout{
+			{
+				ID: "root",
+				Blocks: manifest.Blocks{
+					View:     true,
+					ViewBody: `<div .root><slot /></div>`,
+				},
+			},
+			{
+				ID: "marketing",
+				Blocks: manifest.Blocks{
+					View:     true,
+					ViewBody: `<section .marketing><slot /></section>`,
+				},
+			},
+		},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := readFile(t, filepath.Join(outputDir, "index.html"))
+	want := `<div class="root"><section class="marketing"><main>GOWDK &amp; layouts</main></section></div>`
+	if !strings.Contains(html, want) {
+		t.Fatalf("expected composed layouts %q in:\n%s", want, html)
+	}
+}
+
+func TestBuildRejectsLayoutWithoutOneSlot(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:      "home",
+			Route:   "/",
+			Layouts: []string{"root"},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main>Home</main>`,
+			},
+		}},
+		Layouts: []manifest.Layout{{
+			ID: "root",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<div><slot /><slot /></div>`,
+			},
+		}},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected layout slot error")
+	}
+	if !strings.Contains(err.Error(), `layout root must contain exactly one <slot /> placeholder`) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -370,6 +641,111 @@ func TestBuildMergesBuildDataWithDynamicRouteParams(t *testing.T) {
 	}
 }
 
+func TestBuildBindsRouteParamsIntoBuildDataValues(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "blog.post",
+		Route: "/blog/{slug}",
+		Paths: true,
+		Blocks: manifest.Blocks{
+			PathsBody: `=> { slug: "hello-gowdk" }`,
+			Build:     true,
+			BuildBody: `=> { title: "Post {slug}", canonical: "/blog/{param(\"slug\")}" }`,
+			View:      true,
+			ViewBody:  `<main data-canonical="{canonical}"><h1>{title}</h1></main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "blog", "hello-gowdk", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), `<main data-canonical="/blog/hello-gowdk"><h1>Post hello-gowdk</h1></main>`) {
+		t.Fatalf("expected route params in build data output:\n%s", payload)
+	}
+}
+
+func TestBuildRejectsUnknownRouteParamInBuildDataValue(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "blog.post",
+		Route: "/blog/{slug}",
+		Paths: true,
+		Blocks: manifest.Blocks{
+			PathsBody: `=> { slug: "hello-gowdk" }`,
+			Build:     true,
+			BuildBody: `=> { title: "Post {missing}" }`,
+			View:      true,
+			ViewBody:  `<main>{title}</main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected unknown route param error")
+	}
+	if !strings.Contains(err.Error(), `build field title: unknown route param "missing"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBuildRendersExplicitRouteParamReferences(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "blog.post",
+		Route: "/blog/{slug}",
+		Paths: true,
+		Blocks: manifest.Blocks{
+			PathsBody: `=> { slug: "hello-gowdk" }`,
+			View:      true,
+			ViewBody:  `<main data-slug="{param(\"slug\")}"><h1>{param("slug")}</h1></main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "blog", "hello-gowdk", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), `<main data-slug="hello-gowdk"><h1>hello-gowdk</h1></main>`) {
+		t.Fatalf("expected route param reference in output:\n%s", payload)
+	}
+}
+
+func TestBuildRejectsUndeclaredRouteParamReferenceBeforeWriting(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "blog.post",
+		Route: "/blog/{slug}",
+		Paths: true,
+		Blocks: manifest.Blocks{
+			PathsBody: `=> { slug: "hello-gowdk" }`,
+			View:      true,
+			ViewBody:  `<main>{param("missing")}</main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected undeclared route param reference error")
+	}
+	if !strings.Contains(err.Error(), `view references route param "missing" that is not declared by route "/blog/{slug}"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if entries, err := os.ReadDir(outputDir); err != nil {
+		t.Fatal(err)
+	} else if len(entries) != 0 {
+		t.Fatalf("expected no partial output, got %#v", entries)
+	}
+}
+
 func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 	outputDir := t.TempDir()
 	processor := &recordingCSSProcessor{}
@@ -380,7 +756,7 @@ func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 			Route:  "/",
 			Blocks: manifest.Blocks{
 				View:     true,
-				ViewBody: `<main>Home</main>`,
+				ViewBody: `<main .home-shell>Home</main>`,
 			},
 		}},
 		Components: []manifest.Component{{
@@ -388,12 +764,18 @@ func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 			Name:   "Hero",
 			Blocks: manifest.Blocks{
 				View:     true,
-				ViewBody: `<section>Hero</section>`,
+				ViewBody: `<section class="hero-card">Hero</section>`,
 			},
 		}},
 	}
 
-	result, err := Build(gowdk.Config{Addons: []gowdk.Addon{processor}}, app, outputDir)
+	result, err := Build(gowdk.Config{
+		Build: gowdk.BuildConfig{Output: outputDir},
+		CSS:   gowdk.CSSConfig{Include: []string{"styles/**/*.css"}},
+		Addons: []gowdk.Addon{
+			processor,
+		},
+	}, app, outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,6 +784,12 @@ func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 	}
 	if len(processor.sources) != 2 || processor.sources[0].Kind != "page" || processor.sources[1].Kind != "component" {
 		t.Fatalf("unexpected css sources: %#v", processor.sources)
+	}
+	if strings.Join(processor.sources[0].CSSClasses, ",") != "home-shell" || strings.Join(processor.sources[1].CSSClasses, ",") != "hero-card" {
+		t.Fatalf("unexpected css source classes: %#v", processor.sources)
+	}
+	if processor.context.Build.Output != outputDir || strings.Join(processor.context.CSS.Include, ",") != "styles/**/*.css" {
+		t.Fatalf("unexpected css processor config context: %#v", processor.context)
 	}
 	if len(result.CSSArtifacts) != 1 {
 		t.Fatalf("expected one css artifact, got %#v", result.CSSArtifacts)
@@ -525,6 +913,7 @@ func TestBuildRejectsMissingComponentBeforeWriting(t *testing.T) {
 type recordingCSSProcessor struct {
 	calls   int
 	sources []gowdk.CSSSource
+	context gowdk.CSSContext
 }
 
 func (processor *recordingCSSProcessor) Name() string {
@@ -538,6 +927,7 @@ func (processor *recordingCSSProcessor) Features() []gowdk.Feature {
 func (processor *recordingCSSProcessor) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
 	processor.calls++
 	processor.sources = append([]gowdk.CSSSource(nil), context.Sources...)
+	processor.context = context
 	return gowdk.CSSResult{
 		Assets: []gowdk.CSSAsset{{
 			Path:     "assets/app.css",
@@ -762,7 +1152,7 @@ func TestBuildRejectsInvalidDynamicPathsBeforeWriting(t *testing.T) {
 		},
 		{
 			name:      "unsafe segment",
-			body:      `=> { slug: "../secret" }`,
+			body:      `=> { slug: "../SECRET_TOKEN" }`,
 			wantError: `must not contain /, ?, or #`,
 		},
 		{
@@ -793,6 +1183,9 @@ func TestBuildRejectsInvalidDynamicPathsBeforeWriting(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tt.wantError) {
 				t.Fatalf("expected error containing %q, got %v", tt.wantError, err)
+			}
+			if strings.Contains(err.Error(), "SECRET_TOKEN") {
+				t.Fatalf("expected build error to omit sensitive path param value, got %v", err)
 			}
 			if entries, err := os.ReadDir(outputDir); err != nil {
 				t.Fatal(err)
@@ -862,4 +1255,35 @@ func readRouteManifest(t *testing.T, outputDir string) testRouteManifest {
 		t.Fatal(err)
 	}
 	return routes
+}
+
+func writeFile(t *testing.T, path string, contents string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(payload)
+}
+
+func assertOutputMatchesFixture(t *testing.T, outputDir, relativePath string) {
+	t.Helper()
+	actual, err := os.ReadFile(filepath.Join(outputDir, filepath.FromSlash(relativePath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected, err := os.ReadFile(filepath.Join("testdata", "full_fixture", "expected", filepath.FromSlash(relativePath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(actual) != string(expected) {
+		t.Fatalf("generated output mismatch for %s\nexpected:\n%s\nactual:\n%s", relativePath, expected, actual)
+	}
 }

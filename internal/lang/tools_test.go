@@ -93,6 +93,101 @@ view {
 	}
 }
 
+func TestManifestJSONGoldenFixture(t *testing.T) {
+	paths := []string{
+		filepath.FromSlash("testdata/manifest_golden/home.page.gwdk"),
+		filepath.FromSlash("testdata/manifest_golden/hero.cmp.gwdk"),
+	}
+
+	payload, diagnostics := ManifestJSON(gowdk.Config{}, paths)
+	if diagnostics.HasErrors() {
+		t.Fatal(diagnostics)
+	}
+	expected, err := os.ReadFile(filepath.FromSlash("testdata/manifest_golden/manifest.golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.TrimSpace(string(payload)) != strings.TrimSpace(string(expected)) {
+		t.Fatalf("manifest golden mismatch\nexpected:\n%s\nactual:\n%s", expected, payload)
+	}
+}
+
+func TestCheckJSONGoldenDiagnosticsFixture(t *testing.T) {
+	path := filepath.FromSlash("testdata/diagnostics_golden/invalid.page.gwdk")
+	payload, diagnostics := CheckJSON(gowdk.Config{}, []string{path})
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected diagnostics")
+	}
+	expected, err := os.ReadFile(filepath.FromSlash("testdata/diagnostics_golden/diagnostics.golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(payload)) != strings.TrimSpace(string(expected)) {
+		t.Fatalf("diagnostics golden mismatch\nexpected:\n%s\nactual:\n%s", expected, payload)
+	}
+}
+
+func TestClassifySourceUsesCurrentFileKindRules(t *testing.T) {
+	cases := []struct {
+		path   string
+		source string
+		kind   FileKind
+	}{
+		{"home.page.gwdk", "@page home", FileKindPage},
+		{"hero.cmp.gwdk", "@component Hero", FileKindComponent},
+		{"hero.gwdk", "@component Hero", FileKindComponent},
+		{"root.layout.gwdk", "@layout root", FileKindLayout},
+		{"images.asset.gwdk", "@asset images", FileKindAsset},
+		{"tailwind.plugin.gwdk", "@plugin tailwind", FileKindPlugin},
+	}
+
+	for _, tc := range cases {
+		if got := ClassifySource(tc.path, []byte(tc.source)); got != tc.kind {
+			t.Fatalf("ClassifySource(%q) = %q, want %q", tc.path, got, tc.kind)
+		}
+	}
+}
+
+func TestParseBuildFilesParsesLayoutFilesAndSkipsNonGWDKInputs(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	layout := filepath.Join(root, "root.layout.gwdk")
+	asset := filepath.Join(root, "images.asset.gwdk")
+	plugin := filepath.Join(root, "tailwind.plugin.gwdk")
+	writeGWDK(t, page, `@page home
+@route "/"
+@layout root
+
+view {
+}
+`)
+	writeGWDK(t, layout, `@layout root
+
+view {
+  <slot />
+}
+`)
+	writeGWDK(t, asset, `@asset images
+`)
+	writeGWDK(t, plugin, `@plugin tailwind
+`)
+
+	app, diagnostics := ParseBuildFiles([]string{page, layout, asset, plugin})
+	if diagnostics.HasErrors() {
+		t.Fatal(diagnostics)
+	}
+	if len(app.Pages) != 1 || app.Pages[0].ID != "home" {
+		t.Fatalf("expected one page, got %#v", app.Pages)
+	}
+	if len(app.Components) != 0 {
+		t.Fatalf("expected no components, got %#v", app.Components)
+	}
+	if len(app.Layouts) != 1 || app.Layouts[0].ID != "root" {
+		t.Fatalf("expected root layout, got %#v", app.Layouts)
+	}
+}
+
 func TestCheckJSONReportsCompilerDiagnosticsWithFile(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "dashboard.page.gwdk")
@@ -115,6 +210,17 @@ view {
 	if !strings.Contains(output, `"file": "`+path+`"`) {
 		t.Fatalf("expected diagnostic file in JSON: %s", output)
 	}
+	if !strings.Contains(output, `"code": "missing_ssr_addon"`) {
+		t.Fatalf("expected diagnostic code in JSON: %s", output)
+	}
+	if diagnostics[0].Pos.Line != 3 || diagnostics[0].Pos.Column != 1 {
+		t.Fatalf("expected compiler diagnostic at @render line, got %#v", diagnostics[0].Pos)
+	}
+	if diagnostics[0].Range == nil ||
+		diagnostics[0].Range.Start.Line != 3 || diagnostics[0].Range.Start.Column != 1 ||
+		diagnostics[0].Range.End.Line != 3 || diagnostics[0].Range.End.Column != 12 {
+		t.Fatalf("expected compiler diagnostic range for @render, got %#v", diagnostics[0].Range)
+	}
 	if !strings.Contains(output, "SSR addon is not enabled") {
 		t.Fatalf("expected SSR diagnostic in JSON: %s", output)
 	}
@@ -134,6 +240,39 @@ func TestParseFileReportsParserDiagnosticLine(t *testing.T) {
 	}
 	if diagnostics[0].Pos.Line != 3 || diagnostics[0].Pos.Column != 1 {
 		t.Fatalf("expected line 3 diagnostic, got %#v", diagnostics[0].Pos)
+	}
+	if diagnostics[0].Code != "parse_error" {
+		t.Fatalf("expected parse_error code, got %#v", diagnostics[0])
+	}
+	if diagnostics[0].Range == nil {
+		t.Fatalf("expected parse diagnostic range, got %#v", diagnostics[0])
+	}
+	if diagnostics[0].Range.Start.Line != 3 || diagnostics[0].Range.Start.Column != 1 ||
+		diagnostics[0].Range.End.Line != 3 || diagnostics[0].Range.End.Column != 13 {
+		t.Fatalf("unexpected parse diagnostic range: %#v", diagnostics[0].Range)
+	}
+}
+
+func TestCheckJSONReportsParserDiagnosticRangeAndCode(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "bad.page.gwdk")
+	writeGWDK(t, path, `@page bad
+@route "/bad"
+@render nope
+`)
+
+	payload, diagnostics := CheckJSON(gowdk.Config{}, []string{path})
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected parser diagnostic")
+	}
+	output := string(payload)
+	if !strings.Contains(output, `"code": "parse_error"`) {
+		t.Fatalf("expected parser diagnostic code in JSON: %s", output)
+	}
+	if !strings.Contains(output, `"range"`) ||
+		!strings.Contains(output, `"start": {`) ||
+		!strings.Contains(output, `"end": {`) {
+		t.Fatalf("expected parser diagnostic range in JSON: %s", output)
 	}
 }
 

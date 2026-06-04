@@ -71,5 +71,6 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 
 ## Open Questions
 
-- Workspace-wide manifest validation can be added once duplicate route/page checks exist.
+- Workspace-wide manifest validation can reuse the existing duplicate page and
+  route checks once the LSP maintains a project-wide manifest.
 - Incremental sync can replace full-document sync if large `.gwdk` files become common.

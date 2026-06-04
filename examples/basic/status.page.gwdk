@@ -1,0 +1,13 @@
+@page status
+@route "/status"
+
+api health {
+  GET "/api/health"
+}
+
+view {
+  <main>
+    <h1>Status</h1>
+    <p>API route metadata is available through manifest and routes output.</p>
+  </main>
+}

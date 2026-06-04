@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "routes": [
+    {
+      "page": "docs.post",
+      "route": "/docs/getting-started",
+      "path": "docs/getting-started/index.html"
+    }
+  ]
+}

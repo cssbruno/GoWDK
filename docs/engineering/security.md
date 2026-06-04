@@ -56,6 +56,9 @@ Perform a focused security review when adding:
 - SSR guards, session-aware layouts, or request-time `load {}`.
 - Server fragments that mutate or return user-specific HTML.
 
+First-slice actions, partials, APIs, SSR guards, layouts, and fragments should
+be reviewed against this file before public release.
+
 ## Reporting
 
 Security reporting policy lives in the repository root `SECURITY.md`.

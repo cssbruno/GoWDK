@@ -1,0 +1,6 @@
+@page blog.post
+@route "/blog/{slug}"
+
+view {
+  <main>Post</main>
+}

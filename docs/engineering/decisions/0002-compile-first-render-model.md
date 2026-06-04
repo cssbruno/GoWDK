@@ -41,7 +41,7 @@ Compiler rules:
 
 ### Positive
 
-- GOWDK has a sharper identity: static/compiler-first Go web kit with optional SSR.
+- GOWDK has a sharper identity: app-shipping Go compiler with static/action-first output and optional SSR.
 - One-binary deploy works with or without request-time full-page rendering.
 - Actions, APIs, and fragments can provide backend behavior without forcing SSR.
 - Compiler diagnostics can catch render model mistakes early.
@@ -68,5 +68,5 @@ Compiler rules:
 - Implement `.gwdk` discovery and manifest generation.
 - Implement parser support for `paths`, `build`, `load`, `act`, `api`, and `view`.
 - Implement static/prerender codegen.
-- Implement CSS/plugin extension points. Tailwind should be a future plugin, not initial core.
+- Implement CSS/plugin extension points. Tailwind should remain an optional addon/plugin, not initial core.
 - Implement one-binary serving before SSR addon internals.

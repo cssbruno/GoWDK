@@ -118,9 +118,21 @@ func (scanner *scanner) quotedString() (Token, Diagnostic) {
 	}
 	return Token{Kind: TokenIllegal, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos}, Diagnostic{
 		Pos:      pos,
+		Range:    sourceRange(pos, scanner.position()),
+		Code:     "unterminated_string",
 		Severity: "error",
 		Message:  "unterminated string literal",
 	}
+}
+
+func sourceRange(start, end Position) *Range {
+	if start.Line <= 0 || start.Column <= 0 {
+		return nil
+	}
+	if end.Line <= 0 || end.Column <= 0 || (end.Line == start.Line && end.Column <= start.Column) {
+		end = Position{Line: start.Line, Column: start.Column + 1}
+	}
+	return &Range{Start: start, End: end}
 }
 
 func (scanner *scanner) text() Token {

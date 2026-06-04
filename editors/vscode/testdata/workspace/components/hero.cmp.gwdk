@@ -1,0 +1,9 @@
+@component Hero
+
+props {
+  title string
+}
+
+view {
+  <section><h1>{title}</h1></section>
+}

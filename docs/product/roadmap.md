@@ -4,7 +4,7 @@
 
 Not: SSR framework with static support.
 
-Better: static/compiler-first web kit with optional SSR.
+Better: static/compiler-first app compiler with optional SSR.
 
 Core rule:
 
@@ -17,7 +17,7 @@ SSR addon renders at request time only where enabled.
 
 ```text
 GOWDK Core:
-  Build my web app.
+  Ship apps.
 
 SSR Addon:
   Render this page at request time.
@@ -45,7 +45,8 @@ Embed Addon:
 
 ## Phase Roadmap
 
-Current implementation status and remaining gaps are tracked in `docs/product/missing-implementation-checklist.md`.
+Current implementation status is summarized in `README.md` and
+`docs/product/requirements.md`.
 
 | Phase | Scope |
 | --- | --- |
@@ -72,6 +73,7 @@ Current implementation status and remaining gaps are tracked in `docs/product/mi
 - CSS/plugin extension points.
 - Embedded assets.
 - One-binary static serving.
+- Hybrid render policy and cache/revalidation policy docs.
 
 ### v0.2
 

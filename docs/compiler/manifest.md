@@ -2,7 +2,19 @@
 
 ## Current Internal Model
 
-The internal manifest tracks pages with source path, page ID, route, render mode, layouts, guard metadata, paths presence, block presence, captured `paths {}` body text, captured `build {}` body text, captured `view {}` body text, and first-slice action metadata. It also tracks component build inputs with source path, component name, string props, and captured `view {}` body text.
+The internal manifest tracks pages with source path, page ID, route, render
+mode, layouts, guard metadata, page CSS selection metadata, paths presence,
+block presence, captured `paths {}` body text, captured `build {}` body text,
+captured `view {}` body text, and first-slice action metadata. It also tracks
+component build inputs with source path, component name, string props, and
+captured `view {}` body text.
+
+Compiler validation now rejects malformed routes, duplicate route params,
+duplicate page route patterns, and same-method route conflicts before generated
+output runs. Page routes own `GET`, current action routes own `POST` on the page
+route, and current API metadata defaults to `GET` on the page route when API
+method or route data is absent. Current pages must also declare `view {}` because
+they own a page `GET` route.
 
 ## Current Public Manifest JSON
 
@@ -10,28 +22,71 @@ The internal manifest tracks pages with source path, page ID, route, render mode
 
 ```json
 {
+  "version": 1,
   "pages": {
     "home": {
+      "source": "examples/basic/home.page.gwdk",
+      "kind": "page",
       "route": "/",
       "render": "static",
       "layouts": ["root"],
       "paths": true,
       "guard": ["auth.required"],
+      "css": ["default", "page"],
+      "components": ["Hero"],
+      "staticAssets": ["/assets/hero.png"],
+      "cssClasses": ["hero", "lead"],
+      "styleAttributes": ["color: red;"],
+      "blocks": {
+        "paths": true,
+        "build": true,
+        "load": false,
+        "view": true,
+        "actions": ["submit"]
+      },
       "actions": [
         {
           "name": "submit",
           "inputName": "input",
           "inputType": "SignupInput",
           "validatesInput": true,
-          "redirect": "/signup?ok=1"
+          "redirect": "/signup?ok=1",
+          "fragments": [
+            {"target": "#signup-result"}
+          ]
         }
+      ],
+      "apis": [
+        {
+          "name": "health",
+          "method": "GET",
+          "route": "/api/health"
+        }
+      ]
+    }
+  },
+  "components": {
+    "Hero": {
+      "source": "examples/basic/hero.cmp.gwdk",
+      "kind": "component",
+      "props": [
+        {"name": "title", "type": "string"},
+        {"name": "tagline", "type": "string"}
       ]
     }
   }
 }
 ```
 
-`paths`, `layouts`, `guard`, and `actions` are omitted when empty or false.
+`version` is the public manifest schema version. Public manifest JSON includes
+known source paths, file kind, page route metadata, dynamic route params,
+declared block presence, first-slice action metadata including fragment targets,
+API block names, direct page component references for the current static `view {}` subset, direct static
+asset references, direct CSS class names, direct static `style` attribute
+values, first-slice API method/route metadata, and component declarations.
+`paths`, `layouts`, `guard`, `css`, `actions`, `apis`, `components`,
+`staticAssets`, `cssClasses`, and `styleAttributes` are omitted when empty or
+false.
 
 ## Current Site-Map JSON
 
@@ -76,4 +131,5 @@ referenced file.
 
 ## Planned Manifest Work
 
-Future manifest versions need schema versioning, file kinds, route params, declared blocks in public JSON, full action/API metadata, component/layout dependencies, assets, generated artifact paths, and duplicate route validation.
+Future manifest versions need full action/API metadata, transitive
+component/layout dependencies, and generated artifact paths.

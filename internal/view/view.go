@@ -4,6 +4,7 @@ package view
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -32,20 +33,29 @@ type Element struct {
 }
 
 func (node Element) render(ctx *renderContext, out *strings.Builder) error {
+	if node.Name == "slot" {
+		if ctx.slotHTML != "" {
+			out.WriteString(ctx.slotHTML)
+			return nil
+		}
+		for _, child := range node.Children {
+			if err := child.render(ctx, out); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	out.WriteByte('<')
 	out.WriteString(node.Name)
-	postRoute, err := node.postRoute(ctx)
+	directives, err := node.postDirectives(ctx)
 	if err != nil {
 		return err
 	}
 	for _, attr := range node.Attrs {
 		if strings.HasPrefix(attr.Name, "g:") {
-			if attr.Name != "g:post" {
-				return fmt.Errorf("unsupported directive attribute %q in static build", attr.Name)
-			}
 			continue
 		}
-		if postRoute != "" && (attr.Name == "method" || attr.Name == "action") {
+		if directives.Route != "" && (attr.Name == "method" || attr.Name == "action") {
 			return fmt.Errorf("form with g:post must not declare %q", attr.Name)
 		}
 		value, err := interpolate(ctx, attr.Value)
@@ -60,9 +70,19 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			out.WriteByte('"')
 		}
 	}
-	if postRoute != "" {
+	if directives.Route != "" {
 		out.WriteString(` method="post" action="`)
-		out.WriteString(gowhtml.Escape(postRoute))
+		out.WriteString(gowhtml.Escape(directives.Route))
+		out.WriteByte('"')
+	}
+	if directives.Target != "" {
+		out.WriteString(` data-gowdk-target="`)
+		out.WriteString(gowhtml.Escape(directives.Target))
+		out.WriteByte('"')
+	}
+	if directives.Swap != "" {
+		out.WriteString(` data-gowdk-swap="`)
+		out.WriteString(gowhtml.Escape(directives.Swap))
 		out.WriteByte('"')
 	}
 	out.WriteByte('>')
@@ -77,48 +97,104 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 	return nil
 }
 
-func (node Element) postRoute(ctx *renderContext) (string, error) {
-	postAction, err := node.postActionName()
+type postDirectives struct {
+	Action string
+	Route  string
+	Target string
+	Swap   string
+}
+
+func (node Element) postDirectives(ctx *renderContext) (postDirectives, error) {
+	directives, err := node.directiveValues()
 	if err != nil {
-		return "", err
+		return postDirectives{}, err
 	}
-	if postAction == "" {
-		return "", nil
+	if directives.Action == "" {
+		if directives.Target != "" || directives.Swap != "" {
+			return postDirectives{}, fmt.Errorf("g:target and g:swap require g:post")
+		}
+		return postDirectives{}, nil
 	}
-	route, ok := ctx.actions[postAction]
+	route, ok := ctx.actions[directives.Action]
 	if !ok {
-		return "", fmt.Errorf("unknown action %q for g:post", postAction)
+		return postDirectives{}, fmt.Errorf("unknown action %q for g:post", directives.Action)
 	}
-	return route, nil
+	directives.Route = route
+	return directives, nil
 }
 
 func (node Element) postActionName() (string, error) {
-	postAction := ""
+	directives, err := node.directiveValues()
+	if err != nil {
+		return "", err
+	}
+	return directives.Action, nil
+}
+
+func (node Element) directiveValues() (postDirectives, error) {
+	var directives postDirectives
 	for _, attr := range node.Attrs {
-		if attr.Name != "g:post" {
+		if !strings.HasPrefix(attr.Name, "g:") {
 			continue
 		}
-		if node.Name != "form" {
-			return "", fmt.Errorf("g:post is only supported on <form>")
+		if attr.Name != "g:post" && attr.Name != "g:target" && attr.Name != "g:swap" {
+			return postDirectives{}, fmt.Errorf("unsupported directive attribute %q in static build", attr.Name)
 		}
 		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
-			return "", fmt.Errorf("g:post requires an action name")
+			return postDirectives{}, fmt.Errorf("%s requires a value", attr.Name)
 		}
-		if postAction != "" {
-			return "", fmt.Errorf("form declares multiple g:post directives")
+		if node.Name != "form" {
+			return postDirectives{}, fmt.Errorf("%s is only supported on <form>", attr.Name)
 		}
-		postAction = strings.TrimSpace(attr.Value)
+		switch attr.Name {
+		case "g:post":
+			if directives.Action != "" {
+				return postDirectives{}, fmt.Errorf("form declares multiple g:post directives")
+			}
+			directives.Action = strings.TrimSpace(attr.Value)
+		case "g:target":
+			if directives.Target != "" {
+				return postDirectives{}, fmt.Errorf("form declares multiple g:target directives")
+			}
+			target := strings.TrimSpace(attr.Value)
+			if strings.ContainsAny(target, "{}") {
+				return postDirectives{}, fmt.Errorf("g:target %q must be static", target)
+			}
+			if !strings.HasPrefix(target, "#") || strings.TrimPrefix(target, "#") == "" || strings.ContainsAny(target, " \t\r\n") {
+				return postDirectives{}, fmt.Errorf("g:target %q must be a static id selector", target)
+			}
+			directives.Target = target
+		case "g:swap":
+			if directives.Swap != "" {
+				return postDirectives{}, fmt.Errorf("form declares multiple g:swap directives")
+			}
+			swap := strings.TrimSpace(attr.Value)
+			if !isSupportedSwapMode(swap) {
+				return postDirectives{}, fmt.Errorf("unsupported g:swap mode %q", swap)
+			}
+			directives.Swap = swap
+		}
 	}
-	if postAction == "" {
-		return "", nil
+	if directives.Swap != "" && directives.Target == "" {
+		return postDirectives{}, fmt.Errorf("g:swap requires g:target")
 	}
-	return postAction, nil
+	return directives, nil
+}
+
+func isSupportedSwapMode(value string) bool {
+	switch value {
+	case "innerHTML", "outerHTML":
+		return true
+	default:
+		return false
+	}
 }
 
 // ComponentCall invokes a parsed component with static string props.
 type ComponentCall struct {
-	Name  string
-	Attrs []Attr
+	Name     string
+	Attrs    []Attr
+	Children []Node
 }
 
 func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error {
@@ -151,12 +227,17 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 			return fmt.Errorf("component %s does not declare prop %q", node.Name, prop)
 		}
 	}
+	slotHTML, err := renderNodes(node.Children, ctx)
+	if err != nil {
+		return err
+	}
 
 	childCtx := renderContext{
 		components: ctx.components,
 		values:     values,
 		actions:    ctx.actions,
 		stack:      cloneStack(ctx.stack),
+		slotHTML:   slotHTML,
 	}
 	childCtx.stack[node.Name] = true
 	body, err := render(component.Body, childCtx)
@@ -165,6 +246,19 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 	}
 	out.WriteString(body)
 	return nil
+}
+
+func renderNodes(nodes []Node, ctx *renderContext) (string, error) {
+	if len(nodes) == 0 {
+		return "", nil
+	}
+	var out strings.Builder
+	for _, node := range nodes {
+		if err := node.render(ctx, &out); err != nil {
+			return "", err
+		}
+	}
+	return out.String(), nil
 }
 
 // Attr is a static HTML attribute.
@@ -232,6 +326,13 @@ type ActionFormField struct {
 	Required bool
 }
 
+// Dependencies records static dependencies visible in the first view subset.
+type Dependencies struct {
+	StaticAssets    []string
+	CSSClasses      []string
+	StyleAttributes []string
+}
+
 // RenderWithOptions renders a static markup fragment with component support,
 // interpolation data, and page-scoped action routes.
 func RenderWithOptions(source string, components map[string]Component, data map[string]string, options Options) (string, error) {
@@ -260,6 +361,24 @@ func ActionFormFields(source string) (map[string][]string, error) {
 	return fields, nil
 }
 
+// ViewDependencies returns direct static asset and style references from a
+// static markup fragment. Interpolated and external URLs are not reported.
+func ViewDependencies(source string) (Dependencies, error) {
+	nodes, err := Parse(source)
+	if err != nil {
+		return Dependencies{}, err
+	}
+	assets := map[string]bool{}
+	classes := map[string]bool{}
+	styles := map[string]bool{}
+	collectViewDependencies(nodes, assets, classes, styles)
+	return Dependencies{
+		StaticAssets:    sortedKeys(assets),
+		CSSClasses:      sortedKeys(classes),
+		StyleAttributes: sortedKeys(styles),
+	}, nil
+}
+
 // ActionFormSchema returns direct static HTML controls grouped by g:post action
 // name. Duplicate field names are merged, and Required is true if any matching
 // direct control is required.
@@ -286,9 +405,44 @@ func ActionFormSchema(source string) (map[string][]ActionFormField, error) {
 	return schema, nil
 }
 
+// ComponentReferences returns unique component names directly referenced by a
+// static markup fragment.
+func ComponentReferences(source string) ([]string, error) {
+	nodes, err := Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	names := map[string]bool{}
+	collectComponentReferences(nodes, names)
+	if len(names) == 0 {
+		return nil, nil
+	}
+	refs := make([]string, 0, len(names))
+	for name := range names {
+		refs = append(refs, name)
+	}
+	sort.Strings(refs)
+	return refs, nil
+}
+
+// ParamReferences returns unique param("name") route-param references directly
+// visible in the current static markup subset.
+func ParamReferences(source string) ([]string, error) {
+	nodes, err := Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	names := map[string]bool{}
+	collectParamReferences(nodes, names)
+	return sortedKeys(names), nil
+}
+
 func render(source string, ctx renderContext) (string, error) {
 	nodes, err := Parse(source)
 	if err != nil {
+		return "", err
+	}
+	if err := validateFragmentTargetReferences(nodes); err != nil {
 		return "", err
 	}
 	var out strings.Builder
@@ -300,30 +454,160 @@ func render(source string, ctx renderContext) (string, error) {
 	return out.String(), nil
 }
 
-func collectActionFormFields(nodes []Node, fields map[string]map[string]ActionFormField) error {
+func validateFragmentTargetReferences(nodes []Node) error {
+	ids := map[string]bool{}
+	targets := map[string]bool{}
+	collectIDsAndTargets(nodes, ids, targets)
+	for target := range targets {
+		id := strings.TrimPrefix(target, "#")
+		if !ids[id] {
+			return fmt.Errorf("g:target %q does not reference a static id in this view", target)
+		}
+	}
+	return nil
+}
+
+func collectIDsAndTargets(nodes []Node, ids map[string]bool, targets map[string]bool) {
 	for _, node := range nodes {
 		element, ok := node.(Element)
 		if !ok {
 			continue
 		}
-		action, err := element.postActionName()
-		if err != nil {
-			return err
-		}
-		if action != "" {
-			if fields[action] == nil {
-				fields[action] = map[string]ActionFormField{}
+		hasPost := false
+		for _, attr := range element.Attrs {
+			if attr.Name == "g:post" {
+				hasPost = true
+				break
 			}
-			if err := validateActionForm(element); err != nil {
+		}
+		for _, attr := range element.Attrs {
+			if attr.Boolean {
+				continue
+			}
+			switch attr.Name {
+			case "id":
+				id := strings.TrimSpace(attr.Value)
+				if id != "" && !strings.ContainsAny(id, "{}") {
+					ids[id] = true
+				}
+			case "g:target":
+				target := strings.TrimSpace(attr.Value)
+				if hasPost && target != "" && !strings.ContainsAny(target, "{}") {
+					targets[target] = true
+				}
+			}
+		}
+		collectIDsAndTargets(element.Children, ids, targets)
+	}
+}
+
+func collectParamReferences(nodes []Node, names map[string]bool) {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case Text:
+			collectParamReferencesFromString(typed.Value, names)
+		case Element:
+			for _, attr := range typed.Attrs {
+				collectParamReferencesFromString(attr.Value, names)
+			}
+			collectParamReferences(typed.Children, names)
+		case ComponentCall:
+			for _, attr := range typed.Attrs {
+				collectParamReferencesFromString(attr.Value, names)
+			}
+			collectParamReferences(typed.Children, names)
+		}
+	}
+}
+
+func collectParamReferencesFromString(value string, names map[string]bool) {
+	for {
+		start := strings.Index(value, "{")
+		if start < 0 {
+			return
+		}
+		end := strings.Index(value[start:], "}")
+		if end < 0 {
+			return
+		}
+		end += start
+		expr := strings.TrimSpace(value[start+1 : end])
+		if name, ok := routeParamExpression(expr); ok {
+			names[name] = true
+		}
+		value = value[end+1:]
+	}
+}
+
+func collectComponentReferences(nodes []Node, names map[string]bool) {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case ComponentCall:
+			names[typed.Name] = true
+			collectComponentReferences(typed.Children, names)
+		case Element:
+			collectComponentReferences(typed.Children, names)
+		}
+	}
+}
+
+func collectViewDependencies(nodes []Node, assets, classes, styles map[string]bool) {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case Element:
+			for _, attr := range typed.Attrs {
+				switch attr.Name {
+				case "class":
+					for _, className := range strings.Fields(attr.Value) {
+						if !strings.ContainsAny(className, "{}") {
+							classes[className] = true
+						}
+					}
+				case "style":
+					style := strings.TrimSpace(attr.Value)
+					if style != "" && !strings.ContainsAny(style, "{}") {
+						styles[style] = true
+					}
+				case "src", "href", "poster":
+					if isStaticAssetReference(attr.Value) {
+						assets[strings.TrimSpace(attr.Value)] = true
+					}
+				}
+			}
+			collectViewDependencies(typed.Children, assets, classes, styles)
+		case ComponentCall:
+			collectViewDependencies(typed.Children, assets, classes, styles)
+		}
+	}
+}
+
+func collectActionFormFields(nodes []Node, fields map[string]map[string]ActionFormField) error {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case Element:
+			action, err := typed.postActionName()
+			if err != nil {
 				return err
 			}
-			if err := collectNamedControls(element.Children, fields[action]); err != nil {
+			if action != "" {
+				if fields[action] == nil {
+					fields[action] = map[string]ActionFormField{}
+				}
+				if err := validateActionForm(typed); err != nil {
+					return err
+				}
+				if err := collectNamedControls(typed.Children, fields[action]); err != nil {
+					return err
+				}
+				continue
+			}
+			if err := collectActionFormFields(typed.Children, fields); err != nil {
 				return err
 			}
-			continue
-		}
-		if err := collectActionFormFields(element.Children, fields); err != nil {
-			return err
+		case ComponentCall:
+			if err := collectActionFormFields(typed.Children, fields); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -350,19 +634,22 @@ func validateActionForm(element Element) error {
 
 func collectNamedControls(nodes []Node, fields map[string]ActionFormField) error {
 	for _, node := range nodes {
-		element, ok := node.(Element)
-		if !ok {
-			continue
-		}
-		if field, ok, err := controlField(element); err != nil {
-			return err
-		} else if ok {
-			previous := fields[field.Name]
-			field.Required = field.Required || previous.Required
-			fields[field.Name] = field
-		}
-		if err := collectNamedControls(element.Children, fields); err != nil {
-			return err
+		switch typed := node.(type) {
+		case Element:
+			if field, ok, err := controlField(typed); err != nil {
+				return err
+			} else if ok {
+				previous := fields[field.Name]
+				field.Required = field.Required || previous.Required
+				fields[field.Name] = field
+			}
+			if err := collectNamedControls(typed.Children, fields); err != nil {
+				return err
+			}
+		case ComponentCall:
+			if err := collectNamedControls(typed.Children, fields); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -412,11 +699,38 @@ func controlField(element Element) (ActionFormField, bool, error) {
 	return field, true, nil
 }
 
+func sortedKeys(values map[string]bool) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for value := range values {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func isStaticAssetReference(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.ContainsAny(value, "{}") || strings.HasPrefix(value, "#") {
+		return false
+	}
+	lower := strings.ToLower(value)
+	for _, prefix := range []string{"http://", "https://", "//", "mailto:", "tel:", "data:"} {
+		if strings.HasPrefix(lower, prefix) {
+			return false
+		}
+	}
+	return true
+}
+
 type renderContext struct {
 	components map[string]Component
 	values     map[string]string
 	actions    map[string]string
 	stack      map[string]bool
+	slotHTML   string
 }
 
 type parser struct {
@@ -480,8 +794,16 @@ func (parser *parser) element() (Node, error) {
 		parser.skipSpace()
 		switch {
 		case parser.consume("/>"):
+			attrs, err := normalizeHTMLAttrs(attrs)
+			if err != nil {
+				return nil, err
+			}
 			return Element{Name: name, Attrs: attrs}, nil
 		case parser.consume(">"):
+			attrs, err := normalizeHTMLAttrs(attrs)
+			if err != nil {
+				return nil, err
+			}
 			children, err := parser.nodes(name)
 			if err != nil {
 				return nil, err
@@ -507,7 +829,11 @@ func (parser *parser) componentCall(name string) (ComponentCall, error) {
 		case parser.consume("/>"):
 			return ComponentCall{Name: name, Attrs: attrs}, nil
 		case parser.consume(">"):
-			return ComponentCall{}, parser.errorf("component <%s> must be self-closing in this build slice", name)
+			children, err := parser.nodes(name)
+			if err != nil {
+				return ComponentCall{}, err
+			}
+			return ComponentCall{Name: name, Attrs: attrs, Children: children}, nil
 		case parser.done():
 			return ComponentCall{}, parser.errorf("unterminated <%s> component tag", name)
 		default:
@@ -521,6 +847,9 @@ func (parser *parser) componentCall(name string) (ComponentCall, error) {
 }
 
 func (parser *parser) attr() (Attr, error) {
+	if attr, ok, err := parser.shorthandAttr(); ok || err != nil {
+		return attr, err
+	}
 	name, err := parser.name()
 	if err != nil {
 		return Attr{}, err
@@ -537,19 +866,98 @@ func (parser *parser) attr() (Attr, error) {
 	if strings.HasPrefix(name, "g:") {
 		return parser.directiveAttr(name)
 	}
-	if !parser.consume(`"`) {
-		return Attr{}, parser.errorf("attribute %q must use a quoted string value", name)
+	if parser.startsWith("{") {
+		value, err := parser.expressionAttrValue(name)
+		if err != nil {
+			return Attr{}, err
+		}
+		return Attr{Name: name, Value: value}, nil
+	}
+	value, err := parser.quotedAttrValue(name)
+	if err != nil {
+		return Attr{}, err
+	}
+	return Attr{Name: name, Value: value}, nil
+}
+
+func (parser *parser) expressionAttrValue(name string) (string, error) {
+	if !parser.consume("{") {
+		return "", parser.errorf("attribute %q must use an expression value", name)
 	}
 	start := parser.index
-	for !parser.done() && parser.peek() != '"' {
+	for !parser.done() && parser.peek() != '}' {
 		parser.advance()
 	}
 	if parser.done() {
-		return Attr{}, parser.errorf("unterminated attribute %q", name)
+		return "", parser.errorf("unterminated expression attribute %q", name)
+	}
+	expr := strings.TrimSpace(string(parser.source[start:parser.index]))
+	if expr == "" {
+		return "", parser.errorf("empty expression attribute %q", name)
+	}
+	parser.advance()
+	return "{" + expr + "}", nil
+}
+
+func (parser *parser) shorthandAttr() (Attr, bool, error) {
+	if parser.done() {
+		return Attr{}, false, nil
+	}
+	prefix := parser.peek()
+	if prefix != '.' && prefix != '#' {
+		return Attr{}, false, nil
+	}
+	parser.advance()
+	start := parser.index
+	for !parser.done() && isShorthandPart(parser.peek()) {
+		parser.advance()
+	}
+	if start == parser.index {
+		return Attr{}, true, parser.errorf("empty shorthand attribute")
 	}
 	value := string(parser.source[start:parser.index])
-	parser.advance()
-	return Attr{Name: name, Value: value}, nil
+	switch prefix {
+	case '.':
+		return Attr{Name: "class", Value: value}, true, nil
+	case '#':
+		return Attr{Name: "id", Value: value}, true, nil
+	default:
+		return Attr{}, false, nil
+	}
+}
+
+func normalizeHTMLAttrs(attrs []Attr) ([]Attr, error) {
+	var classValues []string
+	var out []Attr
+	id := ""
+	for _, attr := range attrs {
+		switch attr.Name {
+		case "class":
+			if attr.Boolean {
+				out = append(out, attr)
+				continue
+			}
+			for _, className := range strings.Fields(attr.Value) {
+				classValues = append(classValues, className)
+			}
+		case "id":
+			if attr.Boolean {
+				out = append(out, attr)
+				continue
+			}
+			if id != "" {
+				return nil, fmt.Errorf("element declares multiple id attributes")
+			}
+			id = attr.Value
+			out = append(out, attr)
+		default:
+			out = append(out, attr)
+		}
+	}
+	if len(classValues) > 0 {
+		out = append([]Attr{{Name: "class", Value: strings.Join(classValues, " ")}}, out...)
+	}
+	return out, nil
 }
 
 func (parser *parser) directiveAttr(name string) (Attr, error) {
@@ -565,19 +973,46 @@ func (parser *parser) directiveAttr(name string) (Attr, error) {
 		parser.advance()
 		return Attr{Name: name, Value: value}, nil
 	}
-	if parser.consume(`"`) {
-		start := parser.index
-		for !parser.done() && parser.peek() != '"' {
-			parser.advance()
+	if parser.startsWith(`"`) {
+		value, err := parser.quotedAttrValue(name)
+		if err != nil {
+			return Attr{}, err
 		}
-		if parser.done() {
-			return Attr{}, parser.errorf("unterminated directive attribute %q", name)
-		}
-		value := strings.TrimSpace(string(parser.source[start:parser.index]))
-		parser.advance()
+		value = strings.TrimSpace(value)
 		return Attr{Name: name, Value: value}, nil
 	}
 	return Attr{}, parser.errorf("directive attribute %q must use {name}", name)
+}
+
+func (parser *parser) quotedAttrValue(name string) (string, error) {
+	if !parser.consume(`"`) {
+		return "", parser.errorf("attribute %q must use a quoted string value", name)
+	}
+	start := parser.index - 1
+	escaped := false
+	for !parser.done() {
+		switch parser.peek() {
+		case '\\':
+			escaped = !escaped
+			parser.advance()
+		case '"':
+			if escaped {
+				escaped = false
+				parser.advance()
+				continue
+			}
+			parser.advance()
+			value, err := strconv.Unquote(string(parser.source[start:parser.index]))
+			if err != nil {
+				return "", parser.errorf("invalid attribute %q string: %v", name, err)
+			}
+			return value, nil
+		default:
+			escaped = false
+			parser.advance()
+		}
+	}
+	return "", parser.errorf("unterminated attribute %q", name)
 }
 
 func (parser *parser) closeTag() (string, error) {
@@ -705,6 +1140,10 @@ func isNamePart(r rune) bool {
 	return isNameStart(r) || unicode.IsDigit(r) || r == '-' || r == ':'
 }
 
+func isShorthandPart(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == ':'
+}
+
 func renderText(ctx *renderContext, out *strings.Builder, value string) error {
 	text, err := interpolate(ctx, value)
 	if err != nil {
@@ -735,6 +1174,15 @@ func interpolate(ctx *renderContext, value string) (string, error) {
 		if name == "" {
 			return "", fmt.Errorf("empty interpolation")
 		}
+		if param, ok := routeParamExpression(name); ok {
+			resolved, ok := ctx.values[param]
+			if !ok {
+				return "", fmt.Errorf("unknown route param %q", param)
+			}
+			out.WriteString(resolved)
+			value = value[end+1:]
+			continue
+		}
 		resolved, ok := ctx.values[name]
 		if !ok {
 			return "", fmt.Errorf("unknown interpolation %q", name)
@@ -742,6 +1190,34 @@ func interpolate(ctx *renderContext, value string) (string, error) {
 		out.WriteString(resolved)
 		value = value[end+1:]
 	}
+}
+
+func routeParamExpression(value string) (string, bool) {
+	if !strings.HasPrefix(value, `param("`) || !strings.HasSuffix(value, `")`) {
+		return "", false
+	}
+	name := strings.TrimPrefix(strings.TrimSuffix(value, `")`), `param("`)
+	if !isIdentifier(name) {
+		return "", false
+	}
+	return name, true
+}
+
+func isIdentifier(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, char := range value {
+		switch {
+		case char >= 'A' && char <= 'Z':
+		case char >= 'a' && char <= 'z':
+		case char == '_':
+		case index > 0 && char >= '0' && char <= '9':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func cloneStack(input map[string]bool) map[string]bool {

@@ -1,0 +1,12 @@
+@component Card
+
+props {
+  title string
+}
+
+view {
+  <section class="gowdk-card">
+    <h2>{title}</h2>
+    <slot />
+  </section>
+}

@@ -9,6 +9,7 @@ type Config struct {
 	Modules []ModuleConfig
 	Render  RenderConfig
 	Build   BuildConfig
+	CSS     CSSConfig
 	Addons  []Addon
 }
 ```
@@ -59,6 +60,10 @@ var Config = gowdk.Config{
 			{Href: "/assets/app.css"},
 		},
 	},
+	CSS: gowdk.CSSConfig{
+		Include: []string{"styles/**/*.css"},
+		Default: []string{"global", "tokens"},
+	},
 }
 ```
 
@@ -101,8 +106,56 @@ target build settings. Current `gowdk build` reads literal `Build.Output` and
 `Build.Stylesheets` from `gowdk.config.go`; `--out` overrides `Build.Output`.
 `BuildConfig.Assets` remains planned.
 
+## CSS
+
+`CSSConfig` controls discovered CSS inputs and generated page CSS output:
+
+```go
+type CSSConfig struct {
+	Include []string
+	Exclude []string
+	Default []string
+	Output  CSSOutputConfig
+}
+
+type CSSOutputConfig struct {
+	Dir        string
+	HrefPrefix string
+}
+```
+
+When omitted, CSS discovery scans `**/*.css`, excludes `.git`, `vendor`,
+`node_modules`, and the selected build output directory, and uses `global.css`
+as the default CSS input when present.
+
+`CSS.Default` names discovered CSS inputs used by the `default` built-in in
+`@css`. Generated page CSS defaults to `assets/gowdk/<page-id>.css` and hrefs
+under `/assets/gowdk/`.
+
 ## Addons
 
 `Addons` registers optional features such as static, actions, partial, SSR, API,
-embed, and CSS. Current validation uses SSR feature registration for render-mode
-checks, and static builds invoke addons that implement `gowdk.CSSProcessor`.
+embed, CSS, and rate limiting. Current validation uses SSR feature registration
+for render-mode checks, and static builds invoke addons that implement
+`gowdk.CSSProcessor`.
+
+The static config loader recognizes the known literal Tailwind addon subset:
+
+```go
+import "github.com/gowdk/gowdk/addons/tailwind"
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		tailwind.Addon(tailwind.Options{
+			Input:   "styles/app.css",
+			Command: ".gowdk/bin/tailwindcss",
+			Minify:  true,
+		}),
+	},
+}
+```
+
+Arbitrary addon constructors remain outside the current static config subset.
+Rate limiting can still be configured directly in user-owned server code through
+`addons/ratelimit` middleware with either the in-memory store or a Redis store
+adapter.

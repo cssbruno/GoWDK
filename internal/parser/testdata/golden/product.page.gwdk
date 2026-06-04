@@ -1,0 +1,28 @@
+@page shop.product
+@route "/shop/{slug}"
+@layout root, shop
+@render action
+@guard commerce.auth
+
+paths {
+  => { slug: "starter-kit" }
+}
+
+build {
+  => { title: "Starter Kit" }
+}
+
+act buy {
+  input := form BuyInput
+  valid(input)?
+  -> "/shop/starter-kit?ordered=1"
+}
+
+api metadata {
+}
+
+view {
+  <main>
+    <ProductCard title="{title}" />
+  </main>
+}

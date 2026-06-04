@@ -8,18 +8,22 @@ Implemented today:
 - Optional `props { name string }` declarations.
 - One `view {}` block per component.
 - Self-closing component calls such as `<Hero title="GOWDK" />`.
+- Wrapper component calls such as `<Panel>...</Panel>` with child content
+  rendered into `<slot />` in the component view.
 - Escaped `{prop}` text and attribute interpolation inside component views.
 - Component prop values can interpolate page build data, such as a route param
   from literal `paths {}`.
+- Slot children render in the caller scope, so page build data and route params
+  used inside the child content are resolved before being inserted into the
+  component slot.
 - Duplicate component names are rejected during manifest validation.
 
 Not implemented yet:
 
-- Component children or slots.
 - Non-string props.
 - Expression props.
-- Component-to-component calls as a documented contract.
-- Generated Go component source.
+- Named slots or scoped slots.
+- Wiring generated Go component packages into the generated app layout.
 
 Component design rules:
 

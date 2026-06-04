@@ -1,0 +1,15 @@
+@page embed.example
+@route "/embed"
+@layout root
+@render static
+
+build {
+  => { title: "Embedded GOWDK" }
+}
+
+view {
+  <main>
+    <h1>{title}</h1>
+    <p>Static output compiled into a single Go binary.</p>
+  </main>
+}

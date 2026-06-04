@@ -8,6 +8,7 @@ type Config struct {
 	Modules []ModuleConfig
 	Render  RenderConfig
 	Build   BuildConfig
+	CSS     CSSConfig
 	Addons  []Addon
 }
 
@@ -45,6 +46,20 @@ type BuildConfig struct {
 	Output      string
 	Assets      AssetMode
 	Stylesheets []Stylesheet
+}
+
+// CSSConfig controls discovered CSS inputs and page CSS output.
+type CSSConfig struct {
+	Include []string
+	Exclude []string
+	Default []string
+	Output  CSSOutputConfig
+}
+
+// CSSOutputConfig controls generated page stylesheet locations.
+type CSSOutputConfig struct {
+	Dir        string
+	HrefPrefix string
 }
 
 // AssetMode controls how frontend artifacts are shipped.

@@ -7,16 +7,22 @@ Implemented today:
 - `gowdk build [--out <dir>] [files...]` writes route-derived HTML files for simple `static` and `action` pages.
 - `.cmp.gwdk` files can be passed to build or discovered by default and expanded from self-closing component calls.
 - `gowdk-routes.json` records the static route, page ID, and relative output path for emitted pages.
-- `gowdk-assets.json` records generated static assets such as CSS files emitted by CSS processors.
+- `gowdk-assets.json` records generated static assets such as CSS files emitted
+  by CSS processors and generated page CSS files.
 - Configured stylesheets and CSS processor stylesheet links are emitted in page
   `<head>` elements.
 - CSS processors can emit CSS asset files under the output directory.
+- Discovered page CSS inputs selected by implicit `default page` or explicit
+  `@css` annotations are concatenated into generated page CSS files.
 - Dynamic static routes with literal `paths {}` declarations are expanded by
   `gowdk build`.
 - Literal dynamic route params can render in the current static `view {}`
   interpolation subset.
 - Literal `build {}` data can render in the current static `view {}`
   interpolation subset.
+- Static page output composes declared layouts by replacing each applied
+  layout's single `<slot />` placeholder before rendering the combined view
+  source once.
 - `gowdk build --app <dir>` writes a generated Go module that embeds the static
   output under `<dir>/static`.
 - `gowdk build --bin <file>` requires `--app` and compiles that generated app
@@ -32,8 +38,24 @@ Implemented today:
   `required` fields when the action declares `valid(input)?`.
 - Generated static app action route extraction rejects direct file inputs and
   multipart `g:post` forms until upload security rules are defined.
+- `internal/codegen.GenerateRouteRegistration` can emit formatted Go route
+  registration source from `internal/codegen.RouteBinding` plans for future
+  generated `internal/routes` packages.
+- `internal/codegen.GenerateComponentPackage` can emit formatted Go render
+  functions for current `.cmp.gwdk` components with string props and direct
+  `{prop}` interpolation. Generated component code writes static compiler-owned
+  chunks through `runtime/render.Builder.Static` and expression output through
+  `runtime/render.Builder.Text`, which escapes by default.
+- `runtime/response` defines fragment responses with target and swap metadata
+  for future generated partial handlers.
 - `/` maps to `index.html`.
 - `/patients` maps to `patients/index.html`.
+- Current asset names are stable and deterministic rather than content-hashed.
+- Generated embedded apps skip local environment files, source maps, source
+  files, VCS/dependency directories, and common temporary artifacts when copying
+  static output into the embedded app.
+- Generated embedded apps load `gowdk-assets.json` from the embedded filesystem
+  when present and expose the loaded asset count through `/_gowdk/health`.
 
 Not implemented yet:
 
@@ -51,6 +73,7 @@ The target output can include:
 
 - Static HTML for `static` and `action` pages.
 - Route manifest JSON.
+- Generated Go route registration.
 - Generated Go component render functions.
 - Generated action handlers and typed form decoders.
 - Generated API handlers.
@@ -81,6 +104,7 @@ The generated app reads `GOWDK_ADDR`, defaults to `127.0.0.1:8080`, serves GET
 and HEAD requests, maps extensionless routes to nested `index.html` files, and
 does not list directories. It exposes `/_gowdk/health` and adds
 `X-GOWDK-App`, `X-GOWDK-Module`, and `X-GOWDK-Instance-ID` headers to responses.
+It loads `gowdk-assets.json` from the embedded static filesystem when present.
 Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 `GOWDK_INSTANCE_ID`; if no instance ID is provided, the app creates one at
 process start from the module name, hostname, and a random token. It can also
@@ -131,8 +155,8 @@ as `/blog/hello-gowdk`.
 
 The `files` map resolves logical asset names to slash-separated paths relative
 to the selected output directory. The current implementation records CSS files
-emitted by CSS processors. It does not record configured stylesheet URLs that
-were not written by the build.
+emitted by CSS processors and generated page CSS files. It does not record
+configured stylesheet URLs that were not written by the build.
 
 ## Planned Server Defaults
 

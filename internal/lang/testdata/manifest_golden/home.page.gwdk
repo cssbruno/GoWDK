@@ -1,0 +1,20 @@
+@page home
+@route "/"
+@layout root
+@render action
+
+build {
+  => { title: "Home" }
+}
+
+act submit {
+  input := form SignupInput
+  valid(input)?
+  -> "/?ok=1"
+}
+
+view {
+  <main>
+    <Hero title="{title}" />
+  </main>
+}

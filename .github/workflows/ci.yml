@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Go tests
+        run: go test ./...
+
+      - name: Build CLI
+        run: go build ./cmd/gowdk
+
+      - name: Check VS Code extension syntax
+        run: node --check editors/vscode/extension.js
+
+      - name: Run VS Code extension unit tests
+        run: node --test editors/vscode/*.test.js
+
+      - name: Check example files
+        run: go run ./cmd/gowdk check --ssr examples/basic/*.gwdk
+
+      - name: Smoke build static example output
+        run: |
+          rm -rf /tmp/gowdk-build
+          go run ./cmd/gowdk build --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
+          test -f /tmp/gowdk-build/gowdk-routes.json
+          test -f /tmp/gowdk-build/gowdk-assets.json
+
+      - name: Smoke build dynamic static output
+        run: |
+          rm -rf /tmp/gowdk-dynamic-build
+          go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build examples/basic/blog-post.page.gwdk
+          test -f /tmp/gowdk-dynamic-build/blog/hello-gowdk/index.html
+          test -f /tmp/gowdk-dynamic-build/blog/static-first/index.html
+
+      - name: Smoke build CSS example output
+        run: |
+          rm -rf /tmp/gowdk-css-build
+          go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk
+          grep -F '<link rel="stylesheet" href="/assets/site.css">' /tmp/gowdk-css-build/styled/index.html
+
+      - name: Smoke build embedded binary example
+        run: |
+          rm -rf /tmp/gowdk-embed-build /tmp/gowdk-embed-app /tmp/gowdk-embed-site
+          go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
+          test -x /tmp/gowdk-embed-site

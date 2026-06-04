@@ -1,0 +1,24 @@
+@page patients
+@route "/patients"
+
+act refresh {
+  input := form PatientFilter
+  fragment "#patients" {
+    <section>
+      <p>Updated patients</p>
+    </section>
+  }
+  -> "/patients"
+}
+
+view {
+  <main>
+    <form g:post={refresh} g:target="#patients" g:swap="innerHTML">
+      <input name="query" />
+      <button>Refresh</button>
+    </form>
+    <section id="patients">
+      <p>Initial patients</p>
+    </section>
+  </main>
+}

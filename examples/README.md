@@ -9,9 +9,16 @@ This directory contains small `.gwdk` files for the current language tooling sca
 | `basic/home.page.gwdk` | Buildable static page using literal `build {}` data and `Hero`. | `go run ./cmd/gowdk build --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk` |
 | `basic/hero.cmp.gwdk` | Buildable static component with string props. | `go run ./cmd/gowdk build --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk` |
 | `basic/blog-post.page.gwdk` | Buildable dynamic static route example with literal `paths {}` source. | `go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build examples/basic/blog-post.page.gwdk` |
+| `basic/layout-stack.page.gwdk` | Static page that demonstrates ordered layout metadata. | `go run ./cmd/gowdk check examples/basic/layout-stack.page.gwdk` |
 | `basic/signup.page.gwdk` | Buildable static action page with the first POST redirect action subset. | `go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/basic/signup.page.gwdk` |
 | `basic/newsletter.page.gwdk` | Static action-form syntax example with `g:post` and component markup. | `go run ./cmd/gowdk check examples/basic/newsletter.page.gwdk` |
+| `basic/patients-fragment.page.gwdk` | Partial/server fragment metadata example with `fragment`, `g:target`, and `g:swap`. | `go run ./cmd/gowdk manifest examples/basic/patients-fragment.page.gwdk` |
+| `basic/status.page.gwdk` | API route metadata example with a named `GET` endpoint. | `go run ./cmd/gowdk routes examples/basic/status.page.gwdk` |
 | `basic/dashboard.page.gwdk` | SSR page with `load` and guard metadata. | `go run ./cmd/gowdk check --ssr examples/basic/dashboard.page.gwdk` |
+| `embed/site.page.gwdk` | Standalone one-binary static serving example. | `go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk` |
+| `css/styled.page.gwdk` | Configured stylesheet-link example. | `go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk` |
+| `tailwind/site.page.gwdk` | No-npm Tailwind standalone CLI workflow. | `go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk` |
+| `components/base/base-components.page.gwdk` | Source-level base component examples for `Button`, `TextField`, and `Card`. | `go run ./cmd/gowdk build --out /tmp/gowdk-base-components examples/components/base/*.gwdk` |
 
 Check all current examples with SSR validation enabled:
 
@@ -19,6 +26,7 @@ Check all current examples with SSR validation enabled:
 go run ./cmd/gowdk check --ssr examples/basic/*.gwdk
 go run ./cmd/gowdk manifest --ssr examples/basic/*.gwdk
 go run ./cmd/gowdk sitemap --ssr examples/basic/*.gwdk
+go run ./cmd/gowdk routes --ssr examples/basic/*.gwdk
 ```
 
 Build the current simple static page:
@@ -46,6 +54,28 @@ go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-a
 test -x /tmp/gowdk-action-site
 ```
 
+Build the one-binary static serving example:
+
+```sh
+go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
+test -x /tmp/gowdk-embed-site
+```
+
+Build the CSS stylesheet-link example:
+
+```sh
+go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk
+grep -F '<link rel="stylesheet" href="/assets/site.css">' /tmp/gowdk-css-build/styled/index.html
+go test ./examples/css
+```
+
+Build the source-level base component examples:
+
+```sh
+go run ./cmd/gowdk build --out /tmp/gowdk-base-components examples/components/base/*.gwdk
+test -f /tmp/gowdk-base-components/components/base/index.html
+```
+
 ## Current Limitations
 
 - `gowdk build` emits static HTML, `gowdk-routes.json`, and `gowdk-assets.json` for the simple home page, hero component, and literal dynamic paths today.
@@ -56,12 +86,14 @@ test -x /tmp/gowdk-action-site
   required-field validation, but not real typed action logic, APIs, partial
   fragments, or SSR handlers yet.
 - `view {}` bodies are parsed only for a small static HTML subset; `act` bodies
-  support the first form-input/redirect subset, while `api` and `load` bodies
-  are still not parsed beyond top-level block detection.
+  support the first form-input/redirect subset, `api` bodies support the first
+  method/route metadata line, and `load` bodies are still not parsed beyond
+  top-level block detection.
 - `@guard` is metadata only and does not enforce authentication.
 - Route params from literal `paths {}` are available to the current static
   `view {}` interpolation subset, but not to `build {}` expressions yet.
 - Literal `build {}` string data is available to the current static `view {}`
   interpolation subset.
-- Component children, partial fragment, API route, CSS/plugin, `g:target`,
-  `g:swap`, and broader generated app examples are planned.
+- Component children, generated API handlers, generated partial fragment
+  handlers, active partial-update client behavior, and full configured plugin
+  instantiation are planned.

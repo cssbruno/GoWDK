@@ -3,16 +3,25 @@ const childProcess = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { buildDirectoryHierarchy, buildRouteHierarchy } = require('./routeHierarchy');
+const core = require('./extension-core');
 
 const LANGUAGE_ID = 'gwdk';
+const semanticLegend = new vscode.SemanticTokensLegend(core.SEMANTIC_TOKEN_TYPES, []);
 
 function activate(context) {
   const diagnostics = vscode.languages.createDiagnosticCollection('gowdk');
   const pending = new Map();
   const siteMapTree = new SiteMapTreeProvider();
+  const directoryOutline = new DirectoryOutlineTreeProvider();
+  const refreshProjectViews = () => {
+    siteMapTree.refresh();
+    directoryOutline.refresh();
+  };
 
   context.subscriptions.push(diagnostics);
   context.subscriptions.push(vscode.window.registerTreeDataProvider('gowdk.siteMapTree', siteMapTree));
+  context.subscriptions.push(vscode.window.registerTreeDataProvider('gowdk.directoryOutline', directoryOutline));
 
   context.subscriptions.push(vscode.workspace.onDidOpenTextDocument((doc) => validateSoon(doc, diagnostics, pending)));
   context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((event) => validateSoon(event.document, diagnostics, pending)));
@@ -20,15 +29,21 @@ function activate(context) {
   context.subscriptions.push(vscode.workspace.onDidCloseTextDocument((doc) => diagnostics.delete(doc.uri)));
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument((doc) => {
     if (doc.languageId === LANGUAGE_ID) {
-      siteMapTree.refresh();
+      refreshProjectViews();
     }
   }));
 
   const watcher = vscode.workspace.createFileSystemWatcher('**/*.gwdk');
   context.subscriptions.push(watcher);
-  context.subscriptions.push(watcher.onDidCreate(() => siteMapTree.refresh()));
-  context.subscriptions.push(watcher.onDidDelete(() => siteMapTree.refresh()));
-  context.subscriptions.push(watcher.onDidChange(() => siteMapTree.refresh()));
+  context.subscriptions.push(watcher.onDidCreate(refreshProjectViews));
+  context.subscriptions.push(watcher.onDidDelete(refreshProjectViews));
+  context.subscriptions.push(watcher.onDidChange(refreshProjectViews));
+
+  const cssWatcher = vscode.workspace.createFileSystemWatcher('**/*.css');
+  context.subscriptions.push(cssWatcher);
+  context.subscriptions.push(cssWatcher.onDidCreate(refreshProjectViews));
+  context.subscriptions.push(cssWatcher.onDidDelete(refreshProjectViews));
+  context.subscriptions.push(cssWatcher.onDidChange(refreshProjectViews));
 
   context.subscriptions.push(vscode.languages.registerDocumentFormattingEditProvider(LANGUAGE_ID, {
     provideDocumentFormattingEdits(document) {
@@ -47,10 +62,120 @@ function activate(context) {
   }));
 
   context.subscriptions.push(vscode.languages.registerCompletionItemProvider(LANGUAGE_ID, {
-    provideCompletionItems() {
-      return completions();
+    async provideCompletionItems(document, position) {
+      const linePrefix = document.lineAt(position.line).text.slice(0, position.character);
+      const completionContext = core.completionContext(linePrefix);
+      if (completionContext === 'keyword') {
+        return completionItems(core.completionEntries());
+      }
+      try {
+        const metadata = await loadCompletionMetadata(document);
+        const entries = core.projectCompletionEntries(completionContext, metadata);
+        return completionItems(entries.length ? entries : core.completionEntries());
+      } catch (_error) {
+        return completionItems(core.completionEntries());
+      }
     }
-  }, '@'));
+  }, '@', '<', '"', ','));
+
+  context.subscriptions.push(vscode.languages.registerHoverProvider(LANGUAGE_ID, {
+    async provideHover(document, position) {
+      const range = document.getWordRangeAtPosition(position, /[A-Za-z_][A-Za-z0-9_.-]*/);
+      if (!range) {
+        return undefined;
+      }
+      const token = document.getText(range);
+      try {
+        const metadata = await loadCompletionMetadata(document);
+        const markdown = core.hoverMarkdown(token, metadata);
+        if (!markdown) {
+          return undefined;
+        }
+        return new vscode.Hover(new vscode.MarkdownString(markdown), range);
+      } catch (_error) {
+        return undefined;
+      }
+    }
+  }));
+
+  context.subscriptions.push(vscode.languages.registerDefinitionProvider(LANGUAGE_ID, {
+    async provideDefinition(document, position) {
+      const range = document.getWordRangeAtPosition(position, /[A-Za-z_][A-Za-z0-9_.-]*/);
+      if (!range) {
+        return undefined;
+      }
+      const token = document.getText(range);
+      try {
+        const metadata = await loadCompletionMetadata(document);
+        const target = core.definitionTarget(token, metadata);
+        if (!target) {
+          return undefined;
+        }
+        return new vscode.Location(vscode.Uri.file(target.file), new vscode.Position(target.line, target.column));
+      } catch (_error) {
+        return undefined;
+      }
+    }
+  }));
+
+  context.subscriptions.push(vscode.languages.registerReferenceProvider(LANGUAGE_ID, {
+    async provideReferences(document, position, referenceContext) {
+      const range = document.getWordRangeAtPosition(position, /[A-Za-z_][A-Za-z0-9_.-]*/);
+      if (!range) {
+        return [];
+      }
+      const token = document.getText(range);
+      try {
+        const metadata = await loadCompletionMetadata(document);
+        return core.symbolReferences(token, metadata, {
+          includeDeclaration: referenceContext.includeDeclaration
+        }).map((target) => new vscode.Location(vscode.Uri.file(target.file), new vscode.Position(target.line, target.column)));
+      } catch (_error) {
+        return [];
+      }
+    }
+  }));
+
+  context.subscriptions.push(vscode.languages.registerRenameProvider(LANGUAGE_ID, {
+    async provideRenameEdits(document, position, newName) {
+      const range = document.getWordRangeAtPosition(position, /[A-Za-z_][A-Za-z0-9_.-]*/);
+      if (!range || !core.validRenameValue(newName)) {
+        return undefined;
+      }
+      const token = document.getText(range);
+      try {
+        const metadata = await loadCompletionMetadata(document);
+        if (!core.canRenameSymbol(token, metadata)) {
+          return undefined;
+        }
+        const references = core.symbolReferences(token, metadata, { includeDeclaration: true });
+        const edit = new vscode.WorkspaceEdit();
+        for (const target of references) {
+          const uri = vscode.Uri.file(target.file);
+          const targetDocument = await vscode.workspace.openTextDocument(uri);
+          for (const item of core.renameEditsForSource(targetDocument.getText(), token, newName)) {
+            edit.replace(uri, new vscode.Range(item.start.line, item.start.column, item.end.line, item.end.column), item.text);
+          }
+        }
+        return edit;
+      } catch (_error) {
+        return undefined;
+      }
+    },
+    prepareRename(document, position) {
+      return document.getWordRangeAtPosition(position, /[A-Za-z_][A-Za-z0-9_.-]*/);
+    }
+  }));
+
+  context.subscriptions.push(vscode.languages.registerDocumentSemanticTokensProvider(LANGUAGE_ID, {
+    provideDocumentSemanticTokens(document) {
+      const builder = new vscode.SemanticTokensBuilder(semanticLegend);
+      for (const token of core.semanticTokens(document.getText())) {
+        builder.push(token.line, token.column, token.length, token.tokenType, []);
+      }
+      return builder.build();
+    }
+  }, semanticLegend));
 
   context.subscriptions.push(vscode.commands.registerCommand('gowdk.checkCurrentFile', async () => {
     const document = activeGWDKDocument();
@@ -99,7 +224,7 @@ function activate(context) {
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('gowdk.refreshSiteMapTree', () => {
-    siteMapTree.refresh();
+    refreshProjectViews();
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('gowdk.openPageFile', async (item) => {
@@ -111,7 +236,7 @@ function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand('gowdk.movePageFile', async (item) => {
     if (item && item.page && item.page.source) {
       await moveFile(item.page.source);
-      siteMapTree.refresh();
+      refreshProjectViews();
     }
   }));
 
@@ -141,13 +266,21 @@ async function validateNow(document, diagnostics) {
     return;
   }
   try {
-    const report = await withDocumentFile(document, (file) => {
-      const args = ['check', '--json'];
-      if (config().get('enableSsrAddon')) {
-        args.push('--ssr');
+    if (document.uri.scheme === 'file' && !document.isDirty) {
+      const projectReport = await loadProjectDiagnostics(document);
+      if (projectReport) {
+        setProjectDiagnostics(diagnostics, projectReport, document);
+        return;
       }
-      args.push(file);
-      return runGowdk(args, document).then(({ stdout }) => parseDiagnostics(stdout));
+    }
+
+    const report = await withDocumentFile(document, (file) => {
+      const args = core.projectCommandArgs('check', {
+        json: true,
+        ssr: config().get('enableSsrAddon'),
+        files: [file]
+      });
+      return runGowdk(args, document).then(({ stdout }) => core.parseDiagnostics(stdout));
     });
     diagnostics.set(document.uri, report.map(toVSCodeDiagnostic));
   } catch (error) {
@@ -157,22 +290,51 @@ async function validateNow(document, diagnostics) {
   }
 }
 
-function parseDiagnostics(stdout) {
-  if (!stdout.trim()) {
-    return [];
+async function loadProjectDiagnostics(document) {
+  const root = workspaceRoot(document);
+  const configPath = workspaceConfigPath(root);
+  if (configPath) {
+    const args = core.projectCommandArgs('check', {
+      json: true,
+      configPath,
+      ssr: config().get('enableSsrAddon')
+    });
+    return runGowdk(args, document).then(({ stdout }) => core.parseDiagnostics(stdout));
   }
-  const parsed = JSON.parse(stdout);
-  return parsed.diagnostics || [];
+
+  const uris = await vscode.workspace.findFiles('**/*.gwdk', '**/{.git,node_modules}/**');
+  if (uris.length <= 1) {
+    return undefined;
+  }
+  const args = core.projectCommandArgs('check', {
+    json: true,
+    ssr: config().get('enableSsrAddon'),
+    files: uris.map((uri) => uri.fsPath)
+  });
+  return runGowdk(args, document).then(({ stdout }) => core.parseDiagnostics(stdout));
+}
+
+function setProjectDiagnostics(diagnostics, report, fallbackDocument) {
+  diagnostics.clear();
+  const grouped = core.groupDiagnosticsByFile(report);
+  for (const [file, items] of Object.entries(grouped.files)) {
+    diagnostics.set(vscode.Uri.file(file), items.map(toVSCodeDiagnostic));
+  }
+  if (grouped.global.length > 0) {
+    diagnostics.set(fallbackDocument.uri, grouped.global.map(toVSCodeDiagnostic));
+  }
 }
 
 function toVSCodeDiagnostic(item) {
-  const line = Math.max((item.pos && item.pos.line ? item.pos.line : 1) - 1, 0);
-  const column = Math.max((item.pos && item.pos.column ? item.pos.column : 1) - 1, 0);
-  const severity = item.severity === 'warning'
+  const range = core.diagnosticRange(item);
+  const severity = core.diagnosticSeverity(item) === 'warning'
     ? vscode.DiagnosticSeverity.Warning
     : vscode.DiagnosticSeverity.Error;
-  const diagnostic = new vscode.Diagnostic(new vscode.Range(line, column, line, column + 1), item.message, severity);
+  const diagnostic = new vscode.Diagnostic(new vscode.Range(range.start.line, range.start.column, range.end.line, range.end.column), item.message, severity);
   diagnostic.source = 'gowdk';
+  if (item.code) {
+    diagnostic.code = item.code;
+  }
   return diagnostic;
 }
 
@@ -215,19 +377,21 @@ async function showSiteMap(context) {
     vscode.window.showWarningMessage('Open a workspace to show the GOWDK site map.');
     return;
   }
-  const uris = await vscode.workspace.findFiles('**/*.gwdk', '**/{.git,node_modules}/**');
-  if (uris.length === 0) {
-    vscode.window.showInformationMessage('No .gwdk files found in this workspace.');
-    return;
+  if (!workspaceConfigPath(root)) {
+    const uris = await vscode.workspace.findFiles('**/*.gwdk', '**/{.git,node_modules}/**');
+    if (uris.length === 0) {
+      vscode.window.showInformationMessage('No .gwdk files found in this workspace.');
+      return;
+    }
   }
 
   try {
-    const siteMap = await loadSiteMap();
+    const metadata = await loadProjectMetadata();
     const panel = vscode.window.createWebviewPanel('gowdkSiteMap', 'GOWDK Site Map', vscode.ViewColumn.Beside, {
       enableScripts: true,
       retainContextWhenHidden: true
     });
-    panel.webview.html = siteMapHTML(siteMap, root);
+    panel.webview.html = core.siteMapHTML(metadata, root);
     panel.webview.onDidReceiveMessage(async (message) => {
       if (message.type === 'open') {
         await openFile(message.file);
@@ -246,16 +410,80 @@ async function showSiteMap(context) {
 }
 
 async function refreshSiteMap(panel, root) {
-  panel.webview.html = siteMapHTML(await loadSiteMap(), root);
+  panel.webview.html = core.siteMapHTML(await loadProjectMetadata(), root);
 }
 
 async function loadSiteMap() {
+  const root = workspaceRoot();
+  const configPath = workspaceConfigPath(root);
+  if (configPath) {
+    const args = core.projectCommandArgs('sitemap', {
+      configPath,
+      ssr: config().get('enableSsrAddon')
+    });
+    const { stdout } = await runGowdk(args, undefined);
+    return JSON.parse(stdout);
+  }
+
   const uris = await vscode.workspace.findFiles('**/*.gwdk', '**/{.git,node_modules}/**');
   if (uris.length === 0) {
     return { pages: [] };
   }
-  const { stdout } = await runGowdk(['sitemap', ...uris.map((uri) => uri.fsPath)], undefined);
+  const args = core.projectCommandArgs('sitemap', {
+    ssr: config().get('enableSsrAddon'),
+    files: uris.map((uri) => uri.fsPath)
+  });
+  const { stdout } = await runGowdk(args, undefined);
   return JSON.parse(stdout);
+}
+
+async function loadManifest(document) {
+  const root = workspaceRoot(document);
+  const configPath = workspaceConfigPath(root);
+  if (configPath) {
+    const args = core.projectCommandArgs('manifest', {
+      configPath,
+      ssr: config().get('enableSsrAddon')
+    });
+    const { stdout } = await runGowdk(args, document);
+    return JSON.parse(stdout);
+  }
+
+  const uris = await vscode.workspace.findFiles('**/*.gwdk', '**/{.git,node_modules}/**');
+  if (uris.length === 0) {
+    return { pages: {}, components: {} };
+  }
+  const args = core.projectCommandArgs('manifest', {
+    ssr: config().get('enableSsrAddon'),
+    files: uris.map((uri) => uri.fsPath)
+  });
+  const { stdout } = await runGowdk(args, document);
+  return JSON.parse(stdout);
+}
+
+async function loadCompletionMetadata(document) {
+  const [siteMap, manifest, cssFiles] = await Promise.all([
+    loadSiteMap(),
+    loadManifest(document),
+    loadCSSFiles(document)
+  ]);
+  return { siteMap, manifest, cssFiles };
+}
+
+async function loadProjectMetadata(document) {
+  return loadCompletionMetadata(document);
+}
+
+async function loadCSSFiles(document) {
+  const root = workspaceRoot(document);
+  if (!root) {
+    return [];
+  }
+  const uris = await vscode.workspace.findFiles('**/*.css', '**/{.git,node_modules,vendor}/**');
+  return uris.map((uri) => ({
+    name: path.basename(uri.fsPath, '.css'),
+    file: uri.fsPath
+  })).sort((left, right) => left.name.localeCompare(right.name) || left.file.localeCompare(right.file));
 }
 
 async function openFile(file) {
@@ -280,155 +508,6 @@ async function moveFile(file) {
   vscode.window.showInformationMessage(`Moved ${path.basename(current.fsPath)} to ${target.fsPath}. Route declarations stayed inside the file.`);
 }
 
-function siteMapHTML(siteMap, root) {
-  const pages = (siteMap.pages || []).slice().sort((a, b) => a.route.localeCompare(b.route));
-  const routes = pages.map((page) => pageCard(page, root)).join('');
-  const staticCount = pages.filter((page) => page.render === 'static').length;
-  const ssrCount = pages.filter((page) => page.render === 'ssr').length;
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GOWDK Site Map</title>
-  <style>
-    :root {
-      color-scheme: light dark;
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-foreground);
-      background: var(--vscode-editor-background);
-    }
-    body {
-      margin: 0;
-      padding: 20px;
-    }
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 18px;
-    }
-    h1 {
-      font-size: 20px;
-      margin: 0 0 4px;
-      font-weight: 650;
-    }
-    .summary {
-      color: var(--vscode-descriptionForeground);
-      font-size: 12px;
-    }
-    button {
-      appearance: none;
-      border: 1px solid var(--vscode-button-border, transparent);
-      background: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      border-radius: 4px;
-      padding: 5px 10px;
-      cursor: pointer;
-    }
-    button.secondary {
-      background: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-    }
-    .grid {
-      display: grid;
-      gap: 10px;
-    }
-    .page {
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 6px;
-      padding: 12px;
-      background: var(--vscode-editorWidget-background);
-    }
-    .route {
-      font-size: 15px;
-      font-weight: 650;
-    }
-    .meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin: 8px 0;
-    }
-    .pill {
-      border: 1px solid var(--vscode-badge-background);
-      border-radius: 999px;
-      padding: 2px 7px;
-      font-size: 11px;
-      color: var(--vscode-badge-foreground);
-      background: var(--vscode-badge-background);
-    }
-    .file {
-      color: var(--vscode-descriptionForeground);
-      font-size: 12px;
-      word-break: break-all;
-    }
-    .actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <div>
-      <h1>GOWDK Site Map</h1>
-      <div class="summary">${pages.length} pages · ${staticCount} static · ${ssrCount} ssr</div>
-    </div>
-    <button id="refresh">Refresh</button>
-  </header>
-  <main class="grid">
-    ${routes || '<p>No pages found.</p>'}
-  </main>
-  <script>
-    const vscode = acquireVsCodeApi();
-    document.getElementById('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
-    document.querySelectorAll('[data-open]').forEach((button) => {
-      button.addEventListener('click', () => vscode.postMessage({ type: 'open', file: button.dataset.open }));
-    });
-    document.querySelectorAll('[data-move]').forEach((button) => {
-      button.addEventListener('click', () => vscode.postMessage({ type: 'move', file: button.dataset.move }));
-    });
-  </script>
-</body>
-</html>`;
-}
-
-function pageCard(page, root) {
-  const rel = path.relative(root, page.source || '').replace(/\\/g, '/');
-  const blocks = Object.entries(page.blocks || {})
-    .filter(([key, value]) => key !== 'actions' && key !== 'apis' && value)
-    .map(([key]) => key);
-  const actions = (page.blocks && page.blocks.actions) || [];
-  const apis = (page.blocks && page.blocks.apis) || [];
-  const tags = [page.render, ...blocks, ...actions.map((name) => `act:${name}`), ...apis.map((name) => `api:${name}`), ...(page.layouts || []).map((layout) => `layout:${layout}`)];
-  return `<section class="page">
-    <div class="route">${escapeHTML(page.route || '(missing route)')}</div>
-    <div class="meta">${tags.map((tag) => `<span class="pill">${escapeHTML(tag)}</span>`).join('')}</div>
-    <div class="file">${escapeHTML(page.id)} · ${escapeHTML(rel || page.source || '')}</div>
-    <div class="actions">
-      <button data-open="${escapeAttr(page.source)}">Open</button>
-      <button class="secondary" data-move="${escapeAttr(page.source)}">Move File</button>
-    </div>
-  </section>`;
-}
-
-function escapeHTML(value) {
-  return String(value || '').replace(/[&<>"']/g, (char) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  }[char]));
-}
-
-function escapeAttr(value) {
-  return escapeHTML(value);
-}
-
 class SiteMapTreeProvider {
   constructor() {
     this._onDidChangeTreeData = new vscode.EventEmitter();
@@ -449,17 +528,14 @@ class SiteMapTreeProvider {
     }
     try {
       const root = workspaceRoot();
-      const siteMap = await loadSiteMap();
-      const pages = siteMap.pages || [];
+      const metadata = await loadProjectMetadata();
+      const pages = core.projectPages(metadata);
       if (pages.length === 0) {
         const empty = new vscode.TreeItem('No .gwdk pages found', vscode.TreeItemCollapsibleState.None);
         empty.iconPath = new vscode.ThemeIcon('info');
         return [empty];
       }
-      return pages
-        .slice()
-        .sort((a, b) => a.route.localeCompare(b.route))
-        .map((page) => new SiteMapPageItem(page, root));
+      return buildRouteHierarchy(pages).map((node) => siteMapTreeItem(node, root));
     } catch (error) {
       const fallback = new vscode.TreeItem(`Site map unavailable: ${error.message}`, vscode.TreeItemCollapsibleState.None);
       fallback.iconPath = new vscode.ThemeIcon('warning');
@@ -468,12 +544,68 @@ class SiteMapTreeProvider {
   }
 }
 
+function siteMapTreeItem(node, root) {
+  if (node.type === 'group' || node.type === 'directory') {
+    return new SiteMapRouteGroupItem(node, root);
+  }
+  return new SiteMapPageItem(node.page, root);
+}
+
+class SiteMapRouteGroupItem extends vscode.TreeItem {
+  constructor(node, root) {
+    super(node.label, vscode.TreeItemCollapsibleState.Expanded);
+    this.contextValue = 'gwdkRouteGroup';
+    this.description = node.path;
+    this.tooltip = node.type === 'directory'
+      ? `Source directory ${node.path || '.'}`
+      : `Declared route group ${node.path}`;
+    this.iconPath = new vscode.ThemeIcon('folder');
+    this.children = node.children.map((child) => siteMapTreeItem(child, root));
+  }
+}
+
+class DirectoryOutlineTreeProvider {
+  constructor() {
+    this._onDidChangeTreeData = new vscode.EventEmitter();
+    this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+  }
+
+  refresh() {
+    this._onDidChangeTreeData.fire();
+  }
+
+  getTreeItem(item) {
+    return item;
+  }
+
+  async getChildren(item) {
+    if (item && item.children) {
+      return item.children;
+    }
+    try {
+      const root = workspaceRoot();
+      const metadata = await loadProjectMetadata();
+      const pages = core.projectPages(metadata);
+      if (pages.length === 0) {
+        const empty = new vscode.TreeItem('No .gwdk pages found', vscode.TreeItemCollapsibleState.None);
+        empty.iconPath = new vscode.ThemeIcon('info');
+        return [empty];
+      }
+      return buildDirectoryHierarchy(pages, root).map((node) => siteMapTreeItem(node, root));
+    } catch (error) {
+      const fallback = new vscode.TreeItem(`Source outline unavailable: ${error.message}`, vscode.TreeItemCollapsibleState.None);
+      fallback.iconPath = new vscode.ThemeIcon('warning');
+      return [fallback];
+    }
+  }
+}
+
 class SiteMapPageItem extends vscode.TreeItem {
   constructor(page, root) {
-    super(page.route || '(missing route)', vscode.TreeItemCollapsibleState.Collapsed);
+    super(page.id || page.route || '(missing page)', vscode.TreeItemCollapsibleState.Collapsed);
     this.page = page;
     this.contextValue = 'gwdkPage';
-    this.description = page.render || 'static';
+    this.description = [page.render || 'static', page.route || ''].filter(Boolean).join(' ');
     this.tooltip = `${page.id}\n${page.source}`;
     this.iconPath = new vscode.ThemeIcon(page.render === 'ssr' ? 'server' : 'globe');
     this.command = {
@@ -488,6 +620,7 @@ class SiteMapPageItem extends vscode.TreeItem {
 function pageChildren(page, root) {
   const children = [];
   const rel = path.relative(root, page.source || '').replace(/\\/g, '/');
+  children.push(infoItem(`Flow: ${core.pageFlow(page)}`, 'git-pull-request'));
   children.push(infoItem(`File: ${rel || page.source || '(unknown)'}`, 'file'));
   children.push(infoItem(`Page: ${page.id || '(missing id)'}`, 'symbol-method'));
   if (page.layouts && page.layouts.length) {
@@ -495,6 +628,18 @@ function pageChildren(page, root) {
   }
   if (page.guard && page.guard.length) {
     children.push(infoItem(`Guards: ${page.guard.join(', ')}`, 'shield'));
+  }
+  if (page.css && page.css.length) {
+    children.push(infoItem(`CSS: ${page.css.join(', ')}`, 'symbol-color'));
+  }
+  if (page.components && page.components.length) {
+    children.push(infoItem(`Components: ${page.components.join(', ')}`, 'symbol-class'));
+  }
+  if (page.staticAssets && page.staticAssets.length) {
+    children.push(infoItem(`Assets: ${page.staticAssets.join(', ')}`, 'file-media'));
+  }
+  if (page.cssClasses && page.cssClasses.length) {
+    children.push(infoItem(`Classes: ${page.cssClasses.join(', ')}`, 'symbol-key'));
   }
   const blocks = [];
   if (page.blocks) {
@@ -546,6 +691,14 @@ function workspaceRoot(document) {
   return folder ? folder.uri.fsPath : process.cwd();
 }
 
+function workspaceConfigPath(root) {
+  if (!root) {
+    return undefined;
+  }
+  const configPath = path.join(root, 'gowdk.config.go');
+  return fs.existsSync(configPath) ? configPath : undefined;
+}
+
 function activeGWDKDocument() {
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.document.languageId !== LANGUAGE_ID) {
@@ -555,27 +708,7 @@ function activeGWDKDocument() {
   return editor.document;
 }
 
-function completions() {
-  const entries = [
-    ['@page', 'Declare the page id.'],
-    ['@route', 'Declare the route path.'],
-    ['@layout', 'Declare one or more layout ids.'],
-    ['@render', 'Declare render mode: static, action, hybrid, or ssr.'],
-    ['@guard', 'Declare route guards.'],
-    ['static', 'Build-time HTML render mode.'],
-    ['action', 'Static page with backend actions.'],
-    ['hybrid', 'Static by default with selected request-time behavior.'],
-    ['ssr', 'Request-time full-page rendering through the SSR addon.'],
-    ['paths', 'Build-time dynamic route path block.'],
-    ['build', 'Build-time data block.'],
-    ['load', 'Request-time data block.'],
-    ['act', 'Action block for POST/form behavior.'],
-    ['api', 'API handler block.'],
-    ['view', 'Markup render block.'],
-    ['g:post', 'Bind a form to an action.'],
-    ['g:target', 'Select partial update target.'],
-    ['g:swap', 'Select partial update swap behavior.']
-  ];
+function completionItems(entries) {
   return entries.map(([label, detail]) => {
     const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Keyword);
     item.detail = detail;

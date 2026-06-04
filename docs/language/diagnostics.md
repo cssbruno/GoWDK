@@ -9,7 +9,12 @@ CLI JSON diagnostics use:
   "diagnostics": [
     {
       "file": "examples/basic/home.page.gwdk",
+      "code": "missing_view_block",
       "pos": {"line": 1, "column": 1},
+      "range": {
+        "start": {"line": 1, "column": 1},
+        "end": {"line": 1, "column": 6}
+      },
       "severity": "error",
       "message": "missing @page"
     }
@@ -17,20 +22,37 @@ CLI JSON diagnostics use:
 }
 ```
 
-Positions are 1-based. Some compiler validation diagnostics currently have file and message but no exact source range.
+Positions and ranges are 1-based; range end columns are exclusive. Lexer,
+parser, and compiler validation diagnostics include ranges when the source line
+is known. Compiler validation ranges are derived from parser-recorded source
+spans for annotations, block declarations, route params, actions, APIs, guards,
+layouts, components, and CSS references. Parser errors use the public
+`parse_error` code until parser recovery has more specific codes.
 
 ## Current Validation Codes
 
-Compiler validation uses these internal codes:
+Compiler validation exposes these public codes when available:
 
 - `missing_ssr_addon`
 - `duplicate_page_id`
 - `duplicate_component_name`
+- `duplicate_layout_id`
+- `unknown_layout_id`
+- `malformed_route`
+- `duplicate_route_param`
+- `duplicate_route`
+- `route_method_conflict`
+- `missing_view_block`
 - `static_dynamic_route_missing_paths`
 - `load_requires_request_render`
+- `hybrid_requires_explicit_request_policy`
+- `invalid_css_selection`
+- `duplicate_css_selection`
 
-The public JSON shape does not expose codes yet.
+Lexer diagnostics can also emit `unterminated_string`; parser diagnostics emit
+`parse_error` in the current line-oriented parser.
 
 ## Planned Work
 
-Diagnostics need stable public codes, source ranges, parse recovery, suggested fixes, duplicate route validation, unknown annotation diagnostics, malformed route diagnostics, and body-level syntax errors.
+Diagnostics still need parser recovery, suggested fixes, and broader body-level
+syntax errors.

@@ -1,0 +1,24 @@
+@page grammar.demo
+@route "/demo/{slug}"
+@layout root, demo
+@render action
+@css default page forms
+
+paths {
+  => { slug: "starter" }
+}
+
+act submit {
+  input := form DemoInput
+  valid(input)?
+  -> "/demo/starter?ok=1"
+}
+
+view {
+  <main>
+    <h1 .title>{slug}</h1>
+    <form g:post={submit}>
+      <button>Save</button>
+    </form>
+  </main>
+}

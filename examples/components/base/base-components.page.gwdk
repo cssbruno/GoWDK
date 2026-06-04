@@ -1,0 +1,13 @@
+@page base.components
+@route "/components/base"
+
+view {
+  <main>
+    <Card title="Base components">
+      <form>
+        <TextField label="Email" name="email" type="email" />
+        <Button>Subscribe</Button>
+      </form>
+    </Card>
+  </main>
+}

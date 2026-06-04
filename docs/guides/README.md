@@ -1,22 +1,12 @@
 # Guides
 
-Guides will become user-facing walkthroughs once the compiler emits real artifacts.
+Detailed guides have been collapsed into the reference docs and runnable
+examples so the repository keeps fewer Markdown files.
 
-Available today:
+## Start Here
 
 - `../reference/cli.md`: current CLI commands.
 - `../../examples/README.md`: runnable example validation commands.
 - `../language/README.md`: current `.gwdk` language subset.
 - `../compiler/generated-output.md`: current generated static output and
   embedded app layout.
-
-Planned guides:
-
-- Static page.
-- Dynamic static routes.
-- Components.
-- Actions.
-- Partials.
-- SSR addon.
-- One-binary serving.
-- VS Code extension.

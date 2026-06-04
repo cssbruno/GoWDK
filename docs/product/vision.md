@@ -4,6 +4,9 @@
 
 GOWDK
 
+WDK does not have a canonical expansion. No one knows what it stands for; GOWDK
+just ships apps.
+
 ## One-Line Description
 
 GOWDK is a portable Go web compiler.
@@ -32,12 +35,12 @@ Modern web frameworks often force teams into a rendering ideology: full SSR, ful
 - A v0.1 app can compile movable `.gwdk` files into prerendered HTML, CSS, assets, and one serving binary.
 - A v0.2 app can handle typed actions, form decoding, validation, redirects, CSRF, and server fragments without enabling SSR.
 - A v0.4 app can opt selected pages into request-time SSR with clear compiler diagnostics and addon checks.
-- Developers can explain the mental model in one sentence: static/action-first Go web compiler with optional SSR.
+- Developers can explain the mental model in one sentence: GOWDK ships apps through a static/action-first Go compiler with optional SSR.
 
 ## Constraints
 
 - Language: Go-first compiler, runtime, and deployment.
-- Styling: CSS tooling should be plugin-driven. Tailwind is a future plugin, not initial core.
+- Styling: CSS tooling should be plugin-driven. Tailwind is an optional addon/plugin, not initial core.
 - JavaScript: no user-written JavaScript for normal app flows.
 - Rendering: build-time full-page rendering by default.
 - Deployment: one-binary production deploy must work with and without SSR.

@@ -244,11 +244,28 @@ func diagnosticFromLang(item lang.Diagnostic, source string) diagnostic {
 		severity = diagnosticSeverityWarning
 	}
 	return diagnostic{
-		Range:    rangeFromPosition(item.Pos, source),
+		Range:    rangeFromLangDiagnostic(item, source),
 		Severity: severity,
+		Code:     item.Code,
 		Source:   "gowdk",
 		Message:  item.Message,
 	}
+}
+
+func rangeFromLangDiagnostic(item lang.Diagnostic, source string) lspRange {
+	if item.Range != nil {
+		return rangeFromLangRange(*item.Range, source)
+	}
+	return rangeFromPosition(item.Pos, source)
+}
+
+func rangeFromLangRange(item lang.Range, source string) lspRange {
+	start := positionFromLangPosition(item.Start, source)
+	end := positionFromLangPosition(item.End, source)
+	if end.Line < start.Line || (end.Line == start.Line && end.Character <= start.Character) {
+		end = position{Line: start.Line, Character: start.Character + 1}
+	}
+	return lspRange{Start: start, End: end}
 }
 
 func rangeFromPosition(pos lang.Position, source string) lspRange {
@@ -277,6 +294,23 @@ func rangeFromPosition(pos lang.Position, source string) lspRange {
 		Start: position{Line: lineIndex, Character: character},
 		End:   position{Line: lineIndex, Character: end},
 	}
+}
+
+func positionFromLangPosition(pos lang.Position, source string) position {
+	if pos.Line <= 0 {
+		return position{Line: 0, Character: 0}
+	}
+	lines := strings.Split(source, "\n")
+	lineIndex := clamp(pos.Line-1, 0, len(lines)-1)
+	character := 0
+	if pos.Column > 1 && len(lines) > 0 {
+		character = utf16Column(lines[lineIndex], pos.Column-1)
+	}
+	lineLength := utf16Length(lines[lineIndex])
+	if character > lineLength {
+		character = lineLength
+	}
+	return position{Line: lineIndex, Character: character}
 }
 
 func fullRange(text string) lspRange {
@@ -555,6 +589,7 @@ type publishDiagnosticsParams struct {
 type diagnostic struct {
 	Range    lspRange `json:"range"`
 	Severity int      `json:"severity,omitempty"`
+	Code     string   `json:"code,omitempty"`
 	Source   string   `json:"source,omitempty"`
 	Message  string   `json:"message"`
 }

@@ -181,7 +181,7 @@ func BuildBinary(appDir, binaryPath string) (string, error) {
 		return "", err
 	}
 
-	command := exec.Command("go", "build", "-o", absBinary, ".")
+	command := exec.Command("go", "build", "-buildvcs=false", "-o", absBinary, ".")
 	command.Dir = absApp
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -229,8 +229,12 @@ func copyStaticFiles(sourceRoot, targetRoot string) ([]string, error) {
 		if rel == "." {
 			return nil
 		}
+		rel = filepath.ToSlash(rel)
 		targetPath := filepath.Join(targetRoot, rel)
 		if entry.IsDir() {
+			if unsafeEmbeddedDirectory(rel) {
+				return filepath.SkipDir
+			}
 			return os.MkdirAll(targetPath, 0o755)
 		}
 		info, err := entry.Info()
@@ -240,14 +244,45 @@ func copyStaticFiles(sourceRoot, targetRoot string) ([]string, error) {
 		if !info.Mode().IsRegular() {
 			return nil
 		}
+		if unsafeEmbeddedFile(rel) {
+			return nil
+		}
 		if err := copyFile(sourcePath, targetPath); err != nil {
 			return err
 		}
-		files = append(files, filepath.ToSlash(rel))
+		files = append(files, rel)
 		return nil
 	})
 	sort.Strings(files)
 	return files, err
+}
+
+func unsafeEmbeddedDirectory(rel string) bool {
+	base := path.Base(filepath.ToSlash(rel))
+	switch base {
+	case ".git", ".hg", ".svn", "node_modules", "tmp", "temp", ".tmp":
+		return true
+	default:
+		return false
+	}
+}
+
+func unsafeEmbeddedFile(rel string) bool {
+	rel = filepath.ToSlash(rel)
+	base := path.Base(rel)
+	ext := path.Ext(base)
+	switch {
+	case base == ".env" || strings.HasPrefix(base, ".env."):
+		return true
+	case ext == ".map" || ext == ".gwdk" || ext == ".go":
+		return true
+	case ext == ".tmp" || ext == ".temp" || strings.HasSuffix(base, "~"):
+		return true
+	case strings.HasSuffix(base, ".swp") || strings.HasSuffix(base, ".swo"):
+		return true
+	default:
+		return false
+	}
 }
 
 func copyFile(sourcePath, targetPath string) error {
@@ -388,10 +423,10 @@ func actionHandlerSource(actions []ActionRoute) string {
 		builder.WriteString("\t\trequest.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)\n")
 		builder.WriteString("\t\tif err := request.ParseForm(); err != nil {\n")
 		builder.WriteString("\t\t\tif strings.Contains(err.Error(), \"request body too large\") {\n")
-		builder.WriteString("\t\t\t\thttp.Error(response, \"request body too large\", http.StatusRequestEntityTooLarge)\n")
+		builder.WriteString("\t\t\t\twriteActionError(response, http.StatusRequestEntityTooLarge, actionErrorRequestTooLarge)\n")
 		builder.WriteString("\t\t\t\treturn true\n")
 		builder.WriteString("\t\t\t}\n")
-		builder.WriteString("\t\t\thttp.Error(response, \"invalid form\", http.StatusBadRequest)\n")
+		builder.WriteString("\t\t\twriteActionError(response, http.StatusBadRequest, actionErrorInvalidForm)\n")
 		builder.WriteString("\t\t\treturn true\n")
 		builder.WriteString("\t\t}\n")
 		builder.WriteString("\t\tvalues := formValuesFromURLValues(request.PostForm)\n")
@@ -400,7 +435,7 @@ func actionHandlerSource(actions []ActionRoute) string {
 			builder.WriteString(actionDecoderName(action))
 			builder.WriteString("(values)\n")
 			builder.WriteString("\t\tif err != nil {\n")
-			builder.WriteString("\t\t\thttp.Error(response, \"invalid form\", http.StatusBadRequest)\n")
+			builder.WriteString("\t\t\twriteActionError(response, http.StatusBadRequest, actionErrorInvalidForm)\n")
 			builder.WriteString("\t\t\treturn true\n")
 			builder.WriteString("\t\t}\n")
 			builder.WriteString("\t\t_ = input\n")
@@ -409,7 +444,7 @@ func actionHandlerSource(actions []ActionRoute) string {
 				builder.WriteString(stringSliceLiteral(action.RequiredFields))
 				builder.WriteString(")\n")
 				builder.WriteString("\t\tif !validation.OK() {\n")
-				builder.WriteString("\t\t\thttp.Error(response, \"validation failed\", http.StatusUnprocessableEntity)\n")
+				builder.WriteString("\t\t\twriteActionError(response, http.StatusUnprocessableEntity, actionErrorValidationFailed)\n")
 				builder.WriteString("\t\t\treturn true\n")
 				builder.WriteString("\t\t}\n")
 			}
@@ -417,7 +452,7 @@ func actionHandlerSource(actions []ActionRoute) string {
 			builder.WriteString("\t\tif _, err := decodeExpectedFields(values, ")
 			builder.WriteString(stringSliceLiteral(action.InputFields))
 			builder.WriteString("); err != nil {\n")
-			builder.WriteString("\t\t\thttp.Error(response, \"invalid form\", http.StatusBadRequest)\n")
+			builder.WriteString("\t\t\twriteActionError(response, http.StatusBadRequest, actionErrorInvalidForm)\n")
 			builder.WriteString("\t\t\treturn true\n")
 			builder.WriteString("\t\t}\n")
 		}
@@ -541,6 +576,17 @@ type formDecodeError string
 func (err formDecodeError) Error() string {
 	return string(err)
 }
+
+const (
+	actionErrorInvalidForm      = "invalid form"
+	actionErrorRequestTooLarge  = "request body too large"
+	actionErrorValidationFailed = "validation failed"
+)
+
+func writeActionError(response http.ResponseWriter, status int, message string) {
+	response.Header().Set("Cache-Control", "no-store")
+	http.Error(response, message, status)
+}
 `)
 	return strings.TrimSpace(builder.String())
 }
@@ -643,9 +689,10 @@ func main() {
 
 	addr := env("GOWDK_ADDR", "127.0.0.1:8080")
 	identity := instanceIdentity()
+	assets := loadAssetManifest(root)
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           staticHandler{root: root, identity: identity},
+		Handler:           staticHandler{root: root, identity: identity, assets: assets},
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -734,6 +781,27 @@ func identityPart(value string) string {
 type staticHandler struct {
 	root     fs.FS
 	identity identity
+	assets   assetManifest
+}
+
+type assetManifest struct {
+	Version int
+	Files   map[string]string
+}
+
+func loadAssetManifest(root fs.FS) assetManifest {
+	var manifest assetManifest
+	payload, err := fs.ReadFile(root, "gowdk-assets.json")
+	if err != nil {
+		return assetManifest{Version: 1, Files: map[string]string{}}
+	}
+	if err := json.Unmarshal(payload, &manifest); err != nil {
+		return assetManifest{Version: 1, Files: map[string]string{}}
+	}
+	if manifest.Files == nil {
+		manifest.Files = map[string]string{}
+	}
+	return manifest
 }
 
 func (handler staticHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -774,6 +842,7 @@ func (handler staticHandler) health(response http.ResponseWriter) {
 		"app":         handler.identity.AppID,
 		"module":      handler.identity.ModuleName,
 		"instance_id": handler.identity.InstanceID,
+		"assets":      strconv.Itoa(len(handler.assets.Files)),
 	})
 }
 

@@ -21,7 +21,7 @@
       "patterns": [
         {
           "name": "keyword.control.annotation.gwdk",
-          "match": "@(?:page|route|layout|render|guard)\\b"
+          "match": "@(?:page|route|layout|render|guard|css)\\b"
         }
       ]
     },

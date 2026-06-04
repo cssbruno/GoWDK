@@ -1,0 +1,7 @@
+@component Button
+
+view {
+  <button type="submit" class="gowdk-button">
+    <slot />
+  </button>
+}

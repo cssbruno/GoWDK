@@ -1,0 +1,17 @@
+@page docs.post
+@route "/docs/{slug}"
+
+paths {
+  => { slug: "getting-started" }
+}
+
+build {
+  => { title: "Getting Started", tagline: "Portable Go web compiler" }
+}
+
+view {
+  <main>
+    <Hero title="{title}" tagline="{tagline}" />
+    <p>{param("slug")}</p>
+  </main>
+}

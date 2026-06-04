@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, for example v0.1.0
+        required: true
+        type: string
+
+jobs:
+  package:
+    name: Package release artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify release gates
+        run: |
+          go test ./...
+          go build ./cmd/gowdk
+          node --check editors/vscode/extension.js
+          node --test editors/vscode/*.test.js
+          go run ./cmd/gowdk check --ssr examples/basic/*.gwdk
+          rm -rf /tmp/gowdk-css-build
+          go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk
+          grep -F '<link rel="stylesheet" href="/assets/site.css">' /tmp/gowdk-css-build/styled/index.html
+          rm -rf /tmp/gowdk-embed-build /tmp/gowdk-embed-app /tmp/gowdk-embed-site
+          go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
+          test -x /tmp/gowdk-embed-site
+
+      - name: Build CLI artifacts
+        run: |
+          mkdir -p dist
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/gowdk-linux-amd64 ./cmd/gowdk
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/gowdk-linux-arm64 ./cmd/gowdk
+          GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/gowdk-darwin-amd64 ./cmd/gowdk
+          GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/gowdk-darwin-arm64 ./cmd/gowdk
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/gowdk-windows-amd64.exe ./cmd/gowdk
+          (cd dist && sha256sum * > checksums.txt)
+
+      - name: Package VS Code extension
+        run: |
+          npm install -g @vscode/vsce
+          vsce package --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} --baseImagesUrl https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}
+        working-directory: editors/vscode
+
+      - name: Collect VS Code package
+        run: |
+          find editors/vscode -maxdepth 1 -name '*.vsix' -exec cp {} dist/ \;
+
+      - name: Attest release artifacts
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/*
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          draft: true

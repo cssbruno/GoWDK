@@ -8,21 +8,25 @@ The initial product direction is compile-first and static/action-first. Full-pag
 
 | ID | Requirement | Priority | Status | Notes |
 | --- | --- | --- | --- | --- |
-| PRD-001 | Compile portable `.gwdk` files that declare `@page`, `@route`, `@layout`, and optional `@render`. | High | Partial | Discovery, metadata parsing, default build discovery, and explicit component-file build input are implemented; full compile/codegen remains planned. |
+| PRD-001 | Compile portable `.gwdk` files that declare `@page`, `@route`, `@layout`, and optional `@render`. | High | Partial | Discovery, metadata parsing, parser syntax validation, default build discovery, route shape/conflict validation, required page-view validation, and explicit component-file build input are implemented; full compile/codegen remains planned. |
 | PRD-002 | Default render mode must be `static`. | High | Implemented | Root `RenderConfig.DefaultMode()` defaults to `gowdk.Static`. |
 | PRD-003 | Support render modes `static`, `action`, `hybrid`, and `ssr`. | High | Implemented | Root `RenderMode` constants exist. |
 | PRD-004 | Reject `@render ssr` unless the SSR addon is enabled. | High | Implemented | `internal/compiler.ValidatePage` emits `missing_ssr_addon`. |
-| PRD-005 | Require `paths {}` for dynamic static/action routes. | High | Implemented | Static/action dynamic routes without paths are rejected; the first literal string `paths {}` subset can prerender dynamic static routes. |
-| PRD-006 | Keep typed actions available without SSR. | High | Partial | Static pages with `act` blocks validate without SSR; the first action body subset parses `input := form Type`, `valid(input)?`, and local redirects, and generated static apps can serve POST redirect handlers with first-slice input decoders, unexpected-field rejection, and required-field validation. Real user Go type resolution, CSRF, user action logic, and fragment responses remain planned. |
+| PRD-005 | Require `paths {}` for dynamic static/action routes. | High | Implemented | Static/action dynamic routes without paths are rejected; malformed routes, duplicate route params, duplicate page route patterns, and route-method conflicts are rejected; the first literal string `paths {}` subset can prerender dynamic static routes. |
+| PRD-006 | Keep typed actions available without SSR. | High | Partial | Static pages with `act` blocks validate without SSR; the first action body subset parses `input := form Type`, `valid(input)?`, and local redirects, and generated static apps can serve POST redirect handlers with first-slice input decoders, unexpected-field rejection, and required-field validation. `addons/actions` includes a signed CSRF validator, but generated handlers do not wire it yet. Real user Go type resolution, user action logic, and fragment responses remain planned. |
 | PRD-007 | Treat `load {}` as request-time behavior requiring SSR or hybrid rendering. | High | Implemented | Static pages with `load` are rejected. |
 | PRD-008 | Keep runtime render core separate from optional SSR addon. | High | Implemented | `runtime/render` exists independently from `addons/ssr`. |
 | PRD-009 | Generate static/prerender output for v0.1. | High | Partial | `gowdk build --out` emits static HTML, `gowdk-routes.json`, and `gowdk-assets.json` for simple build-time pages, the first literal dynamic path and build-data subsets, and explicit or discovered components; generated handlers, arbitrary build-time execution, and full component semantics remain planned. |
-| PRD-010 | Provide CSS/plugin extension points without adding Tailwind to initial core. | High | Partial | `FeatureCSS`, `addons/css`, configured stylesheet links, compile-time CSS processors, CSS asset output, and CSS asset manifest entries are implemented; Tailwind, class extraction, hashing, and full plugin docs remain planned. |
+| PRD-010 | Provide CSS/plugin extension points without adding Tailwind to initial core. | High | Partial | `FeatureCSS`, `addons/css`, configured stylesheet links, compile-time CSS processors, discovered CSS inputs, extracted static classes, `@css` page selection, generated page CSS output, CSS asset manifest entries, and an experimental Tailwind v4 standalone-CLI wrapper are implemented; full addon loading, component ASTs, hashing, and page-aware CSS processors remain planned. |
 | PRD-011 | Support embedded assets and one-binary serving. | High | Partial | `addons/embed` and `runtime/asset` boundaries exist; `gowdk serve` can serve generated static output locally; `gowdk build --app` can generate an embedded static app and `--bin` can compile it into one binary for static pages and first-slice action redirects. API/fragment/SSR handlers remain planned. |
 | PRD-012 | Support server fragments for partial updates without full-page SSR. | Medium | Planned | `addons/partial` and `runtime/response.FragmentFor` exist. |
-| PRD-013 | Add SSR addon with request-aware `load {}`, guards, layouts, and error handling. | Medium | Planned | `addons/ssr` boundary exists; guard annotations are parsed as metadata only today. |
+| PRD-013 | Add SSR addon with request-aware `load {}`, guards, layouts, and error handling. | Medium | Partial | `addons/ssr` includes load context, guard execution, route registration, request-aware layout composition, and default error-handler contracts; generated SSR rendering and generated layout wiring remain planned. |
 | PRD-014 | Add optional WASM islands after the core compiler and action flow are stable. | Low | Future | Roadmap v0.6. |
 | PRD-015 | Provide language tools for `.gwdk` token inspection, formatting, validation, manifest output, and LSP editor integration. | High | Implemented | `internal/lang`, `internal/lsp`, and CLI commands exist. |
+| PRD-016 | Keep hybrid pages static by default and require explicit request-time capabilities. | High | Planned | Targeted for roadmap v0.5. |
+| PRD-017 | Define cache and revalidation behavior for static, action, API, partial, SSR, and hybrid routes. | Medium | Planned | Targeted after generated route metadata stabilizes. |
+| PRD-018 | Escape generated HTML by default and require any raw HTML escape hatch to be explicit. | High | Partial | Current static rendering escapes text and attributes. |
+| PRD-019 | Provide optional rate limiting for request-time handlers without making it core. | Medium | Partial | `FeatureRateLimit` and `addons/ratelimit` expose HTTP middleware, fixed-window decisions, an in-memory store, and a Redis-backed store adapter. Generated handler wiring and concrete Redis client docs remain planned. |
 
 ## Non-Functional Requirements
 
@@ -44,6 +48,6 @@ The initial product direction is compile-first and static/action-first. Full-pag
 ## Open Questions
 
 - What exact `.gwdk` grammar should the first parser support?
-- Should `hybrid` be a page render mode, a route policy, or a higher-level application mode?
-- How should GOWDK express cache revalidation for static and hybrid routes?
-- What plugin interface should CSS integrations use?
+- What syntax should expose cache policies once generated route metadata is stable?
+- Should processor-emitted CSS become selectable named `@css` inputs through a
+  future page-aware processor contract?

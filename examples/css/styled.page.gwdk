@@ -1,0 +1,11 @@
+@page styled
+@route "/styled"
+@layout root
+@render static
+
+view {
+  <main>
+    <h1>Styled Page</h1>
+    <p>The generated HTML links to a configured stylesheet.</p>
+  </main>
+}

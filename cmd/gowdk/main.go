@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"github.com/gowdk/gowdk"
 	"github.com/gowdk/gowdk/addons/ssr"
 	"github.com/gowdk/gowdk/internal/appgen"
+	"github.com/gowdk/gowdk/internal/codegen"
 	"github.com/gowdk/gowdk/internal/discover"
 	"github.com/gowdk/gowdk/internal/lang"
 	"github.com/gowdk/gowdk/internal/lsp"
@@ -42,6 +45,8 @@ func run(args []string) error {
 	switch args[0] {
 	case "version":
 		fmt.Println(version)
+	case "init":
+		return initProject(args[1:])
 	case "tokens":
 		return tokens(args[1:])
 	case "fmt":
@@ -52,8 +57,12 @@ func run(args []string) error {
 		return manifestJSON(args[1:])
 	case "sitemap":
 		return siteMapJSON(args[1:])
+	case "routes":
+		return routesJSON(args[1:])
 	case "build":
 		return build(args[1:])
+	case "watch":
+		return watch(args[1:])
 	case "serve":
 		return serve(args[1:])
 	case "lsp":
@@ -71,14 +80,166 @@ func usage() {
 	fmt.Println()
 	fmt.Println("Commands:")
 	fmt.Println("  version                  print CLI version")
+	fmt.Println("  init [--force] [dir]     scaffold a starter GOWDK project")
 	fmt.Println("  tokens <file.gwdk>       print language tokens")
 	fmt.Println("  fmt [--write] <files>    format .gwdk files")
-	fmt.Println("  check [--json] [--ssr] <files> parse and validate .gwdk files")
-	fmt.Println("  manifest [--ssr] <files> print validated manifest JSON")
-	fmt.Println("  sitemap [--ssr] <files> print editor site-map JSON")
+	fmt.Println("  check [--config <file>] [--module <name>] [--json] [--ssr] [files...] parse and validate .gwdk files")
+	fmt.Println("  manifest [--config <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
+	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
+	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print generated route bindings JSON")
 	fmt.Println("  build [--config <file>] [--ssr] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...] emit static output")
+	fmt.Println("  watch [--once] [--interval <duration>] [build flags...] rebuild static output when inputs change")
 	fmt.Println("  serve --dir <dir> [--addr <addr>] serve generated static output locally")
 	fmt.Println("  lsp [--ssr]              start the language server over stdio")
+}
+
+func initProject(args []string) error {
+	options, err := parseInitOptions(args)
+	if err != nil {
+		return err
+	}
+	root, err := filepath.Abs(options.Dir)
+	if err != nil {
+		return err
+	}
+	files := []initFile{
+		{
+			Path: "gowdk.config.go",
+			Body: `package app
+
+import "github.com/gowdk/gowdk"
+
+var Config = gowdk.Config{
+	AppName: "GOWDK App",
+	Source: gowdk.SourceConfig{
+		Include: []string{"src/**/*.gwdk"},
+	},
+	Build: gowdk.BuildConfig{
+		Output: "dist/site",
+	},
+	CSS: gowdk.CSSConfig{
+		Include: []string{"styles/**/*.css"},
+		Default: []string{"global"},
+	},
+}
+`,
+		},
+		{
+			Path: "src/pages/home.page.gwdk",
+			Body: `@page home
+@route "/"
+@css default page
+
+build {
+  => { title: "Hello from GOWDK" }
+}
+
+view {
+  <main class="home">
+    <Hero title="{title}">
+      <p>Compile-first Go web output.</p>
+    </Hero>
+  </main>
+}
+`,
+		},
+		{
+			Path: "src/components/hero.cmp.gwdk",
+			Body: `@component Hero
+
+props {
+  title string
+}
+
+view {
+  <section class="hero">
+    <h1>{title}</h1>
+    <slot />
+  </section>
+}
+`,
+		},
+		{
+			Path: "styles/global.css",
+			Body: `:root {
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.home {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
+}
+
+.hero {
+  display: grid;
+  gap: 1rem;
+}
+`,
+		},
+	}
+	for _, file := range files {
+		target := filepath.Join(root, filepath.FromSlash(file.Path))
+		if err := writeInitFile(target, file.Body, options.Force); err != nil {
+			return err
+		}
+		fmt.Println(target)
+	}
+	fmt.Println("Run: gowdk build")
+	return nil
+}
+
+type initOptions struct {
+	Dir   string
+	Force bool
+}
+
+type initFile struct {
+	Path string
+	Body string
+}
+
+func parseInitOptions(args []string) (initOptions, error) {
+	options := initOptions{Dir: "."}
+	for _, arg := range args {
+		switch arg {
+		case "--force":
+			options.Force = true
+		case "-h", "--help":
+			return initOptions{}, fmt.Errorf("usage: gowdk init [--force] [dir]")
+		default:
+			if strings.HasPrefix(arg, "-") {
+				return initOptions{}, fmt.Errorf("unknown init flag %q", arg)
+			}
+			if options.Dir != "." {
+				return initOptions{}, fmt.Errorf("usage: gowdk init [--force] [dir]")
+			}
+			options.Dir = arg
+		}
+	}
+	if strings.TrimSpace(options.Dir) == "" {
+		return initOptions{}, fmt.Errorf("init directory is required")
+	}
+	return options, nil
+}
+
+func writeInitFile(path string, body string, force bool) error {
+	if !force {
+		if _, err := os.Stat(path); err == nil {
+			return fmt.Errorf("%s already exists; rerun with --force to overwrite starter files", path)
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(body), 0o644)
 }
 
 func tokens(args []string) error {
@@ -138,9 +299,9 @@ func format(args []string) error {
 }
 
 func check(args []string) error {
-	options, paths := parseOptions(args)
-	if len(paths) == 0 {
-		return fmt.Errorf("usage: gowdk check [--json] [--ssr] <files>")
+	options, paths, err := loadCommandInputs(args, "check", true)
+	if err != nil {
+		return err
 	}
 
 	if options.JSON {
@@ -169,9 +330,9 @@ func check(args []string) error {
 }
 
 func manifestJSON(args []string) error {
-	options, paths := parseOptions(args)
-	if len(paths) == 0 {
-		return fmt.Errorf("usage: gowdk manifest [--ssr] <files>")
+	options, paths, err := loadCommandInputs(args, "manifest", false)
+	if err != nil {
+		return err
 	}
 
 	payload, diagnostics := lang.ManifestJSON(options.Config, paths)
@@ -186,9 +347,9 @@ func manifestJSON(args []string) error {
 }
 
 func siteMapJSON(args []string) error {
-	options, paths := parseOptions(args)
-	if len(paths) == 0 {
-		return fmt.Errorf("usage: gowdk sitemap [--ssr] <files>")
+	options, paths, err := loadCommandInputs(args, "sitemap", false)
+	if err != nil {
+		return err
 	}
 
 	payload, diagnostics := lang.SiteMapJSON(options.Config, paths)
@@ -199,6 +360,32 @@ func siteMapJSON(args []string) error {
 		return fmt.Errorf("sitemap failed")
 	}
 	fmt.Print(string(payload))
+	return nil
+}
+
+func routesJSON(args []string) error {
+	options, paths, err := loadCommandInputs(args, "routes", false)
+	if err != nil {
+		return err
+	}
+
+	app, diagnostics := lang.CheckFiles(options.Config, paths)
+	for _, diagnostic := range diagnostics {
+		fmt.Fprintln(os.Stderr, diagnostic.String())
+	}
+	if diagnostics.HasErrors() {
+		return fmt.Errorf("routes failed")
+	}
+
+	bindings, err := codegen.BuildRouteBindings(options.Config, app)
+	if err != nil {
+		return err
+	}
+	payload, err := json.MarshalIndent(routeBindingsJSON(bindings), "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(payload))
 	return nil
 }
 
@@ -276,6 +463,41 @@ func build(args []string) error {
 	return nil
 }
 
+func watch(args []string) error {
+	options, err := parseWatchOptions(args)
+	if err != nil {
+		return err
+	}
+	if options.Once {
+		return build(options.BuildArgs)
+	}
+
+	fmt.Printf("Watching GOWDK inputs every %s\n", options.Interval)
+	if err := build(options.BuildArgs); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+	previous, err := buildInputSnapshot(options.BuildArgs)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+	for {
+		time.Sleep(options.Interval)
+		current, err := buildInputSnapshot(options.BuildArgs)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			continue
+		}
+		if current.same(previous) {
+			continue
+		}
+		previous = current
+		fmt.Printf("Change detected at %s\n", time.Now().Format(time.RFC3339))
+		if err := build(options.BuildArgs); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+	}
+}
+
 func serve(args []string) error {
 	dir, addr, err := parseServeOptions(args)
 	if err != nil {
@@ -306,7 +528,113 @@ func serve(args []string) error {
 	return server.ListenAndServe()
 }
 
+type watchOptions struct {
+	BuildArgs []string
+	Once      bool
+	Interval  time.Duration
+}
+
+func parseWatchOptions(args []string) (watchOptions, error) {
+	options := watchOptions{Interval: time.Second}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--once":
+			options.Once = true
+		case arg == "--interval":
+			i++
+			if i >= len(args) {
+				return watchOptions{}, fmt.Errorf("usage: gowdk watch [--once] [--interval <duration>] [build flags...]")
+			}
+			interval, err := parseWatchInterval(args[i])
+			if err != nil {
+				return watchOptions{}, err
+			}
+			options.Interval = interval
+		case strings.HasPrefix(arg, "--interval="):
+			interval, err := parseWatchInterval(strings.TrimPrefix(arg, "--interval="))
+			if err != nil {
+				return watchOptions{}, err
+			}
+			options.Interval = interval
+		default:
+			options.BuildArgs = append(options.BuildArgs, arg)
+		}
+	}
+	return options, nil
+}
+
+func parseWatchInterval(value string) (time.Duration, error) {
+	interval, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid watch interval %q: %w", value, err)
+	}
+	if interval <= 0 {
+		return 0, fmt.Errorf("watch interval must be positive")
+	}
+	return interval, nil
+}
+
+type inputSnapshot map[string]time.Time
+
+func buildInputSnapshot(args []string) (inputSnapshot, error) {
+	options, outputDir, _, _, configPath, moduleNames, paths, err := parseBuildOptions(args)
+	if err != nil {
+		return nil, err
+	}
+	if err := loadBuildConfig(&options, configPath); err != nil {
+		return nil, err
+	}
+	if outputDir == "" {
+		outputDir = options.Config.Build.Output
+	}
+	if len(paths) == 0 {
+		discovered, err := discoverBuildFiles(options.Config, outputDir, moduleNames)
+		if err != nil {
+			return nil, err
+		}
+		paths = discovered
+	}
+	if strings.TrimSpace(configPath) != "" {
+		paths = append(paths, configPath)
+	} else if _, err := os.Stat("gowdk.config.go"); err == nil {
+		paths = append(paths, "gowdk.config.go")
+	}
+	snapshot := inputSnapshot{}
+	for _, item := range paths {
+		info, err := os.Stat(item)
+		if err != nil {
+			return nil, err
+		}
+		if info.IsDir() {
+			continue
+		}
+		abs, err := filepath.Abs(item)
+		if err != nil {
+			return nil, err
+		}
+		snapshot[abs] = info.ModTime()
+	}
+	return snapshot, nil
+}
+
+func (snapshot inputSnapshot) same(other inputSnapshot) bool {
+	if len(snapshot) != len(other) {
+		return false
+	}
+	for path, modTime := range snapshot {
+		if !modTime.Equal(other[path]) {
+			return false
+		}
+	}
+	return true
+}
+
 func loadBuildConfig(options *cliOptions, configPath string) error {
+	return loadProjectConfig(options, configPath)
+}
+
+func loadProjectConfig(options *cliOptions, configPath string) error {
 	config, loaded, err := project.LoadOptionalConfig(configPath)
 	if err != nil {
 		return err
@@ -320,6 +648,14 @@ func loadBuildConfig(options *cliOptions, configPath string) error {
 }
 
 func discoverBuildFiles(config gowdk.Config, outputDir string, moduleNames []string) ([]string, error) {
+	return discoverConfiguredFiles(config, outputDir, moduleNames)
+}
+
+func discoverProjectFiles(config gowdk.Config, moduleNames []string) ([]string, error) {
+	return discoverConfiguredFiles(config, config.Build.Output, moduleNames)
+}
+
+func discoverConfiguredFiles(config gowdk.Config, outputDir string, moduleNames []string) ([]string, error) {
 	root, err := os.Getwd()
 	if err != nil {
 		return nil, err
@@ -336,6 +672,27 @@ func discoverBuildFiles(config gowdk.Config, outputDir string, moduleNames []str
 		excludes = append(excludes, pattern)
 	}
 	return discover.Files(root, includes, excludes)
+}
+
+func loadCommandInputs(args []string, command string, allowJSON bool) (cliOptions, []string, error) {
+	options, configPath, moduleNames, paths, err := parseProjectOptions(args, command, allowJSON)
+	if err != nil {
+		return options, nil, err
+	}
+	if err := loadProjectConfig(&options, configPath); err != nil {
+		return options, nil, err
+	}
+	if len(paths) == 0 {
+		discovered, err := discoverProjectFiles(options.Config, moduleNames)
+		if err != nil {
+			return options, nil, err
+		}
+		if len(discovered) == 0 {
+			return options, nil, fmt.Errorf("no .gwdk files found")
+		}
+		paths = discovered
+	}
+	return options, paths, nil
 }
 
 func buildModules(modules []gowdk.ModuleConfig, moduleNames []string) ([]gowdk.ModuleConfig, error) {
@@ -631,6 +988,36 @@ type cliOptions struct {
 	JSON   bool
 }
 
+type routeBindingsReport struct {
+	Version int                `json:"version"`
+	Routes  []routeBindingJSON `json:"routes"`
+}
+
+type routeBindingJSON struct {
+	Kind    codegen.RouteKind `json:"kind"`
+	Method  string            `json:"method"`
+	Route   string            `json:"route"`
+	PageID  string            `json:"pageId"`
+	Handler string            `json:"handler"`
+}
+
+func routeBindingsJSON(bindings []codegen.RouteBinding) routeBindingsReport {
+	routes := make([]routeBindingJSON, 0, len(bindings))
+	for _, binding := range bindings {
+		routes = append(routes, routeBindingJSON{
+			Kind:    binding.Kind,
+			Method:  binding.Method,
+			Route:   binding.Route,
+			PageID:  binding.PageID,
+			Handler: binding.Handler,
+		})
+	}
+	return routeBindingsReport{
+		Version: 1,
+		Routes:  routes,
+	}
+}
+
 func parseOptions(args []string) (cliOptions, []string) {
 	var options cliOptions
 	var paths []string
@@ -646,4 +1033,51 @@ func parseOptions(args []string) (cliOptions, []string) {
 		}
 	}
 	return options, paths
+}
+
+func parseProjectOptions(args []string, command string, allowJSON bool) (cliOptions, string, []string, []string, error) {
+	var options cliOptions
+	var configPath string
+	var moduleNames []string
+	var paths []string
+	usage := projectCommandUsage(command, allowJSON)
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--ssr":
+			options.Config.Addons = append(options.Config.Addons, ssr.Addon())
+		case arg == "--json" && allowJSON:
+			options.JSON = true
+		case arg == "--json":
+			return options, "", nil, nil, fmt.Errorf("unknown %s flag %q", command, arg)
+		case arg == "--config":
+			i++
+			if i >= len(args) {
+				return options, "", nil, nil, errors.New(usage)
+			}
+			configPath = args[i]
+		case strings.HasPrefix(arg, "--config="):
+			configPath = strings.TrimPrefix(arg, "--config=")
+		case arg == "--module":
+			i++
+			if i >= len(args) {
+				return options, "", nil, nil, errors.New(usage)
+			}
+			moduleNames = appendModuleNames(moduleNames, args[i])
+		case strings.HasPrefix(arg, "--module="):
+			moduleNames = appendModuleNames(moduleNames, strings.TrimPrefix(arg, "--module="))
+		case strings.HasPrefix(arg, "-"):
+			return options, "", nil, nil, fmt.Errorf("unknown %s flag %q", command, arg)
+		default:
+			paths = append(paths, arg)
+		}
+	}
+	return options, configPath, moduleNames, paths, nil
+}
+
+func projectCommandUsage(command string, allowJSON bool) string {
+	if allowJSON {
+		return fmt.Sprintf("usage: gowdk %s [--config <file>] [--module <name>] [--json] [--ssr] [files...]", command)
+	}
+	return fmt.Sprintf("usage: gowdk %s [--config <file>] [--module <name>] [--ssr] [files...]", command)
 }

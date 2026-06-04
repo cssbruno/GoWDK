@@ -11,10 +11,18 @@ type Position struct {
 	Column int `json:"column"`
 }
 
+// Range is a 1-based source range. End is exclusive.
+type Range struct {
+	Start Position `json:"start"`
+	End   Position `json:"end"`
+}
+
 // Diagnostic describes a language-tool finding.
 type Diagnostic struct {
 	File     string   `json:"file"`
+	Code     string   `json:"code,omitempty"`
 	Pos      Position `json:"pos"`
+	Range    *Range   `json:"range,omitempty"`
 	Severity string   `json:"severity"`
 	Message  string   `json:"message"`
 }

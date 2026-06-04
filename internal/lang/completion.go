@@ -14,6 +14,7 @@ func Completions() []Completion {
 		{Label: "@layout", Detail: "Declare one or more layout ids."},
 		{Label: "@render", Detail: "Declare render mode: static, action, hybrid, or ssr."},
 		{Label: "@guard", Detail: "Declare route guards."},
+		{Label: "@css", Detail: "Select page CSS inputs: default, page, none, or discovered CSS names."},
 		{Label: "static", Detail: "Build-time HTML render mode."},
 		{Label: "action", Detail: "Static page with backend actions."},
 		{Label: "hybrid", Detail: "Static by default with selected request-time behavior."},

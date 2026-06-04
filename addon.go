@@ -4,13 +4,14 @@ package gowdk
 type Feature string
 
 const (
-	FeatureStatic  Feature = "static"
-	FeatureActions Feature = "actions"
-	FeaturePartial Feature = "partial"
-	FeatureSSR     Feature = "ssr"
-	FeatureAPI     Feature = "api"
-	FeatureEmbed   Feature = "embed"
-	FeatureCSS     Feature = "css"
+	FeatureStatic    Feature = "static"
+	FeatureActions   Feature = "actions"
+	FeaturePartial   Feature = "partial"
+	FeatureSSR       Feature = "ssr"
+	FeatureAPI       Feature = "api"
+	FeatureEmbed     Feature = "embed"
+	FeatureCSS       Feature = "css"
+	FeatureRateLimit Feature = "ratelimit"
 )
 
 // Addon is the minimal contract every optional GOWDK capability implements.

@@ -1,0 +1,47 @@
+{
+  "page": {
+    "id": "shop.product",
+    "route": "/shop/{slug}",
+    "render": "action",
+    "layouts": [
+      "root",
+      "shop"
+    ],
+    "guard": [
+      "commerce.auth"
+    ],
+    "paths": true,
+    "dynamicParams": [
+      "slug"
+    ],
+    "blocks": {
+      "pathsBody": "=> { slug: \"starter-kit\" }",
+      "build": true,
+      "buildBody": "=> { title: \"Starter Kit\" }",
+      "view": true,
+      "viewBody": "<main>\n    <ProductCard title=\"{title}\" />\n  </main>",
+      "actions": [
+        {
+          "name": "buy",
+          "inputName": "input",
+          "inputType": "BuyInput",
+          "validatesInput": true,
+          "redirect": "/shop/starter-kit?ordered=1"
+        }
+      ],
+      "apis": [
+        "metadata"
+      ]
+    }
+  },
+  "component": {
+    "name": "ProductCard",
+    "props": [
+      {
+        "name": "title",
+        "type": "string"
+      }
+    ],
+    "viewBody": "<article>\n    <h1>{title}</h1>\n  </article>"
+  }
+}

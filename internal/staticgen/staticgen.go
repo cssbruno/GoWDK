@@ -15,6 +15,7 @@ import (
 
 	"github.com/gowdk/gowdk"
 	"github.com/gowdk/gowdk/internal/compiler"
+	"github.com/gowdk/gowdk/internal/discover"
 	"github.com/gowdk/gowdk/internal/manifest"
 	"github.com/gowdk/gowdk/internal/view"
 	runtimeasset "github.com/gowdk/gowdk/runtime/asset"
@@ -23,10 +24,18 @@ import (
 
 const routeManifestFile = "gowdk-routes.json"
 const assetManifestFile = "gowdk-assets.json"
+const defaultPageCSSDir = "assets/gowdk"
 
 var (
 	literalDeclarationPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
 	literalNamePattern        = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	cssInputNamePattern       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
+	layoutSlotPattern         = regexp.MustCompile(`<slot\s*/>`)
+)
+
+var (
+	defaultCSSIncludes = []string{"**/*.css"}
+	defaultCSSExcludes = []string{".git/**", "vendor/**", "node_modules/**"}
 )
 
 // Artifact describes one emitted file.
@@ -115,16 +124,20 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 
 func plan(config gowdk.Config, app manifest.Manifest, outputDir string) (buildPlan, error) {
 	components, componentFailures := buildComponents(app.Components)
+	layouts, layoutFailures := buildLayouts(app.Layouts)
 	css, cssFailures := planCSS(config, app, outputDir)
-	stylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
-	stylesheets = append(stylesheets, css.stylesheets...)
+	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
+	baseStylesheets = append(baseStylesheets, css.stylesheets...)
 	var planned []plannedArtifact
 	var failures []string
 	seenOutputPaths := map[string]string{}
 	failures = append(failures, componentFailures...)
+	failures = append(failures, layoutFailures...)
 	failures = append(failures, cssFailures...)
 	for _, page := range app.Pages {
-		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, stylesheets)
+		stylesheets := append([]gowdk.Stylesheet{}, baseStylesheets...)
+		stylesheets = append(stylesheets, css.pageStylesheets[page.ID]...)
+		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets)
 		if err != nil {
 			failures = append(failures, err.Error())
 			continue
@@ -154,22 +167,22 @@ type pageOutput struct {
 	data  map[string]string
 }
 
-func pageOutputArtifacts(config gowdk.Config, outputDir string, page manifest.Page, components map[string]view.Component, stylesheets []gowdk.Stylesheet) ([]plannedArtifact, error) {
-	buildData, err := parseBuildData(page.Blocks.BuildBody)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", page.ID, err)
-	}
+func pageOutputArtifacts(config gowdk.Config, outputDir string, page manifest.Page, components map[string]view.Component, layouts map[string]manifest.Layout, stylesheets []gowdk.Stylesheet) ([]plannedArtifact, error) {
 	outputs, err := pageOutputs(page)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", page.ID, err)
 	}
 	artifacts := make([]plannedArtifact, 0, len(outputs))
 	for _, output := range outputs {
+		buildData, err := parseBuildData(page.Blocks.BuildBody, output.data)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", page.ID, err)
+		}
 		data, err := mergeBuildData(buildData, output.data)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
-		html, err := renderPage(config, page, components, stylesheets, data)
+		html, err := renderPage(config, page, components, layouts, stylesheets, data)
 		if err != nil {
 			return nil, err
 		}
@@ -241,7 +254,7 @@ func parsePathParams(source string) (map[string]string, error) {
 	return parseLiteralStringMap(source, "path param")
 }
 
-func parseBuildData(body string) (map[string]string, error) {
+func parseBuildData(body string, routeParams map[string]string) (map[string]string, error) {
 	declarations, err := parseLiteralDeclarations(body, "build", "build field")
 	if err != nil {
 		return nil, err
@@ -252,7 +265,56 @@ func parseBuildData(body string) (map[string]string, error) {
 	if len(declarations) == 0 {
 		return nil, nil
 	}
-	return declarations[0], nil
+	data := declarations[0]
+	for key, value := range data {
+		interpolated, err := interpolateBuildValue(value, routeParams)
+		if err != nil {
+			return nil, fmt.Errorf("build field %s: %w", key, err)
+		}
+		data[key] = interpolated
+	}
+	return data, nil
+}
+
+func interpolateBuildValue(value string, routeParams map[string]string) (string, error) {
+	if !strings.Contains(value, "{") {
+		return value, nil
+	}
+	var out strings.Builder
+	for {
+		start := strings.Index(value, "{")
+		if start < 0 {
+			out.WriteString(value)
+			return out.String(), nil
+		}
+		end := strings.Index(value[start:], "}")
+		if end < 0 {
+			return "", fmt.Errorf("unterminated interpolation")
+		}
+		end += start
+		out.WriteString(value[:start])
+		name := strings.TrimSpace(value[start+1 : end])
+		if param, ok := buildRouteParamExpression(name); ok {
+			name = param
+		}
+		resolved, ok := routeParams[name]
+		if !ok {
+			return "", fmt.Errorf("unknown route param %q", name)
+		}
+		out.WriteString(resolved)
+		value = value[end+1:]
+	}
+}
+
+func buildRouteParamExpression(value string) (string, bool) {
+	if !strings.HasPrefix(value, `param("`) || !strings.HasSuffix(value, `")`) {
+		return "", false
+	}
+	name := strings.TrimPrefix(strings.TrimSuffix(value, `")`), `param("`)
+	if !literalNamePattern.MatchString(name) {
+		return "", false
+	}
+	return name, true
 }
 
 func parseLiteralDeclarations(body, blockName, itemName string) ([]map[string]string, error) {
@@ -363,10 +425,10 @@ func parsePathString(source string) (string, error) {
 
 func validateRouteParamValue(name, value string) error {
 	if strings.ContainsAny(value, "/?#") {
-		return fmt.Errorf("route param %q value %q must not contain /, ?, or #", name, value)
+		return fmt.Errorf("route param %q value must not contain /, ?, or #", name)
 	}
 	if value == "." || value == ".." {
-		return fmt.Errorf("route param %q value %q is unsafe", name, value)
+		return fmt.Errorf("route param %q value is unsafe", name)
 	}
 	return nil
 }
@@ -391,17 +453,26 @@ func cloneStringMap(input map[string]string) map[string]string {
 }
 
 type cssPlan struct {
-	assets      []plannedCSSArtifact
-	stylesheets []gowdk.Stylesheet
+	assets          []plannedCSSArtifact
+	stylesheets     []gowdk.Stylesheet
+	pageStylesheets map[string][]gowdk.Stylesheet
+}
+
+type cssInput struct {
+	name     string
+	path     string
+	contents []byte
 }
 
 func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssPlan, []string) {
-	var planned cssPlan
+	planned := cssPlan{pageStylesheets: map[string][]gowdk.Stylesheet{}}
 	var failures []string
 	seen := map[string]bool{}
 	context := gowdk.CSSContext{
 		Sources:   cssSources(app),
 		OutputDir: outputDir,
+		Build:     config.Build,
+		CSS:       config.CSS,
 	}
 	for _, addon := range config.Addons {
 		processor, ok := addon.(gowdk.CSSProcessor)
@@ -431,26 +502,261 @@ func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssP
 			})
 		}
 	}
+	inputs, inputFailures := discoverCSSInputs(config, outputDir)
+	failures = append(failures, inputFailures...)
+	if len(inputFailures) == 0 {
+		pageCSS, pageStylesheets, pageFailures := planPageCSS(config, app.Pages, outputDir, inputs, seen)
+		failures = append(failures, pageFailures...)
+		planned.assets = append(planned.assets, pageCSS...)
+		for pageID, stylesheets := range pageStylesheets {
+			planned.pageStylesheets[pageID] = append(planned.pageStylesheets[pageID], stylesheets...)
+		}
+	}
 	return planned, failures
+}
+
+func discoverCSSInputs(config gowdk.Config, outputDir string) (map[string]cssInput, []string) {
+	root, err := os.Getwd()
+	if err != nil {
+		return nil, []string{err.Error()}
+	}
+
+	includes := appendNonEmpty(nil, config.CSS.Include)
+	if len(includes) == 0 {
+		includes = append([]string{}, defaultCSSIncludes...)
+	}
+	excludes := append([]string{}, defaultCSSExcludes...)
+	excludes = appendNonEmpty(excludes, config.CSS.Exclude)
+	if pattern := cssOutputExcludePattern(root, outputDir); pattern != "" {
+		excludes = append(excludes, pattern)
+	}
+
+	paths, err := discover.Files(root, includes, excludes)
+	if err != nil {
+		return nil, []string{fmt.Sprintf("css discovery failed: %v", err)}
+	}
+
+	inputs := map[string]cssInput{}
+	var failures []string
+	for _, filePath := range paths {
+		name := cssInputName(filePath)
+		if !cssInputNamePattern.MatchString(name) {
+			failures = append(failures, fmt.Sprintf("css file %q exports invalid name %q", filePath, name))
+			continue
+		}
+		if previous, exists := inputs[name]; exists {
+			failures = append(failures, fmt.Sprintf("duplicate css export %q from %s and %s", name, previous.path, filePath))
+			continue
+		}
+		contents, err := os.ReadFile(filePath)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("read css file %q: %v", filePath, err))
+			continue
+		}
+		inputs[name] = cssInput{name: name, path: filePath, contents: contents}
+	}
+	return inputs, failures
+}
+
+func cssInputName(filePath string) string {
+	base := filepath.Base(filePath)
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+func planPageCSS(config gowdk.Config, pages []manifest.Page, outputDir string, inputs map[string]cssInput, seenAssets map[string]bool) ([]plannedCSSArtifact, map[string][]gowdk.Stylesheet, []string) {
+	var assets []plannedCSSArtifact
+	stylesheets := map[string][]gowdk.Stylesheet{}
+	var failures []string
+	for _, page := range pages {
+		names, err := pageCSSInputNames(config, page, inputs)
+		if err != nil {
+			failures = append(failures, err.Error())
+			continue
+		}
+		if len(names) == 0 {
+			continue
+		}
+		assetPath, err := pageCSSOutputPath(config.CSS.Output, outputDir, page.ID)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", page.ID, err))
+			continue
+		}
+		if seenAssets[assetPath] {
+			failures = append(failures, fmt.Sprintf("%s: duplicate css asset path %q", page.ID, assetPath))
+			continue
+		}
+		seenAssets[assetPath] = true
+		assets = append(assets, plannedCSSArtifact{
+			CSSArtifact: CSSArtifact{Path: assetPath},
+			contents:    pageCSSContents(names, inputs),
+		})
+		stylesheets[page.ID] = []gowdk.Stylesheet{{Href: pageCSSHref(config.CSS.Output, page.ID)}}
+	}
+	return assets, stylesheets, failures
+}
+
+func pageCSSInputNames(config gowdk.Config, page manifest.Page, inputs map[string]cssInput) ([]string, error) {
+	references := page.CSS
+	if len(references) == 0 {
+		references = []string{"default", "page"}
+	}
+	if len(references) == 1 && references[0] == "none" {
+		return nil, nil
+	}
+
+	var names []string
+	seen := map[string]bool{}
+	add := func(name string) error {
+		if seen[name] {
+			return nil
+		}
+		if _, ok := inputs[name]; !ok {
+			return fmt.Errorf("%s: unknown css input %q", page.ID, name)
+		}
+		seen[name] = true
+		names = append(names, name)
+		return nil
+	}
+
+	for _, reference := range references {
+		switch reference {
+		case "default":
+			defaults, err := defaultCSSInputs(config, inputs)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", page.ID, err)
+			}
+			for _, name := range defaults {
+				if err := add(name); err != nil {
+					return nil, err
+				}
+			}
+		case "page":
+			if _, ok := inputs[page.ID]; ok {
+				if err := add(page.ID); err != nil {
+					return nil, err
+				}
+			}
+		case "none":
+			return nil, fmt.Errorf("%s: @css none must be used by itself", page.ID)
+		default:
+			if err := add(reference); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return names, nil
+}
+
+func defaultCSSInputs(config gowdk.Config, inputs map[string]cssInput) ([]string, error) {
+	if len(config.CSS.Default) > 0 {
+		for _, name := range config.CSS.Default {
+			if _, ok := inputs[name]; !ok {
+				return nil, fmt.Errorf("unknown default css input %q", name)
+			}
+		}
+		return append([]string{}, config.CSS.Default...), nil
+	}
+	if _, ok := inputs["global"]; ok {
+		return []string{"global"}, nil
+	}
+	return nil, nil
+}
+
+func pageCSSContents(names []string, inputs map[string]cssInput) []byte {
+	var builder strings.Builder
+	for _, name := range names {
+		input := inputs[name]
+		builder.WriteString("/* gowdk css: ")
+		builder.WriteString(name)
+		builder.WriteString(" */\n")
+		builder.Write(input.contents)
+		if len(input.contents) == 0 || input.contents[len(input.contents)-1] != '\n' {
+			builder.WriteString("\n")
+		}
+	}
+	return []byte(builder.String())
+}
+
+func pageCSSOutputPath(output gowdk.CSSOutputConfig, outputDir string, pageID string) (string, error) {
+	assetPath := path.Join(cssOutputDir(output), pageID+".css")
+	return cssOutputPath(outputDir, assetPath)
+}
+
+func pageCSSHref(output gowdk.CSSOutputConfig, pageID string) string {
+	prefix := strings.TrimSpace(output.HrefPrefix)
+	if prefix == "" {
+		prefix = "/" + cssOutputDir(output)
+	}
+	return path.Join("/", strings.Trim(prefix, "/"), pageID+".css")
+}
+
+func cssOutputDir(output gowdk.CSSOutputConfig) string {
+	dir := strings.Trim(strings.TrimSpace(output.Dir), "/")
+	if dir == "" {
+		return defaultPageCSSDir
+	}
+	return path.Clean(filepath.ToSlash(dir))
+}
+
+func cssOutputExcludePattern(root string, outputDir string) string {
+	if strings.TrimSpace(outputDir) == "" {
+		return ""
+	}
+	absoluteRoot, err := filepath.Abs(root)
+	if err != nil {
+		return ""
+	}
+	absoluteOutput, err := filepath.Abs(outputDir)
+	if err != nil {
+		return ""
+	}
+	rel, err := filepath.Rel(absoluteRoot, absoluteOutput)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		return ""
+	}
+	return filepath.ToSlash(rel) + "/**"
+}
+
+func appendNonEmpty(values []string, patterns []string) []string {
+	for _, pattern := range patterns {
+		if strings.TrimSpace(pattern) == "" {
+			continue
+		}
+		values = append(values, pattern)
+	}
+	return values
 }
 
 func cssSources(app manifest.Manifest) []gowdk.CSSSource {
 	sources := make([]gowdk.CSSSource, 0, len(app.Pages)+len(app.Components))
 	for _, page := range app.Pages {
 		sources = append(sources, gowdk.CSSSource{
-			Path: page.Source,
-			Kind: "page",
-			Name: page.ID,
+			Path:       page.Source,
+			Kind:       "page",
+			Name:       page.ID,
+			CSSClasses: cssClassesFromViewBody(page.Blocks.ViewBody),
 		})
 	}
 	for _, component := range app.Components {
 		sources = append(sources, gowdk.CSSSource{
-			Path: component.Source,
-			Kind: "component",
-			Name: component.Name,
+			Path:       component.Source,
+			Kind:       "component",
+			Name:       component.Name,
+			CSSClasses: cssClassesFromViewBody(component.Blocks.ViewBody),
 		})
 	}
 	return sources
+}
+
+func cssClassesFromViewBody(body string) []string {
+	if strings.TrimSpace(body) == "" {
+		return nil
+	}
+	dependencies, err := view.ViewDependencies(body)
+	if err != nil {
+		return nil
+	}
+	return dependencies.CSSClasses
 }
 
 func nonEmptyStylesheets(stylesheets []gowdk.Stylesheet) []gowdk.Stylesheet {
@@ -616,7 +922,32 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 	return registry, failures
 }
 
-func renderPage(config gowdk.Config, page manifest.Page, components map[string]view.Component, stylesheets []gowdk.Stylesheet, data map[string]string) (string, error) {
+func buildLayouts(layouts []manifest.Layout) (map[string]manifest.Layout, []string) {
+	registry := map[string]manifest.Layout{}
+	var failures []string
+	for _, layout := range layouts {
+		if layout.ID == "" {
+			failures = append(failures, "layout missing ID")
+			continue
+		}
+		if _, exists := registry[layout.ID]; exists {
+			failures = append(failures, fmt.Sprintf("duplicate layout %q", layout.ID))
+			continue
+		}
+		if !layout.Blocks.View {
+			failures = append(failures, fmt.Sprintf("layout %s missing view {}", layout.ID))
+			continue
+		}
+		if strings.TrimSpace(layout.Blocks.ViewBody) == "" {
+			failures = append(failures, fmt.Sprintf("layout %s view {} is empty", layout.ID))
+			continue
+		}
+		registry[layout.ID] = layout
+	}
+	return registry, failures
+}
+
+func renderPage(config gowdk.Config, page manifest.Page, components map[string]view.Component, layouts map[string]manifest.Layout, stylesheets []gowdk.Stylesheet, data map[string]string) (string, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if mode != gowdk.Static && mode != gowdk.Action {
 		return "", fmt.Errorf("%s: static build cannot emit @render %s pages yet", page.ID, mode)
@@ -627,14 +958,70 @@ func renderPage(config gowdk.Config, page manifest.Page, components map[string]v
 	if strings.TrimSpace(page.Blocks.ViewBody) == "" {
 		return "", fmt.Errorf("%s: view {} is empty", page.ID)
 	}
+	viewSource, err := composePageViewSource(page, layouts)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", page.ID, err)
+	}
+	if err := validateViewParamReferences(page, viewSource); err != nil {
+		return "", fmt.Errorf("%s: %w", page.ID, err)
+	}
 
-	body, err := view.RenderWithOptions(page.Blocks.ViewBody, components, data, view.Options{
+	body, err := view.RenderWithOptions(viewSource, components, data, view.Options{
 		Actions: actionRoutes(page, data),
 	})
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
 	return document(page, body, stylesheets), nil
+}
+
+func composePageViewSource(page manifest.Page, layouts map[string]manifest.Layout) (string, error) {
+	source := page.Blocks.ViewBody
+	if len(layouts) == 0 {
+		return source, nil
+	}
+	for index := len(page.Layouts) - 1; index >= 0; index-- {
+		layoutID := page.Layouts[index]
+		layout, ok := layouts[layoutID]
+		if !ok {
+			return "", fmt.Errorf("layout %q is not available for static composition", layoutID)
+		}
+		next, err := composeLayoutSource(layout, source)
+		if err != nil {
+			return "", err
+		}
+		source = next
+	}
+	return source, nil
+}
+
+func composeLayoutSource(layout manifest.Layout, child string) (string, error) {
+	matches := layoutSlotPattern.FindAllStringIndex(layout.Blocks.ViewBody, -1)
+	if len(matches) != 1 {
+		return "", fmt.Errorf("layout %s must contain exactly one <slot /> placeholder", layout.ID)
+	}
+	match := matches[0]
+	return layout.Blocks.ViewBody[:match[0]] + child + layout.Blocks.ViewBody[match[1]:], nil
+}
+
+func validateViewParamReferences(page manifest.Page, source string) error {
+	refs, err := view.ParamReferences(source)
+	if err != nil {
+		return err
+	}
+	if len(refs) == 0 {
+		return nil
+	}
+	declared := map[string]bool{}
+	for _, param := range page.DynamicParams() {
+		declared[param] = true
+	}
+	for _, ref := range refs {
+		if !declared[ref] {
+			return fmt.Errorf("view references route param %q that is not declared by route %q", ref, page.Route)
+		}
+	}
+	return nil
 }
 
 func actionRoutes(page manifest.Page, data map[string]string) map[string]string {

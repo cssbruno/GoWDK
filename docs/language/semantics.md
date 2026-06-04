@@ -14,7 +14,9 @@
 ## Current Metadata Semantics
 
 - `@page` and `@route` are required.
-- `@layout` records ordered layout IDs.
+- `@layout` records ordered page layout IDs. Layout files can declare layout
+  identity with `@layout <id>`; when layout files are present, validation
+  resolves page layout refs by ID.
 - `@guard` records guard IDs as metadata only.
 - `paths {}` records that dynamic static paths are declared and preserves raw
   body text internally. Static builds can execute literal string declarations
@@ -22,13 +24,15 @@
 - `build {}` records block presence and raw body text internally. Static builds
   can execute one literal string declaration such as
   `=> { title: "Hello" }` and expose those values to `view {}` interpolation.
-- `load {}` records block presence only.
+- `load {}` records block presence and raw body text internally. Request-time
+  execution is planned.
 - `view {}` records block presence and raw body text for the current static HTML
   subset. Static builds interpolate route params and component props in text and
   attribute values, escaping the result.
 - `act <name> {}` records action names plus the first supported form-input,
   validation-intent, and local redirect subset.
-- `api <name> {}` records names only.
+- `api <name> {}` records names plus the first method/route metadata line, such
+  as `GET "/api/health"`.
 
 ## Planned Semantics
 

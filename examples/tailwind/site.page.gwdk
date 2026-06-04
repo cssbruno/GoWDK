@@ -1,0 +1,12 @@
+@page tailwind
+@route "/tailwind"
+@render static
+
+view {
+  <main class="min-h-screen bg-slate-950 px-6 py-12 text-white">
+    <section class="mx-auto max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-8">
+      <h1 class="text-3xl font-bold">Tailwind without npm</h1>
+      <p class="mt-4 text-sm text-slate-300">GOWDK can link CSS built by the standalone Tailwind executable.</p>
+    </section>
+  </main>
+}

@@ -24,6 +24,12 @@ static app source, and an optional static-serving binary for simple `static` and
 literal `build {}` data, lowercase HTML markup in `view {}`, and `.cmp.gwdk`
 component files.
 
+`internal/parser.ParseSyntax` exposes a typed AST for the current source subset:
+annotations, supported top-level blocks, parsed `view {}` markup nodes, literal
+`paths {}`/`build {}` records, action statements, API route statements, and
+source spans. Existing manifest parsing still drives the CLI while compiler
+passes migrate toward that AST.
+
 ## Target Pipeline
 
 ```text

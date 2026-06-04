@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +42,140 @@ view {
 	output := string(payload)
 	if !strings.Contains(output, "<main><h1>GOWDK &amp; friends</h1></main>") {
 		t.Fatalf("unexpected output:\n%s", output)
+	}
+}
+
+func TestWatchCommandOnceRunsBuild(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, source, `@page home
+@route "/"
+
+view {
+  <main>Watched</main>
+}
+`)
+
+	if err := run([]string{"watch", "--once", "--out", outputDir, source}); err != nil {
+		t.Fatal(err)
+	}
+
+	payload, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), "<main>Watched</main>") {
+		t.Fatalf("unexpected watch build output:\n%s", payload)
+	}
+}
+
+func TestInitCommandScaffoldsBuildableProject(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "site")
+	if err := run([]string{"init", root}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		"gowdk.config.go",
+		"src/pages/home.page.gwdk",
+		"src/components/hero.cmp.gwdk",
+		"styles/global.css",
+	} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(path))); err != nil {
+			t.Fatalf("expected scaffold file %s: %v", path, err)
+		}
+	}
+
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	if err := run([]string{"build"}); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(root, "dist", "site", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), "Hello from GOWDK") {
+		t.Fatalf("unexpected initialized build output:\n%s", payload)
+	}
+}
+
+func TestInitCommandRejectsExistingFilesUnlessForced(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, "package custom\n")
+
+	err := run([]string{"init", root})
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("expected existing file error, got %v", err)
+	}
+	payload, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(payload) != "package custom\n" {
+		t.Fatalf("init without --force overwrote config:\n%s", payload)
+	}
+
+	if err := run([]string{"init", "--force", root}); err != nil {
+		t.Fatal(err)
+	}
+	payload, err = os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), "var Config = gowdk.Config") {
+		t.Fatalf("init --force did not refresh config:\n%s", payload)
+	}
+}
+
+func TestWatchRejectsInvalidInterval(t *testing.T) {
+	err := run([]string{"watch", "--interval", "0s", "--out", t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "watch interval must be positive") {
+		t.Fatalf("expected invalid interval error, got %v", err)
+	}
+}
+
+func TestBuildInputSnapshotDetectsFileChanges(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	writeCLIFile(t, source, `@page home
+@route "/"
+
+view {
+  <main>Before</main>
+}
+`)
+
+	first, err := buildInputSnapshot([]string{"--out", filepath.Join(root, "dist"), source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Millisecond)
+	writeCLIFile(t, source, `@page home
+@route "/"
+
+view {
+  <main>After</main>
+}
+`)
+	second, err := buildInputSnapshot([]string{"--out", filepath.Join(root, "dist"), source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.same(first) {
+		t.Fatalf("expected changed source snapshot: first=%#v second=%#v", first, second)
 	}
 }
 
@@ -216,6 +352,81 @@ view {
 	}
 	if _, err := os.Stat(filepath.Join(root, "public", "ignored", "index.html")); !os.IsNotExist(err) {
 		t.Fatalf("expected configured exclude to skip ignored page, stat err: %v", err)
+	}
+}
+
+func TestBuildCommandUsesTailwindAddonFromConfig(t *testing.T) {
+	root := t.TempDir()
+	fakeTailwind := filepath.Join(root, "tailwindcss")
+	writeCLIFile(t, fakeTailwind, `#!/bin/sh
+set -eu
+out=""
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		-o|--output)
+			shift
+			out="$1"
+			;;
+	esac
+	shift
+done
+if [ "$out" = "" ]; then
+	echo "missing output" >&2
+	exit 2
+fi
+printf '/* fake tailwind */\n.font-bold { font-weight: 700; }\n' > "$out"
+`)
+	if err := os.Chmod(fakeTailwind, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import (
+	"github.com/gowdk/gowdk"
+	"github.com/gowdk/gowdk/addons/tailwind"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		tailwind.Addon(tailwind.Options{
+			Input: "styles/app.css",
+			Command: `+strconv.Quote(fakeTailwind)+`,
+			OutputPath: "assets/tw.css",
+			Href: "/assets/tw.css",
+			Minify: true,
+		}),
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "styles", "app.css"), `@import "tailwindcss" source(none);
+`)
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `@page home
+@route "/"
+
+view {
+  <main class="font-bold">Home</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build", "--out", "dist", "home.page.gwdk"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	html, err := os.ReadFile(filepath.Join(root, "dist", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(html), `<link rel="stylesheet" href="/assets/tw.css">`) {
+		t.Fatalf("expected tailwind stylesheet link:\n%s", html)
+	}
+	css, err := os.ReadFile(filepath.Join(root, "dist", "assets", "tw.css"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(css), "fake tailwind") {
+		t.Fatalf("expected fake tailwind output, got %q", css)
 	}
 }
 
@@ -428,6 +639,358 @@ view {
 	if !strings.Contains(string(payload), "<main>Custom config</main>") {
 		t.Fatalf("unexpected output:\n%s", payload)
 	}
+}
+
+func TestRunWithoutArgsPrintsUsage(t *testing.T) {
+	output, err := captureCLIStdout(t, func() error {
+		return run(nil)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output, "Commands:") || !strings.Contains(output, "check [--config <file>]") {
+		t.Fatalf("expected usage output, got:\n%s", output)
+	}
+}
+
+func TestCLIRejectsUnknownCommandAndProjectFlag(t *testing.T) {
+	_, err := captureCLIStdout(t, func() error {
+		return run([]string{"unknown"})
+	})
+	if err == nil || !strings.Contains(err.Error(), `unknown command "unknown"`) {
+		t.Fatalf("expected unknown command error, got %v", err)
+	}
+
+	err = run([]string{"check", "--wat"})
+	if err == nil || !strings.Contains(err.Error(), `unknown check flag "--wat"`) {
+		t.Fatalf("expected unknown check flag error, got %v", err)
+	}
+
+	err = run([]string{"manifest", "--json"})
+	if err == nil || !strings.Contains(err.Error(), `unknown manifest flag "--json"`) {
+		t.Fatalf("expected unknown manifest flag error, got %v", err)
+	}
+}
+
+func TestCheckCommandJSONReportsDiagnostics(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "bad.page.gwdk")
+	writeCLIFile(t, source, `@page bad
+@route "/bad"
+`)
+
+	output, err := captureCLIStdout(t, func() error {
+		return run([]string{"check", "--json", source})
+	})
+	if err == nil {
+		t.Fatal("expected check to fail")
+	}
+	if !strings.Contains(output, `"diagnostics"`) || !strings.Contains(output, "missing view") {
+		t.Fatalf("expected JSON diagnostics, got:\n%s", output)
+	}
+}
+
+func TestManifestCommandHandlesMultipleFiles(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home.page.gwdk")
+	about := filepath.Join(root, "about.page.gwdk")
+	writeCLIFile(t, home, `@page home
+@route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+	writeCLIFile(t, about, `@page about
+@route "/about"
+
+view {
+  <main>About</main>
+}
+`)
+
+	output, err := captureCLIStdout(t, func() error {
+		return run([]string{"manifest", home, about})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output, `"home"`) || !strings.Contains(output, `"about"`) {
+		t.Fatalf("expected multi-file manifest, got:\n%s", output)
+	}
+}
+
+func TestCheckCommandUsesConfigForDiscovery(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/gowdk/gowdk"
+
+var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{
+		Include: []string{"pages/**/*.gwdk"},
+		Exclude: []string{"pages/ignored.page.gwdk"},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `@page home
+@route "/"
+
+view {
+  <main>Configured check</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "pages", "ignored.page.gwdk"), `@page ignored
+@route "/"
+
+view {
+  <main>Ignored duplicate</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"check"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+func TestManifestCommandLoadsExplicitConfigPathForDiscovery(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "site.gowdk.go"), `package app
+
+import "github.com/gowdk/gowdk"
+
+var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{
+		Include: []string{"pages/**/*.gwdk"},
+		Exclude: []string{"pages/ignored.page.gwdk"},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `@page home
+@route "/"
+
+view {
+  <main>Manifest discovery</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "pages", "ignored.page.gwdk"), `@page ignored
+@route "/ignored"
+
+view {
+  <main>Ignored</main>
+}
+`)
+
+	var output string
+	withWorkingDir(t, root, func() {
+		captured, err := captureCLIStdout(t, func() error {
+			return run([]string{"manifest", "--config", "site.gowdk.go"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		output = captured
+	})
+
+	if !strings.Contains(output, `"route": "/"`) {
+		t.Fatalf("expected discovered home route in manifest: %s", output)
+	}
+	if strings.Contains(output, "ignored") {
+		t.Fatalf("expected configured exclude to skip ignored page: %s", output)
+	}
+}
+
+func TestSitemapCommandDiscoversSelectedModuleOnly(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/gowdk/gowdk"
+
+var Config = gowdk.Config{
+	Modules: []gowdk.ModuleConfig{
+		{Name: "frontend"},
+		{Name: "backend"},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `@page home
+@route "/"
+
+view {
+  <main>Frontend</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `@page admin
+@route "/admin"
+
+view {
+  <main>Backend</main>
+}
+`)
+
+	var output string
+	withWorkingDir(t, root, func() {
+		captured, err := captureCLIStdout(t, func() error {
+			return run([]string{"sitemap", "--module", "backend"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		output = captured
+	})
+
+	if !strings.Contains(output, `"id": "admin"`) {
+		t.Fatalf("expected selected backend page in sitemap: %s", output)
+	}
+	if strings.Contains(output, `"id": "home"`) {
+		t.Fatalf("expected unselected frontend module to be skipped: %s", output)
+	}
+}
+
+func TestRoutesCommandPrintsGeneratedRouteBindings(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "newsletter.page.gwdk")
+	writeCLIFile(t, page, `@page newsletter
+@route "/newsletter"
+@render action
+
+act subscribe {
+  input := form SubscribeInput
+  valid(input)?
+  -> "/newsletter?ok=1"
+}
+
+view {
+  <form g:post={subscribe}>
+    <input name="email" required />
+    <button type="submit">Subscribe</button>
+  </form>
+}
+`)
+
+	output, err := captureCLIStdout(t, func() error {
+		return run([]string{"routes", page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var report routeBindingsReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
+	}
+	if report.Version != 1 {
+		t.Fatalf("unexpected routes version: %d", report.Version)
+	}
+	if len(report.Routes) != 2 {
+		t.Fatalf("expected static and action routes, got %#v", report.Routes)
+	}
+	assertRouteBinding(t, report.Routes, routeBindingJSON{
+		Kind:    "static",
+		Method:  "GET",
+		Route:   "/newsletter",
+		PageID:  "newsletter",
+		Handler: `embedded.Static("pages/newsletter.html")`,
+	})
+	assertRouteBinding(t, report.Routes, routeBindingJSON{
+		Kind:    "action",
+		Method:  "POST",
+		Route:   "/newsletter",
+		PageID:  "newsletter",
+		Handler: "actions.NewsletterSubscribe",
+	})
+}
+
+func TestRoutesCommandDiscoversSelectedModuleOnly(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/gowdk/gowdk"
+
+var Config = gowdk.Config{
+	Modules: []gowdk.ModuleConfig{
+		{Name: "frontend"},
+		{Name: "backend"},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `@page home
+@route "/"
+
+view {
+  <main>Frontend</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `@page admin
+@route "/admin"
+
+view {
+  <main>Backend</main>
+}
+`)
+
+	var output string
+	withWorkingDir(t, root, func() {
+		captured, err := captureCLIStdout(t, func() error {
+			return run([]string{"routes", "--module", "backend"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		output = captured
+	})
+
+	var report routeBindingsReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
+	}
+	if len(report.Routes) != 1 {
+		t.Fatalf("expected selected backend route only, got %#v", report.Routes)
+	}
+	assertRouteBinding(t, report.Routes, routeBindingJSON{
+		Kind:    "static",
+		Method:  "GET",
+		Route:   "/admin",
+		PageID:  "admin",
+		Handler: `embedded.Static("pages/admin.html")`,
+	})
+}
+
+func TestRoutesCommandPrintsAPIBinding(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "status.page.gwdk")
+	writeCLIFile(t, page, `@page status
+@route "/status"
+
+api health {
+  GET "/api/health"
+}
+
+view {
+  <main>Status</main>
+}
+`)
+
+	output, err := captureCLIStdout(t, func() error {
+		return run([]string{"routes", page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var report routeBindingsReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
+	}
+	assertRouteBinding(t, report.Routes, routeBindingJSON{
+		Kind:    "api",
+		Method:  "GET",
+		Route:   "/api/health",
+		PageID:  "status",
+		Handler: "api.StatusHealth",
+	})
 }
 
 func TestBuildCommandWritesGeneratedEmbeddedApp(t *testing.T) {
@@ -679,6 +1242,39 @@ func withWorkingDir(t *testing.T, dir string, fn func()) {
 		}
 	}()
 	fn()
+}
+
+func captureCLIStdout(t *testing.T, fn func() error) (string, error) {
+	t.Helper()
+	previous := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = writer
+	defer func() {
+		os.Stdout = previous
+	}()
+
+	runErr := fn()
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	payload, readErr := io.ReadAll(reader)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	return string(payload), runErr
+}
+
+func assertRouteBinding(t *testing.T, routes []routeBindingJSON, expected routeBindingJSON) {
+	t.Helper()
+	for _, route := range routes {
+		if route == expected {
+			return
+		}
+	}
+	t.Fatalf("missing route binding %#v in %#v", expected, routes)
 }
 
 func freeCLIAddr(t *testing.T) string {

@@ -2,7 +2,7 @@
 
 This directory documents the current `.gwdk` language contract.
 
-The current implementation supports line-oriented page metadata, explicit component metadata, top-level block detection, the first typed action input/redirect subset, minimal static `view {}` markup parsing, literal dynamic static route expansion, literal build data, route/build-data interpolation in static views, formatting, diagnostics, manifest output, build output for simple static pages/components, and LSP/editor integration. It does not yet parse component children, non-string props, full typed action semantics, API bodies, partial fragments, or full semantic/type analysis.
+The current implementation supports line-oriented page metadata, explicit component metadata, top-level block detection, the first typed action input/redirect/fragment-metadata subset, the first API method/route metadata subset, minimal static `view {}` markup parsing, first-slice `g:post`, `g:target`, and `g:swap` lowering, literal dynamic static route expansion, literal build data, route/build-data interpolation in static views, formatting, diagnostics, manifest output, build output for simple static pages/components, and LSP/editor integration. It does not yet parse component children, non-string props, full typed action semantics, API request/response bodies, generated partial fragment handlers, active partial-update runtime behavior, or full semantic/type analysis.
 
 ## Current Files
 

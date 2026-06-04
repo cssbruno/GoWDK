@@ -20,6 +20,7 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 	appDir := filepath.Join(root, "generated-app")
 	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
 	writeTestFile(t, filepath.Join(staticDir, "blog", "hello", "index.html"), "<main>Post</main>")
+	writeTestFile(t, filepath.Join(staticDir, "gowdk-assets.json"), `{"version":1,"files":{"assets/app.css":"assets/app.css"}}`)
 
 	result, err := Generate(staticDir, appDir)
 	if err != nil {
@@ -36,7 +37,7 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if strings.Join(result.Files, ",") != "blog/hello/index.html,index.html" {
+	if strings.Join(result.Files, ",") != "blog/hello/index.html,gowdk-assets.json,index.html" {
 		t.Fatalf("unexpected copied files: %#v", result.Files)
 	}
 	mainPayload, err := os.ReadFile(result.MainPath)
@@ -50,11 +51,50 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 		`request.URL.Path == "/_gowdk/health"`,
 		`response.Header().Set("X-GOWDK-App", handler.identity.AppID)`,
 		`response.Header().Set("X-GOWDK-Instance-ID", handler.identity.InstanceID)`,
+		`assets := loadAssetManifest(root)`,
+		`"assets":      strconv.Itoa(len(handler.assets.Files))`,
 		`instanceID = generatedInstanceID(moduleName)`,
 		`rand.Read(token[:])`,
 	} {
 		if !strings.Contains(string(mainPayload), expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, mainPayload)
+		}
+	}
+}
+
+func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(staticDir, ".env"), "SECRET=value")
+	writeTestFile(t, filepath.Join(staticDir, ".env.local"), "SECRET=value")
+	writeTestFile(t, filepath.Join(staticDir, "assets", "app.css.map"), "{}")
+	writeTestFile(t, filepath.Join(staticDir, "source", "home.page.gwdk"), "@page home")
+	writeTestFile(t, filepath.Join(staticDir, "source", "main.go"), "package main")
+	writeTestFile(t, filepath.Join(staticDir, "tmp", "asset.css"), "body{}")
+	writeTestFile(t, filepath.Join(staticDir, "assets", "scratch.tmp"), "temporary")
+	writeTestFile(t, filepath.Join(staticDir, "assets", "app.css"), "body{}")
+
+	result, err := Generate(staticDir, appDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Join(result.Files, ",") != "assets/app.css,index.html" {
+		t.Fatalf("unexpected embedded files: %#v", result.Files)
+	}
+	for _, path := range []string{
+		filepath.Join(result.StaticDir, ".env"),
+		filepath.Join(result.StaticDir, ".env.local"),
+		filepath.Join(result.StaticDir, "assets", "app.css.map"),
+		filepath.Join(result.StaticDir, "source", "home.page.gwdk"),
+		filepath.Join(result.StaticDir, "source", "main.go"),
+		filepath.Join(result.StaticDir, "tmp", "asset.css"),
+		filepath.Join(result.StaticDir, "assets", "scratch.tmp"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("expected unsafe file %s to be skipped, stat err: %v", path, err)
 		}
 	}
 }
@@ -91,6 +131,10 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`if err := request.ParseForm(); err != nil`,
 		`http.StatusRequestEntityTooLarge`,
+		`writeActionError(response, http.StatusBadRequest, actionErrorInvalidForm)`,
+		`writeActionError(response, http.StatusRequestEntityTooLarge, actionErrorRequestTooLarge)`,
+		`writeActionError(response, http.StatusUnprocessableEntity, actionErrorValidationFailed)`,
+		`response.Header().Set("Cache-Control", "no-store")`,
 		`type SubscribeInput struct`,
 		`func decodeNewsletterSubscribeInput(values formValues) (SubscribeInput, error)`,
 		`decodeExpectedFields(values, []string{"email"})`,
@@ -232,6 +276,7 @@ func TestBuildBinaryCompilesGeneratedApp(t *testing.T) {
 	binaryPath := filepath.Join(root, "site")
 	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
 	writeTestFile(t, filepath.Join(staticDir, "blog", "hello", "index.html"), "<main>Post</main>")
+	writeTestFile(t, filepath.Join(staticDir, "gowdk-assets.json"), `{"version":1,"files":{"assets/app.css":"assets/app.css"}}`)
 
 	if _, err := Generate(staticDir, appDir); err != nil {
 		t.Fatal(err)
@@ -255,6 +300,7 @@ func TestGeneratedBinaryServesEmbeddedStaticHTML(t *testing.T) {
 	binaryPath := filepath.Join(root, "site")
 	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
 	writeTestFile(t, filepath.Join(staticDir, "blog", "hello", "index.html"), "<main>Post</main>")
+	writeTestFile(t, filepath.Join(staticDir, "gowdk-assets.json"), `{"version":1,"files":{"assets/app.css":"assets/app.css"}}`)
 
 	if _, err := Generate(staticDir, appDir); err != nil {
 		t.Fatal(err)
@@ -313,6 +359,7 @@ func TestGeneratedBinaryServesEmbeddedStaticHTML(t *testing.T) {
 		`"app":"clinic"`,
 		`"module":"backend"`,
 		`"instance_id":"backend-2"`,
+		`"assets":"1"`,
 	} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected health response to contain %q, got %s", expected, body)
@@ -419,6 +466,9 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	_ = response.Body.Close()
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected unexpected field to return 400, got %d", response.StatusCode)
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on action error, got %q", cacheControl)
 	}
 
 	response, err = waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=")

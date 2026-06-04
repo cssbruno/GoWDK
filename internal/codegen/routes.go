@@ -2,6 +2,10 @@ package codegen
 
 import (
 	"fmt"
+	"go/format"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -20,6 +24,8 @@ const (
 	RouteAPI    RouteKind = "api"
 )
 
+var goIdentifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
 // RouteBinding is the route-level codegen plan used by the generated binary.
 type RouteBinding struct {
 	Kind    RouteKind
@@ -27,6 +33,12 @@ type RouteBinding struct {
 	Route   string
 	PageID  string
 	Handler string
+}
+
+// RouteRegistrationOptions configures generated route registration source.
+type RouteRegistrationOptions struct {
+	PackageName string
+	Imports     map[string]string
 }
 
 // BuildRouteBindings converts a validated manifest into generated route
@@ -91,6 +103,104 @@ func BuildRouteBindings(config gowdk.Config, app manifest.Manifest) ([]RouteBind
 	}
 
 	return routes, nil
+}
+
+// GenerateRouteRegistration emits Go source that registers route bindings on an
+// http.ServeMux. Handler package aliases used by bindings must be provided in
+// options.Imports so the generated file is complete and formatted.
+func GenerateRouteRegistration(bindings []RouteBinding, options RouteRegistrationOptions) ([]byte, error) {
+	packageName := strings.TrimSpace(options.PackageName)
+	if packageName == "" {
+		packageName = "routes"
+	}
+	if !goIdentifierPattern.MatchString(packageName) {
+		return nil, fmt.Errorf("invalid route registration package name %q", packageName)
+	}
+
+	imports, err := routeRegistrationImports(bindings, options.Imports)
+	if err != nil {
+		return nil, err
+	}
+
+	var source strings.Builder
+	source.WriteString("package ")
+	source.WriteString(packageName)
+	source.WriteString("\n\n")
+	source.WriteString("import (\n")
+	source.WriteString("\t\"net/http\"\n")
+	for _, item := range imports {
+		source.WriteString("\t")
+		source.WriteString(item.alias)
+		source.WriteByte(' ')
+		source.WriteString(strconv.Quote(item.path))
+		source.WriteByte('\n')
+	}
+	source.WriteString(")\n\n")
+	source.WriteString("func Register(mux *http.ServeMux) {\n")
+	for _, binding := range bindings {
+		pattern := strings.TrimSpace(binding.Method + " " + binding.Route)
+		if strings.TrimSpace(binding.Method) == "" || strings.TrimSpace(binding.Route) == "" {
+			return nil, fmt.Errorf("route binding for page %q must include method and route", binding.PageID)
+		}
+		if strings.TrimSpace(binding.Handler) == "" {
+			return nil, fmt.Errorf("route binding %s must include handler", pattern)
+		}
+		source.WriteString("\tmux.HandleFunc(")
+		source.WriteString(strconv.Quote(pattern))
+		source.WriteString(", ")
+		source.WriteString(binding.Handler)
+		source.WriteString(")\n")
+	}
+	source.WriteString("}\n")
+
+	formatted, err := format.Source([]byte(source.String()))
+	if err != nil {
+		return nil, fmt.Errorf("format route registration source: %w", err)
+	}
+	return formatted, nil
+}
+
+type routeImport struct {
+	alias string
+	path  string
+}
+
+func routeRegistrationImports(bindings []RouteBinding, configured map[string]string) ([]routeImport, error) {
+	needed := map[string]bool{}
+	for _, binding := range bindings {
+		alias := handlerPackageAlias(binding.Handler)
+		if alias != "" {
+			needed[alias] = true
+		}
+	}
+	aliases := make([]string, 0, len(needed))
+	for alias := range needed {
+		aliases = append(aliases, alias)
+	}
+	sort.Strings(aliases)
+
+	imports := make([]routeImport, 0, len(aliases))
+	for _, alias := range aliases {
+		path := strings.TrimSpace(configured[alias])
+		if path == "" {
+			return nil, fmt.Errorf("missing import path for route handler package %q", alias)
+		}
+		imports = append(imports, routeImport{alias: alias, path: path})
+	}
+	return imports, nil
+}
+
+func handlerPackageAlias(handler string) string {
+	handler = strings.TrimSpace(handler)
+	dot := strings.IndexByte(handler, '.')
+	if dot <= 0 {
+		return ""
+	}
+	alias := handler[:dot]
+	if !goIdentifierPattern.MatchString(alias) {
+		return ""
+	}
+	return alias
 }
 
 func assetName(pageID string) string {

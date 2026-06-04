@@ -1,0 +1,43 @@
+package validation
+
+import "testing"
+
+func TestResultOK(t *testing.T) {
+	if !(Result{}).OK() {
+		t.Fatal("empty result should be OK")
+	}
+}
+
+func TestResultAddRecordsErrors(t *testing.T) {
+	var result Result
+	result.Add("email", "is required")
+
+	if result.OK() {
+		t.Fatal("result with errors should not be OK")
+	}
+	if len(result.Errors) != 1 || result.Errors[0].Field != "email" || result.Errors[0].Message != "is required" {
+		t.Fatalf("unexpected errors: %#v", result.Errors)
+	}
+}
+
+func TestResultMessages(t *testing.T) {
+	var result Result
+	result.Add("email", "is required")
+	result.Add("email", "must be valid")
+	result.Add("name", "is required")
+
+	messages := result.Messages()
+	if len(messages) != 3 || messages[0] != "is required" || messages[2] != "is required" {
+		t.Fatalf("unexpected messages: %#v", messages)
+	}
+
+	emailMessages := result.FieldMessages("email")
+	if len(emailMessages) != 2 || emailMessages[1] != "must be valid" {
+		t.Fatalf("unexpected email messages: %#v", emailMessages)
+	}
+
+	byField := result.ByField()
+	if len(byField["email"]) != 2 || byField["name"][0] != "is required" {
+		t.Fatalf("unexpected field messages: %#v", byField)
+	}
+}

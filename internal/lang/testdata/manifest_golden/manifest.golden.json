@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "pages": {
+    "home": {
+      "source": "testdata/manifest_golden/home.page.gwdk",
+      "kind": "page",
+      "route": "/",
+      "render": "action",
+      "layouts": [
+        "root"
+      ],
+      "blocks": {
+        "paths": false,
+        "build": true,
+        "load": false,
+        "view": true,
+        "actions": [
+          "submit"
+        ]
+      },
+      "actions": [
+        {
+          "name": "submit",
+          "inputName": "input",
+          "inputType": "SignupInput",
+          "validatesInput": true,
+          "redirect": "/?ok=1"
+        }
+      ],
+      "components": [
+        "Hero"
+      ],
+      "artifacts": [
+        {
+          "kind": "html",
+          "path": "index.html"
+        }
+      ]
+    }
+  },
+  "components": {
+    "Hero": {
+      "source": "testdata/manifest_golden/hero.cmp.gwdk",
+      "kind": "component",
+      "props": [
+        {
+          "name": "title",
+          "type": "string"
+        }
+      ]
+    }
+  }
+}

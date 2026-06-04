@@ -45,6 +45,13 @@
     ],
     "description": "Create an action block"
   },
+  "CSS selection": {
+    "prefix": "css",
+    "body": [
+      "@css ${1|default page,default page forms,reset tokens forms,none|}"
+    ],
+    "description": "Select page CSS inputs"
+  },
   "SSR page": {
     "prefix": "ssr",
     "body": [

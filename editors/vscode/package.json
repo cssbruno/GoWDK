@@ -2,9 +2,30 @@
   "name": "gowdk-vscode",
   "displayName": "GOWDK",
   "description": "Language tools for portable .gwdk files.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "gowdk",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cssbruno/GOWDK.git",
+    "directory": "editors/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/cssbruno/GOWDK/issues"
+  },
+  "homepage": "https://github.com/cssbruno/GOWDK#readme",
+  "keywords": [
+    "gowdk",
+    "web",
+    "compiler",
+    "static-site",
+    "language-support"
+  ],
+  "scripts": {
+    "check": "node --check extension.js",
+    "test": "node --test *.test.js",
+    "package": "vsce package"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -21,7 +42,8 @@
     "onCommand:gowdk.refreshSiteMapTree",
     "onCommand:gowdk.openPageFile",
     "onCommand:gowdk.movePageFile",
-    "onView:gowdk.siteMapTree"
+    "onView:gowdk.siteMapTree",
+    "onView:gowdk.directoryOutline"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -48,39 +70,58 @@
     "commands": [
       {
         "command": "gowdk.checkCurrentFile",
-        "title": "GOWDK: Check Current File"
+        "title": "GOWDK: Check Current File",
+        "icon": "$(check)"
       },
       {
         "command": "gowdk.showManifest",
-        "title": "GOWDK: Show Manifest"
+        "title": "GOWDK: Show Manifest",
+        "icon": "$(symbol-object)"
       },
       {
         "command": "gowdk.showTokens",
-        "title": "GOWDK: Show Tokens"
+        "title": "GOWDK: Show Tokens",
+        "icon": "$(symbol-keyword)"
       },
       {
         "command": "gowdk.showSiteMap",
-        "title": "GOWDK: Show Site Map"
+        "title": "GOWDK: Show Site Map",
+        "icon": "$(list-tree)"
       },
       {
         "command": "gowdk.refreshSiteMapTree",
-        "title": "GOWDK: Refresh Site Map"
+        "title": "GOWDK: Refresh Site Map",
+        "icon": "$(refresh)"
       },
       {
         "command": "gowdk.openPageFile",
-        "title": "GOWDK: Open Page File"
+        "title": "GOWDK: Open Page File",
+        "icon": "$(go-to-file)"
       },
       {
         "command": "gowdk.movePageFile",
-        "title": "GOWDK: Move Page File"
+        "title": "GOWDK: Move Page File",
+        "icon": "$(arrow-swap)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gowdk",
+          "title": "GOWDK",
+          "icon": "icons/gowdk.svg"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "gowdk": [
         {
           "id": "gowdk.siteMapTree",
-          "name": "GOWDK Site Map",
-          "when": "workspaceFolderCount > 0"
+          "name": "Page Hierarchy"
+        },
+        {
+          "id": "gowdk.directoryOutline",
+          "name": "Source Outline"
         }
       ]
     },
@@ -88,24 +129,24 @@
       "view/title": [
         {
           "command": "gowdk.refreshSiteMapTree",
-          "when": "view == gowdk.siteMapTree",
+          "when": "view == gowdk.siteMapTree || view == gowdk.directoryOutline",
           "group": "navigation"
         },
         {
           "command": "gowdk.showSiteMap",
-          "when": "view == gowdk.siteMapTree",
+          "when": "view == gowdk.siteMapTree || view == gowdk.directoryOutline",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
           "command": "gowdk.openPageFile",
-          "when": "view == gowdk.siteMapTree && viewItem == gwdkPage",
+          "when": "(view == gowdk.siteMapTree || view == gowdk.directoryOutline) && viewItem == gwdkPage",
           "group": "inline"
         },
         {
           "command": "gowdk.movePageFile",
-          "when": "view == gowdk.siteMapTree && viewItem == gwdkPage",
+          "when": "(view == gowdk.siteMapTree || view == gowdk.directoryOutline) && viewItem == gwdkPage",
           "group": "inline"
         }
       ]

@@ -3,7 +3,10 @@ package project
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/gowdk/gowdk"
 )
 
 func TestLoadConfigFileReadsLiteralSourceAndBuildFields(t *testing.T) {
@@ -45,6 +48,15 @@ var Config = gowdk.Config{
 			{Href: "/assets/theme.css"},
 		},
 	},
+	CSS: gowdk.CSSConfig{
+		Include: []string{"styles/**/*.css"},
+		Exclude: []string{"styles/legacy.css"},
+		Default: []string{"global", "tokens"},
+		Output: gowdk.CSSOutputConfig{
+			Dir: "/assets/pages/",
+			HrefPrefix: "/static/pages",
+		},
+	},
 }
 `), 0o644); err != nil {
 		t.Fatal(err)
@@ -84,6 +96,18 @@ var Config = gowdk.Config{
 	if len(config.Build.Stylesheets) != 2 || config.Build.Stylesheets[0].Href != "/assets/app.css" || config.Build.Stylesheets[1].Href != "/assets/theme.css" {
 		t.Fatalf("unexpected stylesheets: %#v", config.Build.Stylesheets)
 	}
+	if len(config.CSS.Include) != 1 || config.CSS.Include[0] != "styles/**/*.css" {
+		t.Fatalf("unexpected css includes: %#v", config.CSS.Include)
+	}
+	if len(config.CSS.Exclude) != 1 || config.CSS.Exclude[0] != "styles/legacy.css" {
+		t.Fatalf("unexpected css excludes: %#v", config.CSS.Exclude)
+	}
+	if len(config.CSS.Default) != 2 || config.CSS.Default[0] != "global" || config.CSS.Default[1] != "tokens" {
+		t.Fatalf("unexpected css default: %#v", config.CSS.Default)
+	}
+	if config.CSS.Output.Dir != "/assets/pages/" || config.CSS.Output.HrefPrefix != "/static/pages" {
+		t.Fatalf("unexpected css output: %#v", config.CSS.Output)
+	}
 }
 
 func TestLoadConfigFileIgnoresNonLiteralValues(t *testing.T) {
@@ -119,6 +143,48 @@ var Config = gowdk.Config{
 	}
 }
 
+func TestLoadConfigFileReadsTailwindAddon(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import (
+	"github.com/gowdk/gowdk"
+	tw "github.com/gowdk/gowdk/addons/tailwind"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		tw.Addon(tw.Options{
+			Input: "styles/app.css",
+			Command: "gowdk-tailwind-missing-executable",
+			OutputPath: "assets/site.css",
+			Href: "/assets/site.css",
+			Minify: true,
+		}),
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Addons) != 1 || config.Addons[0].Name() != "tailwind" {
+		t.Fatalf("unexpected addons: %#v", config.Addons)
+	}
+	processor, ok := config.Addons[0].(gowdk.CSSProcessor)
+	if !ok {
+		t.Fatalf("expected tailwind addon to implement CSSProcessor, got %T", config.Addons[0])
+	}
+	_, err = processor.ProcessCSS(gowdk.CSSContext{})
+	if err == nil || !strings.Contains(err.Error(), "tailwind executable not found") {
+		t.Fatalf("expected parsed tailwind command to be used, got %v", err)
+	}
+}
+
 func TestLoadConfigFileRejectsInvalidGo(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, DefaultConfigFile)
@@ -131,6 +197,25 @@ var Config =
 
 	if _, err := LoadConfigFile(path); err == nil {
 		t.Fatal("expected invalid Go syntax error")
+	}
+}
+
+func TestLoadConfigFileDoesNotEchoUnsupportedSecretValues(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+var Config = secretConfig("SECRET_TOKEN")
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadConfigFile(path)
+	if err == nil {
+		t.Fatal("expected unsupported config error")
+	}
+	if strings.Contains(err.Error(), "SECRET_TOKEN") {
+		t.Fatalf("expected config error to omit secret value, got %v", err)
 	}
 }
 

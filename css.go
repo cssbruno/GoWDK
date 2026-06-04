@@ -7,15 +7,18 @@ type Stylesheet struct {
 
 // CSSSource describes one discovered source file for compile-time CSS plugins.
 type CSSSource struct {
-	Path string
-	Kind string
-	Name string
+	Path       string
+	Kind       string
+	Name       string
+	CSSClasses []string
 }
 
 // CSSContext is passed to compile-time CSS processors.
 type CSSContext struct {
 	Sources   []CSSSource
 	OutputDir string
+	Build     BuildConfig
+	CSS       CSSConfig
 }
 
 // CSSAsset is a CSS file emitted by a compile-time CSS processor.

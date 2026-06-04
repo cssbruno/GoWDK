@@ -1,0 +1,14 @@
+@component TextField
+
+props {
+  label string
+  name string
+  type string
+}
+
+view {
+  <label class="gowdk-field">
+    <span>{label}</span>
+    <input name="{name}" type="{type}" />
+  </label>
+}

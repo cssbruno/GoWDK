@@ -1,0 +1,11 @@
+@component ProductCard
+
+props {
+  title string
+}
+
+view {
+  <article>
+    <h1>{title}</h1>
+  </article>
+}

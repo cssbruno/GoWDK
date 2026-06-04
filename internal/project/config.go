@@ -7,13 +7,17 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"path"
 	"strconv"
 
 	"github.com/gowdk/gowdk"
+	"github.com/gowdk/gowdk/addons/tailwind"
 )
 
 // DefaultConfigFile is the config file discovered from a project root.
 const DefaultConfigFile = "gowdk.config.go"
+
+const tailwindImportPath = "github.com/gowdk/gowdk/addons/tailwind"
 
 // LoadConfigFile reads the supported static subset of gowdk.config.go.
 func LoadConfigFile(path string) (gowdk.Config, error) {
@@ -37,7 +41,7 @@ func LoadConfigFile(path string) (gowdk.Config, error) {
 				if name.Name != "Config" || index >= len(valueSpec.Values) {
 					continue
 				}
-				config, ok := parseConfigLiteral(valueSpec.Values[index])
+				config, ok := parseConfigLiteral(valueSpec.Values[index], importNames(file))
 				if !ok {
 					return gowdk.Config{}, fmt.Errorf("%s must assign Config to a gowdk.Config literal", path)
 				}
@@ -65,7 +69,7 @@ func LoadOptionalConfig(path string) (gowdk.Config, bool, error) {
 	return config, true, err
 }
 
-func parseConfigLiteral(expression ast.Expr) (gowdk.Config, bool) {
+func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.Config, bool) {
 	literal, ok := expression.(*ast.CompositeLit)
 	if !ok || !isConfigType(literal.Type) {
 		return gowdk.Config{}, false
@@ -88,9 +92,29 @@ func parseConfigLiteral(expression ast.Expr) (gowdk.Config, bool) {
 			config.Modules = parseModuleConfigs(keyValue.Value)
 		case "Build":
 			config.Build = parseBuildConfig(keyValue.Value)
+		case "CSS":
+			config.CSS = parseCSSConfig(keyValue.Value)
+		case "Addons":
+			config.Addons = parseAddons(keyValue.Value, imports)
 		}
 	}
 	return config, true
+}
+
+func importNames(file *ast.File) map[string]string {
+	imports := map[string]string{}
+	for _, spec := range file.Imports {
+		importPath := parseString(spec.Path)
+		if importPath == "" {
+			continue
+		}
+		name := path.Base(importPath)
+		if spec.Name != nil && spec.Name.Name != "" && spec.Name.Name != "." && spec.Name.Name != "_" {
+			name = spec.Name.Name
+		}
+		imports[name] = importPath
+	}
+	return imports
 }
 
 func parseSourceConfig(expression ast.Expr) gowdk.SourceConfig {
@@ -227,6 +251,141 @@ func parseStylesheet(expression ast.Expr) gowdk.Stylesheet {
 	return stylesheet
 }
 
+func parseCSSConfig(expression ast.Expr) gowdk.CSSConfig {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.CSSConfig{}
+	}
+
+	var css gowdk.CSSConfig
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "Include":
+			css.Include = parseStringList(keyValue.Value)
+		case "Exclude":
+			css.Exclude = parseStringList(keyValue.Value)
+		case "Default":
+			css.Default = parseStringList(keyValue.Value)
+		case "Output":
+			css.Output = parseCSSOutputConfig(keyValue.Value)
+		}
+	}
+	return css
+}
+
+func parseCSSOutputConfig(expression ast.Expr) gowdk.CSSOutputConfig {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.CSSOutputConfig{}
+	}
+
+	var output gowdk.CSSOutputConfig
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "Dir":
+			output.Dir = parseString(keyValue.Value)
+		case "HrefPrefix":
+			output.HrefPrefix = parseString(keyValue.Value)
+		}
+	}
+	return output
+}
+
+func parseAddons(expression ast.Expr, imports map[string]string) []gowdk.Addon {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil
+	}
+
+	var addons []gowdk.Addon
+	for _, element := range literal.Elts {
+		addon, ok := parseTailwindAddon(element, imports)
+		if !ok {
+			continue
+		}
+		addons = append(addons, addon)
+	}
+	return addons
+}
+
+func parseTailwindAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon, bool) {
+	call, ok := expression.(*ast.CallExpr)
+	if !ok {
+		return nil, false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Addon" {
+		return nil, false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	if !ok || imports[packageName.Name] != tailwindImportPath {
+		return nil, false
+	}
+
+	var options tailwind.Options
+	if len(call.Args) > 0 {
+		options = parseTailwindOptions(call.Args[0], imports)
+	}
+	return tailwind.Addon(options), true
+}
+
+func parseTailwindOptions(expression ast.Expr, imports map[string]string) tailwind.Options {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok || !isTailwindOptionsType(literal.Type, imports) {
+		return tailwind.Options{}
+	}
+
+	var options tailwind.Options
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "Input":
+			options.Input = parseString(keyValue.Value)
+		case "OutputPath":
+			options.OutputPath = parseString(keyValue.Value)
+		case "Href":
+			options.Href = parseString(keyValue.Value)
+		case "Command":
+			options.Command = parseString(keyValue.Value)
+		case "Minify":
+			options.Minify = parseBool(keyValue.Value)
+		}
+	}
+	return options
+}
+
+func isTailwindOptionsType(expression ast.Expr, imports map[string]string) bool {
+	selector, ok := expression.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Options" {
+		return false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	return ok && imports[packageName.Name] == tailwindImportPath
+}
+
 func parseStringList(expression ast.Expr) []string {
 	literal, ok := expression.(*ast.CompositeLit)
 	if !ok {
@@ -254,6 +413,11 @@ func parseString(expression ast.Expr) string {
 		return ""
 	}
 	return value
+}
+
+func parseBool(expression ast.Expr) bool {
+	identifier, ok := expression.(*ast.Ident)
+	return ok && identifier.Name == "true"
 }
 
 func isConfigType(expression ast.Expr) bool {

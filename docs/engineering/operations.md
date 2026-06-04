@@ -21,7 +21,7 @@ The target deployment model is one Go binary that can serve embedded static page
 ## Environments
 
 - Local: run CLI commands such as `gowdk check`, `gowdk manifest`,
-  `gowdk sitemap`, `gowdk build`, `gowdk serve`, and `gowdk lsp`.
+  `gowdk sitemap`, `gowdk build`, `gowdk watch`, `gowdk serve`, and `gowdk lsp`.
 - Development: target flow compiles static output and generated handlers.
 - Staging: target flow verifies one-binary serving and addon behavior.
 - Production: target flow serves static assets, actions, APIs, fragments, and optional SSR from the generated binary.
@@ -56,6 +56,14 @@ gowdk serve --dir dist
 This is development tooling and does not replace generated app output when a
 deployable binary is needed.
 
+Current local development can rebuild generated static output on changes with:
+
+```sh
+gowdk watch --out dist
+```
+
+`watch` uses polling so it stays dependency-free and portable.
+
 GOWDK does not currently generate Kubernetes manifests or own deployment
 configuration. Users can drive their own container or Kubernetes deployment code
 by building selected configured modules with `gowdk build --module <name>`.
@@ -73,6 +81,8 @@ Generated servers must have conservative defaults before production release:
 - Set `MaxHeaderBytes`.
 - Cap action/API request body size before form or JSON decoding; generated
   action handlers currently use a fixed 1 MiB cap.
+- Use signed CSRF tokens with HttpOnly, Secure, SameSite=Lax cookies when
+  generated action handlers wire CSRF.
 - Return explicit method-not-allowed responses for unsupported methods.
 - Serve static assets with deterministic cache headers.
 - Avoid public debug endpoints by default.

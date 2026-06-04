@@ -10,10 +10,13 @@ The parser records whether these top-level blocks are present:
 - `build {}`: build-time data block. Presence and raw body text are recorded.
   Static builds support the first literal subset:
   `=> { title: "Hello" }`.
-- `load {}`: request-time data block. Presence is recorded and rejected on static/action pages.
+- `load {}`: request-time data block. Presence and raw body text are recorded,
+  then rejected on static/action pages.
 - `view {}`: markup render block. Presence and body text are recorded; a minimal static HTML subset is parsed for `gowdk build`.
 - `act <name> {}`: action block. Name and the first form-input/validation-intent/local-redirect body subset are recorded.
-- `api <name> {}`: API block. Name is recorded; method/route/body semantics are planned.
+- `api <name> {}`: API block. Name and the first method/route metadata line
+  such as `GET "/api/health"` are recorded; request/response body semantics
+  are planned.
 
 ## Time Boundaries
 

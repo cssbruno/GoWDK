@@ -17,6 +17,17 @@ import (
 
 var parserLinePattern = regexp.MustCompile(`^line ([0-9]+): `)
 
+// FileKind identifies the current source file category.
+type FileKind string
+
+const (
+	FileKindPage      FileKind = "page"
+	FileKindComponent FileKind = "component"
+	FileKindLayout    FileKind = "layout"
+	FileKindAsset     FileKind = "asset"
+	FileKindPlugin    FileKind = "plugin"
+)
+
 // ParseFile reads and parses one .gwdk file.
 func ParseFile(path string) (manifest.Page, Diagnostics) {
 	source, err := os.ReadFile(path)
@@ -46,7 +57,9 @@ func ParseSource(path string, source []byte) (manifest.Page, Diagnostics) {
 	if err != nil {
 		diagnostics = append(diagnostics, Diagnostic{
 			File:     path,
+			Code:     "parse_error",
 			Pos:      parserErrorPosition(err.Error()),
+			Range:    parserErrorRange(source, err.Error()),
 			Severity: "error",
 			Message:  err.Error(),
 		})
@@ -64,6 +77,22 @@ func parserErrorPosition(message string) Position {
 		return Position{}
 	}
 	return Position{Line: line, Column: 1}
+}
+
+func parserErrorRange(source []byte, message string) *Range {
+	position := parserErrorPosition(message)
+	if position.Line <= 0 {
+		return nil
+	}
+	lines := strings.Split(string(source), "\n")
+	if position.Line > len(lines) {
+		return sourceRange(position, Position{Line: position.Line, Column: 2})
+	}
+	endColumn := len([]rune(lines[position.Line-1])) + 1
+	if endColumn <= 1 {
+		endColumn = 2
+	}
+	return sourceRange(position, Position{Line: position.Line, Column: endColumn})
 }
 
 // ParseFiles parses multiple .gwdk files into a manifest.
@@ -85,12 +114,22 @@ func ParseBuildFiles(paths []string) (manifest.Manifest, Diagnostics) {
 			})
 			continue
 		}
-		if isComponentFile(path, source) {
+		switch ClassifySource(path, source) {
+		case FileKindComponent:
 			component, fileDiagnostics := ParseComponentSource(path, source)
 			diagnostics = append(diagnostics, fileDiagnostics...)
 			if !fileDiagnostics.HasErrors() {
 				app.Components = append(app.Components, component)
 			}
+			continue
+		case FileKindLayout:
+			layout, fileDiagnostics := ParseLayoutSource(path, source)
+			diagnostics = append(diagnostics, fileDiagnostics...)
+			if !fileDiagnostics.HasErrors() {
+				app.Layouts = append(app.Layouts, layout)
+			}
+			continue
+		case FileKindAsset, FileKindPlugin:
 			continue
 		}
 		page, fileDiagnostics := ParseSource(path, source)
@@ -100,6 +139,31 @@ func ParseBuildFiles(paths []string) (manifest.Manifest, Diagnostics) {
 		}
 	}
 	return app, diagnostics
+}
+
+// ParseLayoutSource parses one in-memory .layout.gwdk source buffer.
+func ParseLayoutSource(path string, source []byte) (manifest.Layout, Diagnostics) {
+	_, diagnostics := Lex(string(source))
+	for i := range diagnostics {
+		diagnostics[i].File = path
+	}
+	if diagnostics.HasErrors() {
+		return manifest.Layout{}, diagnostics
+	}
+
+	layout, err := parser.ParseLayout(source)
+	layout.Source = path
+	if err != nil {
+		diagnostics = append(diagnostics, Diagnostic{
+			File:     path,
+			Code:     "parse_error",
+			Pos:      parserErrorPosition(err.Error()),
+			Range:    parserErrorRange(source, err.Error()),
+			Severity: "error",
+			Message:  err.Error(),
+		})
+	}
+	return layout, diagnostics
 }
 
 // ParseComponentSource parses one in-memory .cmp.gwdk source buffer.
@@ -117,7 +181,9 @@ func ParseComponentSource(path string, source []byte) (manifest.Component, Diagn
 	if err != nil {
 		diagnostics = append(diagnostics, Diagnostic{
 			File:     path,
+			Code:     "parse_error",
 			Pos:      parserErrorPosition(err.Error()),
+			Range:    parserErrorRange(source, err.Error()),
 			Severity: "error",
 			Message:  err.Error(),
 		})
@@ -125,11 +191,25 @@ func ParseComponentSource(path string, source []byte) (manifest.Component, Diagn
 	return component, diagnostics
 }
 
-func isComponentFile(path string, source []byte) bool {
-	if strings.HasSuffix(filepath.Base(path), ".cmp.gwdk") {
-		return true
+// ClassifySource classifies a .gwdk source file using current file-kind rules.
+func ClassifySource(path string, source []byte) FileKind {
+	base := filepath.Base(path)
+	if strings.HasSuffix(base, ".cmp.gwdk") {
+		return FileKindComponent
 	}
-	return strings.Contains(string(source), "@component")
+	if strings.HasSuffix(base, ".layout.gwdk") {
+		return FileKindLayout
+	}
+	if strings.HasSuffix(base, ".asset.gwdk") {
+		return FileKindAsset
+	}
+	if strings.HasSuffix(base, ".plugin.gwdk") {
+		return FileKindPlugin
+	}
+	if strings.Contains(string(source), "@component") {
+		return FileKindComponent
+	}
+	return FileKindPage
 }
 
 // CheckFiles parses and validates .gwdk files.
@@ -193,6 +273,9 @@ func compilerDiagnostics(err error, app manifest.Manifest) Diagnostics {
 		for _, validation := range typed {
 			diagnostics = append(diagnostics, Diagnostic{
 				File:     diagnosticSource(validation, sources),
+				Code:     validation.Code,
+				Pos:      sourcePosition(validation.Span.Start),
+				Range:    sourceSpanRange(validation.Span),
 				Severity: "error",
 				Message:  validation.Error(),
 			})
@@ -201,6 +284,17 @@ func compilerDiagnostics(err error, app manifest.Manifest) Diagnostics {
 	default:
 		return Diagnostics{{Severity: "error", Message: fmt.Sprint(err)}}
 	}
+}
+
+func sourcePosition(position manifest.SourcePosition) Position {
+	return Position{Line: position.Line, Column: position.Column}
+}
+
+func sourceSpanRange(span manifest.SourceSpan) *Range {
+	if span.Start.Line <= 0 || span.Start.Column <= 0 || span.End.Line <= 0 || span.End.Column <= 0 {
+		return nil
+	}
+	return sourceRange(sourcePosition(span.Start), sourcePosition(span.End))
 }
 
 func diagnosticSource(validation compiler.ValidationError, sources map[string]string) string {

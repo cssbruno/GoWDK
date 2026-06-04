@@ -12,11 +12,14 @@ Implemented today:
 - Render-rule and duplicate identity validation through `internal/compiler`.
 - Static `view {}` markup and component invocation parsing through `internal/view`.
 - Route-binding planning through `internal/codegen`.
-- Static HTML, route manifest, and asset manifest emission for simple build-time pages, literal build data, literal dynamic paths, and components through `internal/staticgen`.
+- Static HTML, route manifest, and asset manifest emission for simple build-time
+  pages, literal build data, imported Go build data functions, literal dynamic
+  paths, and components through `internal/staticgen`.
 - Generated embedded static app source and optional binary compilation through
   `internal/appgen`, including first-slice action redirect handlers and form
   input decoder and required-field validation wrappers.
-- Static `gowdk.config.go` loading for build source discovery and output through `internal/project`.
+- Static `gowdk.config.go` loading for build source discovery, build targets,
+  and output through `internal/project`.
 - CLI tools for `tokens`, `fmt`, `check`, `manifest`, `sitemap`, `build`, and `lsp`.
 
 Not implemented yet:

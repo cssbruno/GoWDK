@@ -15,6 +15,8 @@ import (
 var (
 	annotationPattern     = regexp.MustCompile(`^@([A-Za-z_][A-Za-z0-9_]*)\s*(.*)$`)
 	blockPattern          = regexp.MustCompile(`^(paths|build|load|view)\s*\{`)
+	importPattern         = regexp.MustCompile(`^import(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s+"([^"]+)"$`)
+	buildCallPattern      = regexp.MustCompile(`^=>\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\)$`)
 	actionPattern         = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{`)
 	apiPattern            = regexp.MustCompile(`^api(?:\s+([A-Za-z_][A-Za-z0-9_.-]*))?\s*\{`)
 	propPattern           = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
@@ -103,6 +105,18 @@ func ParsePage(source []byte) (manifest.Page, error) {
 				return manifest.Page{}, fmt.Errorf("line %d: %w", lineNumber, err)
 			}
 			continue
+		}
+
+		if match := importPattern.FindStringSubmatch(line); match != nil {
+			page.Imports = append(page.Imports, manifest.Import{
+				Alias: match[1],
+				Path:  match[2],
+				Span:  sourceLineSpan(lineNumber, rawLine),
+			})
+			continue
+		}
+		if isMalformedImport(line) {
+			return manifest.Page{}, fmt.Errorf("line %d: malformed import %q", lineNumber, line)
 		}
 
 		if match := blockPattern.FindStringSubmatch(line); match != nil {
@@ -664,6 +678,11 @@ func unsupportedTopLevelBlockName(line string) string {
 		return ""
 	}
 	return name
+}
+
+func isMalformedImport(line string) bool {
+	fields := strings.Fields(line)
+	return len(fields) > 0 && fields[0] == "import"
 }
 
 func isBlockName(value string) bool {

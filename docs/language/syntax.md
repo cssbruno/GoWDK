@@ -59,6 +59,24 @@ api patients {
 api {
 ```
 
+Page files may also declare top-level Go imports before blocks:
+
+```gwdk
+import interop "github.com/cssbruno/gowdk/examples/go-interop"
+```
+
+The first build-time Go interop subset supports one imported no-argument
+function call in `build {}`:
+
+```gwdk
+build {
+  => interop.FeaturedCopyForBuild()
+}
+```
+
+The function must return a JSON-encodable object. Scalar fields are exposed to
+`view {}` as string interpolation data.
+
 API blocks may declare one route metadata line in the current subset:
 
 ```gwdk

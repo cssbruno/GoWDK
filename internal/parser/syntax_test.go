@@ -8,6 +8,8 @@ func TestParseSyntaxBuildsTypedASTForCurrentSubset(t *testing.T) {
 @route "/newsletter/{slug}"
 @guard auth.required
 
+import interop "github.com/cssbruno/gowdk/examples/go-interop"
+
 paths {
   => { slug: "hello" }
 }
@@ -38,6 +40,9 @@ view {
 	}
 	if len(file.Annotations) != 3 || file.Annotations[1].Name != "route" || file.Annotations[1].Span.Start.Line != 3 {
 		t.Fatalf("unexpected annotations: %#v", file.Annotations)
+	}
+	if len(file.Imports) != 1 || file.Imports[0].Alias != "interop" || file.Imports[0].Path != "github.com/cssbruno/gowdk/examples/go-interop" {
+		t.Fatalf("unexpected imports: %#v", file.Imports)
 	}
 	if len(file.Blocks) != 5 {
 		t.Fatalf("expected five blocks, got %#v", file.Blocks)
@@ -83,5 +88,33 @@ build {
 	}
 	if err.Error() != `line 5: unsupported literal record syntax "title = \"Bad\""` {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseSyntaxReadsImportedBuildCall(t *testing.T) {
+	file, err := ParseSyntax([]byte(`@page imported
+@route "/imported"
+
+import interop "github.com/cssbruno/gowdk/examples/go-interop"
+
+build {
+  => interop.FeaturedCopyForBuild()
+}
+
+view {
+  <main>{title}</main>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Imports) != 1 || file.Imports[0].Alias != "interop" {
+		t.Fatalf("expected import, got %#v", file.Imports)
+	}
+	if len(file.Blocks) != 2 || file.Blocks[0].Call == nil {
+		t.Fatalf("expected build call block, got %#v", file.Blocks)
+	}
+	if file.Blocks[0].Call.Alias != "interop" || file.Blocks[0].Call.Function != "FeaturedCopyForBuild" {
+		t.Fatalf("unexpected build call: %#v", file.Blocks[0].Call)
 	}
 }

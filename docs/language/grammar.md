@@ -4,11 +4,12 @@ This is the grammar accepted by the current metadata parser. It is intentionally
 
 ```text
 file        = line*
-line        = blank | comment | annotation | blockDecl | actionDecl | apiDecl | unsupportedBlock | other
+line        = blank | comment | annotation | importDecl | blockDecl | actionDecl | apiDecl | unsupportedBlock | other
 blank       = whitespace*
 comment     = whitespace* "//" text
 
 annotation  = "@" ident value
+importDecl  = "import" (whitespace+ ident)? whitespace+ string
 blockDecl   = ("paths" | "build" | "load" | "view") whitespace* "{"
 actionDecl  = "act" whitespace+ blockName whitespace* "{"
 apiDecl     = "api" (whitespace+ blockName)? whitespace* "{"
@@ -35,11 +36,13 @@ validates the first method/route metadata subset. `gowdk build` parses the first
 ```text
 literalReturn = "=>" whitespace* "{" literalField ("," literalField)* "}"
 literalField  = ident ":" string
+buildCall     = "=>" whitespace* ident "." ident "()"
 ```
 
 Unknown or malformed annotations fail at parse time. Unsupported top-level block
 declarations fail when they have an identifier-like first token and a trailing
-`{`.
+`{`. Static builds also accept the first imported `buildCall` subset when the
+page declares the referenced import.
 
 The parser also validates the first supported `act {}` body subset:
 

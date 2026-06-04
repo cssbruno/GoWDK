@@ -24,6 +24,9 @@
 - `build {}` records block presence and raw body text internally. Static builds
   can execute one literal string declaration such as
   `=> { title: "Hello" }` and expose those values to `view {}` interpolation.
+  Static builds can also execute one imported no-argument Go function call such
+  as `=> interop.FeaturedCopyForBuild()` when the page declares
+  `import interop "github.com/..."`.
 - `load {}` records block presence and raw body text internally. Request-time
   execution is planned.
 - `view {}` records block presence and raw body text for the current static HTML
@@ -36,4 +39,8 @@
 
 ## Planned Semantics
 
-Future compiler phases must define symbol resolution, type checking, layout composition, full component resolution, route parameter binding into `build {}` expressions, real typed action decoding and execution, generated API/fragment execution, partial updates, cache/revalidation behavior, and guard execution.
+Future compiler phases must define broader symbol resolution, type checking,
+layout composition, full component resolution, route parameter binding into
+imported `build {}` calls, real typed action decoding and execution, generated
+API/fragment execution, partial updates, cache/revalidation behavior, and guard
+execution.

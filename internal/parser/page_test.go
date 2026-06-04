@@ -20,6 +20,8 @@ func TestParsePageReadsStaticDynamicRouteWithPathsAndBuild(t *testing.T) {
 @render static
 @css default page forms
 
+import interop "github.com/cssbruno/gowdk/examples/go-interop"
+
 paths {
   => { slug: "hello-gowdk" }
   => { slug: "static-first" }
@@ -67,6 +69,9 @@ view {
 	if strings.Join(page.CSS, ",") != "default,page,forms" {
 		t.Fatalf("expected css selection, got %#v", page.CSS)
 	}
+	if len(page.Imports) != 1 || page.Imports[0].Alias != "interop" || page.Imports[0].Path != "github.com/cssbruno/gowdk/examples/go-interop" {
+		t.Fatalf("expected page import, got %#v", page.Imports)
+	}
 	if page.Spans.Route.Start.Line != 3 || page.Spans.Route.Start.Column != 1 {
 		t.Fatalf("expected route annotation span, got %#v", page.Spans.Route)
 	}
@@ -74,7 +79,7 @@ view {
 		page.Spans.RouteParams[0].Span.Start.Line != 3 || page.Spans.RouteParams[0].Span.Start.Column != 15 {
 		t.Fatalf("expected slug route param span, got %#v", page.Spans.RouteParams)
 	}
-	if page.Blocks.Spans.Paths.Start.Line != 8 || page.Blocks.Spans.Build.Start.Line != 13 || page.Blocks.Spans.View.Start.Line != 17 {
+	if page.Blocks.Spans.Paths.Start.Line != 10 || page.Blocks.Spans.Build.Start.Line != 15 || page.Blocks.Spans.View.Start.Line != 19 {
 		t.Fatalf("expected block spans, got %#v", page.Blocks.Spans)
 	}
 }
@@ -268,6 +273,25 @@ act subscribe {
 		t.Fatal("expected unsupported action syntax error")
 	}
 	if err.Error() != `line 7: action subscribe line 1 has unsupported syntax "send(input)"` {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParsePageRejectsMalformedImport(t *testing.T) {
+	_, err := ParsePage([]byte(`
+@page imported
+@route "/imported"
+
+import interop github.com/cssbruno/gowdk/examples/go-interop
+
+view {
+  <main>Imported</main>
+}
+`))
+	if err == nil {
+		t.Fatal("expected malformed import error")
+	}
+	if err.Error() != `line 5: malformed import "import interop github.com/cssbruno/gowdk/examples/go-interop"` {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

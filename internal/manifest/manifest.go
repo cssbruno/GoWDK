@@ -34,6 +34,13 @@ type NamedSpan struct {
 	Span SourceSpan
 }
 
+// Import records a Go import declared by a .gwdk page.
+type Import struct {
+	Alias string
+	Path  string
+	Span  SourceSpan
+}
+
 // PageSpans records source ranges for page annotations and declarations.
 type PageSpans struct {
 	Page        SourceSpan
@@ -64,6 +71,7 @@ type Page struct {
 	Layouts []string
 	Guard   []string
 	CSS     []string
+	Imports []Import
 	Paths   bool
 	Blocks  Blocks
 	Spans   PageSpans

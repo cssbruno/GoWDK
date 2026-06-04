@@ -16,7 +16,8 @@ Implemented today:
 - Static text and attribute values, escaped before output.
 - `{name}` and dotted-name interpolation such as `{post.Title}` in page text and
   quoted attributes when static build data is available, including route params
-  from literal `paths {}` and string values from literal `build {}`.
+  from literal `paths {}` and string values from literal `build {}` or imported
+  Go build data functions.
 - Explicit route-param interpolation with `{param("slug")}` in page text,
   quoted attributes, and component prop values. Static builds validate that
   each referenced param is declared by the page route. Inside quoted attributes,

@@ -2,10 +2,12 @@
 package staticgen
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -28,6 +30,7 @@ const defaultPageCSSDir = "assets/gowdk"
 
 var (
 	literalDeclarationPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
+	buildCallPattern          = regexp.MustCompile(`^=>\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\)$`)
 	literalNamePattern        = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	cssInputNamePattern       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
 	layoutSlotPattern         = regexp.MustCompile(`<slot\s*/>`)
@@ -106,23 +109,119 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 		CSSArtifacts: make([]CSSArtifact, 0, len(planned.css)),
 	}
 	for _, artifact := range planned.css {
-		if err := os.MkdirAll(filepath.Dir(artifact.Path), 0o755); err != nil {
-			return Result{}, err
-		}
-		if err := os.WriteFile(artifact.Path, artifact.contents, 0o644); err != nil {
+		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
 			return Result{}, err
 		}
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
 	}
 	for _, artifact := range planned.pages {
-		if err := os.MkdirAll(filepath.Dir(artifact.Path), 0o755); err != nil {
-			return Result{}, err
-		}
-		if err := os.WriteFile(artifact.Path, artifact.contents, 0o644); err != nil {
+		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
 			return Result{}, err
 		}
 		result.Artifacts = append(result.Artifacts, artifact.Artifact)
 	}
+	manifestPath, err := writeRouteManifest(outputDir, result.Artifacts)
+	if err != nil {
+		return Result{}, err
+	}
+	result.RouteManifestPath = manifestPath
+	assetManifestPath, err := writeAssetManifest(outputDir, result.CSSArtifacts)
+	if err != nil {
+		return Result{}, err
+	}
+	result.AssetManifestPath = assetManifestPath
+	return result, nil
+}
+
+// BuildIncremental validates the full manifest and refreshes manifests, but
+// only renders pages whose source path is listed in changedPageSources.
+func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir string, changedPageSources []string) (Result, error) {
+	if strings.TrimSpace(outputDir) == "" {
+		return Result{}, fmt.Errorf("build output directory is required")
+	}
+	if err := compiler.ValidateManifest(config, app); err != nil {
+		return Result{}, err
+	}
+
+	changedPages := sourcePathSet(changedPageSources)
+	components, componentFailures := buildComponents(app.Components)
+	layouts, layoutFailures := buildLayouts(app.Layouts)
+	css, cssFailures := planCSS(config, app, outputDir)
+	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
+	baseStylesheets = append(baseStylesheets, css.stylesheets...)
+
+	var failures []string
+	failures = append(failures, componentFailures...)
+	failures = append(failures, layoutFailures...)
+	failures = append(failures, cssFailures...)
+	if len(failures) > 0 {
+		return Result{}, errors.New(strings.Join(failures, "\n"))
+	}
+
+	result := Result{
+		Artifacts:    make([]Artifact, 0, len(app.Pages)),
+		CSSArtifacts: make([]CSSArtifact, 0, len(css.assets)),
+	}
+	previousRoutes, err := readRouteManifestIfExists(outputDir)
+	if err != nil {
+		return Result{}, err
+	}
+	changedPageIDs := map[string]bool{}
+	for _, artifact := range css.assets {
+		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
+			return Result{}, err
+		}
+		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
+	}
+
+	seenOutputPaths := map[string]string{}
+	for _, page := range app.Pages {
+		if isRequestTimePage(config, page) {
+			continue
+		}
+		routeArtifacts, err := pageRouteArtifacts(outputDir, page)
+		if err != nil {
+			failures = append(failures, err.Error())
+			continue
+		}
+		for _, artifact := range routeArtifacts {
+			rel, err := relativeOutputPath(outputDir, artifact.Path)
+			if err != nil {
+				failures = append(failures, fmt.Sprintf("%s: %v", page.ID, err))
+				continue
+			}
+			if previousPage, ok := seenOutputPaths[artifact.Path]; ok {
+				failures = append(failures, fmt.Sprintf("%s: generated output path %q duplicates page %s", page.ID, rel, previousPage))
+				continue
+			}
+			seenOutputPaths[artifact.Path] = page.ID
+			result.Artifacts = append(result.Artifacts, artifact)
+		}
+
+		if !sourcePathChanged(changedPages, page.Source) {
+			continue
+		}
+		changedPageIDs[page.ID] = true
+		stylesheets := append([]gowdk.Stylesheet{}, baseStylesheets...)
+		stylesheets = append(stylesheets, css.pageStylesheets[page.ID]...)
+		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets)
+		if err != nil {
+			failures = append(failures, err.Error())
+			continue
+		}
+		for _, artifact := range pageArtifacts {
+			if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
+				return Result{}, err
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return Result{}, errors.New(strings.Join(failures, "\n"))
+	}
+	if err := removeStaleChangedPageArtifacts(outputDir, previousRoutes, result.Artifacts, changedPageIDs); err != nil {
+		return Result{}, err
+	}
+
 	manifestPath, err := writeRouteManifest(outputDir, result.Artifacts)
 	if err != nil {
 		return Result{}, err
@@ -221,7 +320,7 @@ func ssrArtifact(config gowdk.Config, page manifest.Page, components map[string]
 		return SSRArtifact{}, fmt.Errorf("%s: generated SSR load {} execution is not implemented yet", page.ID)
 	}
 	routeData, replacements := ssrRouteData(page)
-	buildData, err := parseBuildData(page.Blocks.BuildBody, routeData)
+	buildData, err := parseBuildData(page.Blocks.BuildBody, routeData, page.Imports)
 	if err != nil {
 		return SSRArtifact{}, fmt.Errorf("%s: %w", page.ID, err)
 	}
@@ -281,6 +380,22 @@ type pageOutput struct {
 	data  map[string]string
 }
 
+func pageRouteArtifacts(outputDir string, page manifest.Page) ([]Artifact, error) {
+	outputs, err := pageOutputs(page)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", page.ID, err)
+	}
+	artifacts := make([]Artifact, 0, len(outputs))
+	for _, output := range outputs {
+		outputPath, err := outputPath(outputDir, output.route)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", page.ID, err)
+		}
+		artifacts = append(artifacts, Artifact{PageID: page.ID, Route: output.route, Path: outputPath})
+	}
+	return artifacts, nil
+}
+
 func pageOutputArtifacts(config gowdk.Config, outputDir string, page manifest.Page, components map[string]view.Component, layouts map[string]manifest.Layout, stylesheets []gowdk.Stylesheet) ([]plannedArtifact, error) {
 	outputs, err := pageOutputs(page)
 	if err != nil {
@@ -288,7 +403,7 @@ func pageOutputArtifacts(config gowdk.Config, outputDir string, page manifest.Pa
 	}
 	artifacts := make([]plannedArtifact, 0, len(outputs))
 	for _, output := range outputs {
-		buildData, err := parseBuildData(page.Blocks.BuildBody, output.data)
+		buildData, err := parseBuildData(page.Blocks.BuildBody, output.data, page.Imports)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
@@ -368,7 +483,13 @@ func parsePathParams(source string) (map[string]string, error) {
 	return parseLiteralStringMap(source, "path param")
 }
 
-func parseBuildData(body string, routeParams map[string]string) (map[string]string, error) {
+func parseBuildData(body string, routeParams map[string]string, imports []manifest.Import) (map[string]string, error) {
+	lines := significantBuildLines(body)
+	if len(lines) == 1 {
+		if match := buildCallPattern.FindStringSubmatch(lines[0]); match != nil {
+			return runBuildDataCall(match[1], match[2], imports)
+		}
+	}
 	declarations, err := parseLiteralDeclarations(body, "build", "build field")
 	if err != nil {
 		return nil, err
@@ -388,6 +509,126 @@ func parseBuildData(body string, routeParams map[string]string) (map[string]stri
 		data[key] = interpolated
 	}
 	return data, nil
+}
+
+func significantBuildLines(body string) []string {
+	var lines []string
+	for _, rawLine := range strings.Split(body, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func runBuildDataCall(alias, function string, imports []manifest.Import) (map[string]string, error) {
+	item, ok := findBuildImport(alias, imports)
+	if !ok {
+		return nil, fmt.Errorf("build import %q is not declared", alias)
+	}
+	source, err := buildDataRunnerSource(alias, item.Path, function)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.CreateTemp("", "gowdk-build-data-*.go")
+	if err != nil {
+		return nil, err
+	}
+	path := file.Name()
+	defer os.Remove(path)
+	if _, err := file.WriteString(source); err != nil {
+		file.Close()
+		return nil, err
+	}
+	if err := file.Close(); err != nil {
+		return nil, err
+	}
+
+	command := exec.Command("go", "run", path)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("run build data function %s.%s: %w\n%s", alias, function, err, strings.TrimSpace(string(output)))
+	}
+	return parseBuildFunctionOutput(output)
+}
+
+func findBuildImport(alias string, imports []manifest.Import) (manifest.Import, bool) {
+	for _, item := range imports {
+		if item.Alias == alias {
+			return item, true
+		}
+	}
+	return manifest.Import{}, false
+}
+
+func buildDataRunnerSource(alias, importPath, function string) (string, error) {
+	if !literalNamePattern.MatchString(alias) {
+		return "", fmt.Errorf("invalid build import alias %q", alias)
+	}
+	if !literalNamePattern.MatchString(function) {
+		return "", fmt.Errorf("invalid build function name %q", function)
+	}
+	if strings.TrimSpace(importPath) == "" {
+		return "", fmt.Errorf("build import %q has an empty path", alias)
+	}
+	return fmt.Sprintf(`package main
+
+import (
+	"encoding/json"
+	"os"
+
+	%s %q
+)
+
+func main() {
+	value := %s.%s()
+	if err := json.NewEncoder(os.Stdout).Encode(value); err != nil {
+		panic(err)
+	}
+}
+`, alias, importPath, alias, function), nil
+}
+
+func parseBuildFunctionOutput(output []byte) (map[string]string, error) {
+	var raw map[string]any
+	if err := json.Unmarshal(output, &raw); err != nil {
+		return nil, fmt.Errorf("decode build data output: %w", err)
+	}
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("build data function must return a non-empty JSON object")
+	}
+	data := map[string]string{}
+	for key, value := range raw {
+		if !literalNamePattern.MatchString(key) {
+			return nil, fmt.Errorf("invalid build field name %q", key)
+		}
+		scalar, ok := buildScalarString(value)
+		if !ok {
+			return nil, fmt.Errorf("build field %s must be a string, number, boolean, or null", key)
+		}
+		data[key] = scalar
+	}
+	return data, nil
+}
+
+func buildScalarString(value any) (string, bool) {
+	switch typed := value.(type) {
+	case nil:
+		return "", true
+	case string:
+		if strings.TrimSpace(typed) == "" {
+			return "", false
+		}
+		return typed, true
+	case float64:
+		return strconv.FormatFloat(typed, 'f', -1, 64), true
+	case bool:
+		return strconv.FormatBool(typed), true
+	default:
+		return "", false
+	}
 }
 
 func interpolateBuildValue(value string, routeParams map[string]string) (string, error) {
@@ -564,6 +805,26 @@ func cloneStringMap(input map[string]string) map[string]string {
 		output[key] = value
 	}
 	return output
+}
+
+func sourcePathSet(paths []string) map[string]bool {
+	set := map[string]bool{}
+	for _, sourcePath := range paths {
+		abs, err := filepath.Abs(sourcePath)
+		if err != nil {
+			continue
+		}
+		set[filepath.Clean(abs)] = true
+	}
+	return set
+}
+
+func sourcePathChanged(set map[string]bool, sourcePath string) bool {
+	abs, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return false
+	}
+	return set[filepath.Clean(abs)]
 }
 
 type cssPlan struct {
@@ -936,13 +1197,70 @@ func writeRouteManifest(outputDir string, artifacts []Artifact) (string, error) 
 	payload = append(payload, '\n')
 
 	manifestPath := filepath.Join(outputDir, routeManifestFile)
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(manifestPath, payload, 0o644); err != nil {
+	if err := writeFileIfChanged(manifestPath, payload); err != nil {
 		return "", err
 	}
 	return manifestPath, nil
+}
+
+func readRouteManifestIfExists(outputDir string) (routeManifest, error) {
+	manifestPath := filepath.Join(outputDir, routeManifestFile)
+	payload, err := os.ReadFile(manifestPath)
+	if os.IsNotExist(err) {
+		return routeManifest{}, nil
+	}
+	if err != nil {
+		return routeManifest{}, err
+	}
+	var manifest routeManifest
+	if err := json.Unmarshal(payload, &manifest); err != nil {
+		return routeManifest{}, fmt.Errorf("read existing route manifest: %w", err)
+	}
+	return manifest, nil
+}
+
+func removeStaleChangedPageArtifacts(outputDir string, previous routeManifest, current []Artifact, changedPageIDs map[string]bool) error {
+	if len(previous.Routes) == 0 || len(changedPageIDs) == 0 {
+		return nil
+	}
+	keep := map[string]bool{}
+	for _, artifact := range current {
+		if !changedPageIDs[artifact.PageID] {
+			continue
+		}
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return err
+		}
+		keep[rel] = true
+	}
+	for _, route := range previous.Routes {
+		if !changedPageIDs[route.PageID] || keep[route.Path] {
+			continue
+		}
+		filePath, err := outputFilePath(outputDir, route.Path)
+		if err != nil {
+			return err
+		}
+		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func outputFilePath(outputDir, rel string) (string, error) {
+	if strings.TrimSpace(rel) == "" {
+		return "", fmt.Errorf("route manifest path is required")
+	}
+	if filepath.IsAbs(rel) {
+		return "", fmt.Errorf("route manifest path %q must be relative", rel)
+	}
+	clean := filepath.Clean(filepath.FromSlash(rel))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("route manifest path %q must stay inside output directory", rel)
+	}
+	return filepath.Join(outputDir, clean), nil
 }
 
 func writeAssetManifest(outputDir string, cssArtifacts []CSSArtifact) (string, error) {
@@ -962,13 +1280,24 @@ func writeAssetManifest(outputDir string, cssArtifacts []CSSArtifact) (string, e
 	payload = append(payload, '\n')
 
 	manifestPath := filepath.Join(outputDir, assetManifestFile)
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(manifestPath, payload, 0o644); err != nil {
+	if err := writeFileIfChanged(manifestPath, payload); err != nil {
 		return "", err
 	}
 	return manifestPath, nil
+}
+
+func writeFileIfChanged(filePath string, contents []byte) error {
+	current, err := os.ReadFile(filePath)
+	if err == nil && bytes.Equal(current, contents) {
+		return nil
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, contents, 0o644)
 }
 
 func relativeOutputPath(outputDir, filePath string) (string, error) {

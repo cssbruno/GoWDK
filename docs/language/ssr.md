@@ -9,7 +9,7 @@ SSR is optional and must not become the default framework identity.
 - `@render hybrid` also requires the SSR addon in the current validator.
 - `gowdk build --ssr --app <dir> --bin <file>` can generate a binary that
   serves simple concrete `@render ssr` pages rendered from `view {}` and
-  literal `build {}` data.
+  literal or imported `build {}` data.
 - `load {}` is allowed only with `@render ssr` or `@render hybrid`; the parser
   preserves its raw body text and SSR codegen emits first-slice load function
   stubs that receive `ssr.LoadContext`, but generated user execution is not

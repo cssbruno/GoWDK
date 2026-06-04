@@ -23,11 +23,16 @@ for CSS inputs, and `dist/site` for build output.
 `gowdk build` can also discover `.gwdk` files when no explicit files are
 supplied. It reads literal `Source.Include`, `Source.Exclude`, and
 `Modules`, and `Build.Output` fields from `gowdk.config.go` when present. Root
-source patterns and module source patterns are additive; a name-only module
-defaults to `<module-name>/**/*.gwdk`. `gowdk build --module <name>` limits
-discovery to selected configured modules for user-owned deployment workflows.
-When no root or module include is configured, discovery falls back to
-`**/*.gwdk` and an explicit `--out` directory.
+source patterns and module source patterns are additive when no module is
+selected; a name-only module defaults to `<module-name>/**/*.gwdk`.
+`Build.Targets` can statically declare selected modules, output dirs, generated
+app dirs, and binary paths for user-owned deployment workflows. With targets
+configured, `gowdk build` runs all targets and `gowdk build --target <name>`
+runs selected targets. `gowdk build --module <name>` remains available for ad
+hoc builds, and the flag may be repeated or comma-separated. The selected
+modules define what gets emitted to `--out`, copied into `--app`, and embedded
+into `--bin`. When no root or module include is configured, discovery falls
+back to `**/*.gwdk` and an explicit `--out` directory.
 
 Current file-kind classification treats files ending in `.cmp.gwdk` or
 containing `@component` as components, files ending in `.layout.gwdk` as layout
@@ -45,8 +50,8 @@ Future compiler work must define:
 - How island files are classified.
 - Where user Go code lives.
 - How full app config is discovered or passed to every compiler command.
-- Whether module types map to separate generated packages, binaries, or output
-  directories.
+- Whether build targets need per-target addons, render settings, or package
+  layout controls.
 - How examples and fixture apps are kept runnable.
 
 Routes and layouts must remain declared inside files, not inferred from folder location.

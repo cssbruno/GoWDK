@@ -16,6 +16,7 @@ var literalRecordPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
 // SyntaxFile is the typed AST for the currently supported .gwdk syntax subset.
 type SyntaxFile struct {
 	Annotations []SyntaxAnnotation
+	Imports     []SyntaxImport
 	Blocks      []SyntaxBlock
 }
 
@@ -23,6 +24,13 @@ type SyntaxFile struct {
 type SyntaxAnnotation struct {
 	Name  string
 	Value string
+	Span  manifest.SourceSpan
+}
+
+// SyntaxImport is one top-level Go import declaration.
+type SyntaxImport struct {
+	Alias string
+	Path  string
 	Span  manifest.SourceSpan
 }
 
@@ -34,6 +42,7 @@ type SyntaxBlock struct {
 	Span    manifest.SourceSpan
 	View    []view.Node
 	Records []LiteralRecord
+	Call    *BuildCall
 	Actions []ActionStatement
 	APIs    []APIStatement
 }
@@ -42,6 +51,13 @@ type SyntaxBlock struct {
 type LiteralRecord struct {
 	Fields map[string]string
 	Span   manifest.SourceSpan
+}
+
+// BuildCall is a first-slice imported build data function call.
+type BuildCall struct {
+	Alias    string
+	Function string
+	Span     manifest.SourceSpan
 }
 
 // ActionStatement is one supported statement inside act {}.
@@ -113,6 +129,17 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 			})
 			continue
 		}
+		if match := importPattern.FindStringSubmatch(line); match != nil {
+			file.Imports = append(file.Imports, SyntaxImport{
+				Alias: match[1],
+				Path:  match[2],
+				Span:  sourceLineSpan(lineNumber, rawLine),
+			})
+			continue
+		}
+		if isMalformedImport(line) {
+			return SyntaxFile{}, fmt.Errorf("line %d: malformed import %q", lineNumber, line)
+		}
 		if match := blockPattern.FindStringSubmatch(line); match != nil {
 			captured = SyntaxBlock{Kind: match[1], Span: sourceLineSpan(lineNumber, rawLine)}
 			depth = 1
@@ -155,7 +182,21 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 			return SyntaxBlock{}, fmt.Errorf("line %d: view body: %w", block.Span.Start.Line, err)
 		}
 		block.View = nodes
-	case "paths", "build":
+	case "paths":
+		records, err := parseLiteralRecords(body)
+		if err != nil {
+			return SyntaxBlock{}, err
+		}
+		block.Records = records
+	case "build":
+		call, ok, err := parseBuildCall(body)
+		if err != nil {
+			return SyntaxBlock{}, err
+		}
+		if ok {
+			block.Call = &call
+			return block, nil
+		}
 		records, err := parseLiteralRecords(body)
 		if err != nil {
 			return SyntaxBlock{}, err
@@ -175,6 +216,30 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 		block.APIs = statements
 	}
 	return block, nil
+}
+
+func parseBuildCall(body []syntaxBodyLine) (BuildCall, bool, error) {
+	var significant []syntaxBodyLine
+	for _, raw := range body {
+		line := strings.TrimSpace(raw.Text)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		significant = append(significant, raw)
+	}
+	if len(significant) != 1 {
+		return BuildCall{}, false, nil
+	}
+	line := strings.TrimSpace(significant[0].Text)
+	match := buildCallPattern.FindStringSubmatch(line)
+	if match == nil {
+		return BuildCall{}, false, nil
+	}
+	return BuildCall{
+		Alias:    match[1],
+		Function: match[2],
+		Span:     sourceLineSpan(significant[0].Line, significant[0].Text),
+	}, true, nil
 }
 
 func joinSyntaxBody(body []syntaxBodyLine) string {

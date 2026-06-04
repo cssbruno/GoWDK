@@ -24,6 +24,7 @@ type pageJSON struct {
 	Kind            string           `json:"kind"`
 	Route           string           `json:"route"`
 	Render          gowdk.RenderMode `json:"render"`
+	Imports         []importJSON     `json:"imports,omitempty"`
 	Layouts         []string         `json:"layouts,omitempty"`
 	DynamicParams   []string         `json:"dynamicParams,omitempty"`
 	Paths           bool             `json:"paths,omitempty"`
@@ -53,6 +54,11 @@ type layoutJSON struct {
 type propJSON struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
+}
+
+type importJSON struct {
+	Alias string `json:"alias,omitempty"`
+	Path  string `json:"path"`
 }
 
 type blocksJSON struct {
@@ -98,6 +104,7 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 			Kind:            "page",
 			Route:           page.Route,
 			Render:          page.RenderMode(gowdk.Static),
+			Imports:         importsJSON(page.Imports),
 			Layouts:         page.Layouts,
 			DynamicParams:   page.DynamicParams(),
 			Paths:           page.Paths,
@@ -119,6 +126,17 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 		Components: componentsJSON(app.Components),
 		Layouts:    layoutsJSON(app.Layouts),
 	})
+}
+
+func importsJSON(imports []Import) []importJSON {
+	if len(imports) == 0 {
+		return nil
+	}
+	out := make([]importJSON, 0, len(imports))
+	for _, item := range imports {
+		out = append(out, importJSON{Alias: item.Alias, Path: item.Path})
+	}
+	return out
 }
 
 func blocksJSONFor(page Page) blocksJSON {

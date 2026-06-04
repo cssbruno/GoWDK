@@ -13,16 +13,20 @@ explicit file paths or default build discovery
 The current CLI accepts explicit `.gwdk` files. `gowdk build` can also discover
 source files from literal `gowdk.config.go` `Source.Include` and
 `Source.Exclude` settings plus configured module sources when no explicit files
-are supplied. `gowdk build --module <name>` limits discovery to selected
-configured modules, or discovery uses `**/*.gwdk` defaults when no root/module
-source is configured.
+are supplied. Static `Build.Targets` can declare selected modules, output dirs,
+generated app dirs, and binary paths; `gowdk build` runs all configured targets
+and `gowdk build --target <name>` runs selected targets. `gowdk build --module
+<name>` remains available for ad hoc builds, and the flag may be repeated or
+comma-separated. Discovery uses `**/*.gwdk` defaults when no root/module source
+is configured.
 
-`gowdk build [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...]` currently
+`gowdk build [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...]` currently
 emits static HTML, `gowdk-routes.json`, `gowdk-assets.json`, generated embedded
-static app source, and an optional static-serving binary for simple `static` and
+static app source, and an optional static-serving binary for the selected
+source set. The current rendered page subset covers simple `static` and
 `action` pages with non-dynamic routes or literal `paths {}` dynamic routes,
-literal `build {}` data, lowercase HTML markup in `view {}`, and `.cmp.gwdk`
-component files.
+literal `build {}` data, imported Go build data functions, lowercase HTML
+markup in `view {}`, and `.cmp.gwdk` component files.
 
 `internal/parser.ParseSyntax` exposes a typed AST for the current source subset:
 annotations, supported top-level blocks, parsed `view {}` markup nodes, literal

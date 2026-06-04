@@ -388,6 +388,54 @@ func TestGenerateRejectsSSRReplacementForUndeclaredParam(t *testing.T) {
 	}
 }
 
+func TestGenerateRejectsAmbiguousDynamicSSRRoutes(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+
+	_, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{
+		{
+			PageID: "blog.category",
+			Route:  "/blog/{category}/{slug}",
+			HTML:   "<main>Category</main>",
+		},
+		{
+			PageID: "blog.edit",
+			Route:  "/blog/{slug}/edit",
+			HTML:   "<main>Edit</main>",
+		},
+	}})
+	if err == nil {
+		t.Fatal("expected ambiguous generated SSR route error")
+	}
+	if !strings.Contains(err.Error(), `route "/blog/{slug}/edit" overlaps dynamic SSR page blog.category route "/blog/{category}/{slug}"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGenerateAllowsConcreteSSRRouteBesideDynamicSSRRoute(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{
+		{
+			PageID: "blog.about",
+			Route:  "/blog/about",
+			HTML:   "<main>About</main>",
+		},
+		{
+			PageID: "blog.post",
+			Route:  "/blog/{slug}",
+			HTML:   "<main>Post</main>",
+		},
+	}}); err != nil {
+		t.Fatalf("expected concrete SSR route beside dynamic SSR route to be valid, got %v", err)
+	}
+}
+
 func TestBuildBinaryCompilesGeneratedApp(t *testing.T) {
 	root := t.TempDir()
 	staticDir := filepath.Join(root, "dist")

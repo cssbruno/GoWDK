@@ -145,6 +145,58 @@ func TestValidateManifestRejectsDuplicatePageRoutes(t *testing.T) {
 	}
 }
 
+func TestValidateManifestRejectsAmbiguousDynamicPageRoutes(t *testing.T) {
+	tests := []struct {
+		name  string
+		left  string
+		right string
+	}{
+		{
+			name:  "literal tail can also be a param",
+			left:  "/blog/{category}/{slug}",
+			right: "/blog/{slug}/edit",
+		},
+		{
+			name:  "literal head can also be a param",
+			left:  "/{section}/settings",
+			right: "/admin/{page}",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			app := manifest.Manifest{
+				Pages: []manifest.Page{
+					{ID: "left", Route: test.left, Paths: true, Blocks: manifest.Blocks{View: true}},
+					{ID: "right", Route: test.right, Paths: true, Blocks: manifest.Blocks{View: true}},
+				},
+			}
+
+			err := ValidateManifest(gowdk.Config{}, app)
+			if err == nil {
+				t.Fatal("expected ambiguous dynamic route diagnostic")
+			}
+			diagnostics := err.(ValidationErrors)
+			if !hasDiagnosticCode(diagnostics, "ambiguous_dynamic_route") {
+				t.Fatalf("missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
+			}
+		})
+	}
+}
+
+func TestValidateManifestAllowsConcreteRouteBesideDynamicPageRoute(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{
+			{ID: "blog.about", Route: "/blog/about", Blocks: manifest.Blocks{View: true}},
+			{ID: "blog.post", Route: "/blog/{slug}", Paths: true, Blocks: manifest.Blocks{View: true}},
+		},
+	}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected concrete and dynamic routes to be valid, got %v", err)
+	}
+}
+
 func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 	t.Run("multiple actions on one route", func(t *testing.T) {
 		app := manifest.Manifest{

@@ -49,6 +49,81 @@ func duplicateRouteMessage(route, firstID, firstSource, duplicateID, duplicateSo
 	return message
 }
 
+func validateAmbiguousDynamicPageRoutes(pages []manifest.Page) []ValidationError {
+	var dynamicRoutes []routeRegistration
+	var diagnostics []ValidationError
+	for _, page := range pages {
+		info, issues := parseRoute(page.Route)
+		if len(issues) > 0 || len(info.Params) == 0 {
+			continue
+		}
+		current := routeRegistration{
+			Kind:    "page",
+			Owner:   "page " + page.ID,
+			Method:  "GET",
+			Route:   page.Route,
+			Pattern: info.Pattern,
+			PageID:  page.ID,
+			Source:  page.Source,
+			Span:    page.Spans.Route,
+		}
+		for _, previous := range dynamicRoutes {
+			if current.Pattern == previous.Pattern {
+				continue
+			}
+			if !routePatternsOverlap(current.Pattern, previous.Pattern) {
+				continue
+			}
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "ambiguous_dynamic_route",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    page.Spans.Route,
+				Message: ambiguousDynamicRouteMessage(current, previous),
+			})
+		}
+		dynamicRoutes = append(dynamicRoutes, current)
+	}
+	return diagnostics
+}
+
+func ambiguousDynamicRouteMessage(current, previous routeRegistration) string {
+	message := fmt.Sprintf("ambiguous dynamic page route %q overlaps %q", current.Route, previous.Route)
+	if current.PageID != "" && previous.PageID != "" {
+		message = fmt.Sprintf("%s; page %s could match the same request path as page %s", message, current.PageID, previous.PageID)
+	}
+	if current.Source != "" && previous.Source != "" {
+		return fmt.Sprintf("%s (%s and %s)", message, current.Source, previous.Source)
+	}
+	return message
+}
+
+func routePatternsOverlap(left, right string) bool {
+	leftSegments := routePatternSegments(left)
+	rightSegments := routePatternSegments(right)
+	if len(leftSegments) != len(rightSegments) {
+		return false
+	}
+	for index, leftSegment := range leftSegments {
+		rightSegment := rightSegments[index]
+		if leftSegment == "{}" || rightSegment == "{}" {
+			continue
+		}
+		if leftSegment != rightSegment {
+			return false
+		}
+	}
+	return true
+}
+
+func routePatternSegments(pattern string) []string {
+	trimmed := strings.Trim(pattern, "/")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "/")
+}
+
 func validateRouteMethodConflicts(pages []manifest.Page) []ValidationError {
 	seen := map[string]routeRegistration{}
 	var diagnostics []ValidationError

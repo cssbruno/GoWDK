@@ -401,6 +401,7 @@ func validateActionRoutePath(value string) error {
 
 func validateSSRRoutes(routes []SSRRoute) error {
 	seen := map[string]SSRRoute{}
+	var dynamicRoutes []SSRRoute
 	for _, route := range routes {
 		if strings.TrimSpace(route.PageID) == "" {
 			return fmt.Errorf("generated SSR route is missing page ID")
@@ -414,10 +415,25 @@ func validateSSRRoutes(routes []SSRRoute) error {
 		if err := validateSSRReplacements(route); err != nil {
 			return err
 		}
-		if previous, exists := seen[route.Route]; exists {
+		pattern := ssrRoutePattern(route.Route)
+		params := ssrRoutePatternParams(route.Route)
+		if previous, exists := seen[pattern]; exists {
 			return fmt.Errorf("generated SSR %s route %q duplicates SSR page %s", route.PageID, route.Route, previous.PageID)
 		}
-		seen[route.Route] = route
+		if len(params) > 0 {
+			for _, previous := range dynamicRoutes {
+				if pattern == ssrRoutePattern(previous.Route) {
+					continue
+				}
+				if ssrRoutePatternsOverlap(pattern, ssrRoutePattern(previous.Route)) {
+					return fmt.Errorf("generated SSR %s route %q overlaps dynamic SSR page %s route %q", route.PageID, route.Route, previous.PageID, previous.Route)
+				}
+			}
+		}
+		seen[pattern] = route
+		if len(params) > 0 {
+			dynamicRoutes = append(dynamicRoutes, route)
+		}
 	}
 	return nil
 }
@@ -480,6 +496,45 @@ func ssrRoutePatternParams(route string) []string {
 		}
 	}
 	return params
+}
+
+func ssrRoutePattern(route string) string {
+	segments := ssrRoutePatternSegments(route)
+	if len(segments) == 0 {
+		return "/"
+	}
+	for index, segment := range segments {
+		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
+			segments[index] = "{}"
+		}
+	}
+	return "/" + strings.Join(segments, "/")
+}
+
+func ssrRoutePatternsOverlap(left, right string) bool {
+	leftSegments := ssrRoutePatternSegments(left)
+	rightSegments := ssrRoutePatternSegments(right)
+	if len(leftSegments) != len(rightSegments) {
+		return false
+	}
+	for index, leftSegment := range leftSegments {
+		rightSegment := rightSegments[index]
+		if leftSegment == "{}" || rightSegment == "{}" {
+			continue
+		}
+		if leftSegment != rightSegment {
+			return false
+		}
+	}
+	return true
+}
+
+func ssrRoutePatternSegments(route string) []string {
+	trimmed := strings.Trim(route, "/")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "/")
 }
 
 func isIdentifier(value string) bool {

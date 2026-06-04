@@ -519,7 +519,11 @@ func mainSource(actions []ActionRoute, ssr []SSRRoute) string {
 
 func ssrHandlerSource(routes []SSRRoute) string {
 	if len(routes) == 0 {
-		return `func (handler staticHandler) ssr(response http.ResponseWriter, request *http.Request) bool {
+		return `func (handler staticHandler) ssrExact(response http.ResponseWriter, request *http.Request) bool {
+	return false
+}
+
+func (handler staticHandler) ssrDynamic(response http.ResponseWriter, request *http.Request) bool {
 	return false
 }`
 	}
@@ -533,7 +537,7 @@ func ssrHandlerSource(routes []SSRRoute) string {
 	})
 
 	var builder strings.Builder
-	builder.WriteString("func (handler staticHandler) ssr(response http.ResponseWriter, request *http.Request) bool {\n")
+	builder.WriteString("func (handler staticHandler) ssrExact(response http.ResponseWriter, request *http.Request) bool {\n")
 	builder.WriteString("\tswitch request.URL.Path {\n")
 	for _, route := range sorted {
 		if len(ssrRoutePatternParams(route.Route)) > 0 {
@@ -548,6 +552,9 @@ func ssrHandlerSource(routes []SSRRoute) string {
 		builder.WriteString("\t\treturn true\n")
 	}
 	builder.WriteString("\t}\n")
+	builder.WriteString("\treturn false\n")
+	builder.WriteString("}\n\n")
+	builder.WriteString("func (handler staticHandler) ssrDynamic(response http.ResponseWriter, request *http.Request) bool {\n")
 	for _, route := range sorted {
 		if len(ssrRoutePatternParams(route.Route)) == 0 {
 			continue
@@ -998,12 +1005,15 @@ func (handler staticHandler) ServeHTTP(response http.ResponseWriter, request *ht
 		handler.health(response)
 		return
 	}
-	if handler.ssr(response, request) {
+	if handler.ssrExact(response, request) {
 		return
 	}
 
 	payload, info, ok := handler.staticFile(request.URL.Path)
 	if !ok {
+		if handler.ssrDynamic(response, request) {
+			return
+		}
 		http.NotFound(response, request)
 		return
 	}

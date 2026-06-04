@@ -168,8 +168,10 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`if handler.ssr(response, request)`,
-		`func (handler staticHandler) ssr(response http.ResponseWriter, request *http.Request) bool`,
+		`if handler.ssrExact(response, request)`,
+		`if handler.ssrDynamic(response, request)`,
+		`func (handler staticHandler) ssrExact(response http.ResponseWriter, request *http.Request) bool`,
+		`func (handler staticHandler) ssrDynamic(response http.ResponseWriter, request *http.Request) bool`,
 		`case "/dashboard":`,
 		`response.Header().Set("Content-Type", "text/html; charset=utf-8")`,
 		`response.Header().Set("Cache-Control", "no-store")`,
@@ -570,6 +572,96 @@ func TestGeneratedBinaryServesDynamicSSRRoute(t *testing.T) {
 	}
 	if strings.TrimSpace(body) != `<main data-slug="&lt;script&gt;"><h1>&lt;script&gt;</h1></main>` {
 		t.Fatalf("unexpected dynamic SSR response body: %s", body)
+	}
+}
+
+func TestGeneratedBinaryServesStaticPageBeforeDynamicSSRRoute(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(staticDir, "blog", "about", "index.html"), "<main>Static about</main>")
+
+	if _, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "blog.post",
+		Route:  "/blog/{slug}",
+		HTML:   `<main>Dynamic __SLUG__</main>`,
+		Replacements: []SSRReplacement{{
+			Param:       "slug",
+			Placeholder: "__SLUG__",
+		}},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, headers, err := waitForHTTPResponse("http://" + addr + "/blog/about")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(body) != "<main>Static about</main>" {
+		t.Fatalf("expected static page to win over dynamic SSR route, got: %s", body)
+	}
+	if headers.Get("Cache-Control") == "no-store" {
+		t.Fatalf("expected static response headers, got SSR cache header")
+	}
+}
+
+func TestGeneratedBinaryServesStaticAssetBeforeRootDynamicSSRRoute(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(staticDir, "favicon.ico"), "ICON")
+
+	if _, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "catch.all",
+		Route:  "/{slug}",
+		HTML:   `<main>Dynamic __SLUG__</main>`,
+		Replacements: []SSRReplacement{{
+			Param:       "slug",
+			Placeholder: "__SLUG__",
+		}},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, headers, err := waitForHTTPResponse("http://" + addr + "/favicon.ico")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(body) != "ICON" {
+		t.Fatalf("expected static asset to win over root dynamic SSR route, got: %s", body)
+	}
+	if headers.Get("Cache-Control") == "no-store" {
+		t.Fatalf("expected static response headers, got SSR cache header")
 	}
 }
 

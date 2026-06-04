@@ -1081,6 +1081,201 @@ view {
 	}
 }
 
+func TestBuildCommandEmbedsSelectedModuleOnlyInBinary(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Modules: []gowdk.ModuleConfig{
+		{Name: "frontend"},
+		{Name: "admin"},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `@page home
+@route "/"
+
+view {
+  <main>Frontend module</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `@page dashboard
+@route "/admin"
+
+view {
+  <main>Admin module</main>
+}
+`)
+
+	outputDir := filepath.Join(root, "dist-admin")
+	appDir := filepath.Join(root, "app-admin")
+	binaryPath := filepath.Join(root, "admin-site")
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build", "--module", "admin", "--out", outputDir, "--app", appDir, "--bin", binaryPath}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	addr := freeCLIAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, err := waitForCLIHTTP("http://" + addr + "/admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, "<main>Admin module</main>") {
+		t.Fatalf("unexpected selected module response: %s", body)
+	}
+
+	response, err := waitForCLIStatus("http://"+addr+"/", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected unselected frontend route to be absent, got %d", response.StatusCode)
+	}
+}
+
+func TestBuildCommandEmbedsMultipleSelectedModulesInBinary(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Modules: []gowdk.ModuleConfig{
+		{Name: "frontend"},
+		{Name: "admin"},
+		{Name: "docs"},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `@page home
+@route "/"
+
+view {
+  <main>Frontend module</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `@page dashboard
+@route "/admin"
+
+view {
+  <main>Admin module</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "docs", "guide.page.gwdk"), `@page guide
+@route "/docs"
+
+view {
+  <main>Docs module</main>
+}
+`)
+
+	outputDir := filepath.Join(root, "dist-combined")
+	appDir := filepath.Join(root, "app-combined")
+	binaryPath := filepath.Join(root, "combined-site")
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build", "--module", "frontend,admin", "--out", outputDir, "--app", appDir, "--bin", binaryPath}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	addr := freeCLIAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	home, err := waitForCLIHTTP("http://" + addr + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(home, "<main>Frontend module</main>") {
+		t.Fatalf("unexpected frontend module response: %s", home)
+	}
+	admin, err := waitForCLIHTTP("http://" + addr + "/admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(admin, "<main>Admin module</main>") {
+		t.Fatalf("unexpected admin module response: %s", admin)
+	}
+
+	response, err := waitForCLIStatus("http://"+addr+"/docs", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected unselected docs route to be absent, got %d", response.StatusCode)
+	}
+}
+
+func TestBuildCommandBuildsSSRBinary(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "dashboard.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "app")
+	binaryPath := filepath.Join(root, "site")
+	writeCLIFile(t, page, `@page dashboard
+@route "/dashboard"
+@render ssr
+
+build {
+  => { title: "Dashboard" }
+}
+
+view {
+  <main>
+    <h1>{title}</h1>
+  </main>
+}
+`)
+
+	if err := run([]string{"build", "--ssr", "--out", outputDir, "--app", appDir, "--bin", binaryPath, page}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "dashboard", "index.html")); !os.IsNotExist(err) {
+		t.Fatalf("expected no static SSR HTML artifact, stat err: %v", err)
+	}
+
+	addr := freeCLIAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, err := waitForCLIHTTP("http://" + addr + "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, "<h1>Dashboard</h1>") {
+		t.Fatalf("unexpected SSR response body: %s", body)
+	}
+}
+
 func TestBuildCommandBuildsActionRedirectBinary(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "newsletter.page.gwdk")

@@ -446,7 +446,14 @@ func build(args []string) error {
 		if err != nil {
 			return err
 		}
-		app, err := appgen.GenerateWithOptions(outputDir, appDir, appgen.Options{Actions: actions})
+		ssrArtifacts, err := staticgen.SSRArtifacts(options.Config, app, outputDir)
+		if err != nil {
+			return err
+		}
+		app, err := appgen.GenerateWithOptions(outputDir, appDir, appgen.Options{
+			Actions: actions,
+			SSR:     ssrRoutes(ssrArtifacts),
+		})
 		if err != nil {
 			return err
 		}
@@ -461,6 +468,18 @@ func build(args []string) error {
 		}
 	}
 	return nil
+}
+
+func ssrRoutes(artifacts []staticgen.SSRArtifact) []appgen.SSRRoute {
+	routes := make([]appgen.SSRRoute, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		routes = append(routes, appgen.SSRRoute{
+			PageID: artifact.PageID,
+			Route:  artifact.Route,
+			HTML:   artifact.HTML,
+		})
+	}
+	return routes
 }
 
 func watch(args []string) error {

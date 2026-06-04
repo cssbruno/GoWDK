@@ -1196,7 +1196,7 @@ func TestBuildRejectsInvalidDynamicPathsBeforeWriting(t *testing.T) {
 	}
 }
 
-func TestBuildRejectsRequestTimeAndDynamicPagesBeforeWriting(t *testing.T) {
+func TestBuildSkipsRequestTimePagesAndKeepsStaticArtifacts(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{
 		{
@@ -1220,18 +1220,71 @@ func TestBuildRejectsRequestTimeAndDynamicPagesBeforeWriting(t *testing.T) {
 		},
 	}}
 
-	_, err := Build(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
-	if err == nil {
-		t.Fatal("expected build error")
-	}
-	message := err.Error()
-	if !strings.Contains(message, "cannot emit @render ssr") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if entries, err := os.ReadDir(outputDir); err != nil {
+	result, err := Build(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err != nil {
 		t.Fatal(err)
-	} else if len(entries) != 0 {
-		t.Fatalf("expected no partial output, got %#v", entries)
+	}
+	if len(result.Artifacts) != 1 {
+		t.Fatalf("expected only one static artifact, got %#v", result.Artifacts)
+	}
+	if result.Artifacts[0].PageID != "blog.post" {
+		t.Fatalf("expected SSR page to be skipped, got %#v", result.Artifacts)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "dashboard", "index.html")); !os.IsNotExist(err) {
+		t.Fatalf("expected no SSR static output, stat err: %v", err)
+	}
+}
+
+func TestSSRArtifactsRenderConcreteSSRPage(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:     "dashboard",
+			Route:  "/dashboard",
+			Render: gowdk.SSR,
+			Blocks: manifest.Blocks{
+				BuildBody: `=> { title: "Dashboard" }`,
+				View:      true,
+				ViewBody:  `<main><h1>{title}</h1><p>Live</p></main>`,
+			},
+		}},
+	}
+
+	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one SSR artifact, got %#v", artifacts)
+	}
+	if artifacts[0].PageID != "dashboard" || artifacts[0].Route != "/dashboard" {
+		t.Fatalf("unexpected SSR artifact metadata: %#v", artifacts[0])
+	}
+	if !strings.Contains(artifacts[0].HTML, "<h1>Dashboard</h1>") {
+		t.Fatalf("expected rendered SSR HTML, got %s", artifacts[0].HTML)
+	}
+}
+
+func TestSSRArtifactsRejectLoadUntilRequestExecutionExists(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:     "dashboard",
+		Route:  "/dashboard",
+		Render: gowdk.SSR,
+		Blocks: manifest.Blocks{
+			Load:     true,
+			LoadBody: `=> { user }`,
+			View:     true,
+			ViewBody: `<main>Dashboard</main>`,
+		},
+	}}}
+
+	_, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected unsupported load error")
+	}
+	if !strings.Contains(err.Error(), "generated SSR load {} execution is not implemented yet") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

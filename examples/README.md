@@ -14,6 +14,7 @@ This directory contains small `.gwdk` files for the current language tooling sca
 | `basic/newsletter.page.gwdk` | Static action-form syntax example with `g:post` and component markup. | `go run ./cmd/gowdk check examples/basic/newsletter.page.gwdk` |
 | `basic/patients-fragment.page.gwdk` | Partial/server fragment metadata example with `fragment`, `g:target`, and `g:swap`. | `go run ./cmd/gowdk manifest examples/basic/patients-fragment.page.gwdk` |
 | `basic/status.page.gwdk` | API route metadata example with a named `GET` endpoint. | `go run ./cmd/gowdk routes examples/basic/status.page.gwdk` |
+| `basic/simple-ssr.page.gwdk` | Simple generated SSR page without `load {}`. | `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/basic/simple-ssr.page.gwdk` |
 | `basic/dashboard.page.gwdk` | SSR page with `load` and guard metadata. | `go run ./cmd/gowdk check --ssr examples/basic/dashboard.page.gwdk` |
 | `embed/site.page.gwdk` | Standalone one-binary static serving example. | `go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk` |
 | `css/styled.page.gwdk` | Configured stylesheet-link example. | `go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk` |
@@ -54,6 +55,13 @@ go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-a
 test -x /tmp/gowdk-action-site
 ```
 
+Build the current simple generated SSR page:
+
+```sh
+go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/basic/simple-ssr.page.gwdk
+test -x /tmp/gowdk-ssr-site
+```
+
 Build the one-binary static serving example:
 
 ```sh
@@ -79,12 +87,13 @@ test -f /tmp/gowdk-base-components/components/base/index.html
 ## Current Limitations
 
 - `gowdk build` emits static HTML, `gowdk-routes.json`, and `gowdk-assets.json` for the simple home page, hero component, and literal dynamic paths today.
-- Default build discovery exists, but running it from `examples/basic` currently includes an SSR example that needs future generated request-time output. Pass explicit files for build smoke commands.
+- Default build discovery exists, but running it from `examples/basic` currently includes an SSR example with `load {}` and guard metadata that is validation-only. Pass explicit files for build smoke commands.
 - Static examples can be served locally with `gowdk serve` or compiled into an
   embedded static binary with `gowdk build --app --bin`; the current generated
   binary supports first-slice action redirects, form input decoder wrappers, and
-  required-field validation, but not real typed action logic, APIs, partial
-  fragments, or SSR handlers yet.
+  required-field validation, plus first-slice concrete SSR pages without
+  `load {}`. It does not run real typed action logic, APIs, partial fragments,
+  request-time `load {}` functions, guard enforcement, or dynamic SSR routes yet.
 - `view {}` bodies are parsed only for a small static HTML subset; `act` bodies
   support the first form-input/redirect subset, `api` bodies support the first
   method/route metadata line, and `load` bodies are still not parsed beyond

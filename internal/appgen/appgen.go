@@ -34,6 +34,7 @@ type Result struct {
 // Options configures generated app output.
 type Options struct {
 	Actions []ActionRoute
+	SSR     []SSRRoute
 }
 
 // ActionRoute describes a generated static action handler.
@@ -47,6 +48,13 @@ type ActionRoute struct {
 	RequiredFields []string
 	ValidatesInput bool
 	Redirect       string
+}
+
+// SSRRoute describes a generated request-time page handler.
+type SSRRoute struct {
+	PageID string
+	Route  string
+	HTML   string
 }
 
 // Generate writes a self-contained Go app that embeds staticDir.
@@ -77,6 +85,9 @@ func GenerateWithOptions(staticDir, appDir string, options Options) (Result, err
 	if err := validateActionRoutes(options.Actions); err != nil {
 		return Result{}, err
 	}
+	if err := validateSSRRoutes(options.SSR); err != nil {
+		return Result{}, err
+	}
 
 	targetStatic := filepath.Join(absApp, staticDirName)
 	if isSameOrWithin(targetStatic, absStatic) {
@@ -99,7 +110,7 @@ func GenerateWithOptions(staticDir, appDir string, options Options) (Result, err
 	if err := os.WriteFile(filepath.Join(absApp, modFileName), []byte(moduleSource), 0o644); err != nil {
 		return Result{}, err
 	}
-	if err := os.WriteFile(filepath.Join(absApp, mainFileName), []byte(mainSource(options.Actions)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(absApp, mainFileName), []byte(mainSource(options.Actions, options.SSR)), 0o644); err != nil {
 		return Result{}, err
 	}
 
@@ -381,6 +392,26 @@ func validateActionRoutePath(value string) error {
 	return nil
 }
 
+func validateSSRRoutes(routes []SSRRoute) error {
+	seen := map[string]SSRRoute{}
+	for _, route := range routes {
+		if strings.TrimSpace(route.PageID) == "" {
+			return fmt.Errorf("generated SSR route is missing page ID")
+		}
+		if err := validateActionRoutePath(route.Route); err != nil {
+			return fmt.Errorf("generated SSR %s: %w", route.PageID, err)
+		}
+		if strings.TrimSpace(route.HTML) == "" {
+			return fmt.Errorf("generated SSR %s has empty HTML", route.PageID)
+		}
+		if previous, exists := seen[route.Route]; exists {
+			return fmt.Errorf("generated SSR %s route %q duplicates SSR page %s", route.PageID, route.Route, previous.PageID)
+		}
+		seen[route.Route] = route
+	}
+	return nil
+}
+
 func validateActionRedirect(value string) error {
 	if !strings.HasPrefix(value, "/") {
 		return fmt.Errorf("redirect %q must be a local absolute path", value)
@@ -394,8 +425,48 @@ func validateActionRedirect(value string) error {
 	return nil
 }
 
-func mainSource(actions []ActionRoute) string {
-	return strings.ReplaceAll(mainSourceTemplate, "{{ACTION_HANDLER}}", actionHandlerSource(actions))
+func mainSource(actions []ActionRoute, ssr []SSRRoute) string {
+	source := strings.ReplaceAll(mainSourceTemplate, "{{ACTION_HANDLER}}", actionHandlerSource(actions))
+	source = strings.ReplaceAll(source, "{{SSR_HANDLER}}", ssrHandlerSource(ssr))
+	return source
+}
+
+func ssrHandlerSource(routes []SSRRoute) string {
+	if len(routes) == 0 {
+		return `func (handler staticHandler) ssr(response http.ResponseWriter, request *http.Request) bool {
+	return false
+}`
+	}
+
+	sorted := append([]SSRRoute(nil), routes...)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Route == sorted[j].Route {
+			return sorted[i].PageID < sorted[j].PageID
+		}
+		return sorted[i].Route < sorted[j].Route
+	})
+
+	var builder strings.Builder
+	builder.WriteString("func (handler staticHandler) ssr(response http.ResponseWriter, request *http.Request) bool {\n")
+	builder.WriteString("\tswitch request.URL.Path {\n")
+	for _, route := range sorted {
+		builder.WriteString("\tcase ")
+		builder.WriteString(quote(route.Route))
+		builder.WriteString(":\n")
+		builder.WriteString("\t\tresponse.Header().Set(\"Content-Type\", \"text/html; charset=utf-8\")\n")
+		builder.WriteString("\t\tresponse.Header().Set(\"Cache-Control\", \"no-store\")\n")
+		builder.WriteString("\t\tif request.Method != http.MethodHead {\n")
+		builder.WriteString("\t\t\t_, _ = response.Write([]byte(")
+		builder.WriteString(goString(route.HTML))
+		builder.WriteString("))\n")
+		builder.WriteString("\t\t}\n")
+		builder.WriteString("\t\treturn true\n")
+	}
+	builder.WriteString("\tdefault:\n")
+	builder.WriteString("\t\treturn false\n")
+	builder.WriteString("\t}\n")
+	builder.WriteString("}")
+	return builder.String()
 }
 
 func actionHandlerSource(actions []ActionRoute) string {
@@ -649,6 +720,10 @@ func stringSliceLiteral(values []string) string {
 	return builder.String()
 }
 
+func goString(value string) string {
+	return fmt.Sprintf("%q", value)
+}
+
 func quote(value string) string {
 	return fmt.Sprintf("%q", path.Clean("/"+value))
 }
@@ -818,6 +893,9 @@ func (handler staticHandler) ServeHTTP(response http.ResponseWriter, request *ht
 		handler.health(response)
 		return
 	}
+	if handler.ssr(response, request) {
+		return
+	}
 
 	payload, info, ok := handler.staticFile(request.URL.Path)
 	if !ok {
@@ -828,6 +906,8 @@ func (handler staticHandler) ServeHTTP(response http.ResponseWriter, request *ht
 }
 
 {{ACTION_HANDLER}}
+
+{{SSR_HANDLER}}
 
 func (handler staticHandler) writeIdentityHeaders(response http.ResponseWriter) {
 	response.Header().Set("X-GOWDK-App", handler.identity.AppID)

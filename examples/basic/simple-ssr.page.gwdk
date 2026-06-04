@@ -1,0 +1,14 @@
+@page simple.ssr
+@route "/ssr"
+@render ssr
+
+build {
+  => { title: "SSR from GOWDK" }
+}
+
+view {
+  <main>
+    <h1>{title}</h1>
+    <p>This page is served by the generated request-time route.</p>
+  </main>
+}

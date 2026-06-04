@@ -148,6 +148,39 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesSSRHandler(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Static</main>")
+
+	result, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "dashboard",
+		Route:  "/dashboard",
+		HTML:   "<main><h1>Dashboard</h1></main>",
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.MainPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`if handler.ssr(response, request)`,
+		`func (handler staticHandler) ssr(response http.ResponseWriter, request *http.Request) bool`,
+		`case "/dashboard":`,
+		`response.Header().Set("Content-Type", "text/html; charset=utf-8")`,
+		`response.Header().Set("Cache-Control", "no-store")`,
+		`[]byte("<main><h1>Dashboard</h1></main>")`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestActionRoutesInfersInputFieldsFromGPostForm(t *testing.T) {
 	routes, err := ActionRoutes(manifest.Manifest{Pages: []manifest.Page{{
 		ID:    "newsletter",
@@ -269,6 +302,25 @@ func TestGenerateRejectsDynamicActionRoute(t *testing.T) {
 	}
 }
 
+func TestGenerateRejectsDynamicSSRRoute(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+
+	_, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "blog.post",
+		Route:  "/blog/{slug}",
+		HTML:   "<main>Post</main>",
+	}}})
+	if err == nil {
+		t.Fatal("expected dynamic SSR route error")
+	}
+	if !strings.Contains(err.Error(), `route "/blog/{slug}" must be a concrete path`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestBuildBinaryCompilesGeneratedApp(t *testing.T) {
 	root := t.TempDir()
 	staticDir := filepath.Join(root, "dist")
@@ -364,6 +416,53 @@ func TestGeneratedBinaryServesEmbeddedStaticHTML(t *testing.T) {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected health response to contain %q, got %s", expected, body)
 		}
+	}
+}
+
+func TestGeneratedBinaryServesSSRRouteBeforeStaticFallback(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(staticDir, "dashboard", "index.html"), "<main>Stale static dashboard</main>")
+
+	if _, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "dashboard",
+		Route:  "/dashboard",
+		HTML:   "<main><h1>Request Dashboard</h1></main>",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, headers, err := waitForHTTPResponse("http://" + addr + "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(body) != "<main><h1>Request Dashboard</h1></main>" {
+		t.Fatalf("unexpected SSR response body: %s", body)
+	}
+	if strings.Contains(body, "Stale static dashboard") {
+		t.Fatalf("expected SSR route to win over static fallback, got %s", body)
+	}
+	if contentType := headers.Get("Content-Type"); contentType != "text/html; charset=utf-8" {
+		t.Fatalf("unexpected content type: %q", contentType)
+	}
+	if cacheControl := headers.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
 	}
 }
 

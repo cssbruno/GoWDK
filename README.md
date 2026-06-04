@@ -52,6 +52,7 @@ Current compiler slices include:
 - Literal `build {}` data for static rendering.
 - First-slice typed action parsing and generated action redirects.
 - API route metadata.
+- First-slice generated SSR routes for simple concrete `@render ssr` pages.
 - CSS discovery, page CSS output, and CSS processor hooks.
 - Local static serving.
 - Embedded static app generation and optional binary compilation.
@@ -132,6 +133,10 @@ SSR Addon:
 ```
 
 Default render mode is `static`.
+
+The first generated SSR slice supports concrete `@render ssr` pages that render
+from `view {}` plus literal `build {}` data. `load {}`, guards, dynamic SSR
+routes, and user request-time logic are still being built.
 
 ## Verification
 

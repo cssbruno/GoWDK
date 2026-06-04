@@ -58,6 +58,13 @@ type Result struct {
 	AssetManifestPath string
 }
 
+// SSRArtifact describes one generated request-time page route.
+type SSRArtifact struct {
+	PageID string
+	Route  string
+	HTML   string
+}
+
 type plannedArtifact struct {
 	Artifact
 	contents []byte
@@ -135,6 +142,9 @@ func plan(config gowdk.Config, app manifest.Manifest, outputDir string) (buildPl
 	failures = append(failures, layoutFailures...)
 	failures = append(failures, cssFailures...)
 	for _, page := range app.Pages {
+		if isRequestTimePage(config, page) {
+			continue
+		}
 		stylesheets := append([]gowdk.Stylesheet{}, baseStylesheets...)
 		stylesheets = append(stylesheets, css.pageStylesheets[page.ID]...)
 		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets)
@@ -162,6 +172,70 @@ func plan(config gowdk.Config, app manifest.Manifest, outputDir string) (buildPl
 	return buildPlan{pages: planned, css: css.assets}, nil
 }
 
+// SSRArtifacts renders the first supported request-time page slice for
+// generated embedded apps. It supports concrete @render ssr pages whose view can
+// be rendered with compile-time data only; request-time load {} execution is
+// still intentionally rejected.
+func SSRArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string) ([]SSRArtifact, error) {
+	if err := compiler.ValidateManifest(config, app); err != nil {
+		return nil, err
+	}
+
+	components, componentFailures := buildComponents(app.Components)
+	layouts, layoutFailures := buildLayouts(app.Layouts)
+	css, cssFailures := planCSS(config, app, outputDir)
+	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
+	baseStylesheets = append(baseStylesheets, css.stylesheets...)
+
+	var artifacts []SSRArtifact
+	var failures []string
+	failures = append(failures, componentFailures...)
+	failures = append(failures, layoutFailures...)
+	failures = append(failures, cssFailures...)
+	for _, page := range app.Pages {
+		if !isRequestTimePage(config, page) {
+			continue
+		}
+		artifact, err := ssrArtifact(config, page, components, layouts, append(baseStylesheets, css.pageStylesheets[page.ID]...))
+		if err != nil {
+			failures = append(failures, err.Error())
+			continue
+		}
+		artifacts = append(artifacts, artifact)
+	}
+	if len(failures) > 0 {
+		return nil, errors.New(strings.Join(failures, "\n"))
+	}
+	return artifacts, nil
+}
+
+func ssrArtifact(config gowdk.Config, page manifest.Page, components map[string]view.Component, layouts map[string]manifest.Layout, stylesheets []gowdk.Stylesheet) (SSRArtifact, error) {
+	if len(page.DynamicParams()) > 0 {
+		return SSRArtifact{}, fmt.Errorf("%s: generated SSR currently requires a concrete route", page.ID)
+	}
+	if page.Blocks.Load {
+		return SSRArtifact{}, fmt.Errorf("%s: generated SSR load {} execution is not implemented yet", page.ID)
+	}
+	data, err := parseBuildData(page.Blocks.BuildBody, nil)
+	if err != nil {
+		return SSRArtifact{}, fmt.Errorf("%s: %w", page.ID, err)
+	}
+	html, err := renderPage(config, page, components, layouts, stylesheets, data, renderModeRequestTime)
+	if err != nil {
+		return SSRArtifact{}, err
+	}
+	return SSRArtifact{PageID: page.ID, Route: page.Route, HTML: html}, nil
+}
+
+func isRequestTimePage(config gowdk.Config, page manifest.Page) bool {
+	switch page.RenderMode(config.Render.DefaultMode()) {
+	case gowdk.SSR, gowdk.Hybrid:
+		return true
+	default:
+		return false
+	}
+}
+
 type pageOutput struct {
 	route string
 	data  map[string]string
@@ -182,7 +256,7 @@ func pageOutputArtifacts(config gowdk.Config, outputDir string, page manifest.Pa
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
-		html, err := renderPage(config, page, components, layouts, stylesheets, data)
+		html, err := renderPage(config, page, components, layouts, stylesheets, data, renderModeStatic)
 		if err != nil {
 			return nil, err
 		}
@@ -947,10 +1021,20 @@ func buildLayouts(layouts []manifest.Layout) (map[string]manifest.Layout, []stri
 	return registry, failures
 }
 
-func renderPage(config gowdk.Config, page manifest.Page, components map[string]view.Component, layouts map[string]manifest.Layout, stylesheets []gowdk.Stylesheet, data map[string]string) (string, error) {
+type renderModePolicy string
+
+const (
+	renderModeStatic      renderModePolicy = "static"
+	renderModeRequestTime renderModePolicy = "request-time"
+)
+
+func renderPage(config gowdk.Config, page manifest.Page, components map[string]view.Component, layouts map[string]manifest.Layout, stylesheets []gowdk.Stylesheet, data map[string]string, policy renderModePolicy) (string, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
-	if mode != gowdk.Static && mode != gowdk.Action {
+	if policy == renderModeStatic && mode != gowdk.Static && mode != gowdk.Action {
 		return "", fmt.Errorf("%s: static build cannot emit @render %s pages yet", page.ID, mode)
+	}
+	if policy == renderModeRequestTime && mode != gowdk.SSR && mode != gowdk.Hybrid {
+		return "", fmt.Errorf("%s: SSR build cannot emit @render %s pages", page.ID, mode)
 	}
 	if !page.Blocks.View {
 		return "", fmt.Errorf("%s: missing view {}", page.ID)

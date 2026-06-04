@@ -49,6 +49,7 @@ go run ./cmd/gowdk manifest --module frontend --ssr
 go run ./cmd/gowdk sitemap --module frontend --ssr
 go run ./cmd/gowdk routes --module frontend --ssr
 go run ./cmd/gowdk build --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
+go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/basic/simple-ssr.page.gwdk
 go run ./cmd/gowdk build --module frontend --module backend --out /tmp/gowdk-build
 go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
 go run ./cmd/gowdk watch --interval 1s --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
@@ -105,9 +106,11 @@ handlers with form decoder wrappers and required-field validation.
 
 Current generated binary limitations: it serves embedded static files and local
 POST redirects for the first supported action subset, including first-slice
-form input decoder wrappers and required-field validation. It does not run real
-user Go type-bound action decoders, user action logic, CSRF, APIs, partial
-fragments, SSR routes, or hybrid request-time behavior.
+form input decoder wrappers and required-field validation. It also serves
+first-slice concrete SSR pages rendered from `view {}` and literal `build {}`
+data. It does not run real user Go type-bound action decoders, user action
+logic, CSRF, APIs, partial fragments, `load {}` execution, dynamic SSR routes,
+guards, or hybrid request-time behavior.
 
 Current `serve` limitations: it serves generated static files only. It does not
 run generated actions, APIs, partial fragments, or SSR routes.

@@ -133,6 +133,26 @@ func TestActionRoutesInfersInputFieldsFromGPostForm(t *testing.T) {
 	}
 }
 
+func TestActionRoutesRejectsFileInputsWithPageContext(t *testing.T) {
+	_, err := ActionRoutes(manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "profile",
+		Route: "/profile",
+		Blocks: manifest.Blocks{
+			ViewBody: `<form g:post={save}><input name="avatar" type="file" /></form>`,
+			Actions: []manifest.Action{{
+				Name:     "save",
+				Redirect: "/profile?ok=1",
+			}},
+		},
+	}}})
+	if err == nil {
+		t.Fatal("expected file input error")
+	}
+	if !strings.Contains(err.Error(), `profile: file input "avatar" is not supported`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestGenerateRejectsAppDirInsideStaticOutput(t *testing.T) {
 	root := t.TempDir()
 	staticDir := filepath.Join(root, "dist")

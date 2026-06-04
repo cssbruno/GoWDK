@@ -191,6 +191,36 @@ func TestActionFormFieldsRejectsDynamicControlName(t *testing.T) {
 	}
 }
 
+func TestActionFormSchemaRejectsFileInputs(t *testing.T) {
+	_, err := ActionFormSchema(`<form g:post={submit}><input name="avatar" type="FILE" /></form>`)
+	if err == nil {
+		t.Fatal("expected file input error")
+	}
+	if !strings.Contains(err.Error(), `file input "avatar" is not supported`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestActionFormSchemaRejectsDynamicInputType(t *testing.T) {
+	_, err := ActionFormSchema(`<form g:post={submit}><input name="avatar" type="{kind}" /></form>`)
+	if err == nil {
+		t.Fatal("expected dynamic input type error")
+	}
+	if !strings.Contains(err.Error(), `action form input "avatar" type "{kind}" must be static`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestActionFormSchemaRejectsMultipartForms(t *testing.T) {
+	_, err := ActionFormSchema(`<form g:post={submit} enctype="multipart/form-data"><input name="email" /></form>`)
+	if err == nil {
+		t.Fatal("expected multipart form error")
+	}
+	if !strings.Contains(err.Error(), `multipart action forms are not supported`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRenderWithDataRejectsUnknownInterpolation(t *testing.T) {
 	_, err := RenderWithData(`<main>{missing}</main>`, nil, nil)
 	if err == nil {

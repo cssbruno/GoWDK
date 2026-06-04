@@ -521,7 +521,8 @@ the current source tree.
   a documented rule.
 - [x] Avoid mass assignment in generated decoders.
 - [x] Support repeated form values.
-- [ ] Support file inputs only after upload security rules are defined.
+- [x] Reject direct generated action file inputs until upload security rules are
+  defined.
 - [ ] Integrate `runtime/validation`.
 - [x] Define first-slice validation metadata syntax: `valid(input)?`.
 - [x] Generate first-slice required-field validation for `valid(input)?`.
@@ -644,6 +645,8 @@ the current source tree.
 - [ ] Define secure defaults for generated cookies or token storage if needed.
 - [ ] Validate redirects to prevent open redirects.
 - [ ] Validate action inputs and prevent mass assignment.
+- [x] Reject direct file inputs in generated action forms until upload security
+  rules exist.
 - [x] Ensure current generated static HTML escapes text and attributes by default.
 - [ ] Define safe HTML escape hatches and make them explicit.
 - [ ] Ensure embedded assets cannot include secrets or unexpected source files.

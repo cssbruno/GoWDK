@@ -28,6 +28,8 @@ Implemented today:
   static controls in same-page `g:post` forms.
 - Generated static apps return HTTP 422 for missing or empty direct static
   `required` fields when the action declares `valid(input)?`.
+- Generated static app action route extraction rejects direct file inputs and
+  multipart `g:post` forms until upload security rules are defined.
 - `/` maps to `index.html`.
 - `/patients` maps to `patients/index.html`.
 
@@ -83,10 +85,11 @@ process start from the module name, hostname, and a random token. It can also
 serve POST redirect handlers for the first supported action subset. Those
 handlers decode allowlisted form fields into named first-slice input wrappers,
 preserve repeated values, return HTTP 400 for unexpected fields, and return
-HTTP 422 for first-slice required-field validation failures. The generated app
-does not execute user action logic, enforce CSRF, resolve real user Go input
-structs, run user-defined validation, or serve API, fragment, SSR, or hybrid
-request-time handlers today.
+HTTP 422 for first-slice required-field validation failures. Direct file inputs
+and multipart action forms are rejected before generated app output. The
+generated app does not execute user action logic, enforce CSRF, resolve real
+user Go input structs, run user-defined validation, handle uploads, or serve
+API, fragment, SSR, or hybrid request-time handlers today.
 
 ## Current Static Route Manifest
 

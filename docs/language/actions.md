@@ -33,6 +33,9 @@ Current behavior:
 - Field inference currently reads direct `input`, `textarea`, and `select`
   controls with static `name` attributes; fields hidden inside component calls
   are not inferred yet.
+- Direct `input type="file"` controls and multipart `g:post` forms are rejected
+  during generated app action route extraction until upload security rules are
+  defined.
 - Form values are not logged.
 
 The current implementation does not resolve real user Go input structs, execute
@@ -41,7 +44,9 @@ user action logic, enforce CSRF, or run user-defined validation.
 Future action behavior must define:
 
 - User Go type resolution and field-specific generated struct members.
-- User-defined validation integration and file field handling.
+- User-defined validation integration.
+- File upload handling, including body limits, storage rules, validation, and
+  cleanup.
 - CSRF token generation, storage, validation, and failure behavior.
 - Redirect safety beyond local redirect validation.
 - Error response shape and HTTP status mapping.

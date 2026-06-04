@@ -20,6 +20,8 @@ Do not treat current `act`, `api`, `partial`, `@guard`, or SSR scaffolding as pr
 
 - `actions` must include CSRF protection before production use.
 - Generated form decoders must validate expected fields and avoid mass assignment.
+- Generated action forms must reject direct file inputs until upload size,
+  storage, validation, cleanup, and logging rules exist.
 - `partial` responses must render escaped HTML through the shared render core.
 - `ssr` pages with `load {}` must make auth/session access explicit through guards or request-aware APIs.
 - Embedded assets must not include local env files, source maps with secrets, or private files outside configured build output.

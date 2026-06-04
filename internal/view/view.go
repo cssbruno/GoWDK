@@ -314,6 +314,9 @@ func collectActionFormFields(nodes []Node, fields map[string]map[string]ActionFo
 			if fields[action] == nil {
 				fields[action] = map[string]ActionFormField{}
 			}
+			if err := validateActionForm(element); err != nil {
+				return err
+			}
 			if err := collectNamedControls(element.Children, fields[action]); err != nil {
 				return err
 			}
@@ -321,6 +324,25 @@ func collectActionFormFields(nodes []Node, fields map[string]map[string]ActionFo
 		}
 		if err := collectActionFormFields(element.Children, fields); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func validateActionForm(element Element) error {
+	for _, attr := range element.Attrs {
+		if attr.Name != "enctype" {
+			continue
+		}
+		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+			continue
+		}
+		value := strings.TrimSpace(attr.Value)
+		if strings.ContainsAny(value, "{}") {
+			return fmt.Errorf("action form enctype %q must be static", value)
+		}
+		if strings.EqualFold(value, "multipart/form-data") {
+			return fmt.Errorf("multipart action forms are not supported before upload security rules are defined")
 		}
 	}
 	return nil
@@ -353,9 +375,17 @@ func controlField(element Element) (ActionFormField, bool, error) {
 		return ActionFormField{}, false, nil
 	}
 	var field ActionFormField
+	inputType := ""
 	for _, attr := range element.Attrs {
 		if attr.Name == "required" {
 			field.Required = true
+			continue
+		}
+		if element.Name == "input" && attr.Name == "type" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				continue
+			}
+			inputType = strings.TrimSpace(attr.Value)
 			continue
 		}
 		if attr.Name != "name" {
@@ -372,6 +402,12 @@ func controlField(element Element) (ActionFormField, bool, error) {
 	}
 	if field.Name == "" {
 		return ActionFormField{}, false, nil
+	}
+	if strings.ContainsAny(inputType, "{}") {
+		return ActionFormField{}, false, fmt.Errorf("action form input %q type %q must be static", field.Name, inputType)
+	}
+	if strings.EqualFold(inputType, "file") {
+		return ActionFormField{}, false, fmt.Errorf("file input %q is not supported before upload security rules are defined", field.Name)
 	}
 	return field, true, nil
 }

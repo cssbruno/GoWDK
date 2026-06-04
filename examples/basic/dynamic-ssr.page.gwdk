@@ -1,0 +1,14 @@
+@page dynamic.ssr
+@route "/ssr/{slug}"
+@render ssr
+
+build {
+  => { title: "SSR {slug}" }
+}
+
+view {
+  <main>
+    <h1>{title}</h1>
+    <p>{param("slug")}</p>
+  </main>
+}

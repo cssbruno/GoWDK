@@ -1276,6 +1276,60 @@ view {
 	}
 }
 
+func TestBuildCommandBuildsDynamicSSRBinary(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "post.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "app")
+	binaryPath := filepath.Join(root, "site")
+	writeCLIFile(t, page, `@page blog.post
+@route "/blog/{slug}"
+@render ssr
+
+build {
+  => { title: "Post {slug}" }
+}
+
+view {
+  <main data-slug={param("slug")}>
+    <h1>{title}</h1>
+    <p>{param("slug")}</p>
+  </main>
+}
+`)
+
+	if err := run([]string{"build", "--ssr", "--out", outputDir, "--app", appDir, "--bin", binaryPath, page}); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeCLIAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, err := waitForCLIHTTP("http://" + addr + "/blog/hello-gowdk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `<main data-slug="hello-gowdk"><h1>Post hello-gowdk</h1><p>hello-gowdk</p></main>`) {
+		t.Fatalf("unexpected dynamic SSR response body: %s", body)
+	}
+
+	body, err = waitForCLIHTTP("http://" + addr + "/blog/%3Cscript%3E")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(body, "<script>") || !strings.Contains(body, "&lt;script&gt;") {
+		t.Fatalf("expected escaped dynamic SSR param, got: %s", body)
+	}
+}
+
 func TestBuildCommandBuildsActionRedirectBinary(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "newsletter.page.gwdk")

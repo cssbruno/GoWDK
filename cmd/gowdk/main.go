@@ -474,12 +474,24 @@ func ssrRoutes(artifacts []staticgen.SSRArtifact) []appgen.SSRRoute {
 	routes := make([]appgen.SSRRoute, 0, len(artifacts))
 	for _, artifact := range artifacts {
 		routes = append(routes, appgen.SSRRoute{
-			PageID: artifact.PageID,
-			Route:  artifact.Route,
-			HTML:   artifact.HTML,
+			PageID:       artifact.PageID,
+			Route:        artifact.Route,
+			HTML:         artifact.HTML,
+			Replacements: ssrReplacements(artifact.Replacements),
 		})
 	}
 	return routes
+}
+
+func ssrReplacements(replacements []staticgen.SSRReplacement) []appgen.SSRReplacement {
+	out := make([]appgen.SSRReplacement, 0, len(replacements))
+	for _, replacement := range replacements {
+		out = append(out, appgen.SSRReplacement{
+			Param:       replacement.Param,
+			Placeholder: replacement.Placeholder,
+		})
+	}
+	return out
 }
 
 func watch(args []string) error {

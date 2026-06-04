@@ -52,9 +52,16 @@ type ActionRoute struct {
 
 // SSRRoute describes a generated request-time page handler.
 type SSRRoute struct {
-	PageID string
-	Route  string
-	HTML   string
+	PageID       string
+	Route        string
+	HTML         string
+	Replacements []SSRReplacement
+}
+
+// SSRReplacement maps a generated placeholder back to a request route param.
+type SSRReplacement struct {
+	Param       string
+	Placeholder string
 }
 
 // Generate writes a self-contained Go app that embeds staticDir.
@@ -398,11 +405,14 @@ func validateSSRRoutes(routes []SSRRoute) error {
 		if strings.TrimSpace(route.PageID) == "" {
 			return fmt.Errorf("generated SSR route is missing page ID")
 		}
-		if err := validateActionRoutePath(route.Route); err != nil {
+		if err := validateSSRRoutePattern(route.Route); err != nil {
 			return fmt.Errorf("generated SSR %s: %w", route.PageID, err)
 		}
 		if strings.TrimSpace(route.HTML) == "" {
 			return fmt.Errorf("generated SSR %s has empty HTML", route.PageID)
+		}
+		if err := validateSSRReplacements(route); err != nil {
+			return err
 		}
 		if previous, exists := seen[route.Route]; exists {
 			return fmt.Errorf("generated SSR %s route %q duplicates SSR page %s", route.PageID, route.Route, previous.PageID)
@@ -410,6 +420,82 @@ func validateSSRRoutes(routes []SSRRoute) error {
 		seen[route.Route] = route
 	}
 	return nil
+}
+
+func validateSSRRoutePattern(value string) error {
+	if !strings.HasPrefix(value, "/") {
+		return fmt.Errorf("route %q must be an absolute path", value)
+	}
+	if strings.ContainsAny(value, "?#") {
+		return fmt.Errorf("route %q must be a concrete path without query or fragment", value)
+	}
+	params := map[string]bool{}
+	for _, segment := range strings.Split(strings.Trim(value, "/"), "/") {
+		if segment == "" {
+			continue
+		}
+		if strings.ContainsAny(segment, "{}") {
+			if !strings.HasPrefix(segment, "{") || !strings.HasSuffix(segment, "}") || strings.Count(segment, "{") != 1 || strings.Count(segment, "}") != 1 {
+				return fmt.Errorf("route %q has invalid route parameter segment %q", value, segment)
+			}
+			name := strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}")
+			if !isIdentifier(name) {
+				return fmt.Errorf("route %q has invalid route parameter name %q", value, name)
+			}
+			if params[name] {
+				return fmt.Errorf("route %q declares duplicate route parameter %q", value, name)
+			}
+			params[name] = true
+		}
+	}
+	return nil
+}
+
+func validateSSRReplacements(route SSRRoute) error {
+	routeParams := map[string]bool{}
+	for _, param := range ssrRoutePatternParams(route.Route) {
+		routeParams[param] = true
+	}
+	seen := map[string]bool{}
+	for _, replacement := range route.Replacements {
+		if !routeParams[replacement.Param] {
+			return fmt.Errorf("generated SSR %s replacement param %q is not declared by route %q", route.PageID, replacement.Param, route.Route)
+		}
+		if seen[replacement.Param] {
+			return fmt.Errorf("generated SSR %s declares duplicate replacement param %q", route.PageID, replacement.Param)
+		}
+		if strings.TrimSpace(replacement.Placeholder) == "" {
+			return fmt.Errorf("generated SSR %s replacement for %q has empty placeholder", route.PageID, replacement.Param)
+		}
+		seen[replacement.Param] = true
+	}
+	return nil
+}
+
+func ssrRoutePatternParams(route string) []string {
+	var params []string
+	for _, segment := range strings.Split(strings.Trim(route, "/"), "/") {
+		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
+			params = append(params, strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}"))
+		}
+	}
+	return params
+}
+
+func isIdentifier(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, char := range value {
+		valid := char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_'
+		if !valid {
+			return false
+		}
+		if index == 0 && char >= '0' && char <= '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func validateActionRedirect(value string) error {
@@ -450,21 +536,40 @@ func ssrHandlerSource(routes []SSRRoute) string {
 	builder.WriteString("func (handler staticHandler) ssr(response http.ResponseWriter, request *http.Request) bool {\n")
 	builder.WriteString("\tswitch request.URL.Path {\n")
 	for _, route := range sorted {
+		if len(ssrRoutePatternParams(route.Route)) > 0 {
+			continue
+		}
 		builder.WriteString("\tcase ")
 		builder.WriteString(quote(route.Route))
 		builder.WriteString(":\n")
-		builder.WriteString("\t\tresponse.Header().Set(\"Content-Type\", \"text/html; charset=utf-8\")\n")
-		builder.WriteString("\t\tresponse.Header().Set(\"Cache-Control\", \"no-store\")\n")
-		builder.WriteString("\t\tif request.Method != http.MethodHead {\n")
-		builder.WriteString("\t\t\t_, _ = response.Write([]byte(")
+		builder.WriteString("\t\twriteSSRHTML(response, request, ")
 		builder.WriteString(goString(route.HTML))
-		builder.WriteString("))\n")
-		builder.WriteString("\t\t}\n")
+		builder.WriteString(")\n")
 		builder.WriteString("\t\treturn true\n")
 	}
-	builder.WriteString("\tdefault:\n")
-	builder.WriteString("\t\treturn false\n")
 	builder.WriteString("\t}\n")
+	for _, route := range sorted {
+		if len(ssrRoutePatternParams(route.Route)) == 0 {
+			continue
+		}
+		builder.WriteString("\tif params, ok := matchSSRRoute(")
+		builder.WriteString(quote(route.Route))
+		builder.WriteString(", request.URL.Path); ok {\n")
+		builder.WriteString("\t\thtml := ")
+		builder.WriteString(goString(route.HTML))
+		builder.WriteString("\n")
+		for _, replacement := range route.Replacements {
+			builder.WriteString("\t\thtml = strings.ReplaceAll(html, ")
+			builder.WriteString(goString(replacement.Placeholder))
+			builder.WriteString(", escapeSSRValue(params[")
+			builder.WriteString(goString(replacement.Param))
+			builder.WriteString("]))\n")
+		}
+		builder.WriteString("\t\twriteSSRHTML(response, request, html)\n")
+		builder.WriteString("\t\treturn true\n")
+		builder.WriteString("\t}\n")
+	}
+	builder.WriteString("\treturn false\n")
 	builder.WriteString("}")
 	return builder.String()
 }
@@ -908,6 +1013,57 @@ func (handler staticHandler) ServeHTTP(response http.ResponseWriter, request *ht
 {{ACTION_HANDLER}}
 
 {{SSR_HANDLER}}
+
+func writeSSRHTML(response http.ResponseWriter, request *http.Request, html string) {
+	response.Header().Set("Content-Type", "text/html; charset=utf-8")
+	response.Header().Set("Cache-Control", "no-store")
+	if request.Method != http.MethodHead {
+		_, _ = response.Write([]byte(html))
+	}
+}
+
+func matchSSRRoute(pattern, requestPath string) (map[string]string, bool) {
+	patternParts := splitSSRPath(pattern)
+	requestParts := splitSSRPath(requestPath)
+	if len(patternParts) != len(requestParts) {
+		return nil, false
+	}
+	params := map[string]string{}
+	for index, part := range patternParts {
+		if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
+			name := strings.TrimSuffix(strings.TrimPrefix(part, "{"), "}")
+			value := requestParts[index]
+			if value == "" || value == "." || value == ".." {
+				return nil, false
+			}
+			params[name] = value
+			continue
+		}
+		if part != requestParts[index] {
+			return nil, false
+		}
+	}
+	return params, true
+}
+
+func splitSSRPath(value string) []string {
+	clean := path.Clean("/" + value)
+	trimmed := strings.Trim(clean, "/")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "/")
+}
+
+func escapeSSRValue(value string) string {
+	return strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		"\"", "&quot;",
+		"'", "&#39;",
+	).Replace(value)
+}
 
 func (handler staticHandler) writeIdentityHeaders(response http.ResponseWriter) {
 	response.Header().Set("X-GOWDK-App", handler.identity.AppID)

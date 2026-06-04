@@ -173,11 +173,72 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 		`case "/dashboard":`,
 		`response.Header().Set("Content-Type", "text/html; charset=utf-8")`,
 		`response.Header().Set("Cache-Control", "no-store")`,
-		`[]byte("<main><h1>Dashboard</h1></main>")`,
+		`writeSSRHTML(response, request, "<main><h1>Dashboard</h1></main>")`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
 		}
+	}
+}
+
+func TestGenerateWritesDynamicSSRHandler(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Static</main>")
+
+	result, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "blog.post",
+		Route:  "/blog/{slug}",
+		HTML:   `<main data-slug="__SLUG__">__SLUG__</main>`,
+		Replacements: []SSRReplacement{{
+			Param:       "slug",
+			Placeholder: "__SLUG__",
+		}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.MainPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`matchSSRRoute("/blog/{slug}", request.URL.Path)`,
+		`strings.ReplaceAll(html, "__SLUG__", escapeSSRValue(params["slug"]))`,
+		`func escapeSSRValue(value string) string`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateWritesDynamicSSRHandlerWithoutReplacements(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Static</main>")
+
+	result, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "blog.post",
+		Route:  "/blog/{slug}",
+		HTML:   `<main>Post</main>`,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.MainPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	if !strings.Contains(source, `matchSSRRoute("/blog/{slug}", request.URL.Path)`) {
+		t.Fatalf("expected generated main.go to match dynamic route:\n%s", source)
+	}
+	if strings.Contains(source, `case "/blog/{slug}":`) {
+		t.Fatalf("expected generated main.go not to use exact literal match for dynamic route:\n%s", source)
 	}
 }
 
@@ -302,7 +363,7 @@ func TestGenerateRejectsDynamicActionRoute(t *testing.T) {
 	}
 }
 
-func TestGenerateRejectsDynamicSSRRoute(t *testing.T) {
+func TestGenerateRejectsSSRReplacementForUndeclaredParam(t *testing.T) {
 	root := t.TempDir()
 	staticDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
@@ -312,11 +373,15 @@ func TestGenerateRejectsDynamicSSRRoute(t *testing.T) {
 		PageID: "blog.post",
 		Route:  "/blog/{slug}",
 		HTML:   "<main>Post</main>",
+		Replacements: []SSRReplacement{{
+			Param:       "missing",
+			Placeholder: "__MISSING__",
+		}},
 	}}})
 	if err == nil {
-		t.Fatal("expected dynamic SSR route error")
+		t.Fatal("expected undeclared replacement error")
 	}
-	if !strings.Contains(err.Error(), `route "/blog/{slug}" must be a concrete path`) {
+	if !strings.Contains(err.Error(), `replacement param "missing" is not declared by route "/blog/{slug}"`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -463,6 +528,48 @@ func TestGeneratedBinaryServesSSRRouteBeforeStaticFallback(t *testing.T) {
 	}
 	if cacheControl := headers.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinaryServesDynamicSSRRoute(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "blog.post",
+		Route:  "/blog/{slug}",
+		HTML:   `<main data-slug="__SLUG__"><h1>__SLUG__</h1></main>`,
+		Replacements: []SSRReplacement{{
+			Param:       "slug",
+			Placeholder: "__SLUG__",
+		}},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, _, err := waitForHTTPResponse("http://" + addr + "/blog/%3Cscript%3E")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(body) != `<main data-slug="&lt;script&gt;"><h1>&lt;script&gt;</h1></main>` {
+		t.Fatalf("unexpected dynamic SSR response body: %s", body)
 	}
 }
 

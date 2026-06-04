@@ -1265,6 +1265,40 @@ func TestSSRArtifactsRenderConcreteSSRPage(t *testing.T) {
 	}
 }
 
+func TestSSRArtifactsRenderDynamicSSRPageWithPlaceholders(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:     "blog.post",
+			Route:  "/blog/{slug}",
+			Render: gowdk.SSR,
+			Blocks: manifest.Blocks{
+				BuildBody: `=> { title: "Post {slug}" }`,
+				View:      true,
+				ViewBody:  `<main data-slug="{param(\"slug\")}"><h1>{title}</h1><p>{param("slug")}</p></main>`,
+			},
+		}},
+	}
+
+	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one SSR artifact, got %#v", artifacts)
+	}
+	artifact := artifacts[0]
+	if artifact.Route != "/blog/{slug}" {
+		t.Fatalf("unexpected dynamic route: %#v", artifact)
+	}
+	if len(artifact.Replacements) != 1 || artifact.Replacements[0].Param != "slug" {
+		t.Fatalf("unexpected replacements: %#v", artifact.Replacements)
+	}
+	if !strings.Contains(artifact.HTML, artifact.Replacements[0].Placeholder) {
+		t.Fatalf("expected SSR HTML placeholder %q in %s", artifact.Replacements[0].Placeholder, artifact.HTML)
+	}
+}
+
 func TestSSRArtifactsRejectLoadUntilRequestExecutionExists(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{{

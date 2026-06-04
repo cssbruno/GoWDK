@@ -4,37 +4,44 @@
 
 # GOWDK
 
-Welcome to GOWDK, a portable Go web compiler.
+Welcome to GOWDK, a portable Go web compiler for people who would rather ship a
+Go binary than babysit a JavaScript dependency graph.
 
-GOWDK exists for people who want to build web apps in Go without dragging a
-giant JavaScript toolchain into every project. The goal is simple: write
-movable `.gwdk` files, compile them first, and ship the result as static output
-or a single Go binary.
+GOWDK exists because I am fed up with npm being the default answer to every web
+UI problem. The ecosystem is powerful, but the constant churn, huge dependency
+trees, and recurring supply-chain attacks are not a price I want to keep paying
+for ordinary product apps.
 
-No React required. No Svelte required. No npm dependency pile unless you choose
-one yourself.
+The idea is simple: write movable `.gwdk` files, compile them first, and ship
+static output or a single Go binary. No React required. No Svelte required. No
+npm dependency pile unless you deliberately choose one.
 
 ## Why
 
-Modern frontend stacks often make small apps feel heavier than they need to be.
-They also pull in large dependency trees, and those dependency trees keep
-turning into supply-chain risk.
+Modern frontend stacks often make small apps feel heavier than they need to be:
+install half the internet, run a dev server, wire a bundler, accept a lockfile
+the size of a novella, then hope the next transitive package is not compromised.
 
-GOWDK is my answer to that frustration:
+That may be normal now. It does not have to be the only path.
+
+GOWDK is a Go-first path for building web apps with less moving machinery:
 
 - Go-first web apps.
 - Static output by default.
 - Backend actions without full-page SSR.
 - Optional SSR only when a page actually needs request-time rendering.
 - A path toward one-binary deploys with embedded frontend assets.
-- Minimal dependency surface.
+- Small dependency surface.
+- Less npm by default.
 
 WDK does not have a canonical expansion. No one knows what it stands for.
 GOWDK just ships apps.
 
 ## What It Is
 
-GOWDK compiles `.gwdk` source files into web output.
+GOWDK compiles `.gwdk` source files into web output. A page declares its route
+inside the file, so files stay portable instead of being coupled to framework
+folder magic.
 
 Current compiler slices include:
 
@@ -51,8 +58,8 @@ Current compiler slices include:
 - CLI, formatter, diagnostics, manifest output, sitemap output, routes output,
   and a VS Code extension.
 
-This project is still early. It is useful as a compiler/runtime foundation, but
-not yet a production framework.
+This project is still early. It is useful as a compiler/runtime foundation and
+for experiments, but not yet a production framework.
 
 ## Quick Start
 
@@ -63,7 +70,7 @@ go run ../cmd/gowdk build
 go run ../cmd/gowdk serve --dir dist/site
 ```
 
-From inside this repository, you can also build an example directly:
+You can also build an example directly:
 
 ```sh
 go run ./cmd/gowdk build --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
@@ -108,7 +115,7 @@ view {
 
 ## Project Direction
 
-GOWDK is compile-first:
+GOWDK is compile-first and static/action-first:
 
 ```text
 Core GOWDK:

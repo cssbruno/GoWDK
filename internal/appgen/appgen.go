@@ -48,6 +48,13 @@ type ActionRoute struct {
 	RequiredFields []string
 	ValidatesInput bool
 	Redirect       string
+	Fragments      []ActionFragment
+}
+
+// ActionFragment describes a generated partial response fragment.
+type ActionFragment struct {
+	Target string
+	HTML   string
 }
 
 // SSRRoute describes a generated request-time page handler.
@@ -139,7 +146,11 @@ func ActionRoutes(app manifest.Manifest) ([]ActionRoute, error) {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
 		for _, action := range page.Blocks.Actions {
-			if strings.TrimSpace(action.Redirect) == "" {
+			fragments, err := actionFragments(action)
+			if err != nil {
+				return nil, fmt.Errorf("%s.%s: %w", page.ID, action.Name, err)
+			}
+			if strings.TrimSpace(action.Redirect) == "" && len(fragments) == 0 {
 				continue
 			}
 			routes = append(routes, ActionRoute{
@@ -152,6 +163,7 @@ func ActionRoutes(app manifest.Manifest) ([]ActionRoute, error) {
 				RequiredFields: actionRequiredFields(fieldsByAction[action.Name]),
 				ValidatesInput: action.ValidatesInput,
 				Redirect:       action.Redirect,
+				Fragments:      fragments,
 			})
 		}
 	}
@@ -159,6 +171,21 @@ func ActionRoutes(app manifest.Manifest) ([]ActionRoute, error) {
 		return nil, err
 	}
 	return routes, nil
+}
+
+func actionFragments(action manifest.Action) ([]ActionFragment, error) {
+	if len(action.Fragments) == 0 {
+		return nil, nil
+	}
+	fragments := make([]ActionFragment, 0, len(action.Fragments))
+	for _, fragment := range action.Fragments {
+		html, err := view.RenderStatic(fragment.Body)
+		if err != nil {
+			return nil, fmt.Errorf("fragment %s: %w", fragment.Target, err)
+		}
+		fragments = append(fragments, ActionFragment{Target: fragment.Target, HTML: html})
+	}
+	return fragments, nil
 }
 
 func actionInputFields(fields []view.ActionFormField) []string {
@@ -404,8 +431,13 @@ func validateActionRoutes(routes []ActionRoute) error {
 		if err := validateActionRoutePath(route.Route); err != nil {
 			return fmt.Errorf("generated action %s.%s: %w", route.PageID, route.ActionName, err)
 		}
-		if err := validateActionRedirect(route.Redirect); err != nil {
-			return fmt.Errorf("generated action %s.%s: %w", route.PageID, route.ActionName, err)
+		if strings.TrimSpace(route.Redirect) != "" {
+			if err := validateActionRedirect(route.Redirect); err != nil {
+				return fmt.Errorf("generated action %s.%s: %w", route.PageID, route.ActionName, err)
+			}
+		}
+		if strings.TrimSpace(route.Redirect) == "" && len(route.Fragments) == 0 {
+			return fmt.Errorf("generated action %s.%s must declare a redirect or fragment", route.PageID, route.ActionName)
 		}
 		if err := validateInputFields(route); err != nil {
 			return err
@@ -413,10 +445,31 @@ func validateActionRoutes(routes []ActionRoute) error {
 		if err := validateRequiredFields(route); err != nil {
 			return err
 		}
+		if err := validateActionFragments(route); err != nil {
+			return err
+		}
 		if previous, exists := seen[route.Route]; exists {
 			return fmt.Errorf("generated action %s.%s route %q duplicates action %s.%s", route.PageID, route.ActionName, route.Route, previous.PageID, previous.ActionName)
 		}
 		seen[route.Route] = route
+	}
+	return nil
+}
+
+func validateActionFragments(route ActionRoute) error {
+	seen := map[string]bool{}
+	for _, fragment := range route.Fragments {
+		target := strings.TrimSpace(fragment.Target)
+		if target == "" {
+			return fmt.Errorf("generated action %s.%s declares an empty fragment target", route.PageID, route.ActionName)
+		}
+		if !strings.HasPrefix(target, "#") || strings.TrimPrefix(target, "#") == "" || strings.ContainsAny(target, " \t\r\n{}") {
+			return fmt.Errorf("generated action %s.%s fragment target %q must be a static id selector", route.PageID, route.ActionName, fragment.Target)
+		}
+		if seen[target] {
+			return fmt.Errorf("generated action %s.%s declares duplicate fragment target %q", route.PageID, route.ActionName, target)
+		}
+		seen[target] = true
 	}
 	return nil
 }
@@ -766,9 +819,29 @@ func actionHandlerSource(actions []ActionRoute) string {
 			builder.WriteString("\t\t\treturn true\n")
 			builder.WriteString("\t\t}\n")
 		}
-		builder.WriteString("\t\thttp.Redirect(response, request, ")
-		builder.WriteString(quote(action.Redirect))
-		builder.WriteString(", http.StatusSeeOther)\n")
+		if len(action.Fragments) > 0 {
+			builder.WriteString("\t\tif isPartialRequest(request) {\n")
+			builder.WriteString("\t\t\tif writeActionFragment(response, request, ")
+			builder.WriteString(actionFragmentSliceLiteral(action.Fragments))
+			builder.WriteString(") {\n")
+			builder.WriteString("\t\t\t\treturn true\n")
+			builder.WriteString("\t\t\t}\n")
+			builder.WriteString("\t\t\twriteActionError(response, http.StatusNotFound, actionErrorFragmentNotFound)\n")
+			builder.WriteString("\t\t\treturn true\n")
+			builder.WriteString("\t\t}\n")
+		} else {
+			builder.WriteString("\t\tif isPartialRequest(request) {\n")
+			builder.WriteString("\t\t\twriteActionError(response, http.StatusBadRequest, actionErrorFragmentNotFound)\n")
+			builder.WriteString("\t\t\treturn true\n")
+			builder.WriteString("\t\t}\n")
+		}
+		if strings.TrimSpace(action.Redirect) != "" {
+			builder.WriteString("\t\thttp.Redirect(response, request, ")
+			builder.WriteString(quote(action.Redirect))
+			builder.WriteString(", http.StatusSeeOther)\n")
+		} else {
+			builder.WriteString("\t\tresponse.WriteHeader(http.StatusNoContent)\n")
+		}
 		builder.WriteString("\t\treturn true\n")
 	}
 	builder.WriteString("\tdefault:\n")
@@ -811,6 +884,11 @@ func actionDecoderSource(actions []ActionRoute) string {
 		builder.WriteString("}\n\n")
 	}
 	builder.WriteString(`type formValues map[string][]string
+
+type actionFragment struct {
+	Target string
+	HTML   string
+}
 
 func formValuesFromURLValues(values map[string][]string) formValues {
 	out := formValues{}
@@ -864,6 +942,39 @@ func hasSubmittedValue(values []string) bool {
 	return false
 }
 
+func isPartialRequest(request *http.Request) bool {
+	value := strings.TrimSpace(request.Header.Get("X-GOWDK-Partial"))
+	return value != "" && value != "0"
+}
+
+func writeActionFragment(response http.ResponseWriter, request *http.Request, fragments []actionFragment) bool {
+	target := strings.TrimSpace(request.Header.Get("X-GOWDK-Target"))
+	for _, fragment := range fragments {
+		if target != "" && target != fragment.Target {
+			continue
+		}
+		response.Header().Set("Content-Type", "text/html; charset=utf-8")
+		response.Header().Set("Cache-Control", "no-store")
+		response.Header().Set("X-GOWDK-Fragment-Target", fragment.Target)
+		if swap := partialSwapMode(request.Header.Get("X-GOWDK-Swap")); swap != "" {
+			response.Header().Set("X-GOWDK-Fragment-Swap", swap)
+		}
+		response.WriteHeader(http.StatusOK)
+		_, _ = response.Write([]byte(fragment.HTML))
+		return true
+	}
+	return false
+}
+
+func partialSwapMode(value string) string {
+	switch strings.TrimSpace(value) {
+	case "innerHTML", "outerHTML":
+		return strings.TrimSpace(value)
+	default:
+		return ""
+	}
+}
+
 type validationError struct {
 	Field   string
 	Message string
@@ -891,6 +1002,7 @@ const (
 	actionErrorInvalidForm      = "invalid form"
 	actionErrorRequestTooLarge  = "request body too large"
 	actionErrorValidationFailed = "validation failed"
+	actionErrorFragmentNotFound = "partial fragment not found"
 )
 
 func writeActionError(response http.ResponseWriter, status int, message string) {
@@ -954,6 +1066,26 @@ func stringSliceLiteral(values []string) string {
 			builder.WriteString(", ")
 		}
 		builder.WriteString(fmt.Sprintf("%q", value))
+	}
+	builder.WriteString("}")
+	return builder.String()
+}
+
+func actionFragmentSliceLiteral(fragments []ActionFragment) string {
+	if len(fragments) == 0 {
+		return "nil"
+	}
+	var builder strings.Builder
+	builder.WriteString("[]actionFragment{")
+	for index, fragment := range fragments {
+		if index > 0 {
+			builder.WriteString(", ")
+		}
+		builder.WriteString("{Target: ")
+		builder.WriteString(goString(fragment.Target))
+		builder.WriteString(", HTML: ")
+		builder.WriteString(goString(fragment.HTML))
+		builder.WriteString("}")
 	}
 	builder.WriteString("}")
 	return builder.String()

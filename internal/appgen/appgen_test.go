@@ -199,6 +199,48 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesActionFragmentHandler(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(staticDir, "patients", "index.html"), "<main>Patients</main>")
+
+	result, err := GenerateWithOptions(staticDir, appDir, Options{Actions: []ActionRoute{{
+		PageID:      "patients",
+		ActionName:  "refresh",
+		Route:       "/patients",
+		InputName:   "input",
+		InputType:   "PatientFilter",
+		InputFields: []string{"query"},
+		Redirect:    "/patients",
+		Fragments: []ActionFragment{{
+			Target: "#patients",
+			HTML:   "<section><p>Updated patients</p></section>",
+		}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.MainPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`if isPartialRequest(request)`,
+		`writeActionFragment(response, request, []actionFragment{{Target: "#patients", HTML: "<section><p>Updated patients</p></section>"}})`,
+		`response.Header().Set("X-GOWDK-Fragment-Target", fragment.Target)`,
+		`response.Header().Set("X-GOWDK-Fragment-Swap", swap)`,
+		`func partialSwapMode(value string) string`,
+		`actionErrorFragmentNotFound = "partial fragment not found"`,
+		`http.Redirect(response, request, "/patients", http.StatusSeeOther)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestGenerateWritesSSRHandler(t *testing.T) {
 	root := t.TempDir()
 	staticDir := filepath.Join(root, "dist")
@@ -324,6 +366,40 @@ func TestActionRoutesInfersInputFieldsFromGPostForm(t *testing.T) {
 	}
 	if !routes[0].ValidatesInput {
 		t.Fatalf("expected validation metadata: %#v", routes[0])
+	}
+}
+
+func TestActionRoutesRendersActionFragments(t *testing.T) {
+	routes, err := ActionRoutes(manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "patients",
+		Route: "/patients",
+		Blocks: manifest.Blocks{
+			ViewBody: `<form g:post={refresh} g:target="#patients"><input name="query" /></form><section id="patients"></section>`,
+			Actions: []manifest.Action{{
+				Name:      "refresh",
+				InputName: "input",
+				InputType: "PatientFilter",
+				Fragments: []manifest.Fragment{{
+					Target: "#patients",
+					Body:   `<p>Updated & safe</p>`,
+				}},
+			}},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected one route, got %#v", routes)
+	}
+	if routes[0].Redirect != "" {
+		t.Fatalf("did not expect redirect for fragment-only action: %#v", routes[0])
+	}
+	if len(routes[0].Fragments) != 1 {
+		t.Fatalf("expected one fragment, got %#v", routes[0].Fragments)
+	}
+	if routes[0].Fragments[0].Target != "#patients" || routes[0].Fragments[0].HTML != "<p>Updated &amp; safe</p>" {
+		t.Fatalf("unexpected fragment route: %#v", routes[0].Fragments[0])
 	}
 }
 
@@ -914,6 +990,76 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	}
 }
 
+func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(staticDir, "patients", "index.html"), "<main>Patients</main>")
+
+	if _, err := GenerateWithOptions(staticDir, appDir, Options{Actions: []ActionRoute{{
+		PageID:      "patients",
+		ActionName:  "refresh",
+		Route:       "/patients",
+		InputName:   "input",
+		InputType:   "PatientFilter",
+		InputFields: []string{"query"},
+		Redirect:    "/patients",
+		Fragments: []ActionFragment{{
+			Target: "#patients",
+			HTML:   "<section><p>Updated patients</p></section>",
+		}},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatusWithHeaders("http://"+addr+"/patients", http.MethodPost, "query=active", map[string]string{
+		"X-GOWDK-Partial": "1",
+		"X-GOWDK-Target":  "#patients",
+		"X-GOWDK-Swap":    "outerHTML",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected fragment response status 200, got %d: %s", response.StatusCode, payload)
+	}
+	if strings.TrimSpace(string(payload)) != "<section><p>Updated patients</p></section>" {
+		t.Fatalf("unexpected fragment body: %s", payload)
+	}
+	if contentType := response.Header.Get("Content-Type"); contentType != "text/html; charset=utf-8" {
+		t.Fatalf("unexpected content type: %q", contentType)
+	}
+	if response.Header.Get("X-GOWDK-Fragment-Target") != "#patients" {
+		t.Fatalf("unexpected fragment target: %q", response.Header.Get("X-GOWDK-Fragment-Target"))
+	}
+	if response.Header.Get("X-GOWDK-Fragment-Swap") != "outerHTML" {
+		t.Fatalf("unexpected fragment swap: %q", response.Header.Get("X-GOWDK-Fragment-Swap"))
+	}
+	if response.Header.Get("Location") != "" {
+		t.Fatalf("did not expect redirect location on partial response: %q", response.Header.Get("Location"))
+	}
+}
+
 func TestGeneratedBinaryDoesNotValidateRequiredFieldsWithoutValidMetadata(t *testing.T) {
 	root := t.TempDir()
 	staticDir := filepath.Join(root, "dist")
@@ -1035,6 +1181,10 @@ func waitForHTTPResponse(url string) (string, http.Header, error) {
 }
 
 func waitForHTTPStatus(url, method, body string) (*http.Response, error) {
+	return waitForHTTPStatusWithHeaders(url, method, body, nil)
+}
+
+func waitForHTTPStatusWithHeaders(url, method, body string, headers map[string]string) (*http.Response, error) {
 	deadline := time.Now().Add(10 * time.Second)
 	client := http.Client{
 		Timeout: 500 * time.Millisecond,
@@ -1050,6 +1200,9 @@ func waitForHTTPStatus(url, method, body string) (*http.Response, error) {
 		}
 		if body != "" {
 			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		for name, value := range headers {
+			request.Header.Set(name, value)
 		}
 		response, err := client.Do(request)
 		if err != nil {

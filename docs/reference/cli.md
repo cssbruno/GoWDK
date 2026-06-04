@@ -141,16 +141,18 @@ Current `build` limitations: it emits only simple static HTML files,
 and an optional static-serving binary for build-time pages with non-dynamic
 routes or literal `paths {}` dynamic routes, literal `build {}` data, lowercase
 HTML markup, first-slice imported Go build data functions, component files with
-string props, and first-slice action redirect handlers with form decoder
-wrappers and required-field validation.
+string props, first-slice action redirect handlers with form decoder wrappers
+and required-field validation, and first-slice action fragment responses for
+partial requests.
 
 Current generated binary limitations: it serves embedded static files for the
 selected build output and local POST redirects for the first supported action
 subset, including first-slice form input decoder wrappers and required-field
-validation. It also serves first-slice concrete SSR pages rendered from
+validation. It can also serve first-slice action fragment responses for
+`X-GOWDK-Partial` requests and first-slice concrete SSR pages rendered from
 `view {}` and literal or imported `build {}` data. It does not run real user Go
-type-bound action decoders, user action logic, CSRF, APIs, partial fragments,
-`load {}` execution, dynamic SSR routes, guards, or hybrid request-time
+type-bound action decoders, user action logic, CSRF, APIs, general fragment
+routes, `load {}` execution, dynamic SSR routes, guards, or hybrid request-time
 behavior.
 
 Current `serve` limitations: it serves generated static files only. It does not

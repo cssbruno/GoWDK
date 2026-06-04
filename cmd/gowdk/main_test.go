@@ -1468,6 +1468,45 @@ view {
 	}
 }
 
+func TestBuildCommandPrintsPartialRuntimeAsset(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "patients.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, page, `@page patients
+@route "/patients"
+
+act refresh {
+  input := form PatientFilter
+  fragment "#patients" {
+    <p>Updated</p>
+  }
+}
+
+view {
+  <main>
+    <form g:post={refresh} g:target="#patients">
+      <input name="query" />
+    </form>
+    <section id="patients">Initial</section>
+  </main>
+}
+`)
+
+	output, err := captureCLIStdout(t, func() error {
+		return run([]string{"build", "--out", outputDir, page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimePath := filepath.Join(outputDir, "assets", "gowdk", "gowdk.js")
+	if !strings.Contains(output, runtimePath) {
+		t.Fatalf("expected build output to print runtime asset %q, got:\n%s", runtimePath, output)
+	}
+	if _, err := os.Stat(runtimePath); err != nil {
+		t.Fatalf("expected runtime asset to exist: %v", err)
+	}
+}
+
 func TestBuildCommandBinRequiresGeneratedApp(t *testing.T) {
 	err := run([]string{"build", "--out", t.TempDir(), "--bin", filepath.Join(t.TempDir(), "site")})
 	if err == nil {

@@ -109,10 +109,11 @@ test -f /tmp/gowdk-base-components/components/base/index.html
 - Default build discovery exists, but running it from `examples/basic` currently includes an SSR example with `load {}` and guard metadata that is validation-only. Pass explicit files for build smoke commands.
 - Static examples can be served locally with `gowdk serve` or compiled into an
   embedded static binary with `gowdk build --app --bin`; the current generated
-  binary supports first-slice action redirects, form input decoder wrappers, and
-  required-field validation, plus first-slice concrete SSR pages without
-  `load {}`. It does not run real typed action logic, APIs, partial fragments,
-  request-time `load {}` functions, guard enforcement, or dynamic SSR routes yet.
+  binary supports first-slice action redirects, partial action fragments, form
+  input decoder wrappers, and required-field validation, plus first-slice
+  concrete SSR pages without `load {}`. It does not run real typed action
+  logic, APIs, request-time `load {}` functions, guard enforcement, or dynamic
+  SSR routes yet.
 - `view {}` bodies are parsed only for a small static HTML subset; `act` bodies
   support the first form-input/redirect subset, `api` bodies support the first
   method/route metadata line, and `load` bodies are still not parsed beyond
@@ -128,6 +129,5 @@ test -f /tmp/gowdk-base-components/components/base/index.html
 - Literal `build {}` string data and scalar fields returned by imported
   no-argument Go build functions are available to the current static `view {}`
   interpolation subset.
-- Component children, generated API handlers, generated partial fragment
-  handlers, active partial-update client behavior, and full configured plugin
-  instantiation are planned.
+- Component children, generated API handlers, rich local client-side reactivity,
+  and full configured plugin instantiation are planned.

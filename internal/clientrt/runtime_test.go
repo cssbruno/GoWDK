@@ -13,6 +13,8 @@ func TestSourceEmitsPartialUpdateRuntime(t *testing.T) {
 		`gowdk:after-swap`,
 		`gowdk:request-error`,
 		`X-GOWDK-Fragment-Swap`,
+		`X-GOWDK-Target`,
+		`X-GOWDK-Swap`,
 		`target.outerHTML = html`,
 		`target.innerHTML = html`,
 		`aria-busy`,

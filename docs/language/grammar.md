@@ -55,9 +55,10 @@ fragment "#target" {
 }
 ```
 
-It validates first-slice action fragment targets and captures their body text,
-but does not generate fragment handlers yet. It does not validate broader
-statement syntax, full markup syntax, expressions, or most block body contents.
+It validates first-slice action fragment targets, captures their body text, and
+the generated embedded app can serve the first rendered action fragment response
+for partial POSTs. It does not validate broader statement syntax, full markup
+syntax, expressions, or most block body contents.
 
 The canonical AST, recovery, and semantic-analysis model lives in the language
 docs in this directory; implementation remains incremental.

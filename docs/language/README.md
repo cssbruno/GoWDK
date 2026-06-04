@@ -10,10 +10,10 @@ first-slice `g:post`, `g:target`, and `g:swap` lowering, literal dynamic static
 route expansion, literal build data, imported no-argument Go build data
 functions, route/build-data interpolation in static views, formatting,
 diagnostics, manifest output, build output for simple static pages/components,
-and LSP/editor integration. It does not yet parse component children,
-non-string props, full typed action semantics, API request/response bodies,
-generated partial fragment handlers, active partial-update runtime behavior, or
-full semantic/type analysis.
+generated partial fragment responses for embedded apps, and LSP/editor
+integration. It does not yet parse component children, non-string props, full
+typed action semantics, API request/response bodies, rich local client-side
+reactivity, or full semantic/type analysis.
 
 ## Current Files
 

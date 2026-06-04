@@ -36,7 +36,11 @@ const runtimeSource = `(function () {
       var response = await fetch(form.action, {
         method: (form.method || 'POST').toUpperCase(),
         body: new FormData(form),
-        headers: { 'X-GOWDK-Partial': '1' }
+        headers: {
+          'X-GOWDK-Partial': '1',
+          'X-GOWDK-Target': form.dataset.gowdkTarget,
+          'X-GOWDK-Swap': form.dataset.gowdkSwap || ''
+        }
       });
       if (!response.ok) {
         throw new Error('partial request failed with status ' + response.status);

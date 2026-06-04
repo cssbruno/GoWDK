@@ -474,6 +474,9 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	for _, artifact := range result.CSSArtifacts {
 		fmt.Println(artifact.Path)
 	}
+	for _, artifact := range result.AssetArtifacts {
+		fmt.Println(artifact.Path)
+	}
 	if result.RouteManifestPath != "" {
 		fmt.Println(result.RouteManifestPath)
 	}
@@ -770,6 +773,9 @@ func buildIncrementalStatic(args []string, change inputChange) (bool, error) {
 		}
 	}
 	for _, artifact := range result.CSSArtifacts {
+		fmt.Println(artifact.Path)
+	}
+	for _, artifact := range result.AssetArtifacts {
 		fmt.Println(artifact.Path)
 	}
 	if result.RouteManifestPath != "" {

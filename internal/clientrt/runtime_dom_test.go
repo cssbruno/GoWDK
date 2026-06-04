@@ -134,6 +134,7 @@ const form = new Element('form');
 form.method = 'post';
 form.action = '/newsletter';
 form.dataset.gowdkTarget = '#newsletter';
+form.dataset.gowdkSwap = 'innerHTML';
 const target = new Element('section');
 target.id = 'newsletter';
 target.innerHTML = '<p>Old</p>';
@@ -178,6 +179,8 @@ async function submit() {
   assert.equal(request.url, '/newsletter');
   assert.equal(request.options.method, 'POST');
   assert.equal(request.options.headers['X-GOWDK-Partial'], '1');
+  assert.equal(request.options.headers['X-GOWDK-Target'], '#newsletter');
+  assert.equal(request.options.headers['X-GOWDK-Swap'], 'innerHTML');
   assert.equal(target.innerHTML, '<p>Updated</p>');
   assert.equal(form.attributes['aria-busy'], undefined);
   assert.equal(document.activeElement, input);
@@ -186,7 +189,9 @@ async function submit() {
   assert.equal(afterSwap.swap, 'innerHTML');
 
   swap = 'outerHTML';
+  form.dataset.gowdkSwap = 'outerHTML';
   await submit();
+  assert.equal(request.options.headers['X-GOWDK-Swap'], 'outerHTML');
   assert.equal(target.replacedWith, '<p>Updated</p>');
 }()).catch(error => {
   console.error(error && error.stack || error);

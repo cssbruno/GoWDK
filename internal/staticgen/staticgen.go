@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/clientrt"
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/discover"
 	"github.com/cssbruno/gowdk/internal/manifest"
@@ -27,6 +28,8 @@ import (
 const routeManifestFile = "gowdk-routes.json"
 const assetManifestFile = "gowdk-assets.json"
 const defaultPageCSSDir = "assets/gowdk"
+const clientRuntimeAssetPath = "assets/gowdk/" + clientrt.Filename
+const clientRuntimeHref = "/" + clientRuntimeAssetPath
 
 var (
 	literalDeclarationPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
@@ -53,10 +56,16 @@ type CSSArtifact struct {
 	Path string
 }
 
+// AssetArtifact describes one emitted non-CSS asset file.
+type AssetArtifact struct {
+	Path string
+}
+
 // Result describes a static build.
 type Result struct {
 	Artifacts         []Artifact
 	CSSArtifacts      []CSSArtifact
+	AssetArtifacts    []AssetArtifact
 	RouteManifestPath string
 	AssetManifestPath string
 }
@@ -85,9 +94,15 @@ type plannedCSSArtifact struct {
 	contents []byte
 }
 
+type plannedAssetArtifact struct {
+	AssetArtifact
+	contents []byte
+}
+
 type buildPlan struct {
-	pages []plannedArtifact
-	css   []plannedCSSArtifact
+	pages  []plannedArtifact
+	css    []plannedCSSArtifact
+	assets []plannedAssetArtifact
 }
 
 // Build emits static HTML files into outputDir.
@@ -105,14 +120,21 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 	}
 
 	result := Result{
-		Artifacts:    make([]Artifact, 0, len(planned.pages)),
-		CSSArtifacts: make([]CSSArtifact, 0, len(planned.css)),
+		Artifacts:      make([]Artifact, 0, len(planned.pages)),
+		CSSArtifacts:   make([]CSSArtifact, 0, len(planned.css)),
+		AssetArtifacts: make([]AssetArtifact, 0, len(planned.assets)),
 	}
 	for _, artifact := range planned.css {
 		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
 			return Result{}, err
 		}
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
+	}
+	for _, artifact := range planned.assets {
+		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
+			return Result{}, err
+		}
+		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 	}
 	for _, artifact := range planned.pages {
 		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
@@ -125,7 +147,7 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 		return Result{}, err
 	}
 	result.RouteManifestPath = manifestPath
-	assetManifestPath, err := writeAssetManifest(outputDir, result.CSSArtifacts)
+	assetManifestPath, err := writeAssetManifest(outputDir, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return Result{}, err
 	}
@@ -159,8 +181,9 @@ func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir stri
 	}
 
 	result := Result{
-		Artifacts:    make([]Artifact, 0, len(app.Pages)),
-		CSSArtifacts: make([]CSSArtifact, 0, len(css.assets)),
+		Artifacts:      make([]Artifact, 0, len(app.Pages)),
+		CSSArtifacts:   make([]CSSArtifact, 0, len(css.assets)),
+		AssetArtifacts: make([]AssetArtifact, 0, 1),
 	}
 	previousRoutes, err := readRouteManifestIfExists(outputDir)
 	if err != nil {
@@ -172,6 +195,12 @@ func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir stri
 			return Result{}, err
 		}
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
+	}
+	for _, artifact := range clientRuntimeArtifacts(app.Pages, outputDir) {
+		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
+			return Result{}, err
+		}
+		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 	}
 
 	seenOutputPaths := map[string]string{}
@@ -227,7 +256,7 @@ func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir stri
 		return Result{}, err
 	}
 	result.RouteManifestPath = manifestPath
-	assetManifestPath, err := writeAssetManifest(outputDir, result.CSSArtifacts)
+	assetManifestPath, err := writeAssetManifest(outputDir, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return Result{}, err
 	}
@@ -275,7 +304,7 @@ func plan(config gowdk.Config, app manifest.Manifest, outputDir string) (buildPl
 	if len(failures) > 0 {
 		return buildPlan{}, errors.New(strings.Join(failures, "\n"))
 	}
-	return buildPlan{pages: planned, css: css.assets}, nil
+	return buildPlan{pages: planned, css: css.assets, assets: clientRuntimeArtifacts(app.Pages, outputDir)}, nil
 }
 
 // SSRArtifacts renders the first supported request-time page slice for
@@ -1263,9 +1292,28 @@ func outputFilePath(outputDir, rel string) (string, error) {
 	return filepath.Join(outputDir, clean), nil
 }
 
-func writeAssetManifest(outputDir string, cssArtifacts []CSSArtifact) (string, error) {
-	files := make(map[string]string, len(cssArtifacts))
+func clientRuntimeArtifacts(pages []manifest.Page, outputDir string) []plannedAssetArtifact {
+	for _, page := range pages {
+		if pageUsesPartialRuntime(page, page.Blocks.ViewBody) {
+			return []plannedAssetArtifact{{
+				AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath))},
+				contents:      clientrt.Source(),
+			}}
+		}
+	}
+	return nil
+}
+
+func writeAssetManifest(outputDir string, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) (string, error) {
+	files := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
 	for _, artifact := range cssArtifacts {
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return "", err
+		}
+		files[rel] = rel
+	}
+	for _, artifact := range assetArtifacts {
 		rel, err := relativeOutputPath(outputDir, artifact.Path)
 		if err != nil {
 			return "", err
@@ -1425,7 +1473,7 @@ func renderPage(config gowdk.Config, page manifest.Page, components map[string]v
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
-	return document(page, body, stylesheets), nil
+	return document(page, body, stylesheets, pageScripts(page, page.Blocks.ViewBody, policy)), nil
 }
 
 func composePageViewSource(page manifest.Page, layouts map[string]manifest.Layout) (string, error) {
@@ -1484,12 +1532,31 @@ func actionRoutes(page manifest.Page, data map[string]string) map[string]string 
 		route = strings.ReplaceAll(route, "{"+name+"}", value)
 	}
 	for _, action := range page.Blocks.Actions {
-		if strings.TrimSpace(action.Redirect) == "" {
+		if strings.TrimSpace(action.Redirect) == "" && len(action.Fragments) == 0 {
 			continue
 		}
 		routes[action.Name] = route
 	}
 	return routes
+}
+
+func pageScripts(page manifest.Page, viewSource string, policy renderModePolicy) []string {
+	if policy != renderModeStatic || !pageUsesPartialRuntime(page, viewSource) {
+		return nil
+	}
+	return []string{clientRuntimeHref}
+}
+
+func pageUsesPartialRuntime(page manifest.Page, viewSource string) bool {
+	if !strings.Contains(viewSource, "g:target") {
+		return false
+	}
+	for _, action := range page.Blocks.Actions {
+		if len(action.Fragments) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func isComponentName(value string) bool {
@@ -1500,7 +1567,7 @@ func isComponentName(value string) bool {
 	return first >= 'A' && first <= 'Z'
 }
 
-func document(page manifest.Page, body string, stylesheets []gowdk.Stylesheet) string {
+func document(page manifest.Page, body string, stylesheets []gowdk.Stylesheet, scripts []string) string {
 	title := page.ID
 	var head strings.Builder
 	head.WriteString("<head>\n")
@@ -1508,6 +1575,12 @@ func document(page manifest.Page, body string, stylesheets []gowdk.Stylesheet) s
 	head.WriteString("  <title>" + gowhtml.Escape(title) + "</title>\n")
 	for _, stylesheet := range nonEmptyStylesheets(stylesheets) {
 		head.WriteString("  <link rel=\"stylesheet\"" + gowhtml.Attr("href", stylesheet.Href) + ">\n")
+	}
+	for _, script := range scripts {
+		if strings.TrimSpace(script) == "" {
+			continue
+		}
+		head.WriteString("  <script" + gowhtml.Attr("src", script) + " defer></script>\n")
 	}
 	head.WriteString("</head>\n")
 

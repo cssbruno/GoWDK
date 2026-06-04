@@ -664,6 +664,54 @@ func TestBuildLowersGPostDirectiveForActionPage(t *testing.T) {
 	}
 }
 
+func TestBuildEmitsPartialRuntimeForFragmentForms(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "patients",
+		Route: "/patients",
+		Blocks: manifest.Blocks{
+			View: true,
+			ViewBody: `<main>
+  <form g:post={refresh} g:target="#patients" g:swap="innerHTML"><input name="query" /></form>
+  <section id="patients">Initial</section>
+</main>`,
+			Actions: []manifest.Action{{
+				Name: "refresh",
+				Fragments: []manifest.Fragment{{
+					Target: "#patients",
+					Body:   `<p>Updated</p>`,
+				}},
+			}},
+		},
+	}}}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.AssetArtifacts) != 1 || result.AssetArtifacts[0].Path != filepath.Join(outputDir, "assets", "gowdk", "gowdk.js") {
+		t.Fatalf("unexpected runtime assets: %#v", result.AssetArtifacts)
+	}
+	html := readFile(t, filepath.Join(outputDir, "patients", "index.html"))
+	for _, expected := range []string{
+		`<form method="post" action="/patients" data-gowdk-target="#patients" data-gowdk-swap="innerHTML">`,
+		`<script src="/assets/gowdk/gowdk.js" defer></script>`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in partial page:\n%s", expected, html)
+		}
+	}
+	runtime := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "gowdk.js"))
+	if !strings.Contains(runtime, `X-GOWDK-Partial`) {
+		t.Fatalf("expected client runtime source, got:\n%s", runtime)
+	}
+
+	assetManifestPayload := readFile(t, filepath.Join(outputDir, assetManifestFile))
+	if !strings.Contains(assetManifestPayload, `"assets/gowdk/gowdk.js": "assets/gowdk/gowdk.js"`) {
+		t.Fatalf("expected runtime in asset manifest:\n%s", assetManifestPayload)
+	}
+}
+
 func TestBuildRejectsUnknownGPostActionBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{{

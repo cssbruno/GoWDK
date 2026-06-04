@@ -16,6 +16,11 @@ The idea is simple: write movable `.gwdk` files, compile them first, and ship
 static output or a single Go binary. No React required. No Svelte required. No
 npm dependency pile unless you deliberately choose one.
 
+Live demo: [gowdk.com](https://gowdk.com/) is the public project site and a
+real GOWDK-built app. It shows the pitch in practice: portable `.gwdk` files,
+compile-first output, and a small Go-centered path from source to shipped web
+UI. Demo source: [cssbruno/gowdk-page](https://github.com/cssbruno/gowdk-page).
+
 ## Why
 
 Modern frontend stacks often make small apps feel heavier than they need to be:
@@ -51,7 +56,8 @@ Current compiler slices include:
 - Literal `paths {}` dynamic static routes.
 - Literal `build {}` data and first-slice imported Go build functions for
   static rendering.
-- First-slice typed action parsing and generated action redirects.
+- First-slice typed action parsing, generated action redirects, and generated
+  partial fragment responses.
 - API route metadata.
 - First-slice generated SSR routes for simple concrete `@render ssr` pages.
 - CSS discovery, page CSS output, and CSS processor hooks.
@@ -177,6 +183,31 @@ Default render mode is `static`.
 The first generated SSR slice supports concrete `@render ssr` pages that render
 from `view {}` plus literal or imported `build {}` data. `load {}`, guards,
 dynamic SSR routes, and user request-time logic are still being built.
+
+## Code Quality Tools
+
+Use Go's standard tools for repository changes:
+
+```sh
+gofmt -w <changed-go-files>
+go test ./...
+go build ./cmd/gowdk
+```
+
+For the VS Code extension, use Node's built-in checks:
+
+```sh
+node --check editors/vscode/extension.js
+node --test editors/vscode/*.test.js
+```
+
+GOWDK also ships source-quality tools for `.gwdk` files:
+
+```sh
+gowdk fmt --write <file.gwdk>
+gowdk check [files...]
+gowdk tokens <file.gwdk>
+```
 
 ## Verification
 

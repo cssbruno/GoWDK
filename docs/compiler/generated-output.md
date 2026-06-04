@@ -8,7 +8,8 @@ Implemented today:
 - `.cmp.gwdk` files can be passed to build or discovered by default and expanded from self-closing component calls.
 - `gowdk-routes.json` records the static route, page ID, and relative output path for emitted pages.
 - `gowdk-assets.json` records generated static assets such as CSS files emitted
-  by CSS processors and generated page CSS files.
+  by CSS processors, generated page CSS files, and the partial-update client
+  runtime when needed.
 - Configured stylesheets and CSS processor stylesheet links are emitted in page
   `<head>` elements.
 - CSS processors can emit CSS asset files under the output directory.
@@ -36,6 +37,10 @@ Implemented today:
   HTTP 413 for oversized submissions.
 - Generated static apps return HTTP 422 for missing or empty direct static
   `required` fields when the action declares `valid(input)?`.
+- Generated static output emits `assets/gowdk/gowdk.js` only for pages that use
+  partial form metadata with fragment-producing actions.
+- Generated static apps can return first-slice partial fragment responses from
+  action handlers for `X-GOWDK-Partial` requests.
 - Generated static app action route extraction rejects direct file inputs and
   multipart `g:post` forms until upload security rules are defined.
 - `internal/codegen.GenerateRouteRegistration` can emit formatted Go route
@@ -47,7 +52,7 @@ Implemented today:
   chunks through `runtime/render.Builder.Static` and expression output through
   `runtime/render.Builder.Text`, which escapes by default.
 - `runtime/response` defines fragment responses with target and swap metadata
-  for future generated partial handlers.
+  for generated and future partial handlers.
 - `/` maps to `index.html`.
 - `/patients` maps to `patients/index.html`.
 - Current asset names are stable and deterministic rather than content-hashed.
@@ -113,10 +118,13 @@ handlers decode allowlisted form fields into named first-slice input wrappers,
 cap request bodies before parsing, preserve repeated values, return HTTP 413
 for oversized submissions, return HTTP 400 for unexpected fields, and return
 HTTP 422 for first-slice required-field validation failures. Direct file inputs
-and multipart action forms are rejected before generated app output. The
-generated app does not execute user action logic, enforce CSRF, resolve real
-user Go input structs, run user-defined validation, handle uploads, or serve
-API, fragment, SSR, or hybrid request-time handlers today.
+and multipart action forms are rejected before generated app output. For
+partial requests, generated handlers can return the first parsed action
+fragment matching `X-GOWDK-Target` and expose fragment target/swap metadata in
+headers. The generated app does not execute user action logic, enforce CSRF,
+resolve real user Go input structs, run user-defined validation, handle uploads,
+or serve API handlers, general fragment routes, `load {}` SSR, guards, or
+hybrid request-time handlers today.
 
 ## Current Static Route Manifest
 

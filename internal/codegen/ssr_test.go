@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/addons/ssr"
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func TestGenerateSSRPackageEmitsHandlerStubsForSSRAndAcceptedHybrid(t *testing.T) {
@@ -49,8 +49,8 @@ func TestGenerateSSRPackageEmitsHandlerStubsForSSRAndAcceptedHybrid(t *testing.T
 	text := string(source)
 	for _, want := range []string{
 		`package ssr`,
-		`"github.com/gowdk/gowdk/addons/ssr"`,
-		`"github.com/gowdk/gowdk/runtime/render"`,
+		`"github.com/cssbruno/gowdk/addons/ssr"`,
+		`"github.com/cssbruno/gowdk/runtime/render"`,
 		`func RenderDashboard(w http.ResponseWriter, r *http.Request)`,
 		`var _ ssr.LoadFunc = LoadReports`,
 		`func LoadReports(ctx ssr.LoadContext) (map[string]any, error)`,

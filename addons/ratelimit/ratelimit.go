@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 const (

@@ -296,7 +296,7 @@ func TestBuildCommandUsesConfigForDiscoveryAndOutput(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Source: gowdk.SourceConfig{
@@ -382,8 +382,8 @@ printf '/* fake tailwind */\n.font-bold { font-weight: 700; }\n' > "$out"
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
 
 import (
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/addons/tailwind"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/tailwind"
 )
 
 var Config = gowdk.Config{
@@ -434,7 +434,7 @@ func TestBuildCommandDiscoversConfiguredModules(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Modules: []gowdk.ModuleConfig{
@@ -525,7 +525,7 @@ func TestBuildCommandDiscoversSelectedModuleOnly(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Modules: []gowdk.ModuleConfig{
@@ -570,7 +570,7 @@ func TestBuildCommandOutFlagOverridesConfigOutput(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Source: gowdk.SourceConfig{
@@ -607,7 +607,7 @@ func TestBuildCommandLoadsExplicitConfigPath(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "site.gowdk.go"), `package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Source: gowdk.SourceConfig{
@@ -724,7 +724,7 @@ func TestCheckCommandUsesConfigForDiscovery(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Source: gowdk.SourceConfig{
@@ -759,7 +759,7 @@ func TestManifestCommandLoadsExplicitConfigPathForDiscovery(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "site.gowdk.go"), `package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Source: gowdk.SourceConfig{
@@ -806,7 +806,7 @@ func TestSitemapCommandDiscoversSelectedModuleOnly(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Modules: []gowdk.ModuleConfig{
@@ -907,7 +907,7 @@ func TestRoutesCommandDiscoversSelectedModuleOnly(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Modules: []gowdk.ModuleConfig{

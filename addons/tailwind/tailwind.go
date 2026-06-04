@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 const (

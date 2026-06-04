@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 type brandCSS struct{}

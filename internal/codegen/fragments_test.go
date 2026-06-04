@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func TestGenerateFragmentPackageEmitsRenderFunctions(t *testing.T) {
@@ -33,7 +33,7 @@ func TestGenerateFragmentPackageEmitsRenderFunctions(t *testing.T) {
 	for _, want := range []string{
 		`package fragments`,
 		`"net/http"`,
-		`gowdkresponse "github.com/gowdk/gowdk/runtime/response"`,
+		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`func RenderPatientsRefreshPatients() gowdkresponse.Response`,
 		`return gowdkresponse.FragmentFor("#patients", "<p>Updated</p>")`,
 		`func HandlePatientsRefreshPatients(w http.ResponseWriter, r *http.Request)`,

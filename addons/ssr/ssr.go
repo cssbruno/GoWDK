@@ -1,6 +1,6 @@
 package ssr
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 // Addon enables request-time full-page rendering.
 func Addon() gowdk.Addon {

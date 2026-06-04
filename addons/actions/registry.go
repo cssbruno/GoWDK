@@ -3,8 +3,8 @@ package actions
 import (
 	"context"
 
-	"github.com/gowdk/gowdk/runtime/form"
-	"github.com/gowdk/gowdk/runtime/response"
+	"github.com/cssbruno/gowdk/runtime/form"
+	"github.com/cssbruno/gowdk/runtime/response"
 )
 
 // Handler is a generated typed action endpoint.

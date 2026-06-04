@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/gowdk/gowdk/runtime/component"
-	gowdkhtml "github.com/gowdk/gowdk/runtime/html"
+	"github.com/cssbruno/gowdk/runtime/component"
+	gowdkhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 
 // Renderer is the core HTML renderer used by static, action, partial, and SSR

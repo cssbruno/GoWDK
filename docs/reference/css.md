@@ -173,7 +173,7 @@ point `Options.Command` at it.
 
 The static `gowdk.config.go` parser supports this known literal constructor
 shape when `tailwind` is imported from
-`github.com/gowdk/gowdk/addons/tailwind`. Arbitrary addon constructors still
+`github.com/cssbruno/gowdk/addons/tailwind`. Arbitrary addon constructors still
 require future full addon loading.
 
 GOWDK does not generate Tailwind v3 `content` configuration in this slice.

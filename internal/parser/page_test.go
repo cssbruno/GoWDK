@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func TestParsePageReadsStaticDynamicRouteWithPathsAndBuild(t *testing.T) {

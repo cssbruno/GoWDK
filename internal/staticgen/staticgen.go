@@ -13,13 +13,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/compiler"
-	"github.com/gowdk/gowdk/internal/discover"
-	"github.com/gowdk/gowdk/internal/manifest"
-	"github.com/gowdk/gowdk/internal/view"
-	runtimeasset "github.com/gowdk/gowdk/runtime/asset"
-	gowhtml "github.com/gowdk/gowdk/runtime/html"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/discover"
+	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/view"
+	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
+	gowhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 
 const routeManifestFile = "gowdk-routes.json"

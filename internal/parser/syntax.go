@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gowdk/gowdk/internal/manifest"
-	"github.com/gowdk/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/view"
 )
 
 var literalRecordPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)

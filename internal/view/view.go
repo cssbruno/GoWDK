@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	gowhtml "github.com/gowdk/gowdk/runtime/html"
+	gowhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 
 // Node is a static view markup node.

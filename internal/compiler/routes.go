@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func validateUniquePageRoutes(pages []manifest.Page) []ValidationError {

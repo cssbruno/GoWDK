@@ -1,3 +1,3 @@
-module github.com/gowdk/gowdk
+module github.com/cssbruno/gowdk
 
 go 1.26

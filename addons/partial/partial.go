@@ -1,6 +1,6 @@
 package partial
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 // Addon enables server fragments and partial swaps.
 func Addon() gowdk.Addon {

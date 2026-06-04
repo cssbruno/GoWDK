@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/runtime/form"
-	"github.com/gowdk/gowdk/runtime/response"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/runtime/form"
+	"github.com/cssbruno/gowdk/runtime/response"
 )
 
 func TestAddonRegistersActionsFeature(t *testing.T) {

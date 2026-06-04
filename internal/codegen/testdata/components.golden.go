@@ -1,6 +1,6 @@
 package components
 
-import gowdkrender "github.com/gowdk/gowdk/runtime/render"
+import gowdkrender "github.com/cssbruno/gowdk/runtime/render"
 
 type HeroProps struct {
 	Title   string

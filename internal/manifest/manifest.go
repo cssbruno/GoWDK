@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"sort"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 var routeParamPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)\}`)

@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 var cssReferencePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)

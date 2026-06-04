@@ -1,6 +1,6 @@
 package static
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 // Addon enables build-time prerendering.
 func Addon() gowdk.Addon {

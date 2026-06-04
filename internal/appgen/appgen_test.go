@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {

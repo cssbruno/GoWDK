@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 func TestAddonRegistersAPIFeature(t *testing.T) {

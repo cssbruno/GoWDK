@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/compiler"
-	"github.com/gowdk/gowdk/internal/manifest"
-	"github.com/gowdk/gowdk/internal/parser"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/parser"
 )
 
 var parserLinePattern = regexp.MustCompile(`^line ([0-9]+): `)

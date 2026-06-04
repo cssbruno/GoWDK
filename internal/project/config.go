@@ -10,14 +10,14 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/addons/tailwind"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/tailwind"
 )
 
 // DefaultConfigFile is the config file discovered from a project root.
 const DefaultConfigFile = "gowdk.config.go"
 
-const tailwindImportPath = "github.com/gowdk/gowdk/addons/tailwind"
+const tailwindImportPath = "github.com/cssbruno/gowdk/addons/tailwind"
 
 // LoadConfigFile reads the supported static subset of gowdk.config.go.
 func LoadConfigFile(path string) (gowdk.Config, error) {

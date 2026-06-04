@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 func TestServerHandlesInitializeDiagnosticsFormattingCompletionAndShutdown(t *testing.T) {

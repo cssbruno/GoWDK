@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 // FragmentPackageOptions configures generated server fragment package source.
@@ -39,7 +39,7 @@ func GenerateFragmentPackage(app manifest.Manifest, options FragmentPackageOptio
 	if len(fragments) > 0 {
 		source.WriteString("import (\n")
 		source.WriteString("\t\"net/http\"\n")
-		source.WriteString("\tgowdkresponse \"github.com/gowdk/gowdk/runtime/response\"\n")
+		source.WriteString("\tgowdkresponse \"github.com/cssbruno/gowdk/runtime/response\"\n")
 		source.WriteString(")\n\n")
 	}
 	for _, fragment := range fragments {

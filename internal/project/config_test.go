@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 func TestLoadConfigFileReadsLiteralSourceAndBuildFields(t *testing.T) {
@@ -14,7 +14,7 @@ func TestLoadConfigFileReadsLiteralSourceAndBuildFields(t *testing.T) {
 	path := filepath.Join(root, DefaultConfigFile)
 	if err := os.WriteFile(path, []byte(`package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Source: gowdk.SourceConfig{
@@ -115,7 +115,7 @@ func TestLoadConfigFileIgnoresNonLiteralValues(t *testing.T) {
 	path := filepath.Join(root, DefaultConfigFile)
 	if err := os.WriteFile(path, []byte(`package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var includes = []string{"src/**/*.gwdk"}
 
@@ -149,8 +149,8 @@ func TestLoadConfigFileReadsTailwindAddon(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`package app
 
 import (
-	"github.com/gowdk/gowdk"
-	tw "github.com/gowdk/gowdk/addons/tailwind"
+	"github.com/cssbruno/gowdk"
+	tw "github.com/cssbruno/gowdk/addons/tailwind"
 )
 
 var Config = gowdk.Config{

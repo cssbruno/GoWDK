@@ -1,6 +1,6 @@
 package static
 
-import "github.com/gowdk/gowdk/runtime/response"
+import "github.com/cssbruno/gowdk/runtime/response"
 
 // PrerenderedPage is the build-time output for one static route.
 type PrerenderedPage struct {

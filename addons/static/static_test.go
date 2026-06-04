@@ -3,8 +3,8 @@ package static
 import (
 	"testing"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/runtime/response"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/runtime/response"
 )
 
 func TestAddonRegistersStaticFeature(t *testing.T) {

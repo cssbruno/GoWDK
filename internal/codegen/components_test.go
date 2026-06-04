@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func TestGenerateComponentPackageEmitsFormattedGoSource(t *testing.T) {
@@ -30,7 +30,7 @@ func TestGenerateComponentPackageEmitsFormattedGoSource(t *testing.T) {
 	text := string(source)
 	for _, want := range []string{
 		`package components`,
-		`gowdkrender "github.com/gowdk/gowdk/runtime/render"`,
+		`gowdkrender "github.com/cssbruno/gowdk/runtime/render"`,
 		`type HeroProps struct`,
 		`Title   string`,
 		`Tagline string`,

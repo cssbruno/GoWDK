@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/lang"
-	"github.com/gowdk/gowdk/internal/manifest"
-	runtimeasset "github.com/gowdk/gowdk/runtime/asset"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/lang"
+	"github.com/cssbruno/gowdk/internal/manifest"
+	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
 func TestBuildWritesStaticHTMLForSimpleRoute(t *testing.T) {

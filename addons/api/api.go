@@ -1,6 +1,6 @@
 package api
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 // Addon enables generated API handlers.
 func Addon() gowdk.Addon {

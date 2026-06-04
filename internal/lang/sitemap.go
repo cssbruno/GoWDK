@@ -3,8 +3,8 @@ package lang
 import (
 	"encoding/json"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 // SiteMap is an editor-facing route and file map.

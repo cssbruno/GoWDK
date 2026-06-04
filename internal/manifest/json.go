@@ -5,8 +5,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/view"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/view"
 )
 
 // PublicSchemaVersion is the current gowdk manifest JSON schema version.

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {

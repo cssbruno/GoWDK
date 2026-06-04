@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 func TestAddonRegistersSSRFeature(t *testing.T) {

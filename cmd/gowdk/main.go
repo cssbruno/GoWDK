@@ -11,15 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/addons/ssr"
-	"github.com/gowdk/gowdk/internal/appgen"
-	"github.com/gowdk/gowdk/internal/codegen"
-	"github.com/gowdk/gowdk/internal/discover"
-	"github.com/gowdk/gowdk/internal/lang"
-	"github.com/gowdk/gowdk/internal/lsp"
-	"github.com/gowdk/gowdk/internal/project"
-	"github.com/gowdk/gowdk/internal/staticgen"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/internal/appgen"
+	"github.com/cssbruno/gowdk/internal/codegen"
+	"github.com/cssbruno/gowdk/internal/discover"
+	"github.com/cssbruno/gowdk/internal/lang"
+	"github.com/cssbruno/gowdk/internal/lsp"
+	"github.com/cssbruno/gowdk/internal/project"
+	"github.com/cssbruno/gowdk/internal/staticgen"
 )
 
 const version = "0.1.0-dev"
@@ -107,7 +107,7 @@ func initProject(args []string) error {
 			Path: "gowdk.config.go",
 			Body: `package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	AppName: "GOWDK App",

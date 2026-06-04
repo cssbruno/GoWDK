@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/compiler"
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 // ActionPackageOptions configures generated action handler package source.
@@ -43,8 +43,8 @@ func GenerateActionPackage(config gowdk.Config, app manifest.Manifest, options A
 	if len(handlers) > 0 {
 		source.WriteString("import (\n")
 		source.WriteString("\t\"net/http\"\n\n")
-		source.WriteString("\tgowdkactions \"github.com/gowdk/gowdk/addons/actions\"\n")
-		source.WriteString("\tgowdkresponse \"github.com/gowdk/gowdk/runtime/response\"\n")
+		source.WriteString("\tgowdkactions \"github.com/cssbruno/gowdk/addons/actions\"\n")
+		source.WriteString("\tgowdkresponse \"github.com/cssbruno/gowdk/runtime/response\"\n")
 		source.WriteString(")\n\n")
 		source.WriteString("var Registry = gowdkactions.Registry{}\n\n")
 		source.WriteString("func writeActionError(w http.ResponseWriter, status int, message string) {\n")

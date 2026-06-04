@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 func TestAddonRegistersEmbedFeature(t *testing.T) {

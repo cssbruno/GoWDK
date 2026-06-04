@@ -1,6 +1,6 @@
 package main
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Build: gowdk.BuildConfig{

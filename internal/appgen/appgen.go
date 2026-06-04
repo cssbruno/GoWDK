@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gowdk/gowdk/internal/manifest"
-	"github.com/gowdk/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/view"
 )
 
 const (

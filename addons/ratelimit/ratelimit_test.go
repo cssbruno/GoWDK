@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 func TestAddonRegistersRateLimitFeature(t *testing.T) {

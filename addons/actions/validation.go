@@ -3,8 +3,8 @@ package actions
 import (
 	"strings"
 
-	"github.com/gowdk/gowdk/runtime/form"
-	"github.com/gowdk/gowdk/runtime/validation"
+	"github.com/cssbruno/gowdk/runtime/form"
+	"github.com/cssbruno/gowdk/runtime/validation"
 )
 
 // ValidateRequired records one validation error for each missing required form

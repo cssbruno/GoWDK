@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/ssr"
 )
 
 func TestCheckFilesValidatesRenderRules(t *testing.T) {

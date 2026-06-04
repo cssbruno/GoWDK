@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func TestGenerateActionPackageEmitsRegistryBackedHTTPHandlers(t *testing.T) {
@@ -39,8 +39,8 @@ func TestGenerateActionPackageEmitsRegistryBackedHTTPHandlers(t *testing.T) {
 	text := string(source)
 	for _, want := range []string{
 		`package actions`,
-		`gowdkactions "github.com/gowdk/gowdk/addons/actions"`,
-		`gowdkresponse "github.com/gowdk/gowdk/runtime/response"`,
+		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
+		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`var Registry = gowdkactions.Registry{}`,
 		`func RegisterNewsletterSubscribe(handler gowdkactions.Handler)`,
 		`func NewsletterSubscribe(w http.ResponseWriter, r *http.Request)`,

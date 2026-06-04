@@ -9,9 +9,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/compiler"
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 // RouteKind describes generated binary route behavior.

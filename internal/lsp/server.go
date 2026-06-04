@@ -14,8 +14,8 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/lang"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/lang"
 )
 
 const (

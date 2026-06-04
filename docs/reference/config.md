@@ -29,7 +29,7 @@ Supported initial config subset:
 ```go
 package app
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
 	Source: gowdk.SourceConfig{
@@ -142,7 +142,7 @@ for render-mode checks, and static builds invoke addons that implement
 The static config loader recognizes the known literal Tailwind addon subset:
 
 ```go
-import "github.com/gowdk/gowdk/addons/tailwind"
+import "github.com/cssbruno/gowdk/addons/tailwind"
 
 var Config = gowdk.Config{
 	Addons: []gowdk.Addon{

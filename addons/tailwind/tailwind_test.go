@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/manifest"
-	"github.com/gowdk/gowdk/internal/staticgen"
-	runtimeasset "github.com/gowdk/gowdk/runtime/asset"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/staticgen"
+	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
 func TestAddonRegistersCSSFeature(t *testing.T) {

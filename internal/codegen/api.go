@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 // APIPackageOptions configures generated API handler package source.

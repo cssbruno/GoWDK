@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func TestGenerateAPIPackageEmitsHTTPHandlerStubs(t *testing.T) {

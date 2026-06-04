@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gowdk/gowdk/runtime/component"
+	"github.com/cssbruno/gowdk/runtime/component"
 )
 
 func TestRendererJoinsComponentOutput(t *testing.T) {

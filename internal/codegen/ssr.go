@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gowdk/gowdk"
-	"github.com/gowdk/gowdk/internal/compiler"
-	"github.com/gowdk/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 // SSRPackageOptions configures generated SSR handler package source.
@@ -142,10 +142,10 @@ func ssrImports(handlers []ssrHandler) []string {
 			return []string{
 				"fmt",
 				"net/http",
-				"github.com/gowdk/gowdk/addons/ssr",
-				"github.com/gowdk/gowdk/runtime/render",
+				"github.com/cssbruno/gowdk/addons/ssr",
+				"github.com/cssbruno/gowdk/runtime/render",
 			}
 		}
 	}
-	return append(imports, "github.com/gowdk/gowdk/runtime/render")
+	return append(imports, "github.com/cssbruno/gowdk/runtime/render")
 }

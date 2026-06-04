@@ -2,7 +2,7 @@
 
 ## Current Status
 
-GOWDK is a Go module. The root module path is `github.com/gowdk/gowdk`.
+GOWDK is a Go module. The root module path is `github.com/cssbruno/gowdk`.
 
 ## Repository Layout
 

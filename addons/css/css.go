@@ -1,7 +1,7 @@
 // Package css registers compile-time CSS extension support.
 package css
 
-import "github.com/gowdk/gowdk"
+import "github.com/cssbruno/gowdk"
 
 // Addon enables compile-time CSS processing.
 func Addon() gowdk.Addon {

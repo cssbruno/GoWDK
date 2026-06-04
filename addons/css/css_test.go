@@ -3,7 +3,7 @@ package css
 import (
 	"testing"
 
-	"github.com/gowdk/gowdk"
+	"github.com/cssbruno/gowdk"
 )
 
 func TestAddonRegistersCSSFeature(t *testing.T) {

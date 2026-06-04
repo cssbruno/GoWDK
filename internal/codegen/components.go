@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gowdk/gowdk/internal/manifest"
-	viewpkg "github.com/gowdk/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/manifest"
+	viewpkg "github.com/cssbruno/gowdk/internal/view"
 )
 
 var interpolationPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)\}`)
@@ -37,7 +37,7 @@ func GenerateComponentPackage(components []manifest.Component, options Component
 	source.WriteString(packageName)
 	source.WriteString("\n\n")
 	if len(components) > 0 {
-		source.WriteString("import gowdkrender \"github.com/gowdk/gowdk/runtime/render\"\n\n")
+		source.WriteString("import gowdkrender \"github.com/cssbruno/gowdk/runtime/render\"\n\n")
 	}
 
 	names := map[string]bool{}

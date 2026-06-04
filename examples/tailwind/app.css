@@ -1,2 +1,73 @@
-@import "tailwindcss" source(none);
-@source "./site.page.gwdk";
+.min-h-screen {
+  min-height: 100vh;
+}
+
+.bg-slate-950 {
+  background: #020617;
+}
+
+.px-6 {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.py-12 {
+  padding-bottom: 3rem;
+  padding-top: 3rem;
+}
+
+.text-white {
+  color: #fff;
+}
+
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.max-w-2xl {
+  max-width: 42rem;
+}
+
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+.border {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.border-slate-700 {
+  border-color: #334155;
+}
+
+.bg-slate-900 {
+  background: #0f172a;
+}
+
+.p-8 {
+  padding: 2rem;
+}
+
+.text-3xl {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.text-slate-300 {
+  color: #cbd5e1;
+}

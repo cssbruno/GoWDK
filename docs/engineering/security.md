@@ -22,6 +22,8 @@ Do not treat current `act`, `api`, `partial`, `@guard`, or SSR scaffolding as pr
 - Generated form decoders must validate expected fields and avoid mass assignment.
 - Generated action forms must reject direct file inputs until upload size,
   storage, validation, cleanup, and logging rules exist.
+- Generated action handlers must cap request bodies before parsing submitted
+  form values.
 - `partial` responses must render escaped HTML through the shared render core.
 - `ssr` pages with `load {}` must make auth/session access explicit through guards or request-aware APIs.
 - Embedded assets must not include local env files, source maps with secrets, or private files outside configured build output.
@@ -35,7 +37,8 @@ Before generated app output is considered production-ready:
 - Redirects must reject unsafe external destinations unless explicitly allowed.
 - Generated decoders must define how unknown, missing, repeated, and file fields are handled.
 - Guards must have a documented execution contract, failure behavior, and test coverage.
-- Generated servers must enforce request body/header limits and HTTP timeouts.
+- Generated servers must enforce request body/header limits and HTTP timeouts;
+  action request bodies currently have a fixed 1 MiB generated cap.
 - Embedded asset selection must exclude secrets, local env files, private source files, and temporary artifacts.
 - Diagnostics and logs must avoid printing sensitive form values, credentials, or private build-time data.
 

@@ -535,6 +535,7 @@ the current source tree.
 - [ ] Implement broader action error responses.
 - [x] Map first-slice redirect responses to HTTP 303.
 - [x] Support first-slice action redirects on static pages without SSR.
+- [x] Cap generated action request bodies before form parsing.
 - [ ] Add complete tests for decoding, validation, CSRF, redirects, and action
   routing.
 
@@ -647,6 +648,7 @@ the current source tree.
 - [ ] Validate action inputs and prevent mass assignment.
 - [x] Reject direct file inputs in generated action forms until upload security
   rules exist.
+- [x] Cap generated action request bodies before form parsing.
 - [x] Ensure current generated static HTML escapes text and attributes by default.
 - [ ] Define safe HTML escape hatches and make them explicit.
 - [ ] Ensure embedded assets cannot include secrets or unexpected source files.

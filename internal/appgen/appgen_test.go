@@ -87,7 +87,10 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	for _, expected := range []string{
 		`if request.Method == http.MethodPost && handler.action(response, request)`,
 		`case "/newsletter":`,
+		`const maxActionBodyBytes int64 = 1 << 20`,
+		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`if err := request.ParseForm(); err != nil`,
+		`http.StatusRequestEntityTooLarge`,
 		`type SubscribeInput struct`,
 		`func decodeNewsletterSubscribeInput(values formValues) (SubscribeInput, error)`,
 		`decodeExpectedFields(values, []string{"email"})`,
@@ -425,6 +428,15 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	_ = response.Body.Close()
 	if response.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("expected missing required field to return 422, got %d", response.StatusCode)
+	}
+
+	response, err = waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email="+strings.Repeat("a", 1<<20))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected oversized form to return 413, got %d", response.StatusCode)
 	}
 }
 

@@ -26,6 +26,8 @@ Implemented today:
 - Generated static apps include first-slice form input decoder functions that
   preserve repeated values and reject unexpected fields inferred from direct
   static controls in same-page `g:post` forms.
+- Generated action handlers cap request bodies before form parsing and return
+  HTTP 413 for oversized submissions.
 - Generated static apps return HTTP 422 for missing or empty direct static
   `required` fields when the action declares `valid(input)?`.
 - Generated static app action route extraction rejects direct file inputs and
@@ -84,7 +86,8 @@ Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 process start from the module name, hostname, and a random token. It can also
 serve POST redirect handlers for the first supported action subset. Those
 handlers decode allowlisted form fields into named first-slice input wrappers,
-preserve repeated values, return HTTP 400 for unexpected fields, and return
+cap request bodies before parsing, preserve repeated values, return HTTP 413
+for oversized submissions, return HTTP 400 for unexpected fields, and return
 HTTP 422 for first-slice required-field validation failures. Direct file inputs
 and multipart action forms are rejected before generated app output. The
 generated app does not execute user action logic, enforce CSRF, resolve real

@@ -71,7 +71,8 @@ Generated servers must have conservative defaults before production release:
 
 - Set `http.Server` read, write, idle, and header timeouts.
 - Set `MaxHeaderBytes`.
-- Cap action/API request body size before form or JSON decoding.
+- Cap action/API request body size before form or JSON decoding; generated
+  action handlers currently use a fixed 1 MiB cap.
 - Return explicit method-not-allowed responses for unsupported methods.
 - Serve static assets with deterministic cache headers.
 - Avoid public debug endpoints by default.

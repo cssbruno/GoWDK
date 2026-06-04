@@ -385,7 +385,12 @@ func actionHandlerSource(actions []ActionRoute) string {
 		builder.WriteString("\tcase ")
 		builder.WriteString(quote(action.Route))
 		builder.WriteString(":\n")
+		builder.WriteString("\t\trequest.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)\n")
 		builder.WriteString("\t\tif err := request.ParseForm(); err != nil {\n")
+		builder.WriteString("\t\t\tif strings.Contains(err.Error(), \"request body too large\") {\n")
+		builder.WriteString("\t\t\t\thttp.Error(response, \"request body too large\", http.StatusRequestEntityTooLarge)\n")
+		builder.WriteString("\t\t\t\treturn true\n")
+		builder.WriteString("\t\t\t}\n")
 		builder.WriteString("\t\t\thttp.Error(response, \"invalid form\", http.StatusBadRequest)\n")
 		builder.WriteString("\t\t\treturn true\n")
 		builder.WriteString("\t\t}\n")
@@ -624,6 +629,8 @@ import (
 	"strings"
 	"time"
 )
+
+const maxActionBodyBytes int64 = 1 << 20
 
 //go:embed static
 var embeddedFiles embed.FS

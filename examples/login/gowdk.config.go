@@ -3,7 +3,7 @@ package main
 import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
-	AppName: "GOWDK Login Split Runtime",
+	AppName: "GOWDK Login",
 	Source: gowdk.SourceConfig{
 		Include: []string{"src/**/*.gwdk"},
 	},
@@ -11,10 +11,18 @@ var Config = gowdk.Config{
 		Output: "dist/site",
 		Targets: []gowdk.BuildTargetConfig{
 			{
-				Name:   "frontend",
+				Name:   "app",
 				Output: "dist/site",
-				App:    ".gowdk/frontend",
-				Binary: "bin/login-frontend",
+				App:    ".gowdk/app",
+				Binary: "bin/login",
+			},
+			{
+				Name:          "split",
+				Output:        "dist/site",
+				App:           ".gowdk/frontend",
+				Binary:        "bin/login-frontend",
+				BackendApp:    ".gowdk/backend",
+				BackendBinary: "bin/login-backend",
 			},
 		},
 	},

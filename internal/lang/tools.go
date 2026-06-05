@@ -247,6 +247,9 @@ func CheckFiles(config gowdk.Config, paths []string) (manifest.Manifest, Diagnos
 	if err := compiler.ValidateManifest(config, app); err != nil {
 		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 	}
+	if !diagnostics.HasErrors() {
+		app = compiler.BindBackendHandlers(app)
+	}
 	return app, diagnostics
 }
 

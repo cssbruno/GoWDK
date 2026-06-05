@@ -27,6 +27,7 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 		return Result{}, reporter.fail("validate", err)
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
+	reportBackendBindings(reporter, app.BackendBindings)
 
 	planned, err := plan(config, app, outputDir)
 	if err != nil {
@@ -114,6 +115,7 @@ func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (
 		return MemoryResult{}, reporter.fail("validate", err)
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
+	reportBackendBindings(reporter, app.BackendBindings)
 
 	planned, err := plan(config, app, outputDir)
 	if err != nil {
@@ -197,6 +199,28 @@ func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (
 	}
 	result.Files[buildReportFile] = buildReport
 	return result, nil
+}
+
+func reportBackendBindings(reporter *buildReporter, bindings []manifest.BackendBinding) {
+	for _, binding := range bindings {
+		data := map[string]string{
+			"kind":     binding.Kind,
+			"block":    binding.BlockName,
+			"status":   string(binding.Status),
+			"function": binding.FunctionName,
+		}
+		if binding.ImportPath != "" {
+			data["import"] = binding.ImportPath
+		}
+		if binding.Message != "" {
+			data["message"] = binding.Message
+		}
+		reporter.info("bind", "backend_binding", "backend binding resolved", BuildEvent{
+			PageID: binding.PageID,
+			Route:  binding.Route,
+			Data:   data,
+		})
+	}
 }
 
 func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir string, changedPageSources []string) (Result, error) {

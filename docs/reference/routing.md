@@ -114,18 +114,19 @@ view {
 }
 ```
 
-App-shell HTML lowers `g:post={submit}` to a normal POST form. Generated apps built
-with `--app --bin` can serve first-slice POST redirect handlers for concrete
-page routes. They can also return first-slice partial fragments when the action
-declares `fragment "#id" { ... }` and the request includes GOWDK partial
-headers.
+App-shell HTML lowers `g:post={submit}` to a normal POST form. Generated apps
+built with `--app --bin` serve concrete action routes. If the same directory as
+the `.gwdk` file contains an exported Go function named from the block, for
+example `act submit` -> `Submit`, and it has signature
+`func(context.Context, form.Values) (response.Response, error)`, the generated
+handler calls it. Missing or unsupported functions generate HTTP 501 handlers.
 
-Generated action handlers do not execute user Go action logic or CSRF checks
-yet.
+Generated action handlers do not wire CSRF checks yet.
 
 ## API Routes
 
-API route metadata is parsed and appears in route plans:
+API route metadata is parsed, appears in route plans, and can bind to
+same-package Go handlers:
 
 ```gwdk
 @page status
@@ -142,9 +143,12 @@ view {
 }
 ```
 
-Supported method metadata today: `GET`, `POST`, `PUT`, `PATCH`, and `DELETE`.
+Supported methods today: `GET`, `POST`, `PUT`, `PATCH`, and `DELETE`.
 
-Generated API handlers are planned.
+`api health` maps to exported Go function `Health` in the same package as the
+`.gwdk` file when the function has signature
+`func(context.Context, *http.Request) (response.Response, error)`. Missing or
+unsupported functions generate HTTP 501 handlers.
 
 ## SSR Routes
 
@@ -177,4 +181,5 @@ gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partia
 ```
 
 The current JSON schema is version `1` and includes route kind, method, route
-pattern, page ID, and planned handler information.
+pattern, page ID, planned handler information, and backend binding status for
+action/API routes.

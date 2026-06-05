@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -1538,6 +1539,11 @@ view {
 		Route:   "/newsletter",
 		PageID:  "newsletter",
 		Handler: "actions.NewsletterSubscribe",
+		BackendBinding: &backendBindingJSON{
+			Status:       "missing",
+			FunctionName: "Subscribe",
+			Message:      "GOWDK action handler app.Subscribe is not implemented",
+		},
 	})
 }
 
@@ -1629,6 +1635,11 @@ view {
 		Route:   "/api/health",
 		PageID:  "status",
 		Handler: "api.StatusHealth",
+		BackendBinding: &backendBindingJSON{
+			Status:       "missing",
+			FunctionName: "Health",
+			Message:      "GOWDK API handler app.Health is not implemented",
+		},
 	})
 }
 
@@ -2054,7 +2065,7 @@ view {
 	}
 }
 
-func TestBuildCommandBuildsActionRedirectBinary(t *testing.T) {
+func TestBuildCommandBuildsActionBinaryReturns501ForMissingHandler(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "newsletter.page.gwdk")
 	outputDir := filepath.Join(root, "dist")
@@ -2098,12 +2109,115 @@ view {
 	if err != nil {
 		t.Fatal(err)
 	}
+	payload, err := io.ReadAll(response.Body)
 	_ = response.Body.Close()
-	if response.StatusCode != http.StatusSeeOther {
-		t.Fatalf("expected 303, got %d", response.StatusCode)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if response.Header.Get("Location") != "/newsletter?ok=1" {
-		t.Fatalf("unexpected redirect location: %q", response.Header.Get("Location"))
+	if response.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("expected 501, got %d: %s", response.StatusCode, payload)
+	}
+	if !strings.Contains(string(payload), "GOWDK action handler app.Subscribe is not implemented") {
+		t.Fatalf("unexpected missing handler body: %s", payload)
+	}
+}
+
+func TestBuildCommandBuildsBinaryWithFeatureBoundActionAndAPI(t *testing.T) {
+	root := t.TempDir()
+	moduleRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeCLIFile(t, filepath.Join(root, "go.mod"), fmt.Sprintf(`module example.com/gowdk-bound
+
+go 1.26
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => %s
+`, filepath.ToSlash(moduleRoot)))
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+	writeCLIFile(t, filepath.Join(root, "features", "auth", "auth.page.gwdk"), `@page auth
+@route "/login"
+@render spa
+
+act login {
+  input := form LoginInput
+  valid(input)?
+}
+
+api session {
+  GET "/api/session"
+}
+
+view {
+  <form g:post={login}>
+    <input name="email" required />
+    <button type="submit">Sign in</button>
+  </form>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "features", "auth", "auth.go"), `package auth
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/form"
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+func Login(_ context.Context, values form.Values) (response.Response, error) {
+	if values.First("email") != "demo@example.com" {
+		return response.Response{}, response.NewHandlerError(http.StatusUnauthorized, "invalid login", nil)
+	}
+	return response.RedirectTo("/dashboard"), nil
+}
+
+func Session(_ context.Context, _ *http.Request) (response.Response, error) {
+	return response.JSONValue(http.StatusOK, map[string]any{"authenticated": true})
+}
+`)
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, ".gowdk", "app")
+	binaryPath := filepath.Join(root, "bin", "site")
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build", "--out", outputDir, "--app", appDir, "--bin", binaryPath, "features/auth/auth.page.gwdk"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	addr := freeCLIAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForCLIStatus("http://"+addr+"/login", http.MethodPost, "email=demo%40example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther || response.Header.Get("Location") != "/dashboard" {
+		t.Fatalf("expected bound action redirect, status=%d location=%q", response.StatusCode, response.Header.Get("Location"))
+	}
+
+	body, err := waitForCLIHTTP("http://" + addr + "/api/session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `"authenticated":true`) {
+		t.Fatalf("unexpected bound API body: %s", body)
 	}
 }
 
@@ -2313,7 +2427,17 @@ func captureCLIOutput(t *testing.T, fn func() error) (string, string, error) {
 func assertRouteBinding(t *testing.T, routes []routeBindingJSON, expected routeBindingJSON) {
 	t.Helper()
 	for _, route := range routes {
-		if route == expected {
+		if route.Kind != expected.Kind ||
+			route.Method != expected.Method ||
+			route.Route != expected.Route ||
+			route.PageID != expected.PageID ||
+			route.Handler != expected.Handler {
+			continue
+		}
+		if expected.BackendBinding == nil {
+			return
+		}
+		if route.BackendBinding != nil && *route.BackendBinding == *expected.BackendBinding {
 			return
 		}
 	}

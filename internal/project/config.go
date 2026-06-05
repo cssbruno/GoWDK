@@ -18,11 +18,6 @@ import (
 // DefaultConfigFile is the config file discovered from a project root.
 const DefaultConfigFile = "gowdk.config.go"
 
-const (
-	ssrImportPath      = "github.com/cssbruno/gowdk/addons/ssr"
-	tailwindImportPath = "github.com/cssbruno/gowdk/addons/tailwind"
-)
-
 // LoadConfigFile reads the supported SPA subset of gowdk.config.go.
 func LoadConfigFile(path string) (gowdk.Config, error) {
 	fileSet := token.NewFileSet()
@@ -315,7 +310,7 @@ func parseBuildTargets(expression ast.Expr) []gowdk.BuildTargetConfig {
 	var targets []gowdk.BuildTargetConfig
 	for _, element := range literal.Elts {
 		target := parseBuildTarget(element)
-		if target.Name == "" && len(target.Modules) == 0 && target.Output == "" && target.App == "" && target.Binary == "" && target.WASM == "" {
+		if target.Name == "" && len(target.Modules) == 0 && target.Output == "" && target.App == "" && target.Binary == "" && target.WASM == "" && target.BackendApp == "" && target.BackendBinary == "" {
 			continue
 		}
 		targets = append(targets, target)
@@ -352,6 +347,10 @@ func parseBuildTarget(expression ast.Expr) gowdk.BuildTargetConfig {
 			target.Binary = parseString(keyValue.Value)
 		case "WASM", "Wasm":
 			target.WASM = parseString(keyValue.Value)
+		case "BackendApp":
+			target.BackendApp = parseString(keyValue.Value)
+		case "BackendBinary":
+			target.BackendBinary = parseString(keyValue.Value)
 		}
 	}
 	return target
@@ -479,7 +478,7 @@ func parseSSRAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon,
 		return nil, false
 	}
 	packageName, ok := selector.X.(*ast.Ident)
-	if !ok || imports[packageName.Name] != ssrImportPath {
+	if !ok || imports[packageName.Name] != ssr.ImportPath {
 		return nil, false
 	}
 	return ssr.Addon(), true
@@ -495,7 +494,7 @@ func parseTailwindAddon(expression ast.Expr, imports map[string]string) (gowdk.A
 		return nil, false
 	}
 	packageName, ok := selector.X.(*ast.Ident)
-	if !ok || imports[packageName.Name] != tailwindImportPath {
+	if !ok || imports[packageName.Name] != tailwind.ImportPath {
 		return nil, false
 	}
 
@@ -544,7 +543,7 @@ func isTailwindOptionsType(expression ast.Expr, imports map[string]string) bool 
 		return false
 	}
 	packageName, ok := selector.X.(*ast.Ident)
-	return ok && imports[packageName.Name] == tailwindImportPath
+	return ok && imports[packageName.Name] == tailwind.ImportPath
 }
 
 func parseStringList(expression ast.Expr) []string {

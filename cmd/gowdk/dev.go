@@ -130,15 +130,15 @@ func devUsage() string {
 }
 
 func devOutputDir(args []string) (string, error) {
-	options, outputDir, appDir, binaryPath, wasmPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
 	if err != nil {
 		return "", err
 	}
 	if err := loadBuildConfig(&options, configPath); err != nil {
 		return "", err
 	}
-	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
-		return "", fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, or explicit files")
+	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
+		return "", fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
 	}
 	if strings.TrimSpace(outputDir) != "" {
 		return outputDir, nil

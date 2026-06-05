@@ -5,20 +5,50 @@ import (
 	"strings"
 )
 
-func appPackageSource(actions []ActionRoute, ssr []SSRRoute) string {
-	source := strings.ReplaceAll(appPackageSourceTemplate, "{{RUNTIME_IMPORTS}}", runtimeImportSource(actions, ssr))
-	source = strings.ReplaceAll(source, "{{ACTION_HANDLER}}", actionHandlerSource(actions))
-	source = strings.ReplaceAll(source, "{{SSR_HANDLER}}", ssrHandlerSource(ssr))
+func appPackageSource(options Options) string {
+	direct := options
+	if options.ProxyBackend {
+		direct.Actions = nil
+		direct.APIs = nil
+	}
+	source := strings.ReplaceAll(appPackageSourceTemplate, "{{RUNTIME_IMPORTS}}", runtimeImportSource(options))
+	source = strings.ReplaceAll(source, "{{ACTION_CALLBACK}}", actionCallbackName(options))
+	source = strings.ReplaceAll(source, "{{API_CALLBACK}}", apiCallbackName(options))
+	source = strings.ReplaceAll(source, "{{ACTION_HANDLER}}", actionHandlerSource(direct.Actions))
+	source = strings.ReplaceAll(source, "{{API_HANDLER}}", apiHandlerSource(direct.APIs))
+	source = strings.ReplaceAll(source, "{{BACKEND_PROXY}}", backendProxySource(options))
+	source = strings.ReplaceAll(source, "{{SSR_HANDLER}}", ssrHandlerSource(options.SSR))
 	return source
 }
 
-func runtimeImportSource(actions []ActionRoute, ssr []SSRRoute) string {
+func runtimeImportSource(options Options) string {
 	imports := map[string]string{
 		"gowdkruntime": "github.com/cssbruno/gowdk/runtime/app",
 	}
+	actions := options.Actions
+	apis := options.APIs
+	if options.ProxyBackend {
+		actions = nil
+		apis = nil
+	}
+	ssr := options.SSR
 	if len(actions) > 0 {
-		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
+		imports["path"] = "path"
+	}
+	if actionsUseForm(actions) {
+		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
+		imports["strings"] = "strings"
+	}
+	if len(apis) > 0 {
+		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
+		imports["path"] = "path"
+	}
+	if options.ProxyBackend {
+		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
+		imports["neturl"] = "net/url"
+		imports["os"] = "os"
+		imports["httputil"] = "net/http/httputil"
 		imports["path"] = "path"
 		imports["strings"] = "strings"
 	}
@@ -34,6 +64,11 @@ func runtimeImportSource(actions []ActionRoute, ssr []SSRRoute) string {
 	if ssrUsesReplacements(ssr) {
 		imports["gowdkhtml"] = "github.com/cssbruno/gowdk/runtime/html"
 		imports["strings"] = "strings"
+	}
+	if !options.ProxyBackend {
+		for importPath, alias := range backendImports(actions, apis) {
+			imports[alias] = importPath
+		}
 	}
 
 	aliases := make([]string, 0, len(imports))
@@ -54,4 +89,37 @@ func runtimeImportSource(actions []ActionRoute, ssr []SSRRoute) string {
 		builder.WriteString("\"")
 	}
 	return builder.String()
+}
+
+func actionCallbackName(options Options) string {
+	if options.ProxyBackend && hasBackendRoutes(options) {
+		return "backendProxy"
+	}
+	return "action"
+}
+
+func apiCallbackName(options Options) string {
+	if options.ProxyBackend && hasBackendRoutes(options) {
+		return "backendProxy"
+	}
+	return "api"
+}
+
+func hasBackendRoutes(options Options) bool {
+	return len(options.Actions) > 0 || len(options.APIs) > 0
+}
+
+func backendImports(actions []ActionRoute, apis []APIRoute) map[string]string {
+	imports := map[string]string{}
+	for _, action := range actions {
+		if action.Binding.ImportPath != "" && action.BackendAlias != "" {
+			imports[action.Binding.ImportPath] = action.BackendAlias
+		}
+	}
+	for _, api := range apis {
+		if api.Binding.ImportPath != "" && api.BackendAlias != "" {
+			imports[api.Binding.ImportPath] = api.BackendAlias
+		}
+	}
+	return imports
 }

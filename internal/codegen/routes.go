@@ -28,11 +28,15 @@ var goIdentifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // RouteBinding is the route-level codegen plan used by the generated binary.
 type RouteBinding struct {
-	Kind    RouteKind
-	Method  string
-	Route   string
-	PageID  string
-	Handler string
+	Kind              RouteKind
+	Method            string
+	Route             string
+	PageID            string
+	Handler           string
+	BindingStatus     manifest.BackendBindingStatus
+	BindingMessage    string
+	BindingImportPath string
+	BindingFunction   string
 }
 
 // RouteRegistrationOptions configures generated route registration source.
@@ -47,6 +51,10 @@ func BuildRouteBindings(config gowdk.Config, app manifest.Manifest) ([]RouteBind
 	if err := compiler.ValidateManifest(config, app); err != nil {
 		return nil, err
 	}
+	if len(app.BackendBindings) == 0 {
+		app = compiler.BindBackendHandlers(app)
+	}
+	backendBindings := backendBindingsByBlock(app.BackendBindings)
 
 	var routes []RouteBinding
 	for _, page := range app.Pages {
@@ -70,12 +78,17 @@ func BuildRouteBindings(config gowdk.Config, app manifest.Manifest) ([]RouteBind
 		}
 
 		for _, action := range page.Blocks.Actions {
+			binding := backendBindings[backendBindingKey(actionHandlerKind, page.ID, action.Name, "POST", page.Route)]
 			routes = append(routes, RouteBinding{
-				Kind:    RouteAction,
-				Method:  "POST",
-				Route:   page.Route,
-				PageID:  page.ID,
-				Handler: "actions." + exportedName(page.ID) + exportedName(action.Name),
+				Kind:              RouteAction,
+				Method:            "POST",
+				Route:             page.Route,
+				PageID:            page.ID,
+				Handler:           "actions." + exportedName(page.ID) + exportedName(action.Name),
+				BindingStatus:     binding.Status,
+				BindingMessage:    binding.Message,
+				BindingImportPath: binding.ImportPath,
+				BindingFunction:   binding.FunctionName,
 			})
 		}
 
@@ -92,17 +105,39 @@ func BuildRouteBindings(config gowdk.Config, app manifest.Manifest) ([]RouteBind
 			if api.Name != "" {
 				handlerName += exportedName(api.Name)
 			}
+			binding := backendBindings[backendBindingKey(apiHandlerKind, page.ID, api.Name, method, route)]
 			routes = append(routes, RouteBinding{
-				Kind:    RouteAPI,
-				Method:  method,
-				Route:   route,
-				PageID:  page.ID,
-				Handler: "api." + handlerName,
+				Kind:              RouteAPI,
+				Method:            method,
+				Route:             route,
+				PageID:            page.ID,
+				Handler:           "api." + handlerName,
+				BindingStatus:     binding.Status,
+				BindingMessage:    binding.Message,
+				BindingImportPath: binding.ImportPath,
+				BindingFunction:   binding.FunctionName,
 			})
 		}
 	}
 
 	return routes, nil
+}
+
+const (
+	actionHandlerKind = "action"
+	apiHandlerKind    = "api"
+)
+
+func backendBindingsByBlock(bindings []manifest.BackendBinding) map[string]manifest.BackendBinding {
+	out := map[string]manifest.BackendBinding{}
+	for _, binding := range bindings {
+		out[backendBindingKey(binding.Kind, binding.PageID, binding.BlockName, binding.Method, binding.Route)] = binding
+	}
+	return out
+}
+
+func backendBindingKey(kind, pageID, blockName, method, route string) string {
+	return strings.Join([]string{kind, pageID, blockName, method, route}, "\x00")
 }
 
 // GenerateRouteRegistration emits Go source that registers route bindings on an

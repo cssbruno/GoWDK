@@ -2,6 +2,9 @@
 @route "/dashboard"
 @css auth
 
+act logout {
+}
+
 view {
   <main class="dashboard-shell">
     <aside class="sidebar">
@@ -9,9 +12,9 @@ view {
       <h1>Dashboard</h1>
       <nav>
         <a href="/dashboard">Overview</a>
-        <a href="http://127.0.0.1:8091/api/session">Backend session API</a>
+        <a href="/api/session">Session API</a>
       </nav>
-      <form method="post" action="http://127.0.0.1:8091/api/logout">
+      <form g:post={logout}>
         <button type="submit">Sign out</button>
       </form>
     </aside>
@@ -22,7 +25,7 @@ view {
           <p class="eyebrow">Signed in</p>
           <h2>Welcome back</h2>
         </div>
-        <a class="secondary-action" href="http://127.0.0.1:8091/api/session">Inspect backend session</a>
+        <a class="secondary-action" href="/api/session">Inspect session JSON</a>
       </header>
 
       <section class="metrics-grid">
@@ -43,9 +46,9 @@ view {
       <section class="activity-panel">
         <h2>Recent activity</h2>
         <ol>
-          <li>The GOWDK frontend binary serves this app page.</li>
-          <li>The Go backend binary owns API and session routes.</li>
-          <li>Future typed GOWDK actions can replace the backend form boundary.</li>
+          <li>The generated GOWDK app serves this page.</li>
+          <li>The auth feature package owns action and API handlers.</li>
+          <li>Split mode can proxy the same routes to a generated backend binary.</li>
         </ol>
       </section>
     </section>

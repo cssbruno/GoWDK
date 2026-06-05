@@ -49,5 +49,18 @@
         }
       ]
     }
-  }
+  },
+  "backendBindings": [
+    {
+      "kind": "action",
+      "pageId": "home",
+      "source": "testdata/manifest_golden/home.page.gwdk",
+      "blockName": "submit",
+      "method": "POST",
+      "route": "/",
+      "functionName": "Submit",
+      "status": "missing",
+      "message": "GOWDK action handler feature.Submit is not implemented"
+    }
+  ]
 }

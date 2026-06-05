@@ -71,7 +71,8 @@ func ServeMux() (*http.ServeMux, error) {
 		Root:       root,
 		Identity:   gowdkruntime.InstanceIdentity(),
 		Assets:     gowdkruntime.LoadAssetManifest(root),
-		Action:     action,
+		Action:     {{ACTION_CALLBACK}},
+		API:        {{API_CALLBACK}},
 		SSRExact:   ssrExact,
 		SSRDynamic: ssrDynamic,
 	})
@@ -79,6 +80,10 @@ func ServeMux() (*http.ServeMux, error) {
 }
 
 {{ACTION_HANDLER}}
+
+{{API_HANDLER}}
+
+{{BACKEND_PROXY}}
 
 {{SSR_HANDLER}}
 `

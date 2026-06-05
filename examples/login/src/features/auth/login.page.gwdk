@@ -2,6 +2,32 @@
 @route "/"
 @css auth
 
+act login {
+  input := form LoginInput
+  valid(input)?
+}
+
+api session {
+  GET "/api/session"
+}
+
 view {
-  <LoginApp />
+  <main class="shell">
+    <section class="panel">
+      <p class="eyebrow">GOWDK integrated auth feature</p>
+      <h1>Login</h1>
+
+      <form g:post={login}>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" value="demo@example.com" required />
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+
+        <button type="submit">Sign in</button>
+      </form>
+
+      <p class="status" role="status">The generated GOWDK binary calls auth.Login from this feature package.</p>
+    </section>
+  </main>
 }

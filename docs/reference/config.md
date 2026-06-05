@@ -161,12 +161,14 @@ type BuildConfig struct {
 }
 
 type BuildTargetConfig struct {
-	Name    string
-	Modules []string
-	Output  string
-	App     string
-	Binary  string
-	WASM    string
+	Name          string
+	Modules       []string
+	Output        string
+	App           string
+	Binary        string
+	WASM          string
+	BackendApp    string
+	BackendBinary string
 }
 ```
 
@@ -182,6 +184,12 @@ generated Go app that embeds the target output. `Binary` is optional, requires
 `App`, and compiles that generated app for the local platform. `WASM` is
 optional, requires `App`, and compiles the generated app with
 `GOOS=js GOARCH=wasm`.
+
+`BackendApp` is optional and writes a generated backend-only Go app for
+feature-bound action/API routes. `BackendBinary` is optional, requires
+`BackendApp`, and compiles that backend app. When a target has both frontend
+`App`/`Binary` and `BackendApp`/`BackendBinary`, the frontend binary proxies
+generated backend routes to `GOWDK_BACKEND_ORIGIN`.
 
 When `Build.Targets` is present, `gowdk build` runs every configured target
 unless ad hoc build flags or explicit files are passed. Use `gowdk build

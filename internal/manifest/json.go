@@ -13,10 +13,11 @@ import (
 const PublicSchemaVersion = 1
 
 type manifestJSON struct {
-	Version    int                      `json:"version"`
-	Pages      map[string]pageJSON      `json:"pages"`
-	Components map[string]componentJSON `json:"components,omitempty"`
-	Layouts    map[string]layoutJSON    `json:"layouts,omitempty"`
+	Version         int                      `json:"version"`
+	Pages           map[string]pageJSON      `json:"pages"`
+	Components      map[string]componentJSON `json:"components,omitempty"`
+	Layouts         map[string]layoutJSON    `json:"layouts,omitempty"`
+	BackendBindings []backendBindingJSON     `json:"backendBindings,omitempty"`
 }
 
 type pageJSON struct {
@@ -123,6 +124,20 @@ type artifactJSON struct {
 	Path string `json:"path"`
 }
 
+type backendBindingJSON struct {
+	Kind         string               `json:"kind"`
+	PageID       string               `json:"pageId"`
+	Source       string               `json:"source,omitempty"`
+	BlockName    string               `json:"blockName"`
+	Method       string               `json:"method,omitempty"`
+	Route        string               `json:"route"`
+	ImportPath   string               `json:"importPath,omitempty"`
+	PackageName  string               `json:"packageName,omitempty"`
+	FunctionName string               `json:"functionName"`
+	Status       BackendBindingStatus `json:"status"`
+	Message      string               `json:"message,omitempty"`
+}
+
 // MarshalJSON emits the route manifest shape consumed by generated binaries.
 func (app Manifest) MarshalJSON() ([]byte, error) {
 	pages := map[string]pageJSON{}
@@ -150,11 +165,35 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 		}
 	}
 	return json.Marshal(manifestJSON{
-		Version:    PublicSchemaVersion,
-		Pages:      pages,
-		Components: componentsJSON(app.Components),
-		Layouts:    layoutsJSON(app.Layouts),
+		Version:         PublicSchemaVersion,
+		Pages:           pages,
+		Components:      componentsJSON(app.Components),
+		Layouts:         layoutsJSON(app.Layouts),
+		BackendBindings: backendBindingsJSON(app.BackendBindings),
 	})
+}
+
+func backendBindingsJSON(bindings []BackendBinding) []backendBindingJSON {
+	if len(bindings) == 0 {
+		return nil
+	}
+	out := make([]backendBindingJSON, 0, len(bindings))
+	for _, binding := range bindings {
+		out = append(out, backendBindingJSON{
+			Kind:         binding.Kind,
+			PageID:       binding.PageID,
+			Source:       binding.Source,
+			BlockName:    binding.BlockName,
+			Method:       binding.Method,
+			Route:        binding.Route,
+			ImportPath:   binding.ImportPath,
+			PackageName:  binding.PackageName,
+			FunctionName: binding.FunctionName,
+			Status:       binding.Status,
+			Message:      binding.Message,
+		})
+	}
+	return out
 }
 
 func importsJSON(imports []Import) []importJSON {

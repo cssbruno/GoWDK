@@ -5,6 +5,8 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func actionHandlerSource(actions []ActionRoute) string {
@@ -42,7 +44,16 @@ const actionRequestPathSource = `func actionRequestPath(value string) string {
 
 func actionsUseValidation(actions []ActionRoute) bool {
 	for _, action := range actions {
-		if action.ValidatesInput {
+		if action.Binding.Status != manifest.BackendBindingMissing && action.Binding.Status != manifest.BackendBindingUnsupportedSignature && action.ValidatesInput {
+			return true
+		}
+	}
+	return false
+}
+
+func actionsUseForm(actions []ActionRoute) bool {
+	for _, action := range actions {
+		if action.Binding.Status != manifest.BackendBindingMissing && action.Binding.Status != manifest.BackendBindingUnsupportedSignature {
 			return true
 		}
 	}
@@ -64,11 +75,20 @@ func writeActionCase(builder *strings.Builder, action ActionRoute) {
 	builder.WriteString("\tcase ")
 	builder.WriteString(quote(action.Route))
 	builder.WriteString(":\n")
+	if action.Binding.Status != "" && action.Binding.Status != manifest.BackendBindingBound {
+		writeBackendNotImplemented(builder, action.Binding, "action")
+		builder.WriteString("\t\treturn true\n")
+		return
+	}
 	writeActionParseForm(builder)
 	builder.WriteString("\t\tvalues := gowdkform.FromURLValues(request.PostForm)\n")
 	writeActionInputDecode(builder, action)
-	writeActionPartialBranch(builder, action)
-	writeActionResult(builder, action)
+	if action.Binding.Status == manifest.BackendBindingBound {
+		writeActionBoundResult(builder, action)
+	} else {
+		writeActionPartialBranch(builder, action)
+		writeActionResult(builder, action)
+	}
 	builder.WriteString("\t\treturn true\n")
 }
 
@@ -86,11 +106,13 @@ func writeActionParseForm(builder *strings.Builder) {
 
 func writeActionInputDecode(builder *strings.Builder, action ActionRoute) {
 	if action.InputType == "" {
-		builder.WriteString("\t\tif _, err := gowdkform.DecodeExpected(values, ")
+		builder.WriteString("\t\tif decodedValues, err := gowdkform.DecodeExpected(values, ")
 		builder.WriteString(formSchemaLiteral(action.InputFields))
 		builder.WriteString("); err != nil {\n")
 		builder.WriteString("\t\t\tgowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, \"invalid form\")\n")
 		builder.WriteString("\t\t\treturn true\n")
+		builder.WriteString("\t\t} else {\n")
+		builder.WriteString("\t\t\tvalues = decodedValues\n")
 		builder.WriteString("\t\t}\n")
 		return
 	}
@@ -103,6 +125,7 @@ func writeActionInputDecode(builder *strings.Builder, action ActionRoute) {
 	builder.WriteString("\t\t\treturn true\n")
 	builder.WriteString("\t\t}\n")
 	builder.WriteString("\t\t_ = input\n")
+	builder.WriteString("\t\tvalues = input.Values\n")
 	if action.ValidatesInput {
 		builder.WriteString("\t\tvalidation := gowdkvalidation.Result{}\n")
 		builder.WriteString("\t\tfor _, field := range ")
@@ -117,6 +140,19 @@ func writeActionInputDecode(builder *strings.Builder, action ActionRoute) {
 		builder.WriteString("\t\t\treturn true\n")
 		builder.WriteString("\t\t}\n")
 	}
+}
+
+func writeActionBoundResult(builder *strings.Builder, action ActionRoute) {
+	builder.WriteString("\t\tresult, err := ")
+	builder.WriteString(action.BackendAlias)
+	builder.WriteString(".")
+	builder.WriteString(action.Binding.FunctionName)
+	builder.WriteString("(request.Context(), values)\n")
+	builder.WriteString("\t\tif err != nil {\n")
+	builder.WriteString("\t\t\tgowdkresponse.WriteNoStoreError(response, gowdkresponse.HandlerStatus(err, http.StatusInternalServerError), err.Error())\n")
+	builder.WriteString("\t\t\treturn true\n")
+	builder.WriteString("\t\t}\n")
+	builder.WriteString("\t\t_ = gowdkresponse.WriteNoStoreHTTP(response, result)\n")
 }
 
 func writeActionPartialBranch(builder *strings.Builder, action ActionRoute) {
@@ -183,7 +219,7 @@ func actionDecoderSource(actions []ActionRoute) string {
 		builder.WriteString(" struct {\n\tValues gowdkform.Values\n}\n\n")
 	}
 	for _, action := range actions {
-		if action.InputType == "" {
+		if action.Binding.Status == manifest.BackendBindingMissing || action.Binding.Status == manifest.BackendBindingUnsupportedSignature || action.InputType == "" {
 			continue
 		}
 		builder.WriteString("func ")
@@ -211,7 +247,7 @@ func uniqueInputTypes(actions []ActionRoute) []string {
 	seen := map[string]bool{}
 	var types []string
 	for _, action := range actions {
-		if action.InputType == "" || seen[action.InputType] {
+		if action.Binding.Status == manifest.BackendBindingMissing || action.Binding.Status == manifest.BackendBindingUnsupportedSignature || action.InputType == "" || seen[action.InputType] {
 			continue
 		}
 		seen[action.InputType] = true

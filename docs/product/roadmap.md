@@ -19,6 +19,14 @@ SSR addon renders at request time only where enabled.
 GOWDK Core:
   Ship apps.
 
+GOWDK Compiler:
+  Compile .gwdk package-peer pages, layouts, components, build-time data,
+  client islands, CSS, manifests, and generated adapter source.
+
+GOWDK App/Runtime Kit:
+  Run routing, actions, APIs, form decoding, response envelopes, server
+  fragments, CSRF, embedded assets, optional SSR, and one-binary serving.
+
 SSR Addon:
   Render this page at request time.
 

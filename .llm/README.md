@@ -13,3 +13,23 @@ Use workflows for task execution and templates for artifacts the project should 
 - `templates/adr.md`: architecture decision record.
 - `templates/test-plan.md`: verification plan.
 - `templates/pr-description.md`: pull request description.
+
+## Planning Map
+
+Use `plans/gowdk-world-roadmap.md` before starting broad feature work. It
+aligns the current plans around the product split:
+
+```text
+GOWDK component/page compiler
+        +
+GOWDK app/runtime kit
+        =
+Go-first full web app
+```
+
+For package-first backend work, use `features/deep-go-package-integration.md`
+and `plans/deep-go-package-integration.md` as the language source of truth.
+Use `features/go-native-adapter-boundary.md` and
+`plans/go-native-adapter-boundary.md` for generated adapter and runtime-kit
+implementation planning. Older first-slice feature and plan files were removed
+after their useful direction was folded into the roadmap.

@@ -11,6 +11,7 @@ import (
 // ActionRoutes extracts generated action routes from a parsed manifest.
 func ActionRoutes(app manifest.Manifest) ([]ActionRoute, error) {
 	var routes []ActionRoute
+	bindings := backendBindingsByBlock(app.BackendBindings)
 	for _, page := range app.Pages {
 		fieldsByAction, err := view.ActionFormSchema(page.Blocks.ViewBody)
 		if err != nil {
@@ -20,9 +21,6 @@ func ActionRoutes(app manifest.Manifest) ([]ActionRoute, error) {
 			fragments, err := actionFragments(action)
 			if err != nil {
 				return nil, fmt.Errorf("%s.%s: %w", page.ID, action.Name, err)
-			}
-			if strings.TrimSpace(action.Redirect) == "" && len(fragments) == 0 {
-				continue
 			}
 			routes = append(routes, ActionRoute{
 				PageID:         page.ID,
@@ -35,6 +33,7 @@ func ActionRoutes(app manifest.Manifest) ([]ActionRoute, error) {
 				ValidatesInput: action.ValidatesInput,
 				Redirect:       action.Redirect,
 				Fragments:      fragments,
+				Binding:        bindings[backendBindingKey("action", page.ID, action.Name, "POST", page.Route)],
 			})
 		}
 	}
@@ -42,6 +41,44 @@ func ActionRoutes(app manifest.Manifest) ([]ActionRoute, error) {
 		return nil, err
 	}
 	return routes, nil
+}
+
+// APIRoutes extracts generated API routes from a parsed manifest.
+func APIRoutes(app manifest.Manifest) ([]APIRoute, error) {
+	var routes []APIRoute
+	bindings := backendBindingsByBlock(app.BackendBindings)
+	for _, page := range app.Pages {
+		for _, api := range page.Blocks.APIs {
+			method := strings.TrimSpace(api.Method)
+			if method == "" {
+				method = "GET"
+			}
+			route := strings.TrimSpace(api.Route)
+			if route == "" {
+				route = page.Route
+			}
+			routes = append(routes, APIRoute{
+				PageID:  page.ID,
+				APIName: api.Name,
+				Method:  method,
+				Route:   route,
+				Binding: bindings[backendBindingKey("api", page.ID, api.Name, method, route)],
+			})
+		}
+	}
+	return routes, nil
+}
+
+func backendBindingsByBlock(bindings []manifest.BackendBinding) map[string]manifest.BackendBinding {
+	out := map[string]manifest.BackendBinding{}
+	for _, binding := range bindings {
+		out[backendBindingKey(binding.Kind, binding.PageID, binding.BlockName, binding.Method, binding.Route)] = binding
+	}
+	return out
+}
+
+func backendBindingKey(kind, pageID, blockName, method, route string) string {
+	return strings.Join([]string{kind, pageID, blockName, method, route}, "\x00")
 }
 
 func actionFragments(action manifest.Action) ([]ActionFragment, error) {

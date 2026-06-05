@@ -11,9 +11,10 @@ var routeParamPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 // Manifest is the compiler's normalized view of discovered .gwdk files.
 type Manifest struct {
-	Pages      []Page
-	Components []Component
-	Layouts    []Layout
+	Pages           []Page
+	Components      []Component
+	Layouts         []Layout
+	BackendBindings []BackendBinding
 }
 
 // SourcePosition is a 1-based source location in a parsed .gwdk file.
@@ -207,6 +208,31 @@ type API struct {
 	Span        SourceSpan
 	RouteSpan   SourceSpan
 	RouteParams []NamedSpan
+}
+
+// BackendBindingStatus describes whether a .gwdk backend block has a matching
+// same-package Go handler.
+type BackendBindingStatus string
+
+const (
+	BackendBindingBound                BackendBindingStatus = "bound"
+	BackendBindingMissing              BackendBindingStatus = "missing"
+	BackendBindingUnsupportedSignature BackendBindingStatus = "unsupported_signature"
+)
+
+// BackendBinding describes the Go handler selected for an act or api block.
+type BackendBinding struct {
+	Kind         string
+	PageID       string
+	Source       string
+	BlockName    string
+	Method       string
+	Route        string
+	ImportPath   string
+	PackageName  string
+	FunctionName string
+	Status       BackendBindingStatus
+	Message      string
 }
 
 // RenderMode returns the effective render mode for a page.

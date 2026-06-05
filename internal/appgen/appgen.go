@@ -3,6 +3,7 @@ package appgen
 
 import (
 	"fmt"
+	"go/format"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,7 +79,11 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (Result, err
 	if err := writeFileIfChanged(filepath.Join(absApp, modFileName), []byte(modulePayload)); err != nil {
 		return Result{}, err
 	}
-	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), []byte(appPackageSource(options.Actions, options.SSR))); err != nil {
+	appSource, err := formatGeneratedGo(appFileName, []byte(appPackageSource(options)))
+	if err != nil {
+		return Result{}, err
+	}
+	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), appSource); err != nil {
 		return Result{}, err
 	}
 	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(serverMainSource)); err != nil {
@@ -93,4 +98,57 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (Result, err
 		OutputDir:   targetOutput,
 		Files:       files,
 	}, nil
+}
+
+// GenerateBackendWithOptions writes a generated Go app that serves only
+// request-time backend routes for feature-bound actions and APIs.
+func GenerateBackendWithOptions(appDir string, options Options) (Result, error) {
+	if strings.TrimSpace(appDir) == "" {
+		return Result{}, fmt.Errorf("generated backend app directory is required")
+	}
+	absApp, err := filepath.Abs(appDir)
+	if err != nil {
+		return Result{}, err
+	}
+	options, err = resolveBackendOptions(options)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := validateActionRoutes(options.Actions); err != nil {
+		return Result{}, err
+	}
+	if err := os.MkdirAll(absApp, 0o755); err != nil {
+		return Result{}, err
+	}
+	modulePayload, err := moduleSource(options)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := writeFileIfChanged(filepath.Join(absApp, modFileName), []byte(modulePayload)); err != nil {
+		return Result{}, err
+	}
+	appSource, err := formatGeneratedGo(appFileName, []byte(backendAppPackageSource(options)))
+	if err != nil {
+		return Result{}, err
+	}
+	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), appSource); err != nil {
+		return Result{}, err
+	}
+	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(serverMainSource)); err != nil {
+		return Result{}, err
+	}
+	return Result{
+		AppDir:      absApp,
+		MainPath:    filepath.Join(absApp, mainFileName),
+		PackagePath: filepath.Join(absApp, appFileName),
+		ModulePath:  filepath.Join(absApp, modFileName),
+	}, nil
+}
+
+func formatGeneratedGo(name string, source []byte) ([]byte, error) {
+	formatted, err := format.Source(source)
+	if err != nil {
+		return nil, fmt.Errorf("format generated %s: %w", name, err)
+	}
+	return formatted, nil
 }

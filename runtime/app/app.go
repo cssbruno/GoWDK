@@ -34,6 +34,7 @@ type Handler struct {
 	Identity   Identity
 	Assets     asset.Manifest
 	Action     HandlerFunc
+	API        HandlerFunc
 	SSRExact   HandlerFunc
 	SSRDynamic HandlerFunc
 }
@@ -76,16 +77,19 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 		acknowledgeCookie(response, request)
 		return
 	}
+	if request.URL.Path == "/_gowdk/health" {
+		handler.health(response)
+		return
+	}
+	if handler.API != nil && handler.API(response, request) {
+		return
+	}
 	if request.Method == http.MethodPost && handler.Action != nil && handler.Action(response, request) {
 		return
 	}
 	if request.Method != http.MethodGet && request.Method != http.MethodHead {
 		response.Header().Set("Allow", "GET, HEAD")
 		http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if request.URL.Path == "/_gowdk/health" {
-		handler.health(response)
 		return
 	}
 	if handler.SSRExact != nil && handler.SSRExact(response, request) {

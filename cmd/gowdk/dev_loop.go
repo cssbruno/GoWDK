@@ -31,20 +31,20 @@ func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 		return false, nil
 	}
 
-	options, outputDir, appDir, binaryPath, wasmPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
 	if err != nil {
 		return true, err
 	}
 	if err := loadBuildConfig(&options, configPath); err != nil {
 		return true, err
 	}
-	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
-		return true, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, or explicit files")
+	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
+		return true, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
 	}
-	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
 		return false, nil
 	}
-	if strings.TrimSpace(appDir) != "" || strings.TrimSpace(binaryPath) != "" || strings.TrimSpace(wasmPath) != "" {
+	if strings.TrimSpace(appDir) != "" || strings.TrimSpace(binaryPath) != "" || strings.TrimSpace(wasmPath) != "" || strings.TrimSpace(backendAppDir) != "" || strings.TrimSpace(backendBinaryPath) != "" {
 		return false, nil
 	}
 	if inputChangeTouchesConfig(change, configPath) {
@@ -227,17 +227,17 @@ func (change inputChange) summary() string {
 }
 
 func buildInputSnapshot(args []string) (inputSnapshot, error) {
-	options, outputDir, appDir, binaryPath, wasmPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
 	if err != nil {
 		return nil, err
 	}
 	if err := loadBuildConfig(&options, configPath); err != nil {
 		return nil, err
 	}
-	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
-		return nil, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, or explicit files")
+	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
+		return nil, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
 	}
-	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
 		targets, err := selectBuildTargets(options.Config.Build.Targets, targetNames)
 		if err != nil {
 			return nil, err

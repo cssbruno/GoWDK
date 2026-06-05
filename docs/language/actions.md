@@ -24,9 +24,16 @@ Current behavior:
   body is captured for future generated handlers.
 - `<form g:post={submit}>` lowers to a standard POST form for a supported
   action.
-- `gowdk build --app --bin` generates POST handlers for non-dynamic page routes
-  that decode direct literal fields from same-page `g:post` forms and redirect
-  with HTTP 303.
+- `gowdk build --app --bin` generates POST handlers for non-dynamic page routes.
+  If a same-directory Go package exports a matching handler function, the
+  generated app decodes direct literal fields from same-page `g:post` forms,
+  validates required controls, calls that function, and writes its
+  `runtime/response.Response`.
+- `act login` binds to exported Go function `Login` in the same package as the
+  `.gwdk` file when the function has signature
+  `func(context.Context, form.Values) (response.Response, error)`.
+- Missing or unsupported action handlers are not build errors. Generated apps
+  return HTTP 501 with a clear message for those routes.
 - Generated first-slice input decoders create a named input wrapper, preserve
   repeated submitted values, allow missing fields, and reject unexpected fields
   with HTTP 400.
@@ -53,11 +60,11 @@ Current behavior:
   defined.
 - Form values are not logged.
 
-The current generated app does not resolve real user Go input structs, wire the
-registry-backed action codegen package into `gowdk build --app`, wire CSRF into
-generated handlers, run user-defined validation, or generate general fragment
-routes. It can return the first parsed action fragment for supported partial
-POST requests.
+The current generated app does not resolve real user Go input structs, wire
+CSRF into generated handlers, run field-specific user validation, or generate
+general fragment routes. Feature-bound handlers receive `form.Values`, not a
+user struct. They can return redirects, fragments, HTML, or JSON through
+`runtime/response.Response`.
 
 ## Forms
 

@@ -13,6 +13,10 @@ GOWDK needs a deliberately small, Go-like client language that feels familiar to
 Go developers, type-checks at compile time, and compiles to generated JavaScript
 without npm. WASM stays explicit for cases that truly need browser-side Go.
 
+This is a GOWDK compiler feature, not a fork of Go. The `client {}` language is
+a constrained `.gwdk` subset that can read Go-derived component contracts, but
+it is not arbitrary Go source and does not require a custom Go compiler.
+
 ## Goals
 
 - Define a Go-ish `.gwdk` client language for local component interactivity.
@@ -31,6 +35,7 @@ without npm. WASM stays explicit for cases that truly need browser-side Go.
 - Arbitrary package imports inside client logic.
 - Implicit WASM for stateful components.
 - General-purpose async application framework in the first slices.
+- Forking or replacing the Go compiler.
 
 ## Users And Permissions
 
@@ -59,6 +64,8 @@ without npm. WASM stays explicit for cases that truly need browser-side Go.
 The language is Go-like, but intentionally not Go:
 
 ```gwdk
+package ui
+
 @component Counter
 
 import ui "github.com/acme/app/ui"
@@ -95,6 +102,8 @@ Rules:
   `contains`; they are not Go imports.
 - The compiler lowers the subset to generated JavaScript.
 - Unsupported syntax is a compile error, not a runtime fallback.
+- The source stays inside `.gwdk`; normal Go packages still own server logic and
+  component contract types.
 
 ## Requirements
 

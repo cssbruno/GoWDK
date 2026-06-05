@@ -109,9 +109,6 @@ func actionRoutes(page manifest.Page, data map[string]string) map[string]string 
 		route = strings.ReplaceAll(route, "{"+name+"}", value)
 	}
 	for _, action := range page.Blocks.Actions {
-		if strings.TrimSpace(action.Redirect) == "" && len(action.Fragments) == 0 {
-			continue
-		}
 		routes[action.Name] = route
 	}
 	return routes

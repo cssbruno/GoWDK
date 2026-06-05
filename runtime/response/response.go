@@ -28,12 +28,13 @@ const (
 
 // Response is the generated runtime response envelope.
 type Response struct {
-	Kind   Kind
-	Status int
-	Body   string
-	Target string
-	Swap   SwapMode
-	URL    string
+	Kind    Kind
+	Status  int
+	Body    string
+	Target  string
+	Swap    SwapMode
+	URL     string
+	Cookies []http.Cookie
 }
 
 // HandlerError wraps failures raised by generated handlers.
@@ -84,6 +85,12 @@ func RedirectTo(url string) Response {
 	return Response{Kind: Redirect, Status: 303, URL: url}
 }
 
+// WithCookie returns a copy of result that sets cookie when written to HTTP.
+func WithCookie(result Response, cookie http.Cookie) Response {
+	result.Cookies = append(result.Cookies, cookie)
+	return result
+}
+
 // FragmentFor creates a partial fragment response for a DOM target.
 func FragmentFor(target, body string) Response {
 	return Response{Kind: Fragment, Status: 200, Target: target, Swap: SwapInnerHTML, Body: body}
@@ -114,6 +121,9 @@ func JSONValue(status int, value any) (Response, error) {
 // WriteHTTP writes a runtime response envelope to net/http.
 func WriteHTTP(writer http.ResponseWriter, result Response) error {
 	status := statusOrDefault(result)
+	for _, cookie := range result.Cookies {
+		http.SetCookie(writer, &cookie)
+	}
 	switch result.Kind {
 	case Redirect:
 		writer.Header().Set("Location", result.URL)

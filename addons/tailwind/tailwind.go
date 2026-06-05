@@ -14,6 +14,8 @@ import (
 )
 
 const (
+	// ImportPath is the canonical Go import path for the Tailwind addon.
+	ImportPath        = "github.com/cssbruno/gowdk/addons/tailwind"
 	defaultCommand    = "tailwindcss"
 	defaultOutputPath = "assets/app.css"
 	defaultHref       = "/assets/app.css"

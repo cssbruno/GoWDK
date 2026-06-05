@@ -18,11 +18,13 @@ type Result struct {
 
 // Options configures generated app output.
 type Options struct {
-	Actions    []ActionRoute
-	SSR        []SSRRoute
-	AutoRoutes bool
-	Config     gowdk.Config
-	Manifest   *manifest.Manifest
+	Actions      []ActionRoute
+	APIs         []APIRoute
+	SSR          []SSRRoute
+	AutoRoutes   bool
+	ProxyBackend bool
+	Config       gowdk.Config
+	Manifest     *manifest.Manifest
 }
 
 // ActionRoute describes a generated action handler.
@@ -37,6 +39,18 @@ type ActionRoute struct {
 	ValidatesInput bool
 	Redirect       string
 	Fragments      []ActionFragment
+	Binding        manifest.BackendBinding
+	BackendAlias   string
+}
+
+// APIRoute describes a generated API handler.
+type APIRoute struct {
+	PageID       string
+	APIName      string
+	Method       string
+	Route        string
+	Binding      manifest.BackendBinding
+	BackendAlias string
 }
 
 // ActionFragment describes a generated partial response fragment.

@@ -69,8 +69,9 @@ Every successful disk build writes `gowdk-build-report.json`.
 
 Open `http://127.0.0.1:8080/`.
 
-`serve` serves generated build output files only. It does not run generated actions,
-API handlers, partial fragments, or SSR routes.
+`serve` serves generated build output files only. It does not run generated
+actions, API handlers, partial fragments, or SSR routes. Use `gowdk build
+--app --bin` for a generated binary that runs request-time handlers.
 
 ## Development Loop
 
@@ -121,14 +122,15 @@ Implemented today:
 - Config-based discovery, module selection, and named build targets.
 - Generated embedded app source, local binaries, and Go `js/wasm` deploy
   artifacts.
-- First-slice action redirects, partial action fragments, and concrete or
-  dynamic SSR pages without `load {}` in generated binaries.
+- Feature-bound action/API handlers, first-slice action redirects, partial
+  action fragments, and concrete or dynamic SSR pages without `load {}` in
+  generated binaries.
 - CLI tooling for tokens, formatting, validation, manifest, sitemap, routes,
   dev, serve, and LSP.
 
 Planned or partial:
 
-- Real user Go action execution and CSRF wiring in generated handlers.
-- Generated API handlers.
+- CSRF wiring in generated handlers.
+- Typed user input structs for action handlers.
 - Request-time `load {}` execution and guard enforcement.
 - Full browser-side Go/WASM island ABI.

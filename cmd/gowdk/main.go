@@ -14,13 +14,14 @@ import (
 	"github.com/cssbruno/gowdk/internal/appgen"
 	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/codegen"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/lsp"
 )
 
 const (
 	version    = "0.1.5"
-	buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]"
+	buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
 )
 
 var (
@@ -86,7 +87,7 @@ func usage() {
 	fmt.Println("  manifest [--config <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
 	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print generated route bindings JSON")
-	fmt.Println("  build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...] compile .gwdk files into build output")
+	fmt.Println("  build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
 	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload")
 	fmt.Println("  serve --dir <dir> [--addr <addr>] serve generated build output locally")
 	fmt.Println("  lsp [--ssr]              start the language server over stdio")
@@ -394,36 +395,40 @@ func routesJSON(args []string) error {
 }
 
 func build(args []string) error {
-	options, outputDir, appDir, binaryPath, wasmPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
 	if err != nil {
 		return err
 	}
 	if err := loadBuildConfig(&options, configPath); err != nil {
 		return err
 	}
-	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
-		return fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, or explicit files")
+	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
+		return fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
 	}
-	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
 		return buildConfiguredTargets(options, targetNames)
 	}
 	return buildOnce(options, buildRequest{
-		OutputDir:  outputDir,
-		AppDir:     appDir,
-		BinaryPath: binaryPath,
-		WASMPath:   wasmPath,
-		Modules:    moduleNames,
-		Paths:      paths,
+		OutputDir:         outputDir,
+		AppDir:            appDir,
+		BinaryPath:        binaryPath,
+		WASMPath:          wasmPath,
+		BackendAppDir:     backendAppDir,
+		BackendBinaryPath: backendBinaryPath,
+		Modules:           moduleNames,
+		Paths:             paths,
 	})
 }
 
 type buildRequest struct {
-	OutputDir  string
-	AppDir     string
-	BinaryPath string
-	WASMPath   string
-	Modules    []string
-	Paths      []string
+	OutputDir         string
+	AppDir            string
+	BinaryPath        string
+	WASMPath          string
+	BackendAppDir     string
+	BackendBinaryPath string
+	Modules           []string
+	Paths             []string
 }
 
 func buildOnce(options cliOptions, request buildRequest) error {
@@ -433,6 +438,9 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	}
 	if strings.TrimSpace(request.WASMPath) != "" && strings.TrimSpace(request.AppDir) == "" {
 		return fmt.Errorf("gowdk build --wasm requires --app <dir>")
+	}
+	if strings.TrimSpace(request.BackendBinaryPath) != "" && strings.TrimSpace(request.BackendAppDir) == "" {
+		return fmt.Errorf("gowdk build --backend-bin requires --backend-app <dir>")
 	}
 	if outputDir == "" {
 		outputDir = options.Config.Build.Output
@@ -460,6 +468,7 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	if diagnostics.HasErrors() {
 		return fmt.Errorf("build failed")
 	}
+	app = compiler.BindBackendHandlers(app)
 
 	result, err := buildgen.Build(options.Config, app, outputDir)
 	if err != nil {
@@ -488,11 +497,14 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	appDir := request.AppDir
 	binaryPath := request.BinaryPath
 	wasmPath := request.WASMPath
+	backendAppDir := request.BackendAppDir
+	backendBinaryPath := request.BackendBinaryPath
 	if strings.TrimSpace(appDir) != "" {
 		app, err := appgen.GenerateWithOptions(outputDir, appDir, appgen.Options{
-			AutoRoutes: true,
-			Config:     options.Config,
-			Manifest:   &app,
+			AutoRoutes:   true,
+			Config:       options.Config,
+			Manifest:     &app,
+			ProxyBackend: strings.TrimSpace(backendAppDir) != "",
 		})
 		if err != nil {
 			return err
@@ -515,10 +527,30 @@ func buildOnce(options cliOptions, request buildRequest) error {
 			fmt.Println(built)
 		}
 	}
+	if strings.TrimSpace(backendAppDir) != "" {
+		app, err := appgen.GenerateBackendWithOptions(backendAppDir, appgen.Options{
+			AutoRoutes: true,
+			Config:     options.Config,
+			Manifest:   &app,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Println(app.ModulePath)
+		fmt.Println(app.PackagePath)
+		fmt.Println(app.MainPath)
+		if strings.TrimSpace(backendBinaryPath) != "" {
+			built, err := appgen.BuildBinary(app.AppDir, backendBinaryPath)
+			if err != nil {
+				return err
+			}
+			fmt.Println(built)
+		}
+	}
 	return nil
 }
 
-func shouldBuildConfiguredTargets(config gowdk.Config, targetNames []string, outputDir, appDir, binaryPath, wasmPath string, moduleNames, paths []string) bool {
+func shouldBuildConfiguredTargets(config gowdk.Config, targetNames []string, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, moduleNames, paths []string) bool {
 	if len(targetNames) > 0 {
 		return true
 	}
@@ -529,15 +561,19 @@ func shouldBuildConfiguredTargets(config gowdk.Config, targetNames []string, out
 		strings.TrimSpace(appDir) == "" &&
 		strings.TrimSpace(binaryPath) == "" &&
 		strings.TrimSpace(wasmPath) == "" &&
+		strings.TrimSpace(backendAppDir) == "" &&
+		strings.TrimSpace(backendBinaryPath) == "" &&
 		len(moduleNames) == 0 &&
 		len(paths) == 0
 }
 
-func hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath string, moduleNames, paths []string) bool {
+func hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, moduleNames, paths []string) bool {
 	return strings.TrimSpace(outputDir) != "" ||
 		strings.TrimSpace(appDir) != "" ||
 		strings.TrimSpace(binaryPath) != "" ||
 		strings.TrimSpace(wasmPath) != "" ||
+		strings.TrimSpace(backendAppDir) != "" ||
+		strings.TrimSpace(backendBinaryPath) != "" ||
 		len(moduleNames) > 0 ||
 		len(paths) > 0
 }
@@ -551,11 +587,13 @@ func buildConfiguredTargets(options cliOptions, targetNames []string) error {
 		targetOptions := options
 		targetOptions.Config.Build.Output = target.Output
 		if err := buildOnce(targetOptions, buildRequest{
-			OutputDir:  target.Output,
-			AppDir:     target.App,
-			BinaryPath: target.Binary,
-			WASMPath:   target.WASM,
-			Modules:    target.Modules,
+			OutputDir:         target.Output,
+			AppDir:            target.App,
+			BinaryPath:        target.Binary,
+			WASMPath:          target.WASM,
+			BackendAppDir:     target.BackendApp,
+			BackendBinaryPath: target.BackendBinary,
+			Modules:           target.Modules,
 		}); err != nil {
 			return fmt.Errorf("build target %q: %w", target.Name, err)
 		}
@@ -585,10 +623,15 @@ func selectBuildTargets(targets []gowdk.BuildTargetConfig, targetNames []string)
 		if strings.TrimSpace(target.WASM) != "" && strings.TrimSpace(target.App) == "" {
 			return nil, fmt.Errorf("build target %q wasm requires app", name)
 		}
+		if strings.TrimSpace(target.BackendBinary) != "" && strings.TrimSpace(target.BackendApp) == "" {
+			return nil, fmt.Errorf("build target %q backend binary requires backend app", name)
+		}
 		target.Output = strings.TrimSpace(target.Output)
 		target.App = strings.TrimSpace(target.App)
 		target.Binary = strings.TrimSpace(target.Binary)
 		target.WASM = strings.TrimSpace(target.WASM)
+		target.BackendApp = strings.TrimSpace(target.BackendApp)
+		target.BackendBinary = strings.TrimSpace(target.BackendBinary)
 		byName[name] = target
 		normalized = append(normalized, target)
 	}
@@ -671,12 +714,14 @@ func languageServer(args []string) error {
 	return lsp.NewServer(options.Config).Serve(os.Stdin, os.Stdout)
 }
 
-func parseBuildOptions(args []string) (cliOptions, string, string, string, string, string, []string, []string, []string, error) {
+func parseBuildOptions(args []string) (cliOptions, string, string, string, string, string, string, string, []string, []string, []string, error) {
 	var options cliOptions
 	var outputDir string
 	var appDir string
 	var binaryPath string
 	var wasmPath string
+	var backendAppDir string
+	var backendBinaryPath string
 	var configPath string
 	var targetNames []string
 	var moduleNames []string
@@ -692,7 +737,7 @@ func parseBuildOptions(args []string) (cliOptions, string, string, string, strin
 		case arg == "--out":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
 			outputDir = args[i]
 		case len(arg) > len("--out=") && arg[:len("--out=")] == "--out=":
@@ -700,49 +745,77 @@ func parseBuildOptions(args []string) (cliOptions, string, string, string, strin
 		case arg == "--app":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
 			appDir = args[i]
 			if strings.TrimSpace(appDir) == "" {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated app directory is required")
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated app directory is required")
 			}
 		case len(arg) > len("--app=") && arg[:len("--app=")] == "--app=":
 			appDir = arg[len("--app="):]
 			if strings.TrimSpace(appDir) == "" {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated app directory is required")
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated app directory is required")
 			}
 		case arg == "--bin":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
 			binaryPath = args[i]
 			if strings.TrimSpace(binaryPath) == "" {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("binary output path is required")
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("binary output path is required")
 			}
 		case len(arg) > len("--bin=") && arg[:len("--bin=")] == "--bin=":
 			binaryPath = arg[len("--bin="):]
 			if strings.TrimSpace(binaryPath) == "" {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("binary output path is required")
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("binary output path is required")
 			}
 		case arg == "--wasm":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
 			wasmPath = args[i]
 			if strings.TrimSpace(wasmPath) == "" {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("wasm output path is required")
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("wasm output path is required")
 			}
 		case len(arg) > len("--wasm=") && arg[:len("--wasm=")] == "--wasm=":
 			wasmPath = arg[len("--wasm="):]
 			if strings.TrimSpace(wasmPath) == "" {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("wasm output path is required")
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("wasm output path is required")
+			}
+		case arg == "--backend-app":
+			i++
+			if i >= len(args) {
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+			}
+			backendAppDir = args[i]
+			if strings.TrimSpace(backendAppDir) == "" {
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated backend app directory is required")
+			}
+		case len(arg) > len("--backend-app=") && arg[:len("--backend-app=")] == "--backend-app=":
+			backendAppDir = arg[len("--backend-app="):]
+			if strings.TrimSpace(backendAppDir) == "" {
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated backend app directory is required")
+			}
+		case arg == "--backend-bin":
+			i++
+			if i >= len(args) {
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+			}
+			backendBinaryPath = args[i]
+			if strings.TrimSpace(backendBinaryPath) == "" {
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("backend binary output path is required")
+			}
+		case len(arg) > len("--backend-bin=") && arg[:len("--backend-bin=")] == "--backend-bin=":
+			backendBinaryPath = arg[len("--backend-bin="):]
+			if strings.TrimSpace(backendBinaryPath) == "" {
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("backend binary output path is required")
 			}
 		case arg == "--config":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
 			configPath = args[i]
 		case len(arg) > len("--config=") && arg[:len("--config=")] == "--config=":
@@ -750,7 +823,7 @@ func parseBuildOptions(args []string) (cliOptions, string, string, string, strin
 		case arg == "--target":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
 			targetNames = appendNames(targetNames, args[i])
 		case len(arg) > len("--target=") && arg[:len("--target=")] == "--target=":
@@ -758,19 +831,19 @@ func parseBuildOptions(args []string) (cliOptions, string, string, string, strin
 		case arg == "--module":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
 			}
 			moduleNames = appendNames(moduleNames, args[i])
 		case len(arg) > len("--module=") && arg[:len("--module=")] == "--module=":
 			moduleNames = appendNames(moduleNames, arg[len("--module="):])
 		case len(arg) > 0 && arg[0] == '-':
-			return options, "", "", "", "", "", nil, nil, nil, fmt.Errorf("unknown build flag %q", arg)
+			return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("unknown build flag %q", arg)
 		default:
 			paths = append(paths, arg)
 		}
 	}
 
-	return options, outputDir, appDir, binaryPath, wasmPath, configPath, targetNames, moduleNames, paths, nil
+	return options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, nil
 }
 
 func appendModuleNames(moduleNames []string, value string) []string {
@@ -812,23 +885,40 @@ type routeBindingsReport struct {
 }
 
 type routeBindingJSON struct {
-	Kind    codegen.RouteKind `json:"kind"`
-	Method  string            `json:"method"`
-	Route   string            `json:"route"`
-	PageID  string            `json:"pageId"`
-	Handler string            `json:"handler"`
+	Kind           codegen.RouteKind   `json:"kind"`
+	Method         string              `json:"method"`
+	Route          string              `json:"route"`
+	PageID         string              `json:"pageId"`
+	Handler        string              `json:"handler"`
+	BackendBinding *backendBindingJSON `json:"backendBinding,omitempty"`
+}
+
+type backendBindingJSON struct {
+	Status       string `json:"status"`
+	ImportPath   string `json:"importPath,omitempty"`
+	FunctionName string `json:"functionName,omitempty"`
+	Message      string `json:"message,omitempty"`
 }
 
 func routeBindingsJSON(bindings []codegen.RouteBinding) routeBindingsReport {
 	routes := make([]routeBindingJSON, 0, len(bindings))
 	for _, binding := range bindings {
-		routes = append(routes, routeBindingJSON{
+		item := routeBindingJSON{
 			Kind:    binding.Kind,
 			Method:  binding.Method,
 			Route:   binding.Route,
 			PageID:  binding.PageID,
 			Handler: binding.Handler,
-		})
+		}
+		if binding.BindingStatus != "" {
+			item.BackendBinding = &backendBindingJSON{
+				Status:       string(binding.BindingStatus),
+				ImportPath:   binding.BindingImportPath,
+				FunctionName: binding.BindingFunction,
+				Message:      binding.BindingMessage,
+			}
+		}
+		routes = append(routes, item)
 	}
 	return routeBindingsReport{
 		Version: 1,

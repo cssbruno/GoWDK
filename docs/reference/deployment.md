@@ -132,16 +132,20 @@ artifact. It is separate from browser island assets emitted by
 Generated binaries currently support:
 
 - Embedded app file serving.
+- Feature-bound same-package action handlers.
+- Feature-bound same-package API handlers.
 - First-slice same-page POST action redirects.
 - First-slice required-field validation for directly declared form controls.
 - First-slice partial action fragment responses.
 - First-slice concrete and dynamic `@render ssr` pages without `load {}`.
+- Optional split frontend/backend generation with `--backend-app` and
+  `--backend-bin`; the frontend proxies backend routes to
+  `GOWDK_BACKEND_ORIGIN`.
 
 Generated binaries do not yet support:
 
-- Real user Go action execution.
 - CSRF-wired generated handlers.
-- Generated API handlers.
+- Typed user input structs for action handlers.
 - Request-time `load {}` execution.
 - Guard enforcement.
 - General fragment routes.

@@ -1,8 +1,10 @@
 package appgen
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
@@ -11,7 +13,7 @@ import (
 
 const gowdkRuntimeModulePath = "github.com/cssbruno/gowdk"
 
-func moduleSource(_ Options) (string, error) {
+func moduleSource(options Options) (string, error) {
 	version := gowdkRuntimeModuleVersion()
 	if version == "" {
 		version = "v0.0.0"
@@ -38,8 +40,53 @@ func moduleSource(_ Options) (string, error) {
 		builder.WriteString(filepath.ToSlash(root))
 		builder.WriteByte('\n')
 	}
+	if appModule, ok := currentAppModule(); ok && appModule.Path != gowdkRuntimeModulePath && optionsUsesModuleImports(options, appModule.Path) {
+		builder.WriteByte('\n')
+		builder.WriteString("require ")
+		builder.WriteString(appModule.Path)
+		builder.WriteString(" v0.0.0\n")
+		builder.WriteString("replace ")
+		builder.WriteString(appModule.Path)
+		builder.WriteString(" => ")
+		builder.WriteString(filepath.ToSlash(appModule.Dir))
+		builder.WriteByte('\n')
+	}
 
 	return builder.String(), nil
+}
+
+type appModuleInfo struct {
+	Path string
+	Dir  string
+}
+
+func currentAppModule() (appModuleInfo, bool) {
+	command := exec.Command("go", "list", "-m", "-json")
+	output, err := command.Output()
+	if err != nil {
+		return appModuleInfo{}, false
+	}
+	var info appModuleInfo
+	if err := json.Unmarshal(output, &info); err != nil {
+		return appModuleInfo{}, false
+	}
+	if strings.TrimSpace(info.Path) == "" || strings.TrimSpace(info.Dir) == "" {
+		return appModuleInfo{}, false
+	}
+	return info, true
+}
+
+func optionsUsesModuleImports(options Options, modulePath string) bool {
+	modulePath = strings.TrimRight(strings.TrimSpace(modulePath), "/")
+	if modulePath == "" {
+		return false
+	}
+	for importPath := range backendImports(options.Actions, options.APIs) {
+		if importPath == modulePath || strings.HasPrefix(importPath, modulePath+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func gowdkRuntimeModuleVersion() string {

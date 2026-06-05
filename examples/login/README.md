@@ -1,51 +1,31 @@
 # Login Example
 
-This is an integrated auth-feature GOWDK login example. The auth feature keeps
-its `.gwdk` UI, typed render state, backend routes, and backend entrypoint
-together. At runtime, the generated GOWDK frontend binary and the feature-owned
-backend binary run at the same time on different ports.
+This is a feature-bound auth example. The `.gwdk` files declare the login
+actions and session API, and GOWDK discovers matching Go handlers in the same
+feature package.
 
-- GOWDK owns the login UI, app dashboard page, and generated frontend binary.
-- `src/features/auth/auth.go` is the shared feature package. GOWDK imports it
-  for login form state, and the backend binary imports it for API/session
-  routes.
-- Go owns the backend entrypoint until generated GOWDK actions can own this
-  flow directly.
+- One generated binary is the default.
+- `src/features/auth/auth.go` implements `Login`, `Logout`, and `Session`.
+- Split frontend/backend binaries are optional and generated from the same
+  declarations.
 - No hand-written JavaScript is used.
 - No HTML lives in Go code.
 
 ## Files
 
-- `gowdk.config.go`: configures source discovery, CSS discovery, and build output.
-- `src/features/auth/login.page.gwdk`: root page that renders `LoginApp`.
-- `src/features/auth/login-app.cmp.gwdk`: login form component that posts to the feature-owned backend binary.
-- `src/features/auth/auth.go`: shared auth feature state and backend route implementation.
-- `src/features/auth/dashboard.page.gwdk`: app dashboard page served by the frontend binary.
-- `src/features/auth/login-error.page.gwdk`: frontend fallback error route.
-- `styles/auth.css`: CSS input selected by the GWDK pages with `@css auth`.
-- `src/features/auth/backend/main.go`: small backend binary entrypoint that imports the auth feature package.
-- `dist/site`: generated app frontend output.
-- `.gowdk/frontend`: generated frontend Go app source.
-- `bin/login-frontend`: generated GOWDK frontend binary.
-- `bin/login-backend`: user-owned Go backend binary.
-
-## Structure
-
-```text
-examples/login/
-  gowdk.config.go
-  src/features/auth/
-    login.page.gwdk
-    login-app.cmp.gwdk
-    dashboard.page.gwdk
-    login-error.page.gwdk
-    auth.go
-    backend/main.go
-  styles/auth.css
-  dist/site/
-  .gowdk/frontend/
-  bin/
-```
+- `gowdk.config.go`: configures one-binary and split generated targets.
+- `src/features/auth/login.page.gwdk`: root login page with `act login` and
+  `api session`.
+- `src/features/auth/dashboard.page.gwdk`: dashboard page with `act logout`.
+- `src/features/auth/auth.go`: same-package feature-bound handlers.
+- `src/features/auth/login-app.cmp.gwdk`: reusable login panel component.
+- `src/features/auth/login-error.page.gwdk`: failed-login route.
+- `styles/auth.css`: CSS input selected by pages with `@css auth`.
+- `dist/site`: generated app output.
+- `.gowdk/app`: generated one-binary Go app source.
+- `.gowdk/frontend` and `.gowdk/backend`: generated split app sources.
+- `bin/login`: generated one-binary app.
+- `bin/login-frontend` and `bin/login-backend`: generated split binaries.
 
 ## Run
 
@@ -56,12 +36,7 @@ cd examples/login
 make serve
 ```
 
-Open:
-
-```text
-frontend: http://127.0.0.1:8090/
-backend:  http://127.0.0.1:8091/_backend/health
-```
+Open `http://127.0.0.1:8090/`.
 
 Use:
 
@@ -70,54 +45,45 @@ email: demo@example.com
 password: demo-password
 ```
 
-The visible login form is rendered by the GOWDK frontend binary using state
-from `src/features/auth/auth.go`. Submitting the form posts to the
-feature-owned backend binary, which imports the same package, sets a signed
-session cookie, and redirects back to the frontend dashboard.
+The generated app calls `auth.Login`, sets a signed HttpOnly SameSite session
+cookie, and redirects to `/dashboard`. `GET /api/session` calls `auth.Session`.
+
+## Split Mode
+
+Split mode keeps the same `.gwdk` declarations but generates separate frontend
+and backend binaries. The frontend serves app output and proxies action/API
+routes to `GOWDK_BACKEND_ORIGIN`.
+
+```sh
+cd examples/login
+make serve-split
+```
+
+Open:
+
+```text
+frontend: http://127.0.0.1:8090/
+backend:  http://127.0.0.1:8091/
+```
 
 ## Equivalent Commands
 
 ```sh
 cd examples/login
-go run ../../cmd/gowdk build
-go build -o bin/login-backend ./src/features/auth/backend
-GOWDK_BACKEND_ADDR=127.0.0.1:8091 GOWDK_FRONTEND_ORIGIN=http://127.0.0.1:8090 bin/login-backend
-GOWDK_ADDR=127.0.0.1:8090 bin/login-frontend
+go run ../../cmd/gowdk build --target app
+GOWDK_ADDR=127.0.0.1:8090 bin/login
 ```
 
-## Development Loop
-
-Use two terminals:
-
-Terminal 1:
+For split mode:
 
 ```sh
-cd examples/login
-go run ../../cmd/gowdk dev --target frontend
+go run ../../cmd/gowdk build --target split
+GOWDK_ADDR=127.0.0.1:8091 bin/login-backend
+GOWDK_ADDR=127.0.0.1:8090 GOWDK_BACKEND_ORIGIN=http://127.0.0.1:8091 bin/login-frontend
 ```
 
-Terminal 2:
+## Backend Routes
 
-```sh
-cd examples/login
-go run ./src/features/auth/backend
-```
-
-Open `http://127.0.0.1:8090/`.
-
-## Backend Reference Routes
-
-- `GET /_backend/health`: backend health check.
-- `POST /api/login`: validates origin, checks credentials, creates a signed
-  HttpOnly SameSite session cookie, and redirects to the frontend dashboard or
-  returns JSON.
-- `GET /api/session`: returns the current backend session as JSON.
-- `POST /api/logout`: deletes the backend session, clears the cookie, and
-  redirects to the frontend root.
-
-## Current GOWDK Limitation
-
-The backend reference API stays inside the auth feature as Go code because
-GOWDK does not yet support user-owned login actions with sessions, CSRF, and
-guard enforcement in generated handlers. When that lands, the backend boundary
-should move into `act {}` and guard-aware `.gwdk` declarations.
+- `POST /`: bound from `act login` to `auth.Login`.
+- `POST /dashboard`: bound from `act logout` to `auth.Logout`.
+- `GET /api/session`: bound from `api session` to `auth.Session`.

@@ -19,9 +19,6 @@ func validateActionRoutes(routes []ActionRoute) error {
 				return fmt.Errorf("generated action %s.%s: %w", route.PageID, route.ActionName, err)
 			}
 		}
-		if strings.TrimSpace(route.Redirect) == "" && len(route.Fragments) == 0 {
-			return fmt.Errorf("generated action %s.%s must declare a redirect or fragment", route.PageID, route.ActionName)
-		}
 		if err := validateInputFields(route); err != nil {
 			return err
 		}

@@ -11,6 +11,27 @@ just ships apps.
 
 GOWDK is a portable Go web compiler.
 
+## Product Shape
+
+GOWDK should grow as two coordinated layers:
+
+```text
+GOWDK component/page compiler
+        +
+GOWDK app/runtime kit
+        =
+Go-first full web app
+```
+
+The compiler owns `.gwdk` pages, layouts, components, build-time output,
+manifests, generated assets, and generated adapter source. The app/runtime kit
+owns routing, actions, APIs, form decoding, response envelopes, CSRF, partial
+fragments, SSR addon contracts, embedded assets, and one-binary serving.
+
+GOWDK should improve Go web authoring through `.gwdk` compilation, runtime-kit
+contracts, and generated adapters before considering any custom Go compiler.
+User application behavior stays in normal Go packages.
+
 ## Target Users
 
 - Go developers building product applications who want build-time output, typed backend behavior, and one-binary deployment.

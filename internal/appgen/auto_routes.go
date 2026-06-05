@@ -2,8 +2,13 @@ package appgen
 
 import (
 	"fmt"
+	"path"
+	"sort"
+	"strings"
+	"unicode"
 
 	"github.com/cssbruno/gowdk/internal/buildgen"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func resolveOptions(outputDir string, options Options) (Options, error) {
@@ -19,14 +24,104 @@ func resolveOptions(outputDir string, options Options) (Options, error) {
 	if err != nil {
 		return Options{}, err
 	}
+	apis, err := APIRoutes(*options.Manifest)
+	if err != nil {
+		return Options{}, err
+	}
 	ssrArtifacts, err := buildgen.SSRArtifacts(options.Config, *options.Manifest, outputDir)
 	if err != nil {
 		return Options{}, err
 	}
 
 	resolved.Actions = append(append([]ActionRoute(nil), options.Actions...), actions...)
+	resolved.APIs = append(append([]APIRoute(nil), options.APIs...), apis...)
 	resolved.SSR = append(append([]SSRRoute(nil), options.SSR...), ssrRoutes(ssrArtifacts)...)
+	assignBackendAliases(&resolved)
 	return resolved, nil
+}
+
+func resolveBackendOptions(options Options) (Options, error) {
+	resolved := options
+	if !options.AutoRoutes {
+		assignBackendAliases(&resolved)
+		return resolved, nil
+	}
+	if options.Manifest == nil {
+		return Options{}, fmt.Errorf("auto route detection requires a parsed manifest")
+	}
+	actions, err := ActionRoutes(*options.Manifest)
+	if err != nil {
+		return Options{}, err
+	}
+	apis, err := APIRoutes(*options.Manifest)
+	if err != nil {
+		return Options{}, err
+	}
+	resolved.Actions = append(append([]ActionRoute(nil), options.Actions...), actions...)
+	resolved.APIs = append(append([]APIRoute(nil), options.APIs...), apis...)
+	resolved.SSR = nil
+	assignBackendAliases(&resolved)
+	return resolved, nil
+}
+
+func assignBackendAliases(options *Options) {
+	paths := map[string]string{}
+	for _, action := range options.Actions {
+		if action.Binding.Status == manifest.BackendBindingBound && action.Binding.ImportPath != "" {
+			paths[action.Binding.ImportPath] = action.Binding.PackageName
+		}
+	}
+	for _, api := range options.APIs {
+		if api.Binding.Status == manifest.BackendBindingBound && api.Binding.ImportPath != "" {
+			paths[api.Binding.ImportPath] = api.Binding.PackageName
+		}
+	}
+	if len(paths) == 0 {
+		return
+	}
+	importPaths := make([]string, 0, len(paths))
+	for importPath := range paths {
+		importPaths = append(importPaths, importPath)
+	}
+	sort.Strings(importPaths)
+	aliases := map[string]string{}
+	used := map[string]int{}
+	for _, importPath := range importPaths {
+		base := safeImportAlias(paths[importPath])
+		if base == "" {
+			base = safeImportAlias(path.Base(importPath))
+		}
+		if base == "" {
+			base = "feature"
+		}
+		used[base]++
+		alias := base
+		if used[base] > 1 {
+			alias = fmt.Sprintf("%s%d", base, used[base])
+		}
+		aliases[importPath] = alias
+	}
+	for index := range options.Actions {
+		options.Actions[index].BackendAlias = aliases[options.Actions[index].Binding.ImportPath]
+	}
+	for index := range options.APIs {
+		options.APIs[index].BackendAlias = aliases[options.APIs[index].Binding.ImportPath]
+	}
+}
+
+func safeImportAlias(value string) string {
+	var builder strings.Builder
+	for index, char := range strings.TrimSpace(value) {
+		valid := char == '_' || unicode.IsLetter(char) || unicode.IsDigit(char)
+		if !valid {
+			continue
+		}
+		if index == 0 && unicode.IsDigit(char) {
+			builder.WriteByte('p')
+		}
+		builder.WriteRune(char)
+	}
+	return builder.String()
 }
 
 func ssrRoutes(artifacts []buildgen.SSRArtifact) []SSRRoute {

@@ -53,14 +53,17 @@ type BuildConfig struct {
 }
 
 // BuildTargetConfig declares one configured build target. Modules selects the
-// configured source modules compiled into Output, App, Binary, and WASM.
+// configured source modules compiled into Output, App, Binary, WASM, BackendApp,
+// and BackendBinary.
 type BuildTargetConfig struct {
-	Name    string
-	Modules []string
-	Output  string
-	App     string
-	Binary  string
-	WASM    string
+	Name          string
+	Modules       []string
+	Output        string
+	App           string
+	Binary        string
+	WASM          string
+	BackendApp    string
+	BackendBinary string
 }
 
 // CSSConfig controls discovered CSS inputs and page CSS output.

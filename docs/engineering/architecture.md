@@ -4,20 +4,49 @@
 
 GOWDK is compile-first. The current repository discovers `.gwdk` files, parses page metadata and component files with first-slice syntax validation, validates render-mode, duplicate identity, redundant component implementations, route shape, route ownership, component Go contracts, and required page-view rules, emits manifest/site-map JSON, plans route bindings, can emit spa HTML plus spa route, asset, and build-report manifests for simple build-time pages, the first literal dynamic path subset, literal build data, first-slice imported Go build functions, partial client runtime assets, and first-slice island runtime assets through `gowdk build --out`, can skip identical generated output/app writes, can generate an embedded app through `gowdk build --app`, can compile that app through `--bin` or `--wasm`, can package selected configured modules into generated apps, binaries, and WASM artifacts through spa `Build.Targets` or ad hoc repeated/comma-separated `--module`, can rebuild on content-hash changed inputs through `gowdk dev`, can incrementally render existing changed page sources for plain spa dev output, and can serve generated build output locally through `gowdk serve` or the `gowdk dev` live-reload server.
 
-It does not yet emit real user Go type-bound action decoders, user action
-logic, CSRF-wired generated handlers, API handlers, broad local client-side
+It does not yet emit real user Go type-bound action decoders, CSRF-wired
+generated handlers, broad local client-side
 reactivity beyond the first typed island expression subset, request-time
 `load {}` execution, full SSR route handlers with guards and user code, or
 general request-time route handlers in the generated binary. Generated embedded
 apps can serve the first `@render ssr` page slice, including dynamic route
 matching and param replacement without `load {}`, and first-slice partial
-action fragment responses.
+action fragment responses. Generated apps can discover same-package action/API
+handlers and call supported first-slice signatures.
 
 ## System Context
 
 GOWDK users write portable `.gwdk` pages and components. In the target architecture, the compiler discovers those files, builds a manifest, validates render rules, emits assets and Go handlers, and packages output for hosted files or one-binary deploy.
 
 The target core output can include spa pages, components, typed actions, API handlers, server fragment handlers, embedded assets, and a Go binary. CSS tooling, including Tailwind, belongs in optional addons or plugins rather than the initial core. SSR is enabled only when `ssr.Addon()` is present and a page opts into request-time rendering.
+
+## Compiler Lanes
+
+Target `.gwdk` compilation:
+
+```text
+.gwdk file
+  -> GOWDK parser
+  -> GOWDK AST
+  -> GOWDK analyzer
+  -> generated normal Go code
+  -> go/format
+  -> go build
+```
+
+Target Go package validation:
+
+```text
+.go files
+  -> standard go/parser
+  -> standard go/ast
+  -> standard go/types
+  -> validate exported handlers/types
+```
+
+The GOWDK AST models `.gwdk` language constructs. Normal Go files and generated
+Go source use the standard Go AST and type checker. Analyzer output connects
+the lanes through package, route, type, component, and handler binding metadata.
 
 ## Components
 
@@ -36,7 +65,7 @@ The target core output can include spa pages, components, typed actions, API han
 | `internal/compiler` | Validate manifests and coordinate compilation. | Compiler | Render-mode, duplicate identity, redundant component implementation, component Go contract, route shape, duplicate route param, duplicate route pattern, route-method, and required page-view validation implemented. |
 | `internal/codegen` | Emit route behavior plans and future Go, HTML, CSS, and asset artifacts. | Compiler | Route-binding planning implemented; artifact emission is planned. |
 | `internal/buildgen` | Emit route-derived spa HTML files for build-time pages and first-slice SSR render artifacts. | Compiler | Initial simple page, literal build data, imported Go build data calls, literal dynamic path expansion, component expansion, partial runtime asset emission, default JS island asset emission, explicit WASM island asset emission, concrete and dynamic SSR page rendering without `load {}`, route manifest emission, asset manifest emission, mandatory build report emission, identical-output write skipping, and incremental changed-page spa rendering implemented. |
-| `internal/appgen` | Emit generated Go app source for embedded spa output and first-slice request-time routes. | Compiler | Generates `go.mod`, `main.go`, copied spa assets, thin `runtime/app` server wiring, first-slice POST redirect and partial fragment action handlers backed by `runtime/form`, `runtime/response`, and `runtime/validation`, form input decoders, concrete and dynamic SSR route handlers backed by `runtime/route`, identical-output write skipping, stale embedded spa cleanup, and can invoke `go build` for local binaries or Go `js/wasm` artifacts. |
+| `internal/appgen` | Emit generated Go app source for embedded spa output and first-slice request-time routes. | Compiler | Generates `go.mod`, `main.go`, copied spa assets, thin `runtime/app` server wiring, feature-bound action/API handler calls, 501 stubs for missing/unsupported handlers, first-slice POST redirect and partial fragment action handlers backed by `runtime/form`, `runtime/response`, and `runtime/validation`, form input decoders, concrete and dynamic SSR route handlers backed by `runtime/route`, split backend apps, identical-output write skipping, stale embedded spa cleanup, and can invoke `go build` for local binaries or Go `js/wasm` artifacts. |
 | `internal/clientrt` | Emit client runtime for partial updates. | Runtime | First partial form enhancement runtime emits lifecycle hooks, target/swap request headers, swaps, focus restoration, and loading state metadata. |
 | `runtime/render` | Core rendering engine used by spa, actions, partials, and SSR. | Runtime | Renderer and generated-code builder implemented; expression text writes escape by default. |
 | `runtime/component` | Generated component runtime contract. | Runtime | Initial component interface implemented. |
@@ -51,7 +80,7 @@ The target core output can include spa pages, components, typed actions, API han
 | `addons/actions` | Typed backend actions, form decoding, CSRF. | Addon | Capability boundary, required-field validation helper, and signed CSRF validator implemented; generated user action execution is planned. |
 | `addons/partial` | Server fragments and swaps. | Addon | Capability boundary implemented; first generated action fragment execution slice exists. |
 | `addons/ssr` | Request-time full-page rendering. | Addon | Capability boundary plus load context, guard execution, router registration, layout stack, and default error handler contracts implemented; generated embedded apps can serve first-slice SSR pages without `load {}`. |
-| `addons/api` | Generated API handlers. | Addon | Capability boundary implemented; handler generation is planned. |
+| `addons/api` | Generated API handlers. | Addon | Capability boundary implemented; feature-bound first-slice handler generation exists. |
 | `addons/embed` | Embedded assets and one-binary serving. | Addon | Capability boundary implemented; generated embedding is planned. |
 | `addons/css` | Compile-time CSS processing. | Addon | CSS feature registration and processor aliases implemented. |
 | `addons/tailwind` | Tailwind CSS standalone CLI integration. | Addon | Experimental no-npm Tailwind v4 CSS processor wrapper; users provide the executable. |

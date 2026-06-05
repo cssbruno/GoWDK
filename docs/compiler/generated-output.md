@@ -243,4 +243,5 @@ Generated servers must include HTTP timeouts, header/body limits, method handlin
 
 ## Ownership And Licensing
 
-Generated output ownership and license policy are documented in `LICENSE.md` and `docs/engineering/generated-code-policy.md`.
+Generated output ownership and license policy are documented in `../../LICENSE`
+and `../engineering/generated-code-policy.md`.

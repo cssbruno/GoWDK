@@ -4,7 +4,9 @@ Generated output is planned. This policy records constraints before generation e
 
 ## Ownership
 
-Generated application output belongs to the user application unless a generated file explicitly states otherwise. Repository licensing details live in `LICENSE.md`.
+Generated application output belongs to the user application unless a generated
+file explicitly states otherwise. Repository licensing details live in
+`../../LICENSE`.
 
 ## Safety Rules
 

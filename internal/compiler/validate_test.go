@@ -2529,7 +2529,7 @@ func TestValidatePageRejectsMalformedRoutes(t *testing.T) {
 			if !hasDiagnosticCode(diagnostics, "malformed_route") {
 				t.Fatalf("missing malformed_route diagnostic for %q: %#v", test.route, diagnostics)
 			}
-			if hasDiagnosticCode(diagnostics, "static_dynamic_route_missing_paths") {
+			if hasDiagnosticCode(diagnostics, "spa_dynamic_route_missing_paths") {
 				t.Fatalf("malformed route should not cascade into missing paths: %#v", diagnostics)
 			}
 		})
@@ -2545,14 +2545,14 @@ func TestValidatePageRejectsDuplicateRouteParams(t *testing.T) {
 	}
 }
 
-func TestValidatePageRequiresPathsForStaticDynamicRoutes(t *testing.T) {
-	page := manifest.Page{ID: "patients.show", Route: "/patients/{id}", Render: gowdk.Static, Blocks: manifest.Blocks{View: true}}
+func TestValidatePageRequiresPathsForSPADynamicRoutes(t *testing.T) {
+	page := manifest.Page{ID: "patients.show", Route: "/patients/{id}", Render: gowdk.SPA, Blocks: manifest.Blocks{View: true}}
 
 	diagnostics := ValidatePage(gowdk.Config{}, page)
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %d", len(diagnostics))
 	}
-	if diagnostics[0].Code != "static_dynamic_route_missing_paths" {
+	if diagnostics[0].Code != "spa_dynamic_route_missing_paths" {
 		t.Fatalf("unexpected diagnostic code: %s", diagnostics[0].Code)
 	}
 	if !strings.Contains(diagnostics[0].Message, "add paths") {
@@ -2560,8 +2560,8 @@ func TestValidatePageRequiresPathsForStaticDynamicRoutes(t *testing.T) {
 	}
 }
 
-func TestValidatePageAllowsStaticDynamicRoutesWithPaths(t *testing.T) {
-	page := manifest.Page{ID: "blog.post", Route: "/blog/{slug}", Render: gowdk.Static, Paths: true, Blocks: manifest.Blocks{View: true}}
+func TestValidatePageAllowsSPADynamicRoutesWithPaths(t *testing.T) {
+	page := manifest.Page{ID: "blog.post", Route: "/blog/{slug}", Render: gowdk.SPA, Paths: true, Blocks: manifest.Blocks{View: true}}
 
 	diagnostics := ValidatePage(gowdk.Config{}, page)
 	if len(diagnostics) != 0 {
@@ -2569,11 +2569,11 @@ func TestValidatePageAllowsStaticDynamicRoutesWithPaths(t *testing.T) {
 	}
 }
 
-func TestValidatePageAllowsStaticActionsWithoutSSR(t *testing.T) {
+func TestValidatePageAllowsSPAActionsWithoutSSR(t *testing.T) {
 	page := manifest.Page{
 		ID:     "newsletter",
 		Route:  "/newsletter",
-		Render: gowdk.Static,
+		Render: gowdk.SPA,
 		Blocks: manifest.Blocks{
 			View:    true,
 			Actions: []manifest.Action{{Name: "subscribe"}},
@@ -2586,11 +2586,11 @@ func TestValidatePageAllowsStaticActionsWithoutSSR(t *testing.T) {
 	}
 }
 
-func TestValidatePageRejectsLoadOnStaticPage(t *testing.T) {
+func TestValidatePageRejectsLoadOnSPAPage(t *testing.T) {
 	page := manifest.Page{
 		ID:     "newsletter",
 		Route:  "/newsletter",
-		Render: gowdk.Static,
+		Render: gowdk.SPA,
 		Blocks: manifest.Blocks{
 			View: true,
 			Load: true,
@@ -2646,7 +2646,7 @@ func TestValidatePageAllowsHybridWithExplicitLoadAndSSRAddon(t *testing.T) {
 }
 
 func TestValidatePageRejectsMissingViewBlock(t *testing.T) {
-	page := manifest.Page{ID: "home", Route: "/", Render: gowdk.Static}
+	page := manifest.Page{ID: "home", Route: "/", Render: gowdk.SPA}
 
 	diagnostics := ValidatePage(gowdk.Config{}, page)
 	if len(diagnostics) != 1 {

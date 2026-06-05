@@ -1,23 +1,31 @@
 package appgen
 
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/manifest"
+)
+
 // Result describes generated app artifacts.
 type Result struct {
 	AppDir      string
 	MainPath    string
 	PackagePath string
 	ModulePath  string
-	StaticDir   string
+	OutputDir   string
 	Files       []string
 	BinaryPath  string
 }
 
 // Options configures generated app output.
 type Options struct {
-	Actions []ActionRoute
-	SSR     []SSRRoute
+	Actions    []ActionRoute
+	SSR        []SSRRoute
+	AutoRoutes bool
+	Config     gowdk.Config
+	Manifest   *manifest.Manifest
 }
 
-// ActionRoute describes a generated static action handler.
+// ActionRoute describes a generated action handler.
 type ActionRoute struct {
 	PageID         string
 	ActionName     string

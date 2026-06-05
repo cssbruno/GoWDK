@@ -1,4 +1,4 @@
-package staticgen
+package buildgen
 
 import (
 	"os"
@@ -19,7 +19,7 @@ func TestBuildExpandsExplicitComponents(t *testing.T) {
 			Route: "/",
 			Blocks: manifest.Blocks{
 				View:     true,
-				ViewBody: `<main><Hero title="GOWDK" tagline="Portable & static" /></main>`,
+				ViewBody: `<main><Hero title="GOWDK" tagline="Portable & app-first" /></main>`,
 			},
 		}},
 		Components: []manifest.Component{{
@@ -44,7 +44,7 @@ func TestBuildExpandsExplicitComponents(t *testing.T) {
 		t.Fatal(err)
 	}
 	output := string(payload)
-	if !strings.Contains(output, `<section><h1>GOWDK</h1><p>Portable &amp; static</p></section>`) {
+	if !strings.Contains(output, `<section><h1>GOWDK</h1><p>Portable &amp; app-first</p></section>`) {
 		t.Fatalf("expected expanded component in output: %s", output)
 	}
 }

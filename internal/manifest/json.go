@@ -34,7 +34,7 @@ type pageJSON struct {
 	Actions         []actionJSON     `json:"actions,omitempty"`
 	APIs            []apiJSON        `json:"apis,omitempty"`
 	Components      []string         `json:"components,omitempty"`
-	StaticAssets    []string         `json:"staticAssets,omitempty"`
+	Assets          []string         `json:"assets,omitempty"`
 	CSSClasses      []string         `json:"cssClasses,omitempty"`
 	StyleAttributes []string         `json:"styleAttributes,omitempty"`
 	Artifacts       []artifactJSON   `json:"artifacts,omitempty"`
@@ -132,7 +132,7 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 			Source:          page.Source,
 			Kind:            "page",
 			Route:           page.Route,
-			Render:          page.RenderMode(gowdk.Static),
+			Render:          page.RenderMode(gowdk.SPA),
 			Imports:         importsJSON(page.Imports),
 			Layouts:         page.Layouts,
 			DynamicParams:   page.DynamicParams(),
@@ -143,7 +143,7 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 			Actions:         actionsJSON(page.Blocks.Actions),
 			APIs:            apisJSON(page.Blocks.APIs),
 			Components:      pageComponents(page),
-			StaticAssets:    dependencies.StaticAssets,
+			Assets:          dependencies.Assets,
 			CSSClasses:      dependencies.CSSClasses,
 			StyleAttributes: dependencies.StyleAttributes,
 			Artifacts:       artifactsJSON(page),
@@ -242,8 +242,8 @@ func apisJSON(apis []API) []apiJSON {
 }
 
 func artifactsJSON(page Page) []artifactJSON {
-	switch page.RenderMode(gowdk.Static) {
-	case gowdk.Static, gowdk.Action:
+	switch page.RenderMode(gowdk.SPA) {
+	case gowdk.SPA, gowdk.Action:
 	default:
 		return nil
 	}

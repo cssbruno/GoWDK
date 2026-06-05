@@ -2,7 +2,7 @@
   "diagnostics": [
     {
       "file": "testdata/diagnostics_golden/invalid.page.gwdk",
-      "code": "static_dynamic_route_missing_paths",
+      "code": "spa_dynamic_route_missing_paths",
       "pos": {
         "line": 2,
         "column": 15
@@ -18,8 +18,8 @@
         }
       },
       "severity": "error",
-      "message": "blog.post: blog.post has dynamic route params: {slug}, but render mode is static and no paths block exists. Fix: add paths { ... } or use @render ssr",
-      "suggestion": "Add paths { ... } for the dynamic static route or switch the page to @render ssr."
+      "message": "blog.post: blog.post has dynamic route params: {slug}, but render mode is spa and no paths block exists. Fix: add paths { ... } or use @render ssr",
+      "suggestion": "Add paths { ... } for the dynamic spa route or switch the page to @render ssr."
     }
   ]
 }

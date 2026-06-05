@@ -152,7 +152,7 @@ func validateViewValueBind(component manifest.Component, ctx componentValidation
 		return []ValidationError{componentFieldError(component, fmt.Sprintf("component %s g:bind:value target %q is on unsupported <%s>", component.Name, field.Field, field.Element))}
 	}
 	if field.Element == "input" && strings.EqualFold(field.InputType, "radio") && field.InputValue == "" {
-		return []ValidationError{componentFieldError(component, fmt.Sprintf("component %s g:bind:value radio target %q requires a static value attribute", component.Name, field.Field))}
+		return []ValidationError{componentFieldError(component, fmt.Sprintf("component %s g:bind:value radio target %q requires a literal value attribute", component.Name, field.Field))}
 	}
 	if typ == clientlang.TypeString || typ == clientlang.TypeUnknown {
 		return nil

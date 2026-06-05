@@ -50,7 +50,7 @@ func actionFragments(action manifest.Action) ([]ActionFragment, error) {
 	}
 	fragments := make([]ActionFragment, 0, len(action.Fragments))
 	for _, fragment := range action.Fragments {
-		html, err := view.RenderStatic(fragment.Body)
+		html, err := view.RenderSPA(fragment.Body)
 		if err != nil {
 			return nil, fmt.Errorf("fragment %s: %w", fragment.Target, err)
 		}

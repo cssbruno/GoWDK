@@ -23,7 +23,7 @@ const (
 	tailwindImportPath = "github.com/cssbruno/gowdk/addons/tailwind"
 )
 
-// LoadConfigFile reads the supported static subset of gowdk.config.go.
+// LoadConfigFile reads the supported SPA subset of gowdk.config.go.
 func LoadConfigFile(path string) (gowdk.Config, error) {
 	fileSet := token.NewFileSet()
 	file, err := parser.ParseFile(fileSet, path, nil, 0)
@@ -56,21 +56,19 @@ func LoadConfigFile(path string) (gowdk.Config, error) {
 	return gowdk.Config{}, fmt.Errorf("%s missing Config variable", path)
 }
 
-// LoadOptionalConfig loads an explicitly requested config file, or the default
-// config file when it exists. It reports whether a file was loaded.
-func LoadOptionalConfig(path string) (gowdk.Config, bool, error) {
+// LoadConfig loads an explicitly requested config file, or the required default
+// config file when no path is provided.
+func LoadConfig(path string) (gowdk.Config, error) {
 	if path != "" {
-		config, err := LoadConfigFile(path)
-		return config, true, err
+		return LoadConfigFile(path)
 	}
 	if _, err := os.Stat(DefaultConfigFile); err != nil {
 		if os.IsNotExist(err) {
-			return gowdk.Config{}, false, nil
+			return gowdk.Config{}, fmt.Errorf("%s is required; run \"gowdk init\" or pass --config <file>", DefaultConfigFile)
 		}
-		return gowdk.Config{}, false, err
+		return gowdk.Config{}, err
 	}
-	config, err := LoadConfigFile(DefaultConfigFile)
-	return config, true, err
+	return LoadConfigFile(DefaultConfigFile)
 }
 
 func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.Config, bool) {
@@ -235,8 +233,8 @@ func parseRenderMode(expression ast.Expr) gowdk.RenderMode {
 
 func renderModeByName(name string) gowdk.RenderMode {
 	switch name {
-	case "Static":
-		return gowdk.Static
+	case "SPA":
+		return gowdk.SPA
 	case "Action":
 		return gowdk.Action
 	case "Hybrid":

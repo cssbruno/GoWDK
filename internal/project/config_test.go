@@ -73,7 +73,7 @@ var Config = gowdk.Config{
 		Default: []string{"global", "tokens"},
 		Output: gowdk.CSSOutputConfig{
 			Dir: "/assets/pages/",
-			HrefPrefix: "/static/pages",
+			HrefPrefix: "/app/pages",
 		},
 	},
 }
@@ -142,7 +142,7 @@ var Config = gowdk.Config{
 	if len(config.CSS.Default) != 2 || config.CSS.Default[0] != "global" || config.CSS.Default[1] != "tokens" {
 		t.Fatalf("unexpected css default: %#v", config.CSS.Default)
 	}
-	if config.CSS.Output.Dir != "/assets/pages/" || config.CSS.Output.HrefPrefix != "/static/pages" {
+	if config.CSS.Output.Dir != "/assets/pages/" || config.CSS.Output.HrefPrefix != "/app/pages" {
 		t.Fatalf("unexpected css output: %#v", config.CSS.Output)
 	}
 }
@@ -287,7 +287,7 @@ var Config = secretConfig("SECRET_TOKEN")
 	}
 }
 
-func TestLoadOptionalConfigIgnoresMissingDefault(t *testing.T) {
+func TestLoadConfigFailsMissingDefault(t *testing.T) {
 	root := t.TempDir()
 	previous, err := os.Getwd()
 	if err != nil {
@@ -302,21 +302,15 @@ func TestLoadOptionalConfigIgnoresMissingDefault(t *testing.T) {
 		}
 	}()
 
-	_, loaded, err := LoadOptionalConfig("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if loaded {
-		t.Fatal("expected missing default config to be ignored")
+	_, err = LoadConfig("")
+	if err == nil || !strings.Contains(err.Error(), "gowdk.config.go is required") {
+		t.Fatalf("expected missing default config error, got %v", err)
 	}
 }
 
-func TestLoadOptionalConfigFailsMissingExplicitPath(t *testing.T) {
-	_, loaded, err := LoadOptionalConfig(filepath.Join(t.TempDir(), "missing.go"))
+func TestLoadConfigFailsMissingExplicitPath(t *testing.T) {
+	_, err := LoadConfig(filepath.Join(t.TempDir(), "missing.go"))
 	if err == nil {
 		t.Fatal("expected missing explicit config error")
-	}
-	if !loaded {
-		t.Fatal("expected explicit config path to be treated as loaded")
 	}
 }

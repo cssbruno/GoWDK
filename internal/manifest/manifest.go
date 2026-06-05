@@ -215,7 +215,7 @@ func (page Page) RenderMode(defaultMode gowdk.RenderMode) gowdk.RenderMode {
 		return page.Render
 	}
 	if defaultMode == "" {
-		return gowdk.Static
+		return gowdk.SPA
 	}
 	return defaultMode
 }

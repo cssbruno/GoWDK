@@ -33,9 +33,9 @@ func TestRendererPropagatesComponentError(t *testing.T) {
 
 func TestBuilderEscapesTextExpressions(t *testing.T) {
 	var builder Builder
-	builder.Static("<h1>")
+	builder.Markup("<h1>")
 	builder.Text(`<script>alert("x")</script>`)
-	builder.Static("</h1>")
+	builder.Markup("</h1>")
 
 	if got := builder.String(); got != `<h1>&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt;</h1>` {
 		t.Fatalf("unexpected rendered html: %q", got)

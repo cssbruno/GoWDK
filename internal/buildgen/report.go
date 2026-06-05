@@ -1,4 +1,4 @@
-package staticgen
+package buildgen
 
 import (
 	"encoding/json"
@@ -34,7 +34,7 @@ type BuildReport struct {
 	Events    []BuildEvent `json:"events"`
 }
 
-// BuildDiagnostic is a structured diagnostic produced during static planning
+// BuildDiagnostic is a structured diagnostic produced during SPA planning
 // or output generation after parser/compiler validation has already completed.
 type BuildDiagnostic struct {
 	Code          string              `json:"code"`

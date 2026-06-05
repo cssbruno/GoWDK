@@ -8,18 +8,18 @@ import (
 	gowdkhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 
-// Renderer is the core HTML renderer used by static, action, partial, and SSR
-// addons.
+// Renderer is the core HTML renderer used by app, action, partial, and SSR
+// output.
 type Renderer struct{}
 
-// Builder is the low-level generated render target. Static writes are trusted
+// Builder is the low-level generated render target. Markup writes are trusted
 // compiler output; expression writes escape by default.
 type Builder struct {
 	out strings.Builder
 }
 
-// Static writes compiler-owned markup.
-func (builder *Builder) Static(value string) {
+// Markup writes compiler-owned markup.
+func (builder *Builder) Markup(value string) {
 	builder.out.WriteString(value)
 }
 

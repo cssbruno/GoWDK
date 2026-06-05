@@ -177,8 +177,8 @@ func collectComponentViewReferences(nodes []view.Node, refs *componentViewRefs) 
 					refs.ValueBinds = append(refs.ValueBinds, valueBindExpr{
 						Field:      field,
 						Element:    typed.Name,
-						InputType:  staticAttrValue(typed.Attrs, "type"),
-						InputValue: staticAttrValue(typed.Attrs, "value"),
+						InputType:  literalAttrValue(typed.Attrs, "type"),
+						InputValue: literalAttrValue(typed.Attrs, "value"),
 					})
 					refs.Fields[field] = true
 					continue
@@ -260,7 +260,7 @@ func isValueBindableElement(name string) bool {
 	}
 }
 
-func staticAttrValue(attrs []view.Attr, name string) string {
+func literalAttrValue(attrs []view.Attr, name string) string {
 	for _, attr := range attrs {
 		if attr.Name == name && !attr.Boolean && !attr.Expression {
 			return strings.TrimSpace(attr.Value)

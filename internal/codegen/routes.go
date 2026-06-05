@@ -18,7 +18,7 @@ import (
 type RouteKind string
 
 const (
-	RouteStatic RouteKind = "static"
+	RouteSPA    RouteKind = "spa"
 	RouteAction RouteKind = "action"
 	RouteSSR    RouteKind = "ssr"
 	RouteAPI    RouteKind = "api"
@@ -61,11 +61,11 @@ func BuildRouteBindings(config gowdk.Config, app manifest.Manifest) ([]RouteBind
 			})
 		} else {
 			routes = append(routes, RouteBinding{
-				Kind:    RouteStatic,
+				Kind:    RouteSPA,
 				Method:  "GET",
 				Route:   page.Route,
 				PageID:  page.ID,
-				Handler: fmt.Sprintf(`embedded.Static("pages/%s.html")`, assetName(page.ID)),
+				Handler: fmt.Sprintf(`embedded.SPA("pages/%s.html")`, assetName(page.ID)),
 			})
 		}
 

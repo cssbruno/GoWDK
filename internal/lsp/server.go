@@ -122,7 +122,7 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 			},
 			ServerInfo: serverInfo{
 				Name:    "gowdk",
-				Version: "0.1.0",
+				Version: "0.1.5",
 			},
 		}))
 	case "shutdown":

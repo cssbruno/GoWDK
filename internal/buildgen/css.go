@@ -1,4 +1,4 @@
-package staticgen
+package buildgen
 
 import (
 	"fmt"

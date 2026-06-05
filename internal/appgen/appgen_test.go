@@ -11,18 +11,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
+func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
-	writeTestFile(t, filepath.Join(staticDir, "blog", "hello", "index.html"), "<main>Post</main>")
-	writeTestFile(t, filepath.Join(staticDir, "gowdk-assets.json"), `{"version":1,"files":{"assets/app.css":"assets/app.css"}}`)
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "blog", "hello", "index.html"), "<main>Post</main>")
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-assets.json"), `{"version":1,"files":{"assets/app.css":"assets/app.css"}}`)
 
-	result, err := Generate(staticDir, appDir)
+	result, err := Generate(outputDir, appDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,8 +32,8 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 		result.ModulePath,
 		result.MainPath,
 		result.PackagePath,
-		filepath.Join(result.StaticDir, "index.html"),
-		filepath.Join(result.StaticDir, "blog", "hello", "index.html"),
+		filepath.Join(result.OutputDir, "index.html"),
+		filepath.Join(result.OutputDir, "blog", "hello", "index.html"),
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatal(err)
@@ -67,7 +68,7 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 	}
 	for _, expected := range []string{
 		"package gowdkapp",
-		"//go:embed static",
+		"//go:embed app",
 		"func Handler() (http.Handler, error)",
 		"func ServeMux() (*http.ServeMux, error)",
 		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
@@ -83,7 +84,7 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 		}
 	}
 	for _, copiedRuntime := range []string{
-		"type staticHandler struct",
+		"type SPAHandler struct",
 		"func loadAssetManifest",
 		"func generatedInstanceID",
 		"rand.Read(token[:])",
@@ -95,14 +96,14 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 	}
 }
 
-func TestGeneratePreservesUnchangedFilesAndRemovesStaleStaticFiles(t *testing.T) {
+func TestGeneratePreservesUnchangedFilesAndRemovesStaleSPAFiles(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
-	writeTestFile(t, filepath.Join(staticDir, "old.html"), "<main>Old</main>")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "old.html"), "<main>Old</main>")
 
-	result, err := Generate(staticDir, appDir)
+	result, err := Generate(outputDir, appDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +111,7 @@ func TestGeneratePreservesUnchangedFilesAndRemovesStaleStaticFiles(t *testing.T)
 		result.MainPath,
 		result.PackagePath,
 		result.ModulePath,
-		filepath.Join(result.StaticDir, "index.html"),
+		filepath.Join(result.OutputDir, "index.html"),
 	}
 	first := map[string]time.Time{}
 	for _, path := range paths {
@@ -122,11 +123,11 @@ func TestGeneratePreservesUnchangedFilesAndRemovesStaleStaticFiles(t *testing.T)
 	}
 
 	time.Sleep(20 * time.Millisecond)
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
-	if err := os.Remove(filepath.Join(staticDir, "old.html")); err != nil {
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	if err := os.Remove(filepath.Join(outputDir, "old.html")); err != nil {
 		t.Fatal(err)
 	}
-	result, err = Generate(staticDir, appDir)
+	result, err = Generate(outputDir, appDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,26 +143,26 @@ func TestGeneratePreservesUnchangedFilesAndRemovesStaleStaticFiles(t *testing.T)
 			t.Fatalf("expected unchanged mod time for %s: before=%s after=%s", path, first[path], info.ModTime())
 		}
 	}
-	if _, err := os.Stat(filepath.Join(result.StaticDir, "old.html")); !os.IsNotExist(err) {
-		t.Fatalf("expected stale embedded static file to be removed, stat err: %v", err)
+	if _, err := os.Stat(filepath.Join(result.OutputDir, "old.html")); !os.IsNotExist(err) {
+		t.Fatalf("expected stale embedded app file to be removed, stat err: %v", err)
 	}
 }
 
 func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
-	writeTestFile(t, filepath.Join(staticDir, ".env"), "SECRET=value")
-	writeTestFile(t, filepath.Join(staticDir, ".env.local"), "SECRET=value")
-	writeTestFile(t, filepath.Join(staticDir, "assets", "app.css.map"), "{}")
-	writeTestFile(t, filepath.Join(staticDir, "source", "home.page.gwdk"), "@page home")
-	writeTestFile(t, filepath.Join(staticDir, "source", "main.go"), "package main")
-	writeTestFile(t, filepath.Join(staticDir, "tmp", "asset.css"), "body{}")
-	writeTestFile(t, filepath.Join(staticDir, "assets", "scratch.tmp"), "temporary")
-	writeTestFile(t, filepath.Join(staticDir, "assets", "app.css"), "body{}")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, ".env"), "SECRET=value")
+	writeTestFile(t, filepath.Join(outputDir, ".env.local"), "SECRET=value")
+	writeTestFile(t, filepath.Join(outputDir, "assets", "app.css.map"), "{}")
+	writeTestFile(t, filepath.Join(outputDir, "source", "home.page.gwdk"), "@page home")
+	writeTestFile(t, filepath.Join(outputDir, "source", "main.go"), "package main")
+	writeTestFile(t, filepath.Join(outputDir, "tmp", "asset.css"), "body{}")
+	writeTestFile(t, filepath.Join(outputDir, "assets", "scratch.tmp"), "temporary")
+	writeTestFile(t, filepath.Join(outputDir, "assets", "app.css"), "body{}")
 
-	result, err := Generate(staticDir, appDir)
+	result, err := Generate(outputDir, appDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,13 +171,13 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 		t.Fatalf("unexpected embedded files: %#v", result.Files)
 	}
 	for _, path := range []string{
-		filepath.Join(result.StaticDir, ".env"),
-		filepath.Join(result.StaticDir, ".env.local"),
-		filepath.Join(result.StaticDir, "assets", "app.css.map"),
-		filepath.Join(result.StaticDir, "source", "home.page.gwdk"),
-		filepath.Join(result.StaticDir, "source", "main.go"),
-		filepath.Join(result.StaticDir, "tmp", "asset.css"),
-		filepath.Join(result.StaticDir, "assets", "scratch.tmp"),
+		filepath.Join(result.OutputDir, ".env"),
+		filepath.Join(result.OutputDir, ".env.local"),
+		filepath.Join(result.OutputDir, "assets", "app.css.map"),
+		filepath.Join(result.OutputDir, "source", "home.page.gwdk"),
+		filepath.Join(result.OutputDir, "source", "main.go"),
+		filepath.Join(result.OutputDir, "tmp", "asset.css"),
+		filepath.Join(result.OutputDir, "assets", "scratch.tmp"),
 	} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("expected unsafe file %s to be skipped, stat err: %v", path, err)
@@ -186,11 +187,11 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 
 func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "newsletter", "index.html"), "<main>Newsletter</main>")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
-	result, err := GenerateWithOptions(staticDir, appDir, Options{Actions: []ActionRoute{{
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
 		PageID:         "newsletter",
 		ActionName:     "subscribe",
 		Route:          "/newsletter",
@@ -248,11 +249,11 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 
 func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "patients", "index.html"), "<main>Patients</main>")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
-	result, err := GenerateWithOptions(staticDir, appDir, Options{Actions: []ActionRoute{{
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
 		PageID:      "patients",
 		ActionName:  "refresh",
 		Route:       "/patients",
@@ -291,11 +292,11 @@ func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 
 func TestGenerateWritesSSRHandler(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Static</main>")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
 
-	result, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "dashboard",
 		Route:  "/dashboard",
 		HTML:   "<main><h1>Dashboard</h1></main>",
@@ -325,11 +326,11 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 
 func TestGenerateWritesDynamicSSRHandler(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Static</main>")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
 
-	result, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "blog.post",
 		Route:  "/blog/{slug}",
 		HTML:   `<main data-slug="__SLUG__">__SLUG__</main>`,
@@ -362,11 +363,11 @@ func TestGenerateWritesDynamicSSRHandler(t *testing.T) {
 
 func TestGenerateWritesDynamicSSRHandlerWithoutReplacements(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Static</main>")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
 
-	result, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "blog.post",
 		Route:  "/blog/{slug}",
 		HTML:   `<main>Post</main>`,
@@ -387,6 +388,79 @@ func TestGenerateWritesDynamicSSRHandlerWithoutReplacements(t *testing.T) {
 	}
 	if strings.Contains(source, `case "/blog/{slug}":`) {
 		t.Fatalf("expected generated main.go not to use exact literal match for dynamic route:\n%s", source)
+	}
+}
+
+func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
+
+	app := manifest.Manifest{Pages: []manifest.Page{
+		{
+			ID:    "newsletter",
+			Route: "/newsletter",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<form g:post={subscribe}><input name="email" required /></form>`,
+				Actions: []manifest.Action{{
+					Name:           "subscribe",
+					InputName:      "input",
+					InputType:      "SubscribeInput",
+					ValidatesInput: true,
+					Redirect:       "/newsletter?ok=1",
+				}},
+			},
+		},
+		{
+			ID:     "dashboard",
+			Route:  "/dashboard",
+			Render: gowdk.SSR,
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><h1>Dashboard</h1></main>`,
+			},
+		},
+	}}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		AutoRoutes: true,
+		Config: gowdk.Config{
+			Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)},
+		},
+		Manifest: &app,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`case "/newsletter":`,
+		`func decodeNewsletterSubscribeInput(values gowdkform.Values) (SubscribeInput, error)`,
+		`gowdkresponse.WriteHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
+		`case "/dashboard":`,
+		`<main><h1>Dashboard</h1></main>`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected auto-detected generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateAutoRoutesRequiresManifest(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	_, err := GenerateWithOptions(outputDir, appDir, Options{AutoRoutes: true})
+	if err == nil || !strings.Contains(err.Error(), "auto route detection requires a parsed manifest") {
+		t.Fatalf("expected auto route manifest error, got %v", err)
 	}
 }
 
@@ -476,42 +550,42 @@ func TestActionRoutesRejectsFileInputsWithPageContext(t *testing.T) {
 	}
 }
 
-func TestGenerateRejectsAppDirInsideStaticOutput(t *testing.T) {
+func TestGenerateRejectsAppDirInsideSPAOutput(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+	outputDir := filepath.Join(root, "dist")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
-	_, err := Generate(staticDir, filepath.Join(staticDir, "app"))
+	_, err := Generate(outputDir, filepath.Join(outputDir, "app"))
 	if err == nil {
 		t.Fatal("expected app directory validation error")
 	}
-	if !strings.Contains(err.Error(), "must be outside static output directory") {
+	if !strings.Contains(err.Error(), "must be outside build output directory") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestGenerateRejectsStaticOutputInsideGeneratedStaticDir(t *testing.T) {
+func TestGenerateRejectsSPAOutputInsideGeneratedSPADir(t *testing.T) {
 	root := t.TempDir()
 	appDir := filepath.Join(root, "app")
-	staticDir := filepath.Join(appDir, "gowdkapp", "static")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+	outputDir := filepath.Join(appDir, "gowdkapp", "app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
-	_, err := Generate(staticDir, appDir)
+	_, err := Generate(outputDir, appDir)
 	if err == nil {
-		t.Fatal("expected generated static directory validation error")
+		t.Fatal("expected generated app output directory validation error")
 	}
-	if !strings.Contains(err.Error(), "must not be inside generated app static directory") {
+	if !strings.Contains(err.Error(), "must not be inside generated app output directory") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestGenerateRejectsUnsafeActionRedirect(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "newsletter", "index.html"), "<main>Newsletter</main>")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
-	_, err := GenerateWithOptions(staticDir, appDir, Options{Actions: []ActionRoute{{
+	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
 		PageID:     "newsletter",
 		ActionName: "subscribe",
 		Route:      "/newsletter",
@@ -527,11 +601,11 @@ func TestGenerateRejectsUnsafeActionRedirect(t *testing.T) {
 
 func TestGenerateRejectsDynamicActionRoute(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "blog", "hello", "index.html"), "<main>Post</main>")
+	writeTestFile(t, filepath.Join(outputDir, "blog", "hello", "index.html"), "<main>Post</main>")
 
-	_, err := GenerateWithOptions(staticDir, appDir, Options{Actions: []ActionRoute{{
+	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
 		PageID:     "blog.post",
 		ActionName: "save",
 		Route:      "/blog/{slug}",
@@ -547,11 +621,11 @@ func TestGenerateRejectsDynamicActionRoute(t *testing.T) {
 
 func TestGenerateRejectsSSRReplacementForUndeclaredParam(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
-	_, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+	_, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "blog.post",
 		Route:  "/blog/{slug}",
 		HTML:   "<main>Post</main>",
@@ -570,11 +644,11 @@ func TestGenerateRejectsSSRReplacementForUndeclaredParam(t *testing.T) {
 
 func TestGenerateRejectsAmbiguousDynamicSSRRoutes(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
-	_, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{
+	_, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{
 		{
 			PageID: "blog.category",
 			Route:  "/blog/{category}/{slug}",
@@ -596,11 +670,11 @@ func TestGenerateRejectsAmbiguousDynamicSSRRoutes(t *testing.T) {
 
 func TestGenerateAllowsConcreteSSRRouteBesideDynamicSSRRoute(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
-	if _, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{
 		{
 			PageID: "blog.about",
 			Route:  "/blog/about",
@@ -618,14 +692,14 @@ func TestGenerateAllowsConcreteSSRRouteBesideDynamicSSRRoute(t *testing.T) {
 
 func TestBuildBinaryCompilesGeneratedApp(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
-	writeTestFile(t, filepath.Join(staticDir, "blog", "hello", "index.html"), "<main>Post</main>")
-	writeTestFile(t, filepath.Join(staticDir, "gowdk-assets.json"), `{"version":1,"files":{"assets/app.css":"assets/app.css"}}`)
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "blog", "hello", "index.html"), "<main>Post</main>")
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-assets.json"), `{"version":1,"files":{"assets/app.css":"assets/app.css"}}`)
 
-	if _, err := Generate(staticDir, appDir); err != nil {
+	if _, err := Generate(outputDir, appDir); err != nil {
 		t.Fatal(err)
 	}
 	built, err := BuildBinary(appDir, binaryPath)
@@ -642,13 +716,13 @@ func TestBuildBinaryCompilesGeneratedApp(t *testing.T) {
 
 func TestBuildWASMCompilesGeneratedApp(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	wasmPath := filepath.Join(root, "site.wasm")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
-	writeTestFile(t, filepath.Join(staticDir, "gowdk-assets.json"), `{"version":1,"files":{}}`)
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-assets.json"), `{"version":1,"files":{}}`)
 
-	if _, err := Generate(staticDir, appDir); err != nil {
+	if _, err := Generate(outputDir, appDir); err != nil {
 		t.Fatal(err)
 	}
 	built, err := BuildWASM(appDir, wasmPath)
@@ -667,16 +741,16 @@ func TestBuildWASMCompilesGeneratedApp(t *testing.T) {
 	}
 }
 
-func TestGeneratedBinaryServesEmbeddedStaticHTML(t *testing.T) {
+func TestGeneratedBinaryServesEmbeddedSPAHTML(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
-	writeTestFile(t, filepath.Join(staticDir, "blog", "hello", "index.html"), "<main>Post</main>")
-	writeTestFile(t, filepath.Join(staticDir, "gowdk-assets.json"), `{"version":1,"files":{"assets/app.css":"assets/app.css"}}`)
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "blog", "hello", "index.html"), "<main>Post</main>")
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-assets.json"), `{"version":1,"files":{"assets/app.css":"assets/app.css"}}`)
 
-	if _, err := Generate(staticDir, appDir); err != nil {
+	if _, err := Generate(outputDir, appDir); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := BuildBinary(appDir, binaryPath); err != nil {
@@ -741,14 +815,14 @@ func TestGeneratedBinaryServesEmbeddedStaticHTML(t *testing.T) {
 	}
 }
 
-func TestGeneratedBinaryServesSSRRouteBeforeStaticFallback(t *testing.T) {
+func TestGeneratedBinaryServesSSRRouteBeforeSPAFallback(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
-	writeTestFile(t, filepath.Join(staticDir, "dashboard", "index.html"), "<main>Stale static dashboard</main>")
+	writeTestFile(t, filepath.Join(outputDir, "dashboard", "index.html"), "<main>Stale app dashboard</main>")
 
-	if _, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "dashboard",
 		Route:  "/dashboard",
 		HTML:   "<main><h1>Request Dashboard</h1></main>",
@@ -777,8 +851,8 @@ func TestGeneratedBinaryServesSSRRouteBeforeStaticFallback(t *testing.T) {
 	if strings.TrimSpace(body) != "<main><h1>Request Dashboard</h1></main>" {
 		t.Fatalf("unexpected SSR response body: %s", body)
 	}
-	if strings.Contains(body, "Stale static dashboard") {
-		t.Fatalf("expected SSR route to win over static fallback, got %s", body)
+	if strings.Contains(body, "Stale app dashboard") {
+		t.Fatalf("expected SSR route to win over app fallback, got %s", body)
 	}
 	if contentType := headers.Get("Content-Type"); contentType != "text/html; charset=utf-8" {
 		t.Fatalf("unexpected content type: %q", contentType)
@@ -790,12 +864,12 @@ func TestGeneratedBinaryServesSSRRouteBeforeStaticFallback(t *testing.T) {
 
 func TestGeneratedBinaryServesDynamicSSRRoute(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
-	if _, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "blog.post",
 		Route:  "/blog/{slug}",
 		HTML:   `<main data-slug="__SLUG__"><h1>__SLUG__</h1></main>`,
@@ -830,14 +904,14 @@ func TestGeneratedBinaryServesDynamicSSRRoute(t *testing.T) {
 	}
 }
 
-func TestGeneratedBinaryServesStaticPageBeforeDynamicSSRRoute(t *testing.T) {
+func TestGeneratedBinaryServesAppPageBeforeDynamicSSRRoute(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
-	writeTestFile(t, filepath.Join(staticDir, "blog", "about", "index.html"), "<main>Static about</main>")
+	writeTestFile(t, filepath.Join(outputDir, "blog", "about", "index.html"), "<main>App about</main>")
 
-	if _, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "blog.post",
 		Route:  "/blog/{slug}",
 		HTML:   `<main>Dynamic __SLUG__</main>`,
@@ -867,22 +941,22 @@ func TestGeneratedBinaryServesStaticPageBeforeDynamicSSRRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(body) != "<main>Static about</main>" {
-		t.Fatalf("expected static page to win over dynamic SSR route, got: %s", body)
+	if strings.TrimSpace(body) != "<main>App about</main>" {
+		t.Fatalf("expected app page to win over dynamic SSR route, got: %s", body)
 	}
 	if headers.Get("Cache-Control") == "no-store" {
-		t.Fatalf("expected static response headers, got SSR cache header")
+		t.Fatalf("expected app response headers, got SSR cache header")
 	}
 }
 
-func TestGeneratedBinaryServesStaticAssetBeforeRootDynamicSSRRoute(t *testing.T) {
+func TestGeneratedBinaryServesSPAAssetBeforeRootDynamicSSRRoute(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
-	writeTestFile(t, filepath.Join(staticDir, "favicon.ico"), "ICON")
+	writeTestFile(t, filepath.Join(outputDir, "favicon.ico"), "ICON")
 
-	if _, err := GenerateWithOptions(staticDir, appDir, Options{SSR: []SSRRoute{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "catch.all",
 		Route:  "/{slug}",
 		HTML:   `<main>Dynamic __SLUG__</main>`,
@@ -913,21 +987,21 @@ func TestGeneratedBinaryServesStaticAssetBeforeRootDynamicSSRRoute(t *testing.T)
 		t.Fatal(err)
 	}
 	if strings.TrimSpace(body) != "ICON" {
-		t.Fatalf("expected static asset to win over root dynamic SSR route, got: %s", body)
+		t.Fatalf("expected app asset to win over root dynamic SSR route, got: %s", body)
 	}
 	if headers.Get("Cache-Control") == "no-store" {
-		t.Fatalf("expected static response headers, got SSR cache header")
+		t.Fatalf("expected SPA response headers, got SSR cache header")
 	}
 }
 
 func TestGeneratedBinaryAutoGeneratesInstanceID(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
-	if _, err := Generate(staticDir, appDir); err != nil {
+	if _, err := Generate(outputDir, appDir); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := BuildBinary(appDir, binaryPath); err != nil {
@@ -967,12 +1041,12 @@ func TestGeneratedBinaryAutoGeneratesInstanceID(t *testing.T) {
 
 func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
-	writeTestFile(t, filepath.Join(staticDir, "newsletter", "index.html"), "<main>Newsletter</main>")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
-	if _, err := GenerateWithOptions(staticDir, appDir, Options{Actions: []ActionRoute{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
 		PageID:         "newsletter",
 		ActionName:     "subscribe",
 		Route:          "/newsletter",
@@ -1057,12 +1131,12 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 
 func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
-	writeTestFile(t, filepath.Join(staticDir, "patients", "index.html"), "<main>Patients</main>")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
-	if _, err := GenerateWithOptions(staticDir, appDir, Options{Actions: []ActionRoute{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
 		PageID:      "patients",
 		ActionName:  "refresh",
 		Route:       "/patients",
@@ -1127,12 +1201,12 @@ func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
 
 func TestGeneratedBinaryAcknowledgesCookieNotice(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
-	writeTestFile(t, filepath.Join(staticDir, "index.html"), `<main>Home</main><form data-cookie-notice method="post" action="/_gowdk/cookie-ack"></form>`)
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), `<main>Home</main><form data-cookie-notice method="post" action="/_gowdk/cookie-ack"></form>`)
 
-	if _, err := GenerateWithOptions(staticDir, appDir, Options{}); err != nil {
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := BuildBinary(appDir, binaryPath); err != nil {
@@ -1188,12 +1262,12 @@ func TestGeneratedBinaryAcknowledgesCookieNotice(t *testing.T) {
 
 func TestGeneratedBinaryDoesNotValidateRequiredFieldsWithoutValidMetadata(t *testing.T) {
 	root := t.TempDir()
-	staticDir := filepath.Join(root, "dist")
+	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
-	writeTestFile(t, filepath.Join(staticDir, "newsletter", "index.html"), "<main>Newsletter</main>")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
-	if _, err := GenerateWithOptions(staticDir, appDir, Options{Actions: []ActionRoute{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
 		PageID:         "newsletter",
 		ActionName:     "subscribe",
 		Route:          "/newsletter",

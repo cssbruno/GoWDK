@@ -9,10 +9,10 @@ type HeroProps struct {
 
 func RenderHero(props HeroProps) (string, error) {
 	var out gowdkrender.Builder
-	out.Static("<section><h1>")
+	out.Markup("<section><h1>")
 	out.Text(props.Title)
-	out.Static("</h1><p>")
+	out.Markup("</h1><p>")
 	out.Text(props.Tagline)
-	out.Static("</p></section>")
+	out.Markup("</p></section>")
 	return out.String(), nil
 }

@@ -1,4 +1,4 @@
-package staticgen
+package buildgen
 
 import (
 	"os"
@@ -10,7 +10,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-func TestBuildSkipsRequestTimePagesAndKeepsStaticArtifacts(t *testing.T) {
+func TestBuildSkipsRequestTimePagesAndKeepsSPAArtifacts(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{
 		{
@@ -39,13 +39,13 @@ func TestBuildSkipsRequestTimePagesAndKeepsStaticArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(result.Artifacts) != 1 {
-		t.Fatalf("expected only one static artifact, got %#v", result.Artifacts)
+		t.Fatalf("expected only one app artifact, got %#v", result.Artifacts)
 	}
 	if result.Artifacts[0].PageID != "blog.post" {
 		t.Fatalf("expected SSR page to be skipped, got %#v", result.Artifacts)
 	}
 	if _, err := os.Stat(filepath.Join(outputDir, "dashboard", "index.html")); !os.IsNotExist(err) {
-		t.Fatalf("expected no SSR static output, stat err: %v", err)
+		t.Fatalf("expected no SSR build output, stat err: %v", err)
 	}
 }
 

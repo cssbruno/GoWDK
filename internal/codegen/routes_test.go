@@ -11,13 +11,13 @@ import (
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-func TestBuildRouteBindingsMapsStaticActionsSSRAndAPI(t *testing.T) {
+func TestBuildRouteBindingsMapsSPAActionsSSRAndAPI(t *testing.T) {
 	app := manifest.Manifest{
 		Pages: []manifest.Page{
 			{
 				ID:     "newsletter",
 				Route:  "/newsletter",
-				Render: gowdk.Static,
+				Render: gowdk.SPA,
 				Blocks: manifest.Blocks{
 					View:    true,
 					Actions: []manifest.Action{{Name: "subscribe"}},
@@ -35,7 +35,7 @@ func TestBuildRouteBindingsMapsStaticActionsSSRAndAPI(t *testing.T) {
 			{
 				ID:     "patients.index",
 				Route:  "/patients",
-				Render: gowdk.Static,
+				Render: gowdk.SPA,
 				Blocks: manifest.Blocks{
 					View: true,
 					APIs: []manifest.API{{Method: "GET", Route: "/api/patients"}},
@@ -49,7 +49,7 @@ func TestBuildRouteBindingsMapsStaticActionsSSRAndAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assertRoute(t, routes, RouteStatic, "GET", "/newsletter", `embedded.Static("pages/newsletter.html")`)
+	assertRoute(t, routes, RouteSPA, "GET", "/newsletter", `embedded.SPA("pages/newsletter.html")`)
 	assertRoute(t, routes, RouteAction, "POST", "/newsletter", "actions.NewsletterSubscribe")
 	assertRoute(t, routes, RouteSSR, "GET", "/dashboard", "ssr.RenderDashboard")
 	assertRoute(t, routes, RouteAPI, "GET", "/api/patients", "api.PatientsIndex")
@@ -57,7 +57,7 @@ func TestBuildRouteBindingsMapsStaticActionsSSRAndAPI(t *testing.T) {
 
 func TestGenerateRouteRegistrationEmitsFormattedGoSource(t *testing.T) {
 	bindings := []RouteBinding{
-		{Kind: RouteStatic, Method: "GET", Route: "/", PageID: "home", Handler: `embedded.Static("pages/home.html")`},
+		{Kind: RouteSPA, Method: "GET", Route: "/", PageID: "home", Handler: `embedded.SPA("pages/home.html")`},
 		{Kind: RouteAction, Method: "POST", Route: "/newsletter", PageID: "newsletter", Handler: "actions.NewsletterSubscribe"},
 		{Kind: RouteAPI, Method: "GET", Route: "/api/health", PageID: "status", Handler: "api.StatusHealth"},
 		{Kind: RouteSSR, Method: "GET", Route: "/dashboard", PageID: "dashboard", Handler: "ssr.RenderDashboard"},
@@ -83,7 +83,7 @@ func TestGenerateRouteRegistrationEmitsFormattedGoSource(t *testing.T) {
 	for _, want := range []string{
 		`package routes`,
 		`embedded "example.com/site/internal/embedded"`,
-		`mux.HandleFunc("GET /", embedded.Static("pages/home.html"))`,
+		`mux.HandleFunc("GET /", embedded.SPA("pages/home.html"))`,
 		`mux.HandleFunc("POST /newsletter", actions.NewsletterSubscribe)`,
 		`mux.HandleFunc("GET /api/health", api.StatusHealth)`,
 		`mux.HandleFunc("GET /dashboard", ssr.RenderDashboard)`,

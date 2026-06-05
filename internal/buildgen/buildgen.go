@@ -1,5 +1,5 @@
-// Package staticgen emits static HTML artifacts for build-time pages.
-package staticgen
+// Package buildgen emits app-shell HTML artifacts for build-time pages.
+package buildgen
 
 import (
 	"regexp"

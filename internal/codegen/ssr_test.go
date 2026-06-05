@@ -64,7 +64,7 @@ func TestGenerateSSRPackageEmitsHandlerStubsForSSRAndAcceptedHybrid(t *testing.T
 		}
 	}
 	if strings.Contains(text, "RenderHome") {
-		t.Fatalf("expected static page omitted from SSR handlers:\n%s", text)
+		t.Fatalf("expected app page omitted from SSR handlers:\n%s", text)
 	}
 }
 

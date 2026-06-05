@@ -1,4 +1,4 @@
-package staticgen
+package buildgen
 
 import (
 	"fmt"
@@ -47,7 +47,7 @@ func pageOutputArtifacts(config gowdk.Config, outputDir string, page manifest.Pa
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
-		html, err := renderPage(config, page, components, layouts, stylesheets, data, renderModeStatic)
+		html, err := renderPage(config, page, components, layouts, stylesheets, data, renderModeSPA)
 		if err != nil {
 			return nil, err
 		}

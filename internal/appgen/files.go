@@ -10,20 +10,20 @@ import (
 	"strings"
 )
 
-func validateDirectories(staticDir, appDir string) error {
-	info, err := os.Stat(staticDir)
+func validateDirectories(outputDir, appDir string) error {
+	info, err := os.Stat(outputDir)
 	if err != nil {
 		return err
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("static output %q is not a directory", staticDir)
+		return fmt.Errorf("build output %q is not a directory", outputDir)
 	}
-	rel, err := filepath.Rel(staticDir, appDir)
+	rel, err := filepath.Rel(outputDir, appDir)
 	if err != nil {
 		return err
 	}
 	if rel == "." || (!strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != "..") {
-		return fmt.Errorf("generated app directory %q must be outside static output directory %q", appDir, staticDir)
+		return fmt.Errorf("generated app directory %q must be outside build output directory %q", appDir, outputDir)
 	}
 	return nil
 }
@@ -36,7 +36,7 @@ func isSameOrWithin(parent, child string) bool {
 	return rel == "." || (!strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != "..")
 }
 
-func copyStaticFiles(sourceRoot, targetRoot string) ([]string, error) {
+func copyOutputFiles(sourceRoot, targetRoot string) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(sourceRoot, func(sourcePath string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -113,7 +113,7 @@ func copyFile(sourcePath, targetPath string) error {
 	return writeFileIfChanged(targetPath, payload)
 }
 
-func removeStaleStaticFiles(targetRoot string, files []string) error {
+func removeStaleOutputFiles(targetRoot string, files []string) error {
 	keep := map[string]bool{}
 	for _, file := range files {
 		keep[file] = true

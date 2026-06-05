@@ -29,16 +29,16 @@ type ModuleConfig struct {
 	Source SourceConfig
 }
 
-// RenderConfig controls default render behavior. Static is the default when
+// RenderConfig controls default render behavior. SPA is the default when
 // omitted.
 type RenderConfig struct {
 	Default RenderMode
 }
 
-// DefaultMode returns Static when no explicit default render mode is set.
+// DefaultMode returns SPA when no explicit default render mode is set.
 func (config RenderConfig) DefaultMode() RenderMode {
 	if config.Default == "" {
-		return Static
+		return SPA
 	}
 	return config.Default
 }
@@ -52,7 +52,7 @@ type BuildConfig struct {
 	Targets     []BuildTargetConfig
 }
 
-// BuildTargetConfig declares one static build target. Modules selects the
+// BuildTargetConfig declares one configured build target. Modules selects the
 // configured source modules compiled into Output, App, Binary, and WASM.
 type BuildTargetConfig struct {
 	Name    string
@@ -104,11 +104,11 @@ func (config BuildConfig) DebugAssets() bool {
 type RenderMode string
 
 const (
-	// Static renders full pages at build time.
-	Static RenderMode = "static"
-	// Action renders the page statically while allowing backend actions.
+	// SPA emits a non-SSR app shell and client-side route experience.
+	SPA RenderMode = "spa"
+	// Action emits a non-SSR app shell while allowing backend actions.
 	Action RenderMode = "action"
-	// Hybrid allows a route to combine static output and request-time behavior.
+	// Hybrid allows a route to combine app output and request-time behavior.
 	Hybrid RenderMode = "hybrid"
 	// SSR renders full pages at request time through the SSR addon.
 	SSR RenderMode = "ssr"
@@ -118,7 +118,7 @@ const (
 func ParseRenderMode(value string) (RenderMode, error) {
 	mode := RenderMode(value)
 	switch mode {
-	case Static, Action, Hybrid, SSR:
+	case SPA, Action, Hybrid, SSR:
 		return mode, nil
 	default:
 		return "", fmt.Errorf("unknown render mode %q", value)
@@ -130,16 +130,16 @@ func (mode RenderMode) RequiresSSR() bool {
 	return mode == SSR || mode == Hybrid
 }
 
-// IsBuildTime reports whether route params must be known at build time.
+// IsBuildTime reports whether route params must be known for generated output.
 func (mode RenderMode) IsBuildTime() bool {
-	return mode == Static || mode == Action
+	return mode == SPA || mode == Action
 }
 
 // Feature names the capabilities that addons make available to the compiler.
 type Feature string
 
 const (
-	FeatureStatic    Feature = "static"
+	FeatureSPA       Feature = "spa"
 	FeatureActions   Feature = "actions"
 	FeaturePartial   Feature = "partial"
 	FeatureSSR       Feature = "ssr"

@@ -303,10 +303,10 @@ func validateFragmentTarget(value string) error {
 		return fmt.Errorf("fragment target %q must not contain whitespace", value)
 	}
 	if !strings.HasPrefix(value, "#") || strings.TrimPrefix(value, "#") == "" {
-		return fmt.Errorf("fragment target %q must be a static id selector", value)
+		return fmt.Errorf("fragment target %q must be a literal id selector", value)
 	}
 	if strings.ContainsAny(value, "{}") {
-		return fmt.Errorf("fragment target %q must be static", value)
+		return fmt.Errorf("fragment target %q must be literal", value)
 	}
 	return nil
 }

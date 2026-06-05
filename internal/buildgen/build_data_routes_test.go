@@ -1,4 +1,4 @@
-package staticgen
+package buildgen
 
 import (
 	"fmt"
@@ -375,7 +375,7 @@ func TestBuildWritesNestedRouteIndex(t *testing.T) {
 	}
 }
 
-func TestBuildExpandsDynamicStaticPaths(t *testing.T) {
+func TestBuildExpandsDynamicSPAPaths(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{
 		Pages: []manifest.Page{{
@@ -432,7 +432,7 @@ func TestBuildExpandsDynamicStaticPaths(t *testing.T) {
 		t.Fatalf("missing hello route in manifest: %#v", seen)
 	}
 	if seen["/blog/compile-first"] != "blog/compile-first/index.html" {
-		t.Fatalf("missing static route in manifest: %#v", seen)
+		t.Fatalf("missing app route in manifest: %#v", seen)
 	}
 }
 

@@ -10,18 +10,18 @@ import (
 	"time"
 )
 
+const defaultDevOutputDir = "gowdk_cache"
+
 func dev(args []string) error {
 	options, err := parseDevOptions(args)
 	if err != nil {
 		return err
 	}
-	outputDir, err := devOutputDir(options.BuildArgs)
+	buildArgs, outputDir, err := devBuildArgs(options.BuildArgs)
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(outputDir) == "" {
-		return fmt.Errorf("dev requires --out <dir>, Config.Build.Output, or one selected target with Output")
-	}
+	options.BuildArgs = buildArgs
 	if err := build(options.BuildArgs); err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func dev(args []string) error {
 		}
 	}()
 
-	fmt.Printf("Dev server watching GOWDK inputs every %s\n", options.Interval)
+	fmt.Printf("Dev server polling GOWDK inputs every %s\n", options.Interval)
 	fmt.Printf("Serving %s at http://%s\n", absDir, options.Addr)
 	previous, err := buildInputSnapshot(options.BuildArgs)
 	if err != nil {
@@ -68,7 +68,7 @@ func dev(args []string) error {
 		change := current.diff(previous)
 		previous = current
 		fmt.Printf("Change detected at %s: %s\n", time.Now().Format(time.RFC3339), change.summary())
-		_, err = buildWatchChange(options.BuildArgs, change, true)
+		_, err = buildDevChange(options.BuildArgs, change, true)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			continue
@@ -104,13 +104,13 @@ func parseDevOptions(args []string) (devOptions, error) {
 			if i >= len(args) {
 				return devOptions{}, errors.New(devUsage())
 			}
-			interval, err := parseWatchInterval(args[i])
+			interval, err := parseDevInterval(args[i])
 			if err != nil {
 				return devOptions{}, err
 			}
 			options.Interval = interval
 		case strings.HasPrefix(arg, "--interval="):
-			interval, err := parseWatchInterval(strings.TrimPrefix(arg, "--interval="))
+			interval, err := parseDevInterval(strings.TrimPrefix(arg, "--interval="))
 			if err != nil {
 				return devOptions{}, err
 			}
@@ -156,5 +156,39 @@ func devOutputDir(args []string) (string, error) {
 		}
 		return targets[0].Output, nil
 	}
-	return options.Config.Build.Output, nil
+	if strings.TrimSpace(outputDir) != "" {
+		return outputDir, nil
+	}
+	return defaultDevOutputDir, nil
+}
+
+func devBuildArgs(args []string) ([]string, string, error) {
+	outputDir, err := devOutputDir(args)
+	if err != nil {
+		return nil, "", err
+	}
+	if devArgsHaveOutput(args) || devArgsHaveTarget(args) {
+		return append([]string(nil), args...), outputDir, nil
+	}
+	next := append([]string(nil), args...)
+	next = append(next, "--out", outputDir)
+	return next, outputDir, nil
+}
+
+func devArgsHaveOutput(args []string) bool {
+	for _, arg := range args {
+		if arg == "--out" || strings.HasPrefix(arg, "--out=") {
+			return true
+		}
+	}
+	return false
+}
+
+func devArgsHaveTarget(args []string) bool {
+	for _, arg := range args {
+		if arg == "--target" || strings.HasPrefix(arg, "--target=") {
+			return true
+		}
+	}
+	return false
 }

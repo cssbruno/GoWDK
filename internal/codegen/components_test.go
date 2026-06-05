@@ -94,9 +94,9 @@ func TestGenerateComponentPackagePreservesClassShorthand(t *testing.T) {
 
 	text := string(source)
 	for _, want := range []string{
-		`out.Static("<section class=\"hero-card featured lead\"><h1>")`,
+		`out.Markup("<section class=\"hero-card featured lead\"><h1>")`,
 		`out.Text(props.Title)`,
-		`out.Static("</h1></section>")`,
+		`out.Markup("</h1></section>")`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("expected generated source to contain %q:\n%s", want, text)

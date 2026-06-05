@@ -2,87 +2,23 @@ package main
 
 import (
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/buildgen"
+	"github.com/cssbruno/gowdk/internal/discover"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/manifest"
-	"github.com/cssbruno/gowdk/internal/staticgen"
 )
 
-func watch(args []string) error {
-	options, err := parseWatchOptions(args)
-	if err != nil {
-		return err
-	}
-	if options.Once && options.Restart {
-		return fmt.Errorf("watch --restart cannot be used with --once")
-	}
-	if options.Once {
-		return build(options.BuildArgs)
-	}
-
-	var process *watchProcess
-	if options.Restart {
-		binaryPath, err := watchRestartBinaryPath(options.BuildArgs)
-		if err != nil {
-			return err
-		}
-		process = &watchProcess{Path: binaryPath}
-		defer func() {
-			if err := process.stop(); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		}()
-	}
-
-	fmt.Printf("Watching GOWDK inputs every %s\n", options.Interval)
-	if err := build(options.BuildArgs); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-	} else if process != nil {
-		if err := process.restart(); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-		}
-	}
-	previous, err := buildInputSnapshot(options.BuildArgs)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-	}
-	for {
-		time.Sleep(options.Interval)
-		current, err := buildInputSnapshot(options.BuildArgs)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			continue
-		}
-		if current.same(previous) {
-			continue
-		}
-		change := current.diff(previous)
-		previous = current
-		fmt.Printf("Change detected at %s\n", time.Now().Format(time.RFC3339))
-		restart, err := buildWatchChange(options.BuildArgs, change, process == nil)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			continue
-		}
-		if restart && process != nil {
-			if err := process.restart(); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		}
-	}
-}
-
-func buildWatchChange(args []string, change inputChange, allowIncremental bool) (bool, error) {
+func buildDevChange(args []string, change inputChange, allowIncremental bool) (bool, error) {
 	if allowIncremental {
-		incremental, err := buildIncrementalStatic(args, change)
+		incremental, err := buildIncrementalSPA(args, change)
 		if incremental || err != nil {
 			return false, err
 		}
@@ -90,7 +26,7 @@ func buildWatchChange(args []string, change inputChange, allowIncremental bool) 
 	return true, build(args)
 }
 
-func buildIncrementalStatic(args []string, change inputChange) (bool, error) {
+func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 	if len(change.Added) > 0 || len(change.Removed) > 0 || len(change.Changed) == 0 {
 		return false, nil
 	}
@@ -144,9 +80,9 @@ func buildIncrementalStatic(args []string, change inputChange) (bool, error) {
 	if !incremental {
 		return false, nil
 	}
-	result, err := staticgen.BuildIncremental(options.Config, app, outputDir, pageSources)
+	result, err := buildgen.BuildIncremental(options.Config, app, outputDir, pageSources)
 	if err != nil {
-		printStaticgenBuildErrorReport(err, options.Debug)
+		printBuildgenBuildErrorReport(err, options.Debug)
 		return true, err
 	}
 	for _, artifact := range result.Artifacts {
@@ -169,12 +105,12 @@ func buildIncrementalStatic(args []string, change inputChange) (bool, error) {
 	if result.BuildReportPath != "" {
 		fmt.Println(result.BuildReportPath)
 	}
-	printStaticgenBuildReport(result.Report, options.Debug)
+	printBuildgenBuildReport(result.Report, options.Debug)
 	return true, nil
 }
 
 func inputChangeTouchesConfig(change inputChange, configPath string) bool {
-	configAbs, ok := watchedConfigPath(configPath)
+	configAbs, ok := devConfigPath(configPath)
 	if !ok {
 		return false
 	}
@@ -186,7 +122,7 @@ func inputChangeTouchesConfig(change inputChange, configPath string) bool {
 	return false
 }
 
-func watchedConfigPath(configPath string) (string, bool) {
+func devConfigPath(configPath string) (string, bool) {
 	if strings.TrimSpace(configPath) != "" {
 		abs, err := filepath.Abs(configPath)
 		return filepath.Clean(abs), err == nil
@@ -254,143 +190,13 @@ func cleanAbs(path string) (string, bool) {
 	return filepath.Clean(abs), true
 }
 
-type watchProcess struct {
-	Path        string
-	command     *exec.Cmd
-	stopTimeout time.Duration
-}
-
-func (process *watchProcess) restart() error {
-	if strings.TrimSpace(process.Path) == "" {
-		return fmt.Errorf("watch restart binary path is required")
-	}
-	if err := process.stop(); err != nil {
-		return err
-	}
-	command := exec.Command(process.Path)
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-	command.Stdin = os.Stdin
-	command.Env = os.Environ()
-	if err := command.Start(); err != nil {
-		return fmt.Errorf("start %s: %w", process.Path, err)
-	}
-	process.command = command
-	fmt.Printf("Started %s pid=%d\n", process.Path, command.Process.Pid)
-	return nil
-}
-
-func (process *watchProcess) stop() error {
-	if process.command == nil || process.command.Process == nil {
-		process.command = nil
-		return nil
-	}
-
-	command := process.command
-	process.command = nil
-	if err := command.Process.Signal(os.Interrupt); err != nil {
-		_ = command.Process.Kill()
-	}
-
-	done := make(chan error, 1)
-	go func() {
-		done <- command.Wait()
-	}()
-
-	timeout := process.stopTimeout
-	if timeout <= 0 {
-		timeout = 2 * time.Second
-	}
-	select {
-	case <-done:
-		return nil
-	case <-time.After(timeout):
-		_ = command.Process.Kill()
-		<-done
-		return nil
-	}
-}
-
-type watchOptions struct {
-	BuildArgs []string
-	Once      bool
-	Interval  time.Duration
-	Restart   bool
-}
-
-func parseWatchOptions(args []string) (watchOptions, error) {
-	options := watchOptions{Interval: time.Second}
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--once":
-			options.Once = true
-		case arg == "--restart":
-			options.Restart = true
-		case arg == "--interval":
-			i++
-			if i >= len(args) {
-				return watchOptions{}, errors.New(watchUsage())
-			}
-			interval, err := parseWatchInterval(args[i])
-			if err != nil {
-				return watchOptions{}, err
-			}
-			options.Interval = interval
-		case strings.HasPrefix(arg, "--interval="):
-			interval, err := parseWatchInterval(strings.TrimPrefix(arg, "--interval="))
-			if err != nil {
-				return watchOptions{}, err
-			}
-			options.Interval = interval
-		default:
-			options.BuildArgs = append(options.BuildArgs, arg)
-		}
-	}
-	return options, nil
-}
-
-func watchUsage() string {
-	return "usage: gowdk watch [--once] [--restart] [--interval <duration>] [build flags...]"
-}
-
-func watchRestartBinaryPath(args []string) (string, error) {
-	options, outputDir, appDir, binaryPath, wasmPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
-	if err != nil {
-		return "", err
-	}
-	if err := loadBuildConfig(&options, configPath); err != nil {
-		return "", err
-	}
-	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
-		return "", fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, or explicit files")
-	}
-	if strings.TrimSpace(binaryPath) != "" {
-		return binaryPath, nil
-	}
-	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
-		targets, err := selectBuildTargets(options.Config.Build.Targets, targetNames)
-		if err != nil {
-			return "", err
-		}
-		if len(targets) != 1 {
-			return "", fmt.Errorf("watch --restart requires exactly one build target with Binary")
-		}
-		if strings.TrimSpace(targets[0].Binary) == "" {
-			return "", fmt.Errorf("watch --restart target %q is missing Binary", targets[0].Name)
-		}
-		return targets[0].Binary, nil
-	}
-	return "", fmt.Errorf("watch --restart requires --bin <file> or one Build.Targets entry with Binary")
-}
-
-func parseWatchInterval(value string) (time.Duration, error) {
+func parseDevInterval(value string) (time.Duration, error) {
 	interval, err := time.ParseDuration(value)
 	if err != nil {
-		return 0, fmt.Errorf("invalid watch interval %q: %w", value, err)
+		return 0, fmt.Errorf("invalid dev interval %q: %w", value, err)
 	}
 	if interval <= 0 {
-		return 0, fmt.Errorf("watch interval must be positive")
+		return 0, fmt.Errorf("dev interval must be positive")
 	}
 	return interval, nil
 }
@@ -442,6 +248,11 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 				return nil, err
 			}
 			paths = append(paths, discovered...)
+			css, err := discoverBuildCSSFiles(options.Config, target.Output)
+			if err != nil {
+				return nil, err
+			}
+			paths = append(paths, css...)
 		}
 	} else if outputDir == "" {
 		outputDir = options.Config.Build.Output
@@ -452,12 +263,28 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 			}
 			paths = discovered
 		}
+		css, err := discoverBuildCSSFiles(options.Config, outputDir)
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, css...)
 	} else if len(paths) == 0 {
 		discovered, err := discoverBuildFiles(options.Config, outputDir, moduleNames)
 		if err != nil {
 			return nil, err
 		}
 		paths = discovered
+		css, err := discoverBuildCSSFiles(options.Config, outputDir)
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, css...)
+	} else {
+		css, err := discoverBuildCSSFiles(options.Config, outputDir)
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, css...)
 	}
 	if strings.TrimSpace(configPath) != "" {
 		paths = append(paths, configPath)
@@ -485,6 +312,27 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 		snapshot[abs] = fmt.Sprintf("%x", sum)
 	}
 	return snapshot, nil
+}
+
+func discoverBuildCSSFiles(config gowdk.Config, outputDir string) ([]string, error) {
+	includes := appendPatterns(nil, config.CSS.Include)
+	if len(includes) == 1 && includes[0] == buildgen.DisableCSSDiscovery {
+		return nil, nil
+	}
+	if len(includes) == 0 {
+		includes = []string{"**/*.css"}
+	}
+
+	root, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	excludes := []string{".git/**", "vendor/**", "node_modules/**"}
+	excludes = appendPatterns(excludes, config.CSS.Exclude)
+	if pattern := outputExcludePattern(root, outputDir); pattern != "" {
+		excludes = append(excludes, pattern)
+	}
+	return discover.Files(root, includes, excludes)
 }
 
 func (snapshot inputSnapshot) same(other inputSnapshot) bool {

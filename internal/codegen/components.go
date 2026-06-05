@@ -107,13 +107,13 @@ func writeInterpolatedView(source *strings.Builder, component manifest.Component
 			source.WriteString(")\n")
 			continue
 		}
-		writeStringChunk(source, part.Static)
+		writeStringChunk(source, part.Markup)
 	}
 	return nil
 }
 
 type componentViewPart struct {
-	Static string
+	Markup string
 	Prop   string
 }
 
@@ -144,12 +144,12 @@ func componentViewParts(component manifest.Component, props map[string]bool) ([]
 		normalized.WriteString(view[offset:])
 	}
 
-	rendered, err := viewpkg.RenderStatic(normalized.String())
+	rendered, err := viewpkg.RenderSPA(normalized.String())
 	if err != nil {
 		return nil, fmt.Errorf("component %s view: %w", component.Name, err)
 	}
 
-	parts := []componentViewPart{{Static: rendered}}
+	parts := []componentViewPart{{Markup: rendered}}
 	for index, markerPart := range propMarkers {
 		marker := componentPropMarkerPrefix + strconv.Itoa(index) + "__"
 		parts = splitComponentViewParts(parts, marker, markerPart)
@@ -164,10 +164,10 @@ func splitComponentViewParts(parts []componentViewPart, marker string, markerPar
 			out = append(out, part)
 			continue
 		}
-		chunks := strings.Split(part.Static, marker)
+		chunks := strings.Split(part.Markup, marker)
 		for index, chunk := range chunks {
 			if chunk != "" {
-				out = append(out, componentViewPart{Static: chunk})
+				out = append(out, componentViewPart{Markup: chunk})
 			}
 			if index < len(chunks)-1 {
 				out = append(out, markerPart)
@@ -181,7 +181,7 @@ func writeStringChunk(source *strings.Builder, value string) {
 	if value == "" {
 		return
 	}
-	source.WriteString("\tout.Static(")
+	source.WriteString("\tout.Markup(")
 	source.WriteString(strconv.Quote(value))
 	source.WriteString(")\n")
 }

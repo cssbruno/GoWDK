@@ -7,8 +7,8 @@ import (
 	"github.com/cssbruno/gowdk/internal/clientlang"
 )
 
-func TestRenderStaticEscapesTextAndAttributes(t *testing.T) {
-	got, err := RenderStatic(`<main class="hero & lead"><h1>GOWDK & friends</h1><input disabled /></main>`)
+func TestRenderSPAEscapesTextAndAttributes(t *testing.T) {
+	got, err := RenderSPA(`<main class="hero & lead"><h1>GOWDK & friends</h1><input disabled /></main>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -18,8 +18,8 @@ func TestRenderStaticEscapesTextAndAttributes(t *testing.T) {
 	}
 }
 
-func TestRenderStaticExpandsClassAndIDShorthand(t *testing.T) {
-	got, err := RenderStatic(`<main #hero .text-4xl .font-bold class="lead">Title</main>`)
+func TestRenderSPAExpandsClassAndIDShorthand(t *testing.T) {
+	got, err := RenderSPA(`<main #hero .text-4xl .font-bold class="lead">Title</main>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,8 +29,8 @@ func TestRenderStaticExpandsClassAndIDShorthand(t *testing.T) {
 	}
 }
 
-func TestRenderStaticRejectsDuplicateIDShorthand(t *testing.T) {
-	_, err := RenderStatic(`<main #hero id="other">Title</main>`)
+func TestRenderSPARejectsDuplicateIDShorthand(t *testing.T) {
+	_, err := RenderSPA(`<main #hero id="other">Title</main>`)
 	if err == nil {
 		t.Fatal("expected duplicate id error")
 	}
@@ -39,8 +39,8 @@ func TestRenderStaticRejectsDuplicateIDShorthand(t *testing.T) {
 	}
 }
 
-func TestRenderStaticRejectsMissingComponent(t *testing.T) {
-	_, err := RenderStatic(`<Page />`)
+func TestRenderSPARejectsMissingComponent(t *testing.T) {
+	_, err := RenderSPA(`<Page />`)
 	if err == nil {
 		t.Fatal("expected missing component error")
 	}
@@ -49,7 +49,7 @@ func TestRenderStaticRejectsMissingComponent(t *testing.T) {
 	}
 }
 
-func TestRenderWithComponentsExpandsStaticStringProps(t *testing.T) {
+func TestRenderWithComponentsExpandsSPAStringProps(t *testing.T) {
 	got, err := RenderWithComponents(`<main><Hero title="GOWDK & compiler" /></main>`, map[string]Component{
 		"Hero": {
 			Name:  "Hero",
@@ -563,7 +563,7 @@ func TestRenderWithComponentsRejectsRadioValueBindingWithoutValue(t *testing.T) 
 	if err == nil {
 		t.Fatal("expected radio value binding error")
 	}
-	if !strings.Contains(err.Error(), `radio <input> requires a static value attribute`) {
+	if !strings.Contains(err.Error(), `radio <input> requires a literal value attribute`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -772,12 +772,12 @@ func TestActionFormSchemaIncludesSlottedControls(t *testing.T) {
 func TestRenderWithDataInterpolatesTextAndAttributes(t *testing.T) {
 	got, err := RenderWithData(`<main data-slug="{slug}"><h1>{title}</h1></main>`, nil, map[string]string{
 		"slug":  `hello&gowdk`,
-		"title": `GOWDK <static>`,
+		"title": `GOWDK <SPA>`,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `<main data-slug="hello&amp;gowdk"><h1>GOWDK &lt;static&gt;</h1></main>`
+	want := `<main data-slug="hello&amp;gowdk"><h1>GOWDK &lt;SPA&gt;</h1></main>`
 	if got != want {
 		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
@@ -785,12 +785,12 @@ func TestRenderWithDataInterpolatesTextAndAttributes(t *testing.T) {
 
 func TestRenderWithDataInterpolatesExpressionAttributes(t *testing.T) {
 	got, err := RenderWithData(`<main data-title={post.Title}></main>`, nil, map[string]string{
-		"post.Title": `GOWDK <static>`,
+		"post.Title": `GOWDK <SPA>`,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `<main data-title="GOWDK &lt;static&gt;"></main>`
+	want := `<main data-title="GOWDK &lt;SPA&gt;"></main>`
 	if got != want {
 		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
@@ -798,12 +798,12 @@ func TestRenderWithDataInterpolatesExpressionAttributes(t *testing.T) {
 
 func TestRenderWithDataInterpolatesDottedTextExpressionNames(t *testing.T) {
 	got, err := RenderWithData(`<main>{post.Title}</main>`, nil, map[string]string{
-		"post.Title": `GOWDK <static>`,
+		"post.Title": `GOWDK <SPA>`,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `<main>GOWDK &lt;static&gt;</main>`
+	want := `<main>GOWDK &lt;SPA&gt;</main>`
 	if got != want {
 		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
@@ -945,7 +945,7 @@ func TestRenderWithOptionsRejectsMissingPartialTarget(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected missing target error")
 	}
-	if !strings.Contains(err.Error(), `g:target "#patients" does not reference a static id in this view`) {
+	if !strings.Contains(err.Error(), `g:target "#patients" does not reference a literal id in this view`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -999,7 +999,7 @@ func TestRenderWithOptionsRejectsInvalidPartialDirectives(t *testing.T) {
 		source string
 		want   string
 	}{
-		{`<form g:post={refresh} g:target="patients"></form><section id="patients"></section>`, `must be a static id selector`},
+		{`<form g:post={refresh} g:target="patients"></form><section id="patients"></section>`, `must be a literal id selector`},
 		{`<form g:post={refresh} g:swap="append"></form>`, `unsupported g:swap mode "append"`},
 		{`<form g:post={refresh} g:swap="innerHTML"></form>`, `g:swap requires g:target`},
 	}
@@ -1033,7 +1033,7 @@ func TestComponentReferencesReturnsSortedUniqueComponentNames(t *testing.T) {
 }
 
 func TestComponentCallUsagesMarksReactiveProps(t *testing.T) {
-	usages, err := ComponentCallUsages(`<Parent><Child label={SelectedName} static="ok" /></Parent>`)
+	usages, err := ComponentCallUsages(`<Parent><Child label={SelectedName} SPA="ok" /></Parent>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1074,7 +1074,7 @@ func TestParamReferencesReturnsSortedUniqueRouteParamNames(t *testing.T) {
 	}
 }
 
-func TestActionFormFieldsFindsDirectStaticControls(t *testing.T) {
+func TestActionFormFieldsFindsDirectSPAControls(t *testing.T) {
 	fields, err := ActionFormFields(`
 		<form g:post={submit}>
 			<input name="email" />
@@ -1093,7 +1093,7 @@ func TestActionFormFieldsFindsDirectStaticControls(t *testing.T) {
 	}
 }
 
-func TestViewDependenciesCollectsStaticAssetsClassesAndStyles(t *testing.T) {
+func TestViewDependenciesCollectsAssetsClassesAndStyles(t *testing.T) {
 	deps, err := ViewDependencies(`
 		<main class="hero lead hero" style="color: red;">
 			<img src="/assets/hero.png" />
@@ -1106,8 +1106,8 @@ func TestViewDependenciesCollectsStaticAssetsClassesAndStyles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(deps.StaticAssets, ",") != "/assets/hero.png,docs/start.html" {
-		t.Fatalf("unexpected assets: %#v", deps.StaticAssets)
+	if strings.Join(deps.Assets, ",") != "/assets/hero.png,docs/start.html" {
+		t.Fatalf("unexpected assets: %#v", deps.Assets)
 	}
 	if strings.Join(deps.CSSClasses, ",") != "hero,lead" {
 		t.Fatalf("unexpected classes: %#v", deps.CSSClasses)
@@ -1161,7 +1161,7 @@ func TestActionFormFieldsRejectsDynamicControlName(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected dynamic field name error")
 	}
-	if !strings.Contains(err.Error(), `action form field name "{field}" must be static`) {
+	if !strings.Contains(err.Error(), `action form field name "{field}" must be literal`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -1181,7 +1181,7 @@ func TestActionFormSchemaRejectsDynamicInputType(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected dynamic input type error")
 	}
-	if !strings.Contains(err.Error(), `action form input "avatar" type "{kind}" must be static`) {
+	if !strings.Contains(err.Error(), `action form input "avatar" type "{kind}" must be literal`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -1222,8 +1222,8 @@ func TestRenderWithComponentsRejectsMissingRequiredProp(t *testing.T) {
 	}
 }
 
-func TestRenderStaticRejectsMismatchedTags(t *testing.T) {
-	_, err := RenderStatic(`<main><h1>Home</main>`)
+func TestRenderSPARejectsMismatchedTags(t *testing.T) {
+	_, err := RenderSPA(`<main><h1>Home</main>`)
 	if err == nil {
 		t.Fatal("expected mismatched tag error")
 	}

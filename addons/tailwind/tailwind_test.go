@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/manifest"
-	"github.com/cssbruno/gowdk/internal/staticgen"
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
@@ -103,7 +103,7 @@ func TestProcessCSSReportsMissingExecutable(t *testing.T) {
 	}
 }
 
-func TestStaticBuildWritesTailwindAssetAndStylesheet(t *testing.T) {
+func TestSPABuildWritesTailwindAssetAndStylesheet(t *testing.T) {
 	root := t.TempDir()
 	input := filepath.Join(root, "app.css")
 	if err := os.WriteFile(input, []byte(`@import "tailwindcss";`), 0o644); err != nil {
@@ -121,7 +121,7 @@ func TestStaticBuildWritesTailwindAssetAndStylesheet(t *testing.T) {
 			ViewBody: `<main class="font-bold">Site</main>`,
 		},
 	}}}
-	result, err := staticgen.Build(gowdk.Config{
+	result, err := buildgen.Build(gowdk.Config{
 		Addons: []gowdk.Addon{Addon(Options{
 			Input:   input,
 			Command: fakeTailwindCommand(t),

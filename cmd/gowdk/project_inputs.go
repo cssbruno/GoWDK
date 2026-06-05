@@ -18,12 +18,9 @@ func loadBuildConfig(options *cliOptions, configPath string) error {
 }
 
 func loadProjectConfig(options *cliOptions, configPath string) error {
-	config, loaded, err := project.LoadOptionalConfig(configPath)
+	config, err := project.LoadConfig(configPath)
 	if err != nil {
 		return err
-	}
-	if !loaded {
-		return nil
 	}
 	config.Addons = append(config.Addons, options.Config.Addons...)
 	options.Config = config

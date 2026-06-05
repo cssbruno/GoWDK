@@ -22,7 +22,7 @@ Security-sensitive surfaces include:
 - API handlers.
 - Partial/server fragment responses.
 - SSR `load {}` behavior and guard execution.
-- Embedded asset selection and generated static serving.
+- Embedded asset selection and generated app serving.
 - VS Code extension command execution and workspace file handling.
 
 ## Current Production Warning

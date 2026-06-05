@@ -30,7 +30,7 @@ func serve(args []string) error {
 
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           staticFileHandler(absDir),
+		Handler:           outputFileHandler(absDir),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -78,7 +78,7 @@ func parseServeOptions(args []string) (string, string, error) {
 	return dir, addr, nil
 }
 
-func staticFileHandler(root string) http.Handler {
+func outputFileHandler(root string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodGet && request.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
@@ -86,7 +86,7 @@ func staticFileHandler(root string) http.Handler {
 			return
 		}
 
-		filePath, ok := staticFilePath(root, request.URL.Path)
+		filePath, ok := outputFilePath(root, request.URL.Path)
 		if !ok {
 			http.NotFound(w, request)
 			return
@@ -96,7 +96,7 @@ func staticFileHandler(root string) http.Handler {
 }
 
 func liveReloadFileHandler(root string, reload *liveReloadBroker) http.Handler {
-	files := staticFileHandler(root)
+	files := outputFileHandler(root)
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == "/__gowdk/reload" {
 			reload.serve(w, request)
@@ -106,7 +106,7 @@ func liveReloadFileHandler(root string, reload *liveReloadBroker) http.Handler {
 			files.ServeHTTP(w, request)
 			return
 		}
-		filePath, ok := staticFilePath(root, request.URL.Path)
+		filePath, ok := outputFilePath(root, request.URL.Path)
 		if !ok || filepath.Ext(filePath) != ".html" {
 			files.ServeHTTP(w, request)
 			return
@@ -205,7 +205,7 @@ func (broker *liveReloadBroker) serve(w http.ResponseWriter, request *http.Reque
 	}
 }
 
-func staticFilePath(root, requestPath string) (string, bool) {
+func outputFilePath(root, requestPath string) (string, bool) {
 	clean := path.Clean("/" + requestPath)
 	candidates := []string{clean}
 	if strings.HasSuffix(requestPath, "/") {
@@ -215,7 +215,7 @@ func staticFilePath(root, requestPath string) (string, bool) {
 	}
 
 	for _, candidate := range candidates {
-		filePath, ok := staticCandidatePath(root, candidate)
+		filePath, ok := outputCandidatePath(root, candidate)
 		if ok {
 			return filePath, true
 		}
@@ -223,7 +223,7 @@ func staticFilePath(root, requestPath string) (string, bool) {
 	return "", false
 }
 
-func staticCandidatePath(root, candidate string) (string, bool) {
+func outputCandidatePath(root, candidate string) (string, bool) {
 	rel := strings.TrimPrefix(path.Clean("/"+candidate), "/")
 	filePath := filepath.Join(root, filepath.FromSlash(rel))
 	relative, err := filepath.Rel(root, filePath)

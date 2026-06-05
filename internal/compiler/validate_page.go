@@ -75,7 +75,7 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	}
 	if mode.IsBuildTime() && len(params) > 0 && !page.Paths {
 		diagnostics = append(diagnostics, ValidationError{
-			Code:   "static_dynamic_route_missing_paths",
+			Code:   "spa_dynamic_route_missing_paths",
 			PageID: page.ID,
 			Source: page.Source,
 			Span:   firstNamedSpan(page.Spans.RouteParams, page.Spans.Route),

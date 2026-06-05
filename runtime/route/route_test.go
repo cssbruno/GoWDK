@@ -2,10 +2,10 @@ package route
 
 import "testing"
 
-func TestMatchStaticRoute(t *testing.T) {
+func TestMatchSPARoute(t *testing.T) {
 	params, ok := Match("/blog/about", "/blog/about")
 	if !ok {
-		t.Fatal("expected static route to match")
+		t.Fatal("expected SPA route to match")
 	}
 	if len(params) != 0 {
 		t.Fatalf("did not expect params, got %#v", params)
@@ -27,7 +27,7 @@ func TestMatchRejectsDifferentShape(t *testing.T) {
 		t.Fatal("expected different shape not to match")
 	}
 	if _, ok := Match("/blog/{slug}", "/docs/hello"); ok {
-		t.Fatal("expected different static segment not to match")
+		t.Fatal("expected different literal segment not to match")
 	}
 }
 

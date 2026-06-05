@@ -315,7 +315,7 @@ func ManifestJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
 }
 
 func applyDefaultRenderMode(app manifest.Manifest, defaultMode gowdk.RenderMode) manifest.Manifest {
-	if defaultMode == "" || defaultMode == gowdk.Static {
+	if defaultMode == "" || defaultMode == gowdk.SPA {
 		return app
 	}
 	pages := append([]manifest.Page(nil), app.Pages...)
@@ -355,8 +355,8 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 	switch validation.Code {
 	case "missing_ssr_addon":
 		return "Enable ssr.Addon() in gowdk.config.go or change the page render mode."
-	case "static_dynamic_route_missing_paths":
-		return "Add paths { ... } for the dynamic static route or switch the page to @render ssr."
+	case "spa_dynamic_route_missing_paths":
+		return "Add paths { ... } for the dynamic spa route or switch the page to @render ssr."
 	case "load_requires_request_render":
 		return "Use @render ssr or @render hybrid for pages with load { ... }."
 	case "component_client_error":

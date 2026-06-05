@@ -1,4 +1,4 @@
-// Package view parses and renders the first static subset of view {} markup.
+// Package view parses and renders the first subset of view {} markup.
 package view
 
 import (
@@ -30,7 +30,7 @@ var (
 	styleCustomPropertyPattern = regexp.MustCompile(`^--[A-Za-z0-9_-]+$`)
 )
 
-// Node is a static view markup node.
+// Node is a view markup node.
 type Node interface {
 	render(*renderContext, *strings.Builder) error
 }
@@ -571,7 +571,7 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		if node.Name == "option" && ctx.selectBound && attr.Name == "selected" {
 			continue
 		}
-		if valueBinding != "" && node.staticInputType("radio") && attr.Name == "checked" {
+		if valueBinding != "" && node.SPAInputType("radio") && attr.Name == "checked" {
 			continue
 		}
 		if isClassToggleAttr(attr.Name) {
@@ -580,7 +580,7 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		if isStyleBindingAttr(attr.Name) {
 			continue
 		}
-		if valueBinding != "" && attr.Name == "value" && !node.staticInputType("radio") {
+		if valueBinding != "" && attr.Name == "value" && !node.SPAInputType("radio") {
 			return fmt.Errorf("element with g:bind:value must not declare value")
 		}
 		if checkedBinding != "" && attr.Name == "checked" {
@@ -754,20 +754,20 @@ func (node Element) optionValue(ctx *renderContext) (string, error) {
 }
 
 func (node Element) radioChecked(ctx *renderContext, field string) (bool, error) {
-	if field == "" || node.Name != "input" || !node.staticInputType("radio") {
+	if field == "" || node.Name != "input" || !node.SPAInputType("radio") {
 		return false, nil
 	}
-	value, ok, err := node.staticAttrInterpolated(ctx, "value")
+	value, ok, err := node.SPAAttrInterpolated(ctx, "value")
 	if err != nil {
 		return false, err
 	}
 	if !ok {
-		return false, fmt.Errorf("g:bind:value on radio <input> requires a static value attribute")
+		return false, fmt.Errorf("g:bind:value on radio <input> requires a literal value attribute")
 	}
 	return value == ctx.values[field], nil
 }
 
-func (node Element) staticAttrInterpolated(ctx *renderContext, name string) (string, bool, error) {
+func (node Element) SPAAttrInterpolated(ctx *renderContext, name string) (string, bool, error) {
 	for _, attr := range node.Attrs {
 		if attr.Name != name || attr.Boolean {
 			continue
@@ -965,16 +965,16 @@ func (node Element) valueBinding(ctx *renderContext) (string, error) {
 		if err := validateIslandField(field, ctx.stateFields); err != nil {
 			return "", fmt.Errorf("g:bind:value: %w", err)
 		}
-		if node.Name == "input" && node.staticInputType("radio") {
-			if _, ok, err := node.staticAttrInterpolated(ctx, "value"); err != nil {
+		if node.Name == "input" && node.SPAInputType("radio") {
+			if _, ok, err := node.SPAAttrInterpolated(ctx, "value"); err != nil {
 				return "", err
 			} else if !ok {
-				return "", fmt.Errorf("g:bind:value on radio <input> requires a static value attribute")
+				return "", fmt.Errorf("g:bind:value on radio <input> requires a literal value attribute")
 			}
 		}
 		typ := ctx.stateTypes[field]
 		if typ == clientlang.TypeInt || typ == clientlang.TypeFloat {
-			if node.Name != "input" || !node.staticInputType("number") {
+			if node.Name != "input" || !node.SPAInputType("number") {
 				return "", fmt.Errorf("g:bind:value numeric target %q requires <input type=\"number\">", field)
 			}
 		}
@@ -1018,7 +1018,7 @@ func (node Element) checkedBinding(ctx *renderContext) (string, error) {
 		if field != "" {
 			return "", fmt.Errorf("element declares multiple g:bind:checked directives")
 		}
-		if node.Name != "input" || !node.staticInputType("checkbox") {
+		if node.Name != "input" || !node.SPAInputType("checkbox") {
 			return "", fmt.Errorf("g:bind:checked is only supported on checkbox <input> in this build slice")
 		}
 		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
@@ -1032,7 +1032,7 @@ func (node Element) checkedBinding(ctx *renderContext) (string, error) {
 	return field, nil
 }
 
-func (node Element) staticInputType(value string) bool {
+func (node Element) SPAInputType(value string) bool {
 	for _, attr := range node.Attrs {
 		if attr.Name != "type" || attr.Boolean {
 			continue
@@ -1137,7 +1137,7 @@ func (node Element) directiveValues() (postDirectives, error) {
 			continue
 		}
 		if attr.Name != "g:post" && attr.Name != "g:target" && attr.Name != "g:swap" {
-			return postDirectives{}, fmt.Errorf("unsupported directive attribute %q in static build", attr.Name)
+			return postDirectives{}, fmt.Errorf("unsupported directive attribute %q in SPA build", attr.Name)
 		}
 		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
 			return postDirectives{}, fmt.Errorf("%s requires a value", attr.Name)
@@ -1157,10 +1157,10 @@ func (node Element) directiveValues() (postDirectives, error) {
 			}
 			target := strings.TrimSpace(attr.Value)
 			if strings.ContainsAny(target, "{}") {
-				return postDirectives{}, fmt.Errorf("g:target %q must be static", target)
+				return postDirectives{}, fmt.Errorf("g:target %q must be literal", target)
 			}
 			if !strings.HasPrefix(target, "#") || strings.TrimPrefix(target, "#") == "" || strings.ContainsAny(target, " \t\r\n") {
-				return postDirectives{}, fmt.Errorf("g:target %q must be a static id selector", target)
+				return postDirectives{}, fmt.Errorf("g:target %q must be a literal id selector", target)
 			}
 			directives.Target = target
 		case "g:swap":
@@ -1375,7 +1375,7 @@ func (directive EventDirective) RuntimeOptions() string {
 	return strings.Join(options, " ")
 }
 
-// ComponentCall invokes a parsed component with static string props.
+// ComponentCall invokes a parsed component with literal string props.
 type ComponentCall struct {
 	Name     string
 	Attrs    []Attr
@@ -1748,7 +1748,7 @@ func ignorableConditionalSeparator(node Node) bool {
 	return ok && strings.TrimSpace(text.Value) == ""
 }
 
-// Attr is a static HTML attribute.
+// Attr is a literal HTML attribute.
 type Attr struct {
 	Name       string
 	Value      string
@@ -1756,7 +1756,7 @@ type Attr struct {
 	Expression bool
 }
 
-// Component is a static component template known to the view renderer.
+// Component is a literal component template known to the view renderer.
 type Component struct {
 	Name         string
 	Props        []string
@@ -1781,7 +1781,7 @@ func (component Component) HasProp(name string) bool {
 	return false
 }
 
-// Parse parses a static markup fragment.
+// Parse parses a view markup fragment.
 func Parse(source string) ([]Node, error) {
 	parser := parser{source: []rune(source)}
 	nodes, err := parser.nodes("")
@@ -1795,36 +1795,36 @@ func Parse(source string) ([]Node, error) {
 	return nodes, nil
 }
 
-// RenderStatic renders a static markup fragment with escaped text and attrs.
-func RenderStatic(source string) (string, error) {
+// RenderSPA renders a view markup fragment with escaped text and attrs.
+func RenderSPA(source string) (string, error) {
 	return RenderWithComponents(source, nil)
 }
 
-// RenderWithComponents renders a static markup fragment with component support.
+// RenderWithComponents renders a view markup fragment with component support.
 func RenderWithComponents(source string, components map[string]Component) (string, error) {
 	return RenderWithData(source, components, nil)
 }
 
-// RenderWithData renders a static markup fragment with component support and
+// RenderWithData renders a view markup fragment with component support and
 // string interpolation data.
 func RenderWithData(source string, components map[string]Component, data map[string]string) (string, error) {
 	return RenderWithOptions(source, components, data, Options{})
 }
 
-// Options configures static view rendering.
+// Options configures view rendering.
 type Options struct {
 	Actions map[string]string
 }
 
-// ActionFormField describes one direct static form field for a g:post action.
+// ActionFormField describes one direct literal form field for a g:post action.
 type ActionFormField struct {
 	Name     string
 	Required bool
 }
 
-// Dependencies records static dependencies visible in the first view subset.
+// Dependencies records source dependencies visible in the first view subset.
 type Dependencies struct {
-	StaticAssets    []string
+	Assets    []string
 	CSSClasses      []string
 	StyleAttributes []string
 }
@@ -1843,7 +1843,7 @@ type ComponentCallUsage struct {
 	ReactiveProps bool
 }
 
-// RenderWithOptions renders a static markup fragment with component support,
+// RenderWithOptions renders a view markup fragment with component support,
 // interpolation data, and page-scoped action routes.
 func RenderWithOptions(source string, components map[string]Component, data map[string]string, options Options) (string, error) {
 	bindingSeq := 0
@@ -1861,7 +1861,7 @@ func RenderWithOptions(source string, components map[string]Component, data map[
 	})
 }
 
-// ActionFormFields returns direct static HTML control names grouped by g:post
+// ActionFormFields returns direct literal HTML control names grouped by g:post
 // action name. Component-hidden controls are intentionally not inferred in this
 // first decoder slice.
 func ActionFormFields(source string) (map[string][]string, error) {
@@ -1878,8 +1878,8 @@ func ActionFormFields(source string) (map[string][]string, error) {
 	return fields, nil
 }
 
-// ViewDependencies returns direct static asset and style references from a
-// static markup fragment. Interpolated and external URLs are not reported.
+// ViewDependencies returns direct literal asset and style references from a
+// view markup fragment. Interpolated and external URLs are not reported.
 func ViewDependencies(source string) (Dependencies, error) {
 	nodes, err := Parse(source)
 	if err != nil {
@@ -1890,13 +1890,13 @@ func ViewDependencies(source string) (Dependencies, error) {
 	styles := map[string]bool{}
 	collectViewDependencies(nodes, assets, classes, styles)
 	return Dependencies{
-		StaticAssets:    sortedKeys(assets),
+		Assets:    sortedKeys(assets),
 		CSSClasses:      sortedKeys(classes),
 		StyleAttributes: sortedKeys(styles),
 	}, nil
 }
 
-// ActionFormSchema returns direct static HTML controls grouped by g:post action
+// ActionFormSchema returns direct literal HTML controls grouped by g:post action
 // name. Duplicate field names are merged, and Required is true if any matching
 // direct control is required.
 func ActionFormSchema(source string) (map[string][]ActionFormField, error) {
@@ -1923,7 +1923,7 @@ func ActionFormSchema(source string) (map[string][]ActionFormField, error) {
 }
 
 // ComponentReferences returns unique component names directly referenced by a
-// static markup fragment.
+// view markup fragment.
 func ComponentReferences(source string) ([]string, error) {
 	nodes, err := Parse(source)
 	if err != nil {
@@ -2064,7 +2064,7 @@ func canonicalAttrValue(name string, value string, expression bool) string {
 }
 
 // ParamReferences returns unique param("name") route-param references directly
-// visible in the current static markup subset.
+// visible in the current view markup subset.
 func ParamReferences(source string) ([]string, error) {
 	nodes, err := Parse(source)
 	if err != nil {
@@ -2105,7 +2105,7 @@ func validateFragmentTargetReferences(nodes []Node) error {
 	for target := range targets {
 		id := strings.TrimPrefix(target, "#")
 		if !ids[id] {
-			return fmt.Errorf("g:target %q does not reference a static id in this view", target)
+			return fmt.Errorf("g:target %q does not reference a literal id in this view", target)
 		}
 	}
 	return nil
@@ -2273,7 +2273,7 @@ func collectViewDependencies(nodes []Node, assets, classes, styles map[string]bo
 						styles[style] = true
 					}
 				case "src", "href", "poster":
-					if isStaticAssetReference(attr.Value) {
+					if isSPAAssetReference(attr.Value) {
 						assets[strings.TrimSpace(attr.Value)] = true
 					}
 				}
@@ -2327,7 +2327,7 @@ func validateActionForm(element Element) error {
 		}
 		value := strings.TrimSpace(attr.Value)
 		if strings.ContainsAny(value, "{}") {
-			return fmt.Errorf("action form enctype %q must be static", value)
+			return fmt.Errorf("action form enctype %q must be literal", value)
 		}
 		if strings.EqualFold(value, "multipart/form-data") {
 			return fmt.Errorf("multipart action forms are not supported before upload security rules are defined")
@@ -2387,7 +2387,7 @@ func controlField(element Element) (ActionFormField, bool, error) {
 		}
 		name := strings.TrimSpace(attr.Value)
 		if strings.ContainsAny(name, "{}") {
-			return ActionFormField{}, false, fmt.Errorf("action form field name %q must be static", name)
+			return ActionFormField{}, false, fmt.Errorf("action form field name %q must be literal", name)
 		}
 		field.Name = name
 	}
@@ -2395,7 +2395,7 @@ func controlField(element Element) (ActionFormField, bool, error) {
 		return ActionFormField{}, false, nil
 	}
 	if strings.ContainsAny(inputType, "{}") {
-		return ActionFormField{}, false, fmt.Errorf("action form input %q type %q must be static", field.Name, inputType)
+		return ActionFormField{}, false, fmt.Errorf("action form input %q type %q must be literal", field.Name, inputType)
 	}
 	if strings.EqualFold(inputType, "file") {
 		return ActionFormField{}, false, fmt.Errorf("file input %q is not supported before upload security rules are defined", field.Name)
@@ -2415,7 +2415,7 @@ func sortedKeys(values map[string]bool) []string {
 	return out
 }
 
-func isStaticAssetReference(value string) bool {
+func isSPAAssetReference(value string) bool {
 	value = strings.TrimSpace(value)
 	if value == "" || strings.ContainsAny(value, "{}") || strings.HasPrefix(value, "#") {
 		return false

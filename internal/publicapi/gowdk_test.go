@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewAddonAndEnabledFeatures(t *testing.T) {
-	addon := gowdk.NewAddon("custom", gowdk.FeatureStatic, gowdk.FeatureCSS)
+	addon := gowdk.NewAddon("custom", gowdk.FeatureSPA, gowdk.FeatureCSS)
 
 	if addon.Name() != "custom" {
 		t.Fatalf("unexpected addon name: %q", addon.Name())
@@ -17,8 +17,8 @@ func TestNewAddonAndEnabledFeatures(t *testing.T) {
 	features[0] = gowdk.FeatureSSR
 
 	enabled := gowdk.EnabledFeatures(gowdk.Config{Addons: []gowdk.Addon{addon}})
-	if !enabled.Has(gowdk.FeatureStatic) || !enabled.Has(gowdk.FeatureCSS) {
-		t.Fatalf("expected static and css features, got %#v", enabled)
+	if !enabled.Has(gowdk.FeatureSPA) || !enabled.Has(gowdk.FeatureCSS) {
+		t.Fatalf("expected spa and css features, got %#v", enabled)
 	}
 	if enabled.Has(gowdk.FeatureSSR) {
 		t.Fatalf("addon features should be copied defensively, got %#v", enabled)
@@ -37,8 +37,8 @@ func TestConfigHasFeature(t *testing.T) {
 }
 
 func TestRenderConfigDefaultMode(t *testing.T) {
-	if got := (gowdk.RenderConfig{}).DefaultMode(); got != gowdk.Static {
-		t.Fatalf("expected static default, got %q", got)
+	if got := (gowdk.RenderConfig{}).DefaultMode(); got != gowdk.SPA {
+		t.Fatalf("expected spa default, got %q", got)
 	}
 	if got := (gowdk.RenderConfig{Default: gowdk.Action}).DefaultMode(); got != gowdk.Action {
 		t.Fatalf("expected configured default, got %q", got)
@@ -64,7 +64,7 @@ func TestParseRenderModeAndModePredicates(t *testing.T) {
 		requiresSSR bool
 		buildTime   bool
 	}{
-		{"static", gowdk.Static, false, true},
+		{"spa", gowdk.SPA, false, true},
 		{"action", gowdk.Action, false, true},
 		{"hybrid", gowdk.Hybrid, true, false},
 		{"ssr", gowdk.SSR, true, false},

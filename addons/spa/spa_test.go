@@ -1,4 +1,4 @@
-package static
+package spa
 
 import (
 	"testing"
@@ -7,13 +7,13 @@ import (
 	"github.com/cssbruno/gowdk/runtime/response"
 )
 
-func TestAddonRegistersStaticFeature(t *testing.T) {
+func TestAddonRegistersSPAFeature(t *testing.T) {
 	addon := Addon()
-	if addon.Name() != "static" {
+	if addon.Name() != "spa" {
 		t.Fatalf("unexpected addon name: %q", addon.Name())
 	}
-	if !(gowdk.Config{Addons: []gowdk.Addon{addon}}).HasFeature(gowdk.FeatureStatic) {
-		t.Fatal("expected static feature")
+	if !(gowdk.Config{Addons: []gowdk.Addon{addon}}).HasFeature(gowdk.FeatureSPA) {
+		t.Fatal("expected spa feature")
 	}
 }
 

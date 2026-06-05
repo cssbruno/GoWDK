@@ -1,4 +1,4 @@
-package staticgen
+package buildgen
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ import (
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
-func TestBuildWritesStaticHTMLForSimpleRoute(t *testing.T) {
+func TestBuildWritesSPAHTMLForSimpleRoute(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{{
 		ID:    "home",
@@ -107,7 +107,7 @@ func TestBuildWritesStaticHTMLForSimpleRoute(t *testing.T) {
 	}
 }
 
-func TestBuildMemoryReturnsStaticArtifactsWithoutWriting(t *testing.T) {
+func TestBuildMemoryReturnsSPAArtifactsWithoutWriting(t *testing.T) {
 	outputDir := filepath.Join(t.TempDir(), "dist")
 	app := manifest.Manifest{Pages: []manifest.Page{{
 		ID:    "home",

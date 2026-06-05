@@ -3,7 +3,7 @@
 
 @route "/"
 
-// Keep this page static.
+// Keep this page spa.
 view {
 <main>
 <section>

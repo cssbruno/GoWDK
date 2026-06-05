@@ -12,14 +12,14 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/internal/appgen"
+	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/codegen"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/lsp"
-	"github.com/cssbruno/gowdk/internal/staticgen"
 )
 
 const (
-	version    = "0.1.0"
+	version    = "0.1.5"
 	buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]"
 )
 
@@ -62,8 +62,6 @@ func run(args []string) error {
 		return build(args[1:])
 	case "dev":
 		return dev(args[1:])
-	case "watch":
-		return watch(args[1:])
 	case "serve":
 		return serve(args[1:])
 	case "lsp":
@@ -88,10 +86,9 @@ func usage() {
 	fmt.Println("  manifest [--config <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
 	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print generated route bindings JSON")
-	fmt.Println("  build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...] emit static output")
-	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, watch, and live reload")
-	fmt.Println("  watch [--once] [--restart] [--interval <duration>] [build flags...] rebuild static output when inputs change")
-	fmt.Println("  serve --dir <dir> [--addr <addr>] serve generated static output locally")
+	fmt.Println("  build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...] compile .gwdk files into build output")
+	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload")
+	fmt.Println("  serve --dir <dir> [--addr <addr>] serve generated build output locally")
 	fmt.Println("  lsp [--ssr]              start the language server over stdio")
 }
 
@@ -124,6 +121,11 @@ var Config = gowdk.Config{
 		Default: []string{"global"},
 	},
 }
+`,
+		},
+		{
+			Path: ".gitignore",
+			Body: `gowdk_cache/
 `,
 		},
 		{
@@ -459,9 +461,9 @@ func buildOnce(options cliOptions, request buildRequest) error {
 		return fmt.Errorf("build failed")
 	}
 
-	result, err := staticgen.Build(options.Config, app, outputDir)
+	result, err := buildgen.Build(options.Config, app, outputDir)
 	if err != nil {
-		printStaticgenBuildErrorReport(err, options.Debug)
+		printBuildgenBuildErrorReport(err, options.Debug)
 		return err
 	}
 	for _, artifact := range result.Artifacts {
@@ -482,22 +484,15 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	if result.BuildReportPath != "" {
 		fmt.Println(result.BuildReportPath)
 	}
-	printStaticgenBuildReport(result.Report, options.Debug)
+	printBuildgenBuildReport(result.Report, options.Debug)
 	appDir := request.AppDir
 	binaryPath := request.BinaryPath
 	wasmPath := request.WASMPath
 	if strings.TrimSpace(appDir) != "" {
-		actions, err := appgen.ActionRoutes(app)
-		if err != nil {
-			return err
-		}
-		ssrArtifacts, err := staticgen.SSRArtifacts(options.Config, app, outputDir)
-		if err != nil {
-			return err
-		}
 		app, err := appgen.GenerateWithOptions(outputDir, appDir, appgen.Options{
-			Actions: actions,
-			SSR:     ssrRoutes(ssrArtifacts),
+			AutoRoutes: true,
+			Config:     options.Config,
+			Manifest:   &app,
 		})
 		if err != nil {
 			return err
@@ -612,41 +607,17 @@ func selectBuildTargets(targets []gowdk.BuildTargetConfig, targetNames []string)
 	return selected, nil
 }
 
-func ssrRoutes(artifacts []staticgen.SSRArtifact) []appgen.SSRRoute {
-	routes := make([]appgen.SSRRoute, 0, len(artifacts))
-	for _, artifact := range artifacts {
-		routes = append(routes, appgen.SSRRoute{
-			PageID:       artifact.PageID,
-			Route:        artifact.Route,
-			HTML:         artifact.HTML,
-			Replacements: ssrReplacements(artifact.Replacements),
-		})
-	}
-	return routes
-}
-
-func ssrReplacements(replacements []staticgen.SSRReplacement) []appgen.SSRReplacement {
-	out := make([]appgen.SSRReplacement, 0, len(replacements))
-	for _, replacement := range replacements {
-		out = append(out, appgen.SSRReplacement{
-			Param:       replacement.Param,
-			Placeholder: replacement.Placeholder,
-		})
-	}
-	return out
-}
-
-func printStaticgenBuildErrorReport(err error, debug bool) {
+func printBuildgenBuildErrorReport(err error, debug bool) {
 	if !debug {
 		return
 	}
-	var buildErr *staticgen.BuildError
+	var buildErr *buildgen.BuildError
 	if errors.As(err, &buildErr) {
-		printStaticgenBuildReport(buildErr.Report, true)
+		printBuildgenBuildReport(buildErr.Report, true)
 	}
 }
 
-func printStaticgenBuildReport(report staticgen.BuildReport, debug bool) {
+func printBuildgenBuildReport(report buildgen.BuildReport, debug bool) {
 	if !debug || report.Version == 0 {
 		return
 	}
@@ -660,7 +631,7 @@ func printStaticgenBuildReport(report staticgen.BuildReport, debug bool) {
 		if event.Kind != "" {
 			stage += "/" + event.Kind
 		}
-		details := staticgenBuildEventDetails(event)
+		details := buildgenBuildEventDetails(event)
 		if details != "" {
 			details = " (" + details + ")"
 		}
@@ -668,7 +639,7 @@ func printStaticgenBuildReport(report staticgen.BuildReport, debug bool) {
 	}
 }
 
-func staticgenBuildEventDetails(event staticgen.BuildEvent) string {
+func buildgenBuildEventDetails(event buildgen.BuildEvent) string {
 	var details []string
 	if event.PageID != "" {
 		details = append(details, "page="+event.PageID)

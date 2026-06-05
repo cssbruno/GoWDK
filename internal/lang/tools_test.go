@@ -91,7 +91,7 @@ view {
 	if diagnostics.HasErrors() {
 		t.Fatal(diagnostics)
 	}
-	if !strings.Contains(string(payload), `"home"`) || !strings.Contains(string(payload), `"render": "static"`) {
+	if !strings.Contains(string(payload), `"home"`) || !strings.Contains(string(payload), `"render": "spa"`) {
 		t.Fatalf("unexpected manifest JSON: %s", payload)
 	}
 }

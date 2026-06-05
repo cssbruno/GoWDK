@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/manifest"
-	"github.com/cssbruno/gowdk/internal/staticgen"
 )
 
 const defaultOutputDir = "dist/site"
@@ -47,7 +47,7 @@ type Range struct {
 	End   Position `json:"end"`
 }
 
-// Route describes one static HTML route produced by a compile.
+// Route describes one app-shell HTML route produced by a compile.
 type Route struct {
 	PageID string `json:"page"`
 	Route  string `json:"route"`
@@ -63,7 +63,7 @@ type Result struct {
 	Diagnostics []Diagnostic      `json:"diagnostics"`
 }
 
-// Compile parses, validates, and statically renders a project without writing
+// Compile parses, validates, and renders a project at build time without writing
 // files. It is intended for playgrounds; generated apps, binaries, request-time
 // SSR, and action execution remain native/server compiler features.
 func Compile(project Project) Result {
@@ -84,7 +84,7 @@ func Compile(project Project) Result {
 		}}}
 	}
 
-	memory, err := staticgen.BuildMemory(config, app, outputDir)
+	memory, err := buildgen.BuildMemory(config, app, outputDir)
 	if err != nil {
 		return Result{Diagnostics: diagnosticsForBuildError(err, app)}
 	}
@@ -123,7 +123,7 @@ func Compile(project Project) Result {
 
 func browserConfig(config gowdk.Config) gowdk.Config {
 	if len(config.CSS.Include) == 0 {
-		config.CSS.Include = []string{staticgen.DisableCSSDiscovery}
+		config.CSS.Include = []string{buildgen.DisableCSSDiscovery}
 	}
 	return config
 }

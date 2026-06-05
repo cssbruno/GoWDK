@@ -1,4 +1,4 @@
-package staticgen
+package buildgen
 
 import (
 	"errors"
@@ -13,7 +13,7 @@ import (
 
 func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result, error) {
 	reporter := newBuildReporter("build", outputDir)
-	reporter.info("start", "build_started", "static build started", BuildEvent{
+	reporter.info("start", "build_started", "SPA build started", BuildEvent{
 		Data: map[string]string{
 			"pages":      fmt.Sprint(len(app.Pages)),
 			"components": fmt.Sprint(len(app.Components)),
@@ -32,7 +32,7 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 	if err != nil {
 		return Result{}, reporter.fail("plan", err)
 	}
-	reporter.info("plan", "artifacts_planned", "static artifacts planned", BuildEvent{
+	reporter.info("plan", "artifacts_planned", "app artifacts planned", BuildEvent{
 		Data: map[string]string{
 			"pages":  fmt.Sprint(len(planned.pages)),
 			"css":    fmt.Sprint(len(planned.css)),
@@ -82,7 +82,7 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 	}
 	result.AssetManifestPath = assetManifestPath
 	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
-	reporter.info("complete", "build_complete", "static build completed", BuildEvent{
+	reporter.info("complete", "build_complete", "SPA build completed", BuildEvent{
 		Data: map[string]string{
 			"pages":  fmt.Sprint(len(result.Artifacts)),
 			"css":    fmt.Sprint(len(result.CSSArtifacts)),
@@ -100,7 +100,7 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 
 func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (MemoryResult, error) {
 	reporter := newBuildReporter("memory", outputDir)
-	reporter.info("start", "build_started", "in-memory static build started", BuildEvent{
+	reporter.info("start", "build_started", "in-memory SPA build started", BuildEvent{
 		Data: map[string]string{
 			"pages":      fmt.Sprint(len(app.Pages)),
 			"components": fmt.Sprint(len(app.Components)),
@@ -119,7 +119,7 @@ func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (
 	if err != nil {
 		return MemoryResult{}, reporter.fail("plan", err)
 	}
-	reporter.info("plan", "artifacts_planned", "static artifacts planned", BuildEvent{
+	reporter.info("plan", "artifacts_planned", "app artifacts planned", BuildEvent{
 		Data: map[string]string{
 			"pages":  fmt.Sprint(len(planned.pages)),
 			"css":    fmt.Sprint(len(planned.css)),
@@ -182,7 +182,7 @@ func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (
 	}
 	result.Files[assetManifestFile] = assetManifest
 	reporter.info("manifest", "asset_manifest_collected", "asset manifest collected", BuildEvent{Path: assetManifestFile})
-	reporter.info("complete", "build_complete", "in-memory static build completed", BuildEvent{
+	reporter.info("complete", "build_complete", "in-memory SPA build completed", BuildEvent{
 		Data: map[string]string{
 			"pages":  fmt.Sprint(len(result.Artifacts)),
 			"css":    fmt.Sprint(len(result.CSSArtifacts)),
@@ -201,7 +201,7 @@ func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (
 
 func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir string, changedPageSources []string) (Result, error) {
 	reporter := newBuildReporter("incremental", outputDir)
-	reporter.info("start", "build_started", "incremental static build started", BuildEvent{
+	reporter.info("start", "build_started", "incremental SPA build started", BuildEvent{
 		Data: map[string]string{
 			"pages":          fmt.Sprint(len(app.Pages)),
 			"changedSources": fmt.Sprint(len(changedPageSources)),
@@ -336,7 +336,7 @@ func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir stri
 	}
 	result.AssetManifestPath = assetManifestPath
 	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
-	reporter.info("complete", "build_complete", "incremental static build completed", BuildEvent{
+	reporter.info("complete", "build_complete", "incremental SPA build completed", BuildEvent{
 		Data: map[string]string{
 			"pages":        fmt.Sprint(len(result.Artifacts)),
 			"changedPages": fmt.Sprint(len(changedPageIDs)),

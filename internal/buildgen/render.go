@@ -1,4 +1,4 @@
-package staticgen
+package buildgen
 
 import (
 	"fmt"
@@ -14,14 +14,14 @@ import (
 type renderModePolicy string
 
 const (
-	renderModeStatic      renderModePolicy = "static"
+	renderModeSPA         renderModePolicy = "spa"
 	renderModeRequestTime renderModePolicy = "request-time"
 )
 
 func renderPage(config gowdk.Config, page manifest.Page, components map[string]view.Component, layouts map[string]manifest.Layout, stylesheets []gowdk.Stylesheet, data map[string]string, policy renderModePolicy) (string, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
-	if policy == renderModeStatic && mode != gowdk.Static && mode != gowdk.Action {
-		return "", fmt.Errorf("%s: static build cannot emit @render %s pages yet", page.ID, mode)
+	if policy == renderModeSPA && mode != gowdk.SPA && mode != gowdk.Action {
+		return "", fmt.Errorf("%s: SPA build cannot emit @render %s pages yet", page.ID, mode)
 	}
 	if policy == renderModeRequestTime && mode != gowdk.SSR && mode != gowdk.Hybrid {
 		return "", fmt.Errorf("%s: SSR build cannot emit @render %s pages", page.ID, mode)
@@ -62,7 +62,7 @@ func composePageViewSource(page manifest.Page, layouts map[string]manifest.Layou
 		layoutID := page.Layouts[index]
 		layout, ok := layouts[layoutID]
 		if !ok {
-			return "", fmt.Errorf("layout %q is not available for static composition", layoutID)
+			return "", fmt.Errorf("layout %q is not available for app-shell composition", layoutID)
 		}
 		next, err := composeLayoutSource(layout, source)
 		if err != nil {
@@ -118,7 +118,7 @@ func actionRoutes(page manifest.Page, data map[string]string) map[string]string 
 }
 
 func pageScripts(page manifest.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) []string {
-	if policy != renderModeStatic {
+	if policy != renderModeSPA {
 		return nil
 	}
 	var scripts []string

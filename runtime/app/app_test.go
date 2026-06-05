@@ -11,7 +11,7 @@ import (
 	"github.com/cssbruno/gowdk/runtime/asset"
 )
 
-func TestHandlerServesStaticIndexAndIdentityHeaders(t *testing.T) {
+func TestHandlerServesAppIndexAndIdentityHeaders(t *testing.T) {
 	handler := Handler{
 		Root: fstest.MapFS{
 			"index.html": {Data: []byte("<main>Home</main>")},
@@ -128,7 +128,7 @@ func TestHandlerHidesAcknowledgedCookieNotice(t *testing.T) {
 	}
 }
 
-func TestHandlerUsesDynamicSSRAfterStaticMiss(t *testing.T) {
+func TestHandlerUsesDynamicSSRAfterAppMiss(t *testing.T) {
 	handler := Handler{
 		Root:     fstest.MapFS{},
 		Identity: Identity{AppID: "app", ModuleName: "app", InstanceID: "app-1"},

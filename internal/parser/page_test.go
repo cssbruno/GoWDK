@@ -12,12 +12,12 @@ import (
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-func TestParsePageReadsStaticDynamicRouteWithPathsAndBuild(t *testing.T) {
+func TestParsePageReadsSPADynamicRouteWithPathsAndBuild(t *testing.T) {
 	page, err := ParsePage([]byte(`
 @page blog.post
 @route "/blog/{slug}"
 @layout root, blog
-@render static
+@render spa
 @css default page forms
 
 import interop "github.com/cssbruno/gowdk/examples/go-interop"
@@ -28,7 +28,7 @@ paths {
 }
 
 build {
-  => { title: "Static post" }
+  => { title: "SPA post" }
 }
 
 view {
@@ -47,8 +47,8 @@ view {
 	if page.Route != "/blog/{slug}" {
 		t.Fatalf("expected route /blog/{slug}, got %q", page.Route)
 	}
-	if page.Render != gowdk.Static {
-		t.Fatalf("expected static render, got %q", page.Render)
+	if page.Render != gowdk.SPA {
+		t.Fatalf("expected spa render, got %q", page.Render)
 	}
 	if !page.Paths || !page.Blocks.Build || !page.Blocks.View {
 		t.Fatalf("expected paths/build/view blocks, got %#v", page)
@@ -57,7 +57,7 @@ view {
   => { slug: "compile-first" }` {
 		t.Fatalf("unexpected paths body: %q", page.Blocks.PathsBody)
 	}
-	if page.Blocks.BuildBody != `=> { title: "Static post" }` {
+	if page.Blocks.BuildBody != `=> { title: "SPA post" }` {
 		t.Fatalf("unexpected build body: %q", page.Blocks.BuildBody)
 	}
 	if page.Blocks.ViewBody != "<main>\n    <h1>Post</h1>\n  </main>" {
@@ -278,7 +278,7 @@ view {
 	if err == nil {
 		t.Fatal("expected invalid fragment target error")
 	}
-	if !strings.Contains(err.Error(), `fragment target "patients" must be a static id selector`) {
+	if !strings.Contains(err.Error(), `fragment target "patients" must be a literal id selector`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

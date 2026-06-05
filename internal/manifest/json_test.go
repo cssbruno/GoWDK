@@ -15,7 +15,7 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 				Source:  "pages/blog.post.gwdk",
 				ID:      "blog.post",
 				Route:   "/blog/{slug}",
-				Render:  gowdk.Static,
+				Render:  gowdk.SPA,
 				Layouts: []string{"root", "blog"},
 				Paths:   true,
 				Blocks: Blocks{
@@ -82,7 +82,7 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 			DynamicParams   []string         `json:"dynamicParams"`
 			Paths           bool             `json:"paths"`
 			Guard           []string         `json:"guard"`
-			StaticAssets    []string         `json:"staticAssets"`
+			Assets          []string         `json:"assets"`
 			CSSClasses      []string         `json:"cssClasses"`
 			StyleAttributes []string         `json:"styleAttributes"`
 			Artifacts       []struct {
@@ -141,8 +141,8 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 	if decoded.Version != PublicSchemaVersion {
 		t.Fatalf("expected manifest version %d, got %d", PublicSchemaVersion, decoded.Version)
 	}
-	if decoded.Pages["blog.post"].Render != gowdk.Static {
-		t.Fatalf("expected blog.post render static, got %q", decoded.Pages["blog.post"].Render)
+	if decoded.Pages["blog.post"].Render != gowdk.SPA {
+		t.Fatalf("expected blog.post render spa, got %q", decoded.Pages["blog.post"].Render)
 	}
 	if decoded.Pages["blog.post"].Source != "pages/blog.post.gwdk" || decoded.Pages["blog.post"].Kind != "page" {
 		t.Fatalf("unexpected blog.post identity: %#v", decoded.Pages["blog.post"])
@@ -165,8 +165,8 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 	if strings.Join(decoded.Pages["blog.post"].Components, ",") != "ArticleCard,Hero" {
 		t.Fatalf("expected blog.post component references, got %#v", decoded.Pages["blog.post"].Components)
 	}
-	if strings.Join(decoded.Pages["blog.post"].StaticAssets, ",") != "/assets/post.png" {
-		t.Fatalf("expected blog.post static assets, got %#v", decoded.Pages["blog.post"].StaticAssets)
+	if strings.Join(decoded.Pages["blog.post"].Assets, ",") != "/assets/post.png" {
+		t.Fatalf("expected blog.post app assets, got %#v", decoded.Pages["blog.post"].Assets)
 	}
 	if strings.Join(decoded.Pages["blog.post"].CSSClasses, ",") != "lead,post" {
 		t.Fatalf("expected blog.post CSS classes, got %#v", decoded.Pages["blog.post"].CSSClasses)
@@ -184,7 +184,7 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 		t.Fatalf("expected dashboard render ssr, got %q", decoded.Pages["dashboard"].Render)
 	}
 	if len(decoded.Pages["dashboard"].Artifacts) != 0 {
-		t.Fatalf("expected no static artifact for SSR page, got %#v", decoded.Pages["dashboard"].Artifacts)
+		t.Fatalf("expected no app artifact for SSR page, got %#v", decoded.Pages["dashboard"].Artifacts)
 	}
 	if decoded.Pages["dashboard"].Guard[0] != "auth.required" {
 		t.Fatalf("expected dashboard guard, got %#v", decoded.Pages["dashboard"].Guard)

@@ -1,4 +1,4 @@
-// Package appgen emits a generated Go app that embeds static build output.
+// Package appgen emits a generated Go app that embeds build output.
 package appgen
 
 import (
@@ -11,27 +11,27 @@ import (
 const (
 	appPackageDirName = "gowdkapp"
 	serverDirName     = "cmd/server"
-	staticDirName     = appPackageDirName + "/static"
+	appOutputDirName  = appPackageDirName + "/app"
 	appFileName       = appPackageDirName + "/app.go"
 	mainFileName      = serverDirName + "/main.go"
 	modFileName       = "go.mod"
 )
 
-// Generate writes a self-contained Go app that embeds staticDir.
-func Generate(staticDir, appDir string) (Result, error) {
-	return GenerateWithOptions(staticDir, appDir, Options{})
+// Generate writes a self-contained Go app that embeds outputDir.
+func Generate(outputDir, appDir string) (Result, error) {
+	return GenerateWithOptions(outputDir, appDir, Options{})
 }
 
-// GenerateWithOptions writes a self-contained Go app that embeds staticDir.
-func GenerateWithOptions(staticDir, appDir string, options Options) (Result, error) {
-	if strings.TrimSpace(staticDir) == "" {
-		return Result{}, fmt.Errorf("static output directory is required")
+// GenerateWithOptions writes a self-contained Go app that embeds outputDir.
+func GenerateWithOptions(outputDir, appDir string, options Options) (Result, error) {
+	if strings.TrimSpace(outputDir) == "" {
+		return Result{}, fmt.Errorf("build output directory is required")
 	}
 	if strings.TrimSpace(appDir) == "" {
 		return Result{}, fmt.Errorf("generated app directory is required")
 	}
 
-	absStatic, err := filepath.Abs(staticDir)
+	absOutput, err := filepath.Abs(outputDir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -39,7 +39,11 @@ func GenerateWithOptions(staticDir, appDir string, options Options) (Result, err
 	if err != nil {
 		return Result{}, err
 	}
-	if err := validateDirectories(absStatic, absApp); err != nil {
+	if err := validateDirectories(absOutput, absApp); err != nil {
+		return Result{}, err
+	}
+	options, err = resolveOptions(absOutput, options)
+	if err != nil {
 		return Result{}, err
 	}
 	if err := validateActionRoutes(options.Actions); err != nil {
@@ -49,22 +53,22 @@ func GenerateWithOptions(staticDir, appDir string, options Options) (Result, err
 		return Result{}, err
 	}
 
-	targetStatic := filepath.Join(absApp, staticDirName)
-	if isSameOrWithin(targetStatic, absStatic) {
-		return Result{}, fmt.Errorf("static output directory %q must not be inside generated app static directory %q", absStatic, targetStatic)
+	targetOutput := filepath.Join(absApp, appOutputDirName)
+	if isSameOrWithin(targetOutput, absOutput) {
+		return Result{}, fmt.Errorf("build output directory %q must not be inside generated app output directory %q", absOutput, targetOutput)
 	}
 	if err := os.MkdirAll(absApp, 0o755); err != nil {
 		return Result{}, err
 	}
-	if err := os.MkdirAll(targetStatic, 0o755); err != nil {
+	if err := os.MkdirAll(targetOutput, 0o755); err != nil {
 		return Result{}, err
 	}
 
-	files, err := copyStaticFiles(absStatic, targetStatic)
+	files, err := copyOutputFiles(absOutput, targetOutput)
 	if err != nil {
 		return Result{}, err
 	}
-	if err := removeStaleStaticFiles(targetStatic, files); err != nil {
+	if err := removeStaleOutputFiles(targetOutput, files); err != nil {
 		return Result{}, err
 	}
 	modulePayload, err := moduleSource(options)
@@ -86,7 +90,7 @@ func GenerateWithOptions(staticDir, appDir string, options Options) (Result, err
 		MainPath:    filepath.Join(absApp, mainFileName),
 		PackagePath: filepath.Join(absApp, appFileName),
 		ModulePath:  filepath.Join(absApp, modFileName),
-		StaticDir:   targetStatic,
+		OutputDir:   targetOutput,
 		Files:       files,
 	}, nil
 }

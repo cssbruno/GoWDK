@@ -35,6 +35,7 @@ __pycache__/
 
 # Build and coverage output
 /gowdk
+gowdk_cache/
 dist/
 build/
 out/

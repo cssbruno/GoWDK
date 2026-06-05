@@ -54,7 +54,7 @@ func InstanceIdentity() Identity {
 	}
 }
 
-// LoadAssetManifest reads gowdk-assets.json from generated static output.
+// LoadAssetManifest reads gowdk-assets.json from generated app output.
 func LoadAssetManifest(root fs.FS) asset.Manifest {
 	var manifest asset.Manifest
 	payload, err := fs.ReadFile(root, "gowdk-assets.json")
@@ -92,7 +92,7 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 		return
 	}
 
-	payload, info, ok := handler.staticFile(request.URL.Path)
+	payload, info, ok := handler.SPAFile(request.URL.Path)
 	if !ok {
 		if handler.SSRDynamic != nil && handler.SSRDynamic(response, request) {
 			return
@@ -238,9 +238,9 @@ func (handler Handler) health(response http.ResponseWriter) {
 	})
 }
 
-func (handler Handler) staticFile(requestPath string) ([]byte, fs.FileInfo, bool) {
-	for _, candidate := range staticCandidates(requestPath) {
-		payload, info, ok := readStaticFile(handler.Root, candidate)
+func (handler Handler) SPAFile(requestPath string) ([]byte, fs.FileInfo, bool) {
+	for _, candidate := range SPACandidates(requestPath) {
+		payload, info, ok := readSPAFile(handler.Root, candidate)
 		if ok {
 			return payload, info, true
 		}
@@ -248,7 +248,7 @@ func (handler Handler) staticFile(requestPath string) ([]byte, fs.FileInfo, bool
 	return nil, nil, false
 }
 
-func staticCandidates(requestPath string) []string {
+func SPACandidates(requestPath string) []string {
 	clean := path.Clean("/" + requestPath)
 	if strings.HasSuffix(requestPath, "/") {
 		return []string{strings.TrimPrefix(path.Join(clean, "index.html"), "/")}
@@ -261,7 +261,7 @@ func staticCandidates(requestPath string) []string {
 	return []string{candidate}
 }
 
-func readStaticFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
+func readSPAFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
 	if name == "" {
 		name = "index.html"
 	}

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestCompileReturnsStaticPreviewFiles(t *testing.T) {
+func TestCompileReturnsSPAPreviewFiles(t *testing.T) {
 	result := Compile(Project{Files: map[string]string{
 		"src/pages/home.page.gwdk": `@page home
 @route "/"

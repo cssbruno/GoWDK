@@ -28,7 +28,7 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
-	log.Printf("serving embedded GOWDK static app at http://%s", addr)
+	log.Printf("serving embedded GOWDK app at http://%s", addr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
@@ -54,7 +54,7 @@ import (
 
 const maxActionBodyBytes int64 = 1 << 20
 
-//go:embed static
+//go:embed app
 var embeddedFiles embed.FS
 
 func Handler() (http.Handler, error) {
@@ -62,7 +62,7 @@ func Handler() (http.Handler, error) {
 }
 
 func ServeMux() (*http.ServeMux, error) {
-	root, err := fs.Sub(embeddedFiles, "static")
+	root, err := fs.Sub(embeddedFiles, "app")
 	if err != nil {
 		return nil, err
 	}

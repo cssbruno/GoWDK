@@ -47,7 +47,7 @@ func validateActionFragments(route ActionRoute) error {
 			return fmt.Errorf("generated action %s.%s declares an empty fragment target", route.PageID, route.ActionName)
 		}
 		if !strings.HasPrefix(target, "#") || strings.TrimPrefix(target, "#") == "" || strings.ContainsAny(target, " \t\r\n{}") {
-			return fmt.Errorf("generated action %s.%s fragment target %q must be a static id selector", route.PageID, route.ActionName, fragment.Target)
+			return fmt.Errorf("generated action %s.%s fragment target %q must be a literal id selector", route.PageID, route.ActionName, fragment.Target)
 		}
 		if seen[target] {
 			return fmt.Errorf("generated action %s.%s declares duplicate fragment target %q", route.PageID, route.ActionName, target)
@@ -68,7 +68,7 @@ func validateInputFields(route ActionRoute) error {
 			return fmt.Errorf("generated action %s.%s declares duplicate input field %q", route.PageID, route.ActionName, field)
 		}
 		if strings.ContainsAny(field, "{}") {
-			return fmt.Errorf("generated action %s.%s input field %q must be static", route.PageID, route.ActionName, field)
+			return fmt.Errorf("generated action %s.%s input field %q must be literal", route.PageID, route.ActionName, field)
 		}
 		seen[field] = true
 	}

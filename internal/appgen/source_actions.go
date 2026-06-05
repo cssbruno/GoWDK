@@ -15,7 +15,8 @@ func actionHandlerSource(actions []ActionRoute) string {
 	sorted := sortedActionRoutes(actions)
 	var builder strings.Builder
 	builder.WriteString("func action(response http.ResponseWriter, request *http.Request) bool {\n")
-	builder.WriteString("\tswitch request.URL.Path {\n")
+	builder.WriteString("\trequestPath := actionRequestPath(request.URL.Path)\n")
+	builder.WriteString("\tswitch requestPath {\n")
 	for _, action := range sorted {
 		writeActionCase(&builder, action)
 	}
@@ -24,6 +25,8 @@ func actionHandlerSource(actions []ActionRoute) string {
 	builder.WriteString("\t}\n")
 	builder.WriteString("}")
 	builder.WriteString("\n\n")
+	builder.WriteString(actionRequestPathSource)
+	builder.WriteString("\n")
 	builder.WriteString(actionDecoderSource(sorted))
 	return builder.String()
 }
@@ -31,6 +34,11 @@ func actionHandlerSource(actions []ActionRoute) string {
 const emptyActionHandlerSource = `func action(response http.ResponseWriter, request *http.Request) bool {
 	return false
 }`
+
+const actionRequestPathSource = `func actionRequestPath(value string) string {
+	return path.Clean("/" + value)
+}
+`
 
 func actionsUseValidation(actions []ActionRoute) bool {
 	for _, action := range actions {

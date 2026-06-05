@@ -19,6 +19,7 @@ func runtimeImportSource(actions []ActionRoute, ssr []SSRRoute) string {
 	if len(actions) > 0 {
 		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
+		imports["path"] = "path"
 		imports["strings"] = "strings"
 	}
 	if actionsUseValidation(actions) {

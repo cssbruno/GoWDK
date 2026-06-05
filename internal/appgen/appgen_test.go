@@ -230,6 +230,8 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid form")`,
 		`gowdkresponse.WriteNoStoreError(response, http.StatusRequestEntityTooLarge, "request body too large")`,
 		`gowdkresponse.WriteNoStoreError(response, http.StatusUnprocessableEntity, "validation failed")`,
+		`requestPath := actionRequestPath(request.URL.Path)`,
+		`func actionRequestPath(value string) string`,
 		`type SubscribeInput struct`,
 		`func decodeNewsletterSubscribeInput(values gowdkform.Values) (SubscribeInput, error)`,
 		`gowdkform.DecodeExpected(values, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "email"}}})`,
@@ -1010,6 +1012,18 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 		t.Fatalf("unexpected redirect location: %q", response.Header.Get("Location"))
 	}
 
+	response, err = waitForHTTPStatus("http://"+addr+"/newsletter/", http.MethodPost, "email=reader%40example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected trailing slash POST to return 303, got %d", response.StatusCode)
+	}
+	if response.Header.Get("Location") != "/newsletter?ok=1" {
+		t.Fatalf("unexpected redirect location for trailing slash POST: %q", response.Header.Get("Location"))
+	}
+
 	response, err = waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com&role=admin")
 	if err != nil {
 		t.Fatal(err)
@@ -1108,6 +1122,67 @@ func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
 	}
 	if response.Header.Get("Location") != "" {
 		t.Fatalf("did not expect redirect location on partial response: %q", response.Header.Get("Location"))
+	}
+}
+
+func TestGeneratedBinaryAcknowledgesCookieNotice(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(staticDir, "index.html"), `<main>Home</main><form data-cookie-notice method="post" action="/_gowdk/cookie-ack"></form>`)
+
+	if _, err := GenerateWithOptions(staticDir, appDir, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatusWithHeaders("http://"+addr+"/_gowdk/cookie-ack", http.MethodPost, "", map[string]string{
+		"Referer": "http://" + addr + "/",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", response.StatusCode)
+	}
+	if response.Header.Get("Location") != "/" {
+		t.Fatalf("unexpected redirect location: %q", response.Header.Get("Location"))
+	}
+	if setCookie := response.Header.Get("Set-Cookie"); !strings.Contains(setCookie, "gowdk_cookie_ack=accepted") {
+		t.Fatalf("expected acknowledgement cookie, got %q", setCookie)
+	}
+
+	response, err = waitForHTTPStatusWithHeaders("http://"+addr+"/", http.MethodGet, "", map[string]string{
+		"Cookie": "gowdk_cookie_ack=accepted",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+	if !strings.Contains(string(payload), "data-cookie-notice hidden") {
+		t.Fatalf("expected hidden cookie notice, got %s", payload)
 	}
 }
 

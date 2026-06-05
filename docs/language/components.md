@@ -30,6 +30,11 @@ Implemented today:
 - Component-local `computed Name Type { return expr }` values can derive
   read-only browser state from props, state, and other computed values. The
   compiler orders computed values by dependency and rejects cycles.
+- Pages can declare first-slice page-scoped stores with
+  `store cart ui.CartState = ui.NewCartState()`. Component `client {}` blocks
+  can declare explicit dependencies with `use cart`; the compiler validates
+  store type/init contracts and rejects unknown store uses. Runtime shared-state
+  subscriptions are still planned.
 - A component can declare `@wasm ./browser/counter` to compile a browser-side
   Go package for explicit WASM island calls. The package is built with
   `GOOS=js GOARCH=wasm`, must produce a real browser WASM module, and must not

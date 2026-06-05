@@ -248,6 +248,26 @@ fn FocusSearch() {
 	}
 }
 
+func TestParseStoreUses(t *testing.T) {
+	program, err := Parse(`
+use cart
+
+fn Add() {
+  Count++
+}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Uses) != 1 || program.Uses[0].Name != "cart" || program.Uses[0].Span.StartLine != 2 {
+		t.Fatalf("unexpected uses: %#v", program.Uses)
+	}
+	uses := program.UseMap()
+	if uses["cart"].Name != "cart" {
+		t.Fatalf("unexpected use map: %#v", uses)
+	}
+}
+
 func TestParseRejectsDuplicateRef(t *testing.T) {
 	_, err := Parse(`
 ref searchInput HTMLInputElement
@@ -257,6 +277,19 @@ ref searchInput HTMLInputElement
 		t.Fatal("expected duplicate ref error")
 	}
 	if !strings.Contains(err.Error(), `client ref "searchInput" is declared more than once`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseRejectsDuplicateStoreUse(t *testing.T) {
+	_, err := Parse(`
+use cart
+use cart
+`)
+	if err == nil {
+		t.Fatal("expected duplicate use error")
+	}
+	if !strings.Contains(err.Error(), `client store "cart" is used more than once`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

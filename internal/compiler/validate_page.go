@@ -2,7 +2,9 @@ package compiler
 
 import (
 	"fmt"
+
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"regexp"
 	"strings"
@@ -15,6 +17,7 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	var diagnostics []ValidationError
 	pageRoute, pageRouteIssues := parseRoute(page.Route)
 	diagnostics = append(diagnostics, routeDiagnostics(page, "page route", pageRouteIssues, page.Spans.Route, page.Spans.RouteParams)...)
+	diagnostics = append(diagnostics, validatePageStores(page)...)
 	for _, api := range page.Blocks.APIs {
 		if api.Route == "" {
 			continue
@@ -99,6 +102,50 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	}
 	diagnostics = append(diagnostics, validatePageCSS(page)...)
 
+	return diagnostics
+}
+
+func validatePageStores(page manifest.Page) []ValidationError {
+	seen := map[string]manifest.Store{}
+	var diagnostics []ValidationError
+	for _, store := range page.Stores {
+		if first, exists := seen[store.Name]; exists {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:   "duplicate_page_store",
+				PageID: page.ID,
+				Source: page.Source,
+				Span:   store.Span,
+				Message: fmt.Sprintf(
+					"%s declares duplicate store %q; first declared at line %d and duplicated at line %d",
+					page.ID,
+					store.Name,
+					first.Span.Start.Line,
+					store.Span.Start.Line,
+				),
+			})
+			continue
+		}
+		seen[store.Name] = store
+		if _, err := gotypes.ResolveStruct(page.Imports, store.Type); err != nil {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "page_store_error",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    firstSpan(store.Type.Span, store.Span, page.Spans.Page),
+				Message: fmt.Sprintf("page %s store %q type is invalid: %v", page.ID, store.Name, err),
+			})
+			continue
+		}
+		if err := gotypes.ValidateStateInit(page.Imports, manifest.StateContract{Type: store.Type, Init: store.Init, Span: store.Span}); err != nil {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "page_store_error",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    firstSpan(store.Init.Span, store.Span, page.Spans.Page),
+				Message: fmt.Sprintf("page %s store %q init is invalid: %v", page.ID, store.Name, err),
+			})
+		}
+	}
 	return diagnostics
 }
 

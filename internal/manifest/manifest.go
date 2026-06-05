@@ -65,6 +65,14 @@ type StateContract struct {
 	Span SourceSpan
 }
 
+// Store describes one page-scoped shared state declaration.
+type Store struct {
+	Name string
+	Type GoTypeRef
+	Init GoFuncRef
+	Span SourceSpan
+}
+
 // WASMContract points an explicit browser-side Go package at a component.
 type WASMContract struct {
 	Package string
@@ -104,6 +112,7 @@ type Page struct {
 	Guard   []string
 	CSS     []string
 	Imports []Import
+	Stores  []Store
 	Paths   bool
 	Blocks  Blocks
 	Spans   PageSpans

@@ -84,6 +84,90 @@ func TestValidateManifestRejectsDuplicatePageIDsAndComponentNames(t *testing.T) 
 	}
 }
 
+func TestValidateManifestAllowsPageStoreDeclaration(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:     "cart",
+		Route:  "/cart",
+		Source: "pages/cart.page.gwdk",
+		Imports: []manifest.Import{{
+			Alias: "ui",
+			Path:  "github.com/cssbruno/gowdk/testfixture/islands",
+		}},
+		Stores: []manifest.Store{{
+			Name: "cart",
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		}},
+		Blocks: manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected valid store declaration, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsDuplicatePageStore(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:     "cart",
+		Route:  "/cart",
+		Source: "pages/cart.page.gwdk",
+		Stores: []manifest.Store{
+			{
+				Name: "cart",
+				Span: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 5, Column: 1}, End: manifest.SourcePosition{Line: 5, Column: 40}},
+			},
+			{
+				Name: "cart",
+				Span: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 6, Column: 1}, End: manifest.SourcePosition{Line: 6, Column: 40}},
+			},
+		},
+		Blocks: manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected duplicate store diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "duplicate_page_store")
+	if diagnostic == nil {
+		t.Fatalf("missing duplicate_page_store diagnostic: %v", err)
+	}
+	assertSourceSpan(t, diagnostic.Span, 6, 1, 6, 40)
+}
+
+func TestValidateManifestRejectsUnknownComponentStoreUse(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:     "cart",
+			Route:  "/cart",
+			Blocks: manifest.Blocks{View: true, ViewBody: `<main><CartButton /></main>`},
+		}},
+		Components: []manifest.Component{{
+			Name:   "CartButton",
+			Source: "components/cart-button.cmp.gwdk",
+			Blocks: manifest.Blocks{
+				Client:     true,
+				ClientBody: "use cart",
+				Spans: manifest.BlockSpans{
+					Client: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 4, Column: 1}, End: manifest.SourcePosition{Line: 4, Column: 9}},
+				},
+				View:     true,
+				ViewBody: `<button>Cart</button>`,
+			},
+		}},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown store diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "unknown_component_store")
+	if diagnostic == nil {
+		t.Fatalf("missing unknown_component_store diagnostic: %v", err)
+	}
+	assertSourceSpan(t, diagnostic.Span, 5, 1, 5, 2)
+}
+
 func TestValidateManifestRejectsRedundantComponentImplementations(t *testing.T) {
 	app := manifest.Manifest{Components: []manifest.Component{
 		{

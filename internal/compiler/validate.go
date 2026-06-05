@@ -32,6 +32,7 @@ func ValidateManifest(config gowdk.Config, app manifest.Manifest) error {
 	diagnostics = append(diagnostics, validateUniqueComponents(app.Components)...)
 	diagnostics = append(diagnostics, validateComponentEmits(app.Components)...)
 	diagnostics = append(diagnostics, validateComponentGoContracts(app.Components)...)
+	diagnostics = append(diagnostics, validateComponentStoreUses(app.Pages, app.Components)...)
 	diagnostics = append(diagnostics, validateRedundantComponents(app.Components)...)
 	diagnostics = append(diagnostics, validateUniqueLayouts(app.Layouts)...)
 	diagnostics = append(diagnostics, validatePageLayoutReferences(app.Pages, app.Layouts)...)

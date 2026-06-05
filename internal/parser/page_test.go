@@ -84,6 +84,35 @@ view {
 	}
 }
 
+func TestParsePageReadsStoreDeclaration(t *testing.T) {
+	page, err := ParsePage([]byte(`
+@page cart
+@route "/cart"
+
+import ui "github.com/cssbruno/gowdk/testfixture/islands"
+
+store cart ui.CounterState = ui.NewCounterState()
+
+view {
+  <main>Cart</main>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Stores) != 1 {
+		t.Fatalf("expected one store, got %#v", page.Stores)
+	}
+	store := page.Stores[0]
+	if store.Name != "cart" || store.Type.Alias != "ui" || store.Type.Name != "CounterState" ||
+		store.Init.Alias != "ui" || store.Init.Name != "NewCounterState" {
+		t.Fatalf("unexpected store: %#v", store)
+	}
+	if store.Span.Start.Line != 7 {
+		t.Fatalf("unexpected store span: %#v", store.Span)
+	}
+}
+
 func TestParsePageReadsSSRLoadGuardAndAction(t *testing.T) {
 	page, err := ParsePage([]byte(`
 @page dashboard

@@ -637,16 +637,16 @@ client {
 
 Support:
 
-- [ ] page-scoped stores first
+- [x] page-scoped stores first
 - [ ] module-scoped stores later
-- [ ] explicit `use storeName`
-- [ ] no hidden globals
+- [x] explicit `use storeName`
+- [x] no hidden globals
 - [ ] generated JS store asset per page/module
 
 Compiler work:
 
-- [ ] Add store declarations to parser/manifest.
-- [ ] Type-check store fields.
+- [x] Add store declarations to parser/manifest.
+- [x] Type-check store fields.
 - [ ] Generate store runtime.
 - [ ] Wire island subscriptions.
 
@@ -659,6 +659,13 @@ Tests:
 Decision needed:
 
 - [ ] Delay stores until component communication and parent props are stable.
+
+First implementation note: pages can now declare first-slice page-scoped stores
+with `store name Alias.Type = Alias.Init()`, and component `client {}` blocks
+can declare explicit `use name` store dependencies. The compiler type-checks
+store structs and init functions, rejects duplicate page stores, and rejects
+component `use` declarations when no page declares the named store. Runtime
+store assets and island subscriptions remain open.
 
 ### 15. DOM Refs
 

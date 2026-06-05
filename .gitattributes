@@ -1,0 +1,3 @@
+# GOWDK source files. GitHub Linguist uses this once the language is known
+# upstream, and it keeps repository-level language overrides explicit.
+*.gwdk linguist-language=GOWDK linguist-detectable=true

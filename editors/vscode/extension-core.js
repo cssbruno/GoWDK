@@ -78,6 +78,17 @@ function goModRequiresGOWDK(source) {
   });
 }
 
+function goModModulePath(source) {
+  for (const line of String(source || '').split(/\r?\n/)) {
+    const text = line.replace(/\/\/.*$/, '').trim();
+    const match = text.match(/^module\s+(\S+)$/);
+    if (match) {
+      return match[1];
+    }
+  }
+  return '';
+}
+
 function gowdkModuleRunArgs(args) {
   return ['run', `${GOWDK_MODULE_PATH}/cmd/gowdk`, ...args];
 }
@@ -376,6 +387,23 @@ function projectPages(metadata = {}) {
   });
 }
 
+function projectLayouts(metadata = {}) {
+  const layouts = new Map();
+  for (const [id, layout] of Object.entries((metadata.manifest && metadata.manifest.layouts) || {})) {
+    layouts.set(id, { id, ...layout, pages: [] });
+  }
+  for (const page of projectPages(metadata)) {
+    for (const layoutID of page.layouts || []) {
+      const existing = layouts.get(layoutID) || { id: layoutID, pages: [] };
+      layouts.set(layoutID, {
+        ...existing,
+        pages: [...(existing.pages || []), page]
+      });
+    }
+  }
+  return Array.from(layouts.values()).sort((left, right) => left.id.localeCompare(right.id));
+}
+
 function mergePageMetadata(left = {}, right = {}) {
   return {
     ...left,
@@ -457,7 +485,7 @@ function completionContext(linePrefix) {
   if (/@layout\s+(?:[A-Za-z0-9_.-]+,\s*)*[A-Za-z0-9_.-]*$/.test(prefix)) {
     return 'layout';
   }
-  if (/@css\s+(?:[A-Za-z0-9_.-]+,\s*)*[A-Za-z0-9_.-]*$/.test(prefix)) {
+  if (/@css\s+(?:[A-Za-z0-9_.-]+(?:\s*,\s*|\s+))*[A-Za-z0-9_.-]*$/.test(prefix)) {
     return 'css';
   }
   if (/\bg:island\s*=\s*"?[A-Za-z]*$/.test(prefix)) {
@@ -486,8 +514,8 @@ function projectCompletionEntries(context, metadata = {}) {
     return directiveCompletionEntries();
   }
   if (context === 'layout') {
-    return unique(projectPages(metadata).flatMap((page) => page.layouts || []))
-      .map((layout) => [layout, 'Layout id from project metadata.']);
+    return projectLayouts(metadata)
+      .map((layout) => [layout.id, layout.source ? 'Layout from project manifest.' : 'Layout id from project metadata.']);
   }
   if (context === 'route') {
     return unique(projectPages(metadata).map((page) => page.route).filter(Boolean))
@@ -613,7 +641,7 @@ function cssInputMarkdown(name, metadata = {}) {
   return lines.join('\n');
 }
 
-function hoverMarkdown(token, metadata = {}) {
+function hoverMarkdown(token, metadata = {}, context = {}) {
   const value = String(token || '');
   if (!value) {
     return '';
@@ -642,7 +670,7 @@ function hoverMarkdown(token, metadata = {}) {
       emits ? `Emits: \`${escapeMarkdown(emits)}\`` : ''
     ].filter(Boolean).join('\n');
   }
-  const event = componentEvent(value, metadata);
+  const event = componentEvent(value, metadata, context);
   if (event) {
     return [
       `**GOWDK component event** \`${escapeMarkdown(value)}\``,
@@ -651,13 +679,20 @@ function hoverMarkdown(token, metadata = {}) {
       event.params.length ? `Payload: \`${escapeMarkdown(event.params.join(', '))}\`` : 'Payload: none'
     ].join('\n');
   }
-  const layoutPages = pages.filter((item) => (item.layouts || []).includes(value));
-  if (layoutPages.length > 0) {
-    return [
+  const layout = projectLayouts(metadata).find((item) => item.id === value);
+  if (layout) {
+    const lines = [
       `**GOWDK layout** \`${escapeMarkdown(value)}\``,
-      '',
-      `Referenced by ${layoutPages.length} page${layoutPages.length === 1 ? '' : 's'}.`
-    ].join('\n');
+      ''
+    ];
+    if (layout.source) {
+      lines.push(`Source: \`${escapeMarkdown(layout.source)}\``);
+    }
+    const layoutPages = layout.pages || [];
+    if (layoutPages.length > 0) {
+      lines.push(`Referenced by ${layoutPages.length} page${layoutPages.length === 1 ? '' : 's'}.`);
+    }
+    return lines.join('\n');
   }
   const cssMarkdown = cssInputMarkdown(value, metadata);
   if (cssMarkdown) {
@@ -676,7 +711,7 @@ function hoverMarkdown(token, metadata = {}) {
   return '';
 }
 
-function definitionTarget(token, metadata = {}) {
+function definitionTarget(token, metadata = {}, context = {}) {
   const value = String(token || '');
   if (!value) {
     return undefined;
@@ -691,9 +726,13 @@ function definitionTarget(token, metadata = {}) {
   if (component && component.source) {
     return { file: component.source, line: 0, column: 0 };
   }
-  const event = componentEvent(value, metadata);
+  const event = componentEvent(value, metadata, context);
   if (event && event.source) {
     return { file: event.source, line: 0, column: 0 };
+  }
+  const layout = projectLayouts(metadata).find((item) => item.id === value);
+  if (layout && layout.source) {
+    return { file: layout.source, line: 0, column: 0 };
   }
   for (const item of pages) {
     if (!item.source) {
@@ -735,9 +774,13 @@ function symbolReferences(token, metadata = {}, options = {}) {
   if (component && component.source && includeDeclaration) {
     refs.push(fileLocation(component.source));
   }
-  const event = componentEvent(value, metadata);
+  const event = componentEvent(value, metadata, options.symbolContext);
   if (event && event.source && includeDeclaration) {
     refs.push(fileLocation(event.source));
+  }
+  const layout = projectLayouts(metadata).find((item) => item.id === value);
+  if (layout && layout.source && includeDeclaration) {
+    refs.push(fileLocation(layout.source));
   }
 
   if (includeDeclaration && !isProjectSymbol) {
@@ -795,6 +838,9 @@ function projectSymbolExists(token, metadata = {}) {
     return true;
   }
   if (componentEvent(value, metadata)) {
+    return true;
+  }
+  if (projectLayouts(metadata).some((layout) => layout.id === value)) {
     return true;
   }
   return pages.some((page) => {
@@ -857,20 +903,45 @@ function semanticTokens(source) {
   return withoutOverlaps(tokens).sort((a, b) => a.line - b.line || a.column - b.column || a.length - b.length);
 }
 
-function componentEvent(name, metadata = {}) {
+function componentEvent(name, metadata = {}, context = {}) {
+  const events = componentEvents(name, metadata);
+  if (context && context.component) {
+    return events.find((event) => event.component === context.component);
+  }
+  return events.length === 1 ? events[0] : undefined;
+}
+
+function componentEvents(name, metadata = {}) {
   const manifest = metadata.manifest || {};
+  const events = [];
   for (const [componentName, component] of Object.entries(manifest.components || {})) {
     for (const event of component.emits || []) {
       if (event.name === name) {
-        return {
+        events.push({
           component: componentName,
           source: component.source,
           params: (event.params || []).map((param) => `${param.name} ${param.type}`.trim()).filter(Boolean)
-        };
+        });
       }
     }
   }
-  return undefined;
+  return events;
+}
+
+function symbolContext(source, offset) {
+  const text = String(source || '');
+  const end = Number.isFinite(offset) ? Math.max(0, Math.min(offset, text.length)) : text.length;
+  const prefix = text.slice(Math.max(0, end - 4000), end);
+  const openIndex = prefix.lastIndexOf('<');
+  if (openIndex === -1) {
+    return {};
+  }
+  const fragment = prefix.slice(openIndex);
+  if (fragment.startsWith('</') || fragment.includes('>')) {
+    return {};
+  }
+  const match = fragment.match(/^<([A-Z][A-Za-z0-9_]*)\b/);
+  return match ? { component: match[1] } : {};
 }
 
 function formatEmit(event = {}) {
@@ -985,6 +1056,7 @@ module.exports = {
   diagnosticRange,
   diagnosticSeverity,
   escapeHTML,
+  goModModulePath,
   goModRequiresGOWDK,
   gowdkModuleRunArgs,
   groupDiagnosticsByFile,
@@ -992,12 +1064,14 @@ module.exports = {
   nearestProjectRoot,
   parseDiagnostics,
   pageFlow,
+  projectLayouts,
   projectPages,
   projectCompletionEntries,
   projectCommandArgs,
   renameEditsForSource,
   semanticTokens,
   siteMapHTML,
+  symbolContext,
   symbolReferences,
   validRenameValue
 };

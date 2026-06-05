@@ -1346,6 +1346,85 @@ view {
 	}
 }
 
+func TestManifestCommandDefaultDiscoverySkipsTestdata(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `@page home
+@route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "internal", "lang", "testdata", "home.page.gwdk"), `@page home
+@route "/fixture"
+
+view {
+  <main>Fixture duplicate</main>
+}
+`)
+
+	var output string
+	withWorkingDir(t, root, func() {
+		captured, err := captureCLIStdout(t, func() error {
+			return run([]string{"manifest"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		output = captured
+	})
+
+	if !strings.Contains(output, `"route": "/"`) {
+		t.Fatalf("expected discovered home route in manifest: %s", output)
+	}
+	if strings.Contains(output, "fixture") || strings.Contains(output, "Fixture duplicate") {
+		t.Fatalf("expected testdata page to be skipped: %s", output)
+	}
+}
+
+func TestManifestCommandConfigSSRAddonEnablesSSR(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/ssr"
+)
+
+var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{
+		Include: []string{"pages/**/*.gwdk"},
+	},
+	Addons: []gowdk.Addon{
+		ssr.Addon(),
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "pages", "dashboard.page.gwdk"), `@page dashboard
+@route "/dashboard"
+@render ssr
+
+view {
+  <main>Dashboard</main>
+}
+`)
+
+	var output string
+	withWorkingDir(t, root, func() {
+		captured, err := captureCLIStdout(t, func() error {
+			return run([]string{"manifest"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		output = captured
+	})
+
+	if !strings.Contains(output, `"render": "ssr"`) {
+		t.Fatalf("expected SSR page in manifest: %s", output)
+	}
+}
+
 func TestSitemapCommandDiscoversSelectedModuleOnly(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app

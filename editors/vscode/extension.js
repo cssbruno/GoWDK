@@ -76,7 +76,7 @@ function activate(context) {
         return completionItems(core.completionEntries());
       }
     }
-  }, '@', '<', '"', ',', ':', '.'));
+  }, '@', '<', '"', ',', ':', '.', ' '));
 
   context.subscriptions.push(vscode.languages.registerHoverProvider(LANGUAGE_ID, {
     async provideHover(document, position) {
@@ -87,7 +87,7 @@ function activate(context) {
       const token = document.getText(range);
       try {
         const metadata = await loadCompletionMetadata(document);
-        const markdown = core.hoverMarkdown(token, metadata);
+        const markdown = core.hoverMarkdown(token, metadata, symbolContextForDocument(document, position));
         if (!markdown) {
           return undefined;
         }
@@ -107,7 +107,7 @@ function activate(context) {
       const token = document.getText(range);
       try {
         const metadata = await loadCompletionMetadata(document);
-        const target = core.definitionTarget(token, metadata);
+        const target = core.definitionTarget(token, metadata, symbolContextForDocument(document, position));
         if (!target) {
           return undefined;
         }
@@ -128,7 +128,8 @@ function activate(context) {
       try {
         const metadata = await loadCompletionMetadata(document);
         return core.symbolReferences(token, metadata, {
-          includeDeclaration: referenceContext.includeDeclaration
+          includeDeclaration: referenceContext.includeDeclaration,
+          symbolContext: symbolContextForDocument(document, position)
         }).map((target) => new vscode.Location(vscode.Uri.file(target.file), new vscode.Position(target.line, target.column)));
       } catch (_error) {
         return [];
@@ -192,7 +193,7 @@ function activate(context) {
     try {
       const output = await withDocumentFile(document, (file) => {
         const args = ['manifest'];
-        if (config().get('enableSsrAddon')) {
+        if (ssrEnabledForDocument(document)) {
           args.push('--ssr');
         }
         args.push(file);
@@ -277,7 +278,7 @@ async function validateNow(document, diagnostics) {
     const report = await withDocumentFile(document, (file) => {
       const args = core.projectCommandArgs('check', {
         json: true,
-        ssr: config().get('enableSsrAddon'),
+        ssr: ssrEnabledForDocument(document),
         files: [file]
       });
       return runGowdk(args, document).then(({ stdout }) => core.parseDiagnostics(stdout));
@@ -292,23 +293,24 @@ async function validateNow(document, diagnostics) {
 
 async function loadProjectDiagnostics(document) {
   const root = projectRoot(document);
+  const ssr = ssrEnabledForRoot(root);
   const configPath = workspaceConfigPath(root);
   if (configPath) {
     const args = core.projectCommandArgs('check', {
       json: true,
       configPath,
-      ssr: config().get('enableSsrAddon')
+      ssr
     });
     return runGowdk(args, document).then(({ stdout }) => core.parseDiagnostics(stdout));
   }
 
-  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules}/**');
+  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules,vendor}/**');
   if (uris.length <= 1) {
     return undefined;
   }
   const args = core.projectCommandArgs('check', {
     json: true,
-    ssr: config().get('enableSsrAddon'),
+    ssr,
     files: uris.map((uri) => uri.fsPath)
   });
   return runGowdk(args, document).then(({ stdout }) => core.parseDiagnostics(stdout));
@@ -378,7 +380,7 @@ async function showSiteMap(context) {
     return;
   }
   if (!workspaceConfigPath(root)) {
-    const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules}/**');
+    const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules,vendor}/**');
     if (uris.length === 0) {
       vscode.window.showInformationMessage('No .gwdk files found in this workspace.');
       return;
@@ -413,48 +415,50 @@ async function refreshSiteMap(panel, root) {
   panel.webview.html = core.siteMapHTML(await loadProjectMetadata(), root);
 }
 
-async function loadSiteMap() {
-  const root = projectRoot();
+async function loadSiteMap(document) {
+  const root = projectRoot(document);
+  const ssr = ssrEnabledForRoot(root);
   const configPath = workspaceConfigPath(root);
   if (configPath) {
     const args = core.projectCommandArgs('sitemap', {
       configPath,
-      ssr: config().get('enableSsrAddon')
-    });
-    const { stdout } = await runGowdk(args, undefined);
-    return JSON.parse(stdout);
-  }
-
-  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules}/**');
-  if (uris.length === 0) {
-    return { pages: [] };
-  }
-  const args = core.projectCommandArgs('sitemap', {
-    ssr: config().get('enableSsrAddon'),
-    files: uris.map((uri) => uri.fsPath)
-  });
-  const { stdout } = await runGowdk(args, undefined);
-  return JSON.parse(stdout);
-}
-
-async function loadManifest(document) {
-  const root = projectRoot(document);
-  const configPath = workspaceConfigPath(root);
-  if (configPath) {
-    const args = core.projectCommandArgs('manifest', {
-      configPath,
-      ssr: config().get('enableSsrAddon')
+      ssr
     });
     const { stdout } = await runGowdk(args, document);
     return JSON.parse(stdout);
   }
 
-  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules}/**');
+  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules,vendor}/**');
+  if (uris.length === 0) {
+    return { pages: [] };
+  }
+  const args = core.projectCommandArgs('sitemap', {
+    ssr,
+    files: uris.map((uri) => uri.fsPath)
+  });
+  const { stdout } = await runGowdk(args, document);
+  return JSON.parse(stdout);
+}
+
+async function loadManifest(document) {
+  const root = projectRoot(document);
+  const ssr = ssrEnabledForRoot(root);
+  const configPath = workspaceConfigPath(root);
+  if (configPath) {
+    const args = core.projectCommandArgs('manifest', {
+      configPath,
+      ssr
+    });
+    const { stdout } = await runGowdk(args, document);
+    return JSON.parse(stdout);
+  }
+
+  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules,vendor}/**');
   if (uris.length === 0) {
     return { pages: {}, components: {} };
   }
   const args = core.projectCommandArgs('manifest', {
-    ssr: config().get('enableSsrAddon'),
+    ssr,
     files: uris.map((uri) => uri.fsPath)
   });
   const { stdout } = await runGowdk(args, document);
@@ -463,7 +467,7 @@ async function loadManifest(document) {
 
 async function loadCompletionMetadata(document) {
   const [siteMap, manifest, cssFiles] = await Promise.all([
-    loadSiteMap(),
+    loadSiteMap(document),
     loadManifest(document),
     loadCSSFiles(document)
   ]);
@@ -472,6 +476,10 @@ async function loadCompletionMetadata(document) {
 
 async function loadProjectMetadata(document) {
   return loadCompletionMetadata(document);
+}
+
+function symbolContextForDocument(document, position) {
+  return core.symbolContext(document.getText(), document.offsetAt(position));
 }
 
 async function loadCSSFiles(document) {
@@ -721,7 +729,39 @@ function documentForProjectRoot(document) {
 
 function findProjectFiles(root, include, exclude) {
   const pattern = root ? new vscode.RelativePattern(root, include) : include;
-  return vscode.workspace.findFiles(pattern, exclude);
+  return vscode.workspace.findFiles(pattern, projectFileExclude(root, exclude));
+}
+
+function projectFileExclude(root, exclude) {
+  if (!isGOWDKSourceWorkspace(root)) {
+    return exclude;
+  }
+  if (exclude === '**/{.git,node_modules}/**') {
+    return '**/{.git,node_modules,vendor,testdata}/**';
+  }
+  if (exclude === '**/{.git,node_modules,vendor}/**') {
+    return '**/{.git,node_modules,vendor,testdata}/**';
+  }
+  return exclude || '**/testdata/**';
+}
+
+function ssrEnabledForDocument(document) {
+  return ssrEnabledForRoot(projectRoot(document));
+}
+
+function ssrEnabledForRoot(root) {
+  return config().get('enableSsrAddon') || isGOWDKSourceWorkspace(root);
+}
+
+function isGOWDKSourceWorkspace(root) {
+  if (!root || !fs.existsSync(path.join(root, 'cmd', 'gowdk'))) {
+    return false;
+  }
+  try {
+    return core.goModModulePath(fs.readFileSync(path.join(root, 'go.mod'), 'utf8')) === core.GOWDK_MODULE_PATH;
+  } catch (_error) {
+    return false;
+  }
 }
 
 function workspaceConfigPath(root) {

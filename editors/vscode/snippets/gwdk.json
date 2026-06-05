@@ -21,7 +21,7 @@
       "@render static",
       "",
       "paths {",
-      "  ${4:path(slug: \"hello\")}",
+      "  ${4:=> { slug: \"hello\" }}",
       "}",
       "",
       "build {",

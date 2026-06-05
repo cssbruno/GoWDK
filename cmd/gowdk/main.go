@@ -25,7 +25,7 @@ const (
 
 var (
 	defaultSourceIncludes = []string{"**/*.gwdk"}
-	defaultSourceExcludes = []string{".git/**", "vendor/**", "node_modules/**"}
+	defaultSourceExcludes = []string{".git/**", "vendor/**", "node_modules/**", "**/testdata/**"}
 )
 
 func main() {
@@ -77,7 +77,7 @@ func run(args []string) error {
 
 func usage() {
 	fmt.Println("gowdk " + version)
-	fmt.Println("compile-first Go web kit: static/action-first, SSR optional")
+	fmt.Println("compile-first Go web kit: build-time output, backend actions, SSR optional")
 	fmt.Println()
 	fmt.Println("Commands:")
 	fmt.Println("  version                  print CLI version")

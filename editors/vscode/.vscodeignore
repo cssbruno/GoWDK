@@ -5,6 +5,7 @@ out/**
 dist/**
 src/**
 test/**
+testdata/**
 *.test.js
 *.vsix
 package-lock.json

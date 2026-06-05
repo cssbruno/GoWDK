@@ -114,6 +114,17 @@ require github.com/cssbruno/other v0.0.0
 `), false);
 });
 
+test('goModModulePath reads module declarations', () => {
+  assert.equal(core.goModModulePath(`module github.com/cssbruno/gowdk
+
+go 1.26
+`), 'github.com/cssbruno/gowdk');
+  assert.equal(core.goModModulePath(`// module ignored
+module example.com/app // inline comment
+`), 'example.com/app');
+  assert.equal(core.goModModulePath('go 1.26'), '');
+});
+
 test('gowdkModuleRunArgs builds a go run invocation for app workspaces', () => {
   assert.deepEqual(core.gowdkModuleRunArgs(['check', '--json']), [
     'run',
@@ -202,6 +213,7 @@ test('completionContext identifies project-aware completion contexts', () => {
   assert.equal(core.completionContext('@render s'), 'render');
   assert.equal(core.completionContext('@layout root, '), 'layout');
   assert.equal(core.completionContext('@css default, '), 'css');
+  assert.equal(core.completionContext('@css default '), 'css');
   assert.equal(core.completionContext('  <button g:'), 'directive');
   assert.equal(core.completionContext('  <button class:'), 'directive');
   assert.equal(core.completionContext('  <Counter g:island="w'), 'island');
@@ -225,6 +237,10 @@ test('projectCompletionEntries derive layouts routes components and CSS from met
       components: {
         Hero: {},
         StatusPanel: {}
+      },
+      layouts: {
+        root: { source: '/workspace/layouts/root.layout.gwdk' },
+        shell: { source: '/workspace/layouts/shell.layout.gwdk' }
       }
     },
     cssFiles: [
@@ -235,7 +251,8 @@ test('projectCompletionEntries derive layouts routes components and CSS from met
 
   assert.deepEqual(core.projectCompletionEntries('layout', metadata), [
     ['app', 'Layout id from project metadata.'],
-    ['root', 'Layout id from project metadata.']
+    ['root', 'Layout from project manifest.'],
+    ['shell', 'Layout from project manifest.']
   ]);
   assert.deepEqual(core.projectCompletionEntries('route', metadata), [
     ['/', 'Route from project metadata.'],
@@ -305,6 +322,9 @@ test('project metadata helpers work with a fixture workspace', () => {
             { name: 'select', params: [{ name: 'id', type: 'string' }] }
           ]
         }
+      },
+      layouts: {
+        root: { source: path.join(root, 'layouts', 'root.layout.gwdk') }
       }
     },
     cssFiles: [
@@ -337,6 +357,7 @@ test('project metadata helpers work with a fixture workspace', () => {
   assert.match(core.hoverMarkdown('select', metadata), /\*\*GOWDK component event\*\*/);
   assert.match(core.hoverMarkdown('forms', metadata), /\*\*GOWDK CSS input\*\* `forms`/);
   assert.deepEqual(core.definitionTarget('home', metadata), { file: home, line: 0, column: 0 });
+  assert.deepEqual(core.definitionTarget('root', metadata), { file: path.join(root, 'layouts', 'root.layout.gwdk'), line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('select', metadata), { file: hero, line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('forms', metadata), { file: path.join(root, 'styles', 'forms.css'), line: 0, column: 0 });
   assert.deepEqual(core.symbolReferences('Hero', metadata), [
@@ -372,7 +393,7 @@ test('definitionTarget resolves project symbols to owning source files', () => {
   assert.deepEqual(core.definitionTarget('Hero', metadata), { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('select', metadata), { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('forms', metadata), { file: '/workspace/styles/forms.css', line: 0, column: 0 });
-  assert.deepEqual(core.definitionTarget('root', metadata), { file: '/workspace/home.page.gwdk', line: 0, column: 0 });
+  assert.deepEqual(core.definitionTarget('root', metadata), { file: '/workspace/root.layout.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('submit', metadata), { file: '/workspace/home.page.gwdk', line: 0, column: 0 });
   assert.equal(core.definitionTarget('missing', metadata), undefined);
 });
@@ -385,6 +406,7 @@ test('symbolReferences finds project metadata references at file granularity', (
     { file: '/workspace/home.page.gwdk', line: 0, column: 0 }
   ]);
   assert.deepEqual(core.symbolReferences('root', metadata), [
+    { file: '/workspace/root.layout.gwdk', line: 0, column: 0 },
     { file: '/workspace/home.page.gwdk', line: 0, column: 0 }
   ]);
   assert.deepEqual(core.symbolReferences('forms', metadata), [
@@ -401,6 +423,48 @@ test('symbolReferences finds project metadata references at file granularity', (
     { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 }
   ]);
   assert.deepEqual(core.symbolReferences('missing', metadata), []);
+});
+
+test('component event helpers use component context and avoid ambiguous globals', () => {
+  const metadata = {
+    manifest: {
+      components: {
+        Hero: {
+          source: '/workspace/hero.cmp.gwdk',
+          emits: [{ name: 'select', params: [{ name: 'id', type: 'string' }] }]
+        },
+        Menu: {
+          source: '/workspace/menu.cmp.gwdk',
+          emits: [{ name: 'select', params: [{ name: 'index', type: 'int' }] }]
+        }
+      }
+    }
+  };
+
+  assert.equal(core.hoverMarkdown('select', metadata), '');
+  assert.equal(core.definitionTarget('select', metadata), undefined);
+  assert.match(core.hoverMarkdown('select', metadata, { component: 'Menu' }), /Component: `Menu`/);
+  assert.deepEqual(core.definitionTarget('select', metadata, { component: 'Menu' }), {
+    file: '/workspace/menu.cmp.gwdk',
+    line: 0,
+    column: 0
+  });
+  assert.deepEqual(core.symbolReferences('select', metadata, { symbolContext: { component: 'Hero' } }), [
+    { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 }
+  ]);
+});
+
+test('symbolContext finds the surrounding component call', () => {
+  const source = [
+    '<Hero',
+    '  title="Welcome"',
+    '  g:on:select={selected = event.id}',
+    '/>',
+    '<button g:on:select={noop()}>Select</button>'
+  ].join('\n');
+
+  assert.deepEqual(core.symbolContext(source, source.indexOf('select')), { component: 'Hero' });
+  assert.deepEqual(core.symbolContext(source, source.lastIndexOf('select')), {});
 });
 
 test('rename helpers validate symbols and return exact source edits', () => {
@@ -527,6 +591,9 @@ function symbolMetadata() {
             { name: 'select', params: [{ name: 'id', type: 'string' }] }
           ]
         }
+      },
+      layouts: {
+        root: { source: '/workspace/root.layout.gwdk' }
       }
     },
     cssFiles: [

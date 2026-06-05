@@ -141,6 +141,7 @@ func componentClientHandlers(component manifest.Component) (map[string]clientlan
 			Handlers: handlers,
 			Helpers:  helpers,
 			Emits:    emits,
+			Stores:   program.StoreNames(),
 			Mount:    append([]string(nil), program.Mount...),
 			Destroy:  append([]string(nil), program.Destroy...),
 			Effects:  append([]clientlang.Effect(nil), program.Effects...),

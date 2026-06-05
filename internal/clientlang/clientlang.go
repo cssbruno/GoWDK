@@ -136,6 +136,7 @@ type Bootstrap struct {
 	Handlers map[string]Handler `json:"handlers,omitempty"`
 	Helpers  map[string]Helper  `json:"helpers,omitempty"`
 	Emits    map[string]Emit    `json:"emits,omitempty"`
+	Stores   []string           `json:"stores,omitempty"`
 	Mount    []string           `json:"mount,omitempty"`
 	Destroy  []string           `json:"destroy,omitempty"`
 	Effects  []Effect           `json:"effects,omitempty"`
@@ -448,6 +449,19 @@ func (program Program) UseMap() map[string]Use {
 	return uses
 }
 
+// StoreNames returns deterministic page-scoped store names used by the program.
+func (program Program) StoreNames() []string {
+	if len(program.Uses) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(program.Uses))
+	for _, use := range program.Uses {
+		names = append(names, use.Name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // HasLifecycle reports whether the program needs the runtime bootstrap envelope.
 func (program Program) HasLifecycle() bool {
 	return len(program.Mount) > 0 || len(program.Destroy) > 0 || len(program.Effects) > 0
@@ -456,7 +470,7 @@ func (program Program) HasLifecycle() bool {
 // NeedsBootstrap reports whether the program needs the runtime bootstrap
 // envelope instead of the legacy direct handler map.
 func (program Program) NeedsBootstrap() bool {
-	return program.HasLifecycle() || len(program.Computed) > 0 || len(program.HelperMap()) > 0
+	return program.HasLifecycle() || len(program.Computed) > 0 || len(program.HelperMap()) > 0 || len(program.Uses) > 0
 }
 
 // OrderedComputed returns computed values in dependency order. References to

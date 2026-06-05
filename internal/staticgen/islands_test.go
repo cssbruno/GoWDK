@@ -106,6 +106,45 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 	}
 }
 
+func TestBuildEmitsStoreUsesInIslandBootstrap(t *testing.T) {
+	outputDir := t.TempDir()
+	component := counterComponent()
+	component.Blocks.Client = true
+	component.Blocks.ClientBody = `
+use cart
+
+fn Add() {
+  Count++
+}
+`
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:      "counter",
+			Route:   "/counter",
+			Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []manifest.Store{{
+				Name: "cart",
+				Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+				Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+			}},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+
+	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+	html := readFile(t, filepath.Join(outputDir, "counter", "index.html"))
+	expected := `data-gowdk-client="{&#34;handlers&#34;:{&#34;Add&#34;:{&#34;statements&#34;:[&#34;Count++&#34;]}},&#34;stores&#34;:[&#34;cart&#34;]}"`
+	if !strings.Contains(html, expected) {
+		t.Fatalf("expected %q in island page:\n%s", expected, html)
+	}
+}
+
 func TestIslandJSSourceMapMappingsUseComponentSpans(t *testing.T) {
 	component := counterComponent()
 	component.Span = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 2, Column: 1}, End: manifest.SourcePosition{Line: 2, Column: 19}}

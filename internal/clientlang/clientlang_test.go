@@ -266,6 +266,12 @@ fn Add() {
 	if uses["cart"].Name != "cart" {
 		t.Fatalf("unexpected use map: %#v", uses)
 	}
+	if !program.NeedsBootstrap() {
+		t.Fatal("expected store use to require bootstrap envelope")
+	}
+	if got := program.StoreNames(); len(got) != 1 || got[0] != "cart" {
+		t.Fatalf("unexpected store names: %#v", got)
+	}
 }
 
 func TestParseRejectsDuplicateRef(t *testing.T) {

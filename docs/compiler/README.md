@@ -43,6 +43,8 @@ Not implemented yet:
 - `pipeline.md`: current and target compile pipeline.
 - `project-structure.md`: current source inputs and planned project layout.
 - `generated-output.md`: planned generated artifacts and current limitations.
+- `browser-compiler.md`: browser-facing partial runtime, JavaScript islands, and
+  explicit WASM island behavior.
 - `static-build-report.md`: generated build report schema and CLI debug output.
 - `manifest.md`: manifest and site-map JSON contracts.
 - `codegen.md`: route-binding planning and future emitters.

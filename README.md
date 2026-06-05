@@ -174,12 +174,15 @@ CI also smoke-builds static, dynamic, CSS, and embedded-binary examples.
 
 ## Docs
 
+- [Getting started](docs/getting-started.md)
 - [Product vision](docs/product/vision.md)
 - [Requirements](docs/product/requirements.md)
 - [Roadmap](docs/product/roadmap.md)
 - [Architecture](docs/engineering/architecture.md)
 - [Release readiness](docs/engineering/release.md)
 - [CLI reference](docs/reference/cli.md)
+- [Routing reference](docs/reference/routing.md)
+- [Deployment reference](docs/reference/deployment.md)
 - [Language notes](docs/language/README.md)
 - [Examples](examples/README.md)
 - [VS Code extension](https://marketplace.visualstudio.com/items?itemName=GoWDK.gowdk-vscode)

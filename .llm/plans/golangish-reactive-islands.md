@@ -250,7 +250,7 @@ Tests:
 - [x] Event toggles condition.
 - [x] Invalid non-bool condition is rejected.
 
-Decision needed:
+Decision:
 
 - [x] Choose hide/show with `hidden` for first slice or real mount/unmount.
   Hide/show is simpler and preserves static HTML; mount/unmount is closer to
@@ -534,9 +534,12 @@ content types, returns `null` for empty JSON responses, and reports invalid JSON
 with a GOWDK-owned error. Runtime conventions clear `Error` before fetch and
 set `Error` plus `Loading=false` on failures when those fields exist.
 
-Decision needed:
+Decision:
 
-- [ ] Whether async should wait until typed `api {}` handlers are mature.
+- [x] Allow browser-local async before typed `api {}` handlers are mature, but
+  keep the only network primitive compiler-owned through `fetchJSON[T]`.
+  Server `api {}` maturity is still required before documenting async as the
+  recommended path for backend data flows.
 
 ### 12. Component Communication
 
@@ -638,34 +641,43 @@ client {
 Support:
 
 - [x] page-scoped stores first
-- [ ] module-scoped stores later
+- [x] module-scoped stores deferred to a later feature
 - [x] explicit `use storeName`
 - [x] no hidden globals
-- [ ] generated JS store asset per page/module
+- [x] generated JS store asset for page-scoped stores
 
 Compiler work:
 
 - [x] Add store declarations to parser/manifest.
 - [x] Type-check store fields.
-- [ ] Generate store runtime.
-- [ ] Wire island subscriptions.
+- [x] Generate store runtime.
+- [x] Wire island subscriptions.
 
 Tests:
 
-- [ ] Two components read same store.
-- [ ] One component mutates store and other updates.
-- [ ] Missing `use` is rejected.
+- [x] Store declarations parse.
+- [x] Store type/init contracts validate.
+- [x] Duplicate page stores are rejected.
+- [x] Unknown component `use` is rejected.
+- [x] Two components read same store.
+- [x] One component mutates store and other updates through generated
+  publish/subscribe wiring.
 
-Decision needed:
+Decision:
 
-- [ ] Delay stores until component communication and parent props are stable.
+- [x] Ship the first page-scoped mutable store runtime now that component
+  communication and parent props are stable; defer module-scoped stores and
+  advanced shared-state semantics.
 
 First implementation note: pages can now declare first-slice page-scoped stores
 with `store name Alias.Type = Alias.Init()`, and component `client {}` blocks
 can declare explicit `use name` store dependencies. The compiler type-checks
 store structs and init functions, rejects duplicate page stores, and rejects
-component `use` declarations when no page declares the named store. Runtime
-store assets and island subscriptions remain open.
+component `use` declarations when no page declares the named store. Static
+generation emits a shared `stores.js` asset plus build-time JSON seed scripts
+for page stores. JS islands merge store state during mount, publish local
+mutations back to the store registry, subscribe to peer island updates, and
+unsubscribe during island teardown.
 
 ### 15. DOM Refs
 
@@ -774,7 +786,8 @@ Support:
 
 - [x] readable generated function names
 - [x] optional unminified dev output
-- [ ] source maps from `.gwdk` source spans to generated JS
+- [x] source maps from `.gwdk` source spans to generated JS at component,
+  client-block, view-block, and broad runtime-region granularity
 - [x] CLI flag or config for dev/prod asset mode
 
 Compiler work:
@@ -921,14 +934,20 @@ Goal: make the compiler strict and helpful as the language grows.
 
 Support:
 
-- [ ] diagnostic codes for every unsupported feature
-- [ ] source spans in `client {}` and view bindings
+- [x] diagnostic codes for supported parse, validation, generated WASM, and
+  common unsupported-feature failures
+- [x] source spans in `client {}` and selected view bindings
 - [x] suggestions for common mistakes
 - [x] JSON diagnostics for editor tooling
+- [x] exhaustive unsupported-feature code coverage deferred to
+  `island-diagnostic-recovery.md`
+- [x] exhaustive view-binding span coverage deferred to
+  `island-diagnostic-recovery.md`
 
 Compiler work:
 
-- [ ] Extend parser recovery around `client {}`.
+- [x] Defer multi-error parser recovery around `client {}` to
+  `island-diagnostic-recovery.md`.
 - [x] Store spans in client AST.
 - [x] Add diagnostic code docs.
 - [x] Add LSP validation for client syntax.
@@ -983,7 +1002,7 @@ of the whole client block. Multi-error parser recovery remains open.
 - [x] `client {}` block parser
 - [x] component functions
 - [x] computed values
-- [ ] strict diagnostics
+- [x] strict diagnostics for supported syntax and common unsupported syntax
 
 ### Phase B: DOM Binding Core
 
@@ -1007,7 +1026,7 @@ of the whole client block. Multi-error parser recovery remains open.
 - [x] effects
 - [x] async functions
 - [x] partial swap island remounting
-- [ ] debug source maps
+- [x] debug source maps with broad source-span anchors
 
 ### Phase E: Explicit WASM
 
@@ -1015,7 +1034,43 @@ of the whole client block. Multi-error parser recovery remains open.
 - [x] bootstrap ABI
 - [x] event ABI
 - [x] DOM update ABI
-- [ ] real browser-side Go package build
+- [x] real browser-side Go package build
+
+## Completion Status
+
+This plan is complete as the current reactive-islands implementation plan. The
+main implementation slices are represented by checked work items, implementation
+notes, and verification commands. Items that should not ship as part of this
+plan have been explicitly deferred instead of left as unresolved checklist
+holes.
+
+Completed in this plan:
+
+- Go-ish expression parsing, typed checking, generated JavaScript lowering, and
+  diagnostics for the supported expression subset.
+- Component-local functions, locals, computed values, lifecycle hooks, effects,
+  async functions, refs, event modifiers, two-way bindings, conditionals, keyed
+  lists, attribute/class/style bindings, typed child events, and parent-to-child
+  reactive props.
+- Generated JavaScript islands by default, explicit WASM island loaders, the
+  accepted WASM ABI ADR, real `@wasm` package builds, browser import
+  restrictions, and structured WASM package diagnostics.
+- Development-mode JavaScript source maps, production debug-asset omission,
+  readable generated names, and broad source-span anchors.
+- Page-scoped store declarations, component `use` validation, generated store
+  seed data, shared JS store runtime assets, and cross-island subscription
+  wiring.
+
+Deferred follow-up plans:
+
+- `reactive-shared-stores.md`: module-scoped stores, advanced shared-state
+  semantics, and browser-level end-to-end store interaction coverage.
+- `island-diagnostic-recovery.md`: parser recovery for multiple client/view
+  errors in one pass and exhaustive diagnostic code coverage.
+- `island-source-map-precision.md`: per-expression and per-binding source-map
+  mappings beyond the broad region anchors implemented here.
+- `wasm-island-entrypoint-validation.md`: validation of ADR export names and
+  browser-side Go registration contracts beyond successful browser WASM builds.
 
 ## Files Expected To Change
 

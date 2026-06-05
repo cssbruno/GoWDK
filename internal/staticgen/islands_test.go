@@ -129,7 +129,7 @@ fn Add() {
 			}},
 			Blocks: manifest.Blocks{
 				View:     true,
-				ViewBody: `<main><Counter /></main>`,
+				ViewBody: `<main><Counter /><Counter /></main>`,
 			},
 		}},
 		Components: []manifest.Component{component},
@@ -153,6 +153,9 @@ fn Add() {
 		if !strings.Contains(html, expected) {
 			t.Fatalf("expected %q in island page:\n%s", expected, html)
 		}
+	}
+	if count := strings.Count(html, `&#34;stores&#34;:[&#34;cart&#34;]`); count != 2 {
+		t.Fatalf("expected two island roots to use cart store, got %d in:\n%s", count, html)
 	}
 	if storesIndex := strings.Index(html, `/assets/gowdk/islands/stores.js`); storesIndex < 0 {
 		t.Fatalf("expected store runtime script in island page:\n%s", html)

@@ -41,6 +41,30 @@ type Import struct {
 	Span  SourceSpan
 }
 
+// GoTypeRef references a Go type through an import alias declared in a .gwdk
+// source file.
+type GoTypeRef struct {
+	Alias string
+	Name  string
+	Span  SourceSpan
+}
+
+// GoFuncRef references a Go function through an import alias declared in a
+// .gwdk source file.
+type GoFuncRef struct {
+	Alias string
+	Name  string
+	Span  SourceSpan
+}
+
+// StateContract describes a local component state type and build-time
+// initializer.
+type StateContract struct {
+	Type GoTypeRef
+	Init GoFuncRef
+	Span SourceSpan
+}
+
 // PageSpans records source ranges for page annotations and declarations.
 type PageSpans struct {
 	Page        SourceSpan
@@ -57,6 +81,7 @@ type BlockSpans struct {
 	Paths   SourceSpan
 	Build   SourceSpan
 	Load    SourceSpan
+	Client  SourceSpan
 	View    SourceSpan
 	Actions []NamedSpan
 	APIs    []NamedSpan
@@ -84,6 +109,8 @@ type Blocks struct {
 	BuildBody string
 	Load      bool
 	LoadBody  string
+	Client    bool
+	ClientBody string
 	View      bool
 	ViewBody  string
 	Actions   []Action
@@ -93,11 +120,14 @@ type Blocks struct {
 
 // Component describes a .cmp.gwdk component after parsing and normalization.
 type Component struct {
-	Source string
-	Name   string
-	Props  []Prop
-	Blocks Blocks
-	Span   SourceSpan
+	Source    string
+	Name      string
+	Imports   []Import
+	Props     []Prop
+	PropsType GoTypeRef
+	State     StateContract
+	Blocks    Blocks
+	Span      SourceSpan
 }
 
 // Layout describes a .layout.gwdk layout after parsing and normalization.

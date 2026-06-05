@@ -4,14 +4,18 @@
 
 Relevant spec: `.llm/features/interactive-runtime.md`
 
+Detailed local island language plan:
+`.llm/plans/golangish-reactive-islands.md`
+
 GOWDK should stop feeling like a fancy HTML displayer by shipping real
 interaction paths while preserving its compile-first identity. Static HTML stays
 the base output. Interactivity is layered in this order:
 
 1. Server fragments for action-driven updates.
 2. Stronger form/action behavior.
-3. Declarative local client islands.
-4. Optional richer WASM islands after the lower-level contracts stabilize.
+3. Declarative local client islands generated as JavaScript by default.
+4. Explicit WASM islands only for component instances that request
+   `g:island="wasm"`.
 
 ## Assumptions
 
@@ -20,6 +24,8 @@ the base output. Interactivity is layered in this order:
 - No npm dependency is required for the first interactive runtime.
 - Normal forms must still work without JavaScript.
 - The first local-state slice can be deliberately smaller than React/Svelte.
+- A component with `state ...` becomes a JavaScript island by default.
+- WASM is never the default; users must opt into it per component instance.
 
 ## Proposed Changes
 
@@ -43,13 +49,20 @@ the base output. Interactivity is layered in this order:
   - Add examples for table refresh, inline validation, and modal body replacement.
 
 - Phase 4: Add declarative client islands.
-  - Define a small page-local syntax for local state and events.
+  - Define Go-typed props/state contracts through normal module import paths.
   - Start with a counter/disclosure/select-filter slice.
-  - Emit static initial HTML plus generated island runtime only for opted-in islands.
+  - Run state init functions at build time and serialize initial state into
+    bootstrap data.
+  - Emit static initial HTML plus generated JavaScript for stateful component
+    calls by default.
+  - Reject duplicate component names and redundant component implementations
+    before codegen.
   - Avoid full-page hydration; islands attach to compiler-owned markers.
 
 - Phase 5: Decide richer runtime strategy.
-  - Compare generated JavaScript islands against Go WASM islands.
+  - Keep generated JavaScript as the default island runtime.
+  - Emit `.wasm` plus a minimal loader only for explicit `g:island="wasm"`
+    component instances.
   - Keep the chosen path compatible with one-binary deploys.
   - Add an ADR before committing to a broad island architecture.
 
@@ -70,6 +83,8 @@ the base output. Interactivity is layered in this order:
   - `internal/parser`
   - `internal/view`
   - `internal/codegen`
+  - `internal/gotypes`
+  - `internal/compiler`
   - `runtime/*`
   - `docs/language/*`
 
@@ -86,7 +101,9 @@ the base output. Interactivity is layered in this order:
   - `Cache-Control: no-store`
   - `X-GOWDK-Fragment-Target: #id`
   - optional `X-GOWDK-Fragment-Swap`
-- Future islands will need stable generated DOM markers. That should get an ADR before expansion.
+- Island output uses compiler-owned `gowdk-island`, `data-gowdk-on-*`, and
+  `data-gowdk-bind` markers for the first slice. A production WASM ABI should
+  still get an ADR before broad expansion.
 
 ## Tests
 
@@ -94,6 +111,11 @@ the base output. Interactivity is layered in this order:
   - Client runtime source includes partial headers, swap handling, loading state, and focus restoration.
   - Static build emits `gowdk.js` only when a page uses partial metadata.
   - Action route extraction renders fragment bodies and preserves redirect fallback.
+  - Duplicate component names and redundant component fingerprints are rejected.
+  - Imported Go props/state structs resolve through `go list`, `go/parser`, and
+    `go/types`.
+  - Stateful component calls emit JS island assets; explicit `g:island="wasm"`
+    emits WASM assets.
 
 - Integration:
   - Generated binary serves partial fragment responses.
@@ -112,6 +134,7 @@ the base output. Interactivity is layered in this order:
 
 ```sh
 go test ./internal/clientrt ./internal/staticgen ./internal/appgen
+go test ./internal/parser ./internal/compiler ./internal/view ./internal/staticgen
 go test ./...
 go build ./cmd/gowdk
 go run ./cmd/gowdk build --out /tmp/gowdk-partials-build --app /tmp/gowdk-partials-app --bin /tmp/gowdk-partials-site examples/basic/patients-fragment.page.gwdk
@@ -130,4 +153,5 @@ go run ./cmd/gowdk build --out /tmp/gowdk-partials-build --app /tmp/gowdk-partia
 - Fragment rendering could bypass escaping if it does not go through `internal/view` or `runtime/render`.
 - CSRF is still required before claiming production-ready action behavior.
 - Local islands may create a second programming model if syntax is not kept narrow.
-- Generated JavaScript and Go WASM could compete unless the runtime strategy is decided with an ADR.
+- Generated JavaScript and Go WASM could compete if docs stop treating JS as
+  the default and WASM as explicit.

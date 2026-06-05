@@ -1,0 +1,301 @@
+package clientlang
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestParseClientFunctions(t *testing.T) {
+	program, err := Parse(`
+fn Add(step int, label string) {
+  Count = step
+  Label = label;
+  Open = !Open;
+}
+
+fn Reset() {
+  Count = 0
+}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Functions) != 2 {
+		t.Fatalf("expected two functions, got %#v", program.Functions)
+	}
+	if program.Functions[0].Name != "Add" || len(program.Functions[0].Params) != 2 ||
+		program.Functions[0].Params[0].Name != "step" || program.Functions[0].Params[0].Type != "int" ||
+		strings.Join(program.Functions[0].Statements, ",") != "Count = step,Label = label,Open = !Open" {
+		t.Fatalf("unexpected Add function: %#v", program.Functions[0])
+	}
+	handlers := program.HandlerMap()
+	if len(handlers["Add"].Params) != 2 || handlers["Add"].Params[0] != "step" ||
+		len(handlers["Reset"].Statements) != 1 || handlers["Reset"].Statements[0] != "Count = 0" {
+		t.Fatalf("unexpected handlers: %#v", handlers)
+	}
+}
+
+func TestParseHelperFunctionReturns(t *testing.T) {
+	program, err := Parse(`
+fn Next(value int) int {
+  return value + 1
+}
+
+fn Add() {
+  Count = Next(Count)
+}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handlers := program.HandlerMap()
+	if _, ok := handlers["Next"]; ok {
+		t.Fatalf("helper should not be an event handler: %#v", handlers)
+	}
+	helpers := program.HelperMap()
+	if helpers["Next"].Return != "value + 1" || helpers["Next"].ReturnType != TypeInt || len(helpers["Next"].Params) != 1 {
+		t.Fatalf("unexpected helper map: %#v", helpers)
+	}
+	if !program.NeedsBootstrap() {
+		t.Fatal("expected helper program to need bootstrap")
+	}
+}
+
+func TestParseRejectsReturnInEventHandler(t *testing.T) {
+	_, err := Parse(`
+fn Add() {
+  return Count + 1
+}
+`)
+	if err == nil {
+		t.Fatal("expected return without type error")
+	}
+	if !strings.Contains(err.Error(), "cannot return a value without declaring a return type") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseLifecycleAndEffects(t *testing.T) {
+	program, err := Parse(`
+on mount {
+  Focused = true
+}
+
+effect when Query {
+  Dirty = true
+  return {
+    Dirty = false
+  }
+}
+
+on destroy {
+  Open = false
+}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(program.Mount, ",") != "Focused = true" {
+		t.Fatalf("unexpected mount statements: %#v", program.Mount)
+	}
+	if len(program.Effects) != 1 || program.Effects[0].Field != "Query" || strings.Join(program.Effects[0].Statements, ",") != "Dirty = true" || strings.Join(program.Effects[0].Cleanup, ",") != "Dirty = false" {
+		t.Fatalf("unexpected effects: %#v", program.Effects)
+	}
+	if strings.Join(program.Destroy, ",") != "Open = false" {
+		t.Fatalf("unexpected destroy statements: %#v", program.Destroy)
+	}
+	if !program.HasLifecycle() {
+		t.Fatal("expected lifecycle program")
+	}
+}
+
+func TestParseComputedValues(t *testing.T) {
+	program, err := Parse(`
+computed Label string {
+  return if Open { "open" } else { "closed" }
+}
+
+computed Next int {
+  return Count + 1
+}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Computed) != 2 {
+		t.Fatalf("expected two computed values, got %#v", program.Computed)
+	}
+	if program.Computed[0].Name != "Label" || program.Computed[0].Type != "string" ||
+		program.Computed[0].Expr != `if Open { "open" } else { "closed" }` {
+		t.Fatalf("unexpected Label computed: %#v", program.Computed[0])
+	}
+	if program.Computed[1].Name != "Next" || program.Computed[1].Type != "int" || program.Computed[1].Expr != "Count + 1" {
+		t.Fatalf("unexpected Next computed: %#v", program.Computed[1])
+	}
+	if !program.NeedsBootstrap() {
+		t.Fatal("expected computed program to need bootstrap")
+	}
+}
+
+func TestOrderComputedDependencyGraph(t *testing.T) {
+	ordered, err := OrderComputed([]Computed{
+		{Name: "Visible", Type: "bool", Expr: `Label == "open"`},
+		{Name: "Label", Type: "string", Expr: `if Open { "open" } else { "closed" }`},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ordered) != 2 || ordered[0].Name != "Label" || ordered[1].Name != "Visible" {
+		t.Fatalf("unexpected computed order: %#v", ordered)
+	}
+}
+
+func TestOrderComputedRejectsCycle(t *testing.T) {
+	_, err := OrderComputed([]Computed{
+		{Name: "A", Type: "string", Expr: "B"},
+		{Name: "B", Type: "string", Expr: "A"},
+	})
+	if err == nil {
+		t.Fatal("expected computed cycle error")
+	}
+	if !strings.Contains(err.Error(), "computed dependency cycle") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseRejectsComputedWithoutReturn(t *testing.T) {
+	_, err := Parse(`
+computed Label string {
+  Label = "open"
+}
+`)
+	if err == nil {
+		t.Fatal("expected computed return error")
+	}
+	if !strings.Contains(err.Error(), "must use `return expr`") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseRefs(t *testing.T) {
+	program, err := Parse(`
+ref searchInput HTMLInputElement
+
+fn FocusSearch() {
+  searchInput.Focus()
+}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Refs) != 1 || program.Refs[0].Name != "searchInput" || program.Refs[0].Kind != "HTMLInputElement" {
+		t.Fatalf("unexpected refs: %#v", program.Refs)
+	}
+	refs := program.RefMap()
+	if refs["searchInput"].Kind != "HTMLInputElement" {
+		t.Fatalf("unexpected ref map: %#v", refs)
+	}
+}
+
+func TestParseRejectsDuplicateRef(t *testing.T) {
+	_, err := Parse(`
+ref searchInput HTMLInputElement
+ref searchInput HTMLInputElement
+`)
+	if err == nil {
+		t.Fatal("expected duplicate ref error")
+	}
+	if !strings.Contains(err.Error(), `client ref "searchInput" is declared more than once`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseRejectsDuplicateClientFunction(t *testing.T) {
+	_, err := Parse(`
+fn Toggle() {
+  Open = !Open
+}
+
+fn Toggle() {
+  Open = false
+}
+`)
+	if err == nil {
+		t.Fatal("expected duplicate function error")
+	}
+	if !strings.Contains(err.Error(), `client function "Toggle" is declared more than once`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseRejectsUnsupportedClientSyntax(t *testing.T) {
+	_, err := Parse(`
+let Count = 0
+`)
+	if err == nil {
+		t.Fatal("expected unsupported syntax error")
+	}
+	if !strings.Contains(err.Error(), `unsupported syntax`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseRejectsUnsupportedParamType(t *testing.T) {
+	_, err := Parse(`
+fn Add(step uint) {
+  Count = step
+}
+`)
+	if err == nil {
+		t.Fatal("expected unsupported param type error")
+	}
+	if !strings.Contains(err.Error(), `unsupported parameter type "uint"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestIsFunctionCall(t *testing.T) {
+	name, ok := IsFunctionCall("Increment()")
+	if !ok || name != "Increment" {
+		t.Fatalf("expected Increment call, got %q %v", name, ok)
+	}
+	if _, ok := IsFunctionCall("Count++"); ok {
+		t.Fatal("did not expect Count++ to be a function call")
+	}
+}
+
+func TestParseCallWithArgs(t *testing.T) {
+	call, ok := ParseCall(`Add(1, Count, "saved, ok")`)
+	if !ok {
+		t.Fatal("expected call")
+	}
+	if call.Name != "Add" || strings.Join(call.Args, "|") != `1|Count|"saved, ok"` {
+		t.Fatalf("unexpected call: %#v", call)
+	}
+}
+
+func TestParseCallWithObjectLiteralArg(t *testing.T) {
+	call, ok := ParseCall(`append(Items, { ID: "third", Name: "third", Done: false })`)
+	if !ok {
+		t.Fatal("expected call")
+	}
+	if call.Name != "append" || len(call.Args) != 2 {
+		t.Fatalf("unexpected call: %#v", call)
+	}
+	if call.Args[0] != "Items" || call.Args[1] != `{ ID: "third", Name: "third", Done: false }` {
+		t.Fatalf("unexpected args: %#v", call.Args)
+	}
+}
+
+func TestParseRejectsReservedFunctionNames(t *testing.T) {
+	_, err := Parse(`
+fn append() {
+  Count++
+}`)
+	if err == nil {
+		t.Fatal("expected reserved function name error")
+	}
+	if !strings.Contains(err.Error(), "reserved built-in name") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

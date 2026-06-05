@@ -6,8 +6,10 @@ The internal manifest tracks pages with source path, page ID, route, render
 mode, layouts, guard metadata, page CSS selection metadata, paths presence,
 block presence, captured `paths {}` body text, captured `build {}` body text,
 captured `view {}` body text, and first-slice action metadata. It also tracks
-component build inputs with source path, component name, string props, and
-captured `view {}` body text.
+component build inputs with source path, component name, component Go imports,
+legacy string props, typed props/state contracts, and captured `view {}` body
+text. Stateful components can also carry captured `client {}` body text for
+component-local generated-JS handlers.
 
 Compiler validation now rejects malformed routes, duplicate route params,
 duplicate page route patterns, and same-method route conflicts before generated
@@ -69,10 +71,14 @@ they own a page `GET` route.
     "Hero": {
       "source": "examples/basic/hero.cmp.gwdk",
       "kind": "component",
-      "props": [
-        {"name": "title", "type": "string"},
-        {"name": "tagline", "type": "string"}
-      ]
+      "imports": [
+        {"alias": "ui", "path": "github.com/acme/app/ui"}
+      ],
+      "propsType": {"alias": "ui", "name": "HeroProps"},
+      "state": {
+        "type": {"alias": "ui", "name": "HeroState"},
+        "init": {"alias": "ui", "name": "NewHeroState"}
+      }
     }
   }
 }
@@ -84,6 +90,7 @@ declared block presence, first-slice action metadata including fragment targets,
 API block names, direct page component references for the current static `view {}` subset, direct static
 asset references, direct CSS class names, direct static `style` attribute
 values, first-slice API method/route metadata, and component declarations.
+Component declarations include typed contract metadata when present.
 `paths`, `layouts`, `guard`, `css`, `actions`, `apis`, `components`,
 `staticAssets`, `cssClasses`, and `styleAttributes` are omitted when empty or
 false.
@@ -114,13 +121,16 @@ separate from `gowdk manifest` and records generated static page artifacts:
 
 `gowdk build` also writes `gowdk-assets.json` in the selected output directory.
 It records generated static assets that are not route entries. Today that means
-CSS files emitted by compile-time CSS processors:
+CSS files emitted by compile-time CSS processors, `gowdk.js` when server
+fragment forms need it, generated default JS island files, and explicit WASM
+island files/loaders:
 
 ```json
 {
   "version": 1,
   "files": {
-    "assets/app.css": "assets/app.css"
+    "assets/app.css": "assets/app.css",
+    "assets/gowdk/islands/Counter.js": "assets/gowdk/islands/Counter.js"
   }
 }
 ```

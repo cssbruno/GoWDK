@@ -8,7 +8,8 @@ Relevant spec: `.llm/features/wasm-deploy-artifact.md`
 
 - The first deployable slice is a Go `js/wasm` build of the generated embedded
   app.
-- Browser WASM islands remain a separate future feature.
+- Browser WASM island assets are separate from the generated app WASM deploy
+  artifact. The production browser-side Go island ABI remains future work.
 
 ## Proposed Changes
 

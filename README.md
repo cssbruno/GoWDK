@@ -88,6 +88,13 @@ go run ./cmd/gowdk build --out /tmp/gowdk-build examples/basic/home.page.gwdk ex
 go run ./cmd/gowdk serve --dir /tmp/gowdk-build
 ```
 
+For the local edit loop, use `dev`. It builds, serves, watches source hashes,
+and live-reloads the browser after successful rebuilds:
+
+```sh
+go run ./cmd/gowdk dev --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
+```
+
 ## CLI
 
 ```sh
@@ -99,6 +106,7 @@ gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk build [--config <file>] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
+gowdk dev [--addr 127.0.0.1:8080] [--interval 1s] [build flags...]
 gowdk watch [--once] [--restart] [--interval 1s] [build flags...]
 gowdk serve --dir <dir> [--addr 127.0.0.1:8080]
 gowdk lsp [--ssr]

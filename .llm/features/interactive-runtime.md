@@ -10,8 +10,9 @@ without hand-written JavaScript, and selected UI regions should support local
 state.
 
 The product cannot become a React or Svelte clone with an npm dependency graph.
-The fix is a compile-first interactivity model with server fragments as the
-default path and optional generated client islands for local state.
+The fix is a compile-first interactivity model with server fragments for
+action-driven updates, generated JavaScript by default for typed local state
+islands, and explicit WASM only when a component instance requests it.
 
 ## Goals
 
@@ -42,7 +43,11 @@ default path and optional generated client islands for local state.
 1. A developer writes a static/action page with `g:post`, `g:target`, and a matching `fragment "#id" {}` block.
 2. `gowdk build --out dist --app .gowdk/app --bin bin/site` emits static HTML, the partial runtime asset, and generated POST handlers.
 3. A browser submits the form. The generated runtime sends a partial request, receives a server fragment, swaps the target, and restores focus.
-4. For local-only UI state, a developer opts a component into an island-like interactive block. GOWDK emits initial HTML plus the smallest generated runtime needed for that island.
+4. For local-only UI state, a developer declares `state ui.Type = ui.Init()` on
+   a component. GOWDK renders the init state into static HTML and emits a
+   generated JavaScript island for component calls by default.
+5. If a component instance needs the WASM path, the developer writes
+   `g:island="wasm"` on that component call. No WASM is emitted otherwise.
 
 ## Requirements
 
@@ -57,10 +62,16 @@ default path and optional generated client islands for local state.
 - The next client-state slice must support a narrow declarative model before general expressions:
   - local scalar state,
   - event-triggered assignment,
-  - conditional visibility,
-  - list rendering over static or local state,
-  - class/attribute toggles.
-- Interactive islands must remain opt-in and page-local.
+  - increment/decrement,
+  - boolean toggle assignment,
+  - scalar field reads.
+- Stateful components use generated JavaScript islands by default.
+- `g:island="wasm"` must be explicit per component instance, and unknown
+  `g:island` values must be compiler errors.
+- Component contracts must support Go module import paths for props and state
+  structs.
+- Duplicate component names and redundant component implementations must be
+  compile errors.
 
 ### Non-Functional
 
@@ -75,10 +86,12 @@ default path and optional generated client islands for local state.
 - [ ] A page using `g:post`, `g:target`, and `fragment "#id" {}` builds into static HTML plus `assets/gowdk/gowdk.js`.
 - [ ] The generated binary returns a 200 HTML fragment for partial POST requests and a redirect or no-content response for normal POST requests.
 - [ ] The client runtime swaps the returned fragment using the requested swap mode and restores focus.
-- [ ] Pages without partial or island features do not emit `gowdk.js`.
+- [ ] Pages without partial or island features do not emit `gowdk.js` or island
+  assets.
 - [ ] `go test ./internal/staticgen ./internal/appgen ./internal/clientrt` covers the first partial-update path.
 - [ ] Docs show the current interactive feature set and clearly separate planned islands from implemented partials.
-- [ ] A future local-state island example can update a counter or disclosure widget without user-written JavaScript.
+- [ ] A local-state island example can update a counter without user-written
+  JavaScript.
 
 ## Edge Cases
 
@@ -103,11 +116,11 @@ default path and optional generated client islands for local state.
   - `runtime/response` fragment response contracts.
 - External:
   - None for partial runtime.
-  - Future island compiler must decide whether to emit plain JavaScript, Go WASM, or both.
+- Generated JavaScript is the default local island runtime.
+- Browser WASM islands are explicit with `g:island="wasm"`.
 
 ## Open Questions
 
-- Should local interactive islands compile to plain generated JavaScript first, or wait for the WASM island phase?
 - What exact syntax should represent local state without feeling like a second programming language?
 - Should fragments be allowed to use components in the first production slice?
 - How should partial validation errors map to target fragments?

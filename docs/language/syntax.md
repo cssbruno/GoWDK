@@ -65,6 +65,17 @@ Page files may also declare top-level Go imports before blocks:
 import interop "github.com/cssbruno/gowdk/examples/go-interop"
 ```
 
+Component files can declare Go imports for typed props and state contracts:
+
+```gwdk
+import ui "github.com/acme/app/ui"
+import "github.com/acme/app/components"
+```
+
+Aliased imports use the explicit alias. Unaliased imports use the package name
+reported by `go list`, matching ordinary Go import behavior. Relative import
+paths are rejected for typed component contracts.
+
 The first build-time Go interop subset supports one imported no-argument
 function call in `build {}`:
 
@@ -162,6 +173,288 @@ props {
   title string
 }
 ```
+
+Component files can instead declare imported Go struct contracts:
+
+```gwdk
+props ui.CounterProps
+state ui.CounterState = ui.NewCounterState()
+```
+
+The state initializer must be a no-argument function whose return type matches
+the declared state type.
+
+Stateful component files can declare a component-local client block:
+
+```gwdk
+client {
+  fn Increment() {
+    Count++
+  }
+
+  fn Add(step int) {
+    let next int = Count + step
+    Count = next
+  }
+}
+
+view {
+  <button g:on:click={Increment()}>{Count}</button>
+  <button g:on:click={Add(Count + 1)}>+ more</button>
+  <form g:on:submit.prevent={Save()}></form>
+  <input g:on:input.debounce(250ms)={Search()} />
+}
+```
+
+The implemented client block slice supports `fn Name(...) { ... }` handlers
+with `string`, `int`, `float`, and `bool` parameters. `g:on:*` calls can pass
+typed scalar expressions as arguments. Handler statements currently support
+field increment/decrement, scalar locals such as
+`let next int = Count + step`, and assignment from typed scalar expressions
+using `+`, `-`, `*`, `/`, `%`, comparisons, `&&`, `||`, `!`, unary `-`, and
+parentheses. Local variables are visible only to later statements in the same
+client function, lifecycle block, or effect block. Expressions can read nested
+fields and indexed values from Go-typed object and slice state, such as
+`User.Name` and `Items[0].Name`. Expressions also support Go-ish conditional
+values: `if Open { "open" } else { "closed" }`.
+
+Client blocks can declare return-valued helper functions for internal
+expression reuse:
+
+```gwdk
+client {
+  fn Next(value int) int {
+    return value + 1
+  }
+
+  fn Add() {
+    Count = Next(Count)
+  }
+}
+```
+
+Helpers must declare a scalar return type, contain exactly one `return expr`
+statement, and are callable from client expressions such as assignments, local
+initializers, handler arguments, and list mutation arguments. Helpers are not
+event handlers, so `g:on:click={Next(Count)}` is rejected; events must call a
+non-return handler such as `Add()`. Helper call graphs are validated at compile
+time and recursive cycles are rejected. Loops, JavaScript-style ternaries,
+event object reads, computed helper calls, view binding helper calls, broader
+built-ins such as date/time helpers, and recursion remain compile errors today.
+
+Expressions support the first compiler-owned built-ins:
+
+```gwdk
+client {
+  computed TotalLabel string {
+    return string(len(Items))
+  }
+
+  fn SetTotal() {
+    Count = len(Items) + int("1")
+  }
+}
+```
+
+`len(value)` accepts strings and arrays and returns `int`. `string(value)`
+converts scalar values to `string`. `int(value)` and `float(value)` accept
+strings or numeric values and return the requested numeric type.
+
+Client blocks can declare computed values:
+
+```gwdk
+client {
+  computed Label string {
+    return if Open { "open" } else { "closed" }
+  }
+
+  computed Visible bool {
+    return Label == "open"
+  }
+}
+```
+
+Computed values are read-only derived values. They can depend on props, state,
+and other computed values. The compiler builds a dependency graph, emits
+computed values in evaluation order, and rejects dependency cycles. The
+generated island runtime recomputes computed values after state changes before
+updating text, attributes, classes, styles, and `g:if` bindings.
+
+Event directives support `.prevent`, `.stop`, `.once`, `.capture`,
+`.debounce(duration)`, and `.throttle(duration)` modifier chains. Durations
+must be positive integer `ms` or `s` values. Debounce and throttle cannot be
+combined on the same listener.
+
+Client blocks can run controlled lifecycle and effect statements:
+
+```gwdk
+client {
+  on mount {
+    Open = true
+  }
+
+  effect when Count {
+    Dirty = true
+    return {
+      Dirty = false
+    }
+  }
+
+  on destroy {
+    Open = false
+  }
+}
+```
+
+Lifecycle and effect statements use the same state-mutation subset as client
+functions. `effect when Field` requires a state field dependency and reruns
+after that state value changes. Effects can return a cleanup block with
+`return { ... }`; cleanup statements run before the effect reruns and before
+the island unloads. Effects are guarded by the generated runtime so cycles
+cannot run forever. Arbitrary DOM access is not implemented.
+
+Client blocks can declare limited DOM refs for safe methods:
+
+```gwdk
+client {
+  ref searchInput HTMLInputElement
+
+  fn FocusSearch() {
+    searchInput.Focus()
+  }
+}
+
+view {
+  <input g:ref={searchInput} />
+  <button g:on:click={FocusSearch()}>Focus</button>
+}
+```
+
+Each declared ref must be bound exactly once with `g:ref`. The supported ref
+methods are `Focus`, `Blur`, and `ScrollIntoView`; arbitrary DOM access is not
+part of the client language.
+
+Elements inside stateful components can use first-slice conditional rendering:
+
+```gwdk
+view {
+  <section g:if={Open}>Open content</section>
+  <section g:else-if={Loading}>Loading</section>
+  <section g:else>Closed</section>
+}
+```
+
+`g:if` and `g:else-if` must be bool expressions. `g:else` must immediately
+follow a sibling `g:if` or `g:else-if` chain and must not have a value. The
+first slice keeps all branches in the DOM and toggles `hidden`; mount/unmount
+conditionals are planned separately.
+
+Elements inside stateful components can render array state with first-slice
+list rendering:
+
+```gwdk
+view {
+  <li g:for={item in Items} g:key={item.ID}>{item.Name}</li>
+  <li g:for={item, i in Items} g:key={item.ID}>{i}: {item.Name}</li>
+}
+```
+
+`g:for` currently supports `item in Items` and `item, i in Items`, where
+`Items` resolves to a Go-typed slice or array field. `g:key` is required and
+must be a scalar expression in the loop scope. The first slice renders initial
+rows from state, refreshes rows during island render passes, and reuses/reorders
+existing row elements by key.
+
+Client handlers can mutate state arrays with compiler-owned list built-ins:
+
+```gwdk
+client {
+  fn AddItem() {
+    append(Items, { ID: "third", Name: "Third", Done: false })
+  }
+
+  fn RemoveFirst() {
+    remove(Items, 0)
+  }
+
+  fn MoveSecondFirst() {
+    move(Items, 1, 0)
+  }
+}
+```
+
+`append` requires a state array and an object literal whose fields are checked
+against the Go item type. `remove` and `move` require integer indices. These are
+GOWDK client-language built-ins, not arbitrary JavaScript function calls.
+
+Elements inside stateful components can toggle classes with bool expressions:
+
+```gwdk
+view {
+  <button class="tab" class:active={Open}>Toggle</button>
+}
+```
+
+Static classes are preserved, and class toggles update through the generated
+JavaScript island runtime.
+
+Elements inside stateful components can bind individual style properties:
+
+```gwdk
+view {
+  <div style="overflow: hidden" style:height.px={PanelHeight}></div>
+  <div style:width.%={WidthPercent}></div>
+}
+```
+
+Style binding expressions must be string or numeric. Unit suffixes append the
+unit after evaluation; percent uses `.%`. Static `style` declarations are
+preserved. Raw `style={expr}` attributes remain rejected until broader style
+safety rules exist.
+
+Text controls inside stateful components can use first-slice two-way binding:
+
+```gwdk
+view {
+  <input g:bind:value={Query} />
+  <textarea g:bind:value={Query}></textarea>
+  <select g:bind:value={SelectedID}>
+    <option value="a">A</option>
+    <option value="b">B</option>
+  </select>
+  <input type="radio" name="choice" value="a" g:bind:value={SelectedID} />
+  <input type="radio" name="choice" value="b" g:bind:value={SelectedID} />
+  <p>{Query}</p>
+}
+```
+
+`g:bind:value` currently supports `<input>`, `<textarea>`, and `<select>`, and
+the target must be a string state field. Numeric state fields can bind to
+`<input type="number">`; the generated island runtime parses the control value
+back into an integer or float. Radio inputs must declare a static `value`, and
+the bound string state stores the selected radio value.
+
+Checkbox inputs can bind bool state:
+
+```gwdk
+view {
+  <input type="checkbox" g:bind:checked={Enabled} />
+}
+```
+
+Event object binding is planned separately.
+
+Safe non-URL attributes inside stateful components can be reactive:
+
+```gwdk
+view {
+  <button disabled={Saving} aria-expanded={Open}>Save</button>
+}
+```
+
+Boolean HTML attributes such as `disabled` are toggled as attributes. Scalar
+and ARIA attributes are stringified. Reactive URL attributes, `style`, and
+event-handler attributes are rejected until dedicated safety rules exist.
 
 ## Lexer Tokens
 

@@ -2,13 +2,31 @@
 package view
 
 import (
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode"
 
+	"github.com/cssbruno/gowdk/internal/clientlang"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
+)
+
+var (
+	islandFieldPattern         = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	islandIncDecPattern        = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)(\+\+|--)$`)
+	islandAssignPattern        = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$`)
+	islandTogglePattern        = regexp.MustCompile(`^!\s*([A-Za-z_][A-Za-z0-9_]*)$`)
+	islandNumberPattern        = regexp.MustCompile(`^-?[0-9]+(?:\.[0-9]+)?$`)
+	islandTextBindingPattern   = regexp.MustCompile(`^\s*\{([A-Za-z_][A-Za-z0-9_]*)\}\s*$`)
+	islandRefCallPattern       = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\.(Focus|Blur|ScrollIntoView)\(\)$`)
+	islandLetPattern           = regexp.MustCompile(`^let\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$`)
+	forDirectivePattern        = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)(?:\s*,\s*([A-Za-z_][A-Za-z0-9_]*))?\s+in\s+(.+)$`)
+	eventNamePattern           = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
+	stylePropertyPattern       = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	styleCustomPropertyPattern = regexp.MustCompile(`^--[A-Za-z0-9_-]+$`)
 )
 
 // Node is a static view markup node.
@@ -22,7 +40,295 @@ type Text struct {
 }
 
 func (node Text) render(ctx *renderContext, out *strings.Builder) error {
+	if ctx.templateLoop == nil {
+		if field, ok := islandTextBinding(node.Value); ok && ctx.bindFields[field] {
+			value, _, err := interpolateValue(ctx, node.Value)
+			if err != nil {
+				return err
+			}
+			out.WriteString(`<span data-gowdk-bind="`)
+			out.WriteString(gowhtml.Escape(field))
+			out.WriteString(`">`)
+			out.WriteString(gowhtml.Escape(value))
+			out.WriteString(`</span>`)
+			return nil
+		}
+	}
 	return renderText(ctx, out, node.Value)
+}
+
+// ForDirective is a parsed g:for declaration.
+type ForDirective struct {
+	Var        string
+	IndexVar   string
+	Collection string
+}
+
+// ParseForDirective parses a g:for value such as "item in Items" or
+// "item, i in Items".
+func ParseForDirective(source string) (ForDirective, error) {
+	match := forDirectivePattern.FindStringSubmatch(strings.TrimSpace(source))
+	if match == nil {
+		return ForDirective{}, fmt.Errorf("g:for must use \"item in Items\" or \"item, i in Items\" syntax")
+	}
+	item := strings.TrimSpace(match[1])
+	if !isIdentifier(item) {
+		return ForDirective{}, fmt.Errorf("g:for item name %q is invalid", item)
+	}
+	index := strings.TrimSpace(match[2])
+	if index != "" {
+		if !isIdentifier(index) {
+			return ForDirective{}, fmt.Errorf("g:for index name %q is invalid", index)
+		}
+		if index == item {
+			return ForDirective{}, fmt.Errorf("g:for item and index names must differ")
+		}
+	}
+	collection := strings.TrimSpace(match[3])
+	if collection == "" {
+		return ForDirective{}, fmt.Errorf("g:for collection expression is empty")
+	}
+	return ForDirective{Var: item, IndexVar: index, Collection: collection}, nil
+}
+
+func (node Element) renderFor(ctx *renderContext, out *strings.Builder, loop ForDirective, keyExpr string) error {
+	items, err := loopItems(loop.Collection, ctx.values)
+	if err != nil {
+		return fmt.Errorf("g:for: %w", err)
+	}
+	group := ctx.nextLoopGroup()
+	templateNode := node.withoutAttrs("g:for", "g:key")
+	templateCtx := *ctx
+	templateCtx.templateLoop = &templateLoopRender{}
+	templateCtx.loopItem = &loopItemRender{Group: group, KeyExpr: keyExpr}
+	templateCtx.readFields = boolSet(keysFromTypes(ctx.loopSymbols(loop)))
+	var template strings.Builder
+	if err := templateNode.render(&templateCtx, &template); err != nil {
+		return err
+	}
+	out.WriteString(`<template data-gowdk-for="`)
+	out.WriteString(gowhtml.Escape(group))
+	out.WriteString(`" data-gowdk-for-var="`)
+	out.WriteString(gowhtml.Escape(loop.Var))
+	out.WriteString(`" data-gowdk-for-source="`)
+	out.WriteString(gowhtml.Escape(loop.Collection))
+	out.WriteString(`" data-gowdk-for-key="`)
+	out.WriteString(gowhtml.Escape(keyExpr))
+	if loop.IndexVar != "" {
+		out.WriteString(`" data-gowdk-for-index-var="`)
+		out.WriteString(gowhtml.Escape(loop.IndexVar))
+	}
+	out.WriteString(`" data-gowdk-for-template="`)
+	out.WriteString(gowhtml.Escape(template.String()))
+	out.WriteString(`"></template>`)
+	seenKeys := map[string]bool{}
+	for index, item := range items {
+		itemCtx, err := ctx.loopContext(loop, keyExpr, group, item, index)
+		if err != nil {
+			return err
+		}
+		key := itemCtx.loopItem.KeyValue
+		if key != "" {
+			if seenKeys[key] {
+				return fmt.Errorf("g:for duplicate key %q", key)
+			}
+			seenKeys[key] = true
+		}
+		if err := templateNode.render(&itemCtx, out); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (node Element) forDirective(ctx *renderContext) (ForDirective, string, bool, error) {
+	var loop ForDirective
+	var keyExpr string
+	hasFor := false
+	hasKey := false
+	for _, attr := range node.Attrs {
+		switch attr.Name {
+		case "g:for":
+			if hasFor {
+				return ForDirective{}, "", false, fmt.Errorf("element declares multiple g:for directives")
+			}
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return ForDirective{}, "", false, fmt.Errorf("g:for requires an expression value")
+			}
+			parsed, err := ParseForDirective(attr.Value)
+			if err != nil {
+				return ForDirective{}, "", false, err
+			}
+			loop = parsed
+			hasFor = true
+		case "g:key":
+			if hasKey {
+				return ForDirective{}, "", false, fmt.Errorf("element declares multiple g:key directives")
+			}
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return ForDirective{}, "", false, fmt.Errorf("g:key requires an expression value")
+			}
+			keyExpr = strings.TrimSpace(attr.Value)
+			hasKey = true
+		}
+	}
+	if !hasFor {
+		if hasKey {
+			return ForDirective{}, "", false, fmt.Errorf("g:key requires g:for")
+		}
+		return ForDirective{}, "", false, nil
+	}
+	if !hasKey {
+		return ForDirective{}, "", false, fmt.Errorf("g:for requires g:key for mutable lists")
+	}
+	if typ, _, err := clientlang.CheckExpr(loop.Collection, ctx.readSymbols()); err != nil {
+		return ForDirective{}, "", false, fmt.Errorf("g:for collection %q is invalid: %w", loop.Collection, err)
+	} else if typ != clientlang.TypeArray && typ != clientlang.TypeUnknown {
+		return ForDirective{}, "", false, fmt.Errorf("g:for collection %q must be array, got %s", loop.Collection, typ)
+	}
+	loopSymbols := ctx.loopSymbols(loop)
+	if typ, _, err := clientlang.CheckExpr(keyExpr, loopSymbols); err != nil {
+		return ForDirective{}, "", false, fmt.Errorf("g:key %q is invalid: %w", keyExpr, err)
+	} else if typ == clientlang.TypeArray || typ == clientlang.TypeObject || typ == clientlang.TypeNil {
+		return ForDirective{}, "", false, fmt.Errorf("g:key %q must be scalar, got %s", keyExpr, typ)
+	}
+	return loop, keyExpr, true, nil
+}
+
+func (node Element) withoutAttrs(names ...string) Element {
+	removed := map[string]bool{}
+	for _, name := range names {
+		removed[name] = true
+	}
+	next := node
+	next.Attrs = make([]Attr, 0, len(node.Attrs))
+	for _, attr := range node.Attrs {
+		if removed[attr.Name] {
+			continue
+		}
+		next.Attrs = append(next.Attrs, attr)
+	}
+	return next
+}
+
+func loopItems(expr string, values map[string]string) ([]any, error) {
+	value, err := clientlang.EvalValue(expr, values)
+	if err != nil {
+		return nil, err
+	}
+	items, ok := value.([]any)
+	if !ok {
+		return nil, fmt.Errorf("collection %q is not an array", expr)
+	}
+	return items, nil
+}
+
+func flattenLoopValues(prefix string, value any, values map[string]string) {
+	values[prefix] = runtimeValueString(value)
+	switch typed := value.(type) {
+	case map[string]any:
+		for field, fieldValue := range typed {
+			flattenLoopValues(prefix+"."+field, fieldValue, values)
+		}
+	case []any:
+		for index, item := range typed {
+			flattenLoopValues(fmt.Sprintf("%s[%d]", prefix, index), item, values)
+		}
+	}
+}
+
+func runtimeValueString(value any) string {
+	if scalar, ok := scalarString(value); ok {
+		return scalar
+	}
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	return string(payload)
+}
+
+func loopTemplateValue(expr string) string {
+	return "{{" + strings.TrimSpace(expr) + "}}"
+}
+
+func (ctx *renderContext) readSymbols() map[string]clientlang.ValueType {
+	if len(ctx.stateTypes) == 0 {
+		return boolFieldSymbols(ctx.readFields)
+	}
+	symbols := boolFieldSymbols(ctx.readFields)
+	if symbols == nil {
+		symbols = map[string]clientlang.ValueType{}
+	}
+	for field, typ := range ctx.stateTypes {
+		symbols[field] = typ
+	}
+	return symbols
+}
+
+func (ctx *renderContext) loopSymbols(loop ForDirective) map[string]clientlang.ValueType {
+	symbols := ctx.readSymbols()
+	if symbols == nil {
+		symbols = map[string]clientlang.ValueType{}
+	}
+	itemType := symbols[loop.Collection+"[]"]
+	if itemType == "" {
+		itemType = clientlang.TypeObject
+	}
+	symbols[loop.Var] = itemType
+	if loop.IndexVar != "" {
+		symbols[loop.IndexVar] = clientlang.TypeInt
+	}
+	prefix := loop.Collection + "[]."
+	additions := map[string]clientlang.ValueType{}
+	for name, typ := range symbols {
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		additions[loop.Var+"."+strings.TrimPrefix(name, prefix)] = typ
+	}
+	for name, typ := range additions {
+		symbols[name] = typ
+	}
+	return symbols
+}
+
+func (ctx *renderContext) loopContext(loop ForDirective, keyExpr, group string, item any, index int) (renderContext, error) {
+	values := cloneValues(ctx.values)
+	flattenLoopValues(loop.Var, item, values)
+	values["index"] = strconv.Itoa(index)
+	if loop.IndexVar != "" {
+		values[loop.IndexVar] = strconv.Itoa(index)
+	}
+	keyValue, err := clientlang.EvalScalar(keyExpr, values)
+	if err != nil {
+		return renderContext{}, fmt.Errorf("g:key %q: %w", keyExpr, err)
+	}
+	next := *ctx
+	next.values = values
+	next.readFields = boolSet(keys(values))
+	next.bindFields = ctx.bindFields
+	next.loopItem = &loopItemRender{Group: group, KeyExpr: keyExpr, KeyValue: keyValue}
+	return next, nil
+}
+
+func (ctx *renderContext) nextLoopGroup() string {
+	if ctx.loopSeq == nil {
+		seq := 0
+		ctx.loopSeq = &seq
+	}
+	*ctx.loopSeq = *ctx.loopSeq + 1
+	return fmt.Sprintf("l%d", *ctx.loopSeq)
+}
+
+func (ctx *renderContext) loopKeyValue(expr string) string {
+	if ctx.templateLoop != nil {
+		return loopTemplateValue(expr)
+	}
+	if ctx.loopItem != nil {
+		return ctx.loopItem.KeyValue
+	}
+	return ""
 }
 
 // Element is a lowercase HTML element.
@@ -45,14 +351,217 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		}
 		return nil
 	}
+	if loop, keyExpr, ok, err := node.forDirective(ctx); err != nil {
+		return err
+	} else if ok {
+		return node.renderFor(ctx, out, loop, keyExpr)
+	}
 	out.WriteByte('<')
 	out.WriteString(node.Name)
 	directives, err := node.postDirectives(ctx)
 	if err != nil {
 		return err
 	}
+	valueBinding, err := node.valueBinding(ctx)
+	if err != nil {
+		return err
+	}
+	checkedBinding, err := node.checkedBinding(ctx)
+	if err != nil {
+		return err
+	}
+	styleBindings, err := node.styleBindings(ctx)
+	if err != nil {
+		return err
+	}
+	classToggles, err := node.classToggles(ctx)
+	if err != nil {
+		return err
+	}
+	for _, binding := range styleBindings {
+		out.WriteString(` data-gowdk-style-`)
+		out.WriteString(binding.Property)
+		out.WriteString(`="`)
+		out.WriteString(gowhtml.Escape(binding.Expression))
+		out.WriteByte('"')
+		if binding.Unit != "" {
+			out.WriteString(` data-gowdk-style-unit-`)
+			out.WriteString(binding.Property)
+			out.WriteString(`="`)
+			out.WriteString(gowhtml.Escape(binding.Unit))
+			out.WriteByte('"')
+		}
+	}
+	for _, toggle := range classToggles {
+		out.WriteString(` data-gowdk-class-`)
+		out.WriteString(toggle.Name)
+		out.WriteString(`="`)
+		out.WriteString(gowhtml.Escape(toggle.Expression))
+		out.WriteByte('"')
+	}
+	if classValue := node.initialClassValue(ctx, classToggles); classValue != "" {
+		out.WriteString(` class="`)
+		out.WriteString(gowhtml.Escape(classValue))
+		out.WriteByte('"')
+	}
+	styleValue, err := node.initialStyleValue(ctx, styleBindings)
+	if err != nil {
+		return err
+	}
+	if styleValue != "" {
+		out.WriteString(` style="`)
+		out.WriteString(gowhtml.Escape(styleValue))
+		out.WriteByte('"')
+	}
+	if ctx.loopItem != nil {
+		out.WriteString(` data-gowdk-for-item="`)
+		out.WriteString(gowhtml.Escape(ctx.loopItem.Group))
+		out.WriteString(`" data-gowdk-key-value="`)
+		out.WriteString(gowhtml.Escape(ctx.loopKeyValue(ctx.loopItem.KeyExpr)))
+		out.WriteByte('"')
+	}
 	for _, attr := range node.Attrs {
+		if strings.HasPrefix(attr.Name, "g:on:") {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return fmt.Errorf("%s requires an expression value", attr.Name)
+			}
+			eventDirective, err := ParseEventDirective(attr.Name)
+			if err != nil {
+				return err
+			}
+			if err := ValidateIslandEventExpressionTyped(attr.Value, boolFieldSymbols(ctx.readFields), boolFieldSymbols(ctx.stateFields), ctx.handlers); err != nil {
+				return fmt.Errorf("%s: %w", attr.Name, err)
+			}
+			out.WriteString(` data-gowdk-on-`)
+			out.WriteString(eventDirective.Event)
+			out.WriteString(`="`)
+			out.WriteString(gowhtml.Escape(attr.Value))
+			out.WriteByte('"')
+			if options := eventDirective.RuntimeOptions(); options != "" {
+				out.WriteString(` data-gowdk-event-`)
+				out.WriteString(eventDirective.Event)
+				out.WriteString(`="`)
+				out.WriteString(gowhtml.Escape(options))
+				out.WriteByte('"')
+			}
+			continue
+		}
+		if attr.Name == "g:if" {
+			if ctx.conditional != nil {
+				continue
+			}
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return fmt.Errorf("g:if requires an expression value")
+			}
+			if err := ValidateIslandBoolExpression(attr.Value, ctx.readFields); err != nil {
+				return fmt.Errorf("g:if: %w", err)
+			}
+			out.WriteString(` data-gowdk-if="`)
+			out.WriteString(gowhtml.Escape(attr.Value))
+			out.WriteByte('"')
+			if visible, err := clientlang.EvalBool(attr.Value, ctx.values); err == nil && !visible {
+				out.WriteString(` hidden`)
+			}
+			continue
+		}
+		if attr.Name == "g:else-if" || attr.Name == "g:else" {
+			if ctx.conditional != nil {
+				continue
+			}
+			return fmt.Errorf("%s must follow a sibling g:if or g:else-if", attr.Name)
+		}
+		if attr.Name == "g:for" || attr.Name == "g:key" {
+			continue
+		}
+		if attr.Name == "g:bind:value" {
+			out.WriteString(` data-gowdk-bind-value="`)
+			out.WriteString(gowhtml.Escape(valueBinding))
+			out.WriteByte('"')
+			if bindingType := valueBindingRuntimeType(valueBinding, ctx.stateTypes); bindingType != "" {
+				out.WriteString(` data-gowdk-bind-type="`)
+				out.WriteString(gowhtml.Escape(bindingType))
+				out.WriteByte('"')
+			}
+			if node.Name == "input" {
+				out.WriteString(` value="`)
+				out.WriteString(gowhtml.Escape(ctx.values[valueBinding]))
+				out.WriteByte('"')
+			}
+			continue
+		}
+		if attr.Name == "g:bind:checked" {
+			out.WriteString(` data-gowdk-bind-checked="`)
+			out.WriteString(gowhtml.Escape(checkedBinding))
+			out.WriteByte('"')
+			if ctx.values[checkedBinding] == "true" {
+				out.WriteString(` checked`)
+			}
+			continue
+		}
+		if attr.Name == "g:ref" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return fmt.Errorf("g:ref requires a ref name")
+			}
+			refName := strings.TrimSpace(attr.Value)
+			if err := validateDOMRef(refName, ctx.refs); err != nil {
+				return fmt.Errorf("g:ref: %w", err)
+			}
+			out.WriteString(` data-gowdk-ref="`)
+			out.WriteString(gowhtml.Escape(refName))
+			out.WriteByte('"')
+			continue
+		}
 		if strings.HasPrefix(attr.Name, "g:") {
+			continue
+		}
+		if attr.Name == "class" && !attr.Boolean {
+			continue
+		}
+		if attr.Name == "style" && !attr.Boolean {
+			continue
+		}
+		if node.Name == "option" && ctx.selectBound && attr.Name == "selected" {
+			continue
+		}
+		if valueBinding != "" && node.staticInputType("radio") && attr.Name == "checked" {
+			continue
+		}
+		if isClassToggleAttr(attr.Name) {
+			continue
+		}
+		if isStyleBindingAttr(attr.Name) {
+			continue
+		}
+		if valueBinding != "" && attr.Name == "value" && !node.staticInputType("radio") {
+			return fmt.Errorf("element with g:bind:value must not declare value")
+		}
+		if checkedBinding != "" && attr.Name == "checked" {
+			return fmt.Errorf("element with g:bind:checked must not declare checked")
+		}
+		if attr.Expression && len(ctx.readFields) > 0 {
+			expr := expressionAttrSource(attr.Value)
+			if err := validateReactiveAttr(attr.Name, expr, ctx.readFields); err != nil {
+				return err
+			}
+			out.WriteString(` data-gowdk-attr-`)
+			out.WriteString(attr.Name)
+			out.WriteString(`="`)
+			out.WriteString(gowhtml.Escape(expr))
+			out.WriteByte('"')
+			value, ok, err := reactiveAttrValue(attr.Name, expr, ctx.values)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				continue
+			}
+			out.WriteByte(' ')
+			out.WriteString(attr.Name)
+			if !isBooleanHTMLAttr(attr.Name) {
+				out.WriteString(`="`)
+				out.WriteString(gowhtml.Escape(value))
+				out.WriteByte('"')
+			}
 			continue
 		}
 		if directives.Route != "" && (attr.Name == "method" || attr.Name == "action") {
@@ -73,6 +582,16 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			out.WriteByte('"')
 		}
 	}
+	if selected, err := node.optionSelected(ctx); err != nil {
+		return err
+	} else if selected {
+		out.WriteString(` selected`)
+	}
+	if checked, err := node.radioChecked(ctx, valueBinding); err != nil {
+		return err
+	} else if checked {
+		out.WriteString(` checked`)
+	}
 	if directives.Route != "" {
 		out.WriteString(` method="post" action="`)
 		out.WriteString(gowhtml.Escape(directives.Route))
@@ -88,16 +607,375 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		out.WriteString(gowhtml.Escape(directives.Swap))
 		out.WriteByte('"')
 	}
+	if ctx.conditional != nil {
+		out.WriteString(` data-gowdk-if-group="`)
+		out.WriteString(gowhtml.Escape(ctx.conditional.Group))
+		out.WriteString(`" data-gowdk-if-index="`)
+		out.WriteString(strconv.Itoa(ctx.conditional.Index))
+		out.WriteByte('"')
+		if ctx.conditional.Condition != "" {
+			out.WriteString(` data-gowdk-if="`)
+			out.WriteString(gowhtml.Escape(ctx.conditional.Condition))
+			out.WriteByte('"')
+		} else {
+			out.WriteString(` data-gowdk-else`)
+		}
+		if !ctx.conditional.Visible {
+			out.WriteString(` hidden`)
+		}
+	}
 	out.WriteByte('>')
-	for _, child := range node.Children {
-		if err := child.render(ctx, out); err != nil {
-			return err
+	childCtx := ctx
+	if ctx.loopItem != nil {
+		next := *ctx
+		next.loopItem = nil
+		childCtx = &next
+	}
+	if node.Name == "select" && valueBinding != "" {
+		next := *childCtx
+		next.selectBound = true
+		next.selectValue = ctx.values[valueBinding]
+		childCtx = &next
+	}
+	if node.Name == "textarea" && valueBinding != "" {
+		out.WriteString(gowhtml.Escape(ctx.values[valueBinding]))
+	} else {
+		for _, child := range node.Children {
+			if err := child.render(childCtx, out); err != nil {
+				return err
+			}
 		}
 	}
 	out.WriteString("</")
 	out.WriteString(node.Name)
 	out.WriteByte('>')
 	return nil
+}
+
+func (node Element) optionSelected(ctx *renderContext) (bool, error) {
+	if node.Name != "option" || !ctx.selectBound {
+		return false, nil
+	}
+	value, err := node.optionValue(ctx)
+	if err != nil {
+		return false, err
+	}
+	return value == ctx.selectValue, nil
+}
+
+func (node Element) optionValue(ctx *renderContext) (string, error) {
+	for _, attr := range node.Attrs {
+		if attr.Name != "value" || attr.Boolean {
+			continue
+		}
+		value, _, err := interpolateValue(ctx, attr.Value)
+		if err != nil {
+			return "", err
+		}
+		return value, nil
+	}
+	var text strings.Builder
+	for _, child := range node.Children {
+		typed, ok := child.(Text)
+		if !ok {
+			return "", nil
+		}
+		value, _, err := interpolateValue(ctx, typed.Value)
+		if err != nil {
+			return "", err
+		}
+		text.WriteString(value)
+	}
+	return strings.TrimSpace(text.String()), nil
+}
+
+func (node Element) radioChecked(ctx *renderContext, field string) (bool, error) {
+	if field == "" || node.Name != "input" || !node.staticInputType("radio") {
+		return false, nil
+	}
+	value, ok, err := node.staticAttrInterpolated(ctx, "value")
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, fmt.Errorf("g:bind:value on radio <input> requires a static value attribute")
+	}
+	return value == ctx.values[field], nil
+}
+
+func (node Element) staticAttrInterpolated(ctx *renderContext, name string) (string, bool, error) {
+	for _, attr := range node.Attrs {
+		if attr.Name != name || attr.Boolean {
+			continue
+		}
+		value, _, err := interpolateValue(ctx, attr.Value)
+		if err != nil {
+			return "", false, err
+		}
+		return value, true, nil
+	}
+	return "", false, nil
+}
+
+type styleBinding struct {
+	Property   string
+	Unit       string
+	Expression string
+}
+
+func (node Element) styleBindings(ctx *renderContext) ([]styleBinding, error) {
+	var bindings []styleBinding
+	for _, attr := range node.Attrs {
+		if !isStyleBindingAttr(attr.Name) {
+			continue
+		}
+		binding, err := parseStyleBindingAttr(attr.Name)
+		if err != nil {
+			return nil, err
+		}
+		if !attr.Expression || attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+			return nil, fmt.Errorf("style binding directive %q requires an expression value", attr.Name)
+		}
+		expr := expressionAttrSource(attr.Value)
+		if err := validateStyleBinding(expr, ctx.readFields); err != nil {
+			return nil, fmt.Errorf("style binding %s: %w", attr.Name, err)
+		}
+		binding.Expression = expr
+		bindings = append(bindings, binding)
+	}
+	return bindings, nil
+}
+
+func (node Element) initialStyleValue(ctx *renderContext, bindings []styleBinding) (string, error) {
+	var declarations []string
+	for _, attr := range node.Attrs {
+		if attr.Name != "style" || attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+			continue
+		}
+		value, tainted, err := interpolateValue(ctx, attr.Value)
+		if err != nil {
+			return "", err
+		}
+		if tainted && unsafeRouteParamAttr(attr.Name) {
+			return "", fmt.Errorf("route param interpolation is not allowed in %q attributes", attr.Name)
+		}
+		declarations = append(declarations, strings.TrimSpace(value))
+	}
+	for _, binding := range bindings {
+		value, err := clientlang.EvalScalar(binding.Expression, ctx.values)
+		if err != nil || value == "" {
+			continue
+		}
+		declarations = append(declarations, binding.Property+": "+value+binding.Unit)
+	}
+	return strings.Join(declarations, "; "), nil
+}
+
+func isStyleBindingAttr(name string) bool {
+	return strings.HasPrefix(name, "style:")
+}
+
+func parseStyleBindingAttr(name string) (styleBinding, error) {
+	raw := strings.TrimSpace(strings.TrimPrefix(name, "style:"))
+	if raw == "" {
+		return styleBinding{}, fmt.Errorf("style binding directive %q requires a property name", name)
+	}
+	property := raw
+	unit := ""
+	if dot := strings.LastIndex(raw, "."); dot >= 0 {
+		property = raw[:dot]
+		unit = raw[dot+1:]
+		if unit == "" {
+			return styleBinding{}, fmt.Errorf("style binding directive %q has empty unit suffix", name)
+		}
+		if unit == "%" {
+			unit = "%"
+		} else if !isSupportedStyleUnit(unit) {
+			return styleBinding{}, fmt.Errorf("style binding directive %q uses unsupported unit suffix %q", name, unit)
+		}
+	}
+	if !isSupportedStyleProperty(property) {
+		return styleBinding{}, fmt.Errorf("style binding directive %q has unsupported property name %q", name, property)
+	}
+	return styleBinding{Property: property, Unit: unit}, nil
+}
+
+func isSupportedStyleProperty(name string) bool {
+	if strings.HasPrefix(name, "--") {
+		return len(name) > 2 && styleCustomPropertyPattern.MatchString(name)
+	}
+	return stylePropertyPattern.MatchString(name)
+}
+
+func isSupportedStyleUnit(unit string) bool {
+	switch unit {
+	case "px", "rem", "em", "vh", "vw", "vmin", "vmax", "ch", "ex", "lh", "rlh", "ms", "s", "%":
+		return true
+	default:
+		return false
+	}
+}
+
+type classToggle struct {
+	Name       string
+	Expression string
+}
+
+func (node Element) classToggles(ctx *renderContext) ([]classToggle, error) {
+	var toggles []classToggle
+	for _, attr := range node.Attrs {
+		if !isClassToggleAttr(attr.Name) {
+			continue
+		}
+		name := classToggleName(attr.Name)
+		if name == "" {
+			return nil, fmt.Errorf("class toggle directive %q requires a class name", attr.Name)
+		}
+		if !attr.Expression || attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+			return nil, fmt.Errorf("class toggle directive %q requires an expression value", attr.Name)
+		}
+		expr := expressionAttrSource(attr.Value)
+		if err := ValidateIslandBoolExpression(expr, ctx.readFields); err != nil {
+			return nil, fmt.Errorf("class toggle %s: %w", attr.Name, err)
+		}
+		toggles = append(toggles, classToggle{Name: name, Expression: expr})
+	}
+	return toggles, nil
+}
+
+func (node Element) initialClassValue(ctx *renderContext, toggles []classToggle) string {
+	var classes []string
+	for _, attr := range node.Attrs {
+		if attr.Name != "class" || attr.Boolean {
+			continue
+		}
+		for _, className := range strings.Fields(attr.Value) {
+			classes = appendUniqueClass(classes, className)
+		}
+	}
+	for _, toggle := range toggles {
+		active, err := clientlang.EvalBool(toggle.Expression, ctx.values)
+		if err == nil && active {
+			classes = appendUniqueClass(classes, toggle.Name)
+		}
+	}
+	return strings.Join(classes, " ")
+}
+
+func appendUniqueClass(classes []string, className string) []string {
+	if className == "" {
+		return classes
+	}
+	for _, existing := range classes {
+		if existing == className {
+			return classes
+		}
+	}
+	return append(classes, className)
+}
+
+func isClassToggleAttr(name string) bool {
+	return strings.HasPrefix(name, "class:")
+}
+
+func classToggleName(name string) string {
+	return strings.TrimSpace(strings.TrimPrefix(name, "class:"))
+}
+
+func (node Element) valueBinding(ctx *renderContext) (string, error) {
+	field := ""
+	for _, attr := range node.Attrs {
+		if attr.Name != "g:bind:value" {
+			continue
+		}
+		if field != "" {
+			return "", fmt.Errorf("element declares multiple g:bind:value directives")
+		}
+		if node.Name != "input" && node.Name != "textarea" && node.Name != "select" {
+			return "", fmt.Errorf("g:bind:value is only supported on <input>, <textarea>, and <select> in this build slice")
+		}
+		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+			return "", fmt.Errorf("g:bind:value requires a field value")
+		}
+		field = strings.TrimSpace(attr.Value)
+		if err := validateIslandField(field, ctx.stateFields); err != nil {
+			return "", fmt.Errorf("g:bind:value: %w", err)
+		}
+		if node.Name == "input" && node.staticInputType("radio") {
+			if _, ok, err := node.staticAttrInterpolated(ctx, "value"); err != nil {
+				return "", err
+			} else if !ok {
+				return "", fmt.Errorf("g:bind:value on radio <input> requires a static value attribute")
+			}
+		}
+		typ := ctx.stateTypes[field]
+		if typ == clientlang.TypeInt || typ == clientlang.TypeFloat {
+			if node.Name != "input" || !node.staticInputType("number") {
+				return "", fmt.Errorf("g:bind:value numeric target %q requires <input type=\"number\">", field)
+			}
+		}
+		if typ == clientlang.TypeBool {
+			return "", fmt.Errorf("g:bind:value target %q must be string or numeric, got %s", field, typ)
+		}
+	}
+	return field, nil
+}
+
+func valueBindingRuntimeType(field string, stateTypes map[string]clientlang.ValueType) string {
+	switch stateTypes[field] {
+	case clientlang.TypeInt:
+		return "int"
+	case clientlang.TypeFloat:
+		return "float"
+	default:
+		return ""
+	}
+}
+
+func validateDOMRef(name string, refs map[string]clientlang.Ref) error {
+	if !islandFieldPattern.MatchString(name) {
+		return fmt.Errorf("invalid DOM ref %q", name)
+	}
+	if refs == nil {
+		return nil
+	}
+	if _, ok := refs[name]; !ok {
+		return fmt.Errorf("unknown DOM ref %q", name)
+	}
+	return nil
+}
+
+func (node Element) checkedBinding(ctx *renderContext) (string, error) {
+	field := ""
+	for _, attr := range node.Attrs {
+		if attr.Name != "g:bind:checked" {
+			continue
+		}
+		if field != "" {
+			return "", fmt.Errorf("element declares multiple g:bind:checked directives")
+		}
+		if node.Name != "input" || !node.staticInputType("checkbox") {
+			return "", fmt.Errorf("g:bind:checked is only supported on checkbox <input> in this build slice")
+		}
+		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+			return "", fmt.Errorf("g:bind:checked requires a field value")
+		}
+		field = strings.TrimSpace(attr.Value)
+		if err := validateIslandField(field, ctx.stateFields); err != nil {
+			return "", fmt.Errorf("g:bind:checked: %w", err)
+		}
+	}
+	return field, nil
+}
+
+func (node Element) staticInputType(value string) bool {
+	for _, attr := range node.Attrs {
+		if attr.Name != "type" || attr.Boolean {
+			continue
+		}
+		return strings.EqualFold(strings.TrimSpace(attr.Value), value)
+	}
+	return value == "text"
 }
 
 type postDirectives struct {
@@ -138,6 +1016,60 @@ func (node Element) directiveValues() (postDirectives, error) {
 	var directives postDirectives
 	for _, attr := range node.Attrs {
 		if !strings.HasPrefix(attr.Name, "g:") {
+			continue
+		}
+		if strings.HasPrefix(attr.Name, "g:on:") {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return postDirectives{}, fmt.Errorf("%s requires an expression value", attr.Name)
+			}
+			continue
+		}
+		if attr.Name == "g:if" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return postDirectives{}, fmt.Errorf("g:if requires an expression value")
+			}
+			continue
+		}
+		if attr.Name == "g:else-if" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return postDirectives{}, fmt.Errorf("g:else-if requires an expression value")
+			}
+			continue
+		}
+		if attr.Name == "g:else" {
+			if !attr.Boolean && strings.TrimSpace(attr.Value) != "" {
+				return postDirectives{}, fmt.Errorf("g:else must not have a value")
+			}
+			continue
+		}
+		if attr.Name == "g:for" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return postDirectives{}, fmt.Errorf("g:for requires an expression value")
+			}
+			continue
+		}
+		if attr.Name == "g:key" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return postDirectives{}, fmt.Errorf("g:key requires an expression value")
+			}
+			continue
+		}
+		if attr.Name == "g:bind:value" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return postDirectives{}, fmt.Errorf("g:bind:value requires a field value")
+			}
+			continue
+		}
+		if attr.Name == "g:bind:checked" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return postDirectives{}, fmt.Errorf("g:bind:checked requires a field value")
+			}
+			continue
+		}
+		if attr.Name == "g:ref" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return postDirectives{}, fmt.Errorf("g:ref requires a ref name")
+			}
 			continue
 		}
 		if attr.Name != "g:post" && attr.Name != "g:target" && attr.Name != "g:swap" {
@@ -193,6 +1125,192 @@ func isSupportedSwapMode(value string) bool {
 	}
 }
 
+func validateReactiveAttr(name, expr string, fields map[string]bool) error {
+	if unsafeReactiveAttr(name) {
+		return fmt.Errorf("reactive attribute %q is not supported before safe URL/style/event rules are defined", name)
+	}
+	_, _, err := clientlang.CheckExpr(expr, boolFieldSymbols(fields))
+	if err != nil {
+		return fmt.Errorf("attribute %s: %w", name, err)
+	}
+	return nil
+}
+
+func validateStyleBinding(expr string, fields map[string]bool) error {
+	_, _, err := clientlang.CheckExpr(expr, boolFieldSymbols(fields))
+	return err
+}
+
+func reactiveAttrValue(name, expr string, values map[string]string) (string, bool, error) {
+	if isBooleanHTMLAttr(name) {
+		visible, err := clientlang.EvalBool(expr, values)
+		if err != nil {
+			return "", false, err
+		}
+		return "", visible, nil
+	}
+	value, err := clientlang.EvalScalar(expr, values)
+	if err != nil {
+		return "", false, err
+	}
+	return value, true, nil
+}
+
+func unsafeReactiveAttr(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if strings.HasPrefix(name, "on") && len(name) > 2 {
+		return true
+	}
+	if name == "style" {
+		return true
+	}
+	switch name {
+	case "href", "src", "srcset", "action", "formaction", "poster", "cite", "data", "longdesc", "manifest", "xlink:href":
+		return true
+	default:
+		return false
+	}
+}
+
+func isBooleanHTMLAttr(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "defer", "disabled", "formnovalidate", "hidden", "inert", "ismap", "loop", "multiple", "muted", "nomodule", "novalidate", "open", "readonly", "required", "reversed", "selected":
+		return true
+	default:
+		return false
+	}
+}
+
+func expressionAttrSource(value string) string {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}") {
+		return strings.TrimSpace(value[1 : len(value)-1])
+	}
+	return value
+}
+
+// EventDirective is a parsed g:on:<event>[.<modifier>] directive.
+type EventDirective struct {
+	Event      string
+	Prevent    bool
+	Stop       bool
+	Once       bool
+	Capture    bool
+	DebounceMS int
+	ThrottleMS int
+}
+
+// ParseEventDirective validates and splits a g:on directive name.
+func ParseEventDirective(name string) (EventDirective, error) {
+	if !strings.HasPrefix(name, "g:on:") {
+		return EventDirective{}, fmt.Errorf("event directive %q must start with g:on:", name)
+	}
+	raw := strings.TrimPrefix(name, "g:on:")
+	if raw == "" {
+		return EventDirective{}, fmt.Errorf("g:on directive requires an event name")
+	}
+	parts := strings.Split(raw, ".")
+	directive := EventDirective{Event: parts[0]}
+	if !eventNamePattern.MatchString(directive.Event) {
+		return EventDirective{}, fmt.Errorf("g:on directive has invalid event name %q", directive.Event)
+	}
+	seen := map[string]bool{}
+	for _, modifier := range parts[1:] {
+		if modifier == "" {
+			return EventDirective{}, fmt.Errorf("g:on:%s has an empty event modifier", raw)
+		}
+		key := modifier
+		if strings.HasPrefix(modifier, "debounce(") {
+			key = "debounce"
+		} else if strings.HasPrefix(modifier, "throttle(") {
+			key = "throttle"
+		}
+		if seen[key] {
+			return EventDirective{}, fmt.Errorf("g:on:%s repeats %s modifier", raw, key)
+		}
+		seen[key] = true
+		switch modifier {
+		case "prevent":
+			directive.Prevent = true
+		case "stop":
+			directive.Stop = true
+		case "once":
+			directive.Once = true
+		case "capture":
+			directive.Capture = true
+		default:
+			if strings.HasPrefix(modifier, "debounce(") && strings.HasSuffix(modifier, ")") {
+				ms, err := parseEventDurationMS(strings.TrimSuffix(strings.TrimPrefix(modifier, "debounce("), ")"))
+				if err != nil {
+					return EventDirective{}, fmt.Errorf("g:on:%s has invalid debounce duration: %w", raw, err)
+				}
+				directive.DebounceMS = ms
+				continue
+			}
+			if strings.HasPrefix(modifier, "throttle(") && strings.HasSuffix(modifier, ")") {
+				ms, err := parseEventDurationMS(strings.TrimSuffix(strings.TrimPrefix(modifier, "throttle("), ")"))
+				if err != nil {
+					return EventDirective{}, fmt.Errorf("g:on:%s has invalid throttle duration: %w", raw, err)
+				}
+				directive.ThrottleMS = ms
+				continue
+			}
+			return EventDirective{}, fmt.Errorf("g:on:%s uses unsupported event modifier %q", raw, modifier)
+		}
+	}
+	if directive.DebounceMS > 0 && directive.ThrottleMS > 0 {
+		return EventDirective{}, fmt.Errorf("g:on:%s cannot combine debounce and throttle", raw)
+	}
+	return directive, nil
+}
+
+func parseEventDurationMS(value string) (int, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, fmt.Errorf("duration is empty")
+	}
+	multiplier := 1
+	number := value
+	switch {
+	case strings.HasSuffix(value, "ms"):
+		number = strings.TrimSuffix(value, "ms")
+	case strings.HasSuffix(value, "s"):
+		number = strings.TrimSuffix(value, "s")
+		multiplier = 1000
+	default:
+		return 0, fmt.Errorf("duration must use ms or s")
+	}
+	raw, err := strconv.Atoi(strings.TrimSpace(number))
+	if err != nil || raw <= 0 {
+		return 0, fmt.Errorf("duration must be a positive integer")
+	}
+	return raw * multiplier, nil
+}
+
+// RuntimeOptions returns the compact modifier string emitted into HTML.
+func (directive EventDirective) RuntimeOptions() string {
+	var options []string
+	if directive.Prevent {
+		options = append(options, "prevent")
+	}
+	if directive.Stop {
+		options = append(options, "stop")
+	}
+	if directive.Once {
+		options = append(options, "once")
+	}
+	if directive.Capture {
+		options = append(options, "capture")
+	}
+	if directive.DebounceMS > 0 {
+		options = append(options, fmt.Sprintf("debounce:%d", directive.DebounceMS))
+	}
+	if directive.ThrottleMS > 0 {
+		options = append(options, fmt.Sprintf("throttle:%d", directive.ThrottleMS))
+	}
+	return strings.Join(options, " ")
+}
+
 // ComponentCall invokes a parsed component with static string props.
 type ComponentCall struct {
 	Name     string
@@ -209,9 +1327,19 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		return fmt.Errorf("recursive component %q", node.Name)
 	}
 
-	values := map[string]string{}
+	mode, err := node.islandMode()
+	if err != nil {
+		return err
+	}
+	props := map[string]string{}
 	taintedValues := map[string]bool{}
 	for _, attr := range node.Attrs {
+		if strings.HasPrefix(attr.Name, "g:") {
+			if attr.Name == "g:island" {
+				continue
+			}
+			return fmt.Errorf("component %s uses unsupported directive attribute %q", node.Name, attr.Name)
+		}
 		if attr.Boolean {
 			return fmt.Errorf("component %s prop %q requires a string value", node.Name, attr.Name)
 		}
@@ -219,17 +1347,17 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		if err != nil {
 			return err
 		}
-		values[attr.Name] = value
+		props[attr.Name] = value
 		if tainted {
 			taintedValues[attr.Name] = true
 		}
 	}
 	for _, prop := range component.Props {
-		if _, ok := values[prop]; !ok {
+		if _, ok := props[prop]; !ok {
 			return fmt.Errorf("component %s missing required prop %q", node.Name, prop)
 		}
 	}
-	for prop := range values {
+	for prop := range props {
 		if !component.HasProp(prop) {
 			return fmt.Errorf("component %s does not declare prop %q", node.Name, prop)
 		}
@@ -239,21 +1367,77 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		return err
 	}
 
+	values := mergeValues(component.State, props)
+	computedStrings, computedValues, err := evalComputedValues(component.Computed, values)
+	if err != nil {
+		return err
+	}
+	values = mergeValues(values, computedStrings)
+	bindValues := mergeValues(component.State, computedStrings)
 	childCtx := renderContext{
-		components: ctx.components,
-		values:     values,
-		tainted:    taintedValues,
-		actions:    ctx.actions,
-		stack:      cloneStack(ctx.stack),
-		slotHTML:   slotHTML,
+		components:  ctx.components,
+		values:      values,
+		tainted:     taintedValues,
+		actions:     ctx.actions,
+		stack:       cloneStack(ctx.stack),
+		slotHTML:    slotHTML,
+		stateFields: boolSet(keys(component.State)),
+		readFields:  boolSet(keys(values)),
+		bindFields:  boolSet(keys(bindValues)),
+		handlers:    component.Handlers,
+		stateTypes:  component.StateTypes,
+		refs:        component.Refs,
 	}
 	childCtx.stack[node.Name] = true
 	body, err := render(component.Body, childCtx)
 	if err != nil {
 		return err
 	}
+	if component.StateJSON != "" || component.HandlersJSON != "" || mode != "" {
+		if mode == "" {
+			mode = "js"
+		}
+		stateJSON := componentStateJSON(component.StateJSON, props, computedValues)
+		if stateJSON == "" {
+			stateJSON = "{}"
+		}
+		out.WriteString(`<gowdk-island data-gowdk-component="`)
+		out.WriteString(gowhtml.Escape(node.Name))
+		out.WriteString(`" data-gowdk-runtime="`)
+		out.WriteString(gowhtml.Escape(mode))
+		out.WriteString(`" data-gowdk-state="`)
+		out.WriteString(gowhtml.Escape(stateJSON))
+		out.WriteByte('"')
+		if component.HandlersJSON != "" {
+			out.WriteString(` data-gowdk-client="`)
+			out.WriteString(gowhtml.Escape(component.HandlersJSON))
+			out.WriteByte('"')
+		}
+		out.WriteByte('>')
+		out.WriteString(body)
+		out.WriteString(`</gowdk-island>`)
+		return nil
+	}
 	out.WriteString(body)
 	return nil
+}
+
+func (node ComponentCall) islandMode() (string, error) {
+	mode := ""
+	for _, attr := range node.Attrs {
+		if attr.Name != "g:island" {
+			continue
+		}
+		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+			return "", fmt.Errorf("component %s g:island requires a value", node.Name)
+		}
+		value := strings.TrimSpace(attr.Value)
+		if value != "wasm" {
+			return "", fmt.Errorf("component %s uses unsupported g:island value %q", node.Name, value)
+		}
+		mode = value
+	}
+	return mode, nil
 }
 
 func renderNodes(nodes []Node, ctx *renderContext) (string, error) {
@@ -261,26 +1445,175 @@ func renderNodes(nodes []Node, ctx *renderContext) (string, error) {
 		return "", nil
 	}
 	var out strings.Builder
+	groupSeq := 0
+	inChain := false
+	chainMatched := false
+	chainIndex := 0
 	for _, node := range nodes {
-		if err := node.render(ctx, &out); err != nil {
+		nodeCtx := ctx
+		if element, ok := node.(Element); ok {
+			branch, err := conditionalBranch(element, ctx)
+			if err != nil {
+				return "", err
+			}
+			switch branch.Kind {
+			case "if":
+				groupSeq++
+				inChain = true
+				chainMatched = branch.Visible
+				chainIndex = 0
+				next := *ctx
+				next.conditional = &conditionalRender{
+					Group:     fmt.Sprintf("c%d", groupSeq),
+					Index:     chainIndex,
+					Condition: branch.Condition,
+					Visible:   branch.Visible,
+				}
+				nodeCtx = &next
+			case "else-if":
+				if !inChain {
+					return "", fmt.Errorf("g:else-if must follow a sibling g:if or g:else-if")
+				}
+				chainIndex++
+				visible := !chainMatched && branch.Visible
+				if visible {
+					chainMatched = true
+				}
+				next := *ctx
+				next.conditional = &conditionalRender{
+					Group:     fmt.Sprintf("c%d", groupSeq),
+					Index:     chainIndex,
+					Condition: branch.Condition,
+					Visible:   visible,
+				}
+				nodeCtx = &next
+			case "else":
+				if !inChain {
+					return "", fmt.Errorf("g:else must follow a sibling g:if or g:else-if")
+				}
+				chainIndex++
+				visible := !chainMatched
+				chainMatched = true
+				next := *ctx
+				next.conditional = &conditionalRender{
+					Group:   fmt.Sprintf("c%d", groupSeq),
+					Index:   chainIndex,
+					Visible: visible,
+				}
+				nodeCtx = &next
+				inChain = false
+			default:
+				inChain = false
+				chainMatched = false
+				chainIndex = 0
+			}
+		} else if !ignorableConditionalSeparator(node) {
+			inChain = false
+			chainMatched = false
+			chainIndex = 0
+		}
+		if err := node.render(nodeCtx, &out); err != nil {
 			return "", err
 		}
 	}
 	return out.String(), nil
 }
 
+type conditionalRender struct {
+	Group     string
+	Index     int
+	Condition string
+	Visible   bool
+}
+
+type conditionalBranchInfo struct {
+	Kind      string
+	Condition string
+	Visible   bool
+}
+
+func conditionalBranch(node Element, ctx *renderContext) (conditionalBranchInfo, error) {
+	hasIf := false
+	hasElseIf := false
+	hasElse := false
+	var condition string
+	for _, attr := range node.Attrs {
+		switch attr.Name {
+		case "g:if":
+			hasIf = true
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return conditionalBranchInfo{}, fmt.Errorf("g:if requires an expression value")
+			}
+			condition = strings.TrimSpace(attr.Value)
+		case "g:else-if":
+			hasElseIf = true
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return conditionalBranchInfo{}, fmt.Errorf("g:else-if requires an expression value")
+			}
+			condition = strings.TrimSpace(attr.Value)
+		case "g:else":
+			hasElse = true
+			if !attr.Boolean && strings.TrimSpace(attr.Value) != "" {
+				return conditionalBranchInfo{}, fmt.Errorf("g:else must not have a value")
+			}
+		}
+	}
+	count := 0
+	for _, set := range []bool{hasIf, hasElseIf, hasElse} {
+		if set {
+			count++
+		}
+	}
+	if count == 0 {
+		return conditionalBranchInfo{}, nil
+	}
+	if count > 1 {
+		return conditionalBranchInfo{}, fmt.Errorf("element cannot combine g:if, g:else-if, and g:else")
+	}
+	if hasElse {
+		return conditionalBranchInfo{Kind: "else"}, nil
+	}
+	if err := ValidateIslandBoolExpression(condition, ctx.readFields); err != nil {
+		if hasIf {
+			return conditionalBranchInfo{}, fmt.Errorf("g:if: %w", err)
+		}
+		return conditionalBranchInfo{}, fmt.Errorf("g:else-if: %w", err)
+	}
+	visible := false
+	if evaluated, err := clientlang.EvalBool(condition, ctx.values); err == nil {
+		visible = evaluated
+	}
+	if hasIf {
+		return conditionalBranchInfo{Kind: "if", Condition: condition, Visible: visible}, nil
+	}
+	return conditionalBranchInfo{Kind: "else-if", Condition: condition, Visible: visible}, nil
+}
+
+func ignorableConditionalSeparator(node Node) bool {
+	text, ok := node.(Text)
+	return ok && strings.TrimSpace(text.Value) == ""
+}
+
 // Attr is a static HTML attribute.
 type Attr struct {
-	Name    string
-	Value   string
-	Boolean bool
+	Name       string
+	Value      string
+	Boolean    bool
+	Expression bool
 }
 
 // Component is a static component template known to the view renderer.
 type Component struct {
-	Name  string
-	Props []string
-	Body  string
+	Name         string
+	Props        []string
+	State        map[string]string
+	StateJSON    string
+	Handlers     map[string]clientlang.Handler
+	HandlersJSON string
+	StateTypes   map[string]clientlang.ValueType
+	Refs         map[string]clientlang.Ref
+	Computed     []clientlang.Computed
+	Body         string
 }
 
 // HasProp reports whether a component declares a prop.
@@ -341,14 +1674,30 @@ type Dependencies struct {
 	StyleAttributes []string
 }
 
+// ComponentIslandUsage records one component call that explicitly selects an
+// island runtime.
+type ComponentIslandUsage struct {
+	Component string
+	Mode      string
+}
+
+// ComponentCallUsage records one component call and its optional island mode.
+type ComponentCallUsage struct {
+	Component string
+	Island    string
+}
+
 // RenderWithOptions renders a static markup fragment with component support,
 // interpolation data, and page-scoped action routes.
 func RenderWithOptions(source string, components map[string]Component, data map[string]string, options Options) (string, error) {
 	return render(source, renderContext{
-		components: components,
-		values:     cloneValues(data),
-		actions:    cloneValues(options.Actions),
-		stack:      map[string]bool{},
+		components:  components,
+		values:      cloneValues(data),
+		actions:     cloneValues(options.Actions),
+		stack:       map[string]bool{},
+		stateFields: map[string]bool{},
+		readFields:  map[string]bool{},
+		bindFields:  map[string]bool{},
 	})
 }
 
@@ -433,6 +1782,111 @@ func ComponentReferences(source string) ([]string, error) {
 	return refs, nil
 }
 
+// ComponentIslandUsages returns component calls that explicitly set g:island.
+func ComponentIslandUsages(source string) ([]ComponentIslandUsage, error) {
+	nodes, err := Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	var usages []ComponentIslandUsage
+	if err := collectComponentIslandUsages(nodes, &usages); err != nil {
+		return nil, err
+	}
+	return usages, nil
+}
+
+// ComponentCallUsages returns component calls with optional g:island metadata.
+func ComponentCallUsages(source string) ([]ComponentCallUsage, error) {
+	nodes, err := Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	var usages []ComponentCallUsage
+	if err := collectComponentCallUsages(nodes, &usages); err != nil {
+		return nil, err
+	}
+	return usages, nil
+}
+
+// Canonical returns a deterministic AST-backed representation of a view body.
+func Canonical(source string) (string, error) {
+	nodes, err := Parse(stripLineComments(source))
+	if err != nil {
+		return "", err
+	}
+	var out strings.Builder
+	writeCanonicalNodes(&out, nodes)
+	return out.String(), nil
+}
+
+func writeCanonicalNodes(out *strings.Builder, nodes []Node) {
+	for _, node := range nodes {
+		writeCanonicalNode(out, node)
+	}
+}
+
+func writeCanonicalNode(out *strings.Builder, node Node) {
+	switch typed := node.(type) {
+	case Text:
+		out.WriteString("text(")
+		out.WriteString(strconv.Quote(strings.Join(strings.Fields(typed.Value), " ")))
+		out.WriteByte(')')
+	case Element:
+		out.WriteString("element(")
+		out.WriteString(typed.Name)
+		writeCanonicalAttrs(out, typed.Attrs)
+		out.WriteByte('[')
+		writeCanonicalNodes(out, typed.Children)
+		out.WriteString("])")
+	case ComponentCall:
+		out.WriteString("component(")
+		out.WriteString(typed.Name)
+		writeCanonicalAttrs(out, typed.Attrs)
+		out.WriteByte('[')
+		writeCanonicalNodes(out, typed.Children)
+		out.WriteString("])")
+	}
+}
+
+func writeCanonicalAttrs(out *strings.Builder, attrs []Attr) {
+	normalized := make([]Attr, 0, len(attrs))
+	for _, attr := range attrs {
+		value := strings.TrimSpace(attr.Value)
+		if attr.Name == "class" {
+			classes := strings.Fields(value)
+			sort.Strings(classes)
+			value = strings.Join(classes, " ")
+		}
+		normalized = append(normalized, Attr{Name: attr.Name, Value: value, Boolean: attr.Boolean, Expression: attr.Expression})
+	}
+	sort.Slice(normalized, func(i, j int) bool {
+		if normalized[i].Name != normalized[j].Name {
+			return normalized[i].Name < normalized[j].Name
+		}
+		if normalized[i].Value != normalized[j].Value {
+			return normalized[i].Value < normalized[j].Value
+		}
+		return !normalized[i].Boolean && normalized[j].Boolean
+	})
+	out.WriteByte('{')
+	for index, attr := range normalized {
+		if index > 0 {
+			out.WriteByte(',')
+		}
+		out.WriteString(attr.Name)
+		if attr.Boolean {
+			out.WriteString(":bool")
+			continue
+		}
+		if attr.Expression {
+			out.WriteString(":expr")
+		}
+		out.WriteByte('=')
+		out.WriteString(strconv.Quote(attr.Value))
+	}
+	out.WriteByte('}')
+}
+
 // ParamReferences returns unique param("name") route-param references directly
 // visible in the current static markup subset.
 func ParamReferences(source string) ([]string, error) {
@@ -453,13 +1907,7 @@ func render(source string, ctx renderContext) (string, error) {
 	if err := validateFragmentTargetReferences(nodes); err != nil {
 		return "", err
 	}
-	var out strings.Builder
-	for _, node := range nodes {
-		if err := node.render(&ctx, &out); err != nil {
-			return "", err
-		}
-	}
-	return out.String(), nil
+	return renderNodes(nodes, &ctx)
 }
 
 func validateFragmentTargetReferences(nodes []Node) error {
@@ -557,6 +2005,50 @@ func collectComponentReferences(nodes []Node, names map[string]bool) {
 			collectComponentReferences(typed.Children, names)
 		}
 	}
+}
+
+func collectComponentIslandUsages(nodes []Node, usages *[]ComponentIslandUsage) error {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case ComponentCall:
+			mode, err := typed.islandMode()
+			if err != nil {
+				return err
+			}
+			if mode != "" {
+				*usages = append(*usages, ComponentIslandUsage{Component: typed.Name, Mode: mode})
+			}
+			if err := collectComponentIslandUsages(typed.Children, usages); err != nil {
+				return err
+			}
+		case Element:
+			if err := collectComponentIslandUsages(typed.Children, usages); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func collectComponentCallUsages(nodes []Node, usages *[]ComponentCallUsage) error {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case ComponentCall:
+			mode, err := typed.islandMode()
+			if err != nil {
+				return err
+			}
+			*usages = append(*usages, ComponentCallUsage{Component: typed.Name, Island: mode})
+			if err := collectComponentCallUsages(typed.Children, usages); err != nil {
+				return err
+			}
+		case Element:
+			if err := collectComponentCallUsages(typed.Children, usages); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func collectViewDependencies(nodes []Node, assets, classes, styles map[string]bool) {
@@ -734,13 +2226,33 @@ func isStaticAssetReference(value string) bool {
 }
 
 type renderContext struct {
-	components map[string]Component
-	values     map[string]string
-	tainted    map[string]bool
-	actions    map[string]string
-	stack      map[string]bool
-	slotHTML   string
+	components   map[string]Component
+	values       map[string]string
+	tainted      map[string]bool
+	actions      map[string]string
+	stack        map[string]bool
+	slotHTML     string
+	stateFields  map[string]bool
+	readFields   map[string]bool
+	bindFields   map[string]bool
+	conditional  *conditionalRender
+	handlers     map[string]clientlang.Handler
+	stateTypes   map[string]clientlang.ValueType
+	refs         map[string]clientlang.Ref
+	loopSeq      *int
+	loopItem     *loopItemRender
+	templateLoop *templateLoopRender
+	selectBound  bool
+	selectValue  string
 }
+
+type loopItemRender struct {
+	Group    string
+	KeyExpr  string
+	KeyValue string
+}
+
+type templateLoopRender struct{}
 
 type parser struct {
 	source []rune
@@ -859,7 +2371,7 @@ func (parser *parser) attr() (Attr, error) {
 	if attr, ok, err := parser.shorthandAttr(); ok || err != nil {
 		return attr, err
 	}
-	name, err := parser.name()
+	name, err := parser.attrName()
 	if err != nil {
 		return Attr{}, err
 	}
@@ -880,7 +2392,7 @@ func (parser *parser) attr() (Attr, error) {
 		if err != nil {
 			return Attr{}, err
 		}
-		return Attr{Name: name, Value: value}, nil
+		return Attr{Name: name, Value: value, Expression: true}, nil
 	}
 	value, err := parser.quotedAttrValue(name)
 	if err != nil {
@@ -889,22 +2401,26 @@ func (parser *parser) attr() (Attr, error) {
 	return Attr{Name: name, Value: value}, nil
 }
 
-func (parser *parser) expressionAttrValue(name string) (string, error) {
-	if !parser.consume("{") {
-		return "", parser.errorf("attribute %q must use an expression value", name)
+func (parser *parser) attrName() (string, error) {
+	if parser.done() || !isNameStart(parser.peek()) {
+		return "", parser.errorf("expected attribute name")
 	}
 	start := parser.index
-	for !parser.done() && parser.peek() != '}' {
+	parser.advance()
+	for !parser.done() && isAttrNamePart(parser.peek()) {
 		parser.advance()
 	}
-	if parser.done() {
-		return "", parser.errorf("unterminated expression attribute %q", name)
+	return string(parser.source[start:parser.index]), nil
+}
+
+func (parser *parser) expressionAttrValue(name string) (string, error) {
+	expr, err := parser.bracedAttrExpression(name)
+	if err != nil {
+		return "", err
 	}
-	expr := strings.TrimSpace(string(parser.source[start:parser.index]))
 	if expr == "" {
 		return "", parser.errorf("empty expression attribute %q", name)
 	}
-	parser.advance()
 	return "{" + expr + "}", nil
 }
 
@@ -970,16 +2486,11 @@ func normalizeHTMLAttrs(attrs []Attr) ([]Attr, error) {
 }
 
 func (parser *parser) directiveAttr(name string) (Attr, error) {
-	if parser.consume("{") {
-		start := parser.index
-		for !parser.done() && parser.peek() != '}' {
-			parser.advance()
+	if parser.startsWith("{") {
+		value, err := parser.bracedAttrExpression(name)
+		if err != nil {
+			return Attr{}, err
 		}
-		if parser.done() {
-			return Attr{}, parser.errorf("unterminated directive attribute %q", name)
-		}
-		value := strings.TrimSpace(string(parser.source[start:parser.index]))
-		parser.advance()
 		return Attr{Name: name, Value: value}, nil
 	}
 	if parser.startsWith(`"`) {
@@ -991,6 +2502,49 @@ func (parser *parser) directiveAttr(name string) (Attr, error) {
 		return Attr{Name: name, Value: value}, nil
 	}
 	return Attr{}, parser.errorf("directive attribute %q must use {name}", name)
+}
+
+func (parser *parser) bracedAttrExpression(name string) (string, error) {
+	if !parser.consume("{") {
+		return "", parser.errorf("attribute %q must use an expression value", name)
+	}
+	start := parser.index
+	depth := 0
+	inString := false
+	escaped := false
+	for !parser.done() {
+		char := parser.peek()
+		if escaped {
+			escaped = false
+			parser.advance()
+			continue
+		}
+		if inString {
+			switch char {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			parser.advance()
+			continue
+		}
+		switch char {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			if depth == 0 {
+				expr := strings.TrimSpace(string(parser.source[start:parser.index]))
+				parser.advance()
+				return expr, nil
+			}
+			depth--
+		}
+		parser.advance()
+	}
+	return "", parser.errorf("unterminated expression attribute %q", name)
 }
 
 func (parser *parser) quotedAttrValue(name string) (string, error) {
@@ -1130,6 +2684,14 @@ func isAttrName(value string) bool {
 	if value == "" {
 		return false
 	}
+	if strings.HasPrefix(value, "g:on:") {
+		_, err := ParseEventDirective(value)
+		return err == nil
+	}
+	if strings.HasPrefix(value, "style:") {
+		_, err := parseStyleBindingAttr(value)
+		return err == nil
+	}
 	for i, r := range value {
 		switch {
 		case isNameStart(r):
@@ -1147,6 +2709,10 @@ func isNameStart(r rune) bool {
 
 func isNamePart(r rune) bool {
 	return isNameStart(r) || unicode.IsDigit(r) || r == '-' || r == ':'
+}
+
+func isAttrNamePart(r rune) bool {
+	return isNamePart(r) || r == '.' || r == '%' || r == '(' || r == ')'
 }
 
 func isShorthandPart(r rune) bool {
@@ -1188,6 +2754,11 @@ func interpolateValue(ctx *renderContext, value string) (string, bool, error) {
 		name := strings.TrimSpace(value[start+1 : end])
 		if name == "" {
 			return "", false, fmt.Errorf("empty interpolation")
+		}
+		if ctx.templateLoop != nil {
+			out.WriteString(loopTemplateValue(name))
+			value = value[end+1:]
+			continue
 		}
 		if param, ok := routeParamExpression(name); ok {
 			resolved, ok := ctx.values[param]
@@ -1237,6 +2808,668 @@ func routeParamExpression(value string) (string, bool) {
 	return name, true
 }
 
+// ValidateIslandEventExpression validates the first generated-JS event
+// expression subset. When fields is non-nil, every referenced field must exist.
+// Named client function calls are valid only when handlers declares that
+// function.
+func ValidateIslandEventExpression(expr string, fields map[string]bool, handlers ...map[string]clientlang.Handler) error {
+	symbols := boolFieldSymbols(fields)
+	return ValidateIslandEventExpressionTyped(expr, symbols, symbols, firstHandlerMap(handlers))
+}
+
+// ValidateIslandBoolExpression validates a g:if-style bool expression.
+func ValidateIslandBoolExpression(expr string, fields map[string]bool) error {
+	symbols := boolFieldSymbols(fields)
+	typ, _, err := clientlang.CheckExpr(expr, symbols)
+	if err != nil {
+		return err
+	}
+	if typ != clientlang.TypeBool && typ != clientlang.TypeUnknown {
+		return fmt.Errorf("expression must be bool, got %s", typ)
+	}
+	return nil
+}
+
+// ValidateIslandBoolExpressionTyped validates a g:if-style bool expression
+// with scalar type information.
+func ValidateIslandBoolExpressionTyped(expr string, symbols map[string]clientlang.ValueType) error {
+	typ, _, err := clientlang.CheckExpr(expr, symbols)
+	if err != nil {
+		return err
+	}
+	if typ != clientlang.TypeBool && typ != clientlang.TypeUnknown {
+		return fmt.Errorf("expression must be bool, got %s", typ)
+	}
+	return nil
+}
+
+// ValidateReactiveAttrExpressionTyped validates a first-slice reactive
+// attribute expression.
+func ValidateReactiveAttrExpressionTyped(name, expr string, symbols map[string]clientlang.ValueType) error {
+	if unsafeReactiveAttr(name) {
+		return fmt.Errorf("reactive attribute %q is not supported before safe URL/style/event rules are defined", name)
+	}
+	typ, _, err := clientlang.CheckExpr(expr, symbols)
+	if err != nil {
+		return err
+	}
+	if isBooleanHTMLAttr(name) && typ != clientlang.TypeBool && typ != clientlang.TypeUnknown {
+		return fmt.Errorf("boolean attribute %q requires bool expression, got %s", name, typ)
+	}
+	return nil
+}
+
+// ValidateClassToggleExpressionTyped validates a class:name directive
+// expression.
+func ValidateClassToggleExpressionTyped(name, expr string, symbols map[string]clientlang.ValueType) error {
+	if classToggleName(name) == "" {
+		return fmt.Errorf("class toggle directive %q requires a class name", name)
+	}
+	return ValidateIslandBoolExpressionTyped(expr, symbols)
+}
+
+// ValidateStyleBindingExpressionTyped validates a style:name directive
+// expression.
+func ValidateStyleBindingExpressionTyped(name, expr string, symbols map[string]clientlang.ValueType) error {
+	if _, err := parseStyleBindingAttr(name); err != nil {
+		return err
+	}
+	typ, _, err := clientlang.CheckExpr(expr, symbols)
+	if err != nil {
+		return err
+	}
+	if typ == clientlang.TypeBool {
+		return fmt.Errorf("style binding requires string or numeric expression, got %s", typ)
+	}
+	if typ == clientlang.TypeObject || typ == clientlang.TypeArray {
+		return fmt.Errorf("style binding requires string or numeric expression, got %s", typ)
+	}
+	return nil
+}
+
+// ValidateIslandEventExpressionTyped validates an event expression with scalar
+// type information.
+func ValidateIslandEventExpressionTyped(expr string, readSymbols map[string]clientlang.ValueType, writeSymbols map[string]clientlang.ValueType, handlers map[string]clientlang.Handler) error {
+	return ValidateIslandEventExpressionTypedWithFunctions(expr, readSymbols, writeSymbols, handlers, nil)
+}
+
+// ValidateIslandEventExpressionTypedWithFunctions validates an event expression
+// with scalar type information and return-valued helper functions.
+func ValidateIslandEventExpressionTypedWithFunctions(expr string, readSymbols map[string]clientlang.ValueType, writeSymbols map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction) error {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return fmt.Errorf("empty island event expression")
+	}
+	if call, ok := clientlang.ParseCall(expr); ok {
+		if isArrayMutationCall(call.Name) {
+			return validateArrayMutationCallWithFunctions(call, writeSymbols, readSymbols, helpers)
+		}
+		if handlers == nil {
+			return fmt.Errorf("unknown island client function %q", call.Name)
+		}
+		handler, exists := handlers[call.Name]
+		if !exists {
+			return fmt.Errorf("unknown island client function %q", call.Name)
+		}
+		if len(call.Args) != len(handler.Params) {
+			return fmt.Errorf("island client function %s expects %d arguments, got %d", call.Name, len(handler.Params), len(call.Args))
+		}
+		for index, arg := range call.Args {
+			typ, _, err := clientlang.CheckExprWithFunctions(arg, readSymbols, helpers)
+			if err != nil {
+				return err
+			}
+			expected := handlerParamType(handler, index)
+			if expected != clientlang.TypeUnknown && typ != expected && !compatibleNumericType(typ, expected) {
+				return fmt.Errorf("island client function %s argument %d expects %s, got %s", call.Name, index+1, expected, typ)
+			}
+		}
+		return nil
+	}
+	return ValidateIslandStateStatementTypedWithFunctions(expr, writeSymbols, readSymbols, helpers)
+}
+
+// ValidateIslandStateStatement validates a client statement that may write only
+// writeFields and may read readFields plus scalar literals.
+func ValidateIslandStateStatement(expr string, writeFields map[string]bool, readFields map[string]bool) error {
+	return ValidateIslandStateStatementTyped(expr, boolFieldSymbols(writeFields), boolFieldSymbols(readFields))
+}
+
+// ValidateIslandStateStatementTyped validates a state statement with scalar
+// type information.
+func ValidateIslandStateStatementTyped(expr string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType) error {
+	return ValidateIslandStateStatementTypedWithFunctions(expr, writeSymbols, readSymbols, nil)
+}
+
+// ValidateIslandStateStatementTypedWithFunctions validates a state statement
+// with scalar type information and return-valued helper functions.
+func ValidateIslandStateStatementTypedWithFunctions(expr string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, helpers map[string]clientlang.ExprFunction) error {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return fmt.Errorf("empty island event expression")
+	}
+	if call, ok := clientlang.ParseCall(expr); ok {
+		if isArrayMutationCall(call.Name) {
+			return validateArrayMutationCallWithFunctions(call, writeSymbols, readSymbols, helpers)
+		}
+		return fmt.Errorf("unsupported island event expression %q", expr)
+	}
+	if match := islandIncDecPattern.FindStringSubmatch(expr); match != nil {
+		typ, err := validateIslandSymbol(match[1], writeSymbols)
+		if err != nil {
+			return err
+		}
+		if !compatibleNumericType(typ, clientlang.TypeInt) {
+			return fmt.Errorf("operator %s requires numeric island field %q", match[2], match[1])
+		}
+		return nil
+	}
+	if islandFieldPattern.MatchString(expr) {
+		_, err := validateIslandSymbol(expr, readSymbols)
+		return err
+	}
+	if match := islandAssignPattern.FindStringSubmatch(expr); match != nil {
+		left := strings.TrimSpace(match[1])
+		leftType, err := validateIslandSymbol(left, writeSymbols)
+		if err != nil {
+			return err
+		}
+		if leftType == clientlang.TypeObject || leftType == clientlang.TypeArray {
+			return fmt.Errorf("cannot assign to non-scalar island field %q", left)
+		}
+		right := strings.TrimSpace(match[2])
+		rightType, _, err := clientlang.CheckExprWithFunctions(right, readSymbols, helpers)
+		if err != nil {
+			return err
+		}
+		if rightType == clientlang.TypeObject || rightType == clientlang.TypeArray {
+			return fmt.Errorf("cannot assign %s expression to island field %q", rightType, left)
+		}
+		if leftType != clientlang.TypeUnknown && rightType != leftType && !compatibleNumericType(rightType, leftType) {
+			return fmt.Errorf("cannot assign %s expression to %s field %q", rightType, leftType, left)
+		}
+		return nil
+	}
+	return fmt.Errorf("unsupported island event expression %q", expr)
+}
+
+// ValidateIslandClientStatementTyped validates a client statement that may
+// mutate state or call a safe DOM ref method.
+func ValidateIslandClientStatementTyped(expr string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref) error {
+	return ValidateIslandClientStatementTypedWithFunctions(expr, writeSymbols, readSymbols, refs, nil)
+}
+
+// ValidateIslandClientStatementTypedWithFunctions validates a client statement
+// that may mutate state, call a safe DOM ref method, or read helper functions.
+func ValidateIslandClientStatementTypedWithFunctions(expr string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction) error {
+	if refName, ok := IslandRefStatement(expr); ok {
+		if refs == nil {
+			return fmt.Errorf("unknown DOM ref %q", refName)
+		}
+		if _, exists := refs[refName]; !exists {
+			return fmt.Errorf("unknown DOM ref %q", refName)
+		}
+		return nil
+	}
+	return ValidateIslandStateStatementTypedWithFunctions(expr, writeSymbols, readSymbols, helpers)
+}
+
+// ValidateIslandClientStatementsTyped validates an ordered client statement
+// block. Local variables declared with let are visible only to later
+// statements in the same block.
+func ValidateIslandClientStatementsTyped(statements []string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref) (map[string]bool, error) {
+	return ValidateIslandClientStatementsTypedWithFunctions(statements, writeSymbols, readSymbols, refs, nil)
+}
+
+// ValidateIslandClientStatementsTypedWithFunctions validates an ordered client
+// statement block. Local variables declared with let are visible only to later
+// statements in the same block.
+func ValidateIslandClientStatementsTypedWithFunctions(statements []string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction) (map[string]bool, error) {
+	locals := mergeClientSymbols(nil, readSymbols)
+	usedRefs := map[string]bool{}
+	for _, statement := range statements {
+		if refName, ok := IslandRefStatement(statement); ok {
+			usedRefs[refName] = true
+		}
+		if local, ok, err := parseLetStatement(statement); err != nil {
+			return usedRefs, err
+		} else if ok {
+			if _, exists := writeSymbols[local.Name]; exists {
+				return usedRefs, fmt.Errorf("local %q conflicts with a state field", local.Name)
+			}
+			if _, exists := locals[local.Name]; exists {
+				return usedRefs, fmt.Errorf("local %q is already declared", local.Name)
+			}
+			typ := clientlang.NormalizeType(local.Type)
+			if !isSupportedLocalType(typ) {
+				return usedRefs, fmt.Errorf("local %q uses unsupported type %q", local.Name, local.Type)
+			}
+			actual, _, err := clientlang.CheckExprWithFunctions(local.Expr, locals, helpers)
+			if err != nil {
+				return usedRefs, err
+			}
+			if actual == clientlang.TypeArray || actual == clientlang.TypeObject {
+				return usedRefs, fmt.Errorf("local %q cannot use %s expression", local.Name, actual)
+			}
+			if typ != clientlang.TypeUnknown && actual != clientlang.TypeUnknown && typ != actual && !compatibleNumericType(actual, typ) {
+				return usedRefs, fmt.Errorf("local %q expects %s, got %s", local.Name, typ, actual)
+			}
+			locals[local.Name] = typ
+			continue
+		}
+		if err := ValidateIslandClientStatementTypedWithFunctions(statement, writeSymbols, locals, refs, helpers); err != nil {
+			return usedRefs, err
+		}
+	}
+	return usedRefs, nil
+}
+
+type letStatement struct {
+	Name string
+	Type string
+	Expr string
+}
+
+func parseLetStatement(statement string) (letStatement, bool, error) {
+	match := islandLetPattern.FindStringSubmatch(strings.TrimSpace(statement))
+	if match == nil {
+		if strings.HasPrefix(strings.TrimSpace(statement), "let ") {
+			return letStatement{}, false, fmt.Errorf("let statement must use `let name type = expr`")
+		}
+		return letStatement{}, false, nil
+	}
+	return letStatement{Name: match[1], Type: match[2], Expr: strings.TrimSpace(match[3])}, true, nil
+}
+
+func isSupportedLocalType(typ clientlang.ValueType) bool {
+	switch typ {
+	case clientlang.TypeString, clientlang.TypeInt, clientlang.TypeFloat, clientlang.TypeBool:
+		return true
+	default:
+		return false
+	}
+}
+
+func mergeClientSymbols(left, right map[string]clientlang.ValueType) map[string]clientlang.ValueType {
+	output := map[string]clientlang.ValueType{}
+	for key, value := range left {
+		output[key] = value
+	}
+	for key, value := range right {
+		output[key] = value
+	}
+	return output
+}
+
+// IslandRefStatement reports whether expr is a safe DOM ref method call.
+func IslandRefStatement(expr string) (string, bool) {
+	match := islandRefCallPattern.FindStringSubmatch(strings.TrimSpace(expr))
+	if match == nil {
+		return "", false
+	}
+	return match[1], true
+}
+
+// IslandExpressionFields returns field references in a supported island event
+// expression.
+func IslandExpressionFields(expr string) []string {
+	expr = strings.TrimSpace(expr)
+	if call, ok := clientlang.ParseCall(expr); ok {
+		if isArrayMutationCall(call.Name) {
+			return arrayMutationFields(call)
+		}
+		return islandCallFields(call)
+	}
+	seen := map[string]bool{}
+	add := func(name string) {
+		if name != "" {
+			seen[name] = true
+		}
+	}
+	if match := islandIncDecPattern.FindStringSubmatch(expr); match != nil {
+		add(match[1])
+		return sortedKeys(seen)
+	}
+	if islandFieldPattern.MatchString(expr) {
+		add(expr)
+		return sortedKeys(seen)
+	}
+	if match := islandAssignPattern.FindStringSubmatch(expr); match != nil {
+		add(strings.TrimSpace(match[1]))
+		right := strings.TrimSpace(match[2])
+		if fields, err := clientlang.ExprFields(right); err == nil {
+			for _, field := range fields {
+				add(field)
+			}
+		}
+	}
+	return sortedKeys(seen)
+}
+
+func isArrayMutationCall(name string) bool {
+	switch name {
+	case "append", "remove", "move":
+		return true
+	default:
+		return false
+	}
+}
+
+func validateArrayMutationCall(call clientlang.Call, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType) error {
+	return validateArrayMutationCallWithFunctions(call, writeSymbols, readSymbols, nil)
+}
+
+func validateArrayMutationCallWithFunctions(call clientlang.Call, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, helpers map[string]clientlang.ExprFunction) error {
+	switch call.Name {
+	case "append":
+		if len(call.Args) != 2 {
+			return fmt.Errorf("append expects 2 arguments, got %d", len(call.Args))
+		}
+		field := strings.TrimSpace(call.Args[0])
+		if typ, err := validateIslandSymbol(field, writeSymbols); err != nil {
+			return err
+		} else if typ != clientlang.TypeArray && typ != clientlang.TypeUnknown {
+			return fmt.Errorf("append target %q must be array, got %s", field, typ)
+		}
+		itemFields, err := parseObjectLiteral(call.Args[1])
+		if err != nil {
+			return fmt.Errorf("append item: %w", err)
+		}
+		itemSymbols := itemFieldSymbols(field, readSymbols)
+		for name, expr := range itemFields {
+			expected, ok := itemSymbols[name]
+			if !ok {
+				return fmt.Errorf("append item has unknown field %q", name)
+			}
+			actual, _, err := clientlang.CheckExprWithFunctions(expr, readSymbols, helpers)
+			if err != nil {
+				return fmt.Errorf("append item field %s: %w", name, err)
+			}
+			if expected == clientlang.TypeArray || expected == clientlang.TypeObject {
+				return fmt.Errorf("append item field %s must be scalar", name)
+			}
+			if actual == clientlang.TypeArray || actual == clientlang.TypeObject {
+				return fmt.Errorf("append item field %s cannot use %s expression", name, actual)
+			}
+			if expected != clientlang.TypeUnknown && actual != clientlang.TypeUnknown && expected != actual && !compatibleNumericType(actual, expected) {
+				return fmt.Errorf("append item field %s expects %s, got %s", name, expected, actual)
+			}
+		}
+		return nil
+	case "remove":
+		if len(call.Args) != 2 {
+			return fmt.Errorf("remove expects 2 arguments, got %d", len(call.Args))
+		}
+		field := strings.TrimSpace(call.Args[0])
+		if typ, err := validateIslandSymbol(field, writeSymbols); err != nil {
+			return err
+		} else if typ != clientlang.TypeArray && typ != clientlang.TypeUnknown {
+			return fmt.Errorf("remove target %q must be array, got %s", field, typ)
+		}
+		return validateArrayIndexExprWithFunctions("remove", call.Args[1], readSymbols, helpers)
+	case "move":
+		if len(call.Args) != 3 {
+			return fmt.Errorf("move expects 3 arguments, got %d", len(call.Args))
+		}
+		field := strings.TrimSpace(call.Args[0])
+		if typ, err := validateIslandSymbol(field, writeSymbols); err != nil {
+			return err
+		} else if typ != clientlang.TypeArray && typ != clientlang.TypeUnknown {
+			return fmt.Errorf("move target %q must be array, got %s", field, typ)
+		}
+		if err := validateArrayIndexExprWithFunctions("move", call.Args[1], readSymbols, helpers); err != nil {
+			return err
+		}
+		return validateArrayIndexExprWithFunctions("move", call.Args[2], readSymbols, helpers)
+	default:
+		return fmt.Errorf("unsupported array mutation %q", call.Name)
+	}
+}
+
+func validateArrayIndexExpr(name, expr string, readSymbols map[string]clientlang.ValueType) error {
+	return validateArrayIndexExprWithFunctions(name, expr, readSymbols, nil)
+}
+
+func validateArrayIndexExprWithFunctions(name, expr string, readSymbols map[string]clientlang.ValueType, helpers map[string]clientlang.ExprFunction) error {
+	typ, _, err := clientlang.CheckExprWithFunctions(expr, readSymbols, helpers)
+	if err != nil {
+		return fmt.Errorf("%s index: %w", name, err)
+	}
+	if typ != clientlang.TypeInt && typ != clientlang.TypeUnknown {
+		return fmt.Errorf("%s index must be int, got %s", name, typ)
+	}
+	return nil
+}
+
+func itemFieldSymbols(arrayField string, symbols map[string]clientlang.ValueType) map[string]clientlang.ValueType {
+	out := map[string]clientlang.ValueType{}
+	prefix := arrayField + "[]."
+	for name, typ := range symbols {
+		if strings.HasPrefix(name, prefix) {
+			out[strings.TrimPrefix(name, prefix)] = typ
+		}
+	}
+	return out
+}
+
+func parseObjectLiteral(source string) (map[string]string, error) {
+	source = strings.TrimSpace(source)
+	if !strings.HasPrefix(source, "{") || !strings.HasSuffix(source, "}") {
+		return nil, fmt.Errorf("must use { Field: expr }")
+	}
+	body := strings.TrimSpace(source[1 : len(source)-1])
+	if body == "" {
+		return nil, fmt.Errorf("must declare at least one field")
+	}
+	parts, err := splitTopLevelComma(body)
+	if err != nil {
+		return nil, err
+	}
+	fields := map[string]string{}
+	for _, part := range parts {
+		name, expr, ok := strings.Cut(part, ":")
+		if !ok {
+			return nil, fmt.Errorf("field %q must use name: expr", part)
+		}
+		name = strings.TrimSpace(name)
+		expr = strings.TrimSpace(expr)
+		if !isIdentifier(name) {
+			return nil, fmt.Errorf("invalid field name %q", name)
+		}
+		if expr == "" {
+			return nil, fmt.Errorf("field %s has empty expression", name)
+		}
+		if _, exists := fields[name]; exists {
+			return nil, fmt.Errorf("duplicate field %q", name)
+		}
+		fields[name] = expr
+	}
+	return fields, nil
+}
+
+func splitTopLevelComma(source string) ([]string, error) {
+	var parts []string
+	start := 0
+	depth := 0
+	inString := false
+	escaped := false
+	for index, char := range source {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if inString {
+			switch char {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+		switch char {
+		case '"':
+			inString = true
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			depth--
+			if depth < 0 {
+				return nil, fmt.Errorf("unbalanced expression")
+			}
+		case ',':
+			if depth > 0 {
+				continue
+			}
+			part := strings.TrimSpace(source[start:index])
+			if part == "" {
+				return nil, fmt.Errorf("empty item")
+			}
+			parts = append(parts, part)
+			start = index + 1
+		}
+	}
+	if inString {
+		return nil, fmt.Errorf("unterminated string")
+	}
+	if depth != 0 {
+		return nil, fmt.Errorf("unbalanced expression")
+	}
+	part := strings.TrimSpace(source[start:])
+	if part == "" {
+		return nil, fmt.Errorf("empty item")
+	}
+	return append(parts, part), nil
+}
+
+func arrayMutationFields(call clientlang.Call) []string {
+	seen := map[string]bool{}
+	if len(call.Args) > 0 {
+		field := strings.TrimSpace(call.Args[0])
+		if field != "" {
+			seen[field] = true
+		}
+	}
+	for _, arg := range call.Args[1:] {
+		if objectFields, err := parseObjectLiteral(arg); err == nil {
+			for _, expr := range objectFields {
+				if fields, err := clientlang.ExprFields(expr); err == nil {
+					for _, field := range fields {
+						seen[field] = true
+					}
+				}
+			}
+			continue
+		}
+		if fields, err := clientlang.ExprFields(arg); err == nil {
+			for _, field := range fields {
+				seen[field] = true
+			}
+		}
+	}
+	return sortedKeys(seen)
+}
+
+func validateIslandField(field string, fields map[string]bool) error {
+	if !islandFieldPattern.MatchString(field) {
+		return fmt.Errorf("invalid island field %q", field)
+	}
+	if fields != nil && !fields[field] {
+		return fmt.Errorf("unknown island field %q", field)
+	}
+	return nil
+}
+
+func validateIslandReadableValue(value string, fields map[string]bool) error {
+	value = strings.TrimSpace(value)
+	if isIslandScalarLiteral(value) {
+		return nil
+	}
+	if islandFieldPattern.MatchString(value) {
+		return validateIslandField(value, fields)
+	}
+	return fmt.Errorf("unsupported island value %q", value)
+}
+
+func validateIslandSymbol(field string, symbols map[string]clientlang.ValueType) (clientlang.ValueType, error) {
+	if !islandFieldPattern.MatchString(field) {
+		return clientlang.TypeUnknown, fmt.Errorf("invalid island field %q", field)
+	}
+	typ, ok := symbols[field]
+	if symbols != nil && !ok {
+		return clientlang.TypeUnknown, fmt.Errorf("unknown island field %q", field)
+	}
+	return typ, nil
+}
+
+func boolFieldSymbols(fields map[string]bool) map[string]clientlang.ValueType {
+	if fields == nil {
+		return nil
+	}
+	symbols := map[string]clientlang.ValueType{}
+	for field, ok := range fields {
+		if ok {
+			symbols[field] = clientlang.TypeUnknown
+		}
+	}
+	return symbols
+}
+
+func firstHandlerMap(handlers []map[string]clientlang.Handler) map[string]clientlang.Handler {
+	if len(handlers) == 0 {
+		return nil
+	}
+	return handlers[0]
+}
+
+func handlerParamType(handler clientlang.Handler, index int) clientlang.ValueType {
+	if index < 0 || index >= len(handler.ParamTypes) {
+		return clientlang.TypeUnknown
+	}
+	return handler.ParamTypes[index]
+}
+
+func compatibleNumericType(actual, expected clientlang.ValueType) bool {
+	if actual == clientlang.TypeUnknown || expected == clientlang.TypeUnknown {
+		return true
+	}
+	return (actual == clientlang.TypeInt || actual == clientlang.TypeFloat) &&
+		(expected == clientlang.TypeInt || expected == clientlang.TypeFloat)
+}
+
+func isIslandScalarLiteral(value string) bool {
+	if value == "true" || value == "false" || value == "null" {
+		return true
+	}
+	if islandNumberPattern.MatchString(value) {
+		return true
+	}
+	if strings.HasPrefix(value, `"`) {
+		_, err := strconv.Unquote(value)
+		return err == nil
+	}
+	return false
+}
+
+func islandCallFields(call clientlang.Call) []string {
+	seen := map[string]bool{}
+	for _, arg := range call.Args {
+		arg = strings.TrimSpace(arg)
+		if islandFieldPattern.MatchString(arg) && !isIslandScalarLiteral(arg) {
+			seen[arg] = true
+		}
+	}
+	return sortedKeys(seen)
+}
+
+func islandTextBinding(value string) (string, bool) {
+	match := islandTextBindingPattern.FindStringSubmatch(value)
+	if match == nil {
+		return "", false
+	}
+	return match[1], true
+}
+
 func isIdentifier(value string) bool {
 	if value == "" {
 		return false
@@ -1268,4 +3501,113 @@ func cloneValues(input map[string]string) map[string]string {
 		output[key] = value
 	}
 	return output
+}
+
+func mergeValues(base map[string]string, overlay map[string]string) map[string]string {
+	out := cloneValues(base)
+	for key, value := range overlay {
+		out[key] = value
+	}
+	return out
+}
+
+func evalComputedValues(computeds []clientlang.Computed, values map[string]string) (map[string]string, map[string]any, error) {
+	if len(computeds) == 0 {
+		return nil, nil, nil
+	}
+	stringsOut := map[string]string{}
+	valuesOut := map[string]any{}
+	scope := cloneValues(values)
+	for _, computed := range computeds {
+		value, err := clientlang.EvalValue(computed.Expr, scope)
+		if err != nil {
+			return nil, nil, fmt.Errorf("computed %s: %w", computed.Name, err)
+		}
+		scalar, ok := scalarString(value)
+		if !ok {
+			return nil, nil, fmt.Errorf("computed %s must evaluate to a scalar value", computed.Name)
+		}
+		stringsOut[computed.Name] = scalar
+		valuesOut[computed.Name] = value
+		scope[computed.Name] = scalar
+	}
+	return stringsOut, valuesOut, nil
+}
+
+func componentStateJSON(stateJSON string, props map[string]string, computed map[string]any) string {
+	if stateJSON == "" && len(props) == 0 && len(computed) == 0 {
+		return ""
+	}
+	values := map[string]any{}
+	if stateJSON != "" {
+		_ = json.Unmarshal([]byte(stateJSON), &values)
+	}
+	for key, value := range props {
+		values[key] = value
+	}
+	for key, value := range computed {
+		values[key] = value
+	}
+	payload, err := json.Marshal(values)
+	if err != nil {
+		return stateJSON
+	}
+	return string(payload)
+}
+
+func scalarString(value any) (string, bool) {
+	switch typed := value.(type) {
+	case nil:
+		return "", true
+	case string:
+		return typed, true
+	case bool:
+		return strconv.FormatBool(typed), true
+	case int:
+		return strconv.Itoa(typed), true
+	case float64:
+		return strconv.FormatFloat(typed, 'f', -1, 64), true
+	case json.Number:
+		return typed.String(), true
+	default:
+		return "", false
+	}
+}
+
+func keys(input map[string]string) []string {
+	out := make([]string, 0, len(input))
+	for key := range input {
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func keysFromTypes(input map[string]clientlang.ValueType) []string {
+	out := make([]string, 0, len(input))
+	for key := range input {
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func boolSet(values []string) map[string]bool {
+	out := map[string]bool{}
+	for _, value := range values {
+		out[value] = true
+	}
+	return out
+}
+
+func stripLineComments(source string) string {
+	var lines []string
+	for _, rawLine := range strings.Split(source, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if strings.HasPrefix(line, "//") {
+			continue
+		}
+		lines = append(lines, rawLine)
+	}
+	return strings.Join(lines, "\n")
 }

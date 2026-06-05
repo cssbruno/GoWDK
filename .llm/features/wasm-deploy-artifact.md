@@ -4,8 +4,8 @@
 
 GOWDK can generate static output and package that output into a generated Go app
 or local binary. Users also want a deployment option that emits a Go WebAssembly
-artifact from the same selected module output, without waiting for the future
-browser WASM-islands feature.
+artifact from the same selected module output. This generated app artifact is
+separate from explicit browser island assets emitted by `g:island="wasm"`.
 
 ## Goals
 
@@ -14,12 +14,12 @@ browser WASM-islands feature.
   emits a WASM artifact.
 - Keep module selection behavior consistent across `--out`, `--app`, `--bin`,
   and `--wasm`.
-- Document that this is a generated Go `js/wasm` deploy artifact, not browser
-  WASM islands.
+- Document that this is a generated Go `js/wasm` deploy artifact, not the
+  browser island ABI.
 
 ## Non-Goals
 
-- Browser WASM islands or client-side component hydration.
+- Browser island ABI or client-side component hydration.
 - Runtime-specific deployment adapters beyond producing the `.wasm` artifact.
 - Restarting a watched WASM artifact as a local process.
 

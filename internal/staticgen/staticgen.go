@@ -16,9 +16,11 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/clientrt"
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/discover"
+	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
@@ -30,6 +32,8 @@ const assetManifestFile = "gowdk-assets.json"
 const defaultPageCSSDir = "assets/gowdk"
 const clientRuntimeAssetPath = "assets/gowdk/" + clientrt.Filename
 const clientRuntimeHref = "/" + clientRuntimeAssetPath
+const DisableCSSDiscovery = "__gowdk_disable_css_discovery__"
+const islandRuntimeDir = "assets/gowdk/islands"
 
 var (
 	literalDeclarationPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
@@ -68,6 +72,13 @@ type Result struct {
 	AssetArtifacts    []AssetArtifact
 	RouteManifestPath string
 	AssetManifestPath string
+}
+
+// MemoryResult describes a static build whose artifacts were collected without
+// writing to disk.
+type MemoryResult struct {
+	Result
+	Files map[string][]byte
 }
 
 // SSRArtifact describes one generated request-time page route.
@@ -155,6 +166,69 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 	return result, nil
 }
 
+// BuildMemory renders static HTML, CSS, runtime assets, and manifests into an
+// in-memory file map. File keys are slash-separated paths relative to outputDir.
+func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (MemoryResult, error) {
+	if strings.TrimSpace(outputDir) == "" {
+		return MemoryResult{}, fmt.Errorf("build output directory is required")
+	}
+	if err := compiler.ValidateManifest(config, app); err != nil {
+		return MemoryResult{}, err
+	}
+
+	planned, err := plan(config, app, outputDir)
+	if err != nil {
+		return MemoryResult{}, err
+	}
+
+	result := MemoryResult{
+		Result: Result{
+			Artifacts:         make([]Artifact, 0, len(planned.pages)),
+			CSSArtifacts:      make([]CSSArtifact, 0, len(planned.css)),
+			AssetArtifacts:    make([]AssetArtifact, 0, len(planned.assets)),
+			RouteManifestPath: filepath.Join(outputDir, routeManifestFile),
+			AssetManifestPath: filepath.Join(outputDir, assetManifestFile),
+		},
+		Files: map[string][]byte{},
+	}
+	for _, artifact := range planned.css {
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return MemoryResult{}, err
+		}
+		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
+		result.Files[rel] = append([]byte(nil), artifact.contents...)
+	}
+	for _, artifact := range planned.assets {
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return MemoryResult{}, err
+		}
+		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
+		result.Files[rel] = append([]byte(nil), artifact.contents...)
+	}
+	for _, artifact := range planned.pages {
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return MemoryResult{}, err
+		}
+		result.Artifacts = append(result.Artifacts, artifact.Artifact)
+		result.Files[rel] = append([]byte(nil), artifact.contents...)
+	}
+
+	routeManifest, err := routeManifestPayload(outputDir, result.Artifacts)
+	if err != nil {
+		return MemoryResult{}, err
+	}
+	result.Files[routeManifestFile] = routeManifest
+	assetManifest, err := assetManifestPayload(outputDir, result.CSSArtifacts, result.AssetArtifacts)
+	if err != nil {
+		return MemoryResult{}, err
+	}
+	result.Files[assetManifestFile] = assetManifest
+	return result, nil
+}
+
 // BuildIncremental validates the full manifest and refreshes manifests, but
 // only renders pages whose source path is listed in changedPageSources.
 func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir string, changedPageSources []string) (Result, error) {
@@ -196,7 +270,7 @@ func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir stri
 		}
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
 	}
-	for _, artifact := range clientRuntimeArtifacts(app.Pages, outputDir) {
+	for _, artifact := range runtimeArtifacts(app, outputDir, layouts) {
 		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
 			return Result{}, err
 		}
@@ -304,7 +378,7 @@ func plan(config gowdk.Config, app manifest.Manifest, outputDir string) (buildPl
 	if len(failures) > 0 {
 		return buildPlan{}, errors.New(strings.Join(failures, "\n"))
 	}
-	return buildPlan{pages: planned, css: css.assets, assets: clientRuntimeArtifacts(app.Pages, outputDir)}, nil
+	return buildPlan{pages: planned, css: css.assets, assets: runtimeArtifacts(app, outputDir, layouts)}, nil
 }
 
 // SSRArtifacts renders the first supported request-time page slice for
@@ -920,14 +994,17 @@ func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssP
 }
 
 func discoverCSSInputs(config gowdk.Config, outputDir string) (map[string]cssInput, []string) {
+	includes := appendNonEmpty(nil, config.CSS.Include)
+	if len(includes) == 1 && includes[0] == DisableCSSDiscovery {
+		return map[string]cssInput{}, nil
+	}
+	if len(includes) == 0 {
+		includes = append([]string{}, defaultCSSIncludes...)
+	}
+
 	root, err := os.Getwd()
 	if err != nil {
 		return nil, []string{err.Error()}
-	}
-
-	includes := appendNonEmpty(nil, config.CSS.Include)
-	if len(includes) == 0 {
-		includes = append([]string{}, defaultCSSIncludes...)
 	}
 	excludes := append([]string{}, defaultCSSExcludes...)
 	excludes = appendNonEmpty(excludes, config.CSS.Exclude)
@@ -1200,11 +1277,24 @@ type routeManifestEntry struct {
 }
 
 func writeRouteManifest(outputDir string, artifacts []Artifact) (string, error) {
+	payload, err := routeManifestPayload(outputDir, artifacts)
+	if err != nil {
+		return "", err
+	}
+
+	manifestPath := filepath.Join(outputDir, routeManifestFile)
+	if err := writeFileIfChanged(manifestPath, payload); err != nil {
+		return "", err
+	}
+	return manifestPath, nil
+}
+
+func routeManifestPayload(outputDir string, artifacts []Artifact) ([]byte, error) {
 	routes := make([]routeManifestEntry, 0, len(artifacts))
 	for _, artifact := range artifacts {
 		rel, err := relativeOutputPath(outputDir, artifact.Path)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		routes = append(routes, routeManifestEntry{
 			PageID: artifact.PageID,
@@ -1221,15 +1311,10 @@ func writeRouteManifest(outputDir string, artifacts []Artifact) (string, error) 
 
 	payload, err := json.MarshalIndent(routeManifest{Version: 1, Routes: routes}, "", "  ")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	payload = append(payload, '\n')
-
-	manifestPath := filepath.Join(outputDir, routeManifestFile)
-	if err := writeFileIfChanged(manifestPath, payload); err != nil {
-		return "", err
-	}
-	return manifestPath, nil
+	return payload, nil
 }
 
 func readRouteManifestIfExists(outputDir string) (routeManifest, error) {
@@ -1304,34 +1389,725 @@ func clientRuntimeArtifacts(pages []manifest.Page, outputDir string) []plannedAs
 	return nil
 }
 
-func writeAssetManifest(outputDir string, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) (string, error) {
-	files := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
-	for _, artifact := range cssArtifacts {
-		rel, err := relativeOutputPath(outputDir, artifact.Path)
-		if err != nil {
-			return "", err
-		}
-		files[rel] = rel
-	}
-	for _, artifact := range assetArtifacts {
-		rel, err := relativeOutputPath(outputDir, artifact.Path)
-		if err != nil {
-			return "", err
-		}
-		files[rel] = rel
-	}
+func runtimeArtifacts(app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout) []plannedAssetArtifact {
+	var artifacts []plannedAssetArtifact
+	artifacts = append(artifacts, clientRuntimeArtifacts(app.Pages, outputDir)...)
+	artifacts = append(artifacts, islandRuntimeArtifacts(app, outputDir, layouts)...)
+	return dedupeAssetArtifacts(artifacts)
+}
 
-	payload, err := json.MarshalIndent(runtimeasset.Manifest{Version: 1, Files: files}, "", "  ")
+func islandRuntimeArtifacts(app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout) []plannedAssetArtifact {
+	stateful := statefulComponentNames(app.Components)
+	planned := map[string]plannedAssetArtifact{}
+	for _, page := range app.Pages {
+		source, err := composePageViewSource(page, layouts)
+		if err != nil {
+			source = page.Blocks.ViewBody
+		}
+		usages, err := view.ComponentCallUsages(source)
+		if err != nil {
+			continue
+		}
+		for _, usage := range usages {
+			switch usage.Island {
+			case "wasm":
+				addAsset(planned, islandWASMArtifact(outputDir, usage.Component))
+				addAsset(planned, islandWASMLoaderArtifact(outputDir, usage.Component))
+			case "":
+				if stateful[usage.Component] {
+					addAsset(planned, islandJSArtifact(outputDir, usage.Component))
+				}
+			}
+		}
+	}
+	if len(planned) == 0 {
+		return nil
+	}
+	paths := make([]string, 0, len(planned))
+	for path := range planned {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	artifacts := make([]plannedAssetArtifact, 0, len(paths))
+	for _, path := range paths {
+		artifacts = append(artifacts, planned[path])
+	}
+	return artifacts
+}
+
+func islandScriptHrefs(source string, components map[string]view.Component) []string {
+	usages, err := view.ComponentCallUsages(source)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var scripts []string
+	for _, usage := range usages {
+		href := ""
+		switch usage.Island {
+		case "wasm":
+			href = "/" + islandWASMLoaderAssetPath(usage.Component)
+		case "":
+			component, ok := components[usage.Component]
+			if ok && (component.StateJSON != "" || component.HandlersJSON != "") {
+				href = "/" + islandJSAssetPath(usage.Component)
+			}
+		}
+		if href == "" || seen[href] {
+			continue
+		}
+		seen[href] = true
+		scripts = append(scripts, href)
+	}
+	sort.Strings(scripts)
+	return scripts
+}
+
+func statefulComponentNames(components []manifest.Component) map[string]bool {
+	out := map[string]bool{}
+	for _, component := range components {
+		if component.State.Type.Name != "" || component.Blocks.Client {
+			out[component.Name] = true
+		}
+	}
+	return out
+}
+
+func addAsset(artifacts map[string]plannedAssetArtifact, artifact plannedAssetArtifact) {
+	artifacts[artifact.Path] = artifact
+}
+
+func dedupeAssetArtifacts(artifacts []plannedAssetArtifact) []plannedAssetArtifact {
+	if len(artifacts) < 2 {
+		return artifacts
+	}
+	seen := map[string]plannedAssetArtifact{}
+	for _, artifact := range artifacts {
+		seen[artifact.Path] = artifact
+	}
+	paths := make([]string, 0, len(seen))
+	for path := range seen {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	out := make([]plannedAssetArtifact, 0, len(paths))
+	for _, path := range paths {
+		out = append(out, seen[path])
+	}
+	return out
+}
+
+func islandJSArtifact(outputDir, componentName string) plannedAssetArtifact {
+	assetPath := islandJSAssetPath(componentName)
+	return plannedAssetArtifact{
+		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
+		contents:      []byte(islandJSSource(componentName)),
+	}
+}
+
+func islandWASMArtifact(outputDir, componentName string) plannedAssetArtifact {
+	assetPath := islandWASMAssetPath(componentName)
+	return plannedAssetArtifact{
+		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
+		contents:      []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00},
+	}
+}
+
+func islandWASMLoaderArtifact(outputDir, componentName string) plannedAssetArtifact {
+	assetPath := islandWASMLoaderAssetPath(componentName)
+	return plannedAssetArtifact{
+		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
+		contents:      []byte(islandWASMLoaderSource(componentName)),
+	}
+}
+
+func islandJSAssetPath(componentName string) string {
+	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".js")
+}
+
+func islandWASMAssetPath(componentName string) string {
+	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".wasm")
+}
+
+func islandWASMLoaderAssetPath(componentName string) string {
+	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".wasm.js")
+}
+
+func componentAssetName(componentName string) string {
+	name := exportedSafe(componentName)
+	if name == "" {
+		return "component"
+	}
+	return name
+}
+
+func islandJSSource(componentName string) string {
+	component := strconv.Quote(componentName)
+	return fmt.Sprintf(`(() => {
+  const component = %s;
+  const selector = "gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]";
+  const booleanAttrs = new Set(["allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "defer", "disabled", "formnovalidate", "hidden", "inert", "ismap", "loop", "multiple", "muted", "nomodule", "novalidate", "open", "readonly", "required", "reversed", "selected"]);
+
+  function matchingBrace(source, openIndex) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = openIndex; i < source.length; i++) {
+      const char = source[i];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (inString) {
+        if (char === "\\") escaped = true;
+        else if (char === "\"") inString = false;
+        continue;
+      }
+      if (char === "\"") inString = true;
+      else if (char === "{") depth++;
+      else if (char === "}") {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  function expressionSource(source) {
+    source = source.trim();
+    if (!source.startsWith("if ")) return source.replace(/\bnil\b/g, "null");
+    const thenOpen = source.indexOf("{");
+    if (thenOpen < 0) return source.replace(/\bnil\b/g, "null");
+    const thenClose = matchingBrace(source, thenOpen);
+    if (thenClose < 0) return source.replace(/\bnil\b/g, "null");
+    const tail = source.slice(thenClose + 1).trim();
+    if (!tail.startsWith("else")) return source.replace(/\bnil\b/g, "null");
+    const elseOpen = source.indexOf("{", thenClose + 1);
+    if (elseOpen < 0) return source.replace(/\bnil\b/g, "null");
+    const elseClose = matchingBrace(source, elseOpen);
+    if (elseClose < 0) return source.replace(/\bnil\b/g, "null");
+    const cond = source.slice(2, thenOpen).trim();
+    const thenExpr = source.slice(thenOpen + 1, thenClose).trim();
+    const elseExpr = source.slice(elseOpen + 1, elseClose).trim();
+    return "(" + expressionSource(cond) + " ? " + expressionSource(thenExpr) + " : " + expressionSource(elseExpr) + ")";
+  }
+
+  function callHelper(name, args, state, helpers, stack) {
+    const helper = helpers && helpers[name];
+    if (!helper) return null;
+    stack = stack || [];
+    if (stack.indexOf(name) >= 0) throw new Error("recursive GOWDK helper " + name);
+    const nextScope = Object.create(null);
+    (helper.params || []).forEach((param, index) => {
+      nextScope[param] = args[index];
+    });
+    return valueOf(helper.return || "", state, nextScope, helpers, stack.concat([name]));
+  }
+
+  const builtins = Object.freeze({
+    len(value) {
+      if (value == null) return 0;
+      if (typeof value === "string" || Array.isArray(value)) return value.length;
+      return 0;
+    },
+    string(value) {
+      if (value == null) return "";
+      return String(value);
+    },
+    int(value) {
+      const next = Number.parseInt(value, 10);
+      return Number.isNaN(next) ? 0 : next;
+    },
+    float(value) {
+      const next = Number.parseFloat(value);
+      return Number.isNaN(next) ? 0 : next;
+    }
+  });
+
+  function valueOf(token, state, scope, helpers, stack) {
+    token = token.trim();
+    if (token === "true") return true;
+    if (token === "false") return false;
+    if (token === "null" || token === "nil") return null;
+    if (/^-?[0-9]+(?:\.[0-9]+)?$/.test(token)) return Number(token);
+    if (token[0] === "\"") return JSON.parse(token);
+    if (scope && Object.prototype.hasOwnProperty.call(scope, token)) return scope[token];
+    if (Object.prototype.hasOwnProperty.call(state, token)) return state[token];
+    const env = Object.assign(Object.create(null), builtins, state, scope || {});
+    Object.keys(helpers || {}).forEach((name) => {
+      env[name] = (...args) => callHelper(name, args, state, helpers, stack || []);
+    });
+    return Function("env", "with (env) { return (" + expressionSource(token) + "); }")(env);
+  }
+
+  function recomputeComputed(state, computeds, helpers) {
+    (computeds || []).forEach((computed) => {
+      state[computed.name] = valueOf(computed.expr, state, null, helpers);
+    });
+  }
+
+  function splitArgs(source) {
+    source = source.trim();
+    if (!source) return [];
+    const args = [];
+    let start = 0;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < source.length; i++) {
+      const char = source[i];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (inString) {
+        if (char === "\\") escaped = true;
+        else if (char === "\"") inString = false;
+        continue;
+      }
+      if (char === "\"") inString = true;
+      else if (char === "(" || char === "[" || char === "{") depth++;
+      else if (char === ")" || char === "]" || char === "}") depth--;
+      else if (char === ",") {
+        if (depth > 0) continue;
+        args.push(source.slice(start, i).trim());
+        start = i + 1;
+      }
+    }
+    args.push(source.slice(start).trim());
+    return args;
+  }
+
+  function applyExpression(expr, state, handlers, helpers, scope, refs, computeds) {
+    expr = expr.trim();
+    let local = expr.match(/^let\s+([A-Za-z_][A-Za-z0-9_]*)\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*(.+)$/);
+    if (local) {
+      if (!scope) return;
+      scope[local[1]] = valueOf(local[2], state, scope, helpers);
+      return;
+    }
+    let call = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)\((.*)\)$/);
+    if (call) {
+      if (call[1] === "append" || call[1] === "remove" || call[1] === "move") {
+        const args = splitArgs(call[2]);
+        const field = (args[0] || "").trim();
+        if (!Array.isArray(state[field])) return;
+        if (call[1] === "append" && args.length === 2) {
+          state[field] = state[field].concat([valueOf(args[1], state, scope, helpers)]);
+          return;
+        }
+        if (call[1] === "remove" && args.length === 2) {
+          const index = Number(valueOf(args[1], state, scope, helpers));
+          if (!Number.isInteger(index) || index < 0 || index >= state[field].length) return;
+          state[field] = state[field].slice(0, index).concat(state[field].slice(index + 1));
+          return;
+        }
+        if (call[1] === "move" && args.length === 3) {
+          const from = Number(valueOf(args[1], state, scope, helpers));
+          const to = Number(valueOf(args[2], state, scope, helpers));
+          if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || from >= state[field].length || to < 0 || to >= state[field].length || from === to) return;
+          const next = state[field].slice();
+          const item = next.splice(from, 1)[0];
+          next.splice(to, 0, item);
+          state[field] = next;
+          return;
+        }
+        return;
+      }
+      const handler = handlers[call[1]];
+      if (!handler) return;
+      const params = handler.params || [];
+      const args = splitArgs(call[2]);
+      const nextScope = Object.create(null);
+      params.forEach((param, index) => {
+        nextScope[param] = valueOf(args[index] || "", state, scope, helpers);
+      });
+      (handler.statements || handler).forEach((statement) => {
+        applyExpression(statement, state, handlers, helpers, nextScope, refs, computeds);
+        recomputeComputed(state, computeds, helpers);
+      });
+      return;
+    }
+    let refCall = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)\.(Focus|Blur|ScrollIntoView)\(\)$/);
+    if (refCall) {
+      const node = refs && refs[refCall[1]];
+      if (!node) return;
+      if (refCall[2] === "Focus" && typeof node.focus === "function") node.focus();
+      else if (refCall[2] === "Blur" && typeof node.blur === "function") node.blur();
+      else if (refCall[2] === "ScrollIntoView" && typeof node.scrollIntoView === "function") node.scrollIntoView();
+      return;
+    }
+    let match = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)(\+\+|--)$/);
+    if (match) {
+      const current = Number(state[match[1]] || 0);
+      state[match[1]] = match[2] === "++" ? current + 1 : current - 1;
+      return;
+    }
+    match = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/);
+    if (match) {
+      const target = match[1];
+      const value = match[2].trim();
+      const toggle = value.match(/^!\s*([A-Za-z_][A-Za-z0-9_]*)$/);
+      state[target] = toggle ? !Boolean(valueOf(toggle[1], state, scope, helpers)) : valueOf(value, state, scope, helpers);
+    }
+  }
+
+  function applyStatements(statements, state, handlers, helpers, scope, refs, computeds) {
+    (statements || []).forEach((statement) => {
+      applyExpression(statement, state, handlers, helpers, scope || null, refs, computeds);
+      recomputeComputed(state, computeds, helpers);
+    });
+  }
+
+  function escapeHTML(value) {
+    return String(value).replace(/[&<>"']/g, (char) => {
+      if (char === "&") return "&amp;";
+      if (char === "<") return "&lt;";
+      if (char === ">") return "&gt;";
+      if (char === "\"") return "&quot;";
+      return "&#39;";
+    });
+  }
+
+  function interpolateTemplate(template, state, scope, helpers) {
+    return template.replace(/\{\{([^{}]+)\}\}/g, (_match, expr) => {
+      const value = valueOf(expr, state, scope, helpers);
+      return value == null ? "" : escapeHTML(value);
+    });
+  }
+
+  function firstTemplateElement(html) {
+    const holder = document.createElement("template");
+    holder.innerHTML = html.trim();
+    return holder.content.firstElementChild;
+  }
+
+  function syncElement(target, source) {
+    Array.from(target.attributes).forEach((attr) => {
+      if (!source.hasAttribute(attr.name)) target.removeAttribute(attr.name);
+    });
+    Array.from(source.attributes).forEach((attr) => {
+      if (target.getAttribute(attr.name) !== attr.value) target.setAttribute(attr.name, attr.value);
+    });
+    if (target.innerHTML !== source.innerHTML) target.innerHTML = source.innerHTML;
+  }
+
+  function renderListLoops(root, state, helpers) {
+    root.querySelectorAll("template[data-gowdk-for]").forEach((marker) => {
+      const group = marker.getAttribute("data-gowdk-for");
+      const itemName = marker.getAttribute("data-gowdk-for-var");
+      const indexName = marker.getAttribute("data-gowdk-for-index-var");
+      const source = marker.getAttribute("data-gowdk-for-source");
+      const keyExpr = marker.getAttribute("data-gowdk-for-key");
+      const template = marker.getAttribute("data-gowdk-for-template") || "";
+      const items = valueOf(source, state, null, helpers);
+      const existing = new Map();
+      let cursor = marker.nextSibling;
+      while (cursor) {
+        const next = cursor.nextSibling;
+        if (cursor.nodeType !== 1 || cursor.getAttribute("data-gowdk-for-item") !== group) break;
+        existing.set(cursor.getAttribute("data-gowdk-key-value") || "", cursor);
+        cursor = next;
+      }
+      if (!Array.isArray(items)) return;
+      const fragment = document.createDocumentFragment();
+      const used = new Set();
+      items.forEach((item, index) => {
+        const scope = Object.create(null);
+        scope[itemName] = item;
+        scope.index = index;
+        if (indexName) scope[indexName] = index;
+        const key = String(valueOf(keyExpr, state, scope, helpers) ?? "");
+        const fresh = firstTemplateElement(interpolateTemplate(template, state, scope, helpers));
+        if (!fresh) return;
+        const reused = existing.get(key);
+        if (reused && !used.has(key)) {
+          syncElement(reused, fresh);
+          fragment.appendChild(reused);
+          used.add(key);
+          return;
+        }
+        fragment.appendChild(fresh);
+        used.add(key);
+      });
+      marker.parentNode.insertBefore(fragment, marker.nextSibling);
+      existing.forEach((node, key) => {
+        if (!used.has(key) && node.parentNode) node.parentNode.removeChild(node);
+      });
+    });
+  }
+
+  function eventModifiers(source) {
+    const modifiers = { prevent: false, stop: false, once: false, capture: false, debounce: 0, throttle: 0 };
+    (source || "").split(/\s+/).filter(Boolean).forEach((item) => {
+      if (item === "prevent") modifiers.prevent = true;
+      else if (item === "stop") modifiers.stop = true;
+      else if (item === "once") modifiers.once = true;
+      else if (item === "capture") modifiers.capture = true;
+      else if (item.startsWith("debounce:")) modifiers.debounce = Number(item.slice("debounce:".length)) || 0;
+      else if (item.startsWith("throttle:")) modifiers.throttle = Number(item.slice("throttle:".length)) || 0;
+    });
+    return modifiers;
+  }
+
+  function render(root, state, helpers) {
+    renderListLoops(root, state, helpers);
+    root.querySelectorAll("[data-gowdk-bind]").forEach((node) => {
+      const field = node.getAttribute("data-gowdk-bind");
+      node.textContent = state[field] == null ? "" : String(state[field]);
+    });
+    const conditionalGroups = new Map();
+    root.querySelectorAll("[data-gowdk-if-group]").forEach((node) => {
+      const group = node.getAttribute("data-gowdk-if-group");
+      if (!conditionalGroups.has(group)) conditionalGroups.set(group, []);
+      conditionalGroups.get(group).push(node);
+    });
+    conditionalGroups.forEach((nodes) => {
+      nodes.sort((left, right) => Number(left.getAttribute("data-gowdk-if-index")) - Number(right.getAttribute("data-gowdk-if-index")));
+      let matched = false;
+      nodes.forEach((node) => {
+        const condition = node.getAttribute("data-gowdk-if");
+        const visible = !matched && (condition == null || Boolean(valueOf(condition, state, null, helpers)));
+        node.hidden = !visible;
+        if (visible) matched = true;
+      });
+    });
+    root.querySelectorAll("[data-gowdk-bind-value]").forEach((node) => {
+      const field = node.getAttribute("data-gowdk-bind-value");
+      if (node.type === "radio") {
+        node.checked = String(state[field] == null ? "" : state[field]) === node.value;
+        return;
+      }
+      const value = state[field] == null ? "" : String(state[field]);
+      if (document.activeElement !== node && node.value !== value) node.value = value;
+    });
+    root.querySelectorAll("[data-gowdk-bind-checked]").forEach((node) => {
+      const field = node.getAttribute("data-gowdk-bind-checked");
+      const checked = Boolean(state[field]);
+      if (node.checked !== checked) node.checked = checked;
+    });
+    root.querySelectorAll("*").forEach((node) => {
+      Array.from(node.attributes).forEach((attr) => {
+        if (!attr.name.startsWith("data-gowdk-class-")) return;
+        const name = attr.name.slice("data-gowdk-class-".length);
+        node.classList.toggle(name, Boolean(valueOf(attr.value, state, null, helpers)));
+      });
+    });
+    root.querySelectorAll("*").forEach((node) => {
+      Array.from(node.attributes).forEach((attr) => {
+        if (!attr.name.startsWith("data-gowdk-style-") || attr.name.startsWith("data-gowdk-style-unit-")) return;
+        const name = attr.name.slice("data-gowdk-style-".length);
+        const unit = node.getAttribute("data-gowdk-style-unit-" + name) || "";
+        const value = valueOf(attr.value, state, null, helpers);
+        if (value == null || value === false || value === "") node.style.removeProperty(name);
+        else node.style.setProperty(name, String(value) + unit);
+      });
+    });
+    root.querySelectorAll("*").forEach((node) => {
+      Array.from(node.attributes).forEach((attr) => {
+        if (!attr.name.startsWith("data-gowdk-attr-")) return;
+        const name = attr.name.slice("data-gowdk-attr-".length);
+        const value = valueOf(attr.value, state, null, helpers);
+        if (booleanAttrs.has(name)) {
+          if (Boolean(value)) node.setAttribute(name, "");
+          else node.removeAttribute(name);
+          return;
+        }
+        if (value == null || value === false) node.removeAttribute(name);
+        else node.setAttribute(name, String(value));
+      });
+    });
+    root.setAttribute("data-gowdk-state", JSON.stringify(state));
+  }
+
+  document.querySelectorAll(selector).forEach((root) => {
+    const state = JSON.parse(root.getAttribute("data-gowdk-state") || "{}");
+    const client = JSON.parse(root.getAttribute("data-gowdk-client") || "{}");
+    const hasEnvelope = Boolean(client.handlers || client.helpers || client.mount || client.destroy || client.effects || client.computed);
+    const handlers = hasEnvelope ? (client.handlers || {}) : client;
+    const helpers = client.helpers || {};
+    const mountStatements = client.mount || [];
+    const destroyStatements = client.destroy || [];
+    const effects = client.effects || [];
+    const computeds = client.computed || [];
+    const refs = Object.create(null);
+    recomputeComputed(state, computeds, helpers);
+    root.querySelectorAll("[data-gowdk-ref]").forEach((node) => {
+      refs[node.getAttribute("data-gowdk-ref")] = node;
+    });
+    const effectValues = Object.create(null);
+    const effectCleanups = Object.create(null);
+    effects.forEach((effect) => {
+      effectValues[effect.field] = state[effect.field];
+    });
+    const runEffectCleanup = (effect) => {
+      const cleanup = effectCleanups[effect.field];
+      if (!cleanup || cleanup.length === 0) return;
+      effectCleanups[effect.field] = null;
+      applyStatements(cleanup, state, handlers, helpers, null, refs, computeds);
+    };
+    const runAllEffectCleanups = () => {
+      effects.forEach((effect) => runEffectCleanup(effect));
+    };
+    const settleEffects = () => {
+      for (let pass = 0; pass < 10; pass++) {
+        let ran = false;
+        effects.forEach((effect) => {
+          const current = state[effect.field];
+          if (Object.is(effectValues[effect.field], current)) return;
+          runEffectCleanup(effect);
+          effectValues[effect.field] = current;
+          applyStatements(effect.statements, state, handlers, helpers, null, refs, computeds);
+          effectCleanups[effect.field] = effect.cleanup || null;
+          ran = true;
+        });
+        if (!ran) return;
+      }
+    };
+    const rerender = () => {
+      render(root, state, helpers);
+      bindInteractiveNodes();
+    };
+    const bindInteractiveNodes = () => {
+      root.querySelectorAll("*").forEach((node) => {
+        if (node.hasAttribute("data-gowdk-bind-value") && !node.hasAttribute("data-gowdk-bound-value")) {
+          node.setAttribute("data-gowdk-bound-value", "");
+          const field = node.getAttribute("data-gowdk-bind-value");
+          const type = node.getAttribute("data-gowdk-bind-type") || "string";
+          const event = node.tagName === "SELECT" || node.type === "radio" ? "change" : "input";
+          node.addEventListener(event, () => {
+            if (node.type === "radio") {
+              if (!node.checked) return;
+              state[field] = node.value;
+            } else if (type === "int") {
+              const next = parseInt(node.value, 10);
+              state[field] = Number.isNaN(next) ? 0 : next;
+            } else if (type === "float") {
+              const next = parseFloat(node.value);
+              state[field] = Number.isNaN(next) ? 0 : next;
+            } else {
+              state[field] = node.value;
+            }
+            recomputeComputed(state, computeds, helpers);
+            settleEffects();
+            recomputeComputed(state, computeds, helpers);
+            rerender();
+          });
+        }
+        if (node.hasAttribute("data-gowdk-bind-checked") && !node.hasAttribute("data-gowdk-bound-checked")) {
+          node.setAttribute("data-gowdk-bound-checked", "");
+          const field = node.getAttribute("data-gowdk-bind-checked");
+          node.addEventListener("change", () => {
+            state[field] = node.checked;
+            recomputeComputed(state, computeds, helpers);
+            settleEffects();
+            recomputeComputed(state, computeds, helpers);
+            rerender();
+          });
+        }
+        Array.from(node.attributes).forEach((attr) => {
+          if (!attr.name.startsWith("data-gowdk-on-")) return;
+          const event = attr.name.slice("data-gowdk-on-".length);
+          const boundAttr = "data-gowdk-bound-on-" + event;
+          if (node.hasAttribute(boundAttr)) return;
+          node.setAttribute(boundAttr, "");
+          const modifiers = eventModifiers(node.getAttribute("data-gowdk-event-" + event));
+          let debounceTimer = 0;
+          let throttleUntil = 0;
+          const invoke = () => {
+            applyExpression(attr.value, state, handlers, helpers, null, refs, computeds);
+            recomputeComputed(state, computeds, helpers);
+            settleEffects();
+            recomputeComputed(state, computeds, helpers);
+            rerender();
+          };
+          const listener = (domEvent) => {
+            if (modifiers.prevent) domEvent.preventDefault();
+            if (modifiers.stop) domEvent.stopPropagation();
+            if (modifiers.debounce > 0) {
+              clearTimeout(debounceTimer);
+              debounceTimer = setTimeout(invoke, modifiers.debounce);
+              return;
+            }
+            if (modifiers.throttle > 0) {
+              const now = Date.now();
+              if (now < throttleUntil) return;
+              throttleUntil = now + modifiers.throttle;
+            }
+            invoke();
+          };
+          node.addEventListener(event, listener, { once: modifiers.once, capture: modifiers.capture });
+        });
+      });
+    };
+    applyStatements(mountStatements, state, handlers, helpers, null, refs, computeds);
+    settleEffects();
+    recomputeComputed(state, computeds, helpers);
+    if (destroyStatements.length > 0) {
+      window.addEventListener("pagehide", () => {
+        runAllEffectCleanups();
+        applyStatements(destroyStatements, state, handlers, helpers, null, refs, computeds);
+      }, { once: true });
+    } else if (effects.length > 0) {
+      window.addEventListener("pagehide", () => {
+        runAllEffectCleanups();
+      }, { once: true });
+    }
+    rerender();
+  });
+})();
+`, component)
+}
+
+func islandWASMLoaderSource(componentName string) string {
+	component := strconv.Quote(componentName)
+	wasmPath := strconv.Quote("/" + islandWASMAssetPath(componentName))
+	return fmt.Sprintf(`(() => {
+  const component = %s;
+  const wasmPath = %s;
+  const roots = document.querySelectorAll("gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"wasm\"]");
+  if (roots.length === 0 || typeof WebAssembly === "undefined") return;
+  WebAssembly.instantiateStreaming(fetch(wasmPath), {}).catch(() => {});
+})();
+`, component, wasmPath)
+}
+
+func writeAssetManifest(outputDir string, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) (string, error) {
+	payload, err := assetManifestPayload(outputDir, cssArtifacts, assetArtifacts)
 	if err != nil {
 		return "", err
 	}
-	payload = append(payload, '\n')
 
 	manifestPath := filepath.Join(outputDir, assetManifestFile)
 	if err := writeFileIfChanged(manifestPath, payload); err != nil {
 		return "", err
 	}
 	return manifestPath, nil
+}
+
+func assetManifestPayload(outputDir string, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) ([]byte, error) {
+	files := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
+	for _, artifact := range cssArtifacts {
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return nil, err
+		}
+		files[rel] = rel
+	}
+	for _, artifact := range assetArtifacts {
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return nil, err
+		}
+		files[rel] = rel
+	}
+
+	payload, err := json.MarshalIndent(runtimeasset.Manifest{Version: 1, Files: files}, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	payload = append(payload, '\n')
+	return payload, nil
 }
 
 func writeFileIfChanged(filePath string, contents []byte) error {
@@ -1385,32 +2161,193 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 			continue
 		}
 
-		props := make([]string, 0, len(component.Props))
-		seen := map[string]bool{}
-		for _, prop := range component.Props {
-			if prop.Type != "string" {
-				failures = append(failures, fmt.Sprintf("component %s prop %s uses unsupported type %q", component.Name, prop.Name, prop.Type))
-				valid = false
-				continue
-			}
-			if seen[prop.Name] {
-				failures = append(failures, fmt.Sprintf("component %s declares duplicate prop %q", component.Name, prop.Name))
-				valid = false
-				continue
-			}
-			seen[prop.Name] = true
-			props = append(props, prop.Name)
+		props, propFailures := componentPropNames(component)
+		for _, failure := range propFailures {
+			failures = append(failures, failure)
+			valid = false
+		}
+		state, stateTypes, stateJSON, err := componentInitialState(component)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("component %s state: %v", component.Name, err))
+			valid = false
+		}
+		handlers, handlersJSON, err := componentClientHandlers(component)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("component %s client: %v", component.Name, err))
+			valid = false
+		}
+		refs, refFailures := componentClientRefs(component)
+		for _, failure := range refFailures {
+			failures = append(failures, failure)
+			valid = false
+		}
+		computeds, computedFailures := componentClientComputeds(component)
+		for _, failure := range computedFailures {
+			failures = append(failures, failure)
+			valid = false
 		}
 		if !valid {
 			continue
 		}
 		registry[component.Name] = view.Component{
-			Name:  component.Name,
-			Props: props,
-			Body:  component.Blocks.ViewBody,
+			Name:         component.Name,
+			Props:        props,
+			State:        state,
+			StateJSON:    stateJSON,
+			Handlers:     handlers,
+			HandlersJSON: handlersJSON,
+			StateTypes:   stateTypes,
+			Refs:         refs,
+			Computed:     computeds,
+			Body:         component.Blocks.ViewBody,
 		}
 	}
 	return registry, failures
+}
+
+func componentClientComputeds(component manifest.Component) ([]clientlang.Computed, []string) {
+	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
+		return nil, nil
+	}
+	program, err := clientlang.Parse(component.Blocks.ClientBody)
+	if err != nil {
+		return nil, []string{fmt.Sprintf("component %s client: %v", component.Name, err)}
+	}
+	computeds, err := program.OrderedComputed()
+	if err != nil {
+		return nil, []string{fmt.Sprintf("component %s computed dependency graph: %v", component.Name, err)}
+	}
+	return computeds, nil
+}
+
+func componentClientRefs(component manifest.Component) (map[string]clientlang.Ref, []string) {
+	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
+		return nil, nil
+	}
+	program, err := clientlang.Parse(component.Blocks.ClientBody)
+	if err != nil {
+		return nil, []string{fmt.Sprintf("component %s client: %v", component.Name, err)}
+	}
+	return program.RefMap(), nil
+}
+
+func componentClientHandlers(component manifest.Component) (map[string]clientlang.Handler, string, error) {
+	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
+		return nil, "", nil
+	}
+	program, err := clientlang.Parse(component.Blocks.ClientBody)
+	if err != nil {
+		return nil, "", err
+	}
+	handlers := program.HandlerMap()
+	helpers := program.HelperMap()
+	if len(handlers) == 0 && len(helpers) == 0 && !program.NeedsBootstrap() {
+		return nil, "", nil
+	}
+	computeds, err := program.OrderedComputed()
+	if err != nil {
+		return nil, "", err
+	}
+	var payload []byte
+	if program.NeedsBootstrap() {
+		payload, err = json.Marshal(clientlang.Bootstrap{
+			Handlers: handlers,
+			Helpers:  helpers,
+			Mount:    append([]string(nil), program.Mount...),
+			Destroy:  append([]string(nil), program.Destroy...),
+			Effects:  append([]clientlang.Effect(nil), program.Effects...),
+			Computed: computeds,
+		})
+	} else {
+		payload, err = json.Marshal(handlers)
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	return handlers, string(payload), nil
+}
+
+func componentPropNames(component manifest.Component) ([]string, []string) {
+	if component.PropsType.Name != "" {
+		resolved, err := gotypes.ResolveStruct(component.Imports, component.PropsType)
+		if err != nil {
+			return nil, []string{fmt.Sprintf("component %s props: %v", component.Name, err)}
+		}
+		return resolved.FieldNames(), nil
+	}
+	props := make([]string, 0, len(component.Props))
+	seen := map[string]bool{}
+	var failures []string
+	for _, prop := range component.Props {
+		if prop.Type != "string" {
+			failures = append(failures, fmt.Sprintf("component %s prop %s uses unsupported type %q", component.Name, prop.Name, prop.Type))
+			continue
+		}
+		if seen[prop.Name] {
+			failures = append(failures, fmt.Sprintf("component %s declares duplicate prop %q", component.Name, prop.Name))
+			continue
+		}
+		seen[prop.Name] = true
+		props = append(props, prop.Name)
+	}
+	return props, failures
+}
+
+func componentInitialState(component manifest.Component) (map[string]string, map[string]clientlang.ValueType, string, error) {
+	if component.State.Type.Name == "" {
+		return nil, nil, "", nil
+	}
+	resolved, err := gotypes.ResolveStruct(component.Imports, component.State.Type)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	rawJSON, err := gotypes.RunStateInitJSON(component.Imports, component.State)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(rawJSON, &raw); err != nil {
+		return nil, nil, "", fmt.Errorf("decode state JSON: %w", err)
+	}
+	state := map[string]string{}
+	stateTypes := map[string]clientlang.ValueType{}
+	for _, field := range resolved.Fields {
+		value, ok := raw[field.Name]
+		if !ok {
+			return nil, nil, "", fmt.Errorf("init JSON missing field %q", field.Name)
+		}
+		scalar, ok := stateValueString(value)
+		if !ok {
+			return nil, nil, "", fmt.Errorf("field %s must initialize to JSON-compatible state", field.Name)
+		}
+		state[field.Name] = scalar
+		stateTypes[field.Name] = clientlang.NormalizeType(field.Type)
+	}
+	for field, typ := range resolved.FieldTypes {
+		stateTypes[field] = clientlang.NormalizeType(typ)
+	}
+	return state, stateTypes, string(rawJSON), nil
+}
+
+func stateValueString(value any) (string, bool) {
+	switch typed := value.(type) {
+	case nil:
+		return "", true
+	case string:
+		return typed, true
+	case float64:
+		return strconv.FormatFloat(typed, 'f', -1, 64), true
+	case bool:
+		return strconv.FormatBool(typed), true
+	case []any, map[string]any:
+		payload, err := json.Marshal(typed)
+		if err != nil {
+			return "", false
+		}
+		return string(payload), true
+	default:
+		return "", false
+	}
 }
 
 func buildLayouts(layouts []manifest.Layout) (map[string]manifest.Layout, []string) {
@@ -1473,7 +2410,7 @@ func renderPage(config gowdk.Config, page manifest.Page, components map[string]v
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
-	return document(page, body, stylesheets, pageScripts(page, page.Blocks.ViewBody, policy)), nil
+	return document(page, body, stylesheets, pageScripts(page, viewSource, components, policy)), nil
 }
 
 func composePageViewSource(page manifest.Page, layouts map[string]manifest.Layout) (string, error) {
@@ -1540,11 +2477,16 @@ func actionRoutes(page manifest.Page, data map[string]string) map[string]string 
 	return routes
 }
 
-func pageScripts(page manifest.Page, viewSource string, policy renderModePolicy) []string {
-	if policy != renderModeStatic || !pageUsesPartialRuntime(page, viewSource) {
+func pageScripts(page manifest.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) []string {
+	if policy != renderModeStatic {
 		return nil
 	}
-	return []string{clientRuntimeHref}
+	var scripts []string
+	if pageUsesPartialRuntime(page, viewSource) {
+		scripts = append(scripts, clientRuntimeHref)
+	}
+	scripts = append(scripts, islandScriptHrefs(viewSource, components)...)
+	return scripts
 }
 
 func pageUsesPartialRuntime(page manifest.Page, viewSource string) bool {

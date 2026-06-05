@@ -30,6 +30,7 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 	for _, path := range []string{
 		result.ModulePath,
 		result.MainPath,
+		result.PackagePath,
 		filepath.Join(result.StaticDir, "index.html"),
 		filepath.Join(result.StaticDir, "blog", "hello", "index.html"),
 	} {
@@ -45,19 +46,35 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
-		"//go:embed static",
+		`"gowdk-generated-app/gowdkapp"`,
+		"handler, err := gowdkapp.Handler()",
 		"ReadHeaderTimeout: 5 * time.Second",
+	} {
+		if !strings.Contains(string(mainPayload), expected) {
+			t.Fatalf("expected generated server main.go to contain %q:\n%s", expected, mainPayload)
+		}
+	}
+	packagePayload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"package gowdkapp",
+		"//go:embed static",
+		"func Handler() (http.Handler, error)",
+		"func ServeMux() (*http.ServeMux, error)",
+		"mux.Handle(\"/\", staticHandler{",
 		`response.Header().Set("Allow", "GET, HEAD")`,
 		`request.URL.Path == "/_gowdk/health"`,
 		`response.Header().Set("X-GOWDK-App", handler.identity.AppID)`,
 		`response.Header().Set("X-GOWDK-Instance-ID", handler.identity.InstanceID)`,
-		`assets := loadAssetManifest(root)`,
+		`assets:   loadAssetManifest(root),`,
 		`"assets":      strconv.Itoa(len(handler.assets.Files))`,
 		`instanceID = generatedInstanceID(moduleName)`,
 		`rand.Read(token[:])`,
 	} {
-		if !strings.Contains(string(mainPayload), expected) {
-			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, mainPayload)
+		if !strings.Contains(string(packagePayload), expected) {
+			t.Fatalf("expected generated gowdkapp/app.go to contain %q:\n%s", expected, packagePayload)
 		}
 	}
 }
@@ -75,6 +92,7 @@ func TestGeneratePreservesUnchangedFilesAndRemovesStaleStaticFiles(t *testing.T)
 	}
 	paths := []string{
 		result.MainPath,
+		result.PackagePath,
 		result.ModulePath,
 		filepath.Join(result.StaticDir, "index.html"),
 	}
@@ -170,7 +188,7 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := os.ReadFile(result.MainPath)
+	payload, err := os.ReadFile(result.PackagePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +239,7 @@ func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := os.ReadFile(result.MainPath)
+	payload, err := os.ReadFile(result.PackagePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +273,7 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := os.ReadFile(result.MainPath)
+	payload, err := os.ReadFile(result.PackagePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +312,7 @@ func TestGenerateWritesDynamicSSRHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := os.ReadFile(result.MainPath)
+	payload, err := os.ReadFile(result.PackagePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +342,7 @@ func TestGenerateWritesDynamicSSRHandlerWithoutReplacements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := os.ReadFile(result.MainPath)
+	payload, err := os.ReadFile(result.PackagePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +458,7 @@ func TestGenerateRejectsAppDirInsideStaticOutput(t *testing.T) {
 func TestGenerateRejectsStaticOutputInsideGeneratedStaticDir(t *testing.T) {
 	root := t.TempDir()
 	appDir := filepath.Join(root, "app")
-	staticDir := filepath.Join(appDir, "static")
+	staticDir := filepath.Join(appDir, "gowdkapp", "static")
 	writeTestFile(t, filepath.Join(staticDir, "index.html"), "<main>Home</main>")
 
 	_, err := Generate(staticDir, appDir)

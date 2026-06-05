@@ -39,6 +39,12 @@ Implemented today:
   `required` fields when the action declares `valid(input)?`.
 - Generated static output emits `assets/gowdk/gowdk.js` only for pages that use
   partial form metadata with fragment-producing actions.
+- Generated static output emits `assets/gowdk/islands/<Component>.js` for
+  stateful component instances that use the default generated JavaScript island
+  runtime.
+- Generated static output emits `assets/gowdk/islands/<Component>.wasm` plus
+  `assets/gowdk/islands/<Component>.wasm.js` only for component calls that
+  explicitly set `g:island="wasm"`.
 - Generated static apps can return first-slice partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests.
 - Generated static app action route extraction rejects direct file inputs and
@@ -51,6 +57,8 @@ Implemented today:
   `{prop}` interpolation. Generated component code writes static compiler-owned
   chunks through `runtime/render.Builder.Static` and expression output through
   `runtime/render.Builder.Text`, which escapes by default.
+- `internal/gotypes` resolves component prop/state structs through Go module
+  import paths using `go list`, `go/parser`, and `go/types`.
 - `runtime/response` defines fragment responses with target and swap metadata
   for generated and future partial handlers.
 - `/` maps to `index.html`.
@@ -95,19 +103,26 @@ The target output can include:
 ```text
 .gowdk/app/
   go.mod
-  main.go
-  static/
-    index.html
-    gowdk-routes.json
-    gowdk-assets.json
+  gowdkapp/
+    app.go
+    static/
+      index.html
+      gowdk-routes.json
+      gowdk-assets.json
+  cmd/
+    server/
+      main.go
 ```
 
 `gowdk build --out dist --app .gowdk/app --bin dist/site` then runs `go build`
-inside `.gowdk/app` and writes `dist/site`.
+for `.gowdk/app/cmd/server` and writes `dist/site`.
 
-The generated app reads `GOWDK_ADDR`, defaults to `127.0.0.1:8080`, serves GET
-and HEAD requests, maps extensionless routes to nested `index.html` files, and
-does not list directories. It exposes `/_gowdk/health` and adds
+The generated `gowdkapp` package exposes `Handler() (http.Handler, error)` and
+`ServeMux() (*http.ServeMux, error)` for `net/http`, Chi, Echo, Gin, and other
+router integrations. The generated `cmd/server` entrypoint uses that same
+handler, reads `GOWDK_ADDR`, defaults to `127.0.0.1:8080`, serves GET and HEAD
+requests, maps extensionless routes to nested `index.html` files, and does not
+list directories. It exposes `/_gowdk/health` and adds
 `X-GOWDK-App`, `X-GOWDK-Module`, and `X-GOWDK-Instance-ID` headers to responses.
 It loads `gowdk-assets.json` from the embedded static filesystem when present.
 Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
@@ -163,8 +178,9 @@ as `/blog/hello-gowdk`.
 
 The `files` map resolves logical asset names to slash-separated paths relative
 to the selected output directory. The current implementation records CSS files
-emitted by CSS processors and generated page CSS files. It does not record
-configured stylesheet URLs that were not written by the build.
+emitted by CSS processors, generated page CSS files, partial runtime assets, and
+generated island runtime assets. It does not record configured stylesheet URLs
+that were not written by the build.
 
 ## Planned Server Defaults
 

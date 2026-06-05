@@ -163,6 +163,72 @@ func TestParseWatchOptionsSupportsRestart(t *testing.T) {
 	}
 }
 
+func TestParseDevOptions(t *testing.T) {
+	options, err := parseDevOptions([]string{"--addr", "127.0.0.1:8090", "--interval=250ms", "--out", "dist", "home.page.gwdk"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.Addr != "127.0.0.1:8090" {
+		t.Fatalf("unexpected addr: %q", options.Addr)
+	}
+	if options.Interval != 250*time.Millisecond {
+		t.Fatalf("unexpected interval: %s", options.Interval)
+	}
+	if strings.Join(options.BuildArgs, " ") != "--out dist home.page.gwdk" {
+		t.Fatalf("unexpected build args: %#v", options.BuildArgs)
+	}
+}
+
+func TestDevOutputDirUsesConfiguredTarget(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Targets: []gowdk.BuildTargetConfig{
+			{Name: "admin", Output: "dist/admin"},
+		},
+	},
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		outputDir, err := devOutputDir([]string{"--target", "admin"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if outputDir != "dist/admin" {
+			t.Fatalf("unexpected dev output dir: %q", outputDir)
+		}
+	})
+}
+
+func TestDevOutputDirRejectsAmbiguousTargets(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Targets: []gowdk.BuildTargetConfig{
+			{Name: "admin", Output: "dist/admin"},
+			{Name: "public", Output: "dist/public"},
+		},
+	},
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		_, err := devOutputDir(nil)
+		if err == nil || !strings.Contains(err.Error(), "exactly one build target") {
+			t.Fatalf("expected ambiguous target error, got %v", err)
+		}
+	})
+}
+
 func TestWatchRestartRejectsOnce(t *testing.T) {
 	err := watch([]string{"--once", "--restart", "--out", t.TempDir()})
 	if err == nil || !strings.Contains(err.Error(), "cannot be used with --once") {
@@ -876,11 +942,11 @@ view {
 
 	for _, path := range []string{
 		filepath.Join(root, "dist", "public", "index.html"),
-		filepath.Join(root, ".gowdk", "public", "static", "index.html"),
+		filepath.Join(root, ".gowdk", "public", "gowdkapp", "static", "index.html"),
 		filepath.Join(root, "bin", "public"),
 		filepath.Join(root, "dist", "admin-api", "admin", "index.html"),
 		filepath.Join(root, "dist", "admin-api", "api", "status", "index.html"),
-		filepath.Join(root, ".gowdk", "admin-api", "static", "admin", "index.html"),
+		filepath.Join(root, ".gowdk", "admin-api", "gowdkapp", "static", "admin", "index.html"),
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatal(err)
@@ -888,7 +954,7 @@ view {
 	}
 	for _, path := range []string{
 		filepath.Join(root, "dist", "public", "admin", "index.html"),
-		filepath.Join(root, ".gowdk", "public", "static", "admin", "index.html"),
+		filepath.Join(root, ".gowdk", "public", "gowdkapp", "static", "admin", "index.html"),
 		filepath.Join(root, "dist", "admin-api", "index.html"),
 	} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -1457,10 +1523,11 @@ view {
 
 	for _, path := range []string{
 		filepath.Join(appDir, "go.mod"),
-		filepath.Join(appDir, "main.go"),
-		filepath.Join(appDir, "static", "index.html"),
-		filepath.Join(appDir, "static", "gowdk-routes.json"),
-		filepath.Join(appDir, "static", "gowdk-assets.json"),
+		filepath.Join(appDir, "cmd", "server", "main.go"),
+		filepath.Join(appDir, "gowdkapp", "app.go"),
+		filepath.Join(appDir, "gowdkapp", "static", "index.html"),
+		filepath.Join(appDir, "gowdkapp", "static", "gowdk-routes.json"),
+		filepath.Join(appDir, "gowdkapp", "static", "gowdk-assets.json"),
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatal(err)
@@ -1968,6 +2035,26 @@ func TestServeCommandRejectsMissingDirectory(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no such file") && !strings.Contains(err.Error(), "cannot find") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLiveReloadFileHandlerInjectsScript(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "index.html"), `<!doctype html><html><body><main>GOWDK</main></body></html>`)
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+	liveReloadFileHandler(root, newLiveReloadBroker()).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d with body %s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, `new EventSource("/__gowdk/reload")`) {
+		t.Fatalf("expected live reload script:\n%s", body)
+	}
+	if strings.Index(body, "<script>") > strings.Index(body, "</body>") {
+		t.Fatalf("expected script before body close:\n%s", body)
 	}
 }
 

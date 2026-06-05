@@ -3,6 +3,8 @@ package view
 import (
 	"strings"
 	"testing"
+
+	"github.com/cssbruno/gowdk/internal/clientlang"
 )
 
 func TestRenderStaticEscapesTextAndAttributes(t *testing.T) {
@@ -94,6 +96,574 @@ func TestRenderWithComponentsUsesSlotFallbackWithoutChildren(t *testing.T) {
 	want := `<section><p>Empty</p></section>`
 	if got != want {
 		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderWithComponentsEmitsDefaultJSIslandForState(t *testing.T) {
+	got, err := RenderWithComponents(`<Counter />`, map[string]Component{
+		"Counter": {
+			Name:      "Counter",
+			State:     map[string]string{"Count": "1"},
+			StateJSON: `{"Count":1}`,
+			Body:      `<button g:on:click={Count++}>{Count}</button>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`<gowdk-island data-gowdk-component="Counter" data-gowdk-runtime="js" data-gowdk-state="{&#34;Count&#34;:1}">`,
+		`<button data-gowdk-on-click="Count++"><span data-gowdk-bind="Count">1</span></button>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in island output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsEmitsClientHandlers(t *testing.T) {
+	got, err := RenderWithComponents(`<Counter />`, map[string]Component{
+		"Counter": {
+			Name:         "Counter",
+			State:        map[string]string{"Count": "1"},
+			StateJSON:    `{"Count":1}`,
+			Handlers:     map[string]clientlang.Handler{"Add": {Params: []string{"step"}, Statements: []string{"Count = step"}}},
+			HandlersJSON: `{"Add":{"params":["step"],"statements":["Count = step"]}}`,
+			Body:         `<button g:on:click={Add(2)}>{Count}</button>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-client="{&#34;Add&#34;:{&#34;params&#34;:[&#34;step&#34;],&#34;statements&#34;:[&#34;Count = step&#34;]}}"`,
+		`<button data-gowdk-on-click="Add(2)"><span data-gowdk-bind="Count">1</span></button>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in island output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsLowersEventModifiers(t *testing.T) {
+	got, err := RenderWithComponents(`<Counter />`, map[string]Component{
+		"Counter": {
+			Name:      "Counter",
+			State:     map[string]string{"Count": "1"},
+			StateJSON: `{"Count":1}`,
+			Body:      `<button g:on:click.prevent.stop.once.capture.debounce(250ms)={Count++}>{Count}</button><button g:on:click.throttle(1s)={Count++}>Throttle</button>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-on-click="Count++"`,
+		`data-gowdk-event-click="prevent stop once capture debounce:250"`,
+		`data-gowdk-event-click="throttle:1000"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in event modifier output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsLowersDOMRefs(t *testing.T) {
+	got, err := RenderWithComponents(`<Search />`, map[string]Component{
+		"Search": {
+			Name:      "Search",
+			State:     map[string]string{"Query": "initial"},
+			StateJSON: `{"Query":"initial"}`,
+			Refs:      map[string]clientlang.Ref{"searchInput": {Name: "searchInput", Kind: "HTMLInputElement"}},
+			Body:      `<input g:ref={searchInput} />`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `data-gowdk-ref="searchInput"`) {
+		t.Fatalf("expected ref marker in output:\n%s", got)
+	}
+}
+
+func TestRenderWithComponentsRejectsUnknownDOMRef(t *testing.T) {
+	_, err := RenderWithComponents(`<Search />`, map[string]Component{
+		"Search": {
+			Name:      "Search",
+			State:     map[string]string{"Query": "initial"},
+			StateJSON: `{"Query":"initial"}`,
+			Refs:      map[string]clientlang.Ref{"searchInput": {Name: "searchInput", Kind: "HTMLInputElement"}},
+			Body:      `<input g:ref={missingInput} />`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected unknown ref error")
+	}
+	if !strings.Contains(err.Error(), `unknown DOM ref "missingInput"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithComponentsLowersGIfForStatefulIsland(t *testing.T) {
+	got, err := RenderWithComponents(`<Disclosure />`, map[string]Component{
+		"Disclosure": {
+			Name:      "Disclosure",
+			State:     map[string]string{"Open": "false"},
+			StateJSON: `{"Open":false}`,
+			Body:      `<section g:if={Open}>Open</section>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-if="Open" hidden`,
+		`data-gowdk-runtime="js"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in conditional island output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsLeavesGIfVisibleWhenInitiallyTrue(t *testing.T) {
+	got, err := RenderWithComponents(`<Disclosure />`, map[string]Component{
+		"Disclosure": {
+			Name:      "Disclosure",
+			State:     map[string]string{"Open": "true"},
+			StateJSON: `{"Open":true}`,
+			Body:      `<section g:if={Open}>Open</section>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `data-gowdk-if="Open"`) {
+		t.Fatalf("expected g:if marker in output:\n%s", got)
+	}
+	if strings.Contains(got, `data-gowdk-if="Open" hidden`) {
+		t.Fatalf("did not expect hidden on initially true g:if:\n%s", got)
+	}
+}
+
+func TestRenderWithComponentsLowersGElseChain(t *testing.T) {
+	got, err := RenderWithComponents(`<Disclosure />`, map[string]Component{
+		"Disclosure": {
+			Name:      "Disclosure",
+			State:     map[string]string{"Open": "false", "Loading": "true"},
+			StateJSON: `{"Open":false,"Loading":true}`,
+			Body:      `<section g:if={Open}>Open</section><section g:else-if={Loading}>Loading</section><section g:else>Closed</section>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-if-group="c1" data-gowdk-if-index="0" data-gowdk-if="Open" hidden`,
+		`data-gowdk-if-group="c1" data-gowdk-if-index="1" data-gowdk-if="Loading"`,
+		`data-gowdk-if-group="c1" data-gowdk-if-index="2" data-gowdk-else hidden`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in else chain output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsRejectsMisplacedGElse(t *testing.T) {
+	_, err := RenderWithComponents(`<Disclosure />`, map[string]Component{
+		"Disclosure": {
+			Name:      "Disclosure",
+			State:     map[string]string{"Open": "false"},
+			StateJSON: `{"Open":false}`,
+			Body:      `<section g:else>Closed</section>`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected misplaced g:else error")
+	}
+	if !strings.Contains(err.Error(), "g:else must follow") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithComponentsLowersGForList(t *testing.T) {
+	got, err := RenderWithComponents(`<Nested />`, map[string]Component{
+		"Nested": {
+			Name:      "Nested",
+			State:     map[string]string{"Items": `[{"ID":"first","Name":"first","Done":false},{"ID":"second","Name":"second","Done":true}]`},
+			StateJSON: `{"Items":[{"ID":"first","Name":"first","Done":false},{"ID":"second","Name":"second","Done":true}]}`,
+			StateTypes: map[string]clientlang.ValueType{
+				"Items":        clientlang.TypeArray,
+				"Items[]":      clientlang.TypeObject,
+				"Items[].ID":   clientlang.TypeString,
+				"Items[].Name": clientlang.TypeString,
+				"Items[].Done": clientlang.TypeBool,
+			},
+			Body: `<ul><li g:for={item in Items} g:key={item.ID}>{item.Name}</li></ul>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`<template data-gowdk-for="l1" data-gowdk-for-var="item" data-gowdk-for-source="Items" data-gowdk-for-key="item.ID"`,
+		`data-gowdk-for-template="&lt;li data-gowdk-for-item=&#34;l1&#34; data-gowdk-key-value=&#34;{{item.ID}}&#34;&gt;{{item.Name}}&lt;/li&gt;"`,
+		`<li data-gowdk-for-item="l1" data-gowdk-key-value="first">first</li>`,
+		`<li data-gowdk-for-item="l1" data-gowdk-key-value="second">second</li>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in g:for output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsLowersGForIndexVariable(t *testing.T) {
+	got, err := RenderWithComponents(`<Nested />`, map[string]Component{
+		"Nested": {
+			Name:      "Nested",
+			State:     map[string]string{"Items": `[{"ID":"first","Name":"first","Done":false},{"ID":"second","Name":"second","Done":true}]`},
+			StateJSON: `{"Items":[{"ID":"first","Name":"first","Done":false},{"ID":"second","Name":"second","Done":true}]}`,
+			StateTypes: map[string]clientlang.ValueType{
+				"Items":        clientlang.TypeArray,
+				"Items[]":      clientlang.TypeObject,
+				"Items[].ID":   clientlang.TypeString,
+				"Items[].Name": clientlang.TypeString,
+			},
+			Body: `<ol><li g:for={item, i in Items} g:key={item.ID}>{i}: {item.Name}</li></ol>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-for-index-var="i"`,
+		`{{i}}: {{item.Name}}`,
+		`<li data-gowdk-for-item="l1" data-gowdk-key-value="first">0: first</li>`,
+		`<li data-gowdk-for-item="l1" data-gowdk-key-value="second">1: second</li>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in g:for index output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsRejectsGForWithoutKey(t *testing.T) {
+	_, err := RenderWithComponents(`<Nested />`, map[string]Component{
+		"Nested": {
+			Name:      "Nested",
+			State:     map[string]string{"Items": `[]`},
+			StateJSON: `{"Items":[]}`,
+			StateTypes: map[string]clientlang.ValueType{
+				"Items": clientlang.TypeArray,
+			},
+			Body: `<ul><li g:for={item in Items}>{item.Name}</li></ul>`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected missing g:key error")
+	}
+	if !strings.Contains(err.Error(), "g:for requires g:key") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithComponentsLowersValueBinding(t *testing.T) {
+	got, err := RenderWithComponents(`<Search />`, map[string]Component{
+		"Search": {
+			Name:      "Search",
+			State:     map[string]string{"Query": "initial"},
+			StateJSON: `{"Query":"initial"}`,
+			Body:      `<input g:bind:value={Query} />`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-bind-value="Query"`,
+		`value="initial"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in value binding output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsLowersNumericValueBinding(t *testing.T) {
+	got, err := RenderWithComponents(`<Counter />`, map[string]Component{
+		"Counter": {
+			Name:       "Counter",
+			State:      map[string]string{"Count": "7"},
+			StateJSON:  `{"Count":7}`,
+			StateTypes: map[string]clientlang.ValueType{"Count": clientlang.TypeInt},
+			Body:       `<input type="number" g:bind:value={Count} />`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-bind-value="Count"`,
+		`data-gowdk-bind-type="int"`,
+		`value="7"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in numeric value binding output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsLowersTextareaValueBinding(t *testing.T) {
+	got, err := RenderWithComponents(`<Search />`, map[string]Component{
+		"Search": {
+			Name:      "Search",
+			State:     map[string]string{"Query": "initial"},
+			StateJSON: `{"Query":"initial"}`,
+			Body:      `<textarea g:bind:value={Query}></textarea>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-bind-value="Query"`,
+		`>initial</textarea>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in textarea value binding output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsLowersSelectValueBinding(t *testing.T) {
+	got, err := RenderWithComponents(`<Search />`, map[string]Component{
+		"Search": {
+			Name:      "Search",
+			State:     map[string]string{"Query": "b"},
+			StateJSON: `{"Query":"b"}`,
+			Body:      `<select g:bind:value={Query}><option value="a">A</option><option value="b">B</option></select>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-bind-value="Query"`,
+		`<option value="b" selected>B</option>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in select value binding output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsLowersRadioValueBinding(t *testing.T) {
+	got, err := RenderWithComponents(`<Search />`, map[string]Component{
+		"Search": {
+			Name:      "Search",
+			State:     map[string]string{"Query": "b"},
+			StateJSON: `{"Query":"b"}`,
+			Body:      `<input type="radio" name="choice" value="a" g:bind:value={Query} /><input type="radio" name="choice" value="b" g:bind:value={Query} />`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`type="radio"`,
+		`data-gowdk-bind-value="Query"`,
+		`value="b" checked`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in radio value binding output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsRejectsRadioValueBindingWithoutValue(t *testing.T) {
+	_, err := RenderWithComponents(`<Search />`, map[string]Component{
+		"Search": {
+			Name:      "Search",
+			State:     map[string]string{"Query": "b"},
+			StateJSON: `{"Query":"b"}`,
+			Body:      `<input type="radio" g:bind:value={Query} />`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected radio value binding error")
+	}
+	if !strings.Contains(err.Error(), `radio <input> requires a static value attribute`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithComponentsRejectsNumericValueBindingOutsideNumberInput(t *testing.T) {
+	_, err := RenderWithComponents(`<Counter />`, map[string]Component{
+		"Counter": {
+			Name:       "Counter",
+			State:      map[string]string{"Count": "7"},
+			StateJSON:  `{"Count":7}`,
+			StateTypes: map[string]clientlang.ValueType{"Count": clientlang.TypeInt},
+			Body:       `<textarea g:bind:value={Count}></textarea>`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected numeric value binding target error")
+	}
+	if !strings.Contains(err.Error(), `numeric target "Count" requires <input type="number">`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithComponentsRejectsValueBindingOutsideSupportedControls(t *testing.T) {
+	_, err := RenderWithComponents(`<Search />`, map[string]Component{
+		"Search": {
+			Name:      "Search",
+			State:     map[string]string{"Query": "initial"},
+			StateJSON: `{"Query":"initial"}`,
+			Body:      `<div g:bind:value={Query}></div>`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected unsupported g:bind:value target error")
+	}
+	if !strings.Contains(err.Error(), `g:bind:value is only supported on <input>, <textarea>, and <select>`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithComponentsLowersCheckedBinding(t *testing.T) {
+	got, err := RenderWithComponents(`<Toggle />`, map[string]Component{
+		"Toggle": {
+			Name:      "Toggle",
+			State:     map[string]string{"Open": "true"},
+			StateJSON: `{"Open":true}`,
+			Body:      `<input type="checkbox" g:bind:checked={Open} />`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`type="checkbox"`,
+		`data-gowdk-bind-checked="Open"`,
+		`checked`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in checked binding output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsRejectsCheckedBindingOutsideCheckbox(t *testing.T) {
+	_, err := RenderWithComponents(`<Toggle />`, map[string]Component{
+		"Toggle": {
+			Name:      "Toggle",
+			State:     map[string]string{"Open": "true"},
+			StateJSON: `{"Open":true}`,
+			Body:      `<input g:bind:checked={Open} />`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected unsupported g:bind:checked target error")
+	}
+	if !strings.Contains(err.Error(), `g:bind:checked is only supported on checkbox <input>`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithComponentsLowersReactiveAttributes(t *testing.T) {
+	got, err := RenderWithComponents(`<Toggle />`, map[string]Component{
+		"Toggle": {
+			Name:      "Toggle",
+			State:     map[string]string{"Open": "true"},
+			StateJSON: `{"Open":true}`,
+			Body:      `<button disabled={Open} aria-expanded={Open}>Toggle</button>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-attr-disabled="Open"`,
+		` disabled`,
+		`data-gowdk-attr-aria-expanded="Open"`,
+		`aria-expanded="true"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in reactive attr output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsLowersClassToggles(t *testing.T) {
+	got, err := RenderWithComponents(`<Toggle />`, map[string]Component{
+		"Toggle": {
+			Name:      "Toggle",
+			State:     map[string]string{"Open": "true"},
+			StateJSON: `{"Open":true}`,
+			Body:      `<button class="base active" class:active={Open} class:closed={!Open}>Toggle</button>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-class-active="Open"`,
+		`data-gowdk-class-closed="!Open"`,
+		`class="base active"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in class toggle output:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, `class:active`) || strings.Contains(got, `class:closed`) {
+		t.Fatalf("did not expect source class toggle attrs in output:\n%s", got)
+	}
+}
+
+func TestRenderWithComponentsLowersStyleBindings(t *testing.T) {
+	got, err := RenderWithComponents(`<Meter />`, map[string]Component{
+		"Meter": {
+			Name:      "Meter",
+			State:     map[string]string{"Height": "12", "Percent": "50"},
+			StateJSON: `{"Height":12,"Percent":50}`,
+			Body:      `<div style="color: red" style:height.px={Height} style:width.%={Percent}>Meter</div>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-style-height="Height"`,
+		`data-gowdk-style-unit-height="px"`,
+		`data-gowdk-style-width="Percent"`,
+		`data-gowdk-style-unit-width="%"`,
+		`style="color: red; height: 12px; width: 50%"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in style binding output:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, `style:height`) || strings.Contains(got, `style:width`) {
+		t.Fatalf("did not expect source style binding attrs in output:\n%s", got)
+	}
+}
+
+func TestRenderWithComponentsRejectsUnknownIslandMode(t *testing.T) {
+	_, err := RenderWithComponents(`<Counter g:island="js" />`, map[string]Component{
+		"Counter": {
+			Name:      "Counter",
+			State:     map[string]string{"Count": "1"},
+			StateJSON: `{"Count":1}`,
+			Body:      `<button>{Count}</button>`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected unknown island mode error")
+	}
+	if !strings.Contains(err.Error(), `unsupported g:island value "js"`) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -235,6 +805,32 @@ func TestRenderWithOptionsLowersGPostDirective(t *testing.T) {
 	want := `<form class="signup" method="post" action="/signup"><input name="email"></input></form>`
 	if got != want {
 		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderWithOptionsAllowsGPostWithLocalValueBinding(t *testing.T) {
+	got, err := RenderWithOptions(`<Search />`, map[string]Component{
+		"Search": {
+			Name:      "Search",
+			State:     map[string]string{"Query": "initial"},
+			StateJSON: `{"Query":"initial"}`,
+			Body:      `<form g:post={submit}><input name="query" g:bind:value={Query} /></form>`,
+		},
+	}, nil, Options{
+		Actions: map[string]string{"submit": "/search"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`<form method="post" action="/search">`,
+		`name="query"`,
+		`data-gowdk-bind-value="Query"`,
+		`value="initial"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in g:post binding output:\n%s", want, got)
+		}
 	}
 }
 

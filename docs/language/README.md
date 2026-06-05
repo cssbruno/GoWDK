@@ -8,12 +8,14 @@ detection, the first typed action input/redirect/fragment-metadata subset, the
 first API method/route metadata subset, minimal static `view {}` markup parsing,
 first-slice `g:post`, `g:target`, and `g:swap` lowering, literal dynamic static
 route expansion, literal build data, imported no-argument Go build data
-functions, route/build-data interpolation in static views, formatting,
-diagnostics, manifest output, build output for simple static pages/components,
-generated partial fragment responses for embedded apps, and LSP/editor
-integration. It does not yet parse component children, non-string props, full
-typed action semantics, API request/response bodies, rich local client-side
-reactivity, or full semantic/type analysis.
+functions, route/build-data interpolation in static views, Go-typed component
+props/state contracts, first-slice generated JavaScript islands for stateful
+components, explicit `g:island="wasm"` asset emission, formatting, diagnostics,
+manifest output, build output for simple static pages/components, generated
+partial fragment responses for embedded apps, and LSP/editor integration. It
+does not yet parse non-string legacy props, full typed action semantics, API
+request/response bodies, broad local client-side reactivity, or full
+semantic/type analysis outside the component contract slice.
 
 ## Current Files
 
@@ -41,4 +43,5 @@ The compiler currently treats every parsed file as a page file and requires:
 ```
 
 Component files are supported as explicit or discovered `gowdk build` inputs
-with `@component`. Layout, island, and plugin-adjacent file kinds are planned.
+with `@component`. Layout files are also supported. Separate island and
+plugin-adjacent file kinds are planned.

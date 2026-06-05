@@ -9,12 +9,15 @@ Implemented today:
 - Recursive `.gwdk` discovery through `internal/discover`.
 - Page and component metadata parsing through `internal/parser`.
 - Manifest and site-map models through `internal/manifest` and `internal/lang`.
-- Render-rule and duplicate identity validation through `internal/compiler`.
+- Render-rule, duplicate identity, redundant component, and component contract
+  validation through `internal/compiler`.
 - Static `view {}` markup and component invocation parsing through `internal/view`.
+- Imported Go props/state contract resolution through `internal/gotypes`.
 - Route-binding planning through `internal/codegen`.
 - Static HTML, route manifest, and asset manifest emission for simple build-time
   pages, literal build data, imported Go build data functions, literal dynamic
-  paths, and components through `internal/staticgen`.
+  paths, components, partial runtime assets, and island runtime assets through
+  `internal/staticgen`.
 - Generated embedded static app source and optional binary compilation through
   `internal/appgen`, including first-slice action redirect handlers and form
   input decoder and required-field validation wrappers.
@@ -25,8 +28,9 @@ Implemented today:
 Not implemented yet:
 
 - Full project config loading for every compiler command.
-- Full AST/semantic/type analysis.
-- Full component compilation, general interpolation, arbitrary `build {}` execution, and full `paths {}` execution.
+- Full AST/semantic/type analysis beyond the current component contract slice.
+- Full component compilation, general interpolation, arbitrary `build {}`
+  execution, and full `paths {}` execution.
 - Real user Go type resolution for typed action decoders, user action logic,
   API/fragment/SSR handlers.
 - Generated action/API/fragment execution.

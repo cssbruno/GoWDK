@@ -41,9 +41,12 @@ type pageJSON struct {
 }
 
 type componentJSON struct {
-	Source string     `json:"source,omitempty"`
-	Kind   string     `json:"kind"`
-	Props  []propJSON `json:"props,omitempty"`
+	Source    string       `json:"source,omitempty"`
+	Kind      string       `json:"kind"`
+	Imports   []importJSON `json:"imports,omitempty"`
+	Props     []propJSON   `json:"props,omitempty"`
+	PropsType *goTypeJSON  `json:"propsType,omitempty"`
+	State     *stateJSON   `json:"state,omitempty"`
 }
 
 type layoutJSON struct {
@@ -59,6 +62,21 @@ type propJSON struct {
 type importJSON struct {
 	Alias string `json:"alias,omitempty"`
 	Path  string `json:"path"`
+}
+
+type goTypeJSON struct {
+	Alias string `json:"alias"`
+	Name  string `json:"name"`
+}
+
+type goFuncJSON struct {
+	Alias string `json:"alias"`
+	Name  string `json:"name"`
+}
+
+type stateJSON struct {
+	Type goTypeJSON `json:"type"`
+	Init goFuncJSON `json:"init"`
 }
 
 type blocksJSON struct {
@@ -265,9 +283,12 @@ func componentsJSON(components []Component) map[string]componentJSON {
 	out := map[string]componentJSON{}
 	for _, component := range components {
 		out[component.Name] = componentJSON{
-			Source: component.Source,
-			Kind:   "component",
-			Props:  propsJSON(component.Props),
+			Source:    component.Source,
+			Kind:      "component",
+			Imports:   importsJSON(component.Imports),
+			Props:     propsJSON(component.Props),
+			PropsType: goTypeRefJSON(component.PropsType),
+			State:     stateContractJSON(component.State),
 		}
 	}
 	return out
@@ -296,4 +317,21 @@ func propsJSON(props []Prop) []propJSON {
 		out = append(out, propJSON{Name: prop.Name, Type: prop.Type})
 	}
 	return out
+}
+
+func goTypeRefJSON(ref GoTypeRef) *goTypeJSON {
+	if ref.Name == "" {
+		return nil
+	}
+	return &goTypeJSON{Alias: ref.Alias, Name: ref.Name}
+}
+
+func stateContractJSON(state StateContract) *stateJSON {
+	if state.Type.Name == "" {
+		return nil
+	}
+	return &stateJSON{
+		Type: goTypeJSON{Alias: state.Type.Alias, Name: state.Type.Name},
+		Init: goFuncJSON{Alias: state.Init.Alias, Name: state.Init.Name},
+	}
 }

@@ -36,6 +36,12 @@ Compiler validation exposes these public codes when available:
 - `missing_ssr_addon`
 - `duplicate_page_id`
 - `duplicate_component_name`
+- `redundant_component_implementation`
+- `invalid_go_import`
+- `duplicate_go_import_alias`
+- `component_contract_error`
+- `component_field_error`
+- `component_client_error`
 - `duplicate_layout_id`
 - `unknown_layout_id`
 - `malformed_route`

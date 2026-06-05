@@ -20,6 +20,7 @@ var (
 	actionPattern         = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{`)
 	apiPattern            = regexp.MustCompile(`^api(?:\s+([A-Za-z_][A-Za-z0-9_.-]*))?\s*\{`)
 	propPattern           = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
+	componentTypePattern  = regexp.MustCompile(`^(props|state)\s+([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)(?:\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\))?$`)
 	actionInputPattern    = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*form\s+([A-Za-z_][A-Za-z0-9_]*)$`)
 	actionValidPattern    = regexp.MustCompile(`^valid\(([A-Za-z_][A-Za-z0-9_]*)\)\?$`)
 	actionRedirectPattern = regexp.MustCompile(`^->\s*"([^"]*)"$`)
@@ -302,11 +303,29 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	var viewBody []string
 	inView := false
 	inProps := false
+	var clientBody []string
+	inClient := false
+	clientDepth := 0
 
 	scanner := bufio.NewScanner(bytes.NewReader(source))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
+		if inClient {
+			if line == "}" && clientDepth == 1 {
+				component.Blocks.ClientBody = strings.TrimSpace(strings.Join(clientBody, "\n"))
+				inClient = false
+				clientBody = nil
+				clientDepth = 0
+				continue
+			}
+			clientBody = append(clientBody, rawLine)
+			clientDepth += braceDelta(rawLine)
+			if clientDepth < 1 {
+				return manifest.Component{}, fmt.Errorf("line %d: client block closed unexpectedly", lineNumber)
+			}
+			continue
+		}
 		if inView {
 			if line == "}" {
 				component.Blocks.ViewBody = strings.TrimSpace(strings.Join(viewBody, "\n"))
@@ -340,6 +359,18 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			continue
 		}
 
+		if match := importPattern.FindStringSubmatch(line); match != nil {
+			component.Imports = append(component.Imports, manifest.Import{
+				Alias: match[1],
+				Path:  match[2],
+				Span:  sourceLineSpan(lineNumber, rawLine),
+			})
+			continue
+		}
+		if isMalformedImport(line) {
+			return manifest.Component{}, fmt.Errorf("line %d: malformed import %q", lineNumber, line)
+		}
+
 		if strings.HasPrefix(line, "@") {
 			match := annotationPattern.FindStringSubmatch(line)
 			if match == nil {
@@ -351,9 +382,47 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			continue
 		}
 
+		if match := componentTypePattern.FindStringSubmatch(line); match != nil {
+			span := sourceLineSpan(lineNumber, rawLine)
+			kind := match[1]
+			typeRef := manifest.GoTypeRef{Alias: match[2], Name: match[3], Span: span}
+			initRef := manifest.GoFuncRef{Alias: match[4], Name: match[5], Span: span}
+			switch kind {
+			case "props":
+				if initRef.Name != "" {
+					return manifest.Component{}, fmt.Errorf("line %d: props contract must not declare an init function", lineNumber)
+				}
+				if component.PropsType.Name != "" || len(component.Props) > 0 {
+					return manifest.Component{}, fmt.Errorf("line %d: component declares multiple props contracts", lineNumber)
+				}
+				component.PropsType = typeRef
+			case "state":
+				if initRef.Name == "" {
+					return manifest.Component{}, fmt.Errorf("line %d: state contract requires an init function", lineNumber)
+				}
+				if component.State.Type.Name != "" {
+					return manifest.Component{}, fmt.Errorf("line %d: component declares multiple state contracts", lineNumber)
+				}
+				component.State = manifest.StateContract{Type: typeRef, Init: initRef, Span: span}
+			}
+			continue
+		}
+
 		switch line {
 		case "props {":
+			if component.PropsType.Name != "" || len(component.Props) > 0 {
+				return manifest.Component{}, fmt.Errorf("line %d: component declares multiple props contracts", lineNumber)
+			}
 			inProps = true
+			continue
+		case "client {":
+			if component.Blocks.Client {
+				return manifest.Component{}, fmt.Errorf("line %d: component declares multiple client blocks", lineNumber)
+			}
+			component.Blocks.Client = true
+			component.Blocks.Spans.Client = sourceLineSpan(lineNumber, rawLine)
+			inClient = true
+			clientDepth = 1
 			continue
 		case "view {":
 			component.Blocks.View = true
@@ -374,6 +443,9 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	}
 	if inProps {
 		return manifest.Component{}, fmt.Errorf("props block missing closing }")
+	}
+	if inClient {
+		return manifest.Component{}, fmt.Errorf("client block missing closing }")
 	}
 	if component.Name == "" {
 		return manifest.Component{}, fmt.Errorf("missing @component")
@@ -678,6 +750,19 @@ func unsupportedTopLevelBlockName(line string) string {
 		return ""
 	}
 	return name
+}
+
+func braceDelta(line string) int {
+	delta := 0
+	for _, r := range line {
+		switch r {
+		case '{':
+			delta++
+		case '}':
+			delta--
+		}
+	}
+	return delta
 }
 
 func isMalformedImport(line string) bool {

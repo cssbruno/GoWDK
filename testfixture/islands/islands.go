@@ -1,0 +1,65 @@
+package islands
+
+type CounterProps struct {
+	Label string
+}
+
+type CounterState struct {
+	Count int
+	Open  bool
+}
+
+type OtherState struct {
+	Name string
+}
+
+type TaggedState struct {
+	Count int `json:"count,omitempty"`
+}
+
+type TextState struct {
+	Query string
+}
+
+type User struct {
+	Name string
+	Open bool
+}
+
+type Item struct {
+	ID   string
+	Name string
+	Done bool
+}
+
+type NestedState struct {
+	User  User
+	Items []Item
+	Flags []bool
+	Count int
+}
+
+func NewCounterState() CounterState {
+	return CounterState{Count: 1, Open: false}
+}
+
+func NewOtherState() OtherState {
+	return OtherState{Name: "other"}
+}
+
+func NewTaggedState() TaggedState {
+	return TaggedState{}
+}
+
+func NewTextState() TextState {
+	return TextState{Query: "initial"}
+}
+
+func NewNestedState() NestedState {
+	return NestedState{
+		User:  User{Name: "Ada", Open: true},
+		Items: []Item{{ID: "first", Name: "first", Done: false}, {ID: "second", Name: "second", Done: true}},
+		Flags: []bool{true, false},
+		Count: 0,
+	}
+}

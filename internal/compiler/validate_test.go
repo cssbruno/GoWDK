@@ -84,6 +84,1729 @@ func TestValidateManifestRejectsDuplicatePageIDsAndComponentNames(t *testing.T) 
 	}
 }
 
+func TestValidateManifestRejectsRedundantComponentImplementations(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{
+		{
+			Name:   "Hero",
+			Source: "components/hero.cmp.gwdk",
+			Props:  []manifest.Prop{{Name: "title", Type: "string"}},
+			Blocks: manifest.Blocks{View: true, ViewBody: `<section><h1>{title}</h1></section>`},
+		},
+		{
+			Name:   "Feature",
+			Source: "components/feature.cmp.gwdk",
+			Props:  []manifest.Prop{{Name: "title", Type: "string"}},
+			Blocks: manifest.Blocks{View: true, ViewBody: `<section>
+  // ignored by fingerprint
+  <h1>{title}</h1>
+</section>`},
+		},
+	}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected redundant component diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "redundant_component_implementation") {
+		t.Fatalf("missing redundant component diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsRedundantComponentImplementationsWithNormalizedAttrs(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{
+		{
+			Name:   "PrimaryButton",
+			Source: "components/primary-button.cmp.gwdk",
+			Props:  []manifest.Prop{{Name: "label", Type: "string"}},
+			Blocks: manifest.Blocks{View: true, ViewBody: `<button id="save" class="primary large">{label}</button>`},
+		},
+		{
+			Name:   "SaveButton",
+			Source: "components/save-button.cmp.gwdk",
+			Props:  []manifest.Prop{{Name: "label", Type: "string"}},
+			Blocks: manifest.Blocks{View: true, ViewBody: `<button class="large primary" id="save">{label}</button>`},
+		},
+	}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected redundant component diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "redundant_component_implementation") {
+		t.Fatalf("missing redundant component diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsSameViewWithDifferentContracts(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{
+		{
+			Name:   "Hero",
+			Source: "components/hero.cmp.gwdk",
+			Props:  []manifest.Prop{{Name: "title", Type: "string"}},
+			Blocks: manifest.Blocks{View: true, ViewBody: `<section>Same</section>`},
+		},
+		{
+			Name:   "Feature",
+			Source: "components/feature.cmp.gwdk",
+			Props:  []manifest.Prop{{Name: "subtitle", Type: "string"}},
+			Blocks: manifest.Blocks{View: true, ViewBody: `<section>Same</section>`},
+		},
+	}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected different contracts to be allowed, got %v", err)
+	}
+}
+
+func TestValidateManifestResolvesGoTypedComponentContracts(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		PropsType: manifest.GoTypeRef{
+			Alias: "ui",
+			Name:  "CounterProps",
+		},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button g:on:click={Count++}>{Label}: {Count}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected typed component contracts to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestAllowsEventModifiers(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button g:on:click.prevent.stop.once.capture.debounce(1s)={Count++}>{Count}</button><button g:on:input.throttle(250ms)={Count++}>{Count}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected event modifiers to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsBadEventModifier(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button g:on:click.passive={Count++}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unsupported event modifier diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsBadDebounceDuration(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button g:on:click.debounce(soon)={Count++}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected invalid debounce duration diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsDebounceThrottleCombination(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button g:on:click.debounce(100ms).throttle(100ms)={Count++}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected debounce/throttle compatibility diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestResolvesUnaliasedGoTypedComponentImports(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		PropsType: manifest.GoTypeRef{
+			Alias: "islands",
+			Name:  "CounterProps",
+		},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "islands", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "islands", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button g:on:click={Count++}>{Label}: {Count}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected unaliased Go imports to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsMissingGoTypedComponentField(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button g:on:click={Missing++}>{Missing}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected missing field diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsClientFunctionEventCall(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Increment() {
+  Count++
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Increment()}>{Count}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected client function event call to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestAllowsClientFunctionParams(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Add(step int) {
+  Count = Count + step
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Add(Count + 1)}>{Count}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected client function params to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestAllowsClientHelperFunctionReturns(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Next(value int) int {
+  return value + 1
+}
+
+fn Add() {
+  Count = Next(Count)
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Add()}>{Count}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected client helper function to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestAllowsClientBuiltins(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Nested",
+		Source:  "components/nested.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `computed ItemCount string {
+  return string(len(Items))
+}
+
+fn SetCount() {
+  Count = len(Items) + int("1")
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={SetCount()}>{ItemCount}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected client built-ins to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsBadClientBuiltinArg(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Bad() {
+  Count = len(Count)
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Bad()}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected bad built-in argument diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsHelperAsEventHandler(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Next(value int) int {
+  return value + 1
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Next(Count)}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected helper event handler diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsHelperReturnMismatch(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Bad() int {
+  return Open
+}
+
+fn Add() {
+  Count = Bad()
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Add()}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected helper return mismatch diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsHelperCallCycle(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn A() int {
+  return B()
+}
+
+fn B() int {
+  return A()
+}
+
+fn Add() {
+  Count = A()
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Add()}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected helper call cycle diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsClientExpressionTypeMismatch(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Bad(step int) {
+  Open = Count + step
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Bad(1)}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected expression type mismatch diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsClientFunctionArgumentMismatch(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Add(step int) {
+  Count = step
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Add()}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected argument mismatch diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsUnknownClientFunctionEventCall(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Increment() {
+  Count++
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Missing()}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown client function diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsClientFunctionUnknownStateField(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Increment() {
+  Missing++
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Increment()}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected client function field diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsClientFunctionMutatingProp(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		PropsType: manifest.GoTypeRef{
+			Alias: "ui",
+			Name:  "CounterProps",
+		},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Rename() {
+  Label = "changed"
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Rename()}>{Label}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected prop mutation diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsLifecycleAndEffects(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `on mount {
+  Open = true
+}
+
+effect when Count {
+  Open = false
+  return {
+    Open = true
+  }
+}
+
+on destroy {
+  Open = false
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Count++}>{Count}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected lifecycle/effects to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsEffectUnknownDependency(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `effect when Missing {
+  Open = true
+}`,
+			View:     true,
+			ViewBody: `<button>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown effect dependency diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsDOMRefFocusCall(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Search",
+		Source:  "components/search.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `ref searchInput HTMLInputElement
+
+fn FocusSearch() {
+  searchInput.Focus()
+}`,
+			View:     true,
+			ViewBody: `<input g:ref={searchInput} /><button g:on:click={FocusSearch()}>Focus</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected DOM ref focus call to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsUnknownDOMRefBinding(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Search",
+		Source:  "components/search.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		},
+		Blocks: manifest.Blocks{
+			Client:     true,
+			ClientBody: `ref searchInput HTMLInputElement`,
+			View:       true,
+			ViewBody:   `<input g:ref={missingInput} />`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown DOM ref binding diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsDuplicateDOMRefBinding(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Search",
+		Source:  "components/search.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		},
+		Blocks: manifest.Blocks{
+			Client:     true,
+			ClientBody: `ref searchInput HTMLInputElement`,
+			View:       true,
+			ViewBody:   `<input g:ref={searchInput} /><input g:ref={searchInput} />`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected duplicate DOM ref binding diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsUnboundUsedDOMRef(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Search",
+		Source:  "components/search.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `ref searchInput HTMLInputElement
+
+fn FocusSearch() {
+  searchInput.Focus()
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={FocusSearch()}>Focus</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unbound DOM ref diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsGIfBoolExpression(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<p g:if={Count > 0 && !Open}>{Count}</p>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected g:if bool expression to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestAllowsGElseIfExpression(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<p g:if={Open}>{Count}</p><p g:else-if={Count > 0}>{Count}</p><p g:else>Closed</p>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected g:else-if expression to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsGElseIfNonBoolExpression(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<p g:if={Open}>{Count}</p><p g:else-if={Count}>{Count}</p>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected g:else-if non-bool diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsGIfNonBoolExpression(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<p g:if={Count}>{Count}</p>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected g:if non-bool diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsNestedAndIndexExpressions(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Nested",
+		Source:  "components/nested.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<section g:if={User.Open && Items[0].Name == "first" && Flags[Count]}>{Count}</section>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected nested/index expressions to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestAllowsGForListRendering(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Nested",
+		Source:  "components/nested.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<ul><li g:for={item in Items} g:key={item.ID}>{item.Name}</li></ul>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected g:for list rendering to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestAllowsGForIndexVariable(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Nested",
+		Source:  "components/nested.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<ol><li aria-posinset={i} g:for={item, i in Items} g:key={item.ID}>{i}: {item.Name}</li></ol>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected g:for index variable to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestAllowsListMutationBuiltins(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Nested",
+		Source:  "components/nested.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn AddItem() {
+  append(Items, { ID: "third", Name: "third", Done: false })
+}
+
+fn RemoveFirst() {
+  remove(Items, 0)
+}
+
+fn SwapFirstTwo() {
+  move(Items, 1, 0)
+}`,
+			View:     true,
+			ViewBody: `<ul><li g:for={item, i in Items} g:key={item.ID}><button g:on:click={remove(Items, i)}>{item.Name}</button></li></ul><button g:on:click={AddItem()}>Add</button><button g:on:click={RemoveFirst()}>Remove</button><button g:on:click={SwapFirstTwo()}>Swap</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected list mutation built-ins to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsBadAppendItemField(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Nested",
+		Source:  "components/nested.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn AddItem() {
+  append(Items, { Missing: "third" })
+}`,
+			View:     true,
+			ViewBody: `<ul><li g:for={item in Items} g:key={item.ID}>{item.Name}</li></ul><button g:on:click={AddItem()}>Add</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected bad append item diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("missing bad append field diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsGForWithoutKey(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Nested",
+		Source:  "components/nested.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<ul><li g:for={item in Items}>{item.Name}</li></ul>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected missing g:key diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") || !strings.Contains(err.Error(), "g:for requires g:key") {
+		t.Fatalf("missing g:for missing key diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsUnknownGForItemField(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Nested",
+		Source:  "components/nested.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<ul><li g:for={item in Items} g:key={item.ID}>{item.Missing}</li></ul>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown item field diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") || !strings.Contains(err.Error(), "item.Missing") {
+		t.Fatalf("missing unknown item field diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsGoishConditionalExpressions(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn ToggleCount() {
+  Count = if Open { Count + 1 } else { 0 }
+}`,
+			View:     true,
+			ViewBody: `<section g:if={if Open { Count > 0 } else { false }}><button g:on:click={ToggleCount()}>{Count}</button></section>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected Go-ish conditional expressions to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestAllowsClientLocalVariables(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Add(step int) {
+  let next int = Count + step
+  Count = next
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Add(2)}>{Count}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected local variables to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsLocalVariableBeforeDeclaration(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Bad() {
+  Count = next
+  let next int = Count + 1
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Bad()}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected local-before-declaration diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "next") {
+		t.Fatalf("missing local-before-declaration diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsGoishConditionalTypeMismatch(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `fn Bad() {
+  Count = if Open { Count + 1 } else { "closed" }
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Bad()}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected conditional branch mismatch diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsComputedState(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `computed Label string {
+  return if Open { "open" } else { "closed" }
+}
+
+computed Visible bool {
+  return Label == "open"
+}`,
+			View:     true,
+			ViewBody: `<section g:if={Visible}>{Label}</section>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected computed state to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestAllowsComputedOutOfOrderDependencies(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `computed Visible bool {
+  return Label == "open"
+}
+
+computed Label string {
+  return if Open { "open" } else { "closed" }
+}`,
+			View:     true,
+			ViewBody: `<section g:if={Visible}>{Label}</section>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected out-of-order computed state to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsComputedCycle(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `computed First string {
+  return Second
+}
+
+computed Second string {
+  return First
+}`,
+			View:     true,
+			ViewBody: `<section>{First}</section>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected computed cycle diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsComputedMutation(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `computed Label string {
+  Count = Count + 1
+}`,
+			View:     true,
+			ViewBody: `<section>{Count}</section>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected computed mutation diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsUnknownNestedField(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Nested",
+		Source:  "components/nested.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<section g:if={User.Missing}>{Count}</section>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown nested field diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsValueBindingToStringState(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Search",
+		Source:  "components/search.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<input g:bind:value={Query} />`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected string state value binding to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsValueBindingToNonStringState(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<input g:bind:value={Count} />`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected non-string value binding diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsNumberInputValueBindingToNumericState(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<input type="number" g:bind:value={Count} />`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected numeric value binding to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsNumericValueBindingOutsideNumberInput(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<textarea g:bind:value={Count}></textarea>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected numeric value binding target diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsRadioValueBindingToStringState(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Search",
+		Source:  "components/search.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<input type="radio" value="initial" g:bind:value={Query} />`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected radio value binding to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsRadioValueBindingWithoutValue(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Search",
+		Source:  "components/search.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<input type="radio" g:bind:value={Query} />`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected radio missing value diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsValueBindingToProp(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Search",
+		Source:  "components/search.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		PropsType: manifest.GoTypeRef{
+			Alias: "ui",
+			Name:  "CounterProps",
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<input g:bind:value={Label} />`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected prop value binding diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsCheckedBindingToBoolState(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<input type="checkbox" g:bind:checked={Open} />`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected bool state checked binding to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsCheckedBindingToNonBoolState(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Search",
+		Source:  "components/search.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<input type="checkbox" g:bind:checked={Query} />`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected non-bool checked binding diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsReactiveAttributes(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button disabled={Open} aria-expanded={Open}>{Count}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected reactive attributes to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsNonBoolReactiveBooleanAttribute(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button disabled={Count}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected non-bool boolean attr diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsUnsafeReactiveURLAttribute(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Link",
+		Source:  "components/link.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<a href={Query}>Link</a>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unsafe reactive URL attr diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsClassToggle(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button class:active={Open}>{Count}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected class toggle to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsNonBoolClassToggle(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button class:active={Count}>{Count}</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected non-bool class toggle diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsStyleBinding(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<div style:height.px={Count}>{Count}</div>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected style binding to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsBoolStyleBinding(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<div style:height.px={Open}>{Count}</div>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected bool style binding diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_field_error") {
+		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsRelativeGoTypedImportPath(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "./ui"}},
+		PropsType: manifest.GoTypeRef{
+			Alias: "ui",
+			Name:  "CounterProps",
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected invalid import diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "invalid_go_import") {
+		t.Fatalf("missing invalid_go_import diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsStateInitReturnMismatch(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewOtherState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<p>{Count}</p>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected state init mismatch diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_contract_error") {
+		t.Fatalf("missing component_contract_error diagnostic: %#v", diagnostics)
+	}
+}
+
 func TestValidateManifestResolvesLayoutsByID(t *testing.T) {
 	app := manifest.Manifest{
 		Pages: []manifest.Page{{

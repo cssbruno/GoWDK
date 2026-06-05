@@ -634,6 +634,62 @@ view {
 	}
 }
 
+func TestParseComponentReadsGoTypedContracts(t *testing.T) {
+	component, err := ParseComponent([]byte(`
+import ui "github.com/cssbruno/gowdk/testfixture/islands"
+
+@component Counter
+
+props ui.CounterProps
+state ui.CounterState = ui.NewCounterState()
+
+view {
+  <button g:on:click={Count++}>{Count}</button>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(component.Imports) != 1 || component.Imports[0].Alias != "ui" || component.Imports[0].Path != "github.com/cssbruno/gowdk/testfixture/islands" {
+		t.Fatalf("unexpected imports: %#v", component.Imports)
+	}
+	if component.PropsType.Alias != "ui" || component.PropsType.Name != "CounterProps" {
+		t.Fatalf("unexpected props contract: %#v", component.PropsType)
+	}
+	if component.State.Type.Alias != "ui" || component.State.Type.Name != "CounterState" ||
+		component.State.Init.Alias != "ui" || component.State.Init.Name != "NewCounterState" {
+		t.Fatalf("unexpected state contract: %#v", component.State)
+	}
+}
+
+func TestParseComponentReadsClientBlock(t *testing.T) {
+	component, err := ParseComponent([]byte(`
+@component Counter
+
+client {
+  fn Increment() {
+    Count++
+  }
+}
+
+view {
+  <button g:on:click={Increment()}>{Count}</button>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !component.Blocks.Client {
+		t.Fatal("expected client block")
+	}
+	if component.Blocks.ClientBody != "fn Increment() {\n    Count++\n  }" {
+		t.Fatalf("unexpected client body: %q", component.Blocks.ClientBody)
+	}
+	if component.Blocks.Spans.Client.Start.Line != 4 {
+		t.Fatalf("expected client span line 4, got %#v", component.Blocks.Spans.Client)
+	}
+}
+
 func TestParseComponentRejectsUnsupportedPropType(t *testing.T) {
 	_, err := ParseComponent([]byte(`
 @component Hero

@@ -16,6 +16,7 @@ gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk build [--config <file>] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
+gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk watch [--once] [--restart] [--interval <duration>] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
 gowdk lsp [--ssr]
@@ -34,12 +35,11 @@ gowdk lsp [--ssr]
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
 - `--wasm`: supported by `build`; requires `--app` and compiles the generated app with `GOOS=js GOARCH=wasm go build -o <file>`.
+- `--addr`: supported by `dev` and `serve`; selects the listen address and defaults to `127.0.0.1:8080`.
+- `--interval`: supported by `dev` and `watch`; sets the polling interval, such as `500ms`, `1s`, or `2s`.
 - `--once`: supported by `watch`; runs one build using the forwarded build flags and exits.
 - `--restart`: supported by `watch`; restarts one generated binary after each successful rebuild.
-- `--interval`: supported by `watch`; sets the polling interval, such as `500ms`, `1s`, or `2s`.
 - `--dir`: supported by `serve`; selects the generated static output directory.
-- `--addr`: supported by `serve`; selects the listen address and defaults to
-  `127.0.0.1:8080`.
 
 ## Examples
 
@@ -60,6 +60,8 @@ go run ./cmd/gowdk build --module admin --out dist/admin --app .gowdk/admin --bi
 go run ./cmd/gowdk build --module admin --out dist/admin --app .gowdk/admin --wasm bin/admin.wasm
 go run ./cmd/gowdk build --module public,admin --out dist/app --app .gowdk/app --bin bin/app
 go run ./cmd/gowdk build --target admin
+go run ./cmd/gowdk dev --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
+go run ./cmd/gowdk dev --target admin --addr 127.0.0.1:8090
 go run ./cmd/gowdk watch --interval 1s --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
 go run ./cmd/gowdk watch --restart --target admin
 go run ./cmd/gowdk watch --restart --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
@@ -101,16 +103,24 @@ runs selected targets. `--target` cannot be combined with `--module`, `--out`,
 for one-off builds.
 
 `--wasm` produces a Go `js/wasm` compile artifact from the generated app. This
-is a deploy artifact for hosts that can run Go WebAssembly; it is not the future
-browser WASM-islands feature.
+is a deploy artifact for hosts that can run Go WebAssembly; it is separate from
+explicit browser island assets emitted by `g:island="wasm"`.
+
+`dev` is the one-command static development loop. It forwards non-dev flags to
+`build`, resolves the output directory from `--out`, `Build.Output`, or exactly
+one selected `Build.Targets` entry, serves that directory, watches the same
+input set as `watch`, rebuilds after content changes, and injects a tiny
+server-sent-events live-reload script into served HTML pages. Rebuild failures
+are printed and the last successful output keeps serving.
 
 `watch` forwards all non-watch flags and file paths to `build`. It runs an
 initial build, then polls explicit or discovered build inputs plus
 `gowdk.config.go` when present and rebuilds when the file set or content hashes
 change. It intentionally uses polling instead of a platform-specific file
-watcher dependency. Static output, route/asset manifests, generated `main.go`,
-generated `go.mod`, and embedded static files are only rewritten when their
-bytes change, which keeps watch loops from retriggering on no-op generation.
+watcher dependency. Static output, route/asset manifests, generated `go.mod`,
+generated `gowdkapp/app.go`, generated `cmd/server/main.go`, and embedded
+static files are only rewritten when their bytes change, which keeps watch loops
+from retriggering on no-op generation.
 For plain static `--out` builds, page-only source edits use an incremental
 static renderer that validates the full manifest, refreshes manifests, writes
 only changed page output, and removes stale route output for changed pages.

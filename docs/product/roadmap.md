@@ -71,7 +71,7 @@ Current implementation status is summarized in `README.md` and
 | 8 | SSR addon. |
 | 9 | Hybrid render modes. |
 | 10 | Component library. |
-| 11 | WASM islands. |
+| 11 | Generated JS islands by default; explicit WASM islands. |
 
 ## Version Roadmap
 
@@ -127,4 +127,6 @@ Current implementation status is summarized in `README.md` and
 
 ### v0.6
 
-- WASM islands.
+- Generated JavaScript islands for typed local component state.
+- Explicit `g:island="wasm"` artifacts.
+- Production WASM island ABI and browser-side Go logic.

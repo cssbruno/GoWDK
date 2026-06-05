@@ -102,6 +102,69 @@ func TestWriteHTTPWritesRedirect(t *testing.T) {
 	}
 }
 
+func TestWriteNoStoreHTTP(t *testing.T) {
+	recorder := httptest.NewRecorder()
+
+	if err := WriteNoStoreHTTP(recorder, FragmentFor("#target", "<p>Updated</p>")); err != nil {
+		t.Fatal(err)
+	}
+
+	if cacheControl := recorder.Header().Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+}
+
+func TestWriteNoStoreHTML(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	if err := WriteNoStoreHTML(recorder, request, "<main>SSR</main>"); err != nil {
+		t.Fatal(err)
+	}
+
+	if contentType := recorder.Header().Get("Content-Type"); contentType != "text/html; charset=utf-8" {
+		t.Fatalf("unexpected content type: %q", contentType)
+	}
+	if cacheControl := recorder.Header().Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+	if recorder.Body.String() != "<main>SSR</main>" {
+		t.Fatalf("unexpected body: %s", recorder.Body.String())
+	}
+}
+
+func TestWriteNoStoreHTMLSuppressesHeadBody(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodHead, "/", nil)
+
+	if err := WriteNoStoreHTML(recorder, request, "<main>SSR</main>"); err != nil {
+		t.Fatal(err)
+	}
+
+	if recorder.Body.String() != "" {
+		t.Fatalf("expected empty HEAD body, got %s", recorder.Body.String())
+	}
+}
+
+func TestWriteNoStoreError(t *testing.T) {
+	recorder := httptest.NewRecorder()
+
+	WriteNoStoreError(recorder, http.StatusBadRequest, "invalid form")
+
+	if cacheControl := recorder.Header().Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "invalid form") {
+		t.Fatalf("unexpected body: %s", recorder.Body.String())
+	}
+}
+
 func TestWriteHTTPWritesFragment(t *testing.T) {
 	recorder := httptest.NewRecorder()
 

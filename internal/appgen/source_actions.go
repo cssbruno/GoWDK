@@ -14,7 +14,7 @@ func actionHandlerSource(actions []ActionRoute) string {
 
 	sorted := sortedActionRoutes(actions)
 	var builder strings.Builder
-	builder.WriteString("func (handler staticHandler) action(response http.ResponseWriter, request *http.Request) bool {\n")
+	builder.WriteString("func action(response http.ResponseWriter, request *http.Request) bool {\n")
 	builder.WriteString("\tswitch request.URL.Path {\n")
 	for _, action := range sorted {
 		writeActionCase(&builder, action)
@@ -28,9 +28,18 @@ func actionHandlerSource(actions []ActionRoute) string {
 	return builder.String()
 }
 
-const emptyActionHandlerSource = `func (handler staticHandler) action(response http.ResponseWriter, request *http.Request) bool {
+const emptyActionHandlerSource = `func action(response http.ResponseWriter, request *http.Request) bool {
 	return false
 }`
+
+func actionsUseValidation(actions []ActionRoute) bool {
+	for _, action := range actions {
+		if action.ValidatesInput {
+			return true
+		}
+	}
+	return false
+}
 
 func sortedActionRoutes(actions []ActionRoute) []ActionRoute {
 	sorted := append([]ActionRoute(nil), actions...)
@@ -48,7 +57,7 @@ func writeActionCase(builder *strings.Builder, action ActionRoute) {
 	builder.WriteString(quote(action.Route))
 	builder.WriteString(":\n")
 	writeActionParseForm(builder)
-	builder.WriteString("\t\tvalues := formValuesFromURLValues(request.PostForm)\n")
+	builder.WriteString("\t\tvalues := gowdkform.FromURLValues(request.PostForm)\n")
 	writeActionInputDecode(builder, action)
 	writeActionPartialBranch(builder, action)
 	writeActionResult(builder, action)
@@ -59,20 +68,20 @@ func writeActionParseForm(builder *strings.Builder) {
 	builder.WriteString("\t\trequest.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)\n")
 	builder.WriteString("\t\tif err := request.ParseForm(); err != nil {\n")
 	builder.WriteString("\t\t\tif strings.Contains(err.Error(), \"request body too large\") {\n")
-	builder.WriteString("\t\t\t\twriteActionError(response, http.StatusRequestEntityTooLarge, actionErrorRequestTooLarge)\n")
+	builder.WriteString("\t\t\t\tgowdkresponse.WriteNoStoreError(response, http.StatusRequestEntityTooLarge, \"request body too large\")\n")
 	builder.WriteString("\t\t\t\treturn true\n")
 	builder.WriteString("\t\t\t}\n")
-	builder.WriteString("\t\t\twriteActionError(response, http.StatusBadRequest, actionErrorInvalidForm)\n")
+	builder.WriteString("\t\t\tgowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, \"invalid form\")\n")
 	builder.WriteString("\t\t\treturn true\n")
 	builder.WriteString("\t\t}\n")
 }
 
 func writeActionInputDecode(builder *strings.Builder, action ActionRoute) {
 	if action.InputType == "" {
-		builder.WriteString("\t\tif _, err := decodeExpectedFields(values, ")
-		builder.WriteString(stringSliceLiteral(action.InputFields))
+		builder.WriteString("\t\tif _, err := gowdkform.DecodeExpected(values, ")
+		builder.WriteString(formSchemaLiteral(action.InputFields))
 		builder.WriteString("); err != nil {\n")
-		builder.WriteString("\t\t\twriteActionError(response, http.StatusBadRequest, actionErrorInvalidForm)\n")
+		builder.WriteString("\t\t\tgowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, \"invalid form\")\n")
 		builder.WriteString("\t\t\treturn true\n")
 		builder.WriteString("\t\t}\n")
 		return
@@ -82,16 +91,21 @@ func writeActionInputDecode(builder *strings.Builder, action ActionRoute) {
 	builder.WriteString(actionDecoderName(action))
 	builder.WriteString("(values)\n")
 	builder.WriteString("\t\tif err != nil {\n")
-	builder.WriteString("\t\t\twriteActionError(response, http.StatusBadRequest, actionErrorInvalidForm)\n")
+	builder.WriteString("\t\t\tgowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, \"invalid form\")\n")
 	builder.WriteString("\t\t\treturn true\n")
 	builder.WriteString("\t\t}\n")
 	builder.WriteString("\t\t_ = input\n")
 	if action.ValidatesInput {
-		builder.WriteString("\t\tvalidation := validateRequiredFields(input.Values, ")
+		builder.WriteString("\t\tvalidation := gowdkvalidation.Result{}\n")
+		builder.WriteString("\t\tfor _, field := range ")
 		builder.WriteString(stringSliceLiteral(action.RequiredFields))
-		builder.WriteString(")\n")
+		builder.WriteString(" {\n")
+		builder.WriteString("\t\t\tif !input.Values.HasSubmitted(field) {\n")
+		builder.WriteString("\t\t\t\tvalidation.Add(field, \"required\")\n")
+		builder.WriteString("\t\t\t}\n")
+		builder.WriteString("\t\t}\n")
 		builder.WriteString("\t\tif !validation.OK() {\n")
-		builder.WriteString("\t\t\twriteActionError(response, http.StatusUnprocessableEntity, actionErrorValidationFailed)\n")
+		builder.WriteString("\t\t\tgowdkresponse.WriteNoStoreError(response, http.StatusUnprocessableEntity, \"validation failed\")\n")
 		builder.WriteString("\t\t\treturn true\n")
 		builder.WriteString("\t\t}\n")
 	}
@@ -99,22 +113,47 @@ func writeActionInputDecode(builder *strings.Builder, action ActionRoute) {
 
 func writeActionPartialBranch(builder *strings.Builder, action ActionRoute) {
 	if len(action.Fragments) == 0 {
-		builder.WriteString("\t\tif isPartialRequest(request) {\n")
-		builder.WriteString("\t\t\twriteActionError(response, http.StatusBadRequest, actionErrorFragmentNotFound)\n")
+		writeActionPartialRequestCondition(builder)
+		builder.WriteString("\t\t\tgowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, \"partial fragment not found\")\n")
 		builder.WriteString("\t\t\treturn true\n")
 		builder.WriteString("\t\t}\n")
 		return
 	}
 
-	builder.WriteString("\t\tif isPartialRequest(request) {\n")
-	builder.WriteString("\t\t\tif writeActionFragment(response, request, ")
-	builder.WriteString(actionFragmentSliceLiteral(action.Fragments))
-	builder.WriteString(") {\n")
+	writeActionPartialRequestCondition(builder)
+	builder.WriteString("\t\t\ttarget := strings.TrimSpace(request.Header.Get(\"X-GOWDK-Target\"))\n")
+	for index, fragment := range action.Fragments {
+		if index == 0 {
+			builder.WriteString("\t\t\tswitch target {\n")
+			builder.WriteString("\t\t\tcase \"\", ")
+		} else {
+			builder.WriteString("\t\t\tcase ")
+		}
+		builder.WriteString(goString(fragment.Target))
+		builder.WriteString(":\n")
+		builder.WriteString("\t\t\t\tfragment := gowdkresponse.Response{Kind: gowdkresponse.Fragment, Status: http.StatusOK, Target: ")
+		builder.WriteString(goString(fragment.Target))
+		builder.WriteString(", Body: ")
+		builder.WriteString(goString(fragment.HTML))
+		builder.WriteString("}\n")
+		builder.WriteString("\t\t\t\tif swap := strings.TrimSpace(request.Header.Get(\"X-GOWDK-Swap\")); swap != \"\" {\n")
+		builder.WriteString("\t\t\t\t\tif swapped, err := gowdkresponse.FragmentSwap(fragment.Target, gowdkresponse.SwapMode(swap), fragment.Body); err == nil {\n")
+		builder.WriteString("\t\t\t\t\t\tfragment = swapped\n")
+		builder.WriteString("\t\t\t\t\t}\n")
+		builder.WriteString("\t\t\t\t}\n")
+		builder.WriteString("\t\t\t\t_ = gowdkresponse.WriteNoStoreHTTP(response, fragment)\n")
+		builder.WriteString("\t\t\t\treturn true\n")
+	}
+	builder.WriteString("\t\t\tdefault:\n")
+	builder.WriteString("\t\t\t\tgowdkresponse.WriteNoStoreError(response, http.StatusNotFound, \"partial fragment not found\")\n")
 	builder.WriteString("\t\t\t\treturn true\n")
 	builder.WriteString("\t\t\t}\n")
-	builder.WriteString("\t\t\twriteActionError(response, http.StatusNotFound, actionErrorFragmentNotFound)\n")
-	builder.WriteString("\t\t\treturn true\n")
 	builder.WriteString("\t\t}\n")
+}
+
+func writeActionPartialRequestCondition(builder *strings.Builder) {
+	builder.WriteString("\t\tpartial := strings.TrimSpace(request.Header.Get(\"X-GOWDK-Partial\"))\n")
+	builder.WriteString("\t\tif partial != \"\" && partial != \"0\" {\n")
 }
 
 func writeActionResult(builder *strings.Builder, action ActionRoute) {
@@ -122,9 +161,9 @@ func writeActionResult(builder *strings.Builder, action ActionRoute) {
 		builder.WriteString("\t\tresponse.WriteHeader(http.StatusNoContent)\n")
 		return
 	}
-	builder.WriteString("\t\thttp.Redirect(response, request, ")
+	builder.WriteString("\t\t_ = gowdkresponse.WriteHTTP(response, gowdkresponse.RedirectTo(")
 	builder.WriteString(quote(action.Redirect))
-	builder.WriteString(", http.StatusSeeOther)\n")
+	builder.WriteString("))\n")
 }
 
 func actionDecoderSource(actions []ActionRoute) string {
@@ -133,7 +172,7 @@ func actionDecoderSource(actions []ActionRoute) string {
 	for _, inputType := range inputTypes {
 		builder.WriteString("type ")
 		builder.WriteString(inputType)
-		builder.WriteString(" struct {\n\tValues formValues\n}\n\n")
+		builder.WriteString(" struct {\n\tValues gowdkform.Values\n}\n\n")
 	}
 	for _, action := range actions {
 		if action.InputType == "" {
@@ -141,11 +180,11 @@ func actionDecoderSource(actions []ActionRoute) string {
 		}
 		builder.WriteString("func ")
 		builder.WriteString(actionDecoderName(action))
-		builder.WriteString("(values formValues) (")
+		builder.WriteString("(values gowdkform.Values) (")
 		builder.WriteString(action.InputType)
 		builder.WriteString(", error) {\n")
-		builder.WriteString("\tdecoded, err := decodeExpectedFields(values, ")
-		builder.WriteString(stringSliceLiteral(action.InputFields))
+		builder.WriteString("\tdecoded, err := gowdkform.DecodeExpected(values, ")
+		builder.WriteString(formSchemaLiteral(action.InputFields))
 		builder.WriteString(")\n")
 		builder.WriteString("\tif err != nil {\n")
 		builder.WriteString("\t\treturn ")
@@ -157,7 +196,6 @@ func actionDecoderSource(actions []ActionRoute) string {
 		builder.WriteString("{Values: decoded}, nil\n")
 		builder.WriteString("}\n\n")
 	}
-	builder.WriteString(actionRuntimeSource)
 	return strings.TrimSpace(builder.String())
 }
 
@@ -219,23 +257,18 @@ func stringSliceLiteral(values []string) string {
 	return builder.String()
 }
 
-func actionFragmentSliceLiteral(fragments []ActionFragment) string {
-	if len(fragments) == 0 {
-		return "nil"
-	}
+func formSchemaLiteral(fields []string) string {
 	var builder strings.Builder
-	builder.WriteString("[]actionFragment{")
-	for index, fragment := range fragments {
+	builder.WriteString("gowdkform.Schema{Fields: []gowdkform.Field{")
+	for index, field := range fields {
 		if index > 0 {
 			builder.WriteString(", ")
 		}
-		builder.WriteString("{Target: ")
-		builder.WriteString(goString(fragment.Target))
-		builder.WriteString(", HTML: ")
-		builder.WriteString(goString(fragment.HTML))
+		builder.WriteString("{Name: ")
+		builder.WriteString(goString(field))
 		builder.WriteString("}")
 	}
-	builder.WriteString("}")
+	builder.WriteString("}}")
 	return builder.String()
 }
 

@@ -1,0 +1,102 @@
+package appgen
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"runtime/debug"
+	"strings"
+)
+
+const gowdkRuntimeModulePath = "github.com/cssbruno/gowdk"
+
+func moduleSource(_ Options) (string, error) {
+	version := gowdkRuntimeModuleVersion()
+	if version == "" {
+		version = "v0.0.0"
+	}
+
+	var builder strings.Builder
+	builder.WriteString("module gowdk-generated-app\n\n")
+	builder.WriteString("go 1.26\n\n")
+	builder.WriteString("require ")
+	builder.WriteString(gowdkRuntimeModulePath)
+	builder.WriteByte(' ')
+	builder.WriteString(version)
+	builder.WriteByte('\n')
+
+	if version == "v0.0.0" {
+		root, ok := gowdkRuntimeModuleRoot()
+		if !ok {
+			return "", fmt.Errorf("cannot locate %s module root for generated app runtime imports", gowdkRuntimeModulePath)
+		}
+		builder.WriteByte('\n')
+		builder.WriteString("replace ")
+		builder.WriteString(gowdkRuntimeModulePath)
+		builder.WriteString(" => ")
+		builder.WriteString(filepath.ToSlash(root))
+		builder.WriteByte('\n')
+	}
+
+	return builder.String(), nil
+}
+
+func gowdkRuntimeModuleVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	if info.Main.Path == gowdkRuntimeModulePath && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	for _, dependency := range info.Deps {
+		if dependency.Path == gowdkRuntimeModulePath && dependency.Version != "" && dependency.Version != "(devel)" {
+			return dependency.Version
+		}
+	}
+	return ""
+}
+
+func gowdkRuntimeModuleRoot() (string, bool) {
+	if _, file, _, ok := runtime.Caller(0); ok {
+		if root, ok := findModuleRoot(filepath.Dir(file)); ok {
+			return root, true
+		}
+	}
+	wd, err := os.Getwd()
+	if err == nil {
+		if root, ok := findModuleRoot(wd); ok {
+			return root, true
+		}
+	}
+	return "", false
+}
+
+func findModuleRoot(start string) (string, bool) {
+	dir, err := filepath.Abs(start)
+	if err != nil {
+		return "", false
+	}
+	for {
+		payload, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+		if err == nil && modulePath(string(payload)) == gowdkRuntimeModulePath {
+			return dir, true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
+}
+
+func modulePath(goMod string) string {
+	for _, line := range strings.Split(goMod, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "module ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "module "))
+		}
+	}
+	return ""
+}

@@ -56,6 +56,23 @@ func TestDecodeExpectedPreservesRepeatedValues(t *testing.T) {
 	}
 }
 
+func TestValuesHasSubmitted(t *testing.T) {
+	values := Values{
+		"blank": {"", " \t "},
+		"name":  {"", "Bruno"},
+	}
+
+	if values.HasSubmitted("blank") {
+		t.Fatal("blank field should not be submitted")
+	}
+	if !values.HasSubmitted("name") {
+		t.Fatal("name field should be submitted")
+	}
+	if values.HasSubmitted("missing") {
+		t.Fatal("missing field should not be submitted")
+	}
+}
+
 func TestDecodeExpectedRejectsDuplicateSchemaFields(t *testing.T) {
 	_, err := DecodeExpected(nil, Schema{Fields: []Field{
 		{Name: "email"},

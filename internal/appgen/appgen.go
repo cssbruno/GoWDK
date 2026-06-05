@@ -67,7 +67,11 @@ func GenerateWithOptions(staticDir, appDir string, options Options) (Result, err
 	if err := removeStaleStaticFiles(targetStatic, files); err != nil {
 		return Result{}, err
 	}
-	if err := writeFileIfChanged(filepath.Join(absApp, modFileName), []byte(moduleSource)); err != nil {
+	modulePayload, err := moduleSource(options)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := writeFileIfChanged(filepath.Join(absApp, modFileName), []byte(modulePayload)); err != nil {
 		return Result{}, err
 	}
 	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), []byte(appPackageSource(options.Actions, options.SSR))); err != nil {

@@ -41,6 +41,13 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 	if strings.Join(result.Files, ",") != "blog/hello/index.html,gowdk-assets.json,index.html" {
 		t.Fatalf("unexpected copied files: %#v", result.Files)
 	}
+	modulePayload, err := os.ReadFile(result.ModulePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(modulePayload), "require github.com/cssbruno/gowdk") {
+		t.Fatalf("expected generated app to depend on GOWDK runtime module:\n%s", modulePayload)
+	}
 	mainPayload, err := os.ReadFile(result.MainPath)
 	if err != nil {
 		t.Fatal(err)
@@ -63,18 +70,27 @@ func TestGenerateWritesEmbeddedStaticApp(t *testing.T) {
 		"//go:embed static",
 		"func Handler() (http.Handler, error)",
 		"func ServeMux() (*http.ServeMux, error)",
-		"mux.Handle(\"/\", staticHandler{",
-		`response.Header().Set("Allow", "GET, HEAD")`,
-		`request.URL.Path == "/_gowdk/health"`,
-		`response.Header().Set("X-GOWDK-App", handler.identity.AppID)`,
-		`response.Header().Set("X-GOWDK-Instance-ID", handler.identity.InstanceID)`,
-		`assets:   loadAssetManifest(root),`,
-		`"assets":      strconv.Itoa(len(handler.assets.Files))`,
-		`instanceID = generatedInstanceID(moduleName)`,
-		`rand.Read(token[:])`,
+		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
+		`mux.Handle("/", gowdkruntime.Handler{`,
+		`Identity:   gowdkruntime.InstanceIdentity(),`,
+		`Assets:     gowdkruntime.LoadAssetManifest(root),`,
+		`Action:     action,`,
+		`SSRExact:   ssrExact,`,
+		`SSRDynamic: ssrDynamic,`,
 	} {
 		if !strings.Contains(string(packagePayload), expected) {
 			t.Fatalf("expected generated gowdkapp/app.go to contain %q:\n%s", expected, packagePayload)
+		}
+	}
+	for _, copiedRuntime := range []string{
+		"type staticHandler struct",
+		"func loadAssetManifest",
+		"func generatedInstanceID",
+		"rand.Read(token[:])",
+		`request.URL.Path == "/_gowdk/health"`,
+	} {
+		if strings.Contains(string(packagePayload), copiedRuntime) {
+			t.Fatalf("expected generated gowdkapp/app.go not to copy runtime helper %q:\n%s", copiedRuntime, packagePayload)
 		}
 	}
 }
@@ -192,24 +208,35 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	modulePayload, err := os.ReadFile(result.ModulePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(modulePayload), "require github.com/cssbruno/gowdk") {
+		t.Fatalf("expected generated action app to depend on GOWDK runtime module:\n%s", modulePayload)
+	}
 	source := string(payload)
 	for _, expected := range []string{
-		`if request.Method == http.MethodPost && handler.action(response, request)`,
+		`Action:     action,`,
+		`gowdkform "github.com/cssbruno/gowdk/runtime/form"`,
+		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
+		`gowdkvalidation "github.com/cssbruno/gowdk/runtime/validation"`,
+		`func action(response http.ResponseWriter, request *http.Request) bool`,
 		`case "/newsletter":`,
 		`const maxActionBodyBytes int64 = 1 << 20`,
 		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`if err := request.ParseForm(); err != nil`,
 		`http.StatusRequestEntityTooLarge`,
-		`writeActionError(response, http.StatusBadRequest, actionErrorInvalidForm)`,
-		`writeActionError(response, http.StatusRequestEntityTooLarge, actionErrorRequestTooLarge)`,
-		`writeActionError(response, http.StatusUnprocessableEntity, actionErrorValidationFailed)`,
-		`response.Header().Set("Cache-Control", "no-store")`,
+		`gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid form")`,
+		`gowdkresponse.WriteNoStoreError(response, http.StatusRequestEntityTooLarge, "request body too large")`,
+		`gowdkresponse.WriteNoStoreError(response, http.StatusUnprocessableEntity, "validation failed")`,
 		`type SubscribeInput struct`,
-		`func decodeNewsletterSubscribeInput(values formValues) (SubscribeInput, error)`,
-		`decodeExpectedFields(values, []string{"email"})`,
-		`validateRequiredFields(input.Values, []string{"email"})`,
+		`func decodeNewsletterSubscribeInput(values gowdkform.Values) (SubscribeInput, error)`,
+		`gowdkform.DecodeExpected(values, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "email"}}})`,
+		`validation := gowdkvalidation.Result{}`,
+		`input.Values.HasSubmitted(field)`,
 		`http.StatusUnprocessableEntity`,
-		`http.Redirect(response, request, "/newsletter?ok=1", http.StatusSeeOther)`,
+		`gowdkresponse.WriteHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
@@ -245,13 +272,14 @@ func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`if isPartialRequest(request)`,
-		`writeActionFragment(response, request, []actionFragment{{Target: "#patients", HTML: "<section><p>Updated patients</p></section>"}})`,
-		`response.Header().Set("X-GOWDK-Fragment-Target", fragment.Target)`,
-		`response.Header().Set("X-GOWDK-Fragment-Swap", swap)`,
-		`func partialSwapMode(value string) string`,
-		`actionErrorFragmentNotFound = "partial fragment not found"`,
-		`http.Redirect(response, request, "/patients", http.StatusSeeOther)`,
+		`gowdkform "github.com/cssbruno/gowdk/runtime/form"`,
+		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
+		`partial := strings.TrimSpace(request.Header.Get("X-GOWDK-Partial"))`,
+		`fragment := gowdkresponse.Response{Kind: gowdkresponse.Fragment, Status: http.StatusOK, Target: "#patients", Body: "<section><p>Updated patients</p></section>"}`,
+		`gowdkresponse.FragmentSwap(fragment.Target, gowdkresponse.SwapMode(swap), fragment.Body)`,
+		`gowdkresponse.WriteNoStoreHTTP(response, fragment)`,
+		`gowdkresponse.WriteNoStoreError(response, http.StatusNotFound, "partial fragment not found")`,
+		`gowdkresponse.WriteHTTP(response, gowdkresponse.RedirectTo("/patients"))`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
@@ -279,14 +307,13 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`if handler.ssrExact(response, request)`,
-		`if handler.ssrDynamic(response, request)`,
-		`func (handler staticHandler) ssrExact(response http.ResponseWriter, request *http.Request) bool`,
-		`func (handler staticHandler) ssrDynamic(response http.ResponseWriter, request *http.Request) bool`,
+		`SSRExact:   ssrExact,`,
+		`SSRDynamic: ssrDynamic,`,
+		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
+		`func ssrExact(response http.ResponseWriter, request *http.Request) bool`,
+		`func ssrDynamic(response http.ResponseWriter, request *http.Request) bool`,
 		`case "/dashboard":`,
-		`response.Header().Set("Content-Type", "text/html; charset=utf-8")`,
-		`response.Header().Set("Cache-Control", "no-store")`,
-		`writeSSRHTML(response, request, "<main><h1>Dashboard</h1></main>")`,
+		`gowdkresponse.WriteNoStoreHTML(response, request, "<main><h1>Dashboard</h1></main>")`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
@@ -318,9 +345,12 @@ func TestGenerateWritesDynamicSSRHandler(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`matchSSRRoute("/blog/{slug}", request.URL.Path)`,
-		`strings.ReplaceAll(html, "__SLUG__", escapeSSRValue(params["slug"]))`,
-		`func escapeSSRValue(value string) string`,
+		`gowdkhtml "github.com/cssbruno/gowdk/runtime/html"`,
+		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
+		`gowdkroute "github.com/cssbruno/gowdk/runtime/route"`,
+		`gowdkroute.Match("/blog/{slug}", request.URL.Path)`,
+		`strings.ReplaceAll(html, "__SLUG__", gowdkhtml.Escape(params["slug"]))`,
+		`gowdkresponse.WriteNoStoreHTML(response, request, html)`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
@@ -347,8 +377,11 @@ func TestGenerateWritesDynamicSSRHandlerWithoutReplacements(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(payload)
-	if !strings.Contains(source, `matchSSRRoute("/blog/{slug}", request.URL.Path)`) {
+	if !strings.Contains(source, `gowdkroute.Match("/blog/{slug}", request.URL.Path)`) {
 		t.Fatalf("expected generated main.go to match dynamic route:\n%s", source)
+	}
+	if strings.Contains(source, `params, ok := gowdkroute.Match`) {
+		t.Fatalf("did not expect unused params for dynamic route without replacements:\n%s", source)
 	}
 	if strings.Contains(source, `case "/blog/{slug}":`) {
 		t.Fatalf("expected generated main.go not to use exact literal match for dynamic route:\n%s", source)

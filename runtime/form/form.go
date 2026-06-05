@@ -87,6 +87,17 @@ func (values Values) All(name string) []string {
 	return append([]string(nil), values[name]...)
 }
 
+// HasSubmitted reports whether a field was submitted with at least one
+// non-blank value.
+func (values Values) HasSubmitted(name string) bool {
+	for _, value := range values[name] {
+		if strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // Names returns submitted field names in stable order.
 func (values Values) Names() []string {
 	names := make([]string, 0, len(values))

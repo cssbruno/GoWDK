@@ -143,6 +143,31 @@ func WriteHTTP(writer http.ResponseWriter, result Response) error {
 	return nil
 }
 
+// WriteNoStoreHTTP writes a response envelope that must not be cached.
+func WriteNoStoreHTTP(writer http.ResponseWriter, result Response) error {
+	writer.Header().Set("Cache-Control", "no-store")
+	return WriteHTTP(writer, result)
+}
+
+// WriteNoStoreHTML writes a no-store HTML response and suppresses the body for
+// HEAD requests.
+func WriteNoStoreHTML(writer http.ResponseWriter, request *http.Request, body string) error {
+	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+	writer.Header().Set("Cache-Control", "no-store")
+	writer.WriteHeader(http.StatusOK)
+	if request.Method == http.MethodHead {
+		return nil
+	}
+	_, err := writer.Write([]byte(body))
+	return err
+}
+
+// WriteNoStoreError writes an HTTP error that must not be cached.
+func WriteNoStoreError(writer http.ResponseWriter, status int, message string) {
+	writer.Header().Set("Cache-Control", "no-store")
+	http.Error(writer, message, status)
+}
+
 func statusOrDefault(result Response) int {
 	if result.Status != 0 {
 		return result.Status

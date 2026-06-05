@@ -54,7 +54,7 @@ jobs:
           rm -rf /tmp/gowdk-dynamic-build
           go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build examples/basic/blog-post.page.gwdk
           test -f /tmp/gowdk-dynamic-build/blog/hello-gowdk/index.html
-          test -f /tmp/gowdk-dynamic-build/blog/static-first/index.html
+          test -f /tmp/gowdk-dynamic-build/blog/compile-first/index.html
 
       - name: Smoke build CSS example output
         run: |

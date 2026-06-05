@@ -34,8 +34,6 @@ reality. Keep it synchronized with `README.md`, `docs/product/requirements.md`,
   See `README.md`, `docs/product/requirements.md`, language docs, and reference
   docs.
 - [x] Keep README, requirements, architecture, and this checklist in sync.
-- [x] Add an AI-fetchable documentation entrypoint.
-  See `llms.txt`.
 
 ## Maintenance Rule
 

@@ -16,8 +16,8 @@ Go-first full web app
 The compiler owns `.gwdk` package-peer files, pages, layouts, components,
 build-time output, CSS, islands, manifests, diagnostics, and generated adapter
 source. The app/runtime kit owns routing, form decoding, response envelopes,
-actions, APIs, CSRF, partial fragments, SSR addon contracts, embedded assets,
-and one-binary serving.
+actions, APIs, CSRF, partial fragments, SSR contracts, embedded assets, and
+one-binary serving.
 
 Do not use this file to preserve old plan names. Removed first-slice planning
 docs have been folded into `.llm/plans/gowdk-world-roadmap.md`.
@@ -55,7 +55,8 @@ Compiler lanes:
 ## Current Baseline
 
 - [x] Default render mode is `spa`.
-- [x] SSR is optional and rejected without the SSR addon.
+- [x] `@render ssr` is non-default request-time page rendering and is rejected
+      unless the SSR feature is enabled.
 - [x] `load {}` is rejected on SPA pages.
 - [x] Dynamic SPA/action routes require `paths {}`.
 - [x] First literal dynamic `paths {}` subset can prerender SPA output.
@@ -185,7 +186,8 @@ api Session GET "/api/session"
 - [ ] Add redirects and error pages.
 - [ ] Execute request-time `load {}` in generated SSR handlers.
 - [ ] Wire generated SSR guards.
-- [ ] Add full request-time user logic for SSR pages through the SSR addon.
+- [ ] Add full request-time user logic for SSR pages through generated SSR
+      handlers.
 - [ ] Add SSR/action/API error boundaries.
 - [ ] Define hybrid pages as SPA by default with explicit request-time capabilities.
 - [ ] Define cache and revalidation behavior for SPA, action, API, partial, SSR, and hybrid routes.

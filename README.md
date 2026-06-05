@@ -185,7 +185,6 @@ CI also smoke-builds spa, dynamic, CSS, and embedded-binary examples.
 
 ## Docs
 
-- [AI documentation entrypoint](llms.txt)
 - [Getting started](docs/getting-started.md)
 - [Product vision](docs/product/vision.md)
 - [Requirements](docs/product/requirements.md)

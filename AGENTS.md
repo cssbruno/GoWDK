@@ -6,9 +6,10 @@ Scope: entire repository.
 
 This repository is GOWDK, a portable Go web compiler. WDK has no canonical
 expansion; no one knows what it stands for, and the practical product shorthand
-is that GOWDK ships apps. The product direction is compile-first: build-time
-output and backend actions are core, and request-time full-page SSR is an
-optional addon.
+is that GOWDK ships apps. The product direction is a Go-first component/page
+compiler plus app/runtime kit: full pages default to build-time output, backend
+endpoints are core request-time behavior, and `@render ssr` is an integrated
+non-default request-time page lane.
 
 Use this file as the source of truth for Codex in this repository. Shared planning workflows and output templates live in `.llm/` so they can be reused by any capable coding LLM.
 
@@ -59,16 +60,18 @@ For architectural decisions that are hard to reverse, add an ADR under `docs/eng
 
 ## GOWDK Product Rules
 
-- Core GOWDK renders at build time by default.
-- SSR is an addon, not the framework identity.
-- SPA and action pages can use backend routes without full-page SSR.
+- Full pages default to build-time SPA output.
+- SSR is an integrated non-default request-time page-rendering lane selected
+  with `@render ssr`.
+- SPA and action pages can use backend endpoints without full-page SSR.
 - `paths {}` runs at build time and declares dynamic SPA routes.
 - `build {}` runs at build time.
 - `load {}` runs at request time and requires request-time rendering.
-- `act {}` runs POST/action requests.
-- `api {}` runs API requests.
+- `act Name POST "/path"` declares POST/action endpoints.
+- `api Name METHOD "/path"` declares API endpoints.
 - `view {}` renders markup.
-- Dynamic SPA/action routes require `paths {}` unless switched to SSR.
+- Dynamic SPA routes require `paths {}` unless switched to SSR; action endpoints
+  inherit generated concrete page paths.
 - Partial updates use server fragments, not full-page SSR.
 - Single-binary deploy must work with or without SSR.
 
@@ -101,9 +104,12 @@ If a future package adds a more specific validation command, document it in `REA
 
 The next implementation steps should follow `docs/product/roadmap.md`:
 
-1. Portable file discovery and manifest generation.
-2. Component compiler.
-3. SPA/prerender output.
-4. CSS/plugin extension points.
-5. One-binary app server.
-6. Typed actions, partial/server fragments, and then SSR addon.
+1. GOWDK AST and analyzer.
+2. Stable internal IR for templates, client behavior, routes, assets,
+   endpoints, SSR pages, and generated output.
+3. Unified endpoint metadata and generated adapter IR.
+4. CSRF-wired actions, fragments, guards, and production-safe backend docs.
+5. Request-time page rendering with `load {}`, guards, typed route params, and
+   error handling.
+6. Hybrid/cache policy, static-first SPA navigation, richer components, islands,
+   tooling, and documentation sync.

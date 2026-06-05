@@ -9,11 +9,11 @@ just ships apps.
 
 ## One-Line Description
 
-GOWDK is a portable Go web compiler.
+GOWDK is a Go-first web app compiler plus runtime kit.
 
 ## Product Shape
 
-GOWDK should grow as two coordinated layers:
+GOWDK grows as two coordinated parts:
 
 ```text
 GOWDK component/page compiler
@@ -23,46 +23,90 @@ GOWDK app/runtime kit
 Go-first full web app
 ```
 
-The compiler owns `.gwdk` pages, layouts, components, build-time output,
-manifests, generated assets, and generated adapter source. The app/runtime kit
-owns routing, actions, APIs, form decoding, response envelopes, CSRF, partial
-fragments, SSR addon contracts, embedded assets, and one-binary serving.
+The compiler owns package-peer `.gwdk` files, pages, layouts, components,
+build-time output, CSS, islands, manifests, diagnostics, endpoint metadata, and
+generated adapter source. The app/runtime kit owns serving, routing, request
+context helpers, form decoding, response envelopes, actions, APIs, CSRF,
+partial fragments, SSR contracts, embedded assets, and one-binary or
+split-binary wiring.
 
-GOWDK should improve Go web authoring through `.gwdk` compilation, runtime-kit
-contracts, and generated adapters before considering any custom Go compiler.
-User application behavior stays in normal Go packages.
+User application behavior stays in normal Go packages. GOWDK should improve Go
+web authoring through `.gwdk` compilation, runtime-kit contracts, and generated
+adapters before considering any custom Go compiler work.
+
+## Execution Lanes
+
+- Build-time page lane: full pages default to static SPA/prerender output.
+- Backend endpoint lane: actions, APIs, and fragments run at request time
+  without making the page itself request-rendered.
+- Request-time page lane: `@render ssr` pages are compiled into generated SSR
+  handlers and run through the same app/runtime kit.
+
+SSR is integrated into the compiler/runtime code path and selected per page. The
+current `addons/ssr` package and `--ssr` flag are feature gates for enabling
+that lane in config and CLI flows; they are not a separate product layer.
 
 ## Target Users
 
-- Go developers building product applications who want build-time output, typed backend behavior, and one-binary deployment.
-- Small teams that want Go-first UI authoring without a large JavaScript application stack.
-- Builders who want request-time SSR only for pages that actually need request context.
+- Go developers building product applications who want build-time page output,
+  typed backend behavior, and one-binary deployment.
+- Small teams that want Go-first UI authoring without a large JavaScript
+  application stack.
+- Builders who want request-time page rendering only where request context,
+  guards, sessions, or per-request data actually matter.
 
 ## Problem
 
-Modern web frameworks often force teams into a rendering ideology: full SSR, full SPA, or deploy-only build output. GOWDK should let Go teams compile portable `.gwdk` files into SPA pages, components, typed actions, partial updates, and a deployable binary while keeping full-page SSR optional.
+Modern web frameworks often force teams into one rendering ideology: full SSR,
+full SPA, or deploy-only static output. GOWDK should let Go teams compile
+portable `.gwdk` files into build-time pages, components, typed backend
+endpoints, partial updates, request-time pages, and deployable Go binaries while
+keeping the route, handler, and runtime contracts explicit.
 
 ## Differentiation
 
-- Files are portable: routes and layouts are declared in files, not implied by folder nesting.
-- SPA render is the default.
-- Actions can exist without SSR.
-- Partial updates use server fragments instead of full page request-time rendering.
-- SSR is an addon for selected pages, not the framework identity.
-- Production can ship as one Go binary with embedded frontend assets.
+- Files are portable: routes and layouts are declared in files, not implied by
+  folder nesting.
+- Full pages default to build-time SPA output.
+- Actions, APIs, and fragments are request-time endpoint behavior, not page
+  route kinds.
+- Partial updates use server fragments instead of full-page request rendering.
+- SSR is an integrated non-default request-time page lane selected per page.
+- User behavior stays in normal Go packages; generated Go is adapter glue.
+- Production can ship as one Go binary with embedded frontend assets and
+  generated request-time handlers.
 
 ## Success Metrics
 
-- The v0.1 target compiles movable `.gwdk` files into prerendered HTML, CSS, assets, and one serving binary.
-- The v0.2 target handles typed actions, form decoding, validation, redirects, CSRF, and server fragments without enabling SSR.
-- The v0.4 target lets selected pages opt into request-time SSR with clear compiler diagnostics and addon checks.
-- Developers can explain the mental model in one sentence: GOWDK ships apps through a compile-first Go compiler with build-time output, backend actions, and optional SSR.
+- Developers can explain GOWDK in one sentence: GOWDK ships Go web apps through
+  a component/page compiler plus an app/runtime kit.
+- The compiler can produce real build-time page output, route metadata, endpoint
+  metadata, CSS/assets, generated adapter Go, and deployable artifacts from
+  package-peer `.gwdk` files.
+- Actions and APIs bind to exact exported Go handlers with typed form decoding,
+  explicit request context, safe response envelopes, CSRF, and production-safe
+  error handling.
+- `@render ssr` pages can execute `load {}`, guards, typed route params,
+  request-aware layouts, redirects, and error boundaries through generated SSR
+  handlers.
+- One-binary and split-binary deployments use the same route and endpoint
+  metadata.
 
 ## Constraints
 
 - Language: Go-first compiler, runtime, and deployment.
-- Styling: CSS tooling should be plugin-driven. Tailwind is an optional addon/plugin, not initial core.
-- JavaScript: no user-written JavaScript for normal app flows.
-- Rendering: build-time full-page rendering by default.
-- Deployment: one-binary production deploy must work with and without SSR.
-- Extensibility: SSR, actions, partials, API, embed, CSS plugins, and WASM islands should remain modular capabilities.
+- Behavior: domain logic, auth, validation, storage, and services stay in user
+  Go packages.
+- Generated code: generated Go is adapter glue, not generated application
+  logic.
+- Styling: CSS tooling is plugin-driven. Tailwind is optional, not core.
+- JavaScript: generated JavaScript may enhance navigation, forms, fragments, and
+  local UI state, but normal app contracts must not depend on user-written
+  JavaScript.
+- Rendering: full pages default to build-time SPA output; request-time page
+  rendering is explicit with `@render ssr` or a future hybrid branch.
+- Deployment: one-binary production deploy must work with and without
+  request-time page rendering.
+- Extensibility: actions, APIs, partials, SSR, embed, CSS plugins, framework
+  adapters, and WASM islands should remain modular implementation boundaries
+  around the same core metadata.

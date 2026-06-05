@@ -47,6 +47,7 @@ type componentJSON struct {
 	Props     []propJSON   `json:"props,omitempty"`
 	PropsType *goTypeJSON  `json:"propsType,omitempty"`
 	State     *stateJSON   `json:"state,omitempty"`
+	Emits     []emitJSON   `json:"emits,omitempty"`
 }
 
 type layoutJSON struct {
@@ -55,6 +56,16 @@ type layoutJSON struct {
 }
 
 type propJSON struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type emitJSON struct {
+	Name   string          `json:"name"`
+	Params []emitParamJSON `json:"params,omitempty"`
+}
+
+type emitParamJSON struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
@@ -289,6 +300,7 @@ func componentsJSON(components []Component) map[string]componentJSON {
 			Props:     propsJSON(component.Props),
 			PropsType: goTypeRefJSON(component.PropsType),
 			State:     stateContractJSON(component.State),
+			Emits:     emitsJSON(component.Emits),
 		}
 	}
 	return out
@@ -315,6 +327,28 @@ func propsJSON(props []Prop) []propJSON {
 	out := make([]propJSON, 0, len(props))
 	for _, prop := range props {
 		out = append(out, propJSON{Name: prop.Name, Type: prop.Type})
+	}
+	return out
+}
+
+func emitsJSON(emits []Emit) []emitJSON {
+	if len(emits) == 0 {
+		return nil
+	}
+	out := make([]emitJSON, 0, len(emits))
+	for _, emit := range emits {
+		out = append(out, emitJSON{Name: emit.Name, Params: emitParamsJSON(emit.Params)})
+	}
+	return out
+}
+
+func emitParamsJSON(params []EmitParam) []emitParamJSON {
+	if len(params) == 0 {
+		return nil
+	}
+	out := make([]emitParamJSON, 0, len(params))
+	for _, param := range params {
+		out = append(out, emitParamJSON{Name: param.Name, Type: param.Type})
 	}
 	return out
 }

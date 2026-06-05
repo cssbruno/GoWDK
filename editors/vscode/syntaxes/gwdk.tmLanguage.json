@@ -4,6 +4,7 @@
     { "include": "#comments" },
     { "include": "#annotations" },
     { "include": "#strings" },
+    { "include": "#client" },
     { "include": "#blocks" },
     { "include": "#directives" },
     { "include": "#markup" }
@@ -21,7 +22,7 @@
       "patterns": [
         {
           "name": "keyword.control.annotation.gwdk",
-          "match": "@(?:page|route|layout|render|guard|css)\\b"
+          "match": "@(?:page|route|layout|render|guard|component|css)\\b"
         }
       ]
     },
@@ -44,7 +45,7 @@
       "patterns": [
         {
           "name": "keyword.control.block.gwdk",
-          "match": "\\b(?:paths|build|load|view|act|api|fragment)\\b"
+          "match": "\\b(?:paths|build|load|view|act|api|fragment|props|state|client|emits)\\b"
         },
         {
           "name": "support.type.render-mode.gwdk",
@@ -52,11 +53,39 @@
         }
       ]
     },
+    "client": {
+      "patterns": [
+        {
+          "name": "keyword.control.client.gwdk",
+          "match": "\\b(?:async|fn|computed|on|mount|destroy|effect|when|ref|let|return|await|if|else|in|emit)\\b"
+        },
+        {
+          "name": "support.function.builtin.gwdk",
+          "match": "\\b(?:len|lower|upper|contains|string|int|float|append|remove|move|fetchJSON)\\s*(?=\\[|\\()"
+        },
+        {
+          "name": "support.type.scalar.gwdk",
+          "match": "\\b(?:string|int|float|bool)\\b"
+        }
+      ]
+    },
     "directives": {
       "patterns": [
         {
           "name": "entity.other.attribute-name.gwdk",
-          "match": "\\bg:(?:post|target|swap)\\b"
+          "match": "\\bg:(?:post|target|swap|ref|if|else-if|else|for|key|bind:(?:value|checked)|island)\\b"
+        },
+        {
+          "name": "entity.other.attribute-name.gwdk",
+          "match": "\\bg:on:[A-Za-z][A-Za-z0-9_-]*(?:\\.(?:prevent|stop|once|capture|debounce\\([^)]+\\)|throttle\\([^)]+\\)))*"
+        },
+        {
+          "name": "entity.other.attribute-name.gwdk",
+          "match": "\\bclass:[A-Za-z_][A-Za-z0-9_-]*"
+        },
+        {
+          "name": "entity.other.attribute-name.gwdk",
+          "match": "\\bstyle:[A-Za-z_][A-Za-z0-9_-]*(?:\\.(?:%|[A-Za-z][A-Za-z0-9_-]*))?"
         },
         {
           "name": "entity.other.attribute-name.css.gwdk",

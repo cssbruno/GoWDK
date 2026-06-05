@@ -44,7 +44,12 @@ Implemented today:
   partial form metadata with fragment-producing actions.
 - Generated static output emits `assets/gowdk/islands/<Component>.js` for
   stateful component instances that use the default generated JavaScript island
-  runtime.
+  runtime. Island roots carry compiler-owned `data-gowdk-island` markers, and
+  generated island assets register idempotent browser mount hooks for initial
+  load and partial-swap remounts plus destroy hooks for islands removed by
+  partial swaps. Generated island assets update collected bindings through
+  per-binding functions for text, form values, checked state, classes, styles,
+  attributes, conditionals, and lists.
 - Generated static output emits `assets/gowdk/islands/<Component>.wasm` plus
   `assets/gowdk/islands/<Component>.wasm.js` only for component calls that
   explicitly set `g:island="wasm"`.

@@ -410,30 +410,61 @@ function completionEntries() {
     ['@layout', 'Declare one or more layout ids.'],
     ['@render', 'Declare render mode: static, action, hybrid, or ssr.'],
     ['@guard', 'Declare route guards.'],
+    ['@component', 'Declare the component name.'],
     ['@css', 'Select page CSS inputs: default, page, none, or discovered CSS names.'],
-    ['static', 'Build-time HTML render mode.'],
-    ['action', 'Static page with backend actions.'],
-    ['hybrid', 'Static by default with selected request-time behavior.'],
-    ['ssr', 'Request-time full-page rendering through the SSR addon.'],
+    ...renderModeCompletionEntries(),
     ['paths', 'Build-time dynamic route path block.'],
     ['build', 'Build-time data block.'],
     ['load', 'Request-time data block.'],
     ['act', 'Action block for POST/form behavior.'],
     ['api', 'API handler block.'],
+    ['fragment', 'Server fragment block inside an action.'],
+    ['props', 'Component prop declarations block.'],
+    ['state', 'Component state contract declaration.'],
+    ['client', 'Component browser island behavior block.'],
+    ['emits', 'Component event declarations block.'],
     ['view', 'Markup render block.'],
-    ['g:post', 'Bind a form to an action.'],
-    ['g:target', 'Select partial update target.'],
-    ['g:swap', 'Select partial update swap behavior.']
+    ['fn', 'Declare a component client function.'],
+    ['async fn', 'Declare an async component client function.'],
+    ['computed', 'Declare a computed component-local value.'],
+    ['on mount', 'Declare island setup statements.'],
+    ['on destroy', 'Declare island cleanup statements.'],
+    ['effect when', 'Declare state-dependent island effect statements.'],
+    ['ref', 'Declare a safe DOM ref.'],
+    ['emit', 'Dispatch a declared component event.'],
+    ['let', 'Declare a scalar client local.'],
+    ['return', 'Return a client helper, computed value, or effect cleanup block.'],
+    ['await fetchJSON', 'Fetch JSON inside an async client function.'],
+    ['append', 'Append an item to a state array.'],
+    ['remove', 'Remove an item from a state array.'],
+    ['move', 'Move an item inside a state array.'],
+    ['len', 'Return the length of a string or array.'],
+    ['lower', 'Lowercase a string expression.'],
+    ['upper', 'Uppercase a string expression.'],
+    ['contains', 'Check whether one string contains another.'],
+    ['string', 'Convert a scalar expression to string.'],
+    ['int', 'Convert a string or number expression to int.'],
+    ['float', 'Convert a string or number expression to float.'],
+    ...directiveCompletionEntries()
   ];
 }
 
 function completionContext(linePrefix) {
   const prefix = String(linePrefix || '');
+  if (/@render\s+[A-Za-z]*$/.test(prefix)) {
+    return 'render';
+  }
   if (/@layout\s+(?:[A-Za-z0-9_.-]+,\s*)*[A-Za-z0-9_.-]*$/.test(prefix)) {
     return 'layout';
   }
   if (/@css\s+(?:[A-Za-z0-9_.-]+,\s*)*[A-Za-z0-9_.-]*$/.test(prefix)) {
     return 'css';
+  }
+  if (/\bg:island\s*=\s*"?[A-Za-z]*$/.test(prefix)) {
+    return 'island';
+  }
+  if (/\b(?:g:|class:|style:)[A-Za-z0-9_.:%-]*$/.test(prefix)) {
+    return 'directive';
   }
   if (/<[A-Z][A-Za-z0-9_]*$/.test(prefix)) {
     return 'component';
@@ -445,6 +476,15 @@ function completionContext(linePrefix) {
 }
 
 function projectCompletionEntries(context, metadata = {}) {
+  if (context === 'render') {
+    return renderModeCompletionEntries();
+  }
+  if (context === 'island') {
+    return [['wasm', 'Use explicit WASM island assets for this component call.']];
+  }
+  if (context === 'directive') {
+    return directiveCompletionEntries();
+  }
   if (context === 'layout') {
     return unique(projectPages(metadata).flatMap((page) => page.layouts || []))
       .map((layout) => [layout, 'Layout id from project metadata.']);
@@ -461,6 +501,35 @@ function projectCompletionEntries(context, metadata = {}) {
     return cssCompletionEntries(metadata);
   }
   return completionEntries();
+}
+
+function renderModeCompletionEntries() {
+  return [
+    ['static', 'Build-time HTML render mode.'],
+    ['action', 'Static page with backend actions.'],
+    ['hybrid', 'Static by default with selected request-time behavior.'],
+    ['ssr', 'Request-time full-page rendering through the SSR addon.']
+  ];
+}
+
+function directiveCompletionEntries() {
+  return [
+    ['g:post', 'Bind a form to an action.'],
+    ['g:target', 'Select partial update target.'],
+    ['g:swap', 'Select partial update swap behavior.'],
+    ['g:on:', 'Bind a stateful component event listener.'],
+    ['g:ref', 'Bind a declared DOM ref.'],
+    ['g:if', 'Render a branch when a bool expression is true.'],
+    ['g:else-if', 'Continue a conditional branch chain.'],
+    ['g:else', 'Declare the fallback branch in a conditional chain.'],
+    ['g:for', 'Render rows from an array expression.'],
+    ['g:key', 'Declare a stable key for g:for rows.'],
+    ['g:bind:value', 'Two-way bind a form value to state.'],
+    ['g:bind:checked', 'Two-way bind checkbox checked state.'],
+    ['g:island', 'Select component island runtime mode.'],
+    ['class:', 'Toggle a CSS class from a bool expression.'],
+    ['style:', 'Bind a safe style property from a scalar expression.']
+  ];
 }
 
 function cssCompletionEntries(metadata = {}) {
@@ -563,10 +632,23 @@ function hoverMarkdown(token, metadata = {}) {
   if (manifest.components && manifest.components[value]) {
     const component = manifest.components[value];
     const props = (component.props || []).map((prop) => `${prop.name} ${prop.type}`).join(', ');
+    const emits = (component.emits || []).map(formatEmit).join(', ');
+    const state = formatState(component.state);
     return [
       `**GOWDK component** \`${escapeMarkdown(value)}\``,
       '',
-      props ? `Props: \`${escapeMarkdown(props)}\`` : 'Props: none'
+      props ? `Props: \`${escapeMarkdown(props)}\`` : 'Props: none',
+      state ? `State: \`${escapeMarkdown(state)}\`` : '',
+      emits ? `Emits: \`${escapeMarkdown(emits)}\`` : ''
+    ].filter(Boolean).join('\n');
+  }
+  const event = componentEvent(value, metadata);
+  if (event) {
+    return [
+      `**GOWDK component event** \`${escapeMarkdown(value)}\``,
+      '',
+      `Component: \`${escapeMarkdown(event.component)}\``,
+      event.params.length ? `Payload: \`${escapeMarkdown(event.params.join(', '))}\`` : 'Payload: none'
     ].join('\n');
   }
   const layoutPages = pages.filter((item) => (item.layouts || []).includes(value));
@@ -609,6 +691,10 @@ function definitionTarget(token, metadata = {}) {
   if (component && component.source) {
     return { file: component.source, line: 0, column: 0 };
   }
+  const event = componentEvent(value, metadata);
+  if (event && event.source) {
+    return { file: event.source, line: 0, column: 0 };
+  }
   for (const item of pages) {
     if (!item.source) {
       continue;
@@ -649,6 +735,10 @@ function symbolReferences(token, metadata = {}, options = {}) {
   if (component && component.source && includeDeclaration) {
     refs.push(fileLocation(component.source));
   }
+  const event = componentEvent(value, metadata);
+  if (event && event.source && includeDeclaration) {
+    refs.push(fileLocation(event.source));
+  }
 
   if (includeDeclaration && !isProjectSymbol) {
     for (const cssDefinition of cssFileDefinitions(value, metadata)) {
@@ -685,6 +775,9 @@ function symbolReferences(token, metadata = {}, options = {}) {
 }
 
 function canRenameSymbol(token, metadata = {}) {
+  if (componentEvent(token, metadata)) {
+    return false;
+  }
   if (!projectSymbolExists(token, metadata) && cssInputMarkdown(token, metadata)) {
     return false;
   }
@@ -699,6 +792,9 @@ function projectSymbolExists(token, metadata = {}) {
     return true;
   }
   if (manifest.components && manifest.components[value]) {
+    return true;
+  }
+  if (componentEvent(value, metadata)) {
     return true;
   }
   return pages.some((page) => {
@@ -741,14 +837,52 @@ function semanticTokens(source) {
   for (let line = 0; line < lines.length; line++) {
     const text = lines[line];
     collectPatternTokens(tokens, line, text, /@[A-Za-z_][A-Za-z0-9_]*/g, 'namespace');
-    collectPatternTokens(tokens, line, text, /\b(paths|build|load|act|api|view|props)\b/g, 'keyword');
+    collectPatternTokens(tokens, line, text, /\b(paths|build|load|act|api|fragment|view|props|state|client|emits)\b/g, 'keyword');
+    collectPatternTokens(tokens, line, text, /\b(async|fn|computed|on|mount|destroy|effect|when|ref|let|return|await|if|else|in|emit)\b/g, 'keyword');
     collectPatternTokens(tokens, line, text, /\b(static|action|hybrid|ssr)\b/g, 'enumMember');
-    collectPatternTokens(tokens, line, text, /\bg:(post|target|swap)\b/g, 'property');
+    collectPatternTokens(tokens, line, text, /\b(string|int|float|bool)\b/g, 'enumMember');
+    collectPatternTokens(tokens, line, text, /\bg:(post|target|swap|ref|if|else-if|else|for|key|bind:(?:value|checked)|island)\b/g, 'property');
+    collectPatternTokens(tokens, line, text, /\bg:on:[A-Za-z][A-Za-z0-9_-]*(?:\.(?:prevent|stop|once|capture|debounce\([^)]+\)|throttle\([^)]+\)))*/g, 'property');
+    collectPatternTokens(tokens, line, text, /\bclass:[A-Za-z_][A-Za-z0-9_-]*/g, 'property');
+    collectPatternTokens(tokens, line, text, /\bstyle:[A-Za-z_][A-Za-z0-9_-]*(?:\.(?:%|[A-Za-z][A-Za-z0-9_-]*))?/g, 'property');
     collectPatternTokens(tokens, line, text, /<\/?([A-Z][A-Za-z0-9_]*)\b/g, 'class', 1);
     collectPatternTokens(tokens, line, text, /\b(?:act|api)\s+([A-Za-z_][A-Za-z0-9_]*)/g, 'function', 1);
+    collectPatternTokens(tokens, line, text, /\b(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)/g, 'function', 1);
+    collectPatternTokens(tokens, line, text, /\bcomputed\s+([A-Za-z_][A-Za-z0-9_]*)/g, 'property', 1);
+    collectPatternTokens(tokens, line, text, /\bref\s+([A-Za-z_][A-Za-z0-9_]*)/g, 'property', 1);
+    collectPatternTokens(tokens, line, text, /\bemit\s+([A-Za-z_][A-Za-z0-9_]*)/g, 'function', 1);
+    collectPatternTokens(tokens, line, text, /\b(len|lower|upper|contains|string|int|float|append|remove|move|fetchJSON)\s*(?:\[|\()/g, 'function', 1);
     collectCSSReferenceTokens(tokens, line, text);
   }
   return withoutOverlaps(tokens).sort((a, b) => a.line - b.line || a.column - b.column || a.length - b.length);
+}
+
+function componentEvent(name, metadata = {}) {
+  const manifest = metadata.manifest || {};
+  for (const [componentName, component] of Object.entries(manifest.components || {})) {
+    for (const event of component.emits || []) {
+      if (event.name === name) {
+        return {
+          component: componentName,
+          source: component.source,
+          params: (event.params || []).map((param) => `${param.name} ${param.type}`.trim()).filter(Boolean)
+        };
+      }
+    }
+  }
+  return undefined;
+}
+
+function formatEmit(event = {}) {
+  const params = (event.params || []).map((param) => `${param.name} ${param.type}`.trim()).filter(Boolean).join(', ');
+  return `${event.name || '(unnamed)'}(${params})`;
+}
+
+function formatState(state) {
+  if (!state || !state.type || !state.type.name) {
+    return '';
+  }
+  return [state.type.alias, state.type.name].filter(Boolean).join('.');
 }
 
 function collectCSSReferenceTokens(tokens, line, text) {

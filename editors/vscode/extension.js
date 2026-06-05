@@ -76,7 +76,7 @@ function activate(context) {
         return completionItems(core.completionEntries());
       }
     }
-  }, '@', '<', '"', ','));
+  }, '@', '<', '"', ',', ':', '.'));
 
   context.subscriptions.push(vscode.languages.registerHoverProvider(LANGUAGE_ID, {
     async provideHover(document, position) {

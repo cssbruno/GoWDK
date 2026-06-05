@@ -70,5 +70,49 @@
       "}"
     ],
     "description": "Create an SSR page"
+  },
+  "Interactive component": {
+    "prefix": "component",
+    "body": [
+      "@component ${1:Option}",
+      "",
+      "props {",
+      "  ${2:Label string}",
+      "}",
+      "",
+      "emits {",
+      "  ${3:select}(label string)",
+      "}",
+      "",
+      "client {",
+      "  fn ${4:Select}() {",
+      "    emit ${3:select}(Label)",
+      "  }",
+      "}",
+      "",
+      "view {",
+      "  <button g:on:click={${4:Select}()}>{Label}</button>",
+      "  $0",
+      "}"
+    ],
+    "description": "Create a component with client island behavior"
+  },
+  "Component emits": {
+    "prefix": "emits",
+    "body": [
+      "emits {",
+      "  ${1:select}(${2:id string})",
+      "}"
+    ],
+    "description": "Declare component events emitted by a client island"
+  },
+  "Async client handler": {
+    "prefix": "asyncfn",
+    "body": [
+      "async fn ${1:Refresh}() {",
+      "  ${2:Items} = await fetchJSON[${3:[]ui.Item}](\"${4:/api/items}\")",
+      "}"
+    ],
+    "description": "Create an async client handler that fetches JSON"
   }
 }

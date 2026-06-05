@@ -124,6 +124,15 @@ class Headers {
 
 global.CustomEvent = CustomEvent;
 global.document = new Document();
+const islandLifecycle = [];
+global.window = {
+  __gowdkDestroyIslands(target, includeRoot) {
+    islandLifecycle.push(['destroy', target.id, includeRoot]);
+  },
+  __gowdkMountIslands() {
+    islandLifecycle.push(['mount']);
+  }
+};
 global.FormData = class {
   constructor(form) {
     this.form = form;
@@ -182,6 +191,8 @@ async function submit() {
   assert.equal(request.options.headers['X-GOWDK-Target'], '#newsletter');
   assert.equal(request.options.headers['X-GOWDK-Swap'], 'innerHTML');
   assert.equal(target.innerHTML, '<p>Updated</p>');
+  assert.deepEqual(islandLifecycle.shift(), ['destroy', 'newsletter', false]);
+  assert.deepEqual(islandLifecycle.shift(), ['mount']);
   assert.equal(form.attributes['aria-busy'], undefined);
   assert.equal(document.activeElement, input);
   assert.equal(afterSwap.form, form);
@@ -192,6 +203,8 @@ async function submit() {
   form.dataset.gowdkSwap = 'outerHTML';
   await submit();
   assert.equal(request.options.headers['X-GOWDK-Swap'], 'outerHTML');
+  assert.deepEqual(islandLifecycle.shift(), ['destroy', 'newsletter', true]);
+  assert.deepEqual(islandLifecycle.shift(), ['mount']);
   assert.equal(target.replacedWith, '<p>Updated</p>');
 }()).catch(error => {
   console.error(error && error.stack || error);

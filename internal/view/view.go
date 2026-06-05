@@ -335,6 +335,15 @@ func (ctx *renderContext) nextBindingID() string {
 	return fmt.Sprintf("b%d", *ctx.bindingSeq)
 }
 
+func (ctx *renderContext) nextIslandID() string {
+	if ctx.islandSeq == nil {
+		seq := 0
+		ctx.islandSeq = &seq
+	}
+	*ctx.islandSeq = *ctx.islandSeq + 1
+	return fmt.Sprintf("i%d", *ctx.islandSeq)
+}
+
 func (ctx *renderContext) loopKeyValue(expr string) string {
 	if ctx.templateLoop != nil {
 		return loopTemplateValue(expr)
@@ -1460,6 +1469,7 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		refs:        component.Refs,
 		emits:       component.Emits,
 		bindingSeq:  ctx.bindingSeq,
+		islandSeq:   ctx.islandSeq,
 	}
 	childCtx.stack[node.Name] = true
 	body, err := render(component.Body, childCtx)
@@ -1474,8 +1484,11 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		if stateJSON == "" {
 			stateJSON = "{}"
 		}
+		islandID := ctx.nextIslandID()
 		out.WriteString(`<gowdk-island data-gowdk-component="`)
 		out.WriteString(gowhtml.Escape(node.Name))
+		out.WriteString(`" data-gowdk-island="`)
+		out.WriteString(gowhtml.Escape(islandID))
 		out.WriteString(`" data-gowdk-runtime="`)
 		out.WriteString(gowhtml.Escape(mode))
 		out.WriteString(`" data-gowdk-state="`)
@@ -1834,6 +1847,7 @@ type ComponentCallUsage struct {
 // interpolation data, and page-scoped action routes.
 func RenderWithOptions(source string, components map[string]Component, data map[string]string, options Options) (string, error) {
 	bindingSeq := 0
+	islandSeq := 0
 	return render(source, renderContext{
 		components:  components,
 		values:      cloneValues(data),
@@ -1843,6 +1857,7 @@ func RenderWithOptions(source string, components map[string]Component, data map[
 		readFields:  map[string]bool{},
 		bindFields:  map[string]bool{},
 		bindingSeq:  &bindingSeq,
+		islandSeq:   &islandSeq,
 	})
 }
 
@@ -2075,6 +2090,10 @@ func render(source string, ctx renderContext) (string, error) {
 	if ctx.bindingSeq == nil {
 		seq := 0
 		ctx.bindingSeq = &seq
+	}
+	if ctx.islandSeq == nil {
+		seq := 0
+		ctx.islandSeq = &seq
 	}
 	return renderNodes(nodes, &ctx)
 }
@@ -2427,6 +2446,7 @@ type renderContext struct {
 	emits        map[string]clientlang.Emit
 	loopSeq      *int
 	bindingSeq   *int
+	islandSeq    *int
 	loopItem     *loopItemRender
 	templateLoop *templateLoopRender
 	selectBound  bool

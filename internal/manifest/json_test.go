@@ -52,6 +52,10 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 				Source: "components/hero.cmp.gwdk",
 				Name:   "Hero",
 				Props:  []Prop{{Name: "title", Type: "string"}},
+				Emits: []Emit{{
+					Name:   "select",
+					Params: []EmitParam{{Name: "id", Type: "string"}, {Name: "active", Type: "bool"}},
+				}},
 			},
 		},
 		Layouts: []Layout{
@@ -117,6 +121,13 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 				Name string `json:"name"`
 				Type string `json:"type"`
 			} `json:"props"`
+			Emits []struct {
+				Name   string `json:"name"`
+				Params []struct {
+					Name string `json:"name"`
+					Type string `json:"type"`
+				} `json:"params"`
+			} `json:"emits"`
 		} `json:"components"`
 		Layouts map[string]struct {
 			Source string `json:"source"`
@@ -194,6 +205,12 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 	}
 	if len(component.Props) != 1 || component.Props[0].Name != "title" || component.Props[0].Type != "string" {
 		t.Fatalf("unexpected component props: %#v", component.Props)
+	}
+	if len(component.Emits) != 1 || component.Emits[0].Name != "select" {
+		t.Fatalf("unexpected component emits: %#v", component.Emits)
+	}
+	if len(component.Emits[0].Params) != 2 || component.Emits[0].Params[0].Name != "id" || component.Emits[0].Params[0].Type != "string" || component.Emits[0].Params[1].Name != "active" || component.Emits[0].Params[1].Type != "bool" {
+		t.Fatalf("unexpected component emit params: %#v", component.Emits[0].Params)
 	}
 	if decoded.Layouts["root"].Kind != "layout" || decoded.Layouts["root"].Source != "layouts/root.layout.gwdk" {
 		t.Fatalf("unexpected layout metadata: %#v", decoded.Layouts)

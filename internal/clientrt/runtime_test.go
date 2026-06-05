@@ -17,6 +17,8 @@ func TestSourceEmitsPartialUpdateRuntime(t *testing.T) {
 		`X-GOWDK-Swap`,
 		`target.outerHTML = html`,
 		`target.innerHTML = html`,
+		`window.__gowdkDestroyIslands(target, swap === 'outerHTML')`,
+		`typeof window !== 'undefined' && window.__gowdkMountIslands`,
 		`aria-busy`,
 		`focusTarget(document.activeElement)`,
 		`restoreFocus(focused)`,

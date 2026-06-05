@@ -233,6 +233,20 @@ func islandJSSource(componentName string) string {
   const selector = "gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]";
   const booleanAttrs = new Set(["allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "defer", "disabled", "formnovalidate", "hidden", "inert", "ismap", "loop", "multiple", "muted", "nomodule", "novalidate", "open", "readonly", "required", "reversed", "selected"]);
   const staleAsyncResult = Symbol("gowdk stale async result");
+  const registry = window.__gowdkIslandRegistry || (window.__gowdkIslandRegistry = { components: Object.create(null), roots: new WeakMap() });
+  window.__gowdkMountIslands = () => {
+    Object.keys(registry.components).forEach((name) => registry.components[name](document));
+  };
+  window.__gowdkDestroyIslands = (scope, includeRoot) => {
+    scope = scope || document;
+    const roots = [];
+    if (includeRoot && scope.matches && scope.matches("gowdk-island")) roots.push(scope);
+    if (scope.querySelectorAll) scope.querySelectorAll("gowdk-island").forEach((root) => roots.push(root));
+    roots.forEach((root) => {
+      const destroy = registry.roots.get(root);
+      if (destroy) destroy();
+    });
+  };
 
   function matchingBrace(source, openIndex) {
     let depth = 0;
@@ -713,13 +727,13 @@ func islandJSSource(componentName string) string {
     });
   }
 
-  function render(root, state, helpers, bindings) {
-    renderListLoops(root, state, helpers, bindings);
-    bindings = collectBindings(root);
+  function updateTextBindings(bindings, state) {
     bindings.text.forEach(({ node, field }) => {
       node.textContent = state[field] == null ? "" : String(state[field]);
     });
-    renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true, bindings });
+  }
+
+  function updateValueBindings(bindings, state) {
     bindings.value.forEach(({ node, field }) => {
       if (node.type === "radio") {
         node.checked = String(state[field] == null ? "" : state[field]) === node.value;
@@ -728,18 +742,30 @@ func islandJSSource(componentName string) string {
       const value = state[field] == null ? "" : String(state[field]);
       if (document.activeElement !== node && node.value !== value) node.value = value;
     });
+  }
+
+  function updateCheckedBindings(bindings, state) {
     bindings.checked.forEach(({ node, field }) => {
       const checked = Boolean(state[field]);
       if (node.checked !== checked) node.checked = checked;
     });
+  }
+
+  function updateClassBindings(bindings, state, helpers) {
     bindings.classes.forEach(({ node, name, expression }) => {
       node.classList.toggle(name, Boolean(valueOf(expression, state, null, helpers)));
     });
+  }
+
+  function updateStyleBindings(bindings, state, helpers) {
     bindings.styles.forEach(({ node, name, expression, unit }) => {
       const value = valueOf(expression, state, null, helpers);
       if (value == null || value === false || value === "") node.style.removeProperty(name);
       else node.style.setProperty(name, String(value) + unit);
     });
+  }
+
+  function updateAttrBindings(bindings, state, helpers) {
     bindings.attrs.forEach(({ node, name, expression }) => {
       const value = valueOf(expression, state, null, helpers);
       if (booleanAttrs.has(name)) {
@@ -750,11 +776,31 @@ func islandJSSource(componentName string) string {
       if (value == null || value === false) node.removeAttribute(name);
       else node.setAttribute(name, String(value));
     });
+  }
+
+  function updateBindings(root, state, helpers, bindings) {
+    updateTextBindings(bindings, state);
+    renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true, bindings });
+    updateValueBindings(bindings, state);
+    updateCheckedBindings(bindings, state);
+    updateClassBindings(bindings, state, helpers);
+    updateStyleBindings(bindings, state, helpers);
+    updateAttrBindings(bindings, state, helpers);
+  }
+
+  function render(root, state, helpers, bindings) {
+    renderListLoops(root, state, helpers, bindings);
+    bindings = collectBindings(root);
+    updateBindings(root, state, helpers, bindings);
     root.setAttribute("data-gowdk-state", JSON.stringify(state));
     return bindings;
   }
 
-  document.querySelectorAll(selector).forEach(async (root) => {
+  async function mountComponent(scope) {
+    scope = scope || document;
+    scope.querySelectorAll(selector).forEach(async (root) => {
+    if (root.getAttribute("data-gowdk-mounted") === "js") return;
+    root.setAttribute("data-gowdk-mounted", "js");
     const state = JSON.parse(root.getAttribute("data-gowdk-state") || "{}");
     const client = JSON.parse(root.getAttribute("data-gowdk-client") || "{}");
     const hasEnvelope = Boolean(client.handlers || client.helpers || client.emits || client.mount || client.destroy || client.effects || client.computed);
@@ -949,18 +995,25 @@ func islandJSSource(componentName string) string {
     await applyStatements(mountStatements, state, handlers, helpers, null, refs, computeds, asyncTokens, root, emitEvents);
     await settleEffects();
     recomputeComputed(state, computeds, helpers);
-    if (destroyStatements.length > 0) {
-      window.addEventListener("pagehide", async () => {
+    const destroyIsland = async () => {
+      if (root.getAttribute("data-gowdk-mounted") !== "js") return;
+      root.removeAttribute("data-gowdk-mounted");
+      registry.roots.delete(root);
+      if (destroyStatements.length > 0) {
         await runAllEffectCleanups();
         await applyStatements(destroyStatements, state, handlers, helpers, null, refs, computeds, asyncTokens, root, emitEvents);
-      }, { once: true });
-    } else if (effects.length > 0) {
-      window.addEventListener("pagehide", async () => {
+      } else if (effects.length > 0) {
         await runAllEffectCleanups();
-      }, { once: true });
-    }
+      }
+    };
+    registry.roots.set(root, destroyIsland);
+    window.addEventListener("pagehide", destroyIsland, { once: true });
     rerender();
   });
+  }
+
+  registry.components[component] = mountComponent;
+  mountComponent(document);
 })();
 `, component)
 }

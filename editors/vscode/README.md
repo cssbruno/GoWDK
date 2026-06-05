@@ -9,19 +9,21 @@ Language support for `.gwdk` files.
 - Diagnostics through `gowdk check --json`.
 - Formatting through `gowdk fmt`.
 - Standard Language Server Protocol support is available through `gowdk lsp` for editors that prefer LSP integration.
-- Keyword completions for annotations, render modes, blocks, and `g:` directives,
-  plus project-aware route, layout, component, and CSS completions in route
-  strings, `@layout` values, component tag positions, and `@css` selections.
+- Keyword completions for annotations, render modes, blocks, client-island
+  constructs, and `g:`/class/style directives, plus project-aware route,
+  layout, component, and CSS completions in route strings, `@layout` values,
+  component tag positions, and `@css` selections.
 - Hover information for page IDs, layout IDs, component names, CSS input names,
-  action names, and API names from project metadata.
+  component event names, action names, and API names from project metadata.
 - Go-to-definition for current project metadata symbols. Definitions open the
   owning source file. CSS inputs discovered from workspace `.css` files open the
   matching CSS file. Exact source ranges are planned with compiler spans.
 - Find references for current project metadata symbols. References are
   file-level until compiler spans are available. CSS references include pages
   that declare the CSS input through `@css`.
-- Semantic tokens for annotations, block names, render modes, `g:` directives,
-  CSS input names, action/API names, and component tag names.
+- Semantic tokens for annotations, block names, render modes, client-island
+  keywords and built-ins, `g:`/class/style directives, CSS input names,
+  action/API names, and component tag names.
 - Commands to show token output and manifest JSON for the active file.
 - Dedicated GOWDK Activity Bar page hierarchy for movable `.gwdk` page files.
 - Source Outline view that groups pages by their actual workspace directories.
@@ -70,6 +72,7 @@ Check the extension entrypoint syntax with:
 
 ```sh
 node --check editors/vscode/extension.js
+node --check editors/vscode/extension-core.js
 ```
 
 Run the extension unit tests with:
@@ -130,7 +133,7 @@ Do not commit Marketplace tokens or generated `.vsix` files.
 
 1. Update `editors/vscode/package.json` version when the extension behavior or
    published metadata changes.
-2. Run `node --check editors/vscode/extension.js`.
+2. Run `node --check editors/vscode/extension.js` and `node --check editors/vscode/extension-core.js`.
 3. Run `node --test editors/vscode/*.test.js`.
 4. Package the extension with `vsce package`.
 5. Publish after the repository release artifacts are available.

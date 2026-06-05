@@ -35,7 +35,7 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 	html := readFile(t, filepath.Join(outputDir, "counter", "index.html"))
 	for _, expected := range []string{
 		`<script src="/assets/gowdk/islands/Counter.js" defer></script>`,
-		`<gowdk-island data-gowdk-component="Counter" data-gowdk-runtime="js"`,
+		`<gowdk-island data-gowdk-component="Counter" data-gowdk-island="i1" data-gowdk-runtime="js"`,
 		`data-gowdk-on-click="Count++"`,
 		`data-gowdk-bind="Count" data-gowdk-binding-text="b2">1</span>`,
 	} {
@@ -44,7 +44,13 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 		}
 	}
 	js := readFile(t, jsPath)
-	if !strings.Contains(js, `data-gowdk-runtime=\"js\"`) || !strings.Contains(js, `applyExpression`) {
+	if !strings.Contains(js, `data-gowdk-runtime=\"js\"`) ||
+		!strings.Contains(js, `applyExpression`) ||
+		!strings.Contains(js, `window.__gowdkMountIslands`) ||
+		!strings.Contains(js, `window.__gowdkDestroyIslands`) ||
+		!strings.Contains(js, `registry.components[component] = mountComponent`) ||
+		!strings.Contains(js, `registry.roots`) ||
+		!strings.Contains(js, `data-gowdk-mounted`) {
 		t.Fatalf("expected generated JS island runtime, got:\n%s", js)
 	}
 	assetManifestPayload := readFile(t, filepath.Join(outputDir, assetManifestFile))
@@ -376,6 +382,9 @@ on destroy {
 		`await runEffectCleanup(effect);`,
 		`effectCleanups[effect.field] = effect.cleanup || null;`,
 		`await applyStatements(mountStatements, state, handlers, helpers, null, refs, computeds, asyncTokens, root, emitEvents);`,
+		`const destroyIsland = async () => {`,
+		`registry.roots.delete(root);`,
+		`registry.roots.set(root, destroyIsland);`,
 		`await runAllEffectCleanups();`,
 		`window.addEventListener("pagehide"`,
 	} {
@@ -567,6 +576,9 @@ fn SwapFirstTwo() {
 	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Nested.js"))
 	for _, expected := range []string{
 		`function renderListLoops(root, state, helpers, bindings)`,
+		`function updateBindings(root, state, helpers, bindings)`,
+		`updateTextBindings(bindings, state);`,
+		`updateAttrBindings(bindings, state, helpers);`,
 		`template[data-gowdk-for]`,
 		`call[1] === "append"`,
 		`state[field] = state[field].concat([valueOf(args[1], state, scope, helpers)]);`,
@@ -936,6 +948,7 @@ func TestBuildEmitsValueBindingRuntimeForJSIsland(t *testing.T) {
 	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Search.js"))
 	for _, expected := range []string{
 		`bindings.value.push({ id: node.getAttribute("data-gowdk-binding-value"), node, field: node.getAttribute("data-gowdk-bind-value") });`,
+		`function updateValueBindings(bindings, state)`,
 		`state[field] = node.value;`,
 		`const event = node.tagName === "SELECT" || node.type === "radio" ? "change" : "input";`,
 		`scheduleRender();`,
@@ -1179,6 +1192,7 @@ func TestBuildEmitsClassToggleRuntimeForJSIsland(t *testing.T) {
 	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
 	for _, expected := range []string{
 		`data-gowdk-class-`,
+		`function updateClassBindings(bindings, state, helpers)`,
 		`node.classList.toggle(name, Boolean(valueOf(expression, state, null, helpers)));`,
 		`const scheduleRender = () => {`,
 	} {
@@ -1289,6 +1303,7 @@ func TestBuildEmitsWASMIslandAssetsOnlyWhenExplicit(t *testing.T) {
 	html := readFile(t, filepath.Join(outputDir, "counter", "index.html"))
 	for _, expected := range []string{
 		`<script src="/assets/gowdk/islands/Counter.wasm.js" defer></script>`,
+		`data-gowdk-island="i1"`,
 		`data-gowdk-runtime="wasm"`,
 	} {
 		if !strings.Contains(html, expected) {

@@ -34,7 +34,10 @@ Current support:
   swaps, dispatches `gowdk:before-request`, `gowdk:after-swap`, and
   `gowdk:request-error`, and toggles `aria-busy` on the form while the request
   is pending. It restores focus by matching the active element's `id` or `name`
-  after the swap when possible.
+  after the swap when possible. Before a swap, it calls the generated island
+  destroy hook when present for islands being replaced; after the swap, it calls
+  the generated island mount hook so newly inserted JavaScript islands can
+  attach.
 
 ## Swap Modes
 
@@ -55,4 +58,3 @@ Not implemented yet:
 - CSRF wiring for generated partial action handlers.
 - User-owned action logic and typed Go struct resolution.
 - Component expansion inside generated fragment bodies.
-- Rich local client-side state or island reactivity.

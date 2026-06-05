@@ -112,7 +112,7 @@ func TestRenderWithComponentsEmitsDefaultJSIslandForState(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`<gowdk-island data-gowdk-component="Counter" data-gowdk-runtime="js" data-gowdk-state="{&#34;Count&#34;:1}">`,
+		`<gowdk-island data-gowdk-component="Counter" data-gowdk-island="i1" data-gowdk-runtime="js" data-gowdk-state="{&#34;Count&#34;:1}">`,
 		`<button data-gowdk-on-click="Count++" data-gowdk-binding-on-click="b1"><span data-gowdk-bind="Count" data-gowdk-binding-text="b2">1</span></button>`,
 	} {
 		if !strings.Contains(got, want) {

@@ -47,10 +47,16 @@ const runtimeSource = `(function () {
       }
       var html = await response.text();
       var swap = response.headers.get('X-GOWDK-Fragment-Swap') || form.dataset.gowdkSwap || 'innerHTML';
+      if (typeof window !== 'undefined' && window.__gowdkDestroyIslands) {
+        window.__gowdkDestroyIslands(target, swap === 'outerHTML');
+      }
       if (swap === 'outerHTML') {
         target.outerHTML = html;
       } else {
         target.innerHTML = html;
+      }
+      if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
+        window.__gowdkMountIslands();
       }
       restoreFocus(focused);
       form.dispatchEvent(new CustomEvent('gowdk:after-swap', {

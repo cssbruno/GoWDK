@@ -74,6 +74,15 @@ Current JSON shape:
       "props": [
         {"name": "title", "type": "string"},
         {"name": "tagline", "type": "string"}
+      ],
+      "emits": [
+        {
+          "name": "select",
+          "params": [
+            {"name": "id", "type": "string"},
+            {"name": "active", "type": "bool"}
+          ]
+        }
       ]
     }
   }
@@ -111,6 +120,8 @@ Fields:
   directory, such as `index.html`, `newsletter/index.html`, or
   `blog/{slug}/index.html`. SSR-only pages omit static HTML artifacts.
 - `components`: component declarations known to the manifest.
+  Component declarations may include `props`, typed `propsType`/`state`
+  contracts, and emitted browser-island event metadata under `emits`.
 
 The site-map command emits broader editor-facing JSON that includes source paths, dynamic route params, and block presence.
 

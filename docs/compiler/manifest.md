@@ -9,7 +9,8 @@ captured `view {}` body text, and first-slice action metadata. It also tracks
 component build inputs with source path, component name, component Go imports,
 legacy string props, typed props/state contracts, and captured `view {}` body
 text. Stateful components can also carry captured `client {}` body text for
-component-local generated-JS handlers.
+component-local generated-JS handlers and `emits {}` metadata for component
+events.
 
 Compiler validation now rejects malformed routes, duplicate route params,
 duplicate page route patterns, and same-method route conflicts before generated
@@ -78,7 +79,15 @@ they own a page `GET` route.
       "state": {
         "type": {"alias": "ui", "name": "HeroState"},
         "init": {"alias": "ui", "name": "NewHeroState"}
-      }
+      },
+      "emits": [
+        {
+          "name": "select",
+          "params": [
+            {"name": "id", "type": "string"}
+          ]
+        }
+      ]
     }
   }
 }
@@ -90,7 +99,8 @@ declared block presence, first-slice action metadata including fragment targets,
 API block names, direct page component references for the current static `view {}` subset, direct static
 asset references, direct CSS class names, direct static `style` attribute
 values, first-slice API method/route metadata, and component declarations.
-Component declarations include typed contract metadata when present.
+Component declarations include typed contract metadata and emitted event
+metadata when present.
 `paths`, `layouts`, `guard`, `css`, `actions`, `apis`, `components`,
 `staticAssets`, `cssClasses`, and `styleAttributes` are omitted when empty or
 false.

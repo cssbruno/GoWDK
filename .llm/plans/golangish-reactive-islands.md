@@ -706,19 +706,19 @@ Goal: move from simple text replacement to a stable generated DOM update model.
 
 Support:
 
-- [ ] compiler-owned island root markers
+- [x] compiler-owned island root markers
 - [x] binding IDs for text, attrs, classes, styles, conditionals, and lists
 - [ ] keyed list updates
-- [ ] fragment replacement reattaches islands
+- [x] fragment replacement reattaches islands
 - [ ] no full-page hydration
 
 Compiler work:
 
 - [x] Assign stable binding IDs during view compilation.
 - [ ] Emit compact binding table into JS asset.
-- [ ] Generate per-binding update functions.
-- [ ] Add island mount registry.
-- [ ] Integrate with partial runtime after server fragment swaps.
+- [x] Generate per-binding update functions.
+- [x] Add island mount registry.
+- [x] Integrate with partial runtime after server fragment swaps.
 
 Implementation note: the current slice emits compiler-owned `bN` attributes
 and the generated JS builds an in-memory binding table from them on mount and
@@ -728,13 +728,26 @@ open.
 Tests:
 
 - [x] Text/attr/list updates share one scheduler.
-- [ ] Partial swap remounts new islands.
-- [ ] Removed island runs destroy hook.
+- [x] Partial swap remounts new islands.
+- [x] Removed island runs destroy hook.
 
 Second implementation note: generated JS islands now enqueue post-mutation
 updates through one microtask scheduler. Text, attribute/class/style/form, list,
 conditional, and child-prop sync updates still run through the shared render
 pipeline; only the initial mount render remains immediate.
+
+Third implementation note: island roots now carry stable `data-gowdk-island`
+markers. Generated JS island assets register idempotent component mount
+functions in a browser-global registry, and the partial-update runtime calls the
+global mount hook after `innerHTML` or `outerHTML` swaps so new fragment islands
+can attach without full-page hydration. Destroy cleanup for removed islands
+runs through the same registry before partial swaps replace existing island
+roots.
+
+Fourth implementation note: generated JS now routes the collected binding table
+through per-binding update functions for text, values, checked state, classes,
+styles, attributes, conditionals, and lists. The compact precomputed table in
+the JS asset remains open.
 
 ### 17. Source Maps And Debug Output
 

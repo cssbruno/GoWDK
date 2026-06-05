@@ -208,6 +208,7 @@ For the VS Code extension, use Node's built-in checks:
 
 ```sh
 node --check editors/vscode/extension.js
+node --check editors/vscode/extension-core.js
 node --test editors/vscode/*.test.js
 ```
 
@@ -225,6 +226,7 @@ gowdk tokens <file.gwdk>
 go test ./...
 go build ./cmd/gowdk
 node --check editors/vscode/extension.js
+node --check editors/vscode/extension-core.js
 node --test editors/vscode/*.test.js
 ```
 

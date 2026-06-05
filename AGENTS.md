@@ -61,14 +61,14 @@ For architectural decisions that are hard to reverse, add an ADR under `docs/eng
 
 - Core GOWDK renders at build time by default.
 - SSR is an addon, not the framework identity.
-- Static and action pages can use backend routes without full-page SSR.
-- `paths {}` runs at build time and declares dynamic static routes.
+- SPA and action pages can use backend routes without full-page SSR.
+- `paths {}` runs at build time and declares dynamic SPA routes.
 - `build {}` runs at build time.
 - `load {}` runs at request time and requires request-time rendering.
 - `act {}` runs POST/action requests.
 - `api {}` runs API requests.
 - `view {}` renders markup.
-- Dynamic static/action routes require `paths {}` unless switched to SSR.
+- Dynamic SPA/action routes require `paths {}` unless switched to SSR.
 - Partial updates use server fragments, not full-page SSR.
 - Single-binary deploy must work with or without SSR.
 
@@ -103,7 +103,7 @@ The next implementation steps should follow `docs/product/roadmap.md`:
 
 1. Portable file discovery and manifest generation.
 2. Component compiler.
-3. Static/prerender output.
+3. SPA/prerender output.
 4. CSS/plugin extension points.
-5. One-binary static server.
+5. One-binary app server.
 6. Typed actions, partial/server fragments, and then SSR addon.

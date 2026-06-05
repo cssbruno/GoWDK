@@ -10,8 +10,8 @@ modules.
 
 ## Goals
 
-- Let static build target config define the exact `.gwdk` source set compiled
-  into static output, generated app source, and generated binaries.
+- Let SPA build target config define the exact `.gwdk` source set compiled
+  into SPA output, generated app source, and generated binaries.
 - Support one module per binary, multiple modules per binary, and multiple
   separate binaries from different module selections.
 - Keep deployment target orchestration user-owned for now.
@@ -44,7 +44,7 @@ modules.
 
 ### Functional
 
-- `Build.Targets` may declare one or more static build targets.
+- `Build.Targets` may declare one or more SPA build targets.
 - `--target` may be repeated or comma-separated.
 - Ad hoc `--module` may be repeated or comma-separated.
 - When modules are selected, root source discovery is skipped and only selected
@@ -72,7 +72,7 @@ modules.
   selected module routes.
 - [x] `gowdk build` runs all configured `Build.Targets`.
 - [x] `gowdk build --target <name>` runs only selected configured targets.
-- [x] Docs show how to statically configure different binaries from different
+- [x] Docs show how to with config configure different binaries from different
   module sets.
 
 ## Edge Cases
@@ -85,7 +85,7 @@ modules.
 
 ## Dependencies
 
-- Internal: module discovery in `cmd/gowdk`, static generation, generated app
+- Internal: module discovery in `cmd/gowdk`, SPA generation, generated app
   generation, and binary build support.
 - External: Go toolchain for `--bin`.
 

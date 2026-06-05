@@ -11,19 +11,20 @@ Implemented today:
 - Manifest and site-map models through `internal/manifest` and `internal/lang`.
 - Render-rule, duplicate identity, redundant component, and component contract
   validation through `internal/compiler`.
-- Static `view {}` markup and component invocation parsing through `internal/view`.
+- SPA `view {}` markup and component invocation parsing through `internal/view`.
 - Imported Go props/state contract resolution through `internal/gotypes`.
 - Route-binding planning through `internal/codegen`.
-- Static HTML, route manifest, and asset manifest emission for simple build-time
+- App-shell HTML, route manifest, and asset manifest emission for simple build-time
   pages, literal build data, imported Go build data functions, literal dynamic
   paths, components, partial runtime assets, and island runtime assets through
-  `internal/staticgen`.
-- Mandatory static build reports through `internal/staticgen`, written as
+  `internal/buildgen`.
+- Mandatory SPA build reports through `internal/buildgen`, written as
   `gowdk-build-report.json` for disk builds and returned on build errors.
-- Generated embedded static app source and optional binary compilation through
+- Generated embedded app source and optional binary compilation through
   `internal/appgen`, including first-slice action redirect handlers and form
-  input decoder and required-field validation wrappers.
-- Static `gowdk.config.go` loading for build source discovery, build targets,
+  input decoder and required-field validation wrappers, partial action fragment
+  responses, and first-slice SSR routes without `load {}`.
+- SPA `gowdk.config.go` loading for build source discovery, build targets,
   and output through `internal/project`.
 - CLI tools for `tokens`, `fmt`, `check`, `manifest`, `sitemap`, `build`, and `lsp`.
 
@@ -35,8 +36,9 @@ Not implemented yet:
   execution, and full `paths {}` execution.
 - Real user Go type resolution for typed action decoders, user action logic,
   API/fragment/SSR handlers.
-- Generated action/API/fragment execution.
-- Route-aware generated app registration beyond static file serving.
+- Real user action/API/fragment execution.
+- Generated `load {}` execution, guard enforcement, and hybrid request-time
+  handlers.
 
 ## Documents
 
@@ -45,6 +47,6 @@ Not implemented yet:
 - `generated-output.md`: planned generated artifacts and current limitations.
 - `browser-compiler.md`: browser-facing partial runtime, JavaScript islands, and
   explicit WASM island behavior.
-- `static-build-report.md`: generated build report schema and CLI debug output.
+- `SPA-build-report.md`: generated build report schema and CLI debug output.
 - `manifest.md`: manifest and site-map JSON contracts.
 - `codegen.md`: route-binding planning and future emitters.

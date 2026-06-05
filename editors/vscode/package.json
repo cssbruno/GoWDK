@@ -2,7 +2,7 @@
   "name": "gowdk-vscode",
   "displayName": "GOWDK",
   "description": "Language tools for portable .gwdk files.",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "publisher": "gowdk",
   "license": "MIT",
   "repository": {
@@ -18,7 +18,7 @@
     "gowdk",
     "web",
     "compiler",
-    "static-site",
+    "spa-app",
     "language-support"
   ],
   "scripts": {
@@ -163,7 +163,7 @@
         "gowdk.cliPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the gowdk CLI. When empty, the extension uses `go run ./cmd/gowdk` inside source workspaces, `go run github.com/cssbruno/gowdk/cmd/gowdk` inside or below GOWDK app modules, then `gowdk` on PATH."
+          "description": "Path to the gowdk CLI. When empty, the extension uses `go run ./cmd/gowdk` inside source workspaces, a workspace-local `gowdk` binary when present, `go run github.com/cssbruno/gowdk/cmd/gowdk` inside or below GOWDK app modules, then `gowdk` on PATH."
         },
         "gowdk.enableDiagnostics": {
           "type": "boolean",

@@ -42,7 +42,16 @@ jobs:
           go build ./cmd/gowdk
           node --check editors/vscode/extension.js
           node --test editors/vscode/*.test.js
-          go run ./cmd/gowdk check --ssr examples/basic/*.gwdk
+          go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
+          (
+            cd examples/login
+            rm -rf dist
+            go run ../../cmd/gowdk build
+            test -f dist/site/index.html
+            test -f dist/site/dashboard/index.html
+            test -f dist/site/login.css
+            go build .
+          )
           rm -rf /tmp/gowdk-css-build
           go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk
           grep -F '<link rel="stylesheet" href="/assets/site.css">' /tmp/gowdk-css-build/styled/index.html

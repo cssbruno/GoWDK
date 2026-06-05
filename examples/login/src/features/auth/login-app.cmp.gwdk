@@ -1,0 +1,26 @@
+@component LoginApp
+
+import auth "github.com/cssbruno/gowdk/examples/login/src/features/auth"
+
+state auth.LoginViewState = auth.NewLoginViewState()
+
+view {
+  <main class="shell">
+    <section class="panel">
+      <p class="eyebrow">GOWDK integrated auth feature</p>
+      <h1>Login</h1>
+
+      <form method="post" action="{LoginAction}">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" value="{DemoEmail}" required />
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+
+        <button type="submit">Sign in with backend</button>
+      </form>
+
+      <p class="status" role="status">Frontend binary renders the page. Auth posts to {BackendOrigin} from the same feature package.</p>
+    </section>
+  </main>
+}

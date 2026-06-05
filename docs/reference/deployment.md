@@ -2,22 +2,22 @@
 
 GOWDK currently supports three practical output shapes:
 
-- Static files from `gowdk build --out`.
+- Build output files from `gowdk build --out`.
 - A generated Go app from `gowdk build --out --app`.
 - A local-platform binary or Go `js/wasm` artifact from the generated app.
 
 Deployment orchestration is user-owned. GOWDK does not generate containers,
 Kubernetes manifests, platform adapters, or CDN configuration.
 
-## Static Files
+## Build Output Files
 
-Build static output:
+Build build output:
 
 ```sh
 gowdk build --out dist/site
 ```
 
-Deploy the contents of `dist/site` with any static host that can serve
+Deploy the contents of `dist/site` with any asset host that can serve
 directory indexes:
 
 ```text
@@ -36,12 +36,12 @@ Local smoke test:
 gowdk serve --dir dist/site --addr 127.0.0.1:8080
 ```
 
-`gowdk serve` is a static file server. It does not run generated request-time
-features.
+`gowdk serve` serves generated build output from disk. It does not run generated
+request-time features.
 
 ## Single Binary
 
-Build static output, generated app source, and a local binary:
+Build build output, generated app source, and a local binary:
 
 ```sh
 gowdk build --out dist/site --app .gowdk/app --bin bin/site
@@ -53,7 +53,7 @@ Run the binary:
 ./bin/site
 ```
 
-The generated app embeds the selected static output and serves it through
+The generated app embeds the selected build output and serves it through
 `runtime/app`. It also exposes:
 
 - `/_gowdk/health`
@@ -131,11 +131,11 @@ artifact. It is separate from browser island assets emitted by
 
 Generated binaries currently support:
 
-- Embedded static file serving.
+- Embedded app file serving.
 - First-slice same-page POST action redirects.
 - First-slice required-field validation for directly declared form controls.
 - First-slice partial action fragment responses.
-- Simple concrete `@render ssr` pages without `load {}`.
+- First-slice concrete and dynamic `@render ssr` pages without `load {}`.
 
 Generated binaries do not yet support:
 
@@ -144,22 +144,15 @@ Generated binaries do not yet support:
 - Generated API handlers.
 - Request-time `load {}` execution.
 - Guard enforcement.
-- Dynamic SSR routes.
 - General fragment routes.
 - Hybrid request-time behavior.
 
-## Local Redeploy
+## Local Development
 
-`watch --restart` rebuilds and restarts one generated binary:
-
-```sh
-gowdk watch --restart --out dist/site --app .gowdk/app --bin bin/site
-```
-
-With configured targets:
+`dev` rebuilds generated build output, serves it locally, and live reloads the
+browser after successful rebuilds:
 
 ```sh
-gowdk watch --restart --target admin
+gowdk dev --out dist/site
+gowdk dev --target admin
 ```
-
-Failed rebuilds leave the current process running.

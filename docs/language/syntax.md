@@ -14,7 +14,7 @@ Annotations must start at the beginning of the trimmed line:
 @page home
 @route "/"
 @layout root, marketing
-@render static
+@render spa
 @guard auth.required, billing.active
 @component Hero
 @layout root
@@ -26,7 +26,7 @@ Supported annotations:
 - `@route "<path>"`: required route path. Quotes are trimmed.
 - `@layout <id>[, <id>...]`: optional page layout IDs, or a layout identity in
   `.layout.gwdk` files.
-- `@render static|action|hybrid|ssr`: optional render mode.
+- `@render spa|action|hybrid|ssr`: optional render mode.
 - `@guard <id>[, <id>...]`: optional guard metadata.
 - `@component <Name>`: component ID for `.cmp.gwdk` build inputs.
 
@@ -103,20 +103,20 @@ rejected until their feature slice is implemented.
 annotations, blocks, parsed `view {}` markup nodes, literal `paths {}` and
 `build {}` records, action statements, API route statements, and source spans.
 The manifest parser still preserves raw block body text for compatibility.
-Static builds can expand literal `paths {}` lines such as:
+SPA builds can expand literal `paths {}` lines such as:
 
 ```gwdk
 => { slug: "hello-gowdk" }
 ```
 
-Static builds can also render one literal `build {}` line such as:
+SPA builds can also render one literal `build {}` line such as:
 
 ```gwdk
 => { title: "Hello" }
 ```
 
 Inside `view {}`, route params can be referenced explicitly with
-`{param("slug")}` in text, quoted attributes, and component prop values. Static
+`{param("slug")}` in text, quoted attributes, and component prop values. SPA
 builds reject `param(...)` references that are not declared by the page route.
 Inside quoted attributes, escape the inner quotes as `{param(\"slug\")}`.
 HTML elements can use first-slice shorthand classes and IDs:
@@ -125,7 +125,7 @@ HTML elements can use first-slice shorthand classes and IDs:
 <main #hero .text-4xl .font-bold class="lead">
 ```
 
-This is normalized to ordinary `id` and `class` attributes during static
+This is normalized to ordinary `id` and `class` attributes during spa
 rendering. Duplicate IDs on one element are rejected.
 Attributes can use quoted strings, booleans, or first-slice expression values
 such as `data-title={post.Title}`.
@@ -144,7 +144,7 @@ Broader statement syntax inside preserved block bodies is still opaque to the pa
 Current page files must declare `view {}` because every page owns a page `GET`
 route. API-only file or route semantics are planned separately.
 
-Inside `view {}`, the current static markup subset supports
+Inside `view {}`, the current spa markup subset supports
 `<form g:post={submit}>` when `submit` is a supported action on the same page.
 Forms with `g:post` can also declare first-slice partial metadata:
 
@@ -152,9 +152,10 @@ Forms with `g:post` can also declare first-slice partial metadata:
 <form g:post={refresh} g:target="#patients" g:swap="outerHTML">
 ```
 
-`g:target` must be a static id selector that references an `id` in the same
+`g:target` must be a spa id selector that references an `id` in the same
 direct `view {}` markup subset. Current `g:swap` modes are `innerHTML` and
-`outerHTML`; browser runtime behavior is still planned.
+`outerHTML`. SPA builds emit the partial client runtime only for pages that
+use partial form metadata with a fragment-producing action.
 
 Layout files can declare a layout ID and `view {}` body:
 
@@ -403,7 +404,7 @@ view {
 }
 ```
 
-Static classes are preserved, and class toggles update through the generated
+SPA classes are preserved, and class toggles update through the generated
 JavaScript island runtime.
 
 Elements inside stateful components can bind individual style properties:
@@ -416,7 +417,7 @@ view {
 ```
 
 Style binding expressions must be string or numeric. Unit suffixes append the
-unit after evaluation; percent uses `.%`. Static `style` declarations are
+unit after evaluation; percent uses `.%`. SPA `style` declarations are
 preserved. Raw `style={expr}` attributes remain rejected until broader style
 safety rules exist.
 
@@ -439,7 +440,7 @@ view {
 `g:bind:value` currently supports `<input>`, `<textarea>`, and `<select>`, and
 the target must be a string state field. Numeric state fields can bind to
 `<input type="number">`; the generated island runtime parses the control value
-back into an integer or float. Radio inputs must declare a static `value`, and
+back into an integer or float. Radio inputs must declare a spa `value`, and
 the bound string state stores the selected radio value.
 
 Checkbox inputs can bind bool state:

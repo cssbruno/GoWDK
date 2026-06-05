@@ -1,0 +1,192 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #f6f7f9;
+  color: #17202a;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.panel {
+  width: min(100%, 420px);
+  background: #ffffff;
+  border: 1px solid #d7dde5;
+  border-radius: 8px;
+  padding: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #546171;
+  font-size: 14px;
+}
+
+h1 {
+  margin: 0 0 20px;
+}
+
+label {
+  display: block;
+  margin: 16px 0 6px;
+  font-weight: 600;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #b8c2cf;
+  border-radius: 6px;
+  font: inherit;
+}
+
+button,
+a {
+  display: inline-block;
+  margin-top: 20px;
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: #1667d9;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+button {
+  width: 100%;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.status {
+  min-height: 22px;
+  margin: 14px 0 0;
+  color: #546171;
+}
+
+.status[data-kind="error"] {
+  color: #9f1d32;
+}
+
+.status[data-kind="success"] {
+  color: #146c43;
+}
+
+.error {
+  padding: 10px 12px;
+  border: 1px solid #d43d51;
+  border-radius: 6px;
+  background: #fff1f3;
+  color: #9f1d32;
+}
+
+.dashboard-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  background: #eef2f6;
+}
+
+.sidebar {
+  padding: 28px;
+  background: #111827;
+  color: #ffffff;
+}
+
+.sidebar .eyebrow {
+  color: #a7b2c2;
+}
+
+.sidebar h1 {
+  margin-bottom: 28px;
+}
+
+.sidebar nav {
+  display: grid;
+  gap: 10px;
+}
+
+.sidebar a,
+.secondary-action {
+  width: auto;
+  background: #253044;
+}
+
+.sidebar button {
+  margin-top: 32px;
+  background: #d43d51;
+}
+
+.dashboard-main {
+  padding: 32px;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dashboard-header h2,
+.activity-panel h2 {
+  margin: 0;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.metric,
+.activity-panel {
+  background: #ffffff;
+  border: 1px solid #d7dde5;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.metric p {
+  margin: 0 0 8px;
+  color: #546171;
+}
+
+.metric strong {
+  font-size: 28px;
+}
+
+.activity-panel {
+  margin-top: 16px;
+}
+
+.activity-panel li {
+  margin: 10px 0;
+}
+
+@media (max-width: 760px) {
+  .dashboard-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

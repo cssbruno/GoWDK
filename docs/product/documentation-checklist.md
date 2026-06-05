@@ -2,7 +2,8 @@
 
 This checklist tracks the documentation baseline for the current compiler
 reality. Keep it synchronized with `README.md`, `docs/product/requirements.md`,
-and `docs/engineering/architecture.md`.
+`docs/engineering/architecture.md`, and the Documentation section in
+`MISSING_CHECKLIST.md`.
 
 - [x] Rewrite getting started around the current reality: clone, build, run.
   See `docs/getting-started.md`.
@@ -33,6 +34,8 @@ and `docs/engineering/architecture.md`.
   See `README.md`, `docs/product/requirements.md`, language docs, and reference
   docs.
 - [x] Keep README, requirements, architecture, and this checklist in sync.
+- [x] Add an AI-fetchable documentation entrypoint.
+  See `llms.txt`.
 
 ## Maintenance Rule
 

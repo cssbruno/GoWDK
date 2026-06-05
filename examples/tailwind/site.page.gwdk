@@ -1,6 +1,6 @@
 @page tailwind
 @route "/tailwind"
-@render static
+@render spa
 
 view {
   <main class="min-h-screen bg-slate-950 px-6 py-12 text-white">

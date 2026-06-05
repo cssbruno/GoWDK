@@ -42,7 +42,7 @@ references to a preview asset route, and serves the corresponding files from
 ## Partial Runtime
 
 When a page uses a fragment-producing action form with `g:target` and `g:swap`,
-static builds emit the client runtime:
+SPA builds emit the client runtime:
 
 ```gwdk
 <form g:post={refresh} g:target="#patients" g:swap="innerHTML">

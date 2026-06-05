@@ -1,16 +1,18 @@
 # Generated Output
 
-Generated output has started with static HTML emission for simple build-time pages.
+Generated output currently covers app-shell HTML, selected browser runtime assets,
+generated embedded app source, and optional local binary or Go `js/wasm`
+artifacts for the implemented compiler slice.
 
 Implemented today:
 
-- `gowdk build [--out <dir>] [files...]` writes route-derived HTML files for simple `static` and `action` pages.
+- `gowdk build [--out <dir>] [files...]` writes route-derived HTML files for simple `spa` and `action` pages.
 - `.cmp.gwdk` files can be passed to build or discovered by default and expanded from self-closing component calls.
-- `gowdk-routes.json` records the static route, page ID, and relative output path for emitted pages.
-- `gowdk-assets.json` records generated static assets such as CSS files emitted
+- `gowdk-routes.json` records the app route, page ID, and relative output path for emitted pages.
+- `gowdk-assets.json` records generated app assets such as CSS files emitted
   by CSS processors, generated page CSS files, and the partial-update client
   runtime when needed.
-- `gowdk-build-report.json` records static generator validation, planning,
+- `gowdk-build-report.json` records build-output generator validation, planning,
   write, manifest, cleanup, and completion events for every successful disk
   build.
 - Configured stylesheets and CSS processor stylesheet links are emitted in page
@@ -18,31 +20,34 @@ Implemented today:
 - CSS processors can emit CSS asset files under the output directory.
 - Discovered page CSS inputs selected by implicit `default page` or explicit
   `@css` annotations are concatenated into generated page CSS files.
-- Dynamic static routes with literal `paths {}` declarations are expanded by
+- Dynamic app routes with literal `paths {}` declarations are expanded by
   `gowdk build`.
-- Literal dynamic route params can render in the current static `view {}`
+- Literal dynamic route params can render in the current literal `view {}`
   interpolation subset.
-- Literal `build {}` data can render in the current static `view {}`
+- Literal `build {}` data can render in the current literal `view {}`
   interpolation subset.
-- Static page output composes declared layouts by replacing each applied
+- SPA page output composes declared layouts by replacing each applied
   layout's single `<slot />` placeholder before rendering the combined view
   source once.
-- `gowdk build --app <dir>` writes a generated Go module that embeds the static
-  output under `<dir>/static`.
+- `gowdk build --app <dir>` writes a generated Go module that embeds the SPA
+  output under `<dir>/SPA`.
 - `gowdk build --bin <file>` requires `--app` and compiles that generated app
-  into one local static-serving binary.
-- Generated static apps include POST redirect handlers for the first supported
-  action subset on concrete static/action routes.
-- Generated static apps include first-slice form input decoder functions that
+  into one local binary.
+- Generated apps include POST redirect handlers for the first supported
+  action subset on concrete SPA/action routes.
+- Generated app creation auto-detects supported action routes and first-slice
+  SSR routes from the parsed manifest used by `gowdk build --app`, so the CLI
+  does not need to manually register those handler hooks.
+- Generated apps include first-slice form input decoder functions that
   preserve repeated values and reject unexpected fields inferred from direct
-  static controls in same-page `g:post` forms.
+  literal controls in same-page `g:post` forms.
 - Generated action handlers cap request bodies before form parsing and return
   HTTP 413 for oversized submissions.
-- Generated static apps return HTTP 422 for missing or empty direct static
+- Generated apps return HTTP 422 for missing or empty direct SPA
   `required` fields when the action declares `valid(input)?`.
-- Generated static output emits `assets/gowdk/gowdk.js` only for pages that use
+- Generated build output emits `assets/gowdk/gowdk.js` only for pages that use
   partial form metadata with fragment-producing actions.
-- Generated static output emits `assets/gowdk/islands/<Component>.js` for
+- Generated build output emits `assets/gowdk/islands/<Component>.js` for
   stateful component instances that use the default generated JavaScript island
   runtime. Island roots carry compiler-owned `data-gowdk-island` markers, and
   generated island assets register idempotent browser mount hooks for initial
@@ -61,7 +66,7 @@ Implemented today:
   `Build.Mode: gowdk.Production` omits those debug source map artifacts and
   comments and compacts generated island JavaScript by trimming
   formatting-only whitespace.
-- Generated static output emits `assets/gowdk/islands/<Component>.wasm` plus
+- Generated build output emits `assets/gowdk/islands/<Component>.wasm` plus
   `assets/gowdk/islands/<Component>.wasm.js` only for component calls that
   explicitly set `g:island="wasm"`. When the component declares
   `@wasm <package>`, GOWDK runs `GOOS=js GOARCH=wasm go build` for that package
@@ -76,17 +81,20 @@ Implemented today:
   component-scoped WASM exports when present, captures host DOM events, and
   applies validated first-slice patch commands such as text, visibility,
   attribute, class, style, and emitted-event updates.
-- Generated static apps can return first-slice partial fragment responses from
+- Generated apps can serve first-slice concrete and dynamic SSR pages
+  without `load {}`. Dynamic route params are substituted into generated SSR
+  placeholders with request-time HTML escaping.
+- Generated apps can return first-slice partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests.
-- Generated static app action route extraction rejects direct file inputs and
+- Generated app action route extraction rejects direct file inputs and
   multipart `g:post` forms until upload security rules are defined.
 - `internal/codegen.GenerateRouteRegistration` can emit formatted Go route
   registration source from `internal/codegen.RouteBinding` plans for future
   generated `internal/routes` packages.
 - `internal/codegen.GenerateComponentPackage` can emit formatted Go render
   functions for current `.cmp.gwdk` components with string props and direct
-  `{prop}` interpolation. Generated component code writes static compiler-owned
-  chunks through `runtime/render.Builder.Static` and expression output through
+  `{prop}` interpolation. Generated component code writes compiler-owned
+  chunks through `runtime/render.Builder.Markup` and expression output through
   `runtime/render.Builder.Text`, which escapes by default.
 - `internal/gotypes` resolves component prop/state structs through Go module
   import paths using `go list`, `go/parser`, and `go/types`.
@@ -97,25 +105,25 @@ Implemented today:
 - Current asset names are stable and deterministic rather than content-hashed.
 - Generated embedded apps skip local environment files, source maps, source
   files, VCS/dependency directories, and common temporary artifacts when copying
-  static output into the embedded app.
+  build output into the embedded app.
 - Generated embedded apps load `gowdk-assets.json` from the embedded filesystem
   when present and expose the loaded asset count through `/_gowdk/health`.
 
 Not implemented yet:
 
-- Route params bound into `build {}` expressions.
-- CSS class extraction, hashing, minification, and third-party CSS tool
-  integrations.
-- Component children, slots, and non-string props.
+- Route params passed into imported Go `build {}` functions.
+- CSS hashing, minification, and full page-aware third-party CSS processor
+  selection.
+- Non-string props in legacy `props {}` blocks.
 - General expression interpolation and arbitrary `build {}` execution.
-- Real user Go type resolution for typed action decoders, user action logic, CSRF, API handlers,
-  fragment handlers, and SSR handlers.
+- Real user Go type resolution for typed action decoders, user action logic,
+  CSRF, API handlers, general fragment routes, and SSR `load {}` handlers.
 
 ## Target Artifacts
 
 The target output can include:
 
-- Static HTML for `static` and `action` pages.
+- App-shell HTML for `spa` and `action` pages.
 - Route manifest JSON.
 - Generated Go route registration.
 - Generated Go component render functions.
@@ -125,9 +133,9 @@ The target output can include:
 - Optional SSR route handlers.
 - CSS/plugin artifacts.
 - Embedded asset manifest.
-- A generated Go command for one-binary static serving.
+- A generated Go command for one-binary app serving.
 
-## Current Generated Static App
+## Current Generated App
 
 `gowdk build --out dist --app .gowdk/app` writes:
 
@@ -136,7 +144,7 @@ The target output can include:
   go.mod
   gowdkapp/
     app.go
-    static/
+    SPA/
       index.html
       gowdk-routes.json
       gowdk-assets.json
@@ -156,11 +164,12 @@ handler, reads `GOWDK_ADDR`, defaults to `127.0.0.1:8080`, serves GET and HEAD
 requests, maps extensionless routes to nested `index.html` files, and does not
 list directories. It exposes `/_gowdk/health` and adds
 `X-GOWDK-App`, `X-GOWDK-Module`, and `X-GOWDK-Instance-ID` headers to responses.
-It loads `gowdk-assets.json` from the embedded static filesystem when present.
+It loads `gowdk-assets.json` from the embedded build output filesystem when present.
 Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 `GOWDK_INSTANCE_ID`; if no instance ID is provided, the app creates one at
 process start from the module name, hostname, and a random token. It can also
-serve POST redirect handlers for the first supported action subset. Those
+serve auto-detected POST redirect handlers for the first supported action
+subset and first-slice SSR pages that do not use `load {}`. Those action
 handlers decode allowlisted form fields into named first-slice input wrappers,
 cap request bodies before parsing, preserve repeated values, return HTTP 413
 for oversized submissions, return HTTP 400 for unexpected fields, and return
@@ -173,7 +182,7 @@ resolve real user Go input structs, run user-defined validation, handle uploads,
 or serve API handlers, general fragment routes, `load {}` SSR, guards, or
 hybrid request-time handlers today.
 
-## Current Static Route Manifest
+## Current SPA Route Manifest
 
 `gowdk build` writes `gowdk-routes.json` at the output root:
 
@@ -191,11 +200,11 @@ hybrid request-time handlers today.
 ```
 
 The `path` field is slash-separated and relative to the selected output
-directory. Dynamic static routes are recorded once for each generated concrete
+directory. Dynamic app routes are recorded once for each generated concrete
 route, for example `/blog/{slug}` with `=> { slug: "hello-gowdk" }` is recorded
 as `/blog/hello-gowdk`.
 
-## Current Static Asset Manifest
+## Current App Asset Manifest
 
 `gowdk build` writes `gowdk-assets.json` at the output root:
 
@@ -214,7 +223,7 @@ emitted by CSS processors, generated page CSS files, partial runtime assets,
 generated island runtime assets, and generated island source maps. It does not
 record configured stylesheet URLs that were not written by the build.
 
-## Current Static Build Report
+## Current Build Report
 
 `gowdk build` writes `gowdk-build-report.json` at the output root:
 
@@ -228,18 +237,18 @@ record configured stylesheet URLs that were not written by the build.
       "level": "info",
       "stage": "complete",
       "kind": "build_complete",
-      "message": "static build completed"
+      "message": "SPA build completed"
     }
   ]
 }
 ```
 
-The report records static generator stages even when the CLI is not run with
+The report records build-output generator stages even when the CLI is not run with
 `--debug`. Debug mode only mirrors the structured events to stderr for humans.
 
 ## Planned Server Defaults
 
-Generated servers must include HTTP timeouts, header/body limits, method handling, safe static asset serving, and logs that do not expose secrets or sensitive form values.
+Generated servers must include HTTP timeouts, header/body limits, method handling, safe app asset serving, and logs that do not expose secrets or sensitive form values.
 
 ## Ownership And Licensing
 

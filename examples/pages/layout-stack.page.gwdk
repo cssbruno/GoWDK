@@ -1,7 +1,7 @@
 @page layout.stack
 @route "/layout-stack"
 @layout root, marketing.shell
-@render static
+@render spa
 
 view {
   <main>

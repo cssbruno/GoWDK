@@ -1,0 +1,53 @@
+@page dashboard
+@route "/dashboard"
+@css auth
+
+view {
+  <main class="dashboard-shell">
+    <aside class="sidebar">
+      <p class="eyebrow">GOWDK app</p>
+      <h1>Dashboard</h1>
+      <nav>
+        <a href="/dashboard">Overview</a>
+        <a href="http://127.0.0.1:8091/api/session">Backend session API</a>
+      </nav>
+      <form method="post" action="http://127.0.0.1:8091/api/logout">
+        <button type="submit">Sign out</button>
+      </form>
+    </aside>
+
+    <section class="dashboard-main">
+      <header class="dashboard-header">
+        <div>
+          <p class="eyebrow">Signed in</p>
+          <h2>Welcome back</h2>
+        </div>
+        <a class="secondary-action" href="http://127.0.0.1:8091/api/session">Inspect backend session</a>
+      </header>
+
+      <section class="metrics-grid">
+        <article class="metric">
+          <p>Active sessions</p>
+          <strong>1</strong>
+        </article>
+        <article class="metric">
+          <p>Pending alerts</p>
+          <strong>0</strong>
+        </article>
+        <article class="metric">
+          <p>Auth mode</p>
+          <strong>Backend cookie</strong>
+        </article>
+      </section>
+
+      <section class="activity-panel">
+        <h2>Recent activity</h2>
+        <ol>
+          <li>The GOWDK frontend binary serves this app page.</li>
+          <li>The Go backend binary owns API and session routes.</li>
+          <li>Future typed GOWDK actions can replace the backend form boundary.</li>
+        </ol>
+      </section>
+    </section>
+  </main>
+}

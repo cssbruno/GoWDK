@@ -2,14 +2,14 @@
 
 ## Current Render Rules
 
-- Default render mode is `static`.
-- Supported render modes are `static`, `action`, `hybrid`, and `ssr`.
+- Default render mode is `spa`.
+- Supported render modes are `spa`, `action`, `hybrid`, and `ssr`.
 - `@render ssr` and `@render hybrid` require the SSR addon in the current validator.
 - Page IDs must be unique within the manifest.
 - Component names must be unique within the manifest.
-- Dynamic static/action routes such as `/blog/{slug}` require a `paths {}` block.
+- Dynamic SPA/action routes such as `/blog/{slug}` require a `paths {}` block.
 - `load {}` runs at request time and requires `@render ssr` or `@render hybrid`.
-- Static pages may declare `act` blocks without SSR.
+- SPA pages may declare `act` blocks without SSR.
 
 ## Current Metadata Semantics
 
@@ -18,19 +18,19 @@
   identity with `@layout <id>`; when layout files are present, validation
   resolves page layout refs by ID.
 - `@guard` records guard IDs as metadata only.
-- `paths {}` records that dynamic static paths are declared and preserves raw
-  body text internally. Static builds can execute literal string declarations
+- `paths {}` records that dynamic SPA paths are declared and preserves raw
+  body text internally. SPA builds can execute literal string declarations
   such as `=> { slug: "hello-gowdk" }` to expand dynamic route output paths.
-- `build {}` records block presence and raw body text internally. Static builds
+- `build {}` records block presence and raw body text internally. SPA builds
   can execute one literal string declaration such as
   `=> { title: "Hello" }` and expose those values to `view {}` interpolation.
-  Static builds can also execute one imported no-argument Go function call such
+  SPA builds can also execute one imported no-argument Go function call such
   as `=> interop.FeaturedCopyForBuild()` when the page declares
   `import interop "github.com/..."`.
 - `load {}` records block presence and raw body text internally. Request-time
   execution is planned.
-- `view {}` records block presence and raw body text for the current static HTML
-  subset. Static builds interpolate route params and component props in text and
+- `view {}` records block presence and raw body text for the current app-shell HTML
+  subset. SPA builds interpolate route params and component props in text and
   attribute values, escaping the result.
 - `act <name> {}` records action names plus the first supported form-input,
   validation-intent, and local redirect subset.

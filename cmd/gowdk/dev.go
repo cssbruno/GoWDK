@@ -143,7 +143,7 @@ func devOutputDir(args []string) (string, error) {
 	if strings.TrimSpace(outputDir) != "" {
 		return outputDir, nil
 	}
-	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, moduleNames, paths) {
+	if len(targetNames) > 0 {
 		targets, err := selectBuildTargets(options.Config.Build.Targets, targetNames)
 		if err != nil {
 			return "", err

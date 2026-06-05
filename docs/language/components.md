@@ -1,6 +1,6 @@
 # Components
 
-The first component slice is implemented for static build output.
+The first component slice is implemented for SPA build output.
 
 Implemented today:
 

@@ -30,9 +30,9 @@ Current route rules:
 - Duplicate page route patterns are rejected. `/blog/{slug}` and `/blog/{id}`
   are the same route pattern.
 
-## Static Routes
+## SPA Routes
 
-Static render is the default:
+SPA render is the default:
 
 ```gwdk
 @page docs
@@ -45,18 +45,18 @@ view {
 }
 ```
 
-`gowdk build --out <dir>` writes the route as static HTML. For `/docs`, the
+`gowdk build --out <dir>` writes the route as spa HTML. For `/docs`, the
 current output is `<dir>/docs/index.html`. For `/`, the output is
 `<dir>/index.html`.
 
-## Dynamic Static Routes
+## Dynamic SPA Routes
 
-Dynamic static or action routes require `paths {}`:
+Dynamic spa or action routes require `paths {}`:
 
 ```gwdk
 @page blog.post
 @route "/blog/{slug}"
-@render static
+@render spa
 
 paths {
   => { slug: "hello-gowdk" }
@@ -72,13 +72,13 @@ view {
 ```
 
 The implemented `paths {}` subset accepts literal string records. Route params
-from those records are available to the current static interpolation scope and
+from those records are available to the current spa interpolation scope and
 to literal `build {}` string interpolation.
 
 Build:
 
 ```sh
-gowdk build --out /tmp/gowdk-dynamic examples/basic/blog-post.page.gwdk
+gowdk build --out /tmp/gowdk-dynamic examples/pages/blog-post.page.gwdk
 ```
 
 Generated output:
@@ -114,7 +114,7 @@ view {
 }
 ```
 
-Static HTML lowers `g:post={submit}` to a normal POST form. Generated apps built
+App-shell HTML lowers `g:post={submit}` to a normal POST form. Generated apps built
 with `--app --bin` can serve first-slice POST redirect handlers for concrete
 page routes. They can also return first-slice partial fragments when the action
 declares `fragment "#id" { ... }` and the request includes GOWDK partial
@@ -151,28 +151,29 @@ Generated API handlers are planned.
 SSR is optional and must be enabled for validation:
 
 ```sh
-gowdk check --ssr examples/basic/simple-ssr.page.gwdk
+gowdk check --ssr examples/ssr/simple-ssr.page.gwdk
 ```
 
-Simple concrete `@render ssr` pages without `load {}` can be generated into an
-embedded app and binary:
+First-slice concrete and dynamic `@render ssr` pages without `load {}` can be
+generated into an embedded app and binary:
 
 ```sh
 gowdk build --ssr --out /tmp/gowdk-ssr-build \
   --app /tmp/gowdk-ssr-app \
   --bin /tmp/gowdk-ssr-site \
-  examples/basic/simple-ssr.page.gwdk
+  examples/ssr/dynamic-ssr.page.gwdk
 ```
 
-`load {}` parsing, guard enforcement, dynamic SSR routes, and broad
-request-time user logic are still planned.
+Dynamic SSR route params render through generated placeholders and request-time
+HTML escaping. `load {}` execution, guard enforcement, and broad request-time
+user logic are still planned.
 
 ## Route Plans
 
 Use `gowdk routes` to inspect the validated route-binding plan:
 
 ```sh
-gowdk routes --ssr examples/basic/*.gwdk
+gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
 ```
 
 The current JSON schema is version `1` and includes route kind, method, route

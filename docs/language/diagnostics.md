@@ -8,7 +8,7 @@ CLI JSON diagnostics use:
 {
   "diagnostics": [
     {
-      "file": "examples/basic/home.page.gwdk",
+      "file": "examples/pages/home.page.gwdk",
       "code": "missing_view_block",
       "pos": {"line": 1, "column": 1},
       "range": {
@@ -31,7 +31,7 @@ layouts, components, and CSS references. Parser errors use the public
 `parse_error` code until parser recovery has more specific codes.
 
 The optional `suggestion` field carries a short structured fix hint for common
-mistakes such as missing `paths {}` on dynamic static routes, unknown client or
+mistakes such as missing `paths {}` on dynamic spa routes, unknown client or
 view fields, missing `g:key`, and malformed `g:for` syntax.
 
 ## Current Validation Codes
@@ -54,7 +54,7 @@ Compiler validation exposes these public codes when available:
 - `duplicate_route`
 - `route_method_conflict`
 - `missing_view_block`
-- `static_dynamic_route_missing_paths`
+- `spa_dynamic_route_missing_paths`
 - `load_requires_request_render`
 - `hybrid_requires_explicit_request_policy`
 - `invalid_css_selection`

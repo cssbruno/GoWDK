@@ -1,9 +1,9 @@
-# Static Build Report
+# Build Report
 
-Every static generation entrypoint creates a structured build report. Disk
+Every app generation entrypoint creates a structured build report. Disk
 builds write it to `gowdk-build-report.json` at the selected output root;
 in-memory builds return the same file in `MemoryResult.Files`; failed builds
-wrap the original error in `staticgen.BuildError` so callers can inspect the
+wrap the original error in `buildgen.BuildError` so callers can inspect the
 partial report while preserving the original error text.
 
 The report is mandatory for compiler-facing build APIs. It is deterministic:
@@ -36,7 +36,7 @@ Current stages are:
 
 - `start`: source manifest counts at build entry.
 - `validate`: manifest and compiler contract validation.
-- `plan`: static page, CSS, and runtime asset planning.
+- `plan`: SPA page, CSS, and runtime asset planning.
 - `write`: page, CSS, and runtime asset writes or memory collection.
 - `manifest`: route and asset manifest reads/writes.
 - `cleanup`: stale changed-page output removal during incremental builds.
@@ -46,8 +46,8 @@ Current stages are:
 ## CLI Debug Output
 
 `gowdk build --debug` prints a readable version of this report to stderr while
-normal generated artifact paths remain on stdout. `gowdk watch` and `gowdk dev`
-forward `--debug` as a build flag, including incremental static rebuilds.
+normal generated artifact paths remain on stdout. `gowdk dev` forwards
+`--debug` as a build flag, including incremental SPA rebuilds.
 
 Example:
 

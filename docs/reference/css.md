@@ -5,7 +5,7 @@ Tailwind and other CSS tools are addons or plugins, not core dependencies.
 
 ## Discovered Page CSS
 
-Static builds discover CSS files by filename. A file named `forms.css` exports
+SPA builds discover CSS files by filename. A file named `forms.css` exports
 the CSS input `forms`; a file named `blog.post.css` exports `blog.post`.
 
 Configure discovery when the default `**/*.css` scan is too broad:
@@ -78,7 +78,7 @@ var Config = gowdk.Config{
 
 ## Configured Stylesheets
 
-Static builds emit literal stylesheet links from `BuildConfig.Stylesheets`:
+SPA builds emit literal stylesheet links from `BuildConfig.Stylesheets`:
 
 ```go
 var Config = gowdk.Config{
@@ -112,7 +112,7 @@ type CSSProcessor interface {
 `CSSContext` includes:
 
 - `Sources`: discovered page/component source metadata.
-- `Sources[*].CSSClasses`: extracted static class names from the current view
+- `Sources[*].CSSClasses`: extracted literal class names from the current view
   subset.
 - `OutputDir`: the current build output directory.
 - `Build`: the active build config.
@@ -171,7 +171,7 @@ auto-download executable code during `gowdk build`. Projects should download a
 pinned standalone executable from the official Tailwind Labs release page and
 point `Options.Command` at it.
 
-The static `gowdk.config.go` parser supports this known literal constructor
+The literal `gowdk.config.go` parser supports this known literal constructor
 shape when `tailwind` is imported from
 `github.com/cssbruno/gowdk/addons/tailwind`. Arbitrary addon constructors still
 require future full addon loading.

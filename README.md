@@ -12,13 +12,13 @@
 ![Quality](https://img.shields.io/badge/quality-gated-2ea44f)
 
 GOWDK is a portable Go web compiler. Write movable `.gwdk` files, compile first,
-and ship static output or a single Go binary.
+and ship spa output or a single Go binary.
 
-Current status: GOWDK is pre-release compiler/runtime scaffolding. Static output,
-embedded static apps, first-slice actions/fragments, generated JavaScript
-islands, and simple SSR pages without `load {}` are partially implemented. Real
-user Go action execution, CSRF-wired generated action handlers, generated API
-handlers, request-time `load {}` execution, generated guard enforcement,
+Current status: GOWDK is pre-release compiler/runtime scaffolding. Build output,
+embedded app builds, first-slice actions/fragments, generated JavaScript
+islands, and first-slice SSR pages without `load {}` are partially implemented.
+Real user Go action execution, CSRF-wired generated action handlers, generated
+API handlers, request-time `load {}` execution, generated guard enforcement,
 hybrid/cache/revalidation policy, hot deploy, browser playground UI, and the
 production WASM island ABI are not implemented yet.
 
@@ -54,19 +54,22 @@ Build an example:
 
 ```sh
 go run ./cmd/gowdk build --out /tmp/gowdk-build \
-  examples/basic/home.page.gwdk \
-  examples/basic/hero.cmp.gwdk
+  examples/pages/home.page.gwdk \
+  examples/pages/hero.cmp.gwdk
 
 go run ./cmd/gowdk serve --dir /tmp/gowdk-build
 ```
 
-Use `dev` for rebuild, serve, watch, and browser reload when the app config has
-`Build.Output`:
+Project compiler commands require `gowdk.config.go` in the current directory,
+or `--config <file>`, even when explicit `.gwdk` files are passed. This source
+repository includes a root `gowdk.config.go` for example smoke commands.
+
+Use `dev` for polling rebuilds, local serving, and browser reload:
 
 ```sh
 go run ./cmd/gowdk dev --out /tmp/gowdk-build \
-  examples/basic/home.page.gwdk \
-  examples/basic/hero.cmp.gwdk
+  examples/pages/home.page.gwdk \
+  examples/pages/hero.cmp.gwdk
 ```
 
 ## Site Example
@@ -75,7 +78,7 @@ go run ./cmd/gowdk dev --out /tmp/gowdk-build \
 @page blog.post
 @route "/blog/{slug}"
 @layout root, blog
-@render static
+@render spa
 
 paths {
   => { slug: "hello-gowdk" }
@@ -116,7 +119,7 @@ view {
     <section id="article-list">
       <article>
         <h2>{slug}</h2>
-        <p>Generated as static HTML at build time.</p>
+        <p>Generated as spa HTML at build time.</p>
       </article>
     </section>
   </main>
@@ -130,7 +133,6 @@ gowdk init [--force] [dir]
 gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
 gowdk dev [--addr 127.0.0.1:8080] [--interval 1s] [build flags...]
-gowdk watch [--once] [--restart] [--interval 1s] [build flags...]
 gowdk serve --dir <dir> [--addr 127.0.0.1:8080]
 gowdk fmt [--write] <file.gwdk>
 gowdk tokens <file.gwdk>
@@ -177,13 +179,14 @@ go build ./cmd/gowdk
 node --check editors/vscode/extension.js
 node --check editors/vscode/extension-core.js
 node --test editors/vscode/*.test.js
-go run ./cmd/gowdk check --ssr examples/basic/*.gwdk
+go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
 ```
 
-CI also smoke-builds static, dynamic, CSS, and embedded-binary examples.
+CI also smoke-builds spa, dynamic, CSS, and embedded-binary examples.
 
 ## Docs
 
+- [AI documentation entrypoint](llms.txt)
 - [Getting started](docs/getting-started.md)
 - [Product vision](docs/product/vision.md)
 - [Requirements](docs/product/requirements.md)

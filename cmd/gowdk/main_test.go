@@ -257,7 +257,7 @@ var Config = gowdk.Config{
 	})
 }
 
-func TestDevOutputDirRejectsAmbiguousTargets(t *testing.T) {
+func TestDevOutputDirDefaultsToCacheWithConfiguredTargets(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
 
@@ -274,9 +274,12 @@ var Config = gowdk.Config{
 `)
 
 	withWorkingDir(t, root, func() {
-		_, err := devOutputDir(nil)
-		if err == nil || !strings.Contains(err.Error(), "exactly one build target") {
-			t.Fatalf("expected ambiguous target error, got %v", err)
+		outputDir, err := devOutputDir(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if outputDir != "gowdk_cache" {
+			t.Fatalf("unexpected dev output dir: %q", outputDir)
 		}
 	})
 }

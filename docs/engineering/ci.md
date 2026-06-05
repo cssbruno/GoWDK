@@ -12,12 +12,16 @@ the fastest pre-handoff gate.
 - Example smoke checks:
 
   ```sh
-  go run ./cmd/gowdk check --ssr examples/basic/*.gwdk
-  go run ./cmd/gowdk manifest --ssr examples/basic/*.gwdk
-  go run ./cmd/gowdk sitemap --ssr examples/basic/*.gwdk
+  go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
+  go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
+  go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
   go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk
   go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
   ```
+
+  These commands run from the repository root and rely on the root
+  `gowdk.config.go`. Any smoke command run from another directory must pass
+  `--config <file>`.
 
 ## Future Release Jobs
 

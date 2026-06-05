@@ -2,9 +2,9 @@
 
 ## Philosophy
 
-Not: SSR framework with static support.
+Not: SSR framework with a build-output mode.
 
-Better: static/compiler-first app compiler with optional SSR.
+Better: compile-first app compiler with build-time output and optional SSR.
 
 Core rule:
 
@@ -34,9 +34,10 @@ Embed Addon:
 Build Selection:
   Declare which configured modules are compiled into each generated binary.
 
-Watch Redeploy:
-  Rebuild, incrementally refresh page-local static edits, and restart generated
-  binaries during local development without retriggering on no-op writes.
+Dev Loop:
+  Rebuild, incrementally refresh page-local build-output edits, serve locally,
+  and live reload browsers during local development without retriggering on
+  no-op writes.
 ```
 
 ## Final Rule Set
@@ -44,13 +45,13 @@ Watch Redeploy:
 1. Files are portable.
 2. Routes are declared inside files.
 3. Layouts are declared by ID, not folder nesting.
-4. Static render is default.
+4. SPA render is default.
 5. Actions can exist without SSR.
 6. Partial updates use server fragments, not full page SSR.
 7. SSR is an addon.
 8. One-binary deploy works with or without SSR.
-9. Static build targets define what each generated app or binary embeds.
-10. Local watch can rebuild and restart generated binaries without Air, using
+9. SPA build targets define what each generated app or binary embeds.
+10. Local dev can rebuild generated output, serve it, and reload browsers using
     content changes and page-local incremental output instead of timestamp-only
     churn.
 
@@ -63,9 +64,9 @@ Current implementation status is summarized in `README.md` and
 | --- | --- |
 | 1 | Portable file manifest. |
 | 2 | Component compiler. |
-| 3 | Static/prerender output. |
+| 3 | SPA/prerender output. |
 | 4 | CSS/plugin extension points. |
-| 5 | One-binary static server. |
+| 5 | One-binary generated app server. |
 | 6 | Typed actions and forms. |
 | 7 | Partial/server fragments. |
 | 8 | SSR addon. |
@@ -76,7 +77,7 @@ Current implementation status is summarized in `README.md` and
 ## Version Roadmap
 
 The version roadmap is a target sequence, not a statement that those versions
-are shippable today. The repository currently reports CLI version `0.1.0`, but
+are shippable today. The repository currently reports CLI version `0.1.5`, but
 the implementation is still pre-release and does not satisfy every v0.1 target.
 Do not treat v0.2+ bullets as completed unless `docs/product/requirements.md`
 marks the corresponding requirement implemented.
@@ -86,14 +87,14 @@ marks the corresponding requirement implemented.
 - Movable `.gwdk` files.
 - `@page`, `@route`, `@layout`.
 - `.cmp.gwdk` components.
-- Static render.
+- SPA render.
 - CSS/plugin extension points.
 - Embedded assets.
-- One-binary static serving.
+- One-binary generated app serving.
 - Generated Go WASM deploy artifacts.
-- Static module-selected build targets for generated apps and binaries.
-- Dependency-free watch rebuild, page-local incremental static output,
-  generated-binary restart, and no-op output write skipping.
+- SPA module-selected build targets for generated apps and binaries.
+- Dependency-free dev rebuild, page-local incremental build output, browser
+  live reload, and no-op output write skipping.
 - Honest release/version readiness docs.
 
 ### v0.2
@@ -102,7 +103,7 @@ marks the corresponding requirement implemented.
 - Form decoding.
 - Validation.
 - Redirects.
-- Static `g:post` form lowering.
+- SPA `g:post` form lowering.
 - CSRF.
 - Server fragments.
 
@@ -127,7 +128,7 @@ marks the corresponding requirement implemented.
 ### v0.5
 
 - Hybrid mode.
-- Per-route static, SSR, action, and client choices.
+- Per-route spa, SSR, action, and client choices.
 - Better caching.
 - Revalidation.
 - Hybrid/cache/revalidation policy docs.

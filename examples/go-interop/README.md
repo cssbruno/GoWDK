@@ -28,3 +28,6 @@ as its main data path, with no literal fallback.
 go run ./cmd/gowdk build --out /tmp/gowdk-go-interop examples/go-interop/imported-build.page.gwdk
 test -f /tmp/gowdk-go-interop/go-imported/index.html
 ```
+
+Run the command from the repository root so the required root
+`gowdk.config.go` is loaded, or pass an explicit `--config <file>`.

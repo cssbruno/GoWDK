@@ -40,21 +40,31 @@ jobs:
         run: node --test editors/vscode/*.test.js
 
       - name: Check example files
-        run: go run ./cmd/gowdk check --ssr examples/basic/*.gwdk
+        run: go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
 
-      - name: Smoke build static example output
+      - name: Smoke build SPA example output
         run: |
           rm -rf /tmp/gowdk-build
-          go run ./cmd/gowdk build --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
+          go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
           test -f /tmp/gowdk-build/gowdk-routes.json
           test -f /tmp/gowdk-build/gowdk-assets.json
 
-      - name: Smoke build dynamic static output
+      - name: Smoke build dynamic SPA output
         run: |
           rm -rf /tmp/gowdk-dynamic-build
-          go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build examples/basic/blog-post.page.gwdk
+          go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build examples/pages/blog-post.page.gwdk
           test -f /tmp/gowdk-dynamic-build/blog/hello-gowdk/index.html
           test -f /tmp/gowdk-dynamic-build/blog/compile-first/index.html
+
+      - name: Build login backend example
+        run: |
+          cd examples/login
+          rm -rf dist
+          go run ../../cmd/gowdk build
+          test -f dist/site/index.html
+          test -f dist/site/dashboard/index.html
+          test -f dist/site/login.css
+          go build .
 
       - name: Smoke build CSS example output
         run: |

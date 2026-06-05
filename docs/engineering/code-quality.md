@@ -12,7 +12,7 @@ product-name rules live in `docs/engineering/naming-conventions.md`.
 - Keep compiler internals under `internal/`.
 - Keep generated app runtime contracts under `runtime/`.
 - Keep optional capabilities under `addons/`.
-- Keep validation, parsing, manifest construction, static generation, runtime
+- Keep validation, parsing, manifest construction, app generation, runtime
   contracts, and optional addons in separate packages.
 - Do not let `runtime/render` depend on `addons/ssr`; SSR depends on render
   core, not the other way around.

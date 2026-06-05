@@ -3,7 +3,7 @@
 `gowdk manifest` prints validated route metadata for explicit `.gwdk` files.
 
 ```sh
-go run ./cmd/gowdk manifest --ssr examples/basic/*.gwdk
+go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
 ```
 
 Current JSON shape:
@@ -13,7 +13,7 @@ Current JSON shape:
   "version": 1,
   "pages": {
     "dashboard": {
-      "source": "examples/basic/dashboard.page.gwdk",
+      "source": "examples/ssr/dashboard.page.gwdk",
       "kind": "page",
       "route": "/dashboard",
       "render": "ssr",
@@ -21,7 +21,7 @@ Current JSON shape:
       "guard": ["auth.required"],
       "css": ["default", "page", "forms"],
       "components": ["Hero"],
-      "staticAssets": ["/assets/dashboard.png"],
+      "Assets": ["/assets/dashboard.png"],
       "cssClasses": ["dashboard", "panel"],
       "styleAttributes": ["color: red;"],
       "blocks": {
@@ -32,7 +32,7 @@ Current JSON shape:
       }
     },
     "signup": {
-      "source": "examples/basic/signup.page.gwdk",
+      "source": "examples/actions/signup.page.gwdk",
       "kind": "page",
       "route": "/signup",
       "render": "action",
@@ -69,7 +69,7 @@ Current JSON shape:
   },
   "components": {
     "Hero": {
-      "source": "examples/basic/hero.cmp.gwdk",
+      "source": "examples/pages/hero.cmp.gwdk",
       "kind": "component",
       "props": [
         {"name": "title", "type": "string"},
@@ -95,7 +95,7 @@ Fields:
 - `source`: source file path.
 - `kind`: file kind, currently `page` or `component`.
 - `route`: declared route path.
-- `render`: effective render mode after applying default `static`.
+- `render`: effective render mode after applying default `spa`.
 - `layouts`: optional ordered layout IDs.
 - `dynamicParams`: route params declared in dynamic route segments.
 - `paths`: optional boolean present when `paths {}` exists.
@@ -108,29 +108,29 @@ Fields:
 - `apis`: optional API block metadata, including method and route when declared
   with the first supported API route metadata subset.
 - page `components`: optional sorted component names directly referenced by the
-  current static `view {}` parser subset.
-- `staticAssets`: optional sorted static `src`, `href`, and `poster`
-  references directly visible in the current static `view {}` parser subset.
+  current literal `view {}` parser subset.
+- `Assets`: optional sorted literal `src`, `href`, and `poster`
+  references directly visible in the current literal `view {}` parser subset.
   Interpolated and external URLs are omitted.
-- `cssClasses`: optional sorted class names directly visible in static `class`
+- `cssClasses`: optional sorted class names directly visible in literal `class`
   attributes.
-- `styleAttributes`: optional sorted static inline `style` attribute values.
-- `artifacts`: optional generated artifact path metadata. Static and action
+- `styleAttributes`: optional sorted literal inline `style` attribute values.
+- `artifacts`: optional generated artifact path metadata. SPA and action
   pages list the generated HTML path pattern relative to the build output
   directory, such as `index.html`, `newsletter/index.html`, or
-  `blog/{slug}/index.html`. SSR-only pages omit static HTML artifacts.
+  `blog/{slug}/index.html`. SSR-only pages omit app-shell HTML artifacts.
 - `components`: component declarations known to the manifest.
   Component declarations may include `props`, typed `propsType`/`state`
   contracts, and emitted browser-island event metadata under `emits`.
 
 The site-map command emits broader editor-facing JSON that includes source paths, dynamic route params, and block presence.
 
-`gowdk build` also writes a separate static route manifest named
+`gowdk build` also writes a separate SPA route manifest named
 `gowdk-routes.json` in the selected output directory. That generated file records
-emitted page IDs, declared routes, and relative static output paths.
-Dynamic static routes are recorded once for each generated concrete route.
+emitted page IDs, declared routes, and relative build output paths.
+Dynamic SPA routes are recorded once for each generated concrete route.
 
-Static builds also write `gowdk-assets.json` in the selected output directory:
+SPA builds also write `gowdk-assets.json` in the selected output directory:
 
 ```json
 {

@@ -1,6 +1,6 @@
 @page go.imported
 @route "/go-imported"
-@render static
+@render spa
 
 import interop "github.com/cssbruno/gowdk/examples/go-interop"
 

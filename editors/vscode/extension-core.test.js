@@ -134,6 +134,41 @@ test('gowdkModuleRunArgs builds a go run invocation for app workspaces', () => {
   ]);
 });
 
+test('toolInvocation prefers source workspace go run over PATH lookup', () => {
+  assert.deepEqual(core.toolInvocation(['version'], {
+    cwd: '/workspace/GOWDK',
+    isSourceWorkspace: true,
+    localBinary: '/workspace/GOWDK/gowdk',
+    requiresGOWDK: true
+  }), {
+    command: 'go',
+    args: ['run', './cmd/gowdk', 'version'],
+    cwd: '/workspace/GOWDK'
+  });
+});
+
+test('toolInvocation uses a workspace-local binary before bare gowdk', () => {
+  assert.deepEqual(core.toolInvocation(['check', 'home.page.gwdk'], {
+    cwd: '/workspace/app',
+    localBinary: '/workspace/app/gowdk'
+  }), {
+    command: '/workspace/app/gowdk',
+    args: ['check', 'home.page.gwdk'],
+    cwd: '/workspace/app'
+  });
+});
+
+test('toolInvocation uses module go run for GOWDK app modules', () => {
+  assert.deepEqual(core.toolInvocation(['sitemap'], {
+    cwd: '/workspace/app',
+    requiresGOWDK: true
+  }), {
+    command: 'go',
+    args: ['run', 'github.com/cssbruno/gowdk/cmd/gowdk', 'sitemap'],
+    cwd: '/workspace/app'
+  });
+});
+
 test('nearestProjectRoot finds nested GOWDK app roots inside broad workspaces', () => {
   const tmp = fs.mkdtempSync(path.join(process.cwd(), '.tmp-gowdk-vscode-'));
   try {
@@ -164,13 +199,13 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
         layouts: ['shell'],
         css: ['default', 'forms'],
         components: ['AdminPanel'],
-        staticAssets: ['/assets/admin.png'],
+        assets: ['/assets/admin.png'],
         artifacts: []
       },
       {
         id: '<home>',
         route: '/<home>',
-        render: 'static',
+        render: 'spa',
         source: '/workspace/home.page.gwdk',
         blocks: { view: true },
         artifacts: [{ kind: 'html', path: 'index.html' }]
@@ -178,7 +213,7 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
     ]
   }, '/workspace');
 
-  assert.match(html, /2 pages · 1 static · 1 ssr/);
+  assert.match(html, /2 pages · 1 spa · 1 ssr/);
   assert.ok(html.indexOf('/&lt;home&gt;') < html.indexOf('/z-admin'));
   assert.match(html, /&lt;home&gt; · home\.page\.gwdk/);
   assert.match(html, /act:save/);
@@ -187,7 +222,7 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
   assert.match(html, /css:forms/);
   assert.match(html, /Components: AdminPanel/);
   assert.match(html, /Assets: \/assets\/admin\.png/);
-  assert.match(html, /GET \/&lt;home&gt; -&gt; static -&gt; index\.html/);
+  assert.match(html, /GET \/&lt;home&gt; -&gt; spa -&gt; index\.html/);
   assert.match(html, /POST act:save/);
 });
 
@@ -263,7 +298,7 @@ test('projectCompletionEntries derive layouts routes components and CSS from met
     ['StatusPanel', 'Component from project manifest.']
 	]);
   assert.deepEqual(core.projectCompletionEntries('render', metadata).map(([name]) => name), [
-    'static',
+    'spa',
     'action',
     'hybrid',
     'ssr'
@@ -294,7 +329,7 @@ test('project metadata helpers work with a fixture workspace', () => {
         {
           id: 'home',
           route: '/',
-          render: 'static',
+          render: 'spa',
           source: home,
           layouts: ['root'],
           blocks: { view: true, actions: ['subscribe'] }
@@ -307,7 +342,7 @@ test('project metadata helpers work with a fixture workspace', () => {
           source: home,
           css: ['default', 'forms'],
           components: ['Hero'],
-          staticAssets: ['/assets/home.png']
+          spaAssets: ['/assets/home.png']
         }
       },
       components: {
@@ -336,13 +371,13 @@ test('project metadata helpers work with a fixture workspace', () => {
     {
       id: 'home',
       route: '/',
-      render: 'static',
+      render: 'spa',
       source: home,
       layouts: ['root'],
       blocks: { view: true, actions: ['subscribe'] },
       css: ['default', 'forms'],
       components: ['Hero'],
-      staticAssets: ['/assets/home.png']
+      spaAssets: ['/assets/home.png']
     }
   ]);
   assert.deepEqual(core.projectCompletionEntries('component', metadata), [
@@ -495,7 +530,7 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
     '@page home',
     '@component Counter',
     '@css default page forms',
-    '@render static',
+    '@render spa',
     'emits {',
     '  select(id string)',
     '}',
@@ -533,8 +568,8 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
   assert.deepEqual(simplified.filter((token) => token.text === 'forms'), [
     { line: 2, text: 'forms', tokenType: 'property' }
   ]);
-  assert.deepEqual(simplified.filter((token) => token.text === 'static'), [
-    { line: 3, text: 'static', tokenType: 'enumMember' }
+  assert.deepEqual(simplified.filter((token) => token.text === 'spa'), [
+    { line: 3, text: 'spa', tokenType: 'enumMember' }
   ]);
   assert.ok(simplified.some((token) => token.text === 'emits' && token.tokenType === 'keyword'));
   assert.ok(simplified.some((token) => token.text === 'client' && token.tokenType === 'keyword'));
@@ -563,7 +598,7 @@ function symbolMetadata() {
         {
           id: 'home',
           route: '/',
-          render: 'static',
+          render: 'spa',
           source: '/workspace/home.page.gwdk',
           layouts: ['root'],
           guard: ['auth.required'],

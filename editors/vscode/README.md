@@ -42,12 +42,11 @@ CSS names are discovered from workspace `.css` basenames for editor navigation
 and merged with page `@css` metadata from `gowdk manifest`. The compiler remains
 the source of truth for build-time CSS validation and output.
 
-When a workspace contains `gowdk.config.go`, saved-file diagnostics and the site
-map use `--config <workspace>/gowdk.config.go` so source include/exclude globs
-and module-aware discovery match the CLI. Without config, saved-file diagnostics
-validate all workspace `.gwdk` files together when more than one exists. Dirty
-buffers continue to use a temporary explicit file so unsaved edits can be
-checked immediately.
+Saved-file diagnostics, dirty-buffer diagnostics, manifest metadata, and the
+site map require `gowdk.config.go` in the workspace, matching the CLI. The
+extension passes `--config <workspace>/gowdk.config.go` so source
+include/exclude globs and module-aware discovery stay consistent. Without
+config, diagnostics report that the project must be initialized first.
 
 ## Development
 

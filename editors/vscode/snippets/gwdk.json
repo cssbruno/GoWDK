@@ -1,5 +1,5 @@
 {
-  "Static page": {
+  "SPA page": {
     "prefix": "page",
     "body": [
       "@page ${1:home}",
@@ -10,15 +10,15 @@
       "  ${0:<h1>GOWDK</h1>}",
       "}"
     ],
-    "description": "Create a static GOWDK page"
+    "description": "Create a spa GOWDK page"
   },
-  "Static dynamic page with paths": {
+  "SPA dynamic page with paths": {
     "prefix": "paths",
     "body": [
       "@page ${1:blog.post}",
       "@route \"${2:/blog/{slug}}\"",
       "@layout ${3:root, blog}",
-      "@render static",
+      "@render spa",
       "",
       "paths {",
       "  ${4:=> { slug: \"hello\" }}",
@@ -32,7 +32,7 @@
       "  ${0:<Article />}",
       "}"
     ],
-    "description": "Create a dynamic static page with paths"
+    "description": "Create a dynamic spa page with paths"
   },
   "Action block": {
     "prefix": "act",

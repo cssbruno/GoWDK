@@ -266,9 +266,21 @@ async function validateNow(document, diagnostics) {
   if (document.languageId !== LANGUAGE_ID || !config().get('enableDiagnostics')) {
     return;
   }
+  const root = projectRoot(document);
+  const configPath = workspaceConfigPath(root);
+  if (!configPath) {
+    const diagnostic = new vscode.Diagnostic(
+      new vscode.Range(0, 0, 0, 1),
+      'gowdk.config.go is required; run gowdk init before validating .gwdk files.',
+      vscode.DiagnosticSeverity.Error
+    );
+    diagnostic.source = 'gowdk';
+    diagnostics.set(document.uri, [diagnostic]);
+    return;
+  }
   try {
     if (document.uri.scheme === 'file' && !document.isDirty) {
-      const projectReport = await loadProjectDiagnostics(document);
+      const projectReport = await loadProjectDiagnostics(document, configPath);
       if (projectReport) {
         setProjectDiagnostics(diagnostics, projectReport, document);
         return;
@@ -278,6 +290,7 @@ async function validateNow(document, diagnostics) {
     const report = await withDocumentFile(document, (file) => {
       const args = core.projectCommandArgs('check', {
         json: true,
+        configPath,
         ssr: ssrEnabledForDocument(document),
         files: [file]
       });
@@ -291,27 +304,13 @@ async function validateNow(document, diagnostics) {
   }
 }
 
-async function loadProjectDiagnostics(document) {
+async function loadProjectDiagnostics(document, configPath) {
   const root = projectRoot(document);
   const ssr = ssrEnabledForRoot(root);
-  const configPath = workspaceConfigPath(root);
-  if (configPath) {
-    const args = core.projectCommandArgs('check', {
-      json: true,
-      configPath,
-      ssr
-    });
-    return runGowdk(args, document).then(({ stdout }) => core.parseDiagnostics(stdout));
-  }
-
-  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules,vendor}/**');
-  if (uris.length <= 1) {
-    return undefined;
-  }
   const args = core.projectCommandArgs('check', {
     json: true,
-    ssr,
-    files: uris.map((uri) => uri.fsPath)
+    configPath,
+    ssr
   });
   return runGowdk(args, document).then(({ stdout }) => core.parseDiagnostics(stdout));
 }
@@ -419,22 +418,12 @@ async function loadSiteMap(document) {
   const root = projectRoot(document);
   const ssr = ssrEnabledForRoot(root);
   const configPath = workspaceConfigPath(root);
-  if (configPath) {
-    const args = core.projectCommandArgs('sitemap', {
-      configPath,
-      ssr
-    });
-    const { stdout } = await runGowdk(args, document);
-    return JSON.parse(stdout);
-  }
-
-  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules,vendor}/**');
-  if (uris.length === 0) {
+  if (!configPath) {
     return { pages: [] };
   }
   const args = core.projectCommandArgs('sitemap', {
-    ssr,
-    files: uris.map((uri) => uri.fsPath)
+    configPath,
+    ssr
   });
   const { stdout } = await runGowdk(args, document);
   return JSON.parse(stdout);
@@ -444,22 +433,12 @@ async function loadManifest(document) {
   const root = projectRoot(document);
   const ssr = ssrEnabledForRoot(root);
   const configPath = workspaceConfigPath(root);
-  if (configPath) {
-    const args = core.projectCommandArgs('manifest', {
-      configPath,
-      ssr
-    });
-    const { stdout } = await runGowdk(args, document);
-    return JSON.parse(stdout);
-  }
-
-  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules,vendor}/**');
-  if (uris.length === 0) {
+  if (!configPath) {
     return { pages: {}, components: {} };
   }
   const args = core.projectCommandArgs('manifest', {
-    ssr,
-    files: uris.map((uri) => uri.fsPath)
+    configPath,
+    ssr
   });
   const { stdout } = await runGowdk(args, document);
   return JSON.parse(stdout);
@@ -613,7 +592,7 @@ class SiteMapPageItem extends vscode.TreeItem {
     super(page.id || page.route || '(missing page)', vscode.TreeItemCollapsibleState.Collapsed);
     this.page = page;
     this.contextValue = 'gwdkPage';
-    this.description = [page.render || 'static', page.route || ''].filter(Boolean).join(' ');
+    this.description = [page.render || 'spa', page.route || ''].filter(Boolean).join(' ');
     this.tooltip = `${page.id}\n${page.source}`;
     this.iconPath = new vscode.ThemeIcon(page.render === 'ssr' ? 'server' : 'globe');
     this.command = {
@@ -643,8 +622,8 @@ function pageChildren(page, root) {
   if (page.components && page.components.length) {
     children.push(infoItem(`Components: ${page.components.join(', ')}`, 'symbol-class'));
   }
-  if (page.staticAssets && page.staticAssets.length) {
-    children.push(infoItem(`Assets: ${page.staticAssets.join(', ')}`, 'file-media'));
+  if (page.assets && page.assets.length) {
+    children.push(infoItem(`Assets: ${page.assets.join(', ')}`, 'file-media'));
   }
   if (page.cssClasses && page.cssClasses.length) {
     children.push(infoItem(`Classes: ${page.cssClasses.join(', ')}`, 'symbol-key'));
@@ -681,16 +660,22 @@ function infoItem(label, icon) {
 function toolInvocation(args, document) {
   const cliPath = config().get('cliPath');
   const cwd = projectRoot(document);
-  if (cliPath) {
-    return { command: cliPath, args, cwd };
+  return core.toolInvocation(args, {
+    cliPath,
+    cwd,
+    isSourceWorkspace: isGOWDKSourceWorkspace(cwd),
+    localBinary: localGOWDKBinary(cwd),
+    requiresGOWDK: cwd && workspaceRequiresGOWDK(cwd)
+  });
+}
+
+function localGOWDKBinary(cwd) {
+  if (!cwd) {
+    return '';
   }
-  if (cwd && fs.existsSync(path.join(cwd, 'cmd', 'gowdk')) && fs.existsSync(path.join(cwd, 'go.mod'))) {
-    return { command: 'go', args: ['run', './cmd/gowdk', ...args], cwd };
-  }
-  if (cwd && workspaceRequiresGOWDK(cwd)) {
-    return { command: 'go', args: core.gowdkModuleRunArgs(args), cwd };
-  }
-  return { command: 'gowdk', args, cwd };
+  const name = process.platform === 'win32' ? 'gowdk.exe' : 'gowdk';
+  const file = path.join(cwd, name);
+  return fs.existsSync(file) ? file : '';
 }
 
 function workspaceRequiresGOWDK(cwd) {

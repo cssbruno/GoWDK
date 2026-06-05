@@ -31,7 +31,7 @@ and captures raw body text for `paths {}`, `build {}`, `load {}`, and `view {}`
 blocks until a line that contains only `}`. `act {}` captures and validates the first
 form-input/validation/redirect/fragment metadata subset. `api {}` captures and
 validates the first method/route metadata subset. `gowdk build` parses the first literal
-`paths {}` and `build {}` subsets at static-generation time:
+`paths {}` and `build {}` subsets at app-generation time:
 
 ```text
 literalReturn = "=>" whitespace* "{" literalField ("," literalField)* "}"
@@ -41,7 +41,7 @@ buildCall     = "=>" whitespace* ident "." ident "()"
 
 Unknown or malformed annotations fail at parse time. Unsupported top-level block
 declarations fail when they have an identifier-like first token and a trailing
-`{`. Static builds also accept the first imported `buildCall` subset when the
+`{`. SPA builds also accept the first imported `buildCall` subset when the
 page declares the referenced import.
 
 The parser also validates the first supported `act {}` body subset:

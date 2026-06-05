@@ -7,7 +7,7 @@ Status: Accepted
 ## Context
 
 GOWDK needs local component interactivity without becoming a React, Svelte, or
-npm-centered runtime. Static HTML remains the first output, server fragments
+npm-centered runtime. App-shell HTML remains the first output, server fragments
 handle action-driven updates, and local state needs a small browser runtime.
 
 WASM is still important for future richer browser-side Go logic, but making it
@@ -31,7 +31,7 @@ errors.
 ### Positive
 
 - The default interactive path stays dependency-free, inspectable, and small.
-- Static HTML remains the initial output for stateful components.
+- App-shell HTML remains the initial output for stateful components.
 - Future WASM work has an explicit opt-in boundary instead of becoming a hidden
   default.
 

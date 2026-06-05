@@ -49,7 +49,7 @@
         },
         {
           "name": "support.type.render-mode.gwdk",
-          "match": "\\b(?:static|action|hybrid|ssr)\\b"
+          "match": "\\b(?:spa|action|hybrid|ssr)\\b"
         }
       ]
     },

@@ -5,7 +5,7 @@ automation lives in `.github/workflows/release.yml` and creates draft releases
 from `v*` tags or a manual workflow dispatch. VS Code Marketplace publishing
 lives in `.github/workflows/vscode-extension-publish.yml`.
 
-The current CLI version is `0.1.0`, but this is not a production-readiness
+The current CLI version is `0.1.5`, but this is not a production-readiness
 claim. It identifies the current development line while the compiler, generated
 runtime, and docs continue toward the v0.1 target. Public release notes must
 call the build experimental until the release gates below are satisfied.
@@ -13,9 +13,9 @@ call the build experimental until the release gates below are satisfied.
 ## Version Policy
 
 Until the full feature set is complete, public release tags must stay in the
-`0.x.0` pre-1.0 line: `v0.1.0`, `v0.2.0`, `v0.3.0`, and so on. Patch releases
-are reserved for future maintenance of an already-published pre-1.0 line, not
-for implying production support.
+`0.x.y` pre-1.0 line: `v0.1.0`, `v0.1.5`, `v0.2.0`, and so on. Patch releases
+can ship maintenance, packaging, editor, and documentation updates for an
+already-published pre-1.0 line, but they must not imply production support.
 
 Version roadmap entries in `docs/product/roadmap.md` are target milestones. A
 tag may not claim a milestone unless `docs/product/requirements.md`,
@@ -59,8 +59,8 @@ go test ./...
 go build ./cmd/gowdk
 node --check editors/vscode/extension.js
 node --test editors/vscode/*.test.js
-go run ./cmd/gowdk check --ssr examples/basic/*.gwdk
-go run ./cmd/gowdk manifest --ssr examples/basic/*.gwdk
+go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
+go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
 ```
 
 ## Artifacts

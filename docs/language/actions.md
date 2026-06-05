@@ -1,7 +1,7 @@
 # Actions
 
 The parser records `act <name> {}` declarations and the compiler allows actions
-on static pages without SSR.
+on SPA pages without SSR.
 
 The first supported executable action subset is:
 
@@ -20,18 +20,18 @@ Current behavior:
 - `-> "/local-path"` records a local redirect target.
 - Redirect targets must be local absolute paths and must not start with `//`.
 - `fragment "#target" { ... }` inside an action records first-slice server
-  fragment metadata. The target must be a static id selector and the fragment
+  fragment metadata. The target must be a literal id selector and the fragment
   body is captured for future generated handlers.
 - `<form g:post={submit}>` lowers to a standard POST form for a supported
   action.
 - `gowdk build --app --bin` generates POST handlers for non-dynamic page routes
-  that decode direct static fields from same-page `g:post` forms and redirect
+  that decode direct literal fields from same-page `g:post` forms and redirect
   with HTTP 303.
 - Generated first-slice input decoders create a named input wrapper, preserve
   repeated submitted values, allow missing fields, and reject unexpected fields
   with HTTP 400.
 - When an action declares `valid(input)?`, generated handlers enforce direct
-  static `required` controls and return HTTP 422 for missing or empty required
+  literal `required` controls and return HTTP 422 for missing or empty required
   values.
 - Generated first-slice action error responses use explicit status mapping for
   invalid forms, oversized requests, and validation failures, and set
@@ -46,7 +46,7 @@ Current behavior:
   HttpOnly, Secure, SameSite=Lax cookie by default. `NoopCSRF` exists for tests
   only.
 - Field inference currently reads direct `input`, `textarea`, and `select`
-  controls with static `name` attributes; fields hidden inside component calls
+  controls with literal `name` attributes; fields hidden inside component calls
   are not inferred yet.
 - Direct `input type="file"` controls and multipart `g:post` forms are rejected
   during generated app action route extraction until upload security rules are
@@ -55,20 +55,21 @@ Current behavior:
 
 The current generated app does not resolve real user Go input structs, wire the
 registry-backed action codegen package into `gowdk build --app`, wire CSRF into
-generated handlers, run user-defined validation, or generate server fragment
-handlers.
+generated handlers, run user-defined validation, or generate general fragment
+routes. It can return the first parsed action fragment for supported partial
+POST requests.
 
 ## Forms
 
-Current form behavior is intentionally narrow and static-analysis driven:
+Current form behavior is intentionally narrow and literal-analysis driven:
 
 - Forms post only when they declare `g:post={action}` and the action exists on
   the same page.
-- Static builds lower `g:post` to `method="post"` and the current concrete page
+- SPA builds lower `g:post` to `method="post"` and the current concrete page
   route.
 - Field inference reads direct `input`, `textarea`, and `select` controls with
-  static `name` attributes.
-- Required-field validation is generated only from direct static controls with
+  literal `name` attributes.
+- Required-field validation is generated only from direct literal controls with
   `required`.
 - Generated decoders preserve repeated submitted values, allow missing fields,
   reject unexpected fields, and avoid logging form values.
@@ -85,7 +86,7 @@ Partial form metadata can be added to a supported action form:
 </form>
 ```
 
-`g:target` must be a static id selector present in the same direct `view {}`
+`g:target` must be a literal id selector present in the same direct `view {}`
 markup subset. Current swap modes are `innerHTML` and `outerHTML`.
 
 Future action behavior must define:
@@ -99,4 +100,4 @@ Future action behavior must define:
 - Redirect safety beyond local redirect validation.
 - Error response shape and HTTP status mapping for broader generated action
   execution.
-- Server fragment handler generation for partial updates.
+- General server fragment route generation for partial updates.

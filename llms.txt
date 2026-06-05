@@ -1,0 +1,85 @@
+# GOWDK
+
+> GOWDK is a portable Go web compiler. It is compile-first: build-time output
+> and backend actions are core, while request-time full-page SSR is an
+> optional addon.
+
+This file is the AI-fetchable entrypoint for agents, assistants, search tools,
+and documentation indexers. Use it to find the current project facts before
+answering questions or generating GOWDK code.
+
+## Current Status
+
+GOWDK is pre-release compiler/runtime scaffolding. Build output, embedded app
+builds, first-slice actions/fragments, generated JavaScript islands, and
+first-slice SSR pages without `load {}` are partially implemented.
+
+Do not claim these are implemented:
+
+- Real user Go action execution.
+- CSRF-wired generated action handlers.
+- Generated API handlers.
+- Request-time `load {}` execution.
+- Generated guard enforcement.
+- Hybrid/cache/revalidation policy.
+- Hot deploy pipeline.
+- Browser playground UI.
+- Production WASM island ABI.
+
+## Start Here
+
+- [README](README.md): install loop, current status, CLI overview, examples.
+- [Getting started](docs/getting-started.md): clone/build/run path that works
+  today.
+- [Requirements](docs/product/requirements.md): implemented, partial, and
+  planned product requirements.
+- [Architecture](docs/engineering/architecture.md): compiler/runtime boundaries
+  and current implementation status.
+- [Generated output](docs/compiler/generated-output.md): emitted files,
+  generated app shape, and current generated binary limits.
+- [Release readiness](docs/engineering/release.md): version policy and
+  production-readiness blockers.
+
+## References For Code Generation
+
+- [CLI reference](docs/reference/cli.md): supported commands and flags.
+- [Config reference](docs/reference/config.md): `gowdk.config.go` examples and
+  build target rules.
+- [Routing reference](docs/reference/routing.md): route behavior, dynamic route
+  limits, actions, APIs, and SSR route status.
+- [Deployment reference](docs/reference/deployment.md): build output,
+  generated app, binary, WASM deploy artifact, and request-time feature limits.
+- [Language overview](docs/language/README.md): language docs map.
+- [Syntax reference](docs/language/syntax.md): supported `.gwdk` syntax and
+  unsupported forms.
+- [Components](docs/language/components.md): props, state, slots, stores,
+  client behavior, and WASM island limits.
+- [Actions](docs/language/actions.md): supported first-slice action/form
+  behavior and planned action features.
+- [Partials](docs/language/partials.md): current partial update behavior.
+- [SSR](docs/language/ssr.md): current SSR support, `load {}` limits, and guard
+  status.
+- [API blocks](docs/language/api.md): current API metadata support and planned
+  handler behavior.
+- [Examples](examples/README.md): commands that match the current compiler.
+
+## Rules For AI Assistants
+
+- Prefer current behavior documented in `README.md`,
+  `docs/product/requirements.md`, and `docs/engineering/architecture.md` over
+  roadmap targets.
+- Treat roadmap versions as target milestones, not shipped guarantees.
+- When generating examples, use the documented first-slice language and avoid
+  APIs marked planned or not implemented.
+- Do not present generated action/API/guard/`load {}`/hybrid behavior as
+  production-ready.
+- If documentation and code disagree, inspect the code and update the relevant
+  documentation in the same change.
+
+## Verification Commands
+
+```sh
+go test ./...
+go build ./cmd/gowdk
+go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/login/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
+```

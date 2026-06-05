@@ -6,7 +6,7 @@
 {
   "diagnostics": [
     {
-      "file": "examples/basic/dashboard.page.gwdk",
+      "file": "examples/ssr/dashboard.page.gwdk",
       "code": "missing_ssr_addon",
       "pos": {"line": 3, "column": 1},
       "range": {
@@ -45,9 +45,9 @@ Current compiler diagnostic codes include:
 - `redundant_component`
 - route diagnostics such as `duplicate_page_route`,
   `ambiguous_dynamic_page_route`, and `route_method_conflict`
-- render-mode diagnostics such as `static_dynamic_route_missing_paths` and
-  `static_load_block`
-- static-build WASM package diagnostics such as `wasm_package_build_error`,
+- render-mode diagnostics such as `spa_dynamic_route_missing_paths` and
+  `load_requires_request_render`
+- spa-build WASM package diagnostics such as `wasm_package_build_error`,
   `wasm_package_entrypoint_error`, and `unsupported_wasm_import`
 
 Parser diagnostics include line-level ranges. Compiler diagnostics include

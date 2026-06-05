@@ -19,12 +19,12 @@ GOWDK is a portable Go web compiler.
 
 ## Problem
 
-Modern web frameworks often force teams into a rendering ideology: full SSR, full SPA, or static-only. GOWDK should let Go teams compile portable `.gwdk` files into static pages, components, typed actions, partial updates, and a deployable binary while keeping full-page SSR optional.
+Modern web frameworks often force teams into a rendering ideology: full SSR, full SPA, or deploy-only build output. GOWDK should let Go teams compile portable `.gwdk` files into SPA pages, components, typed actions, partial updates, and a deployable binary while keeping full-page SSR optional.
 
 ## Differentiation
 
 - Files are portable: routes and layouts are declared in files, not implied by folder nesting.
-- Static render is the default.
+- SPA render is the default.
 - Actions can exist without SSR.
 - Partial updates use server fragments instead of full page request-time rendering.
 - SSR is an addon for selected pages, not the framework identity.

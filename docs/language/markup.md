@@ -1,11 +1,11 @@
 # Markup
 
-`view {}` is currently captured and parsed for the first static build subset.
+`view {}` is currently captured and parsed for the first SPA build subset.
 
 Implemented today:
 
 - Lowercase HTML element tags.
-- Static quoted attributes.
+- SPA quoted attributes.
 - Boolean attributes.
 - Expression attributes such as `data-title={post.Title}` using the same
   interpolation scope as text.
@@ -13,13 +13,13 @@ Implemented today:
   ordinary `class` attributes.
 - ID shorthand such as `#hero`, normalized into an ordinary `id` attribute.
 - Self-closing tags rendered as explicit open/close tags.
-- Static text and attribute values, escaped before output.
+- SPA text and attribute values, escaped before output.
 - `{name}` and dotted-name interpolation such as `{post.Title}` in page text and
-  quoted attributes when static build data is available, including route params
+  quoted attributes when SPA build data is available, including route params
   from literal `paths {}` and string values from literal `build {}` or imported
   Go build data functions.
 - Explicit route-param interpolation with `{param("slug")}` in page text,
-  quoted attributes, and component prop values. Static builds validate that
+  quoted attributes, and component prop values. SPA builds validate that
   each referenced param is declared by the page route. Inside quoted attributes,
   escape the inner quotes as `{param(\"slug\")}`.
 - Self-closing component calls such as `<Hero title="GOWDK" />` when the component file is passed to `gowdk build`.
@@ -78,11 +78,11 @@ Implemented today:
   HTML attributes are toggled as attributes; scalar and ARIA attributes are
   stringified.
 - Class toggles on elements inside stateful components, such as
-  `class:active={Open}`. The expression must be bool, static classes are
+  `class:active={Open}`. The expression must be bool, literal classes are
   preserved, and the generated island runtime updates `classList`.
 - Style bindings on elements inside stateful components, such as
   `style:height.px={PanelHeight}` and `style:width.%={WidthPercent}`. The
-  expression must be string or numeric, static style declarations are
+  expression must be string or numeric, literal style declarations are
   preserved, and the generated island runtime updates the CSS property.
 - Island expressions can read nested fields and indexed values from Go-typed
   state, such as `User.Name`, `Items[0].Name`, and `Flags[Count]`.

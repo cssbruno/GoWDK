@@ -16,10 +16,15 @@ type Config struct {
 
 ## Source
 
+`gowdk.config.go` is required for CLI commands that compile, validate, inspect,
+or serve a development loop for `.gwdk` code: `check`, `manifest`, `sitemap`,
+`routes`, `build`, and `dev`. Those commands load `gowdk.config.go` from the
+current directory by default, or the file passed with `--config <file>`.
+
 `SourceConfig` has include and exclude patterns. Discovery support exists in
 `internal/discover`, and `gowdk build` reads literal `Source.Include` and
-`Source.Exclude` fields from `gowdk.config.go` when no explicit files are
-supplied.
+`Source.Exclude` fields from the loaded config when no explicit files are
+supplied. Explicit file paths still require a loaded config.
 
 `Modules` declares named source groups. Build discovery treats modules as
 source selectors. Generated app and binary composition is controlled by the
@@ -85,7 +90,7 @@ var Config = gowdk.Config{
 }
 ```
 
-The CLI parses this file statically and does not execute user Go code. Non-literal
+The CLI parses this file as a literal config subset and does not execute user Go code. Non-literal
 values are ignored in the current subset.
 
 ## Modules
@@ -134,7 +139,7 @@ artifacts from another module selection cannot be copied into the next binary.
 
 ## Render
 
-`RenderConfig.Default` controls the default render mode. When omitted, default mode is `static`.
+`RenderConfig.Default` controls the default render mode. When omitted, default mode is `spa`.
 
 ## Build
 
@@ -211,12 +216,12 @@ under `/assets/gowdk/`.
 
 ## Addons
 
-`Addons` registers optional features such as static, actions, partial, SSR, API,
+`Addons` registers optional features such as spa, actions, partial, SSR, API,
 embed, CSS, and rate limiting. Current validation uses SSR feature registration
-for render-mode checks, and static builds invoke addons that implement
+for render-mode checks, and SPA builds invoke addons that implement
 `gowdk.CSSProcessor`.
 
-The static config loader recognizes the known literal Tailwind addon subset:
+The literal config loader recognizes the known literal Tailwind addon subset:
 
 ```go
 import "github.com/cssbruno/gowdk/addons/tailwind"
@@ -232,7 +237,7 @@ var Config = gowdk.Config{
 }
 ```
 
-Arbitrary addon constructors remain outside the current static config subset.
+Arbitrary addon constructors remain outside the current config subset.
 Rate limiting can still be configured directly in user-owned server code through
 `addons/ratelimit` middleware with either the in-memory store or a Redis store
 adapter.

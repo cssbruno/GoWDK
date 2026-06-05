@@ -8,7 +8,7 @@ goal is to build a strong GOWDK architecture:
 
 - Go owns the app contract.
 - `.gwdk` files stay portable.
-- Static output is the default.
+- Build output is the default.
 - Client interactivity is explicit and compiler-generated.
 - Hot deploy and fast local iteration are first-class features.
 - Browser compilation lets people try the platform without installing a toolchain.
@@ -32,7 +32,7 @@ status is summarized in `README.md`, `docs/product/requirements.md`, and
 - [ ] Make invalid client/template code fail with clear compiler errors across the full supported syntax.
 - [ ] Keep generated output deterministic so deploy diffs stay small.
 - [ ] Support arbitrary build-time statements beyond the first literal/imported build-data subset.
-- [ ] Use generated route metadata in request-time handlers instead of only embedding it with static output.
+- [ ] Use generated route metadata in request-time handlers instead of only embedding it with build output.
 
 ## Client Reactivity
 
@@ -97,7 +97,7 @@ status is summarized in `README.md`, `docs/product/requirements.md`, and
 ## Forms And Actions
 
 - [x] Parse first-slice `act {}` input, validation intent, redirect, and fragment bodies.
-- [x] Lower `g:post` forms to same-page POST routes for static/action pages.
+- [x] Lower `g:post` forms to same-page POST routes for SPA/action pages.
 - [x] Generate first-slice form input decoders.
 - [x] Reject unexpected fields and enforce required fields in generated first-slice decoders.
 - [x] Generate first-slice POST redirect handlers.
@@ -129,25 +129,26 @@ status is summarized in `README.md`, `docs/product/requirements.md`, and
 - [ ] Execute user-owned API handler logic.
 - [ ] Add typed request decoding and response writing contracts.
 - [ ] Add API error handling and no-store/cache behavior.
-- [ ] Add API docs and examples.
+- [x] Add API docs and examples for the current route metadata slice.
 
 ## Routing, Rendering, And SSR
 
-- [x] Default render mode to `static`.
+- [x] Default render mode to `spa`.
 - [x] Reject `@render ssr` without the SSR addon.
-- [x] Reject `load {}` on static pages.
-- [x] Require `paths {}` for dynamic static/action routes.
+- [x] Reject `load {}` on SPA pages.
+- [x] Require `paths {}` for dynamic SPA/action routes.
 - [x] Prerender the first literal dynamic `paths {}` subset.
-- [x] Generate simple concrete `@render ssr` pages in embedded apps when they do not use `load {}`.
+- [x] Generate concrete and dynamic `@render ssr` pages in embedded apps when they do not use `load {}`.
 - [x] Add route shape, duplicate param, duplicate route pattern, and route-method conflict validation.
 - [x] Add manifest and sitemap CLI output.
+- [x] Add auto route detection for generated app action and first-slice SSR handlers.
 - [ ] Add nested routes.
 - [ ] Add layouts with complete inheritance/composition rules.
 - [ ] Add typed route param decoding.
 - [ ] Add route-level loaders.
 - [ ] Execute request-time `load {}` in generated SSR handlers.
 - [ ] Wire generated guard enforcement for SSR/action/API paths.
-- [ ] Add dynamic SSR route generation.
+- [x] Add dynamic SSR route generation.
 - [ ] Add full request-time user logic for SSR pages.
 - [ ] Add route-level metadata.
 - [ ] Add redirects.
@@ -159,8 +160,8 @@ status is summarized in `README.md`, `docs/product/requirements.md`, and
 
 ## Hybrid, Cache, And Request-Time Policy
 
-- [ ] Define hybrid pages as static by default with explicit request-time capabilities.
-- [ ] Define cache and revalidation behavior for static routes.
+- [ ] Define hybrid pages as SPA by default with explicit request-time capabilities.
+- [ ] Define cache and revalidation behavior for SPA routes.
 - [ ] Define cache and revalidation behavior for action, API, partial, SSR, and hybrid routes.
 - [ ] Add syntax for route/cache policy once generated route metadata stabilizes.
 - [ ] Document partial update caching and no-store defaults.
@@ -171,7 +172,7 @@ status is summarized in `README.md`, `docs/product/requirements.md`, and
 - [x] Add CSS addon boundary and compile-time processor contract.
 - [x] Add configured stylesheet links.
 - [x] Add discovered CSS inputs and generated page CSS output.
-- [x] Add static class extraction.
+- [x] Add literal class extraction.
 - [x] Add `@css` page selection.
 - [x] Add experimental Tailwind v4 standalone-CLI processor wrapper.
 - [ ] Add full addon/plugin loading.
@@ -208,12 +209,11 @@ status is summarized in `README.md`, `docs/product/requirements.md`, and
 
 ## Hot Deploy And Dev Loop
 
-- [x] Add compiler watch mode that explains what changed and what rebuilt.
+- [x] Add compiler dev mode that explains what changed and what rebuilt.
 - [x] Add content-hash based rebuild detection.
-- [x] Add page-local incremental static output for plain static watch output.
-- [x] Skip identical generated static/app writes.
-- [x] Make failed rebuilds keep the last good generated binary running.
-- [x] Add generated-binary restart with `watch --restart`.
+- [x] Add page-local incremental build output for plain build-output dev output.
+- [x] Skip identical generated output/app writes.
+- [x] Make failed rebuilds keep the last good served output running.
 - [x] Add browser live reload in `gowdk dev`.
 - [x] Add one-command local build/run workflows.
 - [ ] Add a hot deploy pipeline for generated apps.
@@ -222,7 +222,7 @@ status is summarized in `README.md`, `docs/product/requirements.md`, and
 
 ## Compiler-Owned Safety
 
-- [x] Add HTML escaping for current static text and attributes.
+- [x] Add HTML escaping for current text and attributes.
 - [x] Add signed CSRF validator support in `addons/actions`.
 - [x] Add rate-limit addon boundary, in-memory store, and Redis adapter.
 - [x] Add forbidden-import checks for WASM island packages.
@@ -242,24 +242,25 @@ status is summarized in `README.md`, `docs/product/requirements.md`, and
 
 ## Documentation
 
-- [ ] Rewrite getting started around the current reality: clone, build, run.
-- [ ] Write real CLI docs with commands that work today.
-- [ ] Write config docs with real examples.
-- [ ] Write architecture docs that explain the compiler pipeline.
-- [ ] Write client language docs with supported and unsupported syntax.
-- [ ] Write component docs with state, props, slots, stores, and client behavior.
-- [ ] Write routing docs.
-- [ ] Write actions/forms docs.
-- [ ] Write API docs.
-- [ ] Write deployment docs.
-- [ ] Write browser compiler docs.
-- [ ] Add examples that match the actual compiler, not planned features.
-- [ ] Clearly separate implemented features from planned features.
-- [ ] Keep README, requirements, architecture, and this checklist in sync.
+- [x] Rewrite getting started around the current reality: clone, build, run.
+- [x] Write real CLI docs with commands that work today.
+- [x] Write config docs with real examples.
+- [x] Write architecture docs that explain the compiler pipeline.
+- [x] Write client language docs with supported and unsupported syntax.
+- [x] Write component docs with state, props, slots, stores, and client behavior.
+- [x] Write routing docs.
+- [x] Write actions/forms docs.
+- [x] Write API docs.
+- [x] Write deployment docs.
+- [x] Write browser compiler docs.
+- [x] Add examples that match the actual compiler, not planned features.
+- [x] Clearly separate implemented features from planned features.
+- [x] Keep README, requirements, architecture, and this checklist in sync.
+- [x] Add an AI-fetchable documentation entrypoint.
 
 ## Product Positioning
 
-- [ ] Stop implying release/version features that do not exist.
+- [x] Stop implying release/version features that do not exist.
 - [ ] Do not claim Svelte, React, or Solid parity.
 - [ ] Describe GOWDK as Go-native reactive islands with compiler-generated browser behavior.
 - [ ] Show real GOWDK code and real generated output.
@@ -284,4 +285,4 @@ These are the most important missing pieces:
 - [ ] Hot deploy pipeline
 - [ ] Browser playground UI
 - [ ] Production WASM island ABI
-- [ ] Accurate documentation
+- [x] Accurate documentation

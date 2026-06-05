@@ -1,7 +1,7 @@
 # Getting Started
 
 GOWDK is currently used from source. The fastest path is clone, build the CLI,
-scaffold a small app, build static output, and serve the generated directory.
+scaffold a small app, build build output, and serve the generated directory.
 
 ## Prerequisites
 
@@ -38,7 +38,8 @@ cd /tmp/gowdk-my-app
 file. Existing files are not overwritten unless `--force` is passed.
 
 The generated config discovers `src/**/*.gwdk`, discovers CSS from
-`styles/**/*.css`, and writes static output to `dist/site`.
+`styles/**/*.css`, writes build output to `dist/site`, and ignores the default
+dev output directory `gowdk_cache` in the scaffolded `.gitignore`.
 
 ## Build
 
@@ -48,7 +49,7 @@ From the app directory:
 /path/to/GOWDK/gowdk build
 ```
 
-The build writes static HTML and manifests under `dist/site`:
+The build writes app-shell HTML and manifests under `dist/site`:
 
 ```text
 dist/site/
@@ -68,20 +69,21 @@ Every successful disk build writes `gowdk-build-report.json`.
 
 Open `http://127.0.0.1:8080/`.
 
-`serve` serves generated static files only. It does not run generated actions,
+`serve` serves generated build output files only. It does not run generated actions,
 API handlers, partial fragments, or SSR routes.
 
 ## Development Loop
 
-Use `dev` when the project has `Build.Output` in `gowdk.config.go`:
+Use `dev` for polling rebuilds, local serving, and browser reload:
 
 ```sh
 /path/to/GOWDK/gowdk dev
 ```
 
-`dev` builds, serves the output directory, polls source inputs for content
-changes, rebuilds on changes, and injects browser live reload into served HTML.
-It keeps serving the last successful build after a failed rebuild.
+`dev` builds into `gowdk_cache` by default, serves that directory, polls source
+inputs for content changes, rebuilds on changes, and injects browser live reload
+into served HTML. It keeps serving the last successful build after a failed
+rebuild. Pass `--out <dir>` to use a different dev output directory.
 
 ## Build Repository Examples
 
@@ -89,17 +91,21 @@ From the GOWDK repository root:
 
 ```sh
 go run ./cmd/gowdk build --out /tmp/gowdk-build \
-  examples/basic/home.page.gwdk \
-  examples/basic/hero.cmp.gwdk
+  examples/pages/home.page.gwdk \
+  examples/pages/hero.cmp.gwdk
 
 go run ./cmd/gowdk serve --dir /tmp/gowdk-build
 ```
 
-Dynamic static routes work when literal `paths {}` entries are present:
+The repository root includes `gowdk.config.go` so these example commands have
+the same required project config shape as a scaffolded app. Outside this
+repository, run `gowdk init` first or pass `--config <file>`.
+
+Dynamic SPA routes work when literal `paths {}` entries are present:
 
 ```sh
 go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build \
-  examples/basic/blog-post.page.gwdk
+  examples/pages/blog-post.page.gwdk
 ```
 
 This writes `/tmp/gowdk-dynamic-build/blog/hello-gowdk/index.html` and
@@ -109,21 +115,20 @@ This writes `/tmp/gowdk-dynamic-build/blog/hello-gowdk/index.html` and
 
 Implemented today:
 
-- Static output for simple `.gwdk` pages and components.
-- Literal `paths {}` expansion for dynamic static routes.
+- Build output for simple `.gwdk` pages and components.
+- Literal `paths {}` expansion for dynamic SPA routes.
 - Literal `build {}` data and imported no-argument Go build data functions.
 - Config-based discovery, module selection, and named build targets.
 - Generated embedded app source, local binaries, and Go `js/wasm` deploy
   artifacts.
-- First-slice action redirects, partial action fragments, and simple concrete
-  SSR pages in generated binaries.
+- First-slice action redirects, partial action fragments, and concrete or
+  dynamic SSR pages without `load {}` in generated binaries.
 - CLI tooling for tokens, formatting, validation, manifest, sitemap, routes,
-  watch, dev, serve, and LSP.
+  dev, serve, and LSP.
 
 Planned or partial:
 
 - Real user Go action execution and CSRF wiring in generated handlers.
 - Generated API handlers.
 - Request-time `load {}` execution and guard enforcement.
-- Dynamic SSR routes in generated binaries.
 - Full browser-side Go/WASM island ABI.

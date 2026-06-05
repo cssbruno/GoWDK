@@ -19,7 +19,7 @@ without npm. WASM stays explicit for cases that truly need browser-side Go.
 - Keep JavaScript generation as the default island runtime.
 - Keep `g:island="wasm"` explicit and separate from the default path.
 - Support common reactive UI features without exposing arbitrary JavaScript.
-- Preserve static HTML as the first output.
+- Preserve SPA HTML as the first output.
 - Keep the language small enough for compiler diagnostics, editor tooling, and
   generated code review.
 
@@ -50,7 +50,7 @@ without npm. WASM stays explicit for cases that truly need browser-side Go.
    `g:on:click={Increment()}`, `g:if={Open}`, `g:bind:value={Query}`, and
    `g:for={item in Items}`.
 4. `gowdk build` type-checks the component contract, client block, and view
-   bindings, then emits static HTML and generated JS assets.
+   bindings, then emits SPA HTML and generated JS assets.
 5. If a component instance explicitly sets `g:island="wasm"`, GOWDK emits WASM
    island assets instead of the default generated-JS island for that instance.
 
@@ -154,7 +154,7 @@ Rules:
   - `internal/gotypes` for props/state field contracts.
   - `internal/compiler` for type checking and diagnostics.
   - `internal/view` for binding/directive parsing.
-  - `internal/staticgen` for asset emission and script injection.
+  - `internal/buildgen` for asset emission and script injection.
   - `runtime/*` only for public contracts that generated apps need.
 - External:
   - None for generated JavaScript.

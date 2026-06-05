@@ -1,12 +1,12 @@
 # Addons Reference
 
 Addons currently register feature IDs with the compiler. The CSS processor
-contract can run during static builds; other addon packages do not yet execute
+contract can run during SPA builds; other addon packages do not yet execute
 full generated behavior.
 
 Current feature IDs:
 
-- `static`
+- `spa`
 - `actions`
 - `partial`
 - `ssr`
@@ -17,7 +17,7 @@ Current feature IDs:
 
 Current packages:
 
-- `addons/static`
+- `addons/spa`
 - `addons/actions`
 - `addons/partial`
 - `addons/ssr`
@@ -28,7 +28,7 @@ Current packages:
 - `addons/ratelimit`
 
 The current compiler validator checks whether SSR is enabled when a page uses
-`@render ssr` or `@render hybrid`. Static builds also invoke addons that
+`@render ssr` or `@render hybrid`. SPA builds also invoke addons that
 implement `gowdk.CSSProcessor`.
 
 `addons/tailwind` is an experimental Tailwind v4 CSS processor wrapper around a

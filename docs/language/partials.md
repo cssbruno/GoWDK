@@ -1,19 +1,19 @@
 # Partials
 
 Partial updates use server fragments, not full-page SSR. The first generated
-slice supports action-driven fragment responses for static/action pages.
+slice supports action-driven fragment responses for SPA/action pages.
 
 Current support:
 
 - Editor completions include `g:post`, `g:target`, and `g:swap`.
-- Static builds lower `g:post={action}` on `<form>` to normal POST form
+- SPA builds lower `g:post={action}` on `<form>` to normal POST form
   attributes for the first action slice.
-- Static builds parse `g:target="#id"` and `g:swap="innerHTML|outerHTML"` on
+- SPA builds parse `g:target="#id"` and `g:swap="innerHTML|outerHTML"` on
   `g:post` forms and lower them to `data-gowdk-target` and `data-gowdk-swap`
   attributes for the client runtime.
-- Static builds emit `assets/gowdk/gowdk.js` and a deferred script tag only when
+- SPA builds emit `assets/gowdk/gowdk.js` and a deferred script tag only when
   a page uses partial form metadata with a fragment-producing action.
-- `g:target` must reference a static `id` in the same direct `view {}`
+- `g:target` must reference a SPA `id` in the same direct `view {}`
   markup subset.
 - Action bodies parse `fragment "#id" { ... }` metadata and capture the raw
   fragment body for generated render functions and first-slice generated action
@@ -41,14 +41,14 @@ Current support:
 
 ## Swap Modes
 
-The current planned swap modes are:
+The current swap modes are:
 
 - `innerHTML`: replace the target element children with the returned fragment
   HTML. The target element itself remains in place.
 - `outerHTML`: replace the target element itself with the returned fragment
   HTML.
 
-Static output records these values as `data-gowdk-swap` metadata and runtime
+Build output records these values as `data-gowdk-swap` metadata and runtime
 fragment responses expose the same mode names through response metadata. The
 first client runtime prefers the response `X-GOWDK-Fragment-Swap` header and
 falls back to the form metadata.

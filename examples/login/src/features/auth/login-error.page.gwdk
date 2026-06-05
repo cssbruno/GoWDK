@@ -1,0 +1,15 @@
+@page login.error
+@route "/login/error"
+@css auth
+
+view {
+  <main class="shell">
+    <section class="panel">
+      <p class="eyebrow">GOWDK login example</p>
+      <h1>Login failed</h1>
+      <p class="error" role="alert">Invalid credentials or rejected request.</p>
+      <p>Use demo@example.com and the password configured in GOWDK_LOGIN_PASSWORD.</p>
+      <a href="/login">Try again</a>
+    </section>
+  </main>
+}

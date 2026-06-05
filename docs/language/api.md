@@ -19,4 +19,4 @@ Future API behavior must define:
 - Response types and JSON/HTML boundaries.
 - Authentication and authorization hooks.
 - Error response shape.
-- Interaction with static/action pages without full-page SSR.
+- Interaction with SPA/action pages without full-page SSR.

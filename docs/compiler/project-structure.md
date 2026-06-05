@@ -2,37 +2,42 @@
 
 ## Current Inputs
 
-Most current CLI commands take explicit `.gwdk` file paths:
+Project-level CLI commands require `gowdk.config.go` in the current directory,
+or an explicit config passed with `--config <file>`, before they compile,
+validate, or inspect `.gwdk` code. Explicit `.gwdk` file paths narrow the input
+set, but they do not bypass the config requirement:
 
 ```sh
-go run ./cmd/gowdk check examples/basic/*.gwdk
+go run ./cmd/gowdk check examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
 ```
 
 `gowdk init [dir]` scaffolds a conventional buildable project:
 
 ```text
 gowdk.config.go
+.gitignore
 src/pages/home.page.gwdk
 src/components/hero.cmp.gwdk
 styles/global.css
 ```
 
 The generated config uses `src/**/*.gwdk` as the source include, `styles/**/*.css`
-for CSS inputs, and `dist/site` for build output.
+for CSS inputs, and `dist/site` for build output. The scaffolded `.gitignore`
+ignores `gowdk_cache/`, the default `gowdk dev` output directory.
 
 `gowdk build` can also discover `.gwdk` files when no explicit files are
 supplied. It reads literal `Source.Include`, `Source.Exclude`, and
-`Modules`, and `Build.Output` fields from `gowdk.config.go` when present. Root
-source patterns and module source patterns are additive when no module is
-selected; a name-only module defaults to `<module-name>/**/*.gwdk`.
-`Build.Targets` can statically declare selected modules, output dirs, generated
+`Modules`, and `Build.Output` fields from the required config. Root source
+patterns and module source patterns are additive when no module is selected; a
+name-only module defaults to `<module-name>/**/*.gwdk`.
+`Build.Targets` can declare selected modules, output dirs, generated
 app dirs, and binary paths for user-owned deployment workflows. With targets
 configured, `gowdk build` runs all targets and `gowdk build --target <name>`
 runs selected targets. `gowdk build --module <name>` remains available for ad
 hoc builds, and the flag may be repeated or comma-separated. The selected
 modules define what gets emitted to `--out`, copied into `--app`, and embedded
-into `--bin`. When no root or module include is configured, discovery falls
-back to `**/*.gwdk` and an explicit `--out` directory.
+into `--bin`. When the loaded config has no root or module include, discovery
+falls back to `**/*.gwdk` and an explicit `--out` directory.
 
 Current file-kind classification treats files ending in `.cmp.gwdk` or
 containing `@component` as components, files ending in `.layout.gwdk` as layout

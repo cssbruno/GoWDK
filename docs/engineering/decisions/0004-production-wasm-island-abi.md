@@ -14,7 +14,7 @@ passing props, dispatching events, lifecycle calls, and DOM updates.
 
 The ABI must preserve the compile-first model:
 
-- Static HTML is still the initial rendered output.
+- App-shell HTML is still the initial rendered output.
 - JavaScript remains the host that discovers island roots and loads WASM.
 - WASM is opt-in per component call.
 - Components must not require full-page hydration.

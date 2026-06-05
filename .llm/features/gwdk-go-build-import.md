@@ -11,7 +11,7 @@ which makes the intended Go-first authoring model unclear.
 - Allow a page `.gwdk` file to declare a top-level Go import with a GitHub-style
   import path.
 - Allow `build {}` to call one no-argument function from an imported package.
-- Feed the returned JSON object into the existing static `view {}` interpolation
+- Feed the returned JSON object into the existing SPA `view {}` interpolation
   data.
 - Keep literal `build {}` behavior working.
 
@@ -68,7 +68,7 @@ which makes the intended Go-first authoring model unclear.
 
 ## Dependencies
 
-- Internal: parser, manifest, staticgen.
+- Internal: parser, manifest, buildgen.
 - External: Go toolchain available during `gowdk build`.
 
 ## Open Questions

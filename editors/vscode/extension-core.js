@@ -93,6 +93,23 @@ function gowdkModuleRunArgs(args) {
   return ['run', `${GOWDK_MODULE_PATH}/cmd/gowdk`, ...args];
 }
 
+function toolInvocation(args, options = {}) {
+  const cwd = options.cwd;
+  if (options.cliPath) {
+    return { command: options.cliPath, args, cwd };
+  }
+  if (options.isSourceWorkspace) {
+    return { command: 'go', args: ['run', './cmd/gowdk', ...args], cwd };
+  }
+  if (options.localBinary) {
+    return { command: options.localBinary, args, cwd };
+  }
+  if (options.requiresGOWDK) {
+    return { command: 'go', args: gowdkModuleRunArgs(args), cwd };
+  }
+  return { command: 'gowdk', args, cwd };
+}
+
 function nearestProjectRoot(startPath, workspaceRoot) {
   if (!startPath) {
     return workspaceRoot;
@@ -141,7 +158,7 @@ function normalizePath(value) {
 function siteMapHTML(siteMap, root) {
   const pages = siteMapPages(siteMap).slice().sort((a, b) => String(a.route || '').localeCompare(String(b.route || '')));
   const routes = pages.map((page) => pageCard(page, root)).join('');
-  const staticCount = pages.filter((page) => page.render === 'static').length;
+  const spaCount = pages.filter((page) => page.render === 'spa').length;
   const ssrCount = pages.filter((page) => page.render === 'ssr').length;
   return `<!doctype html>
 <html lang="en">
@@ -258,7 +275,7 @@ function siteMapHTML(siteMap, root) {
   <header>
     <div>
       <h1>GOWDK Site Map</h1>
-      <div class="summary">${pages.length} pages · ${staticCount} static · ${ssrCount} ssr</div>
+      <div class="summary">${pages.length} pages · ${spaCount} spa · ${ssrCount} ssr</div>
     </div>
     <button id="refresh" class="icon-button" title="Refresh" aria-label="Refresh">${iconSVG('refresh')}</button>
   </header>
@@ -288,7 +305,7 @@ function pageCard(page, root) {
   const apis = (page.blocks && page.blocks.apis) || [];
   const css = page.css || [];
   const components = page.components || [];
-  const staticAssets = page.staticAssets || [];
+  const assets = page.assets || [];
   const tags = [
     page.render,
     ...blocks,
@@ -300,7 +317,7 @@ function pageCard(page, root) {
   const details = [
     css.length ? `CSS: ${css.join(', ')}` : '',
     components.length ? `Components: ${components.join(', ')}` : '',
-    staticAssets.length ? `Assets: ${staticAssets.join(', ')}` : ''
+    assets.length ? `Assets: ${assets.join(', ')}` : ''
   ].filter(Boolean);
   return `<section class="page">
     <div class="route">${escapeHTML(page.route || '(missing route)')}</div>
@@ -327,7 +344,7 @@ function iconSVG(name) {
 
 function pageFlow(page) {
   const route = page.route || '(missing route)';
-  const render = page.render || 'static';
+  const render = page.render || 'spa';
   const artifacts = page.artifacts || [];
   const htmlArtifact = artifacts.find((artifact) => artifact.kind === 'html' && artifact.path);
   const output = render === 'ssr'
@@ -436,7 +453,7 @@ function completionEntries() {
     ['@page', 'Declare the page id.'],
     ['@route', 'Declare the route path.'],
     ['@layout', 'Declare one or more layout ids.'],
-    ['@render', 'Declare render mode: static, action, hybrid, or ssr.'],
+    ['@render', 'Declare render mode: spa, action, hybrid, or ssr.'],
     ['@guard', 'Declare route guards.'],
     ['@component', 'Declare the component name.'],
     ['@css', 'Select page CSS inputs: default, page, none, or discovered CSS names.'],
@@ -533,9 +550,9 @@ function projectCompletionEntries(context, metadata = {}) {
 
 function renderModeCompletionEntries() {
   return [
-    ['static', 'Build-time HTML render mode.'],
-    ['action', 'Static page with backend actions.'],
-    ['hybrid', 'Static by default with selected request-time behavior.'],
+    ['spa', 'Build-time HTML render mode.'],
+    ['action', 'SPA page with backend actions.'],
+    ['hybrid', 'SPA by default with selected request-time behavior.'],
     ['ssr', 'Request-time full-page rendering through the SSR addon.']
   ];
 }
@@ -654,7 +671,7 @@ function hoverMarkdown(token, metadata = {}, context = {}) {
       `**GOWDK page** \`${escapeMarkdown(value)}\``,
       '',
       `Route: \`${escapeMarkdown(page.route || '')}\``,
-      `Render: \`${escapeMarkdown(page.render || 'static')}\``
+      `Render: \`${escapeMarkdown(page.render || 'spa')}\``
     ].join('\n');
   }
   if (manifest.components && manifest.components[value]) {
@@ -885,7 +902,7 @@ function semanticTokens(source) {
     collectPatternTokens(tokens, line, text, /@[A-Za-z_][A-Za-z0-9_]*/g, 'namespace');
     collectPatternTokens(tokens, line, text, /\b(paths|build|load|act|api|fragment|view|props|state|client|emits)\b/g, 'keyword');
     collectPatternTokens(tokens, line, text, /\b(async|fn|computed|on|mount|destroy|effect|when|ref|let|return|await|if|else|in|emit)\b/g, 'keyword');
-    collectPatternTokens(tokens, line, text, /\b(static|action|hybrid|ssr)\b/g, 'enumMember');
+    collectPatternTokens(tokens, line, text, /\b(spa|action|hybrid|ssr)\b/g, 'enumMember');
     collectPatternTokens(tokens, line, text, /\b(string|int|float|bool)\b/g, 'enumMember');
     collectPatternTokens(tokens, line, text, /\bg:(post|target|swap|ref|if|else-if|else|for|key|bind:(?:value|checked)|island)\b/g, 'property');
     collectPatternTokens(tokens, line, text, /\bg:on:[A-Za-z][A-Za-z0-9_-]*(?:\.(?:prevent|stop|once|capture|debounce\([^)]+\)|throttle\([^)]+\)))*/g, 'property');
@@ -1073,5 +1090,6 @@ module.exports = {
   siteMapHTML,
   symbolContext,
   symbolReferences,
+  toolInvocation,
   validRenameValue
 };

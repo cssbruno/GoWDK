@@ -1,7 +1,7 @@
 @page blog.post
 @route "/blog/{slug}"
 @layout root, blog
-@render static
+@render spa
 
 paths {
   => { slug: "hello-gowdk" }
@@ -11,6 +11,6 @@ paths {
 view {
   <main>
     <h1>{slug}</h1>
-    <p data-slug="{slug}">Dynamic static route example.</p>
+    <p data-slug="{slug}">Dynamic spa route example.</p>
   </main>
 }

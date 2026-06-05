@@ -5,13 +5,13 @@ This directory documents the current `.gwdk` language contract.
 The current implementation supports line-oriented page metadata, page-level Go
 imports for build-time data, explicit component metadata, top-level block
 detection, the first typed action input/redirect/fragment-metadata subset, the
-first API method/route metadata subset, minimal static `view {}` markup parsing,
-first-slice `g:post`, `g:target`, and `g:swap` lowering, literal dynamic static
+first API method/route metadata subset, minimal literal `view {}` markup parsing,
+first-slice `g:post`, `g:target`, and `g:swap` lowering, literal dynamic SPA
 route expansion, literal build data, imported no-argument Go build data
-functions, route/build-data interpolation in static views, Go-typed component
+functions, route/build-data interpolation in views, Go-typed component
 props/state contracts, first-slice generated JavaScript islands for stateful
 components, explicit `g:island="wasm"` asset emission, formatting, diagnostics,
-manifest output, build output for simple static pages/components, generated
+manifest output, build output for simple SPA pages/components, generated
 partial fragment responses for embedded apps, and LSP/editor integration. It
 does not yet parse non-string legacy props, full typed action semantics, API
 request/response bodies, broad local client-side reactivity, or full

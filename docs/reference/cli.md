@@ -1,7 +1,7 @@
 # CLI Reference
 
-The current CLI includes language tooling, an initial static HTML build command,
-generated embedded static app output, and a local static serving command for
+The current CLI includes language tooling, an initial build-output command,
+generated embedded app output, and a local output-serving command for
 development.
 
 ## Commands
@@ -17,7 +17,6 @@ gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
-gowdk watch [--once] [--restart] [--interval <duration>] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
 gowdk lsp [--ssr]
 ```
@@ -28,8 +27,8 @@ gowdk lsp [--ssr]
 - `--force`: supported by `init`; overwrites starter files that already exist.
 - `--json`: supported by `check`; prints editor-friendly diagnostic JSON.
 - `--write`: supported by `fmt`; overwrites formatted files.
-- `--config`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; loads a static `gowdk.config.go` subset from the given path.
-- `--debug`: supported by `build` and forwarded by `dev` and `watch`; prints the structured static build report to stderr while generated paths remain on stdout.
+- `--config`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; loads a literal config subset from the given path instead of the required default `gowdk.config.go`.
+- `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
 - `--module`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
 - `--out`: supported by `build`; selects the output directory and overrides `Build.Output`.
@@ -37,36 +36,31 @@ gowdk lsp [--ssr]
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
 - `--wasm`: supported by `build`; requires `--app` and compiles the generated app with `GOOS=js GOARCH=wasm go build -o <file>`.
 - `--addr`: supported by `dev` and `serve`; selects the listen address and defaults to `127.0.0.1:8080`.
-- `--interval`: supported by `dev` and `watch`; sets the polling interval, such as `500ms`, `1s`, or `2s`.
-- `--once`: supported by `watch`; runs one build using the forwarded build flags and exits.
-- `--restart`: supported by `watch`; restarts one generated binary after each successful rebuild.
-- `--dir`: supported by `serve`; selects the generated static output directory.
+- `--interval`: supported by `dev`; sets the polling interval, such as `500ms`, `1s`, or `2s`.
+- `--dir`: supported by `serve`; selects the generated build output directory.
 
 ## Examples
 
 ```sh
 go run ./cmd/gowdk init my-site
-go run ./cmd/gowdk check examples/basic/home.page.gwdk
+go run ./cmd/gowdk check examples/pages/home.page.gwdk
 go run ./cmd/gowdk check --config gowdk.config.go
-go run ./cmd/gowdk check --ssr examples/basic/dashboard.page.gwdk
+go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk
 go run ./cmd/gowdk manifest --module frontend --ssr
 go run ./cmd/gowdk sitemap --module frontend --ssr
 go run ./cmd/gowdk routes --module frontend --ssr
-go run ./cmd/gowdk build --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
-go run ./cmd/gowdk build --debug --out /tmp/gowdk-build examples/basic/home.page.gwdk
-go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/basic/simple-ssr.page.gwdk
+go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
+go run ./cmd/gowdk build --debug --out /tmp/gowdk-build examples/pages/home.page.gwdk
+go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/ssr/simple-ssr.page.gwdk
 go run ./cmd/gowdk build --module frontend --module backend --out /tmp/gowdk-build
-go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
-go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --wasm /tmp/gowdk-site.wasm examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
+go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
+go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --wasm /tmp/gowdk-site.wasm examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 go run ./cmd/gowdk build --module admin --out dist/admin --app .gowdk/admin --bin bin/admin
 go run ./cmd/gowdk build --module admin --out dist/admin --app .gowdk/admin --wasm bin/admin.wasm
 go run ./cmd/gowdk build --module public,admin --out dist/app --app .gowdk/app --bin bin/app
 go run ./cmd/gowdk build --target admin
-go run ./cmd/gowdk dev --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
+go run ./cmd/gowdk dev --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 go run ./cmd/gowdk dev --target admin --addr 127.0.0.1:8090
-go run ./cmd/gowdk watch --interval 1s --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
-go run ./cmd/gowdk watch --restart --target admin
-go run ./cmd/gowdk watch --restart --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
 go run ./cmd/gowdk serve --dir /tmp/gowdk-build
 ```
 
@@ -81,22 +75,30 @@ styles/global.css
 ```
 
 The generated config discovers `src/**/*.gwdk`, writes build output to
-`dist/site`, and discovers CSS under `styles/**/*.css`. Existing starter files
+`dist/site`, discovers CSS under `styles/**/*.css`, and writes `.gitignore`
+with `gowdk_cache/` for the default dev output. Existing starter files
 are not overwritten unless `--force` is passed.
 
-`check`, `manifest`, `sitemap`, `routes`, and `build` accept explicit file
-paths. If no files are passed, they load `gowdk.config.go` when present and discover
-configured root `Source.Include` globs plus configured module sources, or
-`**/*.gwdk` by default. `--module` limits discovery to selected configured
-modules and skips root `Source.Include`; explicit file paths still bypass
-discovery. A module with a name and no explicit include uses
+`check`, `manifest`, `sitemap`, `routes`, `build`, and `dev` require a config
+file before they compile or validate `.gwdk` code. By default they load
+`gowdk.config.go` from the current directory; `--config <file>` can point at a
+different config for project examples or one-off checks.
+
+These commands accept explicit file paths, but explicit paths do not remove the
+config requirement. If no files are passed, commands discover configured root
+`Source.Include` globs plus configured module sources, or `**/*.gwdk` when the
+loaded config does not declare source includes. `--module` limits discovery to
+selected configured modules and skips root `Source.Include`; explicit file
+paths still bypass discovery. A module with a name and no explicit include uses
 `<module-name>/**/*.gwdk`. Discovery excludes `.git`, `vendor`, `node_modules`,
 `testdata`, root/module `Source.Exclude` globs, and the configured build output
 directory when one exists. `build --out` overrides `Build.Output`; one of them
 is required for `build`. Every successful disk build writes
 `gowdk-build-report.json` to the output root. Passing `--debug` prints the same
 build report to stderr for validation, planning, write, manifest, cleanup, and
-completion events without changing stdout artifact-path output.
+completion events without changing stdout artifact-path output. `gowdk dev`
+uses `gowdk_cache` as its default output directory unless `--out <dir>` or a
+selected build target supplies an explicit output.
 
 For generated apps and binaries, the selected modules are the packaging set:
 `--app` copies the selected build output; `--bin` and `--wasm` embed it. Prefer
@@ -111,33 +113,22 @@ for one-off builds.
 is a deploy artifact for hosts that can run Go WebAssembly; it is separate from
 explicit browser island assets emitted by `g:island="wasm"`.
 
-`dev` is the one-command static development loop. It forwards non-dev flags to
-`build`, resolves the output directory from `--out`, `Build.Output`, or exactly
-one selected `Build.Targets` entry, serves that directory, watches the same
-input set as `watch`, rebuilds after content changes, and injects a tiny
-server-sent-events live-reload script into served HTML pages. Rebuild failures
-are printed and the last successful output keeps serving.
+`dev` is the one-command SPA development loop. It forwards non-dev flags to
+`build`, resolves the output directory from `--out`, exactly one selected
+`Build.Targets` entry, or the default `gowdk_cache` dev output, serves that
+directory, polls explicit or discovered build inputs plus the loaded config
+file, rebuilds after content changes, and injects a tiny server-sent-events
+live-reload script into served HTML pages. Rebuild failures are printed and the
+last successful output keeps serving.
 
-`watch` forwards all non-watch flags and file paths to `build`. It runs an
-initial build, then polls explicit or discovered build inputs plus
-`gowdk.config.go` when present and rebuilds when the file set or content hashes
-change. It intentionally uses polling instead of a platform-specific file
-watcher dependency. Static output, route/asset manifests, generated `go.mod`,
-generated `gowdkapp/app.go`, generated `cmd/server/main.go`, and embedded
-static files are only rewritten when their bytes change, which keeps watch loops
-from retriggering on no-op generation.
-For plain static `--out` builds, page-only source edits use an incremental
-static renderer that validates the full manifest, refreshes manifests, writes
-only changed page output, and removes stale route output for changed pages.
-Component, layout, CSS, config, source-set, target, app, binary, WASM, and
-restart changes use the full build path.
-
-`watch --restart` creates an Air-like local redeploy loop without depending on
-Air. It infers the binary from ad hoc `--bin <file>` or from exactly one
-configured `Build.Targets` entry with `Binary`. After each successful build, it
-interrupts the previous process, kills it if it does not stop quickly, and
-starts the new binary. Failed rebuilds leave the current process running.
-`--restart` cannot be combined with `--once`.
+Build output, route/asset manifests, generated `go.mod`, generated
+`gowdkapp/app.go`, generated `cmd/server/main.go`, and embedded build output
+files are only rewritten when their bytes change, which keeps local dev loops
+from retriggering on no-op generation. For plain SPA `--out` builds, page-only
+source edits use an incremental SPA renderer that validates the full manifest,
+refreshes manifests, writes only changed page output, and removes stale route
+output for changed pages. Component, layout, CSS, config, source-set, target,
+app, binary, and WASM changes use the full build path.
 
 Generated apps created with `--app` read `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`,
 and `GOWDK_INSTANCE_ID`, expose `/_gowdk/health`, and include identity in
@@ -149,26 +140,26 @@ by `Build.Targets` or the selected `--module` flags.
 
 `gowdk routes` prints the validated route-binding plan as JSON. The current
 schema is version `1` and includes route kind, method, route pattern, page ID,
-and planned handler symbol or static embedded asset handler expression.
+and planned handler symbol or app embedded asset handler expression.
 
-Current `build` limitations: it emits only simple static HTML files,
-`gowdk-routes.json`, `gowdk-assets.json`, generated embedded static app source,
-and an optional static-serving binary for build-time pages with non-dynamic
+Current `build` limitations: it emits only simple app-shell HTML files,
+`gowdk-routes.json`, `gowdk-assets.json`, generated embedded app source,
+and an optional generated binary for build-time pages with non-dynamic
 routes or literal `paths {}` dynamic routes, literal `build {}` data, lowercase
 HTML markup, first-slice imported Go build data functions, component files with
 string props, first-slice action redirect handlers with form decoder wrappers
 and required-field validation, and first-slice action fragment responses for
 partial requests.
 
-Current generated binary limitations: it serves embedded static files for the
+Current generated binary limitations: it serves embedded build output files for the
 selected build output and local POST redirects for the first supported action
 subset, including first-slice form input decoder wrappers and required-field
 validation. It can also serve first-slice action fragment responses for
-`X-GOWDK-Partial` requests and first-slice concrete SSR pages rendered from
-`view {}` and literal or imported `build {}` data. It does not run real user Go
-type-bound action decoders, user action logic, CSRF, APIs, general fragment
-routes, `load {}` execution, dynamic SSR routes, guards, or hybrid request-time
+`X-GOWDK-Partial` requests and first-slice concrete or dynamic SSR pages
+rendered from `view {}` and literal or imported `build {}` data. It does not
+run real user Go type-bound action decoders, user action logic, CSRF, APIs,
+general fragment routes, `load {}` execution, guards, or hybrid request-time
 behavior.
 
-Current `serve` limitations: it serves generated static files only. It does not
+Current `serve` limitations: it serves generated build output files only. It does not
 run generated actions, APIs, partial fragments, or SSR routes.

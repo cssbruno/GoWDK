@@ -20,14 +20,17 @@ node --check editors/vscode/extension.js
 node --test editors/vscode/*.test.js
 go build -o /tmp/gowdk-cli ./cmd/gowdk
 rm -rf /tmp/gowdk-init && /tmp/gowdk-cli init /tmp/gowdk-init && (cd /tmp/gowdk-init && /tmp/gowdk-cli build)
-go run ./cmd/gowdk build --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
-go run ./cmd/gowdk watch --once --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
+go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 test -f /tmp/gowdk-build/gowdk-routes.json
 test -f /tmp/gowdk-build/gowdk-assets.json
 go test ./cmd/gowdk
 ```
 
 Use `node --check` and `node --test editors/vscode/*.test.js` when editor extension files change or before release-style verification.
+
+Example commands run from the repository root use the root `gowdk.config.go`.
+Project-level compiler commands must have that file in the working directory or
+must pass `--config <file>`.
 
 ## Verification Matrix
 
@@ -38,15 +41,15 @@ Use `node --check` and `node --test editors/vscode/*.test.js` when editor extens
 | Go formatting | `gofmt -w <files>` | Changed Go files before handoff. |
 | VS Code extension syntax | `node --check editors/vscode/extension.js` | Editor extension changes and broad verification. |
 | VS Code extension behavior | `node --test editors/vscode/*.test.js` | Editor extension pure helper changes and broad verification. |
-| Static/action examples | `go run ./cmd/gowdk check examples/basic/home.page.gwdk examples/basic/newsletter.page.gwdk` | Language/tooling changes. |
+| SPA/action examples | `go run ./cmd/gowdk check examples/pages/home.page.gwdk examples/actions/newsletter.page.gwdk` | Language/tooling changes. |
 | Init project smoke | `go build -o /tmp/gowdk-cli ./cmd/gowdk && rm -rf /tmp/gowdk-init && /tmp/gowdk-cli init /tmp/gowdk-init && (cd /tmp/gowdk-init && /tmp/gowdk-cli build)` | CLI scaffold changes. |
-| SSR example | `go run ./cmd/gowdk check --ssr examples/basic/dashboard.page.gwdk` | SSR validation or example changes. |
-| Manifest smoke | `go run ./cmd/gowdk manifest --ssr examples/basic/*.gwdk` | Manifest, parser, or CLI output changes. |
-| Static build smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk && test -f /tmp/gowdk-build/gowdk-routes.json && test -f /tmp/gowdk-build/gowdk-assets.json` | Parser, view, staticgen, component, or CLI build changes. |
-| Watch smoke | `go run ./cmd/gowdk watch --once --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk` | Watch/dev mode changes. |
-| Action redirect smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/basic/signup.page.gwdk` | Action parsing or generated action route changes. |
+| SSR example | `go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk` | SSR validation or example changes. |
+| Manifest smoke | `go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk` | Manifest, parser, or CLI output changes. |
+| SPA build smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk && test -f /tmp/gowdk-build/gowdk-routes.json && test -f /tmp/gowdk-build/gowdk-assets.json` | Parser, view, buildgen, component, or CLI build changes. |
+| Dev loop tests | `go test ./cmd/gowdk` | Dev mode changes. |
+| Action redirect smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/actions/signup.page.gwdk` | Action parsing or generated action route changes. |
 | Local serve tests | `go test ./cmd/gowdk` | CLI serving or option parsing changes. |
-| Generated static app tests | `go test ./cmd/gowdk ./internal/appgen` | Generated embedded app or binary-serving changes. |
+| Generated app tests | `go test ./cmd/gowdk ./internal/appgen` | Generated embedded app or binary-serving changes. |
 
 ## Coverage Priorities
 
@@ -54,41 +57,40 @@ Use `node --check` and `node --test editors/vscode/*.test.js` when editor extens
 2. Compiler diagnostics for render modes and addon requirements.
 3. Manifest generation and route normalization.
 4. Parser behavior for `.gwdk` syntax.
-5. Static/prerender output and generated route handlers.
+5. SPA/prerender output and generated route handlers.
 6. Typed action decoding, validation, CSRF, redirects, and fragments.
 7. SSR addon routing, guards, `load {}`, layouts, and errors.
 
 ## Existing Coverage
 
-- `internal/compiler` tests cover SSR addon enforcement, duplicate page/component/layout identities, layout reference resolution, dynamic static routes requiring `paths`, static actions without SSR, and `load {}` rejection on static pages.
+- `internal/compiler` tests cover SSR addon enforcement, duplicate page/component/layout identities, layout reference resolution, dynamic SPA routes requiring `paths`, actions without SSR, and `load {}` rejection on SPA pages.
 - `internal/discover` tests cover recursive `.gwdk` include/exclude matching.
 - `internal/parser` tests cover page/component/layout annotations, `paths`, `build`, `load`, `view`, `props`, `act`, captured `paths`/`build`/`load`/`view` bodies, the first action input/redirect body subset, and render mode rejection.
-- `internal/view` tests cover static markup rendering, escaping, expression attributes, shorthand class/id normalization, component expansion, and missing component/prop errors.
-- `internal/staticgen` tests cover static HTML emission, literal build data,
+- `internal/view` tests cover view markup rendering, escaping, expression attributes, shorthand class/id normalization, component expansion, and missing component/prop errors.
+- `internal/buildgen` tests cover app-shell HTML emission, literal build data,
   imported Go build data functions, build-data route-param binding, literal
   dynamic paths, route and asset manifest output, component expansion, nested
   route output paths, and no partial output on unsupported pages.
 - `internal/lang` tests cover lexical tokenization, diagnostics, formatting, file checks, and manifest JSON from parsed source files.
 - `internal/lang` tests cover site-map JSON for movable page files.
 - `internal/manifest` tests cover route manifest JSON render/path/guard/action output.
-- `internal/codegen` tests cover route bindings for static pages, actions, SSR pages, APIs, and missing SSR addon rejection.
+- `internal/codegen` tests cover route bindings for SPA pages, actions, SSR pages, APIs, and missing SSR addon rejection.
 - `internal/clientrt` tests cover the emitted partial-update runtime source and
   run a dependency-free Node DOM harness for innerHTML and outerHTML swaps when
   `node` is available.
 - `internal/lsp` tests cover initialize, diagnostics, formatting, completion, shutdown, and exit protocol behavior.
 - `editors/vscode` tests cover extension route hierarchy helpers.
-- `cmd/gowdk` tests cover `build --out` writing `index.html`, expanding a component file, discovering build inputs when explicit paths are omitted, loading literal build config for source/output settings, configured build targets, selected target builds, and local static serving behavior.
-- `cmd/gowdk` tests cover `watch --once`, invalid watch intervals, restart
-  option parsing, restart binary inference, content-hash input snapshots,
-  snapshot diffs, no-op touch detection, incremental static page rebuild
-  selection, and component-change fallback.
-- `cmd/gowdk` and `internal/appgen` tests cover generated embedded static app
+- `cmd/gowdk` tests cover `build --out` writing `index.html`, expanding a component file, discovering build inputs when explicit paths are omitted, loading literal build config for source/output settings, configured build targets, selected target builds, and local generated-output serving behavior.
+- `cmd/gowdk` tests cover dev option parsing, invalid dev intervals,
+  content-hash input snapshots, snapshot diffs, no-op touch detection,
+  incremental SPA page rebuild selection, and component-change fallback.
+- `cmd/gowdk` and `internal/appgen` tests cover generated embedded app
   source, binary compilation, WASM artifact compilation, live binary HTTP
   serving, and first-slice action redirect routing.
-- `internal/staticgen` and `internal/appgen` tests cover preserving unchanged
-  generated file modification times so local watch loops do not retrigger on
+- `internal/buildgen` and `internal/appgen` tests cover preserving unchanged
+  generated file modification times so local dev loops do not retrigger on
   identical output.
-- `internal/staticgen` tests cover incremental changed-page rendering, complete
+- `internal/buildgen` tests cover incremental changed-page rendering, complete
   route manifest refreshes, and stale route output cleanup.
-- `internal/project` tests cover static `gowdk.config.go` parsing for source
+- `internal/project` tests cover literal `gowdk.config.go` parsing for source
   discovery, module source groups, build output, and build targets.

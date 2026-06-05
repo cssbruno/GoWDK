@@ -2,7 +2,7 @@
 
 ## Problem
 
-GOWDK can generate static output and package that output into a generated Go app
+GOWDK can generate SPA output and package that output into a generated Go app
 or local binary. Users also want a deployment option that emits a Go WebAssembly
 artifact from the same selected module output. This generated app artifact is
 separate from explicit browser island assets emitted by `g:island="wasm"`.
@@ -10,7 +10,7 @@ separate from explicit browser island assets emitted by `g:island="wasm"`.
 ## Goals
 
 - Add an ad hoc `gowdk build --wasm <file>` option.
-- Add static `Build.Targets[].WASM` config so each target can choose whether it
+- Add SPA `Build.Targets[].WASM` config so each target can choose whether it
   emits a WASM artifact.
 - Keep module selection behavior consistent across `--out`, `--app`, `--bin`,
   and `--wasm`.
@@ -21,11 +21,11 @@ separate from explicit browser island assets emitted by `g:island="wasm"`.
 
 - Browser island ABI or client-side component hydration.
 - Runtime-specific deployment adapters beyond producing the `.wasm` artifact.
-- Restarting a watched WASM artifact as a local process.
+- Running a dev input WASM artifact as a local process.
 
 ## Users And Permissions
 
-- Primary users: GOWDK app developers configuring static deploy outputs.
+- Primary users: GOWDK app developers configuring SPA deploy outputs.
 - Roles or permissions: no new roles.
 - Data visibility rules: generated artifacts contain the selected module output
   and must not include unrelated modules.
@@ -35,7 +35,7 @@ separate from explicit browser island assets emitted by `g:island="wasm"`.
 1. The user chooses source files or configured modules.
 2. The user supplies `--app <dir>` and `--wasm <file>`, or configures a build
    target with `App` and `WASM`.
-3. GOWDK renders static output, generates the embedded app, then runs Go with
+3. GOWDK renders SPA output, generates the embedded app, then runs Go with
    `GOOS=js GOARCH=wasm` to produce the WASM artifact.
 
 ## Requirements
@@ -47,16 +47,16 @@ separate from explicit browser island assets emitted by `g:island="wasm"`.
 - `BuildTargetConfig` exposes `WASM string`.
 - Literal `gowdk.config.go` parsing reads `WASM` on build targets.
 - Configured targets with `WASM` require `App`.
-- `watch` input analysis treats WASM artifact builds as full builds.
+- `dev` input analysis treats WASM artifact builds as full builds.
 
 ### Non-Functional
 
-- Performance: keep the existing incremental static watch path for builds that
+- Performance: keep the existing incremental SPA dev path for builds that
   do not request generated app, binary, or WASM output.
 - Reliability: fail early on missing paths or invalid target combinations.
 - Accessibility: not applicable.
 - Security/privacy: generated WASM artifacts must use the same selected source
-  set as static output and binaries.
+  set as SPA output and binaries.
 - Observability: print the generated WASM artifact path like other build
   artifacts.
 
@@ -67,7 +67,7 @@ separate from explicit browser island assets emitted by `g:island="wasm"`.
 - [x] `Build.Targets[].WASM` emits a non-empty `.wasm` artifact for the selected
   target.
 - [x] `--wasm` without `--app` returns a clear error.
-- [x] Docs show CLI and static-config usage.
+- [x] Docs show CLI and SPA-config usage.
 
 ## Edge Cases
 

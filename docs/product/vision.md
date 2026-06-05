@@ -32,9 +32,9 @@ Modern web frameworks often force teams into a rendering ideology: full SSR, ful
 
 ## Success Metrics
 
-- A v0.1 app can compile movable `.gwdk` files into prerendered HTML, CSS, assets, and one serving binary.
-- A v0.2 app can handle typed actions, form decoding, validation, redirects, CSRF, and server fragments without enabling SSR.
-- A v0.4 app can opt selected pages into request-time SSR with clear compiler diagnostics and addon checks.
+- The v0.1 target compiles movable `.gwdk` files into prerendered HTML, CSS, assets, and one serving binary.
+- The v0.2 target handles typed actions, form decoding, validation, redirects, CSRF, and server fragments without enabling SSR.
+- The v0.4 target lets selected pages opt into request-time SSR with clear compiler diagnostics and addon checks.
 - Developers can explain the mental model in one sentence: GOWDK ships apps through a compile-first Go compiler with build-time output, backend actions, and optional SSR.
 
 ## Constraints

@@ -266,7 +266,7 @@ status is summarized in `README.md`, `docs/product/requirements.md`, and
 - [ ] Show the one-binary deploy story.
 - [ ] Show the hot deploy story once it is implemented.
 - [ ] Show the browser compiler once it is implemented.
-- [ ] Document release/version readiness honestly.
+- [x] Document release/version readiness honestly.
 
 ## Highest Priority
 

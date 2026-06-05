@@ -75,6 +75,12 @@ Current implementation status is summarized in `README.md` and
 
 ## Version Roadmap
 
+The version roadmap is a target sequence, not a statement that those versions
+are shippable today. The repository currently reports CLI version `0.1.0`, but
+the implementation is still pre-release and does not satisfy every v0.1 target.
+Do not treat v0.2+ bullets as completed unless `docs/product/requirements.md`
+marks the corresponding requirement implemented.
+
 ### v0.1
 
 - Movable `.gwdk` files.
@@ -88,7 +94,7 @@ Current implementation status is summarized in `README.md` and
 - Static module-selected build targets for generated apps and binaries.
 - Dependency-free watch rebuild, page-local incremental static output,
   generated-binary restart, and no-op output write skipping.
-- Hybrid render policy and cache/revalidation policy docs.
+- Honest release/version readiness docs.
 
 ### v0.2
 
@@ -124,6 +130,7 @@ Current implementation status is summarized in `README.md` and
 - Per-route static, SSR, action, and client choices.
 - Better caching.
 - Revalidation.
+- Hybrid/cache/revalidation policy docs.
 
 ### v0.6
 

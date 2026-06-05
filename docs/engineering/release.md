@@ -1,20 +1,34 @@
 # Release
 
-GOWDK is currently pre-release compiler scaffolding. Release packaging
+GOWDK is currently pre-release compiler/runtime scaffolding. Release packaging
 automation lives in `.github/workflows/release.yml` and creates draft releases
 from `v*` tags or a manual workflow dispatch. VS Code Marketplace publishing
 lives in `.github/workflows/vscode-extension-publish.yml`.
 
+The current CLI version is `0.1.0`, but this is not a production-readiness
+claim. It identifies the current development line while the compiler, generated
+runtime, and docs continue toward the v0.1 target. Public release notes must
+call the build experimental until the release gates below are satisfied.
+
 ## Version Policy
 
-Until the full feature set is complete, public releases advance only the minor
-version and keep the patch version at zero: `v0.1.0`, `v0.2.0`, `v0.3.0`, and
-so on. Patch releases are reserved for future post-completion maintenance.
+Until the full feature set is complete, public release tags must stay in the
+`0.x.0` pre-1.0 line: `v0.1.0`, `v0.2.0`, `v0.3.0`, and so on. Patch releases
+are reserved for future maintenance of an already-published pre-1.0 line, not
+for implying production support.
+
+Version roadmap entries in `docs/product/roadmap.md` are target milestones. A
+tag may not claim a milestone unless `docs/product/requirements.md`,
+`docs/engineering/architecture.md`, and the release notes agree on what is
+implemented, partial, and planned.
 
 ## Release Readiness
 
-Before tagging a public release, confirm:
+No current release should be described as production-ready. Before tagging a
+public release, confirm:
 
+- README, requirements, architecture, examples, generated-output docs, and
+  release notes clearly separate implemented, partial, and planned behavior.
 - Version and release notes are reflected in the release draft.
 - CI workflow is passing.
 - Release artifact list is still accurate.
@@ -23,6 +37,20 @@ Before tagging a public release, confirm:
 - VS Code extension package metadata and version are current.
 - The `VSCE_PAT` GitHub secret is present before publishing the extension.
 - Security advisory process is current.
+
+The following features are known blockers for any production-readiness claim:
+
+- Real user Go action execution.
+- CSRF-wired generated action handlers.
+- Generated API handlers.
+- Request-time `load {}` execution.
+- Generated guard enforcement.
+- Hybrid/cache/revalidation policy.
+- Full reactive dependency graph and richer `client {}` language.
+- Component composition beyond default slots.
+- Hot deploy pipeline.
+- Browser playground UI.
+- Production WASM island ABI.
 
 ## Current Manual Gates
 

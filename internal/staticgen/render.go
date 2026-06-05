@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
@@ -45,7 +46,11 @@ func renderPage(config gowdk.Config, page manifest.Page, components map[string]v
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
-	return document(page, body, stylesheets, pageScripts(page, viewSource, components, policy)), nil
+	storeSeeds, err := pageStoreSeeds(page)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", page.ID, err)
+	}
+	return document(page, body, stylesheets, storeSeeds, pageScripts(page, viewSource, components, policy)), nil
 }
 
 func composePageViewSource(page manifest.Page, layouts map[string]manifest.Layout) (string, error) {
@@ -120,6 +125,9 @@ func pageScripts(page manifest.Page, viewSource string, components map[string]vi
 	if pageUsesPartialRuntime(page, viewSource) {
 		scripts = append(scripts, clientRuntimeHref)
 	}
+	if len(page.Stores) > 0 {
+		scripts = append(scripts, storeRuntimeHref)
+	}
 	scripts = append(scripts, islandScriptHrefs(viewSource, components)...)
 	return scripts
 }
@@ -136,7 +144,31 @@ func pageUsesPartialRuntime(page manifest.Page, viewSource string) bool {
 	return false
 }
 
-func document(page manifest.Page, body string, stylesheets []gowdk.Stylesheet, scripts []string) string {
+type pageStoreSeed struct {
+	Name string
+	JSON string
+}
+
+func pageStoreSeeds(page manifest.Page) ([]pageStoreSeed, error) {
+	if len(page.Stores) == 0 {
+		return nil, nil
+	}
+	seeds := make([]pageStoreSeed, 0, len(page.Stores))
+	for _, store := range page.Stores {
+		payload, err := gotypes.RunStateInitJSON(page.Imports, manifest.StateContract{
+			Type: store.Type,
+			Init: store.Init,
+			Span: store.Span,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("store %s init: %w", store.Name, err)
+		}
+		seeds = append(seeds, pageStoreSeed{Name: store.Name, JSON: string(payload)})
+	}
+	return seeds, nil
+}
+
+func document(page manifest.Page, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []string) string {
 	title := page.ID
 	var head strings.Builder
 	head.WriteString("<head>\n")
@@ -144,6 +176,14 @@ func document(page manifest.Page, body string, stylesheets []gowdk.Stylesheet, s
 	head.WriteString("  <title>" + gowhtml.Escape(title) + "</title>\n")
 	for _, stylesheet := range nonEmptyStylesheets(stylesheets) {
 		head.WriteString("  <link rel=\"stylesheet\"" + gowhtml.Attr("href", stylesheet.Href) + ">\n")
+	}
+	for _, seed := range storeSeeds {
+		if strings.TrimSpace(seed.Name) == "" {
+			continue
+		}
+		head.WriteString("  <script type=\"application/json\"" + gowhtml.Attr("data-gowdk-store", seed.Name) + ">")
+		head.WriteString(escapeScriptJSON(seed.JSON))
+		head.WriteString("</script>\n")
 	}
 	for _, script := range scripts {
 		if strings.TrimSpace(script) == "" {
@@ -160,4 +200,10 @@ func document(page manifest.Page, body string, stylesheets []gowdk.Stylesheet, s
 		body + "\n" +
 		"</body>\n" +
 		"</html>\n"
+}
+
+func escapeScriptJSON(payload string) string {
+	payload = strings.ReplaceAll(payload, "</script", "<\\/script")
+	payload = strings.ReplaceAll(payload, "</SCRIPT", "<\\/SCRIPT")
+	return payload
 }

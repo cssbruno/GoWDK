@@ -23,6 +23,10 @@ const DisableCSSDiscovery = "__gowdk_disable_css_discovery__"
 
 const islandRuntimeDir = "assets/gowdk/islands"
 
+const storeRuntimeAssetPath = islandRuntimeDir + "/stores.js"
+
+const storeRuntimeHref = "/" + storeRuntimeAssetPath
+
 var (
 	literalDeclarationPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
 	buildCallPattern          = regexp.MustCompile(`^=>\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\)$`)

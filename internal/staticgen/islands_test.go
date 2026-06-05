@@ -135,13 +135,52 @@ fn Add() {
 		Components: []manifest.Component{component},
 	}
 
-	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
 		t.Fatal(err)
 	}
+	storePath := filepath.Join(outputDir, "assets", "gowdk", "islands", "stores.js")
+	if !hasAssetArtifact(result.AssetArtifacts, storePath) {
+		t.Fatalf("expected stores.js asset, got %#v", result.AssetArtifacts)
+	}
 	html := readFile(t, filepath.Join(outputDir, "counter", "index.html"))
-	expected := `data-gowdk-client="{&#34;handlers&#34;:{&#34;Add&#34;:{&#34;statements&#34;:[&#34;Count++&#34;]}},&#34;stores&#34;:[&#34;cart&#34;]}"`
-	if !strings.Contains(html, expected) {
-		t.Fatalf("expected %q in island page:\n%s", expected, html)
+	for _, expected := range []string{
+		`<script type="application/json" data-gowdk-store="cart">{"Count":1,"Open":false}</script>`,
+		`<script src="/assets/gowdk/islands/stores.js" defer></script>`,
+		`<script src="/assets/gowdk/islands/Counter.js" defer></script>`,
+		`data-gowdk-client="{&#34;handlers&#34;:{&#34;Add&#34;:{&#34;statements&#34;:[&#34;Count++&#34;]}},&#34;stores&#34;:[&#34;cart&#34;]}"`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in island page:\n%s", expected, html)
+		}
+	}
+	if storesIndex := strings.Index(html, `/assets/gowdk/islands/stores.js`); storesIndex < 0 {
+		t.Fatalf("expected store runtime script in island page:\n%s", html)
+	} else if islandIndex := strings.Index(html, `/assets/gowdk/islands/Counter.js`); islandIndex < 0 || islandIndex < storesIndex {
+		t.Fatalf("expected store runtime before component runtime:\n%s", html)
+	}
+	storeJS := readFile(t, storePath)
+	for _, expected := range []string{
+		`window.__gowdkStores`,
+		`registry.set = (name, next)`,
+		`registry.subscribe = (name, listener)`,
+		`data-gowdk-store`,
+	} {
+		if !strings.Contains(storeJS, expected) {
+			t.Fatalf("expected %q in store runtime:\n%s", expected, storeJS)
+		}
+	}
+	islandJS := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	for _, expected := range []string{
+		`const storeNames = Array.isArray(client.stores) ? client.stores : [];`,
+		`Object.assign(state, storeRegistry.get(name));`,
+		`storeNames.forEach((name) => storeRegistry.set(name, state));`,
+		`storeRegistry.subscribe(name, async (next) =>`,
+		`storeUnsubscribers.forEach((unsubscribe) => unsubscribe());`,
+	} {
+		if !strings.Contains(islandJS, expected) {
+			t.Fatalf("expected %q in island runtime:\n%s", expected, islandJS)
+		}
 	}
 }
 

@@ -37,12 +37,68 @@ var wasmMagic = []byte{0x00, 0x61, 0x73, 0x6d}
 func runtimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout) ([]plannedAssetArtifact, error) {
 	var artifacts []plannedAssetArtifact
 	artifacts = append(artifacts, clientRuntimeArtifacts(app.Pages, outputDir)...)
+	artifacts = append(artifacts, storeRuntimeArtifacts(app.Pages, outputDir)...)
 	islands, err := islandRuntimeArtifacts(config, app, outputDir, layouts)
 	if err != nil {
 		return nil, err
 	}
 	artifacts = append(artifacts, islands...)
 	return dedupeAssetArtifacts(artifacts), nil
+}
+
+func storeRuntimeArtifacts(pages []manifest.Page, outputDir string) []plannedAssetArtifact {
+	for _, page := range pages {
+		if len(page.Stores) > 0 {
+			return []plannedAssetArtifact{{
+				AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(storeRuntimeAssetPath))},
+				contents:      []byte(storeRuntimeSource()),
+			}}
+		}
+	}
+	return nil
+}
+
+func storeRuntimeSource() string {
+	return compactGeneratedJSSource(`(() => {
+  const registry = window.__gowdkStores || (window.__gowdkStores = {
+    stores: Object.create(null),
+    listeners: Object.create(null)
+  });
+
+  registry.init = (name, state) => {
+    if (!name || registry.stores[name]) return;
+    registry.stores[name] = Object.assign({}, state || {});
+  };
+
+  registry.get = (name) => {
+    return Object.assign({}, registry.stores[name] || {});
+  };
+
+  registry.set = (name, next) => {
+    if (!name) return;
+    registry.stores[name] = Object.assign({}, registry.stores[name] || {}, next || {});
+    (registry.listeners[name] || []).slice().forEach((listener) => listener(registry.get(name)));
+  };
+
+  registry.subscribe = (name, listener) => {
+    if (!name || typeof listener !== "function") return () => {};
+    if (!registry.listeners[name]) registry.listeners[name] = [];
+    registry.listeners[name].push(listener);
+    return () => {
+      registry.listeners[name] = (registry.listeners[name] || []).filter((item) => item !== listener);
+    };
+  };
+
+  document.querySelectorAll("script[type=\"application/json\"][data-gowdk-store]").forEach((node) => {
+    const name = node.getAttribute("data-gowdk-store");
+    try {
+      registry.init(name, JSON.parse(node.textContent || "{}"));
+    } catch (error) {
+      registry.init(name, {});
+    }
+  });
+})();
+`)
 }
 
 func islandRuntimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout) ([]plannedAssetArtifact, error) {
@@ -1083,16 +1139,21 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
     root.setAttribute("data-gowdk-mounted", "js");
     const state = JSON.parse(root.getAttribute("data-gowdk-state") || "{}");
     const client = JSON.parse(root.getAttribute("data-gowdk-client") || "{}");
-    const hasEnvelope = Boolean(client.handlers || client.helpers || client.emits || client.mount || client.destroy || client.effects || client.computed);
+    const hasEnvelope = Boolean(client.handlers || client.helpers || client.emits || client.stores || client.mount || client.destroy || client.effects || client.computed);
     const handlers = hasEnvelope ? (client.handlers || {}) : client;
     const helpers = client.helpers || {};
     const emitEvents = client.emits || {};
+    const storeNames = Array.isArray(client.stores) ? client.stores : [];
+    const storeRegistry = window.__gowdkStores;
     const mountStatements = client.mount || [];
     const destroyStatements = client.destroy || [];
     const effects = client.effects || [];
     const computeds = client.computed || [];
     const refs = Object.create(null);
     const asyncTokens = Object.create(null);
+    storeNames.forEach((name) => {
+      if (storeRegistry) Object.assign(state, storeRegistry.get(name));
+    });
     recomputeComputed(state, computeds, helpers);
     root.querySelectorAll("[data-gowdk-ref]").forEach((node) => {
       if (!ownsNode(root, node)) return;
@@ -1130,10 +1191,16 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
         if (!ran) return;
       }
     };
+    let applyingStoreUpdate = false;
+    const publishStores = () => {
+      if (applyingStoreUpdate || !storeRegistry || storeNames.length === 0) return;
+      storeNames.forEach((name) => storeRegistry.set(name, state));
+    };
     const rerender = () => {
       bindings = render(root, state, helpers, bindings);
       bindInteractiveNodes();
       syncChildProps(root, state, helpers);
+      publishStores();
     };
     let renderScheduled = false;
     const scheduleRender = () => {
@@ -1146,6 +1213,21 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
       if (typeof queueMicrotask === "function") queueMicrotask(flush);
       else Promise.resolve().then(flush);
     };
+    const storeUnsubscribers = storeNames.map((name) => {
+      if (!storeRegistry) return () => {};
+      return storeRegistry.subscribe(name, async (next) => {
+        applyingStoreUpdate = true;
+        try {
+          Object.assign(state, next || {});
+          recomputeComputed(state, computeds, helpers);
+          await settleEffects();
+          recomputeComputed(state, computeds, helpers);
+          rerender();
+        } finally {
+          applyingStoreUpdate = false;
+        }
+      });
+    });
     const bindInteractiveNodes = () => {
       root.querySelectorAll("*").forEach((node) => {
         const owned = ownsNode(root, node);
@@ -1279,6 +1361,7 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
       if (root.getAttribute("data-gowdk-mounted") !== "js") return;
       root.removeAttribute("data-gowdk-mounted");
       registry.roots.delete(root);
+      storeUnsubscribers.forEach((unsubscribe) => unsubscribe());
       if (destroyStatements.length > 0) {
         await runAllEffectCleanups();
         await applyStatements(destroyStatements, state, handlers, helpers, null, refs, computeds, asyncTokens, root, emitEvents);

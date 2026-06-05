@@ -2,6 +2,7 @@ package clientlang
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -28,6 +29,31 @@ type Expr interface {
 	exprNode()
 }
 
+// ExprSourceSpan is a 1-based column span within the expression source. End is
+// exclusive.
+type ExprSourceSpan struct {
+	StartColumn int
+	EndColumn   int
+}
+
+// ExprValidationError wraps an expression validation failure with the source
+// columns of the expression node that failed.
+type ExprValidationError struct {
+	Span ExprSourceSpan
+	Err  error
+}
+
+func (err ExprValidationError) Error() string {
+	if err.Err == nil {
+		return ""
+	}
+	return err.Err.Error()
+}
+
+func (err ExprValidationError) Unwrap() error {
+	return err.Err
+}
+
 // ExprFunction describes a return-valued helper callable from expressions.
 type ExprFunction struct {
 	Params []ValueType
@@ -38,6 +64,7 @@ type ExprFunction struct {
 type LiteralExpr struct {
 	Type  ValueType
 	Value string
+	Span  ExprSourceSpan
 }
 
 func (LiteralExpr) exprNode() {}
@@ -45,6 +72,7 @@ func (LiteralExpr) exprNode() {}
 // IdentExpr reads a state, prop, param, or local name.
 type IdentExpr struct {
 	Name string
+	Span ExprSourceSpan
 }
 
 func (IdentExpr) exprNode() {}
@@ -53,6 +81,7 @@ func (IdentExpr) exprNode() {}
 type MemberExpr struct {
 	X    Expr
 	Name string
+	Span ExprSourceSpan
 }
 
 func (MemberExpr) exprNode() {}
@@ -61,6 +90,7 @@ func (MemberExpr) exprNode() {}
 type IndexExpr struct {
 	X     Expr
 	Index Expr
+	Span  ExprSourceSpan
 }
 
 func (IndexExpr) exprNode() {}
@@ -69,14 +99,16 @@ func (IndexExpr) exprNode() {}
 type CallExpr struct {
 	Name string
 	Args []Expr
+	Span ExprSourceSpan
 }
 
 func (CallExpr) exprNode() {}
 
 // UnaryExpr applies a unary operator.
 type UnaryExpr struct {
-	Op string
-	X  Expr
+	Op   string
+	X    Expr
+	Span ExprSourceSpan
 }
 
 func (UnaryExpr) exprNode() {}
@@ -85,6 +117,7 @@ func (UnaryExpr) exprNode() {}
 type BinaryExpr struct {
 	Op          string
 	Left, Right Expr
+	Span        ExprSourceSpan
 }
 
 func (BinaryExpr) exprNode() {}
@@ -94,12 +127,19 @@ type ConditionalExpr struct {
 	Cond Expr
 	Then Expr
 	Else Expr
+	Span ExprSourceSpan
 }
 
 func (ConditionalExpr) exprNode() {}
 
 // ParseExpr parses the supported client expression subset.
 func ParseExpr(source string) (Expr, error) {
+	return ParseExprWithSpans(source)
+}
+
+// ParseExprWithSpans parses the supported client expression subset and records
+// 1-based source columns on every expression node.
+func ParseExprWithSpans(source string) (Expr, error) {
 	parser := exprParser{lexer: newExprLexer(source)}
 	expr, err := parser.parseConditional()
 	if err != nil {
@@ -109,6 +149,99 @@ func ParseExpr(source string) (Expr, error) {
 		return nil, fmt.Errorf("unexpected token %q", parser.peek().value)
 	}
 	return expr, nil
+}
+
+// ExprSpan returns the source span recorded for expr.
+func ExprSpan(expr Expr) ExprSourceSpan {
+	switch typed := expr.(type) {
+	case LiteralExpr:
+		return typed.Span
+	case IdentExpr:
+		return typed.Span
+	case MemberExpr:
+		return typed.Span
+	case IndexExpr:
+		return typed.Span
+	case CallExpr:
+		return typed.Span
+	case UnaryExpr:
+		return typed.Span
+	case BinaryExpr:
+		return typed.Span
+	case ConditionalExpr:
+		return typed.Span
+	default:
+		return ExprSourceSpan{}
+	}
+}
+
+func tokenSpan(token exprToken) ExprSourceSpan {
+	return ExprSourceSpan{StartColumn: token.start + 1, EndColumn: token.end + 1}
+}
+
+func mergeExprSpans(left, right ExprSourceSpan) ExprSourceSpan {
+	if left.StartColumn == 0 {
+		return right
+	}
+	if right.StartColumn == 0 {
+		return left
+	}
+	return ExprSourceSpan{StartColumn: left.StartColumn, EndColumn: right.EndColumn}
+}
+
+func wrapExprError(expr Expr, err error) error {
+	if err == nil {
+		return nil
+	}
+	var validation ExprValidationError
+	if errors.As(err, &validation) {
+		return err
+	}
+	return ExprValidationError{Span: ExprSpan(expr), Err: err}
+}
+
+// CanonicalExpr returns a deterministic representation of the supported
+// expression subset. It is intended for compiler fingerprints, not for source
+// rewriting.
+func CanonicalExpr(source string) (string, error) {
+	expr, err := ParseExpr(source)
+	if err != nil {
+		return "", err
+	}
+	return canonicalExpr(expr), nil
+}
+
+func canonicalExpr(expr Expr) string {
+	switch typed := expr.(type) {
+	case LiteralExpr:
+		if typed.Type == TypeString {
+			value, err := strconv.Unquote(typed.Value)
+			if err == nil {
+				return strconv.Quote(value)
+			}
+		}
+		return typed.Value
+	case IdentExpr:
+		return typed.Name
+	case MemberExpr:
+		return canonicalExpr(typed.X) + "." + typed.Name
+	case IndexExpr:
+		return canonicalExpr(typed.X) + "[" + canonicalExpr(typed.Index) + "]"
+	case CallExpr:
+		args := make([]string, 0, len(typed.Args))
+		for _, arg := range typed.Args {
+			args = append(args, canonicalExpr(arg))
+		}
+		return typed.Name + "(" + strings.Join(args, ",") + ")"
+	case UnaryExpr:
+		return typed.Op + canonicalExpr(typed.X)
+	case BinaryExpr:
+		return "(" + canonicalExpr(typed.Left) + " " + typed.Op + " " + canonicalExpr(typed.Right) + ")"
+	case ConditionalExpr:
+		return "if " + canonicalExpr(typed.Cond) + " { " + canonicalExpr(typed.Then) + " } else { " + canonicalExpr(typed.Else) + " }"
+	default:
+		return ""
+	}
 }
 
 // CheckExpr parses and type-checks a client expression against symbols.
@@ -138,7 +271,7 @@ func checkExpr(expr Expr, symbols map[string]ValueType, functions map[string]Exp
 	case IdentExpr:
 		typ, ok := symbols[typed.Name]
 		if !ok {
-			return TypeUnknown, fmt.Errorf("unknown client value %q", typed.Name)
+			return TypeUnknown, wrapExprError(typed, fmt.Errorf("unknown client value %q", typed.Name))
 		}
 		fields[typed.Name] = true
 		return typ, nil
@@ -157,12 +290,12 @@ func checkExpr(expr Expr, symbols map[string]ValueType, functions map[string]Exp
 			return TypeUnknown, nil
 		}
 		if base != TypeObject && base != TypeArray {
-			return TypeUnknown, fmt.Errorf("cannot read field %q from %s expression", typed.Name, base)
+			return TypeUnknown, wrapExprError(typed, fmt.Errorf("cannot read field %q from %s expression", typed.Name, base))
 		}
 		if path != "" {
-			return TypeUnknown, fmt.Errorf("unknown client value %q", path)
+			return TypeUnknown, wrapExprError(typed, fmt.Errorf("unknown client value %q", path))
 		}
-		return TypeUnknown, fmt.Errorf("unknown client field %q", typed.Name)
+		return TypeUnknown, wrapExprError(typed, fmt.Errorf("unknown client field %q", typed.Name))
 	case IndexExpr:
 		base, err := checkExpr(typed.X, symbols, functions, fields)
 		if err != nil {
@@ -173,7 +306,7 @@ func checkExpr(expr Expr, symbols map[string]ValueType, functions map[string]Exp
 			return TypeUnknown, err
 		}
 		if index != TypeUnknown && index != TypeInt {
-			return TypeUnknown, fmt.Errorf("index expression requires int, got %s", index)
+			return TypeUnknown, wrapExprError(typed.Index, fmt.Errorf("index expression requires int, got %s", index))
 		}
 		path := exprPath(typed)
 		if path != "" {
@@ -185,22 +318,22 @@ func checkExpr(expr Expr, symbols map[string]ValueType, functions map[string]Exp
 			return TypeUnknown, nil
 		}
 		if base != TypeArray {
-			return TypeUnknown, fmt.Errorf("cannot index %s expression", base)
+			return TypeUnknown, wrapExprError(typed.X, fmt.Errorf("cannot index %s expression", base))
 		}
 		if path != "" {
-			return TypeUnknown, fmt.Errorf("unknown client value %q", path)
+			return TypeUnknown, wrapExprError(typed, fmt.Errorf("unknown client value %q", path))
 		}
 		return TypeUnknown, nil
 	case CallExpr:
 		if typ, ok, err := checkBuiltinCall(typed, symbols, functions, fields); ok || err != nil {
-			return typ, err
+			return typ, wrapExprError(typed, err)
 		}
 		function, ok := functions[typed.Name]
 		if !ok {
-			return TypeUnknown, fmt.Errorf("unknown client helper function %q", typed.Name)
+			return TypeUnknown, wrapExprError(typed, fmt.Errorf("unknown client helper function %q", typed.Name))
 		}
 		if len(typed.Args) != len(function.Params) {
-			return TypeUnknown, fmt.Errorf("client helper function %s expects %d arguments, got %d", typed.Name, len(function.Params), len(typed.Args))
+			return TypeUnknown, wrapExprError(typed, fmt.Errorf("client helper function %s expects %d arguments, got %d", typed.Name, len(function.Params), len(typed.Args)))
 		}
 		for index, arg := range typed.Args {
 			actual, err := checkExpr(arg, symbols, functions, fields)
@@ -209,7 +342,7 @@ func checkExpr(expr Expr, symbols map[string]ValueType, functions map[string]Exp
 			}
 			expected := function.Params[index]
 			if expected != TypeUnknown && actual != TypeUnknown && expected != actual && !compatibleNumericType(actual, expected) {
-				return TypeUnknown, fmt.Errorf("client helper function %s argument %d expects %s, got %s", typed.Name, index+1, expected, actual)
+				return TypeUnknown, wrapExprError(arg, fmt.Errorf("client helper function %s argument %d expects %s, got %s", typed.Name, index+1, expected, actual))
 			}
 		}
 		return function.Return, nil
@@ -224,7 +357,7 @@ func checkExpr(expr Expr, symbols map[string]ValueType, functions map[string]Exp
 				return TypeUnknown, nil
 			}
 			if typ != TypeBool {
-				return TypeUnknown, fmt.Errorf("operator ! requires bool, got %s", typ)
+				return TypeUnknown, wrapExprError(typed.X, fmt.Errorf("operator ! requires bool, got %s", typ))
 			}
 			return TypeBool, nil
 		case "-":
@@ -232,11 +365,11 @@ func checkExpr(expr Expr, symbols map[string]ValueType, functions map[string]Exp
 				return TypeUnknown, nil
 			}
 			if !isNumericType(typ) {
-				return TypeUnknown, fmt.Errorf("operator - requires number, got %s", typ)
+				return TypeUnknown, wrapExprError(typed.X, fmt.Errorf("operator - requires number, got %s", typ))
 			}
 			return typ, nil
 		default:
-			return TypeUnknown, fmt.Errorf("unsupported unary operator %q", typed.Op)
+			return TypeUnknown, wrapExprError(typed, fmt.Errorf("unsupported unary operator %q", typed.Op))
 		}
 	case BinaryExpr:
 		left, err := checkExpr(typed.Left, symbols, functions, fields)
@@ -247,14 +380,15 @@ func checkExpr(expr Expr, symbols map[string]ValueType, functions map[string]Exp
 		if err != nil {
 			return TypeUnknown, err
 		}
-		return checkBinaryExpr(typed.Op, left, right)
+		typ, err := checkBinaryExpr(typed.Op, left, right)
+		return typ, wrapExprError(typed, err)
 	case ConditionalExpr:
 		cond, err := checkExpr(typed.Cond, symbols, functions, fields)
 		if err != nil {
 			return TypeUnknown, err
 		}
 		if cond != TypeUnknown && cond != TypeBool {
-			return TypeUnknown, fmt.Errorf("if expression condition requires bool, got %s", cond)
+			return TypeUnknown, wrapExprError(typed.Cond, fmt.Errorf("if expression condition requires bool, got %s", cond))
 		}
 		thenType, err := checkExpr(typed.Then, symbols, functions, fields)
 		if err != nil {
@@ -264,7 +398,8 @@ func checkExpr(expr Expr, symbols map[string]ValueType, functions map[string]Exp
 		if err != nil {
 			return TypeUnknown, err
 		}
-		return checkConditionalBranches(thenType, elseType)
+		typ, err := checkConditionalBranches(thenType, elseType)
+		return typ, wrapExprError(typed, err)
 	default:
 		return TypeUnknown, fmt.Errorf("unknown expression node")
 	}
@@ -283,11 +418,8 @@ func checkConditionalBranches(thenType, elseType ValueType) (ValueType, error) {
 		}
 		return TypeInt, nil
 	}
-	if thenType == TypeNil {
-		return elseType, nil
-	}
-	if elseType == TypeNil {
-		return thenType, nil
+	if thenType == TypeNil || elseType == TypeNil {
+		return TypeUnknown, fmt.Errorf("nil is only supported in == or != scalar comparisons")
 	}
 	return TypeUnknown, fmt.Errorf("if expression branches must have matching types, got %s and %s", thenType, elseType)
 }
@@ -309,6 +441,16 @@ func checkBinaryExpr(op string, left, right ValueType) (ValueType, error) {
 		}
 		return TypeInt, nil
 	case "==", "!=":
+		if left == TypeNil || right == TypeNil {
+			other := right
+			if right == TypeNil {
+				other = left
+			}
+			if other == TypeNil || other == TypeArray || other == TypeObject {
+				return TypeUnknown, fmt.Errorf("operator %s supports nil only with scalar values", op)
+			}
+			return TypeBool, nil
+		}
 		if left != right && left != TypeNil && right != TypeNil {
 			return TypeUnknown, fmt.Errorf("operator %s requires comparable matching types", op)
 		}
@@ -665,6 +807,16 @@ func checkBuiltinCall(expr CallExpr, symbols map[string]ValueType, functions map
 			return TypeInt, true, nil
 		}
 		return TypeUnknown, true, fmt.Errorf("built-in len expects string or array, got %s", actual)
+	case "lower", "upper":
+		if err := checkStringBuiltinArgs(expr, symbols, functions, fields, 1); err != nil {
+			return TypeUnknown, true, err
+		}
+		return TypeString, true, nil
+	case "contains":
+		if err := checkStringBuiltinArgs(expr, symbols, functions, fields, 2); err != nil {
+			return TypeUnknown, true, err
+		}
+		return TypeBool, true, nil
 	case "string":
 		return checkConversionBuiltin(expr, symbols, functions, fields, TypeString)
 	case "int":
@@ -674,6 +826,29 @@ func checkBuiltinCall(expr CallExpr, symbols map[string]ValueType, functions map
 	default:
 		return TypeUnknown, false, nil
 	}
+}
+
+func checkStringBuiltinArgs(expr CallExpr, symbols map[string]ValueType, functions map[string]ExprFunction, fields map[string]bool, count int) error {
+	if len(expr.Args) != count {
+		return fmt.Errorf("built-in %s expects %d argument%s, got %d", expr.Name, count, plural(count), len(expr.Args))
+	}
+	for index, arg := range expr.Args {
+		actual, err := checkExpr(arg, symbols, functions, fields)
+		if err != nil {
+			return err
+		}
+		if actual != TypeUnknown && actual != TypeString {
+			return fmt.Errorf("built-in %s argument %d expects string, got %s", expr.Name, index+1, actual)
+		}
+	}
+	return nil
+}
+
+func plural(count int) string {
+	if count == 1 {
+		return ""
+	}
+	return "s"
 }
 
 func checkConversionBuiltin(expr CallExpr, symbols map[string]ValueType, functions map[string]ExprFunction, fields map[string]bool, out ValueType) (ValueType, bool, error) {
@@ -718,6 +893,12 @@ func evalBuiltinCall(expr CallExpr, values map[string]string) (any, bool, error)
 		default:
 			return nil, true, fmt.Errorf("built-in len expects string or array")
 		}
+	case "lower":
+		return evalCaseBuiltin(expr, values, strings.ToLower)
+	case "upper":
+		return evalCaseBuiltin(expr, values, strings.ToUpper)
+	case "contains":
+		return evalContainsBuiltin(expr, values)
 	case "string":
 		return evalStringBuiltin(expr, values)
 	case "int":
@@ -727,6 +908,44 @@ func evalBuiltinCall(expr CallExpr, values map[string]string) (any, bool, error)
 	default:
 		return nil, false, nil
 	}
+}
+
+func evalCaseBuiltin(expr CallExpr, values map[string]string, fn func(string) string) (any, bool, error) {
+	if len(expr.Args) != 1 {
+		return nil, true, fmt.Errorf("built-in %s expects 1 argument, got %d", expr.Name, len(expr.Args))
+	}
+	value, err := evalExpr(expr.Args[0], values)
+	if err != nil {
+		return nil, true, err
+	}
+	typed, ok := value.(string)
+	if !ok {
+		return nil, true, fmt.Errorf("built-in %s expects string", expr.Name)
+	}
+	return fn(typed), true, nil
+}
+
+func evalContainsBuiltin(expr CallExpr, values map[string]string) (any, bool, error) {
+	if len(expr.Args) != 2 {
+		return nil, true, fmt.Errorf("built-in contains expects 2 arguments, got %d", len(expr.Args))
+	}
+	haystack, err := evalExpr(expr.Args[0], values)
+	if err != nil {
+		return nil, true, err
+	}
+	needle, err := evalExpr(expr.Args[1], values)
+	if err != nil {
+		return nil, true, err
+	}
+	haystackString, ok := haystack.(string)
+	if !ok {
+		return nil, true, fmt.Errorf("built-in contains argument 1 expects string")
+	}
+	needleString, ok := needle.(string)
+	if !ok {
+		return nil, true, fmt.Errorf("built-in contains argument 2 expects string")
+	}
+	return strings.Contains(haystackString, needleString), true, nil
 }
 
 func evalStringBuiltin(expr CallExpr, values map[string]string) (any, bool, error) {
@@ -906,6 +1125,8 @@ const (
 type exprToken struct {
 	kind  tokenKind
 	value string
+	start int
+	end   int
 }
 
 type exprLexer struct {
@@ -914,13 +1135,13 @@ type exprLexer struct {
 }
 
 func newExprLexer(source string) *exprLexer {
-	return &exprLexer{source: []rune(strings.TrimSpace(source))}
+	return &exprLexer{source: []rune(source)}
 }
 
 func (lexer *exprLexer) next() (exprToken, error) {
 	lexer.skipSpace()
 	if lexer.index >= len(lexer.source) {
-		return exprToken{kind: tokenEOF}, nil
+		return exprToken{kind: tokenEOF, start: lexer.index, end: lexer.index}, nil
 	}
 	char := lexer.source[lexer.index]
 	switch {
@@ -931,29 +1152,37 @@ func (lexer *exprLexer) next() (exprToken, error) {
 	case char == '"':
 		return lexer.string()
 	case char == '(':
+		start := lexer.index
 		lexer.index++
-		return exprToken{kind: tokenLParen, value: "("}, nil
+		return exprToken{kind: tokenLParen, value: "(", start: start, end: lexer.index}, nil
 	case char == ')':
+		start := lexer.index
 		lexer.index++
-		return exprToken{kind: tokenRParen, value: ")"}, nil
+		return exprToken{kind: tokenRParen, value: ")", start: start, end: lexer.index}, nil
 	case char == '.':
+		start := lexer.index
 		lexer.index++
-		return exprToken{kind: tokenDot, value: "."}, nil
+		return exprToken{kind: tokenDot, value: ".", start: start, end: lexer.index}, nil
 	case char == '[':
+		start := lexer.index
 		lexer.index++
-		return exprToken{kind: tokenLBracket, value: "["}, nil
+		return exprToken{kind: tokenLBracket, value: "[", start: start, end: lexer.index}, nil
 	case char == ']':
+		start := lexer.index
 		lexer.index++
-		return exprToken{kind: tokenRBracket, value: "]"}, nil
+		return exprToken{kind: tokenRBracket, value: "]", start: start, end: lexer.index}, nil
 	case char == '{':
+		start := lexer.index
 		lexer.index++
-		return exprToken{kind: tokenLBrace, value: "{"}, nil
+		return exprToken{kind: tokenLBrace, value: "{", start: start, end: lexer.index}, nil
 	case char == '}':
+		start := lexer.index
 		lexer.index++
-		return exprToken{kind: tokenRBrace, value: "}"}, nil
+		return exprToken{kind: tokenRBrace, value: "}", start: start, end: lexer.index}, nil
 	case char == ',':
+		start := lexer.index
 		lexer.index++
-		return exprToken{kind: tokenComma, value: ","}, nil
+		return exprToken{kind: tokenComma, value: ",", start: start, end: lexer.index}, nil
 	default:
 		return lexer.operator()
 	}
@@ -973,11 +1202,11 @@ func (lexer *exprLexer) ident() exprToken {
 	value := string(lexer.source[start:lexer.index])
 	switch value {
 	case "true", "false":
-		return exprToken{kind: tokenBool, value: value}
+		return exprToken{kind: tokenBool, value: value, start: start, end: lexer.index}
 	case "nil":
-		return exprToken{kind: tokenNil, value: value}
+		return exprToken{kind: tokenNil, value: value, start: start, end: lexer.index}
 	default:
-		return exprToken{kind: tokenIdent, value: value}
+		return exprToken{kind: tokenIdent, value: value, start: start, end: lexer.index}
 	}
 }
 
@@ -992,7 +1221,7 @@ func (lexer *exprLexer) number() exprToken {
 			lexer.index++
 		}
 	}
-	return exprToken{kind: tokenNumber, value: string(lexer.source[start:lexer.index])}
+	return exprToken{kind: tokenNumber, value: string(lexer.source[start:lexer.index]), start: start, end: lexer.index}
 }
 
 func (lexer *exprLexer) string() (exprToken, error) {
@@ -1014,7 +1243,7 @@ func (lexer *exprLexer) string() (exprToken, error) {
 			if _, err := strconv.Unquote(value); err != nil {
 				return exprToken{}, err
 			}
-			return exprToken{kind: tokenString, value: value}, nil
+			return exprToken{kind: tokenString, value: value, start: start, end: lexer.index}, nil
 		}
 	}
 	return exprToken{}, fmt.Errorf("unterminated string")
@@ -1024,8 +1253,9 @@ func (lexer *exprLexer) operator() (exprToken, error) {
 	remaining := string(lexer.source[lexer.index:])
 	for _, op := range []string{"==", "!=", "<=", ">=", "&&", "||", "+", "-", "*", "/", "%", "!", "<", ">"} {
 		if strings.HasPrefix(remaining, op) {
+			start := lexer.index
 			lexer.index += len([]rune(op))
-			return exprToken{kind: tokenOp, value: op}, nil
+			return exprToken{kind: tokenOp, value: op, start: start, end: lexer.index}, nil
 		}
 	}
 	return exprToken{}, fmt.Errorf("unexpected character %q", lexer.source[lexer.index])
@@ -1071,7 +1301,7 @@ func (parser *exprParser) parseConditional() (Expr, error) {
 	if token.kind != tokenIdent || token.value != "if" {
 		return parser.parseOr()
 	}
-	parser.consume()
+	start := parser.consume()
 	cond, err := parser.parseOr()
 	if err != nil {
 		return nil, err
@@ -1097,10 +1327,12 @@ func (parser *exprParser) parseConditional() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	if token := parser.consume(); token.kind != tokenRBrace {
+	end := parser.consume()
+	if end.kind != tokenRBrace {
+		token := end
 		return nil, parser.expected("closing } after else branch", token)
 	}
-	return ConditionalExpr{Cond: cond, Then: thenExpr, Else: elseExpr}, nil
+	return ConditionalExpr{Cond: cond, Then: thenExpr, Else: elseExpr, Span: mergeExprSpans(tokenSpan(start), tokenSpan(end))}, nil
 }
 
 func (parser *exprParser) parseAnd() (Expr, error) {
@@ -1130,7 +1362,7 @@ func (parser *exprParser) parseBinary(next func() (Expr, error), ops ...string) 
 		if err != nil {
 			return nil, err
 		}
-		left = BinaryExpr{Op: op, Left: left, Right: right}
+		left = BinaryExpr{Op: op, Left: left, Right: right, Span: mergeExprSpans(ExprSpan(left), ExprSpan(right))}
 	}
 	return left, nil
 }
@@ -1143,7 +1375,7 @@ func (parser *exprParser) parseUnary() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return UnaryExpr{Op: token.value, X: expr}, nil
+		return UnaryExpr{Op: token.value, X: expr, Span: mergeExprSpans(tokenSpan(token), ExprSpan(expr))}, nil
 	}
 	return parser.parsePostfix()
 }
@@ -1164,7 +1396,7 @@ func (parser *exprParser) parsePostfix() (Expr, error) {
 				}
 				return nil, fmt.Errorf("expected field name after .")
 			}
-			expr = MemberExpr{X: expr, Name: token.value}
+			expr = MemberExpr{X: expr, Name: token.value, Span: mergeExprSpans(ExprSpan(expr), tokenSpan(token))}
 		case tokenLBracket:
 			parser.consume()
 			index, err := parser.parseOr()
@@ -1178,36 +1410,36 @@ func (parser *exprParser) parsePostfix() (Expr, error) {
 				}
 				return nil, fmt.Errorf("missing closing ]")
 			}
-			expr = IndexExpr{X: expr, Index: index}
+			expr = IndexExpr{X: expr, Index: index, Span: mergeExprSpans(ExprSpan(expr), tokenSpan(token))}
 		case tokenLParen:
 			name, ok := expr.(IdentExpr)
 			if !ok {
 				return nil, fmt.Errorf("only helper names can be called")
 			}
-			args, err := parser.parseCallArgs()
+			args, close, err := parser.parseCallArgs()
 			if err != nil {
 				return nil, err
 			}
-			expr = CallExpr{Name: name.Name, Args: args}
+			expr = CallExpr{Name: name.Name, Args: args, Span: mergeExprSpans(ExprSpan(name), tokenSpan(close))}
 		default:
 			return expr, nil
 		}
 	}
 }
 
-func (parser *exprParser) parseCallArgs() ([]Expr, error) {
+func (parser *exprParser) parseCallArgs() ([]Expr, exprToken, error) {
 	if token := parser.consume(); token.kind != tokenLParen {
-		return nil, parser.expected("opening ( for helper call", token)
+		return nil, exprToken{}, parser.expected("opening ( for helper call", token)
 	}
 	if parser.peek().kind == tokenRParen {
-		parser.consume()
-		return nil, nil
+		close := parser.consume()
+		return nil, close, nil
 	}
 	var args []Expr
 	for {
 		arg, err := parser.parseConditional()
 		if err != nil {
-			return nil, err
+			return nil, exprToken{}, err
 		}
 		args = append(args, arg)
 		token := parser.consume()
@@ -1215,12 +1447,12 @@ func (parser *exprParser) parseCallArgs() ([]Expr, error) {
 		case tokenComma:
 			continue
 		case tokenRParen:
-			return args, nil
+			return args, token, nil
 		default:
 			if token.value != "" {
-				return nil, fmt.Errorf("expected , or ) in helper call, got %q", token.value)
+				return nil, exprToken{}, fmt.Errorf("expected , or ) in helper call, got %q", token.value)
 			}
-			return nil, fmt.Errorf("expected , or ) in helper call")
+			return nil, exprToken{}, fmt.Errorf("expected , or ) in helper call")
 		}
 	}
 }
@@ -1229,18 +1461,18 @@ func (parser *exprParser) parsePrimary() (Expr, error) {
 	token := parser.consume()
 	switch token.kind {
 	case tokenIdent:
-		return IdentExpr{Name: token.value}, nil
+		return IdentExpr{Name: token.value, Span: tokenSpan(token)}, nil
 	case tokenString:
-		return LiteralExpr{Type: TypeString, Value: token.value}, nil
+		return LiteralExpr{Type: TypeString, Value: token.value, Span: tokenSpan(token)}, nil
 	case tokenNumber:
 		if strings.Contains(token.value, ".") {
-			return LiteralExpr{Type: TypeFloat, Value: token.value}, nil
+			return LiteralExpr{Type: TypeFloat, Value: token.value, Span: tokenSpan(token)}, nil
 		}
-		return LiteralExpr{Type: TypeInt, Value: token.value}, nil
+		return LiteralExpr{Type: TypeInt, Value: token.value, Span: tokenSpan(token)}, nil
 	case tokenBool:
-		return LiteralExpr{Type: TypeBool, Value: token.value}, nil
+		return LiteralExpr{Type: TypeBool, Value: token.value, Span: tokenSpan(token)}, nil
 	case tokenNil:
-		return LiteralExpr{Type: TypeNil, Value: token.value}, nil
+		return LiteralExpr{Type: TypeNil, Value: token.value, Span: tokenSpan(token)}, nil
 	case tokenLParen:
 		expr, err := parser.parseOr()
 		if err != nil {

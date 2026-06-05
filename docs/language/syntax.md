@@ -250,15 +250,23 @@ client {
     return string(len(Items))
   }
 
+  computed MatchesQuery bool {
+    return contains(lower(Name), lower(Query))
+  }
+
   fn SetTotal() {
     Count = len(Items) + int("1")
   }
 }
 ```
 
-`len(value)` accepts strings and arrays and returns `int`. `string(value)`
-converts scalar values to `string`. `int(value)` and `float(value)` accept
-strings or numeric values and return the requested numeric type.
+`len(value)` accepts strings and arrays and returns `int`. `lower(value)` and
+`upper(value)` accept strings and return strings. `contains(value, query)`
+accepts strings and returns `bool`; it is intended for small component-local
+filters such as `g:if={contains(lower(item.Name), lower(Query))}` inside
+`g:for`. `string(value)` converts scalar values to `string`. `int(value)` and
+`float(value)` accept strings or numeric values and return the requested numeric
+type.
 
 Client blocks can declare computed values:
 

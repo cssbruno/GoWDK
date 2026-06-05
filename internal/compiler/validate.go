@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -263,6 +264,7 @@ func validateComponentGoContracts(components []manifest.Component) []ValidationE
 			continue
 		}
 		helperFuncs := helperExprFunctions(helpers)
+		emits := componentEmitMap(component)
 		diagnostics = append(diagnostics, validateComponentListDirectives(component, symbolTypes, stateTypes, handlers, helperFuncs)...)
 		for field := range fieldRefs {
 			if props[field] || state[field] {
@@ -290,7 +292,7 @@ func validateComponentGoContracts(components []manifest.Component) []ValidationE
 				})
 				continue
 			}
-			if err := view.ValidateIslandEventExpressionTypedWithFunctions(eventExpr.Expression, symbolTypes, stateTypes, handlers, helperFuncs); err != nil {
+			if err := view.ValidateIslandEventExpressionTypedWithEvents(eventExpr.Expression, symbolTypes, stateTypes, handlers, helperFuncs, emits); err != nil {
 				diagnostics = append(diagnostics, ValidationError{
 					Code:          "component_field_error",
 					ComponentName: component.Name,
@@ -488,6 +490,7 @@ func validateComponentClient(component manifest.Component, stateTypes map[string
 	handlers := program.HandlerMap()
 	helpers := program.HelperMap()
 	helperFuncs := helperExprFunctions(helpers)
+	emits := componentEmitMap(component)
 	refs := program.RefMap()
 	usedRefs := map[string]bool{}
 	computedTypes := map[string]clientlang.ValueType{}
@@ -535,7 +538,7 @@ func validateComponentClient(component manifest.Component, stateTypes map[string
 				Code:          "component_client_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+				Span:          clientExpressionErrorSpan(component, "return "+computed.Expr, computed.ExprSpan, err),
 				Message:       fmt.Sprintf("component %s computed %s expression %q is invalid: %v", component.Name, computed.Name, computed.Expr, err),
 			})
 			continue
@@ -576,7 +579,7 @@ func validateComponentClient(component manifest.Component, stateTypes map[string
 				Code:          "component_client_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+				Span:          clientExpressionErrorSpan(component, function.Statements[len(function.Statements)-1], functionReturnSpan(function), err),
 				Message:       fmt.Sprintf("component %s helper function %s return expression %q is invalid: %v", component.Name, function.Name, helper.Return, err),
 			})
 			continue
@@ -610,7 +613,7 @@ func validateComponentClient(component manifest.Component, stateTypes map[string
 		for _, param := range function.Params {
 			readFields[param.Name] = clientlang.NormalizeType(param.Type)
 		}
-		functionRefs, err := view.ValidateIslandClientStatementsTypedWithFunctions(function.Statements, stateTypes, readFields, refs, helperFuncs)
+		functionRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(function.Statements, stateTypes, readFields, refs, helperFuncs, function.Async, emits)
 		for refName := range functionRefs {
 			usedRefs[refName] = true
 		}
@@ -619,12 +622,12 @@ func validateComponentClient(component manifest.Component, stateTypes map[string
 				Code:          "component_client_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+				Span:          clientStatementErrorSpan(component, function.Statements, function.StatementSpans, err),
 				Message:       fmt.Sprintf("component %s client function %s is invalid: %v", component.Name, function.Name, err),
 			})
 		}
 	}
-	mountRefs, err := view.ValidateIslandClientStatementsTypedWithFunctions(program.Mount, stateTypes, readSymbols, refs, helperFuncs)
+	mountRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(program.Mount, stateTypes, readSymbols, refs, helperFuncs, false, emits)
 	for refName := range mountRefs {
 		usedRefs[refName] = true
 	}
@@ -633,11 +636,11 @@ func validateComponentClient(component manifest.Component, stateTypes map[string
 			Code:          "component_client_error",
 			ComponentName: component.Name,
 			Source:        component.Source,
-			Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+			Span:          clientStatementErrorSpan(component, program.Mount, program.MountSpans, err),
 			Message:       fmt.Sprintf("component %s mount block is invalid: %v", component.Name, err),
 		})
 	}
-	destroyRefs, err := view.ValidateIslandClientStatementsTypedWithFunctions(program.Destroy, stateTypes, readSymbols, refs, helperFuncs)
+	destroyRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(program.Destroy, stateTypes, readSymbols, refs, helperFuncs, false, emits)
 	for refName := range destroyRefs {
 		usedRefs[refName] = true
 	}
@@ -646,7 +649,7 @@ func validateComponentClient(component manifest.Component, stateTypes map[string
 			Code:          "component_client_error",
 			ComponentName: component.Name,
 			Source:        component.Source,
-			Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+			Span:          clientStatementErrorSpan(component, program.Destroy, program.DestroySpans, err),
 			Message:       fmt.Sprintf("component %s destroy block is invalid: %v", component.Name, err),
 		})
 	}
@@ -660,7 +663,7 @@ func validateComponentClient(component manifest.Component, stateTypes map[string
 				Message:       fmt.Sprintf("component %s effect dependency %q must be a state field", component.Name, effect.Field),
 			})
 		}
-		effectRefs, err := view.ValidateIslandClientStatementsTypedWithFunctions(effect.Statements, stateTypes, readSymbols, refs, helperFuncs)
+		effectRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(effect.Statements, stateTypes, readSymbols, refs, helperFuncs, false, emits)
 		for refName := range effectRefs {
 			usedRefs[refName] = true
 		}
@@ -669,11 +672,11 @@ func validateComponentClient(component manifest.Component, stateTypes map[string
 				Code:          "component_client_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+				Span:          clientStatementErrorSpan(component, effect.Statements, effect.StatementSpans, err),
 				Message:       fmt.Sprintf("component %s effect block for %q is invalid: %v", component.Name, effect.Field, err),
 			})
 		}
-		cleanupRefs, err := view.ValidateIslandClientStatementsTypedWithFunctions(effect.Cleanup, stateTypes, readSymbols, refs, helperFuncs)
+		cleanupRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(effect.Cleanup, stateTypes, readSymbols, refs, helperFuncs, false, emits)
 		for refName := range cleanupRefs {
 			usedRefs[refName] = true
 		}
@@ -682,12 +685,103 @@ func validateComponentClient(component manifest.Component, stateTypes map[string
 				Code:          "component_client_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+				Span:          clientStatementErrorSpan(component, effect.Cleanup, effect.CleanupSpans, err),
 				Message:       fmt.Sprintf("component %s effect cleanup for %q is invalid: %v", component.Name, effect.Field, err),
 			})
 		}
 	}
 	return handlers, helpers, refs, usedRefs, computedTypes, diagnostics
+}
+
+func componentEmitMap(component manifest.Component) map[string]clientlang.Emit {
+	if len(component.Emits) == 0 {
+		return nil
+	}
+	out := map[string]clientlang.Emit{}
+	for _, event := range component.Emits {
+		params := make([]string, 0, len(event.Params))
+		paramTypes := make([]clientlang.ValueType, 0, len(event.Params))
+		for _, param := range event.Params {
+			params = append(params, param.Name)
+			paramTypes = append(paramTypes, clientlang.NormalizeType(param.Type))
+		}
+		out[event.Name] = clientlang.Emit{Name: event.Name, Params: params, ParamTypes: paramTypes}
+	}
+	return out
+}
+
+func clientStatementErrorSpan(component manifest.Component, statements []string, spans []clientlang.Span, err error) manifest.SourceSpan {
+	var statementErr view.StatementValidationError
+	if errors.As(err, &statementErr) && statementErr.Index >= 0 && statementErr.Index < len(spans) {
+		if statementErr.Index < len(statements) {
+			return clientExpressionErrorSpan(component, statements[statementErr.Index], spans[statementErr.Index], statementErr.Err)
+		}
+		return clientSpan(component, spans[statementErr.Index])
+	}
+	return firstSpan(component.Blocks.Spans.Client, component.Span)
+}
+
+func clientExpressionErrorSpan(component manifest.Component, statement string, span clientlang.Span, err error) manifest.SourceSpan {
+	var exprErr clientlang.ExprValidationError
+	if !errors.As(err, &exprErr) || exprErr.Span.StartColumn <= 0 {
+		return clientSpan(component, span)
+	}
+	exprStart := expressionStartColumn(statement)
+	if exprStart <= 0 {
+		return clientSpan(component, span)
+	}
+	return clientSpanColumns(component, span, exprStart+exprErr.Span.StartColumn-1, exprStart+exprErr.Span.EndColumn-1)
+}
+
+func expressionStartColumn(statement string) int {
+	trimmed := strings.TrimSpace(statement)
+	if strings.HasPrefix(trimmed, "return ") {
+		return strings.Index(statement, "return") + len("return") + 2
+	}
+	if index := strings.Index(statement, "="); index >= 0 {
+		column := index + 2
+		for column <= len(statement) && statement[column-1] == ' ' {
+			column++
+		}
+		return column
+	}
+	return 0
+}
+
+func functionReturnSpan(function clientlang.Function) clientlang.Span {
+	if len(function.StatementSpans) == 0 {
+		return function.Span
+	}
+	return function.StatementSpans[len(function.StatementSpans)-1]
+}
+
+func clientSpan(component manifest.Component, span clientlang.Span) manifest.SourceSpan {
+	return clientSpanColumns(component, span, 1, 2)
+}
+
+func clientSpanColumns(component manifest.Component, span clientlang.Span, startColumn, endColumn int) manifest.SourceSpan {
+	if span.StartLine <= 0 {
+		return firstSpan(component.Blocks.Spans.Client, component.Span)
+	}
+	base := component.Blocks.Spans.Client.Start.Line
+	if base <= 0 {
+		return firstSpan(component.Blocks.Spans.Client, component.Span)
+	}
+	startLine := base + span.StartLine
+	endLine := base + span.EndLine
+	if endLine < startLine {
+		endLine = startLine
+	}
+	if startColumn <= 0 {
+		startColumn = 1
+	}
+	if endColumn <= startColumn {
+		endColumn = startColumn + 1
+	}
+	return manifest.SourceSpan{
+		Start: manifest.SourcePosition{Line: startLine, Column: startColumn},
+		End:   manifest.SourcePosition{Line: endLine, Column: endColumn},
+	}
 }
 
 func mergeTypeSymbols(left, right map[string]clientlang.ValueType) map[string]clientlang.ValueType {

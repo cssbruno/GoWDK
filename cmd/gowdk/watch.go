@@ -146,6 +146,7 @@ func buildIncrementalStatic(args []string, change inputChange) (bool, error) {
 	}
 	result, err := staticgen.BuildIncremental(options.Config, app, outputDir, pageSources)
 	if err != nil {
+		printStaticgenBuildErrorReport(err, options.Debug)
 		return true, err
 	}
 	for _, artifact := range result.Artifacts {
@@ -165,6 +166,10 @@ func buildIncrementalStatic(args []string, change inputChange) (bool, error) {
 	if result.AssetManifestPath != "" {
 		fmt.Println(result.AssetManifestPath)
 	}
+	if result.BuildReportPath != "" {
+		fmt.Println(result.BuildReportPath)
+	}
+	printStaticgenBuildReport(result.Report, options.Debug)
 	return true, nil
 }
 

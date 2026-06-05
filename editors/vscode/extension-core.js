@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 
 const GOWDK_MODULE_PATH = 'github.com/cssbruno/gowdk';
@@ -79,6 +80,30 @@ function goModRequiresGOWDK(source) {
 
 function gowdkModuleRunArgs(args) {
   return ['run', `${GOWDK_MODULE_PATH}/cmd/gowdk`, ...args];
+}
+
+function nearestProjectRoot(startPath, workspaceRoot) {
+  if (!startPath) {
+    return workspaceRoot;
+  }
+  let current = path.resolve(startPath);
+  const boundary = workspaceRoot ? path.resolve(workspaceRoot) : path.parse(current).root;
+  while (true) {
+    if (isProjectRoot(current)) {
+      return current;
+    }
+    if (current === boundary || current === path.dirname(current)) {
+      break;
+    }
+    current = path.dirname(current);
+  }
+  return workspaceRoot ? path.resolve(workspaceRoot) : undefined;
+}
+
+function isProjectRoot(dir) {
+  return fs.existsSync(path.join(dir, 'go.mod')) ||
+    fs.existsSync(path.join(dir, 'gowdk.config.go')) ||
+    fs.existsSync(path.join(dir, 'cmd', 'gowdk'));
 }
 
 function groupDiagnosticsByFile(diagnostics) {
@@ -830,6 +855,7 @@ module.exports = {
   gowdkModuleRunArgs,
   groupDiagnosticsByFile,
   hoverMarkdown,
+  nearestProjectRoot,
   parseDiagnostics,
   pageFlow,
   projectPages,

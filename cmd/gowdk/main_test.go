@@ -45,6 +45,39 @@ view {
 	}
 }
 
+func TestBuildCommandDebugPrintsStaticgenReport(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, source, `@page home
+@route "/"
+
+view {
+  <main>Debuggable</main>
+}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"build", "--debug", "--out", outputDir, source})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reportPath := filepath.Join(outputDir, "gowdk-build-report.json")
+	if !strings.Contains(stdout, reportPath) {
+		t.Fatalf("expected stdout to include build report path %q, got:\n%s", reportPath, stdout)
+	}
+	if !strings.Contains(stderr, "gowdk build report (build):") {
+		t.Fatalf("expected debug report header on stderr, got:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "validate/manifest_valid") || !strings.Contains(stderr, "complete/build_complete") {
+		t.Fatalf("expected validation and completion events on stderr, got:\n%s", stderr)
+	}
+	if _, err := os.Stat(reportPath); err != nil {
+		t.Fatalf("expected build report artifact: %v", err)
+	}
+}
+
 func TestWatchCommandOnceRunsBuild(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")
@@ -2121,6 +2154,43 @@ func captureCLIStdout(t *testing.T, fn func() error) (string, error) {
 		t.Fatal(readErr)
 	}
 	return string(payload), runErr
+}
+
+func captureCLIOutput(t *testing.T, fn func() error) (string, string, error) {
+	t.Helper()
+	previousStdout := os.Stdout
+	previousStderr := os.Stderr
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = stdoutWriter
+	os.Stderr = stderrWriter
+	defer func() {
+		os.Stdout = previousStdout
+		os.Stderr = previousStderr
+	}()
+
+	runErr := fn()
+	if err := stdoutWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := stderrWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := io.ReadAll(stdoutReader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderr, err := io.ReadAll(stderrReader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(stdout), string(stderr), runErr
 }
 
 func assertRouteBinding(t *testing.T, routes []routeBindingJSON, expected routeBindingJSON) {

@@ -15,3 +15,5 @@ Recommended naming:
 
 - `0001-llm-ready-project-structure.md`: accepted project structure for LLM-ready docs, workflows, and templates.
 - `0002-compile-first-render-model.md`: accepted compile-first render model with optional SSR.
+- `0003-js-default-explicit-wasm-islands.md`: accepted default JS islands and explicit WASM island opt-in.
+- `0004-production-wasm-island-abi.md`: proposed production ABI for explicit WASM islands.

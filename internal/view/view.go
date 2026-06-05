@@ -23,6 +23,7 @@ var (
 	islandTextBindingPattern   = regexp.MustCompile(`^\s*\{([A-Za-z_][A-Za-z0-9_]*)\}\s*$`)
 	islandRefCallPattern       = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\.(Focus|Blur|ScrollIntoView)\(\)$`)
 	islandLetPattern           = regexp.MustCompile(`^let\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$`)
+	islandAwaitFetchPattern    = regexp.MustCompile(`^await\s+fetchJSON\[(.+)\]\((.*)\)$`)
 	forDirectivePattern        = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)(?:\s*,\s*([A-Za-z_][A-Za-z0-9_]*))?\s+in\s+(.+)$`)
 	eventNamePattern           = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
 	stylePropertyPattern       = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -48,6 +49,8 @@ func (node Text) render(ctx *renderContext, out *strings.Builder) error {
 			}
 			out.WriteString(`<span data-gowdk-bind="`)
 			out.WriteString(gowhtml.Escape(field))
+			out.WriteString(`" data-gowdk-binding-text="`)
+			out.WriteString(ctx.nextBindingID())
 			out.WriteString(`">`)
 			out.WriteString(gowhtml.Escape(value))
 			out.WriteString(`</span>`)
@@ -108,6 +111,8 @@ func (node Element) renderFor(ctx *renderContext, out *strings.Builder, loop For
 	}
 	out.WriteString(`<template data-gowdk-for="`)
 	out.WriteString(gowhtml.Escape(group))
+	out.WriteString(`" data-gowdk-binding-list="`)
+	out.WriteString(ctx.nextBindingID())
 	out.WriteString(`" data-gowdk-for-var="`)
 	out.WriteString(gowhtml.Escape(loop.Var))
 	out.WriteString(`" data-gowdk-for-source="`)
@@ -321,6 +326,15 @@ func (ctx *renderContext) nextLoopGroup() string {
 	return fmt.Sprintf("l%d", *ctx.loopSeq)
 }
 
+func (ctx *renderContext) nextBindingID() string {
+	if ctx.bindingSeq == nil {
+		seq := 0
+		ctx.bindingSeq = &seq
+	}
+	*ctx.bindingSeq = *ctx.bindingSeq + 1
+	return fmt.Sprintf("b%d", *ctx.bindingSeq)
+}
+
 func (ctx *renderContext) loopKeyValue(expr string) string {
 	if ctx.templateLoop != nil {
 		return loopTemplateValue(expr)
@@ -356,6 +370,11 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 	} else if ok {
 		return node.renderFor(ctx, out, loop, keyExpr)
 	}
+	if ctx.conditional != nil {
+		out.WriteString(`<!--gowdk-if:`)
+		out.WriteString(gowhtml.Escape(ctx.conditional.Marker()))
+		out.WriteString(`:start-->`)
+	}
 	out.WriteByte('<')
 	out.WriteString(node.Name)
 	directives, err := node.postDirectives(ctx)
@@ -383,6 +402,10 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		out.WriteString(binding.Property)
 		out.WriteString(`="`)
 		out.WriteString(gowhtml.Escape(binding.Expression))
+		out.WriteString(`" data-gowdk-binding-style-`)
+		out.WriteString(binding.Property)
+		out.WriteString(`="`)
+		out.WriteString(ctx.nextBindingID())
 		out.WriteByte('"')
 		if binding.Unit != "" {
 			out.WriteString(` data-gowdk-style-unit-`)
@@ -397,6 +420,10 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		out.WriteString(toggle.Name)
 		out.WriteString(`="`)
 		out.WriteString(gowhtml.Escape(toggle.Expression))
+		out.WriteString(`" data-gowdk-binding-class-`)
+		out.WriteString(toggle.Name)
+		out.WriteString(`="`)
+		out.WriteString(ctx.nextBindingID())
 		out.WriteByte('"')
 	}
 	if classValue := node.initialClassValue(ctx, classToggles); classValue != "" {
@@ -429,13 +456,17 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			if err != nil {
 				return err
 			}
-			if err := ValidateIslandEventExpressionTyped(attr.Value, boolFieldSymbols(ctx.readFields), boolFieldSymbols(ctx.stateFields), ctx.handlers); err != nil {
+			if err := ValidateIslandEventExpressionTypedWithEvents(attr.Value, ctx.readSymbols(), ctx.stateTypes, ctx.handlers, nil, ctx.emits); err != nil {
 				return fmt.Errorf("%s: %w", attr.Name, err)
 			}
 			out.WriteString(` data-gowdk-on-`)
 			out.WriteString(eventDirective.Event)
 			out.WriteString(`="`)
 			out.WriteString(gowhtml.Escape(attr.Value))
+			out.WriteString(`" data-gowdk-binding-on-`)
+			out.WriteString(eventDirective.Event)
+			out.WriteString(`="`)
+			out.WriteString(ctx.nextBindingID())
 			out.WriteByte('"')
 			if options := eventDirective.RuntimeOptions(); options != "" {
 				out.WriteString(` data-gowdk-event-`)
@@ -458,6 +489,8 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			}
 			out.WriteString(` data-gowdk-if="`)
 			out.WriteString(gowhtml.Escape(attr.Value))
+			out.WriteString(`" data-gowdk-binding-if="`)
+			out.WriteString(ctx.nextBindingID())
 			out.WriteByte('"')
 			if visible, err := clientlang.EvalBool(attr.Value, ctx.values); err == nil && !visible {
 				out.WriteString(` hidden`)
@@ -476,6 +509,8 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		if attr.Name == "g:bind:value" {
 			out.WriteString(` data-gowdk-bind-value="`)
 			out.WriteString(gowhtml.Escape(valueBinding))
+			out.WriteString(`" data-gowdk-binding-value="`)
+			out.WriteString(ctx.nextBindingID())
 			out.WriteByte('"')
 			if bindingType := valueBindingRuntimeType(valueBinding, ctx.stateTypes); bindingType != "" {
 				out.WriteString(` data-gowdk-bind-type="`)
@@ -492,6 +527,8 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		if attr.Name == "g:bind:checked" {
 			out.WriteString(` data-gowdk-bind-checked="`)
 			out.WriteString(gowhtml.Escape(checkedBinding))
+			out.WriteString(`" data-gowdk-binding-checked="`)
+			out.WriteString(ctx.nextBindingID())
 			out.WriteByte('"')
 			if ctx.values[checkedBinding] == "true" {
 				out.WriteString(` checked`)
@@ -508,6 +545,8 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			}
 			out.WriteString(` data-gowdk-ref="`)
 			out.WriteString(gowhtml.Escape(refName))
+			out.WriteString(`" data-gowdk-binding-ref="`)
+			out.WriteString(ctx.nextBindingID())
 			out.WriteByte('"')
 			continue
 		}
@@ -547,6 +586,10 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			out.WriteString(attr.Name)
 			out.WriteString(`="`)
 			out.WriteString(gowhtml.Escape(expr))
+			out.WriteString(`" data-gowdk-binding-attr-`)
+			out.WriteString(attr.Name)
+			out.WriteString(`="`)
+			out.WriteString(ctx.nextBindingID())
 			out.WriteByte('"')
 			value, ok, err := reactiveAttrValue(attr.Name, expr, ctx.values)
 			if err != nil {
@@ -612,6 +655,8 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		out.WriteString(gowhtml.Escape(ctx.conditional.Group))
 		out.WriteString(`" data-gowdk-if-index="`)
 		out.WriteString(strconv.Itoa(ctx.conditional.Index))
+		out.WriteString(`" data-gowdk-binding-if="`)
+		out.WriteString(ctx.nextBindingID())
 		out.WriteByte('"')
 		if ctx.conditional.Condition != "" {
 			out.WriteString(` data-gowdk-if="`)
@@ -626,8 +671,13 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 	}
 	out.WriteByte('>')
 	childCtx := ctx
-	if ctx.loopItem != nil {
+	if ctx.conditional != nil {
 		next := *ctx
+		next.conditional = nil
+		childCtx = &next
+	}
+	if ctx.loopItem != nil {
+		next := *childCtx
 		next.loopItem = nil
 		childCtx = &next
 	}
@@ -649,6 +699,11 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 	out.WriteString("</")
 	out.WriteString(node.Name)
 	out.WriteByte('>')
+	if ctx.conditional != nil {
+		out.WriteString(`<!--gowdk-if:`)
+		out.WriteString(gowhtml.Escape(ctx.conditional.Marker()))
+		out.WriteString(`:end-->`)
+	}
 	return nil
 }
 
@@ -1332,10 +1387,20 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		return err
 	}
 	props := map[string]string{}
+	propExpressions := map[string]string{}
 	taintedValues := map[string]bool{}
+	var parentListeners []parentComponentListener
 	for _, attr := range node.Attrs {
 		if strings.HasPrefix(attr.Name, "g:") {
 			if attr.Name == "g:island" {
+				continue
+			}
+			if strings.HasPrefix(attr.Name, "g:on:") {
+				listener, err := node.parentListener(attr, component, ctx)
+				if err != nil {
+					return err
+				}
+				parentListeners = append(parentListeners, listener)
 				continue
 			}
 			return fmt.Errorf("component %s uses unsupported directive attribute %q", node.Name, attr.Name)
@@ -1348,6 +1413,9 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 			return err
 		}
 		props[attr.Name] = value
+		if attr.Expression {
+			propExpressions[attr.Name] = expressionAttrSource(attr.Value)
+		}
 		if tainted {
 			taintedValues[attr.Name] = true
 		}
@@ -1374,6 +1442,9 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 	}
 	values = mergeValues(values, computedStrings)
 	bindValues := mergeValues(component.State, computedStrings)
+	if len(propExpressions) > 0 {
+		bindValues = mergeValues(bindValues, props)
+	}
 	childCtx := renderContext{
 		components:  ctx.components,
 		values:      values,
@@ -1387,13 +1458,15 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		handlers:    component.Handlers,
 		stateTypes:  component.StateTypes,
 		refs:        component.Refs,
+		emits:       component.Emits,
+		bindingSeq:  ctx.bindingSeq,
 	}
 	childCtx.stack[node.Name] = true
 	body, err := render(component.Body, childCtx)
 	if err != nil {
 		return err
 	}
-	if component.StateJSON != "" || component.HandlersJSON != "" || mode != "" {
+	if component.StateJSON != "" || component.HandlersJSON != "" || mode != "" || len(component.Emits) > 0 || len(propExpressions) > 0 {
 		if mode == "" {
 			mode = "js"
 		}
@@ -1413,6 +1486,29 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 			out.WriteString(gowhtml.Escape(component.HandlersJSON))
 			out.WriteByte('"')
 		}
+		if len(propExpressions) > 0 {
+			propsJSON, err := json.Marshal(propExpressions)
+			if err != nil {
+				return err
+			}
+			out.WriteString(` data-gowdk-props="`)
+			out.WriteString(gowhtml.Escape(string(propsJSON)))
+			out.WriteByte('"')
+		}
+		for _, listener := range parentListeners {
+			out.WriteString(` data-gowdk-parent-on-`)
+			out.WriteString(listener.Event)
+			out.WriteString(`="`)
+			out.WriteString(gowhtml.Escape(listener.Expression))
+			out.WriteByte('"')
+			if listener.Modifiers != "" {
+				out.WriteString(` data-gowdk-parent-event-`)
+				out.WriteString(listener.Event)
+				out.WriteString(`="`)
+				out.WriteString(gowhtml.Escape(listener.Modifiers))
+				out.WriteByte('"')
+			}
+		}
 		out.WriteByte('>')
 		out.WriteString(body)
 		out.WriteString(`</gowdk-island>`)
@@ -1420,6 +1516,47 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 	}
 	out.WriteString(body)
 	return nil
+}
+
+type parentComponentListener struct {
+	Event      string
+	Expression string
+	Modifiers  string
+}
+
+func (node ComponentCall) parentListener(attr Attr, component Component, ctx *renderContext) (parentComponentListener, error) {
+	if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+		return parentComponentListener{}, fmt.Errorf("%s requires an expression value", attr.Name)
+	}
+	directive, err := ParseEventDirective(attr.Name)
+	if err != nil {
+		return parentComponentListener{}, err
+	}
+	event, ok := component.Emits[directive.Event]
+	if !ok {
+		return parentComponentListener{}, fmt.Errorf("component %s does not emit event %q", node.Name, directive.Event)
+	}
+	readSymbols := mergeClientSymbols(ctx.readSymbols(), eventPayloadSymbols(event))
+	if err := ValidateIslandEventExpressionTypedWithFunctions(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil); err != nil {
+		return parentComponentListener{}, fmt.Errorf("%s: %w", attr.Name, err)
+	}
+	return parentComponentListener{
+		Event:      directive.Event,
+		Expression: attr.Value,
+		Modifiers:  directive.RuntimeOptions(),
+	}, nil
+}
+
+func eventPayloadSymbols(event clientlang.Emit) map[string]clientlang.ValueType {
+	out := map[string]clientlang.ValueType{"event": clientlang.TypeObject}
+	for index, name := range event.Params {
+		typ := clientlang.TypeUnknown
+		if index < len(event.ParamTypes) {
+			typ = event.ParamTypes[index]
+		}
+		out["event."+name] = typ
+	}
+	return out
 }
 
 func (node ComponentCall) islandMode() (string, error) {
@@ -1526,6 +1663,10 @@ type conditionalRender struct {
 	Visible   bool
 }
 
+func (conditional conditionalRender) Marker() string {
+	return conditional.Group + "-" + strconv.Itoa(conditional.Index)
+}
+
 type conditionalBranchInfo struct {
 	Kind      string
 	Condition string
@@ -1612,6 +1753,7 @@ type Component struct {
 	HandlersJSON string
 	StateTypes   map[string]clientlang.ValueType
 	Refs         map[string]clientlang.Ref
+	Emits        map[string]clientlang.Emit
 	Computed     []clientlang.Computed
 	Body         string
 }
@@ -1683,13 +1825,15 @@ type ComponentIslandUsage struct {
 
 // ComponentCallUsage records one component call and its optional island mode.
 type ComponentCallUsage struct {
-	Component string
-	Island    string
+	Component     string
+	Island        string
+	ReactiveProps bool
 }
 
 // RenderWithOptions renders a static markup fragment with component support,
 // interpolation data, and page-scoped action routes.
 func RenderWithOptions(source string, components map[string]Component, data map[string]string, options Options) (string, error) {
+	bindingSeq := 0
 	return render(source, renderContext{
 		components:  components,
 		values:      cloneValues(data),
@@ -1698,6 +1842,7 @@ func RenderWithOptions(source string, components map[string]Component, data map[
 		stateFields: map[string]bool{},
 		readFields:  map[string]bool{},
 		bindFields:  map[string]bool{},
+		bindingSeq:  &bindingSeq,
 	})
 }
 
@@ -1857,6 +2002,7 @@ func writeCanonicalAttrs(out *strings.Builder, attrs []Attr) {
 			sort.Strings(classes)
 			value = strings.Join(classes, " ")
 		}
+		value = canonicalAttrValue(attr.Name, value, attr.Expression)
 		normalized = append(normalized, Attr{Name: attr.Name, Value: value, Boolean: attr.Boolean, Expression: attr.Expression})
 	}
 	sort.Slice(normalized, func(i, j int) bool {
@@ -1887,6 +2033,21 @@ func writeCanonicalAttrs(out *strings.Builder, attrs []Attr) {
 	out.WriteByte('}')
 }
 
+func canonicalAttrValue(name string, value string, expression bool) string {
+	if strings.HasPrefix(name, "g:on:") {
+		return clientlang.CanonicalStatement(value)
+	}
+	if expression || name == "g:if" || name == "g:else-if" || name == "g:key" ||
+		strings.HasPrefix(name, "class:") || strings.HasPrefix(name, "style:") {
+		expr := expressionAttrSource(value)
+		if canonical, err := clientlang.CanonicalExpr(expr); err == nil {
+			return canonical
+		}
+		return strings.Join(strings.Fields(expr), " ")
+	}
+	return value
+}
+
 // ParamReferences returns unique param("name") route-param references directly
 // visible in the current static markup subset.
 func ParamReferences(source string) ([]string, error) {
@@ -1906,6 +2067,14 @@ func render(source string, ctx renderContext) (string, error) {
 	}
 	if err := validateFragmentTargetReferences(nodes); err != nil {
 		return "", err
+	}
+	if ctx.loopSeq == nil {
+		seq := 0
+		ctx.loopSeq = &seq
+	}
+	if ctx.bindingSeq == nil {
+		seq := 0
+		ctx.bindingSeq = &seq
 	}
 	return renderNodes(nodes, &ctx)
 }
@@ -2038,7 +2207,11 @@ func collectComponentCallUsages(nodes []Node, usages *[]ComponentCallUsage) erro
 			if err != nil {
 				return err
 			}
-			*usages = append(*usages, ComponentCallUsage{Component: typed.Name, Island: mode})
+			*usages = append(*usages, ComponentCallUsage{
+				Component:     typed.Name,
+				Island:        mode,
+				ReactiveProps: typed.hasReactiveProps(),
+			})
 			if err := collectComponentCallUsages(typed.Children, usages); err != nil {
 				return err
 			}
@@ -2049,6 +2222,18 @@ func collectComponentCallUsages(nodes []Node, usages *[]ComponentCallUsage) erro
 		}
 	}
 	return nil
+}
+
+func (node ComponentCall) hasReactiveProps() bool {
+	for _, attr := range node.Attrs {
+		if strings.HasPrefix(attr.Name, "g:") {
+			continue
+		}
+		if attr.Expression {
+			return true
+		}
+	}
+	return false
 }
 
 func collectViewDependencies(nodes []Node, assets, classes, styles map[string]bool) {
@@ -2239,7 +2424,9 @@ type renderContext struct {
 	handlers     map[string]clientlang.Handler
 	stateTypes   map[string]clientlang.ValueType
 	refs         map[string]clientlang.Ref
+	emits        map[string]clientlang.Emit
 	loopSeq      *int
+	bindingSeq   *int
 	loopItem     *loopItemRender
 	templateLoop *templateLoopRender
 	selectBound  bool
@@ -2896,9 +3083,18 @@ func ValidateIslandEventExpressionTyped(expr string, readSymbols map[string]clie
 // ValidateIslandEventExpressionTypedWithFunctions validates an event expression
 // with scalar type information and return-valued helper functions.
 func ValidateIslandEventExpressionTypedWithFunctions(expr string, readSymbols map[string]clientlang.ValueType, writeSymbols map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction) error {
+	return ValidateIslandEventExpressionTypedWithEvents(expr, readSymbols, writeSymbols, handlers, helpers, nil)
+}
+
+// ValidateIslandEventExpressionTypedWithEvents validates an event expression,
+// including component event dispatch statements.
+func ValidateIslandEventExpressionTypedWithEvents(expr string, readSymbols map[string]clientlang.ValueType, writeSymbols map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, emits map[string]clientlang.Emit) error {
 	expr = strings.TrimSpace(expr)
 	if expr == "" {
 		return fmt.Errorf("empty island event expression")
+	}
+	if emit, ok := clientlang.ParseEmitCall(expr); ok {
+		return validateEmitCall(emit, readSymbols, helpers, emits)
 	}
 	if call, ok := clientlang.ParseCall(expr); ok {
 		if isArrayMutationCall(call.Name) {
@@ -2927,6 +3123,33 @@ func ValidateIslandEventExpressionTypedWithFunctions(expr string, readSymbols ma
 		return nil
 	}
 	return ValidateIslandStateStatementTypedWithFunctions(expr, writeSymbols, readSymbols, helpers)
+}
+
+func validateEmitCall(call clientlang.EmitCall, readSymbols map[string]clientlang.ValueType, helpers map[string]clientlang.ExprFunction, emits map[string]clientlang.Emit) error {
+	if emits == nil {
+		return fmt.Errorf("unknown component event %q", call.Name)
+	}
+	event, exists := emits[call.Name]
+	if !exists {
+		return fmt.Errorf("unknown component event %q", call.Name)
+	}
+	if len(call.Args) != len(event.Params) {
+		return fmt.Errorf("component event %s expects %d arguments, got %d", call.Name, len(event.Params), len(call.Args))
+	}
+	for index, arg := range call.Args {
+		typ, _, err := clientlang.CheckExprWithFunctions(arg, readSymbols, helpers)
+		if err != nil {
+			return err
+		}
+		expected := clientlang.TypeUnknown
+		if index < len(event.ParamTypes) {
+			expected = event.ParamTypes[index]
+		}
+		if expected != clientlang.TypeUnknown && typ != expected && !compatibleNumericType(typ, expected) {
+			return fmt.Errorf("component event %s argument %d expects %s, got %s", call.Name, index+1, expected, typ)
+		}
+	}
+	return nil
 }
 
 // ValidateIslandStateStatement validates a client statement that may write only
@@ -3002,6 +3225,13 @@ func ValidateIslandClientStatementTyped(expr string, writeSymbols map[string]cli
 // ValidateIslandClientStatementTypedWithFunctions validates a client statement
 // that may mutate state, call a safe DOM ref method, or read helper functions.
 func ValidateIslandClientStatementTypedWithFunctions(expr string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction) error {
+	return ValidateIslandClientStatementTypedWithEvents(expr, writeSymbols, readSymbols, refs, helpers, nil)
+}
+
+// ValidateIslandClientStatementTypedWithEvents validates a client statement
+// that may mutate state, call a safe DOM ref method, read helper functions, or
+// dispatch declared component events.
+func ValidateIslandClientStatementTypedWithEvents(expr string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction, emits map[string]clientlang.Emit) error {
 	if refName, ok := IslandRefStatement(expr); ok {
 		if refs == nil {
 			return fmt.Errorf("unknown DOM ref %q", refName)
@@ -3010,6 +3240,9 @@ func ValidateIslandClientStatementTypedWithFunctions(expr string, writeSymbols m
 			return fmt.Errorf("unknown DOM ref %q", refName)
 		}
 		return nil
+	}
+	if emit, ok := clientlang.ParseEmitCall(expr); ok {
+		return validateEmitCall(emit, readSymbols, helpers, emits)
 	}
 	return ValidateIslandStateStatementTypedWithFunctions(expr, writeSymbols, readSymbols, helpers)
 }
@@ -3025,43 +3258,116 @@ func ValidateIslandClientStatementsTyped(statements []string, writeSymbols map[s
 // statement block. Local variables declared with let are visible only to later
 // statements in the same block.
 func ValidateIslandClientStatementsTypedWithFunctions(statements []string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction) (map[string]bool, error) {
+	return ValidateIslandClientStatementsTypedWithOptions(statements, writeSymbols, readSymbols, refs, helpers, false)
+}
+
+// ValidateIslandClientStatementsTypedWithOptions validates an ordered client
+// statement block with the same local-variable rules as
+// ValidateIslandClientStatementsTypedWithFunctions. Async blocks may use
+// compiler-owned await expressions.
+func ValidateIslandClientStatementsTypedWithOptions(statements []string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction, async bool) (map[string]bool, error) {
+	return ValidateIslandClientStatementsTypedWithEvents(statements, writeSymbols, readSymbols, refs, helpers, async, nil)
+}
+
+// ValidateIslandClientStatementsTypedWithEvents validates an ordered client
+// statement block with optional component event dispatch support.
+func ValidateIslandClientStatementsTypedWithEvents(statements []string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction, async bool, emits map[string]clientlang.Emit) (map[string]bool, error) {
 	locals := mergeClientSymbols(nil, readSymbols)
 	usedRefs := map[string]bool{}
-	for _, statement := range statements {
+	for index, statement := range statements {
 		if refName, ok := IslandRefStatement(statement); ok {
 			usedRefs[refName] = true
 		}
 		if local, ok, err := parseLetStatement(statement); err != nil {
-			return usedRefs, err
+			return usedRefs, StatementValidationError{Index: index, Err: err}
 		} else if ok {
+			if strings.Contains(local.Expr, "await ") {
+				return usedRefs, StatementValidationError{Index: index, Err: fmt.Errorf("await is not supported in let statements")}
+			}
 			if _, exists := writeSymbols[local.Name]; exists {
-				return usedRefs, fmt.Errorf("local %q conflicts with a state field", local.Name)
+				return usedRefs, StatementValidationError{Index: index, Err: fmt.Errorf("local %q conflicts with a state field", local.Name)}
 			}
 			if _, exists := locals[local.Name]; exists {
-				return usedRefs, fmt.Errorf("local %q is already declared", local.Name)
+				return usedRefs, StatementValidationError{Index: index, Err: fmt.Errorf("local %q is already declared", local.Name)}
 			}
 			typ := clientlang.NormalizeType(local.Type)
 			if !isSupportedLocalType(typ) {
-				return usedRefs, fmt.Errorf("local %q uses unsupported type %q", local.Name, local.Type)
+				return usedRefs, StatementValidationError{Index: index, Err: fmt.Errorf("local %q uses unsupported type %q", local.Name, local.Type)}
 			}
 			actual, _, err := clientlang.CheckExprWithFunctions(local.Expr, locals, helpers)
 			if err != nil {
-				return usedRefs, err
+				return usedRefs, StatementValidationError{Index: index, Err: err}
 			}
 			if actual == clientlang.TypeArray || actual == clientlang.TypeObject {
-				return usedRefs, fmt.Errorf("local %q cannot use %s expression", local.Name, actual)
+				return usedRefs, StatementValidationError{Index: index, Err: fmt.Errorf("local %q cannot use %s expression", local.Name, actual)}
 			}
 			if typ != clientlang.TypeUnknown && actual != clientlang.TypeUnknown && typ != actual && !compatibleNumericType(actual, typ) {
-				return usedRefs, fmt.Errorf("local %q expects %s, got %s", local.Name, typ, actual)
+				return usedRefs, StatementValidationError{Index: index, Err: fmt.Errorf("local %q expects %s, got %s", local.Name, typ, actual)}
 			}
 			locals[local.Name] = typ
 			continue
 		}
-		if err := ValidateIslandClientStatementTypedWithFunctions(statement, writeSymbols, locals, refs, helpers); err != nil {
-			return usedRefs, err
+		if strings.Contains(statement, "await ") {
+			if !async {
+				return usedRefs, StatementValidationError{Index: index, Err: fmt.Errorf("await is only supported inside async client functions")}
+			}
+			if err := validateAwaitFetchAssignment(statement, writeSymbols, locals, helpers); err != nil {
+				return usedRefs, StatementValidationError{Index: index, Err: err}
+			}
+			continue
+		}
+		if err := ValidateIslandClientStatementTypedWithEvents(statement, writeSymbols, locals, refs, helpers, emits); err != nil {
+			return usedRefs, StatementValidationError{Index: index, Err: err}
 		}
 	}
 	return usedRefs, nil
+}
+
+// StatementValidationError identifies the statement index that failed within a
+// client statement block.
+type StatementValidationError struct {
+	Index int
+	Err   error
+}
+
+func (err StatementValidationError) Error() string {
+	if err.Err == nil {
+		return ""
+	}
+	return err.Err.Error()
+}
+
+func (err StatementValidationError) Unwrap() error {
+	return err.Err
+}
+
+func validateAwaitFetchAssignment(statement string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, helpers map[string]clientlang.ExprFunction) error {
+	match := islandAssignPattern.FindStringSubmatch(strings.TrimSpace(statement))
+	if match == nil {
+		return fmt.Errorf("await fetchJSON must assign to a state field")
+	}
+	left := strings.TrimSpace(match[1])
+	leftType, err := validateIslandSymbol(left, writeSymbols)
+	if err != nil {
+		return err
+	}
+	right := strings.TrimSpace(match[2])
+	fetch := islandAwaitFetchPattern.FindStringSubmatch(right)
+	if fetch == nil {
+		return fmt.Errorf("await supports only fetchJSON[T](urlExpr)")
+	}
+	fetchType := clientlang.NormalizeType(strings.TrimSpace(fetch[1]))
+	if fetchType != clientlang.TypeUnknown && leftType != clientlang.TypeUnknown && fetchType != leftType && !compatibleNumericType(fetchType, leftType) {
+		return fmt.Errorf("cannot assign fetched %s value to %s field %q", fetchType, leftType, left)
+	}
+	urlType, _, err := clientlang.CheckExprWithFunctions(strings.TrimSpace(fetch[2]), readSymbols, helpers)
+	if err != nil {
+		return fmt.Errorf("fetchJSON url: %w", err)
+	}
+	if urlType != clientlang.TypeString && urlType != clientlang.TypeUnknown {
+		return fmt.Errorf("fetchJSON url must be string, got %s", urlType)
+	}
+	return nil
 }
 
 type letStatement struct {

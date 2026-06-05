@@ -276,6 +276,95 @@ func TestCheckJSONReportsParserDiagnosticRangeAndCode(t *testing.T) {
 	}
 }
 
+func TestCheckJSONReportsClientStatementDiagnosticRange(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "counter.cmp.gwdk")
+	writeGWDK(t, path, `@component Counter
+
+client {
+  fn Bad() {
+    Missing++
+  }
+}
+
+view {
+  <button g:on:click={Bad()}>Bad</button>
+}
+`)
+
+	payload, diagnostics := CheckJSON(gowdk.Config{}, []string{path})
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected client diagnostic")
+	}
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one client diagnostic, got %#v\n%s", diagnostics, payload)
+	}
+	diagnostic := diagnostics[0]
+	if diagnostic.Code != "component_client_error" {
+		t.Fatalf("expected component_client_error, got %#v", diagnostic)
+	}
+	if diagnostic.Pos.Line != 5 || diagnostic.Pos.Column != 1 {
+		t.Fatalf("expected client statement diagnostic at line 5, got %#v\n%s", diagnostic.Pos, payload)
+	}
+	if diagnostic.Range == nil ||
+		diagnostic.Range.Start.Line != 5 || diagnostic.Range.Start.Column != 1 ||
+		diagnostic.Range.End.Line != 5 || diagnostic.Range.End.Column != 2 {
+		t.Fatalf("unexpected client statement diagnostic range: %#v\n%s", diagnostic.Range, payload)
+	}
+	output := string(payload)
+	if !strings.Contains(output, `"code": "component_client_error"`) ||
+		!strings.Contains(output, `"line": 5`) ||
+		!strings.Contains(output, `unknown island field \"Missing\"`) {
+		t.Fatalf("expected client diagnostic JSON details, got: %s", output)
+	}
+}
+
+func TestCheckJSONReportsClientExpressionDiagnosticRange(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "counter.cmp.gwdk")
+	writeGWDK(t, path, `import ui "github.com/cssbruno/gowdk/testfixture/islands"
+
+@component Counter
+
+state ui.CounterState = ui.NewCounterState()
+
+client {
+  fn Bad() {
+    Count = Count && Open
+  }
+}
+
+view {
+  <button g:on:click={Bad()}>{Count}</button>
+}
+`)
+
+	payload, diagnostics := CheckJSON(gowdk.Config{}, []string{path})
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected client expression diagnostic")
+	}
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one client diagnostic, got %#v\n%s", diagnostics, payload)
+	}
+	diagnostic := diagnostics[0]
+	if diagnostic.Code != "component_client_error" {
+		t.Fatalf("expected component_client_error, got %#v", diagnostic)
+	}
+	if diagnostic.Pos.Line != 9 || diagnostic.Pos.Column != 9 {
+		t.Fatalf("expected client expression diagnostic at line 9 column 9, got %#v\n%s", diagnostic.Pos, payload)
+	}
+	if diagnostic.Range == nil ||
+		diagnostic.Range.Start.Line != 9 || diagnostic.Range.Start.Column != 9 ||
+		diagnostic.Range.End.Line != 9 || diagnostic.Range.End.Column != 22 {
+		t.Fatalf("unexpected client expression diagnostic range: %#v\n%s", diagnostic.Range, payload)
+	}
+	output := string(payload)
+	if !strings.Contains(output, `"column": 9`) ||
+		!strings.Contains(diagnostic.Message, `operator && requires bools`) {
+		t.Fatalf("expected expression diagnostic JSON details, got: %s", output)
+	}
+}
+
 func writeGWDK(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

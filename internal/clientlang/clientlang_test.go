@@ -28,10 +28,50 @@ fn Reset() {
 		strings.Join(program.Functions[0].Statements, ",") != "Count = step,Label = label,Open = !Open" {
 		t.Fatalf("unexpected Add function: %#v", program.Functions[0])
 	}
+	if program.Functions[0].Span.StartLine != 2 || program.Functions[0].Span.EndLine != 6 ||
+		len(program.Functions[0].StatementSpans) != 3 ||
+		program.Functions[0].StatementSpans[0].StartLine != 3 ||
+		program.Functions[0].StatementSpans[2].StartLine != 5 {
+		t.Fatalf("unexpected Add function spans: %#v", program.Functions[0])
+	}
 	handlers := program.HandlerMap()
 	if len(handlers["Add"].Params) != 2 || handlers["Add"].Params[0] != "step" ||
 		len(handlers["Reset"].Statements) != 1 || handlers["Reset"].Statements[0] != "Count = 0" {
 		t.Fatalf("unexpected handlers: %#v", handlers)
+	}
+}
+
+func TestParseAsyncClientFunction(t *testing.T) {
+	program, err := Parse(`
+async fn Search() {
+  Loading = true
+  Items = await fetchJSON[[]ui.Item]("/api/items")
+  Loading = false
+}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Functions) != 1 || !program.Functions[0].Async || program.Functions[0].Name != "Search" {
+		t.Fatalf("unexpected async function: %#v", program.Functions)
+	}
+	handlers := program.HandlerMap()
+	if !handlers["Search"].Async || len(handlers["Search"].Statements) != 3 {
+		t.Fatalf("unexpected async handler: %#v", handlers["Search"])
+	}
+}
+
+func TestParseRejectsAsyncHelperReturn(t *testing.T) {
+	_, err := Parse(`
+async fn Search() int {
+  return 1
+}
+`)
+	if err == nil {
+		t.Fatal("expected async return type error")
+	}
+	if !strings.Contains(err.Error(), "cannot declare a return type") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -101,6 +141,12 @@ on destroy {
 	if len(program.Effects) != 1 || program.Effects[0].Field != "Query" || strings.Join(program.Effects[0].Statements, ",") != "Dirty = true" || strings.Join(program.Effects[0].Cleanup, ",") != "Dirty = false" {
 		t.Fatalf("unexpected effects: %#v", program.Effects)
 	}
+	if len(program.MountSpans) != 1 || program.MountSpans[0].StartLine != 3 ||
+		len(program.Effects[0].StatementSpans) != 1 || program.Effects[0].StatementSpans[0].StartLine != 7 ||
+		len(program.Effects[0].CleanupSpans) != 1 || program.Effects[0].CleanupSpans[0].StartLine != 9 ||
+		len(program.DestroySpans) != 1 || program.DestroySpans[0].StartLine != 14 {
+		t.Fatalf("unexpected lifecycle spans: mount=%#v effects=%#v destroy=%#v", program.MountSpans, program.Effects, program.DestroySpans)
+	}
 	if strings.Join(program.Destroy, ",") != "Open = false" {
 		t.Fatalf("unexpected destroy statements: %#v", program.Destroy)
 	}
@@ -128,6 +174,10 @@ computed Next int {
 	if program.Computed[0].Name != "Label" || program.Computed[0].Type != "string" ||
 		program.Computed[0].Expr != `if Open { "open" } else { "closed" }` {
 		t.Fatalf("unexpected Label computed: %#v", program.Computed[0])
+	}
+	if program.Computed[0].Span.StartLine != 2 || program.Computed[0].Span.EndLine != 4 ||
+		program.Computed[0].ExprSpan.StartLine != 3 {
+		t.Fatalf("unexpected Label computed spans: %#v", program.Computed[0])
 	}
 	if program.Computed[1].Name != "Next" || program.Computed[1].Type != "int" || program.Computed[1].Expr != "Count + 1" {
 		t.Fatalf("unexpected Next computed: %#v", program.Computed[1])

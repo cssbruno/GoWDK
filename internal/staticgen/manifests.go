@@ -1,0 +1,188 @@
+package staticgen
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
+)
+
+type routeManifest struct {
+	Version int                  `json:"version"`
+	Routes  []routeManifestEntry `json:"routes"`
+}
+
+type routeManifestEntry struct {
+	PageID string `json:"page"`
+	Route  string `json:"route"`
+	Path   string `json:"path"`
+}
+
+func writeRouteManifest(outputDir string, artifacts []Artifact) (string, error) {
+	payload, err := routeManifestPayload(outputDir, artifacts)
+	if err != nil {
+		return "", err
+	}
+
+	manifestPath := filepath.Join(outputDir, routeManifestFile)
+	if err := writeFileIfChanged(manifestPath, payload); err != nil {
+		return "", err
+	}
+	return manifestPath, nil
+}
+
+func routeManifestPayload(outputDir string, artifacts []Artifact) ([]byte, error) {
+	routes := make([]routeManifestEntry, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return nil, err
+		}
+		routes = append(routes, routeManifestEntry{
+			PageID: artifact.PageID,
+			Route:  artifact.Route,
+			Path:   rel,
+		})
+	}
+	sort.Slice(routes, func(i, j int) bool {
+		if routes[i].Route == routes[j].Route {
+			return routes[i].PageID < routes[j].PageID
+		}
+		return routes[i].Route < routes[j].Route
+	})
+
+	payload, err := json.MarshalIndent(routeManifest{Version: 1, Routes: routes}, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	payload = append(payload, '\n')
+	return payload, nil
+}
+
+func readRouteManifestIfExists(outputDir string) (routeManifest, error) {
+	manifestPath := filepath.Join(outputDir, routeManifestFile)
+	payload, err := os.ReadFile(manifestPath)
+	if os.IsNotExist(err) {
+		return routeManifest{}, nil
+	}
+	if err != nil {
+		return routeManifest{}, err
+	}
+	var manifest routeManifest
+	if err := json.Unmarshal(payload, &manifest); err != nil {
+		return routeManifest{}, fmt.Errorf("read existing route manifest: %w", err)
+	}
+	return manifest, nil
+}
+
+func removeStaleChangedPageArtifacts(outputDir string, previous routeManifest, current []Artifact, changedPageIDs map[string]bool) error {
+	if len(previous.Routes) == 0 || len(changedPageIDs) == 0 {
+		return nil
+	}
+	keep := map[string]bool{}
+	for _, artifact := range current {
+		if !changedPageIDs[artifact.PageID] {
+			continue
+		}
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return err
+		}
+		keep[rel] = true
+	}
+	for _, route := range previous.Routes {
+		if !changedPageIDs[route.PageID] || keep[route.Path] {
+			continue
+		}
+		filePath, err := outputFilePath(outputDir, route.Path)
+		if err != nil {
+			return err
+		}
+		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func outputFilePath(outputDir, rel string) (string, error) {
+	if strings.TrimSpace(rel) == "" {
+		return "", fmt.Errorf("route manifest path is required")
+	}
+	if filepath.IsAbs(rel) {
+		return "", fmt.Errorf("route manifest path %q must be relative", rel)
+	}
+	clean := filepath.Clean(filepath.FromSlash(rel))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("route manifest path %q must stay inside output directory", rel)
+	}
+	return filepath.Join(outputDir, clean), nil
+}
+
+func writeAssetManifest(outputDir string, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) (string, error) {
+	payload, err := assetManifestPayload(outputDir, cssArtifacts, assetArtifacts)
+	if err != nil {
+		return "", err
+	}
+
+	manifestPath := filepath.Join(outputDir, assetManifestFile)
+	if err := writeFileIfChanged(manifestPath, payload); err != nil {
+		return "", err
+	}
+	return manifestPath, nil
+}
+
+func assetManifestPayload(outputDir string, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) ([]byte, error) {
+	files := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
+	for _, artifact := range cssArtifacts {
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return nil, err
+		}
+		files[rel] = rel
+	}
+	for _, artifact := range assetArtifacts {
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return nil, err
+		}
+		files[rel] = rel
+	}
+
+	payload, err := json.MarshalIndent(runtimeasset.Manifest{Version: 1, Files: files}, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	payload = append(payload, '\n')
+	return payload, nil
+}
+
+func writeFileIfChanged(filePath string, contents []byte) error {
+	current, err := os.ReadFile(filePath)
+	if err == nil && bytes.Equal(current, contents) {
+		return nil
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, contents, 0o644)
+}
+
+func relativeOutputPath(outputDir, filePath string) (string, error) {
+	rel, err := filepath.Rel(outputDir, filePath)
+	if err != nil {
+		return "", err
+	}
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("artifact path %q must stay inside output directory", filePath)
+	}
+	return filepath.ToSlash(rel), nil
+}

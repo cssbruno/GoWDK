@@ -15,7 +15,7 @@ gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
-gowdk build [--config <file>] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
+gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk watch [--once] [--restart] [--interval <duration>] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
@@ -29,6 +29,7 @@ gowdk lsp [--ssr]
 - `--json`: supported by `check`; prints editor-friendly diagnostic JSON.
 - `--write`: supported by `fmt`; overwrites formatted files.
 - `--config`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; loads a static `gowdk.config.go` subset from the given path.
+- `--debug`: supported by `build` and forwarded by `dev` and `watch`; prints the structured static build report to stderr while generated paths remain on stdout.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
 - `--module`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
 - `--out`: supported by `build`; selects the output directory and overrides `Build.Output`.
@@ -52,6 +53,7 @@ go run ./cmd/gowdk manifest --module frontend --ssr
 go run ./cmd/gowdk sitemap --module frontend --ssr
 go run ./cmd/gowdk routes --module frontend --ssr
 go run ./cmd/gowdk build --out /tmp/gowdk-build examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
+go run ./cmd/gowdk build --debug --out /tmp/gowdk-build examples/basic/home.page.gwdk
 go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/basic/simple-ssr.page.gwdk
 go run ./cmd/gowdk build --module frontend --module backend --out /tmp/gowdk-build
 go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site examples/basic/home.page.gwdk examples/basic/hero.cmp.gwdk
@@ -91,7 +93,10 @@ discovery. A module with a name and no explicit include uses
 `<module-name>/**/*.gwdk`. Discovery excludes `.git`, `vendor`, `node_modules`,
 root/module `Source.Exclude` globs, and the configured build output directory
 when one exists. `build --out` overrides `Build.Output`; one of them is required
-for `build`.
+for `build`. Every successful disk build writes `gowdk-build-report.json` to the
+output root. Passing `--debug` prints the same build report to stderr for
+validation, planning, write, manifest, cleanup, and completion events without
+changing stdout artifact-path output.
 
 For generated apps and binaries, the selected modules are the packaging set:
 `--app` copies the selected build output; `--bin` and `--wasm` embed it. Prefer

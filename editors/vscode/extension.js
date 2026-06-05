@@ -291,7 +291,7 @@ async function validateNow(document, diagnostics) {
 }
 
 async function loadProjectDiagnostics(document) {
-  const root = workspaceRoot(document);
+  const root = projectRoot(document);
   const configPath = workspaceConfigPath(root);
   if (configPath) {
     const args = core.projectCommandArgs('check', {
@@ -302,7 +302,7 @@ async function loadProjectDiagnostics(document) {
     return runGowdk(args, document).then(({ stdout }) => core.parseDiagnostics(stdout));
   }
 
-  const uris = await vscode.workspace.findFiles('**/*.gwdk', '**/{.git,node_modules}/**');
+  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules}/**');
   if (uris.length <= 1) {
     return undefined;
   }
@@ -372,13 +372,13 @@ function runGowdk(args, document) {
 }
 
 async function showSiteMap(context) {
-  const root = workspaceRoot();
+  const root = projectRoot();
   if (!root) {
     vscode.window.showWarningMessage('Open a workspace to show the GOWDK site map.');
     return;
   }
   if (!workspaceConfigPath(root)) {
-    const uris = await vscode.workspace.findFiles('**/*.gwdk', '**/{.git,node_modules}/**');
+    const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules}/**');
     if (uris.length === 0) {
       vscode.window.showInformationMessage('No .gwdk files found in this workspace.');
       return;
@@ -414,7 +414,7 @@ async function refreshSiteMap(panel, root) {
 }
 
 async function loadSiteMap() {
-  const root = workspaceRoot();
+  const root = projectRoot();
   const configPath = workspaceConfigPath(root);
   if (configPath) {
     const args = core.projectCommandArgs('sitemap', {
@@ -425,7 +425,7 @@ async function loadSiteMap() {
     return JSON.parse(stdout);
   }
 
-  const uris = await vscode.workspace.findFiles('**/*.gwdk', '**/{.git,node_modules}/**');
+  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules}/**');
   if (uris.length === 0) {
     return { pages: [] };
   }
@@ -438,7 +438,7 @@ async function loadSiteMap() {
 }
 
 async function loadManifest(document) {
-  const root = workspaceRoot(document);
+  const root = projectRoot(document);
   const configPath = workspaceConfigPath(root);
   if (configPath) {
     const args = core.projectCommandArgs('manifest', {
@@ -449,7 +449,7 @@ async function loadManifest(document) {
     return JSON.parse(stdout);
   }
 
-  const uris = await vscode.workspace.findFiles('**/*.gwdk', '**/{.git,node_modules}/**');
+  const uris = await findProjectFiles(root, '**/*.gwdk', '**/{.git,node_modules}/**');
   if (uris.length === 0) {
     return { pages: {}, components: {} };
   }
@@ -475,11 +475,11 @@ async function loadProjectMetadata(document) {
 }
 
 async function loadCSSFiles(document) {
-  const root = workspaceRoot(document);
+  const root = projectRoot(document);
   if (!root) {
     return [];
   }
-  const uris = await vscode.workspace.findFiles('**/*.css', '**/{.git,node_modules,vendor}/**');
+  const uris = await findProjectFiles(root, '**/*.css', '**/{.git,node_modules,vendor}/**');
   return uris.map((uri) => ({
     name: path.basename(uri.fsPath, '.css'),
     file: uri.fsPath
@@ -527,7 +527,7 @@ class SiteMapTreeProvider {
       return item.children;
     }
     try {
-      const root = workspaceRoot();
+      const root = projectRoot();
       const metadata = await loadProjectMetadata();
       const pages = core.projectPages(metadata);
       if (pages.length === 0) {
@@ -583,7 +583,7 @@ class DirectoryOutlineTreeProvider {
       return item.children;
     }
     try {
-      const root = workspaceRoot();
+      const root = projectRoot();
       const metadata = await loadProjectMetadata();
       const pages = core.projectPages(metadata);
       if (pages.length === 0) {
@@ -672,7 +672,7 @@ function infoItem(label, icon) {
 
 function toolInvocation(args, document) {
   const cliPath = config().get('cliPath');
-  const cwd = workspaceRoot(document);
+  const cwd = projectRoot(document);
   if (cliPath) {
     return { command: cliPath, args, cwd };
   }
@@ -700,6 +700,28 @@ function workspaceRoot(document) {
   }
   const folder = vscode.workspace.getWorkspaceFolder(document.uri);
   return folder ? folder.uri.fsPath : process.cwd();
+}
+
+function projectRoot(document) {
+  const root = workspaceRoot(document);
+  const source = documentForProjectRoot(document);
+  if (!source || source.uri.scheme !== 'file') {
+    return root;
+  }
+  return core.nearestProjectRoot(path.dirname(source.uri.fsPath), root);
+}
+
+function documentForProjectRoot(document) {
+  if (document) {
+    return document;
+  }
+  const active = vscode.window.activeTextEditor && vscode.window.activeTextEditor.document;
+  return active && active.uri.scheme === 'file' ? active : undefined;
+}
+
+function findProjectFiles(root, include, exclude) {
+  const pattern = root ? new vscode.RelativePattern(root, include) : include;
+  return vscode.workspace.findFiles(pattern, exclude);
 }
 
 function workspaceConfigPath(root) {

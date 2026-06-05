@@ -10,6 +10,9 @@ Implemented today:
 - `gowdk-assets.json` records generated static assets such as CSS files emitted
   by CSS processors, generated page CSS files, and the partial-update client
   runtime when needed.
+- `gowdk-build-report.json` records static generator validation, planning,
+  write, manifest, cleanup, and completion events for every successful disk
+  build.
 - Configured stylesheets and CSS processor stylesheet links are emitted in page
   `<head>` elements.
 - CSS processors can emit CSS asset files under the output directory.
@@ -109,6 +112,7 @@ The target output can include:
       index.html
       gowdk-routes.json
       gowdk-assets.json
+      gowdk-build-report.json
   cmd/
     server/
       main.go
@@ -181,6 +185,29 @@ to the selected output directory. The current implementation records CSS files
 emitted by CSS processors, generated page CSS files, partial runtime assets, and
 generated island runtime assets. It does not record configured stylesheet URLs
 that were not written by the build.
+
+## Current Static Build Report
+
+`gowdk build` writes `gowdk-build-report.json` at the output root:
+
+```json
+{
+  "version": 1,
+  "mode": "build",
+  "outputDir": "dist/site",
+  "events": [
+    {
+      "level": "info",
+      "stage": "complete",
+      "kind": "build_complete",
+      "message": "static build completed"
+    }
+  ]
+}
+```
+
+The report records static generator stages even when the CLI is not run with
+`--debug`. Debug mode only mirrors the structured events to stderr for humans.
 
 ## Planned Server Defaults
 

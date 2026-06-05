@@ -201,6 +201,36 @@ view {
 	}
 }
 
+func TestParseComponentReadsEmitsMetadata(t *testing.T) {
+	component, err := ParseComponent([]byte(`
+@component Child
+
+emits {
+  select(id string, active bool)
+}
+
+view {
+  <button>Select</button>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(component.Emits) != 1 {
+		t.Fatalf("expected one emit, got %#v", component.Emits)
+	}
+	event := component.Emits[0]
+	if event.Name != "select" || len(event.Params) != 2 {
+		t.Fatalf("unexpected emit metadata: %#v", event)
+	}
+	if event.Params[0].Name != "id" || event.Params[0].Type != "string" || event.Params[1].Name != "active" || event.Params[1].Type != "bool" {
+		t.Fatalf("unexpected emit params: %#v", event.Params)
+	}
+	if component.Blocks.Spans.Emits.Start.Line != 4 {
+		t.Fatalf("expected emits span, got %#v", component.Blocks.Spans.Emits)
+	}
+}
+
 func TestParsePageRejectsInvalidActionFragmentTarget(t *testing.T) {
 	_, err := ParsePage([]byte(`
 @page patients

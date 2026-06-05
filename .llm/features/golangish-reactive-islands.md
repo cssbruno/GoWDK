@@ -126,9 +126,9 @@ Rules:
 - [x] A counter component can use `fn Increment() { Count++ }` and
   `g:on:click={Increment()}`.
 - [x] A disclosure component can use `computed` values and `g:if`.
-- [ ] A filter component can bind an input with `g:bind:value={Query}` and
+- [x] A filter component can bind an input with `g:bind:value={Query}` and
   render a filtered list.
-- [ ] Attribute, class, style, and ARIA bindings update without full-page
+- [x] Attribute, class, style, and ARIA bindings update without full-page
   hydration.
 - [x] Unsupported client syntax fails with a clear diagnostic.
 - [x] A stateful component without `g:island` emits generated JS by default.

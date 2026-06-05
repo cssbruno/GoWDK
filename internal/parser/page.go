@@ -20,6 +20,8 @@ var (
 	actionPattern         = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{`)
 	apiPattern            = regexp.MustCompile(`^api(?:\s+([A-Za-z_][A-Za-z0-9_.-]*))?\s*\{`)
 	propPattern           = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
+	emitPattern           = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)$`)
+	identifierPattern     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	componentTypePattern  = regexp.MustCompile(`^(props|state)\s+([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)(?:\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\))?$`)
 	actionInputPattern    = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*form\s+([A-Za-z_][A-Za-z0-9_]*)$`)
 	actionValidPattern    = regexp.MustCompile(`^valid\(([A-Za-z_][A-Za-z0-9_]*)\)\?$`)
@@ -303,6 +305,7 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	var viewBody []string
 	inView := false
 	inProps := false
+	inEmits := false
 	var clientBody []string
 	inClient := false
 	clientDepth := 0
@@ -352,6 +355,21 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 				return manifest.Component{}, fmt.Errorf("line %d: prop %s uses unsupported type %q", lineNumber, match[1], match[2])
 			}
 			component.Props = append(component.Props, manifest.Prop{Name: match[1], Type: match[2], Span: sourceLineSpan(lineNumber, rawLine)})
+			continue
+		}
+		if inEmits {
+			if line == "}" {
+				inEmits = false
+				continue
+			}
+			if line == "" || strings.HasPrefix(line, "//") {
+				continue
+			}
+			event, err := parseEmitDeclaration(line, lineNumber, rawLine)
+			if err != nil {
+				return manifest.Component{}, err
+			}
+			component.Emits = append(component.Emits, event)
 			continue
 		}
 
@@ -424,6 +442,13 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			inClient = true
 			clientDepth = 1
 			continue
+		case "emits {":
+			if len(component.Emits) > 0 {
+				return manifest.Component{}, fmt.Errorf("line %d: component declares multiple emits blocks", lineNumber)
+			}
+			component.Blocks.Spans.Emits = sourceLineSpan(lineNumber, rawLine)
+			inEmits = true
+			continue
 		case "view {":
 			component.Blocks.View = true
 			component.Blocks.Spans.View = sourceLineSpan(lineNumber, rawLine)
@@ -444,6 +469,9 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	if inProps {
 		return manifest.Component{}, fmt.Errorf("props block missing closing }")
 	}
+	if inEmits {
+		return manifest.Component{}, fmt.Errorf("emits block missing closing }")
+	}
 	if inClient {
 		return manifest.Component{}, fmt.Errorf("client block missing closing }")
 	}
@@ -451,6 +479,48 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 		return manifest.Component{}, fmt.Errorf("missing @component")
 	}
 	return component, nil
+}
+
+func parseEmitDeclaration(line string, lineNumber int, rawLine string) (manifest.Emit, error) {
+	match := emitPattern.FindStringSubmatch(line)
+	if match == nil {
+		return manifest.Emit{}, fmt.Errorf("line %d: invalid emit declaration %q", lineNumber, line)
+	}
+	params, err := parseEmitParams(match[2], lineNumber, rawLine)
+	if err != nil {
+		return manifest.Emit{}, err
+	}
+	return manifest.Emit{Name: match[1], Params: params, Span: sourceLineSpan(lineNumber, rawLine)}, nil
+}
+
+func parseEmitParams(source string, lineNumber int, rawLine string) ([]manifest.EmitParam, error) {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return nil, nil
+	}
+	parts := strings.Split(source, ",")
+	params := make([]manifest.EmitParam, 0, len(parts))
+	seen := map[string]bool{}
+	for _, part := range parts {
+		item := strings.TrimSpace(part)
+		fields := strings.Fields(item)
+		if len(fields) != 2 {
+			return nil, fmt.Errorf("line %d: emit parameter %q must use `name type`", lineNumber, item)
+		}
+		name, typ := fields[0], fields[1]
+		if !identifierPattern.MatchString(name) {
+			return nil, fmt.Errorf("line %d: invalid emit parameter name %q", lineNumber, name)
+		}
+		if typ != "string" && typ != "int" && typ != "float" && typ != "bool" {
+			return nil, fmt.Errorf("line %d: emit parameter %s uses unsupported type %q", lineNumber, name, typ)
+		}
+		if seen[name] {
+			return nil, fmt.Errorf("line %d: duplicate emit parameter %q", lineNumber, name)
+		}
+		seen[name] = true
+		params = append(params, manifest.EmitParam{Name: name, Type: typ, Span: sourceLineSpan(lineNumber, rawLine)})
+	}
+	return params, nil
 }
 
 // ParseLayout extracts layout metadata and top-level block declarations.

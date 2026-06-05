@@ -123,6 +123,24 @@ test('gowdkModuleRunArgs builds a go run invocation for app workspaces', () => {
   ]);
 });
 
+test('nearestProjectRoot finds nested GOWDK app roots inside broad workspaces', () => {
+  const tmp = fs.mkdtempSync(path.join(process.cwd(), '.tmp-gowdk-vscode-'));
+  try {
+    const app = path.join(tmp, 'gowdk-page');
+    const pageDir = path.join(app, 'src', 'pages');
+    fs.mkdirSync(pageDir, { recursive: true });
+    fs.writeFileSync(path.join(app, 'go.mod'), `module example.com/page
+
+require github.com/cssbruno/gowdk v0.0.0
+`, 'utf8');
+
+    assert.equal(core.nearestProjectRoot(pageDir, tmp), app);
+    assert.equal(core.nearestProjectRoot(path.join(tmp, 'other'), tmp), tmp);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
   const html = core.siteMapHTML({
     pages: [

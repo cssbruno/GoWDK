@@ -163,7 +163,7 @@
         "gowdk.cliPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the gowdk CLI. When empty, the extension uses `go run ./cmd/gowdk` inside source workspaces, `go run github.com/cssbruno/gowdk/cmd/gowdk` inside GOWDK app modules, then `gowdk` on PATH."
+          "description": "Path to the gowdk CLI. When empty, the extension uses `go run ./cmd/gowdk` inside source workspaces, `go run github.com/cssbruno/gowdk/cmd/gowdk` inside or below GOWDK app modules, then `gowdk` on PATH."
         },
         "gowdk.enableDiagnostics": {
           "type": "boolean",

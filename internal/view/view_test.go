@@ -113,7 +113,7 @@ func TestRenderWithComponentsEmitsDefaultJSIslandForState(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<gowdk-island data-gowdk-component="Counter" data-gowdk-runtime="js" data-gowdk-state="{&#34;Count&#34;:1}">`,
-		`<button data-gowdk-on-click="Count++"><span data-gowdk-bind="Count">1</span></button>`,
+		`<button data-gowdk-on-click="Count++" data-gowdk-binding-on-click="b1"><span data-gowdk-bind="Count" data-gowdk-binding-text="b2">1</span></button>`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in island output:\n%s", want, got)
@@ -137,10 +137,73 @@ func TestRenderWithComponentsEmitsClientHandlers(t *testing.T) {
 	}
 	for _, want := range []string{
 		`data-gowdk-client="{&#34;Add&#34;:{&#34;params&#34;:[&#34;step&#34;],&#34;statements&#34;:[&#34;Count = step&#34;]}}"`,
-		`<button data-gowdk-on-click="Add(2)"><span data-gowdk-bind="Count">1</span></button>`,
+		`<button data-gowdk-on-click="Add(2)" data-gowdk-binding-on-click="b1"><span data-gowdk-bind="Count" data-gowdk-binding-text="b2">1</span></button>`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in island output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsWiresParentComponentEventListener(t *testing.T) {
+	got, err := RenderWithComponents(`<Parent />`, map[string]Component{
+		"Parent": {
+			Name:       "Parent",
+			State:      map[string]string{"SelectedID": ""},
+			StateJSON:  `{"SelectedID":""}`,
+			StateTypes: map[string]clientlang.ValueType{"SelectedID": clientlang.TypeString},
+			Body:       `<Child g:on:select={SelectedID = event.id} />`,
+		},
+		"Child": {
+			Name:       "Child",
+			State:      map[string]string{"ID": "first"},
+			StateJSON:  `{"ID":"first"}`,
+			StateTypes: map[string]clientlang.ValueType{"ID": clientlang.TypeString},
+			Emits: map[string]clientlang.Emit{
+				"select": {Name: "select", Params: []string{"id"}, ParamTypes: []clientlang.ValueType{clientlang.TypeString}},
+			},
+			HandlersJSON: `{"emits":{"select":{"params":["id"]}}}`,
+			Body:         `<button g:on:click={emit select(ID)}>{ID}</button>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-parent-on-select="SelectedID = event.id"`,
+		`data-gowdk-client="{&#34;emits&#34;:{&#34;select&#34;:{&#34;params&#34;:[&#34;id&#34;]}}}"`,
+		`<button data-gowdk-on-click="emit select(ID)" data-gowdk-binding-on-click="b1"><span data-gowdk-bind="ID" data-gowdk-binding-text="b2">first</span></button>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in component event output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsMarksReactivePropExpressions(t *testing.T) {
+	got, err := RenderWithComponents(`<Parent />`, map[string]Component{
+		"Parent": {
+			Name:      "Parent",
+			State:     map[string]string{"SelectedName": "Ada"},
+			StateJSON: `{"SelectedName":"Ada"}`,
+			Body:      `<Child label={SelectedName} />`,
+		},
+		"Child": {
+			Name:  "Child",
+			Props: []string{"label"},
+			Body:  `<p>{label}</p>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-props="{&#34;label&#34;:&#34;SelectedName&#34;}"`,
+		`data-gowdk-state="{&#34;label&#34;:&#34;Ada&#34;}"`,
+		`<p><span data-gowdk-bind="label" data-gowdk-binding-text="b1">Ada</span></p>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in reactive prop output:\n%s", want, got)
 		}
 	}
 }
@@ -217,7 +280,9 @@ func TestRenderWithComponentsLowersGIfForStatefulIsland(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
+		`<!--gowdk-if:c1-0:start-->`,
 		`data-gowdk-if="Open" hidden`,
+		`<!--gowdk-if:c1-0:end-->`,
 		`data-gowdk-runtime="js"`,
 	} {
 		if !strings.Contains(got, want) {
@@ -259,9 +324,15 @@ func TestRenderWithComponentsLowersGElseChain(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`data-gowdk-if-group="c1" data-gowdk-if-index="0" data-gowdk-if="Open" hidden`,
-		`data-gowdk-if-group="c1" data-gowdk-if-index="1" data-gowdk-if="Loading"`,
-		`data-gowdk-if-group="c1" data-gowdk-if-index="2" data-gowdk-else hidden`,
+		`<!--gowdk-if:c1-0:start-->`,
+		`data-gowdk-if-group="c1" data-gowdk-if-index="0" data-gowdk-binding-if="b1" data-gowdk-if="Open" hidden`,
+		`<!--gowdk-if:c1-0:end-->`,
+		`<!--gowdk-if:c1-1:start-->`,
+		`data-gowdk-if-group="c1" data-gowdk-if-index="1" data-gowdk-binding-if="b2" data-gowdk-if="Loading"`,
+		`<!--gowdk-if:c1-1:end-->`,
+		`<!--gowdk-if:c1-2:start-->`,
+		`data-gowdk-if-group="c1" data-gowdk-if-index="2" data-gowdk-binding-if="b3" data-gowdk-else hidden`,
+		`<!--gowdk-if:c1-2:end-->`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in else chain output:\n%s", want, got)
@@ -306,7 +377,7 @@ func TestRenderWithComponentsLowersGForList(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`<template data-gowdk-for="l1" data-gowdk-for-var="item" data-gowdk-for-source="Items" data-gowdk-for-key="item.ID"`,
+		`<template data-gowdk-for="l1" data-gowdk-binding-list="b1" data-gowdk-for-var="item" data-gowdk-for-source="Items" data-gowdk-for-key="item.ID"`,
 		`data-gowdk-for-template="&lt;li data-gowdk-for-item=&#34;l1&#34; data-gowdk-key-value=&#34;{{item.ID}}&#34;&gt;{{item.Name}}&lt;/li&gt;"`,
 		`<li data-gowdk-for-item="l1" data-gowdk-key-value="first">first</li>`,
 		`<li data-gowdk-for-item="l1" data-gowdk-key-value="second">second</li>`,
@@ -586,8 +657,10 @@ func TestRenderWithComponentsLowersReactiveAttributes(t *testing.T) {
 	}
 	for _, want := range []string{
 		`data-gowdk-attr-disabled="Open"`,
+		`data-gowdk-binding-attr-disabled="b1"`,
 		` disabled`,
 		`data-gowdk-attr-aria-expanded="Open"`,
+		`data-gowdk-binding-attr-aria-expanded="b2"`,
 		`aria-expanded="true"`,
 	} {
 		if !strings.Contains(got, want) {
@@ -610,7 +683,9 @@ func TestRenderWithComponentsLowersClassToggles(t *testing.T) {
 	}
 	for _, want := range []string{
 		`data-gowdk-class-active="Open"`,
+		`data-gowdk-binding-class-active="b1"`,
 		`data-gowdk-class-closed="!Open"`,
+		`data-gowdk-binding-class-closed="b2"`,
 		`class="base active"`,
 	} {
 		if !strings.Contains(got, want) {
@@ -636,8 +711,10 @@ func TestRenderWithComponentsLowersStyleBindings(t *testing.T) {
 	}
 	for _, want := range []string{
 		`data-gowdk-style-height="Height"`,
+		`data-gowdk-binding-style-height="b1"`,
 		`data-gowdk-style-unit-height="px"`,
 		`data-gowdk-style-width="Percent"`,
+		`data-gowdk-binding-style-width="b2"`,
 		`data-gowdk-style-unit-width="%"`,
 		`style="color: red; height: 12px; width: 50%"`,
 	} {
@@ -664,6 +741,20 @@ func TestRenderWithComponentsRejectsUnknownIslandMode(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `unsupported g:island value "js"`) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCanonicalNormalizesDirectiveExpressions(t *testing.T) {
+	left, err := Canonical(`<button class:active={Open&&Count>0} g:on:click={Count=Count+1}>{Count}</button>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := Canonical(`<button g:on:click={Count = Count + 1} class:active={Open && Count > 0}>{Count}</button>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if left != right {
+		t.Fatalf("expected equivalent canonical view output:\nleft  %s\nright %s", left, right)
 	}
 }
 
@@ -938,6 +1029,22 @@ func TestComponentReferencesReturnsSortedUniqueComponentNames(t *testing.T) {
 	got := strings.Join(names, ",")
 	if got != "Card,Hero" {
 		t.Fatalf("unexpected component references: %#v", names)
+	}
+}
+
+func TestComponentCallUsagesMarksReactiveProps(t *testing.T) {
+	usages, err := ComponentCallUsages(`<Parent><Child label={SelectedName} static="ok" /></Parent>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(usages) != 2 {
+		t.Fatalf("unexpected component usages: %#v", usages)
+	}
+	if usages[0].Component != "Parent" || usages[0].ReactiveProps {
+		t.Fatalf("unexpected parent usage: %#v", usages[0])
+	}
+	if usages[1].Component != "Child" || !usages[1].ReactiveProps {
+		t.Fatalf("expected child reactive prop usage, got %#v", usages[1])
 	}
 }
 

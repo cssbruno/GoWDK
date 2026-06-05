@@ -1,6 +1,7 @@
 package clientlang
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -22,6 +23,52 @@ func TestCheckExprParsesArithmeticComparisonAndBooleanLogic(t *testing.T) {
 	}
 }
 
+func TestParseExprWithSpansRecordsNestedSourceColumns(t *testing.T) {
+	expr, err := ParseExprWithSpans(`  Count + Next(Items[0].Name)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, ok := expr.(BinaryExpr)
+	if !ok {
+		t.Fatalf("expected binary expression, got %#v", expr)
+	}
+	if got, want := ExprSpan(root), (ExprSourceSpan{StartColumn: 3, EndColumn: 30}); got != want {
+		t.Fatalf("unexpected root span: got %#v want %#v", got, want)
+	}
+	call, ok := root.Right.(CallExpr)
+	if !ok {
+		t.Fatalf("expected call on right, got %#v", root.Right)
+	}
+	if got, want := ExprSpan(call), (ExprSourceSpan{StartColumn: 11, EndColumn: 30}); got != want {
+		t.Fatalf("unexpected call span: got %#v want %#v", got, want)
+	}
+	member, ok := call.Args[0].(MemberExpr)
+	if !ok {
+		t.Fatalf("expected member call arg, got %#v", call.Args[0])
+	}
+	if got, want := ExprSpan(member), (ExprSourceSpan{StartColumn: 16, EndColumn: 29}); got != want {
+		t.Fatalf("unexpected member span: got %#v want %#v", got, want)
+	}
+	index, ok := member.X.(IndexExpr)
+	if !ok {
+		t.Fatalf("expected index member base, got %#v", member.X)
+	}
+	if got, want := ExprSpan(index), (ExprSourceSpan{StartColumn: 16, EndColumn: 24}); got != want {
+		t.Fatalf("unexpected index span: got %#v want %#v", got, want)
+	}
+}
+
+func TestCanonicalExprNormalizesWhitespaceAndLiterals(t *testing.T) {
+	got, err := CanonicalExpr(`if Open{Count+1}else{int("2")}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `if Open { (Count + 1) } else { int("2") }`
+	if got != want {
+		t.Fatalf("unexpected canonical expression:\nwant %s\ngot  %s", want, got)
+	}
+}
+
 func TestCheckExprRejectsTypeMismatch(t *testing.T) {
 	_, _, err := CheckExpr(`Count && Open`, map[string]ValueType{
 		"Count": TypeInt,
@@ -32,6 +79,40 @@ func TestCheckExprRejectsTypeMismatch(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "operator && requires bools") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckExprRejectsUnsupportedExpressionWithSpan(t *testing.T) {
+	_, _, err := CheckExpr(`Count && 1`, map[string]ValueType{
+		"Count": TypeInt,
+	})
+	if err == nil {
+		t.Fatal("expected type mismatch")
+	}
+	var validation ExprValidationError
+	if !errors.As(err, &validation) {
+		t.Fatalf("expected ExprValidationError, got %T: %v", err, err)
+	}
+	if got, want := validation.Span, (ExprSourceSpan{StartColumn: 1, EndColumn: 11}); got != want {
+		t.Fatalf("unexpected validation span: got %#v want %#v", got, want)
+	}
+}
+
+func TestCheckExprNestedFailuresExposeNarrowSpan(t *testing.T) {
+	_, _, err := CheckExprWithFunctions(`Next(Open)`, map[string]ValueType{
+		"Open": TypeBool,
+	}, map[string]ExprFunction{
+		"Next": {Params: []ValueType{TypeInt}, Return: TypeInt},
+	})
+	if err == nil {
+		t.Fatal("expected helper arg error")
+	}
+	var validation ExprValidationError
+	if !errors.As(err, &validation) {
+		t.Fatalf("expected ExprValidationError, got %T: %v", err, err)
+	}
+	if got, want := validation.Span, (ExprSourceSpan{StartColumn: 6, EndColumn: 10}); got != want {
+		t.Fatalf("unexpected validation span: got %#v want %#v", got, want)
 	}
 }
 
@@ -123,6 +204,23 @@ func TestCheckExprParsesBuiltins(t *testing.T) {
 	}
 }
 
+func TestCheckExprParsesStringFilterBuiltins(t *testing.T) {
+	typ, fields, err := CheckExpr(`contains(lower(item.Name), lower(Query)) || upper(Query) == "ALL"`, map[string]ValueType{
+		"Query":     TypeString,
+		"item":      TypeObject,
+		"item.Name": TypeString,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if typ != TypeBool {
+		t.Fatalf("expected bool type, got %s", typ)
+	}
+	if strings.Join(fields, ",") != "Query,item" {
+		t.Fatalf("unexpected fields: %#v", fields)
+	}
+}
+
 func TestCheckExprRejectsBadBuiltinArg(t *testing.T) {
 	_, _, err := CheckExpr(`len(Count)`, map[string]ValueType{
 		"Count": TypeInt,
@@ -131,6 +229,46 @@ func TestCheckExprRejectsBadBuiltinArg(t *testing.T) {
 		t.Fatal("expected bad len argument")
 	}
 	if !strings.Contains(err.Error(), "built-in len expects string or array") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckExprAllowsNilScalarComparison(t *testing.T) {
+	typ, fields, err := CheckExpr(`Name != nil`, map[string]ValueType{
+		"Name": TypeString,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if typ != TypeBool {
+		t.Fatalf("expected bool type, got %s", typ)
+	}
+	if strings.Join(fields, ",") != "Name" {
+		t.Fatalf("unexpected fields: %#v", fields)
+	}
+}
+
+func TestCheckExprRejectsNilConditionalBranch(t *testing.T) {
+	_, _, err := CheckExpr(`if Open { nil } else { Name }`, map[string]ValueType{
+		"Name": TypeString,
+		"Open": TypeBool,
+	})
+	if err == nil {
+		t.Fatal("expected nil conditional branch diagnostic")
+	}
+	if !strings.Contains(err.Error(), "nil is only supported") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckExprRejectsNilObjectComparison(t *testing.T) {
+	_, _, err := CheckExpr(`User == nil`, map[string]ValueType{
+		"User": TypeObject,
+	})
+	if err == nil {
+		t.Fatal("expected nil object comparison diagnostic")
+	}
+	if !strings.Contains(err.Error(), "supports nil only with scalar values") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -254,5 +392,18 @@ func TestEvalScalarEvaluatesBuiltins(t *testing.T) {
 	}
 	if got != "4:1.5" {
 		t.Fatalf("expected 4:1.5, got %q", got)
+	}
+}
+
+func TestEvalBoolEvaluatesStringFilterBuiltins(t *testing.T) {
+	got, err := EvalBool(`contains(lower(Name), lower(Query))`, map[string]string{
+		"Name":  "First result",
+		"Query": "fir",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got {
+		t.Fatal("expected filter expression to match")
 	}
 }

@@ -85,6 +85,7 @@ type BlockSpans struct {
 	View    SourceSpan
 	Actions []NamedSpan
 	APIs    []NamedSpan
+	Emits   SourceSpan
 }
 
 // Page describes a .gwdk page after parsing and normalization.
@@ -104,18 +105,18 @@ type Page struct {
 
 // Blocks records the source blocks declared by a page.
 type Blocks struct {
-	PathsBody string
-	Build     bool
-	BuildBody string
-	Load      bool
-	LoadBody  string
-	Client    bool
+	PathsBody  string
+	Build      bool
+	BuildBody  string
+	Load       bool
+	LoadBody   string
+	Client     bool
 	ClientBody string
-	View      bool
-	ViewBody  string
-	Actions   []Action
-	APIs      []API
-	Spans     BlockSpans
+	View       bool
+	ViewBody   string
+	Actions    []Action
+	APIs       []API
+	Spans      BlockSpans
 }
 
 // Component describes a .cmp.gwdk component after parsing and normalization.
@@ -126,6 +127,7 @@ type Component struct {
 	Props     []Prop
 	PropsType GoTypeRef
 	State     StateContract
+	Emits     []Emit
 	Blocks    Blocks
 	Span      SourceSpan
 }
@@ -140,6 +142,20 @@ type Layout struct {
 
 // Prop describes one component prop declaration.
 type Prop struct {
+	Name string
+	Type string
+	Span SourceSpan
+}
+
+// Emit describes one component event emitted by a browser island.
+type Emit struct {
+	Name   string
+	Params []EmitParam
+	Span   SourceSpan
+}
+
+// EmitParam describes one scalar field in a component event payload.
+type EmitParam struct {
 	Name string
 	Type string
 	Span SourceSpan

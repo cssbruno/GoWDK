@@ -105,7 +105,7 @@ gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
-gowdk build [--config <file>] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
+gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
 gowdk dev [--addr 127.0.0.1:8080] [--interval 1s] [build flags...]
 gowdk watch [--once] [--restart] [--interval 1s] [build flags...]
 gowdk serve --dir <dir> [--addr 127.0.0.1:8080]
@@ -127,6 +127,8 @@ Build: gowdk.BuildConfig{
 
 Ad hoc `--module`, `--out`, `--app`, `--bin`, and `--wasm` flags still work
 for one-off builds and may be repeated or comma-separated where applicable.
+Every successful disk build writes `gowdk-build-report.json`; pass `--debug`
+to mirror that structured report to stderr during build, dev, or watch runs.
 
 `--wasm <file>` requires `--app <dir>` and compiles the generated app with
 `GOOS=js GOARCH=wasm`:

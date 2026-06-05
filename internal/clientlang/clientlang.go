@@ -9,43 +9,62 @@ import (
 )
 
 var (
-	functionHeaderPattern = regexp.MustCompile(`^fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s*\{$`)
-	computedHeaderPattern = regexp.MustCompile(`^computed\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_.\[\]*]*)\s*\{$`)
-	effectHeaderPattern   = regexp.MustCompile(`^effect\s+when\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{$`)
-	refPattern            = regexp.MustCompile(`^ref\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
-	identifierPattern     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	functionHeaderPattern  = regexp.MustCompile(`^(async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s*\{$`)
+	computedHeaderPattern  = regexp.MustCompile(`^computed\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_.\[\]*]*)\s*\{$`)
+	effectHeaderPattern    = regexp.MustCompile(`^effect\s+when\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{$`)
+	refPattern             = regexp.MustCompile(`^ref\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
+	identifierPattern      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	statementIncDecPattern = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_.\[\]]*)(\+\+|--)$`)
+	statementAssignPattern = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_.\[\]]*)\s*=\s*(.+)$`)
+	statementLetPattern    = regexp.MustCompile(`^let\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$`)
 )
 
 // Program is the parsed representation of a component client {} block.
 type Program struct {
-	Functions []Function
-	Mount     []string
-	Destroy   []string
-	Effects   []Effect
-	Refs      []Ref
-	Computed  []Computed
+	Functions    []Function
+	Mount        []string
+	MountSpans   []Span
+	Destroy      []string
+	DestroySpans []Span
+	Effects      []Effect
+	Refs         []Ref
+	Computed     []Computed
 }
 
 // Function is a component-local browser handler.
 type Function struct {
-	Name       string
-	Params     []Param
-	ReturnType string
-	Statements []string
+	Name           string
+	Async          bool
+	Params         []Param
+	ReturnType     string
+	Statements     []string
+	StatementSpans []Span
+	Span           Span
 }
 
 // Effect is a dependency-triggered client block.
 type Effect struct {
-	Field      string   `json:"field"`
-	Statements []string `json:"statements"`
-	Cleanup    []string `json:"cleanup,omitempty"`
+	Field          string   `json:"field"`
+	Statements     []string `json:"statements"`
+	Cleanup        []string `json:"cleanup,omitempty"`
+	StatementSpans []Span   `json:"-"`
+	CleanupSpans   []Span   `json:"-"`
+	Span           Span     `json:"-"`
 }
 
 // Computed describes one derived component-local value.
 type Computed struct {
-	Name string `json:"name"`
-	Type string `json:"-"`
-	Expr string `json:"expr"`
+	Name     string `json:"name"`
+	Type     string `json:"-"`
+	Expr     string `json:"expr"`
+	Span     Span   `json:"-"`
+	ExprSpan Span   `json:"-"`
+}
+
+// Span is a 1-based source span relative to the component client {} body.
+type Span struct {
+	StartLine int
+	EndLine   int
 }
 
 // Param describes one typed function parameter.
@@ -60,10 +79,18 @@ type Ref struct {
 	Kind string
 }
 
+// Emit describes one component event exposed to parent component calls.
+type Emit struct {
+	Name       string      `json:"-"`
+	Params     []string    `json:"params,omitempty"`
+	ParamTypes []ValueType `json:"-"`
+}
+
 // Handler is the runtime representation emitted into island bootstrap data.
 type Handler struct {
 	Params     []string    `json:"params,omitempty"`
 	ParamTypes []ValueType `json:"-"`
+	Async      bool        `json:"async,omitempty"`
 	Statements []string    `json:"statements"`
 }
 
@@ -81,6 +108,7 @@ type Helper struct {
 type Bootstrap struct {
 	Handlers map[string]Handler `json:"handlers,omitempty"`
 	Helpers  map[string]Helper  `json:"helpers,omitempty"`
+	Emits    map[string]Emit    `json:"emits,omitempty"`
 	Mount    []string           `json:"mount,omitempty"`
 	Destroy  []string           `json:"destroy,omitempty"`
 	Effects  []Effect           `json:"effects,omitempty"`
@@ -89,6 +117,12 @@ type Bootstrap struct {
 
 // Call is a component-local function invocation expression.
 type Call struct {
+	Name string
+	Args []string
+}
+
+// EmitCall is a component event dispatch statement.
+type EmitCall struct {
 	Name string
 	Args []string
 }
@@ -111,35 +145,39 @@ func Parse(source string) (Program, error) {
 		if current == nil && lifecycle == nil {
 			match := functionHeaderPattern.FindStringSubmatch(line)
 			if match != nil {
-				name := match[1]
+				async := strings.TrimSpace(match[1]) != ""
+				name := match[2]
 				if isReservedFunctionName(name) {
 					return Program{}, fmt.Errorf("client function %q uses a reserved built-in name", name)
 				}
 				if seen[name] {
 					return Program{}, fmt.Errorf("client function %q is declared more than once", name)
 				}
-				params, err := parseParams(match[2])
+				params, err := parseParams(match[3])
 				if err != nil {
 					return Program{}, fmt.Errorf("client function %s params: %w", name, err)
 				}
-				returnType := strings.TrimSpace(match[3])
+				returnType := strings.TrimSpace(match[4])
 				if returnType != "" && !isSupportedReturnType(returnType) {
 					return Program{}, fmt.Errorf("client function %s uses unsupported return type %q", name, returnType)
 				}
+				if async && returnType != "" {
+					return Program{}, fmt.Errorf("async client function %s cannot declare a return type", name)
+				}
 				seen[name] = true
-				current = &Function{Name: name, Params: params, ReturnType: returnType}
+				current = &Function{Name: name, Async: async, Params: params, ReturnType: returnType, Span: Span{StartLine: index + 1, EndLine: index + 1}}
 				continue
 			}
 			switch line {
 			case "on mount {":
-				lifecycle = &lifecycleBlock{Kind: "mount"}
+				lifecycle = &lifecycleBlock{Kind: "mount", Span: Span{StartLine: index + 1, EndLine: index + 1}}
 				continue
 			case "on destroy {":
-				lifecycle = &lifecycleBlock{Kind: "destroy"}
+				lifecycle = &lifecycleBlock{Kind: "destroy", Span: Span{StartLine: index + 1, EndLine: index + 1}}
 				continue
 			}
 			if match := effectHeaderPattern.FindStringSubmatch(line); match != nil {
-				lifecycle = &lifecycleBlock{Kind: "effect", Field: match[1]}
+				lifecycle = &lifecycleBlock{Kind: "effect", Field: match[1], Span: Span{StartLine: index + 1, EndLine: index + 1}}
 				continue
 			}
 			if match := computedHeaderPattern.FindStringSubmatch(line); match != nil {
@@ -148,7 +186,7 @@ func Parse(source string) (Program, error) {
 					return Program{}, fmt.Errorf("client computed %q conflicts with a function", name)
 				}
 				seen[name] = true
-				lifecycle = &lifecycleBlock{Kind: "computed", Field: name, Type: match[2]}
+				lifecycle = &lifecycleBlock{Kind: "computed", Field: name, Type: match[2], Span: Span{StartLine: index + 1, EndLine: index + 1}}
 				continue
 			}
 			if match := refPattern.FindStringSubmatch(line); match != nil {
@@ -167,6 +205,7 @@ func Parse(source string) (Program, error) {
 			if err := validateFunctionReturnShape(*current); err != nil {
 				return Program{}, err
 			}
+			current.Span.EndLine = index + 1
 			program.Functions = append(program.Functions, *current)
 			current = nil
 			continue
@@ -182,6 +221,7 @@ func Parse(source string) (Program, error) {
 			statement := strings.TrimSpace(strings.TrimSuffix(line, ";"))
 			if statement != "" {
 				lifecycle.CleanupStatements = append(lifecycle.CleanupStatements, statement)
+				lifecycle.CleanupSpans = append(lifecycle.CleanupSpans, Span{StartLine: index + 1, EndLine: index + 1})
 			}
 			continue
 		}
@@ -190,16 +230,22 @@ func Parse(source string) (Program, error) {
 			continue
 		}
 		if lifecycle != nil && line == "}" {
+			lifecycle.Span.EndLine = index + 1
 			switch lifecycle.Kind {
 			case "mount":
 				program.Mount = append(program.Mount, lifecycle.Statements...)
+				program.MountSpans = append(program.MountSpans, lifecycle.StatementSpans...)
 			case "destroy":
 				program.Destroy = append(program.Destroy, lifecycle.Statements...)
+				program.DestroySpans = append(program.DestroySpans, lifecycle.StatementSpans...)
 			case "effect":
 				program.Effects = append(program.Effects, Effect{
-					Field:      lifecycle.Field,
-					Statements: append([]string(nil), lifecycle.Statements...),
-					Cleanup:    append([]string(nil), lifecycle.CleanupStatements...),
+					Field:          lifecycle.Field,
+					Statements:     append([]string(nil), lifecycle.Statements...),
+					Cleanup:        append([]string(nil), lifecycle.CleanupStatements...),
+					StatementSpans: append([]Span(nil), lifecycle.StatementSpans...),
+					CleanupSpans:   append([]Span(nil), lifecycle.CleanupSpans...),
+					Span:           lifecycle.Span,
 				})
 			case "computed":
 				if len(lifecycle.Statements) != 1 {
@@ -213,7 +259,11 @@ func Parse(source string) (Program, error) {
 				if expr == "" {
 					return Program{}, fmt.Errorf("client computed %s must return an expression", lifecycle.Field)
 				}
-				program.Computed = append(program.Computed, Computed{Name: lifecycle.Field, Type: lifecycle.Type, Expr: expr})
+				exprSpan := Span{}
+				if len(lifecycle.StatementSpans) > 0 {
+					exprSpan = lifecycle.StatementSpans[0]
+				}
+				program.Computed = append(program.Computed, Computed{Name: lifecycle.Field, Type: lifecycle.Type, Expr: expr, Span: lifecycle.Span, ExprSpan: exprSpan})
 			}
 			lifecycle = nil
 			continue
@@ -234,8 +284,10 @@ func Parse(source string) (Program, error) {
 		}
 		if current != nil {
 			current.Statements = append(current.Statements, statement)
+			current.StatementSpans = append(current.StatementSpans, Span{StartLine: index + 1, EndLine: index + 1})
 		} else {
 			lifecycle.Statements = append(lifecycle.Statements, statement)
+			lifecycle.StatementSpans = append(lifecycle.StatementSpans, Span{StartLine: index + 1, EndLine: index + 1})
 		}
 	}
 
@@ -256,8 +308,11 @@ type lifecycleBlock struct {
 	Field             string
 	Type              string
 	Statements        []string
+	StatementSpans    []Span
 	Cleanup           bool
 	CleanupStatements []string
+	CleanupSpans      []Span
+	Span              Span
 }
 
 func (block lifecycleBlock) Description() string {
@@ -289,6 +344,7 @@ func (program Program) HandlerMap() map[string]Handler {
 		handlers[function.Name] = Handler{
 			Params:     params,
 			ParamTypes: paramTypes,
+			Async:      function.Async,
 			Statements: append([]string(nil), function.Statements...),
 		}
 	}
@@ -465,7 +521,11 @@ func (program Program) Canonical() string {
 		for index, statement := range statements {
 			statements[index] = strings.Join(strings.Fields(statement), " ")
 		}
-		parts = append(parts, function.Name+"("+strings.Join(params, ",")+"){"+strings.Join(statements, ";")+"}")
+		prefix := ""
+		if function.Async {
+			prefix = "async "
+		}
+		parts = append(parts, prefix+function.Name+"("+strings.Join(params, ",")+"){"+strings.Join(statements, ";")+"}")
 		if function.ReturnType != "" {
 			parts[len(parts)-1] = function.Name + "(" + strings.Join(params, ",") + ")" + function.ReturnType + "{" + strings.Join(statements, ";") + "}"
 		}
@@ -482,7 +542,11 @@ func (program Program) Canonical() string {
 		return computeds[i].Name < computeds[j].Name
 	})
 	for _, computed := range computeds {
-		parts = append(parts, "computed "+computed.Name+" "+computed.Type+"{return "+strings.Join(strings.Fields(computed.Expr), " ")+"}")
+		expr := strings.Join(strings.Fields(computed.Expr), " ")
+		if canonical, err := CanonicalExpr(computed.Expr); err == nil {
+			expr = canonical
+		}
+		parts = append(parts, "computed "+computed.Name+" "+computed.Type+"{return "+expr+"}")
 	}
 	if len(program.Mount) > 0 {
 		parts = append(parts, "mount{"+canonicalStatements(program.Mount)+"}")
@@ -493,7 +557,7 @@ func (program Program) Canonical() string {
 	effects := append([]Effect(nil), program.Effects...)
 	sort.Slice(effects, func(i, j int) bool {
 		if effects[i].Field == effects[j].Field {
-			return strings.Join(effects[i].Statements, ";") < strings.Join(effects[j].Statements, ";")
+			return canonicalStatements(effects[i].Statements) < canonicalStatements(effects[j].Statements)
 		}
 		return effects[i].Field < effects[j].Field
 	})
@@ -510,9 +574,57 @@ func (program Program) Canonical() string {
 func canonicalStatements(statements []string) string {
 	items := append([]string(nil), statements...)
 	for index, statement := range items {
-		items[index] = strings.Join(strings.Fields(statement), " ")
+		items[index] = CanonicalStatement(statement)
 	}
 	return strings.Join(items, ";")
+}
+
+// CanonicalStatement returns a deterministic representation of the supported
+// client statement subset. It is intended for fingerprints only.
+func CanonicalStatement(statement string) string {
+	statement = strings.TrimSpace(strings.TrimSuffix(statement, ";"))
+	if statement == "" {
+		return ""
+	}
+	if expr, ok := strings.CutPrefix(statement, "return "); ok {
+		if canonical, err := CanonicalExpr(expr); err == nil {
+			return "return " + canonical
+		}
+		return "return " + strings.Join(strings.Fields(strings.TrimSpace(expr)), " ")
+	}
+	if match := statementLetPattern.FindStringSubmatch(statement); match != nil {
+		expr := strings.TrimSpace(match[3])
+		if canonical, err := CanonicalExpr(expr); err == nil {
+			expr = canonical
+		} else {
+			expr = strings.Join(strings.Fields(expr), " ")
+		}
+		return "let " + match[1] + " " + match[2] + " = " + expr
+	}
+	if match := statementIncDecPattern.FindStringSubmatch(statement); match != nil {
+		return match[1] + match[2]
+	}
+	if match := statementAssignPattern.FindStringSubmatch(statement); match != nil {
+		expr := strings.TrimSpace(match[2])
+		if canonical, err := CanonicalExpr(expr); err == nil {
+			expr = canonical
+		} else {
+			expr = strings.Join(strings.Fields(expr), " ")
+		}
+		return match[1] + " = " + expr
+	}
+	if call, ok := ParseCall(statement); ok {
+		args := make([]string, 0, len(call.Args))
+		for _, arg := range call.Args {
+			if canonical, err := CanonicalExpr(arg); err == nil {
+				args = append(args, canonical)
+			} else {
+				args = append(args, strings.Join(strings.Fields(arg), " "))
+			}
+		}
+		return call.Name + "(" + strings.Join(args, ",") + ")"
+	}
+	return strings.Join(strings.Fields(statement), " ")
 }
 
 // IsFunctionCall reports whether expr is a no-argument client function call.
@@ -540,6 +652,19 @@ func ParseCall(expr string) (Call, bool) {
 		return Call{}, false
 	}
 	return Call{Name: name, Args: args}, true
+}
+
+// ParseEmitCall reports whether expr is an emit event(args...) statement.
+func ParseEmitCall(expr string) (EmitCall, bool) {
+	expr = strings.TrimSpace(expr)
+	if !strings.HasPrefix(expr, "emit ") {
+		return EmitCall{}, false
+	}
+	call, ok := ParseCall(strings.TrimSpace(strings.TrimPrefix(expr, "emit ")))
+	if !ok {
+		return EmitCall{}, false
+	}
+	return EmitCall{Name: call.Name, Args: call.Args}, true
 }
 
 func parseParams(source string) ([]Param, error) {
@@ -611,7 +736,7 @@ func isSupportedReturnType(value string) bool {
 
 func isReservedFunctionName(name string) bool {
 	switch name {
-	case "append", "remove", "move", "len", "string", "int", "float":
+	case "append", "remove", "move", "len", "lower", "upper", "contains", "string", "int", "float":
 		return true
 	default:
 		return false

@@ -39,6 +39,11 @@ type NestedState struct {
 	Count int
 }
 
+type FilterState struct {
+	Query string
+	Items []Item
+}
+
 func NewCounterState() CounterState {
 	return CounterState{Count: 1, Open: false}
 }
@@ -61,5 +66,12 @@ func NewNestedState() NestedState {
 		Items: []Item{{ID: "first", Name: "first", Done: false}, {ID: "second", Name: "second", Done: true}},
 		Flags: []bool{true, false},
 		Count: 0,
+	}
+}
+
+func NewFilterState() FilterState {
+	return FilterState{
+		Query: "fir",
+		Items: []Item{{ID: "first", Name: "First result", Done: false}, {ID: "second", Name: "Second result", Done: false}},
 	}
 }

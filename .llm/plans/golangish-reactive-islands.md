@@ -38,31 +38,30 @@ props ui.SearchProps
 state ui.SearchState = ui.NewSearchState()
 
 client {
-  fn SetQuery(value string) {
-    Query = value
-  }
-
   computed HasQuery bool {
     return Query != ""
-  }
-
-  computed VisibleItems []ui.Item {
-    return filter(Items, item => contains(lower(item.Name), lower(Query)))
   }
 }
 
 view {
-  <input value="{Query}" g:on:input={SetQuery(event.value)} />
+  <input g:bind:value={Query} />
 
-  <p g:if={HasQuery}>{len(VisibleItems)} results</p>
+  <p g:if={HasQuery}>Filtering</p>
 
   <ul>
-    <li g:for={item in VisibleItems} g:key={item.ID}>{item.Name}</li>
+    <li
+      g:for={item in Items}
+      g:key={item.ID}
+      g:if={Query == "" || contains(lower(item.Name), lower(Query))}
+    >
+      {item.Name}
+    </li>
   </ul>
 }
 ```
 
-The example shows target direction. Each syntax piece must land in a separate
+The example shows the currently supported filter pattern. Broader collection
+helpers such as `filter(...)` remain future work and must land in a separate
 small slice with tests.
 
 ## Feature Checklist
@@ -105,18 +104,18 @@ Compiler work:
 
 - [x] Add expression lexer/parser under `internal/clientlang`.
 - [x] Build a typed AST.
-- [ ] Add expression source spans.
+- [x] Add expression source spans.
 - [x] Type-check against props, state, and params.
 - [x] Type-check against computed values, locals, and built-ins.
 - [x] Lower expression behavior to generated JavaScript.
 - [x] Add diagnostics for unsupported operators, unknown fields, and type
   mismatch.
-- [ ] Add diagnostics for invalid nil use beyond scalar comparison.
+- [x] Add diagnostics for invalid nil use beyond scalar comparison.
 
 Tests:
 
 - [x] Parse valid expression fixtures.
-- [ ] Reject unsupported expressions with spans.
+- [x] Reject unsupported expressions with spans.
 - [x] Compile arithmetic, comparison, and boolean expressions to JS.
 - [x] Compile nested field reads to JS.
 
@@ -241,7 +240,7 @@ Compiler work:
 
 - [x] Parse conditional directives in `internal/view`.
 - [x] Validate condition type is bool.
-- [ ] Emit stable comment/marker anchors.
+- [x] Emit stable comment/marker anchors.
 - [x] Generate DOM update code for condition changes using `hidden`.
 
 Tests:
@@ -509,24 +508,31 @@ client {
 
 Support:
 
-- [ ] `async fn`
-- [ ] `await` only inside async functions
-- [ ] compiler-owned `fetchJSON[T]`
-- [ ] loading/error conventions
-- [ ] cancellation or stale-response guard
+- [x] `async fn`
+- [x] `await` only inside async functions
+- [x] compiler-owned `fetchJSON[T]`
+- [x] loading/error conventions
+- [x] cancellation or stale-response guard
 
 Compiler work:
 
-- [ ] Type-check async functions separately.
-- [ ] Generate Promise-based JS.
-- [ ] Add optional AbortController support.
-- [ ] Define safe JSON decode expectations.
+- [x] Type-check async functions separately.
+- [x] Generate Promise-based JS.
+- [x] Add optional AbortController support.
+- [x] Define safe JSON decode expectations.
 
 Tests:
 
-- [ ] Async function sets loading and result.
-- [ ] Error path sets error state.
-- [ ] Stale response does not overwrite newer state.
+- [x] Async function sets loading and result.
+- [x] Error path sets error state.
+- [x] Stale response does not overwrite newer state.
+
+First implementation note: async fetches use a per-target stale token and an
+optional `AbortController` to cancel superseded requests. `fetchJSON` sends an
+`Accept: application/json` header, rejects non-2xx status, rejects non-JSON
+content types, returns `null` for empty JSON responses, and reports invalid JSON
+with a GOWDK-owned error. Runtime conventions clear `Error` before fetch and
+set `Error` plus `Loading=false` on failures when those fields exist.
 
 Decision needed:
 
@@ -555,23 +561,29 @@ view {
 
 Support:
 
-- [ ] `emits { event(args...) }`
-- [ ] `emit event(args...)`
-- [ ] parent event listeners on component calls
-- [ ] typed payloads
+- [x] `emits { event(args...) }`
+- [x] `emit event(args...)`
+- [x] parent event listeners on component calls
+- [x] typed payloads
 
 Compiler work:
 
-- [ ] Add event contract metadata to manifest.
-- [ ] Validate child emit calls.
-- [ ] Validate parent listeners and payload fields.
-- [ ] Generate CustomEvent dispatch/listen code.
+- [x] Add event contract metadata to manifest.
+- [x] Validate child emit calls.
+- [x] Validate parent listeners and payload fields.
+- [x] Generate CustomEvent dispatch/listen code.
 
 Tests:
 
-- [ ] Child emits event and parent state updates.
-- [ ] Unknown event rejected.
-- [ ] Payload type mismatch rejected.
+- [x] Child emits event and parent state updates.
+- [x] Unknown event rejected.
+- [x] Payload type mismatch rejected.
+
+First implementation note: component event contracts now flow from parser to
+manifest, validation, view lowering, and the generated JS island runtime.
+Generated tests verify markup/runtime wiring and diagnostics. A Chromium
+verification against a disposable `gowdk build` output confirmed a child
+`emit select(id)` updates parent state through `g:on:select`.
 
 ### 13. Parent/Child State Passing
 
@@ -585,22 +597,29 @@ Syntax:
 
 Support:
 
-- [ ] reactive prop expressions on component calls
-- [ ] child receives updated prop values
-- [ ] props remain read-only in child client logic
-- [ ] no implicit child mutation of parent state
+- [x] reactive prop expressions on component calls
+- [x] child receives updated prop values
+- [x] props remain read-only in child client logic
+- [x] no implicit child mutation of parent state
 
 Compiler work:
 
-- [ ] Track component call prop expressions.
-- [ ] Generate parent update code for child prop changes.
-- [ ] Decide whether child rerender is marker-based or function-based.
+- [x] Track component call prop expressions.
+- [x] Generate parent update code for child prop changes.
+- [x] Decide whether child rerender is marker-based or function-based.
 
 Tests:
 
-- [ ] Parent state update changes child displayed prop.
-- [ ] Child cannot assign to prop.
-- [ ] Missing child prop remains a compile error.
+- [x] Parent state update changes child displayed prop.
+- [x] Child cannot assign to prop.
+- [x] Missing child prop remains a compile error.
+
+First implementation note: reactive component prop expressions lower to
+`data-gowdk-props` on the child island wrapper. Parent islands dispatch
+`gowdk:props` updates after rerender, child islands merge those fields into
+local state and rerender, and parent runtimes now avoid binding nested child
+island internals. A Chromium verification against a disposable `gowdk build`
+output confirmed parent state changes update the child's displayed prop.
 
 ### 14. Stores And Shared State
 
@@ -688,24 +707,34 @@ Goal: move from simple text replacement to a stable generated DOM update model.
 Support:
 
 - [ ] compiler-owned island root markers
-- [ ] binding IDs for text, attrs, classes, styles, conditionals, and lists
+- [x] binding IDs for text, attrs, classes, styles, conditionals, and lists
 - [ ] keyed list updates
 - [ ] fragment replacement reattaches islands
 - [ ] no full-page hydration
 
 Compiler work:
 
-- [ ] Assign stable binding IDs during view compilation.
+- [x] Assign stable binding IDs during view compilation.
 - [ ] Emit compact binding table into JS asset.
 - [ ] Generate per-binding update functions.
 - [ ] Add island mount registry.
 - [ ] Integrate with partial runtime after server fragment swaps.
 
+Implementation note: the current slice emits compiler-owned `bN` attributes
+and the generated JS builds an in-memory binding table from them on mount and
+rerender. A precomputed compact table emitted directly into the JS asset remains
+open.
+
 Tests:
 
-- [ ] Text/attr/list updates share one scheduler.
+- [x] Text/attr/list updates share one scheduler.
 - [ ] Partial swap remounts new islands.
 - [ ] Removed island runs destroy hook.
+
+Second implementation note: generated JS islands now enqueue post-mutation
+updates through one microtask scheduler. Text, attribute/class/style/form, list,
+conditional, and child-prop sync updates still run through the shared render
+pipeline; only the initial mount render remains immediate.
 
 ### 17. Source Maps And Debug Output
 
@@ -735,19 +764,19 @@ Goal: define what explicit WASM islands actually execute.
 
 Support:
 
-- [ ] WASM island entrypoint naming convention
-- [ ] props/state bootstrap ABI
-- [ ] event dispatch ABI
-- [ ] DOM update ABI or host callback ABI
-- [ ] lifecycle ABI
-- [ ] asset naming and loader strategy
+- [x] WASM island entrypoint naming convention
+- [x] props/state bootstrap ABI
+- [x] event dispatch ABI
+- [x] DOM update ABI or host callback ABI
+- [x] lifecycle ABI
+- [x] asset naming and loader strategy
 
 Compiler work:
 
-- [ ] Add ADR before implementation.
+- [x] Add ADR before implementation.
 - [ ] Generate or validate Go WASM entrypoints.
 - [ ] Emit loader that passes bootstrap data.
-- [ ] Decide whether WASM owns DOM updates or calls host JS helpers.
+- [x] Decide whether WASM owns DOM updates or calls host JS helpers.
 
 Tests:
 
@@ -755,6 +784,12 @@ Tests:
 - [ ] WASM island handles click event.
 - [ ] WASM island updates visible state.
 - [ ] JS default and WASM explicit modes can coexist on one page.
+
+First implementation note: ADR 0004 defines a JS-hosted WASM island ABI with
+component-scoped exports, JSON bootstrap data, host-captured events, validated
+patch-list DOM updates, lifecycle calls, and stable island asset names. This is
+an ABI decision only; code generation and browser-side Go validation remain
+open.
 
 ### 19. Browser-Side Go Logic
 
@@ -790,13 +825,13 @@ Support:
 - [ ] diagnostic codes for every unsupported feature
 - [ ] source spans in `client {}` and view bindings
 - [ ] suggestions for common mistakes
-- [ ] JSON diagnostics for editor tooling
+- [x] JSON diagnostics for editor tooling
 
 Compiler work:
 
 - [ ] Extend parser recovery around `client {}`.
-- [ ] Store spans in client AST.
-- [ ] Add diagnostic code docs.
+- [x] Store spans in client AST.
+- [x] Add diagnostic code docs.
 - [ ] Add LSP validation for client syntax.
 
 Tests:
@@ -804,7 +839,17 @@ Tests:
 - [ ] Unsupported JS function call points to exact expression.
 - [ ] Unknown state field points to exact identifier.
 - [ ] Bad `g:for` syntax points to directive value.
-- [ ] Diagnostics appear in `gowdk check --json`.
+- [x] Diagnostics appear in `gowdk check --json`.
+
+First implementation note: `clientlang.Program` now keeps source spans for
+functions, statements, lifecycle blocks, effects, and computed expressions;
+`clientlang` expression AST nodes also keep 1-based expression-column spans.
+Statement validation errors carry the failing statement index, and expression
+validation errors carry the failing expression span, so compiler diagnostics and
+`gowdk check --json` can report the offending client statement line and exact
+columns for deterministic expression positions. `docs/reference/diagnostics.md`
+documents current JSON fields, ranges, and known diagnostic codes. View-binding
+spans remain open.
 
 ## Phasing
 
@@ -822,30 +867,30 @@ Tests:
 - [x] attr bindings
 - [x] class/style bindings
 - [x] conditional rendering
-- [ ] update scheduler
+- [x] update scheduler
 
 ### Phase C: Product UI Workflows
 
 - [x] two-way form bindings
 - [x] event modifiers
 - [x] list rendering
-- [ ] parent-to-child reactive props
-- [ ] child-to-parent typed events
+- [x] parent-to-child reactive props
+- [x] child-to-parent typed events
 
 ### Phase D: Advanced Runtime
 
-- [ ] lifecycle hooks
-- [ ] effects
-- [ ] async functions
+- [x] lifecycle hooks
+- [x] effects
+- [x] async functions
 - [ ] partial swap island remounting
 - [ ] debug source maps
 
 ### Phase E: Explicit WASM
 
-- [ ] WASM ABI ADR
-- [ ] bootstrap ABI
-- [ ] event ABI
-- [ ] DOM update ABI
+- [x] WASM ABI ADR
+- [x] bootstrap ABI
+- [x] event ABI
+- [x] DOM update ABI
 - [ ] real browser-side Go package build
 
 ## Files Expected To Change

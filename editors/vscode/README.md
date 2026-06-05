@@ -56,7 +56,8 @@ go run ./cmd/gowdk <command>
 ```
 
 When opened inside a GOWDK app module whose `go.mod` requires
-`github.com/cssbruno/gowdk`, the extension runs:
+`github.com/cssbruno/gowdk`, or when editing files below such a nested module,
+the extension runs:
 
 ```sh
 go run github.com/cssbruno/gowdk/cmd/gowdk <command>

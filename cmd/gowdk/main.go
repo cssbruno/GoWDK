@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -18,7 +20,7 @@ import (
 
 const (
 	version    = "0.1.0-dev"
-	buildUsage = "usage: gowdk build [--config <file>] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]"
+	buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]"
 )
 
 var (
@@ -86,7 +88,7 @@ func usage() {
 	fmt.Println("  manifest [--config <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
 	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print generated route bindings JSON")
-	fmt.Println("  build [--config <file>] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...] emit static output")
+	fmt.Println("  build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...] emit static output")
 	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, watch, and live reload")
 	fmt.Println("  watch [--once] [--restart] [--interval <duration>] [build flags...] rebuild static output when inputs change")
 	fmt.Println("  serve --dir <dir> [--addr <addr>] serve generated static output locally")
@@ -459,6 +461,7 @@ func buildOnce(options cliOptions, request buildRequest) error {
 
 	result, err := staticgen.Build(options.Config, app, outputDir)
 	if err != nil {
+		printStaticgenBuildErrorReport(err, options.Debug)
 		return err
 	}
 	for _, artifact := range result.Artifacts {
@@ -476,6 +479,10 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	if result.AssetManifestPath != "" {
 		fmt.Println(result.AssetManifestPath)
 	}
+	if result.BuildReportPath != "" {
+		fmt.Println(result.BuildReportPath)
+	}
+	printStaticgenBuildReport(result.Report, options.Debug)
 	appDir := request.AppDir
 	binaryPath := request.BinaryPath
 	wasmPath := request.WASMPath
@@ -629,6 +636,62 @@ func ssrReplacements(replacements []staticgen.SSRReplacement) []appgen.SSRReplac
 	return out
 }
 
+func printStaticgenBuildErrorReport(err error, debug bool) {
+	if !debug {
+		return
+	}
+	var buildErr *staticgen.BuildError
+	if errors.As(err, &buildErr) {
+		printStaticgenBuildReport(buildErr.Report, true)
+	}
+}
+
+func printStaticgenBuildReport(report staticgen.BuildReport, debug bool) {
+	if !debug || report.Version == 0 {
+		return
+	}
+	mode := strings.TrimSpace(report.Mode)
+	if mode == "" {
+		mode = "build"
+	}
+	fmt.Fprintf(os.Stderr, "gowdk build report (%s):\n", mode)
+	for _, event := range report.Events {
+		stage := event.Stage
+		if event.Kind != "" {
+			stage += "/" + event.Kind
+		}
+		details := staticgenBuildEventDetails(event)
+		if details != "" {
+			details = " (" + details + ")"
+		}
+		fmt.Fprintf(os.Stderr, "  [%s] %s: %s%s\n", event.Level, stage, event.Message, details)
+	}
+}
+
+func staticgenBuildEventDetails(event staticgen.BuildEvent) string {
+	var details []string
+	if event.PageID != "" {
+		details = append(details, "page="+event.PageID)
+	}
+	if event.Route != "" {
+		details = append(details, "route="+event.Route)
+	}
+	if event.Path != "" {
+		details = append(details, "path="+event.Path)
+	}
+	if len(event.Data) > 0 {
+		keys := make([]string, 0, len(event.Data))
+		for key := range event.Data {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			details = append(details, key+"="+event.Data[key])
+		}
+	}
+	return strings.Join(details, ", ")
+}
+
 func languageServer(args []string) error {
 	options, paths := parseOptions(args)
 	if len(paths) > 0 {
@@ -653,6 +716,8 @@ func parseBuildOptions(args []string) (cliOptions, string, string, string, strin
 		switch {
 		case arg == "--ssr":
 			options.Config.Addons = append(options.Config.Addons, ssr.Addon())
+		case arg == "--debug":
+			options.Debug = true
 		case arg == "--out":
 			i++
 			if i >= len(args) {
@@ -767,6 +832,7 @@ func cleanNames(names []string) []string {
 type cliOptions struct {
 	Config gowdk.Config
 	JSON   bool
+	Debug  bool
 }
 
 type routeBindingsReport struct {

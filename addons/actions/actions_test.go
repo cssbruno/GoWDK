@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -150,11 +151,12 @@ func TestCSRFRejectsMissingMismatchAndInvalidTokens(t *testing.T) {
 }
 
 func tamperToken(token string) string {
-	replacement := byte('x')
-	if token[len(token)-1] == replacement {
-		replacement = 'y'
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(raw) == 0 {
+		return token + "x"
 	}
-	return token[:len(token)-1] + string(replacement)
+	raw[len(raw)-1] ^= 0xff
+	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
 func TestNewCSRFRejectsShortSecret(t *testing.T) {

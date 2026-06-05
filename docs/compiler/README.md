@@ -18,6 +18,8 @@ Implemented today:
   pages, literal build data, imported Go build data functions, literal dynamic
   paths, components, partial runtime assets, and island runtime assets through
   `internal/staticgen`.
+- Mandatory static build reports through `internal/staticgen`, written as
+  `gowdk-build-report.json` for disk builds and returned on build errors.
 - Generated embedded static app source and optional binary compilation through
   `internal/appgen`, including first-slice action redirect handlers and form
   input decoder and required-field validation wrappers.
@@ -41,5 +43,6 @@ Not implemented yet:
 - `pipeline.md`: current and target compile pipeline.
 - `project-structure.md`: current source inputs and planned project layout.
 - `generated-output.md`: planned generated artifacts and current limitations.
+- `static-build-report.md`: generated build report schema and CLI debug output.
 - `manifest.md`: manifest and site-map JSON contracts.
 - `codegen.md`: route-binding planning and future emitters.

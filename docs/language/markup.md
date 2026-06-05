@@ -97,7 +97,8 @@ Implemented today:
   `append(Items, { Field: expr })`, `remove(Items, index)`, and
   `move(Items, from, to)`.
 - Client expressions support first-slice compiler-owned built-ins:
-  `len(value)`, `string(value)`, `int(value)`, and `float(value)`.
+  `len(value)`, `lower(value)`, `upper(value)`, `contains(value, query)`,
+  `string(value)`, `int(value)`, and `float(value)`.
 - `g:island="wasm"` on component calls to opt that instance into explicit WASM
   island assets. Unknown `g:island` values are compile/render errors. Without
   `g:island`, stateful component calls use generated JavaScript by default.

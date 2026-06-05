@@ -82,6 +82,52 @@ func TestHandlerDelegatesAction(t *testing.T) {
 	}
 }
 
+func TestHandlerAcknowledgesCookie(t *testing.T) {
+	handler := Handler{
+		Root:     fstest.MapFS{},
+		Identity: Identity{AppID: "app", ModuleName: "app", InstanceID: "app-1"},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "https://gowdk.test/_gowdk/cookie-ack/", nil)
+	request.Header.Set("Referer", "https://gowdk.test/docs/?tab=deploy")
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusSeeOther {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if location := recorder.Header().Get("Location"); location != "/docs/?tab=deploy" {
+		t.Fatalf("unexpected redirect location: %q", location)
+	}
+	setCookie := recorder.Header().Get("Set-Cookie")
+	for _, expected := range []string{"gowdk_cookie_ack=accepted", "Path=/", "Max-Age=31536000", "HttpOnly", "Secure", "SameSite=Lax"} {
+		if !strings.Contains(setCookie, expected) {
+			t.Fatalf("expected Set-Cookie to contain %q, got %q", expected, setCookie)
+		}
+	}
+}
+
+func TestHandlerHidesAcknowledgedCookieNotice(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html": {Data: []byte(`<main>Home</main><form data-cookie-notice method="post"></form>`)},
+		},
+		Identity: Identity{AppID: "app", ModuleName: "app", InstanceID: "app-1"},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.AddCookie(&http.Cookie{Name: "gowdk_cookie_ack", Value: "accepted"})
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, "data-cookie-notice hidden") {
+		t.Fatalf("expected hidden cookie notice, got %s", body)
+	}
+}
+
 func TestHandlerUsesDynamicSSRAfterStaticMiss(t *testing.T) {
 	handler := Handler{
 		Root:     fstest.MapFS{},

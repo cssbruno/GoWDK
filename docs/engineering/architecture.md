@@ -45,7 +45,7 @@ The target core output can include static pages, components, typed actions, API 
 | `runtime/response` | HTML, redirect, fragment, and JSON response envelopes. | Runtime | Initial response model implemented. |
 | `runtime/asset` | Asset manifest resolution. | Runtime | Initial manifest helper implemented. |
 | `runtime/route` | Runtime route matching for generated request-time routes. | Runtime | Dynamic route matcher for first-slice generated SSR routes implemented. |
-| `runtime/app` | Shared generated app HTTP server. | Runtime | Serves embedded static files, identity headers, health checks, asset manifest counts, and action/SSR callback hooks for generated apps. |
+| `runtime/app` | Shared generated app HTTP server. | Runtime | Serves embedded static files, identity headers, health checks, asset manifest counts, no-JS cookie acknowledgement, server-side cookie notice hiding, and action/SSR callback hooks for generated apps. |
 | `addons/static` | Build-time prerendering. | Addon | Capability boundary implemented; prerender execution is planned. |
 | `addons/actions` | Typed backend actions, form decoding, CSRF. | Addon | Capability boundary, required-field validation helper, and signed CSRF validator implemented; generated user action execution is planned. |
 | `addons/partial` | Server fragments and swaps. | Addon | Capability boundary implemented; first generated action fragment execution slice exists. |

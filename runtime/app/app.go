@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -71,6 +72,10 @@ func LoadAssetManifest(root fs.FS) asset.Manifest {
 
 func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	handler.writeIdentityHeaders(response)
+	if request.Method == http.MethodPost && isCookieAckPath(request.URL.Path) {
+		acknowledgeCookie(response, request)
+		return
+	}
 	if request.Method == http.MethodPost && handler.Action != nil && handler.Action(response, request) {
 		return
 	}
@@ -95,7 +100,73 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 		http.NotFound(response, request)
 		return
 	}
+	payload = handler.cookieAwarePayload(request, payload, info.Name())
 	http.ServeContent(response, request, info.Name(), info.ModTime(), bytes.NewReader(payload))
+}
+
+const cookieAckName = "gowdk_cookie_ack"
+
+func isCookieAckPath(requestPath string) bool {
+	return strings.TrimRight(requestPath, "/") == "/_gowdk/cookie-ack"
+}
+
+func acknowledgeCookie(response http.ResponseWriter, request *http.Request) {
+	http.SetCookie(response, &http.Cookie{
+		Name:     cookieAckName,
+		Value:    "accepted",
+		Path:     "/",
+		MaxAge:   60 * 60 * 24 * 365,
+		HttpOnly: true,
+		Secure:   requestIsHTTPS(request),
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.Redirect(response, request, safeRedirectPath(request), http.StatusSeeOther)
+}
+
+func requestIsHTTPS(request *http.Request) bool {
+	if request.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(request.Header.Get("X-Forwarded-Proto")), "https")
+}
+
+func safeRedirectPath(request *http.Request) string {
+	referer := strings.TrimSpace(request.Referer())
+	if referer == "" {
+		return "/"
+	}
+	parsed, err := url.Parse(referer)
+	if err != nil {
+		return "/"
+	}
+	if parsed.Host != "" && !strings.EqualFold(parsed.Host, request.Host) {
+		return "/"
+	}
+	target := parsed.EscapedPath()
+	if target == "" {
+		target = "/"
+	}
+	if parsed.RawQuery != "" {
+		target += "?" + parsed.RawQuery
+	}
+	return target
+}
+
+func (handler Handler) cookieAwarePayload(request *http.Request, payload []byte, name string) []byte {
+	if !strings.HasSuffix(name, ".html") || !cookieAcknowledged(request) {
+		return payload
+	}
+	marker := []byte("data-cookie-notice")
+	hidden := []byte("data-cookie-notice hidden")
+	if !bytes.Contains(payload, marker) || bytes.Contains(payload, hidden) {
+		return payload
+	}
+	return bytes.Replace(payload, marker, hidden, 1)
+}
+
+func cookieAcknowledged(request *http.Request) bool {
+	cookie, err := request.Cookie(cookieAckName)
+	return err == nil && cookie.Value == "accepted"
 }
 
 func env(name, fallback string) string {

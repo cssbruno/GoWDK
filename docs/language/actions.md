@@ -58,6 +58,36 @@ registry-backed action codegen package into `gowdk build --app`, wire CSRF into
 generated handlers, run user-defined validation, or generate server fragment
 handlers.
 
+## Forms
+
+Current form behavior is intentionally narrow and static-analysis driven:
+
+- Forms post only when they declare `g:post={action}` and the action exists on
+  the same page.
+- Static builds lower `g:post` to `method="post"` and the current concrete page
+  route.
+- Field inference reads direct `input`, `textarea`, and `select` controls with
+  static `name` attributes.
+- Required-field validation is generated only from direct static controls with
+  `required`.
+- Generated decoders preserve repeated submitted values, allow missing fields,
+  reject unexpected fields, and avoid logging form values.
+- `input type="file"` and multipart `g:post` forms are rejected until upload
+  security rules are defined.
+- Component-hidden fields are not inferred yet.
+
+Partial form metadata can be added to a supported action form:
+
+```gwdk
+<form g:post={refresh} g:target="#patients" g:swap="innerHTML">
+  <input name="query" />
+  <button>Refresh</button>
+</form>
+```
+
+`g:target` must be a static id selector present in the same direct `view {}`
+markup subset. Current swap modes are `innerHTML` and `outerHTML`.
+
 Future action behavior must define:
 
 - User Go type resolution and field-specific generated struct members.

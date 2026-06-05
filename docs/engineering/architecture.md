@@ -173,6 +173,20 @@ gowdk serve --dir <dir> [--addr <addr>]
 gowdk lsp [--ssr]
 ```
 
+The user-facing documentation set for this pipeline is:
+
+- `docs/getting-started.md` for clone, build, scaffold, build, and serve.
+- `docs/reference/cli.md` for working commands and flags.
+- `docs/reference/config.md` for the statically loaded config subset.
+- `docs/reference/routing.md` for route validation, route plans, and generated
+  route behavior.
+- `docs/reference/deployment.md` for static, generated app, binary, and WASM
+  deploy outputs.
+- `docs/compiler/pipeline.md` and `docs/compiler/browser-compiler.md` for
+  compiler and browser-facing output stages.
+- `docs/language/` for supported and unsupported `.gwdk` syntax.
+- `examples/README.md` for examples that match the actual compiler slice.
+
 When `gowdk build` receives no explicit files, it loads literal root source, module source, and build target settings from `gowdk.config.go` when present. A module with a name but no explicit include defaults to `<module-name>/**/*.gwdk`. Static `Build.Targets` declare named module sets, output dirs, generated app dirs, binary paths, and WASM paths; with targets configured, `gowdk build` runs every target and `--target <name>` limits the run to selected targets. `--module <name>` remains available for ad hoc builds and may be repeated or comma-separated. The selected modules define the source set compiled into `--out`, copied into `--app`, and embedded into `--bin` or `--wasm`, so projects can build one-module binaries, multi-module binaries, WASM artifacts, or different artifacts from different module sets. Without configured root or module includes it discovers `**/*.gwdk` under the current working directory. Discovery excludes `.git`, `vendor`, `node_modules`, `testdata`, configured source excludes, and the selected output directory. Module type is user-defined metadata today; future generated-output work can use it to separate frontend, backend, and service artifacts. The VS Code extension uses `gowdk sitemap` to render a visual route map. Because routes are declared inside `.gwdk` files, the visualizer can move a page file without changing the page route.
 
 LSP-capable editors can use `gowdk lsp` over stdio for live buffer diagnostics, document formatting, and keyword completions. The first LSP version uses full-document synchronization and validates one open buffer at a time with the same parser and compiler rules as `gowdk check`.

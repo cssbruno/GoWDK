@@ -4,6 +4,11 @@
 
 The initial product direction is compile-first. Build-time output and backend actions are core; full-page request-time SSR is optional and lives behind the SSR addon.
 
+Current user-facing documentation now separates implemented behavior from
+planned behavior across the README, CLI/config/routing/deployment references,
+language references, compiler docs, examples, and the documentation checklist in
+`docs/product/documentation-checklist.md`.
+
 ## Requirements
 
 | ID | Requirement | Priority | Status | Notes |
@@ -30,6 +35,7 @@ The initial product direction is compile-first. Build-time output and backend ac
 | PRD-020 | Allow generated apps and binaries to package selected configured modules. | High | Implemented | `Build.Targets` statically declares module sets, output dirs, generated app dirs, and binaries. `gowdk build` runs all configured targets, `--target` selects named targets, and ad hoc repeated or comma-separated `--module` flags remain supported. |
 | PRD-021 | Provide a dependency-free fast local rebuild/redeploy loop. | High | Partial | `gowdk watch` polls discovered inputs, compares content hashes, rebuilds only on real input changes, and can incrementally render changed page sources for plain static output; `watch --restart` restarts one generated binary after successful rebuilds; static/app generation skips identical file writes. Browser HMR/live reload remains planned. |
 | PRD-022 | Allow generated app output to compile to a WASM deploy artifact. | Medium | Partial | `gowdk build --wasm <file>` and `Build.Targets[].WASM` compile the generated app with `GOOS=js GOARCH=wasm`. This remains separate from explicit browser island assets emitted by `g:island="wasm"`. |
+| PRD-023 | Keep current documentation aligned with implemented CLI, config, compiler, language, routing, deployment, and examples. | High | Implemented | `README.md`, `docs/getting-started.md`, reference docs, language docs, compiler docs, `examples/README.md`, and `docs/product/documentation-checklist.md` describe current support and call out planned behavior. |
 
 ## Non-Functional Requirements
 

@@ -7,7 +7,7 @@ explicit file paths or default build discovery
   -> parse source files
   -> build manifest
   -> validate render rules
-  -> emit diagnostics, manifest JSON, site-map JSON, route-binding plans, simple static HTML files, or generated static app output
+  -> emit diagnostics, manifest JSON, site-map JSON, route-binding plans, simple static HTML files, browser runtime assets, or generated static app output
 ```
 
 The current CLI accepts explicit `.gwdk` files. `gowdk build` can also discover
@@ -33,6 +33,11 @@ annotations, supported top-level blocks, parsed `view {}` markup nodes, literal
 `paths {}`/`build {}` records, action statements, API route statements, and
 source spans. Existing manifest parsing still drives the CLI while compiler
 passes migrate toward that AST.
+
+Browser-facing output is generated only when the source requires it. Partial
+form metadata can emit `assets/gowdk/gowdk.js`; stateful components can emit
+generated JavaScript island assets; explicit `g:island="wasm"` component calls
+can emit WASM island loader assets. See `browser-compiler.md`.
 
 ## Target Pipeline
 

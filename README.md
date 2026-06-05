@@ -26,7 +26,7 @@ Live demo: [gowdk.com](https://gowdk.com/)
 Demo source: [cssbruno/gowdk-page](https://github.com/cssbruno/gowdk-page)
 
 
-## Install Loop
+## Getting Started
 
 During source development, run the CLI from this repository:
 
@@ -34,13 +34,20 @@ During source development, run the CLI from this repository:
 go run ./cmd/gowdk <command>
 ```
 
-Create and serve an app:
+Build the CLI:
+
+```sh
+go build ./cmd/gowdk
+./gowdk version
+```
+
+Create, build, and serve an app:
 
 ```sh
 go run ./cmd/gowdk init my-app
 cd my-app
-go run ../cmd/gowdk build
-go run ../cmd/gowdk serve --dir dist/site
+../gowdk build
+../gowdk serve --dir dist/site
 ```
 
 Build an example:
@@ -53,10 +60,13 @@ go run ./cmd/gowdk build --out /tmp/gowdk-build \
 go run ./cmd/gowdk serve --dir /tmp/gowdk-build
 ```
 
-Use `dev` for rebuild, serve, watch, and browser reload:
+Use `dev` for rebuild, serve, watch, and browser reload when the app config has
+`Build.Output`:
 
 ```sh
-go run ./cmd/gowdk dev --out /tmp/gowdk-build examples/basic/*.gwdk
+go run ./cmd/gowdk dev --out /tmp/gowdk-build \
+  examples/basic/home.page.gwdk \
+  examples/basic/hero.cmp.gwdk
 ```
 
 ## Site Example
@@ -178,11 +188,14 @@ CI also smoke-builds static, dynamic, CSS, and embedded-binary examples.
 - [Product vision](docs/product/vision.md)
 - [Requirements](docs/product/requirements.md)
 - [Roadmap](docs/product/roadmap.md)
+- [Documentation checklist](docs/product/documentation-checklist.md)
 - [Architecture](docs/engineering/architecture.md)
 - [Release readiness](docs/engineering/release.md)
 - [CLI reference](docs/reference/cli.md)
+- [Config reference](docs/reference/config.md)
 - [Routing reference](docs/reference/routing.md)
 - [Deployment reference](docs/reference/deployment.md)
 - [Language notes](docs/language/README.md)
+- [Browser compiler](docs/compiler/browser-compiler.md)
 - [Examples](examples/README.md)
 - [VS Code extension](https://marketplace.visualstudio.com/items?itemName=GoWDK.gowdk-vscode)

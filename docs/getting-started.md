@@ -23,12 +23,14 @@ During repository development, you can also run the CLI without installing it:
 go run ./cmd/gowdk version
 ```
 
+Use the built binary when running commands from outside this repository.
+
 ## Create An App
 
 From the repository root:
 
 ```sh
-go run ./cmd/gowdk init /tmp/gowdk-my-app
+/path/to/GOWDK/gowdk init /tmp/gowdk-my-app
 cd /tmp/gowdk-my-app
 ```
 
@@ -43,7 +45,7 @@ The generated config discovers `src/**/*.gwdk`, discovers CSS from
 From the app directory:
 
 ```sh
-go run /path/to/GOWDK/cmd/gowdk build
+/path/to/GOWDK/gowdk build
 ```
 
 The build writes static HTML and manifests under `dist/site`:
@@ -61,7 +63,7 @@ Every successful disk build writes `gowdk-build-report.json`.
 ## Serve
 
 ```sh
-go run /path/to/GOWDK/cmd/gowdk serve --dir dist/site
+/path/to/GOWDK/gowdk serve --dir dist/site
 ```
 
 Open `http://127.0.0.1:8080/`.
@@ -74,7 +76,7 @@ API handlers, partial fragments, or SSR routes.
 Use `dev` when the project has `Build.Output` in `gowdk.config.go`:
 
 ```sh
-go run /path/to/GOWDK/cmd/gowdk dev
+/path/to/GOWDK/gowdk dev
 ```
 
 `dev` builds, serves the output directory, polls source inputs for content

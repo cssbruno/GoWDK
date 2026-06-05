@@ -26,6 +26,8 @@ semantic/type analysis outside the component contract slice.
 - `markup.md`: current `view {}` status and planned markup behavior.
 - `components.md`: component status and portability rules.
 - `layouts.md`: layout metadata and planned layout resolution.
+- `docs/reference/routing.md`: route validation, route plans, and generated
+  route output.
 - `actions.md`: action status and planned typed action behavior.
 - `api.md`: API block status and planned handler behavior.
 - `partials.md`: partial update status and planned fragment behavior.

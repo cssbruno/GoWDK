@@ -5,6 +5,12 @@ automation lives in `.github/workflows/release.yml` and creates draft releases
 from `v*` tags or a manual workflow dispatch. VS Code Marketplace publishing
 lives in `.github/workflows/vscode-extension-publish.yml`.
 
+## Version Policy
+
+Until the full feature set is complete, public releases advance only the minor
+version and keep the patch version at zero: `v0.1.0`, `v0.2.0`, `v0.3.0`, and
+so on. Patch releases are reserved for future post-completion maintenance.
+
 ## Release Readiness
 
 Before tagging a public release, confirm:

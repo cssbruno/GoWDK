@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	version    = "0.1.0-dev"
+	version    = "0.1.0"
 	buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]"
 )
 

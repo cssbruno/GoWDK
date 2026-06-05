@@ -1,12 +1,20 @@
 package staticgen
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"go/parser"
+	"go/token"
+	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/clientrt"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
@@ -24,16 +32,24 @@ func clientRuntimeArtifacts(pages []manifest.Page, outputDir string) []plannedAs
 	return nil
 }
 
-func runtimeArtifacts(app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout) []plannedAssetArtifact {
+var wasmMagic = []byte{0x00, 0x61, 0x73, 0x6d}
+
+func runtimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout) ([]plannedAssetArtifact, error) {
 	var artifacts []plannedAssetArtifact
 	artifacts = append(artifacts, clientRuntimeArtifacts(app.Pages, outputDir)...)
-	artifacts = append(artifacts, islandRuntimeArtifacts(app, outputDir, layouts)...)
-	return dedupeAssetArtifacts(artifacts)
+	islands, err := islandRuntimeArtifacts(config, app, outputDir, layouts)
+	if err != nil {
+		return nil, err
+	}
+	artifacts = append(artifacts, islands...)
+	return dedupeAssetArtifacts(artifacts), nil
 }
 
-func islandRuntimeArtifacts(app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout) []plannedAssetArtifact {
+func islandRuntimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout) ([]plannedAssetArtifact, error) {
 	stateful := statefulComponentNames(app.Components)
 	componentBodies := componentViewBodies(app.Components)
+	components := componentsByName(app.Components)
+	includeSourceMaps := config.Build.DebugAssets()
 	planned := map[string]plannedAssetArtifact{}
 	for _, page := range app.Pages {
 		source, err := composePageViewSource(page, layouts)
@@ -50,17 +66,31 @@ func islandRuntimeArtifacts(app manifest.Manifest, outputDir string, layouts map
 		for _, usage := range usages {
 			switch usage.Island {
 			case "wasm":
-				addAsset(planned, islandWASMArtifact(outputDir, usage.Component))
+				if _, exists := planned[filepath.Join(outputDir, filepath.FromSlash(islandWASMAssetPath(usage.Component)))]; !exists {
+					component := components[usage.Component]
+					artifact, err := islandWASMArtifact(outputDir, component)
+					if err != nil {
+						return nil, err
+					}
+					addAsset(planned, artifact)
+				}
 				addAsset(planned, islandWASMLoaderArtifact(outputDir, usage.Component))
 			case "":
 				if stateful[usage.Component] || usage.ReactiveProps {
-					addAsset(planned, islandJSArtifact(outputDir, usage.Component))
+					addAsset(planned, islandJSArtifact(outputDir, usage.Component, includeSourceMaps))
+					if includeSourceMaps {
+						component, ok := components[usage.Component]
+						if !ok {
+							continue
+						}
+						addAsset(planned, islandJSSourceMapArtifact(outputDir, component))
+					}
 				}
 			}
 		}
 	}
 	if len(planned) == 0 {
-		return nil
+		return nil, nil
 	}
 	paths := make([]string, 0, len(planned))
 	for path := range planned {
@@ -71,7 +101,7 @@ func islandRuntimeArtifacts(app manifest.Manifest, outputDir string, layouts map
 	for _, path := range paths {
 		artifacts = append(artifacts, planned[path])
 	}
-	return artifacts
+	return artifacts, nil
 }
 
 func islandScriptHrefs(source string, components map[string]view.Component) []string {
@@ -158,6 +188,14 @@ func componentViewBodies(components []manifest.Component) map[string]string {
 	return out
 }
 
+func componentsByName(components []manifest.Component) map[string]manifest.Component {
+	out := map[string]manifest.Component{}
+	for _, component := range components {
+		out[component.Name] = component
+	}
+	return out
+}
+
 func addAsset(artifacts map[string]plannedAssetArtifact, artifact plannedAssetArtifact) {
 	artifacts[artifact.Path] = artifact
 }
@@ -182,20 +220,204 @@ func dedupeAssetArtifacts(artifacts []plannedAssetArtifact) []plannedAssetArtifa
 	return out
 }
 
-func islandJSArtifact(outputDir, componentName string) plannedAssetArtifact {
+func islandJSArtifact(outputDir, componentName string, includeSourceMap bool) plannedAssetArtifact {
 	assetPath := islandJSAssetPath(componentName)
+	source := islandJSSource(componentName, includeSourceMap)
+	if !includeSourceMap {
+		source = compactGeneratedJSSource(source)
+	}
 	return plannedAssetArtifact{
 		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
-		contents:      []byte(islandJSSource(componentName)),
+		contents:      []byte(source),
 	}
 }
 
-func islandWASMArtifact(outputDir, componentName string) plannedAssetArtifact {
-	assetPath := islandWASMAssetPath(componentName)
+func compactGeneratedJSSource(source string) string {
+	var lines []string
+	for _, line := range strings.Split(source, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func islandJSSourceMapArtifact(outputDir string, component manifest.Component) plannedAssetArtifact {
+	assetPath := islandJSSourceMapAssetPath(component.Name)
+	source := islandJSSource(component.Name, true)
 	return plannedAssetArtifact{
 		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
-		contents:      []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00},
+		contents:      islandJSSourceMap(component, source),
 	}
+}
+
+func islandWASMArtifact(outputDir string, component manifest.Component) (plannedAssetArtifact, error) {
+	assetPath := islandWASMAssetPath(component.Name)
+	contents := []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}
+	if strings.TrimSpace(component.WASM.Package) != "" {
+		wasm, err := buildWASMIslandPackage(component)
+		if err != nil {
+			return plannedAssetArtifact{}, err
+		}
+		contents = wasm
+	}
+	return plannedAssetArtifact{
+		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
+		contents:      contents,
+	}, nil
+}
+
+func buildWASMIslandPackage(component manifest.Component) ([]byte, error) {
+	packagePath := strings.TrimSpace(component.WASM.Package)
+	temp, err := os.CreateTemp("", "gowdk-"+componentAssetName(component.Name)+"-*.wasm")
+	if err != nil {
+		return nil, fmt.Errorf("component %s wasm package %q: create temp output: %w", component.Name, packagePath, err)
+	}
+	tempPath := temp.Name()
+	if err := temp.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return nil, fmt.Errorf("component %s wasm package %q: close temp output: %w", component.Name, packagePath, err)
+	}
+	defer os.Remove(tempPath)
+
+	dir, buildPackage, err := wasmIslandBuildContext(packagePath)
+	if err != nil {
+		return nil, fmt.Errorf("component %s wasm package %q: %w", component.Name, packagePath, err)
+	}
+	if err := validateWASMIslandPackageImports(component, dir, buildPackage, packagePath); err != nil {
+		return nil, err
+	}
+	command := exec.Command("go", "build", "-buildvcs=false", "-o", tempPath, buildPackage)
+	if dir != "" {
+		command.Dir = dir
+	}
+	command.Env = append(envWithout(os.Environ(), "GOOS", "GOARCH"), "GOOS=js", "GOARCH=wasm")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("component %s wasm package %q failed to build with GOOS=js GOARCH=wasm: %w\n%s", component.Name, packagePath, err, strings.TrimSpace(string(output)))
+	}
+	contents, err := os.ReadFile(tempPath)
+	if err != nil {
+		return nil, fmt.Errorf("component %s wasm package %q: read built artifact: %w", component.Name, packagePath, err)
+	}
+	if !bytes.HasPrefix(contents, wasmMagic) {
+		return nil, fmt.Errorf("component %s wasm package %q did not produce a browser WASM module; declare a package main with a main function", component.Name, packagePath)
+	}
+	return contents, nil
+}
+
+var forbiddenWASMIslandImports = map[string]string{
+	"net":          "network listeners belong in server api {} or act {} handlers",
+	"net/http":     "HTTP clients and servers belong in server api {} or act {} handlers",
+	"os/exec":      "process execution is not available in browser WASM islands",
+	"plugin":       "Go plugins are not available in browser WASM islands",
+	"syscall":      "use syscall/js for browser interop instead of syscall",
+	"unsafe":       "unsafe is not allowed in browser WASM island packages",
+	"database/sql": "database access belongs in server api {} or act {} handlers",
+}
+
+func validateWASMIslandPackageImports(component manifest.Component, dir, buildPackage, packagePath string) error {
+	sourceDir, ok := wasmIslandLocalSourceDir(dir, buildPackage, packagePath)
+	if !ok {
+		return nil
+	}
+	entries, err := os.ReadDir(sourceDir)
+	if err != nil {
+		return fmt.Errorf("component %s wasm package %q: read package source: %w", component.Name, packagePath, err)
+	}
+	fileset := token.NewFileSet()
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		filePath := filepath.Join(sourceDir, entry.Name())
+		file, err := parser.ParseFile(fileset, filePath, nil, parser.ImportsOnly)
+		if err != nil {
+			return fmt.Errorf("component %s wasm package %q: parse imports in %s: %w", component.Name, packagePath, entry.Name(), err)
+		}
+		for _, item := range file.Imports {
+			importPath, err := strconv.Unquote(item.Path.Value)
+			if err != nil {
+				return fmt.Errorf("component %s wasm package %q: parse import path in %s: %w", component.Name, packagePath, entry.Name(), err)
+			}
+			reason, forbidden := forbiddenWASMIslandImports[importPath]
+			if !forbidden {
+				continue
+			}
+			position := fileset.Position(item.Pos())
+			return fmt.Errorf("component %s wasm package %q imports unsupported browser package %q at %s:%d: %s", component.Name, packagePath, importPath, filepath.ToSlash(filePath), position.Line, reason)
+		}
+	}
+	return nil
+}
+
+func wasmIslandLocalSourceDir(dir, buildPackage, packagePath string) (string, bool) {
+	if filepath.IsAbs(packagePath) {
+		return packagePath, true
+	}
+	if strings.HasPrefix(packagePath, ".") {
+		abs, err := filepath.Abs(packagePath)
+		if err != nil {
+			return "", false
+		}
+		return abs, true
+	}
+	if dir != "" && strings.HasPrefix(buildPackage, "./") {
+		return filepath.Join(dir, filepath.FromSlash(strings.TrimPrefix(buildPackage, "./"))), true
+	}
+	return "", false
+}
+
+func wasmIslandBuildContext(packagePath string) (string, string, error) {
+	if !filepath.IsAbs(packagePath) {
+		return "", packagePath, nil
+	}
+	info, err := os.Stat(packagePath)
+	if err != nil {
+		return "", "", err
+	}
+	if !info.IsDir() {
+		return "", "", fmt.Errorf("package path is not a directory")
+	}
+	moduleRoot := packagePath
+	for {
+		if _, err := os.Stat(filepath.Join(moduleRoot, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(moduleRoot)
+		if parent == moduleRoot {
+			return "", "", fmt.Errorf("no go.mod found for local package")
+		}
+		moduleRoot = parent
+	}
+	rel, err := filepath.Rel(moduleRoot, packagePath)
+	if err != nil {
+		return "", "", err
+	}
+	return moduleRoot, "./" + filepath.ToSlash(rel), nil
+}
+
+func envWithout(env []string, names ...string) []string {
+	blocked := map[string]bool{}
+	for _, name := range names {
+		blocked[name+"="] = true
+	}
+	out := make([]string, 0, len(env))
+	for _, entry := range env {
+		skip := false
+		for prefix := range blocked {
+			if strings.HasPrefix(entry, prefix) {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			out = append(out, entry)
+		}
+	}
+	return out
 }
 
 func islandWASMLoaderArtifact(outputDir, componentName string) plannedAssetArtifact {
@@ -218,6 +440,10 @@ func islandWASMLoaderAssetPath(componentName string) string {
 	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".wasm.js")
 }
 
+func islandJSSourceMapAssetPath(componentName string) string {
+	return islandJSAssetPath(componentName) + ".map"
+}
+
 func componentAssetName(componentName string) string {
 	name := exportedSafe(componentName)
 	if name == "" {
@@ -226,13 +452,26 @@ func componentAssetName(componentName string) string {
 	return name
 }
 
-func islandJSSource(componentName string) string {
+func islandJSSource(componentName string, includeSourceMap bool) string {
 	component := strconv.Quote(componentName)
-	return fmt.Sprintf(`(() => {
+	name := componentAssetName(componentName)
+	mountFunction := "mount" + name + "Island"
+	destroyFunction := "destroy" + name + "Island"
+	source := fmt.Sprintf(`(() => {
   const component = %s;
   const selector = "gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]";
   const booleanAttrs = new Set(["allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "defer", "disabled", "formnovalidate", "hidden", "inert", "ismap", "loop", "multiple", "muted", "nomodule", "novalidate", "open", "readonly", "required", "reversed", "selected"]);
   const staleAsyncResult = Symbol("gowdk stale async result");
+  const bindingTable = Object.freeze([
+    { kind: "text", selector: "[data-gowdk-binding-text]", id: "data-gowdk-binding-text", field: "data-gowdk-bind" },
+    { kind: "value", selector: "[data-gowdk-binding-value]", id: "data-gowdk-binding-value", field: "data-gowdk-bind-value" },
+    { kind: "checked", selector: "[data-gowdk-binding-checked]", id: "data-gowdk-binding-checked", field: "data-gowdk-bind-checked" },
+    { kind: "conditional", selector: "[data-gowdk-binding-if]", id: "data-gowdk-binding-if" },
+    { kind: "list", selector: "[data-gowdk-binding-list]", id: "data-gowdk-binding-list" },
+    { kind: "class", attrPrefix: "data-gowdk-binding-class-", valuePrefix: "data-gowdk-class-" },
+    { kind: "style", attrPrefix: "data-gowdk-binding-style-", valuePrefix: "data-gowdk-style-", unitPrefix: "data-gowdk-style-unit-" },
+    { kind: "attr", attrPrefix: "data-gowdk-binding-attr-", valuePrefix: "data-gowdk-attr-" }
+  ]);
   const registry = window.__gowdkIslandRegistry || (window.__gowdkIslandRegistry = { components: Object.create(null), roots: new WeakMap() });
   window.__gowdkMountIslands = () => {
     Object.keys(registry.components).forEach((name) => registry.components[name](document));
@@ -577,41 +816,42 @@ func islandJSSource(componentName string) string {
     return nodes;
   }
 
+  function emptyBindings() {
+    return { text: [], value: [], checked: [], classes: [], styles: [], attrs: [], conditionals: [], lists: [] };
+  }
+
+  function collectDirectBinding(bindings, spec, root) {
+    matchingNodes(root, spec.selector).forEach((node) => {
+      if (!ownsNode(root, node)) return;
+      const id = node.getAttribute(spec.id);
+      if (spec.kind === "text") bindings.text.push({ id, node, field: node.getAttribute(spec.field) });
+      else if (spec.kind === "value") bindings.value.push({ id, node, field: node.getAttribute(spec.field) });
+      else if (spec.kind === "checked") bindings.checked.push({ id, node, field: node.getAttribute(spec.field) });
+      else if (spec.kind === "conditional") bindings.conditionals.push({ id, node });
+      else if (spec.kind === "list") bindings.lists.push({ id, node });
+    });
+  }
+
+  function collectPrefixBinding(bindings, spec, node, attr) {
+    if (!attr.name.startsWith(spec.attrPrefix)) return;
+    const name = attr.name.slice(spec.attrPrefix.length);
+    if (spec.kind === "class") {
+      bindings.classes.push({ id: attr.value, node, name, expression: node.getAttribute(spec.valuePrefix + name) });
+    } else if (spec.kind === "style") {
+      bindings.styles.push({ id: attr.value, node, name, expression: node.getAttribute(spec.valuePrefix + name), unit: node.getAttribute(spec.unitPrefix + name) || "" });
+    } else if (spec.kind === "attr") {
+      bindings.attrs.push({ id: attr.value, node, name, expression: node.getAttribute(spec.valuePrefix + name) });
+    }
+  }
+
   function collectBindings(root) {
-    const bindings = { text: [], value: [], checked: [], classes: [], styles: [], attrs: [], conditionals: [], lists: [] };
-    matchingNodes(root, "[data-gowdk-binding-text]").forEach((node) => {
-      if (!ownsNode(root, node)) return;
-      bindings.text.push({ id: node.getAttribute("data-gowdk-binding-text"), node, field: node.getAttribute("data-gowdk-bind") });
-    });
-    matchingNodes(root, "[data-gowdk-binding-value]").forEach((node) => {
-      if (!ownsNode(root, node)) return;
-      bindings.value.push({ id: node.getAttribute("data-gowdk-binding-value"), node, field: node.getAttribute("data-gowdk-bind-value") });
-    });
-    matchingNodes(root, "[data-gowdk-binding-checked]").forEach((node) => {
-      if (!ownsNode(root, node)) return;
-      bindings.checked.push({ id: node.getAttribute("data-gowdk-binding-checked"), node, field: node.getAttribute("data-gowdk-bind-checked") });
-    });
-    matchingNodes(root, "[data-gowdk-binding-if]").forEach((node) => {
-      if (!ownsNode(root, node)) return;
-      bindings.conditionals.push({ id: node.getAttribute("data-gowdk-binding-if"), node });
-    });
-    matchingNodes(root, "[data-gowdk-binding-list]").forEach((node) => {
-      if (!ownsNode(root, node)) return;
-      bindings.lists.push({ id: node.getAttribute("data-gowdk-binding-list"), node });
-    });
+    const bindings = emptyBindings();
+    bindingTable.filter((spec) => spec.selector).forEach((spec) => collectDirectBinding(bindings, spec, root));
+    const prefixSpecs = bindingTable.filter((spec) => spec.attrPrefix);
     root.querySelectorAll("*").forEach((node) => {
       if (!ownsNode(root, node)) return;
       Array.from(node.attributes).forEach((attr) => {
-        if (attr.name.startsWith("data-gowdk-binding-class-")) {
-          const name = attr.name.slice("data-gowdk-binding-class-".length);
-          bindings.classes.push({ id: attr.value, node, name, expression: node.getAttribute("data-gowdk-class-" + name) });
-        } else if (attr.name.startsWith("data-gowdk-binding-style-")) {
-          const name = attr.name.slice("data-gowdk-binding-style-".length);
-          bindings.styles.push({ id: attr.value, node, name, expression: node.getAttribute("data-gowdk-style-" + name), unit: node.getAttribute("data-gowdk-style-unit-" + name) || "" });
-        } else if (attr.name.startsWith("data-gowdk-binding-attr-")) {
-          const name = attr.name.slice("data-gowdk-binding-attr-".length);
-          bindings.attrs.push({ id: attr.value, node, name, expression: node.getAttribute("data-gowdk-attr-" + name) });
-        }
+        prefixSpecs.forEach((spec) => collectPrefixBinding(bindings, spec, node, attr));
       });
     });
     return bindings;
@@ -796,7 +1036,7 @@ func islandJSSource(componentName string) string {
     return bindings;
   }
 
-  async function mountComponent(scope) {
+  async function %s(scope) {
     scope = scope || document;
     scope.querySelectorAll(selector).forEach(async (root) => {
     if (root.getAttribute("data-gowdk-mounted") === "js") return;
@@ -995,7 +1235,7 @@ func islandJSSource(componentName string) string {
     await applyStatements(mountStatements, state, handlers, helpers, null, refs, computeds, asyncTokens, root, emitEvents);
     await settleEffects();
     recomputeComputed(state, computeds, helpers);
-    const destroyIsland = async () => {
+    const destroyIsland = async function %s() {
       if (root.getAttribute("data-gowdk-mounted") !== "js") return;
       root.removeAttribute("data-gowdk-mounted");
       registry.roots.delete(root);
@@ -1012,10 +1252,191 @@ func islandJSSource(componentName string) string {
   });
   }
 
-  registry.components[component] = mountComponent;
-  mountComponent(document);
+  registry.components[component] = %s;
+  %s(document);
 })();
-`, component)
+`, component, mountFunction, destroyFunction, mountFunction, mountFunction)
+	if includeSourceMap {
+		source += "//# sourceMappingURL=" + path.Base(islandJSSourceMapAssetPath(componentName)) + "\n"
+	}
+	return source
+}
+
+type jsSourceMap struct {
+	Version        int      `json:"version"`
+	File           string   `json:"file"`
+	Sources        []string `json:"sources"`
+	SourcesContent []string `json:"sourcesContent,omitempty"`
+	Names          []string `json:"names"`
+	Mappings       string   `json:"mappings"`
+}
+
+func islandJSSourceMap(component manifest.Component, generatedSource string) []byte {
+	source := component.Source
+	if source == "" {
+		source = "components/" + component.Name + ".cmp.gwdk"
+	}
+	content := componentSourceMapContent(component)
+	payload, err := json.MarshalIndent(jsSourceMap{
+		Version:        3,
+		File:           path.Base(islandJSAssetPath(component.Name)),
+		Sources:        []string{source},
+		SourcesContent: []string{content},
+		Names:          []string{},
+		Mappings:       sourceMapMappings(component, generatedSource),
+	}, "", "  ")
+	if err != nil {
+		return []byte(`{"version":3,"file":"` + path.Base(islandJSAssetPath(component.Name)) + `","sources":[],"names":[],"mappings":""}`)
+	}
+	return append(payload, '\n')
+}
+
+type sourceMapAnchor struct {
+	generatedLine int
+	sourceLine    int
+	sourceColumn  int
+}
+
+func sourceMapMappings(component manifest.Component, generatedSource string) string {
+	anchors := sourceMapAnchors(component, generatedSource)
+	if len(anchors) == 0 {
+		return ""
+	}
+	byLine := map[int]sourceMapAnchor{}
+	maxLine := 0
+	for _, anchor := range anchors {
+		if anchor.generatedLine <= 0 || anchor.sourceLine <= 0 || anchor.sourceColumn <= 0 {
+			continue
+		}
+		if _, exists := byLine[anchor.generatedLine]; exists {
+			continue
+		}
+		byLine[anchor.generatedLine] = anchor
+		if anchor.generatedLine > maxLine {
+			maxLine = anchor.generatedLine
+		}
+	}
+	if maxLine == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	previousGeneratedColumn := 0
+	previousSourceIndex := 0
+	previousSourceLine := 0
+	previousSourceColumn := 0
+	for line := 1; line <= maxLine; line++ {
+		if line > 1 {
+			builder.WriteByte(';')
+			previousGeneratedColumn = 0
+		}
+		anchor, ok := byLine[line]
+		if !ok {
+			continue
+		}
+		sourceLine := anchor.sourceLine - 1
+		sourceColumn := anchor.sourceColumn - 1
+		builder.WriteString(sourceMapVLQ(0 - previousGeneratedColumn))
+		builder.WriteString(sourceMapVLQ(0 - previousSourceIndex))
+		builder.WriteString(sourceMapVLQ(sourceLine - previousSourceLine))
+		builder.WriteString(sourceMapVLQ(sourceColumn - previousSourceColumn))
+		previousGeneratedColumn = 0
+		previousSourceIndex = 0
+		previousSourceLine = sourceLine
+		previousSourceColumn = sourceColumn
+	}
+	return builder.String()
+}
+
+func sourceMapAnchors(component manifest.Component, generatedSource string) []sourceMapAnchor {
+	name := componentAssetName(component.Name)
+	componentSpan := firstSourceSpan(component.Span, component.Blocks.Spans.Client, component.Blocks.Spans.View)
+	clientSpan := firstSourceSpan(component.Blocks.Spans.Client, componentSpan)
+	viewSpan := firstSourceSpan(component.Blocks.Spans.View, componentSpan)
+	var anchors []sourceMapAnchor
+	for index, line := range strings.Split(generatedSource, "\n") {
+		lineNumber := index + 1
+		switch {
+		case strings.Contains(line, "const component = "):
+			anchors = appendSourceMapAnchor(anchors, lineNumber, componentSpan)
+		case sourceMapLineBelongsToClient(line, name):
+			anchors = appendSourceMapAnchor(anchors, lineNumber, clientSpan)
+		case sourceMapLineBelongsToView(line):
+			anchors = appendSourceMapAnchor(anchors, lineNumber, viewSpan)
+		}
+	}
+	return anchors
+}
+
+func sourceMapLineBelongsToClient(line, componentAssetName string) bool {
+	return strings.Contains(line, "async function mount"+componentAssetName+"Island(scope)") ||
+		strings.Contains(line, "async function applyExpression(") ||
+		strings.Contains(line, "async function applyStatements(") ||
+		strings.Contains(line, "function recomputeComputed(")
+}
+
+func sourceMapLineBelongsToView(line string) bool {
+	return strings.Contains(line, "const bindingTable = Object.freeze(") ||
+		strings.Contains(line, "function collectBindings(") ||
+		strings.Contains(line, "function renderConditionals(") ||
+		strings.Contains(line, "function renderListLoops(") ||
+		strings.Contains(line, "function updateTextBindings(") ||
+		strings.Contains(line, "function updateValueBindings(") ||
+		strings.Contains(line, "function updateCheckedBindings(") ||
+		strings.Contains(line, "function updateClassBindings(") ||
+		strings.Contains(line, "function updateStyleBindings(") ||
+		strings.Contains(line, "function updateAttrBindings(") ||
+		strings.Contains(line, "function updateBindings(") ||
+		strings.Contains(line, "function render(root, state, helpers, bindings)")
+}
+
+func appendSourceMapAnchor(anchors []sourceMapAnchor, generatedLine int, span manifest.SourceSpan) []sourceMapAnchor {
+	if span.Start.Line <= 0 || span.Start.Column <= 0 {
+		return anchors
+	}
+	return append(anchors, sourceMapAnchor{
+		generatedLine: generatedLine,
+		sourceLine:    span.Start.Line,
+		sourceColumn:  span.Start.Column,
+	})
+}
+
+func firstSourceSpan(spans ...manifest.SourceSpan) manifest.SourceSpan {
+	for _, span := range spans {
+		if span.Start.Line > 0 && span.Start.Column > 0 {
+			return span
+		}
+	}
+	return manifest.SourceSpan{}
+}
+
+const sourceMapBase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+func sourceMapVLQ(value int) string {
+	vlq := value << 1
+	if value < 0 {
+		vlq = ((-value) << 1) + 1
+	}
+	var out strings.Builder
+	for {
+		digit := vlq & 31
+		vlq >>= 5
+		if vlq > 0 {
+			digit |= 32
+		}
+		out.WriteByte(sourceMapBase64[digit])
+		if vlq == 0 {
+			break
+		}
+	}
+	return out.String()
+}
+
+func componentSourceMapContent(component manifest.Component) string {
+	if component.Blocks.ClientBody == "" {
+		return "view {\n" + component.Blocks.ViewBody + "\n}\n"
+	}
+	return "client {\n" + component.Blocks.ClientBody + "\n}\n\nview {\n" + component.Blocks.ViewBody + "\n}\n"
 }
 
 func islandWASMLoaderSource(componentName string) string {
@@ -1024,9 +1445,150 @@ func islandWASMLoaderSource(componentName string) string {
 	return fmt.Sprintf(`(() => {
   const component = %s;
   const wasmPath = %s;
+  const mountExport = "GOWDKMount" + component;
+  const handleExport = "GOWDKHandle" + component;
+  const destroyExport = "GOWDKDestroy" + component;
   const roots = document.querySelectorAll("gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"wasm\"]");
   if (roots.length === 0 || typeof WebAssembly === "undefined") return;
-  WebAssembly.instantiateStreaming(fetch(wasmPath), {}).catch(() => {});
+
+  function parseJSON(value, fallback) {
+    try {
+      return JSON.parse(value || "");
+    } catch (_error) {
+      return fallback;
+    }
+  }
+
+  function ownsNode(root, node) {
+    return node.closest("gowdk-island") === root;
+  }
+
+  function matchingNodes(root, selector) {
+    const nodes = [];
+    if (root.matches && root.matches(selector)) nodes.push(root);
+    root.querySelectorAll(selector).forEach((node) => nodes.push(node));
+    return nodes.filter((node) => ownsNode(root, node));
+  }
+
+  function collectRefs(root) {
+    const refs = Object.create(null);
+    root.querySelectorAll("[data-gowdk-ref]").forEach((node) => {
+      if (!ownsNode(root, node)) return;
+      refs[node.getAttribute("data-gowdk-ref")] = node.getAttribute("data-gowdk-binding-ref") || "";
+    });
+    return refs;
+  }
+
+  function collectBindings(root) {
+    const bindings = { text: [], attrs: [], classes: [], styles: [], conditionals: [], lists: [], events: [] };
+    matchingNodes(root, "[data-gowdk-binding-text]").forEach((node) => {
+      bindings.text.push({ id: node.getAttribute("data-gowdk-binding-text"), field: node.getAttribute("data-gowdk-bind") });
+    });
+    matchingNodes(root, "[data-gowdk-binding-if]").forEach((node) => {
+      bindings.conditionals.push({ id: node.getAttribute("data-gowdk-binding-if"), expr: node.getAttribute("data-gowdk-if") || "" });
+    });
+    matchingNodes(root, "[data-gowdk-binding-list]").forEach((node) => {
+      bindings.lists.push({ id: node.getAttribute("data-gowdk-binding-list"), source: node.getAttribute("data-gowdk-for-source") || "", key: node.getAttribute("data-gowdk-for-key") || "" });
+    });
+    root.querySelectorAll("*").forEach((node) => {
+      if (!ownsNode(root, node)) return;
+      Array.from(node.attributes).forEach((attr) => {
+        if (attr.name.startsWith("data-gowdk-binding-on-")) {
+          bindings.events.push({ id: attr.value, event: attr.name.slice("data-gowdk-binding-on-".length), expr: node.getAttribute("data-gowdk-on-" + attr.name.slice("data-gowdk-binding-on-".length)) || "" });
+        } else if (attr.name.startsWith("data-gowdk-binding-attr-")) {
+          const name = attr.name.slice("data-gowdk-binding-attr-".length);
+          bindings.attrs.push({ id: attr.value, name, expr: node.getAttribute("data-gowdk-attr-" + name) || "" });
+        } else if (attr.name.startsWith("data-gowdk-binding-class-")) {
+          const name = attr.name.slice("data-gowdk-binding-class-".length);
+          bindings.classes.push({ id: attr.value, name, expr: node.getAttribute("data-gowdk-class-" + name) || "" });
+        } else if (attr.name.startsWith("data-gowdk-binding-style-")) {
+          const name = attr.name.slice("data-gowdk-binding-style-".length);
+          bindings.styles.push({ id: attr.value, name, expr: node.getAttribute("data-gowdk-style-" + name) || "", unit: node.getAttribute("data-gowdk-style-unit-" + name) || "" });
+        }
+      });
+    });
+    return bindings;
+  }
+
+  function bootstrap(root) {
+    const client = parseJSON(root.getAttribute("data-gowdk-client"), {});
+    return {
+      component,
+      state: parseJSON(root.getAttribute("data-gowdk-state"), {}),
+      props: parseJSON(root.getAttribute("data-gowdk-props"), {}),
+      emits: client.emits || {},
+      refs: collectRefs(root),
+      bindings: collectBindings(root)
+    };
+  }
+
+  function targetByBinding(root, id) {
+    if (!id) return null;
+    const escaped = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : String(id).replace(/"/g, "\\\"");
+    return root.querySelector("[data-gowdk-binding-text=\"" + escaped + "\"], [data-gowdk-binding-if=\"" + escaped + "\"], [data-gowdk-binding-list=\"" + escaped + "\"], [data-gowdk-binding-value=\"" + escaped + "\"], [data-gowdk-binding-checked=\"" + escaped + "\"]");
+  }
+
+  function applyPatch(root, patch) {
+    if (!patch || typeof patch !== "object") return;
+    const node = targetByBinding(root, patch.target || patch.binding);
+    if (patch.type === "setText" && node) node.textContent = patch.value == null ? "" : String(patch.value);
+    else if (patch.type === "setHidden" && node) node.hidden = Boolean(patch.value);
+    else if (patch.type === "setAttr" && node && patch.name) node.setAttribute(patch.name, String(patch.value == null ? "" : patch.value));
+    else if (patch.type === "removeAttr" && node && patch.name) node.removeAttribute(patch.name);
+    else if (patch.type === "toggleClass" && node && patch.name) node.classList.toggle(patch.name, Boolean(patch.value));
+    else if (patch.type === "setStyle" && node && patch.name) node.style.setProperty(patch.name, String(patch.value == null ? "" : patch.value));
+    else if (patch.type === "emit" && patch.name) root.dispatchEvent(new CustomEvent(patch.name, { detail: patch.detail || {}, bubbles: true }));
+  }
+
+  function applyPatches(root, result) {
+    const patches = typeof result === "string" ? parseJSON(result, []) : result;
+    if (!Array.isArray(patches)) return;
+    patches.forEach((patch) => applyPatch(root, patch));
+  }
+
+  function callExport(exports, name, payload) {
+    const fn = exports && exports[name];
+    if (typeof fn !== "function") return undefined;
+    return fn(payload);
+  }
+
+  async function instantiate() {
+    if (WebAssembly.instantiateStreaming) {
+      try {
+        return await WebAssembly.instantiateStreaming(fetch(wasmPath), {});
+      } catch (_error) {
+        // Fall through for servers that do not serve application/wasm yet.
+      }
+    }
+    const response = await fetch(wasmPath);
+    const bytes = await response.arrayBuffer();
+    return WebAssembly.instantiate(bytes, {});
+  }
+
+  instantiate().then((result) => {
+    const exports = result.instance && result.instance.exports || {};
+    roots.forEach((root) => {
+      const mountPayload = bootstrap(root);
+      applyPatches(root, callExport(exports, mountExport, mountPayload));
+      root.querySelectorAll("*").forEach((node) => {
+        if (!ownsNode(root, node)) return;
+        Array.from(node.attributes).forEach((attr) => {
+          if (!attr.name.startsWith("data-gowdk-binding-on-")) return;
+          const event = attr.name.slice("data-gowdk-binding-on-".length);
+          node.addEventListener(event, (domEvent) => {
+            applyPatches(root, callExport(exports, handleExport, {
+              event,
+              binding: attr.value,
+              detail: { value: domEvent && domEvent.target ? domEvent.target.value : undefined }
+            }));
+          });
+        });
+      });
+      window.addEventListener("pagehide", () => {
+        applyPatches(root, callExport(exports, destroyExport, { component, state: parseJSON(root.getAttribute("data-gowdk-state"), {}) }));
+      }, { once: true });
+    });
+  }).catch(() => {});
 })();
 `, component, wasmPath)
 }

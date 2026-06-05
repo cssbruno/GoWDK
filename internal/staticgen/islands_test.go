@@ -2,6 +2,8 @@ package staticgen
 
 import (
 	"bytes"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,6 +14,9 @@ import (
 
 func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 	outputDir := t.TempDir()
+	component := counterComponent()
+	component.Span = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 1, Column: 1}, End: manifest.SourcePosition{Line: 1, Column: 19}}
+	component.Blocks.Spans.View = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 3, Column: 1}, End: manifest.SourcePosition{Line: 3, Column: 7}}
 	app := manifest.Manifest{
 		Pages: []manifest.Page{{
 			ID:    "counter",
@@ -21,7 +26,7 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{counterComponent()},
+		Components: []manifest.Component{component},
 	}
 
 	result, err := Build(gowdk.Config{}, app, outputDir)
@@ -29,8 +34,12 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	jsPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js")
+	jsMapPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js.map")
 	if !hasAssetArtifact(result.AssetArtifacts, jsPath) {
 		t.Fatalf("expected Counter.js asset, got %#v", result.AssetArtifacts)
+	}
+	if !hasAssetArtifact(result.AssetArtifacts, jsMapPath) {
+		t.Fatalf("expected Counter.js.map asset, got %#v", result.AssetArtifacts)
 	}
 	html := readFile(t, filepath.Join(outputDir, "counter", "index.html"))
 	for _, expected := range []string{
@@ -45,17 +54,225 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 	}
 	js := readFile(t, jsPath)
 	if !strings.Contains(js, `data-gowdk-runtime=\"js\"`) ||
+		!strings.Contains(js, `const selector = "gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]";`) ||
+		!strings.Contains(js, "\n  function matchingBrace(source, openIndex)") ||
 		!strings.Contains(js, `applyExpression`) ||
 		!strings.Contains(js, `window.__gowdkMountIslands`) ||
 		!strings.Contains(js, `window.__gowdkDestroyIslands`) ||
-		!strings.Contains(js, `registry.components[component] = mountComponent`) ||
+		!strings.Contains(js, `async function mountCounterIsland(scope)`) ||
+		!strings.Contains(js, `async function destroyCounterIsland()`) ||
+		!strings.Contains(js, `registry.components[component] = mountCounterIsland`) ||
 		!strings.Contains(js, `registry.roots`) ||
-		!strings.Contains(js, `data-gowdk-mounted`) {
+		!strings.Contains(js, `data-gowdk-mounted`) ||
+		!strings.Contains(js, `//# sourceMappingURL=Counter.js.map`) {
 		t.Fatalf("expected generated JS island runtime, got:\n%s", js)
+	}
+	for _, unexpected := range []string{
+		`document.body.innerHTML`,
+		`document.documentElement.innerHTML`,
+	} {
+		if strings.Contains(js, unexpected) {
+			t.Fatalf("expected island-scoped runtime without full-page hydration, found %q in:\n%s", unexpected, js)
+		}
 	}
 	assetManifestPayload := readFile(t, filepath.Join(outputDir, assetManifestFile))
 	if !strings.Contains(assetManifestPayload, `"assets/gowdk/islands/Counter.js": "assets/gowdk/islands/Counter.js"`) {
 		t.Fatalf("expected island JS in asset manifest:\n%s", assetManifestPayload)
+	}
+	if !strings.Contains(assetManifestPayload, `"assets/gowdk/islands/Counter.js.map": "assets/gowdk/islands/Counter.js.map"`) {
+		t.Fatalf("expected island JS source map in asset manifest:\n%s", assetManifestPayload)
+	}
+	sourceMapPayload := readFile(t, jsMapPath)
+	var sourceMap struct {
+		Version        int      `json:"version"`
+		File           string   `json:"file"`
+		Sources        []string `json:"sources"`
+		SourcesContent []string `json:"sourcesContent"`
+		Names          []string `json:"names"`
+		Mappings       string   `json:"mappings"`
+	}
+	if err := json.Unmarshal([]byte(sourceMapPayload), &sourceMap); err != nil {
+		t.Fatalf("expected valid source map JSON: %v\n%s", err, sourceMapPayload)
+	}
+	if sourceMap.Version != 3 || sourceMap.File != "Counter.js" || len(sourceMap.Sources) != 1 || sourceMap.Sources[0] != "components/counter.cmp.gwdk" {
+		t.Fatalf("unexpected source map metadata: %#v", sourceMap)
+	}
+	if sourceMap.Mappings == "" {
+		t.Fatalf("expected generated JS source map mappings: %#v", sourceMap)
+	}
+	if len(sourceMap.SourcesContent) != 1 || !strings.Contains(sourceMap.SourcesContent[0], `view {`) || !strings.Contains(sourceMap.SourcesContent[0], `{Count}`) {
+		t.Fatalf("expected component source content in source map: %#v", sourceMap.SourcesContent)
+	}
+}
+
+func TestIslandJSSourceMapMappingsUseComponentSpans(t *testing.T) {
+	component := counterComponent()
+	component.Span = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 2, Column: 1}, End: manifest.SourcePosition{Line: 2, Column: 19}}
+	component.Blocks.Client = true
+	component.Blocks.ClientBody = `fn Add() {
+  Count++
+}`
+	component.Blocks.Spans.Client = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 7, Column: 1}, End: manifest.SourcePosition{Line: 7, Column: 9}}
+	component.Blocks.Spans.View = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 13, Column: 1}, End: manifest.SourcePosition{Line: 13, Column: 7}}
+	source := islandJSSource(component.Name, true)
+
+	var sourceMap struct {
+		Mappings string `json:"mappings"`
+	}
+	if err := json.Unmarshal(islandJSSourceMap(component, source), &sourceMap); err != nil {
+		t.Fatal(err)
+	}
+	if sourceMap.Mappings == "" {
+		t.Fatal("expected non-empty source map mappings")
+	}
+
+	mappings := decodeSourceMapMappings(t, sourceMap.Mappings)
+	mountLine := generatedLineContaining(t, source, `async function mountCounterIsland(scope)`)
+	applyStatementsLine := generatedLineContaining(t, source, `async function applyStatements(`)
+	bindingTableLine := generatedLineContaining(t, source, `const bindingTable = Object.freeze(`)
+	updateBindingsLine := generatedLineContaining(t, source, `function updateBindings(root, state, helpers, bindings)`)
+	renderLine := generatedLineContaining(t, source, `function render(root, state, helpers, bindings)`)
+	if mappings[mountLine].SourceLine != 7 || mappings[mountLine].SourceColumn != 1 {
+		t.Fatalf("expected mount function to map to client span, got %#v", mappings[mountLine])
+	}
+	if mappings[applyStatementsLine].SourceLine != 7 || mappings[applyStatementsLine].SourceColumn != 1 {
+		t.Fatalf("expected statement runtime to map to client span, got %#v", mappings[applyStatementsLine])
+	}
+	if mappings[bindingTableLine].SourceLine != 13 || mappings[bindingTableLine].SourceColumn != 1 {
+		t.Fatalf("expected binding table to map to view span, got %#v", mappings[bindingTableLine])
+	}
+	if mappings[updateBindingsLine].SourceLine != 13 || mappings[updateBindingsLine].SourceColumn != 1 {
+		t.Fatalf("expected binding updater to map to view span, got %#v", mappings[updateBindingsLine])
+	}
+	if mappings[renderLine].SourceLine != 13 || mappings[renderLine].SourceColumn != 1 {
+		t.Fatalf("expected render function to map to view span, got %#v", mappings[renderLine])
+	}
+}
+
+type decodedSourceMapMapping struct {
+	SourceLine   int
+	SourceColumn int
+}
+
+func decodeSourceMapMappings(t *testing.T, mappings string) map[int]decodedSourceMapMapping {
+	t.Helper()
+	out := map[int]decodedSourceMapMapping{}
+	previousSourceLine := 0
+	previousSourceColumn := 0
+	for lineIndex, line := range strings.Split(mappings, ";") {
+		if line == "" {
+			continue
+		}
+		segments := strings.Split(line, ",")
+		if len(segments) == 0 || segments[0] == "" {
+			continue
+		}
+		values := decodeSourceMapSegment(t, segments[0])
+		if len(values) < 4 {
+			t.Fatalf("expected source-map segment with four fields, got %#v", values)
+		}
+		previousSourceLine += values[2]
+		previousSourceColumn += values[3]
+		out[lineIndex+1] = decodedSourceMapMapping{
+			SourceLine:   previousSourceLine + 1,
+			SourceColumn: previousSourceColumn + 1,
+		}
+	}
+	return out
+}
+
+func decodeSourceMapSegment(t *testing.T, segment string) []int {
+	t.Helper()
+	var values []int
+	for index := 0; index < len(segment); {
+		value, next := decodeSourceMapVLQ(t, segment, index)
+		values = append(values, value)
+		index = next
+	}
+	return values
+}
+
+func decodeSourceMapVLQ(t *testing.T, source string, index int) (int, int) {
+	t.Helper()
+	shift := 0
+	value := 0
+	for index < len(source) {
+		digit := strings.IndexByte(sourceMapBase64, source[index])
+		if digit < 0 {
+			t.Fatalf("invalid source-map base64 digit %q in %q", source[index], source)
+		}
+		index++
+		continuation := digit&32 != 0
+		digit &= 31
+		value += digit << shift
+		shift += 5
+		if continuation {
+			continue
+		}
+		negative := value&1 == 1
+		value >>= 1
+		if negative {
+			value = -value
+		}
+		return value, index
+	}
+	t.Fatalf("unterminated source-map VLQ in %q", source)
+	return 0, index
+}
+
+func generatedLineContaining(t *testing.T, source, needle string) int {
+	t.Helper()
+	for index, line := range strings.Split(source, "\n") {
+		if strings.Contains(line, needle) {
+			return index + 1
+		}
+	}
+	t.Fatalf("missing generated line containing %q", needle)
+	return 0
+}
+
+func TestBuildProductionModeOmitsJSIslandSourceMaps(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter /></main>`,
+			},
+		}},
+		Components: []manifest.Component{counterComponent()},
+	}
+
+	result, err := Build(gowdk.Config{Build: gowdk.BuildConfig{Mode: gowdk.Production}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js")
+	jsMapPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js.map")
+	if !hasAssetArtifact(result.AssetArtifacts, jsPath) {
+		t.Fatalf("expected Counter.js asset, got %#v", result.AssetArtifacts)
+	}
+	if hasAssetArtifact(result.AssetArtifacts, jsMapPath) {
+		t.Fatalf("did not expect Counter.js.map asset in production mode: %#v", result.AssetArtifacts)
+	}
+	js := readFile(t, jsPath)
+	if strings.Contains(js, `sourceMappingURL`) {
+		t.Fatalf("did not expect sourceMappingURL in production JS:\n%s", js)
+	}
+	if strings.Contains(js, "\n  function matchingBrace(source, openIndex)") {
+		t.Fatalf("did not expect development indentation in production JS:\n%s", js)
+	}
+	if !strings.Contains(js, "\nfunction matchingBrace(source, openIndex)") {
+		t.Fatalf("expected compact function line in production JS:\n%s", js)
+	}
+	assetManifestPayload := readFile(t, filepath.Join(outputDir, assetManifestFile))
+	if strings.Contains(assetManifestPayload, `"assets/gowdk/islands/Counter.js.map"`) {
+		t.Fatalf("did not expect island source map in production asset manifest:\n%s", assetManifestPayload)
+	}
+	if _, err := os.Stat(jsMapPath); err == nil {
+		t.Fatalf("did not expect source map file at %s", jsMapPath)
 	}
 }
 
@@ -382,7 +599,7 @@ on destroy {
 		`await runEffectCleanup(effect);`,
 		`effectCleanups[effect.field] = effect.cleanup || null;`,
 		`await applyStatements(mountStatements, state, handlers, helpers, null, refs, computeds, asyncTokens, root, emitEvents);`,
-		`const destroyIsland = async () => {`,
+		`const destroyIsland = async function destroyCounterIsland() {`,
 		`registry.roots.delete(root);`,
 		`registry.roots.set(root, destroyIsland);`,
 		`await runAllEffectCleanups();`,
@@ -480,7 +697,8 @@ func TestBuildEmitsGIfRuntimeUpdatesForJSIsland(t *testing.T) {
 	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
 	for _, expected := range []string{
 		`const conditionalGroups = new Map();`,
-		`bindings.conditionals.push({ id: node.getAttribute("data-gowdk-binding-if"), node });`,
+		`{ kind: "conditional", selector: "[data-gowdk-binding-if]", id: "data-gowdk-binding-if" },`,
+		`else if (spec.kind === "conditional") bindings.conditionals.push({ id, node });`,
 		`renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true, bindings });`,
 	} {
 		if !strings.Contains(js, expected) {
@@ -585,7 +803,10 @@ fn SwapFirstTwo() {
 		`state[field] = state[field].slice(0, index).concat(state[field].slice(index + 1));`,
 		`next.splice(to, 0, item);`,
 		`const existing = new Map();`,
+		`const key = String(valueOf(keyExpr, state, scope, helpers) ?? "");`,
+		`if (reused && !used.has(key)) {`,
 		`syncElement(reused, fresh);`,
+		`if (!used.has(key) && node.parentNode) node.parentNode.removeChild(node);`,
 		`if (indexName) scope[indexName] = index;`,
 		`const rerender = () => {`,
 		`const scheduleRender = () => {`,
@@ -947,7 +1168,9 @@ func TestBuildEmitsValueBindingRuntimeForJSIsland(t *testing.T) {
 	}
 	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Search.js"))
 	for _, expected := range []string{
-		`bindings.value.push({ id: node.getAttribute("data-gowdk-binding-value"), node, field: node.getAttribute("data-gowdk-bind-value") });`,
+		`const bindingTable = Object.freeze([`,
+		`{ kind: "value", selector: "[data-gowdk-binding-value]", id: "data-gowdk-binding-value", field: "data-gowdk-bind-value" },`,
+		`else if (spec.kind === "value") bindings.value.push({ id, node, field: node.getAttribute(spec.field) });`,
 		`function updateValueBindings(bindings, state)`,
 		`state[field] = node.value;`,
 		`const event = node.tagName === "SELECT" || node.type === "radio" ? "change" : "input";`,
@@ -1108,7 +1331,8 @@ func TestBuildEmitsCheckedBindingRuntimeForJSIsland(t *testing.T) {
 	}
 	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
 	for _, expected := range []string{
-		`bindings.checked.push({ id: node.getAttribute("data-gowdk-binding-checked"), node, field: node.getAttribute("data-gowdk-bind-checked") });`,
+		`{ kind: "checked", selector: "[data-gowdk-binding-checked]", id: "data-gowdk-binding-checked", field: "data-gowdk-bind-checked" },`,
+		`else if (spec.kind === "checked") bindings.checked.push({ id, node, field: node.getAttribute(spec.field) });`,
 		`state[field] = node.checked;`,
 		`node.addEventListener("change"`,
 	} {
@@ -1192,6 +1416,8 @@ func TestBuildEmitsClassToggleRuntimeForJSIsland(t *testing.T) {
 	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
 	for _, expected := range []string{
 		`data-gowdk-class-`,
+		`{ kind: "class", attrPrefix: "data-gowdk-binding-class-", valuePrefix: "data-gowdk-class-" },`,
+		`function collectPrefixBinding(bindings, spec, node, attr)`,
 		`function updateClassBindings(bindings, state, helpers)`,
 		`node.classList.toggle(name, Boolean(valueOf(expression, state, null, helpers)));`,
 		`const scheduleRender = () => {`,
@@ -1235,6 +1461,7 @@ func TestBuildEmitsStyleBindingRuntimeForJSIsland(t *testing.T) {
 	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
 	for _, expected := range []string{
 		`data-gowdk-style-`,
+		`{ kind: "style", attrPrefix: "data-gowdk-binding-style-", valuePrefix: "data-gowdk-style-", unitPrefix: "data-gowdk-style-unit-" },`,
 		`node.style.setProperty(name, String(value) + unit);`,
 		`node.style.removeProperty(name);`,
 	} {
@@ -1314,6 +1541,27 @@ func TestBuildEmitsWASMIslandAssetsOnlyWhenExplicit(t *testing.T) {
 	if !bytes.Equal(wasm, []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}) {
 		t.Fatalf("expected minimal valid wasm module, got %#v", wasm)
 	}
+	loader := readFile(t, loaderPath)
+	for _, expected := range []string{
+		`const mountExport = "GOWDKMount" + component;`,
+		`const handleExport = "GOWDKHandle" + component;`,
+		`const destroyExport = "GOWDKDestroy" + component;`,
+		`state: parseJSON(root.getAttribute("data-gowdk-state"), {}),`,
+		`props: parseJSON(root.getAttribute("data-gowdk-props"), {}),`,
+		`bindings: collectBindings(root)`,
+		`applyPatches(root, callExport(exports, mountExport, mountPayload));`,
+		`node.addEventListener(event`,
+		`binding: attr.value,`,
+		`applyPatches(root, callExport(exports, handleExport`,
+		`applyPatches(root, callExport(exports, destroyExport`,
+		`if (patch.type === "setText" && node) node.textContent`,
+		`else if (patch.type === "setHidden" && node) node.hidden`,
+		`else if (patch.type === "emit" && patch.name) root.dispatchEvent`,
+	} {
+		if !strings.Contains(loader, expected) {
+			t.Fatalf("expected %q in wasm loader:\n%s", expected, loader)
+		}
+	}
 	assetManifestPayload := readFile(t, filepath.Join(outputDir, assetManifestFile))
 	for _, expected := range []string{
 		`"assets/gowdk/islands/Counter.wasm": "assets/gowdk/islands/Counter.wasm"`,
@@ -1321,6 +1569,192 @@ func TestBuildEmitsWASMIslandAssetsOnlyWhenExplicit(t *testing.T) {
 	} {
 		if !strings.Contains(assetManifestPayload, expected) {
 			t.Fatalf("expected %q in asset manifest:\n%s", expected, assetManifestPayload)
+		}
+	}
+}
+
+func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
+	packageDir := writeWASMIslandPackage(t, "main", `func main() {}`)
+	outputDir := t.TempDir()
+	component := counterComponent()
+	component.WASM = manifest.WASMContract{Package: packageDir}
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wasmPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.wasm")
+	if !hasAssetArtifact(result.AssetArtifacts, wasmPath) {
+		t.Fatalf("expected compiled wasm asset, got %#v", result.AssetArtifacts)
+	}
+	wasm := readBytes(t, wasmPath)
+	if !bytes.HasPrefix(wasm, wasmMagic) {
+		t.Fatalf("expected browser wasm module, got %#v", wasm[:min(len(wasm), 8)])
+	}
+	if bytes.Equal(wasm, []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}) {
+		t.Fatal("expected compiled Go wasm, got placeholder module")
+	}
+}
+
+func TestBuildRejectsWASMIslandPackageWithoutMainEntrypoint(t *testing.T) {
+	packageDir := writeWASMIslandPackage(t, "counter", `func NotMain() {}`)
+	outputDir := t.TempDir()
+	component := counterComponent()
+	component.WASM = manifest.WASMContract{Package: packageDir}
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected non-main wasm package to fail")
+	}
+	if !strings.Contains(err.Error(), "did not produce a browser WASM module") ||
+		!strings.Contains(err.Error(), "declare a package main with a main function") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBuildSurfacesWASMIslandPackageImportErrors(t *testing.T) {
+	packageDir := writeWASMIslandPackage(t, "main", `import _ "example.com/gowdkwasmtest/missing"
+
+func main() {}`)
+	outputDir := t.TempDir()
+	component := counterComponent()
+	component.WASM = manifest.WASMContract{Package: packageDir}
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected wasm package import error")
+	}
+	for _, expected := range []string{
+		`component Counter wasm package`,
+		`GOOS=js GOARCH=wasm`,
+		`example.com/gowdkwasmtest/missing`,
+	} {
+		if !strings.Contains(err.Error(), expected) {
+			t.Fatalf("expected %q in error: %v", expected, err)
+		}
+	}
+}
+
+func TestBuildRejectsUnsupportedWASMIslandPackageImports(t *testing.T) {
+	packageDir := writeWASMIslandPackage(t, "main", `import _ "os/exec"
+
+func main() {}`)
+	outputDir := t.TempDir()
+	component := counterComponent()
+	component.WASM = manifest.WASMContract{Package: packageDir}
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected unsupported wasm import error")
+	}
+	for _, expected := range []string{
+		`component Counter wasm package`,
+		`imports unsupported browser package "os/exec"`,
+		`process execution is not available in browser WASM islands`,
+	} {
+		if !strings.Contains(err.Error(), expected) {
+			t.Fatalf("expected %q in error: %v", expected, err)
+		}
+	}
+}
+
+func writeWASMIslandPackage(t *testing.T, packageName, body string) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/gowdkwasmtest\n\ngo 1.22\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	packageDir := filepath.Join(root, "browser", "counter")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source := "package " + packageName + "\n\n" + body + "\n"
+	if err := os.WriteFile(filepath.Join(packageDir, "counter.go"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return packageDir
+}
+
+func TestBuildAllowsJSAndWASMIslandsOnSamePage(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "mixed",
+			Route: "/mixed",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter /><TaggedCounter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []manifest.Component{counterComponent(), taggedCounterComponent()},
+	}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counterJS := filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js")
+	counterMap := filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js.map")
+	taggedWASM := filepath.Join(outputDir, "assets", "gowdk", "islands", "TaggedCounter.wasm")
+	taggedLoader := filepath.Join(outputDir, "assets", "gowdk", "islands", "TaggedCounter.wasm.js")
+	for _, path := range []string{counterJS, counterMap, taggedWASM, taggedLoader} {
+		if !hasAssetArtifact(result.AssetArtifacts, path) {
+			t.Fatalf("expected mixed island asset %s, got %#v", path, result.AssetArtifacts)
+		}
+	}
+	html := readFile(t, filepath.Join(outputDir, "mixed", "index.html"))
+	for _, expected := range []string{
+		`<script src="/assets/gowdk/islands/Counter.js" defer></script>`,
+		`<script src="/assets/gowdk/islands/TaggedCounter.wasm.js" defer></script>`,
+		`data-gowdk-component="Counter" data-gowdk-island="i1" data-gowdk-runtime="js"`,
+		`data-gowdk-component="TaggedCounter" data-gowdk-island="i2" data-gowdk-runtime="wasm"`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in mixed island page:\n%s", expected, html)
 		}
 	}
 }

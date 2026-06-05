@@ -45,6 +45,18 @@ func TestRenderConfigDefaultMode(t *testing.T) {
 	}
 }
 
+func TestBuildConfigDebugAssets(t *testing.T) {
+	if !(gowdk.BuildConfig{}).DebugAssets() {
+		t.Fatal("expected omitted build mode to include debug assets")
+	}
+	if !(gowdk.BuildConfig{Mode: gowdk.Development}).DebugAssets() {
+		t.Fatal("expected development mode to include debug assets")
+	}
+	if (gowdk.BuildConfig{Mode: gowdk.Production}).DebugAssets() {
+		t.Fatal("did not expect production mode to include debug assets")
+	}
+}
+
 func TestParseRenderModeAndModePredicates(t *testing.T) {
 	cases := []struct {
 		value       string

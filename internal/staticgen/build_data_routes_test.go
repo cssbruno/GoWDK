@@ -384,7 +384,7 @@ func TestBuildExpandsDynamicStaticPaths(t *testing.T) {
 			Paths: true,
 			Blocks: manifest.Blocks{
 				PathsBody: `=> { slug: "hello-gowdk" }
-=> { slug: "static-first" }`,
+=> { slug: "compile-first" }`,
 				View:     true,
 				ViewBody: `<main data-slug="{slug}"><h1>{slug}</h1><PostTitle title="{slug}" /></main>`,
 			},
@@ -408,7 +408,7 @@ func TestBuildExpandsDynamicStaticPaths(t *testing.T) {
 	if len(result.Artifacts) != 2 {
 		t.Fatalf("expected two dynamic artifacts, got %#v", result.Artifacts)
 	}
-	for _, slug := range []string{"hello-gowdk", "static-first"} {
+	for _, slug := range []string{"hello-gowdk", "compile-first"} {
 		path := filepath.Join(outputDir, "blog", slug, "index.html")
 		payload, err := os.ReadFile(path)
 		if err != nil {
@@ -431,7 +431,7 @@ func TestBuildExpandsDynamicStaticPaths(t *testing.T) {
 	if seen["/blog/hello-gowdk"] != "blog/hello-gowdk/index.html" {
 		t.Fatalf("missing hello route in manifest: %#v", seen)
 	}
-	if seen["/blog/static-first"] != "blog/static-first/index.html" {
+	if seen["/blog/compile-first"] != "blog/compile-first/index.html" {
 		t.Fatalf("missing static route in manifest: %#v", seen)
 	}
 }

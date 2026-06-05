@@ -65,6 +65,12 @@ type StateContract struct {
 	Span SourceSpan
 }
 
+// WASMContract points an explicit browser-side Go package at a component.
+type WASMContract struct {
+	Package string
+	Span    SourceSpan
+}
+
 // PageSpans records source ranges for page annotations and declarations.
 type PageSpans struct {
 	Page        SourceSpan
@@ -127,6 +133,7 @@ type Component struct {
 	Props     []Prop
 	PropsType GoTypeRef
 	State     StateContract
+	WASM      WASMContract
 	Emits     []Emit
 	Blocks    Blocks
 	Span      SourceSpan

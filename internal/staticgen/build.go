@@ -229,7 +229,10 @@ func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir stri
 	if len(failures) > 0 {
 		return Result{}, reporter.fail("plan", errors.New(strings.Join(failures, "\n")))
 	}
-	runtime := runtimeArtifacts(app, outputDir, layouts)
+	runtime, err := runtimeArtifacts(config, app, outputDir, layouts)
+	if err != nil {
+		return Result{}, reporter.fail("plan", err)
+	}
 	reporter.info("plan", "artifacts_planned", "incremental artifacts planned", BuildEvent{
 		Data: map[string]string{
 			"css":    fmt.Sprint(len(css.assets)),
@@ -390,5 +393,9 @@ func plan(config gowdk.Config, app manifest.Manifest, outputDir string) (buildPl
 	if len(failures) > 0 {
 		return buildPlan{}, errors.New(strings.Join(failures, "\n"))
 	}
-	return buildPlan{pages: planned, css: css.assets, assets: runtimeArtifacts(app, outputDir, layouts)}, nil
+	runtime, err := runtimeArtifacts(config, app, outputDir, layouts)
+	if err != nil {
+		return buildPlan{}, err
+	}
+	return buildPlan{pages: planned, css: css.assets, assets: runtime}, nil
 }

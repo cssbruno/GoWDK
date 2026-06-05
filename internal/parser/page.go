@@ -655,6 +655,14 @@ func applyComponentAnnotation(component *manifest.Component, name, rawValue stri
 		}
 		component.Name = value
 		component.Span = sourceLineSpan(lineNumber, rawLine)
+	case "wasm":
+		if value == "" {
+			return fmt.Errorf("@wasm requires a package path")
+		}
+		component.WASM = manifest.WASMContract{
+			Package: trimQuotes(value),
+			Span:    sourceLineSpan(lineNumber, rawLine),
+		}
 	default:
 		return fmt.Errorf("unsupported annotation @%s", name)
 	}

@@ -43,6 +43,7 @@ var Config = gowdk.Config{
 	},
 	Build: gowdk.BuildConfig{
 		Output: "dist/site",
+		Mode: gowdk.Production,
 		Stylesheets: []gowdk.Stylesheet{
 			{Href: "/assets/app.css"},
 			{Href: "/assets/theme.css"},
@@ -62,6 +63,9 @@ var Config = gowdk.Config{
 				Output: "dist/public-admin",
 			},
 		},
+	},
+	Render: gowdk.RenderConfig{
+		Default: gowdk.Action,
 	},
 	CSS: gowdk.CSSConfig{
 		Include: []string{"styles/**/*.css"},
@@ -108,6 +112,9 @@ var Config = gowdk.Config{
 	if config.Build.Output != "dist/site" {
 		t.Fatalf("unexpected output: %q", config.Build.Output)
 	}
+	if config.Build.Mode != gowdk.Production {
+		t.Fatalf("unexpected build mode: %q", config.Build.Mode)
+	}
 	if len(config.Build.Stylesheets) != 2 || config.Build.Stylesheets[0].Href != "/assets/app.css" || config.Build.Stylesheets[1].Href != "/assets/theme.css" {
 		t.Fatalf("unexpected stylesheets: %#v", config.Build.Stylesheets)
 	}
@@ -122,6 +129,9 @@ var Config = gowdk.Config{
 	}
 	if config.Build.Targets[1].Name != "public-admin" || len(config.Build.Targets[1].Modules) != 2 || config.Build.Targets[1].Modules[0] != "public" || config.Build.Targets[1].Modules[1] != "admin" {
 		t.Fatalf("unexpected combined build target: %#v", config.Build.Targets[1])
+	}
+	if config.Render.Default != gowdk.Action {
+		t.Fatalf("unexpected render default: %q", config.Render.Default)
 	}
 	if len(config.CSS.Include) != 1 || config.CSS.Include[0] != "styles/**/*.css" {
 		t.Fatalf("unexpected css includes: %#v", config.CSS.Include)
@@ -167,6 +177,37 @@ var Config = gowdk.Config{
 	}
 	if config.Build.Output != "" {
 		t.Fatalf("expected non-literal output to be ignored, got %q", config.Build.Output)
+	}
+}
+
+func TestLoadConfigFileReadsSSRAddon(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	s "github.com/cssbruno/gowdk/addons/ssr"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		s.Addon(),
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Addons) != 1 || config.Addons[0].Name() != "ssr" {
+		t.Fatalf("unexpected addons: %#v", config.Addons)
+	}
+	if !config.HasFeature(gowdk.FeatureSSR) {
+		t.Fatal("expected parsed config to enable SSR")
 	}
 }
 

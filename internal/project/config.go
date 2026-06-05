@@ -11,13 +11,17 @@ import (
 	"strconv"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/addons/tailwind"
 )
 
 // DefaultConfigFile is the config file discovered from a project root.
 const DefaultConfigFile = "gowdk.config.go"
 
-const tailwindImportPath = "github.com/cssbruno/gowdk/addons/tailwind"
+const (
+	ssrImportPath      = "github.com/cssbruno/gowdk/addons/ssr"
+	tailwindImportPath = "github.com/cssbruno/gowdk/addons/tailwind"
+)
 
 // LoadConfigFile reads the supported static subset of gowdk.config.go.
 func LoadConfigFile(path string) (gowdk.Config, error) {
@@ -94,6 +98,8 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 			config.Build = parseBuildConfig(keyValue.Value)
 		case "CSS":
 			config.CSS = parseCSSConfig(keyValue.Value)
+		case "Render":
+			config.Render = parseRenderConfig(keyValue.Value)
 		case "Addons":
 			config.Addons = parseAddons(keyValue.Value, imports)
 		}
@@ -188,6 +194,60 @@ func parseModuleConfig(expression ast.Expr) gowdk.ModuleConfig {
 	return module
 }
 
+func parseRenderConfig(expression ast.Expr) gowdk.RenderConfig {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.RenderConfig{}
+	}
+
+	var render gowdk.RenderConfig
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok || key.Name != "Default" {
+			continue
+		}
+		render.Default = parseRenderMode(keyValue.Value)
+	}
+	return render
+}
+
+func parseRenderMode(expression ast.Expr) gowdk.RenderMode {
+	if value := parseString(expression); value != "" {
+		mode, err := gowdk.ParseRenderMode(value)
+		if err == nil {
+			return mode
+		}
+		return ""
+	}
+	switch typed := expression.(type) {
+	case *ast.SelectorExpr:
+		return renderModeByName(typed.Sel.Name)
+	case *ast.Ident:
+		return renderModeByName(typed.Name)
+	default:
+		return ""
+	}
+}
+
+func renderModeByName(name string) gowdk.RenderMode {
+	switch name {
+	case "Static":
+		return gowdk.Static
+	case "Action":
+		return gowdk.Action
+	case "Hybrid":
+		return gowdk.Hybrid
+	case "SSR":
+		return gowdk.SSR
+	default:
+		return ""
+	}
+}
+
 func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 	literal, ok := expression.(*ast.CompositeLit)
 	if !ok {
@@ -207,6 +267,8 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 		switch key.Name {
 		case "Output":
 			build.Output = parseString(keyValue.Value)
+		case "Mode":
+			build.Mode = parseBuildMode(keyValue.Value)
 		case "Stylesheets":
 			build.Stylesheets = parseStylesheets(keyValue.Value)
 		case "Targets":
@@ -214,6 +276,36 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 		}
 	}
 	return build
+}
+
+func parseBuildMode(expression ast.Expr) gowdk.BuildMode {
+	if value := parseString(expression); value != "" {
+		switch gowdk.BuildMode(value) {
+		case gowdk.Development, gowdk.Production:
+			return gowdk.BuildMode(value)
+		default:
+			return ""
+		}
+	}
+	switch typed := expression.(type) {
+	case *ast.SelectorExpr:
+		return buildModeByName(typed.Sel.Name)
+	case *ast.Ident:
+		return buildModeByName(typed.Name)
+	default:
+		return ""
+	}
+}
+
+func buildModeByName(name string) gowdk.BuildMode {
+	switch name {
+	case "Development":
+		return gowdk.Development
+	case "Production":
+		return gowdk.Production
+	default:
+		return ""
+	}
 }
 
 func parseBuildTargets(expression ast.Expr) []gowdk.BuildTargetConfig {
@@ -368,13 +460,31 @@ func parseAddons(expression ast.Expr, imports map[string]string) []gowdk.Addon {
 
 	var addons []gowdk.Addon
 	for _, element := range literal.Elts {
-		addon, ok := parseTailwindAddon(element, imports)
-		if !ok {
+		if addon, ok := parseSSRAddon(element, imports); ok {
+			addons = append(addons, addon)
 			continue
 		}
-		addons = append(addons, addon)
+		if addon, ok := parseTailwindAddon(element, imports); ok {
+			addons = append(addons, addon)
+		}
 	}
 	return addons
+}
+
+func parseSSRAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon, bool) {
+	call, ok := expression.(*ast.CallExpr)
+	if !ok || len(call.Args) != 0 {
+		return nil, false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Addon" {
+		return nil, false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	if !ok || imports[packageName.Name] != ssrImportPath {
+		return nil, false
+	}
+	return ssr.Addon(), true
 }
 
 func parseTailwindAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon, bool) {

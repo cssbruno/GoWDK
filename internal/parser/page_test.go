@@ -24,7 +24,7 @@ import interop "github.com/cssbruno/gowdk/examples/go-interop"
 
 paths {
   => { slug: "hello-gowdk" }
-  => { slug: "static-first" }
+  => { slug: "compile-first" }
 }
 
 build {
@@ -54,7 +54,7 @@ view {
 		t.Fatalf("expected paths/build/view blocks, got %#v", page)
 	}
 	if page.Blocks.PathsBody != `=> { slug: "hello-gowdk" }
-  => { slug: "static-first" }` {
+  => { slug: "compile-first" }` {
 		t.Fatalf("unexpected paths body: %q", page.Blocks.PathsBody)
 	}
 	if page.Blocks.BuildBody != `=> { title: "Static post" }` {
@@ -689,6 +689,26 @@ view {
 	if component.State.Type.Alias != "ui" || component.State.Type.Name != "CounterState" ||
 		component.State.Init.Alias != "ui" || component.State.Init.Name != "NewCounterState" {
 		t.Fatalf("unexpected state contract: %#v", component.State)
+	}
+}
+
+func TestParseComponentReadsWASMContract(t *testing.T) {
+	component, err := ParseComponent([]byte(`
+@component Counter
+@wasm ./browser/counter
+
+view {
+  <button>{Count}</button>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if component.WASM.Package != "./browser/counter" {
+		t.Fatalf("unexpected wasm package: %#v", component.WASM)
+	}
+	if component.WASM.Span.Start.Line != 3 {
+		t.Fatalf("unexpected wasm span: %#v", component.WASM.Span)
 	}
 }
 

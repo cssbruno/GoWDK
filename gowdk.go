@@ -46,6 +46,7 @@ func (config RenderConfig) DefaultMode() RenderMode {
 // BuildConfig controls output artifacts and frontend asset packaging.
 type BuildConfig struct {
 	Output      string
+	Mode        BuildMode
 	Assets      AssetMode
 	Stylesheets []Stylesheet
 	Targets     []BuildTargetConfig
@@ -83,6 +84,21 @@ const (
 	AssetExternal AssetMode = "external"
 	Embed         AssetMode = "embed"
 )
+
+// BuildMode controls whether generated frontend artifacts include development
+// metadata such as source maps. Development is the default when omitted.
+type BuildMode string
+
+const (
+	Development BuildMode = "development"
+	Production  BuildMode = "production"
+)
+
+// DebugAssets reports whether generated frontend artifacts should include
+// debugging metadata.
+func (config BuildConfig) DebugAssets() bool {
+	return config.Mode != Production
+}
 
 // RenderMode describes where full-page HTML is produced.
 type RenderMode string

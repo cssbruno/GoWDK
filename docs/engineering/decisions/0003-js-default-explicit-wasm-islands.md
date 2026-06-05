@@ -49,7 +49,7 @@ errors.
 ## Alternatives Considered
 
 - Make WASM the default island runtime. Rejected because it is too heavy for
-  common scalar UI state and weakens static-first inspectability.
+  common scalar UI state and weakens build-time inspectability.
 - Wait for a full WASM design before adding local state. Rejected because
   generated JavaScript can handle the first useful stateful component slice
   without adding npm or full-page hydration.

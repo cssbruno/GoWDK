@@ -138,9 +138,9 @@ artifacts from another module selection cannot be copied into the next binary.
 
 ## Build
 
-`BuildConfig.Output`, `BuildConfig.Assets`, `BuildConfig.Stylesheets`, and
+`BuildConfig.Output`, `BuildConfig.Mode`, `BuildConfig.Assets`, `BuildConfig.Stylesheets`, and
 `BuildConfig.Targets` are target build settings. Current `gowdk build` reads
-literal `Build.Output`, `Build.Stylesheets`, and `Build.Targets` from
+literal `Build.Output`, `Build.Mode`, `Build.Stylesheets`, and `Build.Targets` from
 `gowdk.config.go`; `--out` overrides `Build.Output` for ad hoc builds.
 `BuildConfig.Assets` remains planned.
 
@@ -149,6 +149,7 @@ literal `Build.Output`, `Build.Stylesheets`, and `Build.Targets` from
 ```go
 type BuildConfig struct {
 	Output      string
+	Mode        gowdk.BuildMode
 	Assets      gowdk.AssetMode
 	Stylesheets []gowdk.Stylesheet
 	Targets     []gowdk.BuildTargetConfig
@@ -163,6 +164,12 @@ type BuildTargetConfig struct {
 	WASM    string
 }
 ```
+
+`Mode` controls development metadata in generated frontend artifacts. The
+default omitted mode behaves like `gowdk.Development` and emits JavaScript
+island source maps. Set `Mode: gowdk.Production` to omit `.js.map` artifacts and
+`sourceMappingURL` comments and to compact generated island JavaScript by
+trimming formatting-only whitespace.
 
 `Name` and `Output` are required. `Modules` selects configured modules; omit it
 to use the default configured discovery set. `App` is optional and writes a

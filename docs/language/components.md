@@ -30,8 +30,14 @@ Implemented today:
 - Component-local `computed Name Type { return expr }` values can derive
   read-only browser state from props, state, and other computed values. The
   compiler orders computed values by dependency and rejects cycles.
-- A component call can explicitly request the first WASM island artifact slice
-  with `<Counter g:island="wasm" />`.
+- A component can declare `@wasm ./browser/counter` to compile a browser-side
+  Go package for explicit WASM island calls. The package is built with
+  `GOOS=js GOARCH=wasm`, must produce a real browser WASM module, and must not
+  import server/process/network packages such as `net/http`, `os/exec`,
+  `database/sql`, raw `syscall`, `plugin`, or `unsafe`.
+- A component call can explicitly request the WASM island artifact with
+  `<Counter g:island="wasm" />`. If the component has no `@wasm` package,
+  GOWDK still emits the first-slice placeholder module plus loader shape.
 - Duplicate component names are rejected during manifest validation.
 - Redundant component implementations are rejected during manifest validation
   with `redundant_component_implementation`, even when their names differ.
@@ -41,8 +47,8 @@ Not implemented yet:
 - Non-string props in legacy `props {}` blocks.
 - Expression props.
 - Client function locals, return values, loops, or arbitrary browser logic.
-- Real user browser logic in WASM islands; the current WASM path emits a
-  minimal valid module plus loader only for explicit `g:island="wasm"` calls.
+- Full runtime validation for user browser logic in WASM islands, including
+  required Go/JS entrypoint registration and export checks.
 - Named slots or scoped slots.
 - Wiring generated Go component packages into the generated app layout.
 

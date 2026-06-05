@@ -41,7 +41,7 @@ Compiler rules:
 
 ### Positive
 
-- GOWDK has a sharper identity: app-shipping Go compiler with static/action-first output and optional SSR.
+- GOWDK has a sharper identity: app-shipping Go compiler with build-time output, backend actions, and optional SSR.
 - One-binary deploy works with or without request-time full-page rendering.
 - Actions, APIs, and fragments can provide backend behavior without forcing SSR.
 - Compiler diagnostics can catch render model mistakes early.

@@ -6,8 +6,8 @@ Scope: entire repository.
 
 This repository is GOWDK, a portable Go web compiler. WDK has no canonical
 expansion; no one knows what it stands for, and the practical product shorthand
-is that GOWDK ships apps. The product direction is compile-first:
-static/action-first output is core, and request-time full-page SSR is an
+is that GOWDK ships apps. The product direction is compile-first: build-time
+output and backend actions are core, and request-time full-page SSR is an
 optional addon.
 
 Use this file as the source of truth for Codex in this repository. Shared planning workflows and output templates live in `.llm/` so they can be reused by any capable coding LLM.

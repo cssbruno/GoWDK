@@ -14,7 +14,8 @@
         "end": {"line": 3, "column": 12}
       },
       "severity": "error",
-      "message": "dashboard: dashboard.page.gwdk uses @render ssr, but the SSR addon is not enabled. Fix: enable ssr.Addon() in gowdk.config.go"
+      "message": "dashboard: dashboard.page.gwdk uses @render ssr, but the SSR addon is not enabled. Fix: enable ssr.Addon() in gowdk.config.go",
+      "suggestion": "Enable ssr.Addon() in gowdk.config.go or change the page render mode."
     }
   ]
 }
@@ -29,6 +30,7 @@ Current diagnostic fields:
 - `range`: optional 1-based source range. End is exclusive.
 - `severity`: currently `error`.
 - `message`: user-facing diagnostic message.
+- `suggestion`: optional editor-facing fix hint for common mistakes.
 
 Current compiler diagnostic codes include:
 
@@ -50,3 +52,6 @@ Parser diagnostics include line-level ranges. Compiler diagnostics include
 ranges when the source span is known. Component `client {}` diagnostics point
 to the offending statement line when available, and supported expression
 validation failures can narrow the range to the failing expression columns.
+Common route, render-mode, client-field, view-field, event, and `g:for`
+mistakes include structured suggestions when GOWDK can offer a concrete next
+step.

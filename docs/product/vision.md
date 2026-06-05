@@ -13,7 +13,7 @@ GOWDK is a portable Go web compiler.
 
 ## Target Users
 
-- Go developers building product applications who want static-first output, typed backend behavior, and one-binary deployment.
+- Go developers building product applications who want build-time output, typed backend behavior, and one-binary deployment.
 - Small teams that want Go-first UI authoring without a large JavaScript application stack.
 - Builders who want request-time SSR only for pages that actually need request context.
 
@@ -35,7 +35,7 @@ Modern web frameworks often force teams into a rendering ideology: full SSR, ful
 - A v0.1 app can compile movable `.gwdk` files into prerendered HTML, CSS, assets, and one serving binary.
 - A v0.2 app can handle typed actions, form decoding, validation, redirects, CSRF, and server fragments without enabling SSR.
 - A v0.4 app can opt selected pages into request-time SSR with clear compiler diagnostics and addon checks.
-- Developers can explain the mental model in one sentence: GOWDK ships apps through a static/action-first Go compiler with optional SSR.
+- Developers can explain the mental model in one sentence: GOWDK ships apps through a compile-first Go compiler with build-time output, backend actions, and optional SSR.
 
 ## Constraints
 

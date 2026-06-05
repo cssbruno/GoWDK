@@ -5,7 +5,7 @@
 
 paths {
   => { slug: "hello-gowdk" }
-  => { slug: "static-first" }
+  => { slug: "compile-first" }
 }
 
 view {

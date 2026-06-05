@@ -16,7 +16,8 @@ CLI JSON diagnostics use:
         "end": {"line": 1, "column": 6}
       },
       "severity": "error",
-      "message": "missing @page"
+      "message": "missing @page",
+      "suggestion": "Add an @page declaration before page-level blocks."
     }
   ]
 }
@@ -28,6 +29,10 @@ is known. Compiler validation ranges are derived from parser-recorded source
 spans for annotations, block declarations, route params, actions, APIs, guards,
 layouts, components, and CSS references. Parser errors use the public
 `parse_error` code until parser recovery has more specific codes.
+
+The optional `suggestion` field carries a short structured fix hint for common
+mistakes such as missing `paths {}` on dynamic static routes, unknown client or
+view fields, missing `g:key`, and malformed `g:for` syntax.
 
 ## Current Validation Codes
 
@@ -60,5 +65,4 @@ Lexer diagnostics can also emit `unterminated_string`; parser diagnostics emit
 
 ## Planned Work
 
-Diagnostics still need parser recovery, suggested fixes, and broader body-level
-syntax errors.
+Diagnostics still need parser recovery and broader body-level syntax errors.

@@ -47,7 +47,7 @@ Build the current dynamic static page:
 ```sh
 go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build examples/basic/blog-post.page.gwdk
 test -f /tmp/gowdk-dynamic-build/blog/hello-gowdk/index.html
-test -f /tmp/gowdk-dynamic-build/blog/static-first/index.html
+test -f /tmp/gowdk-dynamic-build/blog/compile-first/index.html
 ```
 
 Build the current static action redirect page:

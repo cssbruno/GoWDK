@@ -708,22 +708,21 @@ Support:
 
 - [x] compiler-owned island root markers
 - [x] binding IDs for text, attrs, classes, styles, conditionals, and lists
-- [ ] keyed list updates
+- [x] keyed list updates
 - [x] fragment replacement reattaches islands
-- [ ] no full-page hydration
+- [x] no full-page hydration
 
 Compiler work:
 
 - [x] Assign stable binding IDs during view compilation.
-- [ ] Emit compact binding table into JS asset.
+- [x] Emit compact binding table into JS asset.
 - [x] Generate per-binding update functions.
 - [x] Add island mount registry.
 - [x] Integrate with partial runtime after server fragment swaps.
 
 Implementation note: the current slice emits compiler-owned `bN` attributes
 and the generated JS builds an in-memory binding table from them on mount and
-rerender. A precomputed compact table emitted directly into the JS asset remains
-open.
+rerender.
 
 Tests:
 
@@ -746,8 +745,19 @@ roots.
 
 Fourth implementation note: generated JS now routes the collected binding table
 through per-binding update functions for text, values, checked state, classes,
-styles, attributes, conditionals, and lists. The compact precomputed table in
-the JS asset remains open.
+styles, attributes, conditionals, and lists.
+
+Fifth implementation note: keyed list rendering now evaluates each `g:key`
+expression during rerender, reuses existing keyed DOM nodes through
+`syncElement`, and removes keyed nodes that are no longer present in state.
+Generated JavaScript mounts only matching `<gowdk-island>` roots; it does not
+hydrate or replace `document.body` or `document.documentElement`.
+
+Sixth implementation note: generated JS island assets now include a compact
+`bindingTable` descriptor that centralizes direct binding selectors and
+class/style/attribute binding prefixes. Runtime collection uses that table to
+build per-root binding entries from compiler-owned binding IDs, preserving
+dynamic list support while avoiding hardcoded per-kind scans.
 
 ### 17. Source Maps And Debug Output
 
@@ -755,21 +765,55 @@ Goal: make generated JS debuggable.
 
 Support:
 
-- [ ] readable generated function names
-- [ ] optional unminified dev output
+- [x] readable generated function names
+- [x] optional unminified dev output
 - [ ] source maps from `.gwdk` source spans to generated JS
-- [ ] CLI flag or config for dev/prod asset mode
+- [x] CLI flag or config for dev/prod asset mode
 
 Compiler work:
 
-- [ ] Preserve source spans in client AST.
-- [ ] Add generated JS source map writer.
-- [ ] Record source map assets in `gowdk-assets.json`.
+- [x] Preserve source spans in client AST.
+- [x] Add generated JS source map writer.
+- [x] Record source map assets in `gowdk-assets.json`.
 
 Tests:
 
-- [ ] Source map JSON validates.
-- [ ] Generated JS includes sourceMappingURL in dev mode.
+- [x] Source map JSON validates.
+- [x] Generated JS includes sourceMappingURL in dev mode.
+
+First implementation note: generated JavaScript island assets now emit
+companion `<Component>.js.map` files with source map v3 JSON, component `.gwdk`
+source names, and source content. The source map assets are written and recorded
+in `gowdk-assets.json`, and generated JS includes a `sourceMappingURL` comment.
+Span-accurate mappings remain open.
+
+Second implementation note: `gowdk.BuildConfig.Mode` now controls debug asset
+output. The default/development mode emits JavaScript island source maps and
+`sourceMappingURL` comments; `gowdk.Production` omits `.js.map` artifacts,
+manifest entries, and JS source-map comments. Span-accurate mappings remain
+open.
+
+Third implementation note: generated JavaScript island entry points now use
+component-specific names such as `mountCounterIsland` and
+`destroyCounterIsland`, so browser stack traces and devtools call frames point
+at the component owning the generated runtime.
+
+Fourth implementation note: development/default build mode keeps generated
+JavaScript island output formatted and readable. Production mode applies a
+conservative generated-source compaction pass that trims indentation and blank
+lines without rewriting JavaScript tokens. Span-accurate mappings remain open.
+
+Fifth implementation note: generated JavaScript source maps now include
+first-slice mappings from generated component identity, mount, and render helper
+lines back to the component declaration, `client {}`, and `view {}` source
+spans when those spans are available. Finer per-expression and per-binding
+generated mappings remain open.
+
+Sixth implementation note: generated JavaScript source maps now anchor broader
+runtime regions to source spans: statement execution, computed recomputation,
+and island mounting map to `client {}`, while binding tables, binding
+collection, conditional/list rendering, and binding updaters map to `view {}`.
+Finer per-expression and per-binding generated mappings remain open.
 
 ### 18. Production WASM Island ABI
 
@@ -787,22 +831,37 @@ Support:
 Compiler work:
 
 - [x] Add ADR before implementation.
-- [ ] Generate or validate Go WASM entrypoints.
-- [ ] Emit loader that passes bootstrap data.
+- [x] Generate or validate Go WASM entrypoints.
+- [x] Emit loader that passes bootstrap data.
 - [x] Decide whether WASM owns DOM updates or calls host JS helpers.
 
 Tests:
 
-- [ ] WASM island receives initial state.
-- [ ] WASM island handles click event.
-- [ ] WASM island updates visible state.
-- [ ] JS default and WASM explicit modes can coexist on one page.
+- [x] WASM island receives initial state.
+- [x] WASM island handles click event.
+- [x] WASM island updates visible state.
+- [x] JS default and WASM explicit modes can coexist on one page.
 
 First implementation note: ADR 0004 defines a JS-hosted WASM island ABI with
 component-scoped exports, JSON bootstrap data, host-captured events, validated
 patch-list DOM updates, lifecycle calls, and stable island asset names. This is
 an ABI decision only; code generation and browser-side Go validation remain
 open.
+
+Second implementation note: explicit WASM island loaders now collect
+component-local `state`, `props`, `emits`, `refs`, and binding metadata into the
+bootstrap object passed to `GOWDKMount<Component>` when that export exists. The
+loader also captures compiler-bound DOM events for `GOWDKHandle<Component>`,
+calls `GOWDKDestroy<Component>` on pagehide, and applies first-slice host patch
+commands for text, hidden state, attributes, classes, styles, and emitted
+events. Real user-authored Go WASM entrypoint generation/validation remains
+open.
+
+Third implementation note: components can now declare `@wasm <package>` to use
+a real browser-side Go package for explicit `g:island="wasm"` calls. GOWDK
+builds the package with `GOOS=js GOARCH=wasm` and rejects packages that do not
+produce a browser WASM module. Full export/registration validation for the ADR
+entrypoint names remains open.
 
 ### 19. Browser-Side Go Logic
 
@@ -811,23 +870,37 @@ ABI exists.
 
 Support:
 
-- [ ] user package contract for WASM island functions
-- [ ] build tags or target selection for browser-only Go
-- [ ] import restrictions for browser-safe packages
+- [x] user package contract for WASM island functions
+- [x] build tags or target selection for browser-only Go
+- [x] import restrictions for browser-safe packages
 - [ ] compile diagnostics for unsupported packages
 
 Compiler work:
 
-- [ ] Discover browser Go entry packages.
-- [ ] Run `GOOS=js GOARCH=wasm go build` per explicit island target.
-- [ ] Record emitted WASM assets.
+- [x] Discover browser Go entry packages.
+- [x] Run `GOOS=js GOARCH=wasm go build` per explicit island target.
+- [x] Record emitted WASM assets.
 - [ ] Surface Go build errors as GOWDK diagnostics.
 
 Tests:
 
-- [ ] Valid browser Go island builds.
-- [ ] Unsupported package import fails clearly.
-- [ ] Missing entrypoint fails clearly.
+- [x] Valid browser Go island builds.
+- [x] Unsupported package import fails clearly.
+- [x] Missing entrypoint fails clearly.
+
+First implementation note: `@wasm <package>` on a component declares the
+browser-side Go package used by explicit WASM island calls for that component.
+The static generator compiles the package with `GOOS=js GOARCH=wasm`, writes
+the resulting module to `assets/gowdk/islands/<Component>.wasm`, records it in
+`gowdk-assets.json`, and fails clearly when the package produces a Go archive
+instead of a browser WASM module or when `go build` rejects imports.
+Browser-safe import restriction policy and ADR export validation remain open.
+
+Second implementation note: local `@wasm` packages now get a first browser-safe
+import policy before build. GOWDK rejects server/process/network packages such
+as `net`, `net/http`, `os/exec`, `database/sql`, `plugin`, raw `syscall`, and
+`unsafe` with component-scoped errors. ADR export validation and stable
+diagnostic codes for these build errors remain open.
 
 ### 20. Diagnostics For Unsupported Syntax
 
@@ -837,7 +910,7 @@ Support:
 
 - [ ] diagnostic codes for every unsupported feature
 - [ ] source spans in `client {}` and view bindings
-- [ ] suggestions for common mistakes
+- [x] suggestions for common mistakes
 - [x] JSON diagnostics for editor tooling
 
 Compiler work:
@@ -845,13 +918,13 @@ Compiler work:
 - [ ] Extend parser recovery around `client {}`.
 - [x] Store spans in client AST.
 - [x] Add diagnostic code docs.
-- [ ] Add LSP validation for client syntax.
+- [x] Add LSP validation for client syntax.
 
 Tests:
 
-- [ ] Unsupported JS function call points to exact expression.
-- [ ] Unknown state field points to exact identifier.
-- [ ] Bad `g:for` syntax points to directive value.
+- [x] Unsupported JS function call points to exact expression.
+- [x] Unknown state field points to exact identifier.
+- [x] Bad `g:for` syntax points to directive value.
 - [x] Diagnostics appear in `gowdk check --json`.
 
 First implementation note: `clientlang.Program` now keeps source spans for
@@ -863,6 +936,31 @@ validation errors carry the failing expression span, so compiler diagnostics and
 columns for deterministic expression positions. `docs/reference/diagnostics.md`
 documents current JSON fields, ranges, and known diagnostic codes. View-binding
 spans remain open.
+
+Second implementation note: component view validation now maps selected
+directive and interpolation substrings back to `view {}` source ranges.
+Unsupported `g:on:*` event expressions point at the failing expression, unknown
+view fields point at the identifier, and malformed `g:for` directives point at
+the directive value. Broader parser recovery, suggestions, and exhaustive
+view-binding span coverage remain open.
+
+Third implementation note: in-memory checks now classify page, component,
+layout, asset, and plugin buffers before parsing. LSP diagnostics therefore
+validate unsaved `.cmp.gwdk` component buffers through the compiler and publish
+client syntax diagnostics with the same source ranges as `gowdk check --json`.
+Broader parser recovery and exhaustive view-binding span coverage remain open.
+
+Fourth implementation note: JSON diagnostics now include an optional
+`suggestion` field for common fixable mistakes: missing SSR addons, dynamic
+static routes without `paths {}`, load blocks on build-time render modes,
+unknown client/view fields, unknown event handlers, unknown emitted events,
+malformed `g:for`, and missing `g:key`. Parser recovery, exhaustive diagnostic
+codes, and broader view-binding span coverage remain open.
+
+Fifth implementation note: client parser failures now carry line metadata when
+the parser can identify the offending `client {}` body line. Compiler
+diagnostics map malformed client syntax to that line in the source file instead
+of the whole client block. Multi-error parser recovery remains open.
 
 ## Phasing
 
@@ -895,7 +993,7 @@ spans remain open.
 - [x] lifecycle hooks
 - [x] effects
 - [x] async functions
-- [ ] partial swap island remounting
+- [x] partial swap island remounting
 - [ ] debug source maps
 
 ### Phase E: Explicit WASM

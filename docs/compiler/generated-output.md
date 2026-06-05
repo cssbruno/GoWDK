@@ -47,12 +47,35 @@ Implemented today:
   runtime. Island roots carry compiler-owned `data-gowdk-island` markers, and
   generated island assets register idempotent browser mount hooks for initial
   load and partial-swap remounts plus destroy hooks for islands removed by
-  partial swaps. Generated island assets update collected bindings through
-  per-binding functions for text, form values, checked state, classes, styles,
-  attributes, conditionals, and lists.
+  partial swaps. The generated JavaScript is scoped to matching
+  `<gowdk-island>` roots rather than hydrating the full page. Generated island
+  assets carry a compact binding descriptor table and update collected bindings
+  through per-binding functions for text, form values, checked state, classes,
+  styles, attributes, conditionals, and lists; keyed list updates reuse
+  existing DOM nodes by `g:key` and remove stale keyed nodes.
+- In the default development build mode, generated JavaScript island assets are
+  accompanied by `assets/gowdk/islands/<Component>.js.map` source map files
+  that reference the component `.gwdk` source, are recorded in
+  `gowdk-assets.json`, include first-slice component/client/view source span
+  anchors, and are linked from the JS with `sourceMappingURL`.
+  `Build.Mode: gowdk.Production` omits those debug source map artifacts and
+  comments and compacts generated island JavaScript by trimming
+  formatting-only whitespace.
 - Generated static output emits `assets/gowdk/islands/<Component>.wasm` plus
   `assets/gowdk/islands/<Component>.wasm.js` only for component calls that
-  explicitly set `g:island="wasm"`.
+  explicitly set `g:island="wasm"`. When the component declares
+  `@wasm <package>`, GOWDK runs `GOOS=js GOARCH=wasm go build` for that package
+  and writes the compiled browser WASM module to the component asset path.
+  Local packages are checked for browser-safe imports before build; server,
+  process, and network packages such as `net/http`, `os/exec`, and
+  `database/sql` are rejected. A package that does not produce a WASM module
+  fails the build. Components
+  without `@wasm` keep the minimal placeholder module for the loader-shape
+  slice. The loader discovers matching island roots, builds the ADR-defined
+  bootstrap object from state, props, emits, refs, and binding metadata, calls
+  component-scoped WASM exports when present, captures host DOM events, and
+  applies validated first-slice patch commands such as text, visibility,
+  attribute, class, style, and emitted-event updates.
 - Generated static apps can return first-slice partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests.
 - Generated static app action route extraction rejects direct file inputs and
@@ -187,9 +210,9 @@ as `/blog/hello-gowdk`.
 
 The `files` map resolves logical asset names to slash-separated paths relative
 to the selected output directory. The current implementation records CSS files
-emitted by CSS processors, generated page CSS files, partial runtime assets, and
-generated island runtime assets. It does not record configured stylesheet URLs
-that were not written by the build.
+emitted by CSS processors, generated page CSS files, partial runtime assets,
+generated island runtime assets, and generated island source maps. It does not
+record configured stylesheet URLs that were not written by the build.
 
 ## Current Static Build Report
 

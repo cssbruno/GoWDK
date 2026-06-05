@@ -91,12 +91,12 @@ configured root `Source.Include` globs plus configured module sources, or
 modules and skips root `Source.Include`; explicit file paths still bypass
 discovery. A module with a name and no explicit include uses
 `<module-name>/**/*.gwdk`. Discovery excludes `.git`, `vendor`, `node_modules`,
-root/module `Source.Exclude` globs, and the configured build output directory
-when one exists. `build --out` overrides `Build.Output`; one of them is required
-for `build`. Every successful disk build writes `gowdk-build-report.json` to the
-output root. Passing `--debug` prints the same build report to stderr for
-validation, planning, write, manifest, cleanup, and completion events without
-changing stdout artifact-path output.
+`testdata`, root/module `Source.Exclude` globs, and the configured build output
+directory when one exists. `build --out` overrides `Build.Output`; one of them
+is required for `build`. Every successful disk build writes
+`gowdk-build-report.json` to the output root. Passing `--debug` prints the same
+build report to stderr for validation, planning, write, manifest, cleanup, and
+completion events without changing stdout artifact-path output.
 
 For generated apps and binaries, the selected modules are the packaging set:
 `--app` copies the selected build output; `--bin` and `--wasm` embed it. Prefer

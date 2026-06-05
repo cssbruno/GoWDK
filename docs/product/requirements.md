@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The initial product direction is compile-first and static/action-first. Full-page request-time SSR is optional and lives behind the SSR addon.
+The initial product direction is compile-first. Build-time output and backend actions are core; full-page request-time SSR is optional and lives behind the SSR addon.
 
 ## Requirements
 

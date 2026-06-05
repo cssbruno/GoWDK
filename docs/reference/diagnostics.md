@@ -47,6 +47,8 @@ Current compiler diagnostic codes include:
   `ambiguous_dynamic_page_route`, and `route_method_conflict`
 - render-mode diagnostics such as `static_dynamic_route_missing_paths` and
   `static_load_block`
+- static-build WASM package diagnostics such as `wasm_package_build_error`,
+  `wasm_package_entrypoint_error`, and `unsupported_wasm_import`
 
 Parser diagnostics include line-level ranges. Compiler diagnostics include
 ranges when the source span is known. Component `client {}` diagnostics point

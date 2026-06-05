@@ -273,18 +273,18 @@ func buildWASMIslandPackage(component manifest.Component) ([]byte, error) {
 	packagePath := strings.TrimSpace(component.WASM.Package)
 	temp, err := os.CreateTemp("", "gowdk-"+componentAssetName(component.Name)+"-*.wasm")
 	if err != nil {
-		return nil, fmt.Errorf("component %s wasm package %q: create temp output: %w", component.Name, packagePath, err)
+		return nil, wasmIslandDiagnosticError(component, "wasm_package_build_error", packagePath, fmt.Errorf("create temp output: %w", err))
 	}
 	tempPath := temp.Name()
 	if err := temp.Close(); err != nil {
 		_ = os.Remove(tempPath)
-		return nil, fmt.Errorf("component %s wasm package %q: close temp output: %w", component.Name, packagePath, err)
+		return nil, wasmIslandDiagnosticError(component, "wasm_package_build_error", packagePath, fmt.Errorf("close temp output: %w", err))
 	}
 	defer os.Remove(tempPath)
 
 	dir, buildPackage, err := wasmIslandBuildContext(packagePath)
 	if err != nil {
-		return nil, fmt.Errorf("component %s wasm package %q: %w", component.Name, packagePath, err)
+		return nil, wasmIslandDiagnosticError(component, "wasm_package_build_error", packagePath, err)
 	}
 	if err := validateWASMIslandPackageImports(component, dir, buildPackage, packagePath); err != nil {
 		return nil, err
@@ -296,16 +296,56 @@ func buildWASMIslandPackage(component manifest.Component) ([]byte, error) {
 	command.Env = append(envWithout(os.Environ(), "GOOS", "GOARCH"), "GOOS=js", "GOARCH=wasm")
 	output, err := command.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("component %s wasm package %q failed to build with GOOS=js GOARCH=wasm: %w\n%s", component.Name, packagePath, err, strings.TrimSpace(string(output)))
+		return nil, wasmIslandDiagnosticError(component, "wasm_package_build_error", packagePath, fmt.Errorf("failed to build with GOOS=js GOARCH=wasm: %w\n%s", err, strings.TrimSpace(string(output))))
 	}
 	contents, err := os.ReadFile(tempPath)
 	if err != nil {
-		return nil, fmt.Errorf("component %s wasm package %q: read built artifact: %w", component.Name, packagePath, err)
+		return nil, wasmIslandDiagnosticError(component, "wasm_package_build_error", packagePath, fmt.Errorf("read built artifact: %w", err))
 	}
 	if !bytes.HasPrefix(contents, wasmMagic) {
-		return nil, fmt.Errorf("component %s wasm package %q did not produce a browser WASM module; declare a package main with a main function", component.Name, packagePath)
+		return nil, wasmIslandDiagnosticError(component, "wasm_package_entrypoint_error", packagePath, fmt.Errorf("did not produce a browser WASM module; declare a package main with a main function"))
 	}
 	return contents, nil
+}
+
+type wasmIslandBuildDiagnosticError struct {
+	err        error
+	diagnostic BuildDiagnostic
+}
+
+func (err *wasmIslandBuildDiagnosticError) Error() string {
+	if err == nil || err.err == nil {
+		return ""
+	}
+	return err.err.Error()
+}
+
+func (err *wasmIslandBuildDiagnosticError) Unwrap() error {
+	if err == nil {
+		return nil
+	}
+	return err.err
+}
+
+func (err *wasmIslandBuildDiagnosticError) BuildDiagnostics() []BuildDiagnostic {
+	if err == nil {
+		return nil
+	}
+	return []BuildDiagnostic{err.diagnostic}
+}
+
+func wasmIslandDiagnosticError(component manifest.Component, code, packagePath string, cause error) error {
+	message := fmt.Sprintf("component %s wasm package %q %v", component.Name, packagePath, cause)
+	return &wasmIslandBuildDiagnosticError{
+		err: fmt.Errorf("%s", message),
+		diagnostic: BuildDiagnostic{
+			Code:          code,
+			ComponentName: component.Name,
+			Source:        component.Source,
+			Span:          firstSourceSpan(component.WASM.Span, component.Span),
+			Message:       message,
+		},
+	}
 }
 
 var forbiddenWASMIslandImports = map[string]string{
@@ -347,7 +387,7 @@ func validateWASMIslandPackageImports(component manifest.Component, dir, buildPa
 				continue
 			}
 			position := fileset.Position(item.Pos())
-			return fmt.Errorf("component %s wasm package %q imports unsupported browser package %q at %s:%d: %s", component.Name, packagePath, importPath, filepath.ToSlash(filePath), position.Line, reason)
+			return wasmIslandDiagnosticError(component, "unsupported_wasm_import", packagePath, fmt.Errorf("imports unsupported browser package %q at %s:%d: %s", importPath, filepath.ToSlash(filePath), position.Line, reason))
 		}
 	}
 	return nil

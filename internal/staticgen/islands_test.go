@@ -3,6 +3,7 @@ package staticgen
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1632,6 +1633,7 @@ func TestBuildRejectsWASMIslandPackageWithoutMainEntrypoint(t *testing.T) {
 		!strings.Contains(err.Error(), "declare a package main with a main function") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	requireBuildDiagnostic(t, err, "wasm_package_entrypoint_error", "Counter")
 }
 
 func TestBuildSurfacesWASMIslandPackageImportErrors(t *testing.T) {
@@ -1666,6 +1668,7 @@ func main() {}`)
 			t.Fatalf("expected %q in error: %v", expected, err)
 		}
 	}
+	requireBuildDiagnostic(t, err, "wasm_package_build_error", "Counter")
 }
 
 func TestBuildRejectsUnsupportedWASMIslandPackageImports(t *testing.T) {
@@ -1699,6 +1702,22 @@ func main() {}`)
 		if !strings.Contains(err.Error(), expected) {
 			t.Fatalf("expected %q in error: %v", expected, err)
 		}
+	}
+	requireBuildDiagnostic(t, err, "unsupported_wasm_import", "Counter")
+}
+
+func requireBuildDiagnostic(t *testing.T, err error, code string, componentName string) {
+	t.Helper()
+	var buildErr *BuildError
+	if !errors.As(err, &buildErr) {
+		t.Fatalf("expected BuildError, got %T: %v", err, err)
+	}
+	if len(buildErr.Diagnostics) != 1 {
+		t.Fatalf("expected one build diagnostic, got %#v", buildErr.Diagnostics)
+	}
+	diagnostic := buildErr.Diagnostics[0]
+	if diagnostic.Code != code || diagnostic.ComponentName != componentName {
+		t.Fatalf("unexpected build diagnostic: %#v", diagnostic)
 	}
 }
 

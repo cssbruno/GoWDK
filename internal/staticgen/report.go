@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 type BuildEventLevel string
@@ -32,9 +34,20 @@ type BuildReport struct {
 	Events    []BuildEvent `json:"events"`
 }
 
+// BuildDiagnostic is a structured diagnostic produced during static planning
+// or output generation after parser/compiler validation has already completed.
+type BuildDiagnostic struct {
+	Code          string              `json:"code"`
+	ComponentName string              `json:"componentName,omitempty"`
+	Source        string              `json:"source,omitempty"`
+	Span          manifest.SourceSpan `json:"span,omitempty"`
+	Message       string              `json:"message"`
+}
+
 type BuildError struct {
-	Err    error
-	Report BuildReport
+	Err         error
+	Report      BuildReport
+	Diagnostics []BuildDiagnostic
 }
 
 func (err *BuildError) Error() string {
@@ -53,6 +66,10 @@ func (err *BuildError) Unwrap() error {
 
 type buildReporter struct {
 	report BuildReport
+}
+
+type buildDiagnosticError interface {
+	BuildDiagnostics() []BuildDiagnostic
 }
 
 func newBuildReporter(mode string, outputDir string) *buildReporter {
@@ -86,9 +103,14 @@ func (reporter *buildReporter) fail(stage string, err error) error {
 		return nil
 	}
 	reporter.add(BuildEventError, stage, "failed", err.Error(), BuildEvent{})
+	var diagnostics []BuildDiagnostic
+	if typed, ok := err.(buildDiagnosticError); ok {
+		diagnostics = typed.BuildDiagnostics()
+	}
 	return &BuildError{
-		Err:    err,
-		Report: reporter.result(),
+		Err:         err,
+		Report:      reporter.result(),
+		Diagnostics: diagnostics,
 	}
 }
 

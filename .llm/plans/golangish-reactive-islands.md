@@ -873,14 +873,14 @@ Support:
 - [x] user package contract for WASM island functions
 - [x] build tags or target selection for browser-only Go
 - [x] import restrictions for browser-safe packages
-- [ ] compile diagnostics for unsupported packages
+- [x] compile diagnostics for unsupported packages
 
 Compiler work:
 
 - [x] Discover browser Go entry packages.
 - [x] Run `GOOS=js GOARCH=wasm go build` per explicit island target.
 - [x] Record emitted WASM assets.
-- [ ] Surface Go build errors as GOWDK diagnostics.
+- [x] Surface Go build errors as GOWDK diagnostics.
 
 Tests:
 
@@ -901,6 +901,12 @@ import policy before build. GOWDK rejects server/process/network packages such
 as `net`, `net/http`, `os/exec`, `database/sql`, `plugin`, raw `syscall`, and
 `unsafe` with component-scoped errors. ADR export validation and stable
 diagnostic codes for these build errors remain open.
+
+Third implementation note: static build failures from declared `@wasm` packages
+now carry structured build diagnostics. Go build failures use
+`wasm_package_build_error`, non-browser WASM outputs use
+`wasm_package_entrypoint_error`, and rejected browser imports use
+`unsupported_wasm_import`. ADR export validation remains open.
 
 ### 20. Diagnostics For Unsupported Syntax
 

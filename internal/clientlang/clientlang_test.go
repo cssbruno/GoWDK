@@ -1,6 +1,7 @@
 package clientlang
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -287,6 +288,23 @@ let Count = 0
 	}
 	if !strings.Contains(err.Error(), `unsupported syntax`) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseErrorReportsLine(t *testing.T) {
+	_, err := Parse(`fn Bad() {
+  if Count {
+  }
+}`)
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	var parseErr *ParseError
+	if !errors.As(err, &parseErr) {
+		t.Fatalf("expected ParseError, got %T: %v", err, err)
+	}
+	if parseErr.Line != 2 {
+		t.Fatalf("unexpected parse error line: got %d, want 2", parseErr.Line)
 	}
 }
 

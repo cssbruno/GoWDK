@@ -19,12 +19,13 @@ type Range struct {
 
 // Diagnostic describes a language-tool finding.
 type Diagnostic struct {
-	File     string   `json:"file"`
-	Code     string   `json:"code,omitempty"`
-	Pos      Position `json:"pos"`
-	Range    *Range   `json:"range,omitempty"`
-	Severity string   `json:"severity"`
-	Message  string   `json:"message"`
+	File       string   `json:"file"`
+	Code       string   `json:"code,omitempty"`
+	Pos        Position `json:"pos"`
+	Range      *Range   `json:"range,omitempty"`
+	Severity   string   `json:"severity"`
+	Message    string   `json:"message"`
+	Suggestion string   `json:"suggestion,omitempty"`
 }
 
 func (diagnostic Diagnostic) String() string {

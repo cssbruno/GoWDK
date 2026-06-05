@@ -18,7 +18,8 @@
         }
       },
       "severity": "error",
-      "message": "blog.post: blog.post has dynamic route params: {slug}, but render mode is static and no paths block exists. Fix: add paths { ... } or use @render ssr"
+      "message": "blog.post: blog.post has dynamic route params: {slug}, but render mode is static and no paths block exists. Fix: add paths { ... } or use @render ssr",
+      "suggestion": "Add paths { ... } for the dynamic static route or switch the page to @render ssr."
     }
   ]
 }

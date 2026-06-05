@@ -51,6 +51,9 @@ view {
 	if !strings.Contains(diagnostics[0].Message, "dynamic route params") {
 		t.Fatalf("unexpected diagnostic: %#v", diagnostics[0])
 	}
+	if diagnostics[0].Suggestion == "" || !strings.Contains(diagnostics[0].Suggestion, "paths") {
+		t.Fatalf("expected dynamic route suggestion, got %#v", diagnostics[0])
+	}
 }
 
 func TestCompletionsIncludeCoreLanguageKeywords(t *testing.T) {
@@ -90,6 +93,25 @@ view {
 	}
 	if !strings.Contains(string(payload), `"home"`) || !strings.Contains(string(payload), `"render": "static"`) {
 		t.Fatalf("unexpected manifest JSON: %s", payload)
+	}
+}
+
+func TestManifestJSONUsesConfiguredDefaultRenderMode(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "home.page.gwdk")
+	writeGWDK(t, path, `@page home
+@route "/"
+
+view {
+}
+`)
+
+	payload, diagnostics := ManifestJSON(gowdk.Config{Render: gowdk.RenderConfig{Default: gowdk.Action}}, []string{path})
+	if diagnostics.HasErrors() {
+		t.Fatal(diagnostics)
+	}
+	if !strings.Contains(string(payload), `"render": "action"`) {
+		t.Fatalf("expected action render mode in manifest JSON: %s", payload)
 	}
 }
 
@@ -137,6 +159,8 @@ func TestClassifySourceUsesCurrentFileKindRules(t *testing.T) {
 		{"home.page.gwdk", "@page home", FileKindPage},
 		{"hero.cmp.gwdk", "@component Hero", FileKindComponent},
 		{"hero.gwdk", "@component Hero", FileKindComponent},
+		{"home.page.gwdk", "// Mention @component in docs\n@page home", FileKindPage},
+		{"root.gwdk", "@layout root", FileKindLayout},
 		{"root.layout.gwdk", "@layout root", FileKindLayout},
 		{"images.asset.gwdk", "@asset images", FileKindAsset},
 		{"tailwind.plugin.gwdk", "@plugin tailwind", FileKindPlugin},
@@ -314,8 +338,39 @@ view {
 	output := string(payload)
 	if !strings.Contains(output, `"code": "component_client_error"`) ||
 		!strings.Contains(output, `"line": 5`) ||
-		!strings.Contains(output, `unknown island field \"Missing\"`) {
+		!strings.Contains(output, `unknown island field \"Missing\"`) ||
+		!strings.Contains(output, `"suggestion": "Use a field declared by the component props/state contract`) {
 		t.Fatalf("expected client diagnostic JSON details, got: %s", output)
+	}
+}
+
+func TestCheckJSONReportsBadGForSuggestion(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "nested.cmp.gwdk")
+	writeGWDK(t, path, `import ui "github.com/cssbruno/gowdk/testfixture/islands"
+
+@component Nested
+
+state ui.NestedState = ui.NewNestedState()
+
+view {
+  <ul><li g:for={item of Items}>{item.Name}</li></ul>
+}
+`)
+
+	payload, diagnostics := CheckJSON(gowdk.Config{}, []string{path})
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected bad g:for diagnostic")
+	}
+	diagnostic := diagnostics[0]
+	if diagnostic.Code != "component_field_error" {
+		t.Fatalf("expected component_field_error, got %#v\n%s", diagnostic, payload)
+	}
+	if !strings.Contains(diagnostic.Suggestion, `g:for={item in Items}`) {
+		t.Fatalf("expected g:for suggestion, got %#v\n%s", diagnostic, payload)
+	}
+	if !strings.Contains(string(payload), `"suggestion": "Use g:for={item in Items}`) {
+		t.Fatalf("expected suggestion in JSON payload, got: %s", payload)
 	}
 }
 

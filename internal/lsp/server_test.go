@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
@@ -103,6 +104,54 @@ func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 	if len(secondDiagnostics) != 0 {
 		t.Fatalf("expected diagnostics to clear on close, got %#v", secondDiagnostics)
 	}
+}
+
+func TestServerPublishesComponentClientDiagnostics(t *testing.T) {
+	uri := "file:///tmp/counter.cmp.gwdk"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"@component Counter\n\nclient {\n  fn Bad() {\n    Missing++\n  }\n}\n\nview {\n  <button g:on:click={Bad()}>Bad</button>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 3 {
+		t.Fatalf("expected 3 output messages, got %d", len(messages))
+	}
+
+	params := messages[1]["params"].(map[string]any)
+	if params["uri"] != uri {
+		t.Fatalf("unexpected diagnostic uri: %#v", params["uri"])
+	}
+	diagnostics := params["diagnostics"].([]any)
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one component client diagnostic, got %#v", diagnostics)
+	}
+	diagnostic := diagnostics[0].(map[string]any)
+	if diagnostic["code"] != "component_client_error" {
+		t.Fatalf("expected component_client_error code, got %#v", diagnostic)
+	}
+	if diagnostic["source"] != "gowdk" {
+		t.Fatalf("expected gowdk diagnostic source, got %#v", diagnostic)
+	}
+	if message := diagnostic["message"].(string); !strings.Contains(message, `unknown island field "Missing"`) {
+		t.Fatalf("unexpected diagnostic message: %q", message)
+	}
+	diagnosticRange := diagnostic["range"].(map[string]any)
+	start := diagnosticRange["start"].(map[string]any)
+	end := diagnosticRange["end"].(map[string]any)
+	if start["line"] != float64(4) || start["character"] != float64(0) ||
+		end["line"] != float64(4) || end["character"] != float64(1) {
+		t.Fatalf("expected client statement range, got %#v", diagnosticRange)
+	}
+
+	assertResponseID(t, messages[2], float64(2))
 }
 
 func TestServerReturnsMethodNotFoundForUnknownRequests(t *testing.T) {

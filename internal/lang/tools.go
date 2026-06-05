@@ -206,10 +206,36 @@ func ClassifySource(path string, source []byte) FileKind {
 	if strings.HasSuffix(base, ".plugin.gwdk") {
 		return FileKindPlugin
 	}
-	if strings.Contains(string(source), "@component") {
-		return FileKindComponent
+	for _, line := range strings.Split(string(source), "\n") {
+		text := strings.TrimSpace(line)
+		if text == "" || strings.HasPrefix(text, "//") {
+			continue
+		}
+		switch {
+		case isAnnotation(text, "@page"):
+			return FileKindPage
+		case isAnnotation(text, "@component"):
+			return FileKindComponent
+		case isAnnotation(text, "@layout"):
+			return FileKindLayout
+		case isAnnotation(text, "@asset"):
+			return FileKindAsset
+		case isAnnotation(text, "@plugin"):
+			return FileKindPlugin
+		}
 	}
 	return FileKindPage
+}
+
+func isAnnotation(text, annotation string) bool {
+	if !strings.HasPrefix(text, annotation) {
+		return false
+	}
+	if len(text) == len(annotation) {
+		return true
+	}
+	next := text[len(annotation)]
+	return next == ' ' || next == '\t'
 }
 
 // CheckFiles parses and validates .gwdk files.
@@ -226,6 +252,28 @@ func CheckFiles(config gowdk.Config, paths []string) (manifest.Manifest, Diagnos
 
 // CheckSource parses and validates one in-memory .gwdk source buffer.
 func CheckSource(config gowdk.Config, path string, source []byte) (manifest.Page, Diagnostics) {
+	switch ClassifySource(path, source) {
+	case FileKindComponent:
+		component, diagnostics := ParseComponentSource(path, source)
+		if diagnostics.HasErrors() {
+			return manifest.Page{}, diagnostics
+		}
+		app := manifest.Manifest{Components: []manifest.Component{component}}
+		if err := compiler.ValidateManifest(config, app); err != nil {
+			diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
+		}
+		return manifest.Page{}, diagnostics
+	case FileKindLayout:
+		_, diagnostics := ParseLayoutSource(path, source)
+		return manifest.Page{}, diagnostics
+	case FileKindAsset, FileKindPlugin:
+		_, diagnostics := Lex(string(source))
+		for i := range diagnostics {
+			diagnostics[i].File = path
+		}
+		return manifest.Page{}, diagnostics
+	}
+
 	page, diagnostics := ParseSource(path, source)
 	if diagnostics.HasErrors() {
 		return page, diagnostics
@@ -258,11 +306,26 @@ func ManifestJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
 	if diagnostics.HasErrors() {
 		return nil, diagnostics
 	}
+	app = applyDefaultRenderMode(app, config.Render.DefaultMode())
 	payload, err := json.MarshalIndent(app, "", "  ")
 	if err != nil {
 		return nil, Diagnostics{{Severity: "error", Message: err.Error()}}
 	}
 	return append(payload, '\n'), diagnostics
+}
+
+func applyDefaultRenderMode(app manifest.Manifest, defaultMode gowdk.RenderMode) manifest.Manifest {
+	if defaultMode == "" || defaultMode == gowdk.Static {
+		return app
+	}
+	pages := append([]manifest.Page(nil), app.Pages...)
+	for i := range pages {
+		if pages[i].Render == "" {
+			pages[i].Render = defaultMode
+		}
+	}
+	app.Pages = pages
+	return app
 }
 
 func compilerDiagnostics(err error, app manifest.Manifest) Diagnostics {
@@ -272,18 +335,55 @@ func compilerDiagnostics(err error, app manifest.Manifest) Diagnostics {
 		diagnostics := make(Diagnostics, 0, len(typed))
 		for _, validation := range typed {
 			diagnostics = append(diagnostics, Diagnostic{
-				File:     diagnosticSource(validation, sources),
-				Code:     validation.Code,
-				Pos:      sourcePosition(validation.Span.Start),
-				Range:    sourceSpanRange(validation.Span),
-				Severity: "error",
-				Message:  validation.Error(),
+				File:       diagnosticSource(validation, sources),
+				Code:       validation.Code,
+				Pos:        sourcePosition(validation.Span.Start),
+				Range:      sourceSpanRange(validation.Span),
+				Severity:   "error",
+				Message:    validation.Error(),
+				Suggestion: diagnosticSuggestion(validation),
 			})
 		}
 		return diagnostics
 	default:
 		return Diagnostics{{Severity: "error", Message: fmt.Sprint(err)}}
 	}
+}
+
+func diagnosticSuggestion(validation compiler.ValidationError) string {
+	message := validation.Message
+	switch validation.Code {
+	case "missing_ssr_addon":
+		return "Enable ssr.Addon() in gowdk.config.go or change the page render mode."
+	case "static_dynamic_route_missing_paths":
+		return "Add paths { ... } for the dynamic static route or switch the page to @render ssr."
+	case "load_requires_request_render":
+		return "Use @render ssr or @render hybrid for pages with load { ... }."
+	case "component_client_error":
+		if strings.Contains(message, "unknown island field") || strings.Contains(message, "unknown field") {
+			return "Use a field declared by the component props/state contract, a local variable, or a computed value."
+		}
+		if strings.Contains(message, "await is only supported inside async client functions") {
+			return "Mark the client function as async fn or remove await."
+		}
+		if strings.Contains(message, "unknown component event") {
+			return "Declare the event in emits { ... } before emitting it."
+		}
+	case "component_field_error":
+		if strings.Contains(message, "unknown view field") {
+			return "Bind only declared props/state/computed fields or loop variables in view { ... }."
+		}
+		if strings.Contains(message, "unknown client function") {
+			return "Declare a matching fn in client { ... } or use a supported inline state expression."
+		}
+		if strings.Contains(message, "g:for must use") {
+			return "Use g:for={item in Items} or g:for={item, index in Items}."
+		}
+		if strings.Contains(message, "g:for requires g:key") {
+			return "Add g:key with a stable scalar expression, such as g:key={item.ID}."
+		}
+	}
+	return ""
 }
 
 func sourcePosition(position manifest.SourcePosition) Position {

@@ -53,6 +53,29 @@ view {
 	}
 }
 
+func TestSiteMapJSONRunsCompilerValidation(t *testing.T) {
+	root := t.TempDir()
+	dashboard := filepath.Join(root, "dashboard.page.gwdk")
+	writeSiteMapFile(t, dashboard, `@page dashboard
+@route "/dashboard"
+@render ssr
+
+view {
+}
+`)
+
+	payload, diagnostics := SiteMapJSON(gowdk.Config{}, []string{dashboard})
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected missing SSR addon diagnostics")
+	}
+	if payload != nil {
+		t.Fatalf("expected no sitemap payload on validation errors, got %s", payload)
+	}
+	if got := diagnostics[0].Code; got != "missing_ssr_addon" {
+		t.Fatalf("expected missing_ssr_addon diagnostic, got %q", got)
+	}
+}
+
 func writeSiteMapFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

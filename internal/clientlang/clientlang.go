@@ -67,6 +67,25 @@ type Span struct {
 	EndLine   int
 }
 
+// ParseError reports a client {} parse failure with a 1-based line relative to
+// the client block body when available.
+type ParseError struct {
+	Line int
+	Err  error
+}
+
+func (err *ParseError) Error() string {
+	return err.Err.Error()
+}
+
+func (err *ParseError) Unwrap() error {
+	return err.Err
+}
+
+func parseErrorf(line int, format string, args ...any) error {
+	return &ParseError{Line: line, Err: fmt.Errorf(format, args...)}
+}
+
 // Param describes one typed function parameter.
 type Param struct {
 	Name string
@@ -155,14 +174,14 @@ func Parse(source string) (Program, error) {
 				}
 				params, err := parseParams(match[3])
 				if err != nil {
-					return Program{}, fmt.Errorf("client function %s params: %w", name, err)
+					return Program{}, parseErrorf(index+1, "client function %s params: %w", name, err)
 				}
 				returnType := strings.TrimSpace(match[4])
 				if returnType != "" && !isSupportedReturnType(returnType) {
-					return Program{}, fmt.Errorf("client function %s uses unsupported return type %q", name, returnType)
+					return Program{}, parseErrorf(index+1, "client function %s uses unsupported return type %q", name, returnType)
 				}
 				if async && returnType != "" {
-					return Program{}, fmt.Errorf("async client function %s cannot declare a return type", name)
+					return Program{}, parseErrorf(index+1, "async client function %s cannot declare a return type", name)
 				}
 				seen[name] = true
 				current = &Function{Name: name, Async: async, Params: params, ReturnType: returnType, Span: Span{StartLine: index + 1, EndLine: index + 1}}
@@ -198,7 +217,7 @@ func Parse(source string) (Program, error) {
 				program.Refs = append(program.Refs, Ref{Name: name, Kind: match[2]})
 				continue
 			}
-			return Program{}, fmt.Errorf("client line %d has unsupported syntax %q", index+1, line)
+			return Program{}, parseErrorf(index+1, "client line %d has unsupported syntax %q", index+1, line)
 		}
 
 		if current != nil && line == "}" {
@@ -216,7 +235,7 @@ func Parse(source string) (Program, error) {
 				continue
 			}
 			if strings.ContainsAny(line, "{}") && !allowsInlineBraceExpression(line) {
-				return Program{}, fmt.Errorf("client effect cleanup line %d has unsupported syntax %q", index+1, line)
+				return Program{}, parseErrorf(index+1, "client effect cleanup line %d has unsupported syntax %q", index+1, line)
 			}
 			statement := strings.TrimSpace(strings.TrimSuffix(line, ";"))
 			if statement != "" {
@@ -249,15 +268,15 @@ func Parse(source string) (Program, error) {
 				})
 			case "computed":
 				if len(lifecycle.Statements) != 1 {
-					return Program{}, fmt.Errorf("client computed %s must contain exactly one return statement", lifecycle.Field)
+					return Program{}, parseErrorf(lifecycle.Span.StartLine, "client computed %s must contain exactly one return statement", lifecycle.Field)
 				}
 				statement := strings.TrimSpace(lifecycle.Statements[0])
 				if !strings.HasPrefix(statement, "return ") {
-					return Program{}, fmt.Errorf("client computed %s must use `return expr`", lifecycle.Field)
+					return Program{}, parseErrorf(lifecycleStatementLine(lifecycle, 0), "client computed %s must use `return expr`", lifecycle.Field)
 				}
 				expr := strings.TrimSpace(strings.TrimPrefix(statement, "return "))
 				if expr == "" {
-					return Program{}, fmt.Errorf("client computed %s must return an expression", lifecycle.Field)
+					return Program{}, parseErrorf(lifecycleStatementLine(lifecycle, 0), "client computed %s must return an expression", lifecycle.Field)
 				}
 				exprSpan := Span{}
 				if len(lifecycle.StatementSpans) > 0 {
@@ -270,12 +289,12 @@ func Parse(source string) (Program, error) {
 		}
 		if strings.HasPrefix(line, "fn ") {
 			if current != nil {
-				return Program{}, fmt.Errorf("client function %s line %d cannot declare nested functions", current.Name, index+1)
+				return Program{}, parseErrorf(index+1, "client function %s line %d cannot declare nested functions", current.Name, index+1)
 			}
-			return Program{}, fmt.Errorf("client %s block line %d cannot declare nested functions", lifecycle.Description(), index+1)
+			return Program{}, parseErrorf(index+1, "client %s block line %d cannot declare nested functions", lifecycle.Description(), index+1)
 		}
 		if strings.ContainsAny(line, "{}") && !allowsInlineBraceExpression(line) {
-			return Program{}, fmt.Errorf("client block line %d has unsupported syntax %q", index+1, line)
+			return Program{}, parseErrorf(index+1, "client block line %d has unsupported syntax %q", index+1, line)
 		}
 		statement := strings.TrimSuffix(line, ";")
 		statement = strings.TrimSpace(statement)
@@ -292,13 +311,13 @@ func Parse(source string) (Program, error) {
 	}
 
 	if current != nil {
-		return Program{}, fmt.Errorf("client function %s missing closing }", current.Name)
+		return Program{}, parseErrorf(current.Span.StartLine, "client function %s missing closing }", current.Name)
 	}
 	if lifecycle != nil {
 		if lifecycle.Cleanup {
-			return Program{}, fmt.Errorf("client effect cleanup block missing closing }")
+			return Program{}, parseErrorf(lifecycle.Span.StartLine, "client effect cleanup block missing closing }")
 		}
-		return Program{}, fmt.Errorf("client %s block missing closing }", lifecycle.Description())
+		return Program{}, parseErrorf(lifecycle.Span.StartLine, "client %s block missing closing }", lifecycle.Description())
 	}
 	return program, nil
 }
@@ -323,6 +342,16 @@ func (block lifecycleBlock) Description() string {
 		return "effect"
 	}
 	return "on " + block.Kind
+}
+
+func lifecycleStatementLine(block *lifecycleBlock, index int) int {
+	if block != nil && index >= 0 && index < len(block.StatementSpans) {
+		return block.StatementSpans[index].StartLine
+	}
+	if block != nil && block.Span.StartLine > 0 {
+		return block.Span.StartLine
+	}
+	return 0
 }
 
 // HandlerMap returns deterministic handlers keyed by function name.
@@ -700,25 +729,35 @@ func parseParams(source string) ([]Param, error) {
 
 func validateFunctionReturnShape(function Function) error {
 	if function.ReturnType == "" {
-		for _, statement := range function.Statements {
+		for index, statement := range function.Statements {
 			if strings.HasPrefix(strings.TrimSpace(statement), "return ") {
-				return fmt.Errorf("client function %s cannot return a value without declaring a return type", function.Name)
+				return parseErrorf(functionStatementLine(function, index), "client function %s cannot return a value without declaring a return type", function.Name)
 			}
 		}
 		return nil
 	}
 	if len(function.Statements) != 1 {
-		return fmt.Errorf("client helper function %s must contain exactly one return statement", function.Name)
+		return parseErrorf(function.Span.StartLine, "client helper function %s must contain exactly one return statement", function.Name)
 	}
 	statement := strings.TrimSpace(function.Statements[0])
 	if !strings.HasPrefix(statement, "return ") {
-		return fmt.Errorf("client helper function %s must use `return expr`", function.Name)
+		return parseErrorf(functionStatementLine(function, 0), "client helper function %s must use `return expr`", function.Name)
 	}
 	expr := strings.TrimSpace(strings.TrimPrefix(statement, "return "))
 	if expr == "" {
-		return fmt.Errorf("client helper function %s must return an expression", function.Name)
+		return parseErrorf(functionStatementLine(function, 0), "client helper function %s must return an expression", function.Name)
 	}
 	return nil
+}
+
+func functionStatementLine(function Function, index int) int {
+	if index >= 0 && index < len(function.StatementSpans) {
+		return function.StatementSpans[index].StartLine
+	}
+	if function.Span.StartLine > 0 {
+		return function.Span.StartLine
+	}
+	return 0
 }
 
 func isSupportedParamType(value string) bool {

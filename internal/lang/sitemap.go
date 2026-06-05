@@ -61,7 +61,7 @@ func BuildSiteMap(config gowdk.Config, app manifest.Manifest) SiteMap {
 
 // SiteMapJSON returns the JSON site map for parsed and validated files.
 func SiteMapJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
-	app, diagnostics := ParseFiles(paths)
+	app, diagnostics := CheckFiles(config, paths)
 	if diagnostics.HasErrors() {
 		return nil, diagnostics
 	}

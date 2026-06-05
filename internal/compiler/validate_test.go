@@ -504,6 +504,42 @@ func TestValidateManifestAllowsDeclaredComponentEmit(t *testing.T) {
 	}
 }
 
+func TestValidateManifestRejectsDuplicateComponentEmitNames(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:   "Picker",
+		Source: "components/picker.cmp.gwdk",
+		Emits: []manifest.Emit{
+			{
+				Name: "select",
+				Span: manifest.SourceSpan{
+					Start: manifest.SourcePosition{Line: 4, Column: 3},
+					End:   manifest.SourcePosition{Line: 4, Column: 16},
+				},
+			},
+			{
+				Name: "select",
+				Span: manifest.SourceSpan{
+					Start: manifest.SourcePosition{Line: 5, Column: 3},
+					End:   manifest.SourcePosition{Line: 5, Column: 20},
+				},
+			},
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected duplicate component emit diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "duplicate_component_emit")
+	if diagnostic == nil {
+		t.Fatalf("missing duplicate_component_emit diagnostic: %v", err)
+	}
+	if !strings.Contains(diagnostic.Message, `duplicate emit "select"`) {
+		t.Fatalf("unexpected diagnostic message: %s", diagnostic.Message)
+	}
+	assertSourceSpan(t, diagnostic.Span, 5, 3, 5, 20)
+}
+
 func TestValidateManifestRejectsUnknownComponentEmit(t *testing.T) {
 	app := manifest.Manifest{Components: []manifest.Component{{
 		Name:    "Counter",
@@ -531,6 +567,38 @@ func TestValidateManifestRejectsUnknownComponentEmit(t *testing.T) {
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), `unknown component event "select"`) {
 		t.Fatalf("unexpected diagnostics: %v", err)
 	}
+}
+
+func TestValidateManifestClientParseErrorPointsToClientLine(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:   "Counter",
+		Source: "components/counter.cmp.gwdk",
+		Blocks: manifest.Blocks{
+			Client:     true,
+			ClientBody: "fn Bad() {\n  if Count {\n  }\n}",
+			Spans: manifest.BlockSpans{
+				Client: manifest.SourceSpan{
+					Start: manifest.SourcePosition{Line: 10, Column: 1},
+					End:   manifest.SourcePosition{Line: 14, Column: 1},
+				},
+			},
+			View:     true,
+			ViewBody: `<button>Bad</button>`,
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected client parse diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_client_error")
+	if diagnostic == nil {
+		t.Fatalf("missing component_client_error diagnostic: %v", err)
+	}
+	if !strings.Contains(diagnostic.Message, "unsupported syntax") {
+		t.Fatalf("unexpected diagnostic message: %s", diagnostic.Message)
+	}
+	assertSourceSpan(t, diagnostic.Span, 12, 1, 12, 2)
 }
 
 func TestValidateManifestRejectsComponentEmitPayloadTypeMismatch(t *testing.T) {
@@ -1439,6 +1507,83 @@ func TestValidateManifestRejectsUnknownGForItemField(t *testing.T) {
 	if !hasDiagnosticCode(diagnostics, "component_field_error") || !strings.Contains(err.Error(), "item.Missing") {
 		t.Fatalf("missing unknown item field diagnostic: %#v", diagnostics)
 	}
+}
+
+func TestValidateManifestViewEventDiagnosticPointsToExpression(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button g:on:click={Missing()}>{Count}</button>`,
+			Spans: manifest.BlockSpans{
+				View: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 9, Column: 1}, End: manifest.SourcePosition{Line: 9, Column: 7}},
+			},
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected invalid event expression diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	if diagnostic == nil || !strings.Contains(diagnostic.Message, "Missing()") {
+		t.Fatalf("missing event expression diagnostic: %#v", err)
+	}
+	assertSourceSpan(t, diagnostic.Span, 10, 21, 10, 30)
+}
+
+func TestValidateManifestUnknownViewFieldDiagnosticPointsToIdentifier(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:   "Counter",
+		Source: "components/counter.cmp.gwdk",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<button>{Missing}</button>`,
+			Spans: manifest.BlockSpans{
+				View: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 4, Column: 1}, End: manifest.SourcePosition{Line: 4, Column: 7}},
+			},
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown field diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	if diagnostic == nil || !strings.Contains(diagnostic.Message, `"Missing"`) {
+		t.Fatalf("missing unknown field diagnostic: %#v", err)
+	}
+	assertSourceSpan(t, diagnostic.Span, 5, 10, 5, 17)
+}
+
+func TestValidateManifestBadGForDiagnosticPointsToDirectiveValue(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:   "Nested",
+		Source: "components/nested.cmp.gwdk",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<ul><li g:for={item of Items}>{item.Name}</li></ul>`,
+			Spans: manifest.BlockSpans{
+				View: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 12, Column: 1}, End: manifest.SourcePosition{Line: 12, Column: 7}},
+			},
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected bad g:for diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	if diagnostic == nil || !strings.Contains(diagnostic.Message, `g:for must use`) {
+		t.Fatalf("missing bad g:for diagnostic: %#v", err)
+	}
+	assertSourceSpan(t, diagnostic.Span, 13, 16, 13, 29)
 }
 
 func TestValidateManifestAllowsGoishConditionalExpressions(t *testing.T) {
@@ -2467,6 +2612,22 @@ func hasDiagnosticCode(diagnostics []ValidationError, code string) bool {
 		}
 	}
 	return false
+}
+
+func firstDiagnostic(diagnostics []ValidationError, code string) *ValidationError {
+	for index := range diagnostics {
+		if diagnostics[index].Code == code {
+			return &diagnostics[index]
+		}
+	}
+	return nil
+}
+
+func assertSourceSpan(t *testing.T, span manifest.SourceSpan, startLine, startColumn, endLine, endColumn int) {
+	t.Helper()
+	if span.Start.Line != startLine || span.Start.Column != startColumn || span.End.Line != endLine || span.End.Column != endColumn {
+		t.Fatalf("unexpected source span: got %#v, want %d:%d-%d:%d", span, startLine, startColumn, endLine, endColumn)
+	}
 }
 
 func hasDiagnosticMessage(diagnostics []ValidationError, code string, parts ...string) bool {

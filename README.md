@@ -11,16 +11,15 @@
 ![Build](https://img.shields.io/badge/build-succeeds-2ea44f)
 ![Quality](https://img.shields.io/badge/quality-gated-2ea44f)
 
-GOWDK is a portable Go web compiler. Write movable `.gwdk` files, compile first,
-and ship spa output or a single Go binary.
+GOWDK is an experimental new way to build Go web applications. It is a compiler
+that takes portable `.gwdk` pages and components, then turns them into
+build-time web output, backend routes, and deployable Go binaries.
 
-Current status: GOWDK is pre-release compiler/runtime scaffolding. Build output,
-embedded app builds, first-slice actions/fragments, generated JavaScript
-islands, and first-slice SSR pages without `load {}` are partially implemented.
-Real user Go action execution, CSRF-wired generated action handlers, generated
-API handlers, request-time `load {}` execution, generated guard enforcement,
-hybrid/cache/revalidation policy, hot deploy, browser playground UI, and the
-production WASM island ABI are not implemented yet.
+Current status: GOWDK is pre-release and still being shaped. The compiler can
+already produce early build output, embedded app builds, first-slice
+actions/fragments, generated JavaScript islands, and simple SSR pages, but the
+runtime model and language surface are still evolving. If you are interested in
+where this is going, feedback, ideas, experiments, and improvements are welcome.
 
 Live demo: [gowdk.com](https://gowdk.com/)
 Demo source: [cssbruno/gowdk-page](https://github.com/cssbruno/gowdk-page)

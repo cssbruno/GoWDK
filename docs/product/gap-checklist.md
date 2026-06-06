@@ -833,8 +833,11 @@ Done when:
       Decision: `gowdk lsp` advertises `textDocument/semanticTokens/full`
       and returns lexer-backed decorator, variable, string, and operator tokens.
 - [ ] Add code actions for common migrations and missing imports/uses.
-- [ ] Add project-wide completions for discovered components, layouts, guards,
+- [x] Add project-wide completions for discovered components, layouts, guards,
       routes, stores, props, and state fields.
+      Decision: `gowdk lsp` completion merges language keywords with open-project
+      components, layouts, guards, routes, page IDs, stores, local component
+      props, and inferred component state/value fields.
 - [x] Add tests for LSP requests beyond diagnostics/formatting/completion.
       Decision: hover request coverage now exists in `internal/lsp`.
 

@@ -40,6 +40,9 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 - Publish diagnostics using the current GOWDK parser and validation rules.
 - Return whole-document formatting edits using `gowdk fmt` behavior.
 - Return keyword completions for annotations, render modes, blocks, and `g:` directives.
+- Return project completions for open-document components, layouts, guards,
+  routes, page IDs, stores, local component props, and inferred component state
+  or value fields.
 - Return hover text for known annotations, directives, blocks, routes, stores,
   props, components, layouts, guards, and handler symbols from open documents.
 - Return go-to-definition locations for same-package and `use`-qualified
@@ -61,6 +64,8 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 - [x] Opening an invalid `.gwdk` buffer publishes diagnostics without requiring the buffer to be saved.
 - [x] `textDocument/formatting` returns a replacement edit matching `gowdk fmt`.
 - [x] `textDocument/completion` returns the same language keywords exposed by editor tooling.
+- [x] `textDocument/completion` returns open-project symbols for components,
+      layouts, guards, routes, stores, props, and component state/value fields.
 - [x] `textDocument/hover` returns concise markdown help for language tokens and open-project symbols.
 - [x] `textDocument/definition` returns component declaration locations for open-project component calls.
 - [x] `textDocument/semanticTokens/full` returns encoded token data for open `.gwdk` buffers.

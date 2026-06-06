@@ -723,22 +723,39 @@ Done when:
 
 ### 11. Routing And Typed Access
 
-- [ ] Decide whether to support rest params.
-- [ ] Decide whether to support optional params.
-- [ ] Decide whether to support route groups without folder-derived route
+- [x] Decide whether to support rest params.
+      Decision: not supported today. Add only after exact, dynamic, static SPA,
+      and SSR route precedence remains predictable.
+- [x] Decide whether to support optional params.
+      Decision: defer. Optional params create route-shape ambiguity and are not
+      part of the current explicit route contract.
+- [x] Decide whether to support route groups without folder-derived route
       truth.
-- [ ] Decide whether page routes and API endpoints can share method/path through
+      Decision: defer. `@route` remains the route source of truth; file/folder
+      groups must not change URL shape implicitly.
+- [x] Decide whether page routes and API endpoints can share method/path through
       content negotiation.
-- [ ] Decide trailing slash policy and redirects.
-- [ ] Generate typed route param structs or accessors for request-time routes.
-- [ ] Generate typed endpoint metadata accessors if useful.
-- [ ] Generate typed load/action data accessors if useful.
-- [ ] Add tests for route conflicts, typed param decoding, invalid params, and
+      Decision: no same-method page/API content negotiation today. Page routes
+      and endpoints may share a path only when HTTP methods do not conflict.
+- [x] Decide trailing slash policy and redirects.
+      Decision: route declarations reject trailing slashes except `/`.
+      Generated concrete action POST handlers tolerate a trailing slash fallback
+      for compatibility.
+- [x] Generate typed route param structs or accessors for request-time routes.
+      Decision: current request-time access uses `runtime/app.Params(ctx)`,
+      `runtime/app.TypedParams(ctx)`, and `runtime/route` typed helpers.
+      Per-route structs are deferred.
+- [x] Generate typed endpoint metadata accessors if useful.
+      Decision: generated handlers attach endpoint metadata and user code reads
+      it with `runtime/app.Endpoint(ctx)`.
+- [x] Generate typed load/action data accessors if useful.
+      Decision: defer until load and action result contracts are stable.
+- [x] Add tests for route conflicts, typed param decoding, invalid params, and
       generated accessor compatibility.
 
 Done when:
 
-- [ ] Typed route access is easier than reading `map[string]any` while keeping
+- [x] Typed route access is easier than reading `map[string]any` while keeping
       route declarations explicit.
 
 ### 12. Dev Experience

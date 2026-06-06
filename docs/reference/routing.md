@@ -30,6 +30,20 @@ Current route rules:
 - Duplicate page route patterns are rejected. `/blog/{slug}` and `/blog/{id}`
   are the same route pattern.
 
+Unsupported route forms today:
+
+- Rest params such as `/docs/{path...}`.
+- Optional params such as `/docs/{slug?}`.
+- Route groups that affect URL shape independently from explicit `@route`.
+- Page/API same-path content negotiation. A page route and endpoint may share a
+  path only when their HTTP methods do not conflict, such as `GET /signup` page
+  plus `POST /signup` action.
+
+Trailing slash policy is strict. Omit trailing slashes except for `/`. Generated
+action handlers tolerate a trailing slash on concrete POST routes as a
+compatibility fallback and redirect to the declared target when configured; page
+route declarations themselves still reject trailing slashes.
+
 Pages may declare response cache intent with `@cache`. The value is carried as
 route metadata and should be a literal HTTP `Cache-Control` value:
 
@@ -246,6 +260,11 @@ Generated SSR handlers attach route metadata through `runtime/app.Route(ctx)`,
 raw dynamic params through `runtime/app.Params(ctx)`, and decoded typed params
 through `runtime/app.TypedParams(ctx)`.
 
+There are no generated per-route param struct types yet. Request-time user code
+should use `app.Params(ctx)`, `app.TypedParams(ctx)`, or the `runtime/route`
+typed helpers. Per-route structs may be added later only if the generated API
+stays stable and simpler than the current helpers.
+
 User Go can still decode raw params with `runtime/route` helpers:
 
 ```go
@@ -265,6 +284,11 @@ The helpers support `String`, `Int`, `Int64`, `Uint`, `Uint64`, `Bool`, and
 present. Decode errors name the param and expected type without echoing the raw
 request value. Generated typed SSR bindings return `400` for invalid typed route
 params and `404` for missing route params before guards or page rendering run.
+
+Endpoint user code can read generated endpoint metadata with
+`runtime/app.Endpoint(ctx)`. This is the stable accessor for action, API, and
+fragment handler metadata today. Typed load-result and action-result data
+accessors are deferred until those result contracts are stable.
 
 `load { => { field, user.name } }` execution calls same-package Go
 `Load<PageID>` functions at request time through `ssr.LoadContext`. Returned

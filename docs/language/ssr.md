@@ -29,15 +29,17 @@ SSR is optional and must not become the default framework identity.
   handlers to write a no-store local redirect. Redirect URLs must be local
   absolute paths.
 - `@error "/errors/dashboard.html"` declares a route-local generated HTML
-  error document for SSR load and generated render failures on that page. The
-  path is output-relative, may be written with a leading slash, must end in
-  `.html`, and must not contain `..`, query strings, fragments, or backslashes.
+  error document for SSR load failures, generated render failures, and route
+  panics before response headers are written on that page. The path is
+  output-relative, may be written with a leading slash, must end in `.html`,
+  and must not contain `..`, query strings, fragments, or backslashes.
 - Generated embedded apps load optional `404.html` and `500.html` documents
   from build output, plus any route-local `@error` documents selected by SSR
   routes. Missing error documents fall back to `http.Error`.
 - Generated SSR route handlers run inside a runtime panic boundary. A panic
   before response headers are written becomes a no-store HTTP 500 response,
-  using `500.html` when present, without exposing the panic value.
+  using the route-local `@error` page when declared or `500.html` when present,
+  without exposing the panic value.
 - The SSR addon exposes a small router registration contract for generated SSR
   page handlers.
 - The SSR addon provides a default HTTP 500 error handler contract for
@@ -81,6 +83,6 @@ app initialization.
 
 ## Planned Support
 
-Future SSR work must define request layouts, route-local panic recovery,
-action/API custom error-boundary syntax, route registration integration, and
-exactly how hybrid pages avoid becoming implicit full-page SSR.
+Future SSR work must define request layouts, action/API custom error-boundary
+syntax, route registration integration, and exactly how hybrid pages avoid
+becoming implicit full-page SSR.

@@ -143,4 +143,4 @@ Implemented today:
 
 Planned or partial:
 
-- Custom action/API error-boundary syntax and route-local SSR panic recovery.
+- Custom action/API error-boundary syntax.

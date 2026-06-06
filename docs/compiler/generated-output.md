@@ -100,10 +100,12 @@ Implemented today:
   embedded build output and use those pages for not-found responses and
   generated SSR load failures. SSR routes can also declare
   `@error "/errors/page.html"` to use a generated route-local HTML error page
-  for load and generated render failures before falling back to `500.html`.
+  for load failures, generated render failures, and route panics before
+  falling back to `500.html`.
 - Generated SSR, action, and API request-time lanes recover panics before
   response headers are written as no-store HTTP 500 responses without exposing
-  panic values.
+  panic values. SSR route panics use a declared route-local `@error` page when
+  one is available.
 - Generated apps can return first-slice partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests and standalone
   `fragment Name GET "/path" "#target" { ... }` routes. Standalone fragment

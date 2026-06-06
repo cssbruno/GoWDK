@@ -352,7 +352,7 @@ api Session GET "/api/session"
 - [x] Add route-local SSR `@error` page syntax for generated load/render
       failure pages.
 - [ ] Add custom action/API error-boundary syntax.
-- [ ] Add route-local SSR panic recovery for declared `@error` pages.
+- [x] Add route-local SSR panic recovery for declared `@error` pages.
 - [x] Define hybrid pages as SPA by default with explicit request-time capabilities.
 - [x] Define cache and revalidation behavior for static files, SPA routes,
       backend endpoints, partial responses, SSR routes, and hybrid pages.

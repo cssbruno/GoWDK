@@ -34,6 +34,7 @@ Annotations must start at the beginning of the trimmed line:
 @render spa
 @cache "public, max-age=60"
 @revalidate 5m
+@error "/errors/home.html"
 @guard auth.required, billing.active
 @component Hero
 @layout root
@@ -55,6 +56,9 @@ Supported annotations:
   generated static SPA HTML and SSR HTML responses.
 - `@revalidate <seconds|duration>`: optional stale-while-revalidate duration
   such as `60`, `60s`, `5m`, or `1h`; requires `@cache`.
+- `@error "<path.html>"`: optional route-local generated HTML error page for
+  SSR load and generated render failures. The path is output-relative after
+  normalization and must stay inside generated output.
 - `@guard <id>[, <id>...]`: optional guard metadata.
 - `@component <Name>`: component ID for `.cmp.gwdk` build inputs.
 

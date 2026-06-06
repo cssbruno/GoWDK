@@ -98,7 +98,9 @@ Implemented today:
   load failures use generated error-page output.
 - Generated embedded apps load optional `404.html` and `500.html` from the
   embedded build output and use those pages for not-found responses and
-  generated SSR load failures.
+  generated SSR load failures. SSR routes can also declare
+  `@error "/errors/page.html"` to use a generated route-local HTML error page
+  for load and generated render failures before falling back to `500.html`.
 - Generated SSR, action, and API request-time lanes recover panics before
   response headers are written as no-store HTTP 500 responses without exposing
   panic values.
@@ -185,8 +187,8 @@ Request-time action/API dispatch registers generated backend routes with
 `runtime/app.BackendRouter` and passes the router hook into `runtime/app`;
 older separate action/API hook fields remain a compatibility path for existing
 generated apps.
-It loads `gowdk-assets.json`, `404.html`, and `500.html` from the embedded
-build output filesystem when present.
+It loads `gowdk-assets.json`, `404.html`, `500.html`, and route-local SSR
+`@error` pages from the embedded build output filesystem when present.
 Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 `GOWDK_INSTANCE_ID`; if no instance ID is provided, the app creates one at
 process start from the module name, hostname, and a random token. It can also
@@ -194,7 +196,8 @@ serve auto-detected POST redirect handlers for the first supported action
 subset and first-slice SSR pages with declared `load {}` identifier or dotted
 paths. SSR load functions can return safe local redirects with
 `ssr.RedirectTo`/`ssr.Redirect`, and generated SSR load failures render the
-optional `500.html` when present.
+route-local `@error` page when declared or the optional `500.html` when
+present.
 Action handlers decode allowlisted form fields into named first-slice input wrappers,
 cap request bodies before parsing, preserve repeated values, return HTTP 413
 for oversized submissions, return HTTP 400 for unexpected fields, and return

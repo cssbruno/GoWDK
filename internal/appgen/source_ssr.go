@@ -168,6 +168,9 @@ func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
 	if route.Cache != "" {
 		metadata = append(metadata, keyValue("Cache", stringLit(route.Cache)))
 	}
+	if route.ErrorPage != "" {
+		metadata = append(metadata, keyValue("ErrorPage", stringLit(route.ErrorPage)))
+	}
 	dynamicParams := route.DynamicParams
 	if len(dynamicParams) == 0 {
 		dynamicParams = ssrRoutePatternParams(route.Route)

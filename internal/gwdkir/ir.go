@@ -83,6 +83,7 @@ type Page struct {
 	Render      gowdk.RenderMode
 	Cache       string
 	Revalidate  string
+	ErrorPage   string
 	Metadata    PageMetadata
 	Layouts     []string
 	Guards      []string
@@ -125,6 +126,7 @@ type PageSpans struct {
 	Render      manifest.SourceSpan
 	Cache       manifest.SourceSpan
 	Revalidate  manifest.SourceSpan
+	ErrorPage   manifest.SourceSpan
 	Title       manifest.SourceSpan
 	Description manifest.SourceSpan
 	Canonical   manifest.SourceSpan

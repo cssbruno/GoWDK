@@ -87,7 +87,7 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 	metrics := handler.Metrics
 	metrics.recordRequest()
 	handler.writeIdentityHeaders(response)
-	if len(handler.ErrorPages.NotFound) > 0 || len(handler.ErrorPages.InternalServerError) > 0 {
+	if len(handler.ErrorPages.NotFound) > 0 || len(handler.ErrorPages.InternalServerError) > 0 || len(handler.ErrorPages.Custom) > 0 {
 		request = request.WithContext(withErrorPages(request.Context(), handler.ErrorPages))
 	}
 	if request.Method == http.MethodPost && isCookieAckPath(request.URL.Path) {

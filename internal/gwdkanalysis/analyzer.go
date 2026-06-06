@@ -108,6 +108,10 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 		page.Revalidate = ast.Revalidate.Seconds
 		page.Spans.Revalidate = ast.Revalidate.Span
 	}
+	if ast.ErrorPage != nil {
+		page.ErrorPage = ast.ErrorPage.Path
+		page.Spans.ErrorPage = ast.ErrorPage.Span
+	}
 	for _, layout := range ast.Layouts {
 		page.Layouts = append(page.Layouts, layout.ID)
 		page.Spans.Layouts = append(page.Spans.Layouts, manifest.NamedSpan{Name: layout.ID, Span: layout.Span})
@@ -661,6 +665,13 @@ func applyPageAnnotation(page *manifest.Page, annotation gwdkast.Annotation) err
 		}
 		page.Revalidate = seconds
 		page.Spans.Revalidate = annotation.Span
+	case "error":
+		errorPage, err := manifest.ErrorPagePath(trimQuotes(value))
+		if err != nil {
+			return err
+		}
+		page.ErrorPage = errorPage
+		page.Spans.ErrorPage = annotation.Span
 	case "layout":
 		page.Layouts = splitCommaList(value)
 		page.Spans.Layouts = namedSpans(page.Layouts, annotation.Span)
@@ -758,6 +769,7 @@ func lowerIRPage(page manifest.Page) gwdkir.Page {
 		Render:      page.Render,
 		Cache:       page.Cache,
 		Revalidate:  page.Revalidate,
+		ErrorPage:   page.ErrorPage,
 		Metadata:    gwdkir.PageMetadata(page.Metadata),
 		Layouts:     append([]string(nil), page.Layouts...),
 		Guards:      append([]string(nil), page.Guard...),
@@ -773,6 +785,7 @@ func lowerIRPage(page manifest.Page) gwdkir.Page {
 			Render:      page.Spans.Render,
 			Cache:       page.Spans.Cache,
 			Revalidate:  page.Spans.Revalidate,
+			ErrorPage:   page.Spans.ErrorPage,
 			Title:       page.Spans.Title,
 			Description: page.Spans.Description,
 			Canonical:   page.Spans.Canonical,

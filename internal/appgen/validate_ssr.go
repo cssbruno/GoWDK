@@ -3,12 +3,14 @@ package appgen
 import (
 	"fmt"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func validateSSRRoutes(routes []SSRRoute) error {
 	seen := map[string]SSRRoute{}
 	var dynamicRoutes []SSRRoute
-	for _, route := range routes {
+	for index, route := range routes {
 		if strings.TrimSpace(route.PageID) == "" {
 			return fmt.Errorf("generated SSR route is missing page ID")
 		}
@@ -17,6 +19,14 @@ func validateSSRRoutes(routes []SSRRoute) error {
 		}
 		if strings.TrimSpace(route.HTML) == "" {
 			return fmt.Errorf("generated SSR %s has empty HTML", route.PageID)
+		}
+		if route.ErrorPage != "" {
+			errorPage, err := manifest.ErrorPagePath(route.ErrorPage)
+			if err != nil {
+				return fmt.Errorf("generated SSR %s: %w", route.PageID, err)
+			}
+			route.ErrorPage = errorPage
+			routes[index].ErrorPage = errorPage
 		}
 		if err := validateSSRReplacements(route); err != nil {
 			return err

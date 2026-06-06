@@ -26,6 +26,7 @@ type RouteMetadata struct {
 	Path          string
 	Render        string
 	Cache         string
+	ErrorPage     string
 	DynamicParams []string
 	RouteParams   []RouteParamMetadata
 	Guards        []string

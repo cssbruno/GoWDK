@@ -1,8 +1,11 @@
 package manifest
 
 import (
+	"fmt"
+	"path"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/cssbruno/gowdk"
 )
@@ -98,6 +101,7 @@ type PageSpans struct {
 	Render      SourceSpan
 	Cache       SourceSpan
 	Revalidate  SourceSpan
+	ErrorPage   SourceSpan
 	Title       SourceSpan
 	Description SourceSpan
 	Canonical   SourceSpan
@@ -138,6 +142,7 @@ type Page struct {
 	Render      gowdk.RenderMode
 	Cache       string
 	Revalidate  string
+	ErrorPage   string
 	Metadata    PageMetadata
 	Layouts     []string
 	Guard       []string
@@ -163,6 +168,31 @@ func CachePolicyWithRevalidate(cache string, revalidate string) string {
 		return cache
 	}
 	return cache + ", stale-while-revalidate=" + revalidate
+}
+
+// ErrorPagePath returns a clean generated-output-relative error page path.
+func ErrorPagePath(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", fmt.Errorf("@error requires a value")
+	}
+	if strings.ContainsAny(value, "\\?#") {
+		return "", fmt.Errorf("@error must be a local generated HTML path without query, fragment, or backslash")
+	}
+	for _, part := range strings.Split(strings.TrimPrefix(value, "/"), "/") {
+		if part == ".." {
+			return "", fmt.Errorf("@error path must stay inside generated output")
+		}
+	}
+	cleaned := path.Clean("/" + strings.TrimPrefix(value, "/"))
+	if cleaned == "/" || cleaned == "/." {
+		return "", fmt.Errorf("@error requires a generated HTML file path")
+	}
+	cleaned = strings.TrimPrefix(cleaned, "/")
+	if !strings.HasSuffix(strings.ToLower(cleaned), ".html") {
+		return "", fmt.Errorf("@error path must end in .html")
+	}
+	return cleaned, nil
 }
 
 // RouteParam describes one dynamic route parameter and its declared scalar

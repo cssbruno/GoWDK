@@ -840,6 +840,13 @@ func applyAnnotation(page *manifest.Page, name, rawValue string, lineNumber int,
 		}
 		page.Revalidate = seconds
 		page.Spans.Revalidate = span
+	case "error":
+		errorPage, err := manifest.ErrorPagePath(trimQuotes(value))
+		if err != nil {
+			return err
+		}
+		page.ErrorPage = errorPage
+		page.Spans.ErrorPage = span
 	case "title":
 		title, err := annotationText(name, value)
 		if err != nil {

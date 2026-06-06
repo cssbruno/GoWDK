@@ -59,6 +59,7 @@ func TestSSRArtifactsRenderConcreteSSRPage(t *testing.T) {
 			Render:     gowdk.SSR,
 			Cache:      "public, max-age=45",
 			Revalidate: "15",
+			ErrorPage:  "errors/dashboard.html",
 			Blocks: manifest.Blocks{
 				BuildBody: `=> { title: "Dashboard" }`,
 				View:      true,
@@ -79,6 +80,9 @@ func TestSSRArtifactsRenderConcreteSSRPage(t *testing.T) {
 	}
 	if artifacts[0].Cache != "public, max-age=45, stale-while-revalidate=15" {
 		t.Fatalf("unexpected SSR cache policy: %#v", artifacts[0])
+	}
+	if artifacts[0].ErrorPage != "errors/dashboard.html" {
+		t.Fatalf("unexpected SSR error page: %#v", artifacts[0])
 	}
 	if !strings.Contains(artifacts[0].HTML, "<h1>Dashboard</h1>") {
 		t.Fatalf("expected rendered SSR HTML, got %s", artifacts[0].HTML)

@@ -11,6 +11,7 @@ func TestParseSyntaxBuildsTypedASTForCurrentSubset(t *testing.T) {
 @page newsletter
 @route "/newsletter/{slug}"
 @guard auth.required
+@error "/errors/newsletter.html"
 
 import interop "github.com/cssbruno/gowdk/examples/go-interop"
 
@@ -39,8 +40,11 @@ view {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(file.Annotations) != 3 || file.Annotations[1].Name != "route" || file.Annotations[1].Span.Start.Line != 3 {
+	if len(file.Annotations) != 4 || file.Annotations[1].Name != "route" || file.Annotations[1].Span.Start.Line != 3 {
 		t.Fatalf("unexpected annotations: %#v", file.Annotations)
+	}
+	if file.ErrorPage == nil || file.ErrorPage.Path != "errors/newsletter.html" {
+		t.Fatalf("unexpected error page declaration: %#v", file.ErrorPage)
 	}
 	if len(file.Imports) != 1 || file.Imports[0].Alias != "interop" || file.Imports[0].Path != "github.com/cssbruno/gowdk/examples/go-interop" {
 		t.Fatalf("unexpected imports: %#v", file.Imports)

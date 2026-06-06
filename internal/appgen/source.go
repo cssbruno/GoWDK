@@ -322,7 +322,7 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 		keyValue("Root", id("root")),
 		keyValue("Identity", call(sel("gowdkruntime", "InstanceIdentity"))),
 		keyValue("Assets", call(sel("gowdkruntime", "LoadAssetManifest"), id("root"))),
-		keyValue("ErrorPages", call(sel("gowdkruntime", "LoadErrorPages"), id("root"))),
+		keyValue("ErrorPages", errorPagesExpr(options)),
 		keyValue("Backend", backend),
 	}
 	if csrfEnabled(options) {
@@ -333,6 +333,38 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 		keyValue("SSRDynamic", id("ssrDynamic")),
 	)
 	return fields
+}
+
+func errorPagesExpr(options Options) ast.Expr {
+	paths := customErrorPagePaths(options.SSR)
+	if len(paths) == 0 {
+		return call(sel("gowdkruntime", "LoadErrorPages"), id("root"))
+	}
+	args := []ast.Expr{id("root")}
+	for _, errorPath := range paths {
+		args = append(args, &ast.CompositeLit{
+			Type: sel("gowdkruntime", "ErrorPage"),
+			Elts: []ast.Expr{
+				keyValue("Path", stringLit(errorPath)),
+			},
+		})
+	}
+	return call(sel("gowdkruntime", "LoadErrorPagesWith"), args...)
+}
+
+func customErrorPagePaths(routes []SSRRoute) []string {
+	seen := map[string]bool{}
+	for _, route := range routes {
+		if route.ErrorPage != "" {
+			seen[route.ErrorPage] = true
+		}
+	}
+	paths := make([]string, 0, len(seen))
+	for path := range seen {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 func backendOnlyHandlerExpr(options Options) ast.Expr {

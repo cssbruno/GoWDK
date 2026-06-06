@@ -169,6 +169,7 @@ func ssrRoutes(artifacts []buildgen.SSRArtifact) []SSRRoute {
 			Route:            artifact.Route,
 			Render:           artifact.Render,
 			Cache:            artifact.Cache,
+			ErrorPage:        artifact.ErrorPage,
 			DynamicParams:    append([]string(nil), artifact.DynamicParams...),
 			RouteParams:      append([]manifest.RouteParam(nil), artifact.RouteParams...),
 			Guards:           append([]string(nil), artifact.Guards...),

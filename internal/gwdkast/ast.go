@@ -15,6 +15,7 @@ type File struct {
 	Render      *RenderDecl
 	Cache       *CacheDecl
 	Revalidate  *RevalidateDecl
+	ErrorPage   *ErrorPageDecl
 	Layouts     []LayoutRef
 	Guards      []GuardRef
 	CSS         []AssetRef
@@ -94,6 +95,12 @@ type CacheDecl struct {
 type RevalidateDecl struct {
 	Seconds string
 	Span    manifest.SourceSpan
+}
+
+// ErrorPageDecl is a route-local generated error page path.
+type ErrorPageDecl struct {
+	Path string
+	Span manifest.SourceSpan
 }
 
 // LayoutRef is one @layout reference on a page.

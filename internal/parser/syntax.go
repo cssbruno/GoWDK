@@ -9,6 +9,7 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkast"
+	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
@@ -315,6 +316,12 @@ func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNu
 			return err
 		}
 		file.Revalidate = &gwdkast.RevalidateDecl{Seconds: seconds, Span: annotation.Span}
+	case "error":
+		errorPage, err := manifest.ErrorPagePath(trimQuotes(value))
+		if err != nil {
+			return err
+		}
+		file.ErrorPage = &gwdkast.ErrorPageDecl{Path: errorPage, Span: annotation.Span}
 	case "guard":
 		for _, span := range namedValueSpans(splitList(value), lineNumber, rawLine) {
 			file.Guards = append(file.Guards, gwdkast.GuardRef{Name: span.Name, Span: span.Span})

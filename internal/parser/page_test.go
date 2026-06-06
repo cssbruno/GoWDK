@@ -780,6 +780,45 @@ view {
 	}
 }
 
+func TestParsePageReadsErrorPage(t *testing.T) {
+	page, err := ParsePage([]byte(`
+@page dashboard
+@route "/dashboard"
+@render ssr
+@error "/errors/dashboard.html"
+
+view {
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.ErrorPage != "errors/dashboard.html" {
+		t.Fatalf("unexpected error page: %#v", page)
+	}
+	if page.Spans.ErrorPage.Start.Line != 5 {
+		t.Fatalf("unexpected error page span: %#v", page.Spans.ErrorPage)
+	}
+}
+
+func TestParsePageRejectsUnsafeErrorPage(t *testing.T) {
+	_, err := ParsePage([]byte(`
+@page dashboard
+@route "/dashboard"
+@render ssr
+@error "../secret.html"
+
+view {
+}
+`))
+	if err == nil {
+		t.Fatal("expected unsafe error page path error")
+	}
+	if !strings.Contains(err.Error(), `@error path must stay inside generated output`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestParsePageRejectsMalformedAnnotation(t *testing.T) {
 	_, err := ParsePage([]byte(`
 @page home

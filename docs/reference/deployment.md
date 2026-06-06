@@ -178,7 +178,7 @@ Generated binaries currently support:
   identifier or dotted paths.
 - Bare `@render hybrid` pages as normal build-time SPA output.
 - `@render hybrid` pages with `load {}` as explicit request-time page routes
-  through the same first-slice generated load/render path.
+  through the same supported generated load/render path.
 - Optional split frontend/backend generation with `--backend-app` and
   `--backend-bin`; the frontend proxies backend routes to
   `GOWDK_BACKEND_ORIGIN`.

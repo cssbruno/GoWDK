@@ -21,24 +21,21 @@ Implemented today:
 - Mandatory SPA build reports through `internal/buildgen`, written as
   `gowdk-build-report.json` for disk builds and returned on build errors.
 - Generated embedded app source and optional binary compilation through
-  `internal/appgen`, including first-slice action redirect handlers and form
-  input decoder and required-field validation wrappers, partial action fragment
-  responses, and first-slice SSR routes with declared `load {}` fields.
+  `internal/appgen`, including supported action/API/fragment handlers, form
+  input decoder and required-field validation wrappers, CSRF wiring, guards,
+  and concrete or dynamic SSR routes with declared `load {}` fields.
 - SPA `gowdk.config.go` loading for build source discovery, build targets,
   and output through `internal/project`.
 - CLI tools for `tokens`, `fmt`, `check`, `manifest`, `sitemap`, `build`, and `lsp`.
 
 Not implemented yet:
 
-- Full project config loading for every compiler command.
 - Full AST/semantic/type analysis beyond the current component contract slice.
 - Full component compilation, arbitrary `build {}` statements beyond expression
   records, and full `paths {}` execution.
-- Real user Go type resolution for typed action decoders, user action logic,
-  API/fragment/SSR handlers.
-- Real user action/API/fragment execution.
-- Generated `load {}` execution and hybrid request-time
-  handlers.
+- Broader generated-client reactivity, scoped component CSS/asset emission, and
+  load/action invalidation.
+- Broader hybrid request-time behavior beyond explicit `load {}` branches.
 
 ## Documents
 

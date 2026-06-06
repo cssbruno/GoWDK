@@ -135,12 +135,16 @@ Implemented today:
 - Generated embedded app source, local binaries, and Go `js/wasm` deploy
   artifacts.
 - Explicit browser-side Go/WASM island packages with ABI export validation.
-- Feature-bound action/API handlers, first-slice action redirects, partial
-  action fragments, and concrete or dynamic SSR pages with declared `load {}`
-  identifier or dotted paths in generated binaries.
+- Feature-bound action/API handlers, action redirects, partial action
+  fragments, standalone fragment routes, CSRF-wired actions, guards, and
+  concrete or dynamic SSR pages with declared `load {}` identifier or dotted
+  paths in generated binaries.
 - CLI tooling for tokens, formatting, validation, manifest, sitemap, routes,
   dev, serve, and LSP.
 
 Planned or partial:
 
-- Custom action/API error-boundary syntax.
+- Broader generated validation coverage.
+- Scoped component CSS/asset emission from existing metadata.
+- Broader hybrid request-time behavior beyond explicit `load {}` branches.
+- Richer generated-client reactivity and load/action invalidation.

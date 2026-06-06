@@ -39,10 +39,10 @@ Implemented today:
   action subset on concrete SPA page paths.
 - Generated apps pass one backend hook into `runtime/app.Handler`; generated
   action and API dispatch are internal details behind that hook.
-- Generated app creation auto-detects supported action endpoints and first-slice
+- Generated app creation auto-detects supported action endpoints and supported
   SSR routes from the parsed manifest used by `gowdk build --app`, so the CLI
   does not need to manually register those handler hooks.
-- Generated apps include first-slice form input decoder functions that
+- Generated apps include form input decoder functions that
   preserve repeated values and reject unexpected fields inferred from direct
   literal controls in same-page `g:post` forms.
 - Named submit controls discovered in literal `g:post` forms are included in
@@ -87,15 +87,16 @@ Implemented today:
   The loader discovers matching island roots, builds the ADR-defined bootstrap
   object from state, props, emits, refs, and binding metadata, calls
   component-scoped WASM exports when present, captures host DOM events, and
-  applies validated first-slice patch commands such as text, visibility,
+  applies the supported validated patch commands for text, visibility,
   attribute, class, style, and emitted-event updates.
-- Generated apps can serve first-slice concrete and dynamic SSR pages. Dynamic
-  route params are substituted into generated SSR placeholders with
-  request-time HTML escaping. First-slice `load { => { field } }` pages call
-  same-package Go load functions named `Load<PageID>` with `ssr.LoadContext`
-  and replace declared load placeholders with escaped returned values. Load
-  errors that wrap `ssr.RedirectError` become no-store local redirects; other
-  load failures use generated error-page output.
+- Generated apps can serve concrete and dynamic SSR pages in the supported
+  generated request-time slice. Dynamic route params are substituted into
+  generated SSR placeholders with request-time HTML escaping. Declared
+  `load { => { field } }` pages call same-package Go load functions named
+  `Load<PageID>` with `ssr.LoadContext` and replace declared load placeholders
+  with escaped returned values. Load errors that wrap `ssr.RedirectError`
+  become no-store local redirects; other load failures use generated error-page
+  output.
 - Generated embedded apps load optional `404.html` and `500.html` from the
   embedded build output and use those pages for not-found responses and
   generated SSR load failures. SSR routes can also declare
@@ -107,7 +108,7 @@ Implemented today:
   panic values. SSR route panics use a declared route-local `@error` page when
   one is available. Action and API declarations can also use endpoint-local
   `@error "/errors/name.html"` pages for generated panic boundaries.
-- Generated apps can return first-slice partial fragment responses from
+- Generated apps can return partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests and standalone
   `fragment Name GET "/path" "#target" { ... }` routes. Standalone fragment
   bodies can expand known components at app generation time. If the source
@@ -196,15 +197,15 @@ Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 `GOWDK_INSTANCE_ID`; if no instance ID is provided, the app creates one at
 process start from the module name, hostname, and a random token. It can also
 serve auto-detected POST redirect handlers for the first supported action
-subset and first-slice SSR pages with declared `load {}` identifier or dotted
+subset and supported SSR pages with declared `load {}` identifier or dotted
 paths. SSR load functions can return safe local redirects with
 `ssr.RedirectTo`/`ssr.Redirect`, and generated SSR load failures render the
 route-local `@error` page when declared or the optional `500.html` when
 present.
-Action handlers decode allowlisted form fields into named first-slice input wrappers,
+Action handlers decode allowlisted form fields into named input wrappers,
 cap request bodies before parsing, preserve repeated values, return HTTP 413
 for oversized submissions, return HTTP 400 for unexpected fields, and return
-HTTP 422 for first-slice required-field validation failures. Direct file inputs
+HTTP 422 for generated required-field validation failures. Direct file inputs
 and multipart action forms are rejected before generated app output because
 uploads are user-owned API/server behavior. For
 partial requests, generated handlers can return the first parsed action

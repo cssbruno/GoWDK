@@ -32,7 +32,7 @@ errors.
 
 - The default interactive path stays dependency-free, inspectable, and small.
 - App-shell HTML remains the initial output for stateful components.
-- Future WASM work has an explicit opt-in boundary instead of becoming a hidden
+- WASM work has an explicit opt-in boundary instead of becoming a hidden
   default.
 
 ### Negative
@@ -43,8 +43,8 @@ errors.
 
 ### Neutral
 
-- The first WASM artifact slice only proves asset emission and loading shape; a
-  production WASM island ABI is still future work.
+- ADR 0004 defines the production WASM island ABI. Broader user-code ergonomics
+  can evolve without making WASM the default component runtime.
 
 ## Alternatives Considered
 
@@ -56,6 +56,5 @@ errors.
 
 ## Follow-Up
 
-- Add an ADR for the production WASM island ABI before arbitrary browser-side Go
-  logic is supported.
+- Keep ADR 0004 as the production WASM island ABI source of truth.
 - Expand generated JavaScript only through explicit, tested expression slices.

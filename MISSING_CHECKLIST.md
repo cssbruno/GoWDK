@@ -393,7 +393,10 @@ api Session GET "/api/session"
 - [x] Add bindable child state.
 - [x] Add typed component exports.
 - [x] Add named slots and scalar scoped slots.
-- [x] Add scoped component CSS and component-level assets.
+- [x] Add component CSS and component asset metadata with deterministic scope
+      and hash keys.
+- [ ] Emit scoped component CSS and component-level assets from the existing
+      metadata.
 - [x] Add a documented contract for component state, props, stores, client code, and generated runtime behavior.
 - [x] Add a proper reactive dependency graph.
 - [x] Track dependencies for computed values automatically across the supported

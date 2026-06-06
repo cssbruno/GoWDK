@@ -39,8 +39,13 @@ Status legend:
 - [x] Implemented and documented, or product decision recorded for decision
       gaps.
 - [ ] Missing, incomplete, or not yet product-stable.
+- Implemented: available in the current codebase, documented, and covered by
+      tests or an explicit verification command.
+- Partial: available for a narrower slice than the full requirement, with
+      remaining limits called out near the checklist item or requirement.
 - Experimental: implemented enough to try, but not yet stable API.
-- Intentional non-goal: not planned because it conflicts with GOWDK direction.
+- Planned: accepted product direction with no stable implementation yet.
+- Intentionally out of scope: rejected for the current product direction.
 
 ## Already Strong In GOWDK
 
@@ -184,7 +189,7 @@ Svelte/SvelteKit implementation.
       and tests.
 - [ ] Every deferred P0 item has a diagnostic or explicit documentation entry
       that tells users what is unsupported.
-- [ ] The public README, requirements, roadmap, and missing checklist use the
+- [x] The public README, requirements, roadmap, and missing checklist use the
       same status language.
 - [ ] `go test ./...` and `go build ./cmd/gowdk` pass after each implementation
       slice.
@@ -385,34 +390,34 @@ Use these workstreams to turn the high-level gaps into reviewable slices.
 
 ### 1. Documentation Truth Pass
 
-- [ ] Choose one source-of-truth status model for all product docs.
+- [x] Choose one source-of-truth status model for all product docs.
 - [x] Add a status legend to `docs/product/requirements.md`.
 - [x] Add this product gap checklist under `docs/product/` while preserving
       `MISSING_CHECKLIST.md` as the detailed implementation-status checklist.
-- [ ] Update `docs/product/roadmap.md` so completed slices are not described as
+- [x] Update `docs/product/roadmap.md` so completed slices are not described as
       future work.
-- [ ] Update `docs/engineering/architecture.md` so current baseline and target
+- [x] Update `docs/engineering/architecture.md` so current baseline and target
       architecture are separated clearly.
-- [ ] Update `docs/reference/cli.md` for actual generated-binary behavior.
-- [ ] Update `docs/reference/deployment.md` for actual SSR, action, API,
+- [x] Update `docs/reference/cli.md` for actual generated-binary behavior.
+- [x] Update `docs/reference/deployment.md` for actual SSR, action, API,
       fragment, and hybrid limits.
-- [ ] Update `docs/language/ssr.md` for exact `load {}` support and limits.
-- [ ] Update `docs/language/components.md` for actual store, CSS, scoped slot,
+- [x] Update `docs/language/ssr.md` for exact `load {}` support and limits.
+- [x] Update `docs/language/components.md` for actual store, CSS, scoped slot,
       export, and WASM island status.
-- [ ] Update `docs/compiler/generated-output.md` for actual generated app,
+- [x] Update `docs/compiler/generated-output.md` for actual generated app,
       island, partial, SSR, and source-map behavior.
-- [ ] Remove stale "first-slice" wording where behavior is now stable.
-- [ ] Keep "first-slice" wording where the supported language or runtime
+- [x] Remove stale "first-slice" wording where behavior is now stable.
+- [x] Keep "first-slice" wording where the supported language or runtime
       surface is intentionally narrow.
 - [x] Add a short comparison note that explains intentional product differences
       without turning external frameworks into the roadmap.
 
 Done when:
 
-- [ ] A reader can tell what works today without checking source code.
-- [ ] No major feature is simultaneously marked implemented and planned in
+- [x] A reader can tell what works today without checking source code.
+- [x] No major feature is simultaneously marked implemented and planned in
       different docs.
-- [ ] The README, requirements, roadmap, and missing checklist agree.
+- [x] The README, requirements, roadmap, and missing checklist agree.
 
 ### 2. Template Language Contract
 
@@ -717,16 +722,16 @@ Done when:
 
 ## Intentional Differences To Preserve
 
-- [ ] Do not make filesystem route placement the source of truth.
-- [ ] Do not make full-page SSR the default rendering model.
-- [ ] Do not require npm, Vite, Tailwind, Svelte, or a JavaScript framework for
+- [x] Do not make filesystem route placement the source of truth.
+- [x] Do not make full-page SSR the default rendering model.
+- [x] Do not require npm, Vite, Tailwind, Svelte, or a JavaScript framework for
       normal app flows.
-- [ ] Do not move domain logic, persistence, auth, or business validation into
+- [x] Do not move domain logic, persistence, auth, or business validation into
       generated code.
-- [ ] Do not make generated JavaScript the authority for routes, auth, server
+- [x] Do not make generated JavaScript the authority for routes, auth, server
       validation, or cache policy.
-- [ ] Do not make WASM islands the default component runtime.
-- [ ] Do not add platform adapters to core if normal Go deployment or docs can
+- [x] Do not make WASM islands the default component runtime.
+- [x] Do not add platform adapters to core if normal Go deployment or docs can
       solve the need.
 
 ## Verification Matrix
@@ -747,24 +752,24 @@ Done when:
 
 ## Documentation Cleanup Checklist
 
-- [ ] Reconcile `MISSING_CHECKLIST.md` with `docs/product/gap-checklist.md`.
-- [ ] Reconcile `docs/product/gap-checklist.md` with
+- [x] Reconcile `MISSING_CHECKLIST.md` with `docs/product/gap-checklist.md`.
+- [x] Reconcile `docs/product/gap-checklist.md` with
       `docs/product/requirements.md`.
-- [ ] Reconcile `docs/product/gap-checklist.md` with
+- [x] Reconcile `docs/product/gap-checklist.md` with
       `docs/product/roadmap.md`.
-- [ ] Reconcile `docs/product/gap-checklist.md` with
+- [x] Reconcile `docs/product/gap-checklist.md` with
       `docs/engineering/architecture.md`.
-- [ ] Reconcile generated binary support descriptions across
+- [x] Reconcile generated binary support descriptions across
       `docs/reference/cli.md`, `docs/reference/deployment.md`,
       `docs/getting-started.md`, and `README.md`.
-- [ ] Reconcile SSR `load {}` support descriptions across language,
+- [x] Reconcile SSR `load {}` support descriptions across language,
       deployment, CLI, architecture, and release docs.
-- [ ] Reconcile component CSS/assets status across `docs/language/components.md`,
+- [x] Reconcile component CSS/assets status across `docs/language/components.md`,
       `docs/reference/css.md`, requirements, and the missing checklist.
-- [ ] Reconcile WASM island validation status across component docs,
+- [x] Reconcile WASM island validation status across component docs,
       requirements, ADR 0004, generated-output docs, and examples.
-- [ ] Replace stale "first-slice" wording where behavior is now product-stable.
-- [ ] Keep "first-slice" wording where behavior is genuinely narrow.
-- [ ] Add a single status legend used consistently across all product docs:
+- [x] Replace stale "first-slice" wording where behavior is now product-stable.
+- [x] Keep "first-slice" wording where behavior is genuinely narrow.
+- [x] Add a single status legend used consistently across all product docs:
       implemented, partial, experimental, planned, and intentionally out of
       scope.

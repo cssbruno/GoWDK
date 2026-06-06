@@ -2,24 +2,23 @@
 
 ## Current Status
 
-The current repository provides compiler scaffolding, language tooling, SPA
-output, local generated-output serving, and an initial generated embedded app
-binary path.
+The current repository provides compiler/runtime tooling, SPA output, local
+generated-output serving, generated embedded app source, and local generated
+binary builds.
 
 The target deployment model is one Go binary that can serve embedded SPA
 pages and backend routes. Today, that binary serves embedded build output plus
-the first supported action/fragment/SSR slices described below. SSR remains
-optional.
+supported action, API, fragment, guard, rate-limit, SSR, and explicit
+hybrid-with-load request-time slices. SSR remains optional.
 
 ## Runtime
 
 - Application processes: current local development can use the `gowdk` CLI;
-  generated applications can run as a Go binary; future dynamic
-  applications will add generated action, API, fragment, and SSR handlers.
+  generated applications can run as a Go binary with supported action, API,
+  fragment, guard, and SSR handlers.
 - Background workers: not part of initial MVP.
-- Datastores: user application choice; currently usable from imported
-  build-time Go data functions. Future generated actions, APIs, and `load {}`
-  handlers will need explicit datastore integration contracts.
+- Datastores: user application choice; usable from imported build-time Go data
+  functions and from user-owned action, API, fragment, and `load {}` handlers.
 - Queues: user application choice.
 - External services: user application choice.
 
@@ -28,7 +27,7 @@ optional.
 - Local: run CLI commands such as `gowdk check`, `gowdk manifest`,
   `gowdk sitemap`, `gowdk build`, `gowdk dev`, `gowdk serve`, and `gowdk lsp`.
 - Development: current flow compiles build output, generated app source, and
-  first-slice request-time handlers.
+  supported request-time handlers.
 - Staging: target flow verifies one-binary serving and addon behavior.
 - Production: not a supported readiness claim yet. Current generated binaries
   can serve embedded app assets, supported action/API/fragment handlers,
@@ -45,7 +44,7 @@ optional.
   app dispatch paths, and generated apps can expose snapshots through
   `/_gowdk/health` when a metrics collector is attached.
 - Traces: request-time SSR, actions, APIs, and fragments are future production
-  concerns after those generated handlers are complete.
+  observability concerns.
 - Alerts: action failures, API failures, SSR errors, and asset serving errors
   are future production concerns.
 - Dashboards: generated manifest and route behavior should be inspectable.
@@ -60,14 +59,14 @@ gowdk build --out dist --app .gowdk/app --wasm dist/<app>.wasm <files>
 ```
 
 The current generated binary serves embedded prerendered HTML, CSS, SPA
-assets, first-slice POST redirect action handlers, first-slice partial action
-fragment responses, first-slice concrete or dynamic SSR pages with declared
-`load {}` paths, and first-slice hybrid pages that explicitly declare
-`load {}` from the selected output directory. `--wasm` compiles the same
-generated app with `GOOS=js GOARCH=wasm` for hosts that can run Go WebAssembly;
-it is not browser WASM islands. Future generated artifacts should also serve
-real typed action logic, API endpoints, general partial fragment handlers, guard
-registry configuration docs, and broader hybrid request-time behavior.
+assets, supported POST action handlers, partial action fragment responses,
+standalone fragment routes, API handlers, guarded request-time lanes, concrete
+or dynamic SSR pages with declared `load {}` paths, and hybrid pages that
+explicitly declare `load {}` from the selected output directory. `--wasm`
+compiles the same generated app with `GOOS=js GOARCH=wasm` for hosts that can
+run Go WebAssembly; it is not browser WASM islands. Future generated artifacts
+should improve production operations guidance, richer validation, broader
+hybrid request-time behavior, and load/action invalidation.
 
 Current local development can serve generated build output with:
 

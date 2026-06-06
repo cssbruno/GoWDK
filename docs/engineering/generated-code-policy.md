@@ -1,12 +1,12 @@
 # Generated Code Policy
 
 Generated output exists for app-shell HTML, browser runtime assets, generated app
-source, local binaries, Go `js/wasm` artifacts, first-slice action/fragment
-handlers, and first-slice concrete or dynamic SSR pages with declared `load {}`
-fields.
-Broader generated action, API, fragment, guard, `load {}`, and hybrid behavior
-remains planned. This policy records constraints for generated files as that
-surface grows.
+source, local binaries, Go `js/wasm` artifacts, supported action/API/fragment
+handlers, guards, rate-limit hooks, and concrete or dynamic SSR pages with
+declared `load {}` fields.
+Broader hybrid request-time behavior, richer load/action invalidation, and
+production operations policy remain planned. This policy records constraints
+for generated files as that surface grows.
 
 ## Ownership
 

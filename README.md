@@ -20,9 +20,10 @@ hooks. Your domain logic, storage, auth, validation, and services stay in
 normal Go packages.
 
 **Status: pre-release.** The compiler handles core page and component
-compilation, early embedded app builds, first-slice actions/fragments,
-generated JavaScript islands, and simple SSR pages. The runtime model and
-language surface are still evolving. Not ready for production use.
+compilation, embedded app builds, generated JavaScript islands, explicit WASM
+islands, CSRF-wired action handlers, partial fragments, and concrete or dynamic
+SSR pages with declared `load {}` fields. The runtime model and language
+surface are still evolving. Not ready for production use.
 
 Live demo: [gowdk.com](https://gowdk.com/)
 Demo source: [cssbruno/gowdk-page](https://github.com/cssbruno/gowdk-page)
@@ -115,14 +116,17 @@ walkthrough.
 - Literal `paths {}` expansion for dynamic SPA routes.
 - Literal `build {}` data and imported no-argument Go build data functions.
 - Generated embedded app source, local binaries, and Go `js/wasm` artifacts.
-- Action/API handlers, action redirects, partial fragments, and SSR pages with
+- Action/API handlers, action redirects, partial fragments, CSRF-wired action
+  handlers, guards, endpoint-local error pages, and SSR pages with
   declared `load {}` identifier or dotted-path execution, safe load redirects,
-  endpoint-local error pages, and generated error pages in generated binaries.
+  and generated error pages in generated binaries.
 - CLI commands: `build`, `dev`, `serve`, `preview`, `check`, `fmt`, `lsp`,
   `manifest`, `sitemap`, and `routes`.
 
-Not yet: broader validation fragments. File uploads are intentionally left to
-user-owned API/server handlers.
+Partial or planned: broader generated validation coverage, richer fragment data
+contracts, scoped component CSS/asset emission, and broader local browser
+reactivity. File uploads are intentionally left to user-owned API/server
+handlers.
 
 ## Site Example
 

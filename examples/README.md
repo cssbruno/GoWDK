@@ -126,8 +126,8 @@ test -f /tmp/gowdk-base-components/components/base/index.html
   explicit files for build smoke commands.
 - Build-output examples can be served locally with `gowdk serve` or compiled into
   an embedded binary with `gowdk build --app --bin`; the current generated
-  binary supports first-slice action redirects, partial action fragments, form
-  input decoder wrappers, and required-field validation, plus concrete and
+  binary supports action redirects, partial action fragments, form input
+  decoder wrappers, and required-field validation, plus concrete and
   dynamic SSR pages with declared `load {}` fields. It runs declared guards for
   generated SSR/action/API routes and fails closed when guard functions are not
   registered.

@@ -40,13 +40,16 @@ public release, confirm:
 
 The following features are known blockers for any production-readiness claim:
 
-- Real user Go action execution.
-- Generated API handlers.
-- Request-time `load {}` execution.
-- Guard registry configuration examples.
-- Hybrid/cache/revalidation policy.
-- Full reactive dependency graph and richer `client {}` language.
-- Component composition beyond default slots.
+- Broad load/action invalidation and request-time data lifecycle contracts.
+- Broader hybrid request-time behavior beyond explicit `load {}` branches.
+- Production operations guidance for secrets, CSRF rotation, reverse proxies,
+  cache/CDN policy, health checks, metrics, logging, binary deploy, and
+  rollback.
+- Richer generated validation and progressive-enhancement form behavior.
+- Scoped component CSS and component-level asset emission from existing
+  metadata.
+- Full public examples, migration guidance, and generated app smoke-test
+  scaffolds.
 
 ## Current Manual Gates
 

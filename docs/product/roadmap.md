@@ -81,8 +81,10 @@ These are the durable rules. Changing them should require an ADR.
 
 `MISSING_CHECKLIST.md` is the detailed source of truth for what is done and what
 is still missing. `docs/product/gap-checklist.md` tracks broader product gaps
-and comparison-driven follow-up work. At a high level, the current baseline
-already includes:
+and comparison-driven follow-up work. Status terms must match
+`docs/product/requirements.md`: implemented, partial, experimental, planned,
+and intentionally out of scope. At a high level, the current baseline already
+includes:
 
 - project config loading, source discovery, build targets, module selection,
   manifests, route validation, sitemap output, formatting, diagnostics, CLI

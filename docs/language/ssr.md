@@ -9,8 +9,9 @@ SSR is optional and must not become the default framework identity.
 - `@render hybrid` defaults to SPA output. It requires the SSR addon only when
   explicit request-time behavior such as `load {}` is present.
 - `gowdk build --ssr --app <dir> --bin <file>` can generate a binary that
-  serves first-slice `@render ssr` pages and `@render hybrid` pages with
-  `load {}` rendered from `view {}` and literal or imported `build {}` data.
+  serves concrete and dynamic `@render ssr` pages and `@render hybrid` pages
+  with explicit `load {}` branches rendered from `view {}` and literal or
+  imported `build {}` data.
 - Dynamic SSR routes such as `/blog/{slug}` can be matched by generated
   binaries in the first supported slice. Route params render through generated
   placeholders and request-time HTML escaping.

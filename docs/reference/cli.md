@@ -157,26 +157,26 @@ Non-fatal route-mode notes, such as request-time page rendering disabled on a
 SPA or bare hybrid route, or static SPA output disabled on an SSR route, appear
 in `info` and are also mirrored to stderr as `info:` console lines.
 
-Current `build` limitations: it emits only simple app-shell HTML files,
-`gowdk-routes.json`, `gowdk-assets.json`, generated embedded app source,
-and an optional generated binary for build-time pages with non-dynamic
-routes or literal `paths {}` dynamic routes, literal `build {}` data, lowercase
-HTML markup, first-slice imported Go build data functions, component files with
-string props, first-slice action redirect handlers with form decoder wrappers
-and required-field validation, and first-slice action fragment responses for
-partial requests.
+Current `build` limitations: it emits app-shell HTML files,
+`gowdk-routes.json`, `gowdk-assets.json`, generated embedded app source, and
+an optional generated binary for build-time pages with non-dynamic routes or
+literal `paths {}` dynamic routes, literal `build {}` data, lowercase HTML
+markup, imported or same-package no-argument Go build data functions,
+component files with string props, supported action redirect handlers with form
+decoder wrappers and required-field validation, and supported action fragment
+responses for partial requests.
 
 Current generated binary limitations: it serves embedded build output files for
-the selected build output and local POST endpoints for the first supported
-action subset, including first-slice form input decoder wrappers and
-required-field validation. It can also serve first-slice action fragment
-responses for `X-GOWDK-Partial` requests, CSRF validation when
-`Build.CSRF.Enabled` is set, and first-slice concrete or dynamic SSR pages
-rendered from `view {}` and literal or imported `build {}` data. Bare hybrid
-pages are emitted as build-time SPA output; hybrid pages with `load {}` opt
-into the same generated request-time page path and appear as `hybrid` routes in
-`gowdk routes`. It does not run general fragment endpoints or broader hybrid
-request-time behavior beyond that explicit `load {}` branch.
+the selected build output and local POST endpoints for the supported action
+subset, including form input decoder wrappers, required-field validation, CSRF
+validation when `Build.CSRF.Enabled` is set, action fragment responses for
+`X-GOWDK-Partial` requests, standalone fragment routes, feature-bound API
+handlers, guards, and concrete or dynamic SSR pages rendered from `view {}`
+and literal or imported `build {}` data. Bare hybrid pages are emitted as
+build-time SPA output; hybrid pages with `load {}` opt into the same generated
+request-time page path and appear as `hybrid` routes in `gowdk routes`. It does
+not run broader hybrid request-time behavior beyond that explicit `load {}`
+branch.
 
 Current `serve` limitations: it serves generated build output files only. It does not
 run generated actions, APIs, partial fragments, or SSR routes.

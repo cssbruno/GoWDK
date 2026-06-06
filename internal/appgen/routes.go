@@ -8,9 +8,10 @@ import (
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-// ActionRoutes extracts generated action routes from a parsed manifest.
-func ActionRoutes(app manifest.Manifest) ([]ActionRoute, error) {
-	var routes []ActionRoute
+// ActionEndpoints extracts generated action endpoint dispatch entries from a
+// parsed manifest.
+func ActionEndpoints(app manifest.Manifest) ([]ActionEndpoint, error) {
+	var endpoints []ActionEndpoint
 	bindings := backendBindingsByBlock(app.BackendBindings)
 	for _, page := range app.Pages {
 		fieldsByAction, err := view.ActionFormSchema(page.Blocks.ViewBody)
@@ -18,14 +19,23 @@ func ActionRoutes(app manifest.Manifest) ([]ActionRoute, error) {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
 		for _, action := range page.Blocks.Actions {
+			method := strings.TrimSpace(action.Method)
+			if method == "" {
+				method = "POST"
+			}
+			route := strings.TrimSpace(action.Route)
+			if route == "" {
+				route = page.Route
+			}
 			fragments, err := actionFragments(action)
 			if err != nil {
 				return nil, fmt.Errorf("%s.%s: %w", page.ID, action.Name, err)
 			}
-			routes = append(routes, ActionRoute{
+			endpoints = append(endpoints, ActionEndpoint{
 				PageID:         page.ID,
 				ActionName:     action.Name,
-				Route:          page.Route,
+				Method:         method,
+				Route:          route,
 				InputName:      action.InputName,
 				InputType:      action.InputType,
 				InputFields:    actionInputFields(fieldsByAction[action.Name]),
@@ -33,19 +43,20 @@ func ActionRoutes(app manifest.Manifest) ([]ActionRoute, error) {
 				ValidatesInput: action.ValidatesInput,
 				Redirect:       action.Redirect,
 				Fragments:      fragments,
-				Binding:        bindings[backendBindingKey("action", page.ID, action.Name, "POST", page.Route)],
+				Binding:        bindings[backendBindingKey("action", page.ID, action.Name, method, route)],
 			})
 		}
 	}
-	if err := validateActionRoutes(routes); err != nil {
+	if err := validateActionEndpoints(endpoints); err != nil {
 		return nil, err
 	}
-	return routes, nil
+	return endpoints, nil
 }
 
-// APIRoutes extracts generated API routes from a parsed manifest.
-func APIRoutes(app manifest.Manifest) ([]APIRoute, error) {
-	var routes []APIRoute
+// APIEndpoints extracts generated API endpoint dispatch entries from a parsed
+// manifest.
+func APIEndpoints(app manifest.Manifest) ([]APIEndpoint, error) {
+	var endpoints []APIEndpoint
 	bindings := backendBindingsByBlock(app.BackendBindings)
 	for _, page := range app.Pages {
 		for _, api := range page.Blocks.APIs {
@@ -57,7 +68,7 @@ func APIRoutes(app manifest.Manifest) ([]APIRoute, error) {
 			if route == "" {
 				route = page.Route
 			}
-			routes = append(routes, APIRoute{
+			endpoints = append(endpoints, APIEndpoint{
 				PageID:  page.ID,
 				APIName: api.Name,
 				Method:  method,
@@ -66,7 +77,7 @@ func APIRoutes(app manifest.Manifest) ([]APIRoute, error) {
 			})
 		}
 	}
-	return routes, nil
+	return endpoints, nil
 }
 
 func backendBindingsByBlock(bindings []manifest.BackendBinding) map[string]manifest.BackendBinding {

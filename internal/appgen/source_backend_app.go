@@ -1,10 +1,12 @@
 package appgen
 
 import (
-	"sort"
 	"strings"
 )
 
+// Temporary generated-Go template exception: the backend-only app shell stays a
+// raw template until it shares the same AST file builder as the embedded app
+// shell. Do not add generated route, action, API, SSR, or decoder bodies here.
 const backendAppPackageSourceTemplate = `package gowdkapp
 
 import (
@@ -19,12 +21,10 @@ func Handler() (http.Handler, error) {
 }
 
 func ServeMux() (*http.ServeMux, error) {
+{{CSRF_SETUP}}
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		if api(response, request) {
-			return
-		}
-		if request.Method == http.MethodPost && action(response, request) {
+		if backend(response, request) {
 			return
 		}
 		http.NotFound(response, request)
@@ -35,12 +35,19 @@ func ServeMux() (*http.ServeMux, error) {
 {{ACTION_HANDLER}}
 
 {{API_HANDLER}}
+
+{{BACKEND_HANDLER}}
+
+{{CSRF_HELPER}}
 `
 
 func backendAppPackageSource(options Options) string {
 	source := strings.ReplaceAll(backendAppPackageSourceTemplate, "{{RUNTIME_IMPORTS}}", backendRuntimeImportSource(options))
-	source = strings.ReplaceAll(source, "{{ACTION_HANDLER}}", actionHandlerSource(options.Actions))
+	source = strings.ReplaceAll(source, "{{CSRF_SETUP}}", csrfSetupSource(options))
+	source = strings.ReplaceAll(source, "{{ACTION_HANDLER}}", actionHandlerSource(options.Actions, csrfEnabled(options)))
 	source = strings.ReplaceAll(source, "{{API_HANDLER}}", apiHandlerSource(options.APIs))
+	source = strings.ReplaceAll(source, "{{BACKEND_HANDLER}}", backendHandlerSource(options.Actions, options.APIs))
+	source = strings.ReplaceAll(source, "{{CSRF_HELPER}}", csrfHelperSource(options))
 	return source
 }
 
@@ -52,9 +59,11 @@ func backendRuntimeImportSource(options Options) string {
 	if len(options.Actions) > 0 {
 		imports["path"] = "path"
 	}
+	if actionsParseForm(options.Actions) {
+		imports["strings"] = "strings"
+	}
 	if actionsUseForm(options.Actions) {
 		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
-		imports["strings"] = "strings"
 	}
 	if len(options.APIs) > 0 {
 		imports["path"] = "path"
@@ -62,26 +71,15 @@ func backendRuntimeImportSource(options Options) string {
 	if actionsUseValidation(options.Actions) {
 		imports["gowdkvalidation"] = "github.com/cssbruno/gowdk/runtime/validation"
 	}
+	if csrfEnabled(options) {
+		imports["errors"] = "errors"
+		imports["gowdkactions"] = "github.com/cssbruno/gowdk/addons/actions"
+		imports["os"] = "os"
+		imports["strings"] = "strings"
+	}
 	for importPath, alias := range backendImports(options.Actions, options.APIs) {
 		imports[alias] = importPath
 	}
 
-	aliases := make([]string, 0, len(imports))
-	for alias := range imports {
-		aliases = append(aliases, alias)
-	}
-	sort.Strings(aliases)
-
-	var builder strings.Builder
-	for _, alias := range aliases {
-		builder.WriteString("\n\t")
-		if alias != imports[alias] {
-			builder.WriteString(alias)
-			builder.WriteByte(' ')
-		}
-		builder.WriteString("\"")
-		builder.WriteString(imports[alias])
-		builder.WriteString("\"")
-	}
-	return builder.String()
+	return importSpecSource(imports)
 }

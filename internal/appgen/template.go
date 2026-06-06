@@ -1,5 +1,9 @@
 package appgen
 
+// Temporary generated-Go template exception: server main and app shell package
+// declarations stay raw strings until the app-shell AST migration replaces the
+// full file while preserving //go:embed app. Do not add generated route,
+// action, API, SSR, or decoder bodies here.
 const serverMainSource = `package main
 
 import (
@@ -66,13 +70,14 @@ func ServeMux() (*http.ServeMux, error) {
 	if err != nil {
 		return nil, err
 	}
+{{CSRF_SETUP}}
 	mux := http.NewServeMux()
 	mux.Handle("/", gowdkruntime.Handler{
 		Root:       root,
 		Identity:   gowdkruntime.InstanceIdentity(),
 		Assets:     gowdkruntime.LoadAssetManifest(root),
-		Action:     {{ACTION_CALLBACK}},
-		API:        {{API_CALLBACK}},
+		Backend:    {{BACKEND_CALLBACK}},
+{{CSRF_HANDLER_FIELD}}
 		SSRExact:   ssrExact,
 		SSRDynamic: ssrDynamic,
 	})
@@ -83,7 +88,11 @@ func ServeMux() (*http.ServeMux, error) {
 
 {{API_HANDLER}}
 
+{{BACKEND_HANDLER}}
+
 {{BACKEND_PROXY}}
+
+{{CSRF_HELPER}}
 
 {{SSR_HANDLER}}
 `

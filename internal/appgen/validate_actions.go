@@ -5,101 +5,101 @@ import (
 	"strings"
 )
 
-func validateActionRoutes(routes []ActionRoute) error {
-	seen := map[string]ActionRoute{}
-	for _, route := range routes {
-		if strings.TrimSpace(route.ActionName) == "" {
-			return fmt.Errorf("generated action route for page %q is missing action name", route.PageID)
+func validateActionEndpoints(endpoints []ActionEndpoint) error {
+	seen := map[string]ActionEndpoint{}
+	for _, endpoint := range endpoints {
+		if strings.TrimSpace(endpoint.ActionName) == "" {
+			return fmt.Errorf("generated action endpoint for page %q is missing action name", endpoint.PageID)
 		}
-		if err := validateActionRoutePath(route.Route); err != nil {
-			return fmt.Errorf("generated action %s.%s: %w", route.PageID, route.ActionName, err)
+		if err := validateActionEndpointPath(endpoint.Route); err != nil {
+			return fmt.Errorf("generated action %s.%s: %w", endpoint.PageID, endpoint.ActionName, err)
 		}
-		if strings.TrimSpace(route.Redirect) != "" {
-			if err := validateActionRedirect(route.Redirect); err != nil {
-				return fmt.Errorf("generated action %s.%s: %w", route.PageID, route.ActionName, err)
+		if strings.TrimSpace(endpoint.Redirect) != "" {
+			if err := validateActionRedirect(endpoint.Redirect); err != nil {
+				return fmt.Errorf("generated action %s.%s: %w", endpoint.PageID, endpoint.ActionName, err)
 			}
 		}
-		if err := validateInputFields(route); err != nil {
+		if err := validateInputFields(endpoint); err != nil {
 			return err
 		}
-		if err := validateRequiredFields(route); err != nil {
+		if err := validateRequiredFields(endpoint); err != nil {
 			return err
 		}
-		if err := validateActionFragments(route); err != nil {
+		if err := validateActionFragments(endpoint); err != nil {
 			return err
 		}
-		if previous, exists := seen[route.Route]; exists {
-			return fmt.Errorf("generated action %s.%s route %q duplicates action %s.%s", route.PageID, route.ActionName, route.Route, previous.PageID, previous.ActionName)
+		if previous, exists := seen[endpoint.Route]; exists {
+			return fmt.Errorf("generated action %s.%s endpoint path %q duplicates action %s.%s", endpoint.PageID, endpoint.ActionName, endpoint.Route, previous.PageID, previous.ActionName)
 		}
-		seen[route.Route] = route
+		seen[endpoint.Route] = endpoint
 	}
 	return nil
 }
 
-func validateActionFragments(route ActionRoute) error {
+func validateActionFragments(endpoint ActionEndpoint) error {
 	seen := map[string]bool{}
-	for _, fragment := range route.Fragments {
+	for _, fragment := range endpoint.Fragments {
 		target := strings.TrimSpace(fragment.Target)
 		if target == "" {
-			return fmt.Errorf("generated action %s.%s declares an empty fragment target", route.PageID, route.ActionName)
+			return fmt.Errorf("generated action %s.%s declares an empty fragment target", endpoint.PageID, endpoint.ActionName)
 		}
 		if !strings.HasPrefix(target, "#") || strings.TrimPrefix(target, "#") == "" || strings.ContainsAny(target, " \t\r\n{}") {
-			return fmt.Errorf("generated action %s.%s fragment target %q must be a literal id selector", route.PageID, route.ActionName, fragment.Target)
+			return fmt.Errorf("generated action %s.%s fragment target %q must be a literal id selector", endpoint.PageID, endpoint.ActionName, fragment.Target)
 		}
 		if seen[target] {
-			return fmt.Errorf("generated action %s.%s declares duplicate fragment target %q", route.PageID, route.ActionName, target)
+			return fmt.Errorf("generated action %s.%s declares duplicate fragment target %q", endpoint.PageID, endpoint.ActionName, target)
 		}
 		seen[target] = true
 	}
 	return nil
 }
 
-func validateInputFields(route ActionRoute) error {
+func validateInputFields(endpoint ActionEndpoint) error {
 	seen := map[string]bool{}
-	for _, field := range route.InputFields {
+	for _, field := range endpoint.InputFields {
 		field = strings.TrimSpace(field)
 		if field == "" {
-			return fmt.Errorf("generated action %s.%s declares an empty input field", route.PageID, route.ActionName)
+			return fmt.Errorf("generated action %s.%s declares an empty input field", endpoint.PageID, endpoint.ActionName)
 		}
 		if seen[field] {
-			return fmt.Errorf("generated action %s.%s declares duplicate input field %q", route.PageID, route.ActionName, field)
+			return fmt.Errorf("generated action %s.%s declares duplicate input field %q", endpoint.PageID, endpoint.ActionName, field)
 		}
 		if strings.ContainsAny(field, "{}") {
-			return fmt.Errorf("generated action %s.%s input field %q must be literal", route.PageID, route.ActionName, field)
+			return fmt.Errorf("generated action %s.%s input field %q must be literal", endpoint.PageID, endpoint.ActionName, field)
 		}
 		seen[field] = true
 	}
 	return nil
 }
 
-func validateRequiredFields(route ActionRoute) error {
+func validateRequiredFields(endpoint ActionEndpoint) error {
 	expected := map[string]bool{}
-	for _, field := range route.InputFields {
+	for _, field := range endpoint.InputFields {
 		expected[field] = true
 	}
 	seen := map[string]bool{}
-	for _, field := range route.RequiredFields {
+	for _, field := range endpoint.RequiredFields {
 		field = strings.TrimSpace(field)
 		if field == "" {
-			return fmt.Errorf("generated action %s.%s declares an empty required field", route.PageID, route.ActionName)
+			return fmt.Errorf("generated action %s.%s declares an empty required field", endpoint.PageID, endpoint.ActionName)
 		}
 		if seen[field] {
-			return fmt.Errorf("generated action %s.%s declares duplicate required field %q", route.PageID, route.ActionName, field)
+			return fmt.Errorf("generated action %s.%s declares duplicate required field %q", endpoint.PageID, endpoint.ActionName, field)
 		}
 		if !expected[field] {
-			return fmt.Errorf("generated action %s.%s required field %q is not an expected input field", route.PageID, route.ActionName, field)
+			return fmt.Errorf("generated action %s.%s required field %q is not an expected input field", endpoint.PageID, endpoint.ActionName, field)
 		}
 		seen[field] = true
 	}
 	return nil
 }
 
-func validateActionRoutePath(value string) error {
+func validateActionEndpointPath(value string) error {
 	if !strings.HasPrefix(value, "/") {
-		return fmt.Errorf("route %q must be an absolute path", value)
+		return fmt.Errorf("endpoint path %q must be an absolute path", value)
 	}
 	if strings.ContainsAny(value, "?#{}") {
-		return fmt.Errorf("route %q must be a concrete path without query, fragment, or params", value)
+		return fmt.Errorf("endpoint path %q must be a concrete path without query, fragment, or params", value)
 	}
 	return nil
 }

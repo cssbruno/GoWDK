@@ -73,9 +73,9 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 		"func ServeMux() (*http.ServeMux, error)",
 		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
 		`mux.Handle("/", gowdkruntime.Handler{`,
-		`Identity:   gowdkruntime.InstanceIdentity(),`,
-		`Assets:     gowdkruntime.LoadAssetManifest(root),`,
-		`Action:     action,`,
+		`Identity: gowdkruntime.InstanceIdentity(),`,
+		`Assets:   gowdkruntime.LoadAssetManifest(root),`,
+		`Backend:  backend,`,
 		`SSRExact:   ssrExact,`,
 		`SSRDynamic: ssrDynamic,`,
 	} {
@@ -191,9 +191,9 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	appDir := filepath.Join(root, "generated-app")
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
-	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
 		PageID:         "newsletter",
-		ActionName:     "subscribe",
+		ActionName:     "Subscribe",
 		Route:          "/newsletter",
 		InputName:      "input",
 		InputType:      "SubscribeInput",
@@ -218,10 +218,12 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`Action:     action,`,
+		`Backend:  backend,`,
 		`gowdkform "github.com/cssbruno/gowdk/runtime/form"`,
 		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`gowdkvalidation "github.com/cssbruno/gowdk/runtime/validation"`,
+		`func backend(response http.ResponseWriter, request *http.Request) bool`,
+		`if request.Method == http.MethodPost && action(response, request)`,
 		`func action(response http.ResponseWriter, request *http.Request) bool`,
 		`case "/newsletter":`,
 		`const maxActionBodyBytes int64 = 1 << 20`,
@@ -237,12 +239,399 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`func decodeNewsletterSubscribeInput(values gowdkform.Values) (SubscribeInput, error)`,
 		`gowdkform.DecodeExpected(values, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "email"}}})`,
 		`validation := gowdkvalidation.Result{}`,
-		`input.Values.HasSubmitted(field)`,
+		`values.HasSubmitted(field)`,
 		`http.StatusUnprocessableEntity`,
-		`gowdkresponse.WriteHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
+		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateWiresCSRFWhenEnabled(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), `<main><form method="post" action="/newsletter"><input name="email"></form></main>`)
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
+			Enabled:    true,
+			SecretEnv:  "GOWDK_TEST_CSRF_SECRET",
+			CookieName: "csrf",
+			FieldName:  "_csrf",
+			HeaderName: "X-CSRF",
+			Insecure:   true,
+		}}},
+		Actions: []ActionEndpoint{{
+			PageID:      "newsletter",
+			ActionName:  "Subscribe",
+			Route:       "/newsletter",
+			InputFields: []string{"email"},
+			Redirect:    "/newsletter?ok=1",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`errors`,
+		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
+		`CSRF:     csrfTokenSource,`,
+		`csrfTokenSource, err := newCSRF()`,
+		`csrfValidator = csrfTokenSource`,
+		`var csrfValidator gowdkactions.CSRFValidator`,
+		`func newCSRF() (*gowdkactions.CSRF, error)`,
+		`secret := strings.TrimSpace(os.Getenv("GOWDK_TEST_CSRF_SECRET"))`,
+		`return nil, errors.New("GOWDK_TEST_CSRF_SECRET is required when generated CSRF is enabled")`,
+		`CookieName: "csrf"`,
+		`FieldName: "_csrf"`,
+		`HeaderName: "X-CSRF"`,
+		`Insecure: true`,
+		`if csrfValidator != nil {`,
+		`err := csrfValidator.Validate(request)`,
+		`gowdkresponse.WriteNoStoreError(response, http.StatusForbidden, "invalid csrf token")`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "Login", "index.html"), "<main>Login</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{
+		{
+			PageID:      "Login",
+			ActionName:  "Login",
+			Route:       "/Login",
+			InputFields: []string{"email"},
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "example.com/app/auth",
+				PackageName:  "auth",
+				FunctionName: "Login",
+				Signature:    manifest.BackendSignatureActionForm,
+				InputType:    "LoginInput",
+				InputFields: []manifest.BackendInputField{
+					{FieldName: "Email", FormName: "email", Type: "string"},
+					{FieldName: "Tags", FormName: "tag", Type: "[]string"},
+					{FieldName: "Age", FormName: "age", Type: "int"},
+					{FieldName: "Remember", FormName: "remember", Type: "bool"},
+				},
+			},
+		},
+		{
+			PageID:      "Login",
+			ActionName:  "save",
+			Route:       "/Login/save",
+			InputFields: []string{"email"},
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "example.com/app/auth",
+				PackageName:  "auth",
+				FunctionName: "Save",
+				Signature:    manifest.BackendSignatureActionFormPtr,
+				InputType:    "LoginInput",
+				InputPointer: true,
+				InputFields: []manifest.BackendInputField{
+					{FieldName: "Email", FormName: "email", Type: "string"},
+				},
+			},
+		},
+		{
+			PageID:     "Login",
+			ActionName: "Ping",
+			Route:      "/Login/Ping",
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "example.com/app/auth",
+				PackageName:  "auth",
+				FunctionName: "Ping",
+				Signature:    manifest.BackendSignatureAction0,
+			},
+		},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`auth "example.com/app/auth"`,
+		`func decodeLoginLoginBoundInput(values gowdkform.Values) (auth.LoginInput, error)`,
+		`field0, ok, err := gowdkform.String(values, "email")`,
+		`input.Email = field0`,
+		`field1 := gowdkform.Strings(values, "tag")`,
+		`input.Tags = field1`,
+		`field2, ok, err := gowdkform.Int(values, "age", 0)`,
+		`input.Age = int(field2)`,
+		`field3, ok, err := gowdkform.Bool(values, "remember")`,
+		`input.Remember = field3`,
+		`input, err := decodeLoginLoginBoundInput(values)`,
+		`ctx := gowdkruntime.WithEndpoint(request.Context(), gowdkruntime.EndpointMetadata{Kind: "action", PageID: "Login", Name: "Login", Method: "POST", Path: "/Login"})`,
+		`result, err := auth.Login(ctx, input)`,
+		`result, err := auth.Save(ctx, &input)`,
+		`result, err := auth.Ping(ctx)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, "type LoginInput struct") {
+		t.Fatalf("did not expect generated app to create a fake user input struct:\n%s", source)
+	}
+	if strings.Contains(source, "DecodeStruct") {
+		t.Fatalf("did not expect generated app to use runtime reflection struct decoding:\n%s", source)
+	}
+}
+
+func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Actions: []ActionEndpoint{{
+			PageID:     "home",
+			ActionName: "Submit",
+			Route:      "/",
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingMissing,
+				ImportPath:   "example.com/app/missing",
+				PackageName:  "missing",
+				FunctionName: "Submit",
+				Message:      "GOWDK action handler missing.Submit is not implemented",
+			},
+		}},
+		APIs: []APIEndpoint{{
+			PageID:  "home",
+			APIName: "Status",
+			Method:  "GET",
+			Route:   "/api/status",
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingUnsupportedSignature,
+				ImportPath:   "example.com/app/status",
+				PackageName:  "status",
+				FunctionName: "Status",
+				Message:      "GOWDK API handler status.Status must have signature func(context.Context, *http.Request) (response.Response, error)",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, forbidden := range []string{
+		`"example.com/app/missing"`,
+		`"example.com/app/status"`,
+		`missing.Submit(`,
+		`status.Status(`,
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("did not expect generated missing-handler source to contain %q:\n%s", forbidden, source)
+		}
+	}
+	for _, expected := range []string{
+		`GOWDK action handler missing.Submit is not implemented`,
+		`GOWDK API handler status.Status must have signature`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated 501 source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Actions: []ActionEndpoint{
+			{
+				PageID:     "z",
+				ActionName: "Zed",
+				Route:      "/z",
+				Binding: manifest.BackendBinding{
+					Status:       manifest.BackendBindingBound,
+					ImportPath:   "example.com/app/beta",
+					PackageName:  "beta",
+					FunctionName: "Zed",
+					Signature:    manifest.BackendSignatureAction0,
+				},
+			},
+			{
+				PageID:     "a",
+				ActionName: "Alpha",
+				Route:      "/a",
+				Binding: manifest.BackendBinding{
+					Status:       manifest.BackendBindingBound,
+					ImportPath:   "example.com/app/alpha",
+					PackageName:  "alpha",
+					FunctionName: "Alpha",
+					Signature:    manifest.BackendSignatureAction0,
+				},
+			},
+		},
+		APIs: []APIEndpoint{
+			{
+				PageID:  "z",
+				APIName: "ZedAPI",
+				Method:  http.MethodGet,
+				Route:   "/api/z",
+				Binding: manifest.BackendBinding{
+					Status:       manifest.BackendBindingBound,
+					ImportPath:   "example.com/app/beta",
+					PackageName:  "beta",
+					FunctionName: "ZedAPI",
+					Signature:    manifest.BackendSignatureAPI,
+				},
+			},
+			{
+				PageID:  "a",
+				APIName: "AlphaAPI",
+				Method:  http.MethodGet,
+				Route:   "/api/a",
+				Binding: manifest.BackendBinding{
+					Status:       manifest.BackendBindingBound,
+					ImportPath:   "example.com/app/alpha",
+					PackageName:  "alpha",
+					FunctionName: "AlphaAPI",
+					Signature:    manifest.BackendSignatureAPI,
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	assertSourceOrder(t, source,
+		`alpha "example.com/app/alpha"`,
+		`beta "example.com/app/beta"`,
+		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
+		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
+		`"path"`,
+	)
+	assertSourceOrder(t, source, `case "/a":`, `case "/z":`)
+	assertSourceOrder(t, source, `requestPath == "/api/a"`, `requestPath == "/api/z"`)
+}
+
+func TestActionSourceEmitterDoesNotUseStringLineWriting(t *testing.T) {
+	payload, err := os.ReadFile("source_actions.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, forbidden := range []string{"WriteString", "strings.Builder"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("action source emitter must use go/ast, found %q in source_actions.go", forbidden)
+		}
+	}
+}
+
+func TestAPISourceEmitterDoesNotUseStringLineWriting(t *testing.T) {
+	payload, err := os.ReadFile("source_api.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, forbidden := range []string{"WriteString", "strings.Builder"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("API source emitter must use go/ast, found %q in source_api.go", forbidden)
+		}
+	}
+}
+
+func TestBackendSourceEmitterDoesNotUseStringLineWriting(t *testing.T) {
+	payload, err := os.ReadFile("source_backend.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, forbidden := range []string{"WriteString", "strings.Builder"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("backend source emitter must use go/ast, found %q in source_backend.go", forbidden)
+		}
+	}
+}
+
+func TestSSRSourceEmitterDoesNotUseStringLineWriting(t *testing.T) {
+	payload, err := os.ReadFile("source_ssr.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, forbidden := range []string{"WriteString", "strings.Builder"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("SSR source emitter must use go/ast, found %q in source_ssr.go", forbidden)
+		}
+	}
+}
+
+func TestGenerateWritesBoundAPIHandler(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "status", "index.html"), "<main>Status</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{APIs: []APIEndpoint{{
+		PageID:  "status",
+		APIName: "Health",
+		Method:  http.MethodGet,
+		Route:   "/api/health",
+		Binding: manifest.BackendBinding{
+			Status:       manifest.BackendBindingBound,
+			ImportPath:   "example.com/app/status",
+			PackageName:  "status",
+			FunctionName: "Health",
+			Signature:    manifest.BackendSignatureAPI,
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`status "example.com/app/status"`,
+		`func api(response http.ResponseWriter, request *http.Request) bool`,
+		`requestPath := path.Clean("/" + request.URL.Path)`,
+		`case request.Method == "GET" && requestPath == "/api/health":`,
+		`ctx := gowdkruntime.WithEndpoint(request.Context(), gowdkruntime.EndpointMetadata{Kind: "api", PageID: "status", Name: "Health", Method: "GET", Path: "/api/health"})`,
+		`result, err := status.Health(ctx, request)`,
+		`gowdkresponse.WriteNoStoreError(response, gowdkresponse.HandlerStatus(err, http.StatusInternalServerError), err.Error())`,
+		`gowdkresponse.WriteNoStoreHTTP(response, result)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
 		}
 	}
 }
@@ -253,9 +642,9 @@ func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 	appDir := filepath.Join(root, "generated-app")
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
-	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
 		PageID:      "patients",
-		ActionName:  "refresh",
+		ActionName:  "Refresh",
 		Route:       "/patients",
 		InputName:   "input",
 		InputType:   "PatientFilter",
@@ -282,7 +671,7 @@ func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 		`gowdkresponse.FragmentSwap(fragment.Target, gowdkresponse.SwapMode(swap), fragment.Body)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, fragment)`,
 		`gowdkresponse.WriteNoStoreError(response, http.StatusNotFound, "partial fragment not found")`,
-		`gowdkresponse.WriteHTTP(response, gowdkresponse.RedirectTo("/patients"))`,
+		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.RedirectTo("/patients"))`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
@@ -316,6 +705,8 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 		`func ssrExact(response http.ResponseWriter, request *http.Request) bool`,
 		`func ssrDynamic(response http.ResponseWriter, request *http.Request) bool`,
 		`case "/dashboard":`,
+		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard"})`,
+		`request = request.WithContext(ctx)`,
 		`gowdkresponse.WriteNoStoreHTML(response, request, "<main><h1>Dashboard</h1></main>")`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -352,6 +743,9 @@ func TestGenerateWritesDynamicSSRHandler(t *testing.T) {
 		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`gowdkroute "github.com/cssbruno/gowdk/runtime/route"`,
 		`gowdkroute.Match("/blog/{slug}", request.URL.Path)`,
+		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "blog.post", Method: "GET", Path: "/blog/{slug}"})`,
+		`ctx = gowdkruntime.WithParams(ctx, params)`,
+		`request = request.WithContext(ctx)`,
 		`strings.ReplaceAll(html, "__SLUG__", gowdkhtml.Escape(params["slug"]))`,
 		`gowdkresponse.WriteNoStoreHTML(response, request, html)`,
 	} {
@@ -383,8 +777,11 @@ func TestGenerateWritesDynamicSSRHandlerWithoutReplacements(t *testing.T) {
 	if !strings.Contains(source, `gowdkroute.Match("/blog/{slug}", request.URL.Path)`) {
 		t.Fatalf("expected generated main.go to match dynamic route:\n%s", source)
 	}
-	if strings.Contains(source, `params, ok := gowdkroute.Match`) {
-		t.Fatalf("did not expect unused params for dynamic route without replacements:\n%s", source)
+	if !strings.Contains(source, `params, ok := gowdkroute.Match`) {
+		t.Fatalf("expected generated main.go to keep route params in request context:\n%s", source)
+	}
+	if !strings.Contains(source, `ctx = gowdkruntime.WithParams(ctx, params)`) {
+		t.Fatalf("expected generated main.go to attach dynamic route params:\n%s", source)
 	}
 	if strings.Contains(source, `case "/blog/{slug}":`) {
 		t.Fatalf("expected generated main.go not to use exact literal match for dynamic route:\n%s", source)
@@ -403,9 +800,9 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 			Route: "/newsletter",
 			Blocks: manifest.Blocks{
 				View:     true,
-				ViewBody: `<form g:post={subscribe}><input name="email" required /></form>`,
+				ViewBody: `<form g:post={Subscribe}><input name="email" required /></form>`,
 				Actions: []manifest.Action{{
-					Name:           "subscribe",
+					Name:           "Subscribe",
 					InputName:      "input",
 					InputType:      "SubscribeInput",
 					ValidatesInput: true,
@@ -442,7 +839,7 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 	for _, expected := range []string{
 		`case "/newsletter":`,
 		`func decodeNewsletterSubscribeInput(values gowdkform.Values) (SubscribeInput, error)`,
-		`gowdkresponse.WriteHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
+		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
 		`case "/dashboard":`,
 		`<main><h1>Dashboard</h1></main>`,
 	} {
@@ -464,14 +861,14 @@ func TestGenerateAutoRoutesRequiresManifest(t *testing.T) {
 	}
 }
 
-func TestActionRoutesInfersInputFieldsFromGPostForm(t *testing.T) {
-	routes, err := ActionRoutes(manifest.Manifest{Pages: []manifest.Page{{
+func TestActionEndpointsInfersInputFieldsFromGPostForm(t *testing.T) {
+	routes, err := ActionEndpoints(manifest.Manifest{Pages: []manifest.Page{{
 		ID:    "newsletter",
 		Route: "/newsletter",
 		Blocks: manifest.Blocks{
-			ViewBody: `<form g:post={subscribe}><input name="email" required /><textarea name="note"></textarea></form>`,
+			ViewBody: `<form g:post={Subscribe}><input name="email" required /><textarea name="note"></textarea></form>`,
 			Actions: []manifest.Action{{
-				Name:           "subscribe",
+				Name:           "Subscribe",
 				InputName:      "input",
 				InputType:      "SubscribeInput",
 				ValidatesInput: true,
@@ -496,14 +893,38 @@ func TestActionRoutesInfersInputFieldsFromGPostForm(t *testing.T) {
 	}
 }
 
-func TestActionRoutesRendersActionFragments(t *testing.T) {
-	routes, err := ActionRoutes(manifest.Manifest{Pages: []manifest.Page{{
+func TestActionEndpointsInfersSubmitIntentFieldsFromGPostForm(t *testing.T) {
+	routes, err := ActionEndpoints(manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "newsletter",
+		Route: "/newsletter",
+		Blocks: manifest.Blocks{
+			ViewBody: `<form g:post={Subscribe}><input name="email" /><button name="intent" value="save">Save</button><button type="button" name="local">Local</button></form>`,
+			Actions: []manifest.Action{{
+				Name:   "Subscribe",
+				Method: "POST",
+				Route:  "/newsletter",
+			}},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected one action endpoint, got %#v", routes)
+	}
+	if strings.Join(routes[0].InputFields, ",") != "email,intent" {
+		t.Fatalf("unexpected fields: %#v", routes[0].InputFields)
+	}
+}
+
+func TestActionEndpointsRendersActionFragments(t *testing.T) {
+	routes, err := ActionEndpoints(manifest.Manifest{Pages: []manifest.Page{{
 		ID:    "patients",
 		Route: "/patients",
 		Blocks: manifest.Blocks{
-			ViewBody: `<form g:post={refresh} g:target="#patients"><input name="query" /></form><section id="patients"></section>`,
+			ViewBody: `<form g:post={Refresh} g:target="#patients"><input name="query" /></form><section id="patients"></section>`,
 			Actions: []manifest.Action{{
-				Name:      "refresh",
+				Name:      "Refresh",
 				InputName: "input",
 				InputType: "PatientFilter",
 				Fragments: []manifest.Fragment{{
@@ -530,8 +951,8 @@ func TestActionRoutesRendersActionFragments(t *testing.T) {
 	}
 }
 
-func TestActionRoutesRejectsFileInputsWithPageContext(t *testing.T) {
-	_, err := ActionRoutes(manifest.Manifest{Pages: []manifest.Page{{
+func TestActionEndpointsRejectsFileInputsWithPageContext(t *testing.T) {
+	_, err := ActionEndpoints(manifest.Manifest{Pages: []manifest.Page{{
 		ID:    "profile",
 		Route: "/profile",
 		Blocks: manifest.Blocks{
@@ -585,9 +1006,9 @@ func TestGenerateRejectsUnsafeActionRedirect(t *testing.T) {
 	appDir := filepath.Join(root, "generated-app")
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
-	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
+	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
 		PageID:     "newsletter",
-		ActionName: "subscribe",
+		ActionName: "Subscribe",
 		Route:      "/newsletter",
 		Redirect:   "https://example.com",
 	}}})
@@ -599,13 +1020,13 @@ func TestGenerateRejectsUnsafeActionRedirect(t *testing.T) {
 	}
 }
 
-func TestGenerateRejectsDynamicActionRoute(t *testing.T) {
+func TestGenerateRejectsDynamicActionEndpoint(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	writeTestFile(t, filepath.Join(outputDir, "blog", "hello", "index.html"), "<main>Post</main>")
 
-	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
+	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
 		PageID:     "blog.post",
 		ActionName: "save",
 		Route:      "/blog/{slug}",
@@ -614,7 +1035,7 @@ func TestGenerateRejectsDynamicActionRoute(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected dynamic route error")
 	}
-	if !strings.Contains(err.Error(), `route "/blog/{slug}" must be a concrete path`) {
+	if !strings.Contains(err.Error(), `endpoint path "/blog/{slug}" must be a concrete path`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -1046,9 +1467,9 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	binaryPath := filepath.Join(root, "site")
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
-	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
 		PageID:         "newsletter",
-		ActionName:     "subscribe",
+		ActionName:     "Subscribe",
 		Route:          "/newsletter",
 		InputName:      "input",
 		InputType:      "SubscribeInput",
@@ -1056,6 +1477,10 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 		RequiredFields: []string{"email"},
 		ValidatesInput: true,
 		Redirect:       "/newsletter?ok=1",
+	}, {
+		PageID:     "newsletter",
+		ActionName: "Ping",
+		Route:      "/newsletter/ping",
 	}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -1085,6 +1510,9 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	if response.Header.Get("Location") != "/newsletter?ok=1" {
 		t.Fatalf("unexpected redirect location: %q", response.Header.Get("Location"))
 	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on action redirect, got %q", cacheControl)
+	}
 
 	response, err = waitForHTTPStatus("http://"+addr+"/newsletter/", http.MethodPost, "email=reader%40example.com")
 	if err != nil {
@@ -1096,6 +1524,21 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	}
 	if response.Header.Get("Location") != "/newsletter?ok=1" {
 		t.Fatalf("unexpected redirect location for trailing slash POST: %q", response.Header.Get("Location"))
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on trailing slash action redirect, got %q", cacheControl)
+	}
+
+	response, err = waitForHTTPStatus("http://"+addr+"/newsletter/ping", http.MethodPost, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected no-content action to return 204, got %d", response.StatusCode)
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on no-content action response, got %q", cacheControl)
 	}
 
 	response, err = waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com&role=admin")
@@ -1129,6 +1572,95 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	}
 }
 
+func TestGeneratedBinaryValidatesCSRFWhenEnabled(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), `<main><form method="post" action="/newsletter"><input name="email"></form></main>`)
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
+			Enabled:   true,
+			SecretEnv: "GOWDK_TEST_CSRF_SECRET",
+			Insecure:  true,
+		}}},
+		Actions: []ActionEndpoint{{
+			PageID:      "newsletter",
+			ActionName:  "Subscribe",
+			Route:       "/newsletter",
+			InputFields: []string{"email"},
+			Redirect:    "/newsletter?ok=1",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(),
+		"GOWDK_ADDR="+addr,
+		"GOWDK_TEST_CSRF_SECRET="+strings.Repeat("s", 32),
+	)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, headers, err := waitForHTTPResponse("http://" + addr + "/newsletter")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := hiddenInputValue(body, "_gowdk_csrf")
+	if token == "" {
+		t.Fatalf("expected generated form csrf token, got %s", body)
+	}
+	cookie := cookieHeader(headers.Get("Set-Cookie"))
+	if !strings.Contains(cookie, "__Host-gowdk-csrf=") {
+		t.Fatalf("expected csrf cookie, got %q", headers.Get("Set-Cookie"))
+	}
+
+	response, err := waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected missing csrf token to return 403, got %d: %s", response.StatusCode, payload)
+	}
+	if !strings.Contains(string(payload), "invalid csrf token") {
+		t.Fatalf("expected invalid csrf body, got %s", payload)
+	}
+	if cache := response.Header.Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store on invalid csrf response, got %q", cache)
+	}
+
+	response, err = waitForHTTPStatusWithHeaders("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com", map[string]string{
+		"Cookie":       cookie,
+		"X-GOWDK-CSRF": token,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected valid csrf POST to return 303, got %d", response.StatusCode)
+	}
+	if response.Header.Get("Location") != "/newsletter?ok=1" {
+		t.Fatalf("unexpected redirect location: %q", response.Header.Get("Location"))
+	}
+}
+
 func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -1136,9 +1668,9 @@ func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
 	binaryPath := filepath.Join(root, "site")
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
-	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
 		PageID:      "patients",
-		ActionName:  "refresh",
+		ActionName:  "Refresh",
 		Route:       "/patients",
 		InputName:   "input",
 		InputType:   "PatientFilter",
@@ -1197,6 +1729,30 @@ func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
 	if response.Header.Get("Location") != "" {
 		t.Fatalf("did not expect redirect location on partial response: %q", response.Header.Get("Location"))
 	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on partial fragment response, got %q", cacheControl)
+	}
+}
+
+func hiddenInputValue(markup string, name string) string {
+	marker := `name="` + name + `" value="`
+	start := strings.Index(markup, marker)
+	if start < 0 {
+		return ""
+	}
+	start += len(marker)
+	end := strings.Index(markup[start:], `"`)
+	if end < 0 {
+		return ""
+	}
+	return markup[start : start+end]
+}
+
+func cookieHeader(setCookie string) string {
+	if index := strings.Index(setCookie, ";"); index >= 0 {
+		return setCookie[:index]
+	}
+	return setCookie
 }
 
 func TestGeneratedBinaryAcknowledgesCookieNotice(t *testing.T) {
@@ -1267,9 +1823,9 @@ func TestGeneratedBinaryDoesNotValidateRequiredFieldsWithoutValidMetadata(t *tes
 	binaryPath := filepath.Join(root, "site")
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
-	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionRoute{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
 		PageID:         "newsletter",
-		ActionName:     "subscribe",
+		ActionName:     "Subscribe",
 		Route:          "/newsletter",
 		InputName:      "input",
 		InputType:      "SubscribeInput",
@@ -1347,6 +1903,21 @@ func withoutEnv(env []string, names ...string) []string {
 func waitForHTTP(url string) (string, error) {
 	body, _, err := waitForHTTPResponse(url)
 	return body, err
+}
+
+func assertSourceOrder(t *testing.T, source string, snippets ...string) {
+	t.Helper()
+	previous := -1
+	for _, snippet := range snippets {
+		index := strings.Index(source, snippet)
+		if index < 0 {
+			t.Fatalf("expected generated source to contain %q:\n%s", snippet, source)
+		}
+		if index <= previous {
+			t.Fatalf("expected %q to appear after previous snippets:\n%s", snippet, source)
+		}
+		previous = index
+	}
 }
 
 func waitForHTTPResponse(url string) (string, http.Header, error) {

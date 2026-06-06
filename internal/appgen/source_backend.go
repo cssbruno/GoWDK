@@ -1,62 +1,51 @@
 package appgen
 
 import (
+	"go/ast"
+	"go/token"
 	"sort"
-	"strings"
-
-	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-func apiHandlerSource(apis []APIRoute) string {
-	if len(apis) == 0 {
-		return emptyAPIHandlerSource
+func backendHandlerSource(actions []ActionEndpoint, apis []APIEndpoint) string {
+	if len(actions) == 0 && len(apis) == 0 {
+		return printActionDecls([]ast.Decl{emptyBackendHandlerDecl()})
 	}
-
-	var builder strings.Builder
-	builder.WriteString("func api(response http.ResponseWriter, request *http.Request) bool {\n")
-	builder.WriteString("\trequestPath := path.Clean(\"/\" + request.URL.Path)\n")
-	builder.WriteString("\tswitch {\n")
-	for _, api := range sortedAPIRoutes(apis) {
-		builder.WriteString("\tcase request.Method == ")
-		builder.WriteString(goString(api.Method))
-		builder.WriteString(" && requestPath == ")
-		builder.WriteString(quote(api.Route))
-		builder.WriteString(":\n")
-		if api.Binding.Status != manifest.BackendBindingBound {
-			writeBackendNotImplemented(&builder, api.Binding, "API")
-			builder.WriteString("\t\treturn true\n")
-			continue
-		}
-		builder.WriteString("\t\tresult, err := ")
-		builder.WriteString(api.BackendAlias)
-		builder.WriteString(".")
-		builder.WriteString(api.Binding.FunctionName)
-		builder.WriteString("(request.Context(), request)\n")
-		builder.WriteString("\t\tif err != nil {\n")
-		builder.WriteString("\t\t\tgowdkresponse.WriteNoStoreError(response, gowdkresponse.HandlerStatus(err, http.StatusInternalServerError), err.Error())\n")
-		builder.WriteString("\t\t\treturn true\n")
-		builder.WriteString("\t\t}\n")
-		builder.WriteString("\t\t_ = gowdkresponse.WriteNoStoreHTTP(response, result)\n")
-		builder.WriteString("\t\treturn true\n")
-	}
-	builder.WriteString("\tdefault:\n")
-	builder.WriteString("\t\treturn false\n")
-	builder.WriteString("\t}\n")
-	builder.WriteString("}\n")
-	return builder.String()
+	return printActionDecls([]ast.Decl{backendHandlerDecl()})
 }
 
-const emptyAPIHandlerSource = `func api(response http.ResponseWriter, request *http.Request) bool {
-	return false
-}`
+func emptyBackendHandlerDecl() *ast.FuncDecl {
+	return funcDecl("backend", actionParams(), boolResults(), []ast.Stmt{returnBool(false)})
+}
 
-func sortedAPIRoutes(apis []APIRoute) []APIRoute {
-	sorted := append([]APIRoute(nil), apis...)
-	sortAPIRoutes(sorted)
+func backendHandlerDecl() *ast.FuncDecl {
+	return funcDecl("backend", actionParams(), boolResults(), []ast.Stmt{
+		&ast.IfStmt{
+			Cond: call(id("api"), id("response"), id("request")),
+			Body: block(returnBool(true)),
+		},
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{
+				X: &ast.BinaryExpr{
+					X:  selExpr(id("request"), "Method"),
+					Op: token.EQL,
+					Y:  sel("http", "MethodPost"),
+				},
+				Op: token.LAND,
+				Y:  call(id("action"), id("response"), id("request")),
+			},
+			Body: block(returnBool(true)),
+		},
+		returnBool(false),
+	})
+}
+
+func sortedAPIEndpoints(apis []APIEndpoint) []APIEndpoint {
+	sorted := append([]APIEndpoint(nil), apis...)
+	sortAPIEndpoints(sorted)
 	return sorted
 }
 
-func sortAPIRoutes(apis []APIRoute) {
+func sortAPIEndpoints(apis []APIEndpoint) {
 	sort.Slice(apis, func(i, j int) bool {
 		if apis[i].Route == apis[j].Route {
 			if apis[i].Method == apis[j].Method {
@@ -68,59 +57,88 @@ func sortAPIRoutes(apis []APIRoute) {
 	})
 }
 
-func writeBackendNotImplemented(builder *strings.Builder, binding manifest.BackendBinding, kind string) {
-	message := strings.TrimSpace(binding.Message)
-	if message == "" {
-		message = "GOWDK " + kind + " handler is not implemented"
-	}
-	builder.WriteString("\t\tgowdkresponse.WriteNoStoreError(response, http.StatusNotImplemented, ")
-	builder.WriteString(goString(message))
-	builder.WriteString(")\n")
-}
-
 func backendProxySource(options Options) string {
 	if !options.ProxyBackend || !hasBackendRoutes(options) {
 		return ""
 	}
-	var builder strings.Builder
-	builder.WriteString("func backendProxy(response http.ResponseWriter, request *http.Request) bool {\n")
-	builder.WriteString("\tif !isBackendRoute(request.Method, request.URL.Path) {\n")
-	builder.WriteString("\t\treturn false\n")
-	builder.WriteString("\t}\n")
-	builder.WriteString("\torigin := strings.TrimSpace(os.Getenv(\"GOWDK_BACKEND_ORIGIN\"))\n")
-	builder.WriteString("\tif origin == \"\" {\n")
-	builder.WriteString("\t\tgowdkresponse.WriteNoStoreError(response, http.StatusBadGateway, \"GOWDK_BACKEND_ORIGIN is required for split backend routes\")\n")
-	builder.WriteString("\t\treturn true\n")
-	builder.WriteString("\t}\n")
-	builder.WriteString("\ttarget, err := neturl.Parse(origin)\n")
-	builder.WriteString("\tif err != nil || target.Scheme == \"\" || target.Host == \"\" {\n")
-	builder.WriteString("\t\tgowdkresponse.WriteNoStoreError(response, http.StatusBadGateway, \"GOWDK_BACKEND_ORIGIN is invalid\")\n")
-	builder.WriteString("\t\treturn true\n")
-	builder.WriteString("\t}\n")
-	builder.WriteString("\tproxy := httputil.NewSingleHostReverseProxy(target)\n")
-	builder.WriteString("\tproxy.ServeHTTP(response, request)\n")
-	builder.WriteString("\treturn true\n")
-	builder.WriteString("}\n\n")
-	builder.WriteString("func isBackendRoute(method string, requestPath string) bool {\n")
-	builder.WriteString("\trequestPath = path.Clean(\"/\" + requestPath)\n")
-	builder.WriteString("\tswitch {\n")
-	for _, action := range sortedActionRoutes(options.Actions) {
-		builder.WriteString("\tcase method == http.MethodPost && requestPath == ")
-		builder.WriteString(quote(action.Route))
-		builder.WriteString(":\n")
-		builder.WriteString("\t\treturn true\n")
+	return printActionDecls([]ast.Decl{
+		backendProxyDecl(),
+		isBackendRouteDecl(options),
+	})
+}
+
+func backendProxyDecl() *ast.FuncDecl {
+	return funcDecl("backendProxy", actionParams(), boolResults(), []ast.Stmt{
+		&ast.IfStmt{
+			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(id("isBackendRoute"), selExpr(id("request"), "Method"), selExpr(selExpr(id("request"), "URL"), "Path"))},
+			Body: block(returnBool(false)),
+		},
+		define([]ast.Expr{id("origin")}, call(sel("strings", "TrimSpace"), call(sel("os", "Getenv"), stringLit("GOWDK_BACKEND_ORIGIN")))),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: id("origin"), Op: token.EQL, Y: stringLit("")},
+			Body: block(
+				writeNoStoreErrorStmt(sel("http", "StatusBadGateway"), "GOWDK_BACKEND_ORIGIN is required for split backend routes"),
+				returnBool(true),
+			),
+		},
+		define([]ast.Expr{id("target"), id("err")}, call(sel("neturl", "Parse"), id("origin"))),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{
+				X:  notNil("err"),
+				Op: token.LOR,
+				Y: &ast.BinaryExpr{
+					X:  &ast.BinaryExpr{X: selExpr(id("target"), "Scheme"), Op: token.EQL, Y: stringLit("")},
+					Op: token.LOR,
+					Y:  &ast.BinaryExpr{X: selExpr(id("target"), "Host"), Op: token.EQL, Y: stringLit("")},
+				},
+			},
+			Body: block(
+				writeNoStoreErrorStmt(sel("http", "StatusBadGateway"), "GOWDK_BACKEND_ORIGIN is invalid"),
+				returnBool(true),
+			),
+		},
+		define([]ast.Expr{id("proxy")}, call(sel("httputil", "NewSingleHostReverseProxy"), id("target"))),
+		exprStmt(call(selExpr(id("proxy"), "ServeHTTP"), id("response"), id("request"))),
+		returnBool(true),
+	})
+}
+
+func isBackendRouteDecl(options Options) *ast.FuncDecl {
+	clauses := []ast.Stmt{}
+	for _, action := range sortedActionEndpoints(options.Actions) {
+		clauses = append(clauses, &ast.CaseClause{
+			List: []ast.Expr{backendRouteCond(sel("http", "MethodPost"), action.Route)},
+			Body: []ast.Stmt{returnBool(true)},
+		})
 	}
-	for _, api := range sortedAPIRoutes(options.APIs) {
-		builder.WriteString("\tcase method == ")
-		builder.WriteString(goString(api.Method))
-		builder.WriteString(" && requestPath == ")
-		builder.WriteString(quote(api.Route))
-		builder.WriteString(":\n")
-		builder.WriteString("\t\treturn true\n")
+	for _, api := range sortedAPIEndpoints(options.APIs) {
+		clauses = append(clauses, &ast.CaseClause{
+			List: []ast.Expr{backendRouteCond(stringLit(api.Method), api.Route)},
+			Body: []ast.Stmt{returnBool(true)},
+		})
 	}
-	builder.WriteString("\tdefault:\n")
-	builder.WriteString("\t\treturn false\n")
-	builder.WriteString("\t}\n")
-	builder.WriteString("}\n")
-	return builder.String()
+	clauses = append(clauses, &ast.CaseClause{Body: []ast.Stmt{returnBool(false)}})
+	return funcDecl("isBackendRoute", []*ast.Field{
+		{Names: []*ast.Ident{id("method")}, Type: id("string")},
+		{Names: []*ast.Ident{id("requestPath")}, Type: id("string")},
+	}, boolResults(), []ast.Stmt{
+		assign([]ast.Expr{id("requestPath")}, call(sel("path", "Clean"), &ast.BinaryExpr{X: stringLit("/"), Op: token.ADD, Y: id("requestPath")})),
+		&ast.SwitchStmt{Body: &ast.BlockStmt{List: clauses}},
+	})
+}
+
+func backendRouteCond(method ast.Expr, route string) ast.Expr {
+	return &ast.BinaryExpr{
+		X: &ast.BinaryExpr{
+			X:  id("method"),
+			Op: token.EQL,
+			Y:  method,
+		},
+		Op: token.LAND,
+		Y: &ast.BinaryExpr{
+			X:  id("requestPath"),
+			Op: token.EQL,
+			Y:  stringLit(cleanRoutePath(route)),
+		},
+	}
 }

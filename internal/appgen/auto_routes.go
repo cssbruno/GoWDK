@@ -14,17 +14,18 @@ import (
 func resolveOptions(outputDir string, options Options) (Options, error) {
 	resolved := options
 	if !options.AutoRoutes {
+		assignBackendAliases(&resolved)
 		return resolved, nil
 	}
 	if options.Manifest == nil {
 		return Options{}, fmt.Errorf("auto route detection requires a parsed manifest")
 	}
 
-	actions, err := ActionRoutes(*options.Manifest)
+	actions, err := ActionEndpoints(*options.Manifest)
 	if err != nil {
 		return Options{}, err
 	}
-	apis, err := APIRoutes(*options.Manifest)
+	apis, err := APIEndpoints(*options.Manifest)
 	if err != nil {
 		return Options{}, err
 	}
@@ -33,8 +34,8 @@ func resolveOptions(outputDir string, options Options) (Options, error) {
 		return Options{}, err
 	}
 
-	resolved.Actions = append(append([]ActionRoute(nil), options.Actions...), actions...)
-	resolved.APIs = append(append([]APIRoute(nil), options.APIs...), apis...)
+	resolved.Actions = append(append([]ActionEndpoint(nil), options.Actions...), actions...)
+	resolved.APIs = append(append([]APIEndpoint(nil), options.APIs...), apis...)
 	resolved.SSR = append(append([]SSRRoute(nil), options.SSR...), ssrRoutes(ssrArtifacts)...)
 	assignBackendAliases(&resolved)
 	return resolved, nil
@@ -49,16 +50,16 @@ func resolveBackendOptions(options Options) (Options, error) {
 	if options.Manifest == nil {
 		return Options{}, fmt.Errorf("auto route detection requires a parsed manifest")
 	}
-	actions, err := ActionRoutes(*options.Manifest)
+	actions, err := ActionEndpoints(*options.Manifest)
 	if err != nil {
 		return Options{}, err
 	}
-	apis, err := APIRoutes(*options.Manifest)
+	apis, err := APIEndpoints(*options.Manifest)
 	if err != nil {
 		return Options{}, err
 	}
-	resolved.Actions = append(append([]ActionRoute(nil), options.Actions...), actions...)
-	resolved.APIs = append(append([]APIRoute(nil), options.APIs...), apis...)
+	resolved.Actions = append(append([]ActionEndpoint(nil), options.Actions...), actions...)
+	resolved.APIs = append(append([]APIEndpoint(nil), options.APIs...), apis...)
 	resolved.SSR = nil
 	assignBackendAliases(&resolved)
 	return resolved, nil

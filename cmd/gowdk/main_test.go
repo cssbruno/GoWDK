@@ -21,7 +21,9 @@ func TestBuildCommandWritesIndexHTML(t *testing.T) {
 	source := filepath.Join(root, "home.page.gwdk")
 	outputDir := filepath.Join(root, "dist")
 	config := writeMinimalCLIConfig(t, root)
-	if err := os.WriteFile(source, []byte(`@page home
+	if err := os.WriteFile(source, []byte(`package app
+
+@page home
 @route "/"
 
 view {
@@ -52,7 +54,9 @@ func TestBuildCommandDebugPrintsBuildgenReport(t *testing.T) {
 	source := filepath.Join(root, "home.page.gwdk")
 	outputDir := filepath.Join(root, "dist")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, source, `@page home
+	writeCLIFile(t, source, `package app
+
+@page home
 @route "/"
 
 view {
@@ -168,7 +172,9 @@ func TestDevRejectsInvalidInterval(t *testing.T) {
 
 func TestBuildCommandRequiresProjectConfig(t *testing.T) {
 	root := t.TempDir()
-	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
@@ -289,7 +295,9 @@ func TestBuildInputSnapshotDetectsFileChanges(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, source, `@page home
+	writeCLIFile(t, source, `package app
+
+@page home
 @route "/"
 
 view {
@@ -302,7 +310,9 @@ view {
 		t.Fatal(err)
 	}
 	time.Sleep(time.Millisecond)
-	writeCLIFile(t, source, `@page home
+	writeCLIFile(t, source, `package app
+
+@page home
 @route "/"
 
 view {
@@ -322,7 +332,9 @@ func TestBuildInputSnapshotIgnoresUnchangedFileTouches(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")
 	config := writeMinimalCLIConfig(t, root)
-	content := `@page home
+	content := `package app
+
+@page home
 @route "/"
 
 view {
@@ -358,7 +370,9 @@ var Config = gowdk.Config{
 	CSS: gowdk.CSSConfig{Include: []string{"styles/*.css"}},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
@@ -395,7 +409,9 @@ var Config = gowdk.Config{
 	Build: gowdk.BuildConfig{Output: "dist/site"},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
@@ -448,14 +464,18 @@ func TestBuildIncrementalSPAUsesChangedPageSources(t *testing.T) {
 	about := filepath.Join(root, "about.page.gwdk")
 	outputDir := filepath.Join(root, "dist")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, home, `@page home
+	writeCLIFile(t, home, `package app
+
+@page home
 @route "/"
 
 view {
   <main>Before</main>
 }
 `)
-	writeCLIFile(t, about, `@page about
+	writeCLIFile(t, about, `package app
+
+@page about
 @route "/about"
 
 view {
@@ -474,7 +494,9 @@ view {
 	}
 
 	time.Sleep(20 * time.Millisecond)
-	writeCLIFile(t, home, `@page home
+	writeCLIFile(t, home, `package app
+
+@page home
 @route "/"
 
 view {
@@ -510,14 +532,18 @@ func TestBuildIncrementalSPAFallsBackForComponentChanges(t *testing.T) {
 	component := filepath.Join(root, "hero.cmp.gwdk")
 	outputDir := filepath.Join(root, "dist")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, page, `@page home
+	writeCLIFile(t, page, `package app
+
+@page home
 @route "/"
 
 view {
   <main><Hero title="GOWDK" /></main>
 }
 `)
-	writeCLIFile(t, component, `@component Hero
+	writeCLIFile(t, component, `package app
+
+@component Hero
 
 props {
   title string
@@ -543,7 +569,9 @@ func TestBuildCommandWritesComponentExpandedHTML(t *testing.T) {
 	component := filepath.Join(root, "hero.cmp.gwdk")
 	outputDir := filepath.Join(root, "dist")
 	config := writeMinimalCLIConfig(t, root)
-	if err := os.WriteFile(page, []byte(`@page home
+	if err := os.WriteFile(page, []byte(`package app
+
+@page home
 @route "/"
 
 view {
@@ -554,7 +582,9 @@ view {
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(component, []byte(`@component Hero
+	if err := os.WriteFile(component, []byte(`package app
+
+@component Hero
 
 props {
   title string
@@ -586,7 +616,9 @@ view {
 func TestBuildCommandDiscoversFilesWhenNoPathsArePassed(t *testing.T) {
 	root := t.TempDir()
 	writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, filepath.Join(root, "src", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "src", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
@@ -595,7 +627,9 @@ view {
   </main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "src", "hero.cmp.gwdk"), `@component Hero
+	writeCLIFile(t, filepath.Join(root, "src", "hero.cmp.gwdk"), `package app
+
+@component Hero
 
 props {
   title string
@@ -607,7 +641,9 @@ view {
   </section>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "dist", "stale.page.gwdk"), `@page stale
+	writeCLIFile(t, filepath.Join(root, "dist", "stale.page.gwdk"), `package app
+
+@page stale
 @route "/stale"
 
 view {
@@ -668,7 +704,9 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "src", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "src", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
@@ -677,7 +715,9 @@ view {
   </main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "src", "hero.cmp.gwdk"), `@component Hero
+	writeCLIFile(t, filepath.Join(root, "src", "hero.cmp.gwdk"), `package app
+
+@component Hero
 
 props {
   title string
@@ -689,7 +729,9 @@ view {
   </section>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "src", "ignored.page.gwdk"), `@page ignored
+	writeCLIFile(t, filepath.Join(root, "src", "ignored.page.gwdk"), `package app
+
+@page ignored
 @route "/ignored"
 
 view {
@@ -760,7 +802,9 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "styles", "app.css"), `@import "tailwindcss" source(none);
 `)
-	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
@@ -820,35 +864,45 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
   <main>Frontend</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "ui2", "second.page.gwdk"), `@page second
+	writeCLIFile(t, filepath.Join(root, "ui2", "second.page.gwdk"), `package app
+
+@page second
 @route "/second"
 
 view {
   <main>Frontend Two</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `@page admin
+	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `package app
+
+@page admin
 @route "/admin"
 
 view {
   <main>Backend</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "backend", "ignored.page.gwdk"), `@page ignored
+	writeCLIFile(t, filepath.Join(root, "backend", "ignored.page.gwdk"), `package app
+
+@page ignored
 @route "/ignored"
 
 view {
   <main>Ignored</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "other", "stray.page.gwdk"), `@page stray
+	writeCLIFile(t, filepath.Join(root, "other", "stray.page.gwdk"), `package app
+
+@page stray
 @route "/stray"
 
 view {
@@ -897,14 +951,18 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
   <main>Frontend</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `@page admin
+	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `package app
+
+@page admin
 @route "/admin"
 
 view {
@@ -957,21 +1015,27 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
   <main>Public module</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `@page dashboard
+	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `package app
+
+@page dashboard
 @route "/admin"
 
 view {
   <main>Admin module</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "api", "status.page.gwdk"), `@page status
+	writeCLIFile(t, filepath.Join(root, "api", "status.page.gwdk"), `package app
+
+@page status
 @route "/api/status"
 
 view {
@@ -1027,14 +1091,18 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
   <main>Public module</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `@page dashboard
+	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `package app
+
+@page dashboard
 @route "/admin"
 
 view {
@@ -1073,7 +1141,9 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
@@ -1137,7 +1207,9 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "src", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "src", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
@@ -1174,7 +1246,9 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
@@ -1232,7 +1306,9 @@ func TestCheckCommandJSONReportsDiagnostics(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "bad.page.gwdk")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, source, `@page bad
+	writeCLIFile(t, source, `package app
+
+@page bad
 @route "/bad"
 `)
 
@@ -1252,14 +1328,18 @@ func TestManifestCommandHandlesMultipleFiles(t *testing.T) {
 	home := filepath.Join(root, "home.page.gwdk")
 	about := filepath.Join(root, "about.page.gwdk")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, home, `@page home
+	writeCLIFile(t, home, `package app
+
+@page home
 @route "/"
 
 view {
   <main>Home</main>
 }
 `)
-	writeCLIFile(t, about, `@page about
+	writeCLIFile(t, about, `package app
+
+@page about
 @route "/about"
 
 view {
@@ -1291,14 +1371,18 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
   <main>Configured check</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "pages", "ignored.page.gwdk"), `@page ignored
+	writeCLIFile(t, filepath.Join(root, "pages", "ignored.page.gwdk"), `package app
+
+@page ignored
 @route "/"
 
 view {
@@ -1326,14 +1410,18 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
   <main>Manifest discovery</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "pages", "ignored.page.gwdk"), `@page ignored
+	writeCLIFile(t, filepath.Join(root, "pages", "ignored.page.gwdk"), `package app
+
+@page ignored
 @route "/ignored"
 
 view {
@@ -1363,14 +1451,18 @@ view {
 func TestManifestCommandDefaultDiscoverySkipsTestdata(t *testing.T) {
 	root := t.TempDir()
 	writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
   <main>Home</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "internal", "lang", "testdata", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "internal", "lang", "testdata", "home.page.gwdk"), `package app
+
+@page home
 @route "/fixture"
 
 view {
@@ -1415,7 +1507,9 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "pages", "dashboard.page.gwdk"), `@page dashboard
+	writeCLIFile(t, filepath.Join(root, "pages", "dashboard.page.gwdk"), `package app
+
+@page dashboard
 @route "/dashboard"
 @render ssr
 
@@ -1453,14 +1547,18 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
   <main>Frontend</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `@page admin
+	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `package app
+
+@page admin
 @route "/admin"
 
 view {
@@ -1487,44 +1585,48 @@ view {
 	}
 }
 
-func TestRoutesCommandPrintsGeneratedRouteBindings(t *testing.T) {
+func TestRoutesCommandPrintsRoutesAndEndpoints(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "newsletter.page.gwdk")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, page, `@page newsletter
+	writeCLIFile(t, page, `package app
+
+@page newsletter
 @route "/newsletter"
 @render action
 
-act subscribe {
-  input := form SubscribeInput
-  valid(input)?
-  -> "/newsletter?ok=1"
-}
+act Subscribe POST "/newsletter"
 
 view {
-  <form g:post={subscribe}>
+  <form g:post={Subscribe}>
     <input name="email" required />
     <button type="submit">Subscribe</button>
   </form>
 }
 `)
 
-	output, err := captureCLIStdout(t, func() error {
+	output, stderr, err := captureCLIOutput(t, func() error {
 		return run([]string{"routes", "--config", config, page})
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(stderr, "info: ssr_disabled: newsletter uses @render action; request-time SSR is disabled for this route") {
+		t.Fatalf("expected disabled SSR route info on stderr, got:\n%s", stderr)
+	}
 
-	var report routeBindingsReport
+	var report routeMetadataReport
 	if err := json.Unmarshal([]byte(output), &report); err != nil {
 		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
 	}
 	if report.Version != 1 {
 		t.Fatalf("unexpected routes version: %d", report.Version)
 	}
-	if len(report.Routes) != 2 {
-		t.Fatalf("expected spa and action routes, got %#v", report.Routes)
+	if len(report.Routes) != 1 {
+		t.Fatalf("expected only page routes, got %#v", report.Routes)
+	}
+	if len(report.Endpoints) != 1 {
+		t.Fatalf("expected one action endpoint, got %#v", report.Endpoints)
 	}
 	assertRouteBinding(t, report.Routes, routeBindingJSON{
 		Kind:    "spa",
@@ -1533,17 +1635,69 @@ view {
 		PageID:  "newsletter",
 		Handler: `embedded.SPA("pages/newsletter.html")`,
 	})
-	assertRouteBinding(t, report.Routes, routeBindingJSON{
-		Kind:    "action",
-		Method:  "POST",
-		Route:   "/newsletter",
-		PageID:  "newsletter",
-		Handler: "actions.NewsletterSubscribe",
+	assertEndpointBinding(t, report.Endpoints, endpointBindingJSON{
+		Kind:           "action",
+		EndpointSource: "gwdk",
+		Source:         page,
+		Package:        "app",
+		PackageName:    "app",
+		Symbol:         "Subscribe",
+		Method:         "POST",
+		Route:          "/newsletter",
+		PageID:         "newsletter",
+		Handler:        "actions.NewsletterSubscribe",
+		BindingStatus:  "missing",
 		BackendBinding: &backendBindingJSON{
 			Status:       "missing",
+			PackageName:  "app",
 			FunctionName: "Subscribe",
 			Message:      "GOWDK action handler app.Subscribe is not implemented",
 		},
+	})
+	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 7 {
+		t.Fatalf("expected endpoint source span for action declaration, got %#v", report.Endpoints[0].SourceSpan)
+	}
+	assertRouteInfo(t, report.Info, "ssr_disabled", "newsletter")
+}
+
+func TestRoutesCommandPrintsHybridRouteKind(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "dashboard.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+@page dashboard
+@route "/dashboard"
+@render hybrid
+
+load {
+}
+
+view {
+  <main>Dashboard</main>
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"routes", "--config", config, "--ssr", page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected no disabled-lane info for hybrid route, got:\n%s", stderr)
+	}
+
+	var report routeMetadataReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
+	}
+	assertRouteBinding(t, report.Routes, routeBindingJSON{
+		Kind:    "hybrid",
+		Method:  "GET",
+		Route:   "/dashboard",
+		PageID:  "dashboard",
+		Handler: "hybrid.RenderDashboard",
 	})
 }
 
@@ -1560,14 +1714,18 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
   <main>Frontend</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `@page admin
+	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `package app
+
+@page admin
 @route "/admin"
 
 view {
@@ -1586,7 +1744,7 @@ view {
 		output = captured
 	})
 
-	var report routeBindingsReport
+	var report routeMetadataReport
 	if err := json.Unmarshal([]byte(output), &report); err != nil {
 		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
 	}
@@ -1606,12 +1764,12 @@ func TestRoutesCommandPrintsAPIBinding(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "status.page.gwdk")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, page, `@page status
+	writeCLIFile(t, page, `package app
+
+@page status
 @route "/status"
 
-api health {
-  GET "/api/health"
-}
+api Health GET "/api/health"
 
 view {
   <main>Status</main>
@@ -1625,22 +1783,38 @@ view {
 		t.Fatal(err)
 	}
 
-	var report routeBindingsReport
+	var report routeMetadataReport
 	if err := json.Unmarshal([]byte(output), &report); err != nil {
 		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
 	}
-	assertRouteBinding(t, report.Routes, routeBindingJSON{
-		Kind:    "api",
-		Method:  "GET",
-		Route:   "/api/health",
-		PageID:  "status",
-		Handler: "api.StatusHealth",
+	if len(report.Routes) != 1 {
+		t.Fatalf("expected status page route only, got %#v", report.Routes)
+	}
+	if len(report.Endpoints) != 1 {
+		t.Fatalf("expected one API endpoint, got %#v", report.Endpoints)
+	}
+	assertEndpointBinding(t, report.Endpoints, endpointBindingJSON{
+		Kind:           "api",
+		EndpointSource: "gwdk",
+		Source:         page,
+		Package:        "app",
+		PackageName:    "app",
+		Symbol:         "Health",
+		Method:         "GET",
+		Route:          "/api/health",
+		PageID:         "status",
+		Handler:        "api.StatusHealth",
+		BindingStatus:  "missing",
 		BackendBinding: &backendBindingJSON{
 			Status:       "missing",
+			PackageName:  "app",
 			FunctionName: "Health",
 			Message:      "GOWDK API handler app.Health is not implemented",
 		},
 	})
+	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 6 {
+		t.Fatalf("expected endpoint source span for API declaration, got %#v", report.Endpoints[0].SourceSpan)
+	}
 }
 
 func TestBuildCommandWritesGeneratedEmbeddedApp(t *testing.T) {
@@ -1649,7 +1823,9 @@ func TestBuildCommandWritesGeneratedEmbeddedApp(t *testing.T) {
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "app")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, page, `@page home
+	writeCLIFile(t, page, `package app
+
+@page home
 @route "/"
 
 view {
@@ -1680,19 +1856,16 @@ func TestBuildCommandPrintsPartialRuntimeAsset(t *testing.T) {
 	page := filepath.Join(root, "patients.page.gwdk")
 	outputDir := filepath.Join(root, "dist")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, page, `@page patients
+	writeCLIFile(t, page, `package app
+
+@page patients
 @route "/patients"
 
-act refresh {
-  input := form PatientFilter
-  fragment "#patients" {
-    <p>Updated</p>
-  }
-}
+act Refresh POST "/patients"
 
 view {
   <main>
-    <form g:post={refresh} g:target="#patients">
+    <form g:post={Refresh} g:target="#patients">
       <input name="query" />
     </form>
     <section id="patients">Initial</section>
@@ -1752,7 +1925,9 @@ func TestBuildCommandBuildsRunnableEmbeddedBinary(t *testing.T) {
 	appDir := filepath.Join(root, "app")
 	binaryPath := filepath.Join(root, "site")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, page, `@page home
+	writeCLIFile(t, page, `package app
+
+@page home
 @route "/"
 
 view {
@@ -1794,7 +1969,9 @@ func TestBuildCommandBuildsWASMArtifact(t *testing.T) {
 	appDir := filepath.Join(root, "app")
 	wasmPath := filepath.Join(root, "site.wasm")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, page, `@page home
+	writeCLIFile(t, page, `package app
+
+@page home
 @route "/"
 
 view {
@@ -1827,14 +2004,18 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
   <main>Frontend module</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `@page dashboard
+	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `package app
+
+@page dashboard
 @route "/admin"
 
 view {
@@ -1894,21 +2075,27 @@ var Config = gowdk.Config{
 	},
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `@page home
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
+
+@page home
 @route "/"
 
 view {
   <main>Frontend module</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `@page dashboard
+	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `package app
+
+@page dashboard
 @route "/admin"
 
 view {
   <main>Admin module</main>
 }
 `)
-	writeCLIFile(t, filepath.Join(root, "docs", "guide.page.gwdk"), `@page guide
+	writeCLIFile(t, filepath.Join(root, "docs", "guide.page.gwdk"), `package app
+
+@page guide
 @route "/docs"
 
 view {
@@ -1968,7 +2155,9 @@ func TestBuildCommandBuildsSSRBinary(t *testing.T) {
 	appDir := filepath.Join(root, "app")
 	binaryPath := filepath.Join(root, "site")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, page, `@page dashboard
+	writeCLIFile(t, page, `package app
+
+@page dashboard
 @route "/dashboard"
 @render ssr
 
@@ -2017,7 +2206,9 @@ func TestBuildCommandBuildsDynamicSSRBinary(t *testing.T) {
 	appDir := filepath.Join(root, "app")
 	binaryPath := filepath.Join(root, "site")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, page, `@page blog.post
+	writeCLIFile(t, page, `package app
+
+@page blog.post
 @route "/blog/{slug}"
 @render ssr
 
@@ -2072,18 +2263,16 @@ func TestBuildCommandBuildsActionBinaryReturns501ForMissingHandler(t *testing.T)
 	appDir := filepath.Join(root, "app")
 	binaryPath := filepath.Join(root, "site")
 	config := writeMinimalCLIConfig(t, root)
-	writeCLIFile(t, page, `@page newsletter
+	writeCLIFile(t, page, `package app
+
+@page newsletter
 @route "/newsletter"
 @render spa
 
-act subscribe {
-  input := form SubscribeInput
-  valid(input)?
-  -> "/newsletter?ok=1"
-}
+act Subscribe POST "/newsletter"
 
 view {
-  <form g:post={subscribe}>
+  <form g:post={Subscribe}>
     <input name="email" required />
     <button type="submit">Subscribe</button>
   </form>
@@ -2122,6 +2311,90 @@ view {
 	}
 }
 
+func TestBuildCommandFailsProductionMissingBackendHandler(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "newsletter.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Mode: gowdk.Production,
+	},
+}
+`)
+	writeCLIFile(t, page, `package app
+
+@page newsletter
+@route "/newsletter"
+@render spa
+
+act Subscribe POST "/newsletter"
+
+view {
+  <form g:post={Subscribe}>
+    <input name="email" required />
+    <button type="submit">Subscribe</button>
+  </form>
+}
+`)
+
+	err := run([]string{"build", "--config", config, "--out", outputDir, page})
+	if err == nil {
+		t.Fatal("expected production build to fail for missing backend handler")
+	}
+	if !strings.Contains(err.Error(), "production build requires a bound action handler Subscribe") {
+		t.Fatalf("unexpected production backend binding error: %v", err)
+	}
+}
+
+func TestBuildCommandAllowMissingBackendOverridesProductionConfig(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "newsletter.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Mode: gowdk.Production,
+	},
+}
+`)
+	writeCLIFile(t, page, `package app
+
+@page newsletter
+@route "/newsletter"
+@render spa
+
+act Subscribe POST "/newsletter"
+
+view {
+  <form g:post={Subscribe}>
+    <input name="email" required />
+    <button type="submit">Subscribe</button>
+  </form>
+}
+`)
+
+	if err := run([]string{"build", "--config", config, "--allow-missing-backend", "--out", outputDir, page}); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "newsletter", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(payload)
+	if !strings.Contains(html, `<form method="post" action="/newsletter">`) {
+		t.Fatalf("expected production build output with explicit missing backend allowance:\n%s", html)
+	}
+}
+
 func TestBuildCommandBuildsBinaryWithFeatureBoundActionAndAPI(t *testing.T) {
 	root := t.TempDir()
 	moduleRoot, err := filepath.Abs("../..")
@@ -2142,21 +2415,18 @@ import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{}
 `)
-	writeCLIFile(t, filepath.Join(root, "features", "auth", "auth.page.gwdk"), `@page auth
+	writeCLIFile(t, filepath.Join(root, "features", "auth", "auth.page.gwdk"), `package auth
+
+@page auth
 @route "/login"
 @render spa
 
-act login {
-  input := form LoginInput
-  valid(input)?
-}
+act Login POST "/login"
 
-api session {
-  GET "/api/session"
-}
+api Session GET "/api/session"
 
 view {
-  <form g:post={login}>
+  <form g:post={Login}>
     <input name="email" required />
     <button type="submit">Sign in</button>
   </form>
@@ -2211,12 +2481,26 @@ func Session(_ context.Context, _ *http.Request) (response.Response, error) {
 	if response.StatusCode != http.StatusSeeOther || response.Header.Get("Location") != "/dashboard" {
 		t.Fatalf("expected bound action redirect, status=%d location=%q", response.StatusCode, response.Header.Get("Location"))
 	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on bound action redirect, got %q", cacheControl)
+	}
 
-	body, err := waitForCLIHTTP("http://" + addr + "/api/session")
+	response, err = waitForCLIStatus("http://"+addr+"/api/session", http.MethodGet, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(body, `"authenticated":true`) {
+	body, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected bound API status 200, got %d: %s", response.StatusCode, body)
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on bound API response, got %q", cacheControl)
+	}
+	if !strings.Contains(string(body), `"authenticated":true`) {
 		t.Fatalf("unexpected bound API body: %s", body)
 	}
 }
@@ -2434,14 +2718,48 @@ func assertRouteBinding(t *testing.T, routes []routeBindingJSON, expected routeB
 			route.Handler != expected.Handler {
 			continue
 		}
+		return
+	}
+	t.Fatalf("missing route %#v in %#v", expected, routes)
+}
+
+func assertEndpointBinding(t *testing.T, endpoints []endpointBindingJSON, expected endpointBindingJSON) {
+	t.Helper()
+	for _, endpoint := range endpoints {
+		if endpoint.Kind != expected.Kind ||
+			endpoint.EndpointSource != expected.EndpointSource ||
+			endpoint.Source != expected.Source ||
+			endpoint.Package != expected.Package ||
+			endpoint.PackagePath != expected.PackagePath ||
+			endpoint.PackageName != expected.PackageName ||
+			endpoint.Symbol != expected.Symbol ||
+			endpoint.Method != expected.Method ||
+			endpoint.Route != expected.Route ||
+			endpoint.PageID != expected.PageID ||
+			endpoint.Handler != expected.Handler ||
+			endpoint.BindingStatus != expected.BindingStatus ||
+			endpoint.Signature != expected.Signature ||
+			endpoint.InputType != expected.InputType {
+			continue
+		}
 		if expected.BackendBinding == nil {
 			return
 		}
-		if route.BackendBinding != nil && *route.BackendBinding == *expected.BackendBinding {
+		if endpoint.BackendBinding != nil && *endpoint.BackendBinding == *expected.BackendBinding {
 			return
 		}
 	}
-	t.Fatalf("missing route binding %#v in %#v", expected, routes)
+	t.Fatalf("missing endpoint binding %#v in %#v", expected, endpoints)
+}
+
+func assertRouteInfo(t *testing.T, infos []routeInfoJSON, code string, pageID string) {
+	t.Helper()
+	for _, info := range infos {
+		if info.Code == code && info.PageID == pageID {
+			return
+		}
+	}
+	t.Fatalf("missing route info code=%s page=%s in %#v", code, pageID, infos)
 }
 
 func freeCLIAddr(t *testing.T) string {

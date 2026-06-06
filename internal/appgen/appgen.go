@@ -47,7 +47,7 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (Result, err
 	if err != nil {
 		return Result{}, err
 	}
-	if err := validateActionRoutes(options.Actions); err != nil {
+	if err := validateActionEndpoints(options.Actions); err != nil {
 		return Result{}, err
 	}
 	if err := validateSSRRoutes(options.SSR); err != nil {
@@ -114,7 +114,7 @@ func GenerateBackendWithOptions(appDir string, options Options) (Result, error) 
 	if err != nil {
 		return Result{}, err
 	}
-	if err := validateActionRoutes(options.Actions); err != nil {
+	if err := validateActionEndpoints(options.Actions); err != nil {
 		return Result{}, err
 	}
 	if err := os.MkdirAll(absApp, 0o755); err != nil {

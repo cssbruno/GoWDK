@@ -18,12 +18,17 @@ func loadBuildConfig(options *cliOptions, configPath string) error {
 }
 
 func loadProjectConfig(options *cliOptions, configPath string) error {
+	allowMissingBackend := options.AllowMissingBackend
 	config, err := project.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
 	config.Addons = append(config.Addons, options.Config.Addons...)
+	if allowMissingBackend {
+		config.Build.AllowMissingBackend = true
+	}
 	options.Config = config
+	options.AllowMissingBackend = allowMissingBackend
 	return nil
 }
 

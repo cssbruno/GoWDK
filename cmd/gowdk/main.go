@@ -13,15 +13,15 @@ import (
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/internal/appgen"
 	"github.com/cssbruno/gowdk/internal/buildgen"
-	"github.com/cssbruno/gowdk/internal/codegen"
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/lsp"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 const (
 	version    = "0.1.5"
-	buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
+	buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
 )
 
 var (
@@ -86,8 +86,8 @@ func usage() {
 	fmt.Println("  check [--config <file>] [--module <name>] [--json] [--ssr] [files...] parse and validate .gwdk files")
 	fmt.Println("  manifest [--config <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
 	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
-	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print generated route bindings JSON")
-	fmt.Println("  build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
+	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
+	fmt.Println("  build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
 	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload")
 	fmt.Println("  serve --dir <dir> [--addr <addr>] serve generated build output locally")
 	fmt.Println("  lsp [--ssr]              start the language server over stdio")
@@ -131,7 +131,9 @@ var Config = gowdk.Config{
 		},
 		{
 			Path: "src/pages/home.page.gwdk",
-			Body: `@page home
+			Body: `package app
+
+@page home
 @route "/"
 @css default page
 
@@ -150,7 +152,9 @@ view {
 		},
 		{
 			Path: "src/components/hero.cmp.gwdk",
-			Body: `@component Hero
+			Body: `package app
+
+@component Hero
 
 props {
   title string
@@ -382,16 +386,23 @@ func routesJSON(args []string) error {
 		return fmt.Errorf("routes failed")
 	}
 
-	bindings, err := codegen.BuildRouteBindings(options.Config, app)
+	metadata, err := compiler.BuildRouteMetadata(options.Config, app)
 	if err != nil {
 		return err
 	}
-	payload, err := json.MarshalIndent(routeBindingsJSON(bindings), "", "  ")
+	printRouteInfos(metadata.Info)
+	payload, err := json.MarshalIndent(routeMetadataJSON(metadata), "", "  ")
 	if err != nil {
 		return err
 	}
 	fmt.Println(string(payload))
 	return nil
+}
+
+func printRouteInfos(infos []compiler.RouteInfo) {
+	for _, info := range infos {
+		fmt.Fprintf(os.Stderr, "info: %s: %s\n", info.Code, info.Message)
+	}
 }
 
 func build(args []string) error {
@@ -734,6 +745,9 @@ func parseBuildOptions(args []string) (cliOptions, string, string, string, strin
 			options.Config.Addons = append(options.Config.Addons, ssr.Addon())
 		case arg == "--debug":
 			options.Debug = true
+		case arg == "--allow-missing-backend":
+			options.AllowMissingBackend = true
+			options.Config.Build.AllowMissingBackend = true
 		case arg == "--out":
 			i++
 			if i >= len(args) {
@@ -874,55 +888,140 @@ func cleanNames(names []string) []string {
 }
 
 type cliOptions struct {
-	Config gowdk.Config
-	JSON   bool
-	Debug  bool
+	Config              gowdk.Config
+	JSON                bool
+	Debug               bool
+	AllowMissingBackend bool
 }
 
-type routeBindingsReport struct {
-	Version int                `json:"version"`
-	Routes  []routeBindingJSON `json:"routes"`
+type routeMetadataReport struct {
+	Version   int                   `json:"version"`
+	Routes    []routeBindingJSON    `json:"routes"`
+	Endpoints []endpointBindingJSON `json:"endpoints,omitempty"`
+	Info      []routeInfoJSON       `json:"info,omitempty"`
 }
 
 type routeBindingJSON struct {
-	Kind           codegen.RouteKind   `json:"kind"`
-	Method         string              `json:"method"`
-	Route          string              `json:"route"`
-	PageID         string              `json:"pageId"`
-	Handler        string              `json:"handler"`
-	BackendBinding *backendBindingJSON `json:"backendBinding,omitempty"`
+	Kind    compiler.RouteKind `json:"kind"`
+	Method  string             `json:"method"`
+	Route   string             `json:"route"`
+	PageID  string             `json:"pageId"`
+	Handler string             `json:"handler"`
+}
+
+type endpointBindingJSON struct {
+	Kind           compiler.EndpointKind `json:"kind"`
+	EndpointSource string                `json:"endpointSource,omitempty"`
+	Source         string                `json:"source,omitempty"`
+	SourceSpan     *sourceSpanJSON       `json:"sourceSpan,omitempty"`
+	Package        string                `json:"package,omitempty"`
+	PackagePath    string                `json:"packagePath,omitempty"`
+	PackageName    string                `json:"packageName,omitempty"`
+	Symbol         string                `json:"symbol,omitempty"`
+	Method         string                `json:"method"`
+	Route          string                `json:"route"`
+	PageID         string                `json:"pageId"`
+	Handler        string                `json:"handler"`
+	BindingStatus  string                `json:"bindingStatus,omitempty"`
+	Signature      string                `json:"signature,omitempty"`
+	InputType      string                `json:"inputType,omitempty"`
+	BackendBinding *backendBindingJSON   `json:"backendBinding,omitempty"`
+}
+
+type sourceSpanJSON struct {
+	Start sourcePositionJSON `json:"start"`
+	End   sourcePositionJSON `json:"end"`
+}
+
+type sourcePositionJSON struct {
+	Line   int `json:"line"`
+	Column int `json:"column"`
 }
 
 type backendBindingJSON struct {
 	Status       string `json:"status"`
+	PackageName  string `json:"packageName,omitempty"`
 	ImportPath   string `json:"importPath,omitempty"`
 	FunctionName string `json:"functionName,omitempty"`
+	Signature    string `json:"signature,omitempty"`
+	InputType    string `json:"inputType,omitempty"`
 	Message      string `json:"message,omitempty"`
 }
 
-func routeBindingsJSON(bindings []codegen.RouteBinding) routeBindingsReport {
-	routes := make([]routeBindingJSON, 0, len(bindings))
-	for _, binding := range bindings {
-		item := routeBindingJSON{
+type routeInfoJSON struct {
+	Code    string `json:"code"`
+	PageID  string `json:"pageId"`
+	Route   string `json:"route"`
+	Message string `json:"message"`
+}
+
+func routeMetadataJSON(metadata compiler.RouteMetadata) routeMetadataReport {
+	routes := make([]routeBindingJSON, 0, len(metadata.Routes))
+	for _, binding := range metadata.Routes {
+		routes = append(routes, routeBindingJSON{
 			Kind:    binding.Kind,
 			Method:  binding.Method,
 			Route:   binding.Route,
 			PageID:  binding.PageID,
 			Handler: binding.Handler,
+		})
+	}
+	endpoints := make([]endpointBindingJSON, 0, len(metadata.Endpoints))
+	for _, binding := range metadata.Endpoints {
+		item := endpointBindingJSON{
+			Kind:           binding.Kind,
+			EndpointSource: binding.EndpointSource,
+			Source:         binding.Source,
+			SourceSpan:     endpointSourceSpanJSON(binding.SourceSpan),
+			Package:        binding.Package,
+			PackagePath:    binding.PackagePath,
+			PackageName:    binding.PackageName,
+			Symbol:         binding.Symbol,
+			Method:         binding.Method,
+			Route:          binding.Route,
+			PageID:         binding.PageID,
+			Handler:        binding.Handler,
+			BindingStatus:  string(binding.BindingStatus),
+			Signature:      string(binding.BindingSignature),
+			InputType:      binding.BindingInputType,
 		}
 		if binding.BindingStatus != "" {
 			item.BackendBinding = &backendBindingJSON{
 				Status:       string(binding.BindingStatus),
+				PackageName:  binding.BindingPackage,
 				ImportPath:   binding.BindingImportPath,
 				FunctionName: binding.BindingFunction,
+				Signature:    string(binding.BindingSignature),
+				InputType:    binding.BindingInputType,
 				Message:      binding.BindingMessage,
 			}
 		}
-		routes = append(routes, item)
+		endpoints = append(endpoints, item)
 	}
-	return routeBindingsReport{
-		Version: 1,
-		Routes:  routes,
+	info := make([]routeInfoJSON, 0, len(metadata.Info))
+	for _, item := range metadata.Info {
+		info = append(info, routeInfoJSON{
+			Code:    item.Code,
+			PageID:  item.PageID,
+			Route:   item.Route,
+			Message: item.Message,
+		})
+	}
+	return routeMetadataReport{
+		Version:   1,
+		Routes:    routes,
+		Endpoints: endpoints,
+		Info:      info,
+	}
+}
+
+func endpointSourceSpanJSON(span manifest.SourceSpan) *sourceSpanJSON {
+	if span.Start.Line <= 0 || span.Start.Column <= 0 || span.End.Line <= 0 || span.End.Column <= 0 {
+		return nil
+	}
+	return &sourceSpanJSON{
+		Start: sourcePositionJSON{Line: span.Start.Line, Column: span.Start.Column},
+		End:   sourcePositionJSON{Line: span.End.Line, Column: span.End.Column},
 	}
 }
 

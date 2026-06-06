@@ -18,8 +18,8 @@ type Result struct {
 
 // Options configures generated app output.
 type Options struct {
-	Actions      []ActionRoute
-	APIs         []APIRoute
+	Actions      []ActionEndpoint
+	APIs         []APIEndpoint
 	SSR          []SSRRoute
 	AutoRoutes   bool
 	ProxyBackend bool
@@ -27,10 +27,11 @@ type Options struct {
 	Manifest     *manifest.Manifest
 }
 
-// ActionRoute describes a generated action handler.
-type ActionRoute struct {
+// ActionEndpoint describes a generated action handler.
+type ActionEndpoint struct {
 	PageID         string
 	ActionName     string
+	Method         string
 	Route          string
 	InputName      string
 	InputType      string
@@ -43,8 +44,8 @@ type ActionRoute struct {
 	BackendAlias   string
 }
 
-// APIRoute describes a generated API handler.
-type APIRoute struct {
+// APIEndpoint describes a generated API handler.
+type APIEndpoint struct {
 	PageID       string
 	APIName      string
 	Method       string

@@ -908,19 +908,19 @@ Done when:
 
 ## Verification Matrix
 
-- [ ] General repository verification: `go test ./...`.
-- [ ] CLI build verification: `go build ./cmd/gowdk`.
-- [ ] Formatting verification for changed Go files: `gofmt -w <files>`.
-- [ ] Example syntax verification:
+- [x] General repository verification: `go test ./...`.
+- [x] CLI build verification: `go build ./cmd/gowdk`.
+- [x] Formatting verification for changed Go files: `gofmt -w <files>`.
+- [x] Example syntax verification:
       `go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk`.
-- [ ] Login example verification: `cd examples/login && make check`.
-- [ ] Login build verification: `cd examples/login && make build`.
-- [ ] Split build verification: `cd examples/login && make split-build`.
-- [ ] VS Code extension syntax verification:
+- [x] Login example verification: `cd examples/login && make check`.
+- [x] Login build verification: `cd examples/login && make build`.
+- [x] Split build verification: `cd examples/login && make split-build`.
+- [x] VS Code extension syntax verification:
       `node --check editors/vscode/extension.js`.
-- [ ] VS Code extension core syntax verification:
+- [x] VS Code extension core syntax verification:
       `node --check editors/vscode/extension-core.js`.
-- [ ] VS Code extension tests: `node --test editors/vscode/*.test.js`.
+- [x] VS Code extension tests: `node --test editors/vscode/*.test.js`.
 
 ## Documentation Cleanup Checklist
 

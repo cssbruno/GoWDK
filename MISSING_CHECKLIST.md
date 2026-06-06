@@ -369,6 +369,8 @@ api Session GET "/api/session"
 - [x] Add component ASTs for CSS scoping and hashing.
 - [x] Add page-aware CSS processor selections.
 - [x] Add Tailwind and CSS deployment docs with real commands.
+- [x] Emit minified CSS with content-hashed filenames and stable logical asset
+      manifest mappings.
 - [x] Keep module selection as artifact packaging, not runtime module orchestration.
 - [x] Keep generated app WASM deploy artifacts separate from explicit browser WASM islands.
 - [x] Add asset cache policy and hashing rules for generated binaries.

@@ -144,15 +144,16 @@ island files/loaders:
 {
   "version": 1,
   "files": {
-    "assets/app.css": "assets/app.css",
+    "assets/app.css": "assets/app.7ada5a1234b1.css",
     "assets/gowdk/islands/Counter.js": "assets/gowdk/islands/Counter.js"
   }
 }
 ```
 
-Keys and values are slash-separated paths relative to the selected output
-directory. Configured stylesheet links are not included unless GOWDK emits the
-referenced file.
+Keys are stable logical asset names and values are emitted slash-separated paths
+relative to the selected output directory. Generated CSS values include a
+content hash in the filename after minification. Configured stylesheet links are
+not included unless GOWDK emits the referenced file.
 
 ## Planned Manifest Work
 

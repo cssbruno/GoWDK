@@ -82,7 +82,9 @@ Generated binaries use explicit cache headers:
 - Generated CSS and generated browser runtime assets recorded in
   `gowdk-assets.json` use their recorded cache policy. The current generated
   policy is `Cache-Control: public, max-age=31536000, immutable` with SHA-256
-  content hashes in the asset manifest.
+  content hashes in the asset manifest. Generated CSS is minified and emitted
+  with a content-hashed filename; the asset manifest maps the stable logical
+  CSS path to the emitted hashed path.
 - CSRF-personalized HTML, action responses, API responses, partial fragments,
   SSR HTML without an explicit `@cache`, SSR load redirects, generated handler
   errors, generated error pages, and invalid-CSRF responses use

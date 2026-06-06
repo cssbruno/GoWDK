@@ -51,6 +51,21 @@ func TestBuildEmitsConfiguredStylesheetLinks(t *testing.T) {
 	}
 }
 
+func TestMinifyCSSPreservesRequiredValueSpacing(t *testing.T) {
+	input := []byte(`
+/* remove */
+.hero {
+  background: url("/hero image.png") center / cover;
+  font-family: "Open Sans", sans-serif;
+}
+`)
+	got := string(minifyCSS(input))
+	expected := `.hero{background:url("/hero image.png") center / cover;font-family:"Open Sans",sans-serif;}`
+	if got != expected {
+		t.Fatalf("unexpected minified css:\nwant %q\n got %q", expected, got)
+	}
+}
+
 func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
@@ -104,32 +119,39 @@ func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 	if len(result.CSSArtifacts) != 2 {
 		t.Fatalf("expected page css for home and dashboard, got %#v", result.CSSArtifacts)
 	}
+	homeArtifact := cssArtifactByLogicalPath(t, result.CSSArtifacts, "assets/gowdk/home.css")
+	dashboardArtifact := cssArtifactByLogicalPath(t, result.CSSArtifacts, "assets/gowdk/dashboard.css")
 
 	homeHTML := readFile(t, filepath.Join(outputDir, "index.html"))
-	if !strings.Contains(homeHTML, `<link rel="stylesheet" href="/assets/gowdk/home.css">`) {
+	homeHref := "/" + strings.TrimPrefix(filepath.ToSlash(mustRelativePath(t, outputDir, homeArtifact.Path)), "/")
+	if !strings.Contains(homeHTML, `<link rel="stylesheet" href="`+homeHref+`">`) {
 		t.Fatalf("expected home page css link:\n%s", homeHTML)
 	}
-	homeCSS := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "home.css"))
-	for _, expected := range []string{"gowdk css: global", "body { color: black; }", "gowdk css: home", ".home { display: grid; }"} {
+	if !strings.Contains(homeHref, "/assets/gowdk/home.") || !strings.HasSuffix(homeHref, ".css") {
+		t.Fatalf("expected hashed home css href, got %q", homeHref)
+	}
+	homeCSS := readFile(t, homeArtifact.Path)
+	for _, expected := range []string{"body{color:black;}", ".home{display:grid;}"} {
 		if !strings.Contains(homeCSS, expected) {
 			t.Fatalf("expected %q in home css:\n%s", expected, homeCSS)
 		}
 	}
-	if strings.Contains(homeCSS, "input { font: inherit; }") {
+	if strings.Contains(homeCSS, "input{font:inherit;}") {
 		t.Fatalf("did not expect forms css in default home css:\n%s", homeCSS)
 	}
 
 	dashboardHTML := readFile(t, filepath.Join(outputDir, "dashboard", "index.html"))
-	if !strings.Contains(dashboardHTML, `<link rel="stylesheet" href="/assets/gowdk/dashboard.css">`) {
+	dashboardHref := "/" + strings.TrimPrefix(filepath.ToSlash(mustRelativePath(t, outputDir, dashboardArtifact.Path)), "/")
+	if !strings.Contains(dashboardHTML, `<link rel="stylesheet" href="`+dashboardHref+`">`) {
 		t.Fatalf("expected dashboard page css link:\n%s", dashboardHTML)
 	}
-	dashboardCSS := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "dashboard.css"))
-	for _, expected := range []string{"gowdk css: reset", "gowdk css: tokens", "gowdk css: forms"} {
+	dashboardCSS := readFile(t, dashboardArtifact.Path)
+	for _, expected := range []string{"*{box-sizing:border-box;}", ":root{--brand:blue;}", "input{font:inherit;}"} {
 		if !strings.Contains(dashboardCSS, expected) {
 			t.Fatalf("expected %q in dashboard css:\n%s", expected, dashboardCSS)
 		}
 	}
-	if strings.Contains(dashboardCSS, "gowdk css: global") {
+	if strings.Contains(dashboardCSS, "body{color:black;}") {
 		t.Fatalf("did not expect global css in exact dashboard selection:\n%s", dashboardCSS)
 	}
 
@@ -139,6 +161,17 @@ func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(outputDir, "assets", "gowdk", "embed.css")); !os.IsNotExist(err) {
 		t.Fatalf("expected no embed css file, stat err: %v", err)
+	}
+	assetManifestPayload, err := os.ReadFile(filepath.Join(outputDir, assetManifestFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var assets runtimeasset.Manifest
+	if err := json.Unmarshal(assetManifestPayload, &assets); err != nil {
+		t.Fatal(err)
+	}
+	if assets.Resolve("assets/gowdk/home.css") != strings.TrimPrefix(homeHref, "/") {
+		t.Fatalf("expected logical home css to resolve to hashed path, manifest: %s", assetManifestPayload)
 	}
 }
 
@@ -227,22 +260,26 @@ func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 	if len(result.CSSArtifacts) != 1 {
 		t.Fatalf("expected one css artifact, got %#v", result.CSSArtifacts)
 	}
-	cssPath := filepath.Join(outputDir, "assets", "app.css")
-	if result.CSSArtifacts[0].Path != cssPath {
-		t.Fatalf("expected css path %s, got %s", cssPath, result.CSSArtifacts[0].Path)
+	cssPath := result.CSSArtifacts[0].Path
+	if result.CSSArtifacts[0].LogicalPath != "assets/app.css" {
+		t.Fatalf("expected logical css path to stay stable, got %#v", result.CSSArtifacts[0])
+	}
+	if !strings.Contains(filepath.ToSlash(cssPath), "/assets/app.") || !strings.HasSuffix(cssPath, ".css") {
+		t.Fatalf("expected hashed css path, got %s", cssPath)
 	}
 	payload, err := os.ReadFile(cssPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(payload) != "body{color:black}\n" {
+	if string(payload) != "body{color:black}" {
 		t.Fatalf("unexpected css payload: %q", payload)
 	}
 	html, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(html), `<link rel="stylesheet" href="/assets/app.css">`) {
+	emittedRel := filepath.ToSlash(mustRelativePath(t, outputDir, cssPath))
+	if !strings.Contains(string(html), `<link rel="stylesheet" href="/`+emittedRel+`">`) {
 		t.Fatalf("expected css link in html:\n%s", html)
 	}
 	assetManifestPayload, err := os.ReadFile(filepath.Join(outputDir, assetManifestFile))
@@ -253,7 +290,7 @@ func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 	if err := json.Unmarshal(assetManifestPayload, &assets); err != nil {
 		t.Fatal(err)
 	}
-	if assets.Version != 1 || assets.Resolve("assets/app.css") != "assets/app.css" {
+	if assets.Version != 1 || assets.Resolve("assets/app.css") != emittedRel {
 		t.Fatalf("unexpected asset manifest: %s", assetManifestPayload)
 	}
 	if hash := assets.Hash("assets/app.css"); !strings.HasPrefix(hash, "sha256:") {

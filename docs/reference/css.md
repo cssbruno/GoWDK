@@ -63,6 +63,11 @@ Generated page CSS defaults to:
 assets/gowdk/<page-id>.css
 ```
 
+That path is the logical asset name. Build output writes a minified,
+content-hashed physical filename such as
+`assets/gowdk/home.46d269b964e6.css`, updates generated stylesheet links to the
+hashed URL, and records the logical-to-emitted mapping in `gowdk-assets.json`.
+
 Change the output path and href prefix with:
 
 ```go
@@ -133,10 +138,20 @@ Processor-emitted CSS files are recorded in `gowdk-assets.json`:
 {
   "version": 1,
   "files": {
-    "assets/app.css": "assets/app.css"
+    "assets/app.css": "assets/app.7ada5a1234b1.css"
+  },
+  "hashes": {
+    "assets/app.css": "sha256:7ada5a1234b1..."
+  },
+  "cache": {
+    "assets/app.css": "public, max-age=31536000, immutable"
   }
 }
 ```
+
+GOWDK minifies processor-emitted and discovered page CSS before hashing. A
+processor stylesheet link such as `/assets/app.css` is rewritten to the hashed
+emitted file when the processor also emits `assets/app.css`.
 
 Configured stylesheet links are not asset manifest entries unless a processor
 also emits the referenced file.

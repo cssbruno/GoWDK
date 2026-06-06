@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
 func TestBuildCommandWritesIndexHTML(t *testing.T) {
@@ -934,14 +936,26 @@ view {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(html), `<link rel="stylesheet" href="/assets/tw.css">`) {
-		t.Fatalf("expected tailwind stylesheet link:\n%s", html)
-	}
-	css, err := os.ReadFile(filepath.Join(root, "dist", "assets", "tw.css"))
+	manifestPayload, err := os.ReadFile(filepath.Join(root, "dist", "gowdk-assets.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(css), "fake tailwind") {
+	var assets runtimeasset.Manifest
+	if err := json.Unmarshal(manifestPayload, &assets); err != nil {
+		t.Fatal(err)
+	}
+	emittedCSS := assets.Resolve("assets/tw.css")
+	if emittedCSS == "" || emittedCSS == "assets/tw.css" {
+		t.Fatalf("expected hashed tailwind css manifest entry, got %q in %s", emittedCSS, manifestPayload)
+	}
+	if !strings.Contains(string(html), `<link rel="stylesheet" href="/`+emittedCSS+`">`) {
+		t.Fatalf("expected tailwind stylesheet link:\n%s", html)
+	}
+	css, err := os.ReadFile(filepath.Join(root, "dist", filepath.FromSlash(emittedCSS)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(css), ".font-bold{font-weight:700;}") {
 		t.Fatalf("expected fake tailwind output, got %q", css)
 	}
 }

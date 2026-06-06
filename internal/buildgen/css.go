@@ -65,8 +65,13 @@ func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssP
 				continue
 			}
 			seen[outputPath] = true
+			logicalPath, err := relativeOutputPath(outputDir, outputPath)
+			if err != nil {
+				failures = append(failures, fmt.Sprintf("css processor %s: %v", processor.Name(), err))
+				continue
+			}
 			planned.assets = append(planned.assets, plannedCSSArtifact{
-				CSSArtifact: CSSArtifact{Path: outputPath},
+				CSSArtifact: CSSArtifact{Path: outputPath, LogicalPath: logicalPath},
 				contents:    append([]byte(nil), asset.Contents...),
 			})
 		}
@@ -81,6 +86,7 @@ func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssP
 			planned.pageStylesheets[pageID] = append(planned.pageStylesheets[pageID], stylesheets...)
 		}
 	}
+	failures = append(failures, finalizeCSSPlan(outputDir, &planned)...)
 	return planned, failures
 }
 
@@ -166,13 +172,199 @@ func planPageCSS(config gowdk.Config, pages []manifest.Page, outputDir string, i
 			continue
 		}
 		seenAssets[assetPath] = true
+		logicalPath, err := relativeOutputPath(outputDir, assetPath)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", page.ID, err))
+			continue
+		}
+		logicalHref := pageCSSHref(config.CSS.Output, page.ID)
 		assets = append(assets, plannedCSSArtifact{
-			CSSArtifact: CSSArtifact{Path: assetPath},
+			CSSArtifact: CSSArtifact{Path: assetPath, LogicalPath: logicalPath, LogicalHref: logicalHref},
 			contents:    pageCSSContents(names, inputs),
 		})
-		stylesheets[page.ID] = []gowdk.Stylesheet{{Href: pageCSSHref(config.CSS.Output, page.ID)}}
+		stylesheets[page.ID] = []gowdk.Stylesheet{{Href: logicalHref}}
 	}
 	return assets, stylesheets, failures
+}
+
+func finalizeCSSPlan(outputDir string, planned *cssPlan) []string {
+	var failures []string
+	hrefs := map[string]string{}
+	for index := range planned.assets {
+		artifact := &planned.assets[index]
+		logicalPath := artifact.LogicalPath
+		if strings.TrimSpace(logicalPath) == "" {
+			rel, err := relativeOutputPath(outputDir, artifact.Path)
+			if err != nil {
+				failures = append(failures, err.Error())
+				continue
+			}
+			logicalPath = rel
+		}
+		contents := minifyCSS(artifact.contents)
+		hash := contentHash(contents)
+		emittedPath := hashedCSSPath(logicalPath, hash)
+		outputPath, err := cssOutputPath(outputDir, emittedPath)
+		if err != nil {
+			failures = append(failures, err.Error())
+			continue
+		}
+		artifact.contents = contents
+		artifact.Path = outputPath
+		artifact.LogicalPath = logicalPath
+		artifact.Hash = hash
+		artifact.CachePolicy = immutableAssetCachePolicy
+
+		hrefs["/"+strings.TrimLeft(logicalPath, "/")] = "/" + emittedPath
+		hrefs[strings.TrimLeft(logicalPath, "/")] = emittedPath
+		if artifact.LogicalHref != "" {
+			hrefs[artifact.LogicalHref] = hashedStylesheetHref(artifact.LogicalHref, emittedPath)
+		}
+	}
+	planned.stylesheets = rewriteStylesheets(planned.stylesheets, hrefs)
+	for pageID, stylesheets := range planned.pageStylesheets {
+		planned.pageStylesheets[pageID] = rewriteStylesheets(stylesheets, hrefs)
+	}
+	return failures
+}
+
+func hashedCSSPath(logicalPath string, hash string) string {
+	clean := strings.TrimLeft(filepath.ToSlash(logicalPath), "/")
+	digest := strings.TrimPrefix(hash, "sha256:")
+	if len(digest) > 12 {
+		digest = digest[:12]
+	}
+	ext := path.Ext(clean)
+	base := strings.TrimSuffix(clean, ext)
+	if ext == "" {
+		return base + "." + digest
+	}
+	return base + "." + digest + ext
+}
+
+func hashedStylesheetHref(logicalHref string, emittedPath string) string {
+	if strings.Contains(logicalHref, "://") || strings.HasPrefix(logicalHref, "//") {
+		return logicalHref
+	}
+	prefix := path.Dir(strings.TrimSpace(logicalHref))
+	file := path.Base(emittedPath)
+	if prefix == "." || prefix == "/" {
+		return "/" + file
+	}
+	if strings.HasPrefix(logicalHref, "/") {
+		return path.Join("/", strings.Trim(prefix, "/"), file)
+	}
+	return path.Join(prefix, file)
+}
+
+func rewriteStylesheets(stylesheets []gowdk.Stylesheet, hrefs map[string]string) []gowdk.Stylesheet {
+	out := make([]gowdk.Stylesheet, 0, len(stylesheets))
+	for _, stylesheet := range stylesheets {
+		if rewritten, ok := hrefs[stylesheet.Href]; ok {
+			stylesheet.Href = rewritten
+		}
+		out = append(out, stylesheet)
+	}
+	return out
+}
+
+func minifyCSS(contents []byte) []byte {
+	var builder strings.Builder
+	inString := rune(0)
+	escaped := false
+	pendingSpace := false
+	last := rune(0)
+	runes := []rune(string(contents))
+	for index := 0; index < len(runes); index++ {
+		current := runes[index]
+		if inString != 0 {
+			builder.WriteRune(current)
+			if escaped {
+				escaped = false
+				continue
+			}
+			if current == '\\' {
+				escaped = true
+				continue
+			}
+			if current == inString {
+				inString = 0
+			}
+			last = current
+			continue
+		}
+		if current == '/' && index+1 < len(runes) && runes[index+1] == '*' {
+			index++
+			for index+1 < len(runes) && !(runes[index] == '*' && runes[index+1] == '/') {
+				index++
+			}
+			if index+1 < len(runes) {
+				index++
+			}
+			continue
+		}
+		if current == '"' || current == '\'' {
+			if pendingSpace && cssNeedsSpaceBefore(last, current) {
+				builder.WriteByte(' ')
+			}
+			pendingSpace = false
+			builder.WriteRune(current)
+			inString = current
+			last = current
+			continue
+		}
+		if isCSSWhitespace(current) {
+			pendingSpace = true
+			continue
+		}
+		if isCSSPunctuation(current) {
+			trimTrailingSpace(&builder)
+			pendingSpace = false
+			builder.WriteRune(current)
+			last = current
+			continue
+		}
+		if pendingSpace && cssNeedsSpaceBefore(last, current) {
+			builder.WriteByte(' ')
+		}
+		pendingSpace = false
+		builder.WriteRune(current)
+		last = current
+	}
+	return []byte(strings.TrimSpace(builder.String()))
+}
+
+func isCSSWhitespace(value rune) bool {
+	return value == ' ' || value == '\n' || value == '\r' || value == '\t' || value == '\f'
+}
+
+func isCSSPunctuation(value rune) bool {
+	switch value {
+	case '{', '}', ':', ';', ',', '>', '+', '~', '(', ')':
+		return true
+	default:
+		return false
+	}
+}
+
+func cssNeedsSpaceBefore(previous rune, current rune) bool {
+	if previous == ')' && !isCSSPunctuation(current) {
+		return true
+	}
+	if previous == 0 || isCSSPunctuation(previous) {
+		return false
+	}
+	return !isCSSPunctuation(current)
+}
+
+func trimTrailingSpace(builder *strings.Builder) {
+	value := builder.String()
+	trimmed := strings.TrimRight(value, " \n\r\t\f")
+	if len(trimmed) == len(value) {
+		return
+	}
+	builder.Reset()
+	builder.WriteString(trimmed)
 }
 
 func pageCSSInputNames(config gowdk.Config, page manifest.Page, inputs map[string]cssInput) ([]string, error) {

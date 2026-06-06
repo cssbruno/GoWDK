@@ -160,10 +160,12 @@ SPA builds also write `gowdk-assets.json` in the selected output directory:
 {
   "version": 1,
   "files": {
-    "assets/app.css": "assets/app.css"
+    "assets/app.css": "assets/app.7ada5a1234b1.css"
   }
 }
 ```
 
-Today it records CSS files emitted by compile-time CSS processors. Paths are
-slash-separated and relative to the selected output directory.
+Today it records CSS files emitted by compile-time CSS processors and generated
+page CSS. Keys are stable logical asset names. Values are emitted
+slash-separated paths relative to the selected output directory; generated CSS
+is minified and emitted with content-hashed filenames.

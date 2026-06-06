@@ -130,22 +130,30 @@ func TestSPABuildWritesTailwindAssetAndStylesheet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.CSSArtifacts) != 1 || result.CSSArtifacts[0].Path != filepath.Join(outputDir, "assets", "app.css") {
+	if len(result.CSSArtifacts) != 1 || result.CSSArtifacts[0].LogicalPath != "assets/app.css" {
 		t.Fatalf("unexpected css artifacts: %#v", result.CSSArtifacts)
 	}
+	if !strings.Contains(filepath.ToSlash(result.CSSArtifacts[0].Path), "/assets/app.") || !strings.HasSuffix(result.CSSArtifacts[0].Path, ".css") {
+		t.Fatalf("expected hashed tailwind css path, got %#v", result.CSSArtifacts[0])
+	}
 
-	css, err := os.ReadFile(filepath.Join(outputDir, "assets", "app.css"))
+	css, err := os.ReadFile(result.CSSArtifacts[0].Path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(css), "fake tailwind") {
+	if !strings.Contains(string(css), "body{color:black;}") {
 		t.Fatalf("expected generated tailwind css, got %q", css)
 	}
 	html, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(html), `<link rel="stylesheet" href="/assets/app.css">`) {
+	emittedRel, err := filepath.Rel(outputDir, result.CSSArtifacts[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	emittedHref := "/" + filepath.ToSlash(emittedRel)
+	if !strings.Contains(string(html), `<link rel="stylesheet" href="`+emittedHref+`">`) {
 		t.Fatalf("expected tailwind stylesheet link:\n%s", html)
 	}
 	payload, err := os.ReadFile(filepath.Join(outputDir, "gowdk-assets.json"))
@@ -156,7 +164,7 @@ func TestSPABuildWritesTailwindAssetAndStylesheet(t *testing.T) {
 	if err := json.Unmarshal(payload, &assets); err != nil {
 		t.Fatal(err)
 	}
-	if got := assets.Resolve("assets/app.css"); got != "assets/app.css" {
+	if got := assets.Resolve("assets/app.css"); got != strings.TrimPrefix(emittedHref, "/") {
 		t.Fatalf("unexpected asset manifest entry: %q", got)
 	}
 }

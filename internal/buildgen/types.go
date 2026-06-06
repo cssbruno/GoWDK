@@ -8,12 +8,15 @@ type Artifact struct {
 
 type CSSArtifact struct {
 	Path        string
+	LogicalPath string
+	LogicalHref string
 	Hash        string
 	CachePolicy string
 }
 
 type AssetArtifact struct {
 	Path        string
+	LogicalPath string
 	Hash        string
 	CachePolicy string
 }

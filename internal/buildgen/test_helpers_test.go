@@ -65,6 +65,26 @@ func hasAssetArtifact(artifacts []AssetArtifact, path string) bool {
 	return false
 }
 
+func cssArtifactByLogicalPath(t *testing.T, artifacts []CSSArtifact, logicalPath string) CSSArtifact {
+	t.Helper()
+	for _, artifact := range artifacts {
+		if artifact.LogicalPath == logicalPath {
+			return artifact
+		}
+	}
+	t.Fatalf("expected css artifact with logical path %q, got %#v", logicalPath, artifacts)
+	return CSSArtifact{}
+}
+
+func mustRelativePath(t *testing.T, base string, path string) string {
+	t.Helper()
+	rel, err := filepath.Rel(base, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rel
+}
+
 func counterComponent() manifest.Component {
 	return manifest.Component{
 		Name:    "Counter",

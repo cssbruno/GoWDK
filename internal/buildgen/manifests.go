@@ -147,12 +147,13 @@ func assetManifestPayload(outputDir string, cssArtifacts []CSSArtifact, assetArt
 		if err != nil {
 			return nil, err
 		}
-		files[rel] = rel
+		logical := artifactLogicalPath(artifact.LogicalPath, rel)
+		files[logical] = rel
 		if artifact.Hash != "" {
-			hashes[rel] = artifact.Hash
+			hashes[logical] = artifact.Hash
 		}
 		if artifact.CachePolicy != "" {
-			cache[rel] = artifact.CachePolicy
+			cache[logical] = artifact.CachePolicy
 		}
 	}
 	for _, artifact := range assetArtifacts {
@@ -160,12 +161,13 @@ func assetManifestPayload(outputDir string, cssArtifacts []CSSArtifact, assetArt
 		if err != nil {
 			return nil, err
 		}
-		files[rel] = rel
+		logical := artifactLogicalPath(artifact.LogicalPath, rel)
+		files[logical] = rel
 		if artifact.Hash != "" {
-			hashes[rel] = artifact.Hash
+			hashes[logical] = artifact.Hash
 		}
 		if artifact.CachePolicy != "" {
-			cache[rel] = artifact.CachePolicy
+			cache[logical] = artifact.CachePolicy
 		}
 	}
 
@@ -182,6 +184,14 @@ func assetManifestPayload(outputDir string, cssArtifacts []CSSArtifact, assetArt
 	}
 	payload = append(payload, '\n')
 	return payload, nil
+}
+
+func artifactLogicalPath(logicalPath string, fallback string) string {
+	logical := strings.TrimLeft(filepath.ToSlash(strings.TrimSpace(logicalPath)), "/")
+	if logical == "" {
+		return fallback
+	}
+	return logical
 }
 
 func writeFileIfChanged(filePath string, contents []byte) error {

@@ -195,7 +195,6 @@ contract work that later features depend on.
 ### Platform Tooling Release
 
 - Full CSS/plugin loading.
-- Emitted CSS filename hashing and packaging docs.
 - Generated app dev loop.
 - Browser playground and stronger editor tooling.
 

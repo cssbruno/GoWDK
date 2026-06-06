@@ -17,6 +17,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/lang"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 const (
@@ -130,6 +131,7 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 					Save:      saveOptions{IncludeText: true},
 				},
 				HoverProvider:              true,
+				DefinitionProvider:         true,
 				DocumentFormattingProvider: true,
 				CompletionProvider: completionOptions{
 					TriggerCharacters: []string{"@", ":", "<", " "},
@@ -182,6 +184,12 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
 		}
 		return singleMessage(response(request.ID, server.hover(params)))
+	case "textDocument/definition":
+		var params definitionParams
+		if err := decodeParams(request.Params, &params); err != nil {
+			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
+		}
+		return singleMessage(response(request.ID, server.definition(params)))
 	case "textDocument/semanticTokens/full":
 		var params semanticTokensParams
 		if err := decodeParams(request.Params, &params); err != nil {
@@ -298,6 +306,25 @@ func (server *Server) hover(params hoverParams) *hoverResult {
 	return nil
 }
 
+func (server *Server) definition(params definitionParams) *location {
+	doc, ok := server.documents[params.TextDocument.URI]
+	if !ok {
+		return nil
+	}
+	name, ok := componentCallAtPosition(doc.Text, params.Position)
+	if !ok {
+		return nil
+	}
+	component, ok := server.resolveComponentDefinition(doc, name)
+	if !ok {
+		return nil
+	}
+	return &location{
+		URI:   component.URI,
+		Range: lspRangeFromSourceSpan(component.Span, component.Text),
+	}
+}
+
 func (server *Server) semanticTokens(params semanticTokensParams) semanticTokensResult {
 	doc, ok := server.documents[params.TextDocument.URI]
 	if !ok {
@@ -333,6 +360,92 @@ func (server *Server) semanticTokens(params semanticTokensParams) semanticTokens
 		seen = true
 	}
 	return semanticTokensResult{Data: data}
+}
+
+type componentDefinition struct {
+	URI     string
+	Text    string
+	Package string
+	Name    string
+	Span    manifest.SourceSpan
+}
+
+func (server *Server) resolveComponentDefinition(doc document, name string) (componentDefinition, bool) {
+	ownerPackage, ownerUses := server.ownerPackageAndUses(doc)
+	definitions := server.componentDefinitions()
+	if alias, componentName, ok := strings.Cut(name, "."); ok {
+		packageName, ok := ownerUses[alias]
+		if !ok {
+			return componentDefinition{}, false
+		}
+		definition, ok := definitions[componentDefinitionKey(packageName, componentName)]
+		return definition, ok
+	}
+	if ownerPackage != "" {
+		if definition, ok := definitions[componentDefinitionKey(ownerPackage, name)]; ok {
+			return definition, true
+		}
+	}
+	definition, ok := definitions[componentDefinitionKey("", name)]
+	return definition, ok
+}
+
+func (server *Server) ownerPackageAndUses(doc document) (string, map[string]string) {
+	switch lang.ClassifySource(doc.Path, []byte(doc.Text)) {
+	case lang.FileKindPage:
+		page, diagnostics := lang.ParseSource(doc.Path, []byte(doc.Text))
+		if diagnostics.HasErrors() {
+			return "", nil
+		}
+		return page.Package, usePackagesByAlias(page.Uses)
+	case lang.FileKindComponent:
+		component, diagnostics := lang.ParseComponentSource(doc.Path, []byte(doc.Text))
+		if diagnostics.HasErrors() {
+			return "", nil
+		}
+		return component.Package, usePackagesByAlias(component.Uses)
+	default:
+		return "", nil
+	}
+}
+
+func (server *Server) componentDefinitions() map[string]componentDefinition {
+	definitions := map[string]componentDefinition{}
+	for _, doc := range server.documents {
+		if lang.ClassifySource(doc.Path, []byte(doc.Text)) != lang.FileKindComponent {
+			continue
+		}
+		component, diagnostics := lang.ParseComponentSource(doc.Path, []byte(doc.Text))
+		if diagnostics.HasErrors() || component.Name == "" {
+			continue
+		}
+		definition := componentDefinition{
+			URI:     doc.URI,
+			Text:    doc.Text,
+			Package: component.Package,
+			Name:    component.Name,
+			Span:    component.Span,
+		}
+		definitions[componentDefinitionKey(component.Package, component.Name)] = definition
+		if component.Package == "" {
+			definitions[componentDefinitionKey("", component.Name)] = definition
+		}
+	}
+	return definitions
+}
+
+func usePackagesByAlias(uses []manifest.Use) map[string]string {
+	packages := map[string]string{}
+	for _, use := range uses {
+		if _, exists := packages[use.Alias]; !exists {
+			packages[use.Alias] = use.Package
+		}
+	}
+	return packages
+}
+
+func componentDefinitionKey(packageName, componentName string) string {
+	return packageName + "\x00" + componentName
 }
 
 func semanticTokenType(kind lang.TokenKind) (string, bool) {
@@ -473,6 +586,41 @@ func tokenAtPosition(source string, pos position) string {
 	return strings.TrimSpace(line[start:end])
 }
 
+func componentCallAtPosition(source string, pos position) (string, bool) {
+	lines := strings.Split(source, "\n")
+	if pos.Line < 0 || pos.Line >= len(lines) {
+		return "", false
+	}
+	line := lines[pos.Line]
+	index := byteIndexFromUTF16Column(line, pos.Character)
+	if index > len(line) {
+		index = len(line)
+	}
+	start := index
+	for start > 0 && componentCallNameByte(line[start-1]) {
+		start--
+	}
+	end := index
+	for end < len(line) && componentCallNameByte(line[end]) {
+		end++
+	}
+	if start == end || start == 0 {
+		return "", false
+	}
+	name := line[start:end]
+	if !isGOWDKComponentCallName(name) {
+		return "", false
+	}
+	before := start - 1
+	if line[before] == '<' {
+		return name, true
+	}
+	if line[before] == '/' && before > 0 && line[before-1] == '<' {
+		return name, true
+	}
+	return "", false
+}
+
 func byteIndexFromUTF16Column(line string, column int) int {
 	if column <= 0 {
 		return 0
@@ -486,6 +634,48 @@ func byteIndexFromUTF16Column(line string, column int) int {
 		units = next
 	}
 	return len(line)
+}
+
+func componentCallNameByte(value byte) bool {
+	switch {
+	case value >= 'A' && value <= 'Z':
+		return true
+	case value >= 'a' && value <= 'z':
+		return true
+	case value >= '0' && value <= '9':
+		return true
+	case strings.ContainsRune("_-:.", rune(value)):
+		return true
+	default:
+		return false
+	}
+}
+
+func isGOWDKComponentCallName(value string) bool {
+	if alias, name, ok := strings.Cut(value, "."); ok {
+		return isGOWDKIdentifier(alias) && isExportedGOWDKName(name)
+	}
+	return isExportedGOWDKName(value)
+}
+
+func isGOWDKIdentifier(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index := 0; index < len(value); index++ {
+		char := value[index]
+		switch {
+		case index == 0 && (char == '_' || char >= 'A' && char <= 'Z' || char >= 'a' && char <= 'z'):
+		case index > 0 && (char == '_' || char >= 'A' && char <= 'Z' || char >= 'a' && char <= 'z' || char >= '0' && char <= '9'):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func isExportedGOWDKName(value string) bool {
+	return value != "" && value[0] >= 'A' && value[0] <= 'Z'
 }
 
 func hoverTokenByte(value byte) bool {
@@ -549,6 +739,13 @@ func rangeFromLangRange(item lang.Range, source string) lspRange {
 		end = position{Line: start.Line, Character: start.Character + 1}
 	}
 	return lspRange{Start: start, End: end}
+}
+
+func lspRangeFromSourceSpan(span manifest.SourceSpan, source string) lspRange {
+	return rangeFromLangRange(lang.Range{
+		Start: lang.Position{Line: span.Start.Line, Column: span.Start.Column},
+		End:   lang.Position{Line: span.End.Line, Column: span.End.Column},
+	}, source)
 }
 
 func rangeFromPosition(pos lang.Position, source string) lspRange {
@@ -805,6 +1002,7 @@ type serverInfo struct {
 type serverCapabilities struct {
 	TextDocumentSync           textDocumentSyncOptions `json:"textDocumentSync"`
 	HoverProvider              bool                    `json:"hoverProvider"`
+	DefinitionProvider         bool                    `json:"definitionProvider"`
 	DocumentFormattingProvider bool                    `json:"documentFormattingProvider"`
 	CompletionProvider         completionOptions       `json:"completionProvider"`
 	SemanticTokensProvider     semanticTokensOptions   `json:"semanticTokensProvider"`
@@ -843,6 +1041,16 @@ type textDocumentItem struct {
 
 type textDocumentIdentifier struct {
 	URI string `json:"uri"`
+}
+
+type definitionParams struct {
+	TextDocument textDocumentIdentifier `json:"textDocument"`
+	Position     position               `json:"position"`
+}
+
+type location struct {
+	URI   string   `json:"uri"`
+	Range lspRange `json:"range"`
 }
 
 type semanticTokensParams struct {

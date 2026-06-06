@@ -824,7 +824,9 @@ Done when:
       handlers.
       Decision: `gowdk lsp` supports `textDocument/hover` for known language
       tokens and open-project symbols.
-- [ ] Add go-to-definition for component calls.
+- [x] Add go-to-definition for component calls.
+      Decision: `gowdk lsp` resolves same-package and `use`-qualified
+      component calls to open-project `@component` declarations.
 - [ ] Add go-to-definition for Go handler symbols where possible.
 - [ ] Add references for page IDs, routes, components, stores, and guards.
 - [x] Add semantic tokens for `.gwdk`.

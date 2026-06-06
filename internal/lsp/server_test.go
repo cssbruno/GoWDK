@@ -220,6 +220,42 @@ func TestServerReturnsHoverForLanguageAndProjectSymbols(t *testing.T) {
 	assertHoverContains(t, messages[3], "Submit", "GOWDK action handler")
 }
 
+func TestServerReturnsDefinitionForComponentCalls(t *testing.T) {
+	localComponentURI := "file:///tmp/product-card.cmp.gwdk"
+	importedComponentURI := "file:///tmp/button.cmp.gwdk"
+	pageURI := "file:///tmp/home.page.gwdk"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+localComponentURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@component ProductCard\n\nview {\n  <article></article>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+importedComponentURI+`","languageId":"gwdk","version":1,"text":"package design\n\n@component Button\n\nview {\n  <button></button>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\nuse ui \"design\"\n\n@page home\n@route \"/\"\n\nview {\n  <main><ProductCard /><ui.Button /></main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":7,"character":11}}}`) +
+		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/definition","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":7,"character":27}}}`) +
+		framed(`{"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 7 {
+		t.Fatalf("expected 7 output messages, got %d", len(messages))
+	}
+
+	capabilities := messages[0]["result"].(map[string]any)["capabilities"].(map[string]any)
+	if capabilities["definitionProvider"] != true {
+		t.Fatalf("expected definition provider capability, got %#v", capabilities)
+	}
+	assertResponseID(t, messages[4], float64(2))
+	assertLocation(t, messages[4], localComponentURI, 2, 0)
+	assertResponseID(t, messages[5], float64(3))
+	assertLocation(t, messages[5], importedComponentURI, 2, 0)
+	assertResponseID(t, messages[6], float64(4))
+}
+
 func TestServerReturnsSemanticTokens(t *testing.T) {
 	uri := "file:///tmp/home.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
@@ -367,6 +403,18 @@ func assertNumberPrefix(t *testing.T, values []any, expected []float64) {
 		if values[index] != want {
 			t.Fatalf("expected value %d to be %v, got %#v in %#v", index, want, values[index], values)
 		}
+	}
+}
+
+func assertLocation(t *testing.T, message map[string]any, uri string, line int, character int) {
+	t.Helper()
+	result := message["result"].(map[string]any)
+	if result["uri"] != uri {
+		t.Fatalf("expected location uri %q, got %#v", uri, result)
+	}
+	start := result["range"].(map[string]any)["start"].(map[string]any)
+	if start["line"] != float64(line) || start["character"] != float64(character) {
+		t.Fatalf("expected location start %d:%d, got %#v", line, character, result["range"])
 	}
 }
 

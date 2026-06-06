@@ -80,7 +80,8 @@ must pass `--config <file>`.
   run a dependency-free Node DOM harness for innerHTML and outerHTML swaps when
   `node` is available.
 - `internal/lsp` tests cover initialize, diagnostics, formatting, completion,
-  hover, semantic tokens, shutdown, and exit protocol behavior.
+  hover, component go-to-definition, semantic tokens, shutdown, and exit
+  protocol behavior.
 - `editors/vscode` tests cover extension route hierarchy helpers.
 - `cmd/gowdk` tests cover `build --out` writing `index.html`, expanding a component file, discovering build inputs when explicit paths are omitted, loading literal build config for source/output settings, configured build targets, selected target builds, and local generated-output serving behavior.
 - `cmd/gowdk` tests cover dev option parsing, invalid dev intervals,

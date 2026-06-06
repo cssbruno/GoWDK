@@ -143,6 +143,4 @@ Implemented today:
 
 Planned or partial:
 
-- Field-specific user validation syntax.
-- General fragment routes independent of action POSTs.
 - Custom SSR/action/API error-boundary syntax.

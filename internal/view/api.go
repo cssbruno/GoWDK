@@ -82,11 +82,15 @@ type Options struct {
 
 // ActionFormField describes one direct literal form field for a g:post action.
 type ActionFormField struct {
-	Name      string
-	Required  bool
-	MinLength int
-	MaxLength int
-	Pattern   string
+	Name             string
+	Required         bool
+	RequiredMessage  string
+	MinLength        int
+	MinLengthMessage string
+	MaxLength        int
+	MaxLengthMessage string
+	Pattern          string
+	PatternMessage   string
 }
 
 // Dependencies records source dependencies visible in the first view subset.
@@ -682,6 +686,24 @@ func controlField(element Element) (ActionFormField, bool, error) {
 				field.Pattern = value
 			}
 			continue
+		case "g:message:required", "g:message:minlength", "g:message:maxlength", "g:message:pattern":
+			value, ok, err := literalValidationMessage(element, attr)
+			if err != nil {
+				return ActionFormField{}, false, err
+			}
+			if ok {
+				switch attr.Name {
+				case "g:message:required":
+					field.RequiredMessage = value
+				case "g:message:minlength":
+					field.MinLengthMessage = value
+				case "g:message:maxlength":
+					field.MaxLengthMessage = value
+				case "g:message:pattern":
+					field.PatternMessage = value
+				}
+			}
+			continue
 		}
 		if (element.Name == "button" || element.Name == "input") && attr.Name == "type" {
 			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
@@ -714,6 +736,9 @@ func controlField(element Element) (ActionFormField, bool, error) {
 	if strings.EqualFold(controlType, "file") {
 		return ActionFormField{}, false, fmt.Errorf("file input %q is not supported before upload security rules are defined", field.Name)
 	}
+	if err := validateValidationMessages(element.Name, field); err != nil {
+		return ActionFormField{}, false, err
+	}
 	return field, true, nil
 }
 
@@ -726,6 +751,33 @@ func literalConstraintValue(element Element, attr Attr) (string, bool, error) {
 		return "", false, fmt.Errorf("action form %s %s %q must be literal", element.Name, attr.Name, value)
 	}
 	return value, true, nil
+}
+
+func literalValidationMessage(element Element, attr Attr) (string, bool, error) {
+	if element.Name == "button" || attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+		return "", false, nil
+	}
+	value := strings.TrimSpace(attr.Value)
+	if attr.Expression {
+		return "", false, fmt.Errorf("action form %s %s %q must be literal", element.Name, attr.Name, value)
+	}
+	return value, true, nil
+}
+
+func validateValidationMessages(elementName string, field ActionFormField) error {
+	if field.RequiredMessage != "" && !field.Required {
+		return fmt.Errorf("action form %s %q declares g:message:required without required", elementName, field.Name)
+	}
+	if field.MinLengthMessage != "" && field.MinLength == 0 {
+		return fmt.Errorf("action form %s %q declares g:message:minlength without minlength", elementName, field.Name)
+	}
+	if field.MaxLengthMessage != "" && field.MaxLength == 0 {
+		return fmt.Errorf("action form %s %q declares g:message:maxlength without maxlength", elementName, field.Name)
+	}
+	if field.PatternMessage != "" && field.Pattern == "" {
+		return fmt.Errorf("action form %s %q declares g:message:pattern without pattern", elementName, field.Name)
+	}
+	return nil
 }
 
 func parseLengthConstraint(name string, value string) (int, error) {
@@ -742,7 +794,15 @@ func mergeActionFormField(previous, next ActionFormField) (ActionFormField, erro
 	}
 	next.Required = next.Required || previous.Required
 	var err error
+	next.RequiredMessage, err = mergeStringConstraint(next.Name, "required message", previous.RequiredMessage, next.RequiredMessage)
+	if err != nil {
+		return ActionFormField{}, err
+	}
 	next.MinLength, err = mergeIntConstraint(next.Name, "minlength", previous.MinLength, next.MinLength)
+	if err != nil {
+		return ActionFormField{}, err
+	}
+	next.MinLengthMessage, err = mergeStringConstraint(next.Name, "minlength message", previous.MinLengthMessage, next.MinLengthMessage)
 	if err != nil {
 		return ActionFormField{}, err
 	}
@@ -750,7 +810,15 @@ func mergeActionFormField(previous, next ActionFormField) (ActionFormField, erro
 	if err != nil {
 		return ActionFormField{}, err
 	}
+	next.MaxLengthMessage, err = mergeStringConstraint(next.Name, "maxlength message", previous.MaxLengthMessage, next.MaxLengthMessage)
+	if err != nil {
+		return ActionFormField{}, err
+	}
 	next.Pattern, err = mergeStringConstraint(next.Name, "pattern", previous.Pattern, next.Pattern)
+	if err != nil {
+		return ActionFormField{}, err
+	}
+	next.PatternMessage, err = mergeStringConstraint(next.Name, "pattern message", previous.PatternMessage, next.PatternMessage)
 	if err != nil {
 		return ActionFormField{}, err
 	}

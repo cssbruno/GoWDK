@@ -1310,7 +1310,7 @@ func TestActionFormFieldsFindsSubmitIntentControls(t *testing.T) {
 func TestActionFormSchemaInfersRequiredFields(t *testing.T) {
 	schema, err := ActionFormSchema(`
 		<form g:post={submit}>
-			<input name="email" required minlength="3" maxlength="120" pattern="[a-z]+@[a-z]+[.][a-z]{2,4}" />
+			<input name="email" required minlength="3" maxlength="120" pattern="[a-z]+@[a-z]+[.][a-z]{2,4}" g:message:required="Email required" g:message:pattern="Use a real email" />
 			<textarea name="note" maxlength="500"></textarea>
 		</form>
 		<form g:post={submit}>
@@ -1330,11 +1330,24 @@ func TestActionFormSchemaInfersRequiredFields(t *testing.T) {
 	if fields[0].MinLength != 3 || fields[0].MaxLength != 120 || fields[0].Pattern != `[a-z]+@[a-z]+[.][a-z]{2,4}` {
 		t.Fatalf("expected email constraints, got %#v", fields[0])
 	}
+	if fields[0].RequiredMessage != "Email required" || fields[0].PatternMessage != "Use a real email" {
+		t.Fatalf("expected email validation messages, got %#v", fields[0])
+	}
 	if fields[1].Name != "note" || !fields[1].Required {
 		t.Fatalf("expected required note second, got %#v", fields)
 	}
 	if fields[1].MaxLength != 500 {
 		t.Fatalf("expected merged note maxlength, got %#v", fields[1])
+	}
+}
+
+func TestActionFormSchemaRejectsMessageWithoutConstraint(t *testing.T) {
+	_, err := ActionFormSchema(`<form g:post={submit}><input name="email" g:message:pattern="Use a real email" /></form>`)
+	if err == nil {
+		t.Fatal("expected validation message without constraint error")
+	}
+	if !strings.Contains(err.Error(), `declares g:message:pattern without pattern`) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

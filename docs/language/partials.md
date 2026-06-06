@@ -79,6 +79,5 @@ fragment responses expose the same mode names through response metadata. The
 first client runtime prefers the response `X-GOWDK-Fragment-Swap` header and
 falls back to the form metadata.
 
-Not implemented yet:
-
-- Field-specific user validation syntax.
+Field-specific generated validation messages are documented in
+`docs/language/actions.md`.

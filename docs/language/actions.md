@@ -132,6 +132,10 @@ through `runtime/response.Response`.
   matching browser constraint behavior. Partial validation failures use an
   escaped validation fragment so the client runtime can swap the configured
   target.
+- Direct literal controls can customize those generated request-shape messages
+  with `g:message:required`, `g:message:minlength`, `g:message:maxlength`, and
+  `g:message:pattern`. Each message attribute must be a literal string and must
+  appear on a control that declares the matching constraint.
 - `runtime/response.ValidationJSON` and
   `runtime/response.ValidationFragment` provide reusable patterns for returning
   structured validation errors or an escaped fragment for partial form updates.
@@ -164,7 +168,8 @@ Current form behavior is intentionally narrow and literal-analysis driven:
   `type="button"` and `type="reset"` are ignored.
 - Validation is generated only from direct literal controls with `required`,
   `minlength`, `maxlength`, or `pattern`. Dynamic constraint attributes are
-  rejected for generated validation metadata.
+  rejected for generated validation metadata. Literal `g:message:*` attributes
+  can customize generated validation messages for matching constraints.
 - Generated first-slice decoders preserve repeated submitted values, allow
   missing fields, reject unexpected fields, and avoid logging form values.
 - Generated typed action decoders reject repeated scalar fields and support
@@ -187,8 +192,6 @@ markup subset. Current swap modes are `innerHTML` and `outerHTML`.
 
 Future action behavior must define:
 
-- User-defined validation integration.
 - Redirect safety beyond local redirect validation.
 - Error response shape and HTTP status mapping for broader generated action
   execution.
-- General server fragment route generation for partial updates.

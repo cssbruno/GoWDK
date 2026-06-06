@@ -279,6 +279,8 @@ api Session GET "/api/session"
 - [x] Generate request-shape validation for direct literal `required`,
       `minlength`, `maxlength`, and Go-regexp-compatible `pattern` form
       controls, including escaped partial validation fragments.
+- [x] Support field-specific literal messages for generated request-shape
+      validation fragments.
 - [x] Generate first-slice standalone static fragment routes as backend
       endpoints, not page route kinds.
 - [x] Expand first-slice standalone static fragment bodies with known

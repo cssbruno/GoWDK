@@ -31,20 +31,21 @@ func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
 				return nil, fmt.Errorf("%s.%s: %w", page.ID, action.Name, err)
 			}
 			endpoints = append(endpoints, ActionEndpoint{
-				PageID:          page.ID,
-				ActionName:      action.Name,
-				Method:          method,
-				Route:           route,
-				Guards:          append([]string(nil), page.Guards...),
-				InputName:       action.InputName,
-				InputType:       action.InputType,
-				InputFields:     actionInputFields(fieldsByAction[action.Name]),
-				RequiredFields:  actionRequiredFields(fieldsByAction[action.Name]),
-				ValidationRules: actionValidationRules(fieldsByAction[action.Name]),
-				ValidatesInput:  action.ValidatesInput,
-				Redirect:        action.Redirect,
-				Fragments:       fragments,
-				Binding:         bindings[irEndpointKey(gwdkir.EndpointAction, page.ID, action.Name, method, route)],
+				PageID:           page.ID,
+				ActionName:       action.Name,
+				Method:           method,
+				Route:            route,
+				Guards:           append([]string(nil), page.Guards...),
+				InputName:        action.InputName,
+				InputType:        action.InputType,
+				InputFields:      actionInputFields(fieldsByAction[action.Name]),
+				RequiredFields:   actionRequiredFields(fieldsByAction[action.Name]),
+				RequiredMessages: actionRequiredMessages(fieldsByAction[action.Name]),
+				ValidationRules:  actionValidationRules(fieldsByAction[action.Name]),
+				ValidatesInput:   action.ValidatesInput,
+				Redirect:         action.Redirect,
+				Fragments:        fragments,
+				Binding:          bindings[irEndpointKey(gwdkir.EndpointAction, page.ID, action.Name, method, route)],
 			})
 		}
 	}

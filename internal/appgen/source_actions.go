@@ -267,16 +267,12 @@ func expectedValuesStmts(action ActionEndpoint) []ast.Stmt {
 func actionRequiredValidationStmts(action ActionEndpoint) []ast.Stmt {
 	stmts := []ast.Stmt{
 		define([]ast.Expr{id("validation")}, &ast.CompositeLit{Type: sel("gowdkvalidation", "Result")}),
-		&ast.RangeStmt{
-			Key:   id("_"),
-			Value: id("field"),
-			Tok:   token.DEFINE,
-			X:     stringSliceExpr(action.RequiredFields),
-			Body: block(&ast.IfStmt{
-				Cond: &ast.UnaryExpr{Op: token.NOT, X: call(selExpr(id("values"), "HasSubmitted"), id("field"))},
-				Body: block(exprStmt(call(selExpr(id("validation"), "Add"), id("field"), stringLit("required")))),
-			}),
-		},
+	}
+	for _, field := range action.RequiredFields {
+		stmts = append(stmts, &ast.IfStmt{
+			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(selExpr(id("values"), "HasSubmitted"), stringLit(field))},
+			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(field), stringLit(actionValidationMessage(action.RequiredMessages[field], "required"))))),
+		})
 	}
 	for _, rule := range action.ValidationRules {
 		stmts = append(stmts, actionValidationRuleStmt(rule))
@@ -331,7 +327,7 @@ func actionValidationRuleStmt(rule ActionValidationRule) ast.Stmt {
 				Op: token.LSS,
 				Y:  intLit(rule.MinLength),
 			},
-			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit("minlength")))),
+			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit(actionValidationMessage(rule.MinLengthMessage, "minlength"))))),
 		})
 	}
 	if rule.MaxLength > 0 {
@@ -341,7 +337,7 @@ func actionValidationRuleStmt(rule ActionValidationRule) ast.Stmt {
 				Op: token.GTR,
 				Y:  intLit(rule.MaxLength),
 			},
-			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit("maxlength")))),
+			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit(actionValidationMessage(rule.MaxLengthMessage, "maxlength"))))),
 		})
 	}
 	if rule.Pattern != "" {
@@ -352,7 +348,7 @@ func actionValidationRuleStmt(rule ActionValidationRule) ast.Stmt {
 				Op: token.LOR,
 				Y:  &ast.UnaryExpr{Op: token.NOT, X: id("matched")},
 			},
-			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit("pattern")))),
+			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit(actionValidationMessage(rule.PatternMessage, "pattern"))))),
 		})
 	}
 	return block(
@@ -362,6 +358,14 @@ func actionValidationRuleStmt(rule ActionValidationRule) ast.Stmt {
 			Body: block(checks...),
 		},
 	)
+}
+
+func actionValidationMessage(custom string, fallback string) string {
+	custom = strings.TrimSpace(custom)
+	if custom == "" {
+		return fallback
+	}
+	return custom
 }
 
 func boundActionResultStmts(action ActionEndpoint) []ast.Stmt {

@@ -194,18 +194,20 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
-		PageID:         "newsletter",
-		ActionName:     "Subscribe",
-		Route:          "/newsletter",
-		InputName:      "input",
-		InputType:      "SubscribeInput",
-		InputFields:    []string{"email"},
-		RequiredFields: []string{"email"},
+		PageID:           "newsletter",
+		ActionName:       "Subscribe",
+		Route:            "/newsletter",
+		InputName:        "input",
+		InputType:        "SubscribeInput",
+		InputFields:      []string{"email"},
+		RequiredFields:   []string{"email"},
+		RequiredMessages: map[string]string{"email": "Email is required"},
 		ValidationRules: []ActionValidationRule{{
-			Field:     "email",
-			MinLength: 5,
-			MaxLength: 80,
-			Pattern:   `[a-z]+@[a-z]+[.][a-z]{2,4}`,
+			Field:          "email",
+			MinLength:      5,
+			MaxLength:      80,
+			Pattern:        `[a-z]+@[a-z]+[.][a-z]{2,4}`,
+			PatternMessage: "Use a real email address",
 		}},
 		ValidatesInput: true,
 		Redirect:       "/newsletter?ok=1",
@@ -252,11 +254,12 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`func decodeNewsletterSubscribeInput(values gowdkform.Values) (SubscribeInput, error)`,
 		`gowdkform.DecodeExpected(values, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "email"}}})`,
 		`validation := gowdkvalidation.Result{}`,
-		`values.HasSubmitted(field)`,
+		`values.HasSubmitted("email")`,
+		`validation.Add("email", "Email is required")`,
 		`utf8.RuneCountInString(value) < 5`,
 		`utf8.RuneCountInString(value) > 80`,
 		`regexp.MatchString("^(?:[a-z]+@[a-z]+[.][a-z]{2,4})$", value)`,
-		`validation.Add("email", "pattern")`,
+		`validation.Add("email", "Use a real email address")`,
 		`http.StatusUnprocessableEntity`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
 	} {
@@ -1222,7 +1225,7 @@ func TestActionEndpointsInfersInputFieldsFromGPostForm(t *testing.T) {
 		ID:    "newsletter",
 		Route: "/newsletter",
 		Blocks: manifest.Blocks{
-			ViewBody: `<form g:post={Subscribe}><input name="email" required minlength="5" maxlength="80" pattern="[a-z]+@[a-z]+[.][a-z]{2,4}" /><textarea name="note"></textarea></form>`,
+			ViewBody: `<form g:post={Subscribe}><input name="email" required minlength="5" maxlength="80" pattern="[a-z]+@[a-z]+[.][a-z]{2,4}" g:message:required="Email is required" g:message:pattern="Use a real email" /><textarea name="note"></textarea></form>`,
 			Actions: []manifest.Action{{
 				Name:           "Subscribe",
 				InputName:      "input",
@@ -1244,11 +1247,15 @@ func TestActionEndpointsInfersInputFieldsFromGPostForm(t *testing.T) {
 	if strings.Join(routes[0].RequiredFields, ",") != "email" {
 		t.Fatalf("unexpected required fields: %#v", routes[0].RequiredFields)
 	}
+	if routes[0].RequiredMessages["email"] != "Email is required" {
+		t.Fatalf("unexpected required messages: %#v", routes[0].RequiredMessages)
+	}
 	if len(routes[0].ValidationRules) != 1 ||
 		routes[0].ValidationRules[0].Field != "email" ||
 		routes[0].ValidationRules[0].MinLength != 5 ||
 		routes[0].ValidationRules[0].MaxLength != 80 ||
-		routes[0].ValidationRules[0].Pattern != `[a-z]+@[a-z]+[.][a-z]{2,4}` {
+		routes[0].ValidationRules[0].Pattern != `[a-z]+@[a-z]+[.][a-z]{2,4}` ||
+		routes[0].ValidationRules[0].PatternMessage != "Use a real email" {
 		t.Fatalf("unexpected validation rules: %#v", routes[0].ValidationRules)
 	}
 	if !routes[0].ValidatesInput {
@@ -2368,18 +2375,20 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
-		PageID:         "newsletter",
-		ActionName:     "Subscribe",
-		Route:          "/newsletter",
-		InputName:      "input",
-		InputType:      "SubscribeInput",
-		InputFields:    []string{"email"},
-		RequiredFields: []string{"email"},
+		PageID:           "newsletter",
+		ActionName:       "Subscribe",
+		Route:            "/newsletter",
+		InputName:        "input",
+		InputType:        "SubscribeInput",
+		InputFields:      []string{"email"},
+		RequiredFields:   []string{"email"},
+		RequiredMessages: map[string]string{"email": "Email is required"},
 		ValidationRules: []ActionValidationRule{{
-			Field:     "email",
-			MinLength: 5,
-			MaxLength: 80,
-			Pattern:   `[a-z]+@[a-z]+[.][a-z]{2,4}`,
+			Field:          "email",
+			MinLength:      5,
+			MaxLength:      80,
+			Pattern:        `[a-z]+@[a-z]+[.][a-z]{2,4}`,
+			PatternMessage: "Use a real email address",
 		}},
 		ValidatesInput: true,
 		Redirect:       "/newsletter?ok=1",
@@ -2483,7 +2492,7 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("expected partial validation fragment to return 200, got %d: %s", response.StatusCode, payload)
 	}
-	for _, expected := range []string{`<div data-gowdk-validation>`, `data-gowdk-field="email"`, `required`} {
+	for _, expected := range []string{`<div data-gowdk-validation>`, `data-gowdk-field="email"`, `Email is required`} {
 		if !strings.Contains(string(payload), expected) {
 			t.Fatalf("expected validation fragment to contain %q, got %s", expected, payload)
 		}
@@ -2510,7 +2519,7 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("expected partial pattern validation fragment to return 200, got %d: %s", response.StatusCode, payload)
 	}
-	for _, expected := range []string{`<div data-gowdk-validation>`, `data-gowdk-field="email"`, `pattern`} {
+	for _, expected := range []string{`<div data-gowdk-validation>`, `data-gowdk-field="email"`, `Use a real email address`} {
 		if !strings.Contains(string(payload), expected) {
 			t.Fatalf("expected pattern validation fragment to contain %q, got %s", expected, payload)
 		}

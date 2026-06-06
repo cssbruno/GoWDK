@@ -32,8 +32,8 @@ Not implemented yet:
 
 - Full project config loading for every compiler command.
 - Full AST/semantic/type analysis beyond the current component contract slice.
-- Full component compilation, general interpolation, arbitrary `build {}`
-  execution, and full `paths {}` execution.
+- Full component compilation, arbitrary `build {}` statements beyond expression
+  records, and full `paths {}` execution.
 - Real user Go type resolution for typed action decoders, user action logic,
   API/fragment/SSR handlers.
 - Real user action/API/fragment execution.

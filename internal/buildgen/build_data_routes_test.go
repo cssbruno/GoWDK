@@ -72,6 +72,16 @@ func TestBuildRejectsInvalidBuildDataBeforeWriting(t *testing.T) {
 			body:      `=> { title: "Home", title: "Again" }`,
 			wantError: `duplicate build field "title"`,
 		},
+		{
+			name:      "invalid expression",
+			body:      `=> { count: 10 / 0 }`,
+			wantError: `division by zero`,
+		},
+		{
+			name:      "unsupported operand",
+			body:      `=> { enabled: true + false }`,
+			wantError: `operator + requires numbers`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -141,9 +151,10 @@ func TestBuildRendersExpandedBuildDataScalarsAndReferences(t *testing.T) {
 			PathsBody: `=> { slug: "hello" }`,
 			Build:     true,
 			BuildBody: `=> { title: "Hello", count: 2, live: true }
-=> { headline: "{title} {slug}", copy: field("headline") }`,
+=> { headline: "{title} {slug}", copy: field("headline") }
+=> { total: (count + 3) * 2, inverse: -total, label: "Post " + param("slug"), current: field("label") == "Post hello", visible: live && count < 3 }`,
 			View:     true,
-			ViewBody: `<main data-count="{count}" data-live="{live}"><h1>{headline}</h1><p>{copy}</p></main>`,
+			ViewBody: `<main data-count="{count}" data-live="{live}" data-total="{total}" data-inverse="{inverse}" data-current="{current}" data-visible="{visible}"><h1>{headline}</h1><p>{copy}</p><a>{label}</a></main>`,
 		},
 	}}}
 
@@ -155,7 +166,7 @@ func TestBuildRendersExpandedBuildDataScalarsAndReferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(payload), `<main data-count="2" data-live="true"><h1>Hello hello</h1><p>Hello hello</p></main>`) {
+	if !strings.Contains(string(payload), `<main data-count="2" data-live="true" data-total="10" data-inverse="-10" data-current="true" data-visible="true"><h1>Hello hello</h1><p>Hello hello</p><a>Post hello</a></main>`) {
 		t.Fatalf("expected expanded build data output:\n%s", payload)
 	}
 }

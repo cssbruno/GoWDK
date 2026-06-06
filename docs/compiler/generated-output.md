@@ -124,10 +124,11 @@ Implemented today:
 Not implemented yet:
 
 - Route params passed into imported Go `build {}` functions.
-- CSS filename hashing, minification, and full page-aware third-party CSS
-  processor selection.
+- Full page-aware third-party CSS processor selection beyond the current
+  processor stylesheet and generated CSS asset support.
 - Non-string props in inline `props {}` blocks.
-- General expression interpolation and arbitrary `build {}` execution.
+- Arbitrary build-time statements beyond literal expression records and
+  imported/same-package no-argument build data functions.
 - Broader user Go type resolution beyond typed action decoders, user action
   logic, API handlers, and general fragment routes.
 

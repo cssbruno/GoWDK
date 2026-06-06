@@ -182,11 +182,15 @@ SPA builds can also render multiple literal `build {}` lines such as:
 => { title: "Hello" }
 => { count: 2, live: true }
 => { headline: "{title} {slug}", copy: field("headline") }
+=> { total: (count + 3) * 2, visible: live && total > 5 }
 ```
 
 Literal build values can be strings, numbers, booleans, `nil`/`null`,
 `param("name")`, `field("name")`, or a bare reference to an earlier build
-field. Duplicate build fields are rejected.
+field. Build expressions support string concatenation with `+`, numeric
+`+`, `-`, `*`, `/`, and `%`, boolean `!`, `&&`, and `||`, equality and ordered
+comparisons, parentheses, and unary `+`/`-`. Duplicate build fields are
+rejected.
 
 Inside `view {}`, route params can be referenced explicitly with
 `{param("slug")}` in text, quoted attributes, and component prop values. SPA

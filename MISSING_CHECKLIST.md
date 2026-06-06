@@ -130,6 +130,9 @@ api Session GET "/api/session"
         package import resolution.
   - [x] Support scalar literal build values and references to earlier build
         fields or route params.
+  - [x] Support build-time expression values for string concatenation, numeric
+        arithmetic, boolean logic, comparisons, parentheses, and unary
+        operators inside literal `build {}` records.
 - [x] Attach generated endpoint metadata to bound action/API handler contexts
       instead of only embedding it in route/build output.
 - [x] Attach generated page route metadata and dynamic params to generated SSR

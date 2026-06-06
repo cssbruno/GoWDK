@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/cssbruno/gowdk/runtime/validation"
 )
 
 func TestHTMLBody(t *testing.T) {
@@ -66,6 +68,43 @@ func TestJSONValue(t *testing.T) {
 	_, err = JSONValue(200, make(chan string))
 	if err == nil {
 		t.Fatal("expected marshal error")
+	}
+}
+
+func TestValidationJSON(t *testing.T) {
+	var validationResult validation.Result
+	validationResult.Add("email", "is required")
+
+	result, err := ValidationJSON(validationResult)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Kind != JSON || result.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("unexpected validation json response: %#v", result)
+	}
+	for _, expected := range []string{`"ok":false`, `"Field":"email"`, `"Message":"is required"`} {
+		if !strings.Contains(result.Body, expected) {
+			t.Fatalf("expected %q in validation json body: %s", expected, result.Body)
+		}
+	}
+}
+
+func TestValidationFragmentEscapesMessages(t *testing.T) {
+	var validationResult validation.Result
+	validationResult.Add(`email"`, `<required>`)
+
+	result := ValidationFragment("#errors", validationResult)
+	if result.Kind != Fragment || result.Target != "#errors" || result.Status != http.StatusOK {
+		t.Fatalf("unexpected validation fragment response: %#v", result)
+	}
+	for _, expected := range []string{
+		`<div data-gowdk-validation>`,
+		`data-gowdk-field="email&#34;"`,
+		`&lt;required&gt;`,
+	} {
+		if !strings.Contains(result.Body, expected) {
+			t.Fatalf("expected %q in validation fragment body: %s", expected, result.Body)
+		}
 	}
 }
 

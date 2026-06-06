@@ -5,11 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"html"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +22,12 @@ import (
 // HandlerFunc handles a generated request-time route and reports whether it
 // wrote a response.
 type HandlerFunc func(http.ResponseWriter, *http.Request) bool
+
+// CSRFTokenSource generates tokens for generated action forms.
+type CSRFTokenSource interface {
+	Token(http.ResponseWriter) (string, error)
+	FieldName() string
+}
 
 // Identity describes one running generated app instance.
 type Identity struct {
@@ -33,8 +41,10 @@ type Handler struct {
 	Root       fs.FS
 	Identity   Identity
 	Assets     asset.Manifest
+	Backend    HandlerFunc
 	Action     HandlerFunc
 	API        HandlerFunc
+	CSRF       CSRFTokenSource
 	SSRExact   HandlerFunc
 	SSRDynamic HandlerFunc
 }
@@ -81,6 +91,9 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 		handler.health(response)
 		return
 	}
+	if handler.Backend != nil && handler.Backend(response, request) {
+		return
+	}
 	if handler.API != nil && handler.API(response, request) {
 		return
 	}
@@ -105,6 +118,12 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 		return
 	}
 	payload = handler.cookieAwarePayload(request, payload, info.Name())
+	var csrfOK bool
+	payload, csrfOK = handler.csrfAwarePayload(response, request, payload, info.Name())
+	if !csrfOK {
+		return
+	}
+	setGeneratedStaticCache(response)
 	http.ServeContent(response, request, info.Name(), info.ModTime(), bytes.NewReader(payload))
 }
 
@@ -166,6 +185,64 @@ func (handler Handler) cookieAwarePayload(request *http.Request, payload []byte,
 		return payload
 	}
 	return bytes.Replace(payload, marker, hidden, 1)
+}
+
+var (
+	formStartTagPattern   = regexp.MustCompile(`(?is)<form\b[^>]*>`)
+	formMethodPostPattern = regexp.MustCompile(`(?i)\bmethod\s*=\s*(?:"post"|'post'|post)(?:\s|/|>)`)
+)
+
+func (handler Handler) csrfAwarePayload(response http.ResponseWriter, request *http.Request, payload []byte, name string) ([]byte, bool) {
+	if handler.CSRF == nil || request.Method != http.MethodGet || !strings.HasSuffix(name, ".html") {
+		return payload, true
+	}
+	matches := formStartTagPattern.FindAllIndex(payload, -1)
+	if len(matches) == 0 {
+		return payload, true
+	}
+
+	var token string
+	var hidden []byte
+	var builder bytes.Buffer
+	cursor := 0
+	injected := false
+	for _, match := range matches {
+		tag := payload[match[0]:match[1]]
+		if !formMethodPostPattern.Match(tag) {
+			continue
+		}
+		if token == "" {
+			generated, err := handler.CSRF.Token(response)
+			if err != nil {
+				response.Header().Set("Cache-Control", "no-store")
+				http.Error(response, "csrf token unavailable", http.StatusInternalServerError)
+				return nil, false
+			}
+			token = generated
+			hidden = csrfHiddenInput(handler.CSRF.FieldName(), token)
+			response.Header().Set("Cache-Control", "no-store")
+		}
+		builder.Write(payload[cursor:match[1]])
+		builder.Write(hidden)
+		cursor = match[1]
+		injected = true
+	}
+	if !injected {
+		return payload, true
+	}
+	builder.Write(payload[cursor:])
+	return builder.Bytes(), true
+}
+
+func csrfHiddenInput(fieldName string, token string) []byte {
+	return []byte(`<input type="hidden" name="` + html.EscapeString(fieldName) + `" value="` + html.EscapeString(token) + `">`)
+}
+
+func setGeneratedStaticCache(response http.ResponseWriter) {
+	if response.Header().Get("Cache-Control") != "" {
+		return
+	}
+	response.Header().Set("Cache-Control", "no-cache")
 }
 
 func cookieAcknowledged(request *http.Request) bool {

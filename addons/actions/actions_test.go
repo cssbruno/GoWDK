@@ -87,6 +87,9 @@ func TestCSRFGeneratesSecureCookieAndValidatesFormToken(t *testing.T) {
 	if cookie.Name != defaultCSRFCookie || !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("unexpected csrf cookie defaults: %#v", cookie)
 	}
+	if csrf.CookieName() != defaultCSRFCookie || csrf.FieldName() != defaultCSRFField || csrf.HeaderName() != defaultCSRFHeader {
+		t.Fatalf("unexpected csrf names: cookie=%q field=%q header=%q", csrf.CookieName(), csrf.FieldName(), csrf.HeaderName())
+	}
 
 	form := url.Values{defaultCSRFField: []string{token}}
 	request := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader(form.Encode()))

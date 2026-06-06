@@ -23,6 +23,12 @@ type CSRFValidator interface {
 	Validate(*http.Request) error
 }
 
+// CSRFTokenSource generates tokens for generated forms.
+type CSRFTokenSource interface {
+	Token(http.ResponseWriter) (string, error)
+	FieldName() string
+}
+
 // CSRFOptions configures signed double-submit CSRF tokens.
 type CSRFOptions struct {
 	Secret     []byte
@@ -93,6 +99,21 @@ func (csrf *CSRF) Token(response http.ResponseWriter) (string, error) {
 	return token, nil
 }
 
+// CookieName returns the cookie name used for CSRF token storage.
+func (csrf *CSRF) CookieName() string {
+	return csrf.cookieName
+}
+
+// FieldName returns the form field name used for submitted CSRF tokens.
+func (csrf *CSRF) FieldName() string {
+	return csrf.fieldName
+}
+
+// HeaderName returns the header name used for submitted CSRF tokens.
+func (csrf *CSRF) HeaderName() string {
+	return csrf.headerName
+}
+
 // Validate checks the submitted token against the CSRF cookie and signature.
 func (csrf *CSRF) Validate(request *http.Request) error {
 	cookie, err := request.Cookie(csrf.cookieName)
@@ -136,12 +157,4 @@ func (csrf *CSRF) valid(token string) bool {
 	mac.Write(nonce)
 	expected := mac.Sum(nil)
 	return subtle.ConstantTimeCompare(signature, expected) == 1
-}
-
-// NoopCSRF is for tests only.
-type NoopCSRF struct{}
-
-// Validate accepts every request.
-func (NoopCSRF) Validate(*http.Request) error {
-	return nil
 }

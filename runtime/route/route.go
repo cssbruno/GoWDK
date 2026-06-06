@@ -2,6 +2,7 @@ package route
 
 import (
 	"path"
+	"strconv"
 	"strings"
 )
 
@@ -39,4 +40,120 @@ func splitPath(value string) []string {
 		return nil
 	}
 	return strings.Split(trimmed, "/")
+}
+
+// ParamError describes a failed route-param decode without exposing the raw
+// request value.
+type ParamError struct {
+	Name    string
+	Type    string
+	Missing bool
+	Err     error
+}
+
+func (err ParamError) Error() string {
+	if err.Missing {
+		return "missing route param " + strconv.Quote(err.Name)
+	}
+	return "invalid " + err.Type + " route param " + strconv.Quote(err.Name)
+}
+
+func (err ParamError) Unwrap() error {
+	return err.Err
+}
+
+// Required returns a required route param.
+func Required(params map[string]string, name string) (string, error) {
+	value, ok := params[name]
+	if !ok || value == "" {
+		return "", ParamError{Name: name, Type: "string", Missing: true}
+	}
+	return value, nil
+}
+
+// String returns an optional route param as a string.
+func String(params map[string]string, name string) (string, bool, error) {
+	value, ok := params[name]
+	if !ok || value == "" {
+		return "", false, nil
+	}
+	return value, true, nil
+}
+
+// Int returns an optional route param decoded as an int.
+func Int(params map[string]string, name string) (int, bool, error) {
+	value, ok, err := String(params, name)
+	if err != nil || !ok {
+		return 0, ok, err
+	}
+	decoded, parseErr := strconv.Atoi(value)
+	if parseErr != nil {
+		return 0, true, ParamError{Name: name, Type: "int", Err: parseErr}
+	}
+	return decoded, true, nil
+}
+
+// Int64 returns an optional route param decoded as an int64.
+func Int64(params map[string]string, name string) (int64, bool, error) {
+	value, ok, err := String(params, name)
+	if err != nil || !ok {
+		return 0, ok, err
+	}
+	decoded, parseErr := strconv.ParseInt(value, 10, 64)
+	if parseErr != nil {
+		return 0, true, ParamError{Name: name, Type: "int64", Err: parseErr}
+	}
+	return decoded, true, nil
+}
+
+// Uint returns an optional route param decoded as a uint.
+func Uint(params map[string]string, name string) (uint, bool, error) {
+	value, ok, err := String(params, name)
+	if err != nil || !ok {
+		return 0, ok, err
+	}
+	decoded, parseErr := strconv.ParseUint(value, 10, 0)
+	if parseErr != nil {
+		return 0, true, ParamError{Name: name, Type: "uint", Err: parseErr}
+	}
+	return uint(decoded), true, nil
+}
+
+// Uint64 returns an optional route param decoded as a uint64.
+func Uint64(params map[string]string, name string) (uint64, bool, error) {
+	value, ok, err := String(params, name)
+	if err != nil || !ok {
+		return 0, ok, err
+	}
+	decoded, parseErr := strconv.ParseUint(value, 10, 64)
+	if parseErr != nil {
+		return 0, true, ParamError{Name: name, Type: "uint64", Err: parseErr}
+	}
+	return decoded, true, nil
+}
+
+// Bool returns an optional route param decoded as a bool.
+func Bool(params map[string]string, name string) (bool, bool, error) {
+	value, ok, err := String(params, name)
+	if err != nil || !ok {
+		return false, ok, err
+	}
+	decoded, parseErr := strconv.ParseBool(value)
+	if parseErr != nil {
+		return false, true, ParamError{Name: name, Type: "bool", Err: parseErr}
+	}
+	return decoded, true, nil
+}
+
+// Float64 returns an optional route param decoded as a float64.
+func Float64(params map[string]string, name string) (float64, bool, error) {
+	value, ok, err := String(params, name)
+	if err != nil || !ok {
+		return 0, ok, err
+	}
+	decoded, parseErr := strconv.ParseFloat(value, 64)
+	if parseErr != nil {
+		return 0, true, ParamError{Name: name, Type: "float64", Err: parseErr}
+	}
+	return decoded, true, nil
 }

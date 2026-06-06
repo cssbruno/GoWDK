@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
+	"strings"
+
+	"github.com/cssbruno/gowdk/runtime/validation"
 )
 
 // Kind identifies the response shape produced by actions, fragments, APIs, or
@@ -116,6 +120,44 @@ func JSONValue(status int, value any) (Response, error) {
 		return Response{}, err
 	}
 	return JSONBody(status, string(payload)), nil
+}
+
+// ValidationJSON creates a structured validation error response.
+func ValidationJSON(result validation.Result) (Response, error) {
+	return JSONValue(http.StatusUnprocessableEntity, struct {
+		OK     bool               `json:"ok"`
+		Errors []validation.Error `json:"errors"`
+	}{OK: false, Errors: result.Errors})
+}
+
+// ValidationFragment creates a fragment response with escaped validation
+// messages. It uses HTTP 200 so progressively enhanced partial forms can swap
+// the returned fragment with the current client runtime.
+func ValidationFragment(target string, result validation.Result) Response {
+	return FragmentFor(target, ValidationHTML(result))
+}
+
+// ValidationHTML renders a small escaped validation message block.
+func ValidationHTML(result validation.Result) string {
+	var out strings.Builder
+	out.WriteString(`<div data-gowdk-validation>`)
+	if len(result.Errors) > 0 {
+		out.WriteString(`<ul>`)
+		for _, validationErr := range result.Errors {
+			out.WriteString(`<li`)
+			if validationErr.Field != "" {
+				out.WriteString(` data-gowdk-field="`)
+				out.WriteString(html.EscapeString(validationErr.Field))
+				out.WriteString(`"`)
+			}
+			out.WriteString(`>`)
+			out.WriteString(html.EscapeString(validationErr.Message))
+			out.WriteString(`</li>`)
+		}
+		out.WriteString(`</ul>`)
+	}
+	out.WriteString(`</div>`)
+	return out.String()
 }
 
 // WriteHTTP writes a runtime response envelope to net/http.

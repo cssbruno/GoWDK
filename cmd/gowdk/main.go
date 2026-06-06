@@ -29,7 +29,7 @@ import (
 const (
 	version    = "0.1.5"
 	buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
-	initUsage  = "usage: gowdk init [--force] [--template <site|minimal>] [dir]"
+	initUsage  = "usage: gowdk init [--force] [--tests] [--template <site|minimal>] [dir]"
 )
 
 var (
@@ -90,7 +90,7 @@ func usage() {
 	fmt.Println()
 	fmt.Println("Commands:")
 	fmt.Println("  version                  print CLI version")
-	fmt.Println("  init [--force] [--template <site|minimal>] [dir] scaffold a starter GOWDK project")
+	fmt.Println("  init [--force] [--tests] [--template <site|minimal>] [dir] scaffold a starter GOWDK project")
 	fmt.Println("  tokens <file.gwdk>       print language tokens")
 	fmt.Println("  fmt [--write] <files>    format .gwdk files")
 	fmt.Println("  check [--config <file>] [--module <name>] [--json] [--ssr] [files...] parse and validate .gwdk files")
@@ -116,6 +116,9 @@ func initProject(args []string) error {
 	files, err := initTemplateFiles(options.Template)
 	if err != nil {
 		return err
+	}
+	if options.Tests {
+		files = append(files, initTestFiles()...)
 	}
 	for _, file := range files {
 		target := filepath.Join(root, filepath.FromSlash(file.Path))
@@ -251,10 +254,18 @@ view {
 	}
 }
 
+func initTestFiles() []initFile {
+	return []initFile{{
+		Path: "tests/gowdk_smoke_test.go",
+		Body: initSmokeTestSource(),
+	}}
+}
+
 type initOptions struct {
 	Dir      string
 	Force    bool
 	Template string
+	Tests    bool
 }
 
 type initFile struct {
@@ -273,6 +284,62 @@ func initConfigSource() string {
 				Names:  []*ast.Ident{ast.NewIdent("Config")},
 				Values: []ast.Expr{initConfigExpr()},
 			}}},
+		},
+	}
+	var buffer bytes.Buffer
+	if err := printer.Fprint(&buffer, token.NewFileSet(), file); err != nil {
+		panic(err)
+	}
+	formatted, err := goformat.Source(buffer.Bytes())
+	if err != nil {
+		panic(err)
+	}
+	return string(formatted)
+}
+
+func initSmokeTestSource() string {
+	file := &ast.File{
+		Name: ast.NewIdent("gowdktest"),
+		Decls: []ast.Decl{
+			&ast.GenDecl{Tok: token.IMPORT, Specs: []ast.Spec{
+				&ast.ImportSpec{Path: initStringLit("os")},
+				&ast.ImportSpec{Path: initStringLit("os/exec")},
+				&ast.ImportSpec{Path: initStringLit("path/filepath")},
+				&ast.ImportSpec{Path: initStringLit("testing")},
+			}},
+			&ast.FuncDecl{
+				Name: ast.NewIdent("TestGOWDKBuildSmoke"),
+				Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{
+					Names: []*ast.Ident{ast.NewIdent("t")},
+					Type:  &ast.StarExpr{X: initSel("testing", "T")},
+				}}}},
+				Body: initBlock(
+					initDefine([]ast.Expr{ast.NewIdent("gowdkBin")}, initCall(initSel("os", "Getenv"), initStringLit("GOWDK_BIN"))),
+					&ast.IfStmt{
+						Cond: &ast.BinaryExpr{X: ast.NewIdent("gowdkBin"), Op: token.EQL, Y: initStringLit("")},
+						Body: initBlock(initExprStmt(initCall(initSel("t", "Skip"), initStringLit("set GOWDK_BIN=/path/to/gowdk to run generated app smoke tests")))),
+					},
+					initDefine([]ast.Expr{ast.NewIdent("cwd"), ast.NewIdent("err")}, initCall(initSel("os", "Getwd"))),
+					&ast.IfStmt{
+						Cond: initNotNil("err"),
+						Body: initBlock(initExprStmt(initCall(initSel("t", "Fatal"), ast.NewIdent("err")))),
+					},
+					initDefine([]ast.Expr{ast.NewIdent("projectRoot")}, initCall(initSel("filepath", "Dir"), ast.NewIdent("cwd"))),
+					initDefine([]ast.Expr{ast.NewIdent("outDir")}, initCall(initSel("filepath", "Join"), initCall(initSel("t", "TempDir")), initStringLit("site"))),
+					initDefine([]ast.Expr{ast.NewIdent("cmd")}, initCall(initSel("exec", "Command"), ast.NewIdent("gowdkBin"), initStringLit("build"), initStringLit("--out"), ast.NewIdent("outDir"))),
+					initAssign([]ast.Expr{initSel("cmd", "Dir")}, ast.NewIdent("projectRoot")),
+					initDefine([]ast.Expr{ast.NewIdent("payload"), ast.NewIdent("err")}, initCall(initSel("cmd", "CombinedOutput"))),
+					&ast.IfStmt{
+						Cond: initNotNil("err"),
+						Body: initBlock(initExprStmt(initCall(initSel("t", "Fatalf"), initStringLit("gowdk build failed: %v\n%s"), ast.NewIdent("err"), ast.NewIdent("payload")))),
+					},
+					&ast.IfStmt{
+						Init: initDefine([]ast.Expr{ast.NewIdent("_"), ast.NewIdent("err")}, initCall(initSel("os", "Stat"), initCall(initSel("filepath", "Join"), ast.NewIdent("outDir"), initStringLit("index.html")))),
+						Cond: initNotNil("err"),
+						Body: initBlock(initExprStmt(initCall(initSel("t", "Fatalf"), initStringLit("expected generated index.html: %v"), ast.NewIdent("err")))),
+					},
+				),
+			},
 		},
 	}
 	var buffer bytes.Buffer
@@ -334,6 +401,30 @@ func initStringLit(value string) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value)}
 }
 
+func initBlock(stmts ...ast.Stmt) *ast.BlockStmt {
+	return &ast.BlockStmt{List: stmts}
+}
+
+func initExprStmt(expr ast.Expr) ast.Stmt {
+	return &ast.ExprStmt{X: expr}
+}
+
+func initCall(fun ast.Expr, args ...ast.Expr) *ast.CallExpr {
+	return &ast.CallExpr{Fun: fun, Args: args}
+}
+
+func initDefine(names []ast.Expr, values ...ast.Expr) ast.Stmt {
+	return &ast.AssignStmt{Lhs: names, Tok: token.DEFINE, Rhs: values}
+}
+
+func initAssign(names []ast.Expr, values ...ast.Expr) ast.Stmt {
+	return &ast.AssignStmt{Lhs: names, Tok: token.ASSIGN, Rhs: values}
+}
+
+func initNotNil(name string) ast.Expr {
+	return &ast.BinaryExpr{X: ast.NewIdent(name), Op: token.NEQ, Y: ast.NewIdent("nil")}
+}
+
 func parseInitOptions(args []string) (initOptions, error) {
 	options := initOptions{Dir: ".", Template: "site"}
 	for index := 0; index < len(args); index++ {
@@ -341,6 +432,8 @@ func parseInitOptions(args []string) (initOptions, error) {
 		switch arg {
 		case "--force":
 			options.Force = true
+		case "--tests":
+			options.Tests = true
 		case "--template":
 			index++
 			if index >= len(args) {

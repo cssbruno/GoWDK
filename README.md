@@ -78,9 +78,10 @@ go build ./cmd/gowdk
 Scaffold and run a new app:
 
 ```sh
-./gowdk init --template site ~/my-app
+./gowdk init --tests --template site ~/my-app
 cd ~/my-app
 /path/to/GoWDK/gowdk build
+GOWDK_BIN=/path/to/GoWDK/gowdk go test ./tests
 /path/to/GoWDK/gowdk serve --dir dist/site
 ```
 
@@ -88,10 +89,10 @@ Open `http://127.0.0.1:8080`.
 
 `init --template site` writes a starter `gowdk.config.go`, one page, one
 component, and one CSS file. `init --template minimal` writes a smaller page/CSS
-starter. `build` outputs HTML and manifests to `dist/site`. `serve` is static
+starter. `init --tests` adds an optional smoke test that uses `GOWDK_BIN` to run
+the CLI. `build` outputs HTML and manifests to `dist/site`. `serve` is static
 only: it does not run actions, API handlers, partial fragments, or SSR routes.
-For backend handlers, use `gowdk build --app --bin` to produce a runnable
-binary.
+For backend handlers, use `gowdk build --app --bin` to produce a runnable binary.
 
 For a live rebuild loop:
 
@@ -182,7 +183,7 @@ wires the form POST and writes the returned `runtime/response.Response`.
 ## CLI
 
 ```sh
-gowdk init [--force] [--template site|minimal] [dir]
+gowdk init [--force] [--tests] [--template site|minimal] [dir]
 gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
 gowdk dev [--addr 127.0.0.1:8080] [--interval 1s] [build flags...]

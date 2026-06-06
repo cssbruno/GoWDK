@@ -822,19 +822,30 @@ Done when:
 
 - [x] Add template selection to `gowdk init`.
       Decision: `gowdk init --template site|minimal` selects the starter shape.
-- [ ] Add example apps for static site, actions, login/auth, dashboard SSR,
+- [x] Add example apps for static site, actions, login/auth, dashboard SSR,
       API-only backend, partial updates, Tailwind, and split frontend/backend.
-- [ ] Add optional generated test scaffold.
-- [ ] Add Playwright or browser smoke-test guidance for generated apps.
-- [ ] Add accessibility test guidance.
-- [ ] Add performance smoke-test guidance.
-- [ ] Add migration examples for existing Go applications.
-- [ ] Add "web framework concepts for GOWDK users" documentation.
+      See `examples/README.md` for the current static, action, auth/login,
+      SSR, API, partial, Tailwind, and split frontend/backend examples.
+- [x] Add optional generated test scaffold.
+      `gowdk init --tests` writes `tests/gowdk_smoke_test.go`, which runs only
+      when `GOWDK_BIN` points at a built CLI.
+- [x] Add Playwright or browser smoke-test guidance for generated apps.
+      See `docs/reference/testing.md`.
+- [x] Add accessibility test guidance.
+      See `docs/reference/testing.md`.
+- [x] Add performance smoke-test guidance.
+      See `docs/reference/testing.md`.
+- [x] Add migration examples for existing Go applications.
+      See `docs/reference/migration.md`.
+- [x] Add "web framework concepts for GOWDK users" documentation.
+      See `docs/reference/concepts.md`.
 
 Done when:
 
-- [ ] A new user can scaffold, build, test, and deploy a small app without
+- [x] A new user can scaffold, build, test, and deploy a small app without
       reading source code.
+      Covered by `README.md`, `docs/getting-started.md`,
+      `docs/reference/testing.md`, and `docs/reference/deployment.md`.
 
 ### 15. Deployment And Ecosystem
 

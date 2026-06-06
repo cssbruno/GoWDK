@@ -30,14 +30,15 @@ Use the built binary when running commands from outside this repository.
 From the repository root:
 
 ```sh
-/path/to/GOWDK/gowdk init --template site /tmp/gowdk-my-app
+/path/to/GOWDK/gowdk init --tests --template site /tmp/gowdk-my-app
 cd /tmp/gowdk-my-app
 ```
 
 `init --template site` writes a starter `gowdk.config.go`, one page, one
 component, and one CSS file. `init --template minimal` writes a smaller
-page/CSS starter. Existing files are not overwritten unless `--force` is
-passed.
+page/CSS starter. `init --tests` adds `tests/gowdk_smoke_test.go`, which skips
+unless `GOWDK_BIN` points at a built `gowdk` CLI. Existing files are not
+overwritten unless `--force` is passed.
 
 The generated config discovers `src/**/*.gwdk`, discovers CSS from
 `styles/**/*.css`, writes build output to `dist/site`, and ignores the default
@@ -49,6 +50,12 @@ From the app directory:
 
 ```sh
 /path/to/GOWDK/gowdk build
+```
+
+Run the optional scaffolded smoke test:
+
+```sh
+GOWDK_BIN=/path/to/GOWDK/gowdk go test ./tests
 ```
 
 The build writes app-shell HTML and manifests under `dist/site`:

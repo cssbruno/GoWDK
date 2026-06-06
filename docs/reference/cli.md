@@ -8,7 +8,7 @@ development.
 
 ```sh
 gowdk version
-gowdk init [--force] [--template <site|minimal>] [dir]
+gowdk init [--force] [--tests] [--template <site|minimal>] [dir]
 gowdk tokens <file.gwdk>
 gowdk fmt [--write] <files>
 gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
@@ -26,6 +26,7 @@ gowdk lsp [--ssr]
 
 - `--ssr`: enables SSR validation by adding the SSR addon to the in-memory config.
 - `--force`: supported by `init`; overwrites starter files that already exist.
+- `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
 - `--json`: supported by `check`; prints editor-friendly diagnostic JSON.
 - `--write`: supported by `fmt`; overwrites formatted files.
@@ -49,6 +50,7 @@ gowdk lsp [--ssr]
 
 ```sh
 go run ./cmd/gowdk init --template site my-site
+go run ./cmd/gowdk init --tests --template site my-tested-site
 go run ./cmd/gowdk init --template minimal my-minimal-site
 go run ./cmd/gowdk check examples/pages/home.page.gwdk
 go run ./cmd/gowdk check --config gowdk.config.go
@@ -83,6 +85,16 @@ src/pages/home.page.gwdk
 src/components/hero.cmp.gwdk
 styles/global.css
 ```
+
+Passing `--tests` also writes:
+
+```text
+tests/gowdk_smoke_test.go
+```
+
+The smoke test skips by default. Set `GOWDK_BIN=/path/to/gowdk` to make it run
+`gowdk build --out <tempdir>` from the scaffolded project root and assert that
+`index.html` was generated.
 
 The generated config discovers `src/**/*.gwdk`, writes build output to
 `dist/site`, discovers CSS under `styles/**/*.css`, and writes `.gitignore`

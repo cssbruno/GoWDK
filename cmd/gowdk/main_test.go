@@ -169,6 +169,28 @@ func TestInitCommandSupportsMinimalTemplate(t *testing.T) {
 	}
 }
 
+func TestInitCommandSupportsOptionalTestScaffold(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "site")
+	if err := run([]string{"init", "--tests", root}); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(root, "tests", "gowdk_smoke_test.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"package gowdktest",
+		`os.Getenv("GOWDK_BIN")`,
+		`t.Skip("set GOWDK_BIN=/path/to/gowdk to run generated app smoke tests")`,
+		`exec.Command(gowdkBin, "build", "--out", outDir)`,
+		`cmd.Dir = projectRoot`,
+	} {
+		if !strings.Contains(string(payload), expected) {
+			t.Fatalf("expected optional test scaffold to contain %q:\n%s", expected, payload)
+		}
+	}
+}
+
 func TestInitCommandRejectsUnknownTemplate(t *testing.T) {
 	err := run([]string{"init", "--template", "admin", t.TempDir()})
 	if err == nil || !strings.Contains(err.Error(), `unknown init template "admin"`) {

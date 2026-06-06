@@ -80,7 +80,7 @@ work as implemented.
 | Component CSS | Make component CSS explicit, compiler-scoped, and documented; Tailwind and processors remain optional. | Planned |
 | Accessibility | Add accessibility diagnostics as compiler warnings with stable codes and spans. | Planned |
 | Diagnostics and LSP | Expand diagnostic catalogue before broad parser recovery; prioritize hover, semantic tokens, go-to-definition, and route/type navigation. | Planned |
-| Testing and scaffolding | Add optional Go handler tests, generated app smoke tests, template/addon selection, and editable generated examples. | Planned |
+| Testing and scaffolding | Add optional Go handler tests, generated app smoke tests, template/addon selection, and editable generated examples. | Partial |
 | Deployment and operations | Prefer docs and optional generators for static hosts, Docker, systemd, reverse proxies, CDN policy, health checks, metrics, logging, binary deploy, rollback, and CSRF secret rotation. | Planned |
 | Full-page hydration | Keep full-page hydration out of core; use static pages, progressive enhancement, server fragments, and explicit islands. | Intentionally out of scope |
 | Island ergonomics | Improve compiler-owned island syntax, lifecycle cleanup, focus helpers, local batching, and diagnostics without exposing arbitrary JavaScript as the app contract. | Planned |
@@ -90,8 +90,8 @@ work as implemented.
 | Images | Document image optimization patterns first; optional integrations may emit assets or metadata without turning core into an image pipeline. | Planned |
 | Addon discovery | Start with repository/website docs or registry metadata; add CLI discovery only after addon versioning, trust, and compatibility rules exist. | Planned |
 | Playground | Own playground onboarding in website/docs first, with optional CLI export later; hosted execution must remain sandboxed and optional. | Planned |
-| Performance profiling | Document measurement for build time, output size, generated JS size, SSR/action latency, binary size, and cache behavior before adding automation. | Planned |
-| Migration guides | Publish docs-first guides for Go templates, htmx-style apps, JavaScript-framework concepts, and static Go sites while preserving GOWDK-native terminology. | Planned |
+| Performance profiling | Document measurement for build time, output size, generated JS size, SSR/action latency, binary size, and cache behavior before adding automation. | Partial |
+| Migration guides | Publish docs-first guides for Go templates, htmx-style apps, JavaScript-framework concepts, and static Go sites while preserving GOWDK-native terminology. | Partial |
 
 ## Non-Functional Requirements
 

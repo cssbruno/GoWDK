@@ -77,8 +77,8 @@ literal `tailwind.Options` value.
 decisions, rate-limit response headers, a process-local in-memory store, and a
 Redis-backed store adapter. It does not add a Redis client dependency or choose
 an application policy automatically. When `ratelimit.Addon()` is enabled and a
-generated app has action, API, SSR, or split-backend proxy routes, the generated
-package exposes `RegisterRateLimiter(*ratelimit.Limiter)`.
+generated app has action, API, fragment, SSR, or split-backend proxy routes, the
+generated package exposes `RegisterRateLimiter(*ratelimit.Limiter)`.
 
 ```go
 store := ratelimit.NewInMemoryStore(ratelimit.InMemoryOptions{})
@@ -120,9 +120,9 @@ func init() {
 }
 ```
 
-Generated action, API, SSR, and split-backend proxy handlers call the registered
-limiter before guards and user handler logic. If no limiter is registered, the
-generated handlers continue normally.
+Generated action, API, fragment, SSR, and split-backend proxy handlers call the
+registered limiter before guards and user handler logic. If no limiter is
+registered, the generated handlers continue normally.
 
 Distributed deployments can use `ratelimit.NewRedisStore` with a small
 `RedisClient` adapter:

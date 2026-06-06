@@ -161,6 +161,8 @@ api Session GET "/api/session"
 - [x] Wire generated guards for SSR/action/API paths.
 - [x] Document generated guard registration/config and test registered guard
       success paths for SSR/action/API generated binaries.
+- [x] Wire registered rate limiters for action/API/fragment/SSR/proxy handlers
+      before guards and user logic.
 - [x] Add runtime metrics only after handler contracts settle.
 
 ## SPA Navigation And Generated JS Guardrails
@@ -277,6 +279,12 @@ api Session GET "/api/session"
 - [x] Generate request-shape validation for direct literal `required`,
       `minlength`, `maxlength`, and Go-regexp-compatible `pattern` form
       controls, including escaped partial validation fragments.
+- [x] Generate first-slice standalone static fragment routes as backend
+      endpoints, not page route kinds.
+- [x] Expand first-slice standalone static fragment bodies with known
+      components during app generation.
+- [ ] Add request-time fragment rendering with user-owned data/validation
+      hooks.
 - [x] Keep file uploads out of generated actions; uploads belong in user-owned
       API/server handlers with explicit body limits, storage, validation,
       cleanup, and security rules.

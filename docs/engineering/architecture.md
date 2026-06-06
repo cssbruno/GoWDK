@@ -85,7 +85,7 @@ the lanes through package, route, type, component, and handler binding metadata.
 | `addons/embed` | Embedded assets and one-binary serving. | Addon | Capability boundary implemented; generated embedding is planned. |
 | `addons/css` | Compile-time CSS processing. | Addon | CSS feature registration and processor aliases implemented. |
 | `addons/tailwind` | Tailwind CSS standalone CLI integration. | Addon | Experimental no-npm Tailwind v4 CSS processor wrapper; users provide the executable. |
-| `addons/ratelimit` | Request-time HTTP rate limiting. | Addon | Middleware, fixed-window result contract, in-memory store, Redis-backed store adapter, and generated request-time handler registration hook implemented. Generated apps call registered limiters before guards and user logic while user-owned Go chooses policy and store implementation. |
+| `addons/ratelimit` | Request-time HTTP rate limiting. | Addon | Middleware, fixed-window result contract, in-memory store, Redis-backed store adapter, and generated request-time handler registration hook implemented. Generated apps call registered limiters for action, API, fragment, SSR, and split-backend proxy handlers before guards and user logic while user-owned Go chooses policy and store implementation. |
 
 ## Data Model
 

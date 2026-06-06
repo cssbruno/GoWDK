@@ -103,7 +103,9 @@ Implemented today:
   response headers are written as no-store HTTP 500 responses without exposing
   panic values.
 - Generated apps can return first-slice partial fragment responses from
-  action handlers for `X-GOWDK-Partial` requests.
+  action handlers for `X-GOWDK-Partial` requests and standalone static
+  `fragment Name GET "/path" "#target" { ... }` routes. Standalone static
+  fragment bodies can expand known components at app generation time.
 - Generated app action endpoint extraction rejects direct file inputs and
   multipart `g:post` forms. Uploads belong in user-owned API/server handlers.
 - `internal/gotypes` resolves component prop/state structs through Go module
@@ -207,8 +209,7 @@ CSRF token fields into served HTML POST forms, validate action POSTs before
 generated decoding or user handlers run, and return HTTP 403
 `invalid csrf token` with `Cache-Control: no-store` for invalid tokens. The
 generated app does not run user-defined validation beyond handler logic, handle
-uploads, or serve general fragment routes or broad hybrid request-time handlers
-today.
+uploads, or serve broad hybrid request-time handlers today.
 
 Generated app source is an output artifact and sits downstream of feature
 packages. Feature packages may import stable public GOWDK runtime/addon

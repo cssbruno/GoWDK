@@ -1,7 +1,8 @@
 # Partials
 
-Partial updates use server fragments, not full-page SSR. The first generated
-slice supports action-driven fragment responses for SPA/action pages.
+Partial updates use server fragments, not full-page SSR. The generated slice
+supports action-driven fragment responses for SPA/action pages and standalone
+static fragment routes.
 
 Current support:
 
@@ -21,10 +22,27 @@ Current support:
 - Runtime/addon package boundaries exist for partial responses and swaps.
 - `runtime/response` fragment responses carry target and swap metadata through
   `X-GOWDK-Fragment-Target` and `X-GOWDK-Fragment-Swap` when written to HTTP.
+- Page files can declare standalone fragment endpoints:
+
+  ```gwdk
+  fragment Patients GET "/patients/list" "#patients" {
+    <section>Patients</section>
+  }
+  ```
+
+  Generated apps register these as backend endpoints, not page route kinds.
+  They currently require `GET`, a concrete absolute path without route params,
+  and a literal id-selector target.
 - Generated embedded app action handlers can respond to `X-GOWDK-Partial`
   requests with rendered fragment HTML, `Cache-Control: no-store`, and fragment
   target metadata. Normal POST requests still use the redirect/no-content
   fallback path.
+- Generated standalone fragment handlers return rendered static fragment HTML,
+  `Cache-Control: no-store`, `Content-Type: text/html; charset=utf-8`, and
+  fragment target/swap headers.
+- Static standalone fragment bodies expand known components at app generation
+  time, including page-level `use` aliases and component-scoped child
+  components. They do not execute request-time data hooks.
 - Generated required-field validation failures on partial requests with
   `X-GOWDK-Target` return an escaped validation fragment for that target, also
   with `Cache-Control: no-store`.
@@ -55,6 +73,5 @@ falls back to the form metadata.
 
 Not implemented yet:
 
-- General fragment routes independent of action POSTs.
-- Component expansion inside generated fragment bodies.
+- Request-time data hooks for fragment routes.
 - Field-specific user validation syntax.

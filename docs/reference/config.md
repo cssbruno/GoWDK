@@ -392,7 +392,7 @@ The executable bridge runs project config code only when the AST-only loader
 finds addon constructors it cannot reduce safely.
 
 When `ratelimit.Addon()` is enabled, generated apps with request-time action,
-API, SSR, or split-backend proxy routes expose
+API, fragment, SSR, or split-backend proxy routes expose
 `gowdkapp.RegisterRateLimiter(*ratelimit.Limiter)`. User-owned Go still creates
 the limiter and chooses the in-memory store, Redis store adapter, key function,
 limit, and window.

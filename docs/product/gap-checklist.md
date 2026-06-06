@@ -808,7 +808,10 @@ Done when:
       setup failures appear.
       Decision: no `gowdk doctor` yet. Add only after recurring setup failures
       expose a stable checklist worth automating.
-- [ ] Improve scaffolded examples for common workflows.
+- [x] Improve scaffolded examples for common workflows.
+      Covered by `gowdk init --template site|minimal`, optional
+      `gowdk init --tests`, `docs/getting-started.md`, and
+      `docs/reference/testing.md`.
 
 Done when:
 

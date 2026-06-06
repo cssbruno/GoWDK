@@ -50,6 +50,8 @@ var (
 	simpleInterpolationCompletionPattern = regexp.MustCompile(`\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}`)
 	bindingCompletionPattern             = regexp.MustCompile(`g:bind:(?:value|checked)\s*=\s*\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}`)
 	assignmentCompletionPattern          = regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\+\+|--)`)
+	endpointMigrationPattern             = regexp.MustCompile("use `((?:act|api) [^`]+)` and move behavior to Go")
+	useAliasPattern                      = regexp.MustCompile("Add `use ([A-Za-z_][A-Za-z0-9_]*) \"<package>\"`")
 	semanticTokenTypes                   = []string{"decorator", "variable", "string", "operator"}
 	semanticTokenTypeIndex               = map[string]int{"decorator": 0, "variable": 1, "string": 2, "operator": 3}
 )
@@ -137,6 +139,7 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 				HoverProvider:              true,
 				DefinitionProvider:         true,
 				ReferencesProvider:         true,
+				CodeActionProvider:         true,
 				DocumentFormattingProvider: true,
 				CompletionProvider: completionOptions{
 					TriggerCharacters: []string{"@", ":", "<", " "},
@@ -201,6 +204,12 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
 		}
 		return singleMessage(response(request.ID, server.references(params)))
+	case "textDocument/codeAction":
+		var params codeActionParams
+		if err := decodeParams(request.Params, &params); err != nil {
+			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
+		}
+		return singleMessage(response(request.ID, server.codeActions(params)))
 	case "textDocument/semanticTokens/full":
 		var params semanticTokensParams
 		if err := decodeParams(request.Params, &params); err != nil {
@@ -371,6 +380,79 @@ func (server *Server) references(params referenceParams) []location {
 		return locations[i].Range.Start.Character < locations[j].Range.Start.Character
 	})
 	return locations
+}
+
+func (server *Server) codeActions(params codeActionParams) []codeAction {
+	doc, ok := server.documents[params.TextDocument.URI]
+	if !ok {
+		return []codeAction{}
+	}
+	var actions []codeAction
+	for _, diagnostic := range params.Context.Diagnostics {
+		switch diagnostic.Code {
+		case "old_action_block_syntax", "old_api_block_syntax":
+			if action, ok := endpointMigrationCodeAction(params.TextDocument.URI, diagnostic); ok {
+				actions = append(actions, action)
+			}
+		case "unknown_gowdk_use_alias":
+			if action, ok := missingUseCodeAction(params.TextDocument.URI, doc.Text, diagnostic); ok {
+				actions = append(actions, action)
+			}
+		}
+	}
+	if actions == nil {
+		return []codeAction{}
+	}
+	return actions
+}
+
+func endpointMigrationCodeAction(uri string, item diagnostic) (codeAction, bool) {
+	match := endpointMigrationPattern.FindStringSubmatch(item.Message)
+	if match == nil {
+		return codeAction{}, false
+	}
+	replacement := match[1]
+	return codeAction{
+		Title:       "Replace old endpoint block header",
+		Kind:        "quickfix",
+		Diagnostics: []diagnostic{item},
+		Edit: workspaceEdit{Changes: map[string][]textEdit{
+			uri: {{
+				Range:   item.Range,
+				NewText: replacement,
+			}},
+		}},
+	}, true
+}
+
+func missingUseCodeAction(uri string, source string, item diagnostic) (codeAction, bool) {
+	match := useAliasPattern.FindStringSubmatch(item.Message)
+	if match == nil {
+		return codeAction{}, false
+	}
+	alias := match[1]
+	insert := useInsertionPosition(source, item.Range.Start)
+	return codeAction{
+		Title:       `Add use ` + alias + ` "<package>"`,
+		Kind:        "quickfix",
+		Diagnostics: []diagnostic{item},
+		Edit: workspaceEdit{Changes: map[string][]textEdit{
+			uri: {{
+				Range:   lspRange{Start: insert, End: insert},
+				NewText: `use ` + alias + ` "<package>"` + "\n",
+			}},
+		}},
+	}, true
+}
+
+func useInsertionPosition(source string, fallback position) position {
+	lines := strings.Split(source, "\n")
+	for index, line := range lines {
+		if strings.TrimSpace(line) == "view {" {
+			return position{Line: index, Character: 0}
+		}
+	}
+	return fallback
 }
 
 func (server *Server) semanticTokens(params semanticTokensParams) semanticTokensResult {
@@ -1197,6 +1279,7 @@ type serverCapabilities struct {
 	HoverProvider              bool                    `json:"hoverProvider"`
 	DefinitionProvider         bool                    `json:"definitionProvider"`
 	ReferencesProvider         bool                    `json:"referencesProvider"`
+	CodeActionProvider         bool                    `json:"codeActionProvider"`
 	DocumentFormattingProvider bool                    `json:"documentFormattingProvider"`
 	CompletionProvider         completionOptions       `json:"completionProvider"`
 	SemanticTokensProvider     semanticTokensOptions   `json:"semanticTokensProvider"`
@@ -1255,6 +1338,27 @@ type referenceParams struct {
 
 type referenceContext struct {
 	IncludeDeclaration bool `json:"includeDeclaration"`
+}
+
+type codeActionParams struct {
+	TextDocument textDocumentIdentifier `json:"textDocument"`
+	Range        lspRange               `json:"range"`
+	Context      codeActionContext      `json:"context"`
+}
+
+type codeActionContext struct {
+	Diagnostics []diagnostic `json:"diagnostics"`
+}
+
+type codeAction struct {
+	Title       string        `json:"title"`
+	Kind        string        `json:"kind,omitempty"`
+	Diagnostics []diagnostic  `json:"diagnostics,omitempty"`
+	Edit        workspaceEdit `json:"edit"`
+}
+
+type workspaceEdit struct {
+	Changes map[string][]textEdit `json:"changes"`
 }
 
 type semanticTokensParams struct {

@@ -334,6 +334,44 @@ func TestServerReturnsReferencesForProjectSymbols(t *testing.T) {
 	assertResponseID(t, messages[9], float64(7))
 }
 
+func TestServerReturnsCodeActionsForMigrationsAndMissingUses(t *testing.T) {
+	oldURI := "file:///tmp/old.page.gwdk"
+	useURI := "file:///tmp/missing-use.page.gwdk"
+	oldMessage := strconv.Quote("line 6: old action block syntax is not supported; use `act Refresh POST \"<path>\"` and move behavior to Go")
+	useMessage := strconv.Quote("home references component <ui.Button />, but alias \"ui\" is not declared. Add `use ui \"<package>\"` before the view block")
+	oldDiagnostic := `{"range":{"start":{"line":5,"character":0},"end":{"line":5,"character":13}},"severity":1,"code":"old_action_block_syntax","source":"gowdk","message":` + oldMessage + `}`
+	useDiagnostic := `{"range":{"start":{"line":7,"character":0},"end":{"line":7,"character":1}},"severity":1,"code":"unknown_gowdk_use_alias","source":"gowdk","message":` + useMessage + `}`
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+oldURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@page old\n@route \"/old\"\n\nact refresh {\n}\n\nview {\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+useURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@page home\n@route \"/\"\n\nview {\n  <main><ui.Button /></main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/codeAction","params":{"textDocument":{"uri":"`+oldURI+`"},"range":{"start":{"line":5,"character":0},"end":{"line":5,"character":13}},"context":{"diagnostics":[`+oldDiagnostic+`]}}}`) +
+		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/codeAction","params":{"textDocument":{"uri":"`+useURI+`"},"range":{"start":{"line":7,"character":0},"end":{"line":7,"character":1}},"context":{"diagnostics":[`+useDiagnostic+`]}}}`) +
+		framed(`{"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 6 {
+		t.Fatalf("expected 6 output messages, got %d", len(messages))
+	}
+
+	capabilities := messages[0]["result"].(map[string]any)["capabilities"].(map[string]any)
+	if capabilities["codeActionProvider"] != true {
+		t.Fatalf("expected code action provider capability, got %#v", capabilities)
+	}
+	assertResponseID(t, messages[3], float64(2))
+	assertCodeActionEdit(t, messages[3], oldURI, "Replace old endpoint block header", `act Refresh POST "<path>"`, 5)
+	assertResponseID(t, messages[4], float64(3))
+	assertCodeActionEdit(t, messages[4], useURI, `Add use ui "<package>"`, "use ui \"<package>\"\n", 5)
+	assertResponseID(t, messages[5], float64(4))
+}
+
 func TestServerReturnsSemanticTokens(t *testing.T) {
 	uri := "file:///tmp/home.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
@@ -512,6 +550,32 @@ func assertReferenceURIs(t *testing.T, message map[string]any, expected ...strin
 			t.Fatalf("expected references to include %q, got %#v", uri, result)
 		}
 		seen[uri]--
+	}
+}
+
+func assertCodeActionEdit(t *testing.T, message map[string]any, uri string, title string, newText string, line int) {
+	t.Helper()
+	actions := message["result"].([]any)
+	if len(actions) != 1 {
+		t.Fatalf("expected one code action, got %#v", actions)
+	}
+	action := actions[0].(map[string]any)
+	if action["title"] != title {
+		t.Fatalf("expected code action title %q, got %#v", title, action)
+	}
+	edit := action["edit"].(map[string]any)
+	changes := edit["changes"].(map[string]any)
+	edits := changes[uri].([]any)
+	if len(edits) != 1 {
+		t.Fatalf("expected one text edit for %q, got %#v", uri, edits)
+	}
+	textEdit := edits[0].(map[string]any)
+	if textEdit["newText"] != newText {
+		t.Fatalf("expected edit text %q, got %#v", newText, textEdit)
+	}
+	start := textEdit["range"].(map[string]any)["start"].(map[string]any)
+	if start["line"] != float64(line) {
+		t.Fatalf("expected edit line %d, got %#v", line, textEdit["range"])
 	}
 }
 

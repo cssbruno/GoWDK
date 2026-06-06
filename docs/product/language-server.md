@@ -28,7 +28,7 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 
 1. User starts an LSP-capable editor for a workspace containing `.gwdk` files.
 2. The editor launches `gowdk lsp` over stdio.
-3. The language server validates opened buffers, publishes diagnostics, returns formatting edits, offers completions, returns hover text, jumps to component declarations, and colors syntax through semantic tokens.
+3. The language server validates opened buffers, publishes diagnostics, returns formatting edits, offers completions, returns hover text, jumps to declarations, finds references, offers quick fixes, and colors syntax through semantic tokens.
 
 ## Requirements
 
@@ -51,6 +51,8 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
   matching Go file is open in the editor session.
 - Return references for exact `.gwdk` project symbols across open documents,
   including page IDs, routes, components, stores, and guards.
+- Return quick-fix code actions for old action/API block syntax migrations and
+  missing GOWDK `use` aliases.
 - Return full-document semantic tokens for `.gwdk` decorators, identifiers,
   strings, and operators.
 
@@ -74,6 +76,7 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 - [x] `textDocument/definition` returns component declaration locations for open-project component calls.
 - [x] `textDocument/definition` returns open-buffer Go declaration locations for exported handler symbols.
 - [x] `textDocument/references` returns open-document references for page IDs, routes, components, stores, and guards.
+- [x] `textDocument/codeAction` returns quick fixes for old endpoint syntax and missing GOWDK use aliases.
 - [x] `textDocument/semanticTokens/full` returns encoded token data for open `.gwdk` buffers.
 - [x] `go test ./...` and `go build ./cmd/gowdk` pass.
 

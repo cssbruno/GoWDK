@@ -838,7 +838,9 @@ Done when:
 - [x] Add semantic tokens for `.gwdk`.
       Decision: `gowdk lsp` advertises `textDocument/semanticTokens/full`
       and returns lexer-backed decorator, variable, string, and operator tokens.
-- [ ] Add code actions for common migrations and missing imports/uses.
+- [x] Add code actions for common migrations and missing imports/uses.
+      Decision: `gowdk lsp` supports `textDocument/codeAction` quick fixes for
+      old action/API block header migrations and missing GOWDK `use` aliases.
 - [x] Add project-wide completions for discovered components, layouts, guards,
       routes, stores, props, and state fields.
       Decision: `gowdk lsp` completion merges language keywords with open-project
@@ -849,8 +851,11 @@ Done when:
 
 Done when:
 
-- [ ] Editor support is useful without requiring the VS Code extension to patch
+- [x] Editor support is useful without requiring the VS Code extension to patch
       over missing LSP behavior.
+      Decision: the LSP now covers diagnostics, formatting, completions, hover,
+      component and open-Go go-to-definition, references, semantic tokens, and
+      quick fixes for common migrations/missing uses.
 
 ### 14. Scaffolding, Testing, And Examples
 

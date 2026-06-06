@@ -482,12 +482,31 @@ Done when:
 
 ### 5. CSS And Assets
 
-- [ ] Decide the authoring syntax for component-scoped CSS.
-- [ ] Decide how scoped selectors are rewritten and how specificity is handled.
-- [ ] Decide how keyframes are scoped.
-- [ ] Decide how global CSS escapes work.
-- [ ] Decide how component-level assets are declared and emitted.
-- [ ] Document the relationship between page CSS, component CSS, CSS processors,
+- [x] Decide the authoring syntax for component-scoped CSS.
+      Decision: component CSS uses explicit component-local
+      `@css "<relative.css>"` annotations. The path is relative to the
+      component source file. Inline style blocks are not the current contract.
+- [x] Decide how scoped selectors are rewritten and how specificity is handled.
+      Decision: emitted component CSS is scoped by default. The generated
+      scope marker comes from the component CSS scope ID and is attached to
+      compiler-owned component output. Selector rewriting should avoid
+      specificity surprises and use `:where(...)` around the scope marker when
+      browser support allows it.
+- [x] Decide how keyframes are scoped.
+      Decision: local `@keyframes` names are rewritten with the component scope
+      ID, and local `animation` or `animation-name` references are rewritten to
+      the scoped keyframe name.
+- [x] Decide how global CSS escapes work.
+      Decision: component CSS does not leak global selectors implicitly. Use
+      page/global CSS for app-wide styles. A future explicit `:global(...)`
+      escape may be added, but implicit global component selectors are not part
+      of the contract.
+- [x] Decide how component-level assets are declared and emitted.
+      Decision: component assets use explicit component-local
+      `@asset "<relative-path>"` annotations. The metadata path exists today;
+      emitted assets should be content-hashed, manifest-mapped, and served with
+      immutable generated binary cache headers when output support is added.
+- [x] Document the relationship between page CSS, component CSS, CSS processors,
       Tailwind, hashing, and asset manifests.
 - [ ] Add tests for scoped CSS output, hashed filenames, manifest mappings, and
       generated binary cache headers.
@@ -496,8 +515,8 @@ Done when:
 
 Done when:
 
-- [ ] GOWDK has a clear CSS story that is not just "processor hooks exist".
-- [ ] The docs no longer conflict on component CSS/assets status.
+- [x] GOWDK has a clear CSS story that is not just "processor hooks exist".
+- [x] The docs no longer conflict on component CSS/assets status.
 
 ### 6. Load, Data, And Invalidation
 

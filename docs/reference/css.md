@@ -103,6 +103,83 @@ Generated pages include:
 
 `href` values are HTML-escaped.
 
+## Component CSS And Assets
+
+Component CSS is explicit. A component declares stylesheet inputs with
+component-local `@css` annotations:
+
+```gwdk
+package components
+
+@component Hero
+@css "./hero.css"
+
+view {
+  <section class="hero">...</section>
+}
+```
+
+The path is relative to the component source file. GOWDK parses the annotation
+and lowers it into the typed `.gwdk` AST and stable IR with owner metadata,
+source path, CSS path, deterministic hash key, and deterministic scope ID.
+
+Component assets use the same explicit model:
+
+```gwdk
+package components
+
+@component Hero
+@asset "./hero.png"
+```
+
+`@asset` paths are also relative to the component source file and are lowered
+into AST/IR metadata today. GOWDK does not implicitly bundle arbitrary sibling
+files.
+
+Current implementation status:
+
+- Page CSS discovery, configured stylesheets, processor-emitted CSS, minified
+  hashed filenames, asset manifest mappings, and generated binary cache headers
+  are implemented for build output.
+- Component `@css` and `@asset` annotations are parsed and analyzed as
+  metadata with stable owner, hash-key, and scope metadata.
+- Emitting component CSS files, rewriting selectors, scoping keyframes, and
+  emitting component-level assets from that metadata are planned work.
+- Full component AST bodies are not yet passed to CSS processors. Processors
+  receive source metadata and the current extracted class subset.
+
+The component CSS scoping contract is:
+
+- Component CSS is scoped by default when emitted by GOWDK.
+- The generated scope marker comes from the component CSS scope ID and is
+  attached to compiler-owned component output.
+- Local selectors are rewritten with the generated scope marker. Rewriting must
+  avoid surprising specificity changes; when browser support allows it, GOWDK
+  uses `:where(...)` around the generated scope marker so scoping adds no
+  extra selector specificity.
+- Local `@keyframes` names are scoped with the same scope ID, and local
+  `animation` and `animation-name` references are rewritten to the scoped
+  keyframe name.
+- Global CSS does not leak out of component CSS by accident. Use page/global
+  CSS for application-wide styles. A future explicit `:global(...)` escape can
+  be added, but implicit global selectors in component CSS are not part of the
+  contract.
+- Component-level emitted assets are content-hashed, recorded in
+  `gowdk-assets.json`, and served with the same generated binary cache policy
+  as other immutable emitted assets.
+
+Relationship to other CSS features:
+
+- Page CSS is the implemented build-output path today.
+- Component CSS is the component-local authoring contract and metadata path
+  today; emitted scoped component CSS is the next implementation step.
+- CSS processors and Tailwind are optional. They can operate on discovered
+  source metadata and emitted assets, but they must not become mandatory core
+  dependencies.
+- Generated filenames are content-hashed for emitted GOWDK-managed CSS assets.
+  Logical-to-emitted mappings and cache headers are recorded in the asset
+  manifest.
+
 ## Processor Contract
 
 Compile-time CSS plugins implement:

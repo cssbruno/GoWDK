@@ -35,6 +35,7 @@ semantic/type analysis outside the component contract slice.
 - `api.md`: API block status and planned handler behavior.
 - `partials.md`: partial update status and planned fragment behavior.
 - `ssr.md`: SSR render-mode, `load`, and guard behavior.
+- `hybrid.md`: SPA-first hybrid behavior and explicit request-time branch.
 - `diagnostics.md`: current diagnostic shape and known codes.
 - `formatting.md`: current formatter behavior.
 

@@ -83,7 +83,7 @@ package, a startup integration file, or a wrapper binary that owns generated
 app initialization.
 
 For the full `paths {}` / `build {}` / `load {}` / endpoint data boundary, see
-[data.md](data.md).
+[data.md](data.md). For hybrid-specific behavior, see [hybrid.md](hybrid.md).
 
 ## Planned Support
 

@@ -574,19 +574,35 @@ Done when:
 
 ### 7. Hybrid Rendering
 
-- [ ] Define hybrid page modes precisely.
-- [ ] Decide what request-time capabilities a hybrid page can use.
-- [ ] Decide whether hybrid can prerender and later revalidate.
-- [ ] Decide whether hybrid can stream or partially refresh server data.
+- [x] Define hybrid page modes precisely.
+      Decision: bare `@render hybrid` is build-time SPA output. `@render
+      hybrid` with `load {}` is the only stable request-time hybrid page mode.
+- [x] Decide what request-time capabilities a hybrid page can use.
+      Decision: the stable request-time capability is `load {}` through the
+      generated load/render path with SSR enabled. Actions, APIs, and fragments
+      remain endpoint lanes, not hybrid page route behavior.
+- [x] Decide whether hybrid can prerender and later revalidate.
+      Decision: bare hybrid pages prerender as SPA output. Hybrid pages with
+      `load {}` are request-time routes. `@cache` and `@revalidate` remain HTTP
+      response cache policy; they do not add background regeneration.
+- [x] Decide whether hybrid can stream or partially refresh server data.
+      Decision: no hybrid streaming or implicit server-data refresh today. Use
+      explicit fragments for partial updates.
 - [x] Define generated binary behavior for hybrid pages.
-- [ ] Define dev-server behavior for hybrid pages.
-- [ ] Add diagnostics for unsupported hybrid combinations.
-- [ ] Add docs and examples for bare hybrid SPA output and request-time hybrid
+- [x] Define dev-server behavior for hybrid pages.
+      Decision: plain `gowdk dev` serves bare hybrid SPA output. Hybrid pages
+      with `load {}` need SSR enabled and generated app dev output, such as
+      `gowdk dev --ssr --app <dir>`.
+- [x] Add diagnostics for unsupported hybrid combinations.
+      Decision: SPA `load {}` is rejected, hybrid `load {}` requires the SSR
+      feature gate, and bare hybrid routes report request-time rendering as
+      disabled in route info.
+- [x] Add docs and examples for bare hybrid SPA output and request-time hybrid
       behavior.
 
 Done when:
 
-- [ ] `@render hybrid` is either product-stable or clearly experimental.
+- [x] `@render hybrid` is either product-stable or clearly experimental.
 - [x] Deployment docs do not say hybrid request-time behavior is both planned
       and implemented.
 

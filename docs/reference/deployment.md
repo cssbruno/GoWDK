@@ -185,7 +185,6 @@ Generated binaries currently support:
 
 Generated binaries do not yet support:
 
-- General fragment routes.
 - Broader hybrid request-time behavior beyond the explicit `load {}` branch.
 
 ## Local Development

@@ -127,6 +127,7 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 					Change:    textDocumentSyncFull,
 					Save:      saveOptions{IncludeText: true},
 				},
+				HoverProvider:              true,
 				DocumentFormattingProvider: true,
 				CompletionProvider: completionOptions{
 					TriggerCharacters: []string{"@", ":", "<", " "},
@@ -166,6 +167,12 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 			IsIncomplete: false,
 			Items:        server.completionItems(params),
 		}))
+	case "textDocument/hover":
+		var params hoverParams
+		if err := decodeParams(request.Params, &params); err != nil {
+			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
+		}
+		return singleMessage(response(request.ID, server.hover(params)))
 	default:
 		return singleMessage(errorResponse(request.ID, methodNotFound, fmt.Sprintf("method not found: %s", request.Method)))
 	}
@@ -254,6 +261,35 @@ func (server *Server) completionItems(params completionParams) []completionItem 
 	return appendProjectCompletionItems(items, server.projectCompletions(params.TextDocument.URI))
 }
 
+func (server *Server) hover(params hoverParams) *hoverResult {
+	doc, ok := server.documents[params.TextDocument.URI]
+	if !ok {
+		return nil
+	}
+	token := tokenAtPosition(doc.Text, params.Position)
+	if token == "" {
+		return nil
+	}
+	for _, item := range server.hoverItems(params.TextDocument.URI) {
+		if item.Label == token {
+			return &hoverResult{
+				Contents: markupContent{
+					Kind:  "markdown",
+					Value: "**" + item.Label + "**\n\n" + item.Detail,
+				},
+			}
+		}
+	}
+	return nil
+}
+
+func (server *Server) hoverItems(currentURI string) []completionItem {
+	items := server.completionItems(completionParams{
+		TextDocument: textDocumentIdentifier{URI: currentURI},
+	})
+	return appendProjectCompletionItems(items, server.projectHoverItems(currentURI))
+}
+
 func appendProjectCompletionItems(items []completionItem, project []completionItem) []completionItem {
 	seen := map[string]bool{}
 	for _, item := range items {
@@ -316,6 +352,88 @@ func (server *Server) projectCompletions(currentURI string) []completionItem {
 		}
 	}
 	return items
+}
+
+func (server *Server) projectHoverItems(currentURI string) []completionItem {
+	var items []completionItem
+	for _, doc := range server.documents {
+		switch lang.ClassifySource(doc.Path, []byte(doc.Text)) {
+		case lang.FileKindPage:
+			page, diagnostics := lang.ParseSource(doc.Path, []byte(doc.Text))
+			if diagnostics.HasErrors() {
+				continue
+			}
+			for _, action := range page.Blocks.Actions {
+				items = append(items, completionItem{Label: action.Name, Kind: completionItemKindFunction, Detail: "GOWDK action handler"})
+			}
+			for _, api := range page.Blocks.APIs {
+				items = append(items, completionItem{Label: api.Name, Kind: completionItemKindFunction, Detail: "GOWDK API handler"})
+			}
+			for _, fragment := range page.Blocks.Fragments {
+				items = append(items, completionItem{Label: fragment.Name, Kind: completionItemKindFunction, Detail: "GOWDK fragment handler"})
+			}
+		case lang.FileKindComponent:
+			component, diagnostics := lang.ParseComponentSource(doc.Path, []byte(doc.Text))
+			if diagnostics.HasErrors() || doc.URI != currentURI {
+				continue
+			}
+			for _, emit := range component.Emits {
+				items = append(items, completionItem{Label: emit.Name, Kind: completionItemKindFunction, Detail: "component event"})
+			}
+		}
+	}
+	return items
+}
+
+func tokenAtPosition(source string, pos position) string {
+	lines := strings.Split(source, "\n")
+	if pos.Line < 0 || pos.Line >= len(lines) {
+		return ""
+	}
+	line := lines[pos.Line]
+	index := byteIndexFromUTF16Column(line, pos.Character)
+	if index > len(line) {
+		index = len(line)
+	}
+	start := index
+	for start > 0 && hoverTokenByte(line[start-1]) {
+		start--
+	}
+	end := index
+	for end < len(line) && hoverTokenByte(line[end]) {
+		end++
+	}
+	return strings.TrimSpace(line[start:end])
+}
+
+func byteIndexFromUTF16Column(line string, column int) int {
+	if column <= 0 {
+		return 0
+	}
+	units := 0
+	for index, r := range line {
+		next := units + len(utf16.Encode([]rune{r}))
+		if next > column {
+			return index
+		}
+		units = next
+	}
+	return len(line)
+}
+
+func hoverTokenByte(value byte) bool {
+	switch {
+	case value >= 'A' && value <= 'Z':
+		return true
+	case value >= 'a' && value <= 'z':
+		return true
+	case value >= '0' && value <= '9':
+		return true
+	case strings.ContainsRune("@:_-./", rune(value)):
+		return true
+	default:
+		return false
+	}
 }
 
 func inferredComponentFields(viewBody, clientBody string) []string {
@@ -619,6 +737,7 @@ type serverInfo struct {
 
 type serverCapabilities struct {
 	TextDocumentSync           textDocumentSyncOptions `json:"textDocumentSync"`
+	HoverProvider              bool                    `json:"hoverProvider"`
 	DocumentFormattingProvider bool                    `json:"documentFormattingProvider"`
 	CompletionProvider         completionOptions       `json:"completionProvider"`
 }
@@ -684,6 +803,11 @@ type completionParams struct {
 	Position     position               `json:"position"`
 }
 
+type hoverParams struct {
+	TextDocument textDocumentIdentifier `json:"textDocument"`
+	Position     position               `json:"position"`
+}
+
 type publishDiagnosticsParams struct {
 	URI         string       `json:"uri"`
 	Diagnostics []diagnostic `json:"diagnostics"`
@@ -721,4 +845,13 @@ type completionItem struct {
 	Label  string `json:"label"`
 	Kind   int    `json:"kind,omitempty"`
 	Detail string `json:"detail,omitempty"`
+}
+
+type hoverResult struct {
+	Contents markupContent `json:"contents"`
+}
+
+type markupContent struct {
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
 }

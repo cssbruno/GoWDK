@@ -788,8 +788,10 @@ Done when:
 
 ### 13. LSP And Editor Support
 
-- [ ] Add hover support for annotations, directives, stores, props, routes, and
+- [x] Add hover support for annotations, directives, stores, props, routes, and
       handlers.
+      Decision: `gowdk lsp` supports `textDocument/hover` for known language
+      tokens and open-project symbols.
 - [ ] Add go-to-definition for component calls.
 - [ ] Add go-to-definition for Go handler symbols where possible.
 - [ ] Add references for page IDs, routes, components, stores, and guards.
@@ -797,7 +799,8 @@ Done when:
 - [ ] Add code actions for common migrations and missing imports/uses.
 - [ ] Add project-wide completions for discovered components, layouts, guards,
       routes, stores, props, and state fields.
-- [ ] Add tests for LSP requests beyond diagnostics/formatting/completion.
+- [x] Add tests for LSP requests beyond diagnostics/formatting/completion.
+      Decision: hover request coverage now exists in `internal/lsp`.
 
 Done when:
 

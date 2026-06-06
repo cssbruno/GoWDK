@@ -194,6 +194,32 @@ func TestServerReturnsProjectAwareCompletions(t *testing.T) {
 	}
 }
 
+func TestServerReturnsHoverForLanguageAndProjectSymbols(t *testing.T) {
+	uri := "file:///tmp/signup.page.gwdk"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@page signup\n@route \"/signup\"\n\nact Submit POST \"/signup\"\n\nview {\n  <form g:post={Submit}></form>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/hover","params":{"textDocument":{"uri":"`+uri+`"},"position":{"line":3,"character":2}}}`) +
+		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/hover","params":{"textDocument":{"uri":"`+uri+`"},"position":{"line":5,"character":6}}}`) +
+		framed(`{"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 5 {
+		t.Fatalf("expected 5 output messages, got %d", len(messages))
+	}
+	assertResponseID(t, messages[2], float64(2))
+	assertHoverContains(t, messages[2], "@route", "Declare the route path")
+	assertResponseID(t, messages[3], float64(3))
+	assertHoverContains(t, messages[3], "Submit", "GOWDK action handler")
+}
+
 func TestServerReturnsMethodNotFoundForUnknownRequests(t *testing.T) {
 	input := framed(`{"jsonrpc":"2.0","id":"x","method":"gowdk/unknown","params":{}}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)
@@ -276,6 +302,18 @@ func hasCompletionLabel(items []any, label string) bool {
 		}
 	}
 	return false
+}
+
+func assertHoverContains(t *testing.T, message map[string]any, parts ...string) {
+	t.Helper()
+	result := message["result"].(map[string]any)
+	contents := result["contents"].(map[string]any)
+	value := contents["value"].(string)
+	for _, part := range parts {
+		if !strings.Contains(value, part) {
+			t.Fatalf("expected hover to contain %q, got %q", part, value)
+		}
+	}
 }
 
 func stringsReader(input string) *bytes.Reader {

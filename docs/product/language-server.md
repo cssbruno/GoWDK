@@ -28,7 +28,7 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 
 1. User starts an LSP-capable editor for a workspace containing `.gwdk` files.
 2. The editor launches `gowdk lsp` over stdio.
-3. The language server validates opened buffers, publishes diagnostics, returns formatting edits, and offers completions.
+3. The language server validates opened buffers, publishes diagnostics, returns formatting edits, offers completions, and returns hover text.
 
 ## Requirements
 
@@ -40,6 +40,8 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 - Publish diagnostics using the current GOWDK parser and validation rules.
 - Return whole-document formatting edits using `gowdk fmt` behavior.
 - Return keyword completions for annotations, render modes, blocks, and `g:` directives.
+- Return hover text for known annotations, directives, blocks, routes, stores,
+  props, components, layouts, guards, and handler symbols from open documents.
 
 ### Non-Functional
 
@@ -55,6 +57,7 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 - [x] Opening an invalid `.gwdk` buffer publishes diagnostics without requiring the buffer to be saved.
 - [x] `textDocument/formatting` returns a replacement edit matching `gowdk fmt`.
 - [x] `textDocument/completion` returns the same language keywords exposed by editor tooling.
+- [x] `textDocument/hover` returns concise markdown help for language tokens and open-project symbols.
 - [x] `go test ./...` and `go build ./cmd/gowdk` pass.
 
 ## Edge Cases

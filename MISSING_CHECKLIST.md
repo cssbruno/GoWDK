@@ -43,6 +43,13 @@ Status terms used by the product docs:
 - Planned: accepted product direction with no stable implementation yet.
 - Intentionally out of scope: rejected for the current product direction.
 
+P0/P1 product decisions live in `docs/product/gap-checklist.md`. Treat those
+decisions as constraints for implementation slices: generated JavaScript must
+not own routing, auth, business rules, database access, server validation,
+action behavior, global app state, or page loading policy; deferred comparison
+features require explicit docs or diagnostics instead of implicit framework
+behavior.
+
 Compiler lanes:
 
 ```text

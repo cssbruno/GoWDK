@@ -53,6 +53,36 @@ gap checklist in `docs/product/gap-checklist.md`.
 | PRD-024 | Require project config before compiling or validating `.gwdk` code. | High | Implemented | `check`, `manifest`, `sitemap`, `routes`, `build`, and `dev` require `gowdk.config.go` in the current directory or an explicit `--config <file>`, even when explicit `.gwdk` file paths are provided. |
 | PRD-025 | Keep framework integrations optional and outside compiler/runtime core. | Medium | Implemented | Generated apps expose standard `net/http` handlers and framework-neutral code by default. Optional `runtime/adapters/echo`, `runtime/adapters/gin`, and `runtime/adapters/fiber` packages wrap the same generated `http.Handler`; docs cover Echo v5, Gin, Fiber, and Fiber adaptor caveats. |
 
+## P0/P1 Decision Backlog
+
+The product gap checklist records the detailed decisions. This section keeps
+the requirement surface aligned with those decisions without treating deferred
+work as implemented.
+
+| Area | Requirement Direction | Status |
+| --- | --- | --- |
+| Markup language | Expand `view {}` only through GOWDK-owned AST nodes and directives; defer raw HTML, async placeholders, transitions, DOM/document targets, and DOM actions until separate contracts exist. | Planned |
+| Snippets and slots | Keep slots as the stable reusable markup primitive; defer first-class snippet/render values. | Planned |
+| Component props | Keep imported Go structs as the primary typed prop path; add non-string literal props and defaults before considering rest/spread, renaming, recursion, dynamic components, or bindable child state. | Planned |
+| Client reactivity | Keep bounded compiler-owned `client {}`; generated JS must not own routing, auth, business rules, database access, server validation, action behavior, global app state, or page loading policy. | Planned |
+| Shared state | Keep stores page/island scoped until cross-package or app-global stores have explicit ownership, serialization, subscription, and teardown contracts. | Planned |
+| Load/data lifecycle | Keep `build {}` build-time, `load {}` request-time, and actions/APIs/fragments as endpoint lanes; defer universal/browser-owned load policy. | Planned |
+| Hybrid | Keep bare hybrid as SPA output and `load {}` as the explicit request-time branch; defer streaming, data refresh, and non-HTTP revalidation. | Partial |
+| Hooks | Compose app-wide hooks as `net/http` middleware plus explicit generated registration points; defer route rewriting and fetch interception. | Planned |
+| Errors | Keep `@error` for route-local SSR and action/API boundaries; define expected error types and layout boundaries later. | Partial |
+| Dev server | Keep dependency-free live reload as baseline; add browser error overlay before component-aware HMR. | Planned |
+| Routing | Add rest params and trailing-slash policy first while keeping explicit route declarations; defer optional params, route groups, and same-path page/API negotiation. | Planned |
+| Typed generated APIs | Generate typed route-param accessors first; defer typed load/action data accessors until result contracts are stable. | Planned |
+| Forms | Keep progressive-enhancement-first form behavior; full POST and enhanced POST share action result semantics; domain validation stays in user Go. | Planned |
+| APIs | Broaden APIs through public request/response helpers and typed body/query helpers, not framework-specific adapters. | Planned |
+| Cache | Keep `@cache` and `@revalidate` as HTTP cache policy until load/action invalidation contracts exist. | Partial |
+| Guards | Extend guards with safe local redirects and response helpers before richer request-local state. | Planned |
+| Component CSS | Make component CSS explicit, compiler-scoped, and documented; Tailwind and processors remain optional. | Planned |
+| Accessibility | Add accessibility diagnostics as compiler warnings with stable codes and spans. | Planned |
+| Diagnostics and LSP | Expand diagnostic catalogue before broad parser recovery; prioritize hover, semantic tokens, go-to-definition, and route/type navigation. | Planned |
+| Testing and scaffolding | Add optional Go handler tests, generated app smoke tests, template/addon selection, and editable generated examples. | Planned |
+| Deployment and operations | Prefer docs and optional generators for static hosts, Docker, systemd, reverse proxies, CDN policy, health checks, metrics, logging, binary deploy, rollback, and CSRF secret rotation. | Planned |
+
 ## Non-Functional Requirements
 
 - Performance: SPA pages should be generated at build time and served directly from disk or embedded assets.

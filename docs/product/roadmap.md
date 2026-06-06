@@ -115,6 +115,12 @@ Do not roadmap those completed slices as future work. Future work should
 stabilize their contracts, remove generation debt, and fill the missing
 production pieces below.
 
+`docs/product/gap-checklist.md` now records product decisions for all P0 and
+P1 comparison gaps. Treat those decisions as constraints on roadmap execution:
+planned work may implement the GOWDK-native contract, defer it with clear docs
+or diagnostics, or keep it intentionally out of scope. Do not turn deferred
+comparison features into implicit commitments.
+
 ## Roadmap
 
 This order follows dependencies. Some later areas already have first-slice code,
@@ -156,6 +162,9 @@ contract work that later features depend on.
 - Explicit source import semantics.
 - Better spans and diagnostics.
 - Broader build-time data contract.
+- P0/P1 language decisions from `docs/product/gap-checklist.md` remain
+  enforced: no arbitrary JavaScript, no external template semantics, and no
+  generated JS ownership of trusted app behavior.
 
 ### Endpoint And Adapter Release
 
@@ -193,12 +202,17 @@ contract work that later features depend on.
 - Proper client reactivity.
 - Slots, component CSS/assets, and typed exports.
 - Production WASM island ABI.
+- Bounded `client {}` remains the reactivity model unless a later ADR replaces
+  it with an equally Go-owned contract.
 
 ### Platform Tooling Release
 
 - Full CSS/plugin loading.
 - Generated app dev loop.
 - Browser playground and stronger editor tooling.
+- Production operations docs must cover secrets, CSRF rotation, reverse
+  proxies, cache/CDN policy, health checks, metrics, logging, binary deploy,
+  and rollback before any production-ready claim.
 
 ## Non-Goals For Core
 

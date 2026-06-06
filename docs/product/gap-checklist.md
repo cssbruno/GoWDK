@@ -20,8 +20,11 @@ Comparison anchors, not implementation requirements:
 
 ## How To Use This Checklist
 
-- Keep checked items limited to behavior that is implemented, documented, and
-  covered by tests or an explicit verification command.
+- Keep checked implementation items limited to behavior that is implemented,
+  documented, and covered by tests or an explicit verification command. For
+  decision gaps, a checked item means the product decision is recorded and any
+  remaining implementation work is still tracked by the relevant acceptance
+  criteria or detailed workstream.
 - Keep intentional differences visible. If GOWDK deliberately chooses not to
   provide an equivalent for a Svelte/SvelteKit feature, move the item to the
   intentional non-goals section with the reason.
@@ -33,7 +36,8 @@ Comparison anchors, not implementation requirements:
 
 Status legend:
 
-- [x] Implemented and documented.
+- [x] Implemented and documented, or product decision recorded for decision
+      gaps.
 - [ ] Missing, incomplete, or not yet product-stable.
 - Experimental: implemented enough to try, but not yet stable API.
 - Intentional non-goal: not planned because it conflicts with GOWDK direction.
@@ -70,61 +74,111 @@ These are the highest-impact gaps surfaced by the Svelte/SvelteKit comparison.
 Each item should result in a GOWDK-native contract decision, not a copy of the
 Svelte/SvelteKit implementation.
 
-- [ ] Decide the next GOWDK-native `view {}` language expansion.
+- [x] Decide the next GOWDK-native `view {}` language expansion.
       Comparison pressure comes from broad template features such as spread
       attributes, keyed blocks, async placeholders, snippets/renderable markup,
       raw HTML escape hatches, local constants, debug helpers, transitions,
       animations, DOM actions, and document/window/body/head targets. Do not
       implement these one-for-one unless they fit GOWDK's compiler-owned model.
-- [ ] Define whether GOWDK wants a first-class snippet/render equivalent.
+      Decision: expand `view {}` only through GOWDK-owned directives and AST
+      nodes. Prioritize exact markup contract docs, keyed `g:for`, explicit
+      head metadata, and accessible diagnostics. Defer raw HTML, async
+      placeholders, transitions, document/window/body targets, and DOM actions
+      until each has a written security/runtime contract.
+- [x] Define whether GOWDK wants a first-class snippet/render equivalent.
       Current default, named, and scalar scoped slots cover component insertion
       but not reusable typed markup values with parameters and lexical scope.
-- [ ] Broaden the component props contract.
+      Decision: keep slots as the stable primitive for now. Do not add a
+      first-class snippet/render value model in P0; revisit as a P2 language
+      feature only if slots cannot express real component reuse.
+- [x] Broaden the component props contract.
       Missing or weaker areas include non-string inline props, defaults,
       rest/spread props, prop renaming, recursive component ergonomics, dynamic
       component selection, and a clear bindable-prop equivalent.
-- [ ] Decide the long-term GOWDK reactivity model.
+      Decision: imported Go structs remain the primary typed prop path. Add
+      non-string literal props and documented defaults next. Defer rest/spread,
+      prop renaming, recursive components, dynamic component selection, and
+      bindable child state until diagnostics can keep cross-package resolution
+      explicit and predictable.
+- [x] Decide the long-term GOWDK reactivity model.
       The comparison point is Svelte 5 runes, but GOWDK should preserve a
       bounded compiler-owned `client {}` language unless a stronger Go-first
       model is explicitly designed.
-- [ ] Define a stronger shared-state/store runtime.
+      Decision: keep a bounded compiler-owned `client {}` language. Do not
+      allow arbitrary JavaScript, external framework reactivity, or generated JS
+      ownership of app routing, auth, business rules, database access, server
+      validation, action behavior, global app state, or page loading policy.
+- [x] Define a stronger shared-state/store runtime.
       Page stores exist, but they still need a stable GOWDK contract for shared
       island state, subscriptions, isolation, serialization, and teardown.
-- [ ] Complete the GOWDK load/data lifecycle decision.
+      Decision: shared state is page/island scoped by default. Cross-package or
+      app-global stores are deferred until there is an explicit ownership,
+      serialization, subscription, and teardown contract. User Go remains the
+      source of truth for trusted server state.
+- [x] Complete the GOWDK load/data lifecycle decision.
       Comparison pressure comes from server versus universal load, enhanced
       fetch, parent data, dependency tracking, client invalidation,
       post-action load reruns, serialized fetch results, and streaming data.
       Implement only the parts that serve GOWDK's build-time, endpoint, and SSR
       lanes.
-- [ ] Complete hybrid request-time behavior.
+      Decision: `build {}` is build-time data, `load {}` is request-time data,
+      and actions/APIs/fragments are endpoint lanes. Do not add universal load
+      or browser-owned load policy in P0. Post-action invalidation and
+      prefetch/reuse are planned as explicit generated-client features, not
+      hidden framework behavior.
+- [x] Complete hybrid request-time behavior.
       GOWDK currently treats bare hybrid pages as SPA output and supports the
       explicit `load {}` request-time branch, but broader hybrid behavior such
       as streaming, revalidation, and partial server data refresh still needs
       product decisions.
-- [ ] Add a general app-wide hook/middleware contract.
+      Decision: hybrid means SPA output by default plus explicit request-time
+      capabilities. The only product-stable request-time hybrid branch is
+      `load {}` through the generated request-time page path. Streaming,
+      revalidation beyond HTTP headers, and partial server data refresh are
+      deferred.
+- [x] Add a general app-wide hook/middleware contract.
       Current guards and rate-limit registration are useful but narrower than
       app-wide request hooks, response transforms, fetch interception, error
       hooks, rerouting, transport hooks, and init hooks.
-- [ ] Add route-scoped error-boundary syntax and behavior.
+      Decision: core hooks should compose as `net/http` middleware around the
+      generated app handler plus explicit generated registration points for
+      guards, rate limits, and future app init. Do not add route rewriting,
+      fetch interception, or framework-specific hooks to core P0.
+- [x] Add route-scoped error-boundary syntax and behavior.
       Current panic boundaries plus optional `404.html`/`500.html` are weaker
       than route/page/layout error boundaries and expected versus unexpected
       error handling.
-- [ ] Upgrade the dev server from live reload toward component-aware hot
+      Decision: keep current `@error` syntax for route-local SSR and
+      endpoint-local action/API boundaries. Expected error types and
+      layout-level boundaries are planned P1/P2 work; panic details and form
+      values must never be rendered.
+- [x] Upgrade the dev server from live reload toward component-aware hot
       updates where appropriate.
       Missing or weaker areas include state-preserving component updates,
       browser error overlay, module/dependency graph, and precise update
       invalidation.
-- [ ] Fix documentation consistency before public positioning.
+      Decision: keep dependency-free live reload as the P0 dev baseline.
+      Component-aware HMR is deferred until the component/client runtime has a
+      stable dependency graph. Add browser error overlay before state-preserving
+      HMR.
+- [x] Fix documentation consistency before public positioning.
       Several docs still describe first-slice or planned limitations that newer
       checklists mark complete. Align README, requirements, roadmap,
       deployment, CLI, language, release, and missing-work docs.
-- [ ] Publish a release-readiness statement grounded in current behavior.
+      Decision: product docs use the shared status legend from
+      `docs/product/requirements.md`. Public positioning stays pre-release
+      until production readiness and release binaries are true.
+- [x] Publish a release-readiness statement grounded in current behavior.
       README still says no release binary and not production-ready; release
       docs and current implementation status need a single consistent story.
+      Decision: current release-readiness statement is pre-release,
+      source-built, and not production-ready. Do not publish a production
+      readiness claim until release artifacts, operations guidance, and the
+      remaining P0/P1 contracts are implemented and verified.
 
 ## P0 Acceptance Criteria
 
-- [ ] Every P0 item has a product decision: implement, defer, or intentional
+- [x] Every P0 item has a product decision: implement, defer, or intentional
       non-goal.
 - [ ] Every implemented P0 item has language docs, reference docs, examples,
       and tests.
@@ -139,62 +193,113 @@ Svelte/SvelteKit implementation.
 
 These are important product gaps once the P0 contracts are clear.
 
-- [ ] Expand routing expressiveness where it fits GOWDK's explicit-route model.
+- [x] Expand routing expressiveness where it fits GOWDK's explicit-route model.
       Candidate gaps: rest params, optional params, route groups, configurable
       trailing slash policy, and page/API same-path content negotiation.
-- [ ] Generate stronger route-specific typed APIs for user Go.
+      Decision: keep explicit `.gwdk` route declarations as source of truth.
+      Add rest params and trailing-slash policy first. Defer optional params,
+      route groups, and same-path page/API content negotiation until conflict
+      diagnostics and generated route metadata can describe them exactly.
+- [x] Generate stronger route-specific typed APIs for user Go.
       Current typed params are runtime-map based. Consider generated typed
       structs/accessors for params, load data, action data, endpoint metadata,
       and page contracts.
-- [ ] Add a GOWDK page form lifecycle where it fits the product.
+      Decision: generate typed route-param accessors next. Typed load/action
+      data accessors are planned only after the load/action result contracts are
+      stable. Application code should import public `runtime/` or addon
+      packages, not generated app output.
+- [x] Add a GOWDK page form lifecycle where it fits the product.
       Missing or weaker areas include page-level form state, status exposure,
       automatic data invalidation after actions, redirect/error behavior for
       enhanced forms, and nearest error-boundary handling.
-- [ ] Broaden API endpoint support.
+      Decision: page form lifecycle stays progressive-enhancement-first. Full
+      POST fallback and enhanced POST must share action result semantics.
+      Automatic invalidation, enhanced redirects, and nearest boundary behavior
+      are planned generated-client features; domain validation remains user Go.
+- [x] Broaden API endpoint support.
       Candidate gaps: richer body/query helpers, method fallback policy,
       response error shape, Accept/content negotiation, and route-page sharing.
-- [ ] Make cache and revalidation more than response headers if needed.
+      Decision: broaden APIs through public response/request helpers and typed
+      query/body helpers, not through framework-specific adapters. Method
+      fallback and error response shape should be explicit. Accept/content
+      negotiation and page/API same-path sharing are deferred.
+- [x] Make cache and revalidation more than response headers if needed.
       `@cache` and `@revalidate` currently map to HTTP cache headers. Missing
       or weaker areas include data dependency invalidation, prerender crawling,
       dynamic entry generation, and runtime reload policy.
-- [ ] Make guards more expressive.
+      Decision: keep `@cache` and `@revalidate` as HTTP cache policy in P1.
+      Data dependency invalidation, prerender crawling, dynamic entry
+      generation, and runtime reload policy are deferred until load/action
+      invalidation contracts exist.
+- [x] Make guards more expressive.
       Current guards are nil/error and generally map to HTTP 403. Consider
       guard-level redirect/response contracts and richer request-local state.
-- [ ] Create a clear component CSS authoring model.
+      Decision: extend guards to allow safe local redirects and explicit
+      response helpers before adding richer request-local state. Guards must
+      remain public-addon/runtime contracts and run before user endpoint or SSR
+      logic.
+- [x] Create a clear component CSS authoring model.
       GOWDK has CSS processors, page CSS, hashing, and scope metadata, but does
       not yet have an obvious component-local authoring model with default
       scoping, specificity rules, keyframes behavior, and docs.
-- [ ] Add accessibility diagnostics.
+      Decision: component-local CSS should be explicit, compiler-scoped, and
+      documented around selector rewriting, keyframes, global escapes, asset
+      emission, hashing, and binary cache headers. Tailwind and processors stay
+      optional.
+- [x] Add accessibility diagnostics.
       Candidate warnings: missing `alt`, invalid ARIA, clickable elements
       without keyboard support, label/control mismatch, empty headings, empty
       links, invalid autofocus patterns, and role misuse.
-- [ ] Improve compiler diagnostics and parser recovery.
+      Decision: add accessibility diagnostics as compiler warnings with stable
+      codes and source spans. Start with missing `alt`, label/control mismatch,
+      empty headings/links, clickable-without-keyboard, and invalid autofocus.
+- [x] Improve compiler diagnostics and parser recovery.
       GOWDK has useful diagnostics, spans, suggestions, formatting, and LSP,
       but the comparison shows a need for a larger warning/error catalogue and
       broader recovery behavior.
-- [ ] Improve LSP/editor features.
+      Decision: expand the diagnostic catalogue before broad parser recovery.
+      Recovery should never hide invalid route, handler, security, or generated
+      adapter contracts. LSP should consume the same diagnostics.
+- [x] Improve LSP/editor features.
       Candidate gaps: hover, go-to-definition, references, semantic tokens,
       code actions, workspace-wide component/type intelligence, exact source
       ranges, and generated route/type navigation.
-- [ ] Add app testing scaffolds.
+      Decision: prioritize hover, semantic tokens, go-to-definition for
+      component/use/handler symbols, and route/type navigation. Code actions
+      come after diagnostics have stable codes and suggestions.
+- [x] Add app testing scaffolds.
       Candidate outputs: Go handler tests, generated app smoke tests,
       Playwright/browser E2E, accessibility checks, and component/island test
       harnesses for scaffolded apps.
-- [ ] Improve scaffolding beyond `gowdk init`.
+      Decision: add optional scaffolded Go handler tests and generated app
+      smoke tests first. Browser E2E, accessibility checks, and island harnesses
+      should be docs/templates, not mandatory core dependencies.
+- [x] Improve scaffolding beyond `gowdk init`.
       Candidate gaps: interactive templates, add-on selection, auth/db/test
       setup, migration commands, generated examples, and playground-to-project
       export.
-- [ ] Add platform deployment adapters or generators where they do not fight
+      Decision: improve `gowdk init` with explicit template selection and addon
+      selection. Auth/db/test setup should generate editable Go and `.gwdk`
+      files. Migration commands and playground export are deferred.
+- [x] Add platform deployment adapters or generators where they do not fight
       the Go-first model.
       Candidate targets: static hosts, Docker, Fly.io, Render, Kubernetes,
       Cloudflare, Vercel, Netlify, systemd, and CDN cache examples.
-- [ ] Document production operations as first-class guidance.
+      Decision: prefer documentation and optional generators over runtime core
+      adapters. Add static host, Docker, systemd, Caddy/nginx, and CDN guidance
+      first. Kubernetes, Vercel/Netlify, and Cloudflare stay docs-only unless
+      real deploy constraints require generated files.
+- [x] Document production operations as first-class guidance.
       Include secrets, CSRF secret rotation, reverse proxies, cache/CDN policy,
       health checks, metrics, logging, binary deployment, and rollback.
+      Decision: production operations guidance is required before any
+      production-ready claim. Cover secrets, CSRF secret rotation, reverse
+      proxies, cache/CDN policy, health checks, metrics, logging, binary
+      deployment, and rollback as docs first.
 
 ## P1 Acceptance Criteria
 
-- [ ] Routing, form, API, cache, guard, CSS, LSP, testing, scaffold, and
+- [x] Routing, form, API, cache, guard, CSS, LSP, testing, scaffold, and
       deployment decisions are each represented in requirements and roadmap.
 - [ ] User-facing gaps have examples or clear unsupported diagnostics.
 - [ ] New generated contracts are stable enough for application code to import

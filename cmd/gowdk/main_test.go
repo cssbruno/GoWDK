@@ -1737,7 +1737,7 @@ view {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stderr, "info: ssr_disabled: newsletter uses @render action; request-time SSR is disabled for this route") {
+	if !strings.Contains(stderr, "info: ssr_disabled: newsletter uses @render action; request-time page rendering is disabled for this route") {
 		t.Fatalf("expected disabled SSR route info on stderr, got:\n%s", stderr)
 	}
 
@@ -1825,6 +1825,45 @@ view {
 		PageID:  "dashboard",
 		Handler: "hybrid.RenderDashboard",
 	})
+}
+
+func TestRoutesCommandPrintsBareHybridAsSPARouteWithInfo(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "dashboard.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+@page dashboard
+@route "/dashboard"
+@render hybrid
+
+view {
+  <main>Dashboard</main>
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"routes", "--config", config, page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr, "info: ssr_disabled: dashboard uses @render hybrid; request-time page rendering is disabled for this route") {
+		t.Fatalf("expected disabled request-time route info for bare hybrid, got:\n%s", stderr)
+	}
+
+	var report routeMetadataReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
+	}
+	assertRouteBinding(t, report.Routes, routeBindingJSON{
+		Kind:    "spa",
+		Method:  "GET",
+		Route:   "/dashboard",
+		PageID:  "dashboard",
+		Handler: `embedded.SPA("pages/dashboard.html")`,
+	})
+	assertRouteInfo(t, report.Info, "ssr_disabled", "dashboard")
 }
 
 func TestRoutesCommandDiscoversSelectedModuleOnly(t *testing.T) {

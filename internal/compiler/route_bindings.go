@@ -139,7 +139,7 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Code:    "ssr_disabled",
 				PageID:  route.PageID,
 				Route:   route.Path,
-				Message: fmt.Sprintf("%s uses @render %s; request-time SSR is disabled for this route", route.PageID, route.Render),
+				Message: fmt.Sprintf("%s uses @render %s; request-time page rendering is disabled for this route", route.PageID, route.Render),
 			})
 		}
 	}

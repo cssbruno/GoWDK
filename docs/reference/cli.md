@@ -153,9 +153,9 @@ in the separate `endpoints` list with source path, `.gwdk` package, method,
 path, page ID, planned adapter handler, and backend binding metadata. Backend
 binding metadata includes the Go package name, import path when known, handler
 symbol, signature/input metadata when bound, status, and binding message.
-Non-fatal route-mode notes, such as SSR disabled on a SPA route or static SPA
-output disabled on an SSR route, appear in `info` and are also mirrored to
-stderr as `info:` console lines.
+Non-fatal route-mode notes, such as request-time page rendering disabled on a
+SPA or bare hybrid route, or static SPA output disabled on an SSR route, appear
+in `info` and are also mirrored to stderr as `info:` console lines.
 
 Current `build` limitations: it emits only simple app-shell HTML files,
 `gowdk-routes.json`, `gowdk-assets.json`, generated embedded app source,

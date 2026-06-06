@@ -1,0 +1,13 @@
+package componentcss
+
+@page component.css
+@route "/components/css"
+
+view {
+  <main>
+    <ScopedCard title="Scoped CSS">
+      <p>Component CSS metadata is local to the component source.</p>
+    </ScopedCard>
+  </main>
+}
+

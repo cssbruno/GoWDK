@@ -122,6 +122,7 @@ view {
 The path is relative to the component source file. GOWDK parses the annotation
 and lowers it into the typed `.gwdk` AST and stable IR with owner metadata,
 source path, CSS path, deterministic hash key, and deterministic scope ID.
+See `examples/components/css/` for a component-local CSS metadata example.
 
 Component assets use the same explicit model:
 

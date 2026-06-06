@@ -531,8 +531,10 @@ Done when:
       Tailwind, hashing, and asset manifests.
 - [ ] Add tests for scoped CSS output, hashed filenames, manifest mappings, and
       generated binary cache headers.
-- [ ] Add examples for plain CSS, scoped component CSS, Tailwind, and external
+- [x] Add examples for plain CSS, scoped component CSS, Tailwind, and external
       CSS processors.
+      Covered by `examples/css`, `examples/components/css`,
+      `examples/tailwind`, and `examples/css/processor_example_test.go`.
 
 Done when:
 

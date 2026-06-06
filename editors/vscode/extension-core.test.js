@@ -158,6 +158,18 @@ test('toolInvocation uses a workspace-local binary before bare gowdk', () => {
   });
 });
 
+test('toolInvocation uses a source checkout before module go run', () => {
+  assert.deepEqual(core.toolInvocation(['check', '--json'], {
+    cwd: '/workspace/app',
+    sourceWorkspaceRoot: '/workspace/GOWDK',
+    requiresGOWDK: true
+  }), {
+    command: 'go',
+    args: ['run', './cmd/gowdk', 'check', '--json'],
+    cwd: '/workspace/GOWDK'
+  });
+});
+
 test('toolInvocation uses module go run for GOWDK app modules', () => {
   assert.deepEqual(core.toolInvocation(['sitemap'], {
     cwd: '/workspace/app',
@@ -182,6 +194,26 @@ require github.com/cssbruno/gowdk v0.0.0
 
     assert.equal(core.nearestProjectRoot(pageDir, tmp), app);
     assert.equal(core.nearestProjectRoot(path.join(tmp, 'other'), tmp), tmp);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('nearbyGOWDKSourceRoot finds a sibling source checkout', () => {
+  const tmp = fs.mkdtempSync(path.join(process.cwd(), '.tmp-gowdk-vscode-'));
+  try {
+    const app = path.join(tmp, 'gowdk-page');
+    const pageDir = path.join(app, 'src', 'pages');
+    const source = path.join(tmp, 'GOWDK');
+    fs.mkdirSync(pageDir, { recursive: true });
+    fs.mkdirSync(path.join(source, 'cmd', 'gowdk'), { recursive: true });
+    fs.writeFileSync(path.join(source, 'go.mod'), `module github.com/cssbruno/gowdk
+
+go 1.26
+`, 'utf8');
+
+    assert.equal(core.isGOWDKSourceDir(source), true);
+    assert.equal(core.nearbyGOWDKSourceRoot(pageDir), source);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -229,7 +261,14 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
 test('completionEntries include expected language constructs', () => {
   const labels = core.completionEntries().map(([label]) => label);
 
+  assert.ok(labels.includes('package'));
+  assert.ok(labels.includes('import'));
+  assert.ok(labels.includes('use'));
   assert.ok(labels.includes('@route'));
+  assert.ok(labels.includes('@title'));
+  assert.ok(labels.includes('@description'));
+  assert.ok(labels.includes('@canonical'));
+  assert.ok(labels.includes('@image'));
   assert.ok(labels.includes('@component'));
   assert.ok(labels.includes('@css'));
   assert.ok(labels.includes('paths'));
@@ -416,6 +455,9 @@ test('hoverMarkdown describes project symbols from metadata', () => {
   assert.match(core.hoverMarkdown('select', metadata), /\*\*GOWDK component event\*\*/);
   assert.match(core.hoverMarkdown('root', metadata), /Referenced by 1 page/);
   assert.match(core.hoverMarkdown('forms', metadata), /Referenced by 1 page/);
+  assert.match(core.hoverMarkdown('cart', metadata), /\*\*GOWDK store\*\* `cart`/);
+  assert.match(core.hoverMarkdown('CartState', metadata), /\*\*GOWDK Go contract\*\* `CartState`/);
+  assert.match(core.hoverMarkdown('ui', metadata), /Import alias: `ui`/);
   assert.match(core.hoverMarkdown('submit', metadata), /\*\*GOWDK action\*\*/);
   assert.match(core.hoverMarkdown('health', metadata), /\*\*GOWDK API\*\*/);
   assert.equal(core.hoverMarkdown('missing', metadata), '');
@@ -430,6 +472,9 @@ test('definitionTarget resolves project symbols to owning source files', () => {
   assert.deepEqual(core.definitionTarget('forms', metadata), { file: '/workspace/styles/forms.css', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('root', metadata), { file: '/workspace/root.layout.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('submit', metadata), { file: '/workspace/home.page.gwdk', line: 0, column: 0 });
+  assert.deepEqual(core.definitionTarget('cart', metadata), { file: '/workspace/home.page.gwdk', line: 0, column: 0 });
+  assert.deepEqual(core.definitionTarget('CartState', metadata), { file: '/workspace/home.page.gwdk', line: 0, column: 0 });
+  assert.deepEqual(core.definitionTarget('HeroState', metadata), { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 });
   assert.equal(core.definitionTarget('missing', metadata), undefined);
 });
 
@@ -455,6 +500,12 @@ test('symbolReferences finds project metadata references at file granularity', (
     { file: '/workspace/home.page.gwdk', line: 0, column: 0 }
   ]);
   assert.deepEqual(core.symbolReferences('select', metadata), [
+    { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 }
+  ]);
+  assert.deepEqual(core.symbolReferences('cart', metadata), [
+    { file: '/workspace/home.page.gwdk', line: 0, column: 0 }
+  ]);
+  assert.deepEqual(core.symbolReferences('HeroState', metadata), [
     { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 }
   ]);
   assert.deepEqual(core.symbolReferences('missing', metadata), []);
@@ -527,10 +578,19 @@ test('rename helpers validate symbols and return exact source edits', () => {
 
 test('semanticTokens classifies first-slice GOWDK language tokens', () => {
   const source = [
+    'package app',
+    'import interop "github.com/acme/app/interop"',
+    'use ui "components"',
     '@page home',
+    '@title "Home"',
+    '@description "Home page"',
+    '@canonical "https://example.com/"',
+    '@image "https://example.com/social.png"',
     '@component Counter',
     '@css default page forms',
     '@render spa',
+    'act Submit POST "/submit"',
+    'api Status GET "/api/status"',
     'emits {',
     '  select(id string)',
     '}',
@@ -545,8 +605,8 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
     '    emit select(Query)',
     '  }',
     '}',
-    'act submit {',
-    '  form g:post={submit} g:target="#panel" g:swap="innerHTML" {',
+    'view {',
+    '  form g:post={Submit} g:target="#panel" g:swap="innerHTML" {',
     '    <Hero g:on:select={Query = event.id} g:island="wasm" />',
     '    <button g:if={Visible} g:bind:value={Query} class:active={Visible} style:height.px={Count}>Save</button>',
     '  }',
@@ -559,17 +619,50 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
     tokenType: token.tokenType
   }));
 
+  assert.deepEqual(simplified.filter((token) => token.text === 'package'), [
+    { line: 0, text: 'package', tokenType: 'keyword' }
+  ]);
+  assert.deepEqual(simplified.filter((token) => token.text === 'import'), [
+    { line: 1, text: 'import', tokenType: 'keyword' }
+  ]);
+  assert.deepEqual(simplified.filter((token) => token.text === 'use'), [
+    { line: 2, text: 'use', tokenType: 'keyword' }
+  ]);
   assert.deepEqual(simplified.filter((token) => token.text === '@page'), [
-    { line: 0, text: '@page', tokenType: 'namespace' }
+    { line: 3, text: '@page', tokenType: 'namespace' }
+  ]);
+  assert.deepEqual(simplified.filter((token) => token.text === '@title'), [
+    { line: 4, text: '@title', tokenType: 'namespace' }
+  ]);
+  assert.deepEqual(simplified.filter((token) => token.text === '@description'), [
+    { line: 5, text: '@description', tokenType: 'namespace' }
+  ]);
+  assert.deepEqual(simplified.filter((token) => token.text === '@canonical'), [
+    { line: 6, text: '@canonical', tokenType: 'namespace' }
+  ]);
+  assert.deepEqual(simplified.filter((token) => token.text === '@image'), [
+    { line: 7, text: '@image', tokenType: 'namespace' }
   ]);
   assert.deepEqual(simplified.filter((token) => token.text === '@component'), [
-    { line: 1, text: '@component', tokenType: 'namespace' }
+    { line: 8, text: '@component', tokenType: 'namespace' }
   ]);
   assert.deepEqual(simplified.filter((token) => token.text === 'forms'), [
-    { line: 2, text: 'forms', tokenType: 'property' }
+    { line: 9, text: 'forms', tokenType: 'property' }
   ]);
   assert.deepEqual(simplified.filter((token) => token.text === 'spa'), [
-    { line: 3, text: 'spa', tokenType: 'enumMember' }
+    { line: 10, text: 'spa', tokenType: 'enumMember' }
+  ]);
+  assert.deepEqual(simplified.filter((token) => token.text === 'Submit'), [
+    { line: 11, text: 'Submit', tokenType: 'function' }
+  ]);
+  assert.deepEqual(simplified.filter((token) => token.text === 'POST'), [
+    { line: 11, text: 'POST', tokenType: 'enumMember' }
+  ]);
+  assert.deepEqual(simplified.filter((token) => token.text === 'Status'), [
+    { line: 12, text: 'Status', tokenType: 'function' }
+  ]);
+  assert.deepEqual(simplified.filter((token) => token.text === 'GET'), [
+    { line: 12, text: 'GET', tokenType: 'enumMember' }
   ]);
   assert.ok(simplified.some((token) => token.text === 'emits' && token.tokenType === 'keyword'));
   assert.ok(simplified.some((token) => token.text === 'client' && token.tokenType === 'keyword'));
@@ -581,7 +674,7 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
   assert.ok(simplified.some((token) => token.text === 'effect' && token.tokenType === 'keyword'));
   assert.ok(simplified.some((token) => token.text === 'select' && token.tokenType === 'function'));
   assert.ok(simplified.some((token) => token.text === 'act' && token.tokenType === 'keyword'));
-  assert.ok(simplified.some((token) => token.text === 'submit' && token.tokenType === 'function'));
+  assert.ok(simplified.some((token) => token.text === 'api' && token.tokenType === 'keyword'));
   assert.ok(simplified.some((token) => token.text === 'g:post' && token.tokenType === 'property'));
   assert.ok(simplified.some((token) => token.text === 'g:on:select' && token.tokenType === 'property'));
   assert.ok(simplified.some((token) => token.text === 'g:if' && token.tokenType === 'property'));
@@ -610,13 +703,21 @@ function symbolMetadata() {
       pages: {
         home: {
           source: '/workspace/home.page.gwdk',
+          imports: [{ alias: 'ui', path: 'example.com/app/ui' }],
           css: ['default', 'forms'],
-          components: ['Hero']
+          components: ['Hero'],
+          stores: [{
+            name: 'cart',
+            type: { alias: 'ui', name: 'CartState' },
+            init: { alias: 'ui', name: 'NewCartState' }
+          }]
         }
       },
       components: {
         Hero: {
           source: '/workspace/hero.cmp.gwdk',
+          imports: [{ alias: 'ui', path: 'example.com/app/ui' }],
+          propsType: { alias: 'ui', name: 'HeroProps' },
           props: [{ name: 'title', type: 'string' }],
           state: {
             type: { alias: 'ui', name: 'HeroState' },

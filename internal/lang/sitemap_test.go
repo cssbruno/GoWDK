@@ -14,14 +14,18 @@ func TestSiteMapJSONIncludesMovableSourceAndRoute(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "pages", "marketing", "home.page.gwdk")
 	dashboard := filepath.Join(root, "anywhere", "dashboard.page.gwdk")
-	writeSiteMapFile(t, home, `@page home
+	writeSiteMapFile(t, home, `package app
+
+@page home
 @route "/"
 @layout root
 
 view {
 }
 `)
-	writeSiteMapFile(t, dashboard, `@page dashboard
+	writeSiteMapFile(t, dashboard, `package app
+
+@page dashboard
 @route "/dashboard"
 @layout root, dashboard
 @render ssr
@@ -46,6 +50,44 @@ view {
 		`"id": "dashboard"`,
 		`"render": "ssr"`,
 		`"auth.required"`,
+		`"routes": [`,
+		`"kind": "spa"`,
+		`"kind": "ssr"`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in sitemap JSON:\n%s", expected, output)
+		}
+	}
+}
+
+func TestSiteMapJSONIncludesEndpointGraph(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "contact.page.gwdk")
+	writeSiteMapFile(t, page, `package app
+
+@page contact
+@route "/contact"
+
+act Submit POST "/contact"
+api Health GET "/api/health"
+
+view {
+  <main>Contact</main>
+}
+`)
+
+	payload, diagnostics := SiteMapJSON(gowdk.Config{}, []string{page})
+	if diagnostics.HasErrors() {
+		t.Fatal(diagnostics)
+	}
+	output := string(payload)
+	for _, expected := range []string{
+		`"endpoints": [`,
+		`"kind": "action"`,
+		`"kind": "api"`,
+		`"symbol": "Submit"`,
+		`"symbol": "Health"`,
+		`"bindingStatus": "missing"`,
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected %q in sitemap JSON:\n%s", expected, output)
@@ -56,7 +98,9 @@ view {
 func TestSiteMapJSONRunsCompilerValidation(t *testing.T) {
 	root := t.TempDir()
 	dashboard := filepath.Join(root, "dashboard.page.gwdk")
-	writeSiteMapFile(t, dashboard, `@page dashboard
+	writeSiteMapFile(t, dashboard, `package app
+
+@page dashboard
 @route "/dashboard"
 @render ssr
 

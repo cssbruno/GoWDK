@@ -22,7 +22,7 @@
       "patterns": [
         {
           "name": "keyword.control.annotation.gwdk",
-          "match": "@(?:page|route|layout|render|guard|component|css)\\b"
+          "match": "@(?:page|route|title|description|canonical|image|layout|render|guard|component|css)\\b"
         }
       ]
     },
@@ -45,11 +45,15 @@
       "patterns": [
         {
           "name": "keyword.control.block.gwdk",
-          "match": "\\b(?:paths|build|load|view|act|api|fragment|props|state|client|emits)\\b"
+          "match": "\\b(?:package|import|use|paths|build|load|view|act|api|fragment|props|state|client|emits)\\b"
         },
         {
           "name": "support.type.render-mode.gwdk",
           "match": "\\b(?:spa|action|hybrid|ssr)\\b"
+        },
+        {
+          "name": "constant.language.http-method.gwdk",
+          "match": "\\b(?:GET|POST|PUT|PATCH|DELETE)\\b"
         }
       ]
     },

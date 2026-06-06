@@ -1,3 +1,5 @@
+package diagnostics
+
 @page blog.post
 @route "/blog/{slug}"
 

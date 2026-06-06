@@ -665,6 +665,7 @@ function toolInvocation(args, document) {
     cwd,
     isSourceWorkspace: isGOWDKSourceWorkspace(cwd),
     localBinary: localGOWDKBinary(cwd),
+    sourceWorkspaceRoot: configuredGOWDKSourceRoot() || core.nearbyGOWDKSourceRoot(cwd),
     requiresGOWDK: cwd && workspaceRequiresGOWDK(cwd)
   });
 }
@@ -684,6 +685,25 @@ function workspaceRequiresGOWDK(cwd) {
   } catch (_error) {
     return false;
   }
+}
+
+function configuredGOWDKSourceRoot() {
+  const sourcePath = config().get('sourcePath');
+  if (!sourcePath) {
+    return '';
+  }
+  const resolved = path.resolve(expandHome(sourcePath));
+  return core.isGOWDKSourceDir(resolved) ? resolved : '';
+}
+
+function expandHome(value) {
+  if (value === '~') {
+    return os.homedir();
+  }
+  if (typeof value === 'string' && value.startsWith(`~${path.sep}`)) {
+    return path.join(os.homedir(), value.slice(2));
+  }
+  return value;
 }
 
 function workspaceRoot(document) {

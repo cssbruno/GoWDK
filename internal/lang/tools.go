@@ -57,7 +57,7 @@ func ParseSource(path string, source []byte) (manifest.Page, Diagnostics) {
 	if err != nil {
 		diagnostics = append(diagnostics, Diagnostic{
 			File:     path,
-			Code:     "parse_error",
+			Code:     parserErrorCode(err.Error()),
 			Pos:      parserErrorPosition(err.Error()),
 			Range:    parserErrorRange(source, err.Error()),
 			Severity: "error",
@@ -65,6 +65,21 @@ func ParseSource(path string, source []byte) (manifest.Page, Diagnostics) {
 		})
 	}
 	return page, diagnostics
+}
+
+func parserErrorCode(message string) string {
+	switch {
+	case strings.Contains(message, "old action block syntax"):
+		return "old_action_block_syntax"
+	case strings.Contains(message, "old API block syntax"):
+		return "old_api_block_syntax"
+	case strings.Contains(message, "package declaration must be the first"):
+		return "package_must_be_first"
+	case strings.Contains(message, "malformed use"):
+		return "malformed_gowdk_use"
+	default:
+		return "parse_error"
+	}
 }
 
 func parserErrorPosition(message string) Position {
@@ -156,7 +171,7 @@ func ParseLayoutSource(path string, source []byte) (manifest.Layout, Diagnostics
 	if err != nil {
 		diagnostics = append(diagnostics, Diagnostic{
 			File:     path,
-			Code:     "parse_error",
+			Code:     parserErrorCode(err.Error()),
 			Pos:      parserErrorPosition(err.Error()),
 			Range:    parserErrorRange(source, err.Error()),
 			Severity: "error",
@@ -181,7 +196,7 @@ func ParseComponentSource(path string, source []byte) (manifest.Component, Diagn
 	if err != nil {
 		diagnostics = append(diagnostics, Diagnostic{
 			File:     path,
-			Code:     "parse_error",
+			Code:     parserErrorCode(err.Error()),
 			Pos:      parserErrorPosition(err.Error()),
 			Range:    parserErrorRange(source, err.Error()),
 			Severity: "error",
@@ -356,6 +371,22 @@ func compilerDiagnostics(err error, app manifest.Manifest) Diagnostics {
 func diagnosticSuggestion(validation compiler.ValidationError) string {
 	message := validation.Message
 	switch validation.Code {
+	case "missing_package_declaration":
+		return "Add package <name> before annotations, imports, and blocks."
+	case "package_mismatch":
+		return "Use the same package name as sibling .go files in this directory."
+	case "go_package_error":
+		return "Fix the sibling Go package before running GOWDK validation."
+	case "duplicate_gowdk_use_alias":
+		return "Use each GOWDK package alias only once in this file."
+	case "unknown_gowdk_use_package":
+		return "Make sure a discovered .cmp.gwdk file declares that package, or remove the use declaration."
+	case "unknown_gowdk_use_alias":
+		return "Declare the GOWDK package alias with use alias \"package\" before using qualified component tags."
+	case "unknown_gowdk_component":
+		return "Use a component exported by the imported GOWDK package, or fix the package alias."
+	case "unsupported_gowdk_use_scope":
+		return "Move this use declaration to the page that calls the imported component, or keep the component in the same package."
 	case "missing_ssr_addon":
 		return "Enable ssr.Addon() in gowdk.config.go or change the page render mode."
 	case "spa_dynamic_route_missing_paths":
@@ -415,6 +446,11 @@ func pageSources(app manifest.Manifest) map[string]string {
 	for _, page := range app.Pages {
 		if page.Source != "" && sources[page.ID] == "" {
 			sources[page.ID] = page.Source
+		}
+	}
+	for _, component := range app.Components {
+		if component.Source != "" && sources[component.Name] == "" {
+			sources[component.Name] = component.Source
 		}
 	}
 	return sources

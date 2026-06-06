@@ -1,3 +1,5 @@
+package grammar
+
 @page grammar.demo
 @route "/demo/{slug}"
 @layout root, demo
@@ -8,16 +10,12 @@ paths {
   => { slug: "starter" }
 }
 
-act submit {
-  input := form DemoInput
-  valid(input)?
-  -> "/demo/starter?ok=1"
-}
+act Submit POST "/demo/{slug}"
 
 view {
   <main>
     <h1 .title>{slug}</h1>
-    <form g:post={submit}>
+    <form g:post={Submit}>
       <button>Save</button>
     </form>
   </main>

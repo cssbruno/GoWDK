@@ -4,16 +4,16 @@
       "file": "testdata/diagnostics_golden/invalid.page.gwdk",
       "code": "spa_dynamic_route_missing_paths",
       "pos": {
-        "line": 2,
+        "line": 4,
         "column": 15
       },
       "range": {
         "start": {
-          "line": 2,
+          "line": 4,
           "column": 15
         },
         "end": {
-          "line": 2,
+          "line": 4,
           "column": 21
         }
       },

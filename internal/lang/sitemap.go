@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 // SiteMap is an editor-facing route and file map.
 type SiteMap struct {
-	Pages []SiteMapPage `json:"pages"`
+	Pages     []SiteMapPage     `json:"pages"`
+	Routes    []SiteMapRoute    `json:"routes,omitempty"`
+	Endpoints []SiteMapEndpoint `json:"endpoints,omitempty"`
 }
 
 // SiteMapPage describes one movable page file and its route identity.
@@ -34,6 +37,28 @@ type SiteMapBlocks struct {
 	APIs    []string `json:"apis,omitempty"`
 }
 
+// SiteMapRoute describes one generated route graph entry.
+type SiteMapRoute struct {
+	Kind    compiler.RouteKind `json:"kind"`
+	Method  string             `json:"method"`
+	Route   string             `json:"route"`
+	PageID  string             `json:"pageId"`
+	Handler string             `json:"handler,omitempty"`
+}
+
+// SiteMapEndpoint describes one generated action/API endpoint graph entry.
+type SiteMapEndpoint struct {
+	Kind          compiler.EndpointKind         `json:"kind"`
+	Method        string                        `json:"method"`
+	Route         string                        `json:"route"`
+	PageID        string                        `json:"pageId"`
+	Symbol        string                        `json:"symbol,omitempty"`
+	Package       string                        `json:"package,omitempty"`
+	BindingStatus manifest.BackendBindingStatus `json:"bindingStatus,omitempty"`
+	Signature     manifest.BackendSignatureKind `json:"signature,omitempty"`
+	InputType     string                        `json:"inputType,omitempty"`
+}
+
 // BuildSiteMap converts a manifest into the editor-facing site map.
 func BuildSiteMap(config gowdk.Config, app manifest.Manifest) SiteMap {
 	pages := make([]SiteMapPage, 0, len(app.Pages))
@@ -56,7 +81,15 @@ func BuildSiteMap(config gowdk.Config, app manifest.Manifest) SiteMap {
 			},
 		})
 	}
-	return SiteMap{Pages: pages}
+	metadata, err := compiler.BuildRouteMetadata(config, app)
+	if err != nil {
+		return SiteMap{Pages: pages}
+	}
+	return SiteMap{
+		Pages:     pages,
+		Routes:    siteMapRoutes(metadata.Routes),
+		Endpoints: siteMapEndpoints(metadata.Endpoints),
+	}
 }
 
 // SiteMapJSON returns the JSON site map for parsed and validated files.
@@ -92,4 +125,42 @@ func apiNames(apis []manifest.API) []string {
 		names = append(names, api.Name)
 	}
 	return names
+}
+
+func siteMapRoutes(routes []compiler.RouteBinding) []SiteMapRoute {
+	if len(routes) == 0 {
+		return nil
+	}
+	out := make([]SiteMapRoute, 0, len(routes))
+	for _, route := range routes {
+		out = append(out, SiteMapRoute{
+			Kind:    route.Kind,
+			Method:  route.Method,
+			Route:   route.Route,
+			PageID:  route.PageID,
+			Handler: route.Handler,
+		})
+	}
+	return out
+}
+
+func siteMapEndpoints(endpoints []compiler.EndpointBinding) []SiteMapEndpoint {
+	if len(endpoints) == 0 {
+		return nil
+	}
+	out := make([]SiteMapEndpoint, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		out = append(out, SiteMapEndpoint{
+			Kind:          endpoint.Kind,
+			Method:        endpoint.Method,
+			Route:         endpoint.Route,
+			PageID:        endpoint.PageID,
+			Symbol:        endpoint.Symbol,
+			Package:       endpoint.Package,
+			BindingStatus: endpoint.BindingStatus,
+			Signature:     endpoint.BindingSignature,
+			InputType:     endpoint.BindingInputType,
+		})
+	}
+	return out
 }

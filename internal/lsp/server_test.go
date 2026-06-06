@@ -16,7 +16,7 @@ import (
 func TestServerHandlesInitializeDiagnosticsFormattingCompletionAndShutdown(t *testing.T) {
 	uri := "file:///tmp/bad.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"@page bad\n@route \"/bad\"\n\nview {\n<h1>Bad</h1>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@page bad\n@route \"/bad\"\n\nview {\n<h1>Bad</h1>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/formatting","params":{"textDocument":{"uri":"`+uri+`"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/completion","params":{"textDocument":{"uri":"`+uri+`"},"position":{"line":0,"character":0}}}`) +
 		framed(`{"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}`) +
@@ -52,7 +52,7 @@ func TestServerHandlesInitializeDiagnosticsFormattingCompletionAndShutdown(t *te
 		t.Fatalf("expected one formatting edit, got %#v", edits)
 	}
 	edit := edits[0].(map[string]any)
-	if edit["newText"] != "@page bad\n@route \"/bad\"\n\nview {\n  <h1>Bad</h1>\n}\n" {
+	if edit["newText"] != "package app\n\n@page bad\n@route \"/bad\"\n\nview {\n  <h1>Bad</h1>\n}\n" {
 		t.Fatalf("unexpected formatted text: %#v", edit["newText"])
 	}
 
@@ -61,6 +61,9 @@ func TestServerHandlesInitializeDiagnosticsFormattingCompletionAndShutdown(t *te
 	if !hasCompletionLabel(completion["items"].([]any), "@page") {
 		t.Fatalf("expected @page completion, got %#v", completion["items"])
 	}
+	if !hasCompletionLabel(completion["items"].([]any), "g:bind:value") {
+		t.Fatalf("expected g:bind:value completion, got %#v", completion["items"])
+	}
 
 	assertResponseID(t, messages[4], float64(4))
 }
@@ -68,7 +71,7 @@ func TestServerHandlesInitializeDiagnosticsFormattingCompletionAndShutdown(t *te
 func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 	uri := "file:///tmp/bad.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"@page bad\n@render nope\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@page bad\n@render nope\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"`+uri+`"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)
@@ -96,8 +99,8 @@ func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 	firstRange := first["range"].(map[string]any)
 	start := firstRange["start"].(map[string]any)
 	end := firstRange["end"].(map[string]any)
-	if start["line"] != float64(1) || start["character"] != float64(0) ||
-		end["line"] != float64(1) || end["character"] != float64(12) {
+	if start["line"] != float64(3) || start["character"] != float64(0) ||
+		end["line"] != float64(3) || end["character"] != float64(12) {
 		t.Fatalf("expected full parse-error line range, got %#v", firstRange)
 	}
 	secondDiagnostics := messages[2]["params"].(map[string]any)["diagnostics"].([]any)
@@ -109,7 +112,7 @@ func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 func TestServerPublishesComponentClientDiagnostics(t *testing.T) {
 	uri := "file:///tmp/counter.cmp.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"@component Counter\n\nclient {\n  fn Bad() {\n    Missing++\n  }\n}\n\nview {\n  <button g:on:click={Bad()}>Bad</button>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@component Counter\n\nclient {\n  fn Bad() {\n    Missing++\n  }\n}\n\nview {\n  <button g:on:click={Bad()}>Bad</button>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)
 
@@ -146,8 +149,8 @@ func TestServerPublishesComponentClientDiagnostics(t *testing.T) {
 	diagnosticRange := diagnostic["range"].(map[string]any)
 	start := diagnosticRange["start"].(map[string]any)
 	end := diagnosticRange["end"].(map[string]any)
-	if start["line"] != float64(4) || start["character"] != float64(0) ||
-		end["line"] != float64(4) || end["character"] != float64(1) {
+	if start["line"] != float64(6) || start["character"] != float64(0) ||
+		end["line"] != float64(6) || end["character"] != float64(1) {
 		t.Fatalf("expected client statement range, got %#v", diagnosticRange)
 	}
 

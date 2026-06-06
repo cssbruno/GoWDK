@@ -4,6 +4,7 @@
     "home": {
       "source": "testdata/manifest_golden/home.page.gwdk",
       "kind": "page",
+      "package": "home",
       "route": "/",
       "render": "action",
       "layouts": [
@@ -15,16 +16,14 @@
         "load": false,
         "view": true,
         "actions": [
-          "submit"
+          "Submit"
         ]
       },
       "actions": [
         {
-          "name": "submit",
-          "inputName": "input",
-          "inputType": "SignupInput",
-          "validatesInput": true,
-          "redirect": "/?ok=1"
+          "name": "Submit",
+          "method": "POST",
+          "route": "/"
         }
       ],
       "components": [
@@ -42,6 +41,7 @@
     "Hero": {
       "source": "testdata/manifest_golden/hero.cmp.gwdk",
       "kind": "component",
+      "package": "home",
       "props": [
         {
           "name": "title",
@@ -55,7 +55,7 @@
       "kind": "action",
       "pageId": "home",
       "source": "testdata/manifest_golden/home.page.gwdk",
-      "blockName": "submit",
+      "blockName": "Submit",
       "method": "POST",
       "route": "/",
       "functionName": "Submit",

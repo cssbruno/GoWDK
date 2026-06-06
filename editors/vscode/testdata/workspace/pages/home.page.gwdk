@@ -1,12 +1,10 @@
+package pages
+
 @page home
 @route "/"
 @layout root
 
-act subscribe {
-  input := form SignupInput
-  valid(input)?
-  -> "/?ok=1"
-}
+act Subscribe POST "/"
 
 view {
   <main><Hero title="Home" /></main>

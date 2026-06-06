@@ -2,9 +2,13 @@
   "SPA page": {
     "prefix": "page",
     "body": [
-      "@page ${1:home}",
-      "@route \"${2:/}\"",
-      "@layout ${3:root}",
+      "package ${1:app}",
+      "",
+      "@page ${2:home}",
+      "@route \"${3:/}\"",
+      "@title \"${4:Home}\"",
+      "@description \"${5:Compile-first Go web output.}\"",
+      "@layout ${6:root}",
       "",
       "view {",
       "  ${0:<h1>GOWDK</h1>}",
@@ -15,17 +19,21 @@
   "SPA dynamic page with paths": {
     "prefix": "paths",
     "body": [
-      "@page ${1:blog.post}",
-      "@route \"${2:/blog/{slug}}\"",
-      "@layout ${3:root, blog}",
+      "package ${1:app}",
+      "",
+      "@page ${2:blog.post}",
+      "@route \"${3:/blog/{slug}}\"",
+      "@title \"${4:Blog post}\"",
+      "@description \"${5:Compile-first Go web output.}\"",
+      "@layout ${6:root, blog}",
       "@render spa",
       "",
       "paths {",
-      "  ${4:=> { slug: \"hello\" }}",
+      "  ${7:=> { slug: \"hello\" }}",
       "}",
       "",
       "build {",
-      "  ${5:// build-time data}",
+      "  ${8:// build-time data}",
       "}",
       "",
       "view {",
@@ -34,16 +42,33 @@
     ],
     "description": "Create a dynamic spa page with paths"
   },
-  "Action block": {
+  "Action endpoint": {
     "prefix": "act",
     "body": [
-      "act ${1:submit} {",
-      "  ${2:input := form ${3:Input}}",
-      "  ${4:valid(input)?}",
-      "  -> \"${5:/thanks}\"",
-      "}"
+      "act ${1:Submit} POST \"${2:/submit}\""
     ],
-    "description": "Create an action block"
+    "description": "Create an action endpoint declaration"
+  },
+  "API endpoint": {
+    "prefix": "api",
+    "body": [
+      "api ${1:Status} GET \"${2:/api/status}\""
+    ],
+    "description": "Create an API endpoint declaration"
+  },
+  "Go import": {
+    "prefix": "import",
+    "body": [
+      "import ${1:alias} \"${2:github.com/acme/app/pkg}\""
+    ],
+    "description": "Import a normal Go package"
+  },
+  "GOWDK use": {
+    "prefix": "use",
+    "body": [
+      "use ${1:ui} \"${2:components}\""
+    ],
+    "description": "Import a discovered GOWDK package"
   },
   "CSS selection": {
     "prefix": "css",
@@ -55,14 +80,18 @@
   "SSR page": {
     "prefix": "ssr",
     "body": [
-      "@page ${1:dashboard}",
-      "@route \"${2:/dashboard}\"",
-      "@layout ${3:root, dashboard}",
+      "package ${1:app}",
+      "",
+      "@page ${2:dashboard}",
+      "@route \"${3:/dashboard}\"",
+      "@title \"${4:Dashboard}\"",
+      "@description \"${5:Request-time Go page output.}\"",
+      "@layout ${6:root, dashboard}",
       "@render ssr",
-      "@guard ${4:auth.required}",
+      "@guard ${7:auth.required}",
       "",
       "load {",
-      "  ${5:// request-time data}",
+      "  ${8:// request-time data}",
       "}",
       "",
       "view {",
@@ -74,24 +103,26 @@
   "Interactive component": {
     "prefix": "component",
     "body": [
-      "@component ${1:Option}",
+      "package ${1:app}",
+      "",
+      "@component ${2:Option}",
       "",
       "props {",
-      "  ${2:Label string}",
+      "  ${3:Label string}",
       "}",
       "",
       "emits {",
-      "  ${3:select}(label string)",
+      "  ${4:select}(label string)",
       "}",
       "",
       "client {",
-      "  fn ${4:Select}() {",
-      "    emit ${3:select}(Label)",
+      "  fn ${5:Select}() {",
+      "    emit ${4:select}(Label)",
       "  }",
       "}",
       "",
       "view {",
-      "  <button g:on:click={${4:Select}()}>{Label}</button>",
+      "  <button g:on:click={${5:Select}()}>{Label}</button>",
       "  $0",
       "}"
     ],

@@ -93,21 +93,73 @@ function gowdkModuleRunArgs(args) {
   return ['run', `${GOWDK_MODULE_PATH}/cmd/gowdk`, ...args];
 }
 
+function gowdkSourceRunInvocation(args, cwd) {
+  return { command: 'go', args: ['run', './cmd/gowdk', ...args], cwd };
+}
+
 function toolInvocation(args, options = {}) {
   const cwd = options.cwd;
   if (options.cliPath) {
     return { command: options.cliPath, args, cwd };
   }
   if (options.isSourceWorkspace) {
-    return { command: 'go', args: ['run', './cmd/gowdk', ...args], cwd };
+    return gowdkSourceRunInvocation(args, cwd);
   }
   if (options.localBinary) {
     return { command: options.localBinary, args, cwd };
+  }
+  if (options.sourceWorkspaceRoot) {
+    return gowdkSourceRunInvocation(args, options.sourceWorkspaceRoot);
   }
   if (options.requiresGOWDK) {
     return { command: 'go', args: gowdkModuleRunArgs(args), cwd };
   }
   return { command: 'gowdk', args, cwd };
+}
+
+function isGOWDKSourceDir(dir) {
+  if (!dir || !fs.existsSync(path.join(dir, 'cmd', 'gowdk'))) {
+    return false;
+  }
+  try {
+    return goModModulePath(fs.readFileSync(path.join(dir, 'go.mod'), 'utf8')) === GOWDK_MODULE_PATH;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function nearbyGOWDKSourceRoot(startPath) {
+  if (!startPath) {
+    return '';
+  }
+  const checked = new Set();
+  let current = path.resolve(startPath);
+  while (true) {
+    for (const candidate of gowdkSourceCandidates(current)) {
+      const normalized = path.resolve(candidate);
+      if (checked.has(normalized)) {
+        continue;
+      }
+      checked.add(normalized);
+      if (isGOWDKSourceDir(normalized)) {
+        return normalized;
+      }
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+  return '';
+}
+
+function gowdkSourceCandidates(dir) {
+  return [
+    dir,
+    path.join(dir, 'GOWDK'),
+    path.join(dir, 'gowdk')
+  ];
 }
 
 function nearestProjectRoot(startPath, workspaceRoot) {
@@ -450,8 +502,15 @@ function findPageKeyBySource(pages, source) {
 
 function completionEntries() {
   return [
+    ['package', 'Declare the GOWDK package name.'],
+    ['import', 'Import a normal Go package for build functions or typed contracts.'],
+    ['use', 'Import a discovered GOWDK source package with an alias.'],
     ['@page', 'Declare the page id.'],
     ['@route', 'Declare the route path.'],
+    ['@title', 'Declare the generated document title.'],
+    ['@description', 'Declare the generated document description.'],
+    ['@canonical', 'Declare the generated canonical URL.'],
+    ['@image', 'Declare the generated social preview image URL.'],
     ['@layout', 'Declare one or more layout ids.'],
     ['@render', 'Declare render mode: spa, action, hybrid, or ssr.'],
     ['@guard', 'Declare route guards.'],
@@ -461,8 +520,8 @@ function completionEntries() {
     ['paths', 'Build-time dynamic route path block.'],
     ['build', 'Build-time data block.'],
     ['load', 'Request-time data block.'],
-    ['act', 'Action block for POST/form behavior.'],
-    ['api', 'API handler block.'],
+    ['act', 'Action endpoint declaration: act Submit POST "/path".'],
+    ['api', 'API endpoint declaration: api Status GET "/path".'],
     ['fragment', 'Server fragment block inside an action.'],
     ['props', 'Component prop declarations block.'],
     ['state', 'Component state contract declaration.'],
@@ -696,6 +755,26 @@ function hoverMarkdown(token, metadata = {}, context = {}) {
       event.params.length ? `Payload: \`${escapeMarkdown(event.params.join(', '))}\`` : 'Payload: none'
     ].join('\n');
   }
+  const store = projectStores(metadata).find((item) => item.name === value);
+  if (store) {
+    return [
+      `**GOWDK store** \`${escapeMarkdown(value)}\``,
+      '',
+      store.page ? `Page: \`${escapeMarkdown(store.page)}\`` : '',
+      store.type ? `Type: \`${escapeMarkdown(store.type)}\`` : '',
+      store.init ? `Init: \`${escapeMarkdown(store.init)}\`` : ''
+    ].filter(Boolean).join('\n');
+  }
+  const goContract = projectGoContracts(metadata).find((item) => item.name === value || item.alias === value);
+  if (goContract) {
+    return [
+      `**GOWDK Go contract** \`${escapeMarkdown(value)}\``,
+      '',
+      goContract.alias ? `Import alias: \`${escapeMarkdown(goContract.alias)}\`` : '',
+      goContract.path ? `Import path: \`${escapeMarkdown(goContract.path)}\`` : '',
+      goContract.owner ? `Declared by: \`${escapeMarkdown(goContract.owner)}\`` : ''
+    ].filter(Boolean).join('\n');
+  }
   const layout = projectLayouts(metadata).find((item) => item.id === value);
   if (layout) {
     const lines = [
@@ -747,6 +826,14 @@ function definitionTarget(token, metadata = {}, context = {}) {
   if (event && event.source) {
     return { file: event.source, line: 0, column: 0 };
   }
+  const store = projectStores(metadata).find((item) => item.name === value);
+  if (store && store.source) {
+    return { file: store.source, line: 0, column: 0 };
+  }
+  const goContract = projectGoContracts(metadata).find((item) => item.name === value || item.alias === value);
+  if (goContract && goContract.source) {
+    return { file: goContract.source, line: 0, column: 0 };
+  }
   const layout = projectLayouts(metadata).find((item) => item.id === value);
   if (layout && layout.source) {
     return { file: layout.source, line: 0, column: 0 };
@@ -795,6 +882,14 @@ function symbolReferences(token, metadata = {}, options = {}) {
   if (event && event.source && includeDeclaration) {
     refs.push(fileLocation(event.source));
   }
+  const store = projectStores(metadata).find((item) => item.name === value);
+  if (store && store.source && includeDeclaration) {
+    refs.push(fileLocation(store.source));
+  }
+  const goContract = projectGoContracts(metadata).find((item) => item.name === value || item.alias === value);
+  if (goContract && goContract.source && includeDeclaration) {
+    refs.push(fileLocation(goContract.source));
+  }
   const layout = projectLayouts(metadata).find((item) => item.id === value);
   if (layout && layout.source && includeDeclaration) {
     refs.push(fileLocation(layout.source));
@@ -830,8 +925,118 @@ function symbolReferences(token, metadata = {}, options = {}) {
     if ((item.components || []).includes(value)) {
       refs.push(fileLocation(item.source));
     }
+    if ((item.stores || []).some((store) => store.name === value)) {
+      refs.push(fileLocation(item.source));
+    }
+  }
+  for (const item of Object.values(manifest.components || {})) {
+    if (!item.source) {
+      continue;
+    }
+    if (componentUsesGoContract(item, value)) {
+      refs.push(fileLocation(item.source));
+    }
   }
 	return uniqueLocations(refs);
+}
+
+function projectStores(metadata = {}) {
+  const stores = [];
+  for (const page of projectPages(metadata)) {
+    for (const store of page.stores || []) {
+      stores.push(normalizeStore(store, page));
+    }
+  }
+  for (const [id, page] of Object.entries((metadata.manifest && metadata.manifest.pages) || {})) {
+    for (const store of page.stores || []) {
+      stores.push(normalizeStore(store, { id, ...page }));
+    }
+  }
+  return uniqueBy(stores.filter(Boolean), (store) => `${store.source || ''}\0${store.name}`);
+}
+
+function normalizeStore(store = {}, page = {}) {
+  const name = store.name || store.Name;
+  if (!name) {
+    return undefined;
+  }
+  return {
+    name: String(name),
+    page: page.id || '',
+    source: store.source || page.source || '',
+    type: formatGoRef(store.type || store.Type),
+    init: formatGoRef(store.init || store.Init)
+  };
+}
+
+function projectGoContracts(metadata = {}) {
+  const contracts = [];
+  for (const [id, page] of Object.entries((metadata.manifest && metadata.manifest.pages) || {})) {
+    collectGoContractsFromOwner(contracts, { id, ...page }, `page ${id}`);
+  }
+  for (const [name, component] of Object.entries((metadata.manifest && metadata.manifest.components) || {})) {
+    collectGoContractsFromOwner(contracts, { name, ...component }, `component ${name}`);
+  }
+  return uniqueBy(contracts.filter(Boolean), (contract) => `${contract.source || ''}\0${contract.alias || ''}\0${contract.name || ''}`);
+}
+
+function collectGoContractsFromOwner(contracts, owner = {}, label = '') {
+  for (const item of owner.imports || []) {
+    contracts.push({
+      alias: item.alias || '',
+      name: item.alias || '',
+      path: item.path || '',
+      source: owner.source || '',
+      owner: label
+    });
+  }
+  collectGoRefContract(contracts, owner.propsType, owner, label);
+  collectGoRefContract(contracts, owner.state && owner.state.type, owner, label);
+  collectGoRefContract(contracts, owner.state && owner.state.init, owner, label);
+  for (const store of owner.stores || []) {
+    collectGoRefContract(contracts, store.type, owner, label);
+    collectGoRefContract(contracts, store.init, owner, label);
+  }
+}
+
+function collectGoRefContract(contracts, ref, owner = {}, label = '') {
+  if (!ref || !ref.name) {
+    return;
+  }
+  contracts.push({
+    alias: ref.alias || '',
+    name: ref.name || '',
+    path: importPathForAlias(owner.imports || [], ref.alias),
+    source: owner.source || '',
+    owner: label
+  });
+}
+
+function importPathForAlias(imports = [], alias = '') {
+  const item = imports.find((entry) => entry.alias === alias);
+  return item ? item.path || '' : '';
+}
+
+function componentUsesGoContract(component = {}, value = '') {
+  if (!value) {
+    return false;
+  }
+  const refs = [
+    component.propsType,
+    component.state && component.state.type,
+    component.state && component.state.init
+  ].filter(Boolean);
+  if (refs.some((ref) => ref.name === value || ref.alias === value)) {
+    return true;
+  }
+  return (component.imports || []).some((item) => item.alias === value);
+}
+
+function formatGoRef(ref) {
+  if (!ref || !ref.name) {
+    return '';
+  }
+  return [ref.alias, ref.name].filter(Boolean).join('.');
 }
 
 function canRenameSymbol(token, metadata = {}) {
@@ -855,6 +1060,12 @@ function projectSymbolExists(token, metadata = {}) {
     return true;
   }
   if (componentEvent(value, metadata)) {
+    return true;
+  }
+  if (projectStores(metadata).some((store) => store.name === value)) {
+    return true;
+  }
+  if (projectGoContracts(metadata).some((item) => item.name === value || item.alias === value)) {
     return true;
   }
   if (projectLayouts(metadata).some((layout) => layout.id === value)) {
@@ -900,8 +1111,9 @@ function semanticTokens(source) {
   for (let line = 0; line < lines.length; line++) {
     const text = lines[line];
     collectPatternTokens(tokens, line, text, /@[A-Za-z_][A-Za-z0-9_]*/g, 'namespace');
-    collectPatternTokens(tokens, line, text, /\b(paths|build|load|act|api|fragment|view|props|state|client|emits)\b/g, 'keyword');
+    collectPatternTokens(tokens, line, text, /\b(package|import|use|paths|build|load|act|api|fragment|view|props|state|client|emits)\b/g, 'keyword');
     collectPatternTokens(tokens, line, text, /\b(async|fn|computed|on|mount|destroy|effect|when|ref|let|return|await|if|else|in|emit)\b/g, 'keyword');
+    collectPatternTokens(tokens, line, text, /\b(GET|POST|PUT|PATCH|DELETE)\b/g, 'enumMember');
     collectPatternTokens(tokens, line, text, /\b(spa|action|hybrid|ssr)\b/g, 'enumMember');
     collectPatternTokens(tokens, line, text, /\b(string|int|float|bool)\b/g, 'enumMember');
     collectPatternTokens(tokens, line, text, /\bg:(post|target|swap|ref|if|else-if|else|for|key|bind:(?:value|checked)|island)\b/g, 'property');
@@ -1044,6 +1256,20 @@ function unique(values) {
 	return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
 }
 
+function uniqueBy(values, keyFn) {
+  const seen = new Set();
+  const out = [];
+  for (const value of values) {
+    const key = keyFn(value);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
+}
+
 function positionAt(source, offset) {
   const lines = String(source || '').slice(0, offset).split(/\r?\n/);
   return {
@@ -1078,6 +1304,8 @@ module.exports = {
   gowdkModuleRunArgs,
   groupDiagnosticsByFile,
   hoverMarkdown,
+  isGOWDKSourceDir,
+  nearbyGOWDKSourceRoot,
   nearestProjectRoot,
   parseDiagnostics,
   pageFlow,

@@ -13,7 +13,9 @@ import (
 func TestCheckFilesValidatesRenderRules(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "dashboard.page.gwdk")
-	writeGWDK(t, path, `@page dashboard
+	writeGWDK(t, path, `package app
+
+@page dashboard
 @route "/dashboard"
 @render ssr
 
@@ -36,7 +38,9 @@ view {
 }
 
 func TestCheckSourceValidatesUnsavedBuffer(t *testing.T) {
-	_, diagnostics := CheckSource(gowdk.Config{}, "untitled.gwdk", []byte(`@page post
+	_, diagnostics := CheckSource(gowdk.Config{}, "untitled.gwdk", []byte(`package app
+
+@page post
 @route "/blog/{slug}"
 
 view {
@@ -61,25 +65,41 @@ func TestCompletionsIncludeCoreLanguageKeywords(t *testing.T) {
 	if len(completions) == 0 {
 		t.Fatal("expected completions")
 	}
-	var foundPage bool
-	var foundPost bool
+	labels := map[string]bool{}
 	for _, item := range completions {
-		if item.Label == "@page" {
-			foundPage = true
-		}
-		if item.Label == "g:post" {
-			foundPost = true
-		}
+		labels[item.Label] = true
 	}
-	if !foundPage || !foundPost {
-		t.Fatalf("missing expected completions: %#v", completions)
+	for _, expected := range []string{
+		"@page",
+		"@component",
+		"@layout",
+		"package",
+		"use",
+		"store",
+		"props",
+		"state",
+		"client",
+		"computed",
+		"emits",
+		"g:post",
+		"g:if",
+		"g:for",
+		"g:bind:value",
+		"g:ref",
+		`param("slug")`,
+	} {
+		if !labels[expected] {
+			t.Fatalf("missing completion %q in %#v", expected, completions)
+		}
 	}
 }
 
 func TestManifestJSONEmitsParsedPage(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "home.page.gwdk")
-	writeGWDK(t, path, `@page home
+	writeGWDK(t, path, `package app
+
+@page home
 @route "/"
 @layout root
 
@@ -99,7 +119,9 @@ view {
 func TestManifestJSONUsesConfiguredDefaultRenderMode(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "home.page.gwdk")
-	writeGWDK(t, path, `@page home
+	writeGWDK(t, path, `package app
+
+@page home
 @route "/"
 
 view {
@@ -132,6 +154,15 @@ func TestManifestJSONGoldenFixture(t *testing.T) {
 
 	if strings.TrimSpace(string(payload)) != strings.TrimSpace(string(expected)) {
 		t.Fatalf("manifest golden mismatch\nexpected:\n%s\nactual:\n%s", expected, payload)
+	}
+}
+
+func TestCheckFilesAcceptsGoInteropExample(t *testing.T) {
+	path := filepath.FromSlash("../../examples/go-interop/imported-build.page.gwdk")
+
+	_, diagnostics := CheckFiles(gowdk.Config{}, []string{path})
+	if diagnostics.HasErrors() {
+		t.Fatal(diagnostics)
 	}
 }
 
@@ -179,14 +210,18 @@ func TestParseBuildFilesParsesLayoutFilesAndSkipsNonGWDKInputs(t *testing.T) {
 	layout := filepath.Join(root, "root.layout.gwdk")
 	asset := filepath.Join(root, "images.asset.gwdk")
 	plugin := filepath.Join(root, "tailwind.plugin.gwdk")
-	writeGWDK(t, page, `@page home
+	writeGWDK(t, page, `package app
+
+@page home
 @route "/"
 @layout root
 
 view {
 }
 `)
-	writeGWDK(t, layout, `@layout root
+	writeGWDK(t, layout, `package app
+
+@layout root
 
 view {
   <slot />
@@ -215,7 +250,9 @@ view {
 func TestCheckJSONReportsCompilerDiagnosticsWithFile(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "dashboard.page.gwdk")
-	writeGWDK(t, path, `@page dashboard
+	writeGWDK(t, path, `package app
+
+@page dashboard
 @route "/dashboard"
 @render ssr
 
@@ -237,12 +274,12 @@ view {
 	if !strings.Contains(output, `"code": "missing_ssr_addon"`) {
 		t.Fatalf("expected diagnostic code in JSON: %s", output)
 	}
-	if diagnostics[0].Pos.Line != 3 || diagnostics[0].Pos.Column != 1 {
+	if diagnostics[0].Pos.Line != 5 || diagnostics[0].Pos.Column != 1 {
 		t.Fatalf("expected compiler diagnostic at @render line, got %#v", diagnostics[0].Pos)
 	}
 	if diagnostics[0].Range == nil ||
-		diagnostics[0].Range.Start.Line != 3 || diagnostics[0].Range.Start.Column != 1 ||
-		diagnostics[0].Range.End.Line != 3 || diagnostics[0].Range.End.Column != 12 {
+		diagnostics[0].Range.Start.Line != 5 || diagnostics[0].Range.Start.Column != 1 ||
+		diagnostics[0].Range.End.Line != 5 || diagnostics[0].Range.End.Column != 12 {
 		t.Fatalf("expected compiler diagnostic range for @render, got %#v", diagnostics[0].Range)
 	}
 	if !strings.Contains(output, "SSR addon is not enabled") {
@@ -253,7 +290,9 @@ view {
 func TestParseFileReportsParserDiagnosticLine(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "bad.page.gwdk")
-	writeGWDK(t, path, `@page bad
+	writeGWDK(t, path, `package app
+
+@page bad
 @route "/bad"
 @render nope
 `)
@@ -262,8 +301,8 @@ func TestParseFileReportsParserDiagnosticLine(t *testing.T) {
 	if !diagnostics.HasErrors() {
 		t.Fatal("expected parser diagnostic")
 	}
-	if diagnostics[0].Pos.Line != 3 || diagnostics[0].Pos.Column != 1 {
-		t.Fatalf("expected line 3 diagnostic, got %#v", diagnostics[0].Pos)
+	if diagnostics[0].Pos.Line != 5 || diagnostics[0].Pos.Column != 1 {
+		t.Fatalf("expected line 5 diagnostic, got %#v", diagnostics[0].Pos)
 	}
 	if diagnostics[0].Code != "parse_error" {
 		t.Fatalf("expected parse_error code, got %#v", diagnostics[0])
@@ -271,8 +310,8 @@ func TestParseFileReportsParserDiagnosticLine(t *testing.T) {
 	if diagnostics[0].Range == nil {
 		t.Fatalf("expected parse diagnostic range, got %#v", diagnostics[0])
 	}
-	if diagnostics[0].Range.Start.Line != 3 || diagnostics[0].Range.Start.Column != 1 ||
-		diagnostics[0].Range.End.Line != 3 || diagnostics[0].Range.End.Column != 13 {
+	if diagnostics[0].Range.Start.Line != 5 || diagnostics[0].Range.Start.Column != 1 ||
+		diagnostics[0].Range.End.Line != 5 || diagnostics[0].Range.End.Column != 13 {
 		t.Fatalf("unexpected parse diagnostic range: %#v", diagnostics[0].Range)
 	}
 }
@@ -280,7 +319,9 @@ func TestParseFileReportsParserDiagnosticLine(t *testing.T) {
 func TestCheckJSONReportsParserDiagnosticRangeAndCode(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "bad.page.gwdk")
-	writeGWDK(t, path, `@page bad
+	writeGWDK(t, path, `package app
+
+@page bad
 @route "/bad"
 @render nope
 `)
@@ -303,7 +344,9 @@ func TestCheckJSONReportsParserDiagnosticRangeAndCode(t *testing.T) {
 func TestCheckJSONReportsClientStatementDiagnosticRange(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "counter.cmp.gwdk")
-	writeGWDK(t, path, `@component Counter
+	writeGWDK(t, path, `package app
+
+@component Counter
 
 client {
   fn Bad() {
@@ -327,17 +370,17 @@ view {
 	if diagnostic.Code != "component_client_error" {
 		t.Fatalf("expected component_client_error, got %#v", diagnostic)
 	}
-	if diagnostic.Pos.Line != 5 || diagnostic.Pos.Column != 1 {
-		t.Fatalf("expected client statement diagnostic at line 5, got %#v\n%s", diagnostic.Pos, payload)
+	if diagnostic.Pos.Line != 7 || diagnostic.Pos.Column != 1 {
+		t.Fatalf("expected client statement diagnostic at line 7, got %#v\n%s", diagnostic.Pos, payload)
 	}
 	if diagnostic.Range == nil ||
-		diagnostic.Range.Start.Line != 5 || diagnostic.Range.Start.Column != 1 ||
-		diagnostic.Range.End.Line != 5 || diagnostic.Range.End.Column != 2 {
+		diagnostic.Range.Start.Line != 7 || diagnostic.Range.Start.Column != 1 ||
+		diagnostic.Range.End.Line != 7 || diagnostic.Range.End.Column != 2 {
 		t.Fatalf("unexpected client statement diagnostic range: %#v\n%s", diagnostic.Range, payload)
 	}
 	output := string(payload)
 	if !strings.Contains(output, `"code": "component_client_error"`) ||
-		!strings.Contains(output, `"line": 5`) ||
+		!strings.Contains(output, `"line": 7`) ||
 		!strings.Contains(output, `unknown island field \"Missing\"`) ||
 		!strings.Contains(output, `"suggestion": "Use a field declared by the component props/state contract`) {
 		t.Fatalf("expected client diagnostic JSON details, got: %s", output)
@@ -347,7 +390,9 @@ view {
 func TestCheckJSONReportsBadGForSuggestion(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "nested.cmp.gwdk")
-	writeGWDK(t, path, `import ui "github.com/cssbruno/gowdk/testfixture/islands"
+	writeGWDK(t, path, `package app
+
+import ui "github.com/cssbruno/gowdk/testfixture/islands"
 
 @component Nested
 
@@ -377,7 +422,9 @@ view {
 func TestCheckJSONReportsClientExpressionDiagnosticRange(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "counter.cmp.gwdk")
-	writeGWDK(t, path, `import ui "github.com/cssbruno/gowdk/testfixture/islands"
+	writeGWDK(t, path, `package app
+
+import ui "github.com/cssbruno/gowdk/testfixture/islands"
 
 @component Counter
 
@@ -405,12 +452,12 @@ view {
 	if diagnostic.Code != "component_client_error" {
 		t.Fatalf("expected component_client_error, got %#v", diagnostic)
 	}
-	if diagnostic.Pos.Line != 9 || diagnostic.Pos.Column != 9 {
-		t.Fatalf("expected client expression diagnostic at line 9 column 9, got %#v\n%s", diagnostic.Pos, payload)
+	if diagnostic.Pos.Line != 11 || diagnostic.Pos.Column != 9 {
+		t.Fatalf("expected client expression diagnostic at line 11 column 9, got %#v\n%s", diagnostic.Pos, payload)
 	}
 	if diagnostic.Range == nil ||
-		diagnostic.Range.Start.Line != 9 || diagnostic.Range.Start.Column != 9 ||
-		diagnostic.Range.End.Line != 9 || diagnostic.Range.End.Column != 22 {
+		diagnostic.Range.Start.Line != 11 || diagnostic.Range.Start.Column != 9 ||
+		diagnostic.Range.End.Line != 11 || diagnostic.Range.End.Column != 22 {
 		t.Fatalf("unexpected client expression diagnostic range: %#v\n%s", diagnostic.Range, payload)
 	}
 	output := string(payload)

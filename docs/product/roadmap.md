@@ -73,7 +73,7 @@ These are the durable rules. Changing them should require an ADR.
 12. SSR is an integrated non-default request-time page-rendering lane.
 13. One-binary deploy must work with and without request-time page rendering.
 14. Core stays `net/http` compatible; Gin, Echo, Fiber, and similar frameworks
-    can be adapters later, not core dependencies.
+    are optional adapters, not core dependencies.
 15. CSS and styling tooling are plugin-driven; Tailwind is optional.
 16. Normal app flows should not require user-written JavaScript.
 
@@ -138,7 +138,7 @@ are stable.
 | 15 | Components and client language | Components gain real `g:if` mount/unmount, richer expression props, child-to-parent events, bindable state, typed exports, named/scoped slots, scoped CSS/assets, a documented component contract, a proper reactive dependency graph, predictable batching, and cycle diagnostics. |
 | 16 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Explicit WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
 | 17 | CSS, assets, and packaging | Full plugin loading, page-aware CSS processor selection, component AST/IR scope and hash metadata, Tailwind/CSS deployment docs, asset hashing, and binary cache policy are implemented. Module selection remains artifact packaging, not runtime module orchestration. |
-| 18 | Framework adapters | Core remains `net/http`. Optional Gin, Echo, and Fiber adapters wrap the same generated `http.Handler` after the handler contract is stable; generated code stays framework-neutral by default. |
+| 18 | Framework adapters | Core remains `net/http`. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
 | 19 | Dev, playground, and tooling | `gowdk dev` can run generated app/runtime-kit flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, browser playground, browser-compiled GOWDK, richer LSP completions, and editor navigation are added. |
 | 20 | Documentation sync | README, requirements, architecture, deployment, roadmap, examples, and `MISSING_CHECKLIST.md` stay synchronized with implemented behavior and commands. |
 
@@ -196,7 +196,6 @@ contract work that later features depend on.
 
 - Full CSS/plugin loading.
 - Emitted CSS filename hashing and packaging docs.
-- Optional framework adapters.
 - Generated app dev loop.
 - Browser playground and stronger editor tooling.
 

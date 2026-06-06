@@ -673,8 +673,11 @@ Done when:
       generated HTML documents, not panic values. Generated form/request-shape
       errors do not echo submitted values. Returned handler error messages are
       user-owned and must stay safe.
-- [ ] Add generated binary tests for SSR load errors, action errors, API
+- [x] Add generated binary tests for SSR load errors, action errors, API
       errors, guard errors, panic boundaries, and missing error documents.
+      Covered by `internal/appgen` generated-binary tests for SSR load errors,
+      SSR/API/action panic boundaries, returned action/API handler errors,
+      missing custom error document fallback, and guard fail-closed behavior.
 - [x] Add docs and examples for custom `404`, `500`, and route-level errors.
       See `docs/reference/errors.md`.
 

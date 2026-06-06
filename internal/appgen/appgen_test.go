@@ -2199,6 +2199,155 @@ func Health(ctx context.Context, request *http.Request) (response.Response, erro
 	}
 }
 
+func TestGeneratedBinaryHandlesEndpointErrorsAndMissingErrorPage(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "500.html"), "<main>Fallback 500</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Actions: []ActionEndpoint{{
+			PageID:     "newsletter",
+			ActionName: "Subscribe",
+			Method:     http.MethodPost,
+			Route:      "/newsletter",
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "gowdk-generated-app/backend",
+				PackageName:  "backend",
+				FunctionName: "Subscribe",
+				Signature:    manifest.BackendSignatureAction0,
+			},
+		}, {
+			PageID:     "newsletter",
+			ActionName: "Explode",
+			Method:     http.MethodPost,
+			Route:      "/explode",
+			ErrorPage:  "errors/missing.html",
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "gowdk-generated-app/backend",
+				PackageName:  "backend",
+				FunctionName: "Explode",
+				Signature:    manifest.BackendSignatureAction0,
+			},
+		}},
+		APIs: []APIEndpoint{{
+			PageID:  "session",
+			APIName: "Session",
+			Method:  http.MethodGet,
+			Route:   "/api/session",
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "gowdk-generated-app/backend",
+				PackageName:  "backend",
+				FunctionName: "Session",
+				Signature:    manifest.BackendSignatureAPI,
+			},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "backend", "backend.go"), `package backend
+
+import (
+	"context"
+	"net/http"
+
+	gowdkresponse "github.com/cssbruno/gowdk/runtime/response"
+)
+
+func Subscribe(ctx context.Context) (gowdkresponse.Response, error) {
+	return gowdkresponse.Response{}, gowdkresponse.NewHandlerError(http.StatusConflict, "duplicate subscription", nil)
+}
+
+func Explode(ctx context.Context) (gowdkresponse.Response, error) {
+	panic("secret action detail")
+}
+
+func Session(ctx context.Context, request *http.Request) (gowdkresponse.Response, error) {
+	return gowdkresponse.Response{}, gowdkresponse.NewHandlerError(http.StatusForbidden, "session expired", nil)
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	actionResponse, err := waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actionPayload, err := io.ReadAll(actionResponse.Body)
+	_ = actionResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actionResponse.StatusCode != http.StatusConflict {
+		t.Fatalf("expected action handler error to return 409, got %d: %s", actionResponse.StatusCode, actionPayload)
+	}
+	if !strings.Contains(string(actionPayload), "duplicate subscription") {
+		t.Fatalf("expected action handler error body, got %s", actionPayload)
+	}
+	if cacheControl := actionResponse.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on action handler error, got %q", cacheControl)
+	}
+
+	apiResponse, err := waitForHTTPStatus("http://"+addr+"/api/session", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiPayload, err := io.ReadAll(apiResponse.Body)
+	_ = apiResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if apiResponse.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected API handler error to return 403, got %d: %s", apiResponse.StatusCode, apiPayload)
+	}
+	if !strings.Contains(string(apiPayload), "session expired") {
+		t.Fatalf("expected API handler error body, got %s", apiPayload)
+	}
+	if cacheControl := apiResponse.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on API handler error, got %q", cacheControl)
+	}
+
+	panicResponse, err := waitForHTTPStatus("http://"+addr+"/explode", http.MethodPost, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	panicPayload, err := io.ReadAll(panicResponse.Body)
+	_ = panicResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	panicBody := string(panicPayload)
+	if panicResponse.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected action panic to return 500, got %d: %s", panicResponse.StatusCode, panicBody)
+	}
+	if strings.TrimSpace(panicBody) != "<main>Fallback 500</main>" {
+		t.Fatalf("expected missing custom error document to fall back to default 500 page, got %s", panicBody)
+	}
+	if strings.Contains(panicBody, "secret action detail") {
+		t.Fatalf("fallback error page leaked panic detail: %s", panicBody)
+	}
+	if cacheControl := panicResponse.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on action panic boundary, got %q", cacheControl)
+	}
+}
+
 func TestGeneratedBinarySSRGuardFailsClosedWithoutRegistry(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

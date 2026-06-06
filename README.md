@@ -11,19 +11,55 @@
 ![Build](https://img.shields.io/badge/build-succeeds-2ea44f)
 ![Quality](https://img.shields.io/badge/quality-gated-2ea44f)
 
-GOWDK is an experimental new way to build Go web applications. It is a compiler
-that takes portable `.gwdk` pages and components, then turns them into
-build-time web output, backend routes, and deployable Go binaries.
+A compiler and runtime kit for full-stack Go web applications.
 
-Current status: GOWDK is pre-release and still being shaped. The compiler can
-already produce early build output, embedded app builds, first-slice
-actions/fragments, generated JavaScript islands, and simple SSR pages, but the
-runtime model and language surface are still evolving. If you are interested in
-where this is going, feedback, ideas, experiments, and improvements are welcome.
+GOWDK processes `.gwdk` files: pages, components, layouts, actions, APIs,
+fragments, and assets. It generates Go adapter code for route dispatch, form
+decoding, response writing, CSRF, embedded assets, partial updates, and SSR
+hooks. Your domain logic, storage, auth, validation, and services stay in
+normal Go packages.
+
+**Status: pre-release.** The compiler handles core page and component
+compilation, early embedded app builds, first-slice actions/fragments,
+generated JavaScript islands, and simple SSR pages. The runtime model and
+language surface are still evolving. Not ready for production use.
 
 Live demo: [gowdk.com](https://gowdk.com/)
 Demo source: [cssbruno/gowdk-page](https://github.com/cssbruno/gowdk-page)
 
+## How It Works
+
+Write `.gwdk` files for your web-facing contracts. The compiler emits
+`net/http`-compatible Go. There is no reflection and no hidden request-time
+magic in the generated adapters.
+
+Full pages default to build-time output. Actions, APIs, and fragments run as
+backend endpoints without forcing full-page SSR. Pages that need request data,
+guards, sessions, or per-request state opt into request-time rendering with
+`@render ssr`.
+
+The generated handlers are plain `http.Handler` values. Echo, Gin, Chi, Fiber,
+and similar frameworks are integration targets, not core dependencies.
+
+## Data Access
+
+GOWDK does not include an ORM or a data layer. The project is intentionally
+against GORM and ORM-first application design as the recommended path.
+
+The preferred approach is explicit SQL: `sqlc` for type-safe generated queries,
+with `database/sql`, `pgx`, `sqlx`, or similar focused libraries for everything
+else. Explicit SQL is easier to review, test, and reason about than hidden query
+generation, model magic, or framework-owned schema state.
+
+Planned work includes helpers for wiring `sqlc`-generated query packages into
+actions and APIs, plus admin/form scaffolding from explicit SQL contracts.
+
+## Application Scaffolding
+
+GOWDK does not ship login flows, admin panels, billing screens, or CRUD apps as
+baked-in behavior. Planned generators will cover common patterns such as auth,
+CRUD screens, form validation, file upload, background tasks, email, and
+deployment as optional, editable output.
 
 ## Getting Started
 

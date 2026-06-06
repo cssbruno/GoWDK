@@ -87,6 +87,11 @@ func assignBackendAliases(options *Options) {
 			paths[api.Binding.ImportPath] = api.Binding.PackageName
 		}
 	}
+	for _, route := range options.SSR {
+		if route.LoadBinding.Status == manifest.BackendBindingBound && route.LoadBinding.ImportPath != "" {
+			paths[route.LoadBinding.ImportPath] = route.LoadBinding.PackageName
+		}
+	}
 	if len(paths) == 0 {
 		return
 	}
@@ -118,6 +123,9 @@ func assignBackendAliases(options *Options) {
 	for index := range options.APIs {
 		options.APIs[index].BackendAlias = aliases[options.APIs[index].Binding.ImportPath]
 	}
+	for index := range options.SSR {
+		options.SSR[index].LoadBackendAlias = aliases[options.SSR[index].LoadBinding.ImportPath]
+	}
 }
 
 func safeImportAlias(value string) string {
@@ -139,15 +147,18 @@ func ssrRoutes(artifacts []buildgen.SSRArtifact) []SSRRoute {
 	routes := make([]SSRRoute, 0, len(artifacts))
 	for _, artifact := range artifacts {
 		routes = append(routes, SSRRoute{
-			PageID:        artifact.PageID,
-			Route:         artifact.Route,
-			Render:        artifact.Render,
-			Cache:         artifact.Cache,
-			DynamicParams: append([]string(nil), artifact.DynamicParams...),
-			Guards:        append([]string(nil), artifact.Guards...),
-			HasLoad:       artifact.HasLoad,
-			HTML:          artifact.HTML,
-			Replacements:  ssrReplacements(artifact.Replacements),
+			PageID:           artifact.PageID,
+			Route:            artifact.Route,
+			Render:           artifact.Render,
+			Cache:            artifact.Cache,
+			DynamicParams:    append([]string(nil), artifact.DynamicParams...),
+			RouteParams:      append([]manifest.RouteParam(nil), artifact.RouteParams...),
+			Guards:           append([]string(nil), artifact.Guards...),
+			HasLoad:          artifact.HasLoad,
+			LoadBinding:      artifact.LoadBinding,
+			HTML:             artifact.HTML,
+			Replacements:     ssrReplacements(artifact.Replacements),
+			LoadReplacements: ssrLoadReplacements(artifact.LoadReplacements),
 		})
 	}
 	return routes
@@ -158,6 +169,17 @@ func ssrReplacements(replacements []buildgen.SSRReplacement) []SSRReplacement {
 	for _, replacement := range replacements {
 		out = append(out, SSRReplacement{
 			Param:       replacement.Param,
+			Placeholder: replacement.Placeholder,
+		})
+	}
+	return out
+}
+
+func ssrLoadReplacements(replacements []buildgen.SSRLoadReplacement) []SSRLoadReplacement {
+	out := make([]SSRLoadReplacement, 0, len(replacements))
+	for _, replacement := range replacements {
+		out = append(out, SSRLoadReplacement{
+			Field:       replacement.Field,
 			Placeholder: replacement.Placeholder,
 		})
 	}

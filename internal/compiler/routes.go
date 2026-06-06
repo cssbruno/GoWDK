@@ -407,11 +407,11 @@ func parseRoute(route string) (routeInfo, []routeIssue) {
 				Message: fmt.Sprintf("route %q contains unsafe path segment %q", route, segment),
 			})
 		case strings.ContainsAny(segment, "{}"):
-			param, ok := routeParamSegment(segment)
+			param, paramType, ok := routeParamSegment(segment)
 			if !ok {
 				issues = append(issues, routeIssue{
 					Code:    "malformed_route",
-					Message: fmt.Sprintf("route %q has invalid route parameter segment %q; use {name} as the whole segment", route, segment),
+					Message: fmt.Sprintf("route %q has invalid route parameter segment %q; use {name} or {name:type} as the whole segment", route, segment),
 				})
 				continue
 			}
@@ -419,6 +419,14 @@ func parseRoute(route string) (routeInfo, []routeIssue) {
 				issues = append(issues, routeIssue{
 					Code:    "malformed_route",
 					Message: fmt.Sprintf("route %q has invalid route parameter name %q", route, param),
+				})
+				continue
+			}
+			if !isRouteParamType(paramType) {
+				issues = append(issues, routeIssue{
+					Code:    "malformed_route",
+					Message: fmt.Sprintf("route %q has invalid route parameter type %q for %q; supported types are string, int, int64, uint, uint64, bool, float64", route, paramType, param),
+					Param:   param,
 				})
 				continue
 			}
@@ -445,14 +453,28 @@ func parseRoute(route string) (routeInfo, []routeIssue) {
 	return routeInfo{Pattern: pattern, Params: params}, issues
 }
 
-func routeParamSegment(segment string) (string, bool) {
+func routeParamSegment(segment string) (string, string, bool) {
 	if !strings.HasPrefix(segment, "{") || !strings.HasSuffix(segment, "}") {
-		return "", false
+		return "", "", false
 	}
 	if strings.Count(segment, "{") != 1 || strings.Count(segment, "}") != 1 {
-		return "", false
+		return "", "", false
 	}
-	return strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}"), true
+	value := strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}")
+	name, paramType, found := strings.Cut(value, ":")
+	if !found {
+		paramType = "string"
+	}
+	return name, paramType, true
+}
+
+func isRouteParamType(value string) bool {
+	switch value {
+	case "string", "int", "int64", "uint", "uint64", "bool", "float64":
+		return true
+	default:
+		return false
+	}
 }
 
 func isRouteParamName(value string) bool {

@@ -56,21 +56,23 @@ func buildBackendBindingFromIR(endpoint gwdkir.Endpoint) manifest.BackendBinding
 
 func buildPageFromIR(page gwdkir.Page) manifest.Page {
 	return manifest.Page{
-		Source:   page.Source,
-		Package:  page.Package,
-		ID:       page.ID,
-		Route:    page.Route,
-		Render:   page.Render,
-		Cache:    page.Cache,
-		Metadata: manifest.PageMetadata(page.Metadata),
-		Layouts:  append([]string(nil), page.Layouts...),
-		Guard:    append([]string(nil), page.Guards...),
-		CSS:      append([]string(nil), page.CSS...),
-		Imports:  buildImportsFromIR(page.Imports),
-		Uses:     buildUsesFromIR(page.Uses),
-		Stores:   buildStoresFromIR(page.Stores),
-		Paths:    page.Blocks.PathsBody != "",
-		Blocks:   buildBlocksFromIR(page.Blocks),
+		Source:      page.Source,
+		Package:     page.Package,
+		ID:          page.ID,
+		Route:       page.Route,
+		RouteParams: append([]manifest.RouteParam(nil), page.RouteParams...),
+		Render:      page.Render,
+		Cache:       page.Cache,
+		Metadata:    manifest.PageMetadata(page.Metadata),
+		Layouts:     append([]string(nil), page.Layouts...),
+		Guard:       append([]string(nil), page.Guards...),
+		CSS:         append([]string(nil), page.CSS...),
+		Imports:     buildImportsFromIR(page.Imports),
+		Uses:        buildUsesFromIR(page.Uses),
+		Stores:      buildStoresFromIR(page.Stores),
+		Paths:       page.Blocks.PathsBody != "",
+		Blocks:      buildBlocksFromIR(page.Blocks),
+		LoadBinding: buildLoadBindingFromIR(page),
 		Spans: manifest.PageSpans{
 			Package:     page.Spans.Package,
 			Page:        page.Spans.Page,
@@ -86,6 +88,27 @@ func buildPageFromIR(page gwdkir.Page) manifest.Page {
 			CSS:         append([]manifest.NamedSpan(nil), page.Spans.CSS...),
 			RouteParams: append([]manifest.NamedSpan(nil), page.Spans.RouteParams...),
 		},
+	}
+}
+
+func buildLoadBindingFromIR(page gwdkir.Page) manifest.BackendBinding {
+	binding := page.LoadBinding
+	if binding.Status == "" && binding.ImportPath == "" && binding.FunctionName == "" {
+		return manifest.BackendBinding{}
+	}
+	return manifest.BackendBinding{
+		Kind:         "load",
+		PageID:       page.ID,
+		Source:       page.Source,
+		BlockName:    binding.FunctionName,
+		Method:       "GET",
+		Route:        page.Route,
+		ImportPath:   binding.ImportPath,
+		PackageName:  binding.PackageName,
+		FunctionName: binding.FunctionName,
+		Signature:    binding.Signature,
+		Status:       binding.Status,
+		Message:      binding.Message,
 	}
 }
 

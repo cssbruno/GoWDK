@@ -11,6 +11,13 @@ import (
 	"strconv"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/actions"
+	"github.com/cssbruno/gowdk/addons/api"
+	"github.com/cssbruno/gowdk/addons/css"
+	"github.com/cssbruno/gowdk/addons/embed"
+	"github.com/cssbruno/gowdk/addons/partial"
+	"github.com/cssbruno/gowdk/addons/ratelimit"
+	"github.com/cssbruno/gowdk/addons/spa"
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/addons/tailwind"
 )
@@ -40,9 +47,16 @@ func LoadConfigFile(path string) (gowdk.Config, error) {
 				if name.Name != "Config" || index >= len(valueSpec.Values) {
 					continue
 				}
-				config, ok := parseConfigLiteral(valueSpec.Values[index], importNames(file))
+				config, needsExecutableLoad, ok := parseConfigLiteral(valueSpec.Values[index], importNames(file))
 				if !ok {
 					return gowdk.Config{}, fmt.Errorf("%s must assign Config to a gowdk.Config literal", path)
+				}
+				if needsExecutableLoad {
+					config, err := loadExecutableConfig(path)
+					if err != nil {
+						return gowdk.Config{}, fmt.Errorf("%s contains addon constructors outside the AST-only config subset: %w", path, err)
+					}
+					return config, nil
 				}
 				return config, nil
 			}
@@ -66,13 +80,14 @@ func LoadConfig(path string) (gowdk.Config, error) {
 	return LoadConfigFile(DefaultConfigFile)
 }
 
-func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.Config, bool) {
+func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.Config, bool, bool) {
 	literal, ok := expression.(*ast.CompositeLit)
 	if !ok || !isConfigType(literal.Type) {
-		return gowdk.Config{}, false
+		return gowdk.Config{}, false, false
 	}
 
 	var config gowdk.Config
+	var needsExecutableLoad bool
 	for _, element := range literal.Elts {
 		keyValue, ok := element.(*ast.KeyValueExpr)
 		if !ok {
@@ -96,10 +111,10 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 		case "Render":
 			config.Render = parseRenderConfig(keyValue.Value)
 		case "Addons":
-			config.Addons = parseAddons(keyValue.Value, imports)
+			config.Addons, needsExecutableLoad = parseAddons(keyValue.Value, imports)
 		}
 	}
-	return config, true
+	return config, needsExecutableLoad, true
 }
 
 func importNames(file *ast.File) map[string]string {
@@ -521,26 +536,29 @@ func parseCSSOutputConfig(expression ast.Expr) gowdk.CSSOutputConfig {
 	return output
 }
 
-func parseAddons(expression ast.Expr, imports map[string]string) []gowdk.Addon {
+func parseAddons(expression ast.Expr, imports map[string]string) ([]gowdk.Addon, bool) {
 	literal, ok := expression.(*ast.CompositeLit)
 	if !ok {
-		return nil
+		return nil, false
 	}
 
 	var addons []gowdk.Addon
+	var needsExecutableLoad bool
 	for _, element := range literal.Elts {
-		if addon, ok := parseSSRAddon(element, imports); ok {
+		if addon, ok := parseBuiltInAddon(element, imports); ok {
 			addons = append(addons, addon)
 			continue
 		}
 		if addon, ok := parseTailwindAddon(element, imports); ok {
 			addons = append(addons, addon)
+			continue
 		}
+		needsExecutableLoad = true
 	}
-	return addons
+	return addons, needsExecutableLoad
 }
 
-func parseSSRAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon, bool) {
+func parseBuiltInAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon, bool) {
 	call, ok := expression.(*ast.CallExpr)
 	if !ok || len(call.Args) != 0 {
 		return nil, false
@@ -550,10 +568,29 @@ func parseSSRAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon,
 		return nil, false
 	}
 	packageName, ok := selector.X.(*ast.Ident)
-	if !ok || imports[packageName.Name] != ssr.ImportPath {
+	if !ok {
 		return nil, false
 	}
-	return ssr.Addon(), true
+	switch imports[packageName.Name] {
+	case actions.ImportPath:
+		return actions.Addon(), true
+	case api.ImportPath:
+		return api.Addon(), true
+	case css.ImportPath:
+		return css.Addon(), true
+	case embed.ImportPath:
+		return embed.Addon(), true
+	case partial.ImportPath:
+		return partial.Addon(), true
+	case ratelimit.ImportPath:
+		return ratelimit.Addon(), true
+	case spa.ImportPath:
+		return spa.Addon(), true
+	case ssr.ImportPath:
+		return ssr.Addon(), true
+	default:
+		return nil, false
+	}
 }
 
 func parseTailwindAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon, bool) {

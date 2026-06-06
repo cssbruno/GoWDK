@@ -1684,7 +1684,9 @@ func TestBuildEmitsWASMIslandAssetsOnlyWhenExplicit(t *testing.T) {
 		`applyPatches(root, callExport(exports, destroyExport`,
 		`if (patch.type === "setText" && node) node.textContent`,
 		`else if (patch.type === "setHidden" && node) node.hidden`,
+		`else if (patch.type === "replaceList" && node) node.innerHTML`,
 		`else if (patch.type === "emit" && patch.name) root.dispatchEvent`,
+		`console.error("GOWDK WASM island rejected patch"`,
 	} {
 		if !strings.Contains(loader, expected) {
 			t.Fatalf("expected %q in wasm loader:\n%s", expected, loader)
@@ -1702,7 +1704,7 @@ func TestBuildEmitsWASMIslandAssetsOnlyWhenExplicit(t *testing.T) {
 }
 
 func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
-	packageDir := writeWASMIslandPackage(t, "main", `func main() {}`)
+	packageDir := writeWASMIslandPackage(t, "main", requiredWASMExportsSource("Counter"))
 	outputDir := t.TempDir()
 	component := counterComponent()
 	component.WASM = manifest.WASMContract{Package: packageDir}
@@ -1733,6 +1735,40 @@ func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
 	if bytes.Equal(wasm, []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}) {
 		t.Fatal("expected compiled Go wasm, got placeholder module")
 	}
+}
+
+func TestBuildRejectsWASMIslandPackageMissingABIExports(t *testing.T) {
+	packageDir := writeWASMIslandPackage(t, "main", `func main() {}`)
+	outputDir := t.TempDir()
+	component := counterComponent()
+	component.WASM = manifest.WASMContract{Package: packageDir}
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected missing wasm export error")
+	}
+	for _, expected := range []string{
+		`missing required WASM exports`,
+		`GOWDKMountCounter`,
+		`GOWDKHandleCounter`,
+		`GOWDKDestroyCounter`,
+	} {
+		if !strings.Contains(err.Error(), expected) {
+			t.Fatalf("expected %q in error: %v", expected, err)
+		}
+	}
+	requireBuildDiagnostic(t, err, "wasm_package_export_error", "Counter")
 }
 
 func TestBuildRejectsWASMIslandPackageWithoutMainEntrypoint(t *testing.T) {
@@ -1863,6 +1899,19 @@ func writeWASMIslandPackage(t *testing.T, packageName, body string) string {
 		t.Fatal(err)
 	}
 	return packageDir
+}
+
+func requiredWASMExportsSource(component string) string {
+	return `//go:wasmexport GOWDKMount` + component + `
+func GOWDKMount` + component + `() uint32 { return 0 }
+
+//go:wasmexport GOWDKHandle` + component + `
+func GOWDKHandle` + component + `() uint32 { return 0 }
+
+//go:wasmexport GOWDKDestroy` + component + `
+func GOWDKDestroy` + component + `() uint32 { return 0 }
+
+func main() {}`
 }
 
 func TestBuildAllowsJSAndWASMIslandsOnSamePage(t *testing.T) {

@@ -61,7 +61,8 @@ Current diagnostic codes include:
 - render-mode diagnostics such as `spa_dynamic_route_missing_paths` and
   `load_requires_request_render`
 - spa-build WASM package diagnostics such as `wasm_package_build_error`,
-  `wasm_package_entrypoint_error`, and `unsupported_wasm_import`
+  `wasm_package_entrypoint_error`, `wasm_package_export_error`, and
+  `unsupported_wasm_import`
 
 Parser diagnostics include line-level ranges. Compiler diagnostics include
 ranges when the source span is known. Component `client {}` diagnostics point

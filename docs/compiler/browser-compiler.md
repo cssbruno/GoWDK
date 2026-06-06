@@ -39,6 +39,12 @@ case: it renders preview HTML from a `Result`, rewrites compiler-emitted asset
 references to a preview asset route, and serves the corresponding files from
 `Result.Files`.
 
+`playground.UIHTML` is the dependency-free browser shell used by the local
+playground. It provides an editable project tree, starter templates, generated
+HTML/CSS/JS/all-file viewers, diagnostics, iframe preview, JSON import/export,
+and hash-based share links. The browser UI still delegates compilation to
+`window.gowdkCompile`; it does not own routes, generated output, or diagnostics.
+
 ## Partial Runtime
 
 When a page uses a fragment-producing action form with `g:target` and `g:swap`,
@@ -130,12 +136,28 @@ When `@wasm` points to a local package, GOWDK builds that package with
 server/process/network packages such as `net/http`, `os/exec`, `database/sql`,
 raw `syscall`, `plugin`, or `unsafe`.
 
+Declared browser-side Go packages must produce a browser WASM module and export
+the component-scoped ABI entrypoints:
+
+```go
+//go:wasmexport GOWDKMountCounter
+func GOWDKMountCounter() uint32 { return 0 }
+
+//go:wasmexport GOWDKHandleCounter
+func GOWDKHandleCounter() uint32 { return 0 }
+
+//go:wasmexport GOWDKDestroyCounter
+func GOWDKDestroyCounter() uint32 { return 0 }
+```
+
+The generated loader passes a bootstrap object containing component name, state,
+props, emits, refs, and compiler-owned binding metadata. Returned patch lists
+may use `setText`, `setAttr`, `removeAttr`, `toggleClass`, `setStyle`,
+`setHidden`, `replaceList`, and `emit`; unsupported patch operations are
+rejected with a console error.
+
 If a component is called with `g:island="wasm"` and no `@wasm` package is
 declared, GOWDK emits the current placeholder module plus loader shape.
-
-The production WASM island ABI and validation of required browser-side exports
-are planned. See `docs/engineering/decisions/0004-production-wasm-island-abi.md`
-for the target decision.
 
 ## Production Mode
 

@@ -161,12 +161,14 @@ func ParseRenderMode(value string) (RenderMode, error) {
 	}
 }
 
-// RequiresSSR reports whether this mode needs the SSR addon.
+// RequiresSSR reports whether this mode always needs the SSR addon. Hybrid
+// pages need SSR only when they declare explicit request-time capabilities.
 func (mode RenderMode) RequiresSSR() bool {
-	return mode == SSR || mode == Hybrid
+	return mode == SSR
 }
 
-// IsBuildTime reports whether route params must be known for generated output.
+// IsBuildTime reports whether this mode is always build-time. Hybrid defaults
+// to build-time unless explicit request-time capabilities are declared.
 func (mode RenderMode) IsBuildTime() bool {
 	return mode == SPA || mode == Action
 }
@@ -262,8 +264,9 @@ type CSSAsset struct {
 
 // CSSResult is returned by compile-time CSS processors.
 type CSSResult struct {
-	Assets      []CSSAsset
-	Stylesheets []Stylesheet
+	Assets          []CSSAsset
+	Stylesheets     []Stylesheet
+	PageStylesheets map[string][]Stylesheet
 }
 
 // CSSProcessor is implemented by addons that emit CSS at build time.

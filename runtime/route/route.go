@@ -19,6 +19,9 @@ func Match(pattern, requestPath string) (map[string]string, bool) {
 	for index, part := range patternParts {
 		if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
 			name := strings.TrimSuffix(strings.TrimPrefix(part, "{"), "}")
+			if before, _, found := strings.Cut(name, ":"); found {
+				name = before
+			}
 			value := requestParts[index]
 			if value == "" || value == "." || value == ".." {
 				return nil, false

@@ -1,8 +1,11 @@
 # Addons Reference
 
-Addons currently register feature IDs with the compiler. The CSS processor
-contract can run during SPA builds; other addon packages do not yet execute
-full generated behavior.
+Addons currently register feature IDs with the compiler. The config loader
+parses built-in addon constructors from `gowdk.config.go` through the Go AST
+when possible. If an addon constructor comes from another importable Go module,
+the loader uses an executable config bridge so GitHub-hosted addons can return
+real `gowdk.Addon` values. The CSS processor contract can run during SPA
+builds; other addon packages do not yet execute full generated behavior.
 
 Current feature IDs:
 
@@ -31,10 +34,44 @@ The current compiler validator checks whether SSR is enabled when a page uses
 `@render ssr` or `@render hybrid`. SPA builds also invoke addons that
 implement `gowdk.CSSProcessor`.
 
+The literal config loader recognizes no-argument constructors for these
+built-ins:
+
+```go
+Addons: []gowdk.Addon{
+	spa.Addon(),
+	actions.Addon(),
+	partial.Addon(),
+	ssr.Addon(),
+	api.Addon(),
+	embed.Addon(),
+	css.Addon(),
+	ratelimit.Addon(),
+}
+```
+
+External addons use normal Go imports:
+
+```go
+import brand "github.com/example/gowdk-brand"
+
+Addons: []gowdk.Addon{
+	brand.Addon(),
+}
+```
+
+External addons are regular importable Go packages. They can live in GitHub
+modules, private modules, or local modules referenced with `replace`, and they
+can import their own Go dependencies. The project module must already be able
+to resolve the addon and its dependency graph with the Go toolchain through
+`go.mod`, `go.sum`, `replace`, `GOPRIVATE`, or the user's configured module
+proxy settings. GOWDK does not vendor, sandbox, or rewrite addon imports.
+
 `addons/tailwind` is an experimental Tailwind v4 CSS processor wrapper around a
 user-provided standalone CLI executable. It does not use npm, download Tailwind
 automatically, add Tailwind to GOWDK core, or generate Tailwind v3 content
-configuration.
+configuration. The literal config loader recognizes `tailwind.Addon` with a
+literal `tailwind.Options` value.
 
 `addons/ratelimit` provides request-time HTTP middleware with fixed-window
 decisions, rate-limit response headers, a process-local in-memory store, and a

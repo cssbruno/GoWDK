@@ -20,11 +20,13 @@ import (
 const (
 	actionHandlerKind = "action"
 	apiHandlerKind    = "api"
+	loadHandlerKind   = "load"
 
 	contextImportPath  = "context"
 	formImportPath     = "github.com/cssbruno/gowdk/runtime/form"
 	httpImportPath     = "net/http"
 	responseImportPath = "github.com/cssbruno/gowdk/runtime/response"
+	ssrImportPath      = "github.com/cssbruno/gowdk/addons/ssr"
 )
 
 // BindBackendHandlers discovers same-package Go handlers for act and api blocks.
@@ -35,7 +37,7 @@ func BindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 	var bindings []manifest.BackendBinding
 	cache := map[string]featurePackage{}
 	for _, page := range app.Pages {
-		if len(page.Blocks.Actions) == 0 && len(page.Blocks.APIs) == 0 {
+		if len(page.Blocks.Actions) == 0 && len(page.Blocks.APIs) == 0 && !page.Blocks.Load {
 			continue
 		}
 		dir := sourceDir(page.Source)
@@ -43,6 +45,9 @@ func BindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 		if !ok {
 			pkg = inspectFeaturePackage(dir)
 			cache[dir] = pkg
+		}
+		if page.Blocks.Load {
+			bindings = append(bindings, bindLoad(page, pkg))
 		}
 		for _, action := range page.Blocks.Actions {
 			bindings = append(bindings, bindAction(page, action, pkg))
@@ -75,7 +80,37 @@ func BindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 		return bindings[i].Source < bindings[j].Source
 	})
 	app.BackendBindings = bindings
+	loadBindings := map[string]manifest.BackendBinding{}
+	for _, binding := range bindings {
+		if binding.Kind == loadHandlerKind {
+			loadBindings[binding.PageID] = binding
+		}
+	}
+	for index := range app.Pages {
+		if binding, ok := loadBindings[app.Pages[index].ID]; ok {
+			app.Pages[index].LoadBinding = binding
+		}
+	}
 	return app
+}
+
+func bindLoad(page manifest.Page, pkg featurePackage) manifest.BackendBinding {
+	functionName := loadFunctionName(page.ID)
+	binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
+	function, ok := pkg.Functions[functionName]
+	if !ok {
+		binding.Status = manifest.BackendBindingMissing
+		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", packageLabel(pkg), functionName)
+		return binding
+	}
+	if !function.Load() {
+		binding.Status = manifest.BackendBindingUnsupportedSignature
+		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", packageLabel(pkg), functionName)
+		return binding
+	}
+	binding.Signature = function.Signature
+	binding.Status = manifest.BackendBindingBound
+	return binding
 }
 
 func bindStandaloneAction(endpoint manifest.EndpointDeclaration, pkg featurePackage) manifest.BackendBinding {
@@ -267,6 +302,10 @@ func (function featureFunction) Action() bool {
 
 func (function featureFunction) API() bool {
 	return function.Signature == manifest.BackendSignatureAPI
+}
+
+func (function featureFunction) Load() bool {
+	return function.Signature == manifest.BackendSignatureLoad || function.Signature == manifest.BackendSignatureLoadError
 }
 
 func inspectFeaturePackage(dir string) featurePackage {
@@ -532,6 +571,9 @@ func backendSignature(function *ast.FuncType, imports map[string]string) (manife
 	if isAPISignature(function, imports) {
 		return manifest.BackendSignatureAPI, "", false
 	}
+	if signature, ok := loadSignature(function, imports); ok {
+		return signature, "", false
+	}
 	return "", "", false
 }
 
@@ -583,6 +625,70 @@ func isAPISignature(function *ast.FuncType, imports map[string]string) bool {
 		isSelector(request.X, imports, httpImportPath, "Request") &&
 		isSelector(function.Results.List[0].Type, imports, responseImportPath, "Response") &&
 		isError(function.Results.List[1].Type)
+}
+
+func loadSignature(function *ast.FuncType, imports map[string]string) (manifest.BackendSignatureKind, bool) {
+	if function == nil || function.Params == nil || function.Results == nil {
+		return "", false
+	}
+	if len(function.Params.List) != 1 || !isSelector(function.Params.List[0].Type, imports, ssrImportPath, "LoadContext") {
+		return "", false
+	}
+	if len(function.Results.List) == 1 && isMapStringAny(function.Results.List[0].Type) {
+		return manifest.BackendSignatureLoad, true
+	}
+	if len(function.Results.List) == 2 && isMapStringAny(function.Results.List[0].Type) && isError(function.Results.List[1].Type) {
+		return manifest.BackendSignatureLoadError, true
+	}
+	return "", false
+}
+
+func isMapStringAny(expression ast.Expr) bool {
+	mapType, ok := expression.(*ast.MapType)
+	if !ok {
+		return false
+	}
+	key, ok := mapType.Key.(*ast.Ident)
+	if !ok || key.Name != "string" {
+		return false
+	}
+	if value, ok := mapType.Value.(*ast.Ident); ok && value.Name == "any" {
+		return true
+	}
+	_, ok = mapType.Value.(*ast.InterfaceType)
+	return ok
+}
+
+func loadFunctionName(pageID string) string {
+	return "Load" + exportedIdentifier(pageID)
+}
+
+func exportedIdentifier(value string) string {
+	var builder strings.Builder
+	uppercaseNext := true
+	for _, char := range strings.TrimSpace(value) {
+		if char >= 'a' && char <= 'z' {
+			if uppercaseNext {
+				char = char - 'a' + 'A'
+			}
+			builder.WriteRune(char)
+			uppercaseNext = false
+			continue
+		}
+		if char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' {
+			if builder.Len() == 0 && char >= '0' && char <= '9' {
+				builder.WriteByte('P')
+			}
+			builder.WriteRune(char)
+			uppercaseNext = false
+			continue
+		}
+		uppercaseNext = true
+	}
+	if builder.Len() == 0 {
+		return "Page"
+	}
+	return builder.String()
 }
 
 func isSelector(expression ast.Expr, imports map[string]string, importPath, name string) bool {

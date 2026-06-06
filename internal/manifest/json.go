@@ -32,6 +32,7 @@ type pageJSON struct {
 	Uses            []useJSON        `json:"uses,omitempty"`
 	Layouts         []string         `json:"layouts,omitempty"`
 	DynamicParams   []string         `json:"dynamicParams,omitempty"`
+	RouteParams     []routeParamJSON `json:"routeParams,omitempty"`
 	Paths           bool             `json:"paths,omitempty"`
 	Guard           []string         `json:"guard,omitempty"`
 	CSS             []string         `json:"css,omitempty"`
@@ -72,6 +73,11 @@ type metadataJSON struct {
 	Description string `json:"description,omitempty"`
 	Canonical   string `json:"canonical,omitempty"`
 	Image       string `json:"image,omitempty"`
+}
+
+type routeParamJSON struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 type propJSON struct {
@@ -202,6 +208,7 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 			Uses:            usesJSON(page.Uses),
 			Layouts:         page.Layouts,
 			DynamicParams:   page.DynamicParams(),
+			RouteParams:     routeParamsJSON(page.TypedRouteParams()),
 			Paths:           page.Paths,
 			Guard:           page.Guard,
 			CSS:             page.CSS,
@@ -222,6 +229,21 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 		Layouts:         layoutsJSON(app.Layouts),
 		BackendBindings: backendBindingsJSON(app.BackendBindings),
 	})
+}
+
+func routeParamsJSON(params []RouteParam) []routeParamJSON {
+	if len(params) == 0 {
+		return nil
+	}
+	out := make([]routeParamJSON, 0, len(params))
+	for _, param := range params {
+		paramType := param.Type
+		if paramType == "" {
+			paramType = "string"
+		}
+		out = append(out, routeParamJSON{Name: param.Name, Type: paramType})
+	}
+	return out
 }
 
 func backendBindingsJSON(bindings []BackendBinding) []backendBindingJSON {

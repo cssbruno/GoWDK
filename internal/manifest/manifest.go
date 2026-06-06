@@ -7,7 +7,7 @@ import (
 	"github.com/cssbruno/gowdk"
 )
 
-var routeParamPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+var routeParamPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)(?::([A-Za-z_][A-Za-z0-9_]*))?\}`)
 
 // Manifest is the compiler's normalized view of discovered .gwdk files.
 type Manifest struct {
@@ -128,22 +128,32 @@ type BlockSpans struct {
 
 // Page describes a .gwdk page after parsing and normalization.
 type Page struct {
-	Source   string
-	Package  string
-	ID       string
-	Route    string
-	Render   gowdk.RenderMode
-	Cache    string
-	Metadata PageMetadata
-	Layouts  []string
-	Guard    []string
-	CSS      []string
-	Imports  []Import
-	Uses     []Use
-	Stores   []Store
-	Paths    bool
-	Blocks   Blocks
-	Spans    PageSpans
+	Source      string
+	Package     string
+	ID          string
+	Route       string
+	RouteParams []RouteParam
+	Render      gowdk.RenderMode
+	Cache       string
+	Metadata    PageMetadata
+	Layouts     []string
+	Guard       []string
+	CSS         []string
+	Imports     []Import
+	Uses        []Use
+	Stores      []Store
+	Paths       bool
+	Blocks      Blocks
+	LoadBinding BackendBinding
+	Spans       PageSpans
+}
+
+// RouteParam describes one dynamic route parameter and its declared scalar
+// type. Empty Type means string for compatibility with legacy {name} syntax.
+type RouteParam struct {
+	Name string
+	Type string
+	Span SourceSpan
 }
 
 // PageMetadata describes HTML document metadata declared by a page.
@@ -309,6 +319,8 @@ const (
 	BackendSignatureActionForm    BackendSignatureKind = "action_form"
 	BackendSignatureActionFormPtr BackendSignatureKind = "action_form_ptr"
 	BackendSignatureAPI           BackendSignatureKind = "api"
+	BackendSignatureLoad          BackendSignatureKind = "load"
+	BackendSignatureLoadError     BackendSignatureKind = "load_error"
 )
 
 // BackendInputField describes one form field decoded into a Go action input
@@ -351,6 +363,19 @@ func (page Page) RenderMode(defaultMode gowdk.RenderMode) gowdk.RenderMode {
 
 // DynamicParams returns route parameters declared with /path/{param} syntax.
 func (page Page) DynamicParams() []string {
+	if len(page.RouteParams) > 0 {
+		params := make([]string, 0, len(page.RouteParams))
+		seen := map[string]bool{}
+		for _, param := range page.RouteParams {
+			if param.Name == "" || seen[param.Name] {
+				continue
+			}
+			seen[param.Name] = true
+			params = append(params, param.Name)
+		}
+		sort.Strings(params)
+		return params
+	}
 	matches := routeParamPattern.FindAllStringSubmatch(page.Route, -1)
 	if len(matches) == 0 {
 		return nil
@@ -367,4 +392,41 @@ func (page Page) DynamicParams() []string {
 	}
 	sort.Strings(params)
 	return params
+}
+
+// TypedRouteParams returns route params with explicit type metadata. Untyped
+// params are reported as string.
+func (page Page) TypedRouteParams() []RouteParam {
+	if len(page.RouteParams) > 0 {
+		out := make([]RouteParam, 0, len(page.RouteParams))
+		for _, param := range page.RouteParams {
+			if param.Name == "" {
+				continue
+			}
+			if param.Type == "" {
+				param.Type = "string"
+			}
+			out = append(out, param)
+		}
+		return out
+	}
+	matches := routeParamPattern.FindAllStringSubmatch(page.Route, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	out := make([]RouteParam, 0, len(matches))
+	seen := map[string]bool{}
+	for _, match := range matches {
+		name := match[1]
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		paramType := match[2]
+		if paramType == "" {
+			paramType = "string"
+		}
+		out = append(out, RouteParam{Name: name, Type: paramType})
+	}
+	return out
 }

@@ -156,7 +156,7 @@ api Session GET "/api/session"
 - [x] Preserve no-store defaults for request-time action/API/fragment responses.
 - [x] Keep request body size limits in generated action adapters.
 - [x] Wire generated guards for SSR/action/API paths.
-- [ ] Add runtime metrics only after handler contracts settle.
+- [x] Add runtime metrics only after handler contracts settle.
 
 ## SPA Navigation And Generated JS Guardrails
 
@@ -267,9 +267,11 @@ api Session GET "/api/session"
 - [x] Define generated form token exposure for SPA/action pages.
 - [x] Define invalid-CSRF response status and body shape.
 - [x] Keep `NoopCSRF` test-only.
-- [ ] Keep redirects, JSON, HTML, fragments, validation, auth, and storage in user Go handlers returning `runtime/response.Response`.
+- [x] Keep redirects, JSON, HTML, fragments, validation, auth, and storage in user Go handlers returning `runtime/response.Response`.
 - [x] Add structured form error and validation fragment patterns.
-- [ ] Add file upload support only after body limits, storage, validation, cleanup, and security rules are defined.
+- [x] Keep file uploads out of generated actions; uploads belong in user-owned
+      API/server handlers with explicit body limits, storage, validation,
+      cleanup, and security rules.
 - [x] Improve `select`, radio, and checkbox group handling for server forms.
 - [x] Add production-safe action/API docs covering CSRF, redirects, validation, fragments, cache/no-store, and error handling.
 
@@ -278,12 +280,12 @@ api Session GET "/api/session"
 - [x] Keep GOWDK core `net/http` compatible.
 - [x] Ensure generated apps expose or mount as `http.Handler`.
 - [x] Keep Gin, Echo, and Fiber out of compiler/runtime core dependencies.
-- [ ] Add optional adapter packages only after the core handler contract is
+- [x] Add optional adapter packages only after the core handler contract is
       stable:
-  - [ ] `runtime/adapters/gin`
-  - [ ] `runtime/adapters/echo`
-  - [ ] `runtime/adapters/fiber`
-- [ ] Make adapters wrap the same `http.Handler` produced by GOWDK; do not emit
+  - [x] `runtime/adapters/gin`
+  - [x] `runtime/adapters/echo`
+  - [x] `runtime/adapters/fiber`
+- [x] Make adapters wrap the same `http.Handler` produced by GOWDK; do not emit
       framework-specific code by default.
 - [x] Document Fiber's `net/http` adaptor overhead and semantic differences if a
       Fiber adapter is added.
@@ -319,17 +321,17 @@ api Session GET "/api/session"
 ## Routing, Rendering, SSR, Hybrid, And Cache
 
 - [x] Add runtime typed route param decoding helpers.
-- [ ] Add generated typed route param bindings once route-param type syntax
+- [x] Add generated typed route param bindings once route-param type syntax
       exists.
 - [x] Add route-level metadata.
 - [x] Generate sitemap output from the full route graph.
-- [ ] Add redirects and error pages.
-- [ ] Execute request-time `load {}` in generated SSR handlers.
-- [ ] Wire generated SSR guards.
-- [ ] Add full request-time user logic for SSR pages through generated SSR
+- [x] Add redirects and error pages.
+- [x] Execute request-time `load {}` in generated SSR handlers.
+- [x] Wire generated SSR guards.
+- [x] Add full request-time user logic for SSR pages through generated SSR
       handlers.
-- [ ] Add SSR/action/API error boundaries.
-- [ ] Define hybrid pages as SPA by default with explicit request-time capabilities.
+- [x] Add SSR/action/API error boundaries.
+- [x] Define hybrid pages as SPA by default with explicit request-time capabilities.
 - [x] Define cache and revalidation behavior for static files, SPA routes,
       backend endpoints, partial responses, SSR routes, and hybrid pages.
 - [x] Add syntax for route/cache policy once generated route metadata stabilizes.
@@ -355,15 +357,15 @@ api Session GET "/api/session"
       event object access, and broader compiler-owned built-ins.
 - [x] Batch updates predictably and detect reactive cycles with useful diagnostics.
 - [x] Keep browser behavior typed and compiler-owned instead of turning `client {}` into unbounded JavaScript.
-- [ ] Define and implement the production WASM island ABI from ADR 0004.
-- [ ] Add browser-side Go logic contracts for explicit WASM islands.
-- [ ] Validate required WASM island entrypoints and exports.
+- [x] Define and implement the production WASM island ABI from ADR 0004.
+- [x] Add browser-side Go logic contracts for explicit WASM islands.
+- [x] Validate required WASM island entrypoints and exports.
 
 ## CSS, Plugins, Assets, And Packaging
 
-- [ ] Add full addon/plugin loading.
-- [ ] Add component ASTs for CSS scoping and hashing.
-- [ ] Add page-aware CSS processor selections.
+- [x] Add full addon/plugin loading for built-in and external importable Go addons.
+- [x] Add component ASTs for CSS scoping and hashing.
+- [x] Add page-aware CSS processor selections.
 - [x] Add Tailwind and CSS deployment docs with real commands.
 - [x] Keep module selection as artifact packaging, not runtime module orchestration.
 - [x] Keep generated app WASM deploy artifacts separate from explicit browser WASM islands.
@@ -379,7 +381,7 @@ api Session GET "/api/session"
       and generated app restarts in `gowdk dev --app`.
 - [x] Add browser playground UI.
 - [x] Load the GOWDK compiler as WebAssembly in the browser UI.
-- [ ] Add editable project tree, full generated HTML/CSS/JS viewers, starter
+- [x] Add editable project tree, full generated HTML/CSS/JS viewers, starter
       templates, shareable links, and export/download.
 - [x] Improve baseline LSP completions for components, routes, props, state,
       stores, client constructs, and directives.

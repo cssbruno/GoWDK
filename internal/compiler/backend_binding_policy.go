@@ -32,7 +32,7 @@ func ValidateBackendBindingPolicy(config gowdk.Config, app manifest.Manifest) er
 
 func manifestDeclaresBackendEndpoints(app manifest.Manifest) bool {
 	for _, page := range app.Pages {
-		if len(page.Blocks.Actions) > 0 || len(page.Blocks.APIs) > 0 {
+		if len(page.Blocks.Actions) > 0 || len(page.Blocks.APIs) > 0 || page.Blocks.Load {
 			return true
 		}
 	}

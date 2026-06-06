@@ -137,6 +137,9 @@ view {
 	var componentCSS, componentAsset bool
 	for _, asset := range result.IR.Assets {
 		if asset.OwnerID == "Hero" && asset.Kind == gwdkir.AssetCSS && asset.Path == "./hero.css" {
+			if asset.HashKey != "component:components:Hero:components/hero.cmp.gwdk:./hero.css" || len(asset.ScopeID) != len("gwdk-000000000000") {
+				t.Fatalf("unexpected component CSS scope metadata: %#v", asset)
+			}
 			componentCSS = true
 		}
 		if asset.OwnerID == "Hero" && asset.Kind == gwdkir.AssetFile && asset.Path == "./hero.png" {

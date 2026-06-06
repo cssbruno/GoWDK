@@ -1,7 +1,6 @@
 package compiler
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
@@ -74,7 +73,7 @@ func TestBuildRouteMetadataRejectsSSRWithoutAddon(t *testing.T) {
 	}
 }
 
-func TestBuildRouteMetadataRejectsHybridWithoutExplicitLoad(t *testing.T) {
+func TestBuildRouteMetadataMapsHybridWithoutExplicitLoadToSPA(t *testing.T) {
 	app := manifest.Manifest{Pages: []manifest.Page{{
 		ID:     "dashboard",
 		Route:  "/dashboard",
@@ -84,13 +83,12 @@ func TestBuildRouteMetadataRejectsHybridWithoutExplicitLoad(t *testing.T) {
 		},
 	}}}
 
-	_, err := BuildRouteMetadata(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
-	if err == nil {
-		t.Fatal("expected hybrid request policy error")
+	metadata, err := BuildRouteMetadata(gowdk.Config{}, app)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "implicit SSR") {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	assertRoute(t, metadata.Routes, RouteSPA, "GET", "/dashboard", `embedded.SPA("pages/dashboard.html")`)
+	assertInfo(t, metadata.Info, "ssr_disabled", "dashboard")
 }
 
 func TestBuildRouteMetadataMapsHybridWithLoadToHybridRoute(t *testing.T) {

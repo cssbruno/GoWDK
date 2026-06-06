@@ -56,7 +56,6 @@ Compiler validation exposes these public codes when available:
 - `missing_view_block`
 - `spa_dynamic_route_missing_paths`
 - `load_requires_request_render`
-- `hybrid_requires_explicit_request_policy`
 - `invalid_css_selection`
 - `duplicate_css_selection`
 

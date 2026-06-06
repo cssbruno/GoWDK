@@ -10,12 +10,13 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkast"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-var routeParamPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+var routeParamPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)(?::([A-Za-z_][A-Za-z0-9_]*))?\}`)
 
 type SourceKind = gwdkir.SourceKind
 
@@ -89,6 +90,7 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 	}
 	if ast.Route != nil {
 		page.Route = ast.Route.Path
+		page.RouteParams = lowerRouteParams(ast.Route.Params)
 		page.Spans.Route = ast.Route.Span
 		page.Spans.RouteParams = lowerRouteParamSpans(ast.Route.Params)
 	}
@@ -309,7 +311,7 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 
 		mode := page.RenderMode(config.Render.DefaultMode())
 		program.Routes = append(program.Routes, gwdkir.Route{
-			Kind:          routeKind(mode),
+			Kind:          routeKind(mode, page),
 			Method:        "GET",
 			Path:          page.Route,
 			PageID:        page.ID,
@@ -317,6 +319,7 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 			Render:        mode,
 			Cache:         page.Cache,
 			DynamicParams: page.DynamicParams(),
+			RouteParams:   copyRouteParams(page.TypedRouteParams()),
 			Layouts:       append([]string(nil), page.Layouts...),
 			Guards:        append([]string(nil), page.Guard...),
 			Source:        page.Source,
@@ -399,12 +402,15 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 		appendPackageImports(pkg, component.Imports)
 		appendPackageUses(pkg, component.Uses)
 		for _, css := range component.CSS {
+			hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, css)
 			program.Assets = append(program.Assets, gwdkir.Asset{
 				Kind:    gwdkir.AssetCSS,
 				OwnerID: component.Name,
 				Package: component.Package,
 				Source:  component.Source,
 				Path:    css,
+				ScopeID: cssscope.ScopeID(hashKey),
+				HashKey: hashKey,
 				Span:    spanForName(component.Spans.CSS, css, component.Span),
 			})
 		}
@@ -543,7 +549,12 @@ func assetUse(uses []manifest.Use, path string) (name string, useAlias string, u
 
 func attachBackendBindings(program *gwdkir.Program, bindings []manifest.BackendBinding) {
 	byEndpoint := map[string]manifest.BackendBinding{}
+	byLoadPage := map[string]manifest.BackendBinding{}
 	for _, binding := range bindings {
+		if binding.Kind == "load" {
+			byLoadPage[binding.PageID] = binding
+			continue
+		}
 		kind := gwdkir.EndpointAction
 		if binding.Kind == "api" {
 			kind = gwdkir.EndpointAPI
@@ -563,6 +574,18 @@ func attachBackendBindings(program *gwdkir.Program, bindings []manifest.BackendB
 			InputType:    binding.InputType,
 			InputPointer: binding.InputPointer,
 			InputFields:  append([]manifest.BackendInputField(nil), binding.InputFields...),
+		}
+	}
+	for index := range program.Pages {
+		page := &program.Pages[index]
+		binding := byLoadPage[page.ID]
+		page.LoadBinding = gwdkir.Binding{
+			Status:       binding.Status,
+			Message:      binding.Message,
+			ImportPath:   binding.ImportPath,
+			PackageName:  binding.PackageName,
+			FunctionName: binding.FunctionName,
+			Signature:    binding.Signature,
 		}
 	}
 }
@@ -664,11 +687,14 @@ func applyPageBlock(page *manifest.Page, block gwdkast.Block) {
 	}
 }
 
-func routeKind(mode gowdk.RenderMode) gwdkir.RouteKind {
+func routeKind(mode gowdk.RenderMode, page manifest.Page) gwdkir.RouteKind {
 	switch mode {
 	case gowdk.SSR:
 		return gwdkir.RouteSSR
 	case gowdk.Hybrid:
+		if !page.Blocks.Load {
+			return gwdkir.RouteSPA
+		}
 		return gwdkir.RouteHybrid
 	default:
 		return gwdkir.RouteSPA
@@ -677,20 +703,21 @@ func routeKind(mode gowdk.RenderMode) gwdkir.RouteKind {
 
 func lowerIRPage(page manifest.Page) gwdkir.Page {
 	return gwdkir.Page{
-		Source:   page.Source,
-		Package:  page.Package,
-		ID:       page.ID,
-		Route:    page.Route,
-		Render:   page.Render,
-		Cache:    page.Cache,
-		Metadata: gwdkir.PageMetadata(page.Metadata),
-		Layouts:  append([]string(nil), page.Layouts...),
-		Guards:   append([]string(nil), page.Guard...),
-		CSS:      append([]string(nil), page.CSS...),
-		Imports:  lowerIRImports(page.Imports),
-		Uses:     lowerIRUses(page.Uses),
-		Stores:   lowerIRStores(page.Stores),
-		Blocks:   lowerIRBlocks(page.Blocks),
+		Source:      page.Source,
+		Package:     page.Package,
+		ID:          page.ID,
+		Route:       page.Route,
+		RouteParams: copyRouteParams(page.TypedRouteParams()),
+		Render:      page.Render,
+		Cache:       page.Cache,
+		Metadata:    gwdkir.PageMetadata(page.Metadata),
+		Layouts:     append([]string(nil), page.Layouts...),
+		Guards:      append([]string(nil), page.Guard...),
+		CSS:         append([]string(nil), page.CSS...),
+		Imports:     lowerIRImports(page.Imports),
+		Uses:        lowerIRUses(page.Uses),
+		Stores:      lowerIRStores(page.Stores),
+		Blocks:      lowerIRBlocks(page.Blocks),
 		Spans: gwdkir.PageSpans{
 			Package:     page.Spans.Package,
 			Page:        page.Spans.Page,
@@ -707,6 +734,15 @@ func lowerIRPage(page manifest.Page) gwdkir.Page {
 			RouteParams: append([]manifest.NamedSpan(nil), page.Spans.RouteParams...),
 		},
 	}
+}
+
+func copyRouteParams(params []manifest.RouteParam) []manifest.RouteParam {
+	if len(params) == 0 {
+		return nil
+	}
+	out := make([]manifest.RouteParam, len(params))
+	copy(out, params)
+	return out
 }
 
 func lowerIRComponent(component manifest.Component) gwdkir.Component {
@@ -930,6 +966,18 @@ func lowerRouteParamSpans(in []gwdkast.RouteParam) []manifest.NamedSpan {
 	return out
 }
 
+func lowerRouteParams(in []gwdkast.RouteParam) []manifest.RouteParam {
+	out := make([]manifest.RouteParam, 0, len(in))
+	for _, param := range in {
+		paramType := param.Type
+		if paramType == "" {
+			paramType = "string"
+		}
+		out = append(out, manifest.RouteParam{Name: param.Name, Type: paramType, Span: param.Span})
+	}
+	return out
+}
+
 func lowerProps(in []gwdkast.Prop) []manifest.Prop {
 	out := make([]manifest.Prop, 0, len(in))
 	for _, item := range in {
@@ -1007,6 +1055,25 @@ func routeParams(route string) []string {
 		}
 	}
 	sort.Strings(out)
+	return out
+}
+
+func typedRouteParams(route string) []manifest.RouteParam {
+	matches := routeParamPattern.FindAllStringSubmatch(route, -1)
+	out := make([]manifest.RouteParam, 0, len(matches))
+	seen := map[string]bool{}
+	for _, match := range matches {
+		name := match[1]
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		paramType := match[2]
+		if paramType == "" {
+			paramType = "string"
+		}
+		out = append(out, manifest.RouteParam{Name: name, Type: paramType})
+	}
 	return out
 }
 

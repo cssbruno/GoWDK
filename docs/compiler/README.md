@@ -23,7 +23,7 @@ Implemented today:
 - Generated embedded app source and optional binary compilation through
   `internal/appgen`, including first-slice action redirect handlers and form
   input decoder and required-field validation wrappers, partial action fragment
-  responses, and first-slice SSR routes without `load {}`.
+  responses, and first-slice SSR routes with declared `load {}` fields.
 - SPA `gowdk.config.go` loading for build source discovery, build targets,
   and output through `internal/project`.
 - CLI tools for `tokens`, `fmt`, `check`, `manifest`, `sitemap`, `build`, and `lsp`.

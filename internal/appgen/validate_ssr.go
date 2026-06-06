@@ -61,6 +61,9 @@ func validateSSRRoutePattern(value string) error {
 				return fmt.Errorf("route %q has invalid route parameter segment %q", value, segment)
 			}
 			name := strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}")
+			if before, _, found := strings.Cut(name, ":"); found {
+				name = before
+			}
 			if !isIdentifier(name) {
 				return fmt.Errorf("route %q has invalid route parameter name %q", value, name)
 			}
@@ -98,7 +101,11 @@ func ssrRoutePatternParams(route string) []string {
 	var params []string
 	for _, segment := range strings.Split(strings.Trim(route, "/"), "/") {
 		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
-			params = append(params, strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}"))
+			name := strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}")
+			if before, _, found := strings.Cut(name, ":"); found {
+				name = before
+			}
+			params = append(params, name)
 		}
 	}
 	return params

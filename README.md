@@ -115,13 +115,15 @@ walkthrough.
 - Literal `paths {}` expansion for dynamic SPA routes.
 - Literal `build {}` data and imported no-argument Go build data functions.
 - Generated embedded app source, local binaries, and Go `js/wasm` artifacts.
-- Action/API handlers, action redirects, partial fragments, and SSR pages
-  without `load {}` in generated binaries.
+- Action/API handlers, action redirects, partial fragments, and SSR pages with
+  first-slice `load {}` field execution, safe load redirects, and generated
+  error pages in generated binaries.
 - CLI commands: `build`, `dev`, `serve`, `preview`, `check`, `fmt`, `lsp`,
   `manifest`, `sitemap`, and `routes`.
 
-Not yet: typed input structs for action handlers, request-time `load {}`
-execution, full browser WASM island ABI, and validation fragments.
+Not yet: broader `load {}` data shapes, custom SSR/action/API error-boundary
+syntax, and validation fragments. File uploads are intentionally left to
+user-owned API/server handlers.
 
 ## Site Example
 
@@ -200,28 +202,69 @@ uses the dev loop for local hot preview.
 
 ## Build Targets
 
-`gowdk.config.go` can declare named outputs:
+`gowdk.config.go` can declare named outputs for separate deployables:
 
 ```go
 Build: gowdk.BuildConfig{
 	Targets: []gowdk.BuildTargetConfig{
-		{Name: "admin", Modules: []string{"admin"}, Output: "dist/admin", App: ".gowdk/admin", Binary: "bin/admin"},
-		{Name: "site", Modules: []string{"public"}, Output: "dist/site", App: ".gowdk/site", Binary: "bin/site"},
+		{
+			Name:    "site",
+			Modules: []string{"public"},
+			Output:  "dist/site",
+			App:     ".gowdk/site",
+			Binary:  "bin/site",
+		},
+		{
+			Name:    "admin",
+			Modules: []string{"admin"},
+			Output:  "dist/admin",
+			App:     ".gowdk/admin",
+			Binary:  "bin/admin",
+		},
+		{
+			Name:    "api",
+			Modules: []string{"api"},
+			Output:  "dist/api",
+			App:     ".gowdk/api",
+			Binary:  "bin/api",
+		},
+		{
+			Name:    "web",
+			Modules: []string{"public", "admin"},
+			Output:  "dist/web",
+			App:     ".gowdk/web",
+			Binary:  "bin/web",
+		},
 	},
 }
 ```
 
-Run all targets:
+Run all configured targets:
 
 ```sh
 gowdk build
 ```
 
-Run one target:
+Run one deployable:
 
 ```sh
 gowdk build --target admin
 ```
+
+Run multiple deployables together:
+
+```sh
+gowdk build --target site --target api
+```
+
+The `site`, `admin`, and `api` targets build separate outputs and binaries. The
+`web` target packages two frontend modules together when one binary should serve
+both the public site and admin UI.
+
+Modules are local source groups today. A future module system should also allow
+importing reusable GOWDK modules from GitHub repositories, Go module paths, or
+similar sources, so apps can share pages, components, admin screens, and
+integration blueprints without copying files by hand.
 
 ## Docs
 

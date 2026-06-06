@@ -109,7 +109,9 @@ Fields:
 - `layouts`: optional ordered layout references. Bare names are same-package or
   package-less layout IDs; qualified names such as `chrome.root` resolve through
   page `use chrome "package"` declarations.
-- `dynamicParams`: route params declared in dynamic route segments.
+- `dynamicParams`: route param names declared in dynamic route segments.
+- `routeParams`: route param names and scalar types. Untyped params are
+  reported as `string`.
 - `cache`: optional page `@cache` route response metadata.
 - `paths`: optional boolean present when `paths {}` exists.
 - `guard`: optional guard metadata.

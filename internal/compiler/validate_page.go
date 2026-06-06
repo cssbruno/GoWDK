@@ -69,7 +69,7 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 		diagnostics = append(diagnostics, routeDiagnostics(page, label, issues, api.RouteSpan, api.RouteParams)...)
 	}
 
-	if mode.RequiresSSR() && !config.HasFeature(gowdk.FeatureSSR) {
+	if requiresSSRFeature(mode, page) && !config.HasFeature(gowdk.FeatureSSR) {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:   "missing_ssr_addon",
 			PageID: page.ID,
@@ -82,19 +82,6 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 			),
 		})
 	}
-	if mode == gowdk.Hybrid && !page.Blocks.Load {
-		diagnostics = append(diagnostics, ValidationError{
-			Code:   "hybrid_requires_explicit_request_policy",
-			PageID: page.ID,
-			Source: page.Source,
-			Span:   firstSpan(page.Spans.Render, page.Spans.Page),
-			Message: fmt.Sprintf(
-				"%s uses @render hybrid, but no accepted request-time full-page policy is declared. Current hybrid pages must declare load {} so they do not become implicit SSR",
-				page.ID,
-			),
-		})
-	}
-
 	if !page.Blocks.View {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:   "missing_view_block",
@@ -112,7 +99,7 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	if len(pageRouteIssues) == 0 {
 		params = pageRoute.Params
 	}
-	if mode.IsBuildTime() && len(params) > 0 && !page.Paths {
+	if isBuildTimeRoute(mode, page) && len(params) > 0 && !page.Paths {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:   "spa_dynamic_route_missing_paths",
 			PageID: page.ID,
@@ -142,6 +129,21 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	diagnostics = append(diagnostics, validatePageCSS(page)...)
 
 	return diagnostics
+}
+
+func requiresSSRFeature(mode gowdk.RenderMode, page manifest.Page) bool {
+	return mode == gowdk.SSR || mode == gowdk.Hybrid && page.Blocks.Load
+}
+
+func isBuildTimeRoute(mode gowdk.RenderMode, page manifest.Page) bool {
+	switch mode {
+	case gowdk.SPA, gowdk.Action:
+		return true
+	case gowdk.Hybrid:
+		return !page.Blocks.Load
+	default:
+		return false
+	}
 }
 
 func validatePageStores(page manifest.Page) []ValidationError {

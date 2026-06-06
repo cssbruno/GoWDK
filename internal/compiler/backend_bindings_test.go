@@ -109,6 +109,79 @@ func Bad(LoginInput) (response.Response, error) {
 	}
 }
 
+func TestBindBackendHandlersClassifiesSSRLoadSignatures(t *testing.T) {
+	root := t.TempDir()
+	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n")
+	writeCompilerTestFile(t, filepath.Join(root, "dashboard.go"), `package dashboard
+
+import "github.com/cssbruno/gowdk/addons/ssr"
+
+func LoadDashboard(ssr.LoadContext) (map[string]any, error) {
+	return map[string]any{"user": "Ada"}, nil
+}
+
+func LoadProfile(ssr.LoadContext) map[string]any {
+	return map[string]any{"user": "Ada"}
+}
+
+func LoadBroken() map[string]any {
+	return nil
+}
+`)
+
+	app := BindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{
+		{
+			ID:     "dashboard",
+			Source: filepath.Join(root, "dashboard.page.gwdk"),
+			Route:  "/dashboard",
+			Render: gowdk.SSR,
+			Blocks: manifest.Blocks{
+				Load: true,
+			},
+		},
+		{
+			ID:     "profile",
+			Source: filepath.Join(root, "profile.page.gwdk"),
+			Route:  "/profile",
+			Render: gowdk.SSR,
+			Blocks: manifest.Blocks{
+				Load: true,
+			},
+		},
+		{
+			ID:     "broken",
+			Source: filepath.Join(root, "broken.page.gwdk"),
+			Route:  "/broken",
+			Render: gowdk.SSR,
+			Blocks: manifest.Blocks{
+				Load: true,
+			},
+		},
+		{
+			ID:     "missing",
+			Source: filepath.Join(root, "missing.page.gwdk"),
+			Route:  "/missing",
+			Render: gowdk.SSR,
+			Blocks: manifest.Blocks{
+				Load: true,
+			},
+		},
+	}})
+
+	bindings := compilerBindingsByBlock(app.BackendBindings)
+	assertBinding(t, bindings["LoadDashboard"], manifest.BackendBindingBound, manifest.BackendSignatureLoadError, "", false)
+	assertBinding(t, bindings["LoadProfile"], manifest.BackendBindingBound, manifest.BackendSignatureLoad, "", false)
+	if got := bindings["LoadBroken"]; got.Status != manifest.BackendBindingUnsupportedSignature {
+		t.Fatalf("expected LoadBroken unsupported signature, got %#v", got)
+	}
+	if got := bindings["LoadMissing"]; got.Status != manifest.BackendBindingMissing {
+		t.Fatalf("expected LoadMissing missing binding, got %#v", got)
+	}
+	if app.Pages[0].LoadBinding.FunctionName != "LoadDashboard" || app.Pages[0].LoadBinding.Status != manifest.BackendBindingBound {
+		t.Fatalf("expected page load binding to be attached, got %#v", app.Pages[0].LoadBinding)
+	}
+}
+
 func TestDiscoverGoEndpointCommentsBindsStandaloneEndpoints(t *testing.T) {
 	root := t.TempDir()
 	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n")

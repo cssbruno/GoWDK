@@ -113,6 +113,25 @@ view {
 	}
 }
 
+func TestParsePageNormalizesTypedRouteParams(t *testing.T) {
+	page, err := ParsePage([]byte(`
+@page patient
+@route "/patients/{id:int}"
+view {
+  <h1>Patient</h1>
+}
+`))
+	if err != nil {
+		t.Fatalf("ParsePage() error = %v", err)
+	}
+	if page.Route != "/patients/{id}" {
+		t.Fatalf("expected normalized route, got %q", page.Route)
+	}
+	if len(page.RouteParams) != 1 || page.RouteParams[0].Name != "id" || page.RouteParams[0].Type != "int" {
+		t.Fatalf("expected typed route param, got %#v", page.RouteParams)
+	}
+}
+
 func TestParsePageReadsGOWDKUseDeclaration(t *testing.T) {
 	page, err := ParsePage([]byte(`
 package pages

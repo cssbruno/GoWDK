@@ -75,21 +75,23 @@ type Store struct {
 
 // Page is the normalized IR for one page source.
 type Page struct {
-	Source   string
-	Package  string
-	ID       string
-	Route    string
-	Render   gowdk.RenderMode
-	Cache    string
-	Metadata PageMetadata
-	Layouts  []string
-	Guards   []string
-	CSS      []string
-	Imports  []Import
-	Uses     []Use
-	Stores   []Store
-	Blocks   Blocks
-	Spans    PageSpans
+	Source      string
+	Package     string
+	ID          string
+	Route       string
+	RouteParams []manifest.RouteParam
+	Render      gowdk.RenderMode
+	Cache       string
+	Metadata    PageMetadata
+	Layouts     []string
+	Guards      []string
+	CSS         []string
+	Imports     []Import
+	Uses        []Use
+	Stores      []Store
+	Blocks      Blocks
+	LoadBinding Binding
+	Spans       PageSpans
 }
 
 type PageMetadata struct {
@@ -265,6 +267,7 @@ type Route struct {
 	Render        gowdk.RenderMode
 	Cache         string
 	DynamicParams []string
+	RouteParams   []manifest.RouteParam
 	Layouts       []string
 	Guards        []string
 	Source        string
@@ -352,6 +355,8 @@ type Asset struct {
 	Name       string
 	UseAlias   string
 	UsePackage string
+	ScopeID    string
+	HashKey    string
 	Span       manifest.SourceSpan
 }
 

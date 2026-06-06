@@ -3,6 +3,9 @@ package css
 
 import "github.com/cssbruno/gowdk"
 
+// ImportPath is the canonical Go import path for the CSS addon.
+const ImportPath = "github.com/cssbruno/gowdk/addons/css"
+
 // Addon enables compile-time CSS processing.
 func Addon() gowdk.Addon {
 	return gowdk.NewAddon("css", gowdk.FeatureCSS)

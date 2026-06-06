@@ -13,7 +13,7 @@ func newBackendRouterDecl(adapter BackendAdapterIR) *ast.FuncDecl {
 		if registration.Kind == BackendEndpointAction && registration.Method == "POST" {
 			method = sel("http", "MethodPost")
 		}
-		routes = append(routes, backendRouteExpr(method, registration.Path, id(registration.Handler)))
+		routes = append(routes, backendRouteExpr(method, registration.Kind, registration.Path, id(registration.Handler)))
 	}
 	return funcDecl("newBackendRouter", nil, []*ast.Field{
 		{Type: &ast.StarExpr{X: sel("gowdkruntime", "BackendRouter")}},
@@ -23,12 +23,13 @@ func newBackendRouterDecl(adapter BackendAdapterIR) *ast.FuncDecl {
 	})
 }
 
-func backendRouteExpr(method ast.Expr, route string, handler ast.Expr) ast.Expr {
+func backendRouteExpr(method ast.Expr, kind BackendEndpointKind, route string, handler ast.Expr) ast.Expr {
 	return &ast.CompositeLit{
 		Type: sel("gowdkruntime", "BackendRoute"),
 		Elts: []ast.Expr{
 			keyValue("Method", method),
 			keyValue("Path", stringLit(route)),
+			keyValue("Kind", stringLit(string(kind))),
 			keyValue("Handler", handler),
 		},
 	}

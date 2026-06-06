@@ -65,19 +65,30 @@ type ActionFragment struct {
 
 // SSRRoute describes a generated request-time page handler.
 type SSRRoute struct {
-	PageID        string
-	Route         string
-	Render        gowdk.RenderMode
-	Cache         string
-	DynamicParams []string
-	Guards        []string
-	HasLoad       bool
-	HTML          string
-	Replacements  []SSRReplacement
+	PageID           string
+	Route            string
+	Render           gowdk.RenderMode
+	Cache            string
+	DynamicParams    []string
+	RouteParams      []manifest.RouteParam
+	Guards           []string
+	HasLoad          bool
+	LoadBinding      manifest.BackendBinding
+	LoadBackendAlias string
+	HTML             string
+	Replacements     []SSRReplacement
+	LoadReplacements []SSRLoadReplacement
 }
 
 // SSRReplacement maps a generated placeholder back to a request route param.
 type SSRReplacement struct {
 	Param       string
+	Placeholder string
+}
+
+// SSRLoadReplacement maps a generated placeholder back to a request-time load
+// field.
+type SSRLoadReplacement struct {
+	Field       string
 	Placeholder string
 }

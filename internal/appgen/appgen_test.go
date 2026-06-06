@@ -76,6 +76,7 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 		`mux.Handle("/", gowdkruntime.Handler{`,
 		`Identity: gowdkruntime.InstanceIdentity(),`,
 		`Assets: gowdkruntime.LoadAssetManifest(root),`,
+		`ErrorPages: gowdkruntime.LoadErrorPages(root),`,
 		`Backend: backend,`,
 		`SSRExact: ssrExact,`,
 		`SSRDynamic: ssrDynamic}`,
@@ -225,7 +226,7 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`gowdkvalidation "github.com/cssbruno/gowdk/runtime/validation"`,
 		`func newBackendRouter() (*gowdkruntime.BackendRouter, error)`,
-		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Handler: action}`,
+		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}`,
 		`func action(response http.ResponseWriter, request *http.Request) bool`,
 		`case "/newsletter":`,
 		`const maxActionBodyBytes int64 = 1 << 20`,
@@ -273,7 +274,7 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 		`backendRouter, err := newBackendRouter()`,
 		`mux.Handle("/", backendRouter)`,
 		`func newBackendRouter() (*gowdkruntime.BackendRouter, error)`,
-		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Handler: action}`,
+		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated backend app source to contain %q:\n%s", expected, source)
@@ -350,6 +351,8 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 			PageID:      "Login",
 			ActionName:  "Login",
 			Route:       "/Login",
+			Redirect:    "/dashboard",
+			Fragments:   []ActionFragment{{Target: "#login", HTML: "<p>ignored</p>"}},
 			InputFields: []string{"email"},
 			Binding: manifest.BackendBinding{
 				Status:       manifest.BackendBindingBound,
@@ -421,6 +424,7 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 		`result, err := auth.Login(ctx, input)`,
 		`result, err := auth.Save(ctx, &input)`,
 		`result, err := auth.Ping(ctx)`,
+		`gowdkresponse.WriteNoStoreHTTP(response, result)`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
@@ -431,6 +435,9 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 	}
 	if strings.Contains(source, "DecodeStruct") {
 		t.Fatalf("did not expect generated app to use runtime reflection struct decoding:\n%s", source)
+	}
+	if strings.Contains(source, `gowdkresponse.RedirectTo("/dashboard")`) || strings.Contains(source, `<p>ignored</p>`) {
+		t.Fatalf("bound action must keep redirect and fragment policy in the user Go response:\n%s", source)
 	}
 }
 
@@ -762,7 +769,58 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 		`case "/dashboard":`,
 		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr"})`,
 		`request = request.WithContext(ctx)`,
-		`gowdkresponse.WriteNoStoreHTML(response, request, "<main><h1>Dashboard</h1></main>")`,
+		`html := "<main><h1>Dashboard</h1></main>"`,
+		`gowdkresponse.WriteNoStoreHTML(response, request, html)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateWritesSSRLoadHandler(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		HasLoad: true,
+		LoadBinding: manifest.BackendBinding{
+			Status:       manifest.BackendBindingBound,
+			ImportPath:   "example.com/app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    manifest.BackendSignatureLoadError,
+		},
+		HTML: `<main><h1>__USER__</h1></main>`,
+		LoadReplacements: []SSRLoadReplacement{{
+			Field:       "user",
+			Placeholder: "__USER__",
+		}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`dashboard "example.com/app/dashboard"`,
+		`gowdkssr "github.com/cssbruno/gowdk/addons/ssr"`,
+		`"fmt"`,
+		`loadContext := gowdkssr.NewLoadContext(request, nil)`,
+		`loadData, err := dashboard.LoadDashboard(loadContext)`,
+		`redirectURL, redirectStatus, ok := gowdkssr.RedirectTarget(err)`,
+		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.Response{Kind: gowdkresponse.Redirect, Status: redirectStatus, URL: redirectURL})`,
+		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, err.Error())`,
+		`loadValue0, loadOK0 := loadData["user"]`,
+		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, "missing load field user")`,
+		`strings.ReplaceAll(html, "__USER__", gowdkhtml.Escape(fmt.Sprint(loadValue0)))`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
@@ -840,6 +898,42 @@ func TestGenerateWritesDynamicSSRHandlerWithoutReplacements(t *testing.T) {
 	}
 	if strings.Contains(source, `case "/blog/{slug}":`) {
 		t.Fatalf("expected generated main.go not to use exact literal match for dynamic route:\n%s", source)
+	}
+}
+
+func TestGenerateWritesTypedSSRRouteParamBindings(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:        "patients.show",
+		Route:         "/patients/{id}",
+		DynamicParams: []string{"id"},
+		RouteParams:   []manifest.RouteParam{{Name: "id", Type: "int"}},
+		HTML:          `<main>Patient</main>`,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`RouteParams: []gowdkruntime.RouteParamMetadata{gowdkruntime.RouteParamMetadata{Name: "id", Type: "int"}}`,
+		`typedParams := map[string]any{}`,
+		`paramValue0, paramOK0, paramErr0 := gowdkroute.Int(params, "id")`,
+		`gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid route parameter id")`,
+		`gowdkresponse.WriteNoStoreError(response, http.StatusNotFound, "missing route parameter id")`,
+		`typedParams["id"] = paramValue0`,
+		`ctx = gowdkruntime.WithTypedParams(ctx, typedParams)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
 	}
 }
 
@@ -1386,6 +1480,72 @@ func TestGeneratedBinaryServesSSRRouteBeforeSPAFallback(t *testing.T) {
 	}
 	if contentType := headers.Get("Content-Type"); contentType != "text/html; charset=utf-8" {
 		t.Fatalf("unexpected content type: %q", contentType)
+	}
+	if cacheControl := headers.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinaryExecutesSSRLoadUserLogic(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		HasLoad: true,
+		LoadBinding: manifest.BackendBinding{
+			Status:       manifest.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    manifest.BackendSignatureLoadError,
+		},
+		HTML: `<main><h1>__USER__</h1><p>__PATH__</p></main>`,
+		LoadReplacements: []SSRLoadReplacement{
+			{Field: "user", Placeholder: "__USER__"},
+			{Field: "path", Placeholder: "__PATH__"},
+		},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "dashboard", "dashboard.go"), `package dashboard
+
+import "github.com/cssbruno/gowdk/addons/ssr"
+
+func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
+	return map[string]any{
+		"user": "Ada <admin>",
+		"path": ctx.Request.URL.Path,
+	}, nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, headers, err := waitForHTTPResponse("http://" + addr + "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Ada &lt;admin&gt;", "<p>/dashboard</p>"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected SSR load response to contain %q, got %s", expected, body)
+		}
 	}
 	if cacheControl := headers.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("unexpected cache control: %q", cacheControl)

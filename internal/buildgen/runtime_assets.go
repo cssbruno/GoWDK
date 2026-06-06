@@ -439,7 +439,101 @@ func buildWASMIslandPackage(component manifest.Component) ([]byte, error) {
 	if !bytes.HasPrefix(contents, wasmMagic) {
 		return nil, wasmIslandDiagnosticError(component, "wasm_package_entrypoint_error", packagePath, fmt.Errorf("did not produce a browser WASM module; declare a package main with a main function"))
 	}
+	if err := validateWASMIslandExports(component, packagePath, contents); err != nil {
+		return nil, err
+	}
 	return contents, nil
+}
+
+func validateWASMIslandExports(component manifest.Component, packagePath string, contents []byte) error {
+	exports, err := wasmExportNames(contents)
+	if err != nil {
+		return wasmIslandDiagnosticError(component, "wasm_package_export_error", packagePath, err)
+	}
+	required := []string{
+		"GOWDKMount" + component.Name,
+		"GOWDKHandle" + component.Name,
+		"GOWDKDestroy" + component.Name,
+	}
+	var missing []string
+	for _, name := range required {
+		if !exports[name] {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		return wasmIslandDiagnosticError(component, "wasm_package_export_error", packagePath, fmt.Errorf("missing required WASM exports: %s", strings.Join(missing, ", ")))
+	}
+	return nil
+}
+
+func wasmExportNames(contents []byte) (map[string]bool, error) {
+	if len(contents) < 8 || !bytes.Equal(contents[:4], wasmMagic) {
+		return nil, fmt.Errorf("invalid WASM module")
+	}
+	offset := 8
+	for offset < len(contents) {
+		sectionID := contents[offset]
+		offset++
+		sectionSize, next, ok := readWASMVarUint32(contents, offset)
+		if !ok {
+			return nil, fmt.Errorf("invalid WASM section size")
+		}
+		offset = next
+		sectionEnd := offset + int(sectionSize)
+		if sectionEnd < offset || sectionEnd > len(contents) {
+			return nil, fmt.Errorf("invalid WASM section length")
+		}
+		if sectionID != 7 {
+			offset = sectionEnd
+			continue
+		}
+		exports := map[string]bool{}
+		count, cursor, ok := readWASMVarUint32(contents, offset)
+		if !ok {
+			return nil, fmt.Errorf("invalid WASM export count")
+		}
+		for range count {
+			nameLen, next, ok := readWASMVarUint32(contents, cursor)
+			if !ok {
+				return nil, fmt.Errorf("invalid WASM export name length")
+			}
+			cursor = next
+			nameEnd := cursor + int(nameLen)
+			if nameEnd < cursor || nameEnd > sectionEnd {
+				return nil, fmt.Errorf("invalid WASM export name")
+			}
+			name := string(contents[cursor:nameEnd])
+			cursor = nameEnd
+			if cursor >= sectionEnd {
+				return nil, fmt.Errorf("invalid WASM export descriptor")
+			}
+			cursor++
+			_, next, ok = readWASMVarUint32(contents, cursor)
+			if !ok {
+				return nil, fmt.Errorf("invalid WASM export index")
+			}
+			cursor = next
+			exports[name] = true
+		}
+		return exports, nil
+	}
+	return map[string]bool{}, nil
+}
+
+func readWASMVarUint32(contents []byte, offset int) (uint32, int, bool) {
+	var value uint32
+	var shift uint
+	for i := 0; i < 5 && offset < len(contents); i++ {
+		b := contents[offset]
+		offset++
+		value |= uint32(b&0x7f) << shift
+		if b&0x80 == 0 {
+			return value, offset, true
+		}
+		shift += 7
+	}
+	return 0, offset, false
 }
 
 type wasmIslandBuildDiagnosticError struct {
@@ -2027,7 +2121,9 @@ func islandWASMLoaderSource(componentName string) string {
     else if (patch.type === "removeAttr" && node && patch.name) node.removeAttribute(patch.name);
     else if (patch.type === "toggleClass" && node && patch.name) node.classList.toggle(patch.name, Boolean(patch.value));
     else if (patch.type === "setStyle" && node && patch.name) node.style.setProperty(patch.name, String(patch.value == null ? "" : patch.value));
+    else if (patch.type === "replaceList" && node) node.innerHTML = Array.isArray(patch.html) ? patch.html.join("") : String(patch.html || "");
     else if (patch.type === "emit" && patch.name) root.dispatchEvent(new CustomEvent(patch.name, { detail: patch.detail || {}, bubbles: true }));
+    else if (patch.type && typeof console !== "undefined") console.error("GOWDK WASM island rejected patch", patch.type, patch);
   }
 
   function applyPatches(root, result) {

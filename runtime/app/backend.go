@@ -22,12 +22,13 @@ type BackendHandler func(http.ResponseWriter, *http.Request) bool
 type BackendRoute struct {
 	Method  string
 	Path    string
+	Kind    string
 	Handler BackendHandler
 }
 
 // BackendRouter dispatches exact generated backend routes.
 type BackendRouter struct {
-	routes map[backendRouteKey]BackendHandler
+	routes map[backendRouteKey]backendRouteEntry
 }
 
 type backendRouteKey struct {
@@ -35,11 +36,15 @@ type backendRouteKey struct {
 	path   string
 }
 
+type backendRouteEntry struct {
+	handler BackendHandler
+}
+
 // NewBackendRouter creates a backend router and registers the supplied routes.
 func NewBackendRouter(routes ...BackendRoute) (*BackendRouter, error) {
-	router := &BackendRouter{routes: map[backendRouteKey]BackendHandler{}}
+	router := &BackendRouter{routes: map[backendRouteKey]backendRouteEntry{}}
 	for _, route := range routes {
-		if err := router.Handle(route.Method, route.Path, route.Handler); err != nil {
+		if err := router.handle(route.Kind, route.Method, route.Path, route.Handler); err != nil {
 			return nil, err
 		}
 	}
@@ -48,11 +53,15 @@ func NewBackendRouter(routes ...BackendRoute) (*BackendRouter, error) {
 
 // Handle registers a backend route with a normalized method and path.
 func (router *BackendRouter) Handle(method string, routePath string, handler BackendHandler) error {
+	return router.handle("backend", method, routePath, handler)
+}
+
+func (router *BackendRouter) handle(kind string, method string, routePath string, handler BackendHandler) error {
 	if router == nil {
 		return fmt.Errorf("backend router is nil")
 	}
 	if router.routes == nil {
-		router.routes = map[backendRouteKey]BackendHandler{}
+		router.routes = map[backendRouteKey]backendRouteEntry{}
 	}
 	method = strings.ToUpper(strings.TrimSpace(method))
 	if method == "" {
@@ -65,18 +74,18 @@ func (router *BackendRouter) Handle(method string, routePath string, handler Bac
 	if _, exists := router.routes[key]; exists {
 		return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
 	}
-	router.routes[key] = handler
+	router.routes[key] = backendRouteEntry{handler: BackendBoundary(kind, handler)}
 	return nil
 }
 
 // Action registers a generated POST action route.
 func (router *BackendRouter) Action(routePath string, handler BackendHandler) error {
-	return router.Handle(http.MethodPost, routePath, handler)
+	return router.handle("action", http.MethodPost, routePath, handler)
 }
 
 // API registers a generated API route.
 func (router *BackendRouter) API(method string, routePath string, handler BackendHandler) error {
-	return router.Handle(method, routePath, handler)
+	return router.handle("api", method, routePath, handler)
 }
 
 // Dispatch writes a route response when the request matches a backend route.
@@ -84,14 +93,14 @@ func (router *BackendRouter) Dispatch(writer http.ResponseWriter, request *http.
 	if router == nil || request == nil {
 		return false
 	}
-	handler := router.routes[backendRouteKey{
+	route := router.routes[backendRouteKey{
 		method: strings.ToUpper(strings.TrimSpace(request.Method)),
 		path:   normalizeBackendPath(request.URL.Path),
 	}]
-	if handler == nil {
+	if route.handler == nil {
 		return false
 	}
-	return handler(writer, request)
+	return route.handler(writer, request)
 }
 
 // HandlerFunc returns the router as a generated runtime hook.

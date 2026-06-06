@@ -8,12 +8,14 @@ import (
 type contextKey string
 
 const (
-	requestContextKey  contextKey = "gowdk-request"
-	paramsContextKey   contextKey = "gowdk-params"
-	csrfContextKey     contextKey = "gowdk-csrf"
-	sessionContextKey  contextKey = "gowdk-session"
-	routeContextKey    contextKey = "gowdk-route"
-	endpointContextKey contextKey = "gowdk-endpoint"
+	requestContextKey     contextKey = "gowdk-request"
+	paramsContextKey      contextKey = "gowdk-params"
+	typedParamsContextKey contextKey = "gowdk-typed-params"
+	csrfContextKey        contextKey = "gowdk-csrf"
+	sessionContextKey     contextKey = "gowdk-session"
+	routeContextKey       contextKey = "gowdk-route"
+	endpointContextKey    contextKey = "gowdk-endpoint"
+	errorPagesContextKey  contextKey = "gowdk-error-pages"
 )
 
 // RouteMetadata describes one generated request-time page route.
@@ -25,8 +27,15 @@ type RouteMetadata struct {
 	Render        string
 	Cache         string
 	DynamicParams []string
+	RouteParams   []RouteParamMetadata
 	Guards        []string
 	HasLoad       bool
+}
+
+// RouteParamMetadata describes a generated dynamic route parameter.
+type RouteParamMetadata struct {
+	Name string
+	Type string
 }
 
 // EndpointMetadata describes one generated backend endpoint declaration.
@@ -69,6 +78,26 @@ func Params(ctx context.Context) map[string]string {
 	return copied
 }
 
+// WithTypedParams stores decoded route params in a context.
+func WithTypedParams(ctx context.Context, params map[string]any) context.Context {
+	copied := map[string]any{}
+	for key, value := range params {
+		copied[key] = value
+	}
+	return context.WithValue(ctx, typedParamsContextKey, copied)
+}
+
+// TypedParams returns decoded route params attached by generated runtime
+// adapters. Untyped route params are still available as strings.
+func TypedParams(ctx context.Context) map[string]any {
+	params, _ := ctx.Value(typedParamsContextKey).(map[string]any)
+	copied := map[string]any{}
+	for key, value := range params {
+		copied[key] = value
+	}
+	return copied
+}
+
 // WithCSRF stores a generated CSRF token in a context.
 func WithCSRF(ctx context.Context, token string) context.Context {
 	return context.WithValue(ctx, csrfContextKey, token)
@@ -93,6 +122,7 @@ func Session(ctx context.Context) any {
 // WithRoute stores generated route metadata in a context.
 func WithRoute(ctx context.Context, route RouteMetadata) context.Context {
 	route.DynamicParams = copyStrings(route.DynamicParams)
+	route.RouteParams = copyRouteParamMetadata(route.RouteParams)
 	route.Guards = copyStrings(route.Guards)
 	return context.WithValue(ctx, routeContextKey, route)
 }
@@ -102,6 +132,7 @@ func WithRoute(ctx context.Context, route RouteMetadata) context.Context {
 func Route(ctx context.Context) (RouteMetadata, bool) {
 	route, ok := ctx.Value(routeContextKey).(RouteMetadata)
 	route.DynamicParams = copyStrings(route.DynamicParams)
+	route.RouteParams = copyRouteParamMetadata(route.RouteParams)
 	route.Guards = copyStrings(route.Guards)
 	return route, ok
 }
@@ -123,6 +154,15 @@ func copyStrings(values []string) []string {
 		return nil
 	}
 	copied := make([]string, len(values))
+	copy(copied, values)
+	return copied
+}
+
+func copyRouteParamMetadata(values []RouteParamMetadata) []RouteParamMetadata {
+	if len(values) == 0 {
+		return nil
+	}
+	copied := make([]RouteParamMetadata, len(values))
 	copy(copied, values)
 	return copied
 }

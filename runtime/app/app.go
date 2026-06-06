@@ -45,6 +45,8 @@ type Handler struct {
 	Action     HandlerFunc
 	API        HandlerFunc
 	CSRF       CSRFTokenSource
+	ErrorPages ErrorPages
+	Metrics    *Metrics
 	SSRExact   HandlerFunc
 	SSRDynamic HandlerFunc
 }
@@ -82,47 +84,63 @@ func LoadAssetManifest(root fs.FS) asset.Manifest {
 }
 
 func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	metrics := handler.Metrics
+	metrics.recordRequest()
 	handler.writeIdentityHeaders(response)
+	if len(handler.ErrorPages.NotFound) > 0 || len(handler.ErrorPages.InternalServerError) > 0 {
+		request = request.WithContext(withErrorPages(request.Context(), handler.ErrorPages))
+	}
 	if request.Method == http.MethodPost && isCookieAckPath(request.URL.Path) {
+		metrics.recordCookieAck()
 		acknowledgeCookie(response, request)
 		return
 	}
 	if request.URL.Path == "/_gowdk/health" {
+		metrics.recordHealth()
 		handler.health(response)
 		return
 	}
-	if handler.Backend != nil && handler.Backend(response, request) {
+	if handler.Backend != nil && Boundary("backend", handler.Backend)(response, request) {
+		metrics.recordBackend()
 		return
 	}
-	if handler.API != nil && handler.API(response, request) {
+	if handler.API != nil && Boundary("api", handler.API)(response, request) {
+		metrics.recordAPI()
 		return
 	}
-	if request.Method == http.MethodPost && handler.Action != nil && handler.Action(response, request) {
+	if request.Method == http.MethodPost && handler.Action != nil && Boundary("action", handler.Action)(response, request) {
+		metrics.recordAction()
 		return
 	}
 	if request.Method != http.MethodGet && request.Method != http.MethodHead {
+		metrics.recordMethodNotAllowed()
 		response.Header().Set("Allow", "GET, HEAD")
 		http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if handler.SSRExact != nil && handler.SSRExact(response, request) {
+	if handler.SSRExact != nil && Boundary("ssr", handler.SSRExact)(response, request) {
+		metrics.recordSSRExact()
 		return
 	}
 
 	payload, info, assetName, ok := handler.SPAFile(request.URL.Path)
 	if !ok {
-		if handler.SSRDynamic != nil && handler.SSRDynamic(response, request) {
+		if handler.SSRDynamic != nil && Boundary("ssr", handler.SSRDynamic)(response, request) {
+			metrics.recordSSRDynamic()
 			return
 		}
-		http.NotFound(response, request)
+		metrics.recordNotFound()
+		WriteErrorPage(response, request, http.StatusNotFound, "404 page not found")
 		return
 	}
 	payload = handler.cookieAwarePayload(request, payload, info.Name())
 	var csrfOK bool
 	payload, csrfOK = handler.csrfAwarePayload(response, request, payload, info.Name())
 	if !csrfOK {
+		metrics.recordCSRFUnavailable()
 		return
 	}
+	metrics.recordStatic()
 	handler.setGeneratedStaticCache(response, assetName)
 	http.ServeContent(response, request, info.Name(), info.ModTime(), bytes.NewReader(payload))
 }
@@ -314,13 +332,17 @@ func (handler Handler) writeIdentityHeaders(response http.ResponseWriter) {
 
 func (handler Handler) health(response http.ResponseWriter) {
 	response.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(response).Encode(map[string]string{
+	payload := map[string]any{
 		"status":      "ok",
 		"app":         handler.Identity.AppID,
 		"module":      handler.Identity.ModuleName,
 		"instance_id": handler.Identity.InstanceID,
 		"assets":      strconv.Itoa(len(handler.Assets.Files)),
-	})
+	}
+	if handler.Metrics != nil {
+		payload["metrics"] = handler.Metrics.Snapshot()
+	}
+	_ = json.NewEncoder(response).Encode(payload)
 }
 
 func (handler Handler) SPAFile(requestPath string) ([]byte, fs.FileInfo, string, bool) {

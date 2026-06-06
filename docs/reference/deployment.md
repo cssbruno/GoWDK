@@ -59,6 +59,10 @@ The generated app embeds the selected build output and serves it through
 - `/_gowdk/health`
 - `X-GOWDK-*` identity response headers
 
+Generated apps may attach `runtime/app.Metrics` to the runtime handler. When
+present, `/_gowdk/health` includes a snapshot of request, static, backend,
+action, API, SSR, not-found, method-not-allowed, and CSRF-unavailable counters.
+
 Runtime identity environment variables:
 
 - `GOWDK_APP_ID`: application identity metadata.
@@ -80,8 +84,8 @@ Generated binaries use explicit cache headers:
   policy is `Cache-Control: public, max-age=31536000, immutable` with SHA-256
   content hashes in the asset manifest.
 - CSRF-personalized HTML, action responses, API responses, partial fragments,
-  SSR HTML, generated handler errors, and invalid-CSRF responses use
-  `Cache-Control: no-store`.
+  SSR HTML, SSR load redirects, generated handler errors, generated error
+  pages, and invalid-CSRF responses use `Cache-Control: no-store`.
 - Page-level `@cache` records route response cache intent in compiler, route,
   manifest, and generated SSR route metadata. It does not override the
   no-store safety policy for actions, APIs, partial responses, or CSRF-mutated
@@ -153,20 +157,22 @@ Generated binaries currently support:
 - Feature-bound same-package action handlers with no-input, typed value, typed
   pointer, or `form.Values` signatures.
 - Feature-bound same-package API handlers.
+- No-store panic boundaries for generated SSR, action, and API request-time
+  lanes.
 - First-slice same-page POST action redirects.
 - CSRF-wired generated action handlers when `Build.CSRF.Enabled` is set and
   the configured secret environment variable is present.
 - First-slice required-field validation for directly declared form controls.
 - First-slice partial action fragment responses.
-- First-slice concrete and dynamic `@render ssr` pages without `load {}`.
+- First-slice concrete and dynamic `@render ssr` pages with declared `load {}`
+  fields.
+- Bare `@render hybrid` pages as normal build-time SPA output.
 - Optional split frontend/backend generation with `--backend-app` and
   `--backend-bin`; the frontend proxies backend routes to
   `GOWDK_BACKEND_ORIGIN`.
 
 Generated binaries do not yet support:
 
-- Request-time `load {}` execution.
-- Guard enforcement.
 - General fragment routes.
 - Hybrid request-time behavior.
 

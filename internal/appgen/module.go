@@ -81,7 +81,7 @@ func optionsUsesModuleImports(options Options, modulePath string) bool {
 	if modulePath == "" {
 		return false
 	}
-	for importPath := range backendImports(options.Actions, options.APIs) {
+	for importPath := range backendImports(options.Actions, options.APIs, options.SSR) {
 		if importPath == modulePath || strings.HasPrefix(importPath, modulePath+"/") {
 			return true
 		}

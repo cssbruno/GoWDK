@@ -21,8 +21,9 @@ Do not treat current `act`, `api`, `partial`, `@guard`, or SSR scaffolding as co
 - Generated actions must enable `Build.CSRF.Enabled` and set a stable CSRF
   secret before production use.
 - Generated form decoders must validate expected fields and avoid mass assignment.
-- Generated action forms must reject direct file inputs until upload size,
-  storage, validation, cleanup, and logging rules exist.
+- Generated action forms must reject direct file inputs and multipart posts.
+  Uploads are user-owned API/server behavior with explicit size, storage,
+  validation, cleanup, auth, and logging rules.
 - Generated action handlers must cap request bodies before parsing submitted
   form values.
 - `partial` responses must render escaped HTML through the shared render core.
@@ -54,7 +55,7 @@ Perform a focused security review when adding:
 - Admin operations.
 - External webhooks or public APIs.
 - Sensitive personal data.
-- SSR guards, session-aware layouts, or request-time `load {}`.
+- Session-aware layouts and broader request-time SSR user logic.
 - Server fragments that mutate or return user-specific HTML.
 
 First-slice actions, partials, APIs, SSR guards, layouts, and fragments should

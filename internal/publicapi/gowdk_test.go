@@ -66,7 +66,7 @@ func TestParseRenderModeAndModePredicates(t *testing.T) {
 	}{
 		{"spa", gowdk.SPA, false, true},
 		{"action", gowdk.Action, false, true},
-		{"hybrid", gowdk.Hybrid, true, false},
+		{"hybrid", gowdk.Hybrid, false, false},
 		{"ssr", gowdk.SSR, true, false},
 	}
 

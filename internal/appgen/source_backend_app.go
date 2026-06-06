@@ -39,7 +39,7 @@ func backendRuntimeImportMap(options Options) map[string]string {
 		imports["os"] = "os"
 		imports["strings"] = "strings"
 	}
-	for importPath, alias := range backendImports(options.Actions, options.APIs) {
+	for importPath, alias := range backendImports(options.Actions, options.APIs, nil) {
 		imports[alias] = importPath
 	}
 

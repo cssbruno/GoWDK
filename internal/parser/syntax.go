@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkast"
 	"github.com/cssbruno/gowdk/internal/view"
 )
@@ -101,7 +102,9 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 				Value: strings.TrimSpace(match[2]),
 				Span:  sourceLineSpan(lineNumber, rawLine),
 			}
-			applySyntaxAnnotation(&file, annotation, lineNumber, rawLine)
+			if err := applySyntaxAnnotation(&file, annotation, lineNumber, rawLine); err != nil {
+				return SyntaxFile{}, fmt.Errorf("line %d: %w", lineNumber, err)
+			}
 			if match[1] == "wasm" {
 				file.WASM = &WASMContract{
 					Package: strings.TrimSpace(match[2]),
@@ -215,10 +218,34 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 	if captured.Kind != "" {
 		return SyntaxFile{}, fmt.Errorf("%s block missing closing }", captured.Kind)
 	}
+	attachSyntaxAssetScopes(&file)
 	return file, nil
 }
 
-func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNumber int, rawLine string) {
+func attachSyntaxAssetScopes(file *SyntaxFile) {
+	if file.Component == nil {
+		return
+	}
+	packageName := ""
+	if file.Package != nil {
+		packageName = file.Package.Name
+	}
+	for index := range file.CSS {
+		if file.CSS[index].Kind != "css" {
+			continue
+		}
+		hashKey := cssscope.HashKey("component", packageName, file.Component.Name, "", file.CSS[index].Path)
+		file.CSS[index].Scope = gwdkast.AssetScope{
+			OwnerKind: "component",
+			OwnerID:   file.Component.Name,
+			Package:   packageName,
+			ScopeID:   cssscope.ScopeID(hashKey),
+			HashKey:   hashKey,
+		}
+	}
+}
+
+func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNumber int, rawLine string) error {
 	value := strings.TrimSpace(annotation.Value)
 	switch annotation.Name {
 	case "page":
@@ -234,11 +261,13 @@ func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNu
 			file.Layouts = append(file.Layouts, gwdkast.LayoutRef{ID: span.Name, Span: span.Span})
 		}
 	case "route":
-		path := trimQuotes(value)
-		params := routeParamSpans(path, lineNumber, rawLine)
+		path, params, _, err := parseRouteDeclaration(trimQuotes(value), lineNumber, rawLine)
+		if err != nil {
+			return err
+		}
 		routeParams := make([]gwdkast.RouteParam, 0, len(params))
 		for _, param := range params {
-			routeParams = append(routeParams, gwdkast.RouteParam{Name: param.Name, Span: param.Span})
+			routeParams = append(routeParams, gwdkast.RouteParam{Name: param.Name, Type: param.Type, Span: param.Span})
 		}
 		file.Route = &gwdkast.RouteDecl{Path: path, Params: routeParams, Span: annotation.Span}
 	case "render":
@@ -258,6 +287,7 @@ func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNu
 			file.Assets = append(file.Assets, gwdkast.AssetRef{Kind: "asset", Path: span.Name, Span: span.Span})
 		}
 	}
+	return nil
 }
 
 type syntaxBodyLine struct {

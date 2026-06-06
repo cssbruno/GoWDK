@@ -63,7 +63,7 @@ These are the durable rules. Changing them should require an ADR.
 4. Dynamic SPA routes require `paths {}` unless the page uses request-time
    rendering.
 5. `build {}` is build-time page data.
-6. `load {}` is request-time page data and requires `@render ssr` or a future
+6. `load {}` is request-time page data and requires `@render ssr` or an
    explicit hybrid request-time branch.
 7. `act` and `api` declarations name exact exported Go symbols.
 8. Actions and APIs are endpoint metadata, not page route kinds.
@@ -106,8 +106,8 @@ is still missing. At a high level, the current baseline already includes:
   adapter helpers, one generated backend hook, request body limits, and no-store
   defaults for request-time responses;
 - first-slice action/API execution, partial fragment responses, and concrete or
-  dynamic `@render ssr` pages without `load {}` through buildgen, appgen,
-  `runtime/app`, and `runtime/route`.
+  dynamic `@render ssr` pages with declared `load {}` fields through buildgen,
+  appgen, `runtime/app`, and `runtime/route`.
 
 Do not roadmap those completed slices as future work. Future work should
 stabilize their contracts, remove generation debt, and fill the missing
@@ -137,7 +137,7 @@ are stable.
 | 14 | Static-first SPA navigation | SPA routes remain real URLs that work on direct open and refresh. Generated JS may intercept internal links, fetch built page shells or fragments, swap page regions, preserve scroll/focus, prefetch static route assets, and show loading/error UI, but it must not own routing, auth, business rules, validation, backend behavior, global app state, loading policy, or cache policy. |
 | 15 | Components and client language | Components gain real `g:if` mount/unmount, richer expression props, child-to-parent events, bindable state, typed exports, named/scoped slots, scoped CSS/assets, a documented component contract, a proper reactive dependency graph, predictable batching, and cycle diagnostics. |
 | 16 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Explicit WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
-| 17 | CSS, assets, and packaging | Full plugin loading, page-aware CSS processor selection, component ASTs for CSS scoping/hash decisions, Tailwind/CSS deployment docs, asset hashing, and binary cache policy are implemented. Module selection remains artifact packaging, not runtime module orchestration. |
+| 17 | CSS, assets, and packaging | Full plugin loading, page-aware CSS processor selection, component AST/IR scope and hash metadata, Tailwind/CSS deployment docs, asset hashing, and binary cache policy are implemented. Module selection remains artifact packaging, not runtime module orchestration. |
 | 18 | Framework adapters | Core remains `net/http`. Optional Gin, Echo, and Fiber adapters wrap the same generated `http.Handler` after the handler contract is stable; generated code stays framework-neutral by default. |
 | 19 | Dev, playground, and tooling | `gowdk dev` can run generated app/runtime-kit flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, browser playground, browser-compiled GOWDK, richer LSP completions, and editor navigation are added. |
 | 20 | Documentation sync | README, requirements, architecture, deployment, roadmap, examples, and `MISSING_CHECKLIST.md` stay synchronized with implemented behavior and commands. |
@@ -174,18 +174,18 @@ contract work that later features depend on.
 
 ### Request-Time Page Release
 
-- `load {}` execution in generated SSR handlers.
+- Broader `load {}` data shapes beyond declared scalar fields.
 - SSR guard success-path registration examples.
 - Typed route params.
 - Route-level metadata.
-- Redirects, error pages, and error boundaries.
+- Custom SSR/action/API error-boundary syntax and examples.
 - Cache/no-store policy for request-time page rendering.
 
 ### SPA And Hybrid Release
 
 - Static-first SPA navigation enhancements.
 - Progressive form enhancement.
-- Explicit hybrid capabilities.
+- Bare hybrid pages as SPA output with explicit request-time capability gating.
 - Cache and revalidation syntax and binary enforcement.
 
 ### Component And Island Release
@@ -198,7 +198,7 @@ contract work that later features depend on.
 ### Platform Tooling Release
 
 - Full CSS/plugin loading.
-- Asset hashing and packaging docs.
+- Emitted CSS filename hashing and packaging docs.
 - Optional framework adapters.
 - Generated app dev loop.
 - Browser playground and stronger editor tooling.

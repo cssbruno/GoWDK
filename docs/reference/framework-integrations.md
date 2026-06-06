@@ -32,43 +32,60 @@ router.Mount("/", gowdkHandler)
 ## Echo
 
 ```go
+import gowdkecho "github.com/cssbruno/gowdk/runtime/adapters/echo"
+import "github.com/labstack/echo/v5"
+
 gowdkHandler, err := gowdkapp.Handler()
 if err != nil {
 	log.Fatal(err)
 }
 
 app := echo.New()
-app.Any("/*", echo.WrapHandler(gowdkHandler))
+gowdkecho.Mount(app, "/*", gowdkHandler)
 ```
 
 ## Gin
 
 ```go
+import gowdkgin "github.com/cssbruno/gowdk/runtime/adapters/gin"
+import "github.com/gin-gonic/gin"
+
 gowdkHandler, err := gowdkapp.Handler()
 if err != nil {
 	log.Fatal(err)
 }
 
 engine := gin.Default()
-engine.Any("/*path", gin.WrapH(gowdkHandler))
+gowdkgin.Mount(engine, "/*path", gowdkHandler)
 ```
 
 ## Fiber
 
-Fiber is not built on `net/http`, so mounting a generated GOWDK app requires
-Fiber's adaptor package, for example `adaptor.HTTPHandler(gowdkHandler)`.
-That bridge adds adapter overhead and Fiber-specific semantics around request
-and response objects, middleware ordering, context cancellation, streaming,
-and protocol features. Keep security, auth, validation, and persistence in
-normal Go handlers behind GOWDK's `net/http` contract, and test behavior through
-the final Fiber stack before deploying.
+```go
+import gowdkfiber "github.com/cssbruno/gowdk/runtime/adapters/fiber"
+import "github.com/gofiber/fiber/v2"
 
-GOWDK core does not import Fiber and generated apps do not emit Fiber-specific
-code by default. A future optional Fiber adapter should wrap the same generated
-`http.Handler` contract instead of changing generated app output.
+gowdkHandler, err := gowdkapp.Handler()
+if err != nil {
+	log.Fatal(err)
+}
+
+app := fiber.New()
+gowdkfiber.Mount(app, "/*", gowdkHandler)
+```
+
+Fiber is not built on `net/http`, so `runtime/adapters/fiber` uses Fiber's
+adaptor package internally. That bridge adds adapter overhead and
+Fiber-specific semantics around request and response objects, middleware
+ordering, context cancellation, streaming, and protocol features. Keep security,
+auth, validation, and persistence in normal Go handlers behind GOWDK's
+`net/http` contract, and test behavior through the final Fiber stack before
+deploying.
 
 ## Contract
 
 GOWDK's generated app package is `net/http`-first. Framework compatibility comes
 from the standard handler contract, so applications can choose Gin, Chi, Echo,
 Fiber through an adaptor, or plain `net/http` without changing GOWDK core.
+Generated apps do not emit framework-specific code by default; optional adapter
+packages wrap the same generated `http.Handler`.

@@ -134,15 +134,16 @@ Implemented today:
 - Config-based discovery, module selection, and named build targets.
 - Generated embedded app source, local binaries, and Go `js/wasm` deploy
   artifacts.
+- Explicit browser-side Go/WASM island packages with ABI export validation.
 - Feature-bound action/API handlers, first-slice action redirects, partial
-  action fragments, and concrete or dynamic SSR pages without `load {}` in
-  generated binaries.
+  action fragments, and concrete or dynamic SSR pages with declared `load {}`
+  fields in generated binaries.
 - CLI tooling for tokens, formatting, validation, manifest, sitemap, routes,
   dev, serve, and LSP.
 
 Planned or partial:
 
-- Broader validation fragments and upload handling.
+- Broader validation fragments.
 - Typed user input structs for action handlers.
-- Request-time `load {}` execution and guard success-path configuration docs.
-- Full browser-side Go/WASM island ABI.
+- Broader request-time `load {}` data shapes and guard success-path
+  configuration docs.

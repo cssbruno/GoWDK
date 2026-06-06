@@ -74,19 +74,22 @@ func runtimeImportMap(options Options) map[string]string {
 	if len(ssr) > 0 {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 	}
-	if generatedUsesGuards(options) {
+	if generatedUsesGuards(options) || ssrUsesLoad(ssr) {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 		imports["gowdkssr"] = "github.com/cssbruno/gowdk/addons/ssr"
 	}
 	if ssrUsesDynamicRoutes(ssr) {
 		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 	}
-	if ssrUsesReplacements(ssr) {
+	if ssrUsesReplacements(ssr) || ssrUsesLoad(ssr) {
 		imports["gowdkhtml"] = "github.com/cssbruno/gowdk/runtime/html"
 		imports["strings"] = "strings"
 	}
+	if ssrUsesLoad(ssr) {
+		imports["fmt"] = "fmt"
+	}
 	if !options.ProxyBackend {
-		for importPath, alias := range backendImports(actions, apis) {
+		for importPath, alias := range backendImports(actions, apis, ssr) {
 			imports[alias] = importPath
 		}
 	}
@@ -303,6 +306,7 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 		keyValue("Root", id("root")),
 		keyValue("Identity", call(sel("gowdkruntime", "InstanceIdentity"))),
 		keyValue("Assets", call(sel("gowdkruntime", "LoadAssetManifest"), id("root"))),
+		keyValue("ErrorPages", call(sel("gowdkruntime", "LoadErrorPages"), id("root"))),
 		keyValue("Backend", backend),
 	}
 	if csrfEnabled(options) {
@@ -428,7 +432,7 @@ func hasBackendRoutes(options Options) bool {
 	return len(options.Actions) > 0 || len(options.APIs) > 0
 }
 
-func backendImports(actions []ActionEndpoint, apis []APIEndpoint) map[string]string {
+func backendImports(actions []ActionEndpoint, apis []APIEndpoint, ssr []SSRRoute) map[string]string {
 	imports := map[string]string{}
 	for _, action := range actions {
 		if action.Binding.ImportPath != "" && action.BackendAlias != "" {
@@ -438,6 +442,11 @@ func backendImports(actions []ActionEndpoint, apis []APIEndpoint) map[string]str
 	for _, api := range apis {
 		if api.Binding.ImportPath != "" && api.BackendAlias != "" {
 			imports[api.Binding.ImportPath] = api.BackendAlias
+		}
+	}
+	for _, route := range ssr {
+		if route.LoadBinding.ImportPath != "" && route.LoadBackendAlias != "" {
+			imports[route.LoadBinding.ImportPath] = route.LoadBackendAlias
 		}
 	}
 	return imports

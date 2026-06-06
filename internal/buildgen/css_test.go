@@ -264,6 +264,86 @@ func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 	}
 }
 
+func TestBuildAppliesPageAwareCSSProcessorStylesheets(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{
+		{
+			ID:    "home",
+			Route: "/",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main>Home</main>`,
+			},
+		},
+		{
+			ID:    "dashboard",
+			Route: "/dashboard",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main>Dashboard</main>`,
+			},
+		},
+	}}
+
+	_, err := Build(gowdk.Config{
+		CSS: gowdk.CSSConfig{Include: []string{DisableCSSDiscovery}},
+		Addons: []gowdk.Addon{pageAwareCSSProcessor{
+			pageStylesheets: map[string][]gowdk.Stylesheet{
+				"dashboard": {{Href: "/assets/dashboard.css"}},
+			},
+		}},
+	}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	home, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(home), "/assets/dashboard.css") {
+		t.Fatalf("did not expect dashboard stylesheet in home output:\n%s", home)
+	}
+	dashboard, err := os.ReadFile(filepath.Join(outputDir, "dashboard", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(dashboard), `<link rel="stylesheet" href="/assets/dashboard.css">`) {
+		t.Fatalf("expected dashboard stylesheet in dashboard output:\n%s", dashboard)
+	}
+}
+
+func TestBuildRejectsUnknownPageAwareCSSProcessorSelection(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "home",
+		Route: "/",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{
+		CSS: gowdk.CSSConfig{Include: []string{DisableCSSDiscovery}},
+		Addons: []gowdk.Addon{pageAwareCSSProcessor{
+			pageStylesheets: map[string][]gowdk.Stylesheet{
+				"missing": {{Href: "/assets/missing.css"}},
+			},
+		}},
+	}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected unknown page selection error")
+	}
+	if !strings.Contains(err.Error(), `css processor page-aware-css selected unknown page "missing"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if entries, err := os.ReadDir(outputDir); err != nil {
+		t.Fatal(err)
+	} else if len(entries) != 0 {
+		t.Fatalf("expected no partial output, got %#v", entries)
+	}
+}
+
 func TestBuildRejectsUnsafeCSSAssetsBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{{
@@ -343,6 +423,22 @@ func (processor *recordingCSSProcessor) ProcessCSS(context gowdk.CSSContext) (go
 
 type badCSSProcessor struct {
 	path string
+}
+
+type pageAwareCSSProcessor struct {
+	pageStylesheets map[string][]gowdk.Stylesheet
+}
+
+func (processor pageAwareCSSProcessor) Name() string {
+	return "page-aware-css"
+}
+
+func (processor pageAwareCSSProcessor) Features() []gowdk.Feature {
+	return []gowdk.Feature{gowdk.FeatureCSS}
+}
+
+func (processor pageAwareCSSProcessor) ProcessCSS(gowdk.CSSContext) (gowdk.CSSResult, error) {
+	return gowdk.CSSResult{PageStylesheets: processor.pageStylesheets}, nil
 }
 
 type duplicateCSSProcessor struct{}

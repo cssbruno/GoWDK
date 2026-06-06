@@ -17,6 +17,9 @@ import (
 )
 
 const (
+	// ImportPath is the canonical Go import path for the rate-limit addon.
+	ImportPath = "github.com/cssbruno/gowdk/addons/ratelimit"
+
 	defaultCleanupInterval = time.Minute
 
 	// HeaderLimit reports the configured request limit for the current window.

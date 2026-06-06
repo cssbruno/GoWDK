@@ -26,6 +26,16 @@ func TestMatchDynamicRoute(t *testing.T) {
 	}
 }
 
+func TestMatchTypedDynamicRoute(t *testing.T) {
+	params, ok := Match("/patients/{id:int}", "/patients/42")
+	if !ok {
+		t.Fatal("expected typed dynamic route to match")
+	}
+	if params["id"] != "42" {
+		t.Fatalf("unexpected id: %#v", params)
+	}
+}
+
 func TestMatchRejectsDifferentShape(t *testing.T) {
 	if _, ok := Match("/blog/{slug}", "/blog/hello/edit"); ok {
 		t.Fatal("expected different shape not to match")

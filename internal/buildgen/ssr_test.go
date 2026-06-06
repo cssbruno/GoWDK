@@ -169,7 +169,7 @@ func TestSSRArtifactsRejectRouteParamInDangerousAttribute(t *testing.T) {
 	}
 }
 
-func TestSSRArtifactsRejectLoadUntilRequestExecutionExists(t *testing.T) {
+func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{{
 		ID:     "dashboard",
@@ -177,17 +177,29 @@ func TestSSRArtifactsRejectLoadUntilRequestExecutionExists(t *testing.T) {
 		Render: gowdk.SSR,
 		Blocks: manifest.Blocks{
 			Load:     true,
-			LoadBody: `=> { user }`,
+			LoadBody: `=> { user, notice }`,
 			View:     true,
-			ViewBody: `<main>Dashboard</main>`,
+			ViewBody: `<main><h1>{user}</h1><p>{notice}</p></main>`,
 		},
 	}}}
 
-	_, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
-	if err == nil {
-		t.Fatal("expected unsupported load error")
+	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "generated SSR load {} execution is not implemented yet") {
-		t.Fatalf("unexpected error: %v", err)
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one artifact, got %#v", artifacts)
+	}
+	artifact := artifacts[0]
+	if !artifact.HasLoad {
+		t.Fatalf("expected load metadata, got %#v", artifact)
+	}
+	if len(artifact.LoadReplacements) != 2 {
+		t.Fatalf("expected load replacements, got %#v", artifact.LoadReplacements)
+	}
+	for _, replacement := range artifact.LoadReplacements {
+		if !strings.Contains(artifact.HTML, replacement.Placeholder) {
+			t.Fatalf("expected placeholder %q in HTML %s", replacement.Placeholder, artifact.HTML)
+		}
 	}
 }

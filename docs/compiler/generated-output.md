@@ -88,13 +88,23 @@ Implemented today:
   component-scoped WASM exports when present, captures host DOM events, and
   applies validated first-slice patch commands such as text, visibility,
   attribute, class, style, and emitted-event updates.
-- Generated apps can serve first-slice concrete and dynamic SSR pages
-  without `load {}`. Dynamic route params are substituted into generated SSR
-  placeholders with request-time HTML escaping.
+- Generated apps can serve first-slice concrete and dynamic SSR pages. Dynamic
+  route params are substituted into generated SSR placeholders with
+  request-time HTML escaping. First-slice `load { => { field } }` pages call
+  same-package Go load functions named `Load<PageID>` with `ssr.LoadContext`
+  and replace declared load placeholders with escaped returned values. Load
+  errors that wrap `ssr.RedirectError` become no-store local redirects; other
+  load failures use generated error-page output.
+- Generated embedded apps load optional `404.html` and `500.html` from the
+  embedded build output and use those pages for not-found responses and
+  generated SSR load failures.
+- Generated SSR, action, and API request-time lanes recover panics before
+  response headers are written as no-store HTTP 500 responses without exposing
+  panic values.
 - Generated apps can return first-slice partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests.
 - Generated app action endpoint extraction rejects direct file inputs and
-  multipart `g:post` forms until upload security rules are defined.
+  multipart `g:post` forms. Uploads belong in user-owned API/server handlers.
 - `internal/gotypes` resolves component prop/state structs through Go module
   import paths using `go list`, `go/parser`, and `go/types`.
 - `runtime/response` defines fragment responses with target and swap metadata
@@ -117,8 +127,8 @@ Not implemented yet:
   processor selection.
 - Non-string props in inline `props {}` blocks.
 - General expression interpolation and arbitrary `build {}` execution.
-- Real user Go type resolution for typed action decoders, user action logic,
-  API handlers, general fragment routes, and SSR `load {}` handlers.
+- Broader user Go type resolution beyond typed action decoders, user action
+  logic, API handlers, and general fragment routes.
 
 ## Target Artifacts
 
@@ -168,17 +178,21 @@ Request-time action/API dispatch registers generated backend routes with
 `runtime/app.BackendRouter` and passes the router hook into `runtime/app`;
 older separate action/API hook fields remain a compatibility path for existing
 generated apps.
-It loads `gowdk-assets.json` from the embedded build output filesystem when present.
+It loads `gowdk-assets.json`, `404.html`, and `500.html` from the embedded
+build output filesystem when present.
 Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 `GOWDK_INSTANCE_ID`; if no instance ID is provided, the app creates one at
 process start from the module name, hostname, and a random token. It can also
 serve auto-detected POST redirect handlers for the first supported action
-subset and first-slice SSR pages that do not use `load {}`. Those action
-handlers decode allowlisted form fields into named first-slice input wrappers,
+subset and first-slice SSR pages with declared `load {}` fields. SSR load
+functions can return safe local redirects with `ssr.RedirectTo`/`ssr.Redirect`,
+and generated SSR load failures render the optional `500.html` when present.
+Action handlers decode allowlisted form fields into named first-slice input wrappers,
 cap request bodies before parsing, preserve repeated values, return HTTP 413
 for oversized submissions, return HTTP 400 for unexpected fields, and return
 HTTP 422 for first-slice required-field validation failures. Direct file inputs
-and multipart action forms are rejected before generated app output. For
+and multipart action forms are rejected before generated app output because
+uploads are user-owned API/server behavior. For
 partial requests, generated handlers can return the first parsed action
 fragment matching `X-GOWDK-Target` and expose fragment target/swap metadata in
 headers. Feature-bound generated action handlers can call no-input,
@@ -190,8 +204,8 @@ CSRF token fields into served HTML POST forms, validate action POSTs before
 generated decoding or user handlers run, and return HTTP 403
 `invalid csrf token` with `Cache-Control: no-store` for invalid tokens. The
 generated app does not run user-defined validation beyond handler logic, handle
-uploads, or serve general fragment routes, `load {}` SSR, guards, or hybrid
-request-time handlers today.
+uploads, or serve general fragment routes or broad hybrid request-time handlers
+today.
 
 Generated app source is an output artifact and sits downstream of feature
 packages. Feature packages may import stable public GOWDK runtime/addon

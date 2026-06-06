@@ -8,10 +8,17 @@ import (
 func TestUIHTMLIncludesCompilerPreviewAndDiagnostics(t *testing.T) {
 	html := UIHTML()
 	for _, expected := range []string{
-		`<textarea id="source">`,
+		`<textarea id="source"`,
 		`<iframe id="preview"`,
 		`id="diagnostics"`,
-		`id="files"`,
+		`id="project-tree"`,
+		`id="generated-html"`,
+		`id="generated-css"`,
+		`id="generated-js"`,
+		`id="export-project"`,
+		`id="share-project"`,
+		`#project=`,
+		`starter`,
 		`wasm_exec.js`,
 		`gowdk.wasm`,
 		`window.gowdkCompile`,

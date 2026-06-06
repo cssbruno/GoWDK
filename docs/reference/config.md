@@ -100,6 +100,24 @@ var Config = gowdk.Config{
 The CLI parses this file as a literal config subset and does not execute user Go code. Non-literal
 values are ignored in the current subset.
 
+Addon constructors outside the built-in AST subset are loaded through a small
+Go helper that imports the config package. That means addon packages are normal
+Go modules:
+
+```go
+import brand "github.com/example/gowdk-brand"
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		brand.Addon(),
+	},
+}
+```
+
+The addon module may import other GitHub/private/local modules. The project
+`go.mod` remains the source of truth for resolving those imports, including
+`require`, `replace`, `GOPRIVATE`, and module proxy configuration.
+
 ## Modules
 
 `ModuleConfig` names a logical source group:
@@ -276,7 +294,61 @@ embed, CSS, and rate limiting. Current validation uses SSR feature registration
 for render-mode checks, and SPA builds invoke addons that implement
 `gowdk.CSSProcessor`.
 
-The literal config loader recognizes the known literal Tailwind addon subset:
+The literal config loader recognizes built-in no-argument addon constructors
+when they are imported from their canonical package paths:
+
+```go
+import (
+	"github.com/cssbruno/gowdk/addons/actions"
+	"github.com/cssbruno/gowdk/addons/api"
+	"github.com/cssbruno/gowdk/addons/css"
+	"github.com/cssbruno/gowdk/addons/embed"
+	"github.com/cssbruno/gowdk/addons/partial"
+	"github.com/cssbruno/gowdk/addons/ratelimit"
+	"github.com/cssbruno/gowdk/addons/spa"
+	"github.com/cssbruno/gowdk/addons/ssr"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		spa.Addon(),
+		actions.Addon(),
+		partial.Addon(),
+		ssr.Addon(),
+		api.Addon(),
+		embed.Addon(),
+		css.Addon(),
+		ratelimit.Addon(),
+	},
+}
+```
+
+If `Addons` contains a constructor outside that AST-only subset, the loader
+uses an executable config bridge: it creates a temporary helper inside the
+project module, imports the config package as normal Go, and reads the resulting
+`gowdk.Config`. That allows addons from other modules, including GitHub-hosted
+addons, to participate through the regular `gowdk.Addon` and
+`gowdk.CSSProcessor` interfaces:
+
+```go
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/example/gowdk-brand"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		brand.Addon(),
+	},
+}
+```
+
+External addon dependencies must already be resolvable by the project module,
+for example with `go get github.com/example/gowdk-brand`. Config packages must
+be importable Go packages, not `package main`.
+
+The literal loader also recognizes the known literal Tailwind addon options
+subset without needing the executable bridge:
 
 ```go
 import "github.com/cssbruno/gowdk/addons/tailwind"
@@ -292,7 +364,8 @@ var Config = gowdk.Config{
 }
 ```
 
-Arbitrary addon constructors remain outside the current config subset.
+The executable bridge runs project config code only when the AST-only loader
+finds addon constructors it cannot reduce safely.
 Rate limiting can still be configured directly in user-owned server code through
 `addons/ratelimit` middleware with either the in-memory store or a Redis store
 adapter.

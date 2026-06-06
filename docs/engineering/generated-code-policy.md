@@ -2,7 +2,8 @@
 
 Generated output exists for app-shell HTML, browser runtime assets, generated app
 source, local binaries, Go `js/wasm` artifacts, first-slice action/fragment
-handlers, and first-slice concrete or dynamic SSR pages without `load {}`.
+handlers, and first-slice concrete or dynamic SSR pages with declared `load {}`
+fields.
 Broader generated action, API, fragment, guard, `load {}`, and hybrid behavior
 remains planned. This policy records constraints for generated files as that
 surface grows.

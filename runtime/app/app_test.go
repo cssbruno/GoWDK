@@ -69,12 +69,14 @@ func TestHandlerAppliesAssetManifestCachePolicy(t *testing.T) {
 }
 
 func TestHandlerHealth(t *testing.T) {
+	metrics := &Metrics{}
 	handler := Handler{
 		Root:     fstest.MapFS{},
 		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
 		Assets: asset.Manifest{Version: 1, Files: map[string]string{
 			"assets/app.css": "assets/app.css",
 		}},
+		Metrics: metrics,
 	}
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/_gowdk/health", nil)
@@ -88,6 +90,120 @@ func TestHandlerHealth(t *testing.T) {
 		if !strings.Contains(recorder.Body.String(), expected) {
 			t.Fatalf("expected health response to contain %q, got %s", expected, recorder.Body.String())
 		}
+	}
+	if !strings.Contains(recorder.Body.String(), `"metrics"`) || !strings.Contains(recorder.Body.String(), `"requests":1`) {
+		t.Fatalf("expected health metrics, got %s", recorder.Body.String())
+	}
+	if snapshot := metrics.Snapshot(); snapshot.Requests != 1 || snapshot.Health != 1 {
+		t.Fatalf("unexpected metrics snapshot: %#v", snapshot)
+	}
+}
+
+func TestHandlerMetricsRecordDispatchOutcomes(t *testing.T) {
+	metrics := &Metrics{}
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html": {Data: []byte("<main>Home</main>")},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Metrics:  metrics,
+		Backend: func(response http.ResponseWriter, request *http.Request) bool {
+			if request.URL.Path != "/api" {
+				return false
+			}
+			response.WriteHeader(http.StatusOK)
+			return true
+		},
+	}
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api", nil))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/missing", nil))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/missing", nil))
+
+	snapshot := metrics.Snapshot()
+	if snapshot.Requests != 4 || snapshot.Static != 1 || snapshot.Backend != 1 || snapshot.MethodNotAllow != 1 || snapshot.NotFound != 1 {
+		t.Fatalf("unexpected metrics snapshot: %#v", snapshot)
+	}
+}
+
+func TestHandlerServesGenerated404Page(t *testing.T) {
+	root := fstest.MapFS{
+		"404.html": {Data: []byte("<main>Missing</main>")},
+	}
+	handler := Handler{
+		Root:       root,
+		Identity:   Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		ErrorPages: LoadErrorPages(root),
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/missing", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if recorder.Body.String() != "<main>Missing</main>" {
+		t.Fatalf("unexpected body: %q", recorder.Body.String())
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store error page, got %q", cache)
+	}
+	if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
+		t.Fatalf("expected HTML content type, got %q", contentType)
+	}
+}
+
+func TestWriteErrorPageServesGenerated500Page(t *testing.T) {
+	root := fstest.MapFS{
+		"500.html": {Data: []byte("<main>Server Error</main>")},
+	}
+	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	request = request.WithContext(withErrorPages(request.Context(), LoadErrorPages(root)))
+	recorder := httptest.NewRecorder()
+
+	WriteErrorPage(recorder, request, http.StatusInternalServerError, "load failed")
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if recorder.Body.String() != "<main>Server Error</main>" {
+		t.Fatalf("unexpected body: %q", recorder.Body.String())
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store error page, got %q", cache)
+	}
+}
+
+func TestHandlerRecoversSSRExactPanicWithGenerated500Page(t *testing.T) {
+	root := fstest.MapFS{
+		"500.html": {Data: []byte("<main>Server Error</main>")},
+	}
+	handler := Handler{
+		Root:       root,
+		Identity:   Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		ErrorPages: LoadErrorPages(root),
+		SSRExact: func(http.ResponseWriter, *http.Request) bool {
+			panic("database password leaked")
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if recorder.Body.String() != "<main>Server Error</main>" {
+		t.Fatalf("unexpected body: %q", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "database password leaked") {
+		t.Fatalf("panic value leaked in response: %s", recorder.Body.String())
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store boundary response, got %q", cache)
 	}
 }
 
@@ -337,6 +453,61 @@ func TestBackendRouterRejectsDuplicateRoutes(t *testing.T) {
 	}
 }
 
+func TestBackendRouterRecoversActionPanic(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Method: http.MethodPost,
+		Path:   "/login",
+		Kind:   "action",
+		Handler: func(http.ResponseWriter, *http.Request) bool {
+			panic("secret token")
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/login", nil)
+
+	if !router.Dispatch(recorder, request) {
+		t.Fatal("expected route to dispatch")
+	}
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, "GOWDK action handler failed") || strings.Contains(body, "secret token") {
+		t.Fatalf("unexpected boundary body: %q", body)
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store boundary response, got %q", cache)
+	}
+}
+
+func TestBackendRouterRecoversAPIPanic(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Method: http.MethodGet,
+		Path:   "/api/session",
+		Kind:   "api",
+		Handler: func(http.ResponseWriter, *http.Request) bool {
+			panic("secret token")
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/session", nil)
+
+	if !router.Dispatch(recorder, request) {
+		t.Fatal("expected route to dispatch")
+	}
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, "GOWDK API handler failed") || strings.Contains(body, "secret token") {
+		t.Fatalf("unexpected boundary body: %q", body)
+	}
+}
+
 func TestActionFormDecodesStructAndWritesResponse(t *testing.T) {
 	type loginInput struct {
 		Email string `form:"email"`
@@ -484,6 +655,7 @@ func TestContextHelpersCopyParams(t *testing.T) {
 		Path:          "/blog/{slug}",
 		Render:        "ssr",
 		DynamicParams: []string{"slug"},
+		RouteParams:   []RouteParamMetadata{{Name: "slug", Type: "string"}},
 		Guards:        []string{"auth.required"},
 	})
 	route, ok := Route(ctx)
@@ -494,10 +666,17 @@ func TestContextHelpersCopyParams(t *testing.T) {
 		t.Fatalf("unexpected route metadata: %#v", route)
 	}
 	route.DynamicParams[0] = "changed"
+	route.RouteParams[0].Name = "changed"
 	route.Guards[0] = "changed"
 	route, _ = Route(ctx)
-	if route.DynamicParams[0] != "slug" || route.Guards[0] != "auth.required" {
+	if route.DynamicParams[0] != "slug" || route.RouteParams[0].Name != "slug" || route.Guards[0] != "auth.required" {
 		t.Fatalf("expected route metadata slices to be copied, got %#v", route)
+	}
+	ctx = WithTypedParams(ctx, map[string]any{"id": 42})
+	typed := TypedParams(ctx)
+	typed["id"] = 7
+	if got := TypedParams(ctx)["id"]; got != 42 {
+		t.Fatalf("expected typed params copy, got %#v", got)
 	}
 	ctx = WithEndpoint(ctx, EndpointMetadata{
 		Kind:   "action",

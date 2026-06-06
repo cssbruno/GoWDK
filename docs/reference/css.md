@@ -118,10 +118,14 @@ type CSSProcessor interface {
 - `Build`: the active build config.
 - `CSS`: the active CSS config.
 
-Full component ASTs are not passed to CSS processors until the real `.gwdk` AST
-exists; processors should use source metadata and extracted classes in the
-current contract. `CSSResult` can return stylesheet links and CSS assets. CSS
-asset paths must be relative and stay inside the output directory.
+Component `@css` annotations are represented in the typed `.gwdk` AST and
+stable IR with deterministic owner, scope ID, and hash-key metadata for future
+scoping and emitted filename decisions. Full component AST bodies are not yet
+passed to CSS processors; processors should use source metadata and extracted
+classes in the current contract. `CSSResult` can return global stylesheet
+links, page-specific stylesheet links through `PageStylesheets`, and CSS
+assets. Page-specific stylesheet map keys must match known page IDs. CSS asset
+paths must be relative and stay inside the output directory.
 
 Processor-emitted CSS files are recorded in `gowdk-assets.json`:
 
@@ -232,7 +236,10 @@ gowdk build --out dist/site --app .gowdk/app --bin bin/site
 
 The literal `gowdk.config.go` parser supports this known literal constructor
 shape when `tailwind` is imported from
-`github.com/cssbruno/gowdk/addons/tailwind`. Arbitrary addon constructors still
-require future full addon loading.
+`github.com/cssbruno/gowdk/addons/tailwind`. It also recognizes built-in
+no-argument addon constructors. External CSS processor addons can be imported
+from other Go modules; when the AST-only loader cannot reduce the constructor,
+GOWDK uses the executable config bridge and proxies `ProcessCSS` back to that
+importable addon.
 
 GOWDK does not generate Tailwind v3 `content` configuration in this slice.

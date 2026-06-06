@@ -47,7 +47,6 @@ The following features are known blockers for any production-readiness claim:
 - Hybrid/cache/revalidation policy.
 - Full reactive dependency graph and richer `client {}` language.
 - Component composition beyond default slots.
-- Production WASM island ABI.
 
 ## Current Manual Gates
 

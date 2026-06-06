@@ -72,6 +72,7 @@ type RouteDecl struct {
 // RouteParam is one dynamic route segment declared by @route.
 type RouteParam struct {
 	Name string
+	Type string
 	Span manifest.SourceSpan
 }
 
@@ -101,9 +102,20 @@ type GuardRef struct {
 
 // AssetRef is one source-selected asset reference.
 type AssetRef struct {
-	Kind string
-	Path string
-	Span manifest.SourceSpan
+	Kind  string
+	Path  string
+	Scope AssetScope
+	Span  manifest.SourceSpan
+}
+
+// AssetScope records deterministic owner metadata for scoped CSS and future
+// content-hashed component assets.
+type AssetScope struct {
+	OwnerKind string
+	OwnerID   string
+	Package   string
+	ScopeID   string
+	HashKey   string
 }
 
 // Import is one top-level Go import declaration.

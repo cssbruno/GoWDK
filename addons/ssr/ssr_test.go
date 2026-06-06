@@ -74,6 +74,29 @@ func TestDefaultErrorHandlerWritesHTTP500(t *testing.T) {
 	}
 }
 
+func TestRedirectToContract(t *testing.T) {
+	err := RedirectTo("/login?next=/dashboard")
+
+	url, status, ok := RedirectTarget(err)
+	if !ok {
+		t.Fatalf("expected redirect target, got %v", err)
+	}
+	if url != "/login?next=/dashboard" || status != http.StatusSeeOther {
+		t.Fatalf("unexpected redirect target: url=%q status=%d", url, status)
+	}
+}
+
+func TestRedirectRejectsUnsafeURL(t *testing.T) {
+	for _, url := range []string{"https://example.com", "//example.com", "/login\nSet-Cookie: bad=true"} {
+		if err := Redirect(url, http.StatusSeeOther); err == nil {
+			t.Fatalf("expected unsafe redirect URL %q to fail", url)
+		}
+	}
+	if err := Redirect("/login", http.StatusOK); err == nil {
+		t.Fatal("expected non-3xx redirect status to fail")
+	}
+}
+
 func TestRunGuardsExecutesInDeclarationOrder(t *testing.T) {
 	var calls []string
 	registry := GuardRegistry{

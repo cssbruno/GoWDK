@@ -31,15 +31,17 @@ optional.
   first-slice request-time handlers.
 - Staging: target flow verifies one-binary serving and addon behavior.
 - Production: not a supported readiness claim yet. Current generated binaries
-  can serve embedded app assets plus first-slice action/fragment/simple-SSR
-  behavior; real user action logic, APIs, `load {}`, guards, and hybrid
-  request-time behavior remain planned.
+  can serve embedded app assets, supported action/API/fragment handlers,
+  generated guards, and SSR pages with declared `load {}` fields; broader
+  `load {}` data shapes and hybrid request-time behavior remain planned.
 
 ## Observability
 
 - Logs: compiler diagnostics and current generated runtime request logs.
-- Metrics: route counts and render mode counts are available through manifests;
-  action/API/SSR runtime metrics are future production concerns.
+- Metrics: route counts and render mode counts are available through manifests.
+  `runtime/app.Metrics` records dependency-free request counters for generated
+  app dispatch paths, and generated apps can expose snapshots through
+  `/_gowdk/health` when a metrics collector is attached.
 - Traces: request-time SSR, actions, APIs, and fragments are future production
   concerns after those generated handlers are complete.
 - Alerts: action failures, API failures, SSR errors, and asset serving errors
@@ -62,7 +64,7 @@ fragment responses, and first-slice concrete or dynamic SSR pages without
 generated app with `GOOS=js GOARCH=wasm` for hosts that can run Go WebAssembly;
 it is not browser WASM islands. Future generated artifacts should also serve
 real typed action logic, API endpoints, general partial fragment handlers,
-request-time `load {}`, guard registry configuration docs, and hybrid
+broader request-time `load {}` data shapes, guard registry configuration docs, and hybrid
 request-time behavior.
 
 Current local development can serve generated build output with:

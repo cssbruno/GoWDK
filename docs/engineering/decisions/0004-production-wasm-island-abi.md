@@ -2,7 +2,7 @@
 
 Date: 2026-06-05
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -113,11 +113,17 @@ Asset strategy:
 - Serialize HTML fragments from WASM. Rejected because it would bypass stable
   binding IDs and make fine-grained updates harder to reason about.
 
+## Implementation
+
+- GOWDK builds declared `@wasm` packages with `GOOS=js GOARCH=wasm`.
+- Built WASM artifacts are rejected unless they export
+  `GOWDKMount<Component>`, `GOWDKHandle<Component>`, and
+  `GOWDKDestroy<Component>`.
+- The generated loader passes the bootstrap object, applies the defined patch
+  operations, rejects unknown patch operations through a console error, and
+  supports JS/WASM island coexistence on the same page.
+
 ## Follow-Up
 
-- Add compiler validation for required WASM exports when `g:island="wasm"` is
-  used with browser-side Go logic.
-- Generate the bootstrap object in the WASM loader.
-- Implement host-side patch validation and application.
 - Add browser tests for mount, event handling, visible state update, destroy,
-  and JS/WASM coexistence.
+  and JS/WASM coexistence against a real browser runtime.

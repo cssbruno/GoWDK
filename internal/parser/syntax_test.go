@@ -206,6 +206,12 @@ view {
 	if len(file.CSS) != 1 || file.CSS[0].Path != "./counter.css" {
 		t.Fatalf("unexpected component CSS assets: %#v", file.CSS)
 	}
+	if file.CSS[0].Scope.OwnerKind != "component" || file.CSS[0].Scope.OwnerID != "Counter" || file.CSS[0].Scope.Package != "ui" {
+		t.Fatalf("unexpected component CSS scope owner: %#v", file.CSS[0].Scope)
+	}
+	if file.CSS[0].Scope.HashKey != "component:ui:Counter::./counter.css" || len(file.CSS[0].Scope.ScopeID) != len("gwdk-000000000000") {
+		t.Fatalf("unexpected component CSS scope hash metadata: %#v", file.CSS[0].Scope)
+	}
 	if len(file.Assets) != 1 || file.Assets[0].Path != "./counter.svg" {
 		t.Fatalf("unexpected component assets: %#v", file.Assets)
 	}

@@ -127,10 +127,10 @@ test -f /tmp/gowdk-base-components/components/base/index.html
 - Build-output examples can be served locally with `gowdk serve` or compiled into
   an embedded binary with `gowdk build --app --bin`; the current generated
   binary supports first-slice action redirects, partial action fragments, form
-  input decoder wrappers, and required-field validation, plus first-slice
-  concrete and dynamic SSR pages without `load {}`. It runs declared guards for
+  input decoder wrappers, and required-field validation, plus concrete and
+  dynamic SSR pages with declared `load {}` fields. It runs declared guards for
   generated SSR/action/API routes and fails closed when guard functions are not
-  registered. It does not run request-time `load {}` functions yet.
+  registered.
 - `view {}` bodies are parsed only for a small app-shell HTML subset; `act` bodies
   support the first form-input/redirect subset, `api` bodies support the first
   method/route metadata line, and `load` bodies are still not parsed beyond
@@ -138,7 +138,7 @@ test -f /tmp/gowdk-base-components/components/base/index.html
 - `.gwdk` page imports currently support the first build-time data slice:
   `build { => alias.Func() }` for a no-argument Go function returning a JSON
   object. Generated action, API, partial, and `load {}` user handler wiring is
-  still planned.
+  implemented for the supported first request-time signatures.
 - `@guard` is enforced by generated SSR/action/API handlers. Guarded routes
   fail closed unless the generated app registers an `ssr.GuardRegistry`.
 - Route params from literal `paths {}` are available to the current
@@ -147,5 +147,5 @@ test -f /tmp/gowdk-base-components/components/base/index.html
 - Literal `build {}` string data and scalar fields returned by imported
   no-argument Go build functions are available to the current `view {}`
   interpolation subset.
-- Component children, generated API handlers, rich local client-side reactivity,
-  and full configured plugin instantiation are planned.
+- Component children, generated API handlers, and rich local client-side
+  reactivity are planned.

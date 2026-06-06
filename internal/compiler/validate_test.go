@@ -3147,6 +3147,15 @@ func TestValidatePageRejectsDuplicateRouteParams(t *testing.T) {
 	}
 }
 
+func TestValidatePageAllowsTypedRouteParams(t *testing.T) {
+	page := manifest.Page{ID: "patients.show", Route: "/patients/{id:int}", Paths: true, Blocks: manifest.Blocks{View: true}}
+
+	diagnostics := ValidatePage(gowdk.Config{}, page)
+	if hasDiagnosticCode(diagnostics, "malformed_route") {
+		t.Fatalf("typed route params should be valid: %#v", diagnostics)
+	}
+}
+
 func TestValidatePageRequiresPathsForSPADynamicRoutes(t *testing.T) {
 	page := manifest.Page{ID: "patients.show", Route: "/patients/{id}", Render: gowdk.SPA, Blocks: manifest.Blocks{View: true}}
 
@@ -3208,7 +3217,7 @@ func TestValidatePageRejectsLoadOnSPAPage(t *testing.T) {
 	}
 }
 
-func TestValidatePageRejectsAmbiguousHybridWithoutLoad(t *testing.T) {
+func TestValidatePageAllowsHybridWithoutLoadAsBuildTime(t *testing.T) {
 	page := manifest.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard",
@@ -3219,14 +3228,27 @@ func TestValidatePageRejectsAmbiguousHybridWithoutLoad(t *testing.T) {
 	}
 
 	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, page)
+	if len(diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
+	}
+}
+
+func TestValidatePageRequiresPathsForDynamicHybridWithoutLoad(t *testing.T) {
+	page := manifest.Page{
+		ID:     "dashboard",
+		Route:  "/dashboard/{id}",
+		Render: gowdk.Hybrid,
+		Blocks: manifest.Blocks{
+			View: true,
+		},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{}, page)
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %#v", diagnostics)
 	}
-	if diagnostics[0].Code != "hybrid_requires_explicit_request_policy" {
+	if diagnostics[0].Code != "spa_dynamic_route_missing_paths" {
 		t.Fatalf("unexpected diagnostic code: %s", diagnostics[0].Code)
-	}
-	if !strings.Contains(diagnostics[0].Message, "implicit SSR") {
-		t.Fatalf("expected implicit SSR guidance: %s", diagnostics[0].Message)
 	}
 }
 

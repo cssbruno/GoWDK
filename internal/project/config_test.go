@@ -1,7 +1,9 @@
 package project
 
 import (
+	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -239,6 +241,187 @@ var Config = gowdk.Config{
 	}
 }
 
+func TestLoadConfigFileReadsBuiltInAddons(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	act "github.com/cssbruno/gowdk/addons/actions"
+	apiaddon "github.com/cssbruno/gowdk/addons/api"
+	cssaddon "github.com/cssbruno/gowdk/addons/css"
+	embedaddon "github.com/cssbruno/gowdk/addons/embed"
+	partialaddon "github.com/cssbruno/gowdk/addons/partial"
+	rl "github.com/cssbruno/gowdk/addons/ratelimit"
+	spaaddon "github.com/cssbruno/gowdk/addons/spa"
+	ssraddon "github.com/cssbruno/gowdk/addons/ssr"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		act.Addon(),
+		apiaddon.Addon(),
+		cssaddon.Addon(),
+		embedaddon.Addon(),
+		partialaddon.Addon(),
+		rl.Addon(),
+		spaaddon.Addon(),
+		ssraddon.Addon(),
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Addons) != 8 {
+		t.Fatalf("unexpected addons: %#v", config.Addons)
+	}
+	for _, feature := range []gowdk.Feature{
+		gowdk.FeatureActions,
+		gowdk.FeatureAPI,
+		gowdk.FeatureCSS,
+		gowdk.FeatureEmbed,
+		gowdk.FeaturePartial,
+		gowdk.FeatureRateLimit,
+		gowdk.FeatureSPA,
+		gowdk.FeatureSSR,
+	} {
+		if !config.HasFeature(feature) {
+			t.Fatalf("expected feature %q from parsed built-in addons", feature)
+		}
+	}
+}
+
+func TestLoadConfigFileReadsImportableExternalAddon(t *testing.T) {
+	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require (
+	github.com/cssbruno/gowdk v0.0.0
+	github.com/example/gowdk-brand v0.0.0
+)
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+replace github.com/example/gowdk-brand => ./external/gowdk-brand
+replace github.com/example/gowdk-theme => ./external/gowdk-theme
+`)
+	writeTestFile(t, filepath.Join(root, "external", "gowdk-theme", "go.mod"), `module github.com/example/gowdk-theme
+
+go 1.22
+`)
+	writeTestFile(t, filepath.Join(root, "external", "gowdk-theme", "theme.go"), `package theme
+
+func OutputPrefix() string {
+	return "theme-output="
+}
+`)
+	writeTestFile(t, filepath.Join(root, "external", "gowdk-brand", "go.mod"), `module github.com/example/gowdk-brand
+
+go 1.22
+
+require (
+	github.com/cssbruno/gowdk v0.0.0
+	github.com/example/gowdk-theme v0.0.0
+)
+`)
+	writeTestFile(t, filepath.Join(root, "external", "gowdk-brand", "brand.go"), `package brand
+
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/example/gowdk-theme"
+)
+
+type addon struct{}
+
+func Addon() gowdk.CSSProcessor {
+	return addon{}
+}
+
+func (addon) Name() string {
+	return "brand"
+}
+
+func (addon) Features() []gowdk.Feature {
+	return []gowdk.Feature{gowdk.FeatureCSS, gowdk.Feature("brand")}
+}
+
+func (addon) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
+	return gowdk.CSSResult{
+		Assets: []gowdk.CSSAsset{{
+			Path:     "assets/brand.css",
+			Contents: []byte(theme.OutputPrefix() + context.OutputDir),
+		}},
+		Stylesheets: []gowdk.Stylesheet{{Href: "/assets/brand.css"}},
+	}, nil
+}
+`)
+	writeTestFile(t, filepath.Join(root, "addons", "marker", "marker.go"), `package marker
+
+import "github.com/cssbruno/gowdk"
+
+func Addon() gowdk.Addon {
+	return gowdk.NewAddon("marker", gowdk.Feature("marker"))
+}
+`)
+	path := filepath.Join(root, DefaultConfigFile)
+	writeTestFile(t, path, `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	brand "github.com/example/gowdk-brand"
+	"example.com/site/addons/marker"
+)
+
+var Config = gowdk.Config{
+	AppName: "External Addon",
+	Addons: []gowdk.Addon{
+		brand.Addon(),
+		marker.Addon(),
+	},
+}
+`)
+	tidyTestModule(t, root)
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.AppName != "External Addon" {
+		t.Fatalf("unexpected app name: %q", config.AppName)
+	}
+	if len(config.Addons) != 2 || config.Addons[0].Name() != "brand" || config.Addons[1].Name() != "marker" {
+		t.Fatalf("unexpected addons: %#v", config.Addons)
+	}
+	if !config.HasFeature(gowdk.FeatureCSS) || !config.HasFeature(gowdk.Feature("brand")) || !config.HasFeature(gowdk.Feature("marker")) {
+		t.Fatalf("expected external addon features, got %#v", config.Addons[0].Features())
+	}
+	processor, ok := config.Addons[0].(gowdk.CSSProcessor)
+	if !ok {
+		t.Fatalf("expected external addon proxy to implement CSSProcessor, got %T", config.Addons[0])
+	}
+	if _, ok := config.Addons[1].(gowdk.CSSProcessor); ok {
+		t.Fatalf("expected non-css external addon proxy not to implement CSSProcessor, got %T", config.Addons[1])
+	}
+	result, err := processor.ProcessCSS(gowdk.CSSContext{OutputDir: "dist/site"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Assets) != 1 || result.Assets[0].Path != "assets/brand.css" || string(result.Assets[0].Contents) != "theme-output=dist/site" {
+		t.Fatalf("unexpected css result: %#v", result)
+	}
+	if len(result.Stylesheets) != 1 || result.Stylesheets[0].Href != "/assets/brand.css" {
+		t.Fatalf("unexpected stylesheets: %#v", result.Stylesheets)
+	}
+}
+
 func TestLoadConfigFileReadsTailwindAddon(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, DefaultConfigFile)
@@ -340,5 +523,35 @@ func TestLoadConfigFailsMissingExplicitPath(t *testing.T) {
 	_, err := LoadConfig(filepath.Join(t.TempDir(), "missing.go"))
 	if err == nil {
 		t.Fatal("expected missing explicit config error")
+	}
+}
+
+func writeTestFile(t *testing.T, path string, contents string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func repositoryRoot(t *testing.T) string {
+	t.Helper()
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Clean(filepath.Join(workingDir, "..", ".."))
+}
+
+func tidyTestModule(t *testing.T, root string) {
+	t.Helper()
+	command := exec.Command("go", "mod", "tidy")
+	command.Dir = root
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		t.Fatalf("go mod tidy failed: %v\n%s", err, stderr.String())
 	}
 }

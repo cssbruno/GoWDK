@@ -29,6 +29,7 @@ func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssP
 	planned := cssPlan{pageStylesheets: map[string][]gowdk.Stylesheet{}}
 	var failures []string
 	seen := map[string]bool{}
+	pageIDs := pageIDSet(app.Pages)
 	context := gowdk.CSSContext{
 		Sources:   cssSources(app),
 		OutputDir: outputDir,
@@ -46,6 +47,13 @@ func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssP
 			continue
 		}
 		planned.stylesheets = append(planned.stylesheets, nonEmptyStylesheets(result.Stylesheets)...)
+		for pageID, stylesheets := range result.PageStylesheets {
+			if !pageIDs[pageID] {
+				failures = append(failures, fmt.Sprintf("css processor %s selected unknown page %q", processor.Name(), pageID))
+				continue
+			}
+			planned.pageStylesheets[pageID] = append(planned.pageStylesheets[pageID], nonEmptyStylesheets(stylesheets)...)
+		}
 		for _, asset := range result.Assets {
 			outputPath, err := cssOutputPath(outputDir, asset.Path)
 			if err != nil {
@@ -74,6 +82,14 @@ func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssP
 		}
 	}
 	return planned, failures
+}
+
+func pageIDSet(pages []manifest.Page) map[string]bool {
+	out := map[string]bool{}
+	for _, page := range pages {
+		out[page.ID] = true
+	}
+	return out
 }
 
 func discoverCSSInputs(config gowdk.Config, outputDir string) (map[string]cssInput, []string) {

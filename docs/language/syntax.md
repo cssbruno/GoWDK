@@ -61,9 +61,12 @@ Current route validation accepts canonical absolute paths only:
 - `/` is the only route that may end with a trailing slash.
 - Routes must not contain query strings, fragments, backslashes, whitespace,
   control characters, empty segments, `.`, or `..`.
-- Dynamic route params must be whole path segments such as `/blog/{slug}`.
+- Dynamic route params must be whole path segments such as `/blog/{slug}` or
+  `/patients/{id:int}`.
 - Route param names use `[A-Za-z_][A-Za-z0-9_]*` and may not repeat in one
   route.
+- Route param types are optional and support `string`, `int`, `int64`, `uint`,
+  `uint64`, `bool`, and `float64`.
 - Duplicate page route patterns are invalid. `/blog/{slug}` and `/blog/{id}`
   are the same pattern.
 

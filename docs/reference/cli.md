@@ -172,9 +172,9 @@ action subset, including first-slice form input decoder wrappers and
 required-field validation. It can also serve first-slice action fragment
 responses for `X-GOWDK-Partial` requests, CSRF validation when
 `Build.CSRF.Enabled` is set, and first-slice concrete or dynamic SSR pages
-rendered from `view {}` and literal or imported `build {}` data. It does not
-run general fragment endpoints, `load {}` execution, guards, or hybrid
-request-time behavior.
+rendered from `view {}` and literal or imported `build {}` data. Bare hybrid
+pages are emitted as build-time SPA output. It does not run general fragment
+endpoints, `load {}` execution, or hybrid request-time behavior.
 
 Current `serve` limitations: it serves generated build output files only. It does not
 run generated actions, APIs, partial fragments, or SSR routes.

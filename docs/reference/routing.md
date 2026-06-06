@@ -211,7 +211,8 @@ SSR is optional and must be enabled for validation:
 gowdk check --ssr examples/ssr/simple-ssr.page.gwdk
 ```
 
-First-slice concrete and dynamic `@render ssr` pages without `load {}` can be
+First-slice concrete and dynamic `@render ssr` pages with declared `load {}`
+fields can be
 generated into an embedded app and binary:
 
 ```sh
@@ -222,9 +223,13 @@ gowdk build --ssr --out /tmp/gowdk-ssr-build \
 ```
 
 Dynamic SSR route params render through generated placeholders and request-time
-HTML escaping. Generated SSR handlers attach route metadata through
-`runtime/app.Route(ctx)` and dynamic params through `runtime/app.Params(ctx)`.
-User Go can decode those params with `runtime/route` helpers:
+HTML escaping. Params can be declared as `{name}` or `{name:type}`. Supported
+types are `string`, `int`, `int64`, `uint`, `uint64`, `bool`, and `float64`.
+Generated SSR handlers attach route metadata through `runtime/app.Route(ctx)`,
+raw dynamic params through `runtime/app.Params(ctx)`, and decoded typed params
+through `runtime/app.TypedParams(ctx)`.
+
+User Go can still decode raw params with `runtime/route` helpers:
 
 ```go
 params := app.Params(ctx)
@@ -241,10 +246,13 @@ _ = id
 The helpers support `String`, `Int`, `Int64`, `Uint`, `Uint64`, `Bool`, and
 `Float64`. `Required` returns a missing-param error when a required param is not
 present. Decode errors name the param and expected type without echoing the raw
-request value. Route-param type declarations and generated typed bindings are
-still planned.
+request value. Generated typed SSR bindings return `400` for invalid typed route
+params and `404` for missing route params before guards or page rendering run.
 
-`load {}` execution and broad request-time user logic are still planned.
+`load { => { field } }` execution calls same-package Go `Load<PageID>`
+functions at request time through `ssr.LoadContext`. Returned declared fields
+are HTML-escaped into generated placeholders; broader load data shapes remain
+planned.
 
 ## Route Plans
 

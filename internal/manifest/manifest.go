@@ -116,15 +116,16 @@ type ComponentSpans struct {
 
 // BlockSpans records source ranges for page, component, or layout blocks.
 type BlockSpans struct {
-	Paths   SourceSpan
-	Build   SourceSpan
-	Load    SourceSpan
-	Client  SourceSpan
-	View    SourceSpan
-	Actions []NamedSpan
-	APIs    []NamedSpan
-	Exports SourceSpan
-	Emits   SourceSpan
+	Paths     SourceSpan
+	Build     SourceSpan
+	Load      SourceSpan
+	Client    SourceSpan
+	View      SourceSpan
+	Actions   []NamedSpan
+	APIs      []NamedSpan
+	Fragments []NamedSpan
+	Exports   SourceSpan
+	Emits     SourceSpan
 }
 
 // Page describes a .gwdk page after parsing and normalization.
@@ -193,6 +194,7 @@ type Blocks struct {
 	ViewBody   string
 	Actions    []Action
 	APIs       []API
+	Fragments  []FragmentEndpoint
 	Spans      BlockSpans
 }
 
@@ -280,6 +282,19 @@ type Fragment struct {
 	Target string
 	Body   string
 	Span   SourceSpan
+}
+
+// FragmentEndpoint describes a generated server fragment endpoint declaration.
+type FragmentEndpoint struct {
+	Name        string
+	Method      string
+	Route       string
+	Target      string
+	Body        string
+	Span        SourceSpan
+	RouteSpan   SourceSpan
+	TargetSpan  SourceSpan
+	RouteParams []NamedSpan
 }
 
 // API describes an API endpoint declaration.

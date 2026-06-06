@@ -15,27 +15,28 @@ import (
 )
 
 var (
-	annotationPattern     = regexp.MustCompile(`^@([A-Za-z_][A-Za-z0-9_]*)\s*(.*)$`)
-	blockPattern          = regexp.MustCompile(`^(paths|build|load|view)\s*\{`)
-	packagePattern        = regexp.MustCompile(`^package\s+([A-Za-z_][A-Za-z0-9_]*)$`)
-	importPattern         = regexp.MustCompile(`^import(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s+"([^"]+)"$`)
-	usePattern            = regexp.MustCompile(`^use\s+([A-Za-z_][A-Za-z0-9_]*)\s+"([A-Za-z_][A-Za-z0-9_]*)"$`)
-	buildCallPattern      = regexp.MustCompile(`^=>\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\)$`)
-	actionEndpointPattern = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Z]+)\s+"([^"]*)"$`)
-	apiEndpointPattern    = regexp.MustCompile(`^api\s+([A-Za-z_][A-Za-z0-9_]*)\s+(GET|POST|PUT|PATCH|DELETE)\s+"([^"]*)"$`)
-	actionPattern         = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{`)
-	apiPattern            = regexp.MustCompile(`^api(?:\s+([A-Za-z_][A-Za-z0-9_.-]*))?\s*\{`)
-	propPattern           = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
-	emitPattern           = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)$`)
-	identifierPattern     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	componentTypePattern  = regexp.MustCompile(`^(props|state)\s+([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)(?:\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\))?$`)
-	storePattern          = regexp.MustCompile(`^store\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\)$`)
-	actionInputPattern    = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*form\s+([A-Za-z_][A-Za-z0-9_]*)$`)
-	actionValidPattern    = regexp.MustCompile(`^valid\(([A-Za-z_][A-Za-z0-9_]*)\)\?$`)
-	actionRedirectPattern = regexp.MustCompile(`^->\s*"([^"]*)"$`)
-	actionFragmentPattern = regexp.MustCompile(`^fragment\s+"([^"]*)"\s*\{$`)
-	apiRoutePattern       = regexp.MustCompile(`^(GET|POST|PUT|PATCH|DELETE)\s+"([^"]*)"$`)
-	routeParamPattern     = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)(?::([A-Za-z_][A-Za-z0-9_]*))?\}`)
+	annotationPattern       = regexp.MustCompile(`^@([A-Za-z_][A-Za-z0-9_]*)\s*(.*)$`)
+	blockPattern            = regexp.MustCompile(`^(paths|build|load|view)\s*\{`)
+	packagePattern          = regexp.MustCompile(`^package\s+([A-Za-z_][A-Za-z0-9_]*)$`)
+	importPattern           = regexp.MustCompile(`^import(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s+"([^"]+)"$`)
+	usePattern              = regexp.MustCompile(`^use\s+([A-Za-z_][A-Za-z0-9_]*)\s+"([A-Za-z_][A-Za-z0-9_]*)"$`)
+	buildCallPattern        = regexp.MustCompile(`^=>\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\)$`)
+	actionEndpointPattern   = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Z]+)\s+"([^"]*)"$`)
+	apiEndpointPattern      = regexp.MustCompile(`^api\s+([A-Za-z_][A-Za-z0-9_]*)\s+(GET|POST|PUT|PATCH|DELETE)\s+"([^"]*)"$`)
+	fragmentEndpointPattern = regexp.MustCompile(`^fragment\s+([A-Za-z_][A-Za-z0-9_]*)\s+(GET|POST|PUT|PATCH|DELETE)\s+"([^"]*)"\s+"([^"]*)"\s*\{$`)
+	actionPattern           = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{`)
+	apiPattern              = regexp.MustCompile(`^api(?:\s+([A-Za-z_][A-Za-z0-9_.-]*))?\s*\{`)
+	propPattern             = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
+	emitPattern             = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)$`)
+	identifierPattern       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	componentTypePattern    = regexp.MustCompile(`^(props|state)\s+([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)(?:\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\))?$`)
+	storePattern            = regexp.MustCompile(`^store\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\)$`)
+	actionInputPattern      = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*form\s+([A-Za-z_][A-Za-z0-9_]*)$`)
+	actionValidPattern      = regexp.MustCompile(`^valid\(([A-Za-z_][A-Za-z0-9_]*)\)\?$`)
+	actionRedirectPattern   = regexp.MustCompile(`^->\s*"([^"]*)"$`)
+	actionFragmentPattern   = regexp.MustCompile(`^fragment\s+"([^"]*)"\s*\{$`)
+	apiRoutePattern         = regexp.MustCompile(`^(GET|POST|PUT|PATCH|DELETE)\s+"([^"]*)"$`)
+	routeParamPattern       = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)(?::([A-Za-z_][A-Za-z0-9_]*))?\}`)
 )
 
 // ParsePage extracts page metadata and top-level block declarations.
@@ -48,12 +49,24 @@ func ParsePage(source []byte) (manifest.Page, error) {
 	actionDepth := 0
 	var apiBody []string
 	capturedAPI := -1
+	var fragmentBody []string
+	capturedFragment := -1
 	seenDeclaration := false
 
 	scanner := bufio.NewScanner(bytes.NewReader(source))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
+		if capturedFragment >= 0 {
+			if line == "}" {
+				page.Blocks.Fragments[capturedFragment].Body = strings.TrimSpace(strings.Join(fragmentBody, "\n"))
+				capturedFragment = -1
+				fragmentBody = nil
+				continue
+			}
+			fragmentBody = append(fragmentBody, rawLine)
+			continue
+		}
 		if capturedAPI >= 0 {
 			if line == "}" {
 				api, err := parseAPIBody(page.Blocks.APIs[capturedAPI], apiBody)
@@ -225,6 +238,34 @@ func ParsePage(source []byte) (manifest.Page, error) {
 			return manifest.Page{}, fmt.Errorf("line %d: old API block syntax is not supported; use `api %s GET \"<path>\"` and move behavior to Go", lineNumber, exportedIdentifierSuggestion(match[1]))
 		}
 
+		if match := fragmentEndpointPattern.FindStringSubmatch(line); match != nil {
+			name := match[1]
+			method := match[2]
+			route := match[3]
+			target := match[4]
+			span := sourceLineSpan(lineNumber, rawLine)
+			if method != "GET" {
+				return manifest.Page{}, fmt.Errorf("line %d: fragment %s uses unsupported method %s; fragments currently require GET", lineNumber, name, method)
+			}
+			if err := validateFragmentTarget(target); err != nil {
+				return manifest.Page{}, fmt.Errorf("line %d: %w", lineNumber, err)
+			}
+			page.Blocks.Fragments = append(page.Blocks.Fragments, manifest.FragmentEndpoint{
+				Name:        name,
+				Method:      method,
+				Route:       route,
+				Target:      target,
+				Span:        span,
+				RouteSpan:   span,
+				TargetSpan:  span,
+				RouteParams: routeParamSpans(route, lineNumber, rawLine),
+			})
+			page.Blocks.Spans.Fragments = append(page.Blocks.Spans.Fragments, manifest.NamedSpan{Name: name, Span: span})
+			capturedFragment = len(page.Blocks.Fragments) - 1
+			fragmentBody = nil
+			continue
+		}
+
 		if name := unsupportedTopLevelBlockName(line); name != "" {
 			return manifest.Page{}, fmt.Errorf("line %d: unsupported top-level block %q", lineNumber, name)
 		}
@@ -240,6 +281,9 @@ func ParsePage(source []byte) (manifest.Page, error) {
 	}
 	if capturedAPI >= 0 {
 		return manifest.Page{}, fmt.Errorf("api %s block missing closing }", page.Blocks.APIs[capturedAPI].Name)
+	}
+	if capturedFragment >= 0 {
+		return manifest.Page{}, fmt.Errorf("fragment %s block missing closing }", page.Blocks.Fragments[capturedFragment].Name)
 	}
 
 	if page.ID == "" {

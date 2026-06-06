@@ -24,6 +24,7 @@ type SyntaxImport = gwdkast.Import
 type SyntaxUse = gwdkast.Use
 type SyntaxBlock = gwdkast.Block
 type SyntaxEndpoint = gwdkast.Endpoint
+type SyntaxFragmentEndpoint = gwdkast.FragmentEndpoint
 type GoTypeRef = gwdkast.GoTypeRef
 type GoFuncRef = gwdkast.GoFuncRef
 type StateContract = gwdkast.StateContract
@@ -43,6 +44,7 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 	var file SyntaxFile
 	var body []syntaxBodyLine
 	var captured SyntaxBlock
+	var capturedFragment *SyntaxFragmentEndpoint
 	depth := 0
 	seenDeclaration := false
 
@@ -50,6 +52,17 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
+		if capturedFragment != nil {
+			if line == "}" {
+				capturedFragment.Body = strings.TrimSpace(joinSyntaxBody(body))
+				file.Fragments = append(file.Fragments, *capturedFragment)
+				capturedFragment = nil
+				body = nil
+				continue
+			}
+			body = append(body, syntaxBodyLine{Text: rawLine, Line: lineNumber})
+			continue
+		}
 		if captured.Kind != "" {
 			if line == "}" {
 				depth--
@@ -206,6 +219,25 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 		}
 		if match := apiPattern.FindStringSubmatch(line); match != nil {
 			return SyntaxFile{}, fmt.Errorf("line %d: old API block syntax is not supported; use `api %s GET \"<path>\"` and move behavior to Go", lineNumber, exportedIdentifierSuggestion(match[1]))
+		}
+		if match := fragmentEndpointPattern.FindStringSubmatch(line); match != nil {
+			if match[2] != "GET" {
+				return SyntaxFile{}, fmt.Errorf("line %d: fragment %s uses unsupported method %s; fragments currently require GET", lineNumber, match[1], match[2])
+			}
+			if err := validateFragmentTarget(match[4]); err != nil {
+				return SyntaxFile{}, fmt.Errorf("line %d: %w", lineNumber, err)
+			}
+			span := sourceLineSpan(lineNumber, rawLine)
+			capturedFragment = &SyntaxFragmentEndpoint{
+				Name:       match[1],
+				Method:     match[2],
+				Route:      match[3],
+				Target:     match[4],
+				Span:       span,
+				RouteSpan:  span,
+				TargetSpan: span,
+			}
+			body = nil
 			continue
 		}
 		if name := unsupportedTopLevelBlockName(line); name != "" {
@@ -217,6 +249,9 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 	}
 	if captured.Kind != "" {
 		return SyntaxFile{}, fmt.Errorf("%s block missing closing }", captured.Kind)
+	}
+	if capturedFragment != nil {
+		return SyntaxFile{}, fmt.Errorf("fragment %s block missing closing }", capturedFragment.Name)
 	}
 	attachSyntaxAssetScopes(&file)
 	return file, nil

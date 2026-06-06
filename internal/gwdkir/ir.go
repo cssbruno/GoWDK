@@ -114,6 +114,7 @@ type Blocks struct {
 	ViewBody   string
 	Actions    []Action
 	APIs       []API
+	Fragments  []FragmentEndpoint
 	Spans      BlockSpans
 }
 
@@ -135,15 +136,16 @@ type PageSpans struct {
 }
 
 type BlockSpans struct {
-	Paths   manifest.SourceSpan
-	Build   manifest.SourceSpan
-	Load    manifest.SourceSpan
-	Client  manifest.SourceSpan
-	View    manifest.SourceSpan
-	Actions []manifest.NamedSpan
-	APIs    []manifest.NamedSpan
-	Exports manifest.SourceSpan
-	Emits   manifest.SourceSpan
+	Paths     manifest.SourceSpan
+	Build     manifest.SourceSpan
+	Load      manifest.SourceSpan
+	Client    manifest.SourceSpan
+	View      manifest.SourceSpan
+	Actions   []manifest.NamedSpan
+	APIs      []manifest.NamedSpan
+	Fragments []manifest.NamedSpan
+	Exports   manifest.SourceSpan
+	Emits     manifest.SourceSpan
 }
 
 type Action struct {
@@ -168,6 +170,18 @@ type Fragment struct {
 	Target string
 	Body   string
 	Span   manifest.SourceSpan
+}
+
+type FragmentEndpoint struct {
+	Name        string
+	Method      string
+	Route       string
+	Target      string
+	Body        string
+	Span        manifest.SourceSpan
+	RouteSpan   manifest.SourceSpan
+	TargetSpan  manifest.SourceSpan
+	RouteParams []manifest.NamedSpan
 }
 
 type API struct {

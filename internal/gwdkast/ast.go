@@ -30,6 +30,7 @@ type File struct {
 	Blocks      []Block
 	Actions     []Endpoint
 	APIs        []Endpoint
+	Fragments   []FragmentEndpoint
 }
 
 // Package is the top-level Go package declaration.
@@ -197,6 +198,18 @@ type Endpoint struct {
 	Method string
 	Route  string
 	Span   manifest.SourceSpan
+}
+
+// FragmentEndpoint is one generated server fragment route declaration.
+type FragmentEndpoint struct {
+	Name       string
+	Method     string
+	Route      string
+	Target     string
+	Body       string
+	Span       manifest.SourceSpan
+	RouteSpan  manifest.SourceSpan
+	TargetSpan manifest.SourceSpan
 }
 
 // LiteralRecord is a first-slice paths/build return record.

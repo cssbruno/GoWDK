@@ -3147,6 +3147,30 @@ func TestValidatePageRejectsDuplicateRouteParams(t *testing.T) {
 	}
 }
 
+func TestValidatePageRejectsRevalidateWithoutCache(t *testing.T) {
+	page := manifest.Page{ID: "home", Route: "/", Revalidate: "60", Blocks: manifest.Blocks{View: true}}
+
+	diagnostics := ValidatePage(gowdk.Config{}, page)
+	if !hasDiagnosticCode(diagnostics, "revalidate_requires_cache") {
+		t.Fatalf("Missing revalidate_requires_cache diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidatePageRejectsDuplicateRevalidatePolicy(t *testing.T) {
+	page := manifest.Page{
+		ID:         "home",
+		Route:      "/",
+		Cache:      "public, max-age=60, stale-while-revalidate=30",
+		Revalidate: "60",
+		Blocks:     manifest.Blocks{View: true},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{}, page)
+	if !hasDiagnosticCode(diagnostics, "duplicate_revalidate_policy") {
+		t.Fatalf("Missing duplicate_revalidate_policy diagnostic: %#v", diagnostics)
+	}
+}
+
 func TestValidatePageAllowsTypedRouteParams(t *testing.T) {
 	page := manifest.Page{ID: "patients.show", Route: "/patients/{id:int}", Paths: true, Blocks: manifest.Blocks{View: true}}
 

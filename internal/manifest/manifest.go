@@ -97,6 +97,7 @@ type PageSpans struct {
 	Route       SourceSpan
 	Render      SourceSpan
 	Cache       SourceSpan
+	Revalidate  SourceSpan
 	Title       SourceSpan
 	Description SourceSpan
 	Canonical   SourceSpan
@@ -135,6 +136,7 @@ type Page struct {
 	RouteParams []RouteParam
 	Render      gowdk.RenderMode
 	Cache       string
+	Revalidate  string
 	Metadata    PageMetadata
 	Layouts     []string
 	Guard       []string
@@ -146,6 +148,20 @@ type Page struct {
 	Blocks      Blocks
 	LoadBinding BackendBinding
 	Spans       PageSpans
+}
+
+// CachePolicy returns the concrete Cache-Control policy generated for the page.
+func (page Page) CachePolicy() string {
+	return CachePolicyWithRevalidate(page.Cache, page.Revalidate)
+}
+
+// CachePolicyWithRevalidate appends the page revalidation directive to an
+// explicit Cache-Control policy.
+func CachePolicyWithRevalidate(cache string, revalidate string) string {
+	if cache == "" || revalidate == "" {
+		return cache
+	}
+	return cache + ", stale-while-revalidate=" + revalidate
 }
 
 // RouteParam describes one dynamic route parameter and its declared scalar

@@ -178,9 +178,10 @@ func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 func TestBuildRecordsPageCachePolicyInAssetManifest(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{{
-		ID:    "home",
-		Route: "/",
-		Cache: "public, max-age=120",
+		ID:         "home",
+		Route:      "/",
+		Cache:      "public, max-age=120",
+		Revalidate: "30",
 		Blocks: manifest.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
@@ -199,7 +200,7 @@ func TestBuildRecordsPageCachePolicyInAssetManifest(t *testing.T) {
 	if err := json.Unmarshal(payload, &assets); err != nil {
 		t.Fatal(err)
 	}
-	if cache := assets.CachePolicy("index.html"); cache != "public, max-age=120" {
+	if cache := assets.CachePolicy("index.html"); cache != "public, max-age=120, stale-while-revalidate=30" {
 		t.Fatalf("expected page cache policy in asset manifest, got %q in %s", cache, payload)
 	}
 	if assets.Resolve("index.html") != "" {

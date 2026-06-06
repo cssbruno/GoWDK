@@ -14,6 +14,7 @@ func TestAnalyzeLowersASTIntoManifestAndIR(t *testing.T) {
 @page home
 @route "/"
 @cache "public, max-age=60"
+@revalidate 60s
 @layout ui.root
 @guard auth.required
 @css "./home.css"
@@ -47,6 +48,9 @@ view {
 	}
 	if pageAST.Cache == nil || pageAST.Cache.Policy != "public, max-age=60" {
 		t.Fatalf("expected typed cache policy, got %#v", pageAST.Cache)
+	}
+	if pageAST.Revalidate == nil || pageAST.Revalidate.Seconds != "60" {
+		t.Fatalf("expected typed revalidate policy, got %#v", pageAST.Revalidate)
 	}
 	if len(pageAST.CSS) != 1 || pageAST.CSS[0].Path != "./home.css" {
 		t.Fatalf("expected typed CSS refs, got %#v", pageAST.CSS)
@@ -94,7 +98,7 @@ view {
 		t.Fatalf("unexpected manifest pages: %#v", result.Manifest.Pages)
 	}
 	page := result.Manifest.Pages[0]
-	if page.Package != "pages" || page.Route != "/" || page.Cache != "public, max-age=60" || len(page.Stores) != 1 {
+	if page.Package != "pages" || page.Route != "/" || page.Cache != "public, max-age=60" || page.Revalidate != "60" || len(page.Stores) != 1 {
 		t.Fatalf("unexpected lowered page: %#v", page)
 	}
 	if len(page.Blocks.Actions) != 1 || page.Blocks.Actions[0].Name != "Login" {
@@ -112,6 +116,12 @@ view {
 	}
 	if len(result.IR.Routes) != 1 || result.IR.Routes[0].Kind != gwdkir.RouteSPA || result.IR.Routes[0].PageID != "home" {
 		t.Fatalf("unexpected routes: %#v", result.IR.Routes)
+	}
+	if result.IR.Routes[0].Cache != "public, max-age=60, stale-while-revalidate=60" {
+		t.Fatalf("unexpected route cache policy: %#v", result.IR.Routes[0])
+	}
+	if len(result.IR.Pages) != 1 || result.IR.Pages[0].Revalidate != "60" {
+		t.Fatalf("unexpected IR page revalidate policy: %#v", result.IR.Pages)
 	}
 	if len(result.IR.Endpoints) != 2 {
 		t.Fatalf("expected action and API endpoints, got %#v", result.IR.Endpoints)

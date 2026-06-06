@@ -1639,7 +1639,7 @@ func TestGeneratedBinaryAppliesSPAHTMLCachePolicy(t *testing.T) {
   "version": 1,
   "files": {},
   "cache": {
-    "index.html": "public, max-age=120"
+    "index.html": "public, max-age=120, stale-while-revalidate=30"
   }
 }
 `)
@@ -1669,7 +1669,7 @@ func TestGeneratedBinaryAppliesSPAHTMLCachePolicy(t *testing.T) {
 	if strings.TrimSpace(body) != "<main>Home</main>" {
 		t.Fatalf("unexpected SPA response body: %s", body)
 	}
-	if cacheControl := headers.Get("Cache-Control"); cacheControl != "public, max-age=120" {
+	if cacheControl := headers.Get("Cache-Control"); cacheControl != "public, max-age=120, stale-while-revalidate=30" {
 		t.Fatalf("unexpected cache control: %q", cacheControl)
 	}
 }

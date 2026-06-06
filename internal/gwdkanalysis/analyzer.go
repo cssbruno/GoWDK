@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/cssscope"
@@ -101,6 +103,10 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 	if ast.Cache != nil {
 		page.Cache = ast.Cache.Policy
 		page.Spans.Cache = ast.Cache.Span
+	}
+	if ast.Revalidate != nil {
+		page.Revalidate = ast.Revalidate.Seconds
+		page.Spans.Revalidate = ast.Revalidate.Span
 	}
 	for _, layout := range ast.Layouts {
 		page.Layouts = append(page.Layouts, layout.ID)
@@ -317,7 +323,7 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 			PageID:        page.ID,
 			Package:       page.Package,
 			Render:        mode,
-			Cache:         page.Cache,
+			Cache:         page.CachePolicy(),
 			DynamicParams: page.DynamicParams(),
 			RouteParams:   copyRouteParams(page.TypedRouteParams()),
 			Layouts:       append([]string(nil), page.Layouts...),
@@ -614,6 +620,13 @@ func applyPageAnnotation(page *manifest.Page, annotation gwdkast.Annotation) err
 		}
 		page.Cache = policy
 		page.Spans.Cache = annotation.Span
+	case "revalidate":
+		seconds, err := revalidateSecondsValue(value)
+		if err != nil {
+			return err
+		}
+		page.Revalidate = seconds
+		page.Spans.Revalidate = annotation.Span
 	case "layout":
 		page.Layouts = splitCommaList(value)
 		page.Spans.Layouts = namedSpans(page.Layouts, annotation.Span)
@@ -710,6 +723,7 @@ func lowerIRPage(page manifest.Page) gwdkir.Page {
 		RouteParams: copyRouteParams(page.TypedRouteParams()),
 		Render:      page.Render,
 		Cache:       page.Cache,
+		Revalidate:  page.Revalidate,
 		Metadata:    gwdkir.PageMetadata(page.Metadata),
 		Layouts:     append([]string(nil), page.Layouts...),
 		Guards:      append([]string(nil), page.Guard...),
@@ -724,6 +738,7 @@ func lowerIRPage(page manifest.Page) gwdkir.Page {
 			Route:       page.Spans.Route,
 			Render:      page.Spans.Render,
 			Cache:       page.Spans.Cache,
+			Revalidate:  page.Spans.Revalidate,
 			Title:       page.Spans.Title,
 			Description: page.Spans.Description,
 			Canonical:   page.Spans.Canonical,
@@ -1128,6 +1143,30 @@ func cachePolicyValue(value string) (string, error) {
 		return "", fmt.Errorf("@cache must stay on one line")
 	}
 	return policy, nil
+}
+
+func revalidateSecondsValue(value string) (string, error) {
+	raw := strings.TrimSpace(trimQuotes(value))
+	if raw == "" {
+		return "", fmt.Errorf("@revalidate requires a value")
+	}
+	if strings.ContainsAny(raw, "\r\n") {
+		return "", fmt.Errorf("@revalidate must stay on one line")
+	}
+	if seconds, err := strconv.Atoi(raw); err == nil {
+		if seconds <= 0 {
+			return "", fmt.Errorf("@revalidate requires a positive duration")
+		}
+		return strconv.Itoa(seconds), nil
+	}
+	duration, err := time.ParseDuration(raw)
+	if err != nil || duration <= 0 {
+		return "", fmt.Errorf("@revalidate requires a positive duration such as 60s, 5m, or 1h")
+	}
+	if duration%time.Second != 0 {
+		return "", fmt.Errorf("@revalidate must resolve to whole seconds")
+	}
+	return strconv.FormatInt(int64(duration/time.Second), 10), nil
 }
 
 func spanForName(spans []manifest.NamedSpan, name string, fallback manifest.SourceSpan) manifest.SourceSpan {

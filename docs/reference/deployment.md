@@ -96,6 +96,10 @@ Generated binaries use explicit cache headers:
   responses for that page. It does not override the no-store safety policy for
   actions, APIs, partial responses, load redirects, generated errors, or
   CSRF-mutated HTML.
+- Page-level `@revalidate` requires `@cache` and appends
+  `stale-while-revalidate=<seconds>` to the generated Cache-Control header for
+  successful static SPA HTML and SSR HTML responses. Accepted values are whole
+  seconds or whole-second durations such as `60s`, `5m`, or `1h`.
 
 ## Module And Target Builds
 

@@ -82,6 +82,7 @@ type Page struct {
 	RouteParams []manifest.RouteParam
 	Render      gowdk.RenderMode
 	Cache       string
+	Revalidate  string
 	Metadata    PageMetadata
 	Layouts     []string
 	Guards      []string
@@ -122,6 +123,7 @@ type PageSpans struct {
 	Route       manifest.SourceSpan
 	Render      manifest.SourceSpan
 	Cache       manifest.SourceSpan
+	Revalidate  manifest.SourceSpan
 	Title       manifest.SourceSpan
 	Description manifest.SourceSpan
 	Canonical   manifest.SourceSpan

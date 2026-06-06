@@ -14,6 +14,7 @@ type File struct {
 	Route       *RouteDecl
 	Render      *RenderDecl
 	Cache       *CacheDecl
+	Revalidate  *RevalidateDecl
 	Layouts     []LayoutRef
 	Guards      []GuardRef
 	CSS         []AssetRef
@@ -86,6 +87,12 @@ type RenderDecl struct {
 type CacheDecl struct {
 	Policy string
 	Span   manifest.SourceSpan
+}
+
+// RevalidateDecl is an @revalidate stale-while-revalidate declaration.
+type RevalidateDecl struct {
+	Seconds string
+	Span    manifest.SourceSpan
 }
 
 // LayoutRef is one @layout reference on a page.

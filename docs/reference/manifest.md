@@ -112,7 +112,8 @@ Fields:
 - `dynamicParams`: route param names declared in dynamic route segments.
 - `routeParams`: route param names and scalar types. Untyped params are
   reported as `string`.
-- `cache`: optional page `@cache` route response metadata.
+- `cache`: optional concrete page Cache-Control response metadata from `@cache`
+  and `@revalidate`.
 - `paths`: optional boolean present when `paths {}` exists.
 - `guard`: optional guard metadata.
 - `css`: optional `@css` page selection metadata.
@@ -170,4 +171,6 @@ page CSS, and page-level cache policies for generated SPA HTML. Keys are stable
 logical asset names. Values are emitted slash-separated paths relative to the
 selected output directory; generated CSS is minified and emitted with
 content-hashed filenames. The `cache` map may include route HTML paths such as
-`index.html` without adding those route files to `files`.
+`index.html` without adding those route files to `files`; when a page declares
+`@revalidate`, the recorded cache policy includes the generated
+`stale-while-revalidate=<seconds>` directive.

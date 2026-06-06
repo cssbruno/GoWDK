@@ -337,6 +337,8 @@ api Session GET "/api/session"
 - [x] Define cache and revalidation behavior for static files, SPA routes,
       backend endpoints, partial responses, SSR routes, and hybrid pages.
 - [x] Add syntax for route/cache policy once generated route metadata stabilizes.
+- [x] Add `@revalidate` syntax and generated-binary enforcement through
+      `stale-while-revalidate`.
 - [x] Ensure generated binaries apply cache policy consistently.
 - [x] Keep SSR optional instead of making it the framework identity.
 

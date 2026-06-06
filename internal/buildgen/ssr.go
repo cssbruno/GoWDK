@@ -105,7 +105,7 @@ func ssrArtifact(config gowdk.Config, page manifest.Page, components map[string]
 		PageID:           page.ID,
 		Route:            page.Route,
 		Render:           page.Render,
-		Cache:            page.Cache,
+		Cache:            page.CachePolicy(),
 		DynamicParams:    page.DynamicParams(),
 		RouteParams:      append([]manifest.RouteParam(nil), page.TypedRouteParams()...),
 		Guards:           append([]string(nil), page.Guard...),

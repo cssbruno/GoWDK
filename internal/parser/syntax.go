@@ -274,6 +274,12 @@ func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNu
 		file.Render = &gwdkast.RenderDecl{Mode: value, Span: annotation.Span}
 	case "cache":
 		file.Cache = &gwdkast.CacheDecl{Policy: trimQuotes(value), Span: annotation.Span}
+	case "revalidate":
+		seconds, err := revalidateSecondsValue(value)
+		if err != nil {
+			return err
+		}
+		file.Revalidate = &gwdkast.RevalidateDecl{Seconds: seconds, Span: annotation.Span}
 	case "guard":
 		for _, span := range namedValueSpans(splitList(value), lineNumber, rawLine) {
 			file.Guards = append(file.Guards, gwdkast.GuardRef{Name: span.Name, Span: span.Span})

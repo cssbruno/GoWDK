@@ -39,10 +39,25 @@ route metadata and should be a literal HTTP `Cache-Control` value:
 @cache "public, max-age=60"
 ```
 
+Pages may also declare stale-while-revalidate behavior with `@revalidate`.
+Values may be whole seconds or Go-style whole-second durations such as `60s`,
+`5m`, or `1h`. `@revalidate` requires `@cache` and appends a concrete
+`stale-while-revalidate=<seconds>` directive to the generated Cache-Control
+header:
+
+```gwdk
+@page docs
+@route "/docs"
+@cache "public, max-age=60"
+@revalidate 5m
+```
+
 Generated binaries apply explicit page `@cache` values to successful static SPA
-HTML and SSR HTML responses. Request-time safety policies still win for
-actions, APIs, partial responses, SSR load redirects, CSRF HTML mutation, and
-generated request-time errors; those use `no-store`.
+HTML and SSR HTML responses. When `@revalidate` is present, generated binaries
+send the appended stale-while-revalidate directive for the same successful
+responses. Request-time safety policies still win for actions, APIs, partial
+responses, SSR load redirects, CSRF HTML mutation, and generated request-time
+errors; those use `no-store`.
 
 ## SPA Routes
 

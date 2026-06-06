@@ -724,6 +724,7 @@ func TestParsePageReadsCachePolicy(t *testing.T) {
 @page home
 @route "/"
 @cache "public, max-age=60"
+@revalidate 5m
 
 view {
 }
@@ -734,8 +735,14 @@ view {
 	if page.Cache != "public, max-age=60" {
 		t.Fatalf("unexpected cache policy: %#v", page)
 	}
+	if page.Revalidate != "300" {
+		t.Fatalf("unexpected revalidate policy: %#v", page)
+	}
 	if page.Spans.Cache.Start.Line != 4 {
 		t.Fatalf("unexpected cache span: %#v", page.Spans.Cache)
+	}
+	if page.Spans.Revalidate.Start.Line != 5 {
+		t.Fatalf("unexpected revalidate span: %#v", page.Spans.Revalidate)
 	}
 }
 

@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/manifest"
@@ -787,6 +789,13 @@ func applyAnnotation(page *manifest.Page, name, rawValue string, lineNumber int,
 		}
 		page.Cache = policy
 		page.Spans.Cache = span
+	case "revalidate":
+		seconds, err := revalidateSecondsValue(value)
+		if err != nil {
+			return err
+		}
+		page.Revalidate = seconds
+		page.Spans.Revalidate = span
 	case "title":
 		title, err := annotationText(name, value)
 		if err != nil {
@@ -853,6 +862,30 @@ func cachePolicyValue(value string) (string, error) {
 		return "", fmt.Errorf("@cache must stay on one line")
 	}
 	return policy, nil
+}
+
+func revalidateSecondsValue(value string) (string, error) {
+	raw := strings.TrimSpace(trimQuotes(value))
+	if raw == "" {
+		return "", fmt.Errorf("@revalidate requires a value")
+	}
+	if strings.ContainsAny(raw, "\r\n") {
+		return "", fmt.Errorf("@revalidate must stay on one line")
+	}
+	if seconds, err := strconv.Atoi(raw); err == nil {
+		if seconds <= 0 {
+			return "", fmt.Errorf("@revalidate requires a positive duration")
+		}
+		return strconv.Itoa(seconds), nil
+	}
+	duration, err := time.ParseDuration(raw)
+	if err != nil || duration <= 0 {
+		return "", fmt.Errorf("@revalidate requires a positive duration such as 60s, 5m, or 1h")
+	}
+	if duration%time.Second != 0 {
+		return "", fmt.Errorf("@revalidate must resolve to whole seconds")
+	}
+	return strconv.FormatInt(int64(duration/time.Second), 10), nil
 }
 
 func applyLayoutAnnotation(layout *manifest.Layout, name, rawValue string, lineNumber int, rawLine string) error {

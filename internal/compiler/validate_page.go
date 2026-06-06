@@ -18,6 +18,7 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	pageRoute, pageRouteIssues := parseRoute(page.Route)
 	diagnostics = append(diagnostics, routeDiagnostics(page, "page route", pageRouteIssues, page.Spans.Route, page.Spans.RouteParams)...)
 	diagnostics = append(diagnostics, validatePageStores(page)...)
+	diagnostics = append(diagnostics, validatePageCachePolicy(page)...)
 	for _, action := range page.Blocks.Actions {
 		if !isExportedHandlerName(action.Name) {
 			diagnostics = append(diagnostics, ValidationError{
@@ -144,6 +145,31 @@ func isBuildTimeRoute(mode gowdk.RenderMode, page manifest.Page) bool {
 	default:
 		return false
 	}
+}
+
+func validatePageCachePolicy(page manifest.Page) []ValidationError {
+	if page.Revalidate == "" {
+		return nil
+	}
+	if strings.TrimSpace(page.Cache) == "" {
+		return []ValidationError{{
+			Code:    "revalidate_requires_cache",
+			PageID:  page.ID,
+			Source:  page.Source,
+			Span:    firstSpan(page.Spans.Revalidate, page.Spans.Page),
+			Message: fmt.Sprintf("%s declares @revalidate, but revalidation requires an explicit @cache policy", page.ID),
+		}}
+	}
+	if strings.Contains(strings.ToLower(page.Cache), "stale-while-revalidate") {
+		return []ValidationError{{
+			Code:    "duplicate_revalidate_policy",
+			PageID:  page.ID,
+			Source:  page.Source,
+			Span:    firstSpan(page.Spans.Revalidate, page.Spans.Cache, page.Spans.Page),
+			Message: fmt.Sprintf("%s declares @revalidate and a @cache policy that already contains stale-while-revalidate", page.ID),
+		}}
+	}
+	return nil
 }
 
 func validatePageStores(page manifest.Page) []ValidationError {

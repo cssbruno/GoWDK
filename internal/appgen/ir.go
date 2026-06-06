@@ -106,6 +106,152 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 	return endpoints, nil
 }
 
+func fragmentEndpointsFromIR(ir gwdkir.Program) ([]FragmentEndpoint, error) {
+	var endpoints []FragmentEndpoint
+	components := fragmentComponentsFromIR(ir.Components)
+	for _, page := range ir.Pages {
+		for _, fragment := range page.Blocks.Fragments {
+			uses := irUsesMap(page.Uses)
+			html, err := renderFragmentHTML(fragment.Body, page.Package, uses, components)
+			if err != nil {
+				return nil, fmt.Errorf("%s.%s: fragment %s: %w", page.ID, fragment.Name, fragment.Target, err)
+			}
+			method := strings.TrimSpace(fragment.Method)
+			if method == "" {
+				method = "GET"
+			}
+			endpoints = append(endpoints, FragmentEndpoint{
+				PageID:       page.ID,
+				FragmentName: fragment.Name,
+				Method:       method,
+				Route:        strings.TrimSpace(fragment.Route),
+				Target:       fragment.Target,
+				HTML:         html,
+				Package:      page.Package,
+				Uses:         uses,
+				Guards:       append([]string(nil), page.Guards...),
+			})
+		}
+	}
+	if err := validateFragmentEndpoints(endpoints); err != nil {
+		return nil, err
+	}
+	return endpoints, nil
+}
+
+func renderFragmentHTML(source string, packageName string, uses map[string]string, components map[string]view.Component) (string, error) {
+	return view.RenderWithOptions(source, componentRegistryForFragment(packageName, uses, components), nil, view.Options{
+		Package: packageName,
+		Uses:    uses,
+	})
+}
+
+func fragmentComponentsFromIR(components []gwdkir.Component) map[string]view.Component {
+	out := map[string]view.Component{}
+	for _, component := range components {
+		compiled := view.Component{
+			Name:    component.Name,
+			Package: component.Package,
+			Uses:    irUsesMap(component.Uses),
+			Props:   irPropNames(component.Props),
+			Body:    component.Blocks.ViewBody,
+		}
+		addFragmentComponent(out, compiled)
+	}
+	return out
+}
+
+func fragmentComponentsFromManifest(components []manifest.Component) map[string]view.Component {
+	out := map[string]view.Component{}
+	for _, component := range components {
+		compiled := view.Component{
+			Name:    component.Name,
+			Package: component.Package,
+			Uses:    manifestUsesMap(component.Uses),
+			Props:   manifestPropNames(component.Props),
+			Body:    component.Blocks.ViewBody,
+		}
+		addFragmentComponent(out, compiled)
+	}
+	return out
+}
+
+func addFragmentComponent(registry map[string]view.Component, component view.Component) {
+	if component.Name == "" || component.Body == "" {
+		return
+	}
+	registry[fragmentComponentKey(component.Package, component.Name)] = component
+	if component.Package == "" {
+		registry[component.Name] = component
+	}
+}
+
+func componentRegistryForFragment(packageName string, uses map[string]string, registry map[string]view.Component) map[string]view.Component {
+	if packageName == "" && len(uses) == 0 {
+		return registry
+	}
+	out := map[string]view.Component{}
+	for key, component := range registry {
+		out[key] = component
+		if component.Package == packageName {
+			out[component.Name] = component
+		}
+	}
+	for alias, usePackage := range uses {
+		for _, component := range registry {
+			if component.Package == usePackage {
+				out[alias+"."+component.Name] = component
+			}
+		}
+	}
+	return out
+}
+
+func fragmentComponentKey(packageName string, componentName string) string {
+	if packageName == "" {
+		return componentName
+	}
+	return packageName + "." + componentName
+}
+
+func irUsesMap(uses []gwdkir.Use) map[string]string {
+	if len(uses) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for _, use := range uses {
+		out[use.Alias] = use.Package
+	}
+	return out
+}
+
+func manifestUsesMap(uses []manifest.Use) map[string]string {
+	if len(uses) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for _, use := range uses {
+		out[use.Alias] = use.Package
+	}
+	return out
+}
+
+func irPropNames(props []gwdkir.Prop) []string {
+	out := make([]string, 0, len(props))
+	for _, prop := range props {
+		out = append(out, prop.Name)
+	}
+	return out
+}
+
+func manifestPropNames(props []manifest.Prop) []string {
+	out := make([]string, 0, len(props))
+	for _, prop := range props {
+		out = append(out, prop.Name)
+	}
+	return out
+}
+
 func irBindingsByEndpoint(endpoints []gwdkir.Endpoint) map[string]manifest.BackendBinding {
 	out := map[string]manifest.BackendBinding{}
 	for _, endpoint := range endpoints {

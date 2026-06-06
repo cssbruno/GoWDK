@@ -269,12 +269,22 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 	appDir := filepath.Join(t.TempDir(), "generated-backend")
 
-	result, err := GenerateBackendWithOptions(appDir, Options{Actions: []ActionEndpoint{{
-		PageID:     "newsletter",
-		ActionName: "Subscribe",
-		Route:      "/newsletter",
-		Redirect:   "/newsletter?ok=1",
-	}}})
+	result, err := GenerateBackendWithOptions(appDir, Options{
+		Actions: []ActionEndpoint{{
+			PageID:     "newsletter",
+			ActionName: "Subscribe",
+			Route:      "/newsletter",
+			Redirect:   "/newsletter?ok=1",
+		}},
+		Fragments: []FragmentEndpoint{{
+			PageID:       "patients",
+			FragmentName: "List",
+			Method:       "GET",
+			Route:        "/patients/list",
+			Target:       "#patients",
+			HTML:         "<section>Patients</section>",
+		}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,6 +299,9 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 		`mux.Handle("/", backendRouter)`,
 		`func newBackendRouter() (*gowdkruntime.BackendRouter, error)`,
 		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}`,
+		`gowdkruntime.BackendRoute{Method: http.MethodGet, Path: "/patients/list", Kind: "fragment", Handler: fragment}`,
+		`func fragment(response http.ResponseWriter, request *http.Request) bool`,
+		`gowdkresponse.FragmentFor("#patients", "<section>Patients</section>")`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated backend app source to contain %q:\n%s", expected, source)
@@ -1014,6 +1027,13 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 					ValidatesInput: true,
 					Redirect:       "/newsletter?ok=1",
 				}},
+				Fragments: []manifest.FragmentEndpoint{{
+					Name:   "List",
+					Method: "GET",
+					Route:  "/newsletter/list",
+					Target: "#newsletter",
+					Body:   "<section>Newsletter list</section>",
+				}},
 			},
 		},
 		{
@@ -1049,6 +1069,8 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 		`case "/newsletter":`,
 		`func decodeNewsletterSubscribeInput(values gowdkform.Values) (SubscribeInput, error)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
+		`case request.Method == "GET" && requestPath == "/newsletter/list":`,
+		`gowdkresponse.FragmentFor("#newsletter", "<section>Newsletter list</section>")`,
 		`case "/dashboard":`,
 		`gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr", Guards: []string{"auth.required"}}`,
 		`<main><h1>Dashboard</h1></main>`,
@@ -1131,6 +1153,15 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 			Method:  "GET",
 			Route:   "/api/session",
 		}},
+		Fragments: []FragmentEndpoint{{
+			PageID:       "patients",
+			FragmentName: "List",
+			Method:       "GET",
+			Route:        "/patients/list",
+			Target:       "#patients",
+			HTML:         "<section>Patients</section>",
+			Guards:       []string{"auth.required"},
+		}},
 		SSR: []SSRRoute{{
 			PageID: "dashboard",
 			Route:  "/dashboard",
@@ -1162,6 +1193,15 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 		`ctx := gowdkruntime.WithEndpoint(request.Context(), gowdkruntime.EndpointMetadata{Kind: "action"`,
 		`if runRateLimit(response, request)`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
+	)
+	fragmentIndex := strings.Index(source, `ctx := gowdkruntime.WithEndpoint(request.Context(), gowdkruntime.EndpointMetadata{Kind: "fragment"`)
+	if fragmentIndex < 0 {
+		t.Fatalf("expected generated source to contain fragment endpoint context:\n%s", source)
+	}
+	assertSourceOrder(t, source[fragmentIndex:],
+		`if runRateLimit(response, request)`,
+		`if !runGuards(response, request, []string{"auth.required"})`,
+		`fragment := gowdkresponse.FragmentFor("#patients", "<section>Patients</section>")`,
 	)
 }
 
@@ -1271,6 +1311,44 @@ func TestActionEndpointsRendersActionFragments(t *testing.T) {
 	}
 	if routes[0].Fragments[0].Target != "#patients" || routes[0].Fragments[0].HTML != "<p>Updated &amp; safe</p>" {
 		t.Fatalf("unexpected fragment route: %#v", routes[0].Fragments[0])
+	}
+}
+
+func TestFragmentEndpointsRenderComponents(t *testing.T) {
+	routes, err := FragmentEndpoints(manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:      "patients",
+			Route:   "/patients",
+			Package: "pages",
+			Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
+			Blocks: manifest.Blocks{
+				Fragments: []manifest.FragmentEndpoint{{
+					Name:   "List",
+					Method: "GET",
+					Route:  "/patients/list",
+					Target: "#patients",
+					Body:   `<section><ui.PatientCard name="Updated & safe" /></section>`,
+				}},
+			},
+		}},
+		Components: []manifest.Component{{
+			Name:    "PatientCard",
+			Package: "components",
+			Props:   []manifest.Prop{{Name: "name", Type: "string"}},
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<article>{name}</article>`},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected one fragment endpoint, got %#v", routes)
+	}
+	if routes[0].HTML != "<section><article>Updated &amp; safe</article></section>" {
+		t.Fatalf("unexpected fragment HTML: %q", routes[0].HTML)
+	}
+	if routes[0].Package != "pages" || routes[0].Uses["ui"] != "components" {
+		t.Fatalf("expected fragment render context, got %#v", routes[0])
 	}
 }
 
@@ -2607,6 +2685,67 @@ func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
 	}
 	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("expected no-store on partial fragment response, got %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinaryServesStandaloneFragmentRoute(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		PageID:       "patients",
+		FragmentName: "List",
+		Method:       "GET",
+		Route:        "/patients/list",
+		Target:       "#patients",
+		HTML:         "<section><p>Updated patients</p></section>",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/patients/list", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected fragment response status 200, got %d: %s", response.StatusCode, payload)
+	}
+	if strings.TrimSpace(string(payload)) != "<section><p>Updated patients</p></section>" {
+		t.Fatalf("unexpected fragment body: %s", payload)
+	}
+	if contentType := response.Header.Get("Content-Type"); contentType != "text/html; charset=utf-8" {
+		t.Fatalf("unexpected content type: %q", contentType)
+	}
+	if response.Header.Get("X-GOWDK-Fragment-Target") != "#patients" {
+		t.Fatalf("unexpected fragment target: %q", response.Header.Get("X-GOWDK-Fragment-Target"))
+	}
+	if response.Header.Get("X-GOWDK-Fragment-Swap") != "innerHTML" {
+		t.Fatalf("unexpected fragment swap: %q", response.Header.Get("X-GOWDK-Fragment-Swap"))
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on standalone fragment response, got %q", cacheControl)
 	}
 }
 

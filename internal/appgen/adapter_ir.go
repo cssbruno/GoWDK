@@ -13,8 +13,9 @@ type BackendAdapterIR struct {
 type BackendEndpointKind string
 
 const (
-	BackendEndpointAction BackendEndpointKind = "action"
-	BackendEndpointAPI    BackendEndpointKind = "api"
+	BackendEndpointAction   BackendEndpointKind = "action"
+	BackendEndpointAPI      BackendEndpointKind = "api"
+	BackendEndpointFragment BackendEndpointKind = "fragment"
 )
 
 type BackendEndpointRegistration struct {
@@ -129,6 +130,22 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			})
 		}
 		ir.Responses = append(ir.Responses, BackendResponse{Endpoint: endpoint, NoStore: true})
+	}
+	for _, fragment := range sortedFragmentEndpoints(options.Fragments) {
+		endpoint := BackendEndpointRegistration{
+			Kind:    BackendEndpointFragment,
+			Method:  fragment.Method,
+			Path:    fragment.Route,
+			Handler: "fragment",
+			PageID:  fragment.PageID,
+			Name:    fragment.FragmentName,
+		}
+		ir.Registrations = append(ir.Registrations, endpoint)
+		ir.Responses = append(ir.Responses, BackendResponse{
+			Endpoint: endpoint,
+			NoStore:  true,
+			Partial:  true,
+		})
 	}
 	return ir
 }

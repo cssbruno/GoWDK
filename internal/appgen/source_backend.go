@@ -12,6 +12,8 @@ func newBackendRouterDecl(adapter BackendAdapterIR) *ast.FuncDecl {
 		var method ast.Expr = stringLit(registration.Method)
 		if registration.Kind == BackendEndpointAction && registration.Method == "POST" {
 			method = sel("http", "MethodPost")
+		} else if registration.Kind == BackendEndpointFragment && registration.Method == "GET" {
+			method = sel("http", "MethodGet")
 		}
 		routes = append(routes, backendRouteExpr(method, registration.Kind, registration.Path, id(registration.Handler)))
 	}
@@ -118,6 +120,12 @@ func isBackendRouteDecl(options Options) *ast.FuncDecl {
 	for _, api := range sortedAPIEndpoints(options.APIs) {
 		clauses = append(clauses, &ast.CaseClause{
 			List: []ast.Expr{backendRouteCond(stringLit(api.Method), api.Route)},
+			Body: []ast.Stmt{returnBool(true)},
+		})
+	}
+	for _, fragment := range sortedFragmentEndpoints(options.Fragments) {
+		clauses = append(clauses, &ast.CaseClause{
+			List: []ast.Expr{backendRouteCond(stringLit(fragment.Method), fragment.Route)},
 			Body: []ast.Stmt{returnBool(true)},
 		})
 	}

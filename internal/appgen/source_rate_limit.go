@@ -8,7 +8,7 @@ import (
 )
 
 func generatedUsesRateLimit(options Options) bool {
-	return options.Config.HasFeature(gowdk.FeatureRateLimit) && (len(options.Actions) > 0 || len(options.APIs) > 0 || len(options.SSR) > 0)
+	return options.Config.HasFeature(gowdk.FeatureRateLimit) && (len(options.Actions) > 0 || len(options.APIs) > 0 || len(options.Fragments) > 0 || len(options.SSR) > 0)
 }
 
 func rateLimitDecls(options Options) []ast.Decl {

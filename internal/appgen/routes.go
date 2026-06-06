@@ -81,6 +81,40 @@ func APIEndpoints(app manifest.Manifest) ([]APIEndpoint, error) {
 	return endpoints, nil
 }
 
+// FragmentEndpoints extracts generated standalone fragment dispatch entries
+// from a parsed manifest.
+func FragmentEndpoints(app manifest.Manifest) ([]FragmentEndpoint, error) {
+	var endpoints []FragmentEndpoint
+	components := fragmentComponentsFromManifest(app.Components)
+	for _, page := range app.Pages {
+		for _, fragment := range page.Blocks.Fragments {
+			uses := manifestUsesMap(page.Uses)
+			html, err := renderFragmentHTML(fragment.Body, page.Package, uses, components)
+			if err != nil {
+				return nil, fmt.Errorf("%s.%s: fragment %s: %w", page.ID, fragment.Name, fragment.Target, err)
+			}
+			method := strings.TrimSpace(fragment.Method)
+			if method == "" {
+				method = "GET"
+			}
+			endpoints = append(endpoints, FragmentEndpoint{
+				PageID:       page.ID,
+				FragmentName: fragment.Name,
+				Method:       method,
+				Route:        strings.TrimSpace(fragment.Route),
+				Target:       fragment.Target,
+				HTML:         html,
+				Package:      page.Package,
+				Uses:         uses,
+			})
+		}
+	}
+	if err := validateFragmentEndpoints(endpoints); err != nil {
+		return nil, err
+	}
+	return endpoints, nil
+}
+
 func backendBindingsByBlock(bindings []manifest.BackendBinding) map[string]manifest.BackendBinding {
 	out := map[string]manifest.BackendBinding{}
 	for _, binding := range bindings {

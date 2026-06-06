@@ -45,17 +45,49 @@ func validateActionEndpoints(endpoints []ActionEndpoint) error {
 func validateActionFragments(endpoint ActionEndpoint) error {
 	seen := map[string]bool{}
 	for _, fragment := range endpoint.Fragments {
+		if err := validateFragmentTargetValue(fragment.Target); err != nil {
+			return fmt.Errorf("generated action %s.%s fragment target %q %w", endpoint.PageID, endpoint.ActionName, fragment.Target, err)
+		}
 		target := strings.TrimSpace(fragment.Target)
-		if target == "" {
-			return fmt.Errorf("generated action %s.%s declares an empty fragment target", endpoint.PageID, endpoint.ActionName)
-		}
-		if !strings.HasPrefix(target, "#") || strings.TrimPrefix(target, "#") == "" || strings.ContainsAny(target, " \t\r\n{}") {
-			return fmt.Errorf("generated action %s.%s fragment target %q must be a literal id selector", endpoint.PageID, endpoint.ActionName, fragment.Target)
-		}
 		if seen[target] {
 			return fmt.Errorf("generated action %s.%s declares duplicate fragment target %q", endpoint.PageID, endpoint.ActionName, target)
 		}
 		seen[target] = true
+	}
+	return nil
+}
+
+func validateFragmentEndpoints(endpoints []FragmentEndpoint) error {
+	seen := map[string]FragmentEndpoint{}
+	for _, endpoint := range endpoints {
+		if strings.TrimSpace(endpoint.FragmentName) == "" {
+			return fmt.Errorf("generated fragment endpoint for page %q is missing fragment name", endpoint.PageID)
+		}
+		if endpoint.Method != "GET" {
+			return fmt.Errorf("generated fragment %s.%s uses unsupported method %s; fragments currently require GET", endpoint.PageID, endpoint.FragmentName, endpoint.Method)
+		}
+		if err := validateActionEndpointPath(endpoint.Route); err != nil {
+			return fmt.Errorf("generated fragment %s.%s: %w", endpoint.PageID, endpoint.FragmentName, err)
+		}
+		if err := validateFragmentTargetValue(endpoint.Target); err != nil {
+			return fmt.Errorf("generated fragment %s.%s target %q %w", endpoint.PageID, endpoint.FragmentName, endpoint.Target, err)
+		}
+		key := endpoint.Method + "\x00" + endpoint.Route
+		if previous, exists := seen[key]; exists {
+			return fmt.Errorf("generated fragment %s.%s endpoint path %q duplicates fragment %s.%s", endpoint.PageID, endpoint.FragmentName, endpoint.Route, previous.PageID, previous.FragmentName)
+		}
+		seen[key] = endpoint
+	}
+	return nil
+}
+
+func validateFragmentTargetValue(value string) error {
+	target := strings.TrimSpace(value)
+	if target == "" {
+		return fmt.Errorf("must not be empty")
+	}
+	if !strings.HasPrefix(target, "#") || strings.TrimPrefix(target, "#") == "" || strings.ContainsAny(target, " \t\r\n{}") {
+		return fmt.Errorf("must be a literal id selector")
 	}
 	return nil
 }

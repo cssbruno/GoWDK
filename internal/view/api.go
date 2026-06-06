@@ -77,6 +77,7 @@ func RenderWithData(source string, components map[string]Component, data map[str
 type Options struct {
 	Actions map[string]string
 	Package string
+	Uses    map[string]string
 }
 
 // ActionFormField describes one direct literal form field for a g:post action.
@@ -117,6 +118,7 @@ func RenderWithOptions(source string, components map[string]Component, data map[
 	return render(source, renderContext{
 		components:   components,
 		ownerPackage: options.Package,
+		uses:         cloneValues(options.Uses),
 		values:       cloneValues(data),
 		actions:      cloneValues(options.Actions),
 		stack:        map[string]bool{},

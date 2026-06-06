@@ -36,10 +36,18 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 			},
 			BackendAlias: "status",
 		}},
+		Fragments: []FragmentEndpoint{{
+			PageID:       "patients",
+			FragmentName: "List",
+			Method:       "GET",
+			Route:        "/patients/list",
+			Target:       "#patients",
+			HTML:         "<section>Patients</section>",
+		}},
 	})
 
-	if len(ir.Registrations) != 2 {
-		t.Fatalf("expected action and API registrations, got %#v", ir.Registrations)
+	if len(ir.Registrations) != 3 {
+		t.Fatalf("expected action, API, and fragment registrations, got %#v", ir.Registrations)
 	}
 	if ir.Registrations[0].Kind != BackendEndpointAction || ir.Registrations[0].Path != "/newsletter" || ir.Registrations[0].Handler != "action" {
 		t.Fatalf("unexpected action registration: %#v", ir.Registrations[0])
@@ -47,13 +55,16 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 	if ir.Registrations[1].Kind != BackendEndpointAPI || ir.Registrations[1].Path != "/api/health" || ir.Registrations[1].Handler != "api" {
 		t.Fatalf("unexpected API registration: %#v", ir.Registrations[1])
 	}
+	if ir.Registrations[2].Kind != BackendEndpointFragment || ir.Registrations[2].Path != "/patients/list" || ir.Registrations[2].Handler != "fragment" {
+		t.Fatalf("unexpected fragment registration: %#v", ir.Registrations[2])
+	}
 	if len(ir.Decoders) != 1 || ir.Decoders[0].Function == "" || ir.Decoders[0].Input != "SubscribeInput" {
 		t.Fatalf("expected action decoder metadata, got %#v", ir.Decoders)
 	}
 	if len(ir.Calls) != 2 || ir.Calls[0].Alias != "newsletter" || ir.Calls[1].Alias != "status" {
 		t.Fatalf("expected bound handler calls, got %#v", ir.Calls)
 	}
-	if len(ir.Responses) != 2 || !ir.Responses[0].NoStore || ir.Responses[0].Redirect != "/newsletter?ok=1" {
+	if len(ir.Responses) != 3 || !ir.Responses[0].NoStore || ir.Responses[0].Redirect != "/newsletter?ok=1" || !ir.Responses[2].Partial {
 		t.Fatalf("expected no-store response metadata, got %#v", ir.Responses)
 	}
 }

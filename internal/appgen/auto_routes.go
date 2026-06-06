@@ -31,6 +31,10 @@ func resolveOptions(outputDir string, options Options) (Options, error) {
 	if err != nil {
 		return Options{}, err
 	}
+	fragments, err := fragmentEndpointsFromIR(ir)
+	if err != nil {
+		return Options{}, err
+	}
 	ssrArtifacts, err := buildgen.SSRArtifactsFromIR(options.Config, ir, outputDir)
 	if err != nil {
 		return Options{}, err
@@ -38,6 +42,7 @@ func resolveOptions(outputDir string, options Options) (Options, error) {
 
 	resolved.Actions = append(append([]ActionEndpoint(nil), options.Actions...), actions...)
 	resolved.APIs = append(append([]APIEndpoint(nil), options.APIs...), apis...)
+	resolved.Fragments = append(append([]FragmentEndpoint(nil), options.Fragments...), fragments...)
 	resolved.SSR = append(append([]SSRRoute(nil), options.SSR...), ssrRoutes(ssrArtifacts)...)
 	assignBackendAliases(&resolved)
 	return resolved, nil
@@ -61,8 +66,13 @@ func resolveBackendOptions(options Options) (Options, error) {
 	if err != nil {
 		return Options{}, err
 	}
+	fragments, err := fragmentEndpointsFromIR(ir)
+	if err != nil {
+		return Options{}, err
+	}
 	resolved.Actions = append(append([]ActionEndpoint(nil), options.Actions...), actions...)
 	resolved.APIs = append(append([]APIEndpoint(nil), options.APIs...), apis...)
+	resolved.Fragments = append(append([]FragmentEndpoint(nil), options.Fragments...), fragments...)
 	resolved.SSR = nil
 	assignBackendAliases(&resolved)
 	return resolved, nil

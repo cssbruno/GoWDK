@@ -6,7 +6,7 @@ import (
 )
 
 func generatedUsesGuards(options Options) bool {
-	if endpointsUseGuards(options.Actions, options.APIs) {
+	if endpointsUseGuards(options.Actions, options.APIs, options.Fragments) {
 		return true
 	}
 	for _, route := range options.SSR {
@@ -17,7 +17,7 @@ func generatedUsesGuards(options Options) bool {
 	return false
 }
 
-func endpointsUseGuards(actions []ActionEndpoint, apis []APIEndpoint) bool {
+func endpointsUseGuards(actions []ActionEndpoint, apis []APIEndpoint, fragments []FragmentEndpoint) bool {
 	for _, action := range actions {
 		if len(action.Guards) > 0 {
 			return true
@@ -25,6 +25,11 @@ func endpointsUseGuards(actions []ActionEndpoint, apis []APIEndpoint) bool {
 	}
 	for _, api := range apis {
 		if len(api.Guards) > 0 {
+			return true
+		}
+	}
+	for _, fragment := range fragments {
+		if len(fragment.Guards) > 0 {
 			return true
 		}
 	}

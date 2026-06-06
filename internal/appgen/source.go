@@ -17,6 +17,7 @@ func appPackageSource(options Options) string {
 	if options.ProxyBackend {
 		direct.Actions = nil
 		direct.APIs = nil
+		direct.Fragments = nil
 	}
 	imports := runtimeImportMap(options)
 	imports["embed"] = "embed"
@@ -35,12 +36,14 @@ func runtimeImportMap(options Options) map[string]string {
 	}
 	actions := options.Actions
 	apis := options.APIs
+	fragments := options.Fragments
 	if options.ProxyBackend {
 		actions = nil
 		apis = nil
+		fragments = nil
 	}
 	ssr := options.SSR
-	if len(actions) > 0 {
+	if len(actions) > 0 || len(fragments) > 0 {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 		imports["path"] = "path"
 	}
@@ -173,6 +176,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	adapter := backendAdapterIR(direct)
 	decls := actionHandlerDecls(direct.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
 	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(direct.APIs), generatedUsesRateLimit(direct)))
+	decls = append(decls, fragmentFuncDecl(direct.Fragments, generatedUsesRateLimit(direct)))
 	switch {
 	case adapter.HasRegistrations():
 		decls = append(decls, newBackendRouterDecl(adapter))
@@ -195,6 +199,7 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	adapter := backendAdapterIR(options)
 	decls := actionHandlerDecls(options.Actions, csrfEnabled(options), generatedUsesRateLimit(options))
 	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(options.APIs), generatedUsesRateLimit(options)))
+	decls = append(decls, fragmentFuncDecl(options.Fragments, generatedUsesRateLimit(options)))
 	if adapter.HasRegistrations() {
 		decls = append(decls, newBackendRouterDecl(adapter))
 	} else {
@@ -440,7 +445,7 @@ func backendCallbackName(options Options) string {
 }
 
 func hasBackendRoutes(options Options) bool {
-	return len(options.Actions) > 0 || len(options.APIs) > 0
+	return len(options.Actions) > 0 || len(options.APIs) > 0 || len(options.Fragments) > 0
 }
 
 func backendImports(actions []ActionEndpoint, apis []APIEndpoint, ssr []SSRRoute) map[string]string {

@@ -21,6 +21,7 @@ type Result struct {
 type Options struct {
 	Actions      []ActionEndpoint
 	APIs         []APIEndpoint
+	Fragments    []FragmentEndpoint
 	SSR          []SSRRoute
 	AutoRoutes   bool
 	ProxyBackend bool
@@ -64,6 +65,19 @@ type APIEndpoint struct {
 	Guards       []string
 	Binding      manifest.BackendBinding
 	BackendAlias string
+}
+
+// FragmentEndpoint describes a generated server fragment handler.
+type FragmentEndpoint struct {
+	PageID       string
+	FragmentName string
+	Method       string
+	Route        string
+	Target       string
+	HTML         string
+	Package      string
+	Uses         map[string]string
+	Guards       []string
 }
 
 // ActionFragment describes a generated partial response fragment.

@@ -164,16 +164,18 @@ func buildBlocksFromIR(blocks gwdkir.Blocks) manifest.Blocks {
 		ViewBody:   blocks.ViewBody,
 		Actions:    buildActionsFromIR(blocks.Actions),
 		APIs:       buildAPIsFromIR(blocks.APIs),
+		Fragments:  buildFragmentEndpointsFromIR(blocks.Fragments),
 		Spans: manifest.BlockSpans{
-			Paths:   blocks.Spans.Paths,
-			Build:   blocks.Spans.Build,
-			Load:    blocks.Spans.Load,
-			Client:  blocks.Spans.Client,
-			View:    blocks.Spans.View,
-			Actions: append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
-			APIs:    append([]manifest.NamedSpan(nil), blocks.Spans.APIs...),
-			Exports: blocks.Spans.Exports,
-			Emits:   blocks.Spans.Emits,
+			Paths:     blocks.Spans.Paths,
+			Build:     blocks.Spans.Build,
+			Load:      blocks.Spans.Load,
+			Client:    blocks.Spans.Client,
+			View:      blocks.Spans.View,
+			Actions:   append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
+			APIs:      append([]manifest.NamedSpan(nil), blocks.Spans.APIs...),
+			Fragments: append([]manifest.NamedSpan(nil), blocks.Spans.Fragments...),
+			Exports:   blocks.Spans.Exports,
+			Emits:     blocks.Spans.Emits,
 		},
 	}
 }
@@ -221,6 +223,24 @@ func buildFragmentsFromIR(fragments []gwdkir.Fragment) []manifest.Fragment {
 	out := make([]manifest.Fragment, 0, len(fragments))
 	for _, fragment := range fragments {
 		out = append(out, manifest.Fragment{Target: fragment.Target, Body: fragment.Body, Span: fragment.Span})
+	}
+	return out
+}
+
+func buildFragmentEndpointsFromIR(fragments []gwdkir.FragmentEndpoint) []manifest.FragmentEndpoint {
+	out := make([]manifest.FragmentEndpoint, 0, len(fragments))
+	for _, fragment := range fragments {
+		out = append(out, manifest.FragmentEndpoint{
+			Name:        fragment.Name,
+			Method:      fragment.Method,
+			Route:       fragment.Route,
+			Target:      fragment.Target,
+			Body:        fragment.Body,
+			Span:        fragment.Span,
+			RouteSpan:   fragment.RouteSpan,
+			TargetSpan:  fragment.TargetSpan,
+			RouteParams: append([]manifest.NamedSpan(nil), fragment.RouteParams...),
+		})
 	}
 	return out
 }

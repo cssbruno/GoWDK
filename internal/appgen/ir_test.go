@@ -78,6 +78,50 @@ func TestAPIEndpointsFromIR(t *testing.T) {
 	}
 }
 
+func TestFragmentEndpointsFromIR(t *testing.T) {
+	endpoints, err := fragmentEndpointsFromIR(gwdkir.Program{
+		Version: gwdkir.Version,
+		Components: []gwdkir.Component{{
+			Name:    "PatientCard",
+			Package: "components",
+			Props:   []gwdkir.Prop{{Name: "name", Type: "string"}},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<article>{name}</article>`},
+		}},
+		Pages: []gwdkir.Page{{
+			ID:      "patients",
+			Route:   "/patients",
+			Package: "pages",
+			Uses:    []gwdkir.Use{{Alias: "ui", Package: "components"}},
+			Guards:  []string{"auth.required"},
+			Blocks: gwdkir.Blocks{
+				Fragments: []gwdkir.FragmentEndpoint{{
+					Name:   "List",
+					Method: "GET",
+					Route:  "/patients/list",
+					Target: "#patients",
+					Body:   `<section><ui.PatientCard name="Updated & safe" /></section>`,
+				}},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(endpoints) != 1 {
+		t.Fatalf("expected one fragment endpoint, got %#v", endpoints)
+	}
+	endpoint := endpoints[0]
+	if endpoint.FragmentName != "List" || endpoint.Route != "/patients/list" || endpoint.Target != "#patients" {
+		t.Fatalf("unexpected fragment endpoint: %#v", endpoint)
+	}
+	if endpoint.HTML != "<section><article>Updated &amp; safe</article></section>" {
+		t.Fatalf("unexpected rendered fragment HTML: %q", endpoint.HTML)
+	}
+	if len(endpoint.Guards) != 1 || endpoint.Guards[0] != "auth.required" {
+		t.Fatalf("expected inherited guards, got %#v", endpoint.Guards)
+	}
+}
+
 func TestStandaloneGoEndpointsFromIR(t *testing.T) {
 	ir := gwdkir.Program{
 		Version: gwdkir.Version,

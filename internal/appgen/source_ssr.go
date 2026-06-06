@@ -38,7 +38,7 @@ func ssrExactDecl(routes []SSRRoute, rateLimit bool) *ast.FuncDecl {
 			Body: ssrRouteBodyStmts(route, false, rateLimit),
 		})
 	}
-	return funcDecl("ssrExact", actionParams(), boolResults(), []ast.Stmt{
+	return funcDecl("ssrExact", actionParams(), namedBoolResults("handled"), []ast.Stmt{
 		&ast.SwitchStmt{
 			Tag:  selExpr(selExpr(id("request"), "URL"), "Path"),
 			Body: &ast.BlockStmt{List: clauses},
@@ -56,7 +56,7 @@ func ssrDynamicDecl(routes []SSRRoute, rateLimit bool) *ast.FuncDecl {
 		body = append(body, ssrDynamicIfStmt(route, rateLimit))
 	}
 	body = append(body, returnBool(false))
-	return funcDecl("ssrDynamic", actionParams(), boolResults(), body)
+	return funcDecl("ssrDynamic", actionParams(), namedBoolResults("handled"), body)
 }
 
 func ssrDynamicIfStmt(route SSRRoute, rateLimit bool) ast.Stmt {
@@ -71,6 +71,7 @@ func ssrDynamicIfStmt(route SSRRoute, rateLimit bool) ast.Stmt {
 
 func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool) []ast.Stmt {
 	body := ssrRouteContextStmts(route, includeParams)
+	body = append(body, ssrRoutePanicBoundaryStmt())
 	body = append(body, rateLimitStmts(rateLimit)...)
 	body = append(body, guardStmts(route.Guards)...)
 	body = append(body, define([]ast.Expr{id("html")}, stringLit(route.HTML)))
@@ -85,6 +86,20 @@ func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool) []ast
 	body = append(body, ssrLoadStmts(route)...)
 	body = append(body, ssrWriteHTMLStmts(id("html"), route.Cache)...)
 	return body
+}
+
+func ssrRoutePanicBoundaryStmt() ast.Stmt {
+	return &ast.DeferStmt{Call: call(&ast.FuncLit{
+		Type: &ast.FuncType{Params: &ast.FieldList{}},
+		Body: block(&ast.IfStmt{
+			Init: define([]ast.Expr{id("recovered")}, call(id("recover"))),
+			Cond: notNil("recovered"),
+			Body: block(
+				assign([]ast.Expr{id("handled")}, id("true")),
+				exprStmt(call(sel("gowdkruntime", "RecoverSSRRoutePanic"), id("response"), id("request"), id("recovered"))),
+			),
+		}),
+	})}
 }
 
 func ssrLoadStmts(route SSRRoute) []ast.Stmt {

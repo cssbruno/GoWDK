@@ -57,6 +57,10 @@ func (writer *boundaryResponseWriter) Unwrap() http.ResponseWriter {
 	return writer.ResponseWriter
 }
 
+func (writer *boundaryResponseWriter) Written() bool {
+	return writer.wrote
+}
+
 func normalizeBoundaryKind(kind string) string {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case "action":
@@ -78,6 +82,18 @@ func writeBoundaryError(writer http.ResponseWriter, request *http.Request, kind 
 		return
 	}
 	response.WriteNoStoreError(writer, http.StatusInternalServerError, message)
+}
+
+// RecoverSSRRoutePanic writes a no-store SSR route error page for a recovered
+// generated route panic when the response has not started yet.
+func RecoverSSRRoutePanic(writer http.ResponseWriter, request *http.Request, value any) {
+	if value == nil {
+		return
+	}
+	if written, ok := writer.(interface{ Written() bool }); ok && written.Written() {
+		return
+	}
+	WriteErrorPage(writer, request, http.StatusInternalServerError, "GOWDK SSR handler failed")
 }
 
 func boundaryKindLabel(kind string) string {

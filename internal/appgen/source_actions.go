@@ -777,6 +777,10 @@ func boolResults() []*ast.Field {
 	return []*ast.Field{{Type: id("bool")}}
 }
 
+func namedBoolResults(name string) []*ast.Field {
+	return []*ast.Field{{Names: []*ast.Ident{id(name)}, Type: id("bool")}}
+}
+
 func funcDecl(name string, params []*ast.Field, results []*ast.Field, stmts []ast.Stmt) *ast.FuncDecl {
 	return &ast.FuncDecl{
 		Name: id(name),

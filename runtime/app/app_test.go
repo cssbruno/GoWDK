@@ -257,6 +257,50 @@ func TestHandlerRecoversSSRExactPanicWithGenerated500Page(t *testing.T) {
 	}
 }
 
+func TestRecoverSSRRoutePanicUsesRouteErrorPage(t *testing.T) {
+	root := fstest.MapFS{
+		"500.html":                    {Data: []byte("<main>Server Error</main>")},
+		"errors/dashboard.html":       {Data: []byte("<main>Dashboard Error</main>")},
+		"errors/other-dashboard.html": {Data: []byte("<main>Other Dashboard Error</main>")},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	ctx := withErrorPages(request.Context(), LoadErrorPagesWith(root, ErrorPage{Path: "errors/dashboard.html"}))
+	ctx = WithRoute(ctx, RouteMetadata{Kind: "ssr", PageID: "dashboard", Path: "/dashboard", ErrorPage: "errors/dashboard.html"})
+	request = request.WithContext(ctx)
+
+	RecoverSSRRoutePanic(recorder, request, "secret panic detail")
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if recorder.Body.String() != "<main>Dashboard Error</main>" {
+		t.Fatalf("unexpected body: %q", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "secret panic detail") {
+		t.Fatalf("panic value leaked in response: %s", recorder.Body.String())
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store boundary response, got %q", cache)
+	}
+}
+
+func TestRecoverSSRRoutePanicDoesNotWriteAfterHeaders(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	writer := &boundaryResponseWriter{ResponseWriter: recorder}
+	writer.WriteHeader(http.StatusAccepted)
+
+	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	RecoverSSRRoutePanic(writer, request, "secret panic detail")
+
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if recorder.Body.Len() != 0 {
+		t.Fatalf("unexpected body after headers started: %q", recorder.Body.String())
+	}
+}
+
 func TestHandlerDelegatesAction(t *testing.T) {
 	called := false
 	handler := Handler{

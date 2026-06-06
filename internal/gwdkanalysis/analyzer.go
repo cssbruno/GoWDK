@@ -138,23 +138,27 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 	}
 	for _, endpoint := range ast.Actions {
 		page.Blocks.Actions = append(page.Blocks.Actions, manifest.Action{
-			Name:        endpoint.Name,
-			Method:      endpoint.Method,
-			Route:       endpoint.Route,
-			Span:        endpoint.Span,
-			RouteSpan:   endpoint.Span,
-			RouteParams: routeParamSpans(endpoint.Route, endpoint.Span),
+			Name:          endpoint.Name,
+			Method:        endpoint.Method,
+			Route:         endpoint.Route,
+			ErrorPage:     endpoint.ErrorPage,
+			Span:          endpoint.Span,
+			RouteSpan:     endpoint.Span,
+			RouteParams:   routeParamSpans(endpoint.Route, endpoint.Span),
+			ErrorPageSpan: endpoint.ErrorPageSpan,
 		})
 		page.Blocks.Spans.Actions = append(page.Blocks.Spans.Actions, manifest.NamedSpan{Name: endpoint.Name, Span: endpoint.Span})
 	}
 	for _, endpoint := range ast.APIs {
 		page.Blocks.APIs = append(page.Blocks.APIs, manifest.API{
-			Name:        endpoint.Name,
-			Method:      endpoint.Method,
-			Route:       endpoint.Route,
-			Span:        endpoint.Span,
-			RouteSpan:   endpoint.Span,
-			RouteParams: routeParamSpans(endpoint.Route, endpoint.Span),
+			Name:          endpoint.Name,
+			Method:        endpoint.Method,
+			Route:         endpoint.Route,
+			ErrorPage:     endpoint.ErrorPage,
+			Span:          endpoint.Span,
+			RouteSpan:     endpoint.Span,
+			RouteParams:   routeParamSpans(endpoint.Route, endpoint.Span),
+			ErrorPageSpan: endpoint.ErrorPageSpan,
 		})
 		page.Blocks.Spans.APIs = append(page.Blocks.Spans.APIs, manifest.NamedSpan{Name: endpoint.Name, Span: endpoint.Span})
 	}
@@ -390,6 +394,7 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 				Symbol:        action.Name,
 				Method:        method,
 				Path:          path,
+				ErrorPage:     action.ErrorPage,
 				DynamicParams: routeParams(path),
 				SourceFile:    page.Source,
 				Span:          action.Span,
@@ -412,6 +417,7 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 				Symbol:        api.Name,
 				Method:        method,
 				Path:          path,
+				ErrorPage:     api.ErrorPage,
 				DynamicParams: routeParams(path),
 				SourceFile:    page.Source,
 				Span:          api.Span,
@@ -886,12 +892,14 @@ func lowerIRActions(actions []manifest.Action) []gwdkir.Action {
 			ValidatesInput: action.ValidatesInput,
 			Redirect:       action.Redirect,
 			Fragments:      lowerIRFragments(action.Fragments),
+			ErrorPage:      action.ErrorPage,
 			Span:           action.Span,
 			RouteSpan:      action.RouteSpan,
 			RouteParams:    append([]manifest.NamedSpan(nil), action.RouteParams...),
 			InputSpan:      action.InputSpan,
 			ValidationSpan: action.ValidationSpan,
 			RedirectSpan:   action.RedirectSpan,
+			ErrorPageSpan:  action.ErrorPageSpan,
 		})
 	}
 	return out
@@ -901,12 +909,14 @@ func lowerIRAPIs(apis []manifest.API) []gwdkir.API {
 	out := make([]gwdkir.API, 0, len(apis))
 	for _, api := range apis {
 		out = append(out, gwdkir.API{
-			Name:        api.Name,
-			Method:      api.Method,
-			Route:       api.Route,
-			Span:        api.Span,
-			RouteSpan:   api.RouteSpan,
-			RouteParams: append([]manifest.NamedSpan(nil), api.RouteParams...),
+			Name:          api.Name,
+			Method:        api.Method,
+			Route:         api.Route,
+			ErrorPage:     api.ErrorPage,
+			Span:          api.Span,
+			RouteSpan:     api.RouteSpan,
+			RouteParams:   append([]manifest.NamedSpan(nil), api.RouteParams...),
+			ErrorPageSpan: api.ErrorPageSpan,
 		})
 	}
 	return out

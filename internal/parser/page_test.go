@@ -290,7 +290,7 @@ func TestParsePageReadsActionEndpointMetadata(t *testing.T) {
 @page newsletter
 @route "/newsletter"
 
-act Subscribe POST "/newsletter"
+act Subscribe POST "/newsletter" @error "/errors/subscribe.html"
 
 view {
   <main>Newsletter</main>
@@ -303,7 +303,7 @@ view {
 		t.Fatalf("expected one action, got %#v", page.Blocks.Actions)
 	}
 	action := page.Blocks.Actions[0]
-	if action.Name != "Subscribe" || action.Method != "POST" || action.Route != "/newsletter" {
+	if action.Name != "Subscribe" || action.Method != "POST" || action.Route != "/newsletter" || action.ErrorPage != "errors/subscribe.html" {
 		t.Fatalf("unexpected action endpoint metadata: %#v", action)
 	}
 	if action.Span.Start.Line != 5 || action.RouteSpan.Start.Line != 5 {
@@ -712,7 +712,7 @@ func TestParsePageReadsAPIEndpointMetadata(t *testing.T) {
 @page status
 @route "/status"
 
-api Health GET "/api/health"
+api Health GET "/api/health" @error "/errors/api-health.html"
 
 view {
   <main>Status</main>
@@ -725,11 +725,29 @@ view {
 		t.Fatalf("expected one API, got %#v", page.Blocks.APIs)
 	}
 	api := page.Blocks.APIs[0]
-	if api.Name != "Health" || api.Method != "GET" || api.Route != "/api/health" {
+	if api.Name != "Health" || api.Method != "GET" || api.Route != "/api/health" || api.ErrorPage != "errors/api-health.html" {
 		t.Fatalf("unexpected API metadata: %#v", api)
 	}
 	if api.Span.Start.Line != 5 || api.RouteSpan.Start.Line != 5 {
 		t.Fatalf("expected API spans, got api=%#v route=%#v", api.Span, api.RouteSpan)
+	}
+}
+
+func TestParsePageRejectsUnsafeEndpointErrorPage(t *testing.T) {
+	_, err := ParsePage([]byte(`
+@page newsletter
+@route "/newsletter"
+
+act Subscribe POST "/newsletter" @error "../secret.html"
+
+view {
+}
+`))
+	if err == nil {
+		t.Fatal("expected unsafe endpoint error page path error")
+	}
+	if !strings.Contains(err.Error(), `@error path must stay inside generated output`) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

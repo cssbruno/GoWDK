@@ -45,6 +45,7 @@ func ActionEndpoints(app manifest.Manifest) ([]ActionEndpoint, error) {
 				ValidatesInput:   action.ValidatesInput,
 				Redirect:         action.Redirect,
 				Fragments:        fragments,
+				ErrorPage:        action.ErrorPage,
 				Binding:          bindings[backendBindingKey("action", page.ID, action.Name, method, route)],
 			})
 		}
@@ -71,13 +72,17 @@ func APIEndpoints(app manifest.Manifest) ([]APIEndpoint, error) {
 				route = page.Route
 			}
 			endpoints = append(endpoints, APIEndpoint{
-				PageID:  page.ID,
-				APIName: api.Name,
-				Method:  method,
-				Route:   route,
-				Binding: bindings[backendBindingKey("api", page.ID, api.Name, method, route)],
+				PageID:    page.ID,
+				APIName:   api.Name,
+				Method:    method,
+				Route:     route,
+				ErrorPage: api.ErrorPage,
+				Binding:   bindings[backendBindingKey("api", page.ID, api.Name, method, route)],
 			})
 		}
+	}
+	if err := validateAPIEndpoints(endpoints); err != nil {
+		return nil, err
 	}
 	return endpoints, nil
 }

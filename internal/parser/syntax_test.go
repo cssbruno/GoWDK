@@ -25,9 +25,9 @@ build {
   => { title: "Newsletter" }
 }
 
-act Subscribe POST "/newsletter/{slug}"
+act Subscribe POST "/newsletter/{slug}" @error "/errors/subscribe.html"
 
-api Health GET "/api/health"
+api Health GET "/api/health" @error "/errors/health.html"
 
 fragment List GET "/newsletter/list" "#items" {
   <ul><li>{title}</li></ul>
@@ -63,10 +63,10 @@ view {
 	if build.Kind != "build" || len(build.Records) != 1 || build.Records[0].Fields["title"] != "Newsletter" {
 		t.Fatalf("unexpected build AST: %#v", build)
 	}
-	if len(file.Actions) != 1 || file.Actions[0].Name != "Subscribe" || file.Actions[0].Method != "POST" || file.Actions[0].Route != "/newsletter/{slug}" {
+	if len(file.Actions) != 1 || file.Actions[0].Name != "Subscribe" || file.Actions[0].Method != "POST" || file.Actions[0].Route != "/newsletter/{slug}" || file.Actions[0].ErrorPage != "errors/subscribe.html" {
 		t.Fatalf("unexpected action endpoints: %#v", file.Actions)
 	}
-	if len(file.APIs) != 1 || file.APIs[0].Name != "Health" || file.APIs[0].Method != "GET" || file.APIs[0].Route != "/api/health" {
+	if len(file.APIs) != 1 || file.APIs[0].Name != "Health" || file.APIs[0].Method != "GET" || file.APIs[0].Route != "/api/health" || file.APIs[0].ErrorPage != "errors/health.html" {
 		t.Fatalf("unexpected api endpoints: %#v", file.APIs)
 	}
 	if len(file.Fragments) != 1 || file.Fragments[0].Name != "List" || file.Fragments[0].Route != "/newsletter/list" || file.Fragments[0].Target != "#items" {

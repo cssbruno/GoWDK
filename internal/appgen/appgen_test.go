@@ -741,6 +741,58 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesEndpointErrorPages(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "errors", "subscribe.html"), "<main>Subscribe Error</main>")
+	writeTestFile(t, filepath.Join(outputDir, "errors", "health.html"), "<main>Health Error</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Actions: []ActionEndpoint{{
+			PageID:     "newsletter",
+			ActionName: "Subscribe",
+			Route:      "/newsletter",
+			ErrorPage:  "/errors/subscribe.html",
+		}},
+		APIs: []APIEndpoint{{
+			PageID:    "status",
+			APIName:   "Health",
+			Method:    http.MethodGet,
+			Route:     "/api/health",
+			ErrorPage: "/errors/health.html",
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "example.com/app/status",
+				PackageName:  "status",
+				FunctionName: "Health",
+				Signature:    manifest.BackendSignatureAPI,
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`ErrorPages: gowdkruntime.LoadErrorPagesWith(root, gowdkruntime.ErrorPage{Path: "errors/health.html"}, gowdkruntime.ErrorPage{Path: "errors/subscribe.html"})`,
+		`func action(response http.ResponseWriter, request *http.Request) (handled bool)`,
+		`func api(response http.ResponseWriter, request *http.Request) (handled bool)`,
+		`gowdkruntime.EndpointMetadata{Kind: "action", PageID: "newsletter", Name: "Subscribe", Method: "POST", Path: "/newsletter", ErrorPage: "errors/subscribe.html"}`,
+		`gowdkruntime.EndpointMetadata{Kind: "api", PageID: "status", Name: "Health", Method: "GET", Path: "/api/health", ErrorPage: "errors/health.html"}`,
+		`gowdkruntime.RecoverEndpointPanic(response, request, recovered)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -2020,6 +2072,82 @@ func LoadDashboard(ctx ssr.LoadContext) map[string]any {
 		t.Fatalf("expected 500 status, got %d with body %s", response.StatusCode, body)
 	}
 	if strings.TrimSpace(body) != "<main>Dashboard Error</main>" {
+		t.Fatalf("unexpected custom error body: %s", body)
+	}
+	if strings.Contains(body, "secret database detail") {
+		t.Fatalf("custom error page leaked panic detail: %s", body)
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinaryUsesCustomAPIErrorPage(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "errors", "health.html"), "<main>Health Error</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{APIs: []APIEndpoint{{
+		PageID:    "status",
+		APIName:   "Health",
+		Method:    http.MethodGet,
+		Route:     "/api/health",
+		ErrorPage: "errors/health.html",
+		Binding: manifest.BackendBinding{
+			Status:       manifest.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/status",
+			PackageName:  "status",
+			FunctionName: "Health",
+			Signature:    manifest.BackendSignatureAPI,
+		},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "status", "status.go"), `package status
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+func Health(ctx context.Context, request *http.Request) (response.Response, error) {
+	panic("secret database detail")
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/api/health", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(payload)
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 status, got %d with body %s", response.StatusCode, body)
+	}
+	if strings.TrimSpace(body) != "<main>Health Error</main>" {
 		t.Fatalf("unexpected custom error body: %s", body)
 	}
 	if strings.Contains(body, "secret database detail") {

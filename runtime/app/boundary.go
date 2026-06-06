@@ -96,6 +96,18 @@ func RecoverSSRRoutePanic(writer http.ResponseWriter, request *http.Request, val
 	WriteErrorPage(writer, request, http.StatusInternalServerError, "GOWDK SSR handler failed")
 }
 
+// RecoverEndpointPanic writes a no-store endpoint error page for a recovered
+// generated action or API panic when the response has not started yet.
+func RecoverEndpointPanic(writer http.ResponseWriter, request *http.Request, value any) {
+	if value == nil {
+		return
+	}
+	if written, ok := writer.(interface{ Written() bool }); ok && written.Written() {
+		return
+	}
+	WriteErrorPage(writer, request, http.StatusInternalServerError, "GOWDK endpoint handler failed")
+}
+
 func boundaryKindLabel(kind string) string {
 	switch kind {
 	case "api":

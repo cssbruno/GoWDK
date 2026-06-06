@@ -193,12 +193,18 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 			if match[2] != "POST" {
 				return SyntaxFile{}, fmt.Errorf("line %d: action %s uses unsupported method %s; actions currently require POST", lineNumber, match[1], match[2])
 			}
+			errorPage, err := endpointErrorPage(match, lineNumber)
+			if err != nil {
+				return SyntaxFile{}, err
+			}
 			file.Actions = append(file.Actions, SyntaxEndpoint{
-				Kind:   "act",
-				Name:   match[1],
-				Method: match[2],
-				Route:  match[3],
-				Span:   sourceLineSpan(lineNumber, rawLine),
+				Kind:          "act",
+				Name:          match[1],
+				Method:        match[2],
+				Route:         match[3],
+				ErrorPage:     errorPage,
+				Span:          sourceLineSpan(lineNumber, rawLine),
+				ErrorPageSpan: endpointErrorPageSpan(match, sourceLineSpan(lineNumber, rawLine)),
 			})
 			continue
 		}
@@ -209,12 +215,18 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 			if !isExportedIdentifier(match[1]) {
 				return SyntaxFile{}, fmt.Errorf("line %d: API handler %q must be an exported Go identifier", lineNumber, match[1])
 			}
+			errorPage, err := endpointErrorPage(match, lineNumber)
+			if err != nil {
+				return SyntaxFile{}, err
+			}
 			file.APIs = append(file.APIs, SyntaxEndpoint{
-				Kind:   "api",
-				Name:   match[1],
-				Method: match[2],
-				Route:  match[3],
-				Span:   sourceLineSpan(lineNumber, rawLine),
+				Kind:          "api",
+				Name:          match[1],
+				Method:        match[2],
+				Route:         match[3],
+				ErrorPage:     errorPage,
+				Span:          sourceLineSpan(lineNumber, rawLine),
+				ErrorPageSpan: endpointErrorPageSpan(match, sourceLineSpan(lineNumber, rawLine)),
 			})
 			continue
 		}

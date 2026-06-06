@@ -336,7 +336,7 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 }
 
 func errorPagesExpr(options Options) ast.Expr {
-	paths := customErrorPagePaths(options.SSR)
+	paths := customErrorPagePaths(options)
 	if len(paths) == 0 {
 		return call(sel("gowdkruntime", "LoadErrorPages"), id("root"))
 	}
@@ -352,9 +352,19 @@ func errorPagesExpr(options Options) ast.Expr {
 	return call(sel("gowdkruntime", "LoadErrorPagesWith"), args...)
 }
 
-func customErrorPagePaths(routes []SSRRoute) []string {
+func customErrorPagePaths(options Options) []string {
 	seen := map[string]bool{}
-	for _, route := range routes {
+	for _, action := range options.Actions {
+		if action.ErrorPage != "" {
+			seen[action.ErrorPage] = true
+		}
+	}
+	for _, api := range options.APIs {
+		if api.ErrorPage != "" {
+			seen[api.ErrorPage] = true
+		}
+	}
+	for _, route := range options.SSR {
 		if route.ErrorPage != "" {
 			seen[route.ErrorPage] = true
 		}

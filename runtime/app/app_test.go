@@ -773,17 +773,45 @@ func TestContextHelpersCopyParams(t *testing.T) {
 		t.Fatalf("expected typed params copy, got %#v", got)
 	}
 	ctx = WithEndpoint(ctx, EndpointMetadata{
-		Kind:   "action",
-		PageID: "login",
-		Name:   "Login",
-		Method: http.MethodPost,
-		Path:   "/login",
+		Kind:      "action",
+		PageID:    "login",
+		Name:      "Login",
+		Method:    http.MethodPost,
+		Path:      "/login",
+		ErrorPage: "errors/login.html",
 	})
 	endpoint, ok := Endpoint(ctx)
 	if !ok {
 		t.Fatal("expected endpoint metadata")
 	}
-	if endpoint.Kind != "action" || endpoint.PageID != "login" || endpoint.Name != "Login" || endpoint.Method != http.MethodPost || endpoint.Path != "/login" {
+	if endpoint.Kind != "action" || endpoint.PageID != "login" || endpoint.Name != "Login" || endpoint.Method != http.MethodPost || endpoint.Path != "/login" || endpoint.ErrorPage != "errors/login.html" {
 		t.Fatalf("unexpected endpoint metadata: %#v", endpoint)
+	}
+}
+
+func TestRecoverEndpointPanicUsesEndpointErrorPage(t *testing.T) {
+	root := fstest.MapFS{
+		"500.html":            {Data: []byte("<main>Server Error</main>")},
+		"errors/session.html": {Data: []byte("<main>Session Error</main>")},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/session", nil)
+	ctx := withErrorPages(request.Context(), LoadErrorPagesWith(root, ErrorPage{Path: "errors/session.html"}))
+	ctx = WithEndpoint(ctx, EndpointMetadata{Kind: "api", PageID: "status", Name: "Session", Method: "GET", Path: "/api/session", ErrorPage: "errors/session.html"})
+	request = request.WithContext(ctx)
+
+	RecoverEndpointPanic(recorder, request, "secret panic detail")
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if recorder.Body.String() != "<main>Session Error</main>" {
+		t.Fatalf("unexpected body: %q", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "secret panic detail") {
+		t.Fatalf("panic value leaked in response: %s", recorder.Body.String())
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store boundary response, got %q", cache)
 	}
 }

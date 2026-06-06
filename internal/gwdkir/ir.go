@@ -160,12 +160,14 @@ type Action struct {
 	ValidatesInput bool
 	Redirect       string
 	Fragments      []Fragment
+	ErrorPage      string
 	Span           manifest.SourceSpan
 	RouteSpan      manifest.SourceSpan
 	RouteParams    []manifest.NamedSpan
 	InputSpan      manifest.SourceSpan
 	ValidationSpan manifest.SourceSpan
 	RedirectSpan   manifest.SourceSpan
+	ErrorPageSpan  manifest.SourceSpan
 }
 
 type Fragment struct {
@@ -187,12 +189,14 @@ type FragmentEndpoint struct {
 }
 
 type API struct {
-	Name        string
-	Method      string
-	Route       string
-	Span        manifest.SourceSpan
-	RouteSpan   manifest.SourceSpan
-	RouteParams []manifest.NamedSpan
+	Name          string
+	Method        string
+	Route         string
+	ErrorPage     string
+	Span          manifest.SourceSpan
+	RouteSpan     manifest.SourceSpan
+	RouteParams   []manifest.NamedSpan
+	ErrorPageSpan manifest.SourceSpan
 }
 
 // Component is the normalized IR for one component source.
@@ -310,6 +314,7 @@ type Endpoint struct {
 	Symbol        string
 	Method        string
 	Path          string
+	ErrorPage     string
 	DynamicParams []string
 	SourceFile    string
 	Span          manifest.SourceSpan

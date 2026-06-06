@@ -41,11 +41,12 @@ type RouteParamMetadata struct {
 
 // EndpointMetadata describes one generated backend endpoint declaration.
 type EndpointMetadata struct {
-	Kind   string
-	PageID string
-	Name   string
-	Method string
-	Path   string
+	Kind      string
+	PageID    string
+	Name      string
+	Method    string
+	Path      string
+	ErrorPage string
 }
 
 // WithRequest stores the current HTTP request in a context for generated

@@ -50,6 +50,9 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (Result, err
 	if err := validateActionEndpoints(options.Actions); err != nil {
 		return Result{}, err
 	}
+	if err := validateAPIEndpoints(options.APIs); err != nil {
+		return Result{}, err
+	}
 	if err := validateFragmentEndpoints(options.Fragments); err != nil {
 		return Result{}, err
 	}
@@ -118,6 +121,9 @@ func GenerateBackendWithOptions(appDir string, options Options) (Result, error) 
 		return Result{}, err
 	}
 	if err := validateActionEndpoints(options.Actions); err != nil {
+		return Result{}, err
+	}
+	if err := validateAPIEndpoints(options.APIs); err != nil {
 		return Result{}, err
 	}
 	if err := validateFragmentEndpoints(options.Fragments); err != nil {

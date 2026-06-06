@@ -15,6 +15,10 @@ func apiFuncDecl(apis []APIEndpoint, rateLimit bool) *ast.FuncDecl {
 	if len(apis) == 0 {
 		return funcDecl("api", actionParams(), boolResults(), []ast.Stmt{returnBool(false)})
 	}
+	results := boolResults()
+	if apisUseErrorPages(apis) {
+		results = namedBoolResults("handled")
+	}
 	var clauses []ast.Stmt
 	for _, api := range apis {
 		clauses = append(clauses, &ast.CaseClause{
@@ -23,7 +27,7 @@ func apiFuncDecl(apis []APIEndpoint, rateLimit bool) *ast.FuncDecl {
 		})
 	}
 	clauses = append(clauses, &ast.CaseClause{Body: []ast.Stmt{returnBool(false)}})
-	return funcDecl("api", actionParams(), boolResults(), []ast.Stmt{
+	return funcDecl("api", actionParams(), results, []ast.Stmt{
 		define([]ast.Expr{id("requestPath")}, call(sel("path", "Clean"), &ast.BinaryExpr{
 			X:  stringLit("/"),
 			Op: token.ADD,
@@ -52,7 +56,10 @@ func apiCaseExpr(api APIEndpoint) ast.Expr {
 }
 
 func apiCaseStmts(api APIEndpoint, rateLimit bool) []ast.Stmt {
-	stmts := endpointContextStmts("api", api.PageID, api.APIName, api.Method, api.Route)
+	stmts := endpointContextStmts("api", api.PageID, api.APIName, api.Method, api.Route, api.ErrorPage)
+	if api.ErrorPage != "" {
+		stmts = append(stmts, endpointPanicBoundaryStmt())
+	}
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(api.Guards)...)
 	if api.Binding.Status != manifest.BackendBindingBound {
@@ -73,4 +80,13 @@ func apiCaseStmts(api APIEndpoint, rateLimit bool) []ast.Stmt {
 		returnBool(true),
 	)
 	return stmts
+}
+
+func apisUseErrorPages(apis []APIEndpoint) bool {
+	for _, api := range apis {
+		if api.ErrorPage != "" {
+			return true
+		}
+	}
+	return false
 }

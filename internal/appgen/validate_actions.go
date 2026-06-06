@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func validateActionEndpoints(endpoints []ActionEndpoint) error {
 	seen := map[string]ActionEndpoint{}
-	for _, endpoint := range endpoints {
+	for index, endpoint := range endpoints {
 		if strings.TrimSpace(endpoint.ActionName) == "" {
 			return fmt.Errorf("generated action endpoint for page %q is missing action name", endpoint.PageID)
 		}
@@ -19,6 +21,14 @@ func validateActionEndpoints(endpoints []ActionEndpoint) error {
 			if err := validateActionRedirect(endpoint.Redirect); err != nil {
 				return fmt.Errorf("generated action %s.%s: %w", endpoint.PageID, endpoint.ActionName, err)
 			}
+		}
+		if endpoint.ErrorPage != "" {
+			errorPage, err := manifest.ErrorPagePath(endpoint.ErrorPage)
+			if err != nil {
+				return fmt.Errorf("generated action %s.%s: %w", endpoint.PageID, endpoint.ActionName, err)
+			}
+			endpoint.ErrorPage = errorPage
+			endpoints[index].ErrorPage = errorPage
 		}
 		if err := validateInputFields(endpoint); err != nil {
 			return err
@@ -38,6 +48,23 @@ func validateActionEndpoints(endpoints []ActionEndpoint) error {
 			return fmt.Errorf("generated action %s.%s endpoint path %q duplicates action %s.%s", endpoint.PageID, endpoint.ActionName, endpoint.Route, previous.PageID, previous.ActionName)
 		}
 		seen[endpoint.Route] = endpoint
+	}
+	return nil
+}
+
+func validateAPIEndpoints(endpoints []APIEndpoint) error {
+	for index, endpoint := range endpoints {
+		if strings.TrimSpace(endpoint.APIName) == "" {
+			return fmt.Errorf("generated API endpoint for page %q is missing API name", endpoint.PageID)
+		}
+		if endpoint.ErrorPage != "" {
+			errorPage, err := manifest.ErrorPagePath(endpoint.ErrorPage)
+			if err != nil {
+				return fmt.Errorf("generated API %s.%s: %w", endpoint.PageID, endpoint.APIName, err)
+			}
+			endpoint.ErrorPage = errorPage
+			endpoints[index].ErrorPage = errorPage
+		}
 	}
 	return nil
 }

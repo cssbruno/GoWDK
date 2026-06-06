@@ -195,12 +195,14 @@ func buildActionsFromIR(actions []gwdkir.Action) []manifest.Action {
 			ValidatesInput: action.ValidatesInput,
 			Redirect:       action.Redirect,
 			Fragments:      buildFragmentsFromIR(action.Fragments),
+			ErrorPage:      action.ErrorPage,
 			Span:           action.Span,
 			RouteSpan:      action.RouteSpan,
 			RouteParams:    append([]manifest.NamedSpan(nil), action.RouteParams...),
 			InputSpan:      action.InputSpan,
 			ValidationSpan: action.ValidationSpan,
 			RedirectSpan:   action.RedirectSpan,
+			ErrorPageSpan:  action.ErrorPageSpan,
 		})
 	}
 	return out
@@ -210,12 +212,14 @@ func buildAPIsFromIR(apis []gwdkir.API) []manifest.API {
 	out := make([]manifest.API, 0, len(apis))
 	for _, api := range apis {
 		out = append(out, manifest.API{
-			Name:        api.Name,
-			Method:      api.Method,
-			Route:       api.Route,
-			Span:        api.Span,
-			RouteSpan:   api.RouteSpan,
-			RouteParams: append([]manifest.NamedSpan(nil), api.RouteParams...),
+			Name:          api.Name,
+			Method:        api.Method,
+			Route:         api.Route,
+			ErrorPage:     api.ErrorPage,
+			Span:          api.Span,
+			RouteSpan:     api.RouteSpan,
+			RouteParams:   append([]manifest.NamedSpan(nil), api.RouteParams...),
+			ErrorPageSpan: api.ErrorPageSpan,
 		})
 	}
 	return out

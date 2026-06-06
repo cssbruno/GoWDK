@@ -299,12 +299,14 @@ type Action struct {
 	ValidatesInput bool
 	Redirect       string
 	Fragments      []Fragment
+	ErrorPage      string
 	Span           SourceSpan
 	RouteSpan      SourceSpan
 	RouteParams    []NamedSpan
 	InputSpan      SourceSpan
 	ValidationSpan SourceSpan
 	RedirectSpan   SourceSpan
+	ErrorPageSpan  SourceSpan
 }
 
 // Fragment describes a server fragment declared inside an action.
@@ -329,12 +331,14 @@ type FragmentEndpoint struct {
 
 // API describes an API endpoint declaration.
 type API struct {
-	Name        string
-	Method      string
-	Route       string
-	Span        SourceSpan
-	RouteSpan   SourceSpan
-	RouteParams []NamedSpan
+	Name          string
+	Method        string
+	Route         string
+	ErrorPage     string
+	Span          SourceSpan
+	RouteSpan     SourceSpan
+	RouteParams   []NamedSpan
+	ErrorPageSpan SourceSpan
 }
 
 // EndpointSource identifies where an endpoint declaration came from.
@@ -349,16 +353,18 @@ const (
 // Page-owned declarations stay on Page.Blocks so page forms/fragments can still
 // attach page-local behavior.
 type EndpointDeclaration struct {
-	Kind        string
-	SourceKind  EndpointSource
-	Package     string
-	Source      string
-	Name        string
-	Method      string
-	Route       string
-	Span        SourceSpan
-	RouteSpan   SourceSpan
-	RouteParams []NamedSpan
+	Kind          string
+	SourceKind    EndpointSource
+	Package       string
+	Source        string
+	Name          string
+	Method        string
+	Route         string
+	ErrorPage     string
+	Span          SourceSpan
+	RouteSpan     SourceSpan
+	RouteParams   []NamedSpan
+	ErrorPageSpan SourceSpan
 }
 
 // BackendBindingStatus describes whether a .gwdk backend block has a matching

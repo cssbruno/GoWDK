@@ -21,8 +21,8 @@ var (
 	importPattern           = regexp.MustCompile(`^import(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s+"([^"]+)"$`)
 	usePattern              = regexp.MustCompile(`^use\s+([A-Za-z_][A-Za-z0-9_]*)\s+"([A-Za-z_][A-Za-z0-9_]*)"$`)
 	buildCallPattern        = regexp.MustCompile(`^=>\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\)$`)
-	actionEndpointPattern   = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Z]+)\s+"([^"]*)"$`)
-	apiEndpointPattern      = regexp.MustCompile(`^api\s+([A-Za-z_][A-Za-z0-9_]*)\s+(GET|POST|PUT|PATCH|DELETE)\s+"([^"]*)"$`)
+	actionEndpointPattern   = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Z]+)\s+"([^"]*)"(?:\s+@error\s+"([^"]*)")?$`)
+	apiEndpointPattern      = regexp.MustCompile(`^api\s+([A-Za-z_][A-Za-z0-9_]*)\s+(GET|POST|PUT|PATCH|DELETE)\s+"([^"]*)"(?:\s+@error\s+"([^"]*)")?$`)
 	fragmentEndpointPattern = regexp.MustCompile(`^fragment\s+([A-Za-z_][A-Za-z0-9_]*)\s+(GET|POST|PUT|PATCH|DELETE)\s+"([^"]*)"\s+"([^"]*)"\s*\{$`)
 	actionPattern           = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{`)
 	apiPattern              = regexp.MustCompile(`^api(?:\s+([A-Za-z_][A-Za-z0-9_.-]*))?\s*\{`)
@@ -200,13 +200,19 @@ func ParsePage(source []byte) (manifest.Page, error) {
 			if method != "POST" {
 				return manifest.Page{}, fmt.Errorf("line %d: action %s uses unsupported method %s; actions currently require POST", lineNumber, name, method)
 			}
+			errorPage, err := endpointErrorPage(match, lineNumber)
+			if err != nil {
+				return manifest.Page{}, err
+			}
 			page.Blocks.Actions = append(page.Blocks.Actions, manifest.Action{
-				Name:        name,
-				Method:      method,
-				Route:       route,
-				Span:        span,
-				RouteSpan:   span,
-				RouteParams: routeParamSpans(route, lineNumber, rawLine),
+				Name:          name,
+				Method:        method,
+				Route:         route,
+				ErrorPage:     errorPage,
+				Span:          span,
+				RouteSpan:     span,
+				RouteParams:   routeParamSpans(route, lineNumber, rawLine),
+				ErrorPageSpan: endpointErrorPageSpan(match, span),
 			})
 			page.Blocks.Spans.Actions = append(page.Blocks.Spans.Actions, manifest.NamedSpan{Name: name, Span: span})
 			continue
@@ -223,13 +229,19 @@ func ParsePage(source []byte) (manifest.Page, error) {
 			if !isExportedIdentifier(name) {
 				return manifest.Page{}, fmt.Errorf("line %d: API handler %q must be an exported Go identifier", lineNumber, name)
 			}
+			errorPage, err := endpointErrorPage(match, lineNumber)
+			if err != nil {
+				return manifest.Page{}, err
+			}
 			page.Blocks.APIs = append(page.Blocks.APIs, manifest.API{
-				Name:        name,
-				Method:      method,
-				Route:       route,
-				Span:        span,
-				RouteSpan:   span,
-				RouteParams: routeParamSpans(route, lineNumber, rawLine),
+				Name:          name,
+				Method:        method,
+				Route:         route,
+				ErrorPage:     errorPage,
+				Span:          span,
+				RouteSpan:     span,
+				RouteParams:   routeParamSpans(route, lineNumber, rawLine),
+				ErrorPageSpan: endpointErrorPageSpan(match, span),
 			})
 			page.Blocks.Spans.APIs = append(page.Blocks.Spans.APIs, manifest.NamedSpan{Name: name, Span: span})
 			continue
@@ -902,6 +914,24 @@ func annotationText(name, value string) (string, error) {
 		return "", fmt.Errorf("@%s requires a non-empty value", name)
 	}
 	return text, nil
+}
+
+func endpointErrorPage(match []string, lineNumber int) (string, error) {
+	if len(match) < 5 || strings.TrimSpace(match[4]) == "" {
+		return "", nil
+	}
+	errorPage, err := manifest.ErrorPagePath(match[4])
+	if err != nil {
+		return "", fmt.Errorf("line %d: %w", lineNumber, err)
+	}
+	return errorPage, nil
+}
+
+func endpointErrorPageSpan(match []string, fallback manifest.SourceSpan) manifest.SourceSpan {
+	if len(match) < 5 || strings.TrimSpace(match[4]) == "" {
+		return manifest.SourceSpan{}
+	}
+	return fallback
 }
 
 func cachePolicyValue(value string) (string, error) {

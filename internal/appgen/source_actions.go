@@ -119,6 +119,10 @@ func actionFuncDecl(actions []ActionEndpoint, csrf bool, rateLimit bool) *ast.Fu
 	if len(actions) == 0 {
 		return funcDecl("action", actionParams(), boolResults(), []ast.Stmt{returnBool(false)})
 	}
+	results := boolResults()
+	if actionsUseErrorPages(actions) {
+		results = namedBoolResults("handled")
+	}
 	var clauses []ast.Stmt
 	for _, action := range actions {
 		clauses = append(clauses, &ast.CaseClause{
@@ -127,7 +131,7 @@ func actionFuncDecl(actions []ActionEndpoint, csrf bool, rateLimit bool) *ast.Fu
 		})
 	}
 	clauses = append(clauses, &ast.CaseClause{Body: []ast.Stmt{returnBool(false)}})
-	return funcDecl("action", actionParams(), boolResults(), []ast.Stmt{
+	return funcDecl("action", actionParams(), results, []ast.Stmt{
 		define([]ast.Expr{id("requestPath")}, call(sel("actionRequestPath"), selExpr(selExpr(id("request"), "URL"), "Path"))),
 		&ast.SwitchStmt{
 			Tag:  id("requestPath"),
@@ -147,7 +151,10 @@ func actionRequestPathDecl() *ast.FuncDecl {
 }
 
 func actionCaseStmts(action ActionEndpoint, csrf bool, rateLimit bool) []ast.Stmt {
-	stmts := endpointContextStmts("action", action.PageID, action.ActionName, actionMethod(action), action.Route)
+	stmts := endpointContextStmts("action", action.PageID, action.ActionName, actionMethod(action), action.Route, action.ErrorPage)
+	if action.ErrorPage != "" {
+		stmts = append(stmts, endpointPanicBoundaryStmt())
+	}
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(action.Guards)...)
 	if action.Binding.Status != "" && action.Binding.Status != manifest.BackendBindingBound {
@@ -400,35 +407,62 @@ func actionMethod(action ActionEndpoint) string {
 	return method
 }
 
-func endpointContextStmt(kind, pageID, name, method, route string) ast.Stmt {
+func endpointContextStmt(kind, pageID, name, method, route, errorPage string) ast.Stmt {
 	return define(
 		[]ast.Expr{id("ctx")},
 		call(
 			sel("gowdkruntime", "WithEndpoint"),
 			call(sel("gowdkruntime", "WithRequest"), call(selExpr(id("request"), "Context")), id("request")),
-			endpointMetadataExpr(kind, pageID, name, method, route),
+			endpointMetadataExpr(kind, pageID, name, method, route, errorPage),
 		),
 	)
 }
 
-func endpointContextStmts(kind, pageID, name, method, route string) []ast.Stmt {
+func endpointContextStmts(kind, pageID, name, method, route, errorPage string) []ast.Stmt {
 	return []ast.Stmt{
-		endpointContextStmt(kind, pageID, name, method, route),
+		endpointContextStmt(kind, pageID, name, method, route, errorPage),
 		assign([]ast.Expr{id("request")}, call(selExpr(id("request"), "WithContext"), id("ctx"))),
 	}
 }
 
-func endpointMetadataExpr(kind, pageID, name, method, route string) ast.Expr {
+func endpointMetadataExpr(kind, pageID, name, method, route, errorPage string) ast.Expr {
+	elts := []ast.Expr{
+		keyValue("Kind", stringLit(kind)),
+		keyValue("PageID", stringLit(pageID)),
+		keyValue("Name", stringLit(name)),
+		keyValue("Method", stringLit(method)),
+		keyValue("Path", stringLit(route)),
+	}
+	if errorPage != "" {
+		elts = append(elts, keyValue("ErrorPage", stringLit(errorPage)))
+	}
 	return &ast.CompositeLit{
 		Type: sel("gowdkruntime", "EndpointMetadata"),
-		Elts: []ast.Expr{
-			keyValue("Kind", stringLit(kind)),
-			keyValue("PageID", stringLit(pageID)),
-			keyValue("Name", stringLit(name)),
-			keyValue("Method", stringLit(method)),
-			keyValue("Path", stringLit(route)),
-		},
+		Elts: elts,
 	}
+}
+
+func actionsUseErrorPages(actions []ActionEndpoint) bool {
+	for _, action := range actions {
+		if action.ErrorPage != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func endpointPanicBoundaryStmt() ast.Stmt {
+	return &ast.DeferStmt{Call: call(&ast.FuncLit{
+		Type: &ast.FuncType{Params: &ast.FieldList{}},
+		Body: block(&ast.IfStmt{
+			Init: define([]ast.Expr{id("recovered")}, call(id("recover"))),
+			Cond: notNil("recovered"),
+			Body: block(
+				assign([]ast.Expr{id("handled")}, id("true")),
+				exprStmt(call(sel("gowdkruntime", "RecoverEndpointPanic"), id("response"), id("request"), id("recovered"))),
+			),
+		}),
+	})}
 }
 
 func actionPartialBranchStmts(action ActionEndpoint) []ast.Stmt {

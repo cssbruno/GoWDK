@@ -47,7 +47,7 @@ func fragmentCaseExpr(fragment FragmentEndpoint) ast.Expr {
 }
 
 func fragmentCaseStmts(fragment FragmentEndpoint, rateLimit bool) []ast.Stmt {
-	stmts := endpointContextStmts("fragment", fragment.PageID, fragment.FragmentName, fragment.Method, fragment.Route)
+	stmts := endpointContextStmts("fragment", fragment.PageID, fragment.FragmentName, fragment.Method, fragment.Route, "")
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(fragment.Guards)...)
 	if fragment.Binding.Status == manifest.BackendBindingUnsupportedSignature {

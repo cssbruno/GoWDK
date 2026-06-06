@@ -28,8 +28,8 @@ build {
   => { title: "Home" }
 }
 
-act Login POST "/login"
-api Session GET "/api/session"
+act Login POST "/login" @error "/errors/login.html"
+api Session GET "/api/session" @error "/errors/session.html"
 
 fragment Feed GET "/fragments/home-feed" "#feed" {
   <section>Feed</section>
@@ -112,8 +112,14 @@ view {
 	if len(page.Blocks.Actions) != 1 || page.Blocks.Actions[0].Name != "Login" {
 		t.Fatalf("unexpected actions: %#v", page.Blocks.Actions)
 	}
+	if page.Blocks.Actions[0].ErrorPage != "errors/login.html" {
+		t.Fatalf("unexpected action error page: %#v", page.Blocks.Actions[0])
+	}
 	if len(page.Blocks.APIs) != 1 || page.Blocks.APIs[0].Name != "Session" {
 		t.Fatalf("unexpected APIs: %#v", page.Blocks.APIs)
+	}
+	if page.Blocks.APIs[0].ErrorPage != "errors/session.html" {
+		t.Fatalf("unexpected API error page: %#v", page.Blocks.APIs[0])
 	}
 	if len(page.Blocks.Fragments) != 1 || page.Blocks.Fragments[0].Name != "Feed" || page.Blocks.Fragments[0].Target != "#feed" {
 		t.Fatalf("unexpected fragments: %#v", page.Blocks.Fragments)
@@ -139,6 +145,9 @@ view {
 	}
 	if result.IR.Endpoints[0].Path != "/api/session" || result.IR.Endpoints[1].Path != "/fragments/home-feed" || result.IR.Endpoints[1].Kind != gwdkir.EndpointFragment || result.IR.Endpoints[2].Path != "/login" {
 		t.Fatalf("expected sorted endpoints, got %#v", result.IR.Endpoints)
+	}
+	if result.IR.Endpoints[0].ErrorPage != "errors/session.html" || result.IR.Endpoints[2].ErrorPage != "errors/login.html" {
+		t.Fatalf("unexpected endpoint error pages: %#v", result.IR.Endpoints)
 	}
 	if len(result.IR.Pages[0].Blocks.Fragments) != 1 || result.IR.Pages[0].Blocks.Fragments[0].Body != "<section>Feed</section>" {
 		t.Fatalf("expected fragment in IR page blocks, got %#v", result.IR.Pages[0].Blocks.Fragments)

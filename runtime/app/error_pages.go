@@ -96,6 +96,9 @@ func errorPagePayload(request *http.Request, pages ErrorPages, status int) []byt
 	case http.StatusNotFound:
 		return pages.NotFound
 	case http.StatusInternalServerError:
+		if payload := endpointErrorPagePayload(request, pages); len(payload) > 0 {
+			return payload
+		}
 		if payload := routeErrorPagePayload(request, pages); len(payload) > 0 {
 			return payload
 		}
@@ -114,6 +117,17 @@ func routeErrorPagePayload(request *http.Request, pages ErrorPages) []byte {
 		return nil
 	}
 	return pages.Custom[cleanErrorPagePath(route.ErrorPage)]
+}
+
+func endpointErrorPagePayload(request *http.Request, pages ErrorPages) []byte {
+	if request == nil || len(pages.Custom) == 0 {
+		return nil
+	}
+	endpoint, ok := Endpoint(request.Context())
+	if !ok || endpoint.ErrorPage == "" {
+		return nil
+	}
+	return pages.Custom[cleanErrorPagePath(endpoint.ErrorPage)]
 }
 
 func cleanErrorPagePath(value string) string {

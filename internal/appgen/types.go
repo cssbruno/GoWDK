@@ -45,6 +45,7 @@ type ActionEndpoint struct {
 	ValidatesInput   bool
 	Redirect         string
 	Fragments        []ActionFragment
+	ErrorPage        string
 	Binding          manifest.BackendBinding
 	BackendAlias     string
 }
@@ -67,6 +68,7 @@ type APIEndpoint struct {
 	Method       string
 	Route        string
 	Guards       []string
+	ErrorPage    string
 	Binding      manifest.BackendBinding
 	BackendAlias string
 }

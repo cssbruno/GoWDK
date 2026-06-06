@@ -200,11 +200,13 @@ type Block struct {
 
 // Endpoint is one exact action or API endpoint declaration.
 type Endpoint struct {
-	Kind   string
-	Name   string
-	Method string
-	Route  string
-	Span   manifest.SourceSpan
+	Kind          string
+	Name          string
+	Method        string
+	Route         string
+	ErrorPage     string
+	Span          manifest.SourceSpan
+	ErrorPageSpan manifest.SourceSpan
 }
 
 // FragmentEndpoint is one generated server fragment route declaration.

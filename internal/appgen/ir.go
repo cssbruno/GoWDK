@@ -45,6 +45,7 @@ func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
 				ValidatesInput:   action.ValidatesInput,
 				Redirect:         action.Redirect,
 				Fragments:        fragments,
+				ErrorPage:        action.ErrorPage,
 				Binding:          bindings[irEndpointKey(gwdkir.EndpointAction, page.ID, action.Name, method, route)],
 			})
 		}
@@ -59,6 +60,7 @@ func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
 			ActionName:  endpoint.Symbol,
 			Method:      endpoint.Method,
 			Route:       endpoint.Path,
+			ErrorPage:   endpoint.ErrorPage,
 			InputFields: bindingInputFieldNames(binding.InputFields),
 			Binding:     binding,
 		})
@@ -83,12 +85,13 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 				route = page.Route
 			}
 			endpoints = append(endpoints, APIEndpoint{
-				PageID:  page.ID,
-				APIName: api.Name,
-				Method:  method,
-				Route:   route,
-				Guards:  append([]string(nil), page.Guards...),
-				Binding: bindings[irEndpointKey(gwdkir.EndpointAPI, page.ID, api.Name, method, route)],
+				PageID:    page.ID,
+				APIName:   api.Name,
+				Method:    method,
+				Route:     route,
+				Guards:    append([]string(nil), page.Guards...),
+				ErrorPage: api.ErrorPage,
+				Binding:   bindings[irEndpointKey(gwdkir.EndpointAPI, page.ID, api.Name, method, route)],
 			})
 		}
 	}
@@ -97,12 +100,16 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 			continue
 		}
 		endpoints = append(endpoints, APIEndpoint{
-			PageID:  endpoint.PageID,
-			APIName: endpoint.Symbol,
-			Method:  endpoint.Method,
-			Route:   endpoint.Path,
-			Binding: bindings[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)],
+			PageID:    endpoint.PageID,
+			APIName:   endpoint.Symbol,
+			Method:    endpoint.Method,
+			Route:     endpoint.Path,
+			ErrorPage: endpoint.ErrorPage,
+			Binding:   bindings[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)],
 		})
+	}
+	if err := validateAPIEndpoints(endpoints); err != nil {
+		return nil, err
 	}
 	return endpoints, nil
 }

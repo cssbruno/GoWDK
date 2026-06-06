@@ -245,7 +245,7 @@ Use these workstreams to turn the high-level gaps into reviewable slices.
 ### 1. Documentation Truth Pass
 
 - [ ] Choose one source-of-truth status model for all product docs.
-- [ ] Add a status legend to `docs/product/requirements.md`.
+- [x] Add a status legend to `docs/product/requirements.md`.
 - [x] Add this product gap checklist under `docs/product/` while preserving
       `MISSING_CHECKLIST.md` as the detailed implementation-status checklist.
 - [ ] Update `docs/product/roadmap.md` so completed slices are not described as
@@ -605,6 +605,6 @@ Done when:
       requirements, ADR 0004, generated-output docs, and examples.
 - [ ] Replace stale "first-slice" wording where behavior is now product-stable.
 - [ ] Keep "first-slice" wording where behavior is genuinely narrow.
-- [ ] Add a single status legend used consistently across product docs:
+- [ ] Add a single status legend used consistently across all product docs:
       implemented, partial, experimental, planned, and intentionally out of
       scope.

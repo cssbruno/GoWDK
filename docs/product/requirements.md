@@ -13,6 +13,16 @@ planned behavior across the README, CLI/config/routing/deployment references,
 language references, compiler docs, examples, `MISSING_CHECKLIST.md`, and the
 gap checklist in `docs/product/gap-checklist.md`.
 
+## Status Legend
+
+- Implemented: available in the current codebase, documented, and covered by
+  tests or an explicit verification command.
+- Partial: available for a narrower slice than the full requirement, with
+  remaining limits called out in the notes.
+- Experimental: available to try, but the public contract may still change.
+- Planned: accepted product direction with no stable implementation yet.
+- Intentionally out of scope: rejected for the current product direction.
+
 ## Requirements
 
 | ID | Requirement | Priority | Status | Notes |

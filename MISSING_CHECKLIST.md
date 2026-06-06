@@ -24,6 +24,7 @@ docs have been folded into `.llm/plans/gowdk-world-roadmap.md`.
 
 Active planning sources:
 
+- `docs/product/gap-checklist.md`
 - `.llm/plans/gowdk-world-roadmap.md`
 - `.llm/features/deep-go-package-integration.md`
 - `.llm/plans/deep-go-package-integration.md`
@@ -31,6 +32,16 @@ Active planning sources:
 - `.llm/plans/go-native-adapter-boundary.md`
 - `.llm/features/golangish-reactive-islands.md`
 - `docs/engineering/decisions/0006-gowdk-compiler-and-kit-boundary.md`
+
+Status terms used by the product docs:
+
+- Implemented: available in the current codebase, documented, and covered by
+  tests or an explicit verification command.
+- Partial: available for a narrower slice than the full requirement, with
+  remaining limits called out near the checklist item or requirement.
+- Experimental: available to try, but the public contract may still change.
+- Planned: accepted product direction with no stable implementation yet.
+- Intentionally out of scope: rejected for the current product direction.
 
 Compiler lanes:
 

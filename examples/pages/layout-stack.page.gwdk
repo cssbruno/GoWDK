@@ -1,3 +1,5 @@
+package pages
+
 @page layout.stack
 @route "/layout-stack"
 @layout root, marketing.shell

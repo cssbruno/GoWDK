@@ -1,3 +1,5 @@
+package components
+
 @page base.components
 @route "/components/base"
 

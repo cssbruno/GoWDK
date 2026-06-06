@@ -1,3 +1,5 @@
+package pages
+
 @component Hero
 
 props {

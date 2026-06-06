@@ -1,3 +1,5 @@
+package pages
+
 @page home
 @route "/"
 @layout root

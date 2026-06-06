@@ -1,7 +1,9 @@
+package ssr
+
 @page dashboard
 @route "/dashboard"
 @layout root, dashboard
-@render ssr
+@render hybrid
 @guard auth.required
 
 load {

@@ -1,19 +1,13 @@
+package partials
+
 @page patients
 @route "/patients"
 
-act refresh {
-  input := form PatientFilter
-  fragment "#patients" {
-    <section>
-      <p>Updated patients</p>
-    </section>
-  }
-  -> "/patients"
-}
+act Refresh POST "/patients"
 
 view {
   <main>
-    <form g:post={refresh} g:target="#patients" g:swap="innerHTML">
+    <form g:post={Refresh} g:target="#patients" g:swap="innerHTML">
       <input name="query" />
       <button>Refresh</button>
     </form>

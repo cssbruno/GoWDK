@@ -1,16 +1,14 @@
+package actions
+
 @page newsletter
 @route "/newsletter"
 @layout root
 @render spa
 
-act subscribe {
-  input := form SubscribeInput
-  valid(input)?
-  -> "/newsletter?ok=1"
-}
+act Subscribe POST "/newsletter"
 
 view {
-  <form g:post={subscribe}>
+  <form g:post={Subscribe}>
     <Input name="email" label="Email" />
     <Button>Subscribe</Button>
   </form>

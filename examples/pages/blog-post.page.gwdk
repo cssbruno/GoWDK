@@ -1,3 +1,5 @@
+package pages
+
 @page blog.post
 @route "/blog/{slug}"
 @layout root, blog

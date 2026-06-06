@@ -1,3 +1,5 @@
+package ssr
+
 @page simple.ssr
 @route "/ssr"
 @render ssr

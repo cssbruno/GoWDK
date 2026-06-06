@@ -1,9 +1,9 @@
+package api
+
 @page status
 @route "/status"
 
-api health {
-  GET "/api/health"
-}
+api Health GET "/api/health"
 
 view {
   <main>

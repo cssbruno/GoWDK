@@ -1,3 +1,5 @@
+package css
+
 @page styled
 @route "/styled"
 @layout root

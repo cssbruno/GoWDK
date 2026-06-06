@@ -1,3 +1,5 @@
+package auth
+
 @page login.error
 @route "/login/error"
 @css auth

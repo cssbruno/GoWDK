@@ -1,9 +1,10 @@
+package auth
+
 @page dashboard
 @route "/dashboard"
 @css auth
 
-act logout {
-}
+act Logout POST "/dashboard"
 
 view {
   <main class="dashboard-shell">
@@ -14,7 +15,7 @@ view {
         <a href="/dashboard">Overview</a>
         <a href="/api/session">Session API</a>
       </nav>
-      <form g:post={logout}>
+      <form g:post={Logout}>
         <button type="submit">Sign out</button>
       </form>
     </aside>

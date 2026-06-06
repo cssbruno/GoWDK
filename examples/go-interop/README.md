@@ -8,8 +8,12 @@ What works today:
 
 - `.gwdk` page files can declare a top-level aliased import:
   `import interop "github.com/cssbruno/gowdk/examples/go-interop"`.
+- The `.gwdk` package declaration still matches the sibling Go package:
+  `package gointerop`.
 - `build {}` can call one no-argument imported Go function:
   `=> interop.FeaturedCopyForBuild()`.
+- Build-time Go calls must use an explicit imported alias. Same-package helper
+  functions are intentionally not resolved by bare name in this slice.
 - The function must return a JSON object. Scalar fields become string
   interpolation data for `view {}`.
 - Literal `build {}` and `paths {}` records still work in other examples.

@@ -236,6 +236,8 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid form")`,
 		`gowdkresponse.WriteNoStoreError(response, http.StatusRequestEntityTooLarge, "request body too large")`,
 		`gowdkresponse.WriteNoStoreError(response, http.StatusUnprocessableEntity, "validation failed")`,
+		`validationTarget := strings.TrimSpace(request.Header.Get("X-GOWDK-Target"))`,
+		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.ValidationFragment(validationTarget, validation))`,
 		`requestPath := actionRequestPath(request.URL.Path)`,
 		`func actionRequestPath(value string) string`,
 		`type SubscribeInput struct`,
@@ -2338,6 +2340,33 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	_ = response.Body.Close()
 	if response.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("expected missing required field to return 422, got %d", response.StatusCode)
+	}
+
+	response, err = waitForHTTPStatusWithHeaders("http://"+addr+"/newsletter", http.MethodPost, "email=", map[string]string{
+		"X-GOWDK-Partial": "1",
+		"X-GOWDK-Target":  "#errors",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected partial validation fragment to return 200, got %d: %s", response.StatusCode, payload)
+	}
+	for _, expected := range []string{`<div data-gowdk-validation>`, `data-gowdk-field="email"`, `required`} {
+		if !strings.Contains(string(payload), expected) {
+			t.Fatalf("expected validation fragment to contain %q, got %s", expected, payload)
+		}
+	}
+	if response.Header.Get("X-GOWDK-Fragment-Target") != "#errors" {
+		t.Fatalf("unexpected validation fragment target: %q", response.Header.Get("X-GOWDK-Fragment-Target"))
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on validation fragment response, got %q", cacheControl)
 	}
 
 	response, err = waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email="+strings.Repeat("a", 1<<20))

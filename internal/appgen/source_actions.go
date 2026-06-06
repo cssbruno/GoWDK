@@ -248,6 +248,35 @@ func actionRequiredValidationStmts(action ActionEndpoint) []ast.Stmt {
 		&ast.IfStmt{
 			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(selExpr(id("validation"), "OK"))},
 			Body: block(
+				define([]ast.Expr{id("partial")}, trimHeaderCall("X-GOWDK-Partial")),
+				define([]ast.Expr{id("validationTarget")}, trimHeaderCall("X-GOWDK-Target")),
+				&ast.IfStmt{
+					Cond: &ast.BinaryExpr{
+						X: &ast.BinaryExpr{
+							X: &ast.BinaryExpr{
+								X:  id("partial"),
+								Op: token.NEQ,
+								Y:  stringLit(""),
+							},
+							Op: token.LAND,
+							Y: &ast.BinaryExpr{
+								X:  id("partial"),
+								Op: token.NEQ,
+								Y:  stringLit("0"),
+							},
+						},
+						Op: token.LAND,
+						Y: &ast.BinaryExpr{
+							X:  id("validationTarget"),
+							Op: token.NEQ,
+							Y:  stringLit(""),
+						},
+					},
+					Body: block(
+						writeNoStoreHTTPStmt(call(sel("gowdkresponse", "ValidationFragment"), id("validationTarget"), id("validation"))),
+						returnBool(true),
+					),
+				},
 				writeNoStoreErrorStmt(sel("http", "StatusUnprocessableEntity"), "validation failed"),
 				returnBool(true),
 			),

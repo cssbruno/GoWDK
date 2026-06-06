@@ -25,6 +25,9 @@ Current support:
   requests with rendered fragment HTML, `Cache-Control: no-store`, and fragment
   target metadata. Normal POST requests still use the redirect/no-content
   fallback path.
+- Generated required-field validation failures on partial requests with
+  `X-GOWDK-Target` return an escaped validation fragment for that target, also
+  with `Cache-Control: no-store`.
 - `internal/clientrt` emits a small `gowdk.js` runtime that enhances
   `form[data-gowdk-target]` submissions, sends `X-GOWDK-Partial`,
   `X-GOWDK-Target`, and `X-GOWDK-Swap`, applies `innerHTML` or `outerHTML`
@@ -54,3 +57,4 @@ Not implemented yet:
 
 - General fragment routes independent of action POSTs.
 - Component expansion inside generated fragment bodies.
+- Field-specific user validation syntax.

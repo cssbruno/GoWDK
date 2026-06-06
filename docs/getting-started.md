@@ -143,6 +143,6 @@ Implemented today:
 
 Planned or partial:
 
-- Broader validation fragments.
-- Typed user input structs for action handlers.
-- Guard success-path configuration docs.
+- Field-specific user validation syntax.
+- General fragment routes independent of action POSTs.
+- Custom SSR/action/API error-boundary syntax.

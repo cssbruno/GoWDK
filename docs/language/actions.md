@@ -107,7 +107,10 @@ Current behavior:
 The current compiler-generated same-package action binding can decode direct
 literal form fields into exported same-package user input structs for supported
 typed action signatures and can wire generated CSRF when `Build.CSRF.Enabled`
-is set. It does not run field-specific user validation or generate general
+is set. Generated required-field failures return HTTP 422 for normal requests;
+for partial requests with `X-GOWDK-Partial` and `X-GOWDK-Target`, generated
+handlers return an escaped `runtime/response.ValidationFragment` for the target
+instead. GOWDK does not run field-specific user validation or generate general
 fragment routes. Handlers can return redirects, fragments, HTML, or JSON through
 `runtime/response.Response`.
 
@@ -122,7 +125,8 @@ fragment routes. Handlers can return redirects, fragments, HTML, or JSON through
   `runtime/response.Response`; they do not generate application policy.
 - Generated required-field checks only cover direct literal controls in the
   current `view {}` subset. Treat them as request-shape checks, not a substitute
-  for domain validation in Go.
+  for domain validation in Go. Partial required-field failures use an escaped
+  validation fragment so the client runtime can swap the configured target.
 - `runtime/response.ValidationJSON` and
   `runtime/response.ValidationFragment` provide reusable patterns for returning
   structured validation errors or an escaped fragment for partial form updates.

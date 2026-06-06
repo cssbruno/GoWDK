@@ -1310,8 +1310,8 @@ func TestActionFormFieldsFindsSubmitIntentControls(t *testing.T) {
 func TestActionFormSchemaInfersRequiredFields(t *testing.T) {
 	schema, err := ActionFormSchema(`
 		<form g:post={submit}>
-			<input name="email" required />
-			<textarea name="note"></textarea>
+			<input name="email" required minlength="3" maxlength="120" pattern="[a-z]+@[a-z]+[.][a-z]{2,4}" />
+			<textarea name="note" maxlength="500"></textarea>
 		</form>
 		<form g:post={submit}>
 			<input name="note" required />
@@ -1327,8 +1327,14 @@ func TestActionFormSchemaInfersRequiredFields(t *testing.T) {
 	if fields[0].Name != "email" || !fields[0].Required {
 		t.Fatalf("expected required email first, got %#v", fields)
 	}
+	if fields[0].MinLength != 3 || fields[0].MaxLength != 120 || fields[0].Pattern != `[a-z]+@[a-z]+[.][a-z]{2,4}` {
+		t.Fatalf("expected email constraints, got %#v", fields[0])
+	}
 	if fields[1].Name != "note" || !fields[1].Required {
 		t.Fatalf("expected required note second, got %#v", fields)
+	}
+	if fields[1].MaxLength != 500 {
+		t.Fatalf("expected merged note maxlength, got %#v", fields[1])
 	}
 }
 
@@ -1338,6 +1344,16 @@ func TestActionFormFieldsRejectsDynamicControlName(t *testing.T) {
 		t.Fatal("expected dynamic field name error")
 	}
 	if !strings.Contains(err.Error(), `action form field name "{field}" must be literal`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestActionFormSchemaRejectsDynamicConstraint(t *testing.T) {
+	_, err := ActionFormSchema(`<form g:post={submit}><input name="email" pattern={EmailPattern} /></form>`)
+	if err == nil {
+		t.Fatal("expected dynamic constraint error")
+	}
+	if !strings.Contains(err.Error(), `action form input pattern "{EmailPattern}" must be literal`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

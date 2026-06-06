@@ -24,8 +24,8 @@ Current behavior:
 - `gowdk build --app --bin` generates POST handlers for non-dynamic page routes.
   If a same-directory Go package exports a matching handler function, the
   generated app decodes direct literal fields from same-page `g:post` forms,
-  validates required controls, calls that function, and writes its
-  `runtime/response.Response`.
+  validates supported literal form constraints, calls that function, and writes
+  its `runtime/response.Response`.
 - `Submit` must use one of the supported signatures:
   `func(context.Context) (response.Response, error)`,
   `func(context.Context, SignupInput) (response.Response, error)`,
@@ -41,8 +41,9 @@ Current behavior:
 - Generated first-slice input decoders create a named input wrapper, preserve
   repeated submitted values, allow missing fields, and reject unexpected fields
   with HTTP 400.
-- Generated handlers enforce direct literal `required` controls for typed
-  action forms and return HTTP 422 for missing or empty required values.
+- Generated handlers enforce direct literal `required`, `minlength`,
+  `maxlength`, and `pattern` controls for typed action forms when generated
+  validation is enabled. Normal validation failures return HTTP 422.
 - Generated first-slice action error responses use explicit status mapping for
   invalid CSRF tokens, invalid forms, oversized requests, and validation
   failures, and set `Cache-Control: no-store`.
@@ -107,12 +108,13 @@ Current behavior:
 The current compiler-generated same-package action binding can decode direct
 literal form fields into exported same-package user input structs for supported
 typed action signatures and can wire generated CSRF when `Build.CSRF.Enabled`
-is set. Generated required-field failures return HTTP 422 for normal requests;
-for partial requests with `X-GOWDK-Partial` and `X-GOWDK-Target`, generated
-handlers return an escaped `runtime/response.ValidationFragment` for the target
-instead. GOWDK does not run field-specific user validation or generate general
-fragment routes. Handlers can return redirects, fragments, HTML, or JSON through
-`runtime/response.Response`.
+is set. Generated validation failures return HTTP 422 for normal requests; for
+partial requests with `X-GOWDK-Partial` and `X-GOWDK-Target`, generated handlers
+return an escaped `runtime/response.ValidationFragment` for the target instead.
+Generated `pattern` checks use Go regexp syntax and are anchored to the whole
+submitted value. GOWDK does not run user-defined domain validation or generate
+general fragment routes. Handlers can return redirects, fragments, HTML, or JSON
+through `runtime/response.Response`.
 
 ## Production Notes
 
@@ -123,10 +125,13 @@ fragment routes. Handlers can return redirects, fragments, HTML, or JSON through
   calls, redirects, HTML, JSON, and fragment decisions in normal Go handlers.
   Generated adapters decode the request and write the returned
   `runtime/response.Response`; they do not generate application policy.
-- Generated required-field checks only cover direct literal controls in the
-  current `view {}` subset. Treat them as request-shape checks, not a substitute
-  for domain validation in Go. Partial required-field failures use an escaped
-  validation fragment so the client runtime can swap the configured target.
+- Generated checks only cover direct literal `required`, `minlength`,
+  `maxlength`, and Go-regexp-compatible `pattern` controls in the current
+  `view {}` subset. Treat them as request-shape checks, not a substitute for
+  domain validation in Go. Optional empty fields skip length and pattern checks,
+  matching browser constraint behavior. Partial validation failures use an
+  escaped validation fragment so the client runtime can swap the configured
+  target.
 - `runtime/response.ValidationJSON` and
   `runtime/response.ValidationFragment` provide reusable patterns for returning
   structured validation errors or an escaped fragment for partial form updates.
@@ -157,8 +162,9 @@ Current form behavior is intentionally narrow and literal-analysis driven:
   `<input type="submit" name="intent">` are treated as explicit submit-intent
   fields before unknown-field rejection. Non-submitting controls such as
   `type="button"` and `type="reset"` are ignored.
-- Required-field validation is generated only from direct literal controls with
-  `required`.
+- Validation is generated only from direct literal controls with `required`,
+  `minlength`, `maxlength`, or `pattern`. Dynamic constraint attributes are
+  rejected for generated validation metadata.
 - Generated first-slice decoders preserve repeated submitted values, allow
   missing fields, reject unexpected fields, and avoid logging form values.
 - Generated typed action decoders reject repeated scalar fields and support

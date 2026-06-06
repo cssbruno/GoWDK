@@ -32,18 +32,19 @@ func ActionEndpoints(app manifest.Manifest) ([]ActionEndpoint, error) {
 				return nil, fmt.Errorf("%s.%s: %w", page.ID, action.Name, err)
 			}
 			endpoints = append(endpoints, ActionEndpoint{
-				PageID:         page.ID,
-				ActionName:     action.Name,
-				Method:         method,
-				Route:          route,
-				InputName:      action.InputName,
-				InputType:      action.InputType,
-				InputFields:    actionInputFields(fieldsByAction[action.Name]),
-				RequiredFields: actionRequiredFields(fieldsByAction[action.Name]),
-				ValidatesInput: action.ValidatesInput,
-				Redirect:       action.Redirect,
-				Fragments:      fragments,
-				Binding:        bindings[backendBindingKey("action", page.ID, action.Name, method, route)],
+				PageID:          page.ID,
+				ActionName:      action.Name,
+				Method:          method,
+				Route:           route,
+				InputName:       action.InputName,
+				InputType:       action.InputType,
+				InputFields:     actionInputFields(fieldsByAction[action.Name]),
+				RequiredFields:  actionRequiredFields(fieldsByAction[action.Name]),
+				ValidationRules: actionValidationRules(fieldsByAction[action.Name]),
+				ValidatesInput:  action.ValidatesInput,
+				Redirect:        action.Redirect,
+				Fragments:       fragments,
+				Binding:         bindings[backendBindingKey("action", page.ID, action.Name, method, route)],
 			})
 		}
 	}
@@ -123,4 +124,20 @@ func actionRequiredFields(fields []view.ActionFormField) []string {
 		}
 	}
 	return names
+}
+
+func actionValidationRules(fields []view.ActionFormField) []ActionValidationRule {
+	rules := make([]ActionValidationRule, 0, len(fields))
+	for _, field := range fields {
+		if field.MinLength == 0 && field.MaxLength == 0 && field.Pattern == "" {
+			continue
+		}
+		rules = append(rules, ActionValidationRule{
+			Field:     field.Name,
+			MinLength: field.MinLength,
+			MaxLength: field.MaxLength,
+			Pattern:   field.Pattern,
+		})
+	}
+	return rules
 }

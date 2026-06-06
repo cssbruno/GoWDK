@@ -65,6 +65,12 @@ func runtimeImportMap(options Options) map[string]string {
 	if actionsUseValidation(actions) {
 		imports["gowdkvalidation"] = "github.com/cssbruno/gowdk/runtime/validation"
 	}
+	if actionsUseLengthValidation(actions) {
+		imports["utf8"] = "unicode/utf8"
+	}
+	if actionsUsePatternValidation(actions) {
+		imports["regexp"] = "regexp"
+	}
 	if csrfEnabled(options) {
 		imports["errors"] = "errors"
 		imports["gowdkactions"] = "github.com/cssbruno/gowdk/addons/actions"

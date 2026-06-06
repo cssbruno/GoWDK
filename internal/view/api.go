@@ -81,8 +81,11 @@ type Options struct {
 
 // ActionFormField describes one direct literal form field for a g:post action.
 type ActionFormField struct {
-	Name     string
-	Required bool
+	Name      string
+	Required  bool
+	MinLength int
+	MaxLength int
+	Pattern   string
 }
 
 // Dependencies records source dependencies visible in the first view subset.
@@ -608,7 +611,11 @@ func collectNamedControls(nodes []Node, fields map[string]ActionFormField) error
 				return err
 			} else if ok {
 				previous := fields[field.Name]
-				field.Required = field.Required || previous.Required
+				var err error
+				field, err = mergeActionFormField(previous, field)
+				if err != nil {
+					return err
+				}
 				fields[field.Name] = field
 			}
 			if err := collectNamedControls(typed.Children, fields); err != nil {
@@ -634,6 +641,44 @@ func controlField(element Element) (ActionFormField, bool, error) {
 	for _, attr := range element.Attrs {
 		if attr.Name == "required" && element.Name != "button" {
 			field.Required = true
+			continue
+		}
+		switch attr.Name {
+		case "minlength":
+			value, ok, err := literalConstraintValue(element, attr)
+			if err != nil {
+				return ActionFormField{}, false, err
+			}
+			if ok {
+				field.MinLength, err = parseLengthConstraint("minlength", value)
+				if err != nil {
+					return ActionFormField{}, false, err
+				}
+			}
+			continue
+		case "maxlength":
+			value, ok, err := literalConstraintValue(element, attr)
+			if err != nil {
+				return ActionFormField{}, false, err
+			}
+			if ok {
+				field.MaxLength, err = parseLengthConstraint("maxlength", value)
+				if err != nil {
+					return ActionFormField{}, false, err
+				}
+			}
+			continue
+		case "pattern":
+			value, ok, err := literalConstraintValue(element, attr)
+			if err != nil {
+				return ActionFormField{}, false, err
+			}
+			if ok {
+				if strings.TrimSpace(value) == "" {
+					return ActionFormField{}, false, fmt.Errorf("action form %s pattern must not be empty", element.Name)
+				}
+				field.Pattern = value
+			}
 			continue
 		}
 		if (element.Name == "button" || element.Name == "input") && attr.Name == "type" {
@@ -668,6 +713,66 @@ func controlField(element Element) (ActionFormField, bool, error) {
 		return ActionFormField{}, false, fmt.Errorf("file input %q is not supported before upload security rules are defined", field.Name)
 	}
 	return field, true, nil
+}
+
+func literalConstraintValue(element Element, attr Attr) (string, bool, error) {
+	if element.Name == "button" || attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+		return "", false, nil
+	}
+	value := strings.TrimSpace(attr.Value)
+	if attr.Expression {
+		return "", false, fmt.Errorf("action form %s %s %q must be literal", element.Name, attr.Name, value)
+	}
+	return value, true, nil
+}
+
+func parseLengthConstraint(name string, value string) (int, error) {
+	number, err := strconv.Atoi(value)
+	if err != nil || number < 0 {
+		return 0, fmt.Errorf("action form %s must be a non-negative integer", name)
+	}
+	return number, nil
+}
+
+func mergeActionFormField(previous, next ActionFormField) (ActionFormField, error) {
+	if previous.Name == "" {
+		return next, nil
+	}
+	next.Required = next.Required || previous.Required
+	var err error
+	next.MinLength, err = mergeIntConstraint(next.Name, "minlength", previous.MinLength, next.MinLength)
+	if err != nil {
+		return ActionFormField{}, err
+	}
+	next.MaxLength, err = mergeIntConstraint(next.Name, "maxlength", previous.MaxLength, next.MaxLength)
+	if err != nil {
+		return ActionFormField{}, err
+	}
+	next.Pattern, err = mergeStringConstraint(next.Name, "pattern", previous.Pattern, next.Pattern)
+	if err != nil {
+		return ActionFormField{}, err
+	}
+	return next, nil
+}
+
+func mergeIntConstraint(fieldName, constraint string, previous, next int) (int, error) {
+	if previous == 0 {
+		return next, nil
+	}
+	if next == 0 || previous == next {
+		return previous, nil
+	}
+	return 0, fmt.Errorf("action form field %q declares conflicting %s constraints", fieldName, constraint)
+}
+
+func mergeStringConstraint(fieldName, constraint string, previous, next string) (string, error) {
+	if previous == "" {
+		return next, nil
+	}
+	if next == "" || previous == next {
+		return previous, nil
+	}
+	return "", fmt.Errorf("action form field %q declares conflicting %s constraints", fieldName, constraint)
 }
 
 func isNonSubmittingControl(elementName, controlType string) bool {

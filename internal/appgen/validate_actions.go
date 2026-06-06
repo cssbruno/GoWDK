@@ -2,6 +2,7 @@ package appgen
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -24,6 +25,11 @@ func validateActionEndpoints(endpoints []ActionEndpoint) error {
 		}
 		if err := validateRequiredFields(endpoint); err != nil {
 			return err
+		}
+		if endpoint.ValidatesInput {
+			if err := validateValidationRules(endpoint); err != nil {
+				return err
+			}
 		}
 		if err := validateActionFragments(endpoint); err != nil {
 			return err
@@ -88,6 +94,42 @@ func validateRequiredFields(endpoint ActionEndpoint) error {
 		}
 		if !expected[field] {
 			return fmt.Errorf("generated action %s.%s required field %q is not an expected input field", endpoint.PageID, endpoint.ActionName, field)
+		}
+		seen[field] = true
+	}
+	return nil
+}
+
+func validateValidationRules(endpoint ActionEndpoint) error {
+	expected := map[string]bool{}
+	for _, field := range endpoint.InputFields {
+		expected[field] = true
+	}
+	seen := map[string]bool{}
+	for _, rule := range endpoint.ValidationRules {
+		field := strings.TrimSpace(rule.Field)
+		if field == "" {
+			return fmt.Errorf("generated action %s.%s declares an empty validation field", endpoint.PageID, endpoint.ActionName)
+		}
+		if seen[field] {
+			return fmt.Errorf("generated action %s.%s declares duplicate validation rules for field %q", endpoint.PageID, endpoint.ActionName, field)
+		}
+		if !expected[field] {
+			return fmt.Errorf("generated action %s.%s validation field %q is not an expected input field", endpoint.PageID, endpoint.ActionName, field)
+		}
+		if rule.MinLength < 0 || rule.MaxLength < 0 {
+			return fmt.Errorf("generated action %s.%s validation field %q has a negative length constraint", endpoint.PageID, endpoint.ActionName, field)
+		}
+		if rule.MinLength == 0 && rule.MaxLength == 0 && strings.TrimSpace(rule.Pattern) == "" {
+			return fmt.Errorf("generated action %s.%s validation field %q has no constraints", endpoint.PageID, endpoint.ActionName, field)
+		}
+		if rule.MinLength > 0 && rule.MaxLength > 0 && rule.MinLength > rule.MaxLength {
+			return fmt.Errorf("generated action %s.%s validation field %q minlength exceeds maxlength", endpoint.PageID, endpoint.ActionName, field)
+		}
+		if strings.TrimSpace(rule.Pattern) != "" {
+			if _, err := regexp.Compile("^(?:" + rule.Pattern + ")$"); err != nil {
+				return fmt.Errorf("generated action %s.%s validation field %q has invalid pattern: %w", endpoint.PageID, endpoint.ActionName, field, err)
+			}
 		}
 		seen[field] = true
 	}

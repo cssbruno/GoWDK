@@ -201,6 +201,12 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		InputType:      "SubscribeInput",
 		InputFields:    []string{"email"},
 		RequiredFields: []string{"email"},
+		ValidationRules: []ActionValidationRule{{
+			Field:     "email",
+			MinLength: 5,
+			MaxLength: 80,
+			Pattern:   `[a-z]+@[a-z]+[.][a-z]{2,4}`,
+		}},
 		ValidatesInput: true,
 		Redirect:       "/newsletter?ok=1",
 	}}})
@@ -225,6 +231,8 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`gowdkform "github.com/cssbruno/gowdk/runtime/form"`,
 		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`gowdkvalidation "github.com/cssbruno/gowdk/runtime/validation"`,
+		`"regexp"`,
+		`"unicode/utf8"`,
 		`func newBackendRouter() (*gowdkruntime.BackendRouter, error)`,
 		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}`,
 		`func action(response http.ResponseWriter, request *http.Request) bool`,
@@ -245,6 +253,10 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`gowdkform.DecodeExpected(values, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "email"}}})`,
 		`validation := gowdkvalidation.Result{}`,
 		`values.HasSubmitted(field)`,
+		`utf8.RuneCountInString(value) < 5`,
+		`utf8.RuneCountInString(value) > 80`,
+		`regexp.MatchString("^(?:[a-z]+@[a-z]+[.][a-z]{2,4})$", value)`,
+		`validation.Add("email", "pattern")`,
 		`http.StatusUnprocessableEntity`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
 	} {
@@ -1170,7 +1182,7 @@ func TestActionEndpointsInfersInputFieldsFromGPostForm(t *testing.T) {
 		ID:    "newsletter",
 		Route: "/newsletter",
 		Blocks: manifest.Blocks{
-			ViewBody: `<form g:post={Subscribe}><input name="email" required /><textarea name="note"></textarea></form>`,
+			ViewBody: `<form g:post={Subscribe}><input name="email" required minlength="5" maxlength="80" pattern="[a-z]+@[a-z]+[.][a-z]{2,4}" /><textarea name="note"></textarea></form>`,
 			Actions: []manifest.Action{{
 				Name:           "Subscribe",
 				InputName:      "input",
@@ -1191,6 +1203,13 @@ func TestActionEndpointsInfersInputFieldsFromGPostForm(t *testing.T) {
 	}
 	if strings.Join(routes[0].RequiredFields, ",") != "email" {
 		t.Fatalf("unexpected required fields: %#v", routes[0].RequiredFields)
+	}
+	if len(routes[0].ValidationRules) != 1 ||
+		routes[0].ValidationRules[0].Field != "email" ||
+		routes[0].ValidationRules[0].MinLength != 5 ||
+		routes[0].ValidationRules[0].MaxLength != 80 ||
+		routes[0].ValidationRules[0].Pattern != `[a-z]+@[a-z]+[.][a-z]{2,4}` {
+		t.Fatalf("unexpected validation rules: %#v", routes[0].ValidationRules)
 	}
 	if !routes[0].ValidatesInput {
 		t.Fatalf("expected validation metadata: %#v", routes[0])
@@ -1320,6 +1339,29 @@ func TestGenerateRejectsUnsafeActionRedirect(t *testing.T) {
 		t.Fatal("expected unsafe redirect error")
 	}
 	if !strings.Contains(err.Error(), `redirect "https://example.com" must be a local absolute path`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGenerateRejectsEmptyActionValidationRule(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
+
+	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		PageID:          "newsletter",
+		ActionName:      "Subscribe",
+		Route:           "/newsletter",
+		InputFields:     []string{"email"},
+		ValidationRules: []ActionValidationRule{{Field: "email"}},
+		ValidatesInput:  true,
+		Redirect:        "/newsletter?ok=1",
+	}}})
+	if err == nil {
+		t.Fatal("expected empty validation rule error")
+	}
+	if !strings.Contains(err.Error(), `validation field "email" has no constraints`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -2255,6 +2297,12 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 		InputType:      "SubscribeInput",
 		InputFields:    []string{"email"},
 		RequiredFields: []string{"email"},
+		ValidationRules: []ActionValidationRule{{
+			Field:     "email",
+			MinLength: 5,
+			MaxLength: 80,
+			Pattern:   `[a-z]+@[a-z]+[.][a-z]{2,4}`,
+		}},
 		ValidatesInput: true,
 		Redirect:       "/newsletter?ok=1",
 	}, {
@@ -2367,6 +2415,27 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	}
 	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("expected no-store on validation fragment response, got %q", cacheControl)
+	}
+
+	response, err = waitForHTTPStatusWithHeaders("http://"+addr+"/newsletter", http.MethodPost, "email=invalid", map[string]string{
+		"X-GOWDK-Partial": "1",
+		"X-GOWDK-Target":  "#errors",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err = io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected partial pattern validation fragment to return 200, got %d: %s", response.StatusCode, payload)
+	}
+	for _, expected := range []string{`<div data-gowdk-validation>`, `data-gowdk-field="email"`, `pattern`} {
+		if !strings.Contains(string(payload), expected) {
+			t.Fatalf("expected pattern validation fragment to contain %q, got %s", expected, payload)
+		}
 	}
 
 	response, err = waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email="+strings.Repeat("a", 1<<20))

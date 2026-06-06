@@ -37,11 +37,43 @@ func printActionDecls(decls []ast.Decl) string {
 
 func actionsUseValidation(actions []ActionEndpoint) bool {
 	for _, action := range actions {
-		if action.Binding.Status != manifest.BackendBindingMissing && action.Binding.Status != manifest.BackendBindingUnsupportedSignature && action.ValidatesInput {
+		if actionsUseActionValidation(action) {
 			return true
 		}
 	}
 	return false
+}
+
+func actionsUseLengthValidation(actions []ActionEndpoint) bool {
+	for _, action := range actions {
+		if !actionsUseActionValidation(action) {
+			continue
+		}
+		for _, rule := range action.ValidationRules {
+			if rule.MinLength > 0 || rule.MaxLength > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func actionsUsePatternValidation(actions []ActionEndpoint) bool {
+	for _, action := range actions {
+		if !actionsUseActionValidation(action) {
+			continue
+		}
+		for _, rule := range action.ValidationRules {
+			if rule.Pattern != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func actionsUseActionValidation(action ActionEndpoint) bool {
+	return action.Binding.Status != manifest.BackendBindingMissing && action.Binding.Status != manifest.BackendBindingUnsupportedSignature && action.ValidatesInput
 }
 
 func actionsUseForm(actions []ActionEndpoint) bool {
@@ -233,7 +265,7 @@ func expectedValuesStmts(action ActionEndpoint) []ast.Stmt {
 }
 
 func actionRequiredValidationStmts(action ActionEndpoint) []ast.Stmt {
-	return []ast.Stmt{
+	stmts := []ast.Stmt{
 		define([]ast.Expr{id("validation")}, &ast.CompositeLit{Type: sel("gowdkvalidation", "Result")}),
 		&ast.RangeStmt{
 			Key:   id("_"),
@@ -245,6 +277,11 @@ func actionRequiredValidationStmts(action ActionEndpoint) []ast.Stmt {
 				Body: block(exprStmt(call(selExpr(id("validation"), "Add"), id("field"), stringLit("required")))),
 			}),
 		},
+	}
+	for _, rule := range action.ValidationRules {
+		stmts = append(stmts, actionValidationRuleStmt(rule))
+	}
+	stmts = append(stmts,
 		&ast.IfStmt{
 			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(selExpr(id("validation"), "OK"))},
 			Body: block(
@@ -281,7 +318,50 @@ func actionRequiredValidationStmts(action ActionEndpoint) []ast.Stmt {
 				returnBool(true),
 			),
 		},
+	)
+	return stmts
+}
+
+func actionValidationRuleStmt(rule ActionValidationRule) ast.Stmt {
+	var checks []ast.Stmt
+	if rule.MinLength > 0 {
+		checks = append(checks, &ast.IfStmt{
+			Cond: &ast.BinaryExpr{
+				X:  call(sel("utf8", "RuneCountInString"), id("value")),
+				Op: token.LSS,
+				Y:  intLit(rule.MinLength),
+			},
+			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit("minlength")))),
+		})
 	}
+	if rule.MaxLength > 0 {
+		checks = append(checks, &ast.IfStmt{
+			Cond: &ast.BinaryExpr{
+				X:  call(sel("utf8", "RuneCountInString"), id("value")),
+				Op: token.GTR,
+				Y:  intLit(rule.MaxLength),
+			},
+			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit("maxlength")))),
+		})
+	}
+	if rule.Pattern != "" {
+		checks = append(checks, &ast.IfStmt{
+			Init: define([]ast.Expr{id("matched"), id("err")}, call(sel("regexp", "MatchString"), stringLit("^(?:"+rule.Pattern+")$"), id("value"))),
+			Cond: &ast.BinaryExpr{
+				X:  notNil("err"),
+				Op: token.LOR,
+				Y:  &ast.UnaryExpr{Op: token.NOT, X: id("matched")},
+			},
+			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit("pattern")))),
+		})
+	}
+	return block(
+		define([]ast.Expr{id("value")}, call(sel("strings", "TrimSpace"), call(selExpr(id("values"), "First"), stringLit(rule.Field)))),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: id("value"), Op: token.NEQ, Y: stringLit("")},
+			Body: block(checks...),
+		},
+	)
 }
 
 func boundActionResultStmts(action ActionEndpoint) []ast.Stmt {

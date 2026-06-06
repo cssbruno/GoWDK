@@ -274,6 +274,9 @@ api Session GET "/api/session"
 - [x] Keep `NoopCSRF` test-only.
 - [x] Keep redirects, JSON, HTML, fragments, validation, auth, and storage in user Go handlers returning `runtime/response.Response`.
 - [x] Add structured form error and validation fragment patterns.
+- [x] Generate request-shape validation for direct literal `required`,
+      `minlength`, `maxlength`, and Go-regexp-compatible `pattern` form
+      controls, including escaped partial validation fragments.
 - [x] Keep file uploads out of generated actions; uploads belong in user-owned
       API/server handlers with explicit body limits, storage, validation,
       cleanup, and security rules.

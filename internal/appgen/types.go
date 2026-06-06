@@ -30,20 +30,29 @@ type Options struct {
 
 // ActionEndpoint describes a generated action handler.
 type ActionEndpoint struct {
-	PageID         string
-	ActionName     string
-	Method         string
-	Route          string
-	Guards         []string
-	InputName      string
-	InputType      string
-	InputFields    []string
-	RequiredFields []string
-	ValidatesInput bool
-	Redirect       string
-	Fragments      []ActionFragment
-	Binding        manifest.BackendBinding
-	BackendAlias   string
+	PageID          string
+	ActionName      string
+	Method          string
+	Route           string
+	Guards          []string
+	InputName       string
+	InputType       string
+	InputFields     []string
+	RequiredFields  []string
+	ValidationRules []ActionValidationRule
+	ValidatesInput  bool
+	Redirect        string
+	Fragments       []ActionFragment
+	Binding         manifest.BackendBinding
+	BackendAlias    string
+}
+
+// ActionValidationRule describes one generated server-side form constraint.
+type ActionValidationRule struct {
+	Field     string
+	MinLength int
+	MaxLength int
+	Pattern   string
 }
 
 // APIEndpoint describes a generated API handler.

@@ -192,6 +192,62 @@ fn Add() {
 	}
 }
 
+func TestJSIslandsSharePageStoreInBrowser(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	chromium, err := lookupChromium()
+	if err != nil {
+		t.Skip(err)
+	}
+	requireNodePlaywright(t, node)
+
+	outputDir := t.TempDir()
+	component := counterComponent()
+	component.Blocks.Client = true
+	component.Blocks.ClientBody = `use cart`
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:      "counter",
+			Route:   "/counter",
+			Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []manifest.Store{{
+				Name: "cart",
+				Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+				Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+			}},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter /><Counter /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.FileServer(http.Dir(outputDir)))
+	defer server.Close()
+
+	script := filepath.Join(t.TempDir(), "gowdk-js-store-browser-test.cjs")
+	if err := os.WriteFile(script, []byte(jsIslandStoreBrowserHarness()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, script, server.URL, chromium)
+	command.Dir = mustWorkingDir(t)
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("browser JS store test timed out:\n%s", output)
+	}
+	if err != nil {
+		t.Fatalf("browser JS store test failed: %v\n%s", err, output)
+	}
+}
+
 func TestIslandJSSourceMapMappingsUseComponentSpans(t *testing.T) {
 	component := counterComponent()
 	component.Span = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 2, Column: 1}, End: manifest.SourcePosition{Line: 2, Column: 19}}
@@ -2007,6 +2063,56 @@ func mustWorkingDir(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return dir
+}
+
+func jsIslandStoreBrowserHarness() string {
+	return `
+"use strict";
+
+const assert = require("node:assert/strict");
+const nodeModule = require("node:module");
+
+const baseURL = process.argv[2];
+const executablePath = process.argv[3];
+const { chromium } = nodeModule.createRequire(process.cwd() + "/gowdk-test.js")("playwright");
+
+async function waitForButtonTexts(page, expected) {
+  await page.waitForFunction((expected) => {
+    const values = Array.from(document.querySelectorAll("gowdk-island button")).map((node) => node.textContent);
+    return values.length === expected.length && values.every((value, index) => value === expected[index]);
+  }, expected);
+}
+
+(async () => {
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+    args: ["--no-sandbox"]
+  });
+  const page = await browser.newPage();
+  const consoleErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("GOWDK")) consoleErrors.push(message.text());
+  });
+
+  await page.goto(baseURL + "/counter/", { waitUntil: "networkidle" });
+  await waitForButtonTexts(page, ["1", "1"]);
+  assert.equal(await page.evaluate(() => window.__gowdkStores.get("cart").Count), 1);
+
+  await page.evaluate(() => document.querySelectorAll("gowdk-island button")[0].click());
+  await waitForButtonTexts(page, ["2", "2"]);
+  assert.equal(await page.evaluate(() => window.__gowdkStores.get("cart").Count), 2);
+
+  await page.evaluate(() => document.querySelectorAll("gowdk-island button")[1].click());
+  await waitForButtonTexts(page, ["3", "3"]);
+  assert.equal(await page.evaluate(() => window.__gowdkStores.get("cart").Count), 3);
+  assert.deepEqual(consoleErrors, []);
+  await browser.close();
+})().catch(async (error) => {
+  console.error(error && error.stack || error);
+  process.exit(1);
+});
+`
 }
 
 func wasmIslandBrowserHarness() string {

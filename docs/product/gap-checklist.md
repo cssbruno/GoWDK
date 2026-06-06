@@ -493,7 +493,10 @@ Done when:
 - [x] Decide whether stores can cross package boundaries.
 - [x] Decide whether client handlers can be async and what async means for
       update ordering.
-- [ ] Add integration tests for multi-island store sharing.
+- [x] Add integration tests for multi-island store sharing.
+      Covered by `TestJSIslandsSharePageStoreInBrowser`, which builds two
+      store-backed JS islands, clicks each island in a browser, and verifies
+      both island DOM roots and the shared page store update together.
 - [ ] Add tests for effect ordering, cleanup, batching, and cycles.
 
 Done when:

@@ -262,6 +262,33 @@ func TestServerReturnsDefinitionForComponentCalls(t *testing.T) {
 	assertResponseID(t, messages[6], float64(4))
 }
 
+func TestServerReturnsDefinitionForOpenGoHandlerSymbols(t *testing.T) {
+	pageURI := "file:///tmp/signup.page.gwdk"
+	goURI := "file:///tmp/handlers.go"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@page signup\n@route \"/signup\"\n\nact Submit POST \"/signup\"\n\nview {\n  <form g:post={Submit}></form>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+goURI+`","languageId":"go","version":1,"text":"package app\n\nfunc Submit() error {\n  return nil\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":5,"character":6}}}`) +
+		framed(`{"jsonrpc":"2.0","id":3,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 5 {
+		t.Fatalf("expected 5 output messages, got %d", len(messages))
+	}
+
+	assertResponseID(t, messages[3], float64(2))
+	assertLocation(t, messages[3], goURI, 2, 5)
+	assertResponseID(t, messages[4], float64(3))
+}
+
 func TestServerReturnsReferencesForProjectSymbols(t *testing.T) {
 	componentURI := "file:///tmp/product-card.cmp.gwdk"
 	pageURI := "file:///tmp/home.page.gwdk"

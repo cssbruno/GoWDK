@@ -827,7 +827,10 @@ Done when:
 - [x] Add go-to-definition for component calls.
       Decision: `gowdk lsp` resolves same-package and `use`-qualified
       component calls to open-project `@component` declarations.
-- [ ] Add go-to-definition for Go handler symbols where possible.
+- [x] Add go-to-definition for Go handler symbols where possible.
+      Decision: `gowdk lsp` resolves exported Go functions, types, vars, and
+      consts from open Go buffers when the cursor is on a matching `.gwdk`
+      handler symbol.
 - [x] Add references for page IDs, routes, components, stores, and guards.
       Decision: `gowdk lsp` supports `textDocument/references` across open
       `.gwdk` documents using exact token ranges for page IDs, route strings,

@@ -47,6 +47,8 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
   props, components, layouts, guards, and handler symbols from open documents.
 - Return go-to-definition locations for same-package and `use`-qualified
   component calls from open documents.
+- Return go-to-definition locations for exported Go handler symbols when the
+  matching Go file is open in the editor session.
 - Return references for exact `.gwdk` project symbols across open documents,
   including page IDs, routes, components, stores, and guards.
 - Return full-document semantic tokens for `.gwdk` decorators, identifiers,
@@ -70,6 +72,7 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
       layouts, guards, routes, stores, props, and component state/value fields.
 - [x] `textDocument/hover` returns concise markdown help for language tokens and open-project symbols.
 - [x] `textDocument/definition` returns component declaration locations for open-project component calls.
+- [x] `textDocument/definition` returns open-buffer Go declaration locations for exported handler symbols.
 - [x] `textDocument/references` returns open-document references for page IDs, routes, components, stores, and guards.
 - [x] `textDocument/semanticTokens/full` returns encoded token data for open `.gwdk` buffers.
 - [x] `go test ./...` and `go build ./cmd/gowdk` pass.

@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	goparser "go/parser"
+	"go/token"
 	"io"
 	"net/url"
 	"os"
@@ -271,6 +274,9 @@ func (server *Server) handleNotification(request rpcRequest) [][]byte {
 }
 
 func (server *Server) publishDiagnostics(doc document) []byte {
+	if !strings.HasSuffix(doc.Path, ".gwdk") {
+		return publishDiagnostics(doc.URI, nil)
+	}
 	_, diagnostics := lang.CheckSource(server.config, doc.Path, []byte(doc.Text))
 	items := make([]diagnostic, 0, len(diagnostics))
 	for _, item := range diagnostics {
@@ -319,18 +325,25 @@ func (server *Server) definition(params definitionParams) *location {
 	if !ok {
 		return nil
 	}
-	name, ok := componentCallAtPosition(doc.Text, params.Position)
+	if name, ok := componentCallAtPosition(doc.Text, params.Position); ok {
+		component, ok := server.resolveComponentDefinition(doc, name)
+		if !ok {
+			return nil
+		}
+		return &location{
+			URI:   component.URI,
+			Range: lspRangeFromSourceSpan(component.Span, component.Text),
+		}
+	}
+	token := tokenAtPosition(doc.Text, params.Position)
+	if token == "" {
+		return nil
+	}
+	location, ok := server.goDefinition(token)
 	if !ok {
 		return nil
 	}
-	component, ok := server.resolveComponentDefinition(doc, name)
-	if !ok {
-		return nil
-	}
-	return &location{
-		URI:   component.URI,
-		Range: lspRangeFromSourceSpan(component.Span, component.Text),
-	}
+	return &location
 }
 
 func (server *Server) references(params referenceParams) []location {
@@ -481,6 +494,75 @@ func usePackagesByAlias(uses []manifest.Use) map[string]string {
 
 func componentDefinitionKey(packageName, componentName string) string {
 	return packageName + "\x00" + componentName
+}
+
+func (server *Server) goDefinition(name string) (location, bool) {
+	if !isExportedGOWDKName(name) {
+		return location{}, false
+	}
+	for _, doc := range server.documents {
+		if !strings.HasSuffix(doc.Path, ".go") {
+			continue
+		}
+		fileSet := token.NewFileSet()
+		file, err := goparser.ParseFile(fileSet, doc.Path, doc.Text, 0)
+		if err != nil {
+			continue
+		}
+		if item, ok := goDefinitionInFile(fileSet, file, doc, name); ok {
+			return item, true
+		}
+	}
+	return location{}, false
+}
+
+func goDefinitionInFile(fileSet *token.FileSet, file *ast.File, doc document, name string) (location, bool) {
+	for _, declaration := range file.Decls {
+		switch typed := declaration.(type) {
+		case *ast.FuncDecl:
+			if typed.Name.Name == name {
+				return goNameLocation(fileSet, doc.URI, typed.Name), true
+			}
+		case *ast.GenDecl:
+			for _, spec := range typed.Specs {
+				if item, ok := goDefinitionInSpec(fileSet, doc.URI, spec, name); ok {
+					return item, true
+				}
+			}
+		}
+	}
+	return location{}, false
+}
+
+func goDefinitionInSpec(fileSet *token.FileSet, uri string, spec ast.Spec, name string) (location, bool) {
+	switch typed := spec.(type) {
+	case *ast.TypeSpec:
+		if typed.Name.Name == name {
+			return goNameLocation(fileSet, uri, typed.Name), true
+		}
+	case *ast.ValueSpec:
+		for _, ident := range typed.Names {
+			if ident.Name == name {
+				return goNameLocation(fileSet, uri, ident), true
+			}
+		}
+	}
+	return location{}, false
+}
+
+func goNameLocation(fileSet *token.FileSet, uri string, ident *ast.Ident) location {
+	start := fileSet.Position(ident.Pos())
+	startPosition := position{Line: start.Line - 1, Character: start.Column - 1}
+	return location{
+		URI: uri,
+		Range: lspRange{
+			Start: startPosition,
+			End: position{
+				Line:      startPosition.Line,
+				Character: startPosition.Character + utf16Length(ident.Name),
+			},
+		},
+	}
 }
 
 func semanticTokenType(kind lang.TokenKind) (string, bool) {

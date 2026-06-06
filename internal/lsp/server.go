@@ -45,6 +45,8 @@ var (
 	simpleInterpolationCompletionPattern = regexp.MustCompile(`\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}`)
 	bindingCompletionPattern             = regexp.MustCompile(`g:bind:(?:value|checked)\s*=\s*\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}`)
 	assignmentCompletionPattern          = regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\+\+|--)`)
+	semanticTokenTypes                   = []string{"decorator", "variable", "string", "operator"}
+	semanticTokenTypeIndex               = map[string]int{"decorator": 0, "variable": 1, "string": 2, "operator": 3}
 )
 
 // Server handles one LSP session.
@@ -132,6 +134,13 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 				CompletionProvider: completionOptions{
 					TriggerCharacters: []string{"@", ":", "<", " "},
 				},
+				SemanticTokensProvider: semanticTokensOptions{
+					Legend: semanticTokensLegend{
+						TokenTypes:     semanticTokenTypes,
+						TokenModifiers: []string{},
+					},
+					Full: true,
+				},
 			},
 			ServerInfo: serverInfo{
 				Name:    "gowdk",
@@ -173,6 +182,12 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
 		}
 		return singleMessage(response(request.ID, server.hover(params)))
+	case "textDocument/semanticTokens/full":
+		var params semanticTokensParams
+		if err := decodeParams(request.Params, &params); err != nil {
+			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
+		}
+		return singleMessage(response(request.ID, server.semanticTokens(params)))
 	default:
 		return singleMessage(errorResponse(request.ID, methodNotFound, fmt.Sprintf("method not found: %s", request.Method)))
 	}
@@ -281,6 +296,58 @@ func (server *Server) hover(params hoverParams) *hoverResult {
 		}
 	}
 	return nil
+}
+
+func (server *Server) semanticTokens(params semanticTokensParams) semanticTokensResult {
+	doc, ok := server.documents[params.TextDocument.URI]
+	if !ok {
+		return semanticTokensResult{Data: []int{}}
+	}
+	tokens, _ := lang.Lex(doc.Text)
+	data := make([]int, 0, len(tokens)*5)
+	previousLine := 0
+	previousCharacter := 0
+	seen := false
+	for _, token := range tokens {
+		tokenType, ok := semanticTokenType(token.Kind)
+		if !ok || token.Lexeme == "" {
+			continue
+		}
+		start := positionFromLangPosition(token.Pos, doc.Text)
+		length := utf16Length(token.Lexeme)
+		if length == 0 {
+			continue
+		}
+
+		deltaLine := start.Line
+		deltaStart := start.Character
+		if seen {
+			deltaLine = start.Line - previousLine
+			if deltaLine == 0 {
+				deltaStart = start.Character - previousCharacter
+			}
+		}
+		data = append(data, deltaLine, deltaStart, length, semanticTokenTypeIndex[tokenType], 0)
+		previousLine = start.Line
+		previousCharacter = start.Character
+		seen = true
+	}
+	return semanticTokensResult{Data: data}
+}
+
+func semanticTokenType(kind lang.TokenKind) (string, bool) {
+	switch kind {
+	case lang.TokenAnnotation:
+		return "decorator", true
+	case lang.TokenIdentifier, lang.TokenText:
+		return "variable", true
+	case lang.TokenString:
+		return "string", true
+	case lang.TokenLBrace, lang.TokenRBrace, lang.TokenComma, lang.TokenColon, lang.TokenQuestion, lang.TokenArrow:
+		return "operator", true
+	default:
+		return "", false
+	}
 }
 
 func (server *Server) hoverItems(currentURI string) []completionItem {
@@ -740,6 +807,7 @@ type serverCapabilities struct {
 	HoverProvider              bool                    `json:"hoverProvider"`
 	DocumentFormattingProvider bool                    `json:"documentFormattingProvider"`
 	CompletionProvider         completionOptions       `json:"completionProvider"`
+	SemanticTokensProvider     semanticTokensOptions   `json:"semanticTokensProvider"`
 }
 
 type textDocumentSyncOptions struct {
@@ -756,6 +824,16 @@ type completionOptions struct {
 	TriggerCharacters []string `json:"triggerCharacters"`
 }
 
+type semanticTokensOptions struct {
+	Legend semanticTokensLegend `json:"legend"`
+	Full   bool                 `json:"full"`
+}
+
+type semanticTokensLegend struct {
+	TokenTypes     []string `json:"tokenTypes"`
+	TokenModifiers []string `json:"tokenModifiers"`
+}
+
 type textDocumentItem struct {
 	URI        string `json:"uri"`
 	LanguageID string `json:"languageId"`
@@ -765,6 +843,14 @@ type textDocumentItem struct {
 
 type textDocumentIdentifier struct {
 	URI string `json:"uri"`
+}
+
+type semanticTokensParams struct {
+	TextDocument textDocumentIdentifier `json:"textDocument"`
+}
+
+type semanticTokensResult struct {
+	Data []int `json:"data"`
 }
 
 type versionedTextDocumentIdentifier struct {

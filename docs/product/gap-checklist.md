@@ -827,7 +827,9 @@ Done when:
 - [ ] Add go-to-definition for component calls.
 - [ ] Add go-to-definition for Go handler symbols where possible.
 - [ ] Add references for page IDs, routes, components, stores, and guards.
-- [ ] Add semantic tokens for `.gwdk`.
+- [x] Add semantic tokens for `.gwdk`.
+      Decision: `gowdk lsp` advertises `textDocument/semanticTokens/full`
+      and returns lexer-backed decorator, variable, string, and operator tokens.
 - [ ] Add code actions for common migrations and missing imports/uses.
 - [ ] Add project-wide completions for discovered components, layouts, guards,
       routes, stores, props, and state fields.

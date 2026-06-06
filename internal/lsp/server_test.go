@@ -220,6 +220,51 @@ func TestServerReturnsHoverForLanguageAndProjectSymbols(t *testing.T) {
 	assertHoverContains(t, messages[3], "Submit", "GOWDK action handler")
 }
 
+func TestServerReturnsSemanticTokens(t *testing.T) {
+	uri := "file:///tmp/home.page.gwdk"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@page home\n@route \"/\"\n\nview {\n  <main>{title}</main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/semanticTokens/full","params":{"textDocument":{"uri":"`+uri+`"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":3,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 4 {
+		t.Fatalf("expected 4 output messages, got %d", len(messages))
+	}
+
+	capabilities := messages[0]["result"].(map[string]any)["capabilities"].(map[string]any)
+	provider := capabilities["semanticTokensProvider"].(map[string]any)
+	if provider["full"] != true {
+		t.Fatalf("expected full semantic-token support, got %#v", provider)
+	}
+	legend := provider["legend"].(map[string]any)
+	for _, tokenType := range []string{"decorator", "variable", "string", "operator"} {
+		if !hasStringValue(legend["tokenTypes"].([]any), tokenType) {
+			t.Fatalf("expected semantic token type %q, got %#v", tokenType, legend["tokenTypes"])
+		}
+	}
+
+	assertResponseID(t, messages[2], float64(2))
+	result := messages[2]["result"].(map[string]any)
+	data := result["data"].([]any)
+	if len(data) == 0 || len(data)%5 != 0 {
+		t.Fatalf("expected semantic-token data groups, got %#v", data)
+	}
+	assertNumberPrefix(t, data, []float64{
+		0, 0, 7, 1, 0, // package
+		0, 8, 3, 1, 0, // app
+		2, 0, 5, 0, 0, // @page
+	})
+}
+
 func TestServerReturnsMethodNotFoundForUnknownRequests(t *testing.T) {
 	input := framed(`{"jsonrpc":"2.0","id":"x","method":"gowdk/unknown","params":{}}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)
@@ -302,6 +347,27 @@ func hasCompletionLabel(items []any, label string) bool {
 		}
 	}
 	return false
+}
+
+func hasStringValue(values []any, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func assertNumberPrefix(t *testing.T, values []any, expected []float64) {
+	t.Helper()
+	if len(values) < len(expected) {
+		t.Fatalf("expected at least %d values, got %#v", len(expected), values)
+	}
+	for index, want := range expected {
+		if values[index] != want {
+			t.Fatalf("expected value %d to be %v, got %#v in %#v", index, want, values[index], values)
+		}
+	}
 }
 
 func assertHoverContains(t *testing.T, message map[string]any, parts ...string) {

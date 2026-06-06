@@ -97,8 +97,10 @@ Svelte/SvelteKit implementation.
       Implement only the parts that serve GOWDK's build-time, endpoint, and SSR
       lanes.
 - [ ] Complete hybrid request-time behavior.
-      GOWDK currently treats bare hybrid pages as SPA output, while generated
-      binary docs still list hybrid request-time behavior as unsupported.
+      GOWDK currently treats bare hybrid pages as SPA output and supports the
+      explicit `load {}` request-time branch, but broader hybrid behavior such
+      as streaming, revalidation, and partial server data refresh still needs
+      product decisions.
 - [ ] Add a general app-wide hook/middleware contract.
       Current guards and rate-limit registration are useful but narrower than
       app-wide request hooks, response transforms, fetch interception, error
@@ -388,7 +390,7 @@ Done when:
 - [ ] Decide what request-time capabilities a hybrid page can use.
 - [ ] Decide whether hybrid can prerender and later revalidate.
 - [ ] Decide whether hybrid can stream or partially refresh server data.
-- [ ] Define generated binary behavior for hybrid pages.
+- [x] Define generated binary behavior for hybrid pages.
 - [ ] Define dev-server behavior for hybrid pages.
 - [ ] Add diagnostics for unsupported hybrid combinations.
 - [ ] Add docs and examples for bare hybrid SPA output and request-time hybrid
@@ -397,7 +399,7 @@ Done when:
 Done when:
 
 - [ ] `@render hybrid` is either product-stable or clearly experimental.
-- [ ] Deployment docs do not say hybrid request-time behavior is both planned
+- [x] Deployment docs do not say hybrid request-time behavior is both planned
       and implemented.
 
 ### 8. Hooks, Guards, And Middleware

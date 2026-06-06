@@ -173,8 +173,10 @@ required-field validation. It can also serve first-slice action fragment
 responses for `X-GOWDK-Partial` requests, CSRF validation when
 `Build.CSRF.Enabled` is set, and first-slice concrete or dynamic SSR pages
 rendered from `view {}` and literal or imported `build {}` data. Bare hybrid
-pages are emitted as build-time SPA output. It does not run general fragment
-endpoints, `load {}` execution, or hybrid request-time behavior.
+pages are emitted as build-time SPA output; hybrid pages with `load {}` opt
+into the same generated request-time page path and appear as `hybrid` routes in
+`gowdk routes`. It does not run general fragment endpoints or broader hybrid
+request-time behavior beyond that explicit `load {}` branch.
 
 Current `serve` limitations: it serves generated build output files only. It does not
 run generated actions, APIs, partial fragments, or SSR routes.

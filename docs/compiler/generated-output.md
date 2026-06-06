@@ -218,7 +218,8 @@ CSRF token fields into served HTML POST forms, validate action POSTs before
 generated decoding or user handlers run, and return HTTP 403
 `invalid csrf token` with `Cache-Control: no-store` for invalid tokens. The
 generated app does not run user-defined validation beyond handler logic, handle
-uploads, or serve broad hybrid request-time handlers today.
+uploads, or serve broad hybrid request-time handlers beyond the explicit
+`@render hybrid` plus `load {}` page branch today.
 
 Generated app source is an output artifact and sits downstream of feature
 packages. Feature packages may import stable public GOWDK runtime/addon

@@ -177,6 +177,8 @@ Generated binaries currently support:
 - First-slice concrete and dynamic `@render ssr` pages with declared `load {}`
   identifier or dotted paths.
 - Bare `@render hybrid` pages as normal build-time SPA output.
+- `@render hybrid` pages with `load {}` as explicit request-time page routes
+  through the same first-slice generated load/render path.
 - Optional split frontend/backend generation with `--backend-app` and
   `--backend-bin`; the frontend proxies backend routes to
   `GOWDK_BACKEND_ORIGIN`.
@@ -184,7 +186,7 @@ Generated binaries currently support:
 Generated binaries do not yet support:
 
 - General fragment routes.
-- Hybrid request-time behavior.
+- Broader hybrid request-time behavior beyond the explicit `load {}` branch.
 
 ## Local Development
 

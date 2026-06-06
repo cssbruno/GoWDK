@@ -56,7 +56,7 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 	js := readFile(t, jsPath)
 	if !strings.Contains(js, `data-gowdk-runtime=\"js\"`) ||
 		!strings.Contains(js, `const selector = "gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]";`) ||
-		!strings.Contains(js, "\n  function matchingBrace(source, openIndex)") ||
+		!strings.Contains(js, "\n  function parseExpression(source)") ||
 		!strings.Contains(js, `applyExpression`) ||
 		!strings.Contains(js, `window.__gowdkMountIslands`) ||
 		!strings.Contains(js, `window.__gowdkDestroyIslands`) ||
@@ -343,10 +343,10 @@ func TestBuildProductionModeOmitsJSIslandSourceMaps(t *testing.T) {
 	if strings.Contains(js, `sourceMappingURL`) {
 		t.Fatalf("did not expect sourceMappingURL in production JS:\n%s", js)
 	}
-	if strings.Contains(js, "\n  function matchingBrace(source, openIndex)") {
+	if strings.Contains(js, "\n  function parseExpression(source)") {
 		t.Fatalf("did not expect development indentation in production JS:\n%s", js)
 	}
-	if !strings.Contains(js, "\nfunction matchingBrace(source, openIndex)") {
+	if !strings.Contains(js, "\nfunction parseExpression(source)") {
 		t.Fatalf("expected compact function line in production JS:\n%s", js)
 	}
 	assetManifestPayload := readFile(t, filepath.Join(outputDir, assetManifestFile))
@@ -402,7 +402,7 @@ func TestBuildEmitsClientFunctionHandlersForJSIsland(t *testing.T) {
 		`nextScope[param] = valueOf(args[index] || "", state, scope, helpers);`,
 		`let local = expr.match(/^let\s+([A-Za-z_][A-Za-z0-9_]*)\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*(.+)$/);`,
 		`scope[local[1]] = valueOf(local[2], state, scope, helpers);`,
-		`with (env) { return (`,
+		`function evalExpression(expr, state, scope, helpers, stack)`,
 		`applyExpression(statement, state, handlers, helpers, nextScope, refs, computeds, asyncTokens, root, emitEvents)`,
 	} {
 		if !strings.Contains(js, expected) {
@@ -571,7 +571,7 @@ fn Add() {
 	js := readFile(t, jsPath)
 	for _, expected := range []string{
 		`function callHelper(name, args, state, helpers, stack)`,
-		`env[name] = (...args) => callHelper(name, args, state, helpers, stack || []);`,
+		`return callHelper(expr.name, args, state, helpers, stack);`,
 		`const helpers = client.helpers || {};`,
 	} {
 		if !strings.Contains(js, expected) {
@@ -823,8 +823,19 @@ func TestBuildEmitsNestedAndIndexExpressionsForJSIsland(t *testing.T) {
 		t.Fatalf("expected initial nested condition to render visible:\n%s", html)
 	}
 	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Nested.js"))
-	if !strings.Contains(js, `with (env) { return (`) {
-		t.Fatalf("expected expression lowering path in generated JS:\n%s", js)
+	for _, forbidden := range []string{`with (env)`, `Function("env"`} {
+		if strings.Contains(js, forbidden) {
+			t.Fatalf("did not expect dynamic expression evaluation %q in generated JS:\n%s", forbidden, js)
+		}
+	}
+	for _, expected := range []string{
+		`function parseExpression(source)`,
+		`function evalExpression(expr, state, scope, helpers, stack)`,
+		`function evalBinaryExpression(expr, state, scope, helpers, stack)`,
+	} {
+		if !strings.Contains(js, expected) {
+			t.Fatalf("expected compiler-owned expression interpreter %q in generated JS:\n%s", expected, js)
+		}
 	}
 }
 
@@ -987,9 +998,9 @@ func TestBuildEmitsGoishConditionalExpressionsForJSIsland(t *testing.T) {
 	}
 	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
 	for _, expected := range []string{
-		`function expressionSource(source)`,
-		`return "(" + expressionSource(cond) + " ? " + expressionSource(thenExpr) + " : " + expressionSource(elseExpr) + ")"`,
-		`return Function("env", "with (env) { return (" + expressionSource(token) + "); }")(env);`,
+		`parseConditional()`,
+		`if (this.match("ident", "if"))`,
+		`return Boolean(evalExpression(expr.cond, state, scope, helpers, stack))`,
 	} {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated JS island runtime:\n%s", expected, js)
@@ -1143,7 +1154,7 @@ fn SetCount() {
 		`string(value) {`,
 		`int(value) {`,
 		`float(value) {`,
-		`Object.assign(Object.create(null), builtins, state, scope || {})`,
+		`if (Object.prototype.hasOwnProperty.call(builtins, expr.name)) return builtins[expr.name].apply(null, args);`,
 	} {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated JS island runtime:\n%s", expected, js)

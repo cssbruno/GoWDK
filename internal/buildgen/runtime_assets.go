@@ -20,9 +20,13 @@ import (
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-func clientRuntimeArtifacts(pages []manifest.Page, outputDir string) []plannedAssetArtifact {
+func clientRuntimeArtifacts(config gowdk.Config, pages []manifest.Page, outputDir string, layouts map[string]manifest.Layout, components map[string]view.Component) []plannedAssetArtifact {
 	for _, page := range pages {
-		if pageUsesPartialRuntime(page, page.Blocks.ViewBody) {
+		viewSource := page.Blocks.ViewBody
+		if source, err := composePageViewSource(page, layouts); err == nil {
+			viewSource = source
+		}
+		if pageUsesPartialRuntime(page, viewSource) || pageUsesSPANavigationRuntime(config, page, viewSource, components) {
 			return []plannedAssetArtifact{{
 				AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath))},
 				contents:      clientrt.Source(),
@@ -34,9 +38,9 @@ func clientRuntimeArtifacts(pages []manifest.Page, outputDir string) []plannedAs
 
 var wasmMagic = []byte{0x00, 0x61, 0x73, 0x6d}
 
-func runtimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout) ([]plannedAssetArtifact, error) {
+func runtimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout, components map[string]view.Component) ([]plannedAssetArtifact, error) {
 	var artifacts []plannedAssetArtifact
-	artifacts = append(artifacts, clientRuntimeArtifacts(app.Pages, outputDir)...)
+	artifacts = append(artifacts, clientRuntimeArtifacts(config, app.Pages, outputDir, layouts, components)...)
 	artifacts = append(artifacts, storeRuntimeArtifacts(app.Pages, outputDir)...)
 	islands, err := islandRuntimeArtifacts(config, app, outputDir, layouts)
 	if err != nil {
@@ -102,8 +106,6 @@ func storeRuntimeSource() string {
 }
 
 func islandRuntimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout) ([]plannedAssetArtifact, error) {
-	stateful := statefulComponentNames(app.Components)
-	componentBodies := componentViewBodies(app.Components)
 	components := componentsByName(app.Components)
 	includeSourceMaps := config.Build.DebugAssets()
 	planned := map[string]plannedAssetArtifact{}
@@ -112,33 +114,26 @@ func islandRuntimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDi
 		if err != nil {
 			source = page.Blocks.ViewBody
 		}
-		usages, err := recursiveComponentCallUsages(source, func(name string) (string, bool) {
-			body, ok := componentBodies[name]
-			return body, ok
-		})
+		usages, err := recursiveManifestComponentCallUsages(source, components, page.Package, componentUses(page.Uses))
 		if err != nil {
 			continue
 		}
 		for _, usage := range usages {
-			switch usage.Island {
+			component := usage.component
+			switch usage.call.Island {
 			case "wasm":
-				if _, exists := planned[filepath.Join(outputDir, filepath.FromSlash(islandWASMAssetPath(usage.Component)))]; !exists {
-					component := components[usage.Component]
+				if _, exists := planned[filepath.Join(outputDir, filepath.FromSlash(islandWASMAssetPath(component.Name)))]; !exists {
 					artifact, err := islandWASMArtifact(outputDir, component)
 					if err != nil {
 						return nil, err
 					}
 					addAsset(planned, artifact)
 				}
-				addAsset(planned, islandWASMLoaderArtifact(outputDir, usage.Component))
+				addAsset(planned, islandWASMLoaderArtifact(outputDir, component.Name))
 			case "":
-				if stateful[usage.Component] || usage.ReactiveProps {
-					addAsset(planned, islandJSArtifact(outputDir, usage.Component, includeSourceMaps))
+				if componentNeedsJSIsland(component) || usage.call.ReactiveProps {
+					addAsset(planned, islandJSArtifact(outputDir, component.Name, includeSourceMaps))
 					if includeSourceMaps {
-						component, ok := components[usage.Component]
-						if !ok {
-							continue
-						}
 						addAsset(planned, islandJSSourceMapArtifact(outputDir, component))
 					}
 				}
@@ -160,14 +155,8 @@ func islandRuntimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDi
 	return artifacts, nil
 }
 
-func islandScriptHrefs(source string, components map[string]view.Component) []string {
-	usages, err := recursiveComponentCallUsages(source, func(name string) (string, bool) {
-		component, ok := components[name]
-		if !ok {
-			return "", false
-		}
-		return component.Body, true
-	})
+func islandScriptHrefs(source string, components map[string]view.Component, ownerPackage string, uses map[string]string) []string {
+	usages, err := recursiveViewComponentCallUsages(source, components, ownerPackage, uses)
 	if err != nil {
 		return nil
 	}
@@ -175,13 +164,13 @@ func islandScriptHrefs(source string, components map[string]view.Component) []st
 	var scripts []string
 	for _, usage := range usages {
 		href := ""
-		switch usage.Island {
+		component := usage.component
+		switch usage.call.Island {
 		case "wasm":
-			href = "/" + islandWASMLoaderAssetPath(usage.Component)
+			href = "/" + islandWASMLoaderAssetPath(component.Name)
 		case "":
-			component, ok := components[usage.Component]
-			if ok && (component.StateJSON != "" || component.HandlersJSON != "" || len(component.Emits) > 0 || usage.ReactiveProps) {
-				href = "/" + islandJSAssetPath(usage.Component)
+			if component.StateJSON != "" || component.HandlersJSON != "" || len(component.Emits) > 0 || usage.call.ReactiveProps {
+				href = "/" + islandJSAssetPath(component.Name)
 			}
 		}
 		if href == "" || seen[href] {
@@ -194,60 +183,149 @@ func islandScriptHrefs(source string, components map[string]view.Component) []st
 	return scripts
 }
 
-func recursiveComponentCallUsages(source string, componentBody func(string) (string, bool)) ([]view.ComponentCallUsage, error) {
-	var usages []view.ComponentCallUsage
+type resolvedViewComponentCallUsage struct {
+	call      view.ComponentCallUsage
+	component view.Component
+}
+
+func recursiveViewComponentCallUsages(source string, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]resolvedViewComponentCallUsage, error) {
+	var usages []resolvedViewComponentCallUsage
 	visiting := map[string]bool{}
-	var walk func(string) error
-	walk = func(source string) error {
+	var walk func(string, string, map[string]string) error
+	walk = func(source string, ownerPackage string, uses map[string]string) error {
 		direct, err := view.ComponentCallUsages(source)
 		if err != nil {
 			return err
 		}
 		for _, usage := range direct {
-			usages = append(usages, usage)
-			if visiting[usage.Component] {
-				continue
-			}
-			body, ok := componentBody(usage.Component)
+			component, ok := lookupViewComponent(components, usage.Component, ownerPackage, uses)
 			if !ok {
 				continue
 			}
-			visiting[usage.Component] = true
-			if err := walk(body); err != nil {
+			usages = append(usages, resolvedViewComponentCallUsage{call: usage, component: component})
+			identity := component.Identity()
+			if visiting[identity] {
+				continue
+			}
+			visiting[identity] = true
+			if err := walk(component.Body, component.Package, component.Uses); err != nil {
 				return err
 			}
-			delete(visiting, usage.Component)
+			delete(visiting, identity)
 		}
 		return nil
 	}
-	if err := walk(source); err != nil {
+	if err := walk(source, ownerPackage, uses); err != nil {
 		return nil, err
 	}
 	return usages, nil
 }
 
+func lookupViewComponent(components map[string]view.Component, name string, ownerPackage string, uses map[string]string) (view.Component, bool) {
+	if strings.Contains(name, ".") {
+		if component, ok := components[name]; ok {
+			return component, true
+		}
+		alias, componentName, _ := strings.Cut(name, ".")
+		packageName := uses[alias]
+		if packageName == "" {
+			return view.Component{}, false
+		}
+		component, ok := components[componentRegistryKey(packageName, componentName)]
+		return component, ok
+	}
+	if ownerPackage != "" {
+		component, ok := components[componentRegistryKey(ownerPackage, name)]
+		return component, ok
+	}
+	component, ok := components[name]
+	return component, ok
+}
+
+type resolvedManifestComponentCallUsage struct {
+	call      view.ComponentCallUsage
+	component manifest.Component
+}
+
+func recursiveManifestComponentCallUsages(source string, components map[string]manifest.Component, ownerPackage string, uses map[string]string) ([]resolvedManifestComponentCallUsage, error) {
+	var usages []resolvedManifestComponentCallUsage
+	visiting := map[string]bool{}
+	var walk func(string, string, map[string]string) error
+	walk = func(source string, ownerPackage string, uses map[string]string) error {
+		direct, err := view.ComponentCallUsages(source)
+		if err != nil {
+			return err
+		}
+		for _, usage := range direct {
+			component, ok := lookupManifestComponent(components, usage.Component, ownerPackage, uses)
+			if !ok {
+				continue
+			}
+			usages = append(usages, resolvedManifestComponentCallUsage{call: usage, component: component})
+			identity := manifestComponentIdentity(component)
+			if visiting[identity] {
+				continue
+			}
+			visiting[identity] = true
+			if err := walk(component.Blocks.ViewBody, component.Package, componentUses(component.Uses)); err != nil {
+				return err
+			}
+			delete(visiting, identity)
+		}
+		return nil
+	}
+	if err := walk(source, ownerPackage, uses); err != nil {
+		return nil, err
+	}
+	return usages, nil
+}
+
+func lookupManifestComponent(components map[string]manifest.Component, name string, ownerPackage string, uses map[string]string) (manifest.Component, bool) {
+	if strings.Contains(name, ".") {
+		if component, ok := components[name]; ok {
+			return component, true
+		}
+		alias, componentName, _ := strings.Cut(name, ".")
+		packageName := uses[alias]
+		if packageName == "" {
+			return manifest.Component{}, false
+		}
+		component, ok := components[componentRegistryKey(packageName, componentName)]
+		return component, ok
+	}
+	if ownerPackage != "" {
+		component, ok := components[componentRegistryKey(ownerPackage, name)]
+		return component, ok
+	}
+	component, ok := components[name]
+	return component, ok
+}
+
 func statefulComponentNames(components []manifest.Component) map[string]bool {
 	out := map[string]bool{}
 	for _, component := range components {
-		if component.State.Type.Name != "" || component.Blocks.Client || len(component.Emits) > 0 {
+		if componentNeedsJSIsland(component) {
 			out[component.Name] = true
+			if component.Package != "" {
+				out[component.Package+"."+component.Name] = true
+			}
 		}
 	}
 	return out
 }
 
-func componentViewBodies(components []manifest.Component) map[string]string {
-	out := map[string]string{}
-	for _, component := range components {
-		out[component.Name] = component.Blocks.ViewBody
-	}
-	return out
+func componentNeedsJSIsland(component manifest.Component) bool {
+	return component.State.Type.Name != "" || component.Blocks.Client || len(component.Emits) > 0
 }
 
 func componentsByName(components []manifest.Component) map[string]manifest.Component {
 	out := map[string]manifest.Component{}
 	for _, component := range components {
-		out[component.Name] = component
+		key := componentRegistryKey(component.Package, component.Name)
+		out[key] = component
+		if component.Package == "" {
+			out[component.Name] = component
+		}
 	}
 	return out
 }
@@ -583,50 +661,6 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
     });
   };
 
-  function matchingBrace(source, openIndex) {
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-    for (let i = openIndex; i < source.length; i++) {
-      const char = source[i];
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (inString) {
-        if (char === "\\") escaped = true;
-        else if (char === "\"") inString = false;
-        continue;
-      }
-      if (char === "\"") inString = true;
-      else if (char === "{") depth++;
-      else if (char === "}") {
-        depth--;
-        if (depth === 0) return i;
-      }
-    }
-    return -1;
-  }
-
-  function expressionSource(source) {
-    source = source.trim();
-    if (!source.startsWith("if ")) return source.replace(/\bnil\b/g, "null");
-    const thenOpen = source.indexOf("{");
-    if (thenOpen < 0) return source.replace(/\bnil\b/g, "null");
-    const thenClose = matchingBrace(source, thenOpen);
-    if (thenClose < 0) return source.replace(/\bnil\b/g, "null");
-    const tail = source.slice(thenClose + 1).trim();
-    if (!tail.startsWith("else")) return source.replace(/\bnil\b/g, "null");
-    const elseOpen = source.indexOf("{", thenClose + 1);
-    if (elseOpen < 0) return source.replace(/\bnil\b/g, "null");
-    const elseClose = matchingBrace(source, elseOpen);
-    if (elseClose < 0) return source.replace(/\bnil\b/g, "null");
-    const cond = source.slice(2, thenOpen).trim();
-    const thenExpr = source.slice(thenOpen + 1, thenClose).trim();
-    const elseExpr = source.slice(elseOpen + 1, elseClose).trim();
-    return "(" + expressionSource(cond) + " ? " + expressionSource(thenExpr) + " : " + expressionSource(elseExpr) + ")";
-  }
-
   function callHelper(name, args, state, helpers, stack) {
     const helper = helpers && helpers[name];
     if (!helper) return null;
@@ -668,6 +702,220 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
     }
   });
 
+  const expressionCache = Object.create(null);
+
+  function parseExpression(source) {
+    source = String(source || "").trim();
+    if (!expressionCache[source]) expressionCache[source] = expressionParser(tokenizeExpression(source)).parse();
+    return expressionCache[source];
+  }
+
+  function tokenizeExpression(source) {
+    const tokens = [];
+    let index = 0;
+    while (index < source.length) {
+      const char = source[index];
+      if (/\s/.test(char)) {
+        index++;
+        continue;
+      }
+      if (/[A-Za-z_]/.test(char)) {
+        const start = index++;
+        while (index < source.length && /[A-Za-z0-9_]/.test(source[index])) index++;
+        tokens.push({ kind: "ident", value: source.slice(start, index) });
+        continue;
+      }
+      if (/[0-9]/.test(char)) {
+        const start = index++;
+        while (index < source.length && /[0-9]/.test(source[index])) index++;
+        if (source[index] === ".") {
+          index++;
+          while (index < source.length && /[0-9]/.test(source[index])) index++;
+        }
+        tokens.push({ kind: "number", value: source.slice(start, index) });
+        continue;
+      }
+      if (char === "\"") {
+        const start = index++;
+        let escaped = false;
+        while (index < source.length) {
+          const next = source[index++];
+          if (escaped) {
+            escaped = false;
+            continue;
+          }
+          if (next === "\\") escaped = true;
+          else if (next === "\"") break;
+        }
+        tokens.push({ kind: "string", value: source.slice(start, index) });
+        continue;
+      }
+      const pair = source.slice(index, index + 2);
+      if (["==", "!=", "<=", ">=", "&&", "||"].indexOf(pair) >= 0) {
+        tokens.push({ kind: "op", value: pair });
+        index += 2;
+        continue;
+      }
+      if ("+-*/%%!<>".indexOf(char) >= 0) {
+        tokens.push({ kind: "op", value: char });
+        index++;
+        continue;
+      }
+      if ("()[]{}.,:".indexOf(char) >= 0) {
+        tokens.push({ kind: char, value: char });
+        index++;
+        continue;
+      }
+      throw new Error("unsupported GOWDK expression token " + char);
+    }
+    tokens.push({ kind: "eof", value: "" });
+    return tokens;
+  }
+
+  function expressionParser(tokens) {
+    let index = 0;
+    const parser = {
+      parse() {
+        const expr = this.parseConditional();
+        this.expect("eof");
+        return expr;
+      },
+      peek() {
+        return tokens[index] || { kind: "eof", value: "" };
+      },
+      match(kind, value) {
+        const token = this.peek();
+        if (token.kind !== kind || (value != null && token.value !== value)) return false;
+        index++;
+        return true;
+      },
+      expect(kind, value) {
+        const token = this.peek();
+        if (!this.match(kind, value)) throw new Error("expected " + (value || kind) + " in GOWDK expression");
+        return token;
+      },
+      parseConditional() {
+        if (this.match("ident", "if")) {
+          const cond = this.parseOr();
+          this.expect("{");
+          const thenExpr = this.parseConditional();
+          this.expect("}");
+          this.expect("ident", "else");
+          this.expect("{");
+          const elseExpr = this.parseConditional();
+          this.expect("}");
+          return { kind: "if", cond, thenExpr, elseExpr };
+        }
+        return this.parseOr();
+      },
+      parseOr() {
+        let expr = this.parseAnd();
+        while (this.match("op", "||")) expr = { kind: "binary", op: "||", left: expr, right: this.parseAnd() };
+        return expr;
+      },
+      parseAnd() {
+        let expr = this.parseEquality();
+        while (this.match("op", "&&")) expr = { kind: "binary", op: "&&", left: expr, right: this.parseEquality() };
+        return expr;
+      },
+      parseEquality() {
+        let expr = this.parseCompare();
+        while (this.peek().kind === "op" && (this.peek().value === "==" || this.peek().value === "!=")) {
+          const op = this.expect("op").value;
+          expr = { kind: "binary", op, left: expr, right: this.parseCompare() };
+        }
+        return expr;
+      },
+      parseCompare() {
+        let expr = this.parseTerm();
+        while (this.peek().kind === "op" && ["<", "<=", ">", ">="].indexOf(this.peek().value) >= 0) {
+          const op = this.expect("op").value;
+          expr = { kind: "binary", op, left: expr, right: this.parseTerm() };
+        }
+        return expr;
+      },
+      parseTerm() {
+        let expr = this.parseFactor();
+        while (this.peek().kind === "op" && (this.peek().value === "+" || this.peek().value === "-")) {
+          const op = this.expect("op").value;
+          expr = { kind: "binary", op, left: expr, right: this.parseFactor() };
+        }
+        return expr;
+      },
+      parseFactor() {
+        let expr = this.parseUnary();
+        while (this.peek().kind === "op" && ["*", "/", "%%"].indexOf(this.peek().value) >= 0) {
+          const op = this.expect("op").value;
+          expr = { kind: "binary", op, left: expr, right: this.parseUnary() };
+        }
+        return expr;
+      },
+      parseUnary() {
+        if (this.peek().kind === "op" && (this.peek().value === "!" || this.peek().value === "-")) {
+          const op = this.expect("op").value;
+          return { kind: "unary", op, expr: this.parseUnary() };
+        }
+        return this.parsePostfix();
+      },
+      parsePostfix() {
+        let expr = this.parsePrimary();
+        for (;;) {
+          if (this.match(".")) {
+            expr = { kind: "member", target: expr, name: this.expect("ident").value };
+            continue;
+          }
+          if (this.match("[")) {
+            const item = this.parseConditional();
+            this.expect("]");
+            expr = { kind: "index", target: expr, index: item };
+            continue;
+          }
+          if (this.match("(")) {
+            const args = [];
+            if (!this.match(")")) {
+              do {
+                args.push(this.parseConditional());
+              } while (this.match(","));
+              this.expect(")");
+            }
+            if (expr.kind !== "ident") throw new Error("only named GOWDK helpers can be called");
+            expr = { kind: "call", name: expr.name, args };
+            continue;
+          }
+          return expr;
+        }
+      },
+      parsePrimary() {
+        const token = this.peek();
+        if (this.match("number")) return { kind: "literal", value: Number(token.value) };
+        if (this.match("string")) return { kind: "literal", value: JSON.parse(token.value) };
+        if (this.match("ident", "true")) return { kind: "literal", value: true };
+        if (this.match("ident", "false")) return { kind: "literal", value: false };
+        if (this.match("ident", "nil") || this.match("ident", "null")) return { kind: "literal", value: null };
+        if (this.match("ident")) return { kind: "ident", name: token.value };
+        if (this.match("(")) {
+          const expr = this.parseConditional();
+          this.expect(")");
+          return expr;
+        }
+        if (this.match("{")) {
+          const fields = [];
+          if (!this.match("}")) {
+            do {
+              const name = this.expect("ident").value;
+              this.expect(":");
+              fields.push([name, this.parseConditional()]);
+            } while (this.match(","));
+            this.expect("}");
+          }
+          return { kind: "object", fields };
+        }
+        throw new Error("unsupported GOWDK expression");
+      }
+    };
+    return parser;
+  }
+
   async function fetchJSON(url, signal) {
     const response = await fetch(String(url), { headers: { "Accept": "application/json" }, signal });
     if (!response.ok) throw new Error("GOWDK fetchJSON failed with HTTP " + response.status);
@@ -698,19 +946,86 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
   }
 
   function valueOf(token, state, scope, helpers, stack) {
-    token = token.trim();
-    if (token === "true") return true;
-    if (token === "false") return false;
-    if (token === "null" || token === "nil") return null;
-    if (/^-?[0-9]+(?:\.[0-9]+)?$/.test(token)) return Number(token);
-    if (token[0] === "\"") return JSON.parse(token);
-    if (scope && Object.prototype.hasOwnProperty.call(scope, token)) return scope[token];
-    if (Object.prototype.hasOwnProperty.call(state, token)) return state[token];
-    const env = Object.assign(Object.create(null), builtins, state, scope || {});
-    Object.keys(helpers || {}).forEach((name) => {
-      env[name] = (...args) => callHelper(name, args, state, helpers, stack || []);
-    });
-    return Function("env", "with (env) { return (" + expressionSource(token) + "); }")(env);
+    return evalExpression(parseExpression(token), state, scope || null, helpers || {}, stack || []);
+  }
+
+  function evalExpression(expr, state, scope, helpers, stack) {
+    switch (expr.kind) {
+      case "literal":
+        return expr.value;
+      case "ident":
+        if (scope && Object.prototype.hasOwnProperty.call(scope, expr.name)) return scope[expr.name];
+        if (Object.prototype.hasOwnProperty.call(state, expr.name)) return state[expr.name];
+        return undefined;
+      case "member": {
+        const target = evalExpression(expr.target, state, scope, helpers, stack);
+        return target == null ? undefined : target[expr.name];
+      }
+      case "index": {
+        const target = evalExpression(expr.target, state, scope, helpers, stack);
+        const index = evalExpression(expr.index, state, scope, helpers, stack);
+        return target == null ? undefined : target[index];
+      }
+      case "object": {
+        const out = {};
+        expr.fields.forEach((field) => {
+          out[field[0]] = evalExpression(field[1], state, scope, helpers, stack);
+        });
+        return out;
+      }
+      case "call": {
+        const args = expr.args.map((arg) => evalExpression(arg, state, scope, helpers, stack));
+        if (Object.prototype.hasOwnProperty.call(builtins, expr.name)) return builtins[expr.name].apply(null, args);
+        return callHelper(expr.name, args, state, helpers, stack);
+      }
+      case "unary": {
+        const value = evalExpression(expr.expr, state, scope, helpers, stack);
+        if (expr.op === "!") return !Boolean(value);
+        if (expr.op === "-") return -Number(value);
+        return undefined;
+      }
+      case "binary":
+        return evalBinaryExpression(expr, state, scope, helpers, stack);
+      case "if":
+        return Boolean(evalExpression(expr.cond, state, scope, helpers, stack))
+          ? evalExpression(expr.thenExpr, state, scope, helpers, stack)
+          : evalExpression(expr.elseExpr, state, scope, helpers, stack);
+      default:
+        return undefined;
+    }
+  }
+
+  function evalBinaryExpression(expr, state, scope, helpers, stack) {
+    if (expr.op === "&&") return Boolean(evalExpression(expr.left, state, scope, helpers, stack)) && Boolean(evalExpression(expr.right, state, scope, helpers, stack));
+    if (expr.op === "||") return Boolean(evalExpression(expr.left, state, scope, helpers, stack)) || Boolean(evalExpression(expr.right, state, scope, helpers, stack));
+    const left = evalExpression(expr.left, state, scope, helpers, stack);
+    const right = evalExpression(expr.right, state, scope, helpers, stack);
+    switch (expr.op) {
+      case "==":
+        return left === right;
+      case "!=":
+        return left !== right;
+      case "<":
+        return left < right;
+      case "<=":
+        return left <= right;
+      case ">":
+        return left > right;
+      case ">=":
+        return left >= right;
+      case "+":
+        return left + right;
+      case "-":
+        return Number(left) - Number(right);
+      case "*":
+        return Number(left) * Number(right);
+      case "/":
+        return Number(left) / Number(right);
+      case "%%":
+        return Number(left) %% Number(right);
+      default:
+        return undefined;
+    }
   }
 
   function recomputeComputed(state, computeds, helpers) {

@@ -468,7 +468,7 @@ func (program Program) HasLifecycle() bool {
 }
 
 // NeedsBootstrap reports whether the program needs the runtime bootstrap
-// envelope instead of the legacy direct handler map.
+// envelope instead of the older direct handler map.
 func (program Program) NeedsBootstrap() bool {
 	return program.HasLifecycle() || len(program.Computed) > 0 || len(program.HelperMap()) > 0 || len(program.Uses) > 0
 }

@@ -40,8 +40,10 @@ func renderPage(config gowdk.Config, page manifest.Page, components map[string]v
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
 
-	body, err := view.RenderWithOptions(viewSource, components, data, view.Options{
+	pageComponents := componentRegistryForPage(page, components)
+	body, err := view.RenderWithOptions(viewSource, pageComponents, data, view.Options{
 		Actions: actionRoutes(page, data),
+		Package: page.Package,
 	})
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
@@ -50,7 +52,7 @@ func renderPage(config gowdk.Config, page manifest.Page, components map[string]v
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
-	return document(page, body, stylesheets, storeSeeds, pageScripts(page, viewSource, components, policy)), nil
+	return document(config, page, body, stylesheets, storeSeeds, pageScripts(config, page, viewSource, pageComponents, policy)), nil
 }
 
 func composePageViewSource(page manifest.Page, layouts map[string]manifest.Layout) (string, error) {
@@ -59,10 +61,10 @@ func composePageViewSource(page manifest.Page, layouts map[string]manifest.Layou
 		return source, nil
 	}
 	for index := len(page.Layouts) - 1; index >= 0; index-- {
-		layoutID := page.Layouts[index]
-		layout, ok := layouts[layoutID]
+		layoutRef := page.Layouts[index]
+		layout, ok := resolvePageLayout(page, layouts, layoutRef)
 		if !ok {
-			return "", fmt.Errorf("layout %q is not available for app-shell composition", layoutID)
+			return "", fmt.Errorf("layout %q is not available for app-shell composition", layoutRef)
 		}
 		next, err := composeLayoutSource(layout, source)
 		if err != nil {
@@ -71,6 +73,25 @@ func composePageViewSource(page manifest.Page, layouts map[string]manifest.Layou
 		source = next
 	}
 	return source, nil
+}
+
+func resolvePageLayout(page manifest.Page, layouts map[string]manifest.Layout, layoutRef string) (manifest.Layout, bool) {
+	if alias, layoutID, ok := strings.Cut(layoutRef, "."); ok {
+		for _, use := range page.Uses {
+			if use.Alias == alias {
+				layout, exists := layouts[layoutRegistryKey(use.Package, layoutID)]
+				return layout, exists
+			}
+		}
+		return manifest.Layout{}, false
+	}
+	if page.Package != "" {
+		if layout, ok := layouts[layoutRegistryKey(page.Package, layoutRef)]; ok {
+			return layout, true
+		}
+	}
+	layout, ok := layouts[layoutRegistryKey("", layoutRef)]
+	return layout, ok
 }
 
 func composeLayoutSource(layout manifest.Layout, child string) (string, error) {
@@ -104,28 +125,31 @@ func validateViewParamReferences(page manifest.Page, source string) error {
 
 func actionRoutes(page manifest.Page, data map[string]string) map[string]string {
 	routes := map[string]string{}
-	route := page.Route
-	for name, value := range data {
-		route = strings.ReplaceAll(route, "{"+name+"}", value)
-	}
 	for _, action := range page.Blocks.Actions {
+		route := action.Route
+		if route == "" {
+			route = page.Route
+		}
+		for name, value := range data {
+			route = strings.ReplaceAll(route, "{"+name+"}", value)
+		}
 		routes[action.Name] = route
 	}
 	return routes
 }
 
-func pageScripts(page manifest.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) []string {
+func pageScripts(config gowdk.Config, page manifest.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) []string {
 	if policy != renderModeSPA {
 		return nil
 	}
 	var scripts []string
-	if pageUsesPartialRuntime(page, viewSource) {
+	if pageUsesPartialRuntime(page, viewSource) || pageUsesSPANavigationRuntime(config, page, viewSource, components) {
 		scripts = append(scripts, clientRuntimeHref)
 	}
 	if len(page.Stores) > 0 {
 		scripts = append(scripts, storeRuntimeHref)
 	}
-	scripts = append(scripts, islandScriptHrefs(viewSource, components)...)
+	scripts = append(scripts, islandScriptHrefs(viewSource, components, page.Package, componentUses(page.Uses))...)
 	return scripts
 }
 
@@ -133,12 +157,66 @@ func pageUsesPartialRuntime(page manifest.Page, viewSource string) bool {
 	if !strings.Contains(viewSource, "g:target") {
 		return false
 	}
-	for _, action := range page.Blocks.Actions {
-		if len(action.Fragments) > 0 {
+	return len(page.Blocks.Actions) > 0
+}
+
+func pageUsesSPANavigationRuntime(config gowdk.Config, page manifest.Page, viewSource string, components map[string]view.Component) bool {
+	mode := page.RenderMode(config.Render.DefaultMode())
+	if mode != gowdk.SPA && mode != gowdk.Action {
+		return false
+	}
+	if viewSourceHasInternalLink(viewSource) {
+		return true
+	}
+	usages, err := recursiveViewComponentCallUsages(viewSource, components, page.Package, componentUses(page.Uses))
+	if err != nil {
+		return false
+	}
+	for _, usage := range usages {
+		if viewSourceHasInternalLink(usage.component.Body) {
 			return true
 		}
 	}
 	return false
+}
+
+func viewSourceHasInternalLink(source string) bool {
+	nodes, err := view.Parse(source)
+	if err != nil {
+		return false
+	}
+	return nodesHaveInternalLink(nodes)
+}
+
+func nodesHaveInternalLink(nodes []view.Node) bool {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case view.Element:
+			if strings.EqualFold(typed.Name, "a") {
+				for _, attr := range typed.Attrs {
+					if attr.Name == "href" && isInternalNavigationHref(attr.Value) {
+						return true
+					}
+				}
+			}
+			if nodesHaveInternalLink(typed.Children) {
+				return true
+			}
+		case view.ComponentCall:
+			if nodesHaveInternalLink(typed.Children) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isInternalNavigationHref(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.ContainsAny(value, "{}") {
+		return false
+	}
+	return strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "//")
 }
 
 type pageStoreSeed struct {
@@ -165,12 +243,61 @@ func pageStoreSeeds(page manifest.Page) ([]pageStoreSeed, error) {
 	return seeds, nil
 }
 
-func document(page manifest.Page, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []string) string {
+func document(config gowdk.Config, page manifest.Page, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []string) string {
 	title := page.ID
+	if page.Metadata.Title != "" {
+		title = page.Metadata.Title
+	}
+	image := page.Metadata.Image
+	if image == "" {
+		image = config.Build.Head.Image
+	}
 	var head strings.Builder
 	head.WriteString("<head>\n")
 	head.WriteString(`  <meta charset="utf-8">` + "\n")
+	head.WriteString(`  <meta name="viewport" content="width=device-width, initial-scale=1">` + "\n")
 	head.WriteString("  <title>" + gowhtml.Escape(title) + "</title>\n")
+	if page.Metadata.Description != "" {
+		head.WriteString("  <meta name=\"description\"" + gowhtml.Attr("content", page.Metadata.Description) + ">\n")
+	}
+	if page.Metadata.Canonical != "" {
+		head.WriteString("  <link rel=\"canonical\"" + gowhtml.Attr("href", page.Metadata.Canonical) + ">\n")
+	}
+	if config.Build.Head.Favicon != "" {
+		head.WriteString("  <link rel=\"icon\"" + gowhtml.Attr("href", config.Build.Head.Favicon) + ">\n")
+	}
+	if socialHeadEnabled(config.Build.Head, page.Metadata) {
+		if config.Build.Head.SiteName != "" {
+			head.WriteString("  <meta property=\"og:site_name\"" + gowhtml.Attr("content", config.Build.Head.SiteName) + ">\n")
+		}
+		head.WriteString("  <meta property=\"og:type\" content=\"website\">\n")
+		if page.Metadata.Canonical != "" {
+			head.WriteString("  <meta property=\"og:url\"" + gowhtml.Attr("content", page.Metadata.Canonical) + ">\n")
+		}
+		if title != "" {
+			head.WriteString("  <meta property=\"og:title\"" + gowhtml.Attr("content", title) + ">\n")
+		}
+		if page.Metadata.Description != "" {
+			head.WriteString("  <meta property=\"og:description\"" + gowhtml.Attr("content", page.Metadata.Description) + ">\n")
+		}
+		if image != "" {
+			head.WriteString("  <meta property=\"og:image\"" + gowhtml.Attr("content", image) + ">\n")
+		}
+		card := config.Build.Head.TwitterCard
+		if card == "" {
+			card = "summary"
+		}
+		head.WriteString("  <meta name=\"twitter:card\"" + gowhtml.Attr("content", card) + ">\n")
+		if title != "" {
+			head.WriteString("  <meta name=\"twitter:title\"" + gowhtml.Attr("content", title) + ">\n")
+		}
+		if page.Metadata.Description != "" {
+			head.WriteString("  <meta name=\"twitter:description\"" + gowhtml.Attr("content", page.Metadata.Description) + ">\n")
+		}
+		if image != "" {
+			head.WriteString("  <meta name=\"twitter:image\"" + gowhtml.Attr("content", image) + ">\n")
+		}
+	}
 	for _, stylesheet := range nonEmptyStylesheets(stylesheets) {
 		head.WriteString("  <link rel=\"stylesheet\"" + gowhtml.Attr("href", stylesheet.Href) + ">\n")
 	}
@@ -197,6 +324,10 @@ func document(page manifest.Page, body string, stylesheets []gowdk.Stylesheet, s
 		body + "\n" +
 		"</body>\n" +
 		"</html>\n"
+}
+
+func socialHeadEnabled(head gowdk.HeadConfig, metadata manifest.PageMetadata) bool {
+	return head.SiteName != "" || head.Image != "" || head.TwitterCard != "" || metadata.Image != ""
 }
 
 func escapeScriptJSON(payload string) string {

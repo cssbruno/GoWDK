@@ -66,6 +66,111 @@ func TestRenderWithComponentsExpandsSPAStringProps(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsExpandsQualifiedComponentCall(t *testing.T) {
+	got, err := RenderWithOptions(`<main><ui.Hero title="GOWDK" /></main>`, map[string]Component{
+		"ui.Hero": {
+			Name:    "Hero",
+			Package: "components",
+			Props:   []string{"title"},
+			Body:    `<section><h1>{title}</h1></section>`,
+		},
+	}, nil, Options{Package: "pages"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<main><section><h1>GOWDK</h1></section></main>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderWithComponentsResolvesImportedComponentChildrenInTheirOwnPackage(t *testing.T) {
+	got, err := RenderWithOptions(`<main><ui.Hero title="GOWDK" /></main>`, map[string]Component{
+		"ui.Hero": {
+			Name:    "Hero",
+			Package: "components",
+			Props:   []string{"title"},
+			Body:    `<section><Badge label={title} /></section>`,
+		},
+		"Badge": {
+			Name:    "Badge",
+			Package: "components",
+			Props:   []string{"label"},
+			Body:    `<strong>{label}</strong>`,
+		},
+	}, nil, Options{Package: "pages"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`<main><section><gowdk-island data-gowdk-component="Badge"`,
+		`<strong><span data-gowdk-bind="label" data-gowdk-binding-text="b1">GOWDK</span></strong>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in component output:\n%s", want, got)
+		}
+	}
+	if !strings.HasSuffix(got, `</gowdk-island></section></main>`) {
+		t.Fatalf("unexpected HTML suffix:\n%s", got)
+	}
+}
+
+func TestRenderWithComponentsResolvesComponentScopedUse(t *testing.T) {
+	got, err := RenderWithOptions(`<main><Marketing title="GOWDK" /></main>`, map[string]Component{
+		"Marketing": {
+			Name:    "Marketing",
+			Package: "pages",
+			Uses:    map[string]string{"icons": "icons"},
+			Props:   []string{"title"},
+			Body:    `<section><icons.Badge label={title} /></section>`,
+		},
+		"Badge": {
+			Name:    "Badge",
+			Package: "icons",
+			Props:   []string{"label"},
+			Body:    `<strong>{label}</strong>`,
+		},
+	}, nil, Options{Package: "pages"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`<section><gowdk-island data-gowdk-component="Badge"`,
+		`<strong><span data-gowdk-bind="label" data-gowdk-binding-text="b1">GOWDK</span></strong>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in component output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsDoesNotResolveImportedComponentByUnqualifiedNameFromPage(t *testing.T) {
+	_, err := RenderWithOptions(`<main><Badge label="GOWDK" /></main>`, map[string]Component{
+		"Badge": {
+			Name:    "Badge",
+			Package: "components",
+			Props:   []string{"label"},
+			Body:    `<strong>{label}</strong>`,
+		},
+	}, nil, Options{Package: "pages"})
+	if err == nil {
+		t.Fatal("expected missing component error")
+	}
+	if !strings.Contains(err.Error(), `missing component "Badge"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestComponentReferencesIncludesQualifiedNames(t *testing.T) {
+	refs, err := ComponentReferences(`<main><ui.Hero /><Card /></main>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(refs, ",") != "Card,ui.Hero" {
+		t.Fatalf("unexpected component references: %#v", refs)
+	}
+}
+
 func TestRenderWithComponentsExpandsSlotChildrenInCallerScope(t *testing.T) {
 	got, err := RenderWithData(`<Panel title="Welcome"><p>{message}</p></Panel>`, map[string]Component{
 		"Panel": {
@@ -1127,6 +1232,26 @@ func TestActionFormFieldsUnionsMultipleFormsForAction(t *testing.T) {
 	}
 	got := strings.Join(fields["submit"], ",")
 	if got != "email,name" {
+		t.Fatalf("unexpected fields: %#v", fields)
+	}
+}
+
+func TestActionFormFieldsFindsSubmitIntentControls(t *testing.T) {
+	fields, err := ActionFormFields(`
+		<form g:post={submit}>
+			<input name="email" />
+			<input type="submit" name="intent" value="save" />
+			<button name="intent" value="publish">Publish</button>
+			<button type="submit" name="confirm" value="yes">Confirm</button>
+			<button type="button" name="local">Local</button>
+			<input type="reset" name="resetIntent" />
+		</form>
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(fields["submit"], ",")
+	if got != "confirm,email,intent" {
 		t.Fatalf("unexpected fields: %#v", fields)
 	}
 }

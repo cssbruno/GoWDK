@@ -21,7 +21,8 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 			failures = append(failures, "component missing name")
 			continue
 		}
-		if _, exists := registry[component.Name]; exists {
+		key := componentRegistryKey(component.Package, component.Name)
+		if _, exists := registry[key]; exists {
 			failures = append(failures, fmt.Sprintf("duplicate component %q", component.Name))
 			continue
 		}
@@ -67,8 +68,10 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 		if !valid {
 			continue
 		}
-		registry[component.Name] = view.Component{
+		compiled := view.Component{
 			Name:         component.Name,
+			Package:      component.Package,
+			Uses:         componentUses(component.Uses),
 			Props:        props,
 			State:        state,
 			StateJSON:    stateJSON,
@@ -80,8 +83,23 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 			Computed:     computeds,
 			Body:         component.Blocks.ViewBody,
 		}
+		registry[key] = compiled
+		if component.Package == "" {
+			registry[component.Name] = compiled
+		}
 	}
 	return registry, failures
+}
+
+func componentUses(uses []manifest.Use) map[string]string {
+	if len(uses) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for _, use := range uses {
+		out[use.Alias] = use.Package
+	}
+	return out
 }
 
 func componentClientComputeds(component manifest.Component) ([]clientlang.Computed, []string) {
@@ -264,8 +282,9 @@ func buildLayouts(layouts []manifest.Layout) (map[string]manifest.Layout, []stri
 			failures = append(failures, "layout missing ID")
 			continue
 		}
-		if _, exists := registry[layout.ID]; exists {
-			failures = append(failures, fmt.Sprintf("duplicate layout %q", layout.ID))
+		key := layoutRegistryKey(layout.Package, layout.ID)
+		if _, exists := registry[key]; exists {
+			failures = append(failures, fmt.Sprintf("duplicate layout %q", layoutRegistryDisplayName(layout.Package, layout.ID)))
 			continue
 		}
 		if !layout.Blocks.View {
@@ -276,9 +295,23 @@ func buildLayouts(layouts []manifest.Layout) (map[string]manifest.Layout, []stri
 			failures = append(failures, fmt.Sprintf("layout %s view {} is empty", layout.ID))
 			continue
 		}
-		registry[layout.ID] = layout
+		registry[key] = layout
 	}
 	return registry, failures
+}
+
+func layoutRegistryKey(packageName, layoutID string) string {
+	if packageName == "" {
+		return layoutID
+	}
+	return packageName + "." + layoutID
+}
+
+func layoutRegistryDisplayName(packageName, layoutID string) string {
+	if packageName == "" {
+		return layoutID
+	}
+	return packageName + "." + layoutID
 }
 
 func isComponentName(value string) bool {

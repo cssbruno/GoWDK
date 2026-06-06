@@ -7,77 +7,33 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkast"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-var literalRecordPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
+var (
+	literalRecordPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
+	syntaxBlockPattern   = regexp.MustCompile(`^(paths|build|load|client|view|props|emits)\s*\{`)
+)
 
-// SyntaxFile is the typed AST for the currently supported .gwdk syntax subset.
-type SyntaxFile struct {
-	Annotations []SyntaxAnnotation
-	Imports     []SyntaxImport
-	Blocks      []SyntaxBlock
-}
-
-// SyntaxAnnotation is one top-level @annotation.
-type SyntaxAnnotation struct {
-	Name  string
-	Value string
-	Span  manifest.SourceSpan
-}
-
-// SyntaxImport is one top-level Go import declaration.
-type SyntaxImport struct {
-	Alias string
-	Path  string
-	Span  manifest.SourceSpan
-}
-
-// SyntaxBlock is one parsed top-level block.
-type SyntaxBlock struct {
-	Kind    string
-	Name    string
-	Body    string
-	Span    manifest.SourceSpan
-	View    []view.Node
-	Records []LiteralRecord
-	Call    *BuildCall
-	Actions []ActionStatement
-	APIs    []APIStatement
-}
-
-// LiteralRecord is a first-slice paths/build return record.
-type LiteralRecord struct {
-	Fields map[string]string
-	Span   manifest.SourceSpan
-}
-
-// BuildCall is a first-slice imported build data function call.
-type BuildCall struct {
-	Alias    string
-	Function string
-	Span     manifest.SourceSpan
-}
-
-// ActionStatement is one supported statement inside act {}.
-type ActionStatement struct {
-	Kind      string
-	Name      string
-	InputName string
-	InputType string
-	Target    string
-	Redirect  string
-	Body      string
-	Span      manifest.SourceSpan
-}
-
-// APIStatement is one supported statement inside api {}.
-type APIStatement struct {
-	Method string
-	Route  string
-	Span   manifest.SourceSpan
-}
+type SyntaxFile = gwdkast.File
+type SyntaxPackage = gwdkast.Package
+type SyntaxAnnotation = gwdkast.Annotation
+type SyntaxImport = gwdkast.Import
+type SyntaxUse = gwdkast.Use
+type SyntaxBlock = gwdkast.Block
+type SyntaxEndpoint = gwdkast.Endpoint
+type GoTypeRef = gwdkast.GoTypeRef
+type GoFuncRef = gwdkast.GoFuncRef
+type StateContract = gwdkast.StateContract
+type WASMContract = gwdkast.WASMContract
+type LiteralRecord = gwdkast.LiteralRecord
+type BuildCall = gwdkast.BuildCall
+type Prop = gwdkast.Prop
+type Emit = gwdkast.Emit
+type EmitParam = gwdkast.EmitParam
+type ActionStatement = gwdkast.ActionStatement
+type APIStatement = gwdkast.APIStatement
 
 // ParseSyntax parses a .gwdk source file into a typed syntax AST for the
 // current compiler subset.
@@ -86,6 +42,7 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 	var body []syntaxBodyLine
 	var captured SyntaxBlock
 	depth := 0
+	seenDeclaration := false
 
 	scanner := bufio.NewScanner(bytes.NewReader(source))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
@@ -110,6 +67,9 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 			if captured.Kind == "act" && actionFragmentPattern.FindStringSubmatch(line) != nil {
 				depth++
 			}
+			if captured.Kind == "client" && strings.Contains(line, "{") {
+				depth += strings.Count(line, "{")
+			}
 			body = append(body, syntaxBodyLine{Text: rawLine, Line: lineNumber})
 			continue
 		}
@@ -117,10 +77,29 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 		if line == "" || strings.HasPrefix(line, "//") {
 			continue
 		}
+		if match := packagePattern.FindStringSubmatch(line); match != nil {
+			if seenDeclaration {
+				return SyntaxFile{}, fmt.Errorf("line %d: package declaration must be the first non-comment declaration", lineNumber)
+			}
+			pkg := SyntaxPackage{Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)}
+			file.Package = &pkg
+			seenDeclaration = true
+			continue
+		}
+		if strings.HasPrefix(line, "package ") {
+			return SyntaxFile{}, fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line)
+		}
+		seenDeclaration = true
 		if strings.HasPrefix(line, "@") {
 			match := annotationPattern.FindStringSubmatch(line)
 			if match == nil {
 				return SyntaxFile{}, fmt.Errorf("line %d: malformed annotation %q", lineNumber, line)
+			}
+			if match[1] == "wasm" {
+				file.WASM = &WASMContract{
+					Package: strings.TrimSpace(match[2]),
+					Span:    sourceLineSpan(lineNumber, rawLine),
+				}
 			}
 			file.Annotations = append(file.Annotations, SyntaxAnnotation{
 				Name:  match[1],
@@ -140,19 +119,87 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 		if isMalformedImport(line) {
 			return SyntaxFile{}, fmt.Errorf("line %d: malformed import %q", lineNumber, line)
 		}
-		if match := blockPattern.FindStringSubmatch(line); match != nil {
+		if match := usePattern.FindStringSubmatch(line); match != nil {
+			file.Uses = append(file.Uses, SyntaxUse{
+				Alias:   match[1],
+				Package: match[2],
+				Span:    sourceLineSpan(lineNumber, rawLine),
+			})
+			continue
+		}
+		if isMalformedUse(line) {
+			return SyntaxFile{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
+		}
+		if match := storePattern.FindStringSubmatch(line); match != nil {
+			span := sourceLineSpan(lineNumber, rawLine)
+			file.Stores = append(file.Stores, gwdkast.Store{
+				Name: match[1],
+				Type: GoTypeRef{Alias: match[2], Name: match[3], Span: span},
+				Init: GoFuncRef{Alias: match[4], Name: match[5], Span: span},
+				Span: span,
+			})
+			continue
+		}
+		if match := componentTypePattern.FindStringSubmatch(line); match != nil {
+			span := sourceLineSpan(lineNumber, rawLine)
+			typeRef := GoTypeRef{Alias: match[2], Name: match[3], Span: span}
+			switch match[1] {
+			case "props":
+				if match[4] != "" || match[5] != "" {
+					return SyntaxFile{}, fmt.Errorf("line %d: props contract must not declare an init function", lineNumber)
+				}
+				file.PropsType = &typeRef
+			case "state":
+				if match[4] == "" || match[5] == "" {
+					return SyntaxFile{}, fmt.Errorf("line %d: state contract requires an init function", lineNumber)
+				}
+				file.State = &StateContract{
+					Type: typeRef,
+					Init: GoFuncRef{Alias: match[4], Name: match[5], Span: span},
+					Span: span,
+				}
+			}
+			continue
+		}
+		if match := syntaxBlockPattern.FindStringSubmatch(line); match != nil {
 			captured = SyntaxBlock{Kind: match[1], Span: sourceLineSpan(lineNumber, rawLine)}
 			depth = 1
 			continue
 		}
+		if match := actionEndpointPattern.FindStringSubmatch(line); match != nil {
+			if !isExportedIdentifier(match[1]) {
+				return SyntaxFile{}, fmt.Errorf("line %d: action handler %q must be an exported Go identifier", lineNumber, match[1])
+			}
+			if match[2] != "POST" {
+				return SyntaxFile{}, fmt.Errorf("line %d: action %s uses unsupported method %s; actions currently require POST", lineNumber, match[1], match[2])
+			}
+			file.Actions = append(file.Actions, SyntaxEndpoint{
+				Kind:   "act",
+				Name:   match[1],
+				Method: match[2],
+				Route:  match[3],
+				Span:   sourceLineSpan(lineNumber, rawLine),
+			})
+			continue
+		}
 		if match := actionPattern.FindStringSubmatch(line); match != nil {
-			captured = SyntaxBlock{Kind: "act", Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)}
-			depth = 1
+			return SyntaxFile{}, fmt.Errorf("line %d: old action block syntax is not supported; use `act %s POST \"<path>\"` and move behavior to Go", lineNumber, exportedIdentifierSuggestion(match[1]))
+		}
+		if match := apiEndpointPattern.FindStringSubmatch(line); match != nil {
+			if !isExportedIdentifier(match[1]) {
+				return SyntaxFile{}, fmt.Errorf("line %d: API handler %q must be an exported Go identifier", lineNumber, match[1])
+			}
+			file.APIs = append(file.APIs, SyntaxEndpoint{
+				Kind:   "api",
+				Name:   match[1],
+				Method: match[2],
+				Route:  match[3],
+				Span:   sourceLineSpan(lineNumber, rawLine),
+			})
 			continue
 		}
 		if match := apiPattern.FindStringSubmatch(line); match != nil {
-			captured = SyntaxBlock{Kind: "api", Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)}
-			depth = 1
+			return SyntaxFile{}, fmt.Errorf("line %d: old API block syntax is not supported; use `api %s GET \"<path>\"` and move behavior to Go", lineNumber, exportedIdentifierSuggestion(match[1]))
 			continue
 		}
 		if name := unsupportedTopLevelBlockName(line); name != "" {
@@ -202,6 +249,20 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 			return SyntaxBlock{}, err
 		}
 		block.Records = records
+	case "load":
+	case "client":
+	case "props":
+		props, err := parseSyntaxProps(body)
+		if err != nil {
+			return SyntaxBlock{}, err
+		}
+		block.Props = props
+	case "emits":
+		emits, err := parseSyntaxEmits(body)
+		if err != nil {
+			return SyntaxBlock{}, err
+		}
+		block.Emits = emits
 	case "act":
 		statements, err := parseActionStatements(block.Name, body)
 		if err != nil {
@@ -289,6 +350,53 @@ func parseLiteralRecordFields(body string) (map[string]string, error) {
 		fields[name] = value
 	}
 	return fields, nil
+}
+
+func parseSyntaxProps(body []syntaxBodyLine) ([]Prop, error) {
+	var props []Prop
+	for _, raw := range body {
+		line := strings.TrimSpace(raw.Text)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		match := propPattern.FindStringSubmatch(line)
+		if match == nil {
+			return nil, fmt.Errorf("line %d: unsupported prop syntax %q", raw.Line, line)
+		}
+		if !supportedSyntaxPropType(match[2]) {
+			return nil, fmt.Errorf("line %d: unsupported prop type %q", raw.Line, match[2])
+		}
+		props = append(props, Prop{Name: match[1], Type: match[2], Span: sourceLineSpan(raw.Line, raw.Text)})
+	}
+	return props, nil
+}
+
+func supportedSyntaxPropType(value string) bool {
+	return value == "string"
+}
+
+func parseSyntaxEmits(body []syntaxBodyLine) ([]Emit, error) {
+	var emits []Emit
+	for _, raw := range body {
+		line := strings.TrimSpace(raw.Text)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		match := emitPattern.FindStringSubmatch(line)
+		if match == nil {
+			return nil, fmt.Errorf("line %d: unsupported emit syntax %q", raw.Line, line)
+		}
+		params, err := parseEmitParams(match[2], raw.Line, raw.Text)
+		if err != nil {
+			return nil, err
+		}
+		outParams := make([]EmitParam, 0, len(params))
+		for _, param := range params {
+			outParams = append(outParams, EmitParam{Name: param.Name, Type: param.Type, Span: param.Span})
+		}
+		emits = append(emits, Emit{Name: match[1], Params: outParams, Span: sourceLineSpan(raw.Line, raw.Text)})
+	}
+	return emits, nil
 }
 
 func parseActionStatements(actionName string, body []syntaxBodyLine) ([]ActionStatement, error) {

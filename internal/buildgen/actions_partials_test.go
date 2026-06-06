@@ -18,9 +18,9 @@ func TestBuildLowersGPostDirectiveForActionPage(t *testing.T) {
 		Render: gowdk.Action,
 		Blocks: manifest.Blocks{
 			View:     true,
-			ViewBody: `<form g:post={submit}><input name="email" /></form>`,
+			ViewBody: `<form g:post={Submit}><input name="email" /></form>`,
 			Actions: []manifest.Action{{
-				Name:     "submit",
+				Name:     "Submit",
 				Redirect: "/signup?ok=1",
 			}},
 		},
@@ -40,10 +40,58 @@ func TestBuildLowersGPostDirectiveForActionPage(t *testing.T) {
 	}
 }
 
+func TestBuildProductionRequiresBoundBackendHandlers(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:      "signup",
+		Package: "app",
+		Source:  filepath.Join(t.TempDir(), "signup.page.gwdk"),
+		Route:   "/signup",
+		Render:  gowdk.Action,
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<form g:post={Submit}><input name="email" /></form>`,
+			Actions:  []manifest.Action{{Name: "Submit"}},
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{Build: gowdk.BuildConfig{Mode: gowdk.Production}}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected production build to reject missing backend handler")
+	}
+	if !strings.Contains(err.Error(), "production build requires a bound action handler Submit") {
+		t.Fatalf("unexpected production backend binding error: %v", err)
+	}
+}
+
+func TestBuildProductionAllowsExplicitMissingBackendStubs(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:      "signup",
+		Package: "app",
+		Source:  filepath.Join(t.TempDir(), "signup.page.gwdk"),
+		Route:   "/signup",
+		Render:  gowdk.Action,
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<form g:post={Submit}><input name="email" /></form>`,
+			Actions:  []manifest.Action{{Name: "Submit"}},
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{Build: gowdk.BuildConfig{
+		Mode:                gowdk.Production,
+		AllowMissingBackend: true,
+	}}, app, outputDir)
+	if err != nil {
+		t.Fatalf("expected explicit missing backend stubs to build, got %v", err)
+	}
+}
+
 func TestBuildAllowsGPostWithLocalValueBinding(t *testing.T) {
 	outputDir := t.TempDir()
 	component := textComponent()
-	component.Blocks.ViewBody = `<form g:post={submit}><input name="query" g:bind:value={Query} /></form>`
+	component.Blocks.ViewBody = `<form g:post={Submit}><input name="query" g:bind:value={Query} /></form>`
 	app := manifest.Manifest{
 		Pages: []manifest.Page{{
 			ID:     "search",
@@ -53,7 +101,7 @@ func TestBuildAllowsGPostWithLocalValueBinding(t *testing.T) {
 				View:     true,
 				ViewBody: `<main><Search /></main>`,
 				Actions: []manifest.Action{{
-					Name:     "submit",
+					Name:     "Submit",
 					Redirect: "/search",
 				}},
 			},
@@ -81,8 +129,8 @@ func TestBuildAllowsGPostWithLocalValueBinding(t *testing.T) {
 			t.Fatalf("expected %q in g:post binding page:\n%s", expected, html)
 		}
 	}
-	if strings.Contains(html, `data-gowdk-on-submit`) || strings.Contains(html, `data-gowdk-event-submit`) {
-		t.Fatalf("did not expect local value binding to add submit event interception:\n%s", html)
+	if strings.Contains(html, `data-gowdk-on-Submit`) || strings.Contains(html, `data-gowdk-event-Submit`) {
+		t.Fatalf("did not expect local value binding to add Submit event interception:\n%s", html)
 	}
 }
 
@@ -94,11 +142,11 @@ func TestBuildEmitsPartialRuntimeForFragmentForms(t *testing.T) {
 		Blocks: manifest.Blocks{
 			View: true,
 			ViewBody: `<main>
-  <form g:post={refresh} g:target="#patients" g:swap="innerHTML"><input name="query" /></form>
+  <form g:post={Refresh} g:target="#patients" g:swap="innerHTML"><input name="query" /></form>
   <section id="patients">Initial</section>
 </main>`,
 			Actions: []manifest.Action{{
-				Name: "refresh",
+				Name: "Refresh",
 				Fragments: []manifest.Fragment{{
 					Target: "#patients",
 					Body:   `<p>Updated</p>`,
@@ -141,9 +189,9 @@ func TestBuildRejectsUnknownGPostActionBeforeWriting(t *testing.T) {
 		Route: "/signup",
 		Blocks: manifest.Blocks{
 			View:     true,
-			ViewBody: `<form g:post={missing}></form>`,
+			ViewBody: `<form g:post={Missing}></form>`,
 			Actions: []manifest.Action{{
-				Name:     "submit",
+				Name:     "Submit",
 				Redirect: "/signup?ok=1",
 			}},
 		},
@@ -153,7 +201,7 @@ func TestBuildRejectsUnknownGPostActionBeforeWriting(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown g:post action error")
 	}
-	if !strings.Contains(err.Error(), `signup: unknown action "missing" for g:post`) {
+	if !strings.Contains(err.Error(), `signup: unknown action "Missing" for g:post`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if entries, err := os.ReadDir(outputDir); err != nil {

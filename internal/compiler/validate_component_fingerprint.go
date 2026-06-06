@@ -60,14 +60,14 @@ func componentPropsFingerprint(component manifest.Component) string {
 		return "type:" + canonicalGoType(component.Imports, component.PropsType)
 	}
 	if len(component.Props) == 0 {
-		return "legacy:"
+		return "inline:"
 	}
 	props := make([]string, 0, len(component.Props))
 	for _, prop := range component.Props {
 		props = append(props, prop.Name+":"+prop.Type)
 	}
 	sort.Strings(props)
-	return "legacy:" + strings.Join(props, ",")
+	return "inline:" + strings.Join(props, ",")
 }
 
 func componentStateFingerprint(component manifest.Component) string {

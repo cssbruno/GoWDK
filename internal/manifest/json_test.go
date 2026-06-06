@@ -13,9 +13,17 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 		Pages: []Page{
 			{
 				Source:  "pages/blog.post.gwdk",
+				Package: "blog",
 				ID:      "blog.post",
 				Route:   "/blog/{slug}",
 				Render:  gowdk.SPA,
+				Metadata: PageMetadata{
+					Title:       "Blog post",
+					Description: "A generated blog post.",
+					Canonical:   "https://gowdk.test/blog/hello-gowdk",
+					Image:       "https://gowdk.test/assets/blog.png",
+				},
+				Uses:    []Use{{Alias: "ui", Package: "components"}},
 				Layouts: []string{"root", "blog"},
 				Paths:   true,
 				Blocks: Blocks{
@@ -49,9 +57,10 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 		},
 		Components: []Component{
 			{
-				Source: "components/hero.cmp.gwdk",
-				Name:   "Hero",
-				Props:  []Prop{{Name: "title", Type: "string"}},
+				Source:  "components/hero.cmp.gwdk",
+				Package: "components",
+				Name:    "Hero",
+				Props:   []Prop{{Name: "title", Type: "string"}},
 				Emits: []Emit{{
 					Name:   "select",
 					Params: []EmitParam{{Name: "id", Type: "string"}, {Name: "active", Type: "bool"}},
@@ -74,17 +83,28 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 	var decoded struct {
 		Version int `json:"version"`
 		Pages   map[string]struct {
-			Source          string           `json:"source"`
-			Kind            string           `json:"kind"`
-			Route           string           `json:"route"`
-			Render          gowdk.RenderMode `json:"render"`
-			Layouts         []string         `json:"layouts"`
-			DynamicParams   []string         `json:"dynamicParams"`
-			Paths           bool             `json:"paths"`
-			Guard           []string         `json:"guard"`
-			Assets          []string         `json:"assets"`
-			CSSClasses      []string         `json:"cssClasses"`
-			StyleAttributes []string         `json:"styleAttributes"`
+			Source   string           `json:"source"`
+			Kind     string           `json:"kind"`
+			Package  string           `json:"package"`
+			Route    string           `json:"route"`
+			Render   gowdk.RenderMode `json:"render"`
+			Metadata struct {
+				Title       string `json:"title"`
+				Description string `json:"description"`
+				Canonical   string `json:"canonical"`
+				Image       string `json:"image"`
+			} `json:"metadata"`
+			Uses []struct {
+				Alias   string `json:"alias"`
+				Package string `json:"package"`
+			} `json:"uses"`
+			Layouts         []string `json:"layouts"`
+			DynamicParams   []string `json:"dynamicParams"`
+			Paths           bool     `json:"paths"`
+			Guard           []string `json:"guard"`
+			Assets          []string `json:"assets"`
+			CSSClasses      []string `json:"cssClasses"`
+			StyleAttributes []string `json:"styleAttributes"`
 			Artifacts       []struct {
 				Kind string `json:"kind"`
 				Path string `json:"path"`
@@ -115,9 +135,10 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 			Components []string `json:"components"`
 		} `json:"pages"`
 		Components map[string]struct {
-			Source string `json:"source"`
-			Kind   string `json:"kind"`
-			Props  []struct {
+			Source  string `json:"source"`
+			Kind    string `json:"kind"`
+			Package string `json:"package"`
+			Props   []struct {
 				Name string `json:"name"`
 				Type string `json:"type"`
 			} `json:"props"`
@@ -146,6 +167,18 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 	}
 	if decoded.Pages["blog.post"].Source != "pages/blog.post.gwdk" || decoded.Pages["blog.post"].Kind != "page" {
 		t.Fatalf("unexpected blog.post identity: %#v", decoded.Pages["blog.post"])
+	}
+	if decoded.Pages["blog.post"].Package != "blog" {
+		t.Fatalf("expected blog.post package metadata, got %#v", decoded.Pages["blog.post"])
+	}
+	if decoded.Pages["blog.post"].Metadata.Title != "Blog post" ||
+		decoded.Pages["blog.post"].Metadata.Description != "A generated blog post." ||
+		decoded.Pages["blog.post"].Metadata.Canonical != "https://gowdk.test/blog/hello-gowdk" ||
+		decoded.Pages["blog.post"].Metadata.Image != "https://gowdk.test/assets/blog.png" {
+		t.Fatalf("expected blog.post document metadata, got %#v", decoded.Pages["blog.post"].Metadata)
+	}
+	if len(decoded.Pages["blog.post"].Uses) != 1 || decoded.Pages["blog.post"].Uses[0].Alias != "ui" || decoded.Pages["blog.post"].Uses[0].Package != "components" {
+		t.Fatalf("expected blog.post uses metadata, got %#v", decoded.Pages["blog.post"].Uses)
 	}
 	if len(decoded.Pages["blog.post"].DynamicParams) != 1 || decoded.Pages["blog.post"].DynamicParams[0] != "slug" {
 		t.Fatalf("expected blog.post dynamic param, got %#v", decoded.Pages["blog.post"].DynamicParams)
@@ -203,6 +236,9 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 	if component.Kind != "component" || component.Source != "components/hero.cmp.gwdk" {
 		t.Fatalf("unexpected component identity: %#v", component)
 	}
+	if component.Package != "components" {
+		t.Fatalf("unexpected component package metadata: %#v", component)
+	}
 	if len(component.Props) != 1 || component.Props[0].Name != "title" || component.Props[0].Type != "string" {
 		t.Fatalf("unexpected component props: %#v", component.Props)
 	}
@@ -214,5 +250,84 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 	}
 	if decoded.Layouts["root"].Kind != "layout" || decoded.Layouts["root"].Source != "layouts/root.layout.gwdk" {
 		t.Fatalf("unexpected layout metadata: %#v", decoded.Layouts)
+	}
+}
+
+func TestManifestJSONIncludesBackendBindingSignatureMetadata(t *testing.T) {
+	app := Manifest{BackendBindings: []BackendBinding{{
+		Kind:         "action",
+		PageID:       "login",
+		Source:       "features/auth/login.page.gwdk",
+		BlockName:    "login",
+		Method:       "POST",
+		Route:        "/login",
+		ImportPath:   "example.com/app/features/auth",
+		PackageName:  "auth",
+		FunctionName: "Login",
+		Signature:    BackendSignatureActionFormPtr,
+		InputType:    "LoginInput",
+		InputPointer: true,
+		InputFields: []BackendInputField{{
+			FieldName: "Email",
+			FormName:  "email",
+			Type:      "string",
+		}},
+		Status:  BackendBindingBound,
+		Message: "bound",
+	}}}
+
+	payload, err := json.Marshal(app)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		BackendBindings []struct {
+			Kind         string               `json:"kind"`
+			PageID       string               `json:"pageId"`
+			Source       string               `json:"source"`
+			BlockName    string               `json:"blockName"`
+			Method       string               `json:"method"`
+			Route        string               `json:"route"`
+			ImportPath   string               `json:"importPath"`
+			PackageName  string               `json:"packageName"`
+			FunctionName string               `json:"functionName"`
+			Signature    BackendSignatureKind `json:"signature"`
+			InputType    string               `json:"inputType"`
+			InputPointer bool                 `json:"inputPointer"`
+			InputFields  []struct {
+				FieldName string `json:"fieldName"`
+				FormName  string `json:"formName"`
+				Type      string `json:"type"`
+			} `json:"inputFields"`
+			Status  BackendBindingStatus `json:"status"`
+			Message string               `json:"message"`
+		} `json:"backendBindings"`
+	}
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.BackendBindings) != 1 {
+		t.Fatalf("expected one backend binding, got %#v", decoded.BackendBindings)
+	}
+	binding := decoded.BackendBindings[0]
+	if binding.Kind != "action" ||
+		binding.PageID != "login" ||
+		binding.Source != "features/auth/login.page.gwdk" ||
+		binding.BlockName != "login" ||
+		binding.Method != "POST" ||
+		binding.Route != "/login" ||
+		binding.ImportPath != "example.com/app/features/auth" ||
+		binding.PackageName != "auth" ||
+		binding.FunctionName != "Login" ||
+		binding.Signature != BackendSignatureActionFormPtr ||
+		binding.InputType != "LoginInput" ||
+		!binding.InputPointer ||
+		len(binding.InputFields) != 1 ||
+		binding.InputFields[0].FieldName != "Email" ||
+		binding.InputFields[0].FormName != "email" ||
+		binding.InputFields[0].Type != "string" ||
+		binding.Status != BackendBindingBound ||
+		binding.Message != "bound" {
+		t.Fatalf("unexpected backend binding metadata: %#v", binding)
 	}
 }

@@ -2,6 +2,8 @@ package compiler
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -40,9 +42,10 @@ func validateUniqueLayouts(layouts []manifest.Layout) []ValidationError {
 		if layout.ID == "" {
 			continue
 		}
-		first, exists := seen[layout.ID]
+		key := layoutIdentityKey(layout.Package, layout.ID)
+		first, exists := seen[key]
 		if !exists {
-			seen[layout.ID] = layout
+			seen[key] = layout
 			continue
 		}
 		diagnostics = append(diagnostics, ValidationError{
@@ -51,7 +54,7 @@ func validateUniqueLayouts(layouts []manifest.Layout) []ValidationError {
 			Span:   layout.Span,
 			Message: duplicateIdentityMessage(
 				"layout ID",
-				layout.ID,
+				layoutDisplayName(layout.Package, layout.ID),
 				first.Source,
 				layout.Source,
 			),
@@ -64,33 +67,101 @@ func validatePageLayoutReferences(pages []manifest.Page, layouts []manifest.Layo
 	if len(layouts) == 0 {
 		return nil
 	}
-	declared := map[string]bool{}
+	declared := map[string]manifest.Layout{}
 	for _, layout := range layouts {
 		if layout.ID != "" {
-			declared[layout.ID] = true
+			declared[layoutIdentityKey(layout.Package, layout.ID)] = layout
 		}
 	}
 	var diagnostics []ValidationError
 	for _, page := range pages {
-		for _, layoutID := range page.Layouts {
-			if declared[layoutID] {
+		usesByAlias := pageUsesByAlias(page)
+		for _, layoutRef := range page.Layouts {
+			if alias, layoutID, ok := strings.Cut(layoutRef, "."); ok {
+				use, exists := usesByAlias[alias]
+				if !exists {
+					diagnostics = append(diagnostics, ValidationError{
+						Code:   "unknown_gowdk_use_alias",
+						PageID: page.ID,
+						Source: page.Source,
+						Span:   spanForName(page.Spans.Layouts, layoutRef, page.Spans.Page),
+						Message: fmt.Sprintf(
+							"%s references layout %q, but alias %q is not declared. Add `use %s \"<package>\"` before @layout",
+							page.ID,
+							layoutRef,
+							alias,
+							alias,
+						),
+					})
+					continue
+				}
+				if _, ok := declared[layoutIdentityKey(use.Package, layoutID)]; ok {
+					continue
+				}
+				diagnostics = append(diagnostics, ValidationError{
+					Code:   "unknown_layout_id",
+					PageID: page.ID,
+					Source: page.Source,
+					Span:   spanForName(page.Spans.Layouts, layoutRef, page.Spans.Page),
+					Message: fmt.Sprintf(
+						"%s references layout %q through alias %q, but GOWDK package %s does not declare @layout %s",
+						page.ID,
+						layoutRef,
+						alias,
+						use.Package,
+						layoutID,
+					),
+				})
+				continue
+			}
+			if page.Package != "" {
+				if _, ok := declared[layoutIdentityKey(page.Package, layoutRef)]; ok {
+					continue
+				}
+			}
+			if _, ok := declared[layoutIdentityKey("", layoutRef)]; ok {
 				continue
 			}
 			diagnostics = append(diagnostics, ValidationError{
 				Code:   "unknown_layout_id",
 				PageID: page.ID,
 				Source: page.Source,
-				Span:   spanForName(page.Spans.Layouts, layoutID, page.Spans.Page),
+				Span:   spanForName(page.Spans.Layouts, layoutRef, page.Spans.Page),
 				Message: fmt.Sprintf(
-					"%s references layout %q, but no .layout.gwdk file declares @layout %s",
+					"%s references layout %q, but no same-package .layout.gwdk file declares @layout %s. For cross-package layouts, add `use alias \"package\"` and write `@layout alias.%s`",
 					page.ID,
-					layoutID,
-					layoutID,
+					layoutRef,
+					layoutRef,
+					layoutRef,
 				),
 			})
 		}
 	}
 	return diagnostics
+}
+
+func pageUsesByAlias(page manifest.Page) map[string]manifest.Use {
+	usesByAlias := map[string]manifest.Use{}
+	for _, use := range page.Uses {
+		if _, exists := usesByAlias[use.Alias]; !exists {
+			usesByAlias[use.Alias] = use
+		}
+	}
+	return usesByAlias
+}
+
+func layoutIdentityKey(packageName, layoutID string) string {
+	if packageName == "" {
+		return layoutID
+	}
+	return packageName + "." + layoutID
+}
+
+func layoutDisplayName(packageName, layoutID string) string {
+	if packageName == "" {
+		return layoutID
+	}
+	return packageName + "." + layoutID
 }
 
 func validateUniqueComponents(components []manifest.Component) []ValidationError {

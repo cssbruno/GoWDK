@@ -181,15 +181,27 @@ func routeRegistrations(pages []manifest.Page) []routeRegistration {
 				Span:    page.Spans.Route,
 			})
 			for _, action := range page.Blocks.Actions {
+				route := action.Route
+				if route == "" {
+					route = page.Route
+				}
+				info, issues := parseRoute(route)
+				if len(issues) > 0 {
+					continue
+				}
+				method := strings.ToUpper(strings.TrimSpace(action.Method))
+				if method == "" {
+					method = "POST"
+				}
 				registrations = append(registrations, routeRegistration{
 					Kind:    "action",
 					Owner:   "action " + page.ID + "." + action.Name,
-					Method:  "POST",
-					Route:   page.Route,
-					Pattern: pageInfo.Pattern,
+					Method:  method,
+					Route:   route,
+					Pattern: info.Pattern,
 					PageID:  page.ID,
 					Source:  page.Source,
-					Span:    action.Span,
+					Span:    firstSpan(action.RouteSpan, action.Span, page.Spans.Route),
 				})
 			}
 		}

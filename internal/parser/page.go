@@ -15,8 +15,12 @@ import (
 var (
 	annotationPattern     = regexp.MustCompile(`^@([A-Za-z_][A-Za-z0-9_]*)\s*(.*)$`)
 	blockPattern          = regexp.MustCompile(`^(paths|build|load|view)\s*\{`)
+	packagePattern        = regexp.MustCompile(`^package\s+([A-Za-z_][A-Za-z0-9_]*)$`)
 	importPattern         = regexp.MustCompile(`^import(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s+"([^"]+)"$`)
+	usePattern            = regexp.MustCompile(`^use\s+([A-Za-z_][A-Za-z0-9_]*)\s+"([A-Za-z_][A-Za-z0-9_]*)"$`)
 	buildCallPattern      = regexp.MustCompile(`^=>\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\)$`)
+	actionEndpointPattern = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Z]+)\s+"([^"]*)"$`)
+	apiEndpointPattern    = regexp.MustCompile(`^api\s+([A-Za-z_][A-Za-z0-9_]*)\s+(GET|POST|PUT|PATCH|DELETE)\s+"([^"]*)"$`)
 	actionPattern         = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{`)
 	apiPattern            = regexp.MustCompile(`^api(?:\s+([A-Za-z_][A-Za-z0-9_.-]*))?\s*\{`)
 	propPattern           = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
@@ -42,6 +46,7 @@ func ParsePage(source []byte) (manifest.Page, error) {
 	actionDepth := 0
 	var apiBody []string
 	capturedAPI := -1
+	seenDeclaration := false
 
 	scanner := bufio.NewScanner(bytes.NewReader(source))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
@@ -100,6 +105,20 @@ func ParsePage(source []byte) (manifest.Page, error) {
 			continue
 		}
 
+		if match := packagePattern.FindStringSubmatch(line); match != nil {
+			if seenDeclaration {
+				return manifest.Page{}, fmt.Errorf("line %d: package declaration must be the first non-comment declaration", lineNumber)
+			}
+			page.Package = match[1]
+			page.Spans.Package = sourceLineSpan(lineNumber, rawLine)
+			seenDeclaration = true
+			continue
+		}
+		if strings.HasPrefix(line, "package ") {
+			return manifest.Page{}, fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line)
+		}
+		seenDeclaration = true
+
 		if strings.HasPrefix(line, "@") {
 			match := annotationPattern.FindStringSubmatch(line)
 			if match == nil {
@@ -121,6 +140,17 @@ func ParsePage(source []byte) (manifest.Page, error) {
 		}
 		if isMalformedImport(line) {
 			return manifest.Page{}, fmt.Errorf("line %d: malformed import %q", lineNumber, line)
+		}
+		if match := usePattern.FindStringSubmatch(line); match != nil {
+			page.Uses = append(page.Uses, manifest.Use{
+				Alias:   match[1],
+				Package: match[2],
+				Span:    sourceLineSpan(lineNumber, rawLine),
+			})
+			continue
+		}
+		if isMalformedUse(line) {
+			return manifest.Page{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
 		}
 
 		if match := storePattern.FindStringSubmatch(line); match != nil {
@@ -144,19 +174,53 @@ func ParsePage(source []byte) (manifest.Page, error) {
 			continue
 		}
 
-		if match := actionPattern.FindStringSubmatch(line); match != nil {
-			page.Blocks.Actions = append(page.Blocks.Actions, manifest.Action{Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)})
-			page.Blocks.Spans.Actions = append(page.Blocks.Spans.Actions, manifest.NamedSpan{Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)})
-			capturedAction = len(page.Blocks.Actions) - 1
-			actionDepth = 1
+		if match := actionEndpointPattern.FindStringSubmatch(line); match != nil {
+			name := match[1]
+			method := match[2]
+			route := match[3]
+			span := sourceLineSpan(lineNumber, rawLine)
+			if !isExportedIdentifier(name) {
+				return manifest.Page{}, fmt.Errorf("line %d: action handler %q must be an exported Go identifier", lineNumber, name)
+			}
+			if method != "POST" {
+				return manifest.Page{}, fmt.Errorf("line %d: action %s uses unsupported method %s; actions currently require POST", lineNumber, name, method)
+			}
+			page.Blocks.Actions = append(page.Blocks.Actions, manifest.Action{
+				Name:        name,
+				Method:      method,
+				Route:       route,
+				Span:        span,
+				RouteSpan:   span,
+				RouteParams: routeParamSpans(route, lineNumber, rawLine),
+			})
+			page.Blocks.Spans.Actions = append(page.Blocks.Spans.Actions, manifest.NamedSpan{Name: name, Span: span})
 			continue
 		}
+		if match := actionPattern.FindStringSubmatch(line); match != nil {
+			return manifest.Page{}, fmt.Errorf("line %d: old action block syntax is not supported; use `act %s POST \"<path>\"` and move behavior to Go", lineNumber, exportedIdentifierSuggestion(match[1]))
+		}
 
-		if match := apiPattern.FindStringSubmatch(line); match != nil {
-			page.Blocks.APIs = append(page.Blocks.APIs, manifest.API{Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)})
-			page.Blocks.Spans.APIs = append(page.Blocks.Spans.APIs, manifest.NamedSpan{Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)})
-			capturedAPI = len(page.Blocks.APIs) - 1
+		if match := apiEndpointPattern.FindStringSubmatch(line); match != nil {
+			name := match[1]
+			method := match[2]
+			route := match[3]
+			span := sourceLineSpan(lineNumber, rawLine)
+			if !isExportedIdentifier(name) {
+				return manifest.Page{}, fmt.Errorf("line %d: API handler %q must be an exported Go identifier", lineNumber, name)
+			}
+			page.Blocks.APIs = append(page.Blocks.APIs, manifest.API{
+				Name:        name,
+				Method:      method,
+				Route:       route,
+				Span:        span,
+				RouteSpan:   span,
+				RouteParams: routeParamSpans(route, lineNumber, rawLine),
+			})
+			page.Blocks.Spans.APIs = append(page.Blocks.Spans.APIs, manifest.NamedSpan{Name: name, Span: span})
 			continue
+		}
+		if match := apiPattern.FindStringSubmatch(line); match != nil {
+			return manifest.Page{}, fmt.Errorf("line %d: old API block syntax is not supported; use `api %s GET \"<path>\"` and move behavior to Go", lineNumber, exportedIdentifierSuggestion(match[1]))
 		}
 
 		if name := unsupportedTopLevelBlockName(line); name != "" {
@@ -321,6 +385,7 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	var clientBody []string
 	inClient := false
 	clientDepth := 0
+	seenDeclaration := false
 
 	scanner := bufio.NewScanner(bytes.NewReader(source))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
@@ -389,6 +454,20 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			continue
 		}
 
+		if match := packagePattern.FindStringSubmatch(line); match != nil {
+			if seenDeclaration {
+				return manifest.Component{}, fmt.Errorf("line %d: package declaration must be the first non-comment declaration", lineNumber)
+			}
+			component.Package = match[1]
+			component.PackageSpan = sourceLineSpan(lineNumber, rawLine)
+			seenDeclaration = true
+			continue
+		}
+		if strings.HasPrefix(line, "package ") {
+			return manifest.Component{}, fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line)
+		}
+		seenDeclaration = true
+
 		if match := importPattern.FindStringSubmatch(line); match != nil {
 			component.Imports = append(component.Imports, manifest.Import{
 				Alias: match[1],
@@ -399,6 +478,17 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 		}
 		if isMalformedImport(line) {
 			return manifest.Component{}, fmt.Errorf("line %d: malformed import %q", lineNumber, line)
+		}
+		if match := usePattern.FindStringSubmatch(line); match != nil {
+			component.Uses = append(component.Uses, manifest.Use{
+				Alias:   match[1],
+				Package: match[2],
+				Span:    sourceLineSpan(lineNumber, rawLine),
+			})
+			continue
+		}
+		if isMalformedUse(line) {
+			return manifest.Component{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
 		}
 
 		if strings.HasPrefix(line, "@") {
@@ -540,6 +630,7 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 	var layout manifest.Layout
 	var viewBody []string
 	inView := false
+	seenDeclaration := false
 
 	scanner := bufio.NewScanner(bytes.NewReader(source))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
@@ -561,6 +652,20 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 			continue
 		}
 
+		if match := packagePattern.FindStringSubmatch(line); match != nil {
+			if seenDeclaration {
+				return manifest.Layout{}, fmt.Errorf("line %d: package declaration must be the first non-comment declaration", lineNumber)
+			}
+			layout.Package = match[1]
+			layout.PackageSpan = sourceLineSpan(lineNumber, rawLine)
+			seenDeclaration = true
+			continue
+		}
+		if strings.HasPrefix(line, "package ") {
+			return manifest.Layout{}, fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line)
+		}
+		seenDeclaration = true
+
 		if strings.HasPrefix(line, "@") {
 			match := annotationPattern.FindStringSubmatch(line)
 			if match == nil {
@@ -570,6 +675,18 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 				return manifest.Layout{}, fmt.Errorf("line %d: %w", lineNumber, err)
 			}
 			continue
+		}
+
+		if match := usePattern.FindStringSubmatch(line); match != nil {
+			layout.Uses = append(layout.Uses, manifest.Use{
+				Alias:   match[1],
+				Package: match[2],
+				Span:    sourceLineSpan(lineNumber, rawLine),
+			})
+			continue
+		}
+		if isMalformedUse(line) {
+			return manifest.Layout{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
 		}
 
 		switch line {
@@ -625,6 +742,34 @@ func applyAnnotation(page *manifest.Page, name, rawValue string, lineNumber int,
 		}
 		page.Render = mode
 		page.Spans.Render = span
+	case "title":
+		title, err := annotationText(name, value)
+		if err != nil {
+			return err
+		}
+		page.Metadata.Title = title
+		page.Spans.Title = span
+	case "description":
+		description, err := annotationText(name, value)
+		if err != nil {
+			return err
+		}
+		page.Metadata.Description = description
+		page.Spans.Description = span
+	case "canonical":
+		canonical, err := annotationText(name, value)
+		if err != nil {
+			return err
+		}
+		page.Metadata.Canonical = canonical
+		page.Spans.Canonical = span
+	case "image":
+		image, err := annotationText(name, value)
+		if err != nil {
+			return err
+		}
+		page.Metadata.Image = image
+		page.Spans.Image = span
 	case "guard":
 		if value == "" {
 			return fmt.Errorf("@guard requires a value")
@@ -641,6 +786,17 @@ func applyAnnotation(page *manifest.Page, name, rawValue string, lineNumber int,
 		return fmt.Errorf("unsupported annotation @%s", name)
 	}
 	return nil
+}
+
+func annotationText(name, value string) (string, error) {
+	if value == "" {
+		return "", fmt.Errorf("@%s requires a value", name)
+	}
+	text := strings.TrimSpace(trimQuotes(value))
+	if text == "" {
+		return "", fmt.Errorf("@%s requires a non-empty value", name)
+	}
+	return text, nil
 }
 
 func applyLayoutAnnotation(layout *manifest.Layout, name, rawValue string, lineNumber int, rawLine string) error {
@@ -860,6 +1016,11 @@ func isMalformedImport(line string) bool {
 	return len(fields) > 0 && fields[0] == "import"
 }
 
+func isMalformedUse(line string) bool {
+	fields := strings.Fields(line)
+	return len(fields) > 0 && fields[0] == "use"
+}
+
 func isBlockName(value string) bool {
 	if value == "" {
 		return false
@@ -884,4 +1045,43 @@ func isIdentStart(r rune) bool {
 
 func isBlockNamePart(r rune) bool {
 	return isIdentStart(r) || (r >= '0' && r <= '9') || r == '.' || r == '-'
+}
+
+func isExportedIdentifier(value string) bool {
+	if !identifierPattern.MatchString(value) {
+		return false
+	}
+	for _, r := range value {
+		return r >= 'A' && r <= 'Z'
+	}
+	return false
+}
+
+func exportedIdentifierSuggestion(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "Handler"
+	}
+	var builder strings.Builder
+	upperNext := true
+	for _, r := range value {
+		if !isIdentStart(r) && (r < '0' || r > '9') {
+			upperNext = true
+			continue
+		}
+		if builder.Len() == 0 && r >= '0' && r <= '9' {
+			builder.WriteByte('X')
+		}
+		if upperNext {
+			if r >= 'a' && r <= 'z' {
+				r = r - 'a' + 'A'
+			}
+			upperNext = false
+		}
+		builder.WriteRune(r)
+	}
+	if builder.Len() == 0 {
+		return "Handler"
+	}
+	return builder.String()
 }

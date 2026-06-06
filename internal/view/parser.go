@@ -429,8 +429,37 @@ func isComponentName(value string) bool {
 	if value == "" {
 		return false
 	}
+	if strings.Contains(value, ".") {
+		alias, name, ok := strings.Cut(value, ".")
+		if !ok || strings.Contains(name, ".") {
+			return false
+		}
+		return isComponentAlias(alias) && isExportedComponentName(name)
+	}
+	return isExportedComponentName(value)
+}
+
+func isExportedComponentName(value string) bool {
+	if value == "" {
+		return false
+	}
 	first := []rune(value)[0]
 	return first >= 'A' && first <= 'Z'
+}
+
+func isComponentAlias(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		switch {
+		case index == 0 && isNameStart(r):
+		case index > 0 && (isNameStart(r) || unicode.IsDigit(r)):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func isAttrName(value string) bool {
@@ -461,7 +490,7 @@ func isNameStart(r rune) bool {
 }
 
 func isNamePart(r rune) bool {
-	return isNameStart(r) || unicode.IsDigit(r) || r == '-' || r == ':'
+	return isNameStart(r) || unicode.IsDigit(r) || r == '-' || r == ':' || r == '.'
 }
 
 func isAttrNamePart(r rune) bool {

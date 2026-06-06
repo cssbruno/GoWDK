@@ -19,6 +19,8 @@ type Attr struct {
 // Component is a literal component template known to the view renderer.
 type Component struct {
 	Name         string
+	Package      string
+	Uses         map[string]string
 	Props        []string
 	State        map[string]string
 	StateJSON    string
@@ -74,6 +76,7 @@ func RenderWithData(source string, components map[string]Component, data map[str
 // Options configures view rendering.
 type Options struct {
 	Actions map[string]string
+	Package string
 }
 
 // ActionFormField describes one direct literal form field for a g:post action.
@@ -104,20 +107,21 @@ type ComponentCallUsage struct {
 }
 
 // RenderWithOptions renders a view markup fragment with component support,
-// interpolation data, and page-scoped action routes.
+// interpolation data, and page-scoped action endpoints.
 func RenderWithOptions(source string, components map[string]Component, data map[string]string, options Options) (string, error) {
 	bindingSeq := 0
 	islandSeq := 0
 	return render(source, renderContext{
-		components:  components,
-		values:      cloneValues(data),
-		actions:     cloneValues(options.Actions),
-		stack:       map[string]bool{},
-		stateFields: map[string]bool{},
-		readFields:  map[string]bool{},
-		bindFields:  map[string]bool{},
-		bindingSeq:  &bindingSeq,
-		islandSeq:   &islandSeq,
+		components:   components,
+		ownerPackage: options.Package,
+		values:       cloneValues(data),
+		actions:      cloneValues(options.Actions),
+		stack:        map[string]bool{},
+		stateFields:  map[string]bool{},
+		readFields:   map[string]bool{},
+		bindFields:   map[string]bool{},
+		bindingSeq:   &bindingSeq,
+		islandSeq:    &islandSeq,
 	})
 }
 
@@ -621,22 +625,22 @@ func collectNamedControls(nodes []Node, fields map[string]ActionFormField) error
 
 func controlField(element Element) (ActionFormField, bool, error) {
 	switch element.Name {
-	case "input", "textarea", "select":
+	case "button", "input", "textarea", "select":
 	default:
 		return ActionFormField{}, false, nil
 	}
 	var field ActionFormField
-	inputType := ""
+	controlType := ""
 	for _, attr := range element.Attrs {
-		if attr.Name == "required" {
+		if attr.Name == "required" && element.Name != "button" {
 			field.Required = true
 			continue
 		}
-		if element.Name == "input" && attr.Name == "type" {
+		if (element.Name == "button" || element.Name == "input") && attr.Name == "type" {
 			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
 				continue
 			}
-			inputType = strings.TrimSpace(attr.Value)
+			controlType = strings.TrimSpace(attr.Value)
 			continue
 		}
 		if attr.Name != "name" {
@@ -654,13 +658,28 @@ func controlField(element Element) (ActionFormField, bool, error) {
 	if field.Name == "" {
 		return ActionFormField{}, false, nil
 	}
-	if strings.ContainsAny(inputType, "{}") {
-		return ActionFormField{}, false, fmt.Errorf("action form input %q type %q must be literal", field.Name, inputType)
+	if strings.ContainsAny(controlType, "{}") {
+		return ActionFormField{}, false, fmt.Errorf("action form %s %q type %q must be literal", element.Name, field.Name, controlType)
 	}
-	if strings.EqualFold(inputType, "file") {
+	if isNonSubmittingControl(element.Name, controlType) {
+		return ActionFormField{}, false, nil
+	}
+	if strings.EqualFold(controlType, "file") {
 		return ActionFormField{}, false, fmt.Errorf("file input %q is not supported before upload security rules are defined", field.Name)
 	}
 	return field, true, nil
+}
+
+func isNonSubmittingControl(elementName, controlType string) bool {
+	typ := strings.ToLower(strings.TrimSpace(controlType))
+	switch elementName {
+	case "button":
+		return typ == "button" || typ == "reset"
+	case "input":
+		return typ == "button" || typ == "reset"
+	default:
+		return false
+	}
 }
 
 func sortedKeys(values map[string]bool) []string {
@@ -691,6 +710,8 @@ func isSPAAssetReference(value string) bool {
 
 type renderContext struct {
 	components   map[string]Component
+	ownerPackage string
+	uses         map[string]string
 	values       map[string]string
 	tainted      map[string]bool
 	actions      map[string]string

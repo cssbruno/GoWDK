@@ -18,13 +18,52 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	pageRoute, pageRouteIssues := parseRoute(page.Route)
 	diagnostics = append(diagnostics, routeDiagnostics(page, "page route", pageRouteIssues, page.Spans.Route, page.Spans.RouteParams)...)
 	diagnostics = append(diagnostics, validatePageStores(page)...)
+	for _, action := range page.Blocks.Actions {
+		if !isExportedHandlerName(action.Name) {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "invalid_backend_handler_name",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    action.Span,
+				Message: fmt.Sprintf("%s action handler %q must be an exported Go identifier", page.ID, action.Name),
+			})
+		}
+		method := strings.ToUpper(strings.TrimSpace(action.Method))
+		if method == "" {
+			method = "POST"
+		}
+		if method != "POST" {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "unsupported_action_method",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    action.Span,
+				Message: fmt.Sprintf("%s action %s uses unsupported method %s; actions currently require POST", page.ID, action.Name, method),
+			})
+		}
+		route := action.Route
+		if route == "" {
+			route = page.Route
+		}
+		_, issues := parseRoute(route)
+		diagnostics = append(diagnostics, routeDiagnostics(page, fmt.Sprintf("action %s endpoint path", action.Name), issues, firstSpan(action.RouteSpan, action.Span, page.Spans.Route), action.RouteParams)...)
+	}
 	for _, api := range page.Blocks.APIs {
+		if !isExportedHandlerName(api.Name) {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "invalid_backend_handler_name",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    api.Span,
+				Message: fmt.Sprintf("%s API handler %q must be an exported Go identifier", page.ID, api.Name),
+			})
+		}
 		if api.Route == "" {
 			continue
 		}
-		label := "api route"
+		label := "api endpoint path"
 		if api.Name != "" {
-			label = fmt.Sprintf("api %s route", api.Name)
+			label = fmt.Sprintf("api %s endpoint path", api.Name)
 		}
 		_, issues := parseRoute(api.Route)
 		diagnostics = append(diagnostics, routeDiagnostics(page, label, issues, api.RouteSpan, api.RouteParams)...)
@@ -202,6 +241,18 @@ func containsCSSReference(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
 			return true
+		}
+	}
+	return false
+}
+
+func isExportedHandlerName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		if index == 0 {
+			return r >= 'A' && r <= 'Z'
 		}
 	}
 	return false

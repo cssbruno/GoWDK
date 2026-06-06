@@ -1,3 +1,5 @@
+package fixtures
+
 @page docs.post
 @route "/docs/{slug}"
 

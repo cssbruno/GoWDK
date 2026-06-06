@@ -45,11 +45,44 @@ func (config RenderConfig) DefaultMode() RenderMode {
 
 // BuildConfig controls output artifacts and frontend asset packaging.
 type BuildConfig struct {
-	Output      string
-	Mode        BuildMode
-	Assets      AssetMode
-	Stylesheets []Stylesheet
-	Targets     []BuildTargetConfig
+	Output              string
+	Mode                BuildMode
+	Assets              AssetMode
+	Head                HeadConfig
+	CSRF                CSRFConfig
+	AllowMissingBackend bool
+	Stylesheets         []Stylesheet
+	Targets             []BuildTargetConfig
+}
+
+// HeadConfig controls app-level document head tags emitted around page
+// metadata.
+type HeadConfig struct {
+	SiteName    string
+	Favicon     string
+	Image       string
+	TwitterCard string
+}
+
+const DefaultCSRFSecretEnv = "GOWDK_CSRF_SECRET"
+
+// CSRFConfig controls generated action CSRF token wiring.
+type CSRFConfig struct {
+	Enabled    bool
+	SecretEnv  string
+	CookieName string
+	FieldName  string
+	HeaderName string
+	Insecure   bool
+}
+
+// SecretEnvName returns the environment variable used by generated apps to
+// read the CSRF signing secret.
+func (config CSRFConfig) SecretEnvName() string {
+	if config.SecretEnv == "" {
+		return DefaultCSRFSecretEnv
+	}
+	return config.SecretEnv
 }
 
 // BuildTargetConfig declares one configured build target. Modules selects the

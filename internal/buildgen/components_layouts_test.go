@@ -49,6 +49,158 @@ func TestBuildExpandsExplicitComponents(t *testing.T) {
 	}
 }
 
+func TestBuildExpandsImportedGOWDKPackageComponent(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><ui.Hero title="GOWDK" /></main>`,
+			},
+		}},
+		Components: []manifest.Component{
+			{
+				Package: "components",
+				Name:    "Hero",
+				Props:   []manifest.Prop{{Name: "title", Type: "string"}},
+				Blocks: manifest.Blocks{
+					View:     true,
+					ViewBody: `<section><Badge label={title} /></section>`,
+				},
+			},
+			{
+				Package: "components",
+				Name:    "Badge",
+				Props:   []manifest.Prop{{Name: "label", Type: "string"}},
+				Blocks: manifest.Blocks{
+					View:     true,
+					ViewBody: `<strong>{label}</strong>`,
+				},
+			},
+		},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, expected := range []string{
+		`<section><gowdk-island data-gowdk-component="Badge"`,
+		`<strong><span data-gowdk-bind="label" data-gowdk-binding-text="b1">GOWDK</span></strong>`,
+		`<script src="/assets/gowdk/islands/Badge.js" defer></script>`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in imported component output: %s", expected, output)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "assets", "gowdk", "islands", "Badge.js")); err != nil {
+		t.Fatalf("expected imported child island asset: %v", err)
+	}
+	if strings.Contains(output, "ui.Hero.js") {
+		t.Fatalf("expected island asset to use real component names, got: %s", output)
+	}
+	if !strings.Contains(output, `<main>`) {
+		t.Fatalf("expected imported component output: %s", output)
+	}
+}
+
+func TestBuildExpandsComponentScopedGOWDKPackageUse(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Marketing title="GOWDK" /></main>`,
+			},
+		}},
+		Components: []manifest.Component{
+			{
+				Package: "pages",
+				Name:    "Marketing",
+				Uses:    []manifest.Use{{Alias: "icons", Package: "icons"}},
+				Props:   []manifest.Prop{{Name: "title", Type: "string"}},
+				Blocks: manifest.Blocks{
+					View:     true,
+					ViewBody: `<section><icons.Badge label={title} /></section>`,
+				},
+			},
+			{
+				Package: "icons",
+				Name:    "Badge",
+				Props:   []manifest.Prop{{Name: "label", Type: "string"}},
+				Emits:   []manifest.Emit{{Name: "select"}},
+				Blocks: manifest.Blocks{
+					View:     true,
+					ViewBody: `<strong>{label}</strong>`,
+				},
+			},
+		},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := readFile(t, filepath.Join(outputDir, "index.html"))
+	for _, expected := range []string{
+		`<section><gowdk-island data-gowdk-component="Badge"`,
+		`<strong><span data-gowdk-bind="label" data-gowdk-binding-text="b1">GOWDK</span></strong>`,
+		`<script src="/assets/gowdk/islands/Badge.js" defer></script>`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in component-scoped use output: %s", expected, output)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "assets", "gowdk", "islands", "Badge.js")); err != nil {
+		t.Fatalf("expected component-scoped child island asset: %v", err)
+	}
+	if strings.Contains(output, "icons.Badge.js") {
+		t.Fatalf("expected island asset to use real component names, got: %s", output)
+	}
+}
+
+func TestBuildRejectsImportedPackageComponentByBarePageName(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Hero title="GOWDK" /></main>`,
+			},
+		}},
+		Components: []manifest.Component{{
+			Package: "components",
+			Name:    "Hero",
+			Props:   []manifest.Prop{{Name: "title", Type: "string"}},
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<section>{title}</section>`},
+		}},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected missing component error")
+	}
+	if !strings.Contains(err.Error(), `missing component "Hero"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestBuildExpandsWrapperComponentSlots(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{
@@ -158,6 +310,51 @@ func TestBuildComposesPageLayouts(t *testing.T) {
 	want := `<div class="root"><section class="marketing"><main>GOWDK &amp; layouts</main></section></div>`
 	if !strings.Contains(html, want) {
 		t.Fatalf("expected composed layouts %q in:\n%s", want, html)
+	}
+}
+
+func TestBuildComposesQualifiedPageLayouts(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Uses:    []manifest.Use{{Alias: "chrome", Package: "layouts"}},
+			Layouts: []string{"chrome.root", "local"},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main>Home</main>`,
+			},
+		}},
+		Layouts: []manifest.Layout{
+			{
+				Package: "layouts",
+				ID:      "root",
+				Blocks: manifest.Blocks{
+					View:     true,
+					ViewBody: `<div .root><slot /></div>`,
+				},
+			},
+			{
+				Package: "pages",
+				ID:      "local",
+				Blocks: manifest.Blocks{
+					View:     true,
+					ViewBody: `<section .local><slot /></section>`,
+				},
+			},
+		},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := readFile(t, filepath.Join(outputDir, "index.html"))
+	want := `<div class="root"><section class="local"><main>Home</main></section></div>`
+	if !strings.Contains(html, want) {
+		t.Fatalf("expected composed qualified layouts %q in:\n%s", want, html)
 	}
 }
 

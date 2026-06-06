@@ -107,6 +107,121 @@ func TestBuildWritesSPAHTMLForSimpleRoute(t *testing.T) {
 	}
 }
 
+func TestBuildEmitsSPANavigationRuntimeForInternalLinks(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{
+			{
+				ID:    "home",
+				Route: "/",
+				Blocks: manifest.Blocks{
+					View:     true,
+					ViewBody: `<main><Nav /></main>`,
+				},
+			},
+			{
+				ID:    "docs",
+				Route: "/docs",
+				Blocks: manifest.Blocks{
+					View:     true,
+					ViewBody: `<main><h1>Docs</h1></main>`,
+				},
+			},
+		},
+		Components: []manifest.Component{{
+			Name: "Nav",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<nav><a href="/docs">Docs</a><a href="https://example.com">External</a></nav>`,
+			},
+		}},
+	}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.AssetArtifacts) != 1 || result.AssetArtifacts[0].Path != filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath)) {
+		t.Fatalf("expected SPA navigation runtime asset, got %#v", result.AssetArtifacts)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	if !strings.Contains(output, `<script src="`+clientRuntimeHref+`" defer></script>`) {
+		t.Fatalf("expected SPA navigation runtime script in output:\n%s", output)
+	}
+	runtimePayload, err := os.ReadFile(filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(runtimePayload), `X-GOWDK-Navigate`) {
+		t.Fatalf("expected navigation code in runtime:\n%s", runtimePayload)
+	}
+}
+
+func TestBuildWritesPageMetadataToSPAHTMLHead(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "home",
+		Route: "/",
+		Metadata: manifest.PageMetadata{
+			Title:       "GOWDK - Go-native web apps",
+			Description: "Portable .gwdk pages compiled into Go web output.",
+			Canonical:   "https://gowdk.com/",
+			Image:       "https://gowdk.com/assets/social.png",
+		},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main><h1>GOWDK</h1></main>`,
+		},
+	}}}
+
+	config := gowdk.Config{Build: gowdk.BuildConfig{
+		Head: gowdk.HeadConfig{
+			SiteName:    "GOWDK",
+			Favicon:     "/favicon.ico",
+			TwitterCard: "summary",
+		},
+		Stylesheets: []gowdk.Stylesheet{{Href: "/assets/app.css"}},
+	}}
+	if _, err := Build(config, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, want := range []string{
+		`<meta name="viewport" content="width=device-width, initial-scale=1">`,
+		`<title>GOWDK - Go-native web apps</title>`,
+		`<meta name="description" content="Portable .gwdk pages compiled into Go web output.">`,
+		`<link rel="canonical" href="https://gowdk.com/">`,
+		`<link rel="icon" href="/favicon.ico">`,
+		`<meta property="og:site_name" content="GOWDK">`,
+		`<meta property="og:type" content="website">`,
+		`<meta property="og:url" content="https://gowdk.com/">`,
+		`<meta property="og:title" content="GOWDK - Go-native web apps">`,
+		`<meta property="og:description" content="Portable .gwdk pages compiled into Go web output.">`,
+		`<meta property="og:image" content="https://gowdk.com/assets/social.png">`,
+		`<meta name="twitter:card" content="summary">`,
+		`<meta name="twitter:title" content="GOWDK - Go-native web apps">`,
+		`<meta name="twitter:description" content="Portable .gwdk pages compiled into Go web output.">`,
+		`<meta name="twitter:image" content="https://gowdk.com/assets/social.png">`,
+		`<link rel="stylesheet" href="/assets/app.css">`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("expected %q in output:\n%s", want, output)
+		}
+	}
+	assertHTMLOrder(t, output,
+		`<meta name="twitter:image" content="https://gowdk.com/assets/social.png">`,
+		`<link rel="stylesheet" href="/assets/app.css">`,
+	)
+}
+
 func TestBuildMemoryReturnsSPAArtifactsWithoutWriting(t *testing.T) {
 	outputDir := filepath.Join(t.TempDir(), "dist")
 	app := manifest.Manifest{Pages: []manifest.Page{{
@@ -156,6 +271,61 @@ func TestBuildMemoryReturnsSPAArtifactsWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestBuildReportIncludesBackendBindingEndpointMetadata(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	source := filepath.Join(root, "features", "auth", "login.page.gwdk")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Source:  source,
+			Package: "auth",
+			ID:      "login",
+			Route:   "/login",
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Login</main>`},
+		}},
+		BackendBindings: []manifest.BackendBinding{{
+			Kind:         "action",
+			PageID:       "login",
+			Source:       source,
+			BlockName:    "Login",
+			Method:       "POST",
+			Route:        "/login",
+			PackageName:  "auth",
+			FunctionName: "Login",
+			Status:       manifest.BackendBindingMissing,
+			Message:      "GOWDK action handler auth.Login is not implemented",
+		}},
+	}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := findBuildReportEvent(result.Report, "bind", "backend_binding")
+	if event == nil {
+		t.Fatalf("missing backend binding event in %#v", result.Report.Events)
+	}
+	if event.PageID != "login" || event.Route != "/login" {
+		t.Fatalf("unexpected backend binding event route data: %#v", event)
+	}
+	for key, expected := range map[string]string{
+		"kind":     "action",
+		"block":    "Login",
+		"method":   "POST",
+		"package":  "auth",
+		"function": "Login",
+		"status":   "missing",
+		"message":  "GOWDK action handler auth.Login is not implemented",
+	} {
+		if event.Data[key] != expected {
+			t.Fatalf("expected backend binding data %s=%q, got %#v", key, expected, event.Data)
+		}
+	}
+}
+
 func TestBuildReturnsReportOnValidationError(t *testing.T) {
 	_, err := Build(gowdk.Config{}, manifest.Manifest{}, "")
 	if err == nil {
@@ -174,6 +344,21 @@ func TestBuildReturnsReportOnValidationError(t *testing.T) {
 	requireBuildReportEvent(t, buildErr.Report, "validate", "failed")
 }
 
+func assertHTMLOrder(t *testing.T, html string, snippets ...string) {
+	t.Helper()
+	previous := -1
+	for _, snippet := range snippets {
+		index := strings.Index(html, snippet)
+		if index < 0 {
+			t.Fatalf("expected %q in HTML:\n%s", snippet, html)
+		}
+		if index <= previous {
+			t.Fatalf("expected %q after earlier snippets:\n%s", snippet, html)
+		}
+		previous = index
+	}
+}
+
 func requireBuildReportEvent(t *testing.T, report BuildReport, stage string, kind string) {
 	t.Helper()
 	if !hasBuildReportEvent(report, stage, kind) {
@@ -182,10 +367,14 @@ func requireBuildReportEvent(t *testing.T, report BuildReport, stage string, kin
 }
 
 func hasBuildReportEvent(report BuildReport, stage string, kind string) bool {
+	return findBuildReportEvent(report, stage, kind) != nil
+}
+
+func findBuildReportEvent(report BuildReport, stage string, kind string) *BuildEvent {
 	for _, event := range report.Events {
 		if event.Stage == stage && event.Kind == kind {
-			return true
+			return &event
 		}
 	}
-	return false
+	return nil
 }

@@ -42,6 +42,15 @@ type Import struct {
 	Span  SourceSpan
 }
 
+// Use records a GOWDK source package import declared by a .gwdk file.
+// Go imports still use Import; Use is for package-peer .gwdk pages,
+// components, layouts, stores, and assets selected by the GOWDK compiler.
+type Use struct {
+	Alias   string
+	Package string
+	Span    SourceSpan
+}
+
 // GoTypeRef references a Go type through an import alias declared in a .gwdk
 // source file.
 type GoTypeRef struct {
@@ -82,9 +91,14 @@ type WASMContract struct {
 
 // PageSpans records source ranges for page annotations and declarations.
 type PageSpans struct {
+	Package     SourceSpan
 	Page        SourceSpan
 	Route       SourceSpan
 	Render      SourceSpan
+	Title       SourceSpan
+	Description SourceSpan
+	Canonical   SourceSpan
+	Image       SourceSpan
 	Layouts     []NamedSpan
 	Guard       []NamedSpan
 	CSS         []NamedSpan
@@ -105,18 +119,29 @@ type BlockSpans struct {
 
 // Page describes a .gwdk page after parsing and normalization.
 type Page struct {
-	Source  string
-	ID      string
-	Route   string
-	Render  gowdk.RenderMode
-	Layouts []string
-	Guard   []string
-	CSS     []string
-	Imports []Import
-	Stores  []Store
-	Paths   bool
-	Blocks  Blocks
-	Spans   PageSpans
+	Source   string
+	Package  string
+	ID       string
+	Route    string
+	Render   gowdk.RenderMode
+	Metadata PageMetadata
+	Layouts  []string
+	Guard    []string
+	CSS      []string
+	Imports  []Import
+	Uses     []Use
+	Stores   []Store
+	Paths    bool
+	Blocks   Blocks
+	Spans    PageSpans
+}
+
+// PageMetadata describes HTML document metadata declared by a page.
+type PageMetadata struct {
+	Title       string
+	Description string
+	Canonical   string
+	Image       string
 }
 
 // Blocks records the source blocks declared by a page.
@@ -137,24 +162,30 @@ type Blocks struct {
 
 // Component describes a .cmp.gwdk component after parsing and normalization.
 type Component struct {
-	Source    string
-	Name      string
-	Imports   []Import
-	Props     []Prop
-	PropsType GoTypeRef
-	State     StateContract
-	WASM      WASMContract
-	Emits     []Emit
-	Blocks    Blocks
-	Span      SourceSpan
+	Source      string
+	Package     string
+	Name        string
+	Imports     []Import
+	Uses        []Use
+	Props       []Prop
+	PropsType   GoTypeRef
+	State       StateContract
+	WASM        WASMContract
+	Emits       []Emit
+	Blocks      Blocks
+	Span        SourceSpan
+	PackageSpan SourceSpan
 }
 
 // Layout describes a .layout.gwdk layout after parsing and normalization.
 type Layout struct {
-	Source string
-	ID     string
-	Blocks Blocks
-	Span   SourceSpan
+	Source      string
+	Package     string
+	ID          string
+	Uses        []Use
+	Blocks      Blocks
+	Span        SourceSpan
+	PackageSpan SourceSpan
 }
 
 // Prop describes one component prop declaration.
@@ -178,9 +209,11 @@ type EmitParam struct {
 	Span SourceSpan
 }
 
-// Action describes an act block.
+// Action describes an action endpoint declaration.
 type Action struct {
 	Name           string
+	Method         string
+	Route          string
 	Body           string
 	InputName      string
 	InputType      string
@@ -188,6 +221,8 @@ type Action struct {
 	Redirect       string
 	Fragments      []Fragment
 	Span           SourceSpan
+	RouteSpan      SourceSpan
+	RouteParams    []NamedSpan
 	InputSpan      SourceSpan
 	ValidationSpan SourceSpan
 	RedirectSpan   SourceSpan
@@ -200,7 +235,7 @@ type Fragment struct {
 	Span   SourceSpan
 }
 
-// API describes an api block.
+// API describes an API endpoint declaration.
 type API struct {
 	Name        string
 	Method      string
@@ -220,6 +255,25 @@ const (
 	BackendBindingUnsupportedSignature BackendBindingStatus = "unsupported_signature"
 )
 
+// BackendSignatureKind describes the supported Go handler shape.
+type BackendSignatureKind string
+
+const (
+	BackendSignatureAction0       BackendSignatureKind = "action0"
+	BackendSignatureActionValues  BackendSignatureKind = "action_values"
+	BackendSignatureActionForm    BackendSignatureKind = "action_form"
+	BackendSignatureActionFormPtr BackendSignatureKind = "action_form_ptr"
+	BackendSignatureAPI           BackendSignatureKind = "api"
+)
+
+// BackendInputField describes one form field decoded into a Go action input
+// struct from compile-time Go AST metadata.
+type BackendInputField struct {
+	FieldName string
+	FormName  string
+	Type      string
+}
+
 // BackendBinding describes the Go handler selected for an act or api block.
 type BackendBinding struct {
 	Kind         string
@@ -231,6 +285,10 @@ type BackendBinding struct {
 	ImportPath   string
 	PackageName  string
 	FunctionName string
+	Signature    BackendSignatureKind
+	InputType    string
+	InputPointer bool
+	InputFields  []BackendInputField
 	Status       BackendBindingStatus
 	Message      string
 }

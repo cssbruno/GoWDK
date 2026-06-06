@@ -1,6 +1,10 @@
 package parser
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/cssbruno/gowdk/internal/gwdkast"
+)
 
 func TestParseSyntaxBuildsTypedASTForCurrentSubset(t *testing.T) {
 	file, err := ParseSyntax([]byte(`
@@ -10,6 +14,8 @@ func TestParseSyntaxBuildsTypedASTForCurrentSubset(t *testing.T) {
 
 import interop "github.com/cssbruno/gowdk/examples/go-interop"
 
+use ui "components"
+
 paths {
   => { slug: "hello" }
 }
@@ -18,18 +24,9 @@ build {
   => { title: "Newsletter" }
 }
 
-act subscribe {
-  input := form SubscribeInput
-  valid(input)?
-  fragment "#status" {
-    <p>Saved</p>
-  }
-  -> "/newsletter?ok=1"
-}
+act Subscribe POST "/newsletter/{slug}"
 
-api health {
-  GET "/api/health"
-}
+api Health GET "/api/health"
 
 view {
   <main><Panel><h1>{title}</h1></Panel></main>
@@ -44,8 +41,11 @@ view {
 	if len(file.Imports) != 1 || file.Imports[0].Alias != "interop" || file.Imports[0].Path != "github.com/cssbruno/gowdk/examples/go-interop" {
 		t.Fatalf("unexpected imports: %#v", file.Imports)
 	}
-	if len(file.Blocks) != 5 {
-		t.Fatalf("expected five blocks, got %#v", file.Blocks)
+	if len(file.Uses) != 1 || file.Uses[0].Alias != "ui" || file.Uses[0].Package != "components" {
+		t.Fatalf("unexpected uses: %#v", file.Uses)
+	}
+	if len(file.Blocks) != 3 {
+		t.Fatalf("expected three blocks, got %#v", file.Blocks)
 	}
 	paths := file.Blocks[0]
 	if paths.Kind != "paths" || len(paths.Records) != 1 || paths.Records[0].Fields["slug"] != "hello" {
@@ -55,21 +55,13 @@ view {
 	if build.Kind != "build" || len(build.Records) != 1 || build.Records[0].Fields["title"] != "Newsletter" {
 		t.Fatalf("unexpected build AST: %#v", build)
 	}
-	action := file.Blocks[2]
-	if action.Kind != "act" || action.Name != "subscribe" || len(action.Actions) != 4 {
-		t.Fatalf("unexpected action AST: %#v", action)
+	if len(file.Actions) != 1 || file.Actions[0].Name != "Subscribe" || file.Actions[0].Method != "POST" || file.Actions[0].Route != "/newsletter/{slug}" {
+		t.Fatalf("unexpected action endpoints: %#v", file.Actions)
 	}
-	if action.Actions[0].Kind != "input" || action.Actions[0].InputType != "SubscribeInput" {
-		t.Fatalf("unexpected input action statement: %#v", action.Actions[0])
+	if len(file.APIs) != 1 || file.APIs[0].Name != "Health" || file.APIs[0].Method != "GET" || file.APIs[0].Route != "/api/health" {
+		t.Fatalf("unexpected api endpoints: %#v", file.APIs)
 	}
-	if action.Actions[2].Kind != "fragment" || action.Actions[2].Target != "#status" || action.Actions[2].Body != "<p>Saved</p>" {
-		t.Fatalf("unexpected fragment action statement: %#v", action.Actions[2])
-	}
-	api := file.Blocks[3]
-	if api.Kind != "api" || api.Name != "health" || len(api.APIs) != 1 || api.APIs[0].Route != "/api/health" {
-		t.Fatalf("unexpected api AST: %#v", api)
-	}
-	view := file.Blocks[4]
+	view := file.Blocks[2]
 	if view.Kind != "view" || len(view.View) != 1 {
 		t.Fatalf("expected parsed view AST, got %#v", view)
 	}
@@ -117,4 +109,109 @@ view {
 	if file.Blocks[0].Call.Alias != "interop" || file.Blocks[0].Call.Function != "FeaturedCopyForBuild" {
 		t.Fatalf("unexpected build call: %#v", file.Blocks[0].Call)
 	}
+}
+
+func TestParseSyntaxReturnsGOWDKAST(t *testing.T) {
+	var _ gwdkast.File = mustParseSyntax(t, []byte(`package ui
+@component Counter
+@wasm ./counter/browser
+
+import ui "github.com/cssbruno/gowdk/examples/ui"
+
+store Cart ui.CartState = ui.NewCartState()
+props ui.CounterProps
+state ui.CounterState = ui.NewCounterState()
+
+props {
+  title string
+  subtitle string
+}
+
+emits {
+  select(id string)
+}
+
+client {
+  fn Increment() {
+    Count++
+  }
+}
+
+view {
+  <button>{title}</button>
+}
+`))
+}
+
+func TestParseSyntaxReadsStoresAndComponentContracts(t *testing.T) {
+	file := mustParseSyntax(t, []byte(`package ui
+@component Counter
+@wasm ./counter/browser
+
+import ui "github.com/cssbruno/gowdk/examples/ui"
+
+store Cart ui.CartState = ui.NewCartState()
+props ui.CounterProps
+state ui.CounterState = ui.NewCounterState()
+
+props {
+  title string
+  subtitle string
+}
+
+emits {
+  select(id string)
+}
+
+client {
+  fn Increment() {
+    Count++
+  }
+}
+
+view {
+  <button>{title}</button>
+}
+`))
+
+	if file.Package == nil || file.Package.Name != "ui" {
+		t.Fatalf("unexpected package AST: %#v", file.Package)
+	}
+	if len(file.Stores) != 1 || file.Stores[0].Name != "Cart" || file.Stores[0].Type.Name != "CartState" || file.Stores[0].Init.Name != "NewCartState" {
+		t.Fatalf("unexpected stores: %#v", file.Stores)
+	}
+	if file.PropsType == nil || file.PropsType.Name != "CounterProps" {
+		t.Fatalf("unexpected props type: %#v", file.PropsType)
+	}
+	if file.State == nil || file.State.Type.Name != "CounterState" || file.State.Init.Name != "NewCounterState" {
+		t.Fatalf("unexpected state contract: %#v", file.State)
+	}
+	if file.WASM == nil || file.WASM.Package != "./counter/browser" {
+		t.Fatalf("unexpected wasm contract: %#v", file.WASM)
+	}
+	props := file.Blocks[0]
+	if props.Kind != "props" || len(props.Props) != 2 || props.Props[0].Name != "title" || props.Props[1].Name != "subtitle" {
+		t.Fatalf("unexpected props block: %#v", props)
+	}
+	emits := file.Blocks[1]
+	if emits.Kind != "emits" || len(emits.Emits) != 1 || emits.Emits[0].Name != "select" || emits.Emits[0].Params[0].Name != "id" {
+		t.Fatalf("unexpected emits block: %#v", emits)
+	}
+	client := file.Blocks[2]
+	if client.Kind != "client" || client.Body == "" {
+		t.Fatalf("unexpected client block: %#v", client)
+	}
+	view := file.Blocks[3]
+	if view.Kind != "view" || len(view.View) != 1 {
+		t.Fatalf("unexpected view block: %#v", view)
+	}
+}
+
+func mustParseSyntax(t *testing.T, source []byte) gwdkast.File {
+	t.Helper()
+	file, err := ParseSyntax(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return file
 }

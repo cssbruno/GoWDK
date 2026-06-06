@@ -23,9 +23,12 @@ type manifestJSON struct {
 type pageJSON struct {
 	Source          string           `json:"source,omitempty"`
 	Kind            string           `json:"kind"`
+	Package         string           `json:"package,omitempty"`
 	Route           string           `json:"route"`
 	Render          gowdk.RenderMode `json:"render"`
+	Metadata        *metadataJSON    `json:"metadata,omitempty"`
 	Imports         []importJSON     `json:"imports,omitempty"`
+	Uses            []useJSON        `json:"uses,omitempty"`
 	Layouts         []string         `json:"layouts,omitempty"`
 	DynamicParams   []string         `json:"dynamicParams,omitempty"`
 	Paths           bool             `json:"paths,omitempty"`
@@ -44,7 +47,9 @@ type pageJSON struct {
 type componentJSON struct {
 	Source    string       `json:"source,omitempty"`
 	Kind      string       `json:"kind"`
+	Package   string       `json:"package,omitempty"`
 	Imports   []importJSON `json:"imports,omitempty"`
+	Uses      []useJSON    `json:"uses,omitempty"`
 	Props     []propJSON   `json:"props,omitempty"`
 	PropsType *goTypeJSON  `json:"propsType,omitempty"`
 	State     *stateJSON   `json:"state,omitempty"`
@@ -52,8 +57,17 @@ type componentJSON struct {
 }
 
 type layoutJSON struct {
-	Source string `json:"source,omitempty"`
-	Kind   string `json:"kind"`
+	Source  string    `json:"source,omitempty"`
+	Kind    string    `json:"kind"`
+	Package string    `json:"package,omitempty"`
+	Uses    []useJSON `json:"uses,omitempty"`
+}
+
+type metadataJSON struct {
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	Canonical   string `json:"canonical,omitempty"`
+	Image       string `json:"image,omitempty"`
 }
 
 type propJSON struct {
@@ -74,6 +88,11 @@ type emitParamJSON struct {
 type importJSON struct {
 	Alias string `json:"alias,omitempty"`
 	Path  string `json:"path"`
+}
+
+type useJSON struct {
+	Alias   string `json:"alias"`
+	Package string `json:"package"`
 }
 
 type goTypeJSON struct {
@@ -102,6 +121,8 @@ type blocksJSON struct {
 
 type actionJSON struct {
 	Name           string         `json:"name"`
+	Method         string         `json:"method,omitempty"`
+	Route          string         `json:"route,omitempty"`
 	InputName      string         `json:"inputName,omitempty"`
 	InputType      string         `json:"inputType,omitempty"`
 	ValidatesInput bool           `json:"validatesInput,omitempty"`
@@ -134,8 +155,30 @@ type backendBindingJSON struct {
 	ImportPath   string               `json:"importPath,omitempty"`
 	PackageName  string               `json:"packageName,omitempty"`
 	FunctionName string               `json:"functionName"`
+	Signature    BackendSignatureKind `json:"signature,omitempty"`
+	InputType    string               `json:"inputType,omitempty"`
+	InputPointer bool                 `json:"inputPointer,omitempty"`
+	InputFields  []backendInputJSON   `json:"inputFields,omitempty"`
 	Status       BackendBindingStatus `json:"status"`
 	Message      string               `json:"message,omitempty"`
+}
+
+type backendInputJSON struct {
+	FieldName string `json:"fieldName"`
+	FormName  string `json:"formName"`
+	Type      string `json:"type"`
+}
+
+func metadataJSONFor(metadata PageMetadata) *metadataJSON {
+	if metadata.Title == "" && metadata.Description == "" && metadata.Canonical == "" && metadata.Image == "" {
+		return nil
+	}
+	return &metadataJSON{
+		Title:       metadata.Title,
+		Description: metadata.Description,
+		Canonical:   metadata.Canonical,
+		Image:       metadata.Image,
+	}
 }
 
 // MarshalJSON emits the route manifest shape consumed by generated binaries.
@@ -146,9 +189,12 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 		pages[page.ID] = pageJSON{
 			Source:          page.Source,
 			Kind:            "page",
+			Package:         page.Package,
 			Route:           page.Route,
 			Render:          page.RenderMode(gowdk.SPA),
+			Metadata:        metadataJSONFor(page.Metadata),
 			Imports:         importsJSON(page.Imports),
+			Uses:            usesJSON(page.Uses),
 			Layouts:         page.Layouts,
 			DynamicParams:   page.DynamicParams(),
 			Paths:           page.Paths,
@@ -189,8 +235,27 @@ func backendBindingsJSON(bindings []BackendBinding) []backendBindingJSON {
 			ImportPath:   binding.ImportPath,
 			PackageName:  binding.PackageName,
 			FunctionName: binding.FunctionName,
+			Signature:    binding.Signature,
+			InputType:    binding.InputType,
+			InputPointer: binding.InputPointer,
+			InputFields:  backendInputFieldsJSON(binding.InputFields),
 			Status:       binding.Status,
 			Message:      binding.Message,
+		})
+	}
+	return out
+}
+
+func backendInputFieldsJSON(fields []BackendInputField) []backendInputJSON {
+	if len(fields) == 0 {
+		return nil
+	}
+	out := make([]backendInputJSON, 0, len(fields))
+	for _, field := range fields {
+		out = append(out, backendInputJSON{
+			FieldName: field.FieldName,
+			FormName:  field.FormName,
+			Type:      field.Type,
 		})
 	}
 	return out
@@ -203,6 +268,17 @@ func importsJSON(imports []Import) []importJSON {
 	out := make([]importJSON, 0, len(imports))
 	for _, item := range imports {
 		out = append(out, importJSON{Alias: item.Alias, Path: item.Path})
+	}
+	return out
+}
+
+func usesJSON(uses []Use) []useJSON {
+	if len(uses) == 0 {
+		return nil
+	}
+	out := make([]useJSON, 0, len(uses))
+	for _, item := range uses {
+		out = append(out, useJSON{Alias: item.Alias, Package: item.Package})
 	}
 	return out
 }
@@ -237,6 +313,8 @@ func actionsJSON(actions []Action) []actionJSON {
 	for _, action := range actions {
 		out = append(out, actionJSON{
 			Name:           action.Name,
+			Method:         action.Method,
+			Route:          action.Route,
 			InputName:      action.InputName,
 			InputType:      action.InputType,
 			ValidatesInput: action.ValidatesInput,
@@ -335,7 +413,9 @@ func componentsJSON(components []Component) map[string]componentJSON {
 		out[component.Name] = componentJSON{
 			Source:    component.Source,
 			Kind:      "component",
+			Package:   component.Package,
 			Imports:   importsJSON(component.Imports),
+			Uses:      usesJSON(component.Uses),
 			Props:     propsJSON(component.Props),
 			PropsType: goTypeRefJSON(component.PropsType),
 			State:     stateContractJSON(component.State),
@@ -352,8 +432,10 @@ func layoutsJSON(layouts []Layout) map[string]layoutJSON {
 	out := map[string]layoutJSON{}
 	for _, layout := range layouts {
 		out[layout.ID] = layoutJSON{
-			Source: layout.Source,
-			Kind:   "layout",
+			Source:  layout.Source,
+			Kind:    "layout",
+			Package: layout.Package,
+			Uses:    usesJSON(layout.Uses),
 		}
 	}
 	return out

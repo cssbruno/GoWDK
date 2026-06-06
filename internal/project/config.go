@@ -83,6 +83,8 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 			continue
 		}
 		switch key.Name {
+		case "AppName":
+			config.AppName = parseString(keyValue.Value)
 		case "Source":
 			config.Source = parseSourceConfig(keyValue.Value)
 		case "Modules":
@@ -262,6 +264,12 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 			build.Output = parseString(keyValue.Value)
 		case "Mode":
 			build.Mode = parseBuildMode(keyValue.Value)
+		case "Head":
+			build.Head = parseHeadConfig(keyValue.Value)
+		case "CSRF":
+			build.CSRF = parseCSRFConfig(keyValue.Value)
+		case "AllowMissingBackend":
+			build.AllowMissingBackend = parseBool(keyValue.Value)
 		case "Stylesheets":
 			build.Stylesheets = parseStylesheets(keyValue.Value)
 		case "Targets":
@@ -269,6 +277,70 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 		}
 	}
 	return build
+}
+
+func parseHeadConfig(expression ast.Expr) gowdk.HeadConfig {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.HeadConfig{}
+	}
+
+	var head gowdk.HeadConfig
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "SiteName":
+			head.SiteName = parseString(keyValue.Value)
+		case "Favicon":
+			head.Favicon = parseString(keyValue.Value)
+		case "Image":
+			head.Image = parseString(keyValue.Value)
+		case "TwitterCard":
+			head.TwitterCard = parseString(keyValue.Value)
+		}
+	}
+	return head
+}
+
+func parseCSRFConfig(expression ast.Expr) gowdk.CSRFConfig {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.CSRFConfig{}
+	}
+
+	var csrf gowdk.CSRFConfig
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "Enabled":
+			csrf.Enabled = parseBool(keyValue.Value)
+		case "SecretEnv":
+			csrf.SecretEnv = parseString(keyValue.Value)
+		case "CookieName":
+			csrf.CookieName = parseString(keyValue.Value)
+		case "FieldName":
+			csrf.FieldName = parseString(keyValue.Value)
+		case "HeaderName":
+			csrf.HeaderName = parseString(keyValue.Value)
+		case "Insecure":
+			csrf.Insecure = parseBool(keyValue.Value)
+		}
+	}
+	return csrf
 }
 
 func parseBuildMode(expression ast.Expr) gowdk.BuildMode {

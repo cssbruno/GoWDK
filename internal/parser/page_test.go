@@ -113,7 +113,114 @@ view {
 	}
 }
 
-func TestParsePageReadsSSRLoadGuardAndAction(t *testing.T) {
+func TestParsePageReadsGOWDKUseDeclaration(t *testing.T) {
+	page, err := ParsePage([]byte(`
+package pages
+
+@page home
+@route "/"
+
+use ui "components"
+
+view {
+  <main><ui.Hero title="GOWDK" /></main>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Uses) != 1 {
+		t.Fatalf("expected one GOWDK use, got %#v", page.Uses)
+	}
+	use := page.Uses[0]
+	if use.Alias != "ui" || use.Package != "components" {
+		t.Fatalf("unexpected GOWDK use: %#v", use)
+	}
+	if use.Span.Start.Line != 7 {
+		t.Fatalf("unexpected use span: %#v", use.Span)
+	}
+}
+
+func TestParsePageReadsQualifiedLayoutReference(t *testing.T) {
+	page, err := ParsePage([]byte(`
+package pages
+
+@page home
+@route "/"
+@layout chrome.root, local
+
+use chrome "layouts"
+
+view {
+  <main>Home</main>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(page.Layouts, ",") != "chrome.root,local" {
+		t.Fatalf("unexpected layouts: %#v", page.Layouts)
+	}
+	if page.Spans.Layouts[0].Name != "chrome.root" || page.Spans.Layouts[0].Span.Start.Line != 6 {
+		t.Fatalf("unexpected qualified layout span: %#v", page.Spans.Layouts)
+	}
+}
+
+func TestParsePageReadsDocumentMetadata(t *testing.T) {
+	page, err := ParsePage([]byte(`
+@page home
+@route "/"
+@title "GOWDK - Go-native web apps"
+@description "Portable .gwdk pages compiled into Go web output."
+@canonical "https://gowdk.com/"
+@image "https://gowdk.com/assets/wdk_logo.png"
+
+view {
+  <main>Home</main>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Metadata.Title != "GOWDK - Go-native web apps" {
+		t.Fatalf("unexpected title metadata: %#v", page.Metadata)
+	}
+	if page.Metadata.Description != "Portable .gwdk pages compiled into Go web output." {
+		t.Fatalf("unexpected description metadata: %#v", page.Metadata)
+	}
+	if page.Metadata.Canonical != "https://gowdk.com/" {
+		t.Fatalf("unexpected canonical metadata: %#v", page.Metadata)
+	}
+	if page.Metadata.Image != "https://gowdk.com/assets/wdk_logo.png" {
+		t.Fatalf("unexpected image metadata: %#v", page.Metadata)
+	}
+	if page.Spans.Title.Start.Line != 4 || page.Spans.Description.Start.Line != 5 || page.Spans.Canonical.Start.Line != 6 || page.Spans.Image.Start.Line != 7 {
+		t.Fatalf("unexpected metadata spans: %#v", page.Spans)
+	}
+}
+
+func TestParsePageRejectsMalformedGOWDKUse(t *testing.T) {
+	_, err := ParsePage([]byte(`
+package pages
+
+@page home
+@route "/"
+
+use ui components
+
+view {
+  <main>Home</main>
+}
+`))
+	if err == nil {
+		t.Fatal("expected malformed use error")
+	}
+	if !strings.Contains(err.Error(), `malformed use "use ui components"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParsePageReadsSSRLoadGuardAndActionEndpoint(t *testing.T) {
 	page, err := ParsePage([]byte(`
 @page dashboard
 @route "/dashboard"
@@ -126,8 +233,7 @@ load {
   => { user }
 }
 
-act refresh {
-}
+act Refresh POST "/dashboard"
 
 view {
 }
@@ -148,7 +254,8 @@ view {
 	if page.Guard[0] != "auth.required" {
 		t.Fatalf("expected auth guard, got %#v", page.Guard)
 	}
-	if page.Blocks.Actions[0].Name != "refresh" {
+	action := page.Blocks.Actions[0]
+	if action.Name != "Refresh" || action.Method != "POST" || action.Route != "/dashboard" {
 		t.Fatalf("expected refresh action, got %#v", page.Blocks.Actions)
 	}
 	if page.Spans.Guard[0].Name != "auth.required" || page.Spans.Guard[0].Span.Start.Line != 6 {
@@ -159,16 +266,12 @@ view {
 	}
 }
 
-func TestParsePageReadsActionBodyMetadata(t *testing.T) {
+func TestParsePageReadsActionEndpointMetadata(t *testing.T) {
 	page, err := ParsePage([]byte(`
 @page newsletter
 @route "/newsletter"
 
-act subscribe {
-  input := form SubscribeInput
-  valid(input)?
-  -> "/newsletter?ok=1"
-}
+act Subscribe POST "/newsletter"
 
 view {
   <main>Newsletter</main>
@@ -181,22 +284,16 @@ view {
 		t.Fatalf("expected one action, got %#v", page.Blocks.Actions)
 	}
 	action := page.Blocks.Actions[0]
-	if action.Name != "subscribe" || action.InputName != "input" || action.InputType != "SubscribeInput" {
-		t.Fatalf("unexpected action input metadata: %#v", action)
+	if action.Name != "Subscribe" || action.Method != "POST" || action.Route != "/newsletter" {
+		t.Fatalf("unexpected action endpoint metadata: %#v", action)
 	}
-	if !action.ValidatesInput {
-		t.Fatalf("expected action validation metadata: %#v", action)
-	}
-	if action.Redirect != "/newsletter?ok=1" {
-		t.Fatalf("unexpected action redirect: %#v", action)
-	}
-	if action.InputSpan.Start.Line != 6 || action.ValidationSpan.Start.Line != 7 || action.RedirectSpan.Start.Line != 8 {
-		t.Fatalf("expected action body spans, got input=%#v validation=%#v redirect=%#v", action.InputSpan, action.ValidationSpan, action.RedirectSpan)
+	if action.Span.Start.Line != 5 || action.RouteSpan.Start.Line != 5 {
+		t.Fatalf("expected action spans, got %#v", action)
 	}
 }
 
-func TestParsePageReadsActionFragmentMetadata(t *testing.T) {
-	page, err := ParsePage([]byte(`
+func TestParsePageRejectsOldActionBlockSyntax(t *testing.T) {
+	_, err := ParsePage([]byte(`
 @page patients
 @route "/patients"
 
@@ -212,21 +309,11 @@ view {
   <main>Patients</main>
 }
 `))
-	if err != nil {
-		t.Fatal(err)
+	if err == nil {
+		t.Fatal("expected old action syntax error")
 	}
-	action := page.Blocks.Actions[0]
-	if len(action.Fragments) != 1 {
-		t.Fatalf("expected one fragment, got %#v", action.Fragments)
-	}
-	if action.Fragments[0].Target != "#patients" {
-		t.Fatalf("unexpected fragment target: %#v", action.Fragments[0])
-	}
-	if action.Fragments[0].Body != "<section>Updated</section>" {
-		t.Fatalf("unexpected fragment body: %q", action.Fragments[0].Body)
-	}
-	if action.Redirect != "/patients" {
-		t.Fatalf("expected redirect after fragment, got %#v", action)
+	if !strings.Contains(err.Error(), "old action block syntax is not supported") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -260,25 +347,21 @@ view {
 	}
 }
 
-func TestParsePageRejectsInvalidActionFragmentTarget(t *testing.T) {
+func TestParsePageRejectsLowercaseActionEndpoint(t *testing.T) {
 	_, err := ParsePage([]byte(`
 @page patients
 @route "/patients"
 
-act refresh {
-  fragment "patients" {
-    <section>Updated</section>
-  }
-}
+act refresh POST "/patients"
 
 view {
   <main>Patients</main>
 }
 `))
 	if err == nil {
-		t.Fatal("expected invalid fragment target error")
+		t.Fatal("expected invalid handler error")
 	}
-	if !strings.Contains(err.Error(), `fragment target "patients" must be a literal id selector`) {
+	if !strings.Contains(err.Error(), `action handler "refresh" must be an exported Go identifier`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -331,7 +414,7 @@ act subscribe {
 	if err == nil {
 		t.Fatal("expected unsupported action syntax error")
 	}
-	if err.Error() != `line 7: action subscribe line 1 has unsupported syntax "send(input)"` {
+	if !strings.Contains(err.Error(), `old action block syntax is not supported`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -361,6 +444,7 @@ type parserGolden struct {
 }
 
 type parserGoldenPage struct {
+	Package       string             `json:"package,omitempty"`
 	ID            string             `json:"id"`
 	Route         string             `json:"route"`
 	Render        gowdk.RenderMode   `json:"render"`
@@ -385,6 +469,8 @@ type parserGoldenBlocks struct {
 
 type parserGoldenAction struct {
 	Name           string   `json:"name"`
+	Method         string   `json:"method,omitempty"`
+	Route          string   `json:"route,omitempty"`
 	InputName      string   `json:"inputName,omitempty"`
 	InputType      string   `json:"inputType,omitempty"`
 	ValidatesInput bool     `json:"validatesInput,omitempty"`
@@ -393,6 +479,7 @@ type parserGoldenAction struct {
 }
 
 type parserGoldenComponent struct {
+	Package  string             `json:"package,omitempty"`
 	Name     string             `json:"name"`
 	Props    []parserGoldenProp `json:"props,omitempty"`
 	ViewBody string             `json:"viewBody,omitempty"`
@@ -406,6 +493,7 @@ type parserGoldenProp struct {
 func parserGoldenSummary(page manifest.Page, component manifest.Component) parserGolden {
 	return parserGolden{
 		Page: parserGoldenPage{
+			Package:       page.Package,
 			ID:            page.ID,
 			Route:         page.Route,
 			Render:        page.Render,
@@ -426,6 +514,7 @@ func parserGoldenSummary(page manifest.Page, component manifest.Component) parse
 			},
 		},
 		Component: parserGoldenComponent{
+			Package:  component.Package,
 			Name:     component.Name,
 			Props:    parserGoldenProps(component.Props),
 			ViewBody: component.Blocks.ViewBody,
@@ -441,6 +530,8 @@ func parserGoldenActions(actions []manifest.Action) []parserGoldenAction {
 	for _, action := range actions {
 		out = append(out, parserGoldenAction{
 			Name:           action.Name,
+			Method:         action.Method,
+			Route:          action.Route,
 			InputName:      action.InputName,
 			InputType:      action.InputType,
 			ValidatesInput: action.ValidatesInput,
@@ -497,7 +588,7 @@ act subscribe {
 	if err == nil {
 		t.Fatal("expected unsafe redirect error")
 	}
-	if err.Error() != `line 8: action subscribe line 2: redirect "https://example.com" must be a local absolute path` {
+	if !strings.Contains(err.Error(), `old action block syntax is not supported`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -515,7 +606,7 @@ act subscribe {
 	if err == nil {
 		t.Fatal("expected mismatched validation input error")
 	}
-	if err.Error() != `line 8: action subscribe line 2 validates "other" but input is "input"` {
+	if !strings.Contains(err.Error(), `old action block syntax is not supported`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -563,14 +654,12 @@ func TestParsePageRejectsUnknownRenderMode(t *testing.T) {
 	}
 }
 
-func TestParsePageReadsAPIRouteMetadata(t *testing.T) {
+func TestParsePageReadsAPIEndpointMetadata(t *testing.T) {
 	page, err := ParsePage([]byte(`
 @page status
 @route "/status"
 
-api health {
-  GET "/api/health"
-}
+api Health GET "/api/health"
 
 view {
   <main>Status</main>
@@ -583,10 +672,10 @@ view {
 		t.Fatalf("expected one API, got %#v", page.Blocks.APIs)
 	}
 	api := page.Blocks.APIs[0]
-	if api.Name != "health" || api.Method != "GET" || api.Route != "/api/health" {
+	if api.Name != "Health" || api.Method != "GET" || api.Route != "/api/health" {
 		t.Fatalf("unexpected API metadata: %#v", api)
 	}
-	if api.Span.Start.Line != 5 || api.RouteSpan.Start.Line != 6 {
+	if api.Span.Start.Line != 5 || api.RouteSpan.Start.Line != 5 {
 		t.Fatalf("expected API spans, got api=%#v route=%#v", api.Span, api.RouteSpan)
 	}
 }
@@ -606,7 +695,7 @@ view {
 	if err == nil {
 		t.Fatal("expected unsupported API body syntax error")
 	}
-	if err.Error() != `line 7: api health line 1 has unsupported syntax "return JSON({})"` {
+	if !strings.Contains(err.Error(), `old API block syntax is not supported`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

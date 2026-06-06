@@ -15,12 +15,58 @@ type ComponentCall struct {
 	Children []Node
 }
 
+// Identity is the package-qualified component identity used for compiler-time
+// resolution and recursion checks. The public call name can be an import alias.
+func (component Component) Identity() string {
+	if component.Package == "" {
+		return component.Name
+	}
+	return component.Package + "." + component.Name
+}
+
+func (ctx *renderContext) lookupComponent(name string) (Component, bool) {
+	if strings.Contains(name, ".") {
+		component, ok := ctx.components[name]
+		if ok && component.Name == "" {
+			_, component.Name, _ = strings.Cut(name, ".")
+		}
+		if ok {
+			return component, true
+		}
+		alias, componentName, _ := strings.Cut(name, ".")
+		packageName := ctx.uses[alias]
+		if packageName == "" {
+			return Component{}, false
+		}
+		for _, component := range ctx.components {
+			if component.Package == packageName && component.Name == componentName {
+				return component, true
+			}
+		}
+		return Component{}, false
+	}
+	if ctx.ownerPackage != "" {
+		for _, component := range ctx.components {
+			if component.Package == ctx.ownerPackage && component.Name == name {
+				return component, true
+			}
+		}
+		return Component{}, false
+	}
+	component, ok := ctx.components[name]
+	if ok && component.Name == "" {
+		component.Name = name
+	}
+	return component, ok
+}
+
 func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error {
-	component, ok := ctx.components[node.Name]
+	component, ok := ctx.lookupComponent(node.Name)
 	if !ok {
 		return fmt.Errorf("missing component %q", node.Name)
 	}
-	if ctx.stack[node.Name] {
+	identity := component.Identity()
+	if ctx.stack[identity] {
 		return fmt.Errorf("recursive component %q", node.Name)
 	}
 
@@ -88,23 +134,25 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		bindValues = mergeValues(bindValues, props)
 	}
 	childCtx := renderContext{
-		components:  ctx.components,
-		values:      values,
-		tainted:     taintedValues,
-		actions:     ctx.actions,
-		stack:       cloneStack(ctx.stack),
-		slotHTML:    slotHTML,
-		stateFields: boolSet(keys(component.State)),
-		readFields:  boolSet(keys(values)),
-		bindFields:  boolSet(keys(bindValues)),
-		handlers:    component.Handlers,
-		stateTypes:  component.StateTypes,
-		refs:        component.Refs,
-		emits:       component.Emits,
-		bindingSeq:  ctx.bindingSeq,
-		islandSeq:   ctx.islandSeq,
+		components:   ctx.components,
+		ownerPackage: component.Package,
+		uses:         component.Uses,
+		values:       values,
+		tainted:      taintedValues,
+		actions:      ctx.actions,
+		stack:        cloneStack(ctx.stack),
+		slotHTML:     slotHTML,
+		stateFields:  boolSet(keys(component.State)),
+		readFields:   boolSet(keys(values)),
+		bindFields:   boolSet(keys(bindValues)),
+		handlers:     component.Handlers,
+		stateTypes:   component.StateTypes,
+		refs:         component.Refs,
+		emits:        component.Emits,
+		bindingSeq:   ctx.bindingSeq,
+		islandSeq:    ctx.islandSeq,
 	}
-	childCtx.stack[node.Name] = true
+	childCtx.stack[identity] = true
 	body, err := render(component.Body, childCtx)
 	if err != nil {
 		return err
@@ -119,7 +167,7 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		}
 		islandID := ctx.nextIslandID()
 		out.WriteString(`<gowdk-island data-gowdk-component="`)
-		out.WriteString(gowhtml.Escape(node.Name))
+		out.WriteString(gowhtml.Escape(component.Name))
 		out.WriteString(`" data-gowdk-island="`)
 		out.WriteString(gowhtml.Escape(islandID))
 		out.WriteString(`" data-gowdk-runtime="`)

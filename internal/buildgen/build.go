@@ -28,6 +28,9 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
 	reportBackendBindings(reporter, app.BackendBindings)
+	if err := compiler.ValidateBackendBindingPolicy(config, app); err != nil {
+		return Result{}, reporter.fail("bind", err)
+	}
 
 	planned, err := plan(config, app, outputDir)
 	if err != nil {
@@ -116,6 +119,9 @@ func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
 	reportBackendBindings(reporter, app.BackendBindings)
+	if err := compiler.ValidateBackendBindingPolicy(config, app); err != nil {
+		return MemoryResult{}, reporter.fail("bind", err)
+	}
 
 	planned, err := plan(config, app, outputDir)
 	if err != nil {
@@ -206,11 +212,21 @@ func reportBackendBindings(reporter *buildReporter, bindings []manifest.BackendB
 		data := map[string]string{
 			"kind":     binding.Kind,
 			"block":    binding.BlockName,
+			"method":   binding.Method,
 			"status":   string(binding.Status),
 			"function": binding.FunctionName,
 		}
+		if binding.PackageName != "" {
+			data["package"] = binding.PackageName
+		}
 		if binding.ImportPath != "" {
 			data["import"] = binding.ImportPath
+		}
+		if binding.Signature != "" {
+			data["signature"] = string(binding.Signature)
+		}
+		if binding.InputType != "" {
+			data["inputType"] = binding.InputType
 		}
 		if binding.Message != "" {
 			data["message"] = binding.Message
@@ -238,6 +254,9 @@ func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir stri
 		return Result{}, reporter.fail("validate", err)
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
+	if err := compiler.ValidateBackendBindingPolicy(config, app); err != nil {
+		return Result{}, reporter.fail("bind", err)
+	}
 
 	changedPages := sourcePathSet(changedPageSources)
 	components, componentFailures := buildComponents(app.Components)
@@ -253,7 +272,7 @@ func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir stri
 	if len(failures) > 0 {
 		return Result{}, reporter.fail("plan", errors.New(strings.Join(failures, "\n")))
 	}
-	runtime, err := runtimeArtifacts(config, app, outputDir, layouts)
+	runtime, err := runtimeArtifacts(config, app, outputDir, layouts, components)
 	if err != nil {
 		return Result{}, reporter.fail("plan", err)
 	}
@@ -417,7 +436,7 @@ func plan(config gowdk.Config, app manifest.Manifest, outputDir string) (buildPl
 	if len(failures) > 0 {
 		return buildPlan{}, errors.New(strings.Join(failures, "\n"))
 	}
-	runtime, err := runtimeArtifacts(config, app, outputDir, layouts)
+	runtime, err := runtimeArtifacts(config, app, outputDir, layouts, components)
 	if err != nil {
 		return buildPlan{}, err
 	}

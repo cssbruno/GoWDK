@@ -1,6 +1,9 @@
 package compiler
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -8,6 +11,393 @@ import (
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
+
+func TestValidateManifestRejectsMissingPackageDeclaration(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(source, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source: source,
+		ID:     "home",
+		Route:  "/",
+		Blocks: manifest.Blocks{View: true},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	if err == nil {
+		t.Fatal("expected missing package diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "missing_package_declaration") {
+		t.Fatalf("missing package diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsPackageMismatchWithSiblingGoFile(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(source, []byte("package views\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	goFile := filepath.Join(root, "handlers.go")
+	if err := os.WriteFile(goFile, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source:  source,
+		Package: "views",
+		ID:      "home",
+		Route:   "/",
+		Blocks:  manifest.Blocks{View: true},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	if err == nil {
+		t.Fatal("expected package mismatch diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticMessage(diagnostics, "package_mismatch", "views", "app") {
+		t.Fatalf("missing package mismatch diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAcceptsPackageMatchingSiblingGoFile(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	goFile := filepath.Join(root, "handlers.go")
+	if err := os.WriteFile(goFile, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source:  source,
+		Package: "app",
+		ID:      "home",
+		Route:   "/",
+		Blocks:  manifest.Blocks{View: true},
+	}
+
+	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+		t.Fatalf("expected matching package to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestIgnoresProjectConfigGoPackage(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "styled.page.gwdk")
+	if err := os.WriteFile(source, []byte("package css\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configFile := filepath.Join(root, "gowdk.config.go")
+	if err := os.WriteFile(configFile, []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source:  source,
+		Package: "css",
+		ID:      "styled",
+		Route:   "/styled",
+		Blocks:  manifest.Blocks{View: true},
+	}
+
+	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+		t.Fatalf("expected project config package to be ignored, got %v", err)
+	}
+}
+
+func TestValidateManifestReportsGoPackageParseErrors(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	goFile := filepath.Join(root, "handlers.go")
+	if err := os.WriteFile(goFile, []byte("package app\nfunc Bad("), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source:  source,
+		Package: "app",
+		ID:      "home",
+		Route:   "/",
+		Blocks:  manifest.Blocks{View: true},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	if err == nil {
+		t.Fatal("expected Go package error diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "go_package_error") {
+		t.Fatalf("missing Go package error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestReportsGoPackageTypeErrors(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	goFile := filepath.Join(root, "handlers.go")
+	if err := os.WriteFile(goFile, []byte("package app\n\nfunc Broken() int { return missing }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source:  source,
+		Package: "app",
+		ID:      "home",
+		Route:   "/",
+		Blocks:  manifest.Blocks{View: true},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	if err == nil {
+		t.Fatal("expected Go package type-check diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	diagnostic := firstDiagnostic(diagnostics, "go_package_error")
+	if diagnostic == nil {
+		t.Fatalf("missing Go package error diagnostic: %#v", diagnostics)
+	}
+	if diagnostic.Source != goFile {
+		t.Fatalf("expected diagnostic source %s, got %#v", goFile, diagnostic)
+	}
+	if !strings.Contains(diagnostic.Message, "undefined: missing") {
+		t.Fatalf("expected undefined symbol in diagnostic, got %q", diagnostic.Message)
+	}
+	if diagnostic.Span.Start.Line == 0 || diagnostic.Span.Start.Column == 0 {
+		t.Fatalf("expected diagnostic source span, got %#v", diagnostic.Span)
+	}
+}
+
+func TestValidateManifestSkipsSiblingGoPackageForUnsavedAbsoluteSource(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "handlers.go"), []byte("package main\n\nfunc Broken() int { return missing }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source:  filepath.Join(root, "unsaved.page.gwdk"),
+		Package: "app",
+		ID:      "home",
+		Route:   "/",
+		Blocks:  manifest.Blocks{View: true},
+	}
+
+	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+		t.Fatalf("expected unsaved absolute source to skip sibling Go package validation, got %v", err)
+	}
+}
+
+func TestValidateManifestTypeChecksGoPackagesWithModuleImports(t *testing.T) {
+	root := t.TempDir()
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(fmt.Sprintf(`module example.com/app
+
+go 1.26
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => %s
+`, filepath.ToSlash(repoRoot))), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sourceDir := filepath.Join(root, "features", "auth")
+	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, "handlers.go"), []byte(`package auth
+
+import "github.com/cssbruno/gowdk/runtime/form"
+
+func Email(values form.Values) string {
+	return values.First("email")
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source:  filepath.Join(sourceDir, "login.page.gwdk"),
+		Package: "auth",
+		ID:      "login",
+		Route:   "/login",
+		Blocks:  manifest.Blocks{View: true},
+	}
+
+	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+		t.Fatalf("expected module imports to type-check, got %v", err)
+	}
+}
+
+func TestValidateManifestAcceptsQualifiedComponentUse(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><ui.Hero /></main>`,
+			},
+		}},
+		Components: []manifest.Component{{
+			Package: "components",
+			Name:    "Hero",
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<section>Hero</section>`},
+		}},
+	}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected qualified component use to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsUnknownGOWDKUsePackage(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		Package: "pages",
+		ID:      "home",
+		Route:   "/",
+		Uses:    []manifest.Use{{Alias: "ui", Package: "missing"}},
+		Blocks:  manifest.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown use package diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_package") {
+		t.Fatalf("missing unknown package diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsUnknownGOWDKUseAlias(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
+		}},
+		Components: []manifest.Component{{Package: "components", Name: "Hero"}},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown use alias diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_alias") {
+		t.Fatalf("missing unknown alias diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsUnknownQualifiedComponent(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<main><ui.Missing /></main>`},
+		}},
+		Components: []manifest.Component{{Package: "components", Name: "Hero"}},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown component diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_component") {
+		t.Fatalf("missing unknown component diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsComponentRefToLayoutOnlyUsePackage(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Uses:    []manifest.Use{{Alias: "chrome", Package: "layouts"}},
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<main><chrome.Root /></main>`},
+		}},
+		Layouts: []manifest.Layout{{Package: "layouts", ID: "root"}},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown component diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_component") {
+		t.Fatalf("missing unknown component diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAcceptsComponentScopedGOWDKUse(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{
+		{
+			Package: "marketing",
+			Name:    "Hero",
+			Uses:    []manifest.Use{{Alias: "icons", Package: "icons"}},
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<section><icons.Badge /></section>`},
+		},
+		{
+			Package: "icons",
+			Name:    "Badge",
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<strong>GOWDK</strong>`},
+		},
+	}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected component-scoped use to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsUnknownComponentScopedGOWDKUseAlias(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Package: "marketing",
+		Name:    "Hero",
+		Blocks:  manifest.Blocks{View: true, ViewBody: `<section><icons.Badge /></section>`},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown component use alias diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_alias") {
+		t.Fatalf("missing unknown alias diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsUnknownComponentScopedGOWDKUsePackage(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Package: "marketing",
+		Name:    "Hero",
+		Uses:    []manifest.Use{{Alias: "icons", Package: "icons"}},
+		Blocks:  manifest.Blocks{View: true, ViewBody: `<section><icons.Badge /></section>`},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown component use package diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_package") {
+		t.Fatalf("missing unknown package diagnostic: %#v", diagnostics)
+	}
+}
 
 func TestValidatePageRejectsSSRWithoutAddon(t *testing.T) {
 	page := manifest.Page{
@@ -77,10 +467,10 @@ func TestValidateManifestRejectsDuplicatePageIDsAndComponentNames(t *testing.T) 
 		}
 	}
 	if !codes["duplicate_page_id"] {
-		t.Fatalf("missing duplicate_page_id diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing duplicate_page_id diagnostic: %#v", diagnostics)
 	}
 	if !codes["duplicate_component_name"] {
-		t.Fatalf("missing duplicate_component_name diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing duplicate_component_name diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -130,7 +520,7 @@ func TestValidateManifestRejectsDuplicatePageStore(t *testing.T) {
 	}
 	diagnostic := firstDiagnostic(err.(ValidationErrors), "duplicate_page_store")
 	if diagnostic == nil {
-		t.Fatalf("missing duplicate_page_store diagnostic: %v", err)
+		t.Fatalf("Missing duplicate_page_store diagnostic: %v", err)
 	}
 	assertSourceSpan(t, diagnostic.Span, 6, 1, 6, 40)
 }
@@ -163,7 +553,7 @@ func TestValidateManifestRejectsUnknownComponentStoreUse(t *testing.T) {
 	}
 	diagnostic := firstDiagnostic(err.(ValidationErrors), "unknown_component_store")
 	if diagnostic == nil {
-		t.Fatalf("missing unknown_component_store diagnostic: %v", err)
+		t.Fatalf("Missing unknown_component_store diagnostic: %v", err)
 	}
 	assertSourceSpan(t, diagnostic.Span, 5, 1, 5, 2)
 }
@@ -193,7 +583,7 @@ func TestValidateManifestRejectsRedundantComponentImplementations(t *testing.T) 
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "redundant_component_implementation") {
-		t.Fatalf("missing redundant component diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing redundant component diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -219,7 +609,7 @@ func TestValidateManifestRejectsRedundantComponentImplementationsWithNormalizedA
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "redundant_component_implementation") {
-		t.Fatalf("missing redundant component diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing redundant component diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -261,7 +651,7 @@ func TestValidateManifestRejectsRedundantTypedComponentsWithCanonicalImportsAndE
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "redundant_component_implementation") {
-		t.Fatalf("missing redundant component diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing redundant component diagnostic: %#v", diagnostics)
 	}
 	if !hasDiagnosticMessage(diagnostics, "redundant_component_implementation", "components/counter.cmp.gwdk", "components/stepper.cmp.gwdk") {
 		t.Fatalf("redundant diagnostic should point to both component sources: %#v", diagnostics)
@@ -383,7 +773,7 @@ func TestValidateManifestRejectsBadEventModifier(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -408,7 +798,7 @@ func TestValidateManifestRejectsBadDebounceDuration(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -433,7 +823,7 @@ func TestValidateManifestRejectsDebounceThrottleCombination(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -478,11 +868,11 @@ func TestValidateManifestRejectsMissingGoTypedComponentField(t *testing.T) {
 
 	err := ValidateManifest(gowdk.Config{}, app)
 	if err == nil {
-		t.Fatal("expected missing field diagnostic")
+		t.Fatal("expected Missing field diagnostic")
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -490,7 +880,7 @@ func TestValidateManifestRejectsMissingGoTypedComponentPackage(t *testing.T) {
 	app := manifest.Manifest{Components: []manifest.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/missing"}},
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/Missing"}},
 		PropsType: manifest.GoTypeRef{
 			Alias: "ui",
 			Name:  "CounterProps",
@@ -503,11 +893,11 @@ func TestValidateManifestRejectsMissingGoTypedComponentPackage(t *testing.T) {
 
 	err := ValidateManifest(gowdk.Config{}, app)
 	if err == nil {
-		t.Fatal("expected missing package diagnostic")
+		t.Fatal("expected Missing package diagnostic")
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_contract_error") {
-		t.Fatalf("missing component_contract_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_contract_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -528,11 +918,11 @@ func TestValidateManifestRejectsMissingGoTypedComponentType(t *testing.T) {
 
 	err := ValidateManifest(gowdk.Config{}, app)
 	if err == nil {
-		t.Fatal("expected missing type diagnostic")
+		t.Fatal("expected Missing type diagnostic")
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_contract_error") {
-		t.Fatalf("missing component_contract_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_contract_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -616,7 +1006,7 @@ func TestValidateManifestRejectsDuplicateComponentEmitNames(t *testing.T) {
 	}
 	diagnostic := firstDiagnostic(err.(ValidationErrors), "duplicate_component_emit")
 	if diagnostic == nil {
-		t.Fatalf("missing duplicate_component_emit diagnostic: %v", err)
+		t.Fatalf("Missing duplicate_component_emit diagnostic: %v", err)
 	}
 	if !strings.Contains(diagnostic.Message, `duplicate emit "select"`) {
 		t.Fatalf("unexpected diagnostic message: %s", diagnostic.Message)
@@ -677,7 +1067,7 @@ func TestValidateManifestClientParseErrorPointsToClientLine(t *testing.T) {
 	}
 	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_client_error")
 	if diagnostic == nil {
-		t.Fatalf("missing component_client_error diagnostic: %v", err)
+		t.Fatalf("Missing component_client_error diagnostic: %v", err)
 	}
 	if !strings.Contains(diagnostic.Message, "unsupported syntax") {
 		t.Fatalf("unexpected diagnostic message: %s", diagnostic.Message)
@@ -847,7 +1237,7 @@ func TestValidateManifestRejectsAwaitOutsideAsyncClientFunction(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "await is only supported inside async client functions") {
-		t.Fatalf("missing async await diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing async await diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -876,7 +1266,7 @@ func TestValidateManifestRejectsAsyncFetchJSONNonStringURL(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "fetchJSON url must be string") {
-		t.Fatalf("missing fetchJSON URL diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing fetchJSON URL diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -901,11 +1291,11 @@ func TestValidateManifestRejectsBadClientBuiltinArg(t *testing.T) {
 
 	err := ValidateManifest(gowdk.Config{}, app)
 	if err == nil {
-		t.Fatal("expected bad built-in argument diagnostic")
+		t.Fatal("expected Bad built-in argument diagnostic")
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
-		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -934,7 +1324,7 @@ func TestValidateManifestRejectsHelperAsEventHandler(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -967,7 +1357,7 @@ fn Add() {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
-		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1004,7 +1394,7 @@ fn Add() {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
-		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1033,7 +1423,7 @@ func TestValidateManifestRejectsClientExpressionTypeMismatch(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
-		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1062,7 +1452,7 @@ func TestValidateManifestRejectsClientFunctionArgumentMismatch(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1091,7 +1481,7 @@ func TestValidateManifestRejectsUnknownClientFunctionEventCall(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1120,7 +1510,7 @@ func TestValidateManifestRejectsClientFunctionUnknownStateField(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
-		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1153,7 +1543,7 @@ func TestValidateManifestRejectsClientFunctionMutatingProp(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
-		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1217,7 +1607,7 @@ func TestValidateManifestRejectsEffectUnknownDependency(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
-		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1270,7 +1660,7 @@ func TestValidateManifestRejectsUnknownDOMRefBinding(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1297,7 +1687,7 @@ func TestValidateManifestRejectsDuplicateDOMRefBinding(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1328,7 +1718,7 @@ fn FocusSearch() {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
-		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1393,7 +1783,7 @@ func TestValidateManifestRejectsGElseIfNonBoolExpression(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1418,7 +1808,7 @@ func TestValidateManifestRejectsGIfNonBoolExpression(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1535,11 +1925,11 @@ func TestValidateManifestRejectsBadAppendItemField(t *testing.T) {
 
 	err := ValidateManifest(gowdk.Config{}, app)
 	if err == nil {
-		t.Fatal("expected bad append item diagnostic")
+		t.Fatal("expected Bad append item diagnostic")
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "unknown field") {
-		t.Fatalf("missing bad append field diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing Bad append field diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1560,11 +1950,11 @@ func TestValidateManifestRejectsGForWithoutKey(t *testing.T) {
 
 	err := ValidateManifest(gowdk.Config{}, app)
 	if err == nil {
-		t.Fatal("expected missing g:key diagnostic")
+		t.Fatal("expected Missing g:key diagnostic")
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") || !strings.Contains(err.Error(), "g:for requires g:key") {
-		t.Fatalf("missing g:for missing key diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing g:for Missing key diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1589,7 +1979,7 @@ func TestValidateManifestRejectsUnknownGForItemField(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") || !strings.Contains(err.Error(), "item.Missing") {
-		t.Fatalf("missing unknown item field diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing unknown item field diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1617,7 +2007,7 @@ func TestValidateManifestViewEventDiagnosticPointsToExpression(t *testing.T) {
 	}
 	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
 	if diagnostic == nil || !strings.Contains(diagnostic.Message, "Missing()") {
-		t.Fatalf("missing event expression diagnostic: %#v", err)
+		t.Fatalf("Missing event expression diagnostic: %#v", err)
 	}
 	assertSourceSpan(t, diagnostic.Span, 10, 21, 10, 30)
 }
@@ -1641,7 +2031,7 @@ func TestValidateManifestUnknownViewFieldDiagnosticPointsToIdentifier(t *testing
 	}
 	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
 	if diagnostic == nil || !strings.Contains(diagnostic.Message, `"Missing"`) {
-		t.Fatalf("missing unknown field diagnostic: %#v", err)
+		t.Fatalf("Missing unknown field diagnostic: %#v", err)
 	}
 	assertSourceSpan(t, diagnostic.Span, 5, 10, 5, 17)
 }
@@ -1661,11 +2051,11 @@ func TestValidateManifestBadGForDiagnosticPointsToDirectiveValue(t *testing.T) {
 
 	err := ValidateManifest(gowdk.Config{}, app)
 	if err == nil {
-		t.Fatal("expected bad g:for diagnostic")
+		t.Fatal("expected Bad g:for diagnostic")
 	}
 	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
 	if diagnostic == nil || !strings.Contains(diagnostic.Message, `g:for must use`) {
-		t.Fatalf("missing bad g:for diagnostic: %#v", err)
+		t.Fatalf("Missing Bad g:for diagnostic: %#v", err)
 	}
 	assertSourceSpan(t, diagnostic.Span, 13, 16, 13, 29)
 }
@@ -1745,7 +2135,7 @@ func TestValidateManifestRejectsLocalVariableBeforeDeclaration(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "next") {
-		t.Fatalf("missing local-before-declaration diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing local-before-declaration diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1774,7 +2164,7 @@ func TestValidateManifestRejectsGoishConditionalTypeMismatch(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
-		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1863,7 +2253,7 @@ computed Second string {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
-		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1892,7 +2282,7 @@ func TestValidateManifestRejectsComputedMutation(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
-		t.Fatalf("missing component_client_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1917,7 +2307,7 @@ func TestValidateManifestRejectsUnknownNestedField(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -1962,7 +2352,7 @@ func TestValidateManifestRejectsValueBindingToNonStringState(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2007,7 +2397,7 @@ func TestValidateManifestRejectsNumericValueBindingOutsideNumberInput(t *testing
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2048,11 +2438,11 @@ func TestValidateManifestRejectsRadioValueBindingWithoutValue(t *testing.T) {
 
 	err := ValidateManifest(gowdk.Config{}, app)
 	if err == nil {
-		t.Fatal("expected radio missing value diagnostic")
+		t.Fatal("expected radio Missing value diagnostic")
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2077,7 +2467,7 @@ func TestValidateManifestRejectsValueBindingToProp(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2122,7 +2512,7 @@ func TestValidateManifestRejectsCheckedBindingToNonBoolState(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2167,7 +2557,7 @@ func TestValidateManifestRejectsNonBoolReactiveBooleanAttribute(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2192,7 +2582,7 @@ func TestValidateManifestRejectsUnsafeReactiveURLAttribute(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2237,7 +2627,7 @@ func TestValidateManifestRejectsNonBoolClassToggle(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2282,7 +2672,7 @@ func TestValidateManifestRejectsBoolStyleBinding(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
-		t.Fatalf("missing component_field_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2303,7 +2693,7 @@ func TestValidateManifestRejectsRelativeGoTypedImportPath(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "invalid_go_import") {
-		t.Fatalf("missing invalid_go_import diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing invalid_go_import diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2328,7 +2718,7 @@ func TestValidateManifestRejectsStateInitReturnMismatch(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_contract_error") {
-		t.Fatalf("missing component_contract_error diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing component_contract_error diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2337,7 +2727,7 @@ func TestValidateManifestResolvesLayoutsByID(t *testing.T) {
 		Pages: []manifest.Page{{
 			ID:      "dashboard",
 			Route:   "/dashboard",
-			Layouts: []string{"root", "missing"},
+			Layouts: []string{"root", "Missing"},
 			Source:  "pages/dashboard.page.gwdk",
 			Blocks:  manifest.Blocks{View: true},
 		}},
@@ -2353,7 +2743,55 @@ func TestValidateManifestResolvesLayoutsByID(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "unknown_layout_id") {
-		t.Fatalf("missing unknown_layout_id diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing unknown_layout_id diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAcceptsQualifiedLayoutUse(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Uses:    []manifest.Use{{Alias: "chrome", Package: "layouts"}},
+			Layouts: []string{"chrome.root"},
+			Blocks:  manifest.Blocks{View: true},
+		}},
+		Layouts: []manifest.Layout{{
+			Package: "layouts",
+			ID:      "root",
+			Source:  "layouts/root.layout.gwdk",
+		}},
+	}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected qualified layout reference to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsUnqualifiedCrossPackageLayout(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Layouts: []string{"root"},
+			Blocks:  manifest.Blocks{View: true},
+		}},
+		Layouts: []manifest.Layout{{
+			Package: "layouts",
+			ID:      "root",
+			Source:  "layouts/root.layout.gwdk",
+		}},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown layout diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_layout_id") {
+		t.Fatalf("Missing unknown_layout_id diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2371,7 +2809,38 @@ func TestValidateManifestRejectsDuplicateLayoutIDs(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "duplicate_layout_id") {
-		t.Fatalf("missing duplicate_layout_id diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing duplicate_layout_id diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsDuplicateLayoutIDsAcrossPackages(t *testing.T) {
+	app := manifest.Manifest{
+		Layouts: []manifest.Layout{
+			{Package: "pages", ID: "root", Source: "pages/root.layout.gwdk"},
+			{Package: "admin", ID: "root", Source: "admin/root.layout.gwdk"},
+		},
+	}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected package-qualified layout IDs to be unique, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsDuplicateLayoutIDsInSamePackage(t *testing.T) {
+	app := manifest.Manifest{
+		Layouts: []manifest.Layout{
+			{Package: "pages", ID: "root", Source: "pages/root.layout.gwdk"},
+			{Package: "pages", ID: "root", Source: "pages/root-copy.layout.gwdk"},
+		},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected duplicate layout diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "duplicate_layout_id") {
+		t.Fatalf("Missing duplicate_layout_id diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2389,7 +2858,7 @@ func TestValidateManifestRejectsDuplicatePageRoutes(t *testing.T) {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "duplicate_route") {
-		t.Fatalf("missing duplicate_route diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing duplicate_route diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2426,7 +2895,7 @@ func TestValidateManifestRejectsAmbiguousDynamicPageRoutes(t *testing.T) {
 			}
 			diagnostics := err.(ValidationErrors)
 			if !hasDiagnosticCode(diagnostics, "ambiguous_dynamic_route") {
-				t.Fatalf("missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
+				t.Fatalf("Missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
 			}
 		})
 	}
@@ -2464,7 +2933,7 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		}
 		diagnostics := err.(ValidationErrors)
 		if !hasDiagnosticCode(diagnostics, "route_method_conflict") {
-			t.Fatalf("missing route_method_conflict diagnostic: %#v", diagnostics)
+			t.Fatalf("Missing route_method_conflict diagnostic: %#v", diagnostics)
 		}
 	})
 
@@ -2486,7 +2955,7 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		}
 		diagnostics := err.(ValidationErrors)
 		if !hasDiagnosticCode(diagnostics, "route_method_conflict") {
-			t.Fatalf("missing route_method_conflict diagnostic: %#v", diagnostics)
+			t.Fatalf("Missing route_method_conflict diagnostic: %#v", diagnostics)
 		}
 	})
 }
@@ -2498,7 +2967,7 @@ func TestValidateManifestAllowsSameRouteWithDifferentMethods(t *testing.T) {
 			Route: "/newsletter",
 			Blocks: manifest.Blocks{
 				View:    true,
-				Actions: []manifest.Action{{Name: "subscribe"}},
+				Actions: []manifest.Action{{Name: "Subscribe"}},
 			},
 		}},
 	}
@@ -2527,10 +2996,10 @@ func TestValidatePageRejectsMalformedRoutes(t *testing.T) {
 
 			diagnostics := ValidatePage(gowdk.Config{}, page)
 			if !hasDiagnosticCode(diagnostics, "malformed_route") {
-				t.Fatalf("missing malformed_route diagnostic for %q: %#v", test.route, diagnostics)
+				t.Fatalf("Missing malformed_route diagnostic for %q: %#v", test.route, diagnostics)
 			}
 			if hasDiagnosticCode(diagnostics, "spa_dynamic_route_missing_paths") {
-				t.Fatalf("malformed route should not cascade into missing paths: %#v", diagnostics)
+				t.Fatalf("malformed route should not cascade into Missing paths: %#v", diagnostics)
 			}
 		})
 	}
@@ -2541,7 +3010,7 @@ func TestValidatePageRejectsDuplicateRouteParams(t *testing.T) {
 
 	diagnostics := ValidatePage(gowdk.Config{}, page)
 	if !hasDiagnosticCode(diagnostics, "duplicate_route_param") {
-		t.Fatalf("missing duplicate_route_param diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing duplicate_route_param diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2576,7 +3045,7 @@ func TestValidatePageAllowsSPAActionsWithoutSSR(t *testing.T) {
 		Render: gowdk.SPA,
 		Blocks: manifest.Blocks{
 			View:    true,
-			Actions: []manifest.Action{{Name: "subscribe"}},
+			Actions: []manifest.Action{{Name: "Subscribe"}},
 		},
 	}
 
@@ -2669,7 +3138,7 @@ func TestValidatePageRejectsInvalidCSSSelection(t *testing.T) {
 
 	diagnostics := ValidatePage(gowdk.Config{}, page)
 	if !hasDiagnosticCode(diagnostics, "invalid_css_selection") {
-		t.Fatalf("missing invalid_css_selection diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing invalid_css_selection diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -2685,7 +3154,7 @@ func TestValidatePageRejectsDuplicateCSSSelection(t *testing.T) {
 
 	diagnostics := ValidatePage(gowdk.Config{}, page)
 	if !hasDiagnosticCode(diagnostics, "duplicate_css_selection") {
-		t.Fatalf("missing duplicate_css_selection diagnostic: %#v", diagnostics)
+		t.Fatalf("Missing duplicate_css_selection diagnostic: %#v", diagnostics)
 	}
 }
 

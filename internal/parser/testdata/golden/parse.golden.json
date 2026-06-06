@@ -1,5 +1,6 @@
 {
   "page": {
+    "package": "shop",
     "id": "shop.product",
     "route": "/shop/{slug}",
     "render": "action",
@@ -22,19 +23,18 @@
       "viewBody": "<main>\n    <ProductCard title=\"{title}\" />\n  </main>",
       "actions": [
         {
-          "name": "buy",
-          "inputName": "input",
-          "inputType": "BuyInput",
-          "validatesInput": true,
-          "redirect": "/shop/starter-kit?ordered=1"
+          "name": "Buy",
+          "method": "POST",
+          "route": "/shop/{slug}"
         }
       ],
       "apis": [
-        "metadata"
+        "Metadata"
       ]
     }
   },
   "component": {
+    "package": "shop",
     "name": "ProductCard",
     "props": [
       {

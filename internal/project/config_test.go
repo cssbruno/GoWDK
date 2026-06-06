@@ -17,6 +17,7 @@ func TestLoadConfigFileReadsLiteralSourceAndBuildFields(t *testing.T) {
 import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
+	AppName: "Example App",
 	Source: gowdk.SourceConfig{
 		Include: []string{
 			"src/**/*.gwdk",
@@ -44,6 +45,21 @@ var Config = gowdk.Config{
 	Build: gowdk.BuildConfig{
 		Output: "dist/site",
 		Mode: gowdk.Production,
+		Head: gowdk.HeadConfig{
+			SiteName: "Example",
+			Favicon: "/favicon.ico",
+			Image: "https://example.com/social.png",
+			TwitterCard: "summary_large_image",
+		},
+		CSRF: gowdk.CSRFConfig{
+			Enabled: true,
+			SecretEnv: "EXAMPLE_CSRF_SECRET",
+			CookieName: "__Host-example-csrf",
+			FieldName: "_example_csrf",
+			HeaderName: "X-Example-CSRF",
+			Insecure: true,
+		},
+		AllowMissingBackend: true,
 		Stylesheets: []gowdk.Stylesheet{
 			{Href: "/assets/app.css"},
 			{Href: "/assets/theme.css"},
@@ -69,7 +85,7 @@ var Config = gowdk.Config{
 	},
 	CSS: gowdk.CSSConfig{
 		Include: []string{"styles/**/*.css"},
-		Exclude: []string{"styles/legacy.css"},
+		Exclude: []string{"styles/old.css"},
 		Default: []string{"global", "tokens"},
 		Output: gowdk.CSSOutputConfig{
 			Dir: "/assets/pages/",
@@ -87,6 +103,9 @@ var Config = gowdk.Config{
 	}
 	if len(config.Source.Include) != 2 || config.Source.Include[0] != "src/**/*.gwdk" || config.Source.Include[1] != "modules/**/*.gwdk" {
 		t.Fatalf("unexpected includes: %#v", config.Source.Include)
+	}
+	if config.AppName != "Example App" {
+		t.Fatalf("unexpected app name: %q", config.AppName)
 	}
 	if len(config.Source.Exclude) != 1 || config.Source.Exclude[0] != "src/**/draft.page.gwdk" {
 		t.Fatalf("unexpected excludes: %#v", config.Source.Exclude)
@@ -115,6 +134,15 @@ var Config = gowdk.Config{
 	if config.Build.Mode != gowdk.Production {
 		t.Fatalf("unexpected build mode: %q", config.Build.Mode)
 	}
+	if config.Build.Head.SiteName != "Example" || config.Build.Head.Favicon != "/favicon.ico" || config.Build.Head.Image != "https://example.com/social.png" || config.Build.Head.TwitterCard != "summary_large_image" {
+		t.Fatalf("unexpected build head config: %#v", config.Build.Head)
+	}
+	if !config.Build.CSRF.Enabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
+		t.Fatalf("unexpected build csrf config: %#v", config.Build.CSRF)
+	}
+	if !config.Build.AllowMissingBackend {
+		t.Fatal("expected AllowMissingBackend to be parsed")
+	}
 	if len(config.Build.Stylesheets) != 2 || config.Build.Stylesheets[0].Href != "/assets/app.css" || config.Build.Stylesheets[1].Href != "/assets/theme.css" {
 		t.Fatalf("unexpected stylesheets: %#v", config.Build.Stylesheets)
 	}
@@ -136,7 +164,7 @@ var Config = gowdk.Config{
 	if len(config.CSS.Include) != 1 || config.CSS.Include[0] != "styles/**/*.css" {
 		t.Fatalf("unexpected css includes: %#v", config.CSS.Include)
 	}
-	if len(config.CSS.Exclude) != 1 || config.CSS.Exclude[0] != "styles/legacy.css" {
+	if len(config.CSS.Exclude) != 1 || config.CSS.Exclude[0] != "styles/old.css" {
 		t.Fatalf("unexpected css excludes: %#v", config.CSS.Exclude)
 	}
 	if len(config.CSS.Default) != 2 || config.CSS.Default[0] != "global" || config.CSS.Default[1] != "tokens" {

@@ -3,7 +3,8 @@ package clientrt
 // Filename is the conventional output name for the generated client runtime.
 const Filename = "gowdk.js"
 
-// Source returns the first partial-update client runtime.
+// Source returns the first client runtime for partial updates and SPA
+// navigation enhancement.
 func Source() []byte {
 	return []byte(runtimeSource)
 }
@@ -72,6 +73,138 @@ const runtimeSource = `(function () {
   }
 
   document.addEventListener('submit', submitPartial);
+  document.addEventListener('click', navigateLink);
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('popstate', function () {
+      loadDocument(window.location.href, false, null);
+    });
+  }
+
+  async function navigateLink(event) {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    var link = event.target && event.target.closest && event.target.closest('a[href]');
+    if (!link || link.target || link.hasAttribute('download')) {
+      return;
+    }
+    var url;
+    try {
+      url = new URL(link.href, window.location.href);
+    } catch (error) {
+      return;
+    }
+    if (!isNavigableURL(url)) {
+      return;
+    }
+    if (url.hash && url.pathname === window.location.pathname && url.search === window.location.search) {
+      return;
+    }
+    var before = new CustomEvent('gowdk:before-navigate', {
+      cancelable: true,
+      detail: { link: link, url: url.href }
+    });
+    if (!document.dispatchEvent(before)) {
+      event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    try {
+      await loadDocument(url.href, true, link);
+    } catch (error) {
+      document.dispatchEvent(new CustomEvent('gowdk:navigate-error', {
+        detail: { link: link, url: url.href, error: error }
+      }));
+      window.location.href = url.href;
+    }
+  }
+
+  async function loadDocument(url, push, source) {
+    var response = await fetch(url, {
+      headers: {
+        'Accept': 'text/html',
+        'X-GOWDK-Navigate': '1'
+      }
+    });
+    if (!response.ok) {
+      throw new Error('navigation request failed with status ' + response.status);
+    }
+    var type = response.headers && response.headers.get && response.headers.get('Content-Type') || '';
+    if (type && type.indexOf('text/html') === -1) {
+      window.location.href = url;
+      return;
+    }
+    var html = await response.text();
+    var next = new DOMParser().parseFromString(html, 'text/html');
+    if (!next || !next.body) {
+      window.location.href = url;
+      return;
+    }
+    var focused = focusTarget(document.activeElement);
+    if (typeof window !== 'undefined' && window.__gowdkDestroyIslands) {
+      window.__gowdkDestroyIslands(document.body, false);
+    }
+    var previousScripts = scriptSources(document);
+    document.title = next.title || document.title;
+    document.head.innerHTML = next.head ? next.head.innerHTML : '';
+    document.body.innerHTML = next.body.innerHTML;
+    await activateNewScripts(previousScripts);
+    if (push && window.history && window.history.pushState) {
+      window.history.pushState({}, document.title, url);
+    }
+    if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
+      window.__gowdkMountIslands();
+    }
+    restoreFocus(focused);
+    if (window.location.hash) {
+      var target = document.getElementById(window.location.hash.slice(1));
+      if (target && target.scrollIntoView) {
+        target.scrollIntoView();
+      }
+    } else if (window.scrollTo) {
+      window.scrollTo(0, 0);
+    }
+    document.dispatchEvent(new CustomEvent('gowdk:after-navigate', {
+      detail: { url: url, source: source || null }
+    }));
+  }
+
+  function isNavigableURL(url) {
+    if (!window || !window.location) {
+      return false;
+    }
+    if (url.origin !== window.location.origin) {
+      return false;
+    }
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  }
+
+  function scriptSources(doc) {
+    var sources = {};
+    Array.prototype.forEach.call(doc.querySelectorAll('script[src]'), function (script) {
+      sources[script.src] = true;
+    });
+    return sources;
+  }
+
+  function activateNewScripts(previousScripts) {
+    var pending = [];
+    Array.prototype.forEach.call(document.querySelectorAll('script[src]'), function (script) {
+      if (previousScripts[script.src]) {
+        return;
+      }
+      var active = document.createElement('script');
+      Array.prototype.forEach.call(script.attributes, function (attr) {
+        active.setAttribute(attr.name, attr.value);
+      });
+      pending.push(new Promise(function (resolve, reject) {
+        active.onload = resolve;
+        active.onerror = reject;
+      }));
+      script.parentNode.replaceChild(active, script);
+    });
+    return Promise.all(pending);
+  }
 
   function focusTarget(element) {
     if (!element || element === document.body) {

@@ -60,18 +60,20 @@ func TestBuildIncrementalRendersOnlyChangedPageSources(t *testing.T) {
 	aboutSource := filepath.Join(t.TempDir(), "about.page.gwdk")
 	initial := manifest.Manifest{Pages: []manifest.Page{
 		{
-			Source: homeSource,
-			ID:     "home",
-			Route:  "/",
+			Source:  homeSource,
+			Package: "app",
+			ID:      "home",
+			Route:   "/",
 			Blocks: manifest.Blocks{
 				View:     true,
 				ViewBody: `<main>Home before</main>`,
 			},
 		},
 		{
-			Source: aboutSource,
-			ID:     "about",
-			Route:  "/about",
+			Source:  aboutSource,
+			Package: "app",
+			ID:      "about",
+			Route:   "/about",
 			Blocks: manifest.Blocks{
 				View:     true,
 				ViewBody: `<main>About stable</main>`,
@@ -90,18 +92,20 @@ func TestBuildIncrementalRendersOnlyChangedPageSources(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	changed := manifest.Manifest{Pages: []manifest.Page{
 		{
-			Source: homeSource,
-			ID:     "home",
-			Route:  "/",
+			Source:  homeSource,
+			Package: "app",
+			ID:      "home",
+			Route:   "/",
 			Blocks: manifest.Blocks{
 				View:     true,
 				ViewBody: `<main>Home after</main>`,
 			},
 		},
 		{
-			Source: aboutSource,
-			ID:     "about",
-			Route:  "/about",
+			Source:  aboutSource,
+			Package: "app",
+			ID:      "about",
+			Route:   "/about",
 			Blocks: manifest.Blocks{
 				Build:     true,
 				BuildBody: `=> missing.BuildData()`,
@@ -137,9 +141,10 @@ func TestBuildIncrementalRemovesStaleChangedPageRouteOutput(t *testing.T) {
 	outputDir := t.TempDir()
 	source := filepath.Join(t.TempDir(), "home.page.gwdk")
 	initial := manifest.Manifest{Pages: []manifest.Page{{
-		Source: source,
-		ID:     "home",
-		Route:  "/old",
+		Source:  source,
+		Package: "app",
+		ID:      "home",
+		Route:   "/old",
 		Blocks: manifest.Blocks{
 			View:     true,
 			ViewBody: `<main>Old route</main>`,
@@ -154,9 +159,10 @@ func TestBuildIncrementalRemovesStaleChangedPageRouteOutput(t *testing.T) {
 	}
 
 	changed := manifest.Manifest{Pages: []manifest.Page{{
-		Source: source,
-		ID:     "home",
-		Route:  "/new",
+		Source:  source,
+		Package: "app",
+		ID:      "home",
+		Route:   "/new",
 		Blocks: manifest.Blocks{
 			View:     true,
 			ViewBody: `<main>New route</main>`,

@@ -28,12 +28,14 @@ func (err ValidationError) Error() string {
 // ValidateManifest checks render-mode invariants that must hold before codegen.
 func ValidateManifest(config gowdk.Config, app manifest.Manifest) error {
 	var diagnostics []ValidationError
+	diagnostics = append(diagnostics, validatePackages(app)...)
 	diagnostics = append(diagnostics, validateUniquePages(app.Pages)...)
 	diagnostics = append(diagnostics, validateUniqueComponents(app.Components)...)
 	diagnostics = append(diagnostics, validateComponentEmits(app.Components)...)
 	diagnostics = append(diagnostics, validateComponentGoContracts(app.Components)...)
 	diagnostics = append(diagnostics, validateComponentStoreUses(app.Pages, app.Components)...)
 	diagnostics = append(diagnostics, validateRedundantComponents(app.Components)...)
+	diagnostics = append(diagnostics, validateGOWDKUses(app)...)
 	diagnostics = append(diagnostics, validateUniqueLayouts(app.Layouts)...)
 	diagnostics = append(diagnostics, validatePageLayoutReferences(app.Pages, app.Layouts)...)
 	diagnostics = append(diagnostics, validateUniquePageRoutes(app.Pages)...)

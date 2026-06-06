@@ -1,0 +1,205 @@
+package compiler
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/manifest"
+)
+
+func TestBindBackendHandlersClassifiesSupportedActionSignatures(t *testing.T) {
+	root := t.TempDir()
+	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n")
+	writeCompilerTestFile(t, filepath.Join(root, "auth.go"), `package auth
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/form"
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+type LoginInput struct {
+	Email string `+"`form:\"email\"`"+`
+	Tags []string `+"`form:\"tag\"`"+`
+	Remember bool `+"`form:\"remember\"`"+`
+	Age int `+"`form:\"age\"`"+`
+	Score uint64 `+"`form:\"score\"`"+`
+	Internal string `+"`form:\"-\"`"+`
+	ignored string
+}
+
+type BrokenInput struct {
+	Nested map[string]string `+"`form:\"nested\"`"+`
+}
+
+func Ping(context.Context) (response.Response, error) {
+	return response.Response{}, nil
+}
+
+func Login(context.Context, LoginInput) (response.Response, error) {
+	return response.Response{}, nil
+}
+
+func LoginPtr(context.Context, *LoginInput) (response.Response, error) {
+	return response.Response{}, nil
+}
+
+func Raw(context.Context, form.Values) (response.Response, error) {
+	return response.Response{}, nil
+}
+
+func Broken(context.Context, BrokenInput) (response.Response, error) {
+	return response.Response{}, nil
+}
+
+func Session(context.Context, *http.Request) (response.Response, error) {
+	return response.Response{}, nil
+}
+
+func Bad(LoginInput) (response.Response, error) {
+	return response.Response{}, nil
+}
+`)
+
+	app := BindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{{
+		ID:     "Login",
+		Source: filepath.Join(root, "Login.page.gwdk"),
+		Route:  "/Login",
+		Blocks: manifest.Blocks{
+			Actions: []manifest.Action{
+				{Name: "Ping"},
+				{Name: "Login"},
+				{Name: "LoginPtr"},
+				{Name: "Raw"},
+				{Name: "Broken"},
+				{Name: "Bad"},
+				{Name: "Missing"},
+			},
+			APIs: []manifest.API{{
+				Name:   "Session",
+				Method: "GET",
+				Route:  "/api/Session",
+			}},
+		},
+	}}})
+
+	bindings := compilerBindingsByBlock(app.BackendBindings)
+	assertBinding(t, bindings["Ping"], manifest.BackendBindingBound, manifest.BackendSignatureAction0, "", false)
+	assertBinding(t, bindings["Login"], manifest.BackendBindingBound, manifest.BackendSignatureActionForm, "LoginInput", false)
+	assertBinding(t, bindings["LoginPtr"], manifest.BackendBindingBound, manifest.BackendSignatureActionFormPtr, "LoginInput", true)
+	assertBinding(t, bindings["Raw"], manifest.BackendBindingBound, manifest.BackendSignatureActionValues, "", false)
+	assertBinding(t, bindings["Session"], manifest.BackendBindingBound, manifest.BackendSignatureAPI, "", false)
+	assertInputFields(t, bindings["Login"].InputFields, "Email:email:string,Tags:tag:[]string,Remember:remember:bool,Age:age:int,Score:score:uint64")
+	if got := bindings["Broken"]; got.Status != manifest.BackendBindingUnsupportedSignature {
+		t.Fatalf("expected Broken unsupported signature, got %#v", got)
+	}
+	if !strings.Contains(bindings["Broken"].Message, "unsupported field type") {
+		t.Fatalf("expected Broken message to explain unsupported field type, got %q", bindings["Broken"].Message)
+	}
+	if got := bindings["Bad"]; got.Status != manifest.BackendBindingUnsupportedSignature {
+		t.Fatalf("expected Bad unsupported signature, got %#v", got)
+	}
+	if got := bindings["Missing"]; got.Status != manifest.BackendBindingMissing {
+		t.Fatalf("expected Missing binding, got %#v", got)
+	}
+}
+
+func TestValidateBackendBindingPolicyFailsProductionMissingHandler(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:     "login",
+		Source: filepath.Join(t.TempDir(), "login.page.gwdk"),
+		Route:  "/login",
+		Blocks: manifest.Blocks{
+			Actions: []manifest.Action{{Name: "Login", Method: "POST"}},
+		},
+	}}}
+
+	err := ValidateBackendBindingPolicy(gowdk.Config{Build: gowdk.BuildConfig{Mode: gowdk.Production}}, app)
+	if err == nil {
+		t.Fatal("expected production missing handler diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "backend_binding_required") {
+		t.Fatalf("missing backend_binding_required diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(err.Error(), "--allow-missing-backend") {
+		t.Fatalf("expected diagnostic to mention explicit stub flag, got %v", err)
+	}
+}
+
+func TestValidateBackendBindingPolicyAllowsDevelopmentMissingHandler(t *testing.T) {
+	app := manifest.Manifest{BackendBindings: []manifest.BackendBinding{{
+		Kind:         actionHandlerKind,
+		PageID:       "login",
+		BlockName:    "Login",
+		Method:       "POST",
+		Route:        "/login",
+		FunctionName: "Login",
+		Status:       manifest.BackendBindingMissing,
+	}}}
+
+	if err := ValidateBackendBindingPolicy(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected development missing handler to remain non-fatal, got %v", err)
+	}
+}
+
+func TestValidateBackendBindingPolicyAllowsExplicitProductionStubMode(t *testing.T) {
+	app := manifest.Manifest{BackendBindings: []manifest.BackendBinding{{
+		Kind:         apiHandlerKind,
+		PageID:       "session",
+		BlockName:    "Session",
+		Method:       "GET",
+		Route:        "/api/session",
+		FunctionName: "Session",
+		Status:       manifest.BackendBindingUnsupportedSignature,
+	}}}
+
+	config := gowdk.Config{Build: gowdk.BuildConfig{
+		Mode:                gowdk.Production,
+		AllowMissingBackend: true,
+	}}
+	if err := ValidateBackendBindingPolicy(config, app); err != nil {
+		t.Fatalf("expected explicit production stub mode to allow missing backend, got %v", err)
+	}
+}
+
+func assertBinding(t *testing.T, binding manifest.BackendBinding, status manifest.BackendBindingStatus, signature manifest.BackendSignatureKind, inputType string, inputPointer bool) {
+	t.Helper()
+	if binding.Status != status || binding.Signature != signature || binding.InputType != inputType || binding.InputPointer != inputPointer {
+		t.Fatalf("unexpected binding: %#v", binding)
+	}
+}
+
+func assertInputFields(t *testing.T, fields []manifest.BackendInputField, expected string) {
+	t.Helper()
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		parts = append(parts, field.FieldName+":"+field.FormName+":"+field.Type)
+	}
+	if strings.Join(parts, ",") != expected {
+		t.Fatalf("unexpected input fields: %s", strings.Join(parts, ","))
+	}
+}
+
+func compilerBindingsByBlock(bindings []manifest.BackendBinding) map[string]manifest.BackendBinding {
+	out := map[string]manifest.BackendBinding{}
+	for _, binding := range bindings {
+		out[binding.BlockName] = binding
+	}
+	return out
+}
+
+func writeCompilerTestFile(t *testing.T, path string, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}

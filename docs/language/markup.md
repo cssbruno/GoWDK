@@ -1,6 +1,23 @@
 # Markup
 
-`view {}` is currently captured and parsed for the first SPA build subset.
+`view {}` is currently captured and parsed for the first SPA build subset. This
+page is the contract for the supported markup subset; syntax not listed here is
+unsupported unless another language reference explicitly says otherwise.
+
+## Contract Decisions
+
+- Raw HTML escape hatches are not supported in the current language contract.
+  Rendered text and attributes are escaped by default.
+- Snippet/render blocks are not supported. Use GOWDK component slots for the
+  supported reusable-markup model.
+- Head management is page metadata, not `view {}` markup. Use `@title`,
+  `@description`, `@canonical`, and `@image`.
+- Document/window/body event targets are not core `view {}` features.
+- Transitions and animations are not core `view {}` features in this slice.
+  Use CSS or a future addon-specific contract.
+- DOM actions/attachments are not core `view {}` features in this slice.
+  Use explicit generated island behavior that is documented here.
+- External template syntax is rejected instead of translated implicitly.
 
 Implemented today:
 
@@ -37,6 +54,10 @@ Implemented today:
 - `g:target="#id"` and `g:swap="innerHTML|outerHTML"` on `g:post` forms,
   lowered to `data-gowdk-target` and `data-gowdk-swap` for future partial
   runtime enhancement.
+- `g:message:required`, `g:message:minlength`, `g:message:maxlength`, and
+  `g:message:pattern` on literal controls inside `g:post` forms to attach
+  request-shape validation messages to the generated action schema. Each
+  message directive must match a literal HTML constraint on the same control.
 - `g:on:<event>={...}` on elements inside stateful components. The first
   generated-JS expression subset supports field increment/decrement,
   assignment from typed scalar expressions, arithmetic, comparisons, boolean
@@ -115,6 +136,34 @@ Implemented today:
   alternatives. These diagnostics are guidance only; they do not imply that
   GOWDK will implement those external constructs feature-for-feature.
 
+## Supported `g:` Directives
+
+These are the supported `g:` directives in `view {}` markup:
+
+- `g:post={Action}` on `<form>`.
+- `g:target="#id"` and `g:swap="innerHTML|outerHTML"` on `g:post` forms.
+- `g:message:required`, `g:message:minlength`, `g:message:maxlength`, and
+  `g:message:pattern` on literal form controls inside `g:post` forms.
+- `g:on:<event>[.<modifier>...]={Expr}` inside stateful components. Supported
+  modifiers are `.prevent`, `.stop`, `.once`, `.capture`,
+  `.debounce(duration)`, and `.throttle(duration)`.
+- `g:ref={name}` inside stateful components.
+- `g:if={boolExpr}`, `g:else-if={boolExpr}`, and `g:else` inside stateful
+  components.
+- `g:for={item in Items}` or `g:for={item, i in Items}` with required
+  `g:key={scalarExpr}` inside stateful components.
+- `g:bind:value={Field}` on `<input>`, `<textarea>`, and `<select>` inside
+  stateful components.
+- `g:bind:checked={Field}` on checkbox `<input>` elements inside stateful
+  components.
+- `g:slot="name"` on caller-side `<template>` elements for named and scoped
+  slots.
+- `g:island="wasm"` on component calls.
+
+All other `g:` directives are unsupported today. In particular, there is no
+`g:html`, `g:head`, `g:window`, `g:body`, `g:document`, `g:transition`,
+`g:animate`, or `g:action` directive in core.
+
 Not implemented yet:
 
 - Non-string component props in inline `props {}` blocks.
@@ -124,9 +173,7 @@ Not implemented yet:
   animations, DOM actions, and document/window/body/head special targets.
 - Full client-side expressions beyond the first safe island subset, including
   broader date/time built-ins and JavaScript-style ternaries.
-- Other `g:` directives beyond `g:post`, `g:target`, `g:swap`, `g:on:*`,
-  `g:if`, `g:else-if`, `g:else`, `g:for`, `g:key`, `g:bind:value`,
-  `g:bind:checked`, and `g:island`.
+- Other `g:` directives beyond the supported directive list above.
 - Reactive URL and event-handler attributes, plus raw `style={expr}`
   attributes.
 - Shorthand preservation in a full component AST.

@@ -416,15 +416,15 @@ Done when:
 
 ### 2. Template Language Contract
 
-- [ ] Inventory all currently parsed markup syntax from `internal/view`.
-- [ ] Document every supported `g:` directive and every unsupported directive.
-- [ ] Decide whether to add raw HTML escape hatches. If yes, require explicit
+- [x] Inventory all currently parsed markup syntax from `internal/view`.
+- [x] Document every supported `g:` directive and every unsupported directive.
+- [x] Decide whether to add raw HTML escape hatches. If yes, require explicit
       syntax and document security rules.
-- [ ] Decide whether to add snippet/render syntax or keep slots only.
-- [ ] Decide whether `head` management is part of `view {}` or page metadata.
-- [ ] Decide whether document/window/body event targets belong in core.
-- [ ] Decide whether transitions and animations are core, addon, or non-goal.
-- [ ] Decide whether DOM actions/attachments are core, addon, or non-goal.
+- [x] Decide whether to add snippet/render syntax or keep slots only.
+- [x] Decide whether `head` management is part of `view {}` or page metadata.
+- [x] Decide whether document/window/body event targets belong in core.
+- [x] Decide whether transitions and animations are core, addon, or non-goal.
+- [x] Decide whether DOM actions/attachments are core, addon, or non-goal.
 - [x] Add parser diagnostics for unsupported external-framework syntax that
       users are likely to try.
 - [ ] Add golden tests for each supported markup construct.
@@ -432,7 +432,7 @@ Done when:
 
 Done when:
 
-- [ ] `docs/language/markup.md` is an exact contract, not a direction document.
+- [x] `docs/language/markup.md` is an exact contract, not a direction document.
 - [x] Unsupported familiar template syntax fails clearly.
 - [ ] `gowdk fmt` preserves or normalizes the supported syntax predictably.
 

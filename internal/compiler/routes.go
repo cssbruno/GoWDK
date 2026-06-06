@@ -124,10 +124,10 @@ func routePatternSegments(pattern string) []string {
 	return strings.Split(trimmed, "/")
 }
 
-func validateRouteMethodConflicts(pages []manifest.Page) []ValidationError {
+func validateRouteMethodConflicts(pages []manifest.Page, endpoints []manifest.EndpointDeclaration) []ValidationError {
 	seen := map[string]routeRegistration{}
 	var diagnostics []ValidationError
-	for _, registration := range routeRegistrations(pages) {
+	for _, registration := range routeRegistrations(pages, endpoints) {
 		key := registration.Method + " " + registration.Pattern
 		first, exists := seen[key]
 		if !exists {
@@ -165,7 +165,7 @@ type routeRegistration struct {
 	Span    manifest.SourceSpan
 }
 
-func routeRegistrations(pages []manifest.Page) []routeRegistration {
+func routeRegistrations(pages []manifest.Page, endpoints []manifest.EndpointDeclaration) []routeRegistration {
 	var registrations []routeRegistration
 	for _, page := range pages {
 		pageInfo, pageIssues := parseRoute(page.Route)
@@ -235,7 +235,74 @@ func routeRegistrations(pages []manifest.Page) []routeRegistration {
 			})
 		}
 	}
+	for _, endpoint := range endpoints {
+		info, issues := parseRoute(endpoint.Route)
+		if len(issues) > 0 {
+			continue
+		}
+		kind := strings.TrimSpace(endpoint.Kind)
+		if kind == "" {
+			kind = "endpoint"
+		}
+		method := strings.ToUpper(strings.TrimSpace(endpoint.Method))
+		registrations = append(registrations, routeRegistration{
+			Kind:    kind,
+			Owner:   fmt.Sprintf("%s %s.%s", kind, endpoint.Package, endpoint.Name),
+			Method:  method,
+			Route:   endpoint.Route,
+			Pattern: info.Pattern,
+			PageID:  standaloneEndpointPageID(endpoint),
+			Source:  endpoint.Source,
+			Span:    firstSpan(endpoint.RouteSpan, endpoint.Span),
+		})
+	}
 	return registrations
+}
+
+func validateStandaloneEndpoints(endpoints []manifest.EndpointDeclaration) []ValidationError {
+	var diagnostics []ValidationError
+	for _, endpoint := range endpoints {
+		page := manifest.Page{ID: standaloneEndpointPageID(endpoint), Source: endpoint.Source}
+		if !isExportedHandlerName(endpoint.Name) {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "invalid_backend_handler_name",
+				PageID:  page.ID,
+				Source:  endpoint.Source,
+				Span:    endpoint.Span,
+				Message: fmt.Sprintf("%s endpoint handler %q must be an exported Go identifier", endpoint.Kind, endpoint.Name),
+			})
+		}
+		method := strings.ToUpper(strings.TrimSpace(endpoint.Method))
+		if method == "" {
+			if endpoint.Kind == "act" || endpoint.Kind == "action" {
+				method = "POST"
+			} else {
+				method = "GET"
+			}
+		}
+		if endpoint.Kind == "act" || endpoint.Kind == "action" {
+			if method != "POST" {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:    "unsupported_action_method",
+					PageID:  page.ID,
+					Source:  endpoint.Source,
+					Span:    endpoint.Span,
+					Message: fmt.Sprintf("Go action endpoint %s uses unsupported method %s; actions currently require POST", endpoint.Name, method),
+				})
+			}
+		}
+		_, issues := parseRoute(endpoint.Route)
+		label := fmt.Sprintf("Go %s endpoint path", endpoint.Kind)
+		diagnostics = append(diagnostics, routeDiagnostics(page, label, issues, firstSpan(endpoint.RouteSpan, endpoint.Span), endpoint.RouteParams)...)
+	}
+	return diagnostics
+}
+
+func standaloneEndpointPageID(endpoint manifest.EndpointDeclaration) string {
+	if endpoint.Package == "" {
+		return endpoint.Name
+	}
+	return endpoint.Package + "." + endpoint.Name
 }
 
 func routeDiagnostics(page manifest.Page, label string, issues []routeIssue, routeSpan manifest.SourceSpan, paramSpans []manifest.NamedSpan) []ValidationError {

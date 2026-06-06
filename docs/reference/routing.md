@@ -136,6 +136,18 @@ func Submit(context.Context, form.Values) (response.Response, error)
 
 Missing or unsupported functions generate HTTP 501 handlers.
 
+Actions can also be declared on the exported Go handler itself:
+
+```go
+//gowdk:act POST /signup
+func Submit(context.Context, SignupInput) (response.Response, error)
+```
+
+Go comment action endpoints are standalone backend endpoints. They use the same
+binding and generated adapter pipeline as `.gwdk` action declarations, but they
+do not infer page-local form schemas, fragments, or guards from `.gwdk` page
+markup.
+
 When `Build.CSRF.Enabled` is set, generated action handlers validate CSRF
 tokens before generated decoding or user handlers run. Missing or invalid
 tokens return HTTP 403 with `invalid csrf token` and `Cache-Control: no-store`.
@@ -166,6 +178,18 @@ Supported methods today: `GET`, `POST`, `PUT`, `PATCH`, and `DELETE`.
 same package as the `.gwdk` file when the function has signature
 `func(context.Context, *http.Request) (response.Response, error)`. Missing or
 unsupported functions generate HTTP 501 handlers.
+
+APIs can also be declared on the exported Go handler itself:
+
+```go
+//gowdk:api GET /api/health
+func Health(context.Context, *http.Request) (response.Response, error)
+```
+
+The compiler discovers Go endpoint comments only in selected source packages,
+does not infer endpoints from function names, and does not scan framework route
+registrations. If a Go comment endpoint and a `.gwdk` endpoint declare the same
+method/path pair, validation fails with a route conflict diagnostic.
 
 ## SSR Routes
 

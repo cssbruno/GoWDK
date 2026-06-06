@@ -87,12 +87,14 @@ is still missing. At a high level, the current baseline already includes:
   route reports, and LSP support;
 - package-first `.gwdk` files, package mismatch diagnostics, package source
   spans, package-scoped `use alias "package"` component imports, exact
-  `act Name POST "/path"` and `api Name METHOD "/path"` declarations, and
-  migration diagnostics for old action/API block syntax;
-- build-time SPA output for simple pages, dynamic `paths {}` subsets, build data
-  subsets, layouts, components, CSS assets, route manifests, asset manifests,
-  build reports, generated app output, embedded assets, local binaries, WASM
-  deploy artifacts, and a polling dev server with live reload;
+  `act Name POST "/path"` and `api Name METHOD "/path"` declarations, optional
+  `//gowdk:act` and `//gowdk:api` Go endpoint comments, and migration
+  diagnostics for old action/API block syntax;
+- build-time SPA output for simple pages, dynamic `paths {}` subsets, literal,
+  imported, and same-package build data subsets, layouts, components, CSS
+  assets, route manifests, asset manifests, build reports, generated app
+  output, embedded assets, local binaries, WASM deploy artifacts, and a polling
+  dev server with live reload;
 - component discovery, imported props/state contracts, slots, generated
   JavaScript islands, explicit WASM island assets, and a first-slice client
   language for local component behavior;

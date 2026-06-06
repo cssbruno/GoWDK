@@ -16,16 +16,7 @@ type Element struct {
 
 func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 	if node.Name == "slot" {
-		if ctx.slotHTML != "" {
-			out.WriteString(ctx.slotHTML)
-			return nil
-		}
-		for _, child := range node.Children {
-			if err := child.render(ctx, out); err != nil {
-				return err
-			}
-		}
-		return nil
+		return node.renderSlot(ctx, out)
 	}
 	if loop, keyExpr, ok, err := node.forDirective(ctx); err != nil {
 		return err
@@ -118,7 +109,8 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			if err != nil {
 				return err
 			}
-			if err := ValidateIslandEventExpressionTypedWithEvents(attr.Value, ctx.readSymbols(), ctx.stateTypes, ctx.handlers, nil, ctx.emits); err != nil {
+			readSymbols := mergeClientSymbols(ctx.readSymbols(), domEventSymbols())
+			if err := ValidateIslandEventExpressionTypedWithEvents(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil, ctx.emits); err != nil {
 				return fmt.Errorf("%s: %w", attr.Name, err)
 			}
 			out.WriteString(` data-gowdk-on-`)
@@ -365,6 +357,76 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		out.WriteString(`<!--gowdk-if:`)
 		out.WriteString(gowhtml.Escape(ctx.conditional.Marker()))
 		out.WriteString(`:end-->`)
+	}
+	return nil
+}
+
+// DOMEventSymbols returns the compiler-owned scalar DOM event scope exposed to
+// g:on:* expressions.
+func DOMEventSymbols() map[string]clientlang.ValueType {
+	return map[string]clientlang.ValueType{
+		"event":         clientlang.TypeObject,
+		"event.value":   clientlang.TypeString,
+		"event.checked": clientlang.TypeBool,
+		"event.key":     clientlang.TypeString,
+		"event.code":    clientlang.TypeString,
+		"event.clientX": clientlang.TypeFloat,
+		"event.clientY": clientlang.TypeFloat,
+	}
+}
+
+func domEventSymbols() map[string]clientlang.ValueType {
+	return DOMEventSymbols()
+}
+
+func (node Element) renderSlot(ctx *renderContext, out *strings.Builder) error {
+	name := ""
+	scopedValues := map[string]string{}
+	for _, attr := range node.Attrs {
+		if attr.Name == "name" {
+			if attr.Boolean {
+				return fmt.Errorf("slot name requires a value")
+			}
+			name = strings.TrimSpace(attr.Value)
+			continue
+		}
+		if strings.HasPrefix(attr.Name, "g:") {
+			return fmt.Errorf("slot uses unsupported directive attribute %q", attr.Name)
+		}
+		if attr.Boolean {
+			return fmt.Errorf("slot prop %q requires a value", attr.Name)
+		}
+		value, _, err := interpolateValue(ctx, attr.Value)
+		if err != nil {
+			return err
+		}
+		scopedValues[attr.Name] = value
+	}
+	if slot, ok := ctx.slots[name]; ok {
+		slotValues := map[string]string{}
+		for key, value := range scopedValues {
+			slotValues[key] = value
+		}
+		for prop, local := range slot.Lets {
+			if value, ok := scopedValues[prop]; ok {
+				slotValues[local] = value
+			}
+		}
+		html, err := renderSlotContent(slot, slotValues)
+		if err != nil {
+			return err
+		}
+		out.WriteString(html)
+		return nil
+	}
+	if name == "" && ctx.slotHTML != "" {
+		out.WriteString(ctx.slotHTML)
+		return nil
+	}
+	for _, child := range node.Children {
+		if err := child.render(ctx, out); err != nil {
+			return err
+		}
 	}
 	return nil
 }

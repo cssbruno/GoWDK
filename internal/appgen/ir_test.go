@@ -77,3 +77,48 @@ func TestAPIEndpointsFromIR(t *testing.T) {
 		t.Fatalf("unexpected API endpoints: %#v", endpoints)
 	}
 }
+
+func TestStandaloneGoEndpointsFromIR(t *testing.T) {
+	ir := gwdkir.Program{
+		Version: gwdkir.Version,
+		Endpoints: []gwdkir.Endpoint{
+			{
+				Kind:   gwdkir.EndpointAction,
+				Source: gwdkir.EndpointSourceGo,
+				PageID: "auth.Login",
+				Symbol: "Login",
+				Method: "POST",
+				Path:   "/login",
+				Binding: gwdkir.Binding{
+					Status:       manifest.BackendBindingBound,
+					ImportPath:   "example.com/app/auth",
+					PackageName:  "auth",
+					FunctionName: "Login",
+					Signature:    manifest.BackendSignatureAction0,
+				},
+			},
+			{
+				Kind:   gwdkir.EndpointAPI,
+				Source: gwdkir.EndpointSourceGo,
+				PageID: "api.Session",
+				Symbol: "Session",
+				Method: "GET",
+				Path:   "/api/session",
+			},
+		},
+	}
+	actions, err := actionEndpointsFromIR(ir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apis, err := apiEndpointsFromIR(ir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actions) != 1 || actions[0].PageID != "auth.Login" || actions[0].ActionName != "Login" {
+		t.Fatalf("unexpected standalone action endpoints: %#v", actions)
+	}
+	if len(apis) != 1 || apis[0].PageID != "api.Session" || apis[0].APIName != "Session" {
+		t.Fatalf("unexpected standalone API endpoints: %#v", apis)
+	}
+}

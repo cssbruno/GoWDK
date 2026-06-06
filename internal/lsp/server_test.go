@@ -157,6 +157,43 @@ func TestServerPublishesComponentClientDiagnostics(t *testing.T) {
 	assertResponseID(t, messages[2], float64(2))
 }
 
+func TestServerReturnsProjectAwareCompletions(t *testing.T) {
+	componentURI := "file:///tmp/card.cmp.gwdk"
+	pageURI := "file:///tmp/home.page.gwdk"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+componentURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@component ProductCard\n\nprops {\n  title string\n}\n\nview {\n  <article>{title}</article>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@page home\n@route \"/products\"\n\nview {\n  <main></main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/completion","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":6,"character":8}}}`) +
+		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/completion","params":{"textDocument":{"uri":"`+componentURI+`"},"position":{"line":8,"character":13}}}`) +
+		framed(`{"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 6 {
+		t.Fatalf("expected 6 output messages, got %d", len(messages))
+	}
+	assertResponseID(t, messages[3], float64(2))
+	completion := messages[3]["result"].(map[string]any)
+	items := completion["items"].([]any)
+	for _, label := range []string{"ProductCard", "/products", "home"} {
+		if !hasCompletionLabel(items, label) {
+			t.Fatalf("expected %q completion, got %#v", label, items)
+		}
+	}
+	assertResponseID(t, messages[4], float64(3))
+	componentCompletion := messages[4]["result"].(map[string]any)
+	if !hasCompletionLabel(componentCompletion["items"].([]any), "title") {
+		t.Fatalf("expected prop/value completion, got %#v", componentCompletion["items"])
+	}
+}
+
 func TestServerReturnsMethodNotFoundForUnknownRequests(t *testing.T) {
 	input := framed(`{"jsonrpc":"2.0","id":"x","method":"gowdk/unknown","params":{}}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)

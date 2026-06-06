@@ -47,8 +47,6 @@ The following features are known blockers for any production-readiness claim:
 - Hybrid/cache/revalidation policy.
 - Full reactive dependency graph and richer `client {}` language.
 - Component composition beyond default slots.
-- Hot deploy pipeline.
-- Browser playground UI.
 - Production WASM island ABI.
 
 ## Current Manual Gates
@@ -57,6 +55,7 @@ The following features are known blockers for any production-readiness claim:
 go test ./...
 go build ./cmd/gowdk
 node --check editors/vscode/extension.js
+node --check editors/vscode/extension-core.js
 node --test editors/vscode/*.test.js
 go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
 go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk

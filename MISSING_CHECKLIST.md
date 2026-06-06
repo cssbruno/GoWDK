@@ -121,11 +121,15 @@ api Session GET "/api/session"
   - [x] Build output planning, memory output planning, incremental SPA output,
         and SSR artifact planning consume `internal/gwdkir.Program`.
   - [x] Generated app planning consumes `internal/gwdkir.Program`.
-- [ ] Expand source spans and suggestions across parser, route, view, component, client, package, and build errors.
+- [x] Expand source spans and suggestions across parser, route, view, component, client, package, endpoint, and build errors.
 - [x] Support same-package build functions or document why explicit imports remain required.
-- [ ] Support broader build-time data beyond the first literal/imported no-argument subset.
+- [x] Support broader build-time data beyond the first literal/imported no-argument subset.
   - [x] Merge multiple literal `=> { ... }` declarations in one `build {}`
         block with duplicate-field diagnostics.
+  - [x] Support same-package no-argument build data functions with standard Go
+        package import resolution.
+  - [x] Support scalar literal build values and references to earlier build
+        fields or route params.
 - [x] Attach generated endpoint metadata to bound action/API handler contexts
       instead of only embedding it in route/build output.
 - [x] Attach generated page route metadata and dynamic params to generated SSR
@@ -223,17 +227,17 @@ api Session GET "/api/session"
 - [x] Normalize all endpoints into one framework-neutral endpoint metadata model.
 - [x] Include endpoint source, kind, package path, package name, symbol, method,
       path, signature kind, input type, source span, and binding status.
-- [ ] Merge endpoint metadata from `.gwdk` endpoint declarations and explicit Go
+- [x] Merge endpoint metadata from `.gwdk` endpoint declarations and explicit Go
       endpoint comments.
-- [ ] Support explicit Go endpoint comments as an optional discovery source:
-  - [ ] `//gowdk:act POST /login`
-  - [ ] `//gowdk:api GET /api/session`
+- [x] Support explicit Go endpoint comments as an optional discovery source:
+  - [x] `//gowdk:act POST /login`
+  - [x] `//gowdk:api GET /api/session`
 - [x] Do not auto-discover endpoints from function names alone.
 - [x] Do not scan Gin/Echo/Fiber route registration code in the first endpoint
       discovery model.
-- [ ] Make route conflicts between `.gwdk` declarations and Go endpoint comments
+- [x] Make route conflicts between `.gwdk` declarations and Go endpoint comments
       hard diagnostics; never silently pick a winner.
-- [ ] Keep adapter IR independent of whether an endpoint came from `.gwdk` or a
+- [x] Keep adapter IR independent of whether an endpoint came from `.gwdk` or a
       Go comment.
 - [x] Keep route metadata limited to `static`, `spa`, `ssr`, and `hybrid`;
       actions and APIs are endpoint metadata, not route kinds.
@@ -334,19 +338,22 @@ api Session GET "/api/session"
 
 ## Components, Client Language, And Islands
 
-- [ ] Add real branch mount/unmount for `g:if`.
-- [ ] Keep hidden-toggle `g:if` only as an explicit mode if useful.
-- [ ] Add parent-to-child expression props beyond current string/build-data interpolation.
+- [x] Add real branch mount/unmount for `g:if`.
+- [x] Remove hidden-toggle `g:if` as the JS island update behavior; static
+      first render may still include `hidden` until the island mounts.
+- [x] Add parent-to-child expression props beyond current string/build-data interpolation.
 - [x] Add child-to-parent events.
-- [ ] Add bindable child state.
+- [x] Add bindable child state.
 - [ ] Add typed component exports.
-- [ ] Add named slots and scoped slots.
+- [x] Add named slots and scalar scoped slots.
 - [ ] Add scoped component CSS and component-level assets.
 - [x] Add a documented contract for component state, props, stores, client code, and generated runtime behavior.
 - [x] Add a proper reactive dependency graph.
-- [ ] Track dependencies for computed values automatically across the full client language.
-- [ ] Allow richer computed bodies, loops inside `client {}`, event object access, and broader compiler-owned built-ins.
-- [ ] Batch updates predictably and detect reactive cycles with useful diagnostics.
+- [x] Track dependencies for computed values automatically across the supported
+      client language.
+- [x] Allow richer computed bodies, loops inside `client {}`, DOM/component
+      event object access, and broader compiler-owned built-ins.
+- [x] Batch updates predictably and detect reactive cycles with useful diagnostics.
 - [x] Keep browser behavior typed and compiler-owned instead of turning `client {}` into unbounded JavaScript.
 - [ ] Define and implement the production WASM island ABI from ADR 0004.
 - [ ] Add browser-side Go logic contracts for explicit WASM islands.
@@ -364,20 +371,22 @@ api Session GET "/api/session"
 
 ## Dev, Playground, And Tooling
 
-- [ ] Extend `gowdk dev` to run generated app/runtime-kit flows when backend routes or SSR are selected.
-- [ ] Decide whether generated backend processes are restarted by `gowdk dev` or proxied to a user-owned backend command.
-- [ ] Add fast rebuild caching beyond current changed-page incremental output.
-- [ ] Add deploy preview support.
-- [ ] Add hot deploy pipeline for generated apps.
-- [ ] Add browser playground UI.
-- [ ] Load the GOWDK compiler as WebAssembly in the browser UI.
-- [ ] Add editable project tree, live preview, generated HTML/CSS/JS viewers, diagnostics panel, starter templates, shareable links, and export/download.
+- [x] Extend `gowdk dev` to run generated app/runtime-kit flows when backend routes or SSR are selected.
+- [x] Decide whether generated backend processes are restarted by `gowdk dev` or proxied to a user-owned backend command.
+- [x] Add fast rebuild caching beyond current changed-page incremental output.
+- [x] Add local deploy preview support.
+- [x] Add local hot deploy pipeline for generated apps through `gowdk preview --hot`
+      and generated app restarts in `gowdk dev --app`.
+- [x] Add browser playground UI.
+- [x] Load the GOWDK compiler as WebAssembly in the browser UI.
+- [ ] Add editable project tree, full generated HTML/CSS/JS viewers, starter
+      templates, shareable links, and export/download.
 - [x] Improve baseline LSP completions for components, routes, props, state,
       stores, client constructs, and directives.
-- [ ] Add project-aware LSP completions for concrete component names, route
+- [x] Add project-aware LSP completions for concrete component names, route
       IDs, prop names, state fields, store names, and directives.
 - [x] Add editor navigation for component calls, route IDs, guards, stores, and imported Go contracts.
-- [ ] Add editor release workflow coverage.
+- [x] Add editor release workflow coverage.
 
 ## Documentation
 

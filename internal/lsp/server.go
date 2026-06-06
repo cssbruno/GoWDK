@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -32,7 +33,18 @@ const (
 	diagnosticSeverityError   = 1
 	diagnosticSeverityWarning = 2
 
-	completionItemKindKeyword = 14
+	completionItemKindText      = 1
+	completionItemKindFunction  = 3
+	completionItemKindClass     = 7
+	completionItemKindProperty  = 10
+	completionItemKindReference = 18
+	completionItemKindKeyword   = 14
+)
+
+var (
+	simpleInterpolationCompletionPattern = regexp.MustCompile(`\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}`)
+	bindingCompletionPattern             = regexp.MustCompile(`g:bind:(?:value|checked)\s*=\s*\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}`)
+	assignmentCompletionPattern          = regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\+\+|--)`)
 )
 
 // Server handles one LSP session.
@@ -146,9 +158,13 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 			NewText: formatted,
 		}}))
 	case "textDocument/completion":
+		var params completionParams
+		if err := decodeParams(request.Params, &params); err != nil {
+			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
+		}
 		return singleMessage(response(request.ID, completionList{
 			IsIncomplete: false,
-			Items:        completionItems(),
+			Items:        server.completionItems(params),
 		}))
 	default:
 		return singleMessage(errorResponse(request.ID, methodNotFound, fmt.Sprintf("method not found: %s", request.Method)))
@@ -225,7 +241,7 @@ func (server *Server) publishDiagnostics(doc document) []byte {
 	return publishDiagnostics(doc.URI, items)
 }
 
-func completionItems() []completionItem {
+func (server *Server) completionItems(params completionParams) []completionItem {
 	completions := lang.Completions()
 	items := make([]completionItem, 0, len(completions))
 	for _, completion := range completions {
@@ -235,7 +251,89 @@ func completionItems() []completionItem {
 			Detail: completion.Detail,
 		})
 	}
+	return appendProjectCompletionItems(items, server.projectCompletions(params.TextDocument.URI))
+}
+
+func appendProjectCompletionItems(items []completionItem, project []completionItem) []completionItem {
+	seen := map[string]bool{}
+	for _, item := range items {
+		seen[item.Label+"\x00"+item.Detail] = true
+	}
+	for _, item := range project {
+		key := item.Label + "\x00" + item.Detail
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		items = append(items, item)
+	}
 	return items
+}
+
+func (server *Server) projectCompletions(currentURI string) []completionItem {
+	var items []completionItem
+	for _, doc := range server.documents {
+		switch lang.ClassifySource(doc.Path, []byte(doc.Text)) {
+		case lang.FileKindPage:
+			page, diagnostics := lang.ParseSource(doc.Path, []byte(doc.Text))
+			if diagnostics.HasErrors() {
+				continue
+			}
+			if page.ID != "" {
+				items = append(items, completionItem{Label: page.ID, Kind: completionItemKindReference, Detail: "GOWDK page id"})
+			}
+			if page.Route != "" {
+				items = append(items, completionItem{Label: page.Route, Kind: completionItemKindText, Detail: "GOWDK route"})
+			}
+			for _, guard := range page.Guard {
+				items = append(items, completionItem{Label: guard, Kind: completionItemKindFunction, Detail: "GOWDK guard"})
+			}
+			for _, store := range page.Stores {
+				items = append(items, completionItem{Label: store.Name, Kind: completionItemKindProperty, Detail: "GOWDK store"})
+			}
+		case lang.FileKindComponent:
+			component, diagnostics := lang.ParseComponentSource(doc.Path, []byte(doc.Text))
+			if diagnostics.HasErrors() {
+				continue
+			}
+			if component.Name != "" {
+				items = append(items, completionItem{Label: component.Name, Kind: completionItemKindClass, Detail: "GOWDK component"})
+			}
+			if doc.URI == currentURI {
+				for _, prop := range component.Props {
+					items = append(items, completionItem{Label: prop.Name, Kind: completionItemKindProperty, Detail: "component prop"})
+				}
+				for _, field := range inferredComponentFields(component.Blocks.ViewBody, component.Blocks.ClientBody) {
+					items = append(items, completionItem{Label: field, Kind: completionItemKindProperty, Detail: "component state/value"})
+				}
+			}
+		case lang.FileKindLayout:
+			layout, diagnostics := lang.ParseLayoutSource(doc.Path, []byte(doc.Text))
+			if diagnostics.HasErrors() || layout.ID == "" {
+				continue
+			}
+			items = append(items, completionItem{Label: layout.ID, Kind: completionItemKindReference, Detail: "GOWDK layout"})
+		}
+	}
+	return items
+}
+
+func inferredComponentFields(viewBody, clientBody string) []string {
+	fields := map[string]bool{}
+	for _, match := range simpleInterpolationCompletionPattern.FindAllStringSubmatch(viewBody, -1) {
+		fields[match[1]] = true
+	}
+	for _, match := range bindingCompletionPattern.FindAllStringSubmatch(viewBody, -1) {
+		fields[match[1]] = true
+	}
+	for _, match := range assignmentCompletionPattern.FindAllStringSubmatch(clientBody, -1) {
+		fields[match[1]] = true
+	}
+	out := make([]string, 0, len(fields))
+	for field := range fields {
+		out = append(out, field)
+	}
+	return out
 }
 
 func diagnosticFromLang(item lang.Diagnostic, source string) diagnostic {
@@ -579,6 +677,11 @@ type didCloseTextDocumentParams struct {
 
 type documentFormattingParams struct {
 	TextDocument textDocumentIdentifier `json:"textDocument"`
+}
+
+type completionParams struct {
+	TextDocument textDocumentIdentifier `json:"textDocument"`
+	Position     position               `json:"position"`
 }
 
 type publishDiagnosticsParams struct {

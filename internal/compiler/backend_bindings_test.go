@@ -109,6 +109,85 @@ func Bad(LoginInput) (response.Response, error) {
 	}
 }
 
+func TestDiscoverGoEndpointCommentsBindsStandaloneEndpoints(t *testing.T) {
+	root := t.TempDir()
+	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n")
+	writeCompilerTestFile(t, filepath.Join(root, "handlers.go"), `package api
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+//gowdk:act POST /login
+func Login(context.Context) (response.Response, error) {
+	return response.Response{}, nil
+}
+
+//gowdk:api GET /api/session
+func Session(context.Context, *http.Request) (response.Response, error) {
+	return response.Response{}, nil
+}
+`)
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:     "home",
+		Source: filepath.Join(root, "home.page.gwdk"),
+		Route:  "/",
+		Blocks: manifest.Blocks{View: true, ViewBody: "<main>Home</main>"},
+	}}}
+
+	app, err := DiscoverGoEndpointComments(app)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(app.Endpoints) != 2 {
+		t.Fatalf("expected two Go comment endpoints, got %#v", app.Endpoints)
+	}
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatal(err)
+	}
+	app = BindBackendHandlers(app)
+	bindings := compilerBindingsByBlock(app.BackendBindings)
+	assertBinding(t, bindings["Login"], manifest.BackendBindingBound, manifest.BackendSignatureAction0, "", false)
+	assertBinding(t, bindings["Session"], manifest.BackendBindingBound, manifest.BackendSignatureAPI, "", false)
+}
+
+func TestValidateManifestRejectsGoEndpointConflictWithGOWDKEndpoint(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:     "home",
+			Source: source,
+			Route:  "/",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: "<main>Home</main>",
+				APIs:     []manifest.API{{Name: "Session", Method: "GET", Route: "/api/session"}},
+			},
+		}},
+		Endpoints: []manifest.EndpointDeclaration{{
+			Kind:       "api",
+			SourceKind: manifest.EndpointSourceGo,
+			Package:    "api",
+			Source:     filepath.Join(root, "handlers.go"),
+			Name:       "Session",
+			Method:     "GET",
+			Route:      "/api/session",
+		}},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected route conflict diagnostic")
+	}
+	if !hasDiagnosticCode(err.(ValidationErrors), "route_method_conflict") {
+		t.Fatalf("missing route_method_conflict diagnostic: %#v", err)
+	}
+}
+
 func TestValidateBackendBindingPolicyFailsProductionMissingHandler(t *testing.T) {
 	app := manifest.Manifest{Pages: []manifest.Page{{
 		ID:     "login",

@@ -16,6 +16,11 @@ Implemented today:
 - Self-closing component calls such as `<Hero title="GOWDK" />`.
 - Wrapper component calls such as `<Panel>...</Panel>` with child content
   rendered into `<slot />` in the component view.
+- Named slots with caller-side `<template g:slot="name">...</template>` and
+  component-side `<slot name="name">fallback</slot>`.
+- Scalar scoped slots with component-side slot props and caller-side `let:`
+  bindings, for example `<slot name="item" label={Title} />` consumed by
+  `<template g:slot="item" let:label>...</template>`.
 - Page-level cross-package component imports with
   `use ui "components"` and qualified calls such as `<ui.Hero />`.
 - Component-scoped cross-package component imports with local aliases such as
@@ -25,7 +30,8 @@ Implemented today:
   from literal `paths {}`.
 - Slot children render in the caller scope, so page build data and route params
   used inside the child content are resolved before being inserted into the
-  component slot.
+  component slot. Scoped slot values are injected into that caller scope for
+  the slot body.
 - A component with `state ...` renders initial state at build time and emits a
   generated JavaScript island by default when called without `g:island`.
 - Component-local `client { fn Name(...) { ... } }` handlers can group the
@@ -137,12 +143,8 @@ handlers.
 Not implemented yet:
 
 - Non-string props in inline `props {}` blocks.
-- Parent-to-child expression props beyond the implemented literal and build-data
-  interpolation slice.
-- Bindable child state.
 - Full runtime validation for user browser logic in WASM islands, including
   required Go/JS entrypoint registration and export checks.
-- Named slots or scoped slots.
 - Wiring generated Go component packages into the generated app layout.
 - Cross-package store and asset use syntax.
 - Component-scoped CSS and component-level assets.

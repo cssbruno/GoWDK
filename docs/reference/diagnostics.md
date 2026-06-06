@@ -50,6 +50,7 @@ Current diagnostic codes include:
   `go_package_error` covers sibling Go parse errors, mixed package names, and
   `go/types` type-check errors.
 - endpoint diagnostics such as `invalid_backend_handler_name`,
+  `invalid_go_endpoint_handler`, `duplicate_go_endpoint_comment`,
   `unsupported_action_method`, `old_action_block_syntax`, and
   `old_api_block_syntax`
 - backend binding diagnostics such as `backend_binding_required`
@@ -66,6 +67,6 @@ Parser diagnostics include line-level ranges. Compiler diagnostics include
 ranges when the source span is known. Component `client {}` diagnostics point
 to the offending statement line when available, and supported expression
 validation failures can narrow the range to the failing expression columns.
-Common route, render-mode, client-field, view-field, event, and `g:for`
-mistakes include structured suggestions when GOWDK can offer a concrete next
-step.
+Common route, render-mode, endpoint-comment, client-field, view-field, event,
+and `g:for` mistakes include structured suggestions when GOWDK can offer a
+concrete next step.

@@ -25,6 +25,10 @@ Implemented today:
 - Self-closing component calls such as `<Hero title="GOWDK" />` when the component file is passed to `gowdk build`.
 - Wrapper component calls such as `<Panel>...</Panel>`, with child markup
   rendered into `<slot />` in the component view.
+- Named component slots using caller-side `<template g:slot="name">...</template>`
+  and component-side `<slot name="name">fallback</slot>`.
+- Scalar scoped slot values using component-side `<slot name="row" value={Field} />`
+  and caller-side `<template g:slot="row" let:value>...</template>`.
 - `{prop}` text and attribute interpolation inside component views.
 - Component prop values can interpolate page build data, such as
   `<Hero title="{slug}" />`.
@@ -43,6 +47,9 @@ Implemented today:
   `.debounce(duration)`, and `.throttle(duration)` modifiers, for example
   `g:on:submit.prevent={Save()}` and
   `g:on:input.debounce(250ms)={Search()}`.
+- DOM event expressions can read the compiler-owned event scope:
+  `event.value`, `event.checked`, `event.key`, `event.code`,
+  `event.clientX`, and `event.clientY`.
 - Component `client {}` blocks can declare `on mount`, `on destroy`, and
   `effect when Field` blocks. These blocks use the same state-mutation subset
   as client functions; effects rerun after the named state field changes and
@@ -56,9 +63,9 @@ Implemented today:
   Computed values are read-only, can depend on props, state, and earlier
   computed values, and update dependent bindings after state changes.
 - `g:if={boolExpr}`, `g:else-if={boolExpr}`, and `g:else` on sibling elements
-  inside stateful components. The first slice keeps every branch in the DOM,
-  marks inactive branches with `hidden`, and updates the active branch after
-  island state changes.
+  inside stateful components. The static first render may mark inactive
+  branches with `hidden`; after island mount, generated JavaScript mounts the
+  active branch and unmounts inactive branches.
 - `g:bind:value={Field}` on `<input>`, `<textarea>`, and `<select>` inside
   stateful components when `Field` is a string state field. Numeric state
   fields can bind to `<input type="number">`. The first slice emits the
@@ -105,17 +112,15 @@ Implemented today:
 
 Not implemented yet:
 
-- Named slots or scoped slots.
 - Non-string component props in inline `props {}` blocks.
 - Full client-side expressions beyond the first safe island subset, including
-  broader date/time built-ins, JavaScript-style ternaries, and event object
-  reads.
+  broader date/time built-ins and JavaScript-style ternaries.
 - Other `g:` directives beyond `g:post`, `g:target`, `g:swap`, `g:on:*`,
   `g:if`, `g:else-if`, `g:else`, `g:for`, `g:key`, `g:bind:value`,
   `g:bind:checked`, and `g:island`.
 - Reactive URL and event-handler attributes, plus raw `style={expr}`
   attributes.
-- Mount/unmount conditionals and shorthand preservation in a full component AST.
+- Shorthand preservation in a full component AST.
 - Comment preservation.
 
 Examples may show components, attributes, interpolation, and `g:` directives.

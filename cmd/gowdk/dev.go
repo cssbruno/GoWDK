@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/cssbruno/gowdk/internal/appgen"
 )
 
 const defaultDevOutputDir = "gowdk_cache"
@@ -22,9 +25,11 @@ func dev(args []string) error {
 		return err
 	}
 	options.BuildArgs = buildArgs
-	if err := build(options.BuildArgs); err != nil {
+	runtime, buildArgs, err := devRuntimePlan(buildArgs, outputDir)
+	if err != nil {
 		return err
 	}
+	options.BuildArgs = buildArgs
 	absDir, err := filepath.Abs(outputDir)
 	if err != nil {
 		return err
@@ -32,28 +37,57 @@ func dev(args []string) error {
 	if err := os.MkdirAll(absDir, 0o755); err != nil {
 		return err
 	}
-
-	reload := newLiveReloadBroker()
-	server := &http.Server{
-		Addr:              options.Addr,
-		Handler:           liveReloadFileHandler(absDir, reload),
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		MaxHeaderBytes:    1 << 20,
-	}
-	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			fmt.Fprintln(os.Stderr, err)
-		}
-	}()
-
-	fmt.Printf("Dev server polling GOWDK inputs every %s\n", options.Interval)
-	fmt.Printf("Serving %s at http://%s\n", absDir, options.Addr)
 	previous, err := buildInputSnapshot(options.BuildArgs)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+	}
+	if runtime.Enabled || previous == nil || !devInputCacheFresh(absDir, previous) {
+		if err := build(options.BuildArgs); err != nil {
+			return err
+		}
+		if previous != nil {
+			if err := writeDevInputCache(absDir, previous); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		}
+	} else {
+		fmt.Printf("Dev cache hit: inputs unchanged for %s\n", absDir)
+	}
+
+	reload := newLiveReloadBroker()
+	var server *http.Server
+	var process *devRuntimeProcess
+	if runtime.Enabled {
+		if _, err := appgen.BuildBinary(runtime.AppDir, runtime.BinaryPath); err != nil {
+			return err
+		}
+		process = &devRuntimeProcess{plan: runtime, addr: options.Addr}
+		if err := process.restart(); err != nil {
+			return err
+		}
+		defer process.stop()
+	} else {
+		server = &http.Server{
+			Addr:              options.Addr,
+			Handler:           liveReloadFileHandler(absDir, reload),
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       10 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
+			MaxHeaderBytes:    1 << 20,
+		}
+		go func() {
+			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		}()
+	}
+
+	fmt.Printf("Dev server polling GOWDK inputs every %s\n", options.Interval)
+	if runtime.Enabled {
+		fmt.Printf("Running generated app %s at http://%s\n", runtime.BinaryPath, options.Addr)
+	} else {
+		fmt.Printf("Serving %s at http://%s\n", absDir, options.Addr)
 	}
 	for {
 		time.Sleep(options.Interval)
@@ -73,6 +107,19 @@ func dev(args []string) error {
 			fmt.Fprintln(os.Stderr, err)
 			continue
 		}
+		if process != nil {
+			if _, err := appgen.BuildBinary(runtime.AppDir, runtime.BinaryPath); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				continue
+			}
+			if err := process.restart(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				continue
+			}
+		}
+		if err := writeDevInputCache(absDir, current); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		reload.notify("reload")
 	}
 }
@@ -81,6 +128,46 @@ type devOptions struct {
 	BuildArgs []string
 	Addr      string
 	Interval  time.Duration
+}
+
+type devRuntime struct {
+	Enabled    bool
+	AppDir     string
+	BinaryPath string
+}
+
+type devRuntimeProcess struct {
+	plan devRuntime
+	addr string
+	cmd  *exec.Cmd
+}
+
+func (process *devRuntimeProcess) restart() error {
+	process.stop()
+	command := exec.Command(process.plan.BinaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+process.addr)
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	if err := command.Start(); err != nil {
+		return fmt.Errorf("start generated app: %w", err)
+	}
+	process.cmd = command
+	go func() {
+		if err := command.Wait(); err != nil && process.cmd == command {
+			fmt.Fprintln(os.Stderr, err)
+		}
+	}()
+	return nil
+}
+
+func (process *devRuntimeProcess) stop() {
+	if process.cmd == nil || process.cmd.Process == nil {
+		return
+	}
+	if err := process.cmd.Process.Kill(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+	process.cmd = nil
 }
 
 func parseDevOptions(args []string) (devOptions, error) {
@@ -127,6 +214,45 @@ func parseDevOptions(args []string) (devOptions, error) {
 
 func devUsage() string {
 	return "usage: gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]"
+}
+
+func devRuntimePlan(args []string, outputDir string) (devRuntime, []string, error) {
+	appDir, binaryPath, err := devAppAndBinary(args, outputDir)
+	if err != nil || strings.TrimSpace(appDir) == "" {
+		return devRuntime{}, args, err
+	}
+	if strings.TrimSpace(binaryPath) != "" {
+		return devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}, args, nil
+	}
+	binaryPath = filepath.Join(outputDir, ".gowdk", "dev", "app")
+	if os.PathSeparator == '\\' {
+		binaryPath += ".exe"
+	}
+	return devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}, args, nil
+}
+
+func devAppAndBinary(args []string, _ string) (string, string, error) {
+	options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	if err != nil {
+		return "", "", err
+	}
+	if err := loadBuildConfig(&options, configPath); err != nil {
+		return "", "", err
+	}
+	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
+		return "", "", fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
+	}
+	if len(targetNames) > 0 {
+		targets, err := selectBuildTargets(options.Config.Build.Targets, targetNames)
+		if err != nil {
+			return "", "", err
+		}
+		if len(targets) != 1 {
+			return "", "", fmt.Errorf("dev runtime requires exactly one build target")
+		}
+		return targets[0].App, targets[0].Binary, nil
+	}
+	return appDir, binaryPath, nil
 }
 
 func devOutputDir(args []string) (string, error) {

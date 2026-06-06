@@ -41,7 +41,8 @@ func ValidateManifest(config gowdk.Config, app manifest.Manifest) error {
 	diagnostics = append(diagnostics, validatePageLayoutReferences(app.Pages, app.Layouts)...)
 	diagnostics = append(diagnostics, validateUniquePageRoutes(app.Pages)...)
 	diagnostics = append(diagnostics, validateAmbiguousDynamicPageRoutes(app.Pages)...)
-	diagnostics = append(diagnostics, validateRouteMethodConflicts(app.Pages)...)
+	diagnostics = append(diagnostics, validateRouteMethodConflicts(app.Pages, app.Endpoints)...)
+	diagnostics = append(diagnostics, validateStandaloneEndpoints(app.Endpoints)...)
 	for _, page := range app.Pages {
 		diagnostics = append(diagnostics, ValidatePage(config, page)...)
 	}

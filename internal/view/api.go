@@ -717,6 +717,7 @@ type renderContext struct {
 	actions      map[string]string
 	stack        map[string]bool
 	slotHTML     string
+	slots        map[string]slotContent
 	stateFields  map[string]bool
 	readFields   map[string]bool
 	bindFields   map[string]bool

@@ -1268,35 +1268,72 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
     return bindings;
   }
 
-  function renderConditionals(container, state, scope, helpers, options) {
+  function conditionalRecords(root, options) {
     options = options || {};
+    const records = root.__gowdkConditionalRecords || (root.__gowdkConditionalRecords = new Map());
     const shouldSkip = (node) => {
       if (options.owner && !ownsNode(options.owner, node)) return true;
       if (options.skipLoopItems && node.closest("[data-gowdk-for-item]")) return true;
       return false;
     };
-    const conditionalNodes = options.bindings ? options.bindings.conditionals.map((binding) => binding.node).filter((node) => node.isConnected) : matchingNodes(container, "[data-gowdk-if]:not([data-gowdk-if-group]), [data-gowdk-if-group]");
-    conditionalNodes.forEach((node) => {
+    matchingNodes(root, "[data-gowdk-binding-if]").forEach((node) => {
       if (shouldSkip(node)) return;
-      if (node.hasAttribute("data-gowdk-if-group")) return;
-      if (!node.hasAttribute("data-gowdk-if")) return;
-      node.hidden = !Boolean(valueOf(node.getAttribute("data-gowdk-if"), state, scope, helpers));
+      const id = node.getAttribute("data-gowdk-binding-if");
+      if (!id || records.has(id)) return;
+      const marker = document.createComment("gowdk-if:" + id);
+      const template = node.cloneNode(true);
+      node.parentNode.insertBefore(marker, node);
+      records.set(id, {
+        id,
+        marker,
+        template,
+        current: node,
+        group: node.getAttribute("data-gowdk-if-group") || "",
+        index: Number(node.getAttribute("data-gowdk-if-index") || "0")
+      });
+    });
+    return Array.from(records.values()).filter((record) => record.marker && record.marker.isConnected);
+  }
+
+  function mountConditional(record) {
+    if (record.current && record.current.isConnected) return record.current;
+    const node = record.template.cloneNode(true);
+    node.hidden = false;
+    record.marker.parentNode.insertBefore(node, record.marker.nextSibling);
+    record.current = node;
+    return node;
+  }
+
+  function unmountConditional(record) {
+    if (!record.current || !record.current.isConnected) return;
+    record.current.parentNode.removeChild(record.current);
+    record.current = null;
+  }
+
+  function renderConditionals(container, state, scope, helpers, options) {
+    options = options || {};
+    const records = conditionalRecords(container, options);
+    records.forEach((record) => {
+      if (record.group) return;
+      const condition = record.template.getAttribute("data-gowdk-if");
+      const visible = condition == null || Boolean(valueOf(condition, state, scope, helpers));
+      if (visible) mountConditional(record);
+      else unmountConditional(record);
     });
     const conditionalGroups = new Map();
-    conditionalNodes.forEach((node) => {
-      if (shouldSkip(node)) return;
-      if (!node.hasAttribute("data-gowdk-if-group")) return;
-      const group = node.getAttribute("data-gowdk-if-group");
-      if (!conditionalGroups.has(group)) conditionalGroups.set(group, []);
-      conditionalGroups.get(group).push(node);
+    records.forEach((record) => {
+      if (!record.group) return;
+      if (!conditionalGroups.has(record.group)) conditionalGroups.set(record.group, []);
+      conditionalGroups.get(record.group).push(record);
     });
-    conditionalGroups.forEach((nodes) => {
-      nodes.sort((left, right) => Number(left.getAttribute("data-gowdk-if-index")) - Number(right.getAttribute("data-gowdk-if-index")));
+    conditionalGroups.forEach((groupRecords) => {
+      groupRecords.sort((left, right) => left.index - right.index);
       let matched = false;
-      nodes.forEach((node) => {
-        const condition = node.getAttribute("data-gowdk-if");
+      groupRecords.forEach((record) => {
+        const condition = record.template.getAttribute("data-gowdk-if");
         const visible = !matched && (condition == null || Boolean(valueOf(condition, state, scope, helpers)));
-        node.hidden = !visible;
+        if (visible) mountConditional(record);
+        else unmountConditional(record);
         if (visible) matched = true;
       });
     });
@@ -1361,6 +1398,20 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
       else if (item.startsWith("throttle:")) modifiers.throttle = Number(item.slice("throttle:".length)) || 0;
     });
     return modifiers;
+  }
+
+  function domEventScope(domEvent) {
+    const target = domEvent && domEvent.target ? domEvent.target : {};
+    return {
+      event: {
+        value: target.value == null ? "" : String(target.value),
+        checked: Boolean(target.checked),
+        key: domEvent && domEvent.key ? String(domEvent.key) : "",
+        code: domEvent && domEvent.code ? String(domEvent.code) : "",
+        clientX: domEvent && typeof domEvent.clientX === "number" ? domEvent.clientX : 0,
+        clientY: domEvent && typeof domEvent.clientY === "number" ? domEvent.clientY : 0
+      }
+    };
   }
 
   function ownsNode(root, node) {
@@ -1431,7 +1482,6 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
 
   function updateBindings(root, state, helpers, bindings) {
     updateTextBindings(bindings, state);
-    renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true, bindings });
     updateValueBindings(bindings, state);
     updateCheckedBindings(bindings, state);
     updateClassBindings(bindings, state, helpers);
@@ -1441,6 +1491,8 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
 
   function render(root, state, helpers, bindings) {
     renderListLoops(root, state, helpers, bindings);
+    bindings = collectBindings(root);
+    renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true });
     bindings = collectBindings(root);
     updateBindings(root, state, helpers, bindings);
     root.setAttribute("data-gowdk-state", JSON.stringify(state));
@@ -1631,9 +1683,9 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
           const modifiers = eventModifiers(node.getAttribute("data-gowdk-event-" + event));
           let debounceTimer = 0;
           let throttleUntil = 0;
-          const invoke = async () => {
+          const invoke = async (domEvent) => {
             try {
-              await applyExpression(attr.value, state, handlers, helpers, null, refs, computeds, asyncTokens, root, emitEvents);
+              await applyExpression(attr.value, state, handlers, helpers, domEventScope(domEvent), refs, computeds, asyncTokens, root, emitEvents);
             } catch (error) {
               if (error !== staleAsyncResult) recordAsyncError(state, error);
             } finally {
@@ -1648,7 +1700,7 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
             if (modifiers.stop) domEvent.stopPropagation();
             if (modifiers.debounce > 0) {
               clearTimeout(debounceTimer);
-              debounceTimer = setTimeout(invoke, modifiers.debounce);
+              debounceTimer = setTimeout(() => invoke(domEvent), modifiers.debounce);
               return;
             }
             if (modifiers.throttle > 0) {
@@ -1656,7 +1708,7 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
               if (now < throttleUntil) return;
               throttleUntil = now + modifiers.throttle;
             }
-            invoke();
+            invoke(domEvent);
           };
           node.addEventListener(event, listener, { once: modifiers.once, capture: modifiers.capture });
         });

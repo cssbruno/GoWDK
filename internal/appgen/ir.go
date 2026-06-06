@@ -47,6 +47,20 @@ func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
 			})
 		}
 	}
+	for _, endpoint := range ir.Endpoints {
+		if endpoint.Kind != gwdkir.EndpointAction || endpoint.Source != gwdkir.EndpointSourceGo {
+			continue
+		}
+		binding := bindings[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)]
+		endpoints = append(endpoints, ActionEndpoint{
+			PageID:      endpoint.PageID,
+			ActionName:  endpoint.Symbol,
+			Method:      endpoint.Method,
+			Route:       endpoint.Path,
+			InputFields: bindingInputFieldNames(binding.InputFields),
+			Binding:     binding,
+		})
+	}
 	if err := validateActionEndpoints(endpoints); err != nil {
 		return nil, err
 	}
@@ -75,6 +89,18 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 				Binding: bindings[irEndpointKey(gwdkir.EndpointAPI, page.ID, api.Name, method, route)],
 			})
 		}
+	}
+	for _, endpoint := range ir.Endpoints {
+		if endpoint.Kind != gwdkir.EndpointAPI || endpoint.Source != gwdkir.EndpointSourceGo {
+			continue
+		}
+		endpoints = append(endpoints, APIEndpoint{
+			PageID:  endpoint.PageID,
+			APIName: endpoint.Symbol,
+			Method:  endpoint.Method,
+			Route:   endpoint.Path,
+			Binding: bindings[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)],
+		})
 	}
 	return endpoints, nil
 }
@@ -127,4 +153,12 @@ func actionFragmentsFromIR(action gwdkir.Action) ([]ActionFragment, error) {
 		fragments = append(fragments, ActionFragment{Target: fragment.Target, HTML: html})
 	}
 	return fragments, nil
+}
+
+func bindingInputFieldNames(fields []manifest.BackendInputField) []string {
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		out = append(out, field.FormName)
+	}
+	return out
 }

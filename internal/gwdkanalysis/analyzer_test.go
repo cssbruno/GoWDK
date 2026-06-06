@@ -153,6 +153,39 @@ func TestBuildIRAttachesBackendBindings(t *testing.T) {
 	}
 }
 
+func TestBuildIRIncludesStandaloneGoEndpointSource(t *testing.T) {
+	ir := BuildIR(gowdk.Config{}, manifest.Manifest{
+		Endpoints: []manifest.EndpointDeclaration{{
+			Kind:       "api",
+			SourceKind: manifest.EndpointSourceGo,
+			Package:    "api",
+			Source:     "api/handlers.go",
+			Name:       "Session",
+			Method:     "GET",
+			Route:      "/api/session",
+		}},
+		BackendBindings: []manifest.BackendBinding{{
+			Kind:         "api",
+			PageID:       "api.Session",
+			BlockName:    "Session",
+			Method:       "GET",
+			Route:        "/api/session",
+			Status:       manifest.BackendBindingBound,
+			ImportPath:   "example.com/app/api",
+			PackageName:  "api",
+			FunctionName: "Session",
+			Signature:    manifest.BackendSignatureAPI,
+		}},
+	})
+	if len(ir.Endpoints) != 1 {
+		t.Fatalf("expected one endpoint, got %#v", ir.Endpoints)
+	}
+	endpoint := ir.Endpoints[0]
+	if endpoint.Source != gwdkir.EndpointSourceGo || endpoint.PageID != "api.Session" || endpoint.Binding.Signature != manifest.BackendSignatureAPI {
+		t.Fatalf("unexpected endpoint IR: %#v", endpoint)
+	}
+}
+
 func TestBuildIRResolvesQualifiedCSSAssetUse(t *testing.T) {
 	ir := BuildIR(gowdk.Config{}, manifest.Manifest{
 		Pages: []manifest.Page{{

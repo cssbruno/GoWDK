@@ -204,6 +204,39 @@ func TestRenderWithComponentsUsesSlotFallbackWithoutChildren(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsExpandsNamedSlots(t *testing.T) {
+	got, err := RenderWithData(`<Panel title="Welcome"><template g:slot="actions"><button>{label}</button></template><p>Body</p></Panel>`, map[string]Component{
+		"Panel": {
+			Name:  "Panel",
+			Props: []string{"title"},
+			Body:  `<section><h2>{title}</h2><div><slot name="actions"><span>None</span></slot></div><slot /></section>`,
+		},
+	}, map[string]string{"label": "Save"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<section><h2>Welcome</h2><div><button>Save</button></div><p>Body</p></section>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderWithComponentsExpandsScopedSlots(t *testing.T) {
+	got, err := RenderWithComponents(`<Panel><template g:slot="item" let:item><strong>{item}</strong></template></Panel>`, map[string]Component{
+		"Panel": {
+			Name: "Panel",
+			Body: `<section><slot name="item" item="Ada" /></section>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<section><strong>Ada</strong></section>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
 func TestRenderWithComponentsEmitsDefaultJSIslandForState(t *testing.T) {
 	got, err := RenderWithComponents(`<Counter />`, map[string]Component{
 		"Counter": {
@@ -333,6 +366,24 @@ func TestRenderWithComponentsLowersEventModifiers(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in event modifier output:\n%s", want, got)
 		}
+	}
+}
+
+func TestRenderWithComponentsAllowsDOMEventObjectAccess(t *testing.T) {
+	got, err := RenderWithComponents(`<Search />`, map[string]Component{
+		"Search": {
+			Name:       "Search",
+			State:      map[string]string{"Query": ""},
+			StateJSON:  `{"Query":""}`,
+			StateTypes: map[string]clientlang.ValueType{"Query": clientlang.TypeString},
+			Body:       `<input g:on:input={Query = event.value} value="" />`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `data-gowdk-on-input="Query = event.value"`) {
+		t.Fatalf("expected DOM event binding in output:\n%s", got)
 	}
 }
 

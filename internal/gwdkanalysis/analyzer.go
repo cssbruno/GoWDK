@@ -419,6 +419,32 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 			})
 		}
 	}
+	for _, endpoint := range app.Endpoints {
+		kind := gwdkir.EndpointAPI
+		if endpoint.Kind == "act" || endpoint.Kind == "action" {
+			kind = gwdkir.EndpointAction
+		}
+		method := endpoint.Method
+		if method == "" {
+			if kind == gwdkir.EndpointAction {
+				method = "POST"
+			} else {
+				method = "GET"
+			}
+		}
+		program.Endpoints = append(program.Endpoints, gwdkir.Endpoint{
+			Kind:          kind,
+			Source:        endpointSource(endpoint.SourceKind),
+			Package:       endpoint.Package,
+			PageID:        standaloneEndpointPageID(endpoint),
+			Symbol:        endpoint.Name,
+			Method:        method,
+			Path:          endpoint.Route,
+			DynamicParams: routeParams(endpoint.Route),
+			SourceFile:    endpoint.Source,
+			Span:          endpoint.Span,
+		})
+	}
 
 	names := make([]string, 0, len(packages))
 	for name := range packages {
@@ -440,6 +466,20 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 	})
 	attachBackendBindings(&program, app.BackendBindings)
 	return program
+}
+
+func endpointSource(source manifest.EndpointSource) gwdkir.EndpointSource {
+	if source == manifest.EndpointSourceGo {
+		return gwdkir.EndpointSourceGo
+	}
+	return gwdkir.EndpointSourceGOWDK
+}
+
+func standaloneEndpointPageID(endpoint manifest.EndpointDeclaration) string {
+	if endpoint.Package == "" {
+		return endpoint.Name
+	}
+	return endpoint.Package + "." + endpoint.Name
 }
 
 func assetUse(uses []manifest.Use, path string) (name string, useAlias string, usePackage string) {

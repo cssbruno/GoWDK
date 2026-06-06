@@ -615,7 +615,7 @@ func TestBuildEmitsEventModifierRuntimeForJSIsland(t *testing.T) {
 		`function eventModifiers(source)`,
 		`if (modifiers.prevent) domEvent.preventDefault();`,
 		`if (modifiers.stop) domEvent.stopPropagation();`,
-		`debounceTimer = setTimeout(invoke, modifiers.debounce);`,
+		`debounceTimer = setTimeout(() => invoke(domEvent), modifiers.debounce);`,
 		`if (now < throttleUntil) return;`,
 		`node.addEventListener(event, listener, { once: modifiers.once, capture: modifiers.capture });`,
 	} {
@@ -778,10 +778,13 @@ func TestBuildEmitsGIfRuntimeUpdatesForJSIsland(t *testing.T) {
 	}
 	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
 	for _, expected := range []string{
-		`const conditionalGroups = new Map();`,
+		`function conditionalRecords(root, options)`,
+		`document.createComment("gowdk-if:" + id)`,
+		`function mountConditional(record)`,
+		`function unmountConditional(record)`,
 		`{ kind: "conditional", selector: "[data-gowdk-binding-if]", id: "data-gowdk-binding-if" },`,
 		`else if (spec.kind === "conditional") bindings.conditionals.push({ id, node });`,
-		`renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true, bindings });`,
+		`renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true });`,
 	} {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated JS:\n%s", expected, js)
@@ -954,7 +957,7 @@ func TestBuildEmitsFilterListBindingForJSIsland(t *testing.T) {
 		`lower(value)`,
 		`contains(value, query)`,
 		`renderConditionals(fresh, state, scope, helpers);`,
-		`matchingNodes(container, "[data-gowdk-if]:not([data-gowdk-if-group]), [data-gowdk-if-group]")`,
+		`matchingNodes(root, "[data-gowdk-binding-if]")`,
 		`if (options.skipLoopItems && node.closest("[data-gowdk-for-item]")) return true;`,
 	} {
 		if !strings.Contains(js, expected) {
@@ -1001,6 +1004,38 @@ func TestBuildEmitsGoishConditionalExpressionsForJSIsland(t *testing.T) {
 		`parseConditional()`,
 		`if (this.match("ident", "if"))`,
 		`return Boolean(evalExpression(expr.cond, state, scope, helpers, stack))`,
+	} {
+		if !strings.Contains(js, expected) {
+			t.Fatalf("expected %q in generated JS island runtime:\n%s", expected, js)
+		}
+	}
+}
+
+func TestBuildEmitsDOMEventScopeForJSIsland(t *testing.T) {
+	outputDir := t.TempDir()
+	component := textComponent()
+	component.Blocks.ViewBody = `<input g:on:input={Query = event.value} value="" /><p>{Query}</p>`
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "event",
+			Route: "/event",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Search /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Search.js"))
+	for _, expected := range []string{
+		`function domEventScope(domEvent)`,
+		`value: target.value == null ? "" : String(target.value)`,
+		`await applyExpression(attr.value, state, handlers, helpers, domEventScope(domEvent), refs, computeds, asyncTokens, root, emitEvents);`,
 	} {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated JS island runtime:\n%s", expected, js)
@@ -1224,7 +1259,7 @@ func TestBuildEmitsAsyncFetchJSONRuntimeForJSIsland(t *testing.T) {
 		`GOWDK fetchJSON expected JSON response`,
 		`GOWDK fetchJSON received invalid JSON`,
 		`if (error !== staleAsyncResult) recordAsyncError(state, error);`,
-		`await applyExpression(attr.value, state, handlers, helpers, null, refs, computeds, asyncTokens, root, emitEvents);`,
+		`await applyExpression(attr.value, state, handlers, helpers, domEventScope(domEvent), refs, computeds, asyncTokens, root, emitEvents);`,
 	} {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated JS island runtime:\n%s", expected, js)

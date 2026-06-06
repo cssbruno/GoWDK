@@ -70,6 +70,8 @@ func run(args []string) error {
 		return build(args[1:])
 	case "dev":
 		return dev(args[1:])
+	case "preview":
+		return preview(args[1:])
 	case "serve":
 		return serve(args[1:])
 	case "lsp":
@@ -96,6 +98,7 @@ func usage() {
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
 	fmt.Println("  build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
 	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload")
+	fmt.Println("  preview [--addr <addr>] [--hot] [build flags...] build and serve a local deploy preview")
 	fmt.Println("  serve --dir <dir> [--addr <addr>] serve generated build output locally")
 	fmt.Println("  lsp [--ssr]              start the language server over stdio")
 }
@@ -539,6 +542,15 @@ func buildOnce(options cliOptions, request buildRequest) error {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
 	if diagnostics.HasErrors() {
+		return fmt.Errorf("build failed")
+	}
+	app, err := compiler.DiscoverGoEndpointComments(app)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return fmt.Errorf("build failed")
+	}
+	if err := compiler.ValidateManifest(options.Config, app); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		return fmt.Errorf("build failed")
 	}
 	app = compiler.BindBackendHandlers(app)

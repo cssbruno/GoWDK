@@ -39,7 +39,7 @@ func pageOutputArtifacts(config gowdk.Config, outputDir string, page manifest.Pa
 	}
 	artifacts := make([]plannedArtifact, 0, len(outputs))
 	for _, output := range outputs {
-		buildData, err := parseBuildData(page.Blocks.BuildBody, output.data, page.Imports)
+		buildData, err := parseBuildData(page.Blocks.BuildBody, output.data, page.Imports, page.Source)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}

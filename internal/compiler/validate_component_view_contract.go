@@ -68,7 +68,8 @@ func validateViewEventExpressions(component manifest.Component, ctx componentVal
 			})
 			continue
 		}
-		if err := view.ValidateIslandEventExpressionTypedWithEvents(eventExpr.Expression, ctx.SymbolTypes, ctx.StateTypes, ctx.Handlers, helperFuncs, emits); err != nil {
+		readSymbols := mergeClientSymbols(ctx.SymbolTypes, view.DOMEventSymbols())
+		if err := view.ValidateIslandEventExpressionTypedWithEvents(eventExpr.Expression, readSymbols, ctx.StateTypes, ctx.Handlers, helperFuncs, emits); err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_field_error",
 				ComponentName: component.Name,
@@ -79,6 +80,17 @@ func validateViewEventExpressions(component manifest.Component, ctx componentVal
 		}
 	}
 	return diagnostics
+}
+
+func mergeClientSymbols(left, right map[string]clientlang.ValueType) map[string]clientlang.ValueType {
+	out := map[string]clientlang.ValueType{}
+	for key, value := range left {
+		out[key] = value
+	}
+	for key, value := range right {
+		out[key] = value
+	}
+	return out
 }
 
 func validateViewBooleanExpressions(component manifest.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {

@@ -291,6 +291,118 @@ var Config = gowdk.Config{
 	})
 }
 
+func TestDevRuntimePlanAddsBinaryForAppBuild(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+
+	withWorkingDir(t, root, func() {
+		runtime, args, err := devRuntimePlan([]string{"--out", "dist", "--app", ".gowdk/app"}, "dist")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !runtime.Enabled {
+			t.Fatal("expected dev runtime to be enabled")
+		}
+		if runtime.AppDir != ".gowdk/app" {
+			t.Fatalf("unexpected app dir: %q", runtime.AppDir)
+		}
+		if runtime.BinaryPath != filepath.Join("dist", ".gowdk", "dev", "app") {
+			t.Fatalf("unexpected binary path: %q", runtime.BinaryPath)
+		}
+		if strings.Join(args, " ") != "--out dist --app .gowdk/app" {
+			t.Fatalf("unexpected dev build args: %#v", args)
+		}
+	})
+}
+
+func TestDevRuntimePlanUsesConfiguredTargetApp(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Targets: []gowdk.BuildTargetConfig{
+			{Name: "site", Output: "dist/site", App: ".gowdk/site"},
+		},
+	},
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		runtime, args, err := devRuntimePlan([]string{"--target", "site"}, "dist/site")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !runtime.Enabled {
+			t.Fatal("expected dev runtime to be enabled")
+		}
+		if runtime.AppDir != ".gowdk/site" {
+			t.Fatalf("unexpected app dir: %q", runtime.AppDir)
+		}
+		if runtime.BinaryPath != filepath.Join("dist", "site", ".gowdk", "dev", "app") {
+			t.Fatalf("unexpected binary path: %q", runtime.BinaryPath)
+		}
+		if strings.Join(args, " ") != "--target site" {
+			t.Fatalf("unexpected dev build args: %#v", args)
+		}
+	})
+}
+
+func TestParsePreviewOptions(t *testing.T) {
+	options, err := parsePreviewOptions([]string{"--addr=127.0.0.1:9090", "--hot", "--out", "preview-dist", "home.page.gwdk"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.Addr != "127.0.0.1:9090" {
+		t.Fatalf("unexpected addr: %q", options.Addr)
+	}
+	if !options.Hot {
+		t.Fatal("expected hot preview")
+	}
+	if options.OutputDir != "preview-dist" {
+		t.Fatalf("unexpected preview output dir: %q", options.OutputDir)
+	}
+	if strings.Join(options.BuildArgs, " ") != "--out preview-dist home.page.gwdk" {
+		t.Fatalf("unexpected preview build args: %#v", options.BuildArgs)
+	}
+}
+
+func TestPreviewBuildArgsInjectsOutput(t *testing.T) {
+	args := previewBuildArgs([]string{"home.page.gwdk"}, "preview")
+	if strings.Join(args, " ") != "home.page.gwdk --out preview" {
+		t.Fatalf("unexpected preview build args: %#v", args)
+	}
+	args = previewBuildArgs([]string{"--out", "custom", "home.page.gwdk"}, "preview")
+	if strings.Join(args, " ") != "--out custom home.page.gwdk" {
+		t.Fatalf("unexpected explicit preview build args: %#v", args)
+	}
+}
+
+func TestDevInputCacheFreshRequiresMatchingSnapshotAndOutput(t *testing.T) {
+	outputDir := t.TempDir()
+	snapshot := inputSnapshot{"/tmp/home.page.gwdk": "abc"}
+	if err := writeDevInputCache(outputDir, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if devInputCacheFresh(outputDir, snapshot) {
+		t.Fatal("expected cache miss without generated output files")
+	}
+	writeCLIFile(t, filepath.Join(outputDir, "index.html"), "<main>ok</main>")
+	if !devInputCacheFresh(outputDir, snapshot) {
+		t.Fatal("expected cache hit with matching snapshot and output")
+	}
+	if devInputCacheFresh(outputDir, inputSnapshot{"/tmp/home.page.gwdk": "changed"}) {
+		t.Fatal("expected cache miss for changed snapshot")
+	}
+}
+
 func TestBuildInputSnapshotDetectsFileChanges(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")

@@ -27,8 +27,8 @@ emits app-shell HTML, `gowdk-routes.json`, `gowdk-assets.json`, generated embedd
 app source, and an optional binary for the selected
 source set. The current rendered page subset covers simple `spa` and
 `action` pages with non-dynamic routes or literal `paths {}` dynamic routes,
-literal `build {}` data, imported Go build data functions, lowercase HTML
-markup in `view {}`, and `.cmp.gwdk` component files.
+literal `build {}` data, imported or same-package no-argument Go build data
+functions, lowercase HTML markup in `view {}`, and `.cmp.gwdk` component files.
 
 `internal/gwdkast` owns the typed GOWDK AST. `internal/parser.ParseSyntax`
 returns that AST for the current source subset: package declarations, typed
@@ -39,10 +39,11 @@ action/API endpoint declarations, and source spans.
 
 `internal/gwdkanalysis` lowers parsed AST files into normalized manifest
 compatibility records and a versioned `internal/gwdkir.Program`. The IR models
-packages, source files, page routes, backend endpoints, templates, client
-behavior, source-selected assets, and generated-output plans. Build, memory
-build, incremental SPA build, SSR artifact, and generated app planning now
-accept `internal/gwdkir.Program`; manifest records remain as a
+packages, source files, page routes, backend endpoints from `.gwdk`
+declarations or explicit Go comments, templates, client behavior,
+source-selected assets, and generated-output plans. Build, memory build,
+incremental SPA build, SSR artifact, and generated app planning now accept
+`internal/gwdkir.Program`; manifest records remain as a
 compatibility/public-report shape while older passes are retired.
 Generated app Go, backend adapter Go, build-data helper Go, and starter config
 Go are constructed as Go ASTs, printed, and formatted before use or write.

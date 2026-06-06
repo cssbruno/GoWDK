@@ -139,19 +139,15 @@ Aliased imports use the explicit alias. Unaliased imports use the package name
 reported by `go list`, matching ordinary Go import behavior. Relative import
 paths are rejected for typed component contracts.
 
-The first build-time Go interop subset supports one imported no-argument
-function call in `build {}`:
+Build-time Go interop supports imported or same-package no-argument function
+calls in `build {}`:
 
 ```gwdk
 build {
   => interop.FeaturedCopyForBuild()
+  => FeaturedCopyForBuild()
 }
 ```
-
-The function must be reached through an explicit `.gwdk` Go import alias, even
-when the Go function lives in a sibling same-package `.go` file. This keeps
-build-time execution dependencies explicit in the first analyzer slice and
-prevents accidental execution of same-package symbols by bare name.
 
 The function must return a JSON-encodable object. Scalar fields are exposed to
 `view {}` as string interpolation data.
@@ -171,11 +167,17 @@ SPA builds can expand literal `paths {}` lines such as:
 => { slug: "hello-gowdk" }
 ```
 
-SPA builds can also render one literal `build {}` line such as:
+SPA builds can also render multiple literal `build {}` lines such as:
 
 ```gwdk
 => { title: "Hello" }
+=> { count: 2, live: true }
+=> { headline: "{title} {slug}", copy: field("headline") }
 ```
+
+Literal build values can be strings, numbers, booleans, `nil`/`null`,
+`param("name")`, `field("name")`, or a bare reference to an earlier build
+field. Duplicate build fields are rejected.
 
 Inside `view {}`, route params can be referenced explicitly with
 `{param("slug")}` in text, quoted attributes, and component prop values. SPA
@@ -293,8 +295,7 @@ statement, and are callable from client expressions such as assignments, local
 initializers, handler arguments, and list mutation arguments. Helpers are not
 event handlers, so `g:on:click={Next(Count)}` is rejected; events must call a
 non-return handler such as `Add()`. Helper call graphs are validated at compile
-time and recursive cycles are rejected. Loops, JavaScript-style ternaries,
-event object reads, computed helper calls, view binding helper calls, broader
+time and recursive cycles are rejected. JavaScript-style ternaries, broader
 built-ins such as date/time helpers, and recursion remain compile errors today.
 
 Expressions support the first compiler-owned built-ins:
@@ -351,7 +352,9 @@ updating text, attributes, classes, styles, and `g:if` bindings.
 Event directives support `.prevent`, `.stop`, `.once`, `.capture`,
 `.debounce(duration)`, and `.throttle(duration)` modifier chains. Durations
 must be positive integer `ms` or `s` values. Debounce and throttle cannot be
-combined on the same listener.
+combined on the same listener. Element event expressions can read the
+compiler-owned DOM event object through `event.value`, `event.checked`,
+`event.key`, `event.code`, `event.clientX`, and `event.clientY`.
 
 Client blocks can run controlled lifecycle and effect statements:
 
@@ -413,9 +416,9 @@ view {
 ```
 
 `g:if` and `g:else-if` must be bool expressions. `g:else` must immediately
-follow a sibling `g:if` or `g:else-if` chain and must not have a value. The
-first slice keeps all branches in the DOM and toggles `hidden`; mount/unmount
-conditionals are planned separately.
+follow a sibling `g:if` or `g:else-if` chain and must not have a value. Static
+first render may include `hidden` on inactive branches. After island mount, the
+generated runtime mounts the active branch and unmounts inactive branches.
 
 Elements inside stateful components can render array state with first-slice
 list rendering:

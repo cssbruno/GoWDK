@@ -86,6 +86,18 @@ inputs for content changes, rebuilds on changes, and injects browser live reload
 into served HTML. It keeps serving the last successful build after a failed
 rebuild. Pass `--out <dir>` to use a different dev output directory.
 
+When you pass `--app <dir>`, `dev` builds the generated app, compiles a local
+dev binary, runs it on `GOWDK_ADDR`, and restarts that process after successful
+rebuilds. Use this path for local backend, action, API, partial, and SSR flows.
+
+Use `preview` for a one-shot local deploy preview:
+
+```sh
+/path/to/GOWDK/gowdk preview
+```
+
+Add `--hot` to run the same preview output through the dev rebuild loop.
+
 ## Build Repository Examples
 
 From the GOWDK repository root:

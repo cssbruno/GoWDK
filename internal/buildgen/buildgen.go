@@ -29,7 +29,6 @@ const storeRuntimeHref = "/" + storeRuntimeAssetPath
 
 var (
 	literalDeclarationPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
-	buildCallPattern          = regexp.MustCompile(`^=>\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\)$`)
 	literalNamePattern        = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	cssInputNamePattern       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
 	layoutSlotPattern         = regexp.MustCompile(`<slot\s*/>`)

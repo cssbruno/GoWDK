@@ -51,6 +51,20 @@ func BindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 			bindings = append(bindings, bindAPI(page, api, pkg))
 		}
 	}
+	for _, endpoint := range app.Endpoints {
+		dir := sourceDir(endpoint.Source)
+		pkg, ok := cache[dir]
+		if !ok {
+			pkg = inspectFeaturePackage(dir)
+			cache[dir] = pkg
+		}
+		switch endpoint.Kind {
+		case "act", "action":
+			bindings = append(bindings, bindStandaloneAction(endpoint, pkg))
+		case "api":
+			bindings = append(bindings, bindStandaloneAPI(endpoint, pkg))
+		}
+	}
 	sort.Slice(bindings, func(i, j int) bool {
 		if bindings[i].Source == bindings[j].Source {
 			if bindings[i].Kind == bindings[j].Kind {
@@ -62,6 +76,57 @@ func BindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 	})
 	app.BackendBindings = bindings
 	return app
+}
+
+func bindStandaloneAction(endpoint manifest.EndpointDeclaration, pkg featurePackage) manifest.BackendBinding {
+	method := endpoint.Method
+	if method == "" {
+		method = "POST"
+	}
+	binding := baseStandaloneBackendBinding(endpoint, actionHandlerKind, method, pkg)
+	function, ok := pkg.Functions[binding.FunctionName]
+	if !ok {
+		binding.Status = manifest.BackendBindingMissing
+		binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is not implemented", packageLabel(pkg), binding.FunctionName)
+		return binding
+	}
+	if !function.Action() {
+		binding.Status = manifest.BackendBindingUnsupportedSignature
+		if function.SupportMessage != "" {
+			binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is unsupported: %s", packageLabel(pkg), binding.FunctionName, function.SupportMessage)
+		} else {
+			binding.Message = fmt.Sprintf("GOWDK action handler %s.%s must have signature func(context.Context) (response.Response, error), func(context.Context, Input) (response.Response, error), func(context.Context, *Input) (response.Response, error), or func(context.Context, form.Values) (response.Response, error)", packageLabel(pkg), binding.FunctionName)
+		}
+		return binding
+	}
+	binding.Signature = function.Signature
+	binding.InputType = function.InputType
+	binding.InputPointer = function.InputPointer
+	binding.InputFields = function.InputFields
+	binding.Status = manifest.BackendBindingBound
+	return binding
+}
+
+func bindStandaloneAPI(endpoint manifest.EndpointDeclaration, pkg featurePackage) manifest.BackendBinding {
+	method := endpoint.Method
+	if method == "" {
+		method = "GET"
+	}
+	binding := baseStandaloneBackendBinding(endpoint, apiHandlerKind, method, pkg)
+	function, ok := pkg.Functions[binding.FunctionName]
+	if !ok {
+		binding.Status = manifest.BackendBindingMissing
+		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s is not implemented", packageLabel(pkg), binding.FunctionName)
+		return binding
+	}
+	if !function.API() {
+		binding.Status = manifest.BackendBindingUnsupportedSignature
+		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s must have signature func(context.Context, *http.Request) (response.Response, error)", packageLabel(pkg), binding.FunctionName)
+		return binding
+	}
+	binding.Signature = function.Signature
+	binding.Status = manifest.BackendBindingBound
+	return binding
 }
 
 func bindAction(page manifest.Page, action manifest.Action, pkg featurePackage) manifest.BackendBinding {
@@ -134,6 +199,21 @@ func baseBackendBinding(page manifest.Page, kind, blockName, method, route strin
 		ImportPath:   pkg.ImportPath,
 		PackageName:  pkg.Name,
 		FunctionName: blockName,
+		Status:       manifest.BackendBindingMissing,
+	}
+}
+
+func baseStandaloneBackendBinding(endpoint manifest.EndpointDeclaration, kind, method string, pkg featurePackage) manifest.BackendBinding {
+	return manifest.BackendBinding{
+		Kind:         kind,
+		PageID:       standaloneEndpointPageID(endpoint),
+		Source:       endpoint.Source,
+		BlockName:    endpoint.Name,
+		Method:       method,
+		Route:        endpoint.Route,
+		ImportPath:   pkg.ImportPath,
+		PackageName:  pkg.Name,
+		FunctionName: endpoint.Name,
 		Status:       manifest.BackendBindingMissing,
 	}
 }

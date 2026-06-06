@@ -152,6 +152,9 @@ func collectComponentViewReferences(nodes []view.Node, refs *componentViewRefs) 
 				if strings.HasPrefix(attr.Name, "g:on:") {
 					refs.Events = append(refs.Events, eventExpr{Name: attr.Name, Expression: strings.TrimSpace(attr.Value)})
 					for _, field := range view.IslandExpressionFields(attr.Value) {
+						if isDOMEventScopeField(field) {
+							continue
+						}
 						refs.Fields[field] = true
 					}
 					continue
@@ -233,6 +236,10 @@ func collectComponentViewReferences(nodes []view.Node, refs *componentViewRefs) 
 			collectComponentViewReferences(typed.Children, refs)
 		}
 	}
+}
+
+func isDOMEventScopeField(field string) bool {
+	return field == "event" || strings.HasPrefix(field, "event.")
 }
 
 func expressionFields(expr string) []string {

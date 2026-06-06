@@ -15,6 +15,12 @@ type ComponentCall struct {
 	Children []Node
 }
 
+type slotContent struct {
+	Nodes []Node
+	Ctx   renderContext
+	Lets  map[string]string
+}
+
 // Identity is the package-qualified component identity used for compiler-time
 // resolution and recursion checks. The public call name can be an import alias.
 func (component Component) Identity() string {
@@ -118,9 +124,17 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 			return fmt.Errorf("component %s does not declare prop %q", node.Name, prop)
 		}
 	}
-	slotHTML, err := renderNodes(node.Children, ctx)
+	slots, err := componentSlots(node.Children, ctx)
 	if err != nil {
 		return err
+	}
+	slotHTML := ""
+	if slot, ok := slots[""]; ok {
+		var err error
+		slotHTML, err = renderSlotContent(slot, nil)
+		if err != nil {
+			return err
+		}
 	}
 
 	values := mergeValues(component.State, props)
@@ -142,6 +156,7 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		actions:      ctx.actions,
 		stack:        cloneStack(ctx.stack),
 		slotHTML:     slotHTML,
+		slots:        slots,
 		stateFields:  boolSet(keys(component.State)),
 		readFields:   boolSet(keys(values)),
 		bindFields:   boolSet(keys(bindValues)),
@@ -269,4 +284,82 @@ func (node ComponentCall) islandMode() (string, error) {
 		mode = value
 	}
 	return mode, nil
+}
+
+func componentSlots(children []Node, ctx *renderContext) (map[string]slotContent, error) {
+	slots := map[string]slotContent{}
+	var defaultNodes []Node
+	for _, child := range children {
+		element, ok := child.(Element)
+		if !ok || element.Name != "template" {
+			defaultNodes = append(defaultNodes, child)
+			continue
+		}
+		name, lets, isSlot, err := templateSlot(element)
+		if err != nil {
+			return nil, err
+		}
+		if !isSlot {
+			defaultNodes = append(defaultNodes, child)
+			continue
+		}
+		if _, exists := slots[name]; exists {
+			return nil, fmt.Errorf("duplicate slot %q", name)
+		}
+		slots[name] = slotContent{Nodes: element.Children, Ctx: *ctx, Lets: lets}
+	}
+	if len(defaultNodes) > 0 {
+		if _, exists := slots[""]; exists {
+			return nil, fmt.Errorf("duplicate default slot")
+		}
+		slots[""] = slotContent{Nodes: defaultNodes, Ctx: *ctx}
+	}
+	return slots, nil
+}
+
+func templateSlot(node Element) (string, map[string]string, bool, error) {
+	name := ""
+	isSlot := false
+	lets := map[string]string{}
+	for _, attr := range node.Attrs {
+		switch {
+		case attr.Name == "g:slot":
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return "", nil, false, fmt.Errorf("g:slot requires a slot name")
+			}
+			name = strings.TrimSpace(attr.Value)
+			isSlot = true
+		case strings.HasPrefix(attr.Name, "let:"):
+			prop := strings.TrimPrefix(attr.Name, "let:")
+			if prop == "" {
+				return "", nil, false, fmt.Errorf("slot let binding requires a name")
+			}
+			local := prop
+			if !attr.Boolean && strings.TrimSpace(attr.Value) != "" {
+				local = strings.TrimSpace(attr.Value)
+			}
+			lets[prop] = local
+		}
+	}
+	return name, lets, isSlot, nil
+}
+
+func renderSlotContent(slot slotContent, scopedValues map[string]string) (string, error) {
+	slotCtx := slot.Ctx
+	if len(scopedValues) > 0 {
+		slotCtx.values = mergeValues(slotCtx.values, scopedValues)
+		slotCtx.readFields = mergeBoolSets(slotCtx.readFields, boolSet(keys(scopedValues)))
+	}
+	return renderNodes(slot.Nodes, &slotCtx)
+}
+
+func mergeBoolSets(base, next map[string]bool) map[string]bool {
+	out := map[string]bool{}
+	for key, value := range base {
+		out[key] = value
+	}
+	for key, value := range next {
+		out[key] = value
+	}
+	return out
 }

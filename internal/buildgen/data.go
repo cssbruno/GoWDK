@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/format"
+	"go/parser"
 	"go/printer"
 	"go/token"
 	"os"
@@ -25,37 +26,187 @@ func parsePathParams(source string) (map[string]string, error) {
 	return parseLiteralStringMap(source, "path param")
 }
 
-func parseBuildData(body string, routeParams map[string]string, imports []manifest.Import) (map[string]string, error) {
+func parseBuildData(body string, routeParams map[string]string, imports []manifest.Import, source string) (map[string]string, error) {
 	lines := significantBuildLines(body)
 	if len(lines) == 1 {
-		if match := buildCallPattern.FindStringSubmatch(lines[0]); match != nil {
-			return runBuildDataCall(match[1], match[2], imports)
+		call, ok, err := parseBuildDataCallLine(lines[0])
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return runBuildDataCallRef(call, imports, source)
 		}
 	}
-	declarations, err := parseLiteralDeclarations(body, "build", "build field")
-	if err != nil {
-		return nil, err
-	}
-	if len(declarations) == 0 {
-		return nil, nil
-	}
 	data := map[string]string{}
-	for index, declaration := range declarations {
-		for key, value := range declaration {
+	declarations := 0
+	for index, line := range lines {
+		declaration, ok, err := parseBuildLiteralLine(line)
+		if err != nil {
+			return nil, fmt.Errorf("build line %d: %w", index+1, err)
+		}
+		if !ok {
+			return nil, fmt.Errorf("build line %d must use `=> { name: value }` or `=> BuildData()`", index+1)
+		}
+		declarations++
+		if len(declaration.Elts) == 0 && index == 0 {
+			return nil, fmt.Errorf("build {} declaration must not be empty")
+		}
+		for _, element := range declaration.Elts {
+			key, value, err := buildFieldValue(element, routeParams, data)
+			if err != nil {
+				return nil, fmt.Errorf("build line %d: %w", index+1, err)
+			}
 			if _, exists := data[key]; exists {
 				return nil, fmt.Errorf("duplicate build field %q", key)
 			}
-			interpolated, err := interpolateBuildValue(value, routeParams)
-			if err != nil {
-				return nil, fmt.Errorf("build field %s: %w", key, err)
-			}
-			data[key] = interpolated
-		}
-		if len(declaration) == 0 && index == 0 {
-			return nil, fmt.Errorf("build {} declaration must not be empty")
+			data[key] = value
 		}
 	}
+	if declarations == 0 {
+		return nil, nil
+	}
 	return data, nil
+}
+
+type buildCallRef struct {
+	Alias    string
+	Function string
+}
+
+func parseBuildDataCallLine(line string) (buildCallRef, bool, error) {
+	expr, ok := strings.CutPrefix(strings.TrimSpace(line), "=>")
+	if !ok {
+		return buildCallRef{}, false, nil
+	}
+	expr = strings.TrimSpace(expr)
+	if strings.HasPrefix(expr, "{") {
+		return buildCallRef{}, false, nil
+	}
+	parsed, err := parser.ParseExpr(expr)
+	if err != nil {
+		return buildCallRef{}, false, fmt.Errorf("parse build call: %w", err)
+	}
+	call, ok := parsed.(*ast.CallExpr)
+	if !ok || len(call.Args) != 0 {
+		return buildCallRef{}, false, nil
+	}
+	switch fun := call.Fun.(type) {
+	case *ast.Ident:
+		return buildCallRef{Function: fun.Name}, true, nil
+	case *ast.SelectorExpr:
+		alias, ok := fun.X.(*ast.Ident)
+		if !ok {
+			return buildCallRef{}, false, fmt.Errorf("build data call receiver must be an import alias")
+		}
+		return buildCallRef{Alias: alias.Name, Function: fun.Sel.Name}, true, nil
+	default:
+		return buildCallRef{}, false, nil
+	}
+}
+
+func parseBuildLiteralLine(line string) (*ast.CompositeLit, bool, error) {
+	body, ok := strings.CutPrefix(strings.TrimSpace(line), "=>")
+	if !ok {
+		return nil, false, nil
+	}
+	body = strings.TrimSpace(body)
+	if !strings.HasPrefix(body, "{") || !strings.HasSuffix(body, "}") {
+		return nil, false, nil
+	}
+	expr, err := parser.ParseExpr("struct{}" + body)
+	if err != nil {
+		return nil, true, fmt.Errorf("parse build literal: %w", err)
+	}
+	literal, ok := expr.(*ast.CompositeLit)
+	if !ok {
+		return nil, true, fmt.Errorf("build literal must be an object")
+	}
+	return literal, true, nil
+}
+
+func buildFieldValue(expr ast.Expr, routeParams map[string]string, data map[string]string) (string, string, error) {
+	kv, ok := expr.(*ast.KeyValueExpr)
+	if !ok {
+		return "", "", fmt.Errorf("build field must use name: value")
+	}
+	key, ok := kv.Key.(*ast.Ident)
+	if !ok || !literalNamePattern.MatchString(key.Name) {
+		return "", "", fmt.Errorf("invalid build field name")
+	}
+	value, err := buildValueString(kv.Value, routeParams, data)
+	if err != nil {
+		return "", "", fmt.Errorf("build field %s: %w", key.Name, err)
+	}
+	return key.Name, value, nil
+}
+
+func buildValueString(expr ast.Expr, routeParams map[string]string, data map[string]string) (string, error) {
+	switch typed := expr.(type) {
+	case *ast.BasicLit:
+		switch typed.Kind {
+		case token.STRING:
+			value, err := strconv.Unquote(typed.Value)
+			if err != nil {
+				return "", err
+			}
+			if strings.TrimSpace(value) == "" {
+				return "", fmt.Errorf("value must not be empty")
+			}
+			return interpolateBuildValue(value, routeParams, data)
+		case token.INT, token.FLOAT:
+			return typed.Value, nil
+		default:
+			return "", fmt.Errorf("unsupported scalar literal")
+		}
+	case *ast.Ident:
+		switch typed.Name {
+		case "true", "false":
+			return typed.Name, nil
+		case "nil", "null":
+			return "", nil
+		default:
+			value, ok := data[typed.Name]
+			if !ok {
+				return "", fmt.Errorf("unknown build field reference %q", typed.Name)
+			}
+			return value, nil
+		}
+	case *ast.CallExpr:
+		return buildCallValue(typed, routeParams, data)
+	default:
+		return "", fmt.Errorf("value must be a string, number, boolean, nil, param(), field(), or earlier field reference")
+	}
+}
+
+func buildCallValue(call *ast.CallExpr, routeParams map[string]string, data map[string]string) (string, error) {
+	name, ok := call.Fun.(*ast.Ident)
+	if !ok || len(call.Args) != 1 {
+		return "", fmt.Errorf("unsupported build value call")
+	}
+	arg, ok := call.Args[0].(*ast.BasicLit)
+	if !ok || arg.Kind != token.STRING {
+		return "", fmt.Errorf("%s argument must be a string literal", name.Name)
+	}
+	key, err := strconv.Unquote(arg.Value)
+	if err != nil {
+		return "", err
+	}
+	switch name.Name {
+	case "param":
+		value, ok := routeParams[key]
+		if !ok {
+			return "", fmt.Errorf("unknown route param %q", key)
+		}
+		return value, nil
+	case "field":
+		value, ok := data[key]
+		if !ok {
+			return "", fmt.Errorf("unknown build field %q", key)
+		}
+		return value, nil
+	default:
+		return "", fmt.Errorf("unsupported build value call %s", name.Name)
+	}
 }
 
 func significantBuildLines(body string) []string {
@@ -70,12 +221,57 @@ func significantBuildLines(body string) []string {
 	return lines
 }
 
-func runBuildDataCall(alias, function string, imports []manifest.Import) (map[string]string, error) {
-	item, ok := findBuildImport(alias, imports)
-	if !ok {
-		return nil, fmt.Errorf("build import %q is not declared", alias)
+func runBuildDataCallRef(ref buildCallRef, imports []manifest.Import, source string) (map[string]string, error) {
+	if ref.Alias == "" {
+		importPath, err := samePackageImportPath(source)
+		if err != nil {
+			return nil, err
+		}
+		return runBuildDataCall("gowdkbuilddata", importPath, ref.Function)
 	}
-	source, err := buildDataRunnerSource(alias, item.Path, function)
+	item, ok := findBuildImport(ref.Alias, imports)
+	if !ok {
+		return nil, fmt.Errorf("build import %q is not declared", ref.Alias)
+	}
+	return runBuildDataCall(ref.Alias, item.Path, ref.Function)
+}
+
+func samePackageImportPath(source string) (string, error) {
+	dir := sourceDir(source)
+	info := goListDir(dir)
+	if strings.TrimSpace(info.ImportPath) == "" {
+		return "", fmt.Errorf("same-package build data function requires a buildable Go package for %s", dir)
+	}
+	return info.ImportPath, nil
+}
+
+type goListDirInfo struct {
+	ImportPath string
+}
+
+func goListDir(dir string) goListDirInfo {
+	command := exec.Command("go", "list", "-json", ".")
+	command.Dir = dir
+	output, err := command.Output()
+	if err != nil {
+		return goListDirInfo{}
+	}
+	var info goListDirInfo
+	if err := json.Unmarshal(output, &info); err != nil {
+		return goListDirInfo{}
+	}
+	return info
+}
+
+func sourceDir(source string) string {
+	if strings.TrimSpace(source) == "" {
+		return "."
+	}
+	return filepath.Dir(source)
+}
+
+func runBuildDataCall(alias, importPath, function string) (map[string]string, error) {
+	source, err := buildDataRunnerSource(alias, importPath, function)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +417,7 @@ func buildScalarString(value any) (string, bool) {
 	}
 }
 
-func interpolateBuildValue(value string, routeParams map[string]string) (string, error) {
+func interpolateBuildValue(value string, routeParams map[string]string, data map[string]string) (string, error) {
 	if !strings.Contains(value, "{") {
 		return value, nil
 	}
@@ -241,14 +437,38 @@ func interpolateBuildValue(value string, routeParams map[string]string) (string,
 		name := strings.TrimSpace(value[start+1 : end])
 		if param, ok := buildRouteParamExpression(name); ok {
 			name = param
+			resolved, ok := routeParams[name]
+			if !ok {
+				return "", fmt.Errorf("unknown route param %q", name)
+			}
+			out.WriteString(resolved)
+			value = value[end+1:]
+			continue
 		}
-		resolved, ok := routeParams[name]
+		if field, ok := buildFieldExpression(name); ok {
+			name = field
+		}
+		resolved, ok := data[name]
+		if !ok {
+			resolved, ok = routeParams[name]
+		}
 		if !ok {
 			return "", fmt.Errorf("unknown route param %q", name)
 		}
 		out.WriteString(resolved)
 		value = value[end+1:]
 	}
+}
+
+func buildFieldExpression(value string) (string, bool) {
+	if !strings.HasPrefix(value, `field("`) || !strings.HasSuffix(value, `")`) {
+		return "", false
+	}
+	name := strings.TrimPrefix(strings.TrimSuffix(value, `")`), `field("`)
+	if !literalNamePattern.MatchString(name) {
+		return "", false
+	}
+	return name, true
 }
 
 func buildRouteParamExpression(value string) (string, bool) {

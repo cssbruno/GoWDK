@@ -74,7 +74,7 @@ func ssrArtifact(config gowdk.Config, page manifest.Page, components map[string]
 		return SSRArtifact{}, fmt.Errorf("%s: generated SSR load {} execution is not implemented yet", page.ID)
 	}
 	routeData, replacements := ssrRouteData(page)
-	buildData, err := parseBuildData(page.Blocks.BuildBody, routeData, page.Imports)
+	buildData, err := parseBuildData(page.Blocks.BuildBody, routeData, page.Imports, page.Source)
 	if err != nil {
 		return SSRArtifact{}, fmt.Errorf("%s: %w", page.ID, err)
 	}

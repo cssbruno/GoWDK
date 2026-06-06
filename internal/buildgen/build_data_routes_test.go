@@ -131,6 +131,35 @@ func TestBuildMergesMultipleLiteralBuildDataDeclarations(t *testing.T) {
 	}
 }
 
+func TestBuildRendersExpandedBuildDataScalarsAndReferences(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "blog.post",
+		Route: "/blog/{slug}",
+		Paths: true,
+		Blocks: manifest.Blocks{
+			PathsBody: `=> { slug: "hello" }`,
+			Build:     true,
+			BuildBody: `=> { title: "Hello", count: 2, live: true }
+=> { headline: "{title} {slug}", copy: field("headline") }`,
+			View:     true,
+			ViewBody: `<main data-count="{count}" data-live="{live}"><h1>{headline}</h1><p>{copy}</p></main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "blog", "hello", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), `<main data-count="2" data-live="true"><h1>Hello hello</h1><p>Hello hello</p></main>`) {
+		t.Fatalf("expected expanded build data output:\n%s", payload)
+	}
+}
+
 func TestBuildRejectsBuildDataRouteParamConflictBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{{

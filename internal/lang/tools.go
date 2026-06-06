@@ -259,6 +259,12 @@ func CheckFiles(config gowdk.Config, paths []string) (manifest.Manifest, Diagnos
 	if diagnostics.HasErrors() {
 		return app, diagnostics
 	}
+	var err error
+	app, err = compiler.DiscoverGoEndpointComments(app)
+	if err != nil {
+		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
+		return app, diagnostics
+	}
 	if err := compiler.ValidateManifest(config, app); err != nil {
 		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 	}
@@ -393,6 +399,16 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 		return "Add paths { ... } for the dynamic spa route or switch the page to @render ssr."
 	case "load_requires_request_render":
 		return "Use @render ssr or @render hybrid for pages with load { ... }."
+	case "invalid_go_endpoint_handler":
+		return "Move the gowdk endpoint comment onto an exported package-level function."
+	case "duplicate_go_endpoint_comment":
+		return "Keep only one //gowdk:act or //gowdk:api comment on the handler."
+	case "route_method_conflict":
+		return "Give each page route, action, API, or Go endpoint comment a unique method/path pair."
+	case "unsupported_action_method":
+		return "Use POST for action endpoints, or declare an API endpoint for other HTTP methods."
+	case "invalid_backend_handler_name":
+		return "Use the exact exported Go function name in the endpoint declaration."
 	case "component_client_error":
 		if strings.Contains(message, "unknown island field") || strings.Contains(message, "unknown field") {
 			return "Use a field declared by the component props/state contract, a local variable, or a computed value."

@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -209,6 +210,56 @@ type inputChange struct {
 	Changed []string
 	Added   []string
 	Removed []string
+}
+
+func devInputCacheFresh(outputDir string, snapshot inputSnapshot) bool {
+	if len(snapshot) == 0 || !devOutputHasFiles(outputDir) {
+		return false
+	}
+	cached, err := readDevInputCache(outputDir)
+	return err == nil && cached.same(snapshot)
+}
+
+func devOutputHasFiles(outputDir string) bool {
+	entries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.Name() == ".gowdk" {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func readDevInputCache(outputDir string) (inputSnapshot, error) {
+	payload, err := os.ReadFile(devInputCachePath(outputDir))
+	if err != nil {
+		return nil, err
+	}
+	var snapshot inputSnapshot
+	if err := json.Unmarshal(payload, &snapshot); err != nil {
+		return nil, err
+	}
+	return snapshot, nil
+}
+
+func writeDevInputCache(outputDir string, snapshot inputSnapshot) error {
+	payload, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := devInputCachePath(outputDir)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, payload, 0o644)
+}
+
+func devInputCachePath(outputDir string) string {
+	return filepath.Join(outputDir, ".gowdk", "dev", "inputs.json")
 }
 
 func (change inputChange) summary() string {

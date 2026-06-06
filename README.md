@@ -128,6 +128,7 @@ gowdk init [--force] [dir]
 gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
 gowdk dev [--addr 127.0.0.1:8080] [--interval 1s] [build flags...]
+gowdk preview [--addr 127.0.0.1:8080] [--hot] [build flags...]
 gowdk serve --dir <dir> [--addr 127.0.0.1:8080]
 gowdk fmt [--write] <file.gwdk>
 gowdk tokens <file.gwdk>
@@ -139,6 +140,11 @@ gowdk lsp [--ssr]
 
 Every successful disk build writes `gowdk-build-report.json`. Pass `--debug` to
 mirror the structured report to stderr.
+
+`gowdk dev --app <dir>` generates the app, compiles a dev binary, and restarts
+that generated process after successful rebuilds. `gowdk preview` builds once
+into a temporary deploy-preview output and serves it; `gowdk preview --hot`
+uses the dev loop for local hot preview.
 
 ## Build Targets
 

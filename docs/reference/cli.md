@@ -17,6 +17,7 @@ gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
+gowdk preview [--addr <addr>] [--hot] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
 gowdk lsp [--ssr]
 ```
@@ -38,8 +39,9 @@ gowdk lsp [--ssr]
 - `--wasm`: supported by `build`; requires `--app` and compiles the generated app with `GOOS=js GOARCH=wasm go build -o <file>`.
 - `--backend-app`: supported by `build`; writes generated backend-only Go app source for feature-bound action/API endpoints.
 - `--backend-bin`: supported by `build`; requires `--backend-app` and compiles the generated backend app with `go build -o <file>`.
-- `--addr`: supported by `dev` and `serve`; selects the listen address and defaults to `127.0.0.1:8080`.
+- `--addr`: supported by `dev`, `preview`, and `serve`; selects the listen address and defaults to `127.0.0.1:8080`.
 - `--interval`: supported by `dev`; sets the polling interval, such as `500ms`, `1s`, or `2s`.
+- `--hot`: supported by `preview`; runs the dev loop against the preview output instead of serving a one-shot build.
 - `--dir`: supported by `serve`; selects the generated build output directory.
 
 ## Examples
@@ -56,6 +58,8 @@ go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk ex
 go run ./cmd/gowdk build --debug --out /tmp/gowdk-build examples/pages/home.page.gwdk
 go run ./cmd/gowdk build --allow-missing-backend --out /tmp/gowdk-build examples/actions/signup.page.gwdk
 go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/ssr/simple-ssr.page.gwdk
+go run ./cmd/gowdk preview --out /tmp/gowdk-preview examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
+go run ./cmd/gowdk dev --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app examples/ssr/simple-ssr.page.gwdk
 go run ./cmd/gowdk build --module frontend --module backend --out /tmp/gowdk-build
 go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --wasm /tmp/gowdk-site.wasm examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk

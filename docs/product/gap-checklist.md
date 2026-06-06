@@ -644,21 +644,40 @@ Done when:
 
 ### 9. Errors And Boundaries
 
-- [ ] Define expected versus unexpected errors.
-- [ ] Define user error types or response helpers for not found, forbidden,
+- [x] Define expected versus unexpected errors.
+      Decision: expected outcomes are user-owned `runtime/response.Response`
+      values, `response.NewHandlerError` values, and SSR local redirect errors.
+      Unexpected generated-lane failures are panic boundaries, generated
+      request-shape failures, and missing generated resources.
+- [x] Define user error types or response helpers for not found, forbidden,
       invalid request, conflict, validation, and redirect.
-- [ ] Define page/layout-level error boundary syntax if supported.
-- [ ] Define action/API/fragment error boundary syntax if supported.
-- [ ] Define error response cache policy.
-- [ ] Define what error details are logged versus rendered.
+      Decision: use `response.Response` helpers for explicit status/body,
+      fragment, JSON, validation, and redirect outcomes. Use
+      `response.NewHandlerError` when an action/API handler must return an
+      error with an explicit HTTP status. Dedicated named helpers remain planned
+      only if repeated app code proves they are needed.
+- [x] Define page/layout-level error boundary syntax if supported.
+      Decision: SSR pages support route-local `@error`; layout-level and
+      component-level boundaries are not supported today.
+- [x] Define action/API/fragment error boundary syntax if supported.
+      Decision: `act` and `api` support endpoint-local `@error` for generated
+      panic boundaries. Fragment-specific boundary syntax is not supported.
+- [x] Define error response cache policy.
+      Decision: generated error responses use `Cache-Control: no-store`.
+- [x] Define what error details are logged versus rendered.
+      Decision: generated panic boundaries render safe fixed messages or
+      generated HTML documents, not panic values. Generated form/request-shape
+      errors do not echo submitted values. Returned handler error messages are
+      user-owned and must stay safe.
 - [ ] Add generated binary tests for SSR load errors, action errors, API
       errors, guard errors, panic boundaries, and missing error documents.
-- [ ] Add docs and examples for custom `404`, `500`, and route-level errors.
+- [x] Add docs and examples for custom `404`, `500`, and route-level errors.
+      See `docs/reference/errors.md`.
 
 Done when:
 
-- [ ] Production apps have a safe, documented error customization path.
-- [ ] Panic values and submitted form values are not exposed in generated
+- [x] Production apps have a safe, documented error customization path.
+- [x] Panic values and submitted form values are not exposed in generated
       responses.
 
 ### 10. Forms, Actions, And Progressive Enhancement

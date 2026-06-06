@@ -282,6 +282,7 @@ integration blueprints without copying files by hand.
 - [Config reference](docs/reference/config.md)
 - [Routing reference](docs/reference/routing.md)
 - [Hooks reference](docs/reference/hooks.md)
+- [Errors reference](docs/reference/errors.md)
 - [Deployment reference](docs/reference/deployment.md)
 - [Language notes](docs/language/README.md)
 - [Browser compiler](docs/compiler/browser-compiler.md)

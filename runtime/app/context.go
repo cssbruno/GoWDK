@@ -18,10 +18,14 @@ const (
 
 // RouteMetadata describes one generated request-time page route.
 type RouteMetadata struct {
-	Kind   string
-	PageID string
-	Method string
-	Path   string
+	Kind          string
+	PageID        string
+	Method        string
+	Path          string
+	Render        string
+	DynamicParams []string
+	Guards        []string
+	HasLoad       bool
 }
 
 // EndpointMetadata describes one generated backend endpoint declaration.
@@ -87,6 +91,8 @@ func Session(ctx context.Context) any {
 
 // WithRoute stores generated route metadata in a context.
 func WithRoute(ctx context.Context, route RouteMetadata) context.Context {
+	route.DynamicParams = copyStrings(route.DynamicParams)
+	route.Guards = copyStrings(route.Guards)
 	return context.WithValue(ctx, routeContextKey, route)
 }
 
@@ -94,6 +100,8 @@ func WithRoute(ctx context.Context, route RouteMetadata) context.Context {
 // adapters.
 func Route(ctx context.Context) (RouteMetadata, bool) {
 	route, ok := ctx.Value(routeContextKey).(RouteMetadata)
+	route.DynamicParams = copyStrings(route.DynamicParams)
+	route.Guards = copyStrings(route.Guards)
 	return route, ok
 }
 
@@ -107,4 +115,13 @@ func WithEndpoint(ctx context.Context, endpoint EndpointMetadata) context.Contex
 func Endpoint(ctx context.Context) (EndpointMetadata, bool) {
 	endpoint, ok := ctx.Value(endpointContextKey).(EndpointMetadata)
 	return endpoint, ok
+}
+
+func copyStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	copied := make([]string, len(values))
+	copy(copied, values)
+	return copied
 }

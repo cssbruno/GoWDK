@@ -12,6 +12,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/discover"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
@@ -80,7 +81,8 @@ func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 	if !incremental {
 		return false, nil
 	}
-	result, err := buildgen.BuildIncremental(options.Config, app, outputDir, pageSources)
+	ir := gwdkanalysis.BuildIR(options.Config, app)
+	result, err := buildgen.BuildIncrementalFromIR(options.Config, ir, outputDir, pageSources)
 	if err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)
 		return true, err

@@ -43,7 +43,7 @@ The following features are known blockers for any production-readiness claim:
 - Real user Go action execution.
 - Generated API handlers.
 - Request-time `load {}` execution.
-- Generated guard enforcement.
+- Guard registry configuration examples.
 - Hybrid/cache/revalidation policy.
 - Full reactive dependency graph and richer `client {}` language.
 - Component composition beyond default slots.

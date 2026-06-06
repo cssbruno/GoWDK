@@ -8,16 +8,27 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result, error) {
+	return buildFromIR(config, app, gwdkanalysis.BuildIR(config, app), outputDir)
+}
+
+// BuildFromIR writes SPA build artifacts from normalized compiler IR.
+func BuildFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (Result, error) {
+	return buildFromIR(config, buildModelFromIR(ir), ir, outputDir)
+}
+
+func buildFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, outputDir string) (Result, error) {
 	reporter := newBuildReporter("build", outputDir)
 	reporter.info("start", "build_started", "SPA build started", BuildEvent{
 		Data: map[string]string{
-			"pages":      fmt.Sprint(len(app.Pages)),
-			"components": fmt.Sprint(len(app.Components)),
-			"layouts":    fmt.Sprint(len(app.Layouts)),
+			"pages":      fmt.Sprint(len(ir.Pages)),
+			"components": fmt.Sprint(len(ir.Components)),
+			"layouts":    fmt.Sprint(len(ir.Layouts)),
 		},
 	})
 	if strings.TrimSpace(outputDir) == "" {
@@ -32,7 +43,7 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 		return Result{}, reporter.fail("bind", err)
 	}
 
-	planned, err := plan(config, app, outputDir)
+	planned, err := planFromIR(config, ir, outputDir)
 	if err != nil {
 		return Result{}, reporter.fail("plan", err)
 	}
@@ -103,12 +114,22 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 }
 
 func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (MemoryResult, error) {
+	return buildMemoryFromIR(config, app, gwdkanalysis.BuildIR(config, app), outputDir)
+}
+
+// BuildMemoryFromIR plans SPA build artifacts from normalized compiler IR
+// without writing them to disk.
+func BuildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (MemoryResult, error) {
+	return buildMemoryFromIR(config, buildModelFromIR(ir), ir, outputDir)
+}
+
+func buildMemoryFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, outputDir string) (MemoryResult, error) {
 	reporter := newBuildReporter("memory", outputDir)
 	reporter.info("start", "build_started", "in-memory SPA build started", BuildEvent{
 		Data: map[string]string{
-			"pages":      fmt.Sprint(len(app.Pages)),
-			"components": fmt.Sprint(len(app.Components)),
-			"layouts":    fmt.Sprint(len(app.Layouts)),
+			"pages":      fmt.Sprint(len(ir.Pages)),
+			"components": fmt.Sprint(len(ir.Components)),
+			"layouts":    fmt.Sprint(len(ir.Layouts)),
 		},
 	})
 	if strings.TrimSpace(outputDir) == "" {
@@ -123,7 +144,7 @@ func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (
 		return MemoryResult{}, reporter.fail("bind", err)
 	}
 
-	planned, err := plan(config, app, outputDir)
+	planned, err := planFromIR(config, ir, outputDir)
 	if err != nil {
 		return MemoryResult{}, reporter.fail("plan", err)
 	}
@@ -240,10 +261,20 @@ func reportBackendBindings(reporter *buildReporter, bindings []manifest.BackendB
 }
 
 func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir string, changedPageSources []string) (Result, error) {
+	return buildIncrementalFromIR(config, app, gwdkanalysis.BuildIR(config, app), outputDir, changedPageSources)
+}
+
+// BuildIncrementalFromIR incrementally renders changed SPA page outputs from
+// normalized compiler IR.
+func BuildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
+	return buildIncrementalFromIR(config, buildModelFromIR(ir), ir, outputDir, changedPageSources)
+}
+
+func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
 	reporter := newBuildReporter("incremental", outputDir)
 	reporter.info("start", "build_started", "incremental SPA build started", BuildEvent{
 		Data: map[string]string{
-			"pages":          fmt.Sprint(len(app.Pages)),
+			"pages":          fmt.Sprint(len(ir.Pages)),
 			"changedSources": fmt.Sprint(len(changedPageSources)),
 		},
 	})
@@ -397,6 +428,11 @@ func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir stri
 }
 
 func plan(config gowdk.Config, app manifest.Manifest, outputDir string) (buildPlan, error) {
+	return planFromIR(config, gwdkanalysis.BuildIR(config, app), outputDir)
+}
+
+func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (buildPlan, error) {
+	app := buildModelFromIR(ir)
 	components, componentFailures := buildComponents(app.Components)
 	layouts, layoutFailures := buildLayouts(app.Layouts)
 	css, cssFailures := planCSS(config, app, outputDir)

@@ -95,17 +95,19 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 			if match == nil {
 				return SyntaxFile{}, fmt.Errorf("line %d: malformed annotation %q", lineNumber, line)
 			}
+			annotation := SyntaxAnnotation{
+				Name:  match[1],
+				Value: strings.TrimSpace(match[2]),
+				Span:  sourceLineSpan(lineNumber, rawLine),
+			}
+			applySyntaxAnnotation(&file, annotation, lineNumber, rawLine)
 			if match[1] == "wasm" {
 				file.WASM = &WASMContract{
 					Package: strings.TrimSpace(match[2]),
 					Span:    sourceLineSpan(lineNumber, rawLine),
 				}
 			}
-			file.Annotations = append(file.Annotations, SyntaxAnnotation{
-				Name:  match[1],
-				Value: strings.TrimSpace(match[2]),
-				Span:  sourceLineSpan(lineNumber, rawLine),
-			})
+			file.Annotations = append(file.Annotations, annotation)
 			continue
 		}
 		if match := importPattern.FindStringSubmatch(line); match != nil {
@@ -213,6 +215,42 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 		return SyntaxFile{}, fmt.Errorf("%s block missing closing }", captured.Kind)
 	}
 	return file, nil
+}
+
+func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNumber int, rawLine string) {
+	value := strings.TrimSpace(annotation.Value)
+	switch annotation.Name {
+	case "page":
+		file.Page = &gwdkast.PageDecl{ID: value, Span: annotation.Span}
+	case "component":
+		file.Component = &gwdkast.ComponentDecl{Name: value, Span: annotation.Span}
+	case "layout":
+		values := splitList(value)
+		if len(values) == 1 {
+			file.Layout = &gwdkast.LayoutDecl{ID: values[0], Span: annotation.Span}
+		}
+		for _, span := range namedValueSpans(values, lineNumber, rawLine) {
+			file.Layouts = append(file.Layouts, gwdkast.LayoutRef{ID: span.Name, Span: span.Span})
+		}
+	case "route":
+		path := trimQuotes(value)
+		params := routeParamSpans(path, lineNumber, rawLine)
+		routeParams := make([]gwdkast.RouteParam, 0, len(params))
+		for _, param := range params {
+			routeParams = append(routeParams, gwdkast.RouteParam{Name: param.Name, Span: param.Span})
+		}
+		file.Route = &gwdkast.RouteDecl{Path: path, Params: routeParams, Span: annotation.Span}
+	case "render":
+		file.Render = &gwdkast.RenderDecl{Mode: value, Span: annotation.Span}
+	case "guard":
+		for _, span := range namedValueSpans(splitList(value), lineNumber, rawLine) {
+			file.Guards = append(file.Guards, gwdkast.GuardRef{Name: span.Name, Span: span.Span})
+		}
+	case "css":
+		for _, span := range namedValueSpans(splitCSSList(value), lineNumber, rawLine) {
+			file.CSS = append(file.CSS, gwdkast.AssetRef{Kind: "css", Path: span.Name, Span: span.Span})
+		}
+	}
 }
 
 type syntaxBodyLine struct {

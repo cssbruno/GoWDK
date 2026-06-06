@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -74,10 +75,10 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
 		`mux.Handle("/", gowdkruntime.Handler{`,
 		`Identity: gowdkruntime.InstanceIdentity(),`,
-		`Assets:   gowdkruntime.LoadAssetManifest(root),`,
-		`Backend:  backend,`,
-		`SSRExact:   ssrExact,`,
-		`SSRDynamic: ssrDynamic,`,
+		`Assets: gowdkruntime.LoadAssetManifest(root),`,
+		`Backend: backend,`,
+		`SSRExact: ssrExact,`,
+		`SSRDynamic: ssrDynamic}`,
 	} {
 		if !strings.Contains(string(packagePayload), expected) {
 			t.Fatalf("expected generated gowdkapp/app.go to contain %q:\n%s", expected, packagePayload)
@@ -218,12 +219,13 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`Backend:  backend,`,
+		`backendRouter, err := newBackendRouter()`,
+		`Backend: backendRouter.HandlerFunc(),`,
 		`gowdkform "github.com/cssbruno/gowdk/runtime/form"`,
 		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`gowdkvalidation "github.com/cssbruno/gowdk/runtime/validation"`,
-		`func backend(response http.ResponseWriter, request *http.Request) bool`,
-		`if request.Method == http.MethodPost && action(response, request)`,
+		`func newBackendRouter() (*gowdkruntime.BackendRouter, error)`,
+		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Handler: action}`,
 		`func action(response http.ResponseWriter, request *http.Request) bool`,
 		`case "/newsletter":`,
 		`const maxActionBodyBytes int64 = 1 << 20`,
@@ -246,6 +248,39 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
 		}
+	}
+}
+
+func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
+	appDir := filepath.Join(t.TempDir(), "generated-backend")
+
+	result, err := GenerateBackendWithOptions(appDir, Options{Actions: []ActionEndpoint{{
+		PageID:     "newsletter",
+		ActionName: "Subscribe",
+		Route:      "/newsletter",
+		Redirect:   "/newsletter?ok=1",
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
+		`backendRouter, err := newBackendRouter()`,
+		`mux.Handle("/", backendRouter)`,
+		`func newBackendRouter() (*gowdkruntime.BackendRouter, error)`,
+		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Handler: action}`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated backend app source to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, `func backend(response http.ResponseWriter, request *http.Request) bool`) {
+		t.Fatalf("expected backend-only app to use BackendRouter instead of generated backend dispatcher:\n%s", source)
 	}
 }
 
@@ -283,7 +318,7 @@ func TestGenerateWiresCSRFWhenEnabled(t *testing.T) {
 	for _, expected := range []string{
 		`errors`,
 		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
-		`CSRF:     csrfTokenSource,`,
+		`CSRF: csrfTokenSource,`,
 		`csrfTokenSource, err := newCSRF()`,
 		`csrfValidator = csrfTokenSource`,
 		`var csrfValidator gowdkactions.CSRFValidator`,
@@ -593,6 +628,26 @@ func TestSSRSourceEmitterDoesNotUseStringLineWriting(t *testing.T) {
 	}
 }
 
+func TestAppShellSourceEmitterDoesNotUseRawTemplates(t *testing.T) {
+	for _, path := range []string{"source.go", "source_backend_app.go", "template.go"} {
+		payload, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		source := string(payload)
+		for _, forbidden := range []string{
+			"appPackageSourceTemplate",
+			"backendAppPackageSourceTemplate",
+			"strings.ReplaceAll",
+			"Temporary generated-Go template exception",
+		} {
+			if strings.Contains(source, forbidden) {
+				t.Fatalf("app shell source emitter must use go/ast, found %q in %s", forbidden, path)
+			}
+		}
+	}
+}
+
 func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -699,13 +754,13 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`SSRExact:   ssrExact,`,
-		`SSRDynamic: ssrDynamic,`,
+		`SSRExact: ssrExact,`,
+		`SSRDynamic: ssrDynamic}`,
 		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`func ssrExact(response http.ResponseWriter, request *http.Request) bool`,
 		`func ssrDynamic(response http.ResponseWriter, request *http.Request) bool`,
 		`case "/dashboard":`,
-		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard"})`,
+		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr"})`,
 		`request = request.WithContext(ctx)`,
 		`gowdkresponse.WriteNoStoreHTML(response, request, "<main><h1>Dashboard</h1></main>")`,
 	} {
@@ -743,7 +798,7 @@ func TestGenerateWritesDynamicSSRHandler(t *testing.T) {
 		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`gowdkroute "github.com/cssbruno/gowdk/runtime/route"`,
 		`gowdkroute.Match("/blog/{slug}", request.URL.Path)`,
-		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "blog.post", Method: "GET", Path: "/blog/{slug}"})`,
+		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "blog.post", Method: "GET", Path: "/blog/{slug}", Render: "ssr", DynamicParams: []string{"slug"}})`,
 		`ctx = gowdkruntime.WithParams(ctx, params)`,
 		`request = request.WithContext(ctx)`,
 		`strings.ReplaceAll(html, "__SLUG__", gowdkhtml.Escape(params["slug"]))`,
@@ -814,6 +869,7 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 			ID:     "dashboard",
 			Route:  "/dashboard",
 			Render: gowdk.SSR,
+			Guard:  []string{"auth.required"},
 			Blocks: manifest.Blocks{
 				View:     true,
 				ViewBody: `<main><h1>Dashboard</h1></main>`,
@@ -821,12 +877,14 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 		},
 	}}
 
+	config := gowdk.Config{
+		Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)},
+	}
+	ir := gwdkanalysis.BuildIR(config, app)
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		AutoRoutes: true,
-		Config: gowdk.Config{
-			Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)},
-		},
-		Manifest: &app,
+		Config:     config,
+		IR:         &ir,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -841,6 +899,7 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 		`func decodeNewsletterSubscribeInput(values gowdkform.Values) (SubscribeInput, error)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
 		`case "/dashboard":`,
+		`gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr", Guards: []string{"auth.required"}}`,
 		`<main><h1>Dashboard</h1></main>`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -849,15 +908,65 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 	}
 }
 
-func TestGenerateAutoRoutesRequiresManifest(t *testing.T) {
+func TestGenerateWritesGuardRegistryAndGuardChecks(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Actions: []ActionEndpoint{{
+			PageID:     "newsletter",
+			ActionName: "Subscribe",
+			Method:     "POST",
+			Route:      "/newsletter",
+			Guards:     []string{"auth.required"},
+			Redirect:   "/newsletter?ok=1",
+		}},
+		APIs: []APIEndpoint{{
+			PageID:  "session",
+			APIName: "Session",
+			Method:  "GET",
+			Route:   "/api/session",
+			Guards:  []string{"auth.required"},
+		}},
+		SSR: []SSRRoute{{
+			PageID: "dashboard",
+			Route:  "/dashboard",
+			Guards: []string{"auth.required"},
+			HTML:   "<main>Dashboard</main>",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkssr "github.com/cssbruno/gowdk/addons/ssr"`,
+		`var guardRegistry gowdkssr.GuardRegistry`,
+		`func RegisterGuards(registry gowdkssr.GuardRegistry)`,
+		`gowdkssr.RunGuards(loadContext, guards, guardRegistry)`,
+		`if !runGuards(response, request, []string{"auth.required"})`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected guard generated source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateAutoRoutesRequiresIR(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
 	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
 	_, err := GenerateWithOptions(outputDir, appDir, Options{AutoRoutes: true})
-	if err == nil || !strings.Contains(err.Error(), "auto route detection requires a parsed manifest") {
-		t.Fatalf("expected auto route manifest error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "auto route detection requires compiler IR") {
+		t.Fatalf("expected auto route IR error, got %v", err)
 	}
 }
 
@@ -1280,6 +1389,121 @@ func TestGeneratedBinaryServesSSRRouteBeforeSPAFallback(t *testing.T) {
 	}
 	if cacheControl := headers.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinarySSRGuardFailsClosedWithoutRegistry(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "dashboard",
+		Route:  "/dashboard",
+		Guards: []string{"auth.required"},
+		HTML:   "<main><h1>Request Dashboard</h1></main>",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/dashboard", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected guarded SSR route to fail closed with 403, got %d: %s", response.StatusCode, payload)
+	}
+	if !strings.Contains(string(payload), `SSR guard "auth.required" is not registered`) {
+		t.Fatalf("expected missing guard registry error, got %s", payload)
+	}
+}
+
+func TestGeneratedBinaryBackendGuardsFailClosedWithoutRegistry(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Actions: []ActionEndpoint{{
+			PageID:     "newsletter",
+			ActionName: "Subscribe",
+			Method:     "POST",
+			Route:      "/newsletter",
+			Guards:     []string{"auth.required"},
+			Redirect:   "/newsletter?ok=1",
+		}},
+		APIs: []APIEndpoint{{
+			PageID:  "session",
+			APIName: "Session",
+			Method:  "GET",
+			Route:   "/api/session",
+			Guards:  []string{"auth.required"},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	actionResponse, err := waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=a@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actionPayload, err := io.ReadAll(actionResponse.Body)
+	_ = actionResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actionResponse.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected guarded action to fail closed with 403, got %d: %s", actionResponse.StatusCode, actionPayload)
+	}
+
+	apiResponse, err := waitForHTTPStatus("http://"+addr+"/api/session", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiPayload, err := io.ReadAll(apiResponse.Body)
+	_ = apiResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if apiResponse.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected guarded API to fail closed with 403, got %d: %s", apiResponse.StatusCode, apiPayload)
 	}
 }
 

@@ -13,7 +13,7 @@ var (
 	computedHeaderPattern  = regexp.MustCompile(`^computed\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_.\[\]*]*)\s*\{$`)
 	effectHeaderPattern    = regexp.MustCompile(`^effect\s+when\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{$`)
 	refPattern             = regexp.MustCompile(`^ref\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
-	usePattern             = regexp.MustCompile(`^use\s+([A-Za-z_][A-Za-z0-9_]*)$`)
+	usePattern             = regexp.MustCompile(`^use\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)$`)
 	identifierPattern      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	statementIncDecPattern = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_.\[\]]*)(\+\+|--)$`)
 	statementAssignPattern = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_.\[\]]*)\s*=\s*(.+)$`)
@@ -102,8 +102,10 @@ type Ref struct {
 
 // Use declares one page-scoped store used by this component.
 type Use struct {
-	Name string
-	Span Span
+	Name         string
+	PackageAlias string
+	StoreName    string
+	Span         Span
 }
 
 // Emit describes one component event exposed to parent component calls.
@@ -233,7 +235,12 @@ func Parse(source string) (Program, error) {
 					return Program{}, fmt.Errorf("client store %q is used more than once", name)
 				}
 				seenUses[name] = true
-				program.Uses = append(program.Uses, Use{Name: name, Span: Span{StartLine: index + 1, EndLine: index + 1}})
+				use := Use{Name: name, StoreName: name, Span: Span{StartLine: index + 1, EndLine: index + 1}}
+				if alias, storeName, ok := strings.Cut(name, "."); ok {
+					use.PackageAlias = alias
+					use.StoreName = storeName
+				}
+				program.Uses = append(program.Uses, use)
 				continue
 			}
 			return Program{}, parseErrorf(index+1, "client line %d has unsupported syntax %q", index+1, line)

@@ -1,98 +1,74 @@
 package appgen
 
-// Temporary generated-Go template exception: server main and app shell package
-// declarations stay raw strings until the app-shell AST migration replaces the
-// full file while preserving //go:embed app. Do not add generated route,
-// action, API, SSR, or decoder bodies here.
-const serverMainSource = `package main
-
 import (
-	"log"
-	"net/http"
-	"os"
-	"strings"
-	"time"
-
-	"gowdk-generated-app/gowdkapp"
+	"go/ast"
+	"go/token"
 )
 
-func main() {
-	handler, err := gowdkapp.Handler()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	addr := env("GOWDK_ADDR", "127.0.0.1:8080")
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		MaxHeaderBytes:    1 << 20,
-	}
-	log.Printf("serving embedded GOWDK app at http://%s", addr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
-	}
-}
-
-func env(name, fallback string) string {
-	value := strings.TrimSpace(os.Getenv(name))
-	if value == "" {
-		return fallback
-	}
-	return value
-}
-`
-
-const appPackageSourceTemplate = `package gowdkapp
-
-import (
-	"embed"
-	"io/fs"
-	"net/http"
-{{RUNTIME_IMPORTS}}
-)
-
-const maxActionBodyBytes int64 = 1 << 20
-
-//go:embed app
-var embeddedFiles embed.FS
-
-func Handler() (http.Handler, error) {
-	return ServeMux()
-}
-
-func ServeMux() (*http.ServeMux, error) {
-	root, err := fs.Sub(embeddedFiles, "app")
-	if err != nil {
-		return nil, err
-	}
-{{CSRF_SETUP}}
-	mux := http.NewServeMux()
-	mux.Handle("/", gowdkruntime.Handler{
-		Root:       root,
-		Identity:   gowdkruntime.InstanceIdentity(),
-		Assets:     gowdkruntime.LoadAssetManifest(root),
-		Backend:    {{BACKEND_CALLBACK}},
-{{CSRF_HANDLER_FIELD}}
-		SSRExact:   ssrExact,
-		SSRDynamic: ssrDynamic,
+func serverMainSource() string {
+	return printGoFile("main", map[string]string{
+		"gowdkapp": "gowdk-generated-app/gowdkapp",
+		"log":      "log",
+		"http":     "net/http",
+		"os":       "os",
+		"strings":  "strings",
+		"time":     "time",
+	}, []ast.Decl{
+		serverMainDecl(),
+		serverEnvDecl(),
 	})
-	return mux, nil
 }
 
-{{ACTION_HANDLER}}
+func serverMainDecl() ast.Decl {
+	return funcDecl("main", nil, nil, []ast.Stmt{
+		define([]ast.Expr{id("handler"), id("err")}, call(sel("gowdkapp", "Handler"))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(exprStmt(call(sel("log", "Fatal"), id("err")))),
+		},
+		define([]ast.Expr{id("addr")}, call(sel("env"), stringLit("GOWDK_ADDR"), stringLit("127.0.0.1:8080"))),
+		define([]ast.Expr{id("server")}, &ast.UnaryExpr{
+			Op: token.AND,
+			X: &ast.CompositeLit{
+				Type: sel("http", "Server"),
+				Elts: []ast.Expr{
+					keyValue("Addr", id("addr")),
+					keyValue("Handler", id("handler")),
+					keyValue("ReadHeaderTimeout", durationExpr(5)),
+					keyValue("ReadTimeout", durationExpr(10)),
+					keyValue("WriteTimeout", durationExpr(30)),
+					keyValue("IdleTimeout", durationExpr(60)),
+					keyValue("MaxHeaderBytes", &ast.BinaryExpr{X: intLit(1), Op: token.SHL, Y: intLit(20)}),
+				},
+			},
+		}),
+		exprStmt(call(sel("log", "Printf"), stringLit("serving embedded GOWDK app at http://%s"), id("addr"))),
+		&ast.IfStmt{
+			Init: define([]ast.Expr{id("err")}, call(selExpr(id("server"), "ListenAndServe"))),
+			Cond: &ast.BinaryExpr{
+				X:  notNil("err"),
+				Op: token.LAND,
+				Y:  &ast.BinaryExpr{X: id("err"), Op: token.NEQ, Y: sel("http", "ErrServerClosed")},
+			},
+			Body: block(exprStmt(call(sel("log", "Fatal"), id("err")))),
+		},
+	})
+}
 
-{{API_HANDLER}}
+func serverEnvDecl() ast.Decl {
+	return funcDecl("env", []*ast.Field{
+		{Names: []*ast.Ident{id("name")}, Type: id("string")},
+		{Names: []*ast.Ident{id("fallback")}, Type: id("string")},
+	}, []*ast.Field{{Type: id("string")}}, []ast.Stmt{
+		define([]ast.Expr{id("value")}, call(sel("strings", "TrimSpace"), call(sel("os", "Getenv"), id("name")))),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: id("value"), Op: token.EQL, Y: stringLit("")},
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("fallback")}}),
+		},
+		&ast.ReturnStmt{Results: []ast.Expr{id("value")}},
+	})
+}
 
-{{BACKEND_HANDLER}}
-
-{{BACKEND_PROXY}}
-
-{{CSRF_HELPER}}
-
-{{SSR_HANDLER}}
-`
+func durationExpr(seconds int) ast.Expr {
+	return &ast.BinaryExpr{X: intLit(seconds), Op: token.MUL, Y: sel("time", "Second")}
+}

@@ -7,15 +7,21 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
 type SSRArtifact struct {
-	PageID       string
-	Route        string
-	HTML         string
-	Replacements []SSRReplacement
+	PageID        string
+	Route         string
+	Render        gowdk.RenderMode
+	DynamicParams []string
+	Guards        []string
+	HasLoad       bool
+	HTML          string
+	Replacements  []SSRReplacement
 }
 
 type SSRReplacement struct {
@@ -24,6 +30,13 @@ type SSRReplacement struct {
 }
 
 func SSRArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string) ([]SSRArtifact, error) {
+	return SSRArtifactsFromIR(config, gwdkanalysis.BuildIR(config, app), outputDir)
+}
+
+// SSRArtifactsFromIR renders request-time page artifacts from normalized
+// compiler IR.
+func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) ([]SSRArtifact, error) {
+	app := buildModelFromIR(ir)
 	if err := compiler.ValidateManifest(config, app); err != nil {
 		return nil, err
 	}
@@ -73,7 +86,16 @@ func ssrArtifact(config gowdk.Config, page manifest.Page, components map[string]
 	if err != nil {
 		return SSRArtifact{}, err
 	}
-	return SSRArtifact{PageID: page.ID, Route: page.Route, HTML: html, Replacements: replacements}, nil
+	return SSRArtifact{
+		PageID:        page.ID,
+		Route:         page.Route,
+		Render:        page.Render,
+		DynamicParams: page.DynamicParams(),
+		Guards:        append([]string(nil), page.Guard...),
+		HasLoad:       page.Blocks.Load,
+		HTML:          html,
+		Replacements:  replacements,
+	}, nil
 }
 
 func ssrRouteData(page manifest.Page) (map[string]string, []SSRReplacement) {

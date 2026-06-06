@@ -1,12 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	goformat "go/format"
+	"go/printer"
+	"go/token"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -14,6 +20,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/appgen"
 	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/lsp"
 	"github.com/cssbruno/gowdk/internal/manifest"
@@ -105,24 +112,7 @@ func initProject(args []string) error {
 	files := []initFile{
 		{
 			Path: "gowdk.config.go",
-			Body: `package app
-
-import "github.com/cssbruno/gowdk"
-
-var Config = gowdk.Config{
-	AppName: "GOWDK App",
-	Source: gowdk.SourceConfig{
-		Include: []string{"src/**/*.gwdk"},
-	},
-	Build: gowdk.BuildConfig{
-		Output: "dist/site",
-	},
-	CSS: gowdk.CSSConfig{
-		Include: []string{"styles/**/*.css"},
-		Default: []string{"global"},
-	},
-}
-`,
+			Body: initConfigSource(),
 		},
 		{
 			Path: ".gitignore",
@@ -211,6 +201,78 @@ type initOptions struct {
 type initFile struct {
 	Path string
 	Body string
+}
+
+func initConfigSource() string {
+	file := &ast.File{
+		Name: ast.NewIdent("app"),
+		Decls: []ast.Decl{
+			&ast.GenDecl{Tok: token.IMPORT, Specs: []ast.Spec{
+				&ast.ImportSpec{Path: initStringLit("github.com/cssbruno/gowdk")},
+			}},
+			&ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+				Names:  []*ast.Ident{ast.NewIdent("Config")},
+				Values: []ast.Expr{initConfigExpr()},
+			}}},
+		},
+	}
+	var buffer bytes.Buffer
+	if err := printer.Fprint(&buffer, token.NewFileSet(), file); err != nil {
+		panic(err)
+	}
+	formatted, err := goformat.Source(buffer.Bytes())
+	if err != nil {
+		panic(err)
+	}
+	return string(formatted)
+}
+
+func initConfigExpr() ast.Expr {
+	return &ast.CompositeLit{
+		Type: initSel("gowdk", "Config"),
+		Elts: []ast.Expr{
+			initKeyValue("AppName", initStringLit("GOWDK App")),
+			initKeyValue("Source", &ast.CompositeLit{
+				Type: initSel("gowdk", "SourceConfig"),
+				Elts: []ast.Expr{
+					initKeyValue("Include", initStringSlice("src/**/*.gwdk")),
+				},
+			}),
+			initKeyValue("Build", &ast.CompositeLit{
+				Type: initSel("gowdk", "BuildConfig"),
+				Elts: []ast.Expr{
+					initKeyValue("Output", initStringLit("dist/site")),
+				},
+			}),
+			initKeyValue("CSS", &ast.CompositeLit{
+				Type: initSel("gowdk", "CSSConfig"),
+				Elts: []ast.Expr{
+					initKeyValue("Include", initStringSlice("styles/**/*.css")),
+					initKeyValue("Default", initStringSlice("global")),
+				},
+			}),
+		},
+	}
+}
+
+func initStringSlice(values ...string) ast.Expr {
+	elts := make([]ast.Expr, 0, len(values))
+	for _, value := range values {
+		elts = append(elts, initStringLit(value))
+	}
+	return &ast.CompositeLit{Type: &ast.ArrayType{Elt: ast.NewIdent("string")}, Elts: elts}
+}
+
+func initKeyValue(key string, value ast.Expr) ast.Expr {
+	return &ast.KeyValueExpr{Key: ast.NewIdent(key), Value: value}
+}
+
+func initSel(pkg string, name string) ast.Expr {
+	return &ast.SelectorExpr{X: ast.NewIdent(pkg), Sel: ast.NewIdent(name)}
+}
+
+func initStringLit(value string) *ast.BasicLit {
+	return &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value)}
 }
 
 func parseInitOptions(args []string) (initOptions, error) {
@@ -480,8 +542,9 @@ func buildOnce(options cliOptions, request buildRequest) error {
 		return fmt.Errorf("build failed")
 	}
 	app = compiler.BindBackendHandlers(app)
+	ir := gwdkanalysis.BuildIR(options.Config, app)
 
-	result, err := buildgen.Build(options.Config, app, outputDir)
+	result, err := buildgen.BuildFromIR(options.Config, ir, outputDir)
 	if err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)
 		return err
@@ -514,7 +577,7 @@ func buildOnce(options cliOptions, request buildRequest) error {
 		app, err := appgen.GenerateWithOptions(outputDir, appDir, appgen.Options{
 			AutoRoutes:   true,
 			Config:       options.Config,
-			Manifest:     &app,
+			IR:           &ir,
 			ProxyBackend: strings.TrimSpace(backendAppDir) != "",
 		})
 		if err != nil {
@@ -542,7 +605,7 @@ func buildOnce(options cliOptions, request buildRequest) error {
 		app, err := appgen.GenerateBackendWithOptions(backendAppDir, appgen.Options{
 			AutoRoutes: true,
 			Config:     options.Config,
-			Manifest:   &app,
+			IR:         &ir,
 		})
 		if err != nil {
 			return err

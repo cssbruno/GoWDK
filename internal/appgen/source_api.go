@@ -52,11 +52,14 @@ func apiCaseExpr(api APIEndpoint) ast.Expr {
 }
 
 func apiCaseStmts(api APIEndpoint) []ast.Stmt {
+	stmts := endpointContextStmts("api", api.PageID, api.APIName, api.Method, api.Route)
+	stmts = append(stmts, guardStmts(api.Guards)...)
 	if api.Binding.Status != manifest.BackendBindingBound {
-		return append(backendNotImplementedStmts(api.Binding, "API"), returnBool(true))
+		stmts = append(stmts, backendNotImplementedStmts(api.Binding, "API")...)
+		stmts = append(stmts, returnBool(true))
+		return stmts
 	}
-	return []ast.Stmt{
-		endpointContextStmt("api", api.PageID, api.APIName, api.Method, api.Route),
+	stmts = append(stmts,
 		define([]ast.Expr{id("result"), id("err")}, call(sel(api.BackendAlias, api.Binding.FunctionName), id("ctx"), id("request"))),
 		&ast.IfStmt{
 			Cond: notNil("err"),
@@ -67,5 +70,6 @@ func apiCaseStmts(api APIEndpoint) []ast.Stmt {
 		},
 		writeNoStoreHTTPStmt(id("result")),
 		returnBool(true),
-	}
+	)
+	return stmts
 }

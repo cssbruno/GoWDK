@@ -6,6 +6,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -108,6 +109,41 @@ func TestBuildRouteMetadataMapsHybridWithLoadToHybridRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertRoute(t, metadata.Routes, RouteHybrid, "GET", "/dashboard", "hybrid.RenderDashboard")
+}
+
+func TestBuildRouteMetadataFromIR(t *testing.T) {
+	metadata := BuildRouteMetadataFromIR(gowdk.Config{}, gwdkir.Program{
+		Version: gwdkir.Version,
+		Routes: []gwdkir.Route{
+			{Kind: gwdkir.RouteSPA, Method: "GET", Path: "/newsletter", PageID: "newsletter", Render: gowdk.SPA},
+			{Kind: gwdkir.RouteSSR, Method: "GET", Path: "/dashboard", PageID: "dashboard", Render: gowdk.SSR},
+		},
+		Endpoints: []gwdkir.Endpoint{
+			{
+				Kind:       gwdkir.EndpointAction,
+				Source:     gwdkir.EndpointSourceGOWDK,
+				PageID:     "newsletter",
+				Symbol:     "Subscribe",
+				Method:     "POST",
+				Path:       "/newsletter",
+				SourceFile: "newsletter.page.gwdk",
+				Binding: gwdkir.Binding{
+					Status:       manifest.BackendBindingBound,
+					ImportPath:   "example.com/app/newsletter",
+					PackageName:  "newsletter",
+					FunctionName: "Subscribe",
+					Signature:    manifest.BackendSignatureAction0,
+				},
+			},
+		},
+	})
+
+	assertRoute(t, metadata.Routes, RouteSPA, "GET", "/newsletter", `embedded.SPA("pages/newsletter.html")`)
+	assertRoute(t, metadata.Routes, RouteSSR, "GET", "/dashboard", "ssr.RenderDashboard")
+	assertEndpoint(t, metadata.Endpoints, EndpointAction, "POST", "/newsletter", "actions.NewsletterSubscribe")
+	if metadata.Endpoints[0].BindingStatus != manifest.BackendBindingBound {
+		t.Fatalf("expected binding status from IR, got %#v", metadata.Endpoints[0])
+	}
 }
 
 func assertRoute(t *testing.T, routes []RouteBinding, kind RouteKind, method, route, handler string) {

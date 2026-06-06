@@ -62,10 +62,10 @@ func TestBuildRejectsInvalidBuildDataBeforeWriting(t *testing.T) {
 			wantError: `build line 1 must use`,
 		},
 		{
-			name: "multiple returns",
+			name: "duplicate field across declarations",
 			body: `=> { title: "Home" }
-=> { tagline: "Second" }`,
-			wantError: `build {} supports one literal data declaration`,
+=> { title: "Second" }`,
+			wantError: `duplicate build field "title"`,
 		},
 		{
 			name:      "duplicate field",
@@ -101,6 +101,33 @@ func TestBuildRejectsInvalidBuildDataBeforeWriting(t *testing.T) {
 				t.Fatalf("expected no partial output, got %#v", entries)
 			}
 		})
+	}
+}
+
+func TestBuildMergesMultipleLiteralBuildDataDeclarations(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "home",
+		Route: "/",
+		Blocks: manifest.Blocks{
+			Build: true,
+			BuildBody: `=> { title: "Home" }
+=> { tagline: "Second declaration" }`,
+			View:     true,
+			ViewBody: `<main><h1>{title}</h1><p>{tagline}</p></main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), `<main><h1>Home</h1><p>Second declaration</p></main>`) {
+		t.Fatalf("expected merged build data output:\n%s", payload)
 	}
 }
 

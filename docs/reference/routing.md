@@ -208,8 +208,7 @@ present. Decode errors name the param and expected type without echoing the raw
 request value. Route-param type declarations and generated typed bindings are
 still planned.
 
-`load {}` execution, guard enforcement, and broad request-time user logic are
-still planned.
+`load {}` execution and broad request-time user logic are still planned.
 
 ## Route Plans
 

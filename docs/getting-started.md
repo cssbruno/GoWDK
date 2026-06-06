@@ -132,5 +132,5 @@ Planned or partial:
 
 - Broader validation fragments and upload handling.
 - Typed user input structs for action handlers.
-- Request-time `load {}` execution and guard enforcement.
+- Request-time `load {}` execution and guard success-path configuration docs.
 - Full browser-side Go/WASM island ABI.

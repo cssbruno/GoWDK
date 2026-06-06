@@ -10,6 +10,14 @@ import (
 type File struct {
 	Package     *Package
 	Annotations []Annotation
+	Page        *PageDecl
+	Route       *RouteDecl
+	Render      *RenderDecl
+	Layouts     []LayoutRef
+	Guards      []GuardRef
+	CSS         []AssetRef
+	Component   *ComponentDecl
+	Layout      *LayoutDecl
 	Imports     []Import
 	Uses        []Use
 	Stores      []Store
@@ -32,6 +40,62 @@ type Annotation struct {
 	Name  string
 	Value string
 	Span  manifest.SourceSpan
+}
+
+// PageDecl is an @page declaration.
+type PageDecl struct {
+	ID   string
+	Span manifest.SourceSpan
+}
+
+// ComponentDecl is an @component declaration.
+type ComponentDecl struct {
+	Name string
+	Span manifest.SourceSpan
+}
+
+// LayoutDecl is an @layout declaration in a layout file.
+type LayoutDecl struct {
+	ID   string
+	Span manifest.SourceSpan
+}
+
+// RouteDecl is an @route declaration.
+type RouteDecl struct {
+	Path   string
+	Params []RouteParam
+	Span   manifest.SourceSpan
+}
+
+// RouteParam is one dynamic route segment declared by @route.
+type RouteParam struct {
+	Name string
+	Span manifest.SourceSpan
+}
+
+// RenderDecl is an @render declaration.
+type RenderDecl struct {
+	Mode string
+	Span manifest.SourceSpan
+}
+
+// LayoutRef is one @layout reference on a page.
+type LayoutRef struct {
+	ID   string
+	Span manifest.SourceSpan
+}
+
+// GuardRef is one @guard reference on a page.
+type GuardRef struct {
+	Name string
+	Span manifest.SourceSpan
+}
+
+// AssetRef is one source-selected asset reference.
+type AssetRef struct {
+	Kind string
+	Path string
+	Span manifest.SourceSpan
 }
 
 // Import is one top-level Go import declaration.

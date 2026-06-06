@@ -2,6 +2,7 @@ package appgen
 
 import (
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -24,7 +25,7 @@ type Options struct {
 	AutoRoutes   bool
 	ProxyBackend bool
 	Config       gowdk.Config
-	Manifest     *manifest.Manifest
+	IR           *gwdkir.Program
 }
 
 // ActionEndpoint describes a generated action handler.
@@ -33,6 +34,7 @@ type ActionEndpoint struct {
 	ActionName     string
 	Method         string
 	Route          string
+	Guards         []string
 	InputName      string
 	InputType      string
 	InputFields    []string
@@ -50,6 +52,7 @@ type APIEndpoint struct {
 	APIName      string
 	Method       string
 	Route        string
+	Guards       []string
 	Binding      manifest.BackendBinding
 	BackendAlias string
 }
@@ -62,10 +65,14 @@ type ActionFragment struct {
 
 // SSRRoute describes a generated request-time page handler.
 type SSRRoute struct {
-	PageID       string
-	Route        string
-	HTML         string
-	Replacements []SSRReplacement
+	PageID        string
+	Route         string
+	Render        gowdk.RenderMode
+	DynamicParams []string
+	Guards        []string
+	HasLoad       bool
+	HTML          string
+	Replacements  []SSRReplacement
 }
 
 // SSRReplacement maps a generated placeholder back to a request route param.

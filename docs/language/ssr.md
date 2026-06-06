@@ -23,11 +23,12 @@ SSR is optional and must not become the default framework identity.
   request-time SSR failures.
 - `@guard` uses comma-separated guard IDs such as `@guard auth.required,
   billing.active`. The SSR addon exposes `GuardFunc`, `GuardRegistry`, and
-  ordered guard execution contracts; generated handlers do not wire guard
-  execution yet.
+  ordered guard execution contracts. Generated SSR, action, and API handlers
+  run declared guards before user logic and fail closed with HTTP 403 when a
+  guard is missing or returns an error.
 
 ## Planned Support
 
-Future SSR work must define request-aware `load {}` execution, guard wiring,
-request layouts, broader error handling, route registration integration, and
-exactly how hybrid pages avoid becoming implicit full-page SSR.
+Future SSR work must define request-aware `load {}` execution, request layouts,
+broader error handling, route registration integration, and exactly how hybrid
+pages avoid becoming implicit full-page SSR.

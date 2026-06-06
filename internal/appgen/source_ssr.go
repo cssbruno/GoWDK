@@ -32,7 +32,7 @@ func ssrExactDecl(routes []SSRRoute) *ast.FuncDecl {
 		}
 		clauses = append(clauses, &ast.CaseClause{
 			List: []ast.Expr{stringLit(route.Route)},
-			Body: append(ssrRouteContextStmts(route, false), ssrWriteHTMLStmts(stringLit(route.HTML))...),
+			Body: append(append(ssrRouteContextStmts(route, false), guardStmts(route.Guards)...), ssrWriteHTMLStmts(stringLit(route.HTML))...),
 		})
 	}
 	return funcDecl("ssrExact", actionParams(), boolResults(), []ast.Stmt{
@@ -59,6 +59,7 @@ func ssrDynamicDecl(routes []SSRRoute) *ast.FuncDecl {
 func ssrDynamicIfStmt(route SSRRoute) ast.Stmt {
 	names := []ast.Expr{id("params"), id("ok")}
 	body := ssrRouteContextStmts(route, true)
+	body = append(body, guardStmts(route.Guards)...)
 	body = append(body, define([]ast.Expr{id("html")}, stringLit(route.HTML)))
 	for _, replacement := range route.Replacements {
 		body = append(body, assign([]ast.Expr{id("html")}, call(
@@ -77,18 +78,33 @@ func ssrDynamicIfStmt(route SSRRoute) ast.Stmt {
 }
 
 func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
+	metadata := []ast.Expr{
+		keyValue("Kind", stringLit("ssr")),
+		keyValue("PageID", stringLit(route.PageID)),
+		keyValue("Method", stringLit("GET")),
+		keyValue("Path", stringLit(route.Route)),
+		keyValue("Render", stringLit(ssrRouteRender(route))),
+	}
+	dynamicParams := route.DynamicParams
+	if len(dynamicParams) == 0 {
+		dynamicParams = ssrRoutePatternParams(route.Route)
+	}
+	if len(dynamicParams) > 0 {
+		metadata = append(metadata, keyValue("DynamicParams", stringSliceExpr(dynamicParams)))
+	}
+	if len(route.Guards) > 0 {
+		metadata = append(metadata, keyValue("Guards", stringSliceExpr(route.Guards)))
+	}
+	if route.HasLoad {
+		metadata = append(metadata, keyValue("HasLoad", id("true")))
+	}
 	stmts := []ast.Stmt{
 		define([]ast.Expr{id("ctx")}, call(
 			sel("gowdkruntime", "WithRoute"),
 			call(selExpr(id("request"), "Context")),
 			&ast.CompositeLit{
 				Type: sel("gowdkruntime", "RouteMetadata"),
-				Elts: []ast.Expr{
-					keyValue("Kind", stringLit("ssr")),
-					keyValue("PageID", stringLit(route.PageID)),
-					keyValue("Method", stringLit("GET")),
-					keyValue("Path", stringLit(route.Route)),
-				},
+				Elts: metadata,
 			},
 		)),
 	}
@@ -97,6 +113,13 @@ func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
 	}
 	stmts = append(stmts, assign([]ast.Expr{id("request")}, call(selExpr(id("request"), "WithContext"), id("ctx"))))
 	return stmts
+}
+
+func ssrRouteRender(route SSRRoute) string {
+	if route.Render == "" {
+		return "ssr"
+	}
+	return string(route.Render)
 }
 
 func ssrWriteHTMLStmts(html ast.Expr) []ast.Stmt {

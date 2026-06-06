@@ -79,9 +79,9 @@ Compiler lanes:
 
 - [x] Define the GOWDK AST for package declarations, annotations, routes,
       imports, stores, blocks, component contracts, and source spans.
-- [ ] Add a GOWDK analyzer that lowers the GOWDK AST into normalized route,
+- [x] Add a GOWDK analyzer that lowers the GOWDK AST into normalized route,
       component, package, type, asset, and generated adapter metadata.
-- [ ] Define the GOWDK source import model:
+- [x] Define the GOWDK source import model:
   - [x] Go `import` inside `.gwdk` imports normal Go packages only.
   - [x] Same-package `.gwdk` and `.go` files are peers and need no import.
   - [x] Page-level cross-package component calls use explicit GOWDK
@@ -93,7 +93,7 @@ Compiler lanes:
         semantics and renderer/build-asset support.
   - [x] Cross-package layouts use explicit GOWDK `use alias "package"`
         declarations and qualified `@layout alias.id` references.
-  - [ ] Cross-package stores and assets need explicit GOWDK import/use
+  - [x] Cross-package stores and assets need explicit GOWDK import/use
         semantics, not accidental global lookup.
   - [x] Decide syntax for qualified layout references before broad
         multi-package layout reuse.
@@ -116,15 +116,21 @@ api Session GET "/api/session"
 - [x] Reject non-POST action methods.
 - [x] Keep route declarations in `.gwdk`; keep behavior in normal Go.
 - [x] Add package, handler symbol, endpoint path, method, binding status, and binding message to manifest, routes output, and build report metadata.
-- [ ] Add a stable internal IR for templates, client behavior, routes, assets, and generated output.
+- [x] Add a stable internal IR for templates, client behavior, routes, assets, and generated output.
+  - [x] Route/sitemap metadata reports consume `internal/gwdkir.Program`.
+  - [x] Build output planning, memory output planning, incremental SPA output,
+        and SSR artifact planning consume `internal/gwdkir.Program`.
+  - [x] Generated app planning consumes `internal/gwdkir.Program`.
 - [ ] Expand source spans and suggestions across parser, route, view, component, client, package, and build errors.
 - [x] Support same-package build functions or document why explicit imports remain required.
 - [ ] Support broader build-time data beyond the first literal/imported no-argument subset.
+  - [x] Merge multiple literal `=> { ... }` declarations in one `build {}`
+        block with duplicate-field diagnostics.
 - [x] Attach generated endpoint metadata to bound action/API handler contexts
       instead of only embedding it in route/build output.
 - [x] Attach generated page route metadata and dynamic params to generated SSR
       handler contexts.
-- [ ] Reuse the generated page route context for future request-time
+- [x] Reuse the generated page route context for future request-time
       `load {}` and guard user logic.
 
 ## App Runtime Kit
@@ -145,7 +151,7 @@ api Session GET "/api/session"
 - [x] Update generated apps to use one backend hook instead of separate action/API hook shapes.
 - [x] Preserve no-store defaults for request-time action/API/fragment responses.
 - [x] Keep request body size limits in generated action adapters.
-- [ ] Wire generated guards for SSR/action/API paths.
+- [x] Wire generated guards for SSR/action/API paths.
 - [ ] Add runtime metrics only after handler contracts settle.
 
 ## SPA Navigation And Generated JS Guardrails
@@ -282,8 +288,8 @@ api Session GET "/api/session"
 
 ## Generated Adapter Source
 
-- [ ] Define a typed backend adapter IR for imports, endpoint registrations, decoding, handler calls, response writing, and `501` fallbacks.
-- [ ] Generate backend endpoint registration from the IR through Go AST.
+- [x] Define a typed backend adapter IR for imports, endpoint registrations, decoding, handler calls, response writing, and `501` fallbacks.
+- [x] Generate backend endpoint registration from the IR through Go AST.
 - [x] Replace broad action/API string builders with full Go AST emission.
   - [x] Action handler source is emitted through `go/ast` and guarded against
         `WriteString`/`strings.Builder` regression.
@@ -294,14 +300,16 @@ api Session GET "/api/session"
   - [x] SSR exact/dynamic handler source is emitted through `go/ast` and
         guarded against `WriteString`/`strings.Builder` regression.
   - [x] Generated CSRF helper declarations are emitted through `go/ast`.
-- [ ] Generate all generated Go with `go/ast` and `go/printer`, then run `go/format`.
+  - [x] Generated app and backend app shell packages are emitted through
+        `go/ast` and guarded against raw template regression.
+- [x] Generate all generated Go with `go/ast` and `go/printer`, then run `go/format`.
 - [x] Ban hardcoded line writing, `WriteString` chains, token concatenation, and source snippets for generated Go unless a documented temporary exception is strictly necessary.
-- [ ] Replace generated app shell Go templates with AST emission.
+- [x] Replace generated app shell Go templates with AST emission.
 - [x] Preserve `//go:embed app` comments.
 - [x] Sort imports and routes deterministically.
 - [x] Never generate user handler functions, input structs, auth logic, validation policy, storage code, or service code.
 - [x] Do not import missing or unsupported handler packages solely for `501` routes.
-- [ ] Drive one-binary, split frontend proxy, and backend-only app generation from the same route metadata.
+- [x] Drive one-binary, split frontend proxy, and backend-only app generation from the same route metadata.
 - [x] Add structural tests for generated imports, route dispatch, and missing-handler output.
 
 ## Routing, Rendering, SSR, Hybrid, And Cache

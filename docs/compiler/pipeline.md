@@ -31,12 +31,21 @@ literal `build {}` data, imported Go build data functions, lowercase HTML
 markup in `view {}`, and `.cmp.gwdk` component files.
 
 `internal/gwdkast` owns the typed GOWDK AST. `internal/parser.ParseSyntax`
-returns that AST for the current source subset: package declarations,
-annotations, Go imports, GOWDK uses, stores, typed component contracts,
-supported top-level blocks, parsed `view {}` markup nodes, literal
-`paths {}`/`build {}` records, action/API endpoint declarations, and source
-spans. Existing manifest parsing still drives the CLI while compiler passes
-migrate toward that AST.
+returns that AST for the current source subset: package declarations, typed
+page/component/layout/route/render/layout/guard/CSS declarations, annotations,
+Go imports, GOWDK uses, stores, typed component contracts, supported top-level
+blocks, parsed `view {}` markup nodes, literal `paths {}`/`build {}` records,
+action/API endpoint declarations, and source spans.
+
+`internal/gwdkanalysis` lowers parsed AST files into normalized manifest
+compatibility records and a versioned `internal/gwdkir.Program`. The IR models
+packages, source files, page routes, backend endpoints, templates, client
+behavior, source-selected assets, and generated-output plans. Build, memory
+build, incremental SPA build, SSR artifact, and generated app planning now
+accept `internal/gwdkir.Program`; manifest records remain as a
+compatibility/public-report shape while older passes are retired.
+Generated app Go, backend adapter Go, build-data helper Go, and starter config
+Go are constructed as Go ASTs, printed, and formatted before use or write.
 
 Browser-facing output is generated only when the source requires it. Partial
 form metadata can emit `assets/gowdk/gowdk.js`; stateful components can emit
@@ -50,8 +59,9 @@ project config
   -> discover sources
   -> lex/parse full AST
   -> semantic analysis and type checks
-  -> manifest
+  -> stable internal IR
   -> app/component/action/API/fragment/SSR codegen
+  -> go/format
   -> app assets and generated Go app
   -> optional embedded one-binary output
 ```

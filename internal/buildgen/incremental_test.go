@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -134,6 +135,45 @@ func TestBuildIncrementalRendersOnlyChangedPageSources(t *testing.T) {
 	routes := readRouteManifest(t, outputDir)
 	if len(routes.Routes) != 2 {
 		t.Fatalf("expected both routes in route manifest, got %#v", routes.Routes)
+	}
+}
+
+func TestBuildIncrementalFromIRRendersChangedPageSources(t *testing.T) {
+	outputDir := t.TempDir()
+	source := filepath.Join(t.TempDir(), "home.page.gwdk")
+	initial := manifest.Manifest{Pages: []manifest.Page{{
+		Source:  source,
+		Package: "app",
+		ID:      "home",
+		Route:   "/",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main>Home before</main>`,
+		},
+	}}}
+	if _, err := Build(gowdk.Config{}, initial, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	changed := manifest.Manifest{Pages: []manifest.Page{{
+		Source:  source,
+		Package: "app",
+		ID:      "home",
+		Route:   "/",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main>Home after</main>`,
+		},
+	}}}
+	result, err := BuildIncrementalFromIR(gowdk.Config{}, gwdkanalysis.BuildIR(gowdk.Config{}, changed), outputDir, []string{source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Artifacts) != 1 || result.Artifacts[0].PageID != "home" {
+		t.Fatalf("unexpected artifacts: %#v", result.Artifacts)
+	}
+	if html := readFile(t, filepath.Join(outputDir, "index.html")); !strings.Contains(html, "Home after") {
+		t.Fatalf("expected changed home output, got:\n%s", html)
 	}
 }
 

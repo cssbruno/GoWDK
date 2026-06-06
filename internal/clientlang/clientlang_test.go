@@ -274,6 +274,29 @@ fn Add() {
 	}
 }
 
+func TestParseQualifiedStoreUses(t *testing.T) {
+	program, err := Parse(`
+use cart.current
+
+fn Add() {
+  Count++
+}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Uses) != 1 {
+		t.Fatalf("expected one qualified use, got %#v", program.Uses)
+	}
+	use := program.Uses[0]
+	if use.Name != "cart.current" || use.PackageAlias != "cart" || use.StoreName != "current" {
+		t.Fatalf("unexpected qualified store use: %#v", use)
+	}
+	if got := program.StoreNames(); len(got) != 1 || got[0] != "cart.current" {
+		t.Fatalf("unexpected store names: %#v", got)
+	}
+}
+
 func TestParseRejectsDuplicateRef(t *testing.T) {
 	_, err := Parse(`
 ref searchInput HTMLInputElement

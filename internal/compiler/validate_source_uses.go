@@ -26,12 +26,18 @@ func validateGOWDKUses(app manifest.Manifest) []ValidationError {
 		}
 		sourcePackages[layout.Package] = true
 	}
+	for _, page := range app.Pages {
+		if page.Package == "" {
+			continue
+		}
+		sourcePackages[page.Package] = true
+	}
 
 	var diagnostics []ValidationError
 	for _, component := range app.Components {
 		usesByAlias := map[string]manifest.Use{}
-		diagnostics = append(diagnostics, validateComponentUses(component, usesByAlias, componentPackages)...)
-		diagnostics = append(diagnostics, validateComponentQualifiedComponentRefs(component, usesByAlias, componentPackages, componentByPackageName)...)
+		diagnostics = append(diagnostics, validateComponentUses(component, usesByAlias, sourcePackages)...)
+		diagnostics = append(diagnostics, validateComponentQualifiedComponentRefs(component, usesByAlias, componentPackages, componentByPackageName, sourcePackages)...)
 	}
 	for _, layout := range app.Layouts {
 		for _, use := range layout.Uses {
@@ -87,7 +93,7 @@ func validateGOWDKUses(app manifest.Manifest) []ValidationError {
 	return diagnostics
 }
 
-func validateComponentUses(component manifest.Component, usesByAlias map[string]manifest.Use, componentPackages map[string]bool) []ValidationError {
+func validateComponentUses(component manifest.Component, usesByAlias map[string]manifest.Use, sourcePackages map[string]bool) []ValidationError {
 	var diagnostics []ValidationError
 	for _, use := range component.Uses {
 		if first, exists := usesByAlias[use.Alias]; exists {
@@ -106,14 +112,14 @@ func validateComponentUses(component manifest.Component, usesByAlias map[string]
 			continue
 		}
 		usesByAlias[use.Alias] = use
-		if !componentPackages[use.Package] {
+		if !sourcePackages[use.Package] {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "unknown_gowdk_use_package",
 				ComponentName: component.Name,
 				Source:        component.Source,
 				Span:          use.Span,
 				Message: fmt.Sprintf(
-					"component %s uses GOWDK package %q as %s, but no discovered component file declares package %s",
+					"component %s uses GOWDK package %q as %s, but no discovered .gwdk file declares package %s",
 					component.Name,
 					use.Package,
 					use.Alias,
@@ -199,7 +205,7 @@ func validatePageQualifiedComponentRefs(page manifest.Page, usesByAlias map[stri
 	return diagnostics
 }
 
-func validateComponentQualifiedComponentRefs(component manifest.Component, usesByAlias map[string]manifest.Use, componentPackages map[string]bool, componentByPackageName map[string]bool) []ValidationError {
+func validateComponentQualifiedComponentRefs(component manifest.Component, usesByAlias map[string]manifest.Use, componentPackages map[string]bool, componentByPackageName map[string]bool, sourcePackages map[string]bool) []ValidationError {
 	if !component.Blocks.View || strings.TrimSpace(component.Blocks.ViewBody) == "" {
 		return nil
 	}
@@ -237,6 +243,20 @@ func validateComponentQualifiedComponentRefs(component manifest.Component, usesB
 			continue
 		}
 		if !componentPackages[use.Package] {
+			if sourcePackages[use.Package] {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:          "unknown_gowdk_component",
+					ComponentName: component.Name,
+					Source:        component.Source,
+					Span:          firstSpan(component.Blocks.Spans.View, component.Span),
+					Message: fmt.Sprintf(
+						"component %s references component <%s />, but package %s does not declare components",
+						component.Name,
+						ref,
+						use.Package,
+					),
+				})
+			}
 			continue
 		}
 		if componentByPackageName[use.Package+"."+name] {

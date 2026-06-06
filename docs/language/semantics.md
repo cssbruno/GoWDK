@@ -25,7 +25,9 @@
 - `@layout` records ordered page layout references. Bare references resolve to
   same-package layout IDs or legacy package-less layouts. Cross-package layouts
   require `use alias "package"` and qualified refs such as `alias.root`.
-- `@guard` records guard IDs as metadata only.
+- `@guard` records guard IDs. Generated SSR, action, and API handlers run
+  declared guards before request-time user logic and fail closed unless the
+  generated app registers matching guard functions.
 - `paths {}` records that dynamic SPA paths are declared and preserves raw
   body text internally. SPA builds can execute literal string declarations
   such as `=> { slug: "hello-gowdk" }` to expand dynamic route output paths.

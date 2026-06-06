@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"github.com/cssbruno/gowdk/internal/buildgen"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -17,19 +18,20 @@ func resolveOptions(outputDir string, options Options) (Options, error) {
 		assignBackendAliases(&resolved)
 		return resolved, nil
 	}
-	if options.Manifest == nil {
-		return Options{}, fmt.Errorf("auto route detection requires a parsed manifest")
+	ir, err := optionsIR(options)
+	if err != nil {
+		return Options{}, err
 	}
 
-	actions, err := ActionEndpoints(*options.Manifest)
+	actions, err := actionEndpointsFromIR(ir)
 	if err != nil {
 		return Options{}, err
 	}
-	apis, err := APIEndpoints(*options.Manifest)
+	apis, err := apiEndpointsFromIR(ir)
 	if err != nil {
 		return Options{}, err
 	}
-	ssrArtifacts, err := buildgen.SSRArtifacts(options.Config, *options.Manifest, outputDir)
+	ssrArtifacts, err := buildgen.SSRArtifactsFromIR(options.Config, ir, outputDir)
 	if err != nil {
 		return Options{}, err
 	}
@@ -47,14 +49,15 @@ func resolveBackendOptions(options Options) (Options, error) {
 		assignBackendAliases(&resolved)
 		return resolved, nil
 	}
-	if options.Manifest == nil {
-		return Options{}, fmt.Errorf("auto route detection requires a parsed manifest")
-	}
-	actions, err := ActionEndpoints(*options.Manifest)
+	ir, err := optionsIR(options)
 	if err != nil {
 		return Options{}, err
 	}
-	apis, err := APIEndpoints(*options.Manifest)
+	actions, err := actionEndpointsFromIR(ir)
+	if err != nil {
+		return Options{}, err
+	}
+	apis, err := apiEndpointsFromIR(ir)
 	if err != nil {
 		return Options{}, err
 	}
@@ -63,6 +66,13 @@ func resolveBackendOptions(options Options) (Options, error) {
 	resolved.SSR = nil
 	assignBackendAliases(&resolved)
 	return resolved, nil
+}
+
+func optionsIR(options Options) (gwdkir.Program, error) {
+	if options.IR != nil {
+		return *options.IR, nil
+	}
+	return gwdkir.Program{}, fmt.Errorf("auto route detection requires compiler IR")
 }
 
 func assignBackendAliases(options *Options) {
@@ -129,10 +139,14 @@ func ssrRoutes(artifacts []buildgen.SSRArtifact) []SSRRoute {
 	routes := make([]SSRRoute, 0, len(artifacts))
 	for _, artifact := range artifacts {
 		routes = append(routes, SSRRoute{
-			PageID:       artifact.PageID,
-			Route:        artifact.Route,
-			HTML:         artifact.HTML,
-			Replacements: ssrReplacements(artifact.Replacements),
+			PageID:        artifact.PageID,
+			Route:         artifact.Route,
+			Render:        artifact.Render,
+			DynamicParams: append([]string(nil), artifact.DynamicParams...),
+			Guards:        append([]string(nil), artifact.Guards...),
+			HasLoad:       artifact.HasLoad,
+			HTML:          artifact.HTML,
+			Replacements:  ssrReplacements(artifact.Replacements),
 		})
 	}
 	return routes

@@ -344,6 +344,41 @@ func TestValidateManifestRejectsComponentRefToLayoutOnlyUsePackage(t *testing.T)
 	}
 }
 
+func TestValidateManifestRejectsComponentScopedComponentRefToStoreOnlyUsePackage(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "stores",
+			ID:      "cart",
+			Route:   "/cart",
+			Imports: []manifest.Import{{
+				Alias: "ui",
+				Path:  "github.com/cssbruno/gowdk/testfixture/islands",
+			}},
+			Stores: []manifest.Store{{
+				Name: "cart",
+				Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+				Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+			}},
+			Blocks: manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+		}},
+		Components: []manifest.Component{{
+			Package: "marketing",
+			Name:    "Hero",
+			Uses:    []manifest.Use{{Alias: "stores", Package: "stores"}},
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<section><stores.Cart /></section>`},
+		}},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown component diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_component") {
+		t.Fatalf("missing unknown component diagnostic: %#v", diagnostics)
+	}
+}
+
 func TestValidateManifestAcceptsComponentScopedGOWDKUse(t *testing.T) {
 	app := manifest.Manifest{Components: []manifest.Component{
 		{
@@ -556,6 +591,104 @@ func TestValidateManifestRejectsUnknownComponentStoreUse(t *testing.T) {
 		t.Fatalf("Missing unknown_component_store diagnostic: %v", err)
 	}
 	assertSourceSpan(t, diagnostic.Span, 5, 1, 5, 2)
+}
+
+func TestValidateManifestAcceptsQualifiedComponentStoreUse(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "stores",
+			ID:      "cart",
+			Route:   "/cart",
+			Imports: []manifest.Import{{
+				Alias: "ui",
+				Path:  "github.com/cssbruno/gowdk/testfixture/islands",
+			}},
+			Stores: []manifest.Store{{
+				Name: "cart",
+				Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+				Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+			}},
+			Blocks: manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+		}},
+		Components: []manifest.Component{{
+			Package: "components",
+			Name:    "CartButton",
+			Uses:    []manifest.Use{{Alias: "stores", Package: "stores"}},
+			Blocks: manifest.Blocks{
+				Client:     true,
+				ClientBody: "use stores.cart",
+				View:       true,
+				ViewBody:   `<button>Cart</button>`,
+			},
+		}},
+	}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected qualified store use to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsUnknownQualifiedComponentStoreUseAlias(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "stores",
+			ID:      "cart",
+			Route:   "/cart",
+			Stores:  []manifest.Store{{Name: "cart"}},
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+		}},
+		Components: []manifest.Component{{
+			Package: "components",
+			Name:    "CartButton",
+			Blocks: manifest.Blocks{
+				Client:     true,
+				ClientBody: "use stores.cart",
+				View:       true,
+				ViewBody:   `<button>Cart</button>`,
+			},
+		}},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown store alias diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_alias") {
+		t.Fatalf("missing unknown alias diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsUnknownQualifiedComponentStoreName(t *testing.T) {
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "stores",
+			ID:      "cart",
+			Route:   "/cart",
+			Stores:  []manifest.Store{{Name: "cart"}},
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+		}},
+		Components: []manifest.Component{{
+			Package: "components",
+			Name:    "CartButton",
+			Uses:    []manifest.Use{{Alias: "stores", Package: "stores"}},
+			Blocks: manifest.Blocks{
+				Client:     true,
+				ClientBody: "use stores.missing",
+				View:       true,
+				ViewBody:   `<button>Cart</button>`,
+			},
+		}},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown store diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_component_store") {
+		t.Fatalf("missing unknown store diagnostic: %#v", diagnostics)
+	}
 }
 
 func TestValidateManifestRejectsRedundantComponentImplementations(t *testing.T) {
@@ -3123,6 +3256,48 @@ func TestValidatePageRejectsMissingViewBlock(t *testing.T) {
 	}
 	if diagnostics[0].Code != "missing_view_block" {
 		t.Fatalf("unexpected diagnostic code: %s", diagnostics[0].Code)
+	}
+}
+
+func TestValidateManifestAcceptsQualifiedCSSAssetUse(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{
+		{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Uses:    []manifest.Use{{Alias: "theme", Package: "assets"}},
+			CSS:     []string{"theme.tokens"},
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Home</main>`},
+		},
+		{
+			Package: "assets",
+			ID:      "tokens",
+			Route:   "/tokens",
+			Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Tokens</main>`},
+		},
+	}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected qualified CSS asset use to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsUnknownQualifiedCSSAssetUseAlias(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		Package: "pages",
+		ID:      "home",
+		Route:   "/",
+		CSS:     []string{"theme.tokens"},
+		Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Home</main>`},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown CSS asset alias diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_alias") {
+		t.Fatalf("missing unknown alias diagnostic: %#v", diagnostics)
 	}
 }
 

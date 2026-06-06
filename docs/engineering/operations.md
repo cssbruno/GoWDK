@@ -62,7 +62,8 @@ fragment responses, and first-slice concrete or dynamic SSR pages without
 generated app with `GOOS=js GOARCH=wasm` for hosts that can run Go WebAssembly;
 it is not browser WASM islands. Future generated artifacts should also serve
 real typed action logic, API endpoints, general partial fragment handlers,
-request-time `load {}`, guard enforcement, and hybrid request-time behavior.
+request-time `load {}`, guard registry configuration docs, and hybrid
+request-time behavior.
 
 Current local development can serve generated build output with:
 

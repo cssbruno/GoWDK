@@ -453,17 +453,26 @@ func TestContextHelpersCopyParams(t *testing.T) {
 		t.Fatalf("unexpected session: %#v", got)
 	}
 	ctx = WithRoute(ctx, RouteMetadata{
-		Kind:   "ssr",
-		PageID: "blog.post",
-		Method: http.MethodGet,
-		Path:   "/blog/{slug}",
+		Kind:          "ssr",
+		PageID:        "blog.post",
+		Method:        http.MethodGet,
+		Path:          "/blog/{slug}",
+		Render:        "ssr",
+		DynamicParams: []string{"slug"},
+		Guards:        []string{"auth.required"},
 	})
 	route, ok := Route(ctx)
 	if !ok {
 		t.Fatal("expected route metadata")
 	}
-	if route.Kind != "ssr" || route.PageID != "blog.post" || route.Method != http.MethodGet || route.Path != "/blog/{slug}" {
+	if route.Kind != "ssr" || route.PageID != "blog.post" || route.Method != http.MethodGet || route.Path != "/blog/{slug}" || route.Render != "ssr" {
 		t.Fatalf("unexpected route metadata: %#v", route)
+	}
+	route.DynamicParams[0] = "changed"
+	route.Guards[0] = "changed"
+	route, _ = Route(ctx)
+	if route.DynamicParams[0] != "slug" || route.Guards[0] != "auth.required" {
+		t.Fatalf("expected route metadata slices to be copied, got %#v", route)
 	}
 	ctx = WithEndpoint(ctx, EndpointMetadata{
 		Kind:   "action",

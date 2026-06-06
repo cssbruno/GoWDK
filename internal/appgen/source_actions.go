@@ -115,10 +115,14 @@ func actionRequestPathDecl() *ast.FuncDecl {
 }
 
 func actionCaseStmts(action ActionEndpoint, csrf bool) []ast.Stmt {
+	stmts := endpointContextStmts("action", action.PageID, action.ActionName, actionMethod(action), action.Route)
+	stmts = append(stmts, guardStmts(action.Guards)...)
 	if action.Binding.Status != "" && action.Binding.Status != manifest.BackendBindingBound {
-		return append(backendNotImplementedStmts(action.Binding, "action"), returnBool(true))
+		stmts = append(stmts, backendNotImplementedStmts(action.Binding, "action")...)
+		stmts = append(stmts, returnBool(true))
+		return stmts
 	}
-	stmts := actionParseFormStmts(csrf)
+	stmts = append(stmts, actionParseFormStmts(csrf)...)
 	if actionNeedsValues(action) {
 		stmts = append(stmts, define([]ast.Expr{id("values")}, call(sel("gowdkform", "FromURLValues"), selExpr(id("request"), "PostForm"))))
 	}
@@ -262,7 +266,6 @@ func boundActionResultStmts(action ActionEndpoint) []ast.Stmt {
 		args = append(args, id("values"))
 	}
 	return []ast.Stmt{
-		endpointContextStmt("action", action.PageID, action.ActionName, actionMethod(action), action.Route),
 		define([]ast.Expr{id("result"), id("err")}, call(sel(action.BackendAlias, action.Binding.FunctionName), args...)),
 		&ast.IfStmt{
 			Cond: notNil("err"),
@@ -292,6 +295,13 @@ func endpointContextStmt(kind, pageID, name, method, route string) ast.Stmt {
 			endpointMetadataExpr(kind, pageID, name, method, route),
 		),
 	)
+}
+
+func endpointContextStmts(kind, pageID, name, method, route string) []ast.Stmt {
+	return []ast.Stmt{
+		endpointContextStmt(kind, pageID, name, method, route),
+		assign([]ast.Expr{id("request")}, call(selExpr(id("request"), "WithContext"), id("ctx"))),
+	}
 }
 
 func endpointMetadataExpr(kind, pageID, name, method, route string) ast.Expr {

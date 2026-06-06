@@ -86,7 +86,7 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (Result, err
 	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), appSource); err != nil {
 		return Result{}, err
 	}
-	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(serverMainSource)); err != nil {
+	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(serverMainSource())); err != nil {
 		return Result{}, err
 	}
 
@@ -134,7 +134,7 @@ func GenerateBackendWithOptions(appDir string, options Options) (Result, error) 
 	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), appSource); err != nil {
 		return Result{}, err
 	}
-	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(serverMainSource)); err != nil {
+	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(serverMainSource())); err != nil {
 		return Result{}, err
 	}
 	return Result{

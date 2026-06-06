@@ -128,9 +128,9 @@ test -f /tmp/gowdk-base-components/components/base/index.html
   an embedded binary with `gowdk build --app --bin`; the current generated
   binary supports first-slice action redirects, partial action fragments, form
   input decoder wrappers, and required-field validation, plus first-slice
-  concrete SSR pages without `load {}`. It does not run real typed action
-  logic, APIs, request-time `load {}` functions, guard enforcement, or dynamic
-  SSR routes yet.
+  concrete and dynamic SSR pages without `load {}`. It runs declared guards for
+  generated SSR/action/API routes and fails closed when guard functions are not
+  registered. It does not run request-time `load {}` functions yet.
 - `view {}` bodies are parsed only for a small app-shell HTML subset; `act` bodies
   support the first form-input/redirect subset, `api` bodies support the first
   method/route metadata line, and `load` bodies are still not parsed beyond
@@ -139,7 +139,8 @@ test -f /tmp/gowdk-base-components/components/base/index.html
   `build { => alias.Func() }` for a no-argument Go function returning a JSON
   object. Generated action, API, partial, and `load {}` user handler wiring is
   still planned.
-- `@guard` is metadata only and does not enforce authentication.
+- `@guard` is enforced by generated SSR/action/API handlers. Guarded routes
+  fail closed unless the generated app registers an `ssr.GuardRegistry`.
 - Route params from literal `paths {}` are available to the current
   `view {}` interpolation subset and to literal `build {}` string
   interpolation. Imported build functions do not receive route params yet.

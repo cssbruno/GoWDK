@@ -17,7 +17,7 @@ language references, compiler docs, examples, and the documentation checklist in
 
 | ID | Requirement | Priority | Status | Notes |
 | --- | --- | --- | --- | --- |
-| PRD-001 | Compile portable package-peer `.gwdk` files that declare `package`, `@page`, `@route`, `@layout`, and optional `@render`. | High | Partial | Discovery, package parsing, metadata parsing, parser syntax validation, default build discovery, route shape/conflict validation, required page-view validation, and explicit component-file build input are implemented; stable GOWDK AST/analyzer and full compiler IR remain planned. |
+| PRD-001 | Compile portable package-peer `.gwdk` files that declare `package`, `@page`, `@route`, `@layout`, and optional `@render`. | High | Partial | Discovery, package parsing, metadata parsing, parser syntax validation, default build discovery, route shape/conflict validation, required page-view validation, explicit component-file build input, typed GOWDK AST, AST analyzer, and versioned compiler IR are implemented; full downstream migration to the IR remains planned. |
 | PRD-002 | Default render mode must be `spa`. | High | Implemented | Root `RenderConfig.DefaultMode()` defaults to `gowdk.SPA`. |
 | PRD-003 | Support render modes `spa`, `action`, `hybrid`, and `ssr`. | High | Implemented | Root `RenderMode` constants exist. |
 | PRD-004 | Reject `@render ssr` unless the SSR feature is enabled in config or CLI options. | High | Implemented | `internal/compiler.ValidatePage` emits `missing_ssr_addon`; the diagnostic name is historical. |
@@ -29,7 +29,7 @@ language references, compiler docs, examples, and the documentation checklist in
 | PRD-010 | Provide CSS/plugin extension points without adding Tailwind to initial core. | High | Partial | `FeatureCSS`, `addons/css`, configured stylesheet links, compile-time CSS processors, discovered CSS inputs, extracted literal classes, `@css` page selection, generated page CSS output, CSS asset manifest entries, and an experimental Tailwind v4 standalone-CLI wrapper are implemented; full addon loading, component ASTs, hashing, and page-aware CSS processors remain planned. |
 | PRD-011 | Support embedded assets and one-binary serving. | High | Partial | `addons/embed` and `runtime/asset` boundaries exist; `gowdk serve` can serve generated build output locally; `gowdk build --app` can generate an embedded app, `--bin` can compile it into one binary, and `--wasm` can compile a Go `js/wasm` artifact for SPA pages, feature-bound action/API handlers, first-slice action redirects, first-slice action fragments, and first-slice concrete or dynamic SSR pages without `load {}`. General fragment routing remains planned. |
 | PRD-012 | Support server fragments for partial updates without full-page SSR. | Medium | Partial | `addons/partial`, `runtime/response.FragmentFor`, generated client runtime emission, first-slice generated action fragment responses for partial POSTs, generated CSRF validation when enabled, and first-slice generated JavaScript islands for local component state are implemented. Validation fragments, richer fragment rendering, and broader local client-side reactivity remain planned. |
-| PRD-013 | Complete request-time page rendering with `load {}`, guards, layouts, and error handling. | Medium | Partial | `addons/ssr` registers the SSR feature and provides load context, guard execution, route registration, request-aware layout composition, and default error-handler contracts. Generated embedded apps can serve first-slice concrete and dynamic `@render ssr` pages rendered from `view {}` and literal or imported `build {}` data; generated `load {}` execution, guard wiring, and full request-time user logic remain planned. |
+| PRD-013 | Complete request-time page rendering with `load {}`, guards, layouts, and error handling. | Medium | Partial | `addons/ssr` registers the SSR feature and provides load context, guard execution, route registration, request-aware layout composition, and default error-handler contracts. Generated embedded apps can serve first-slice concrete and dynamic `@render ssr` pages rendered from `view {}` and literal or imported `build {}` data, and generated SSR/action/API routes run declared guards with fail-closed missing-guard behavior; generated `load {}` execution and full request-time user logic remain planned. |
 | PRD-014 | Add optional WASM islands after the core compiler and action flow are stable. | Low | Partial | Explicit `g:island="wasm"` component calls emit a minimal valid `.wasm` artifact and loader under `assets/gowdk/islands/`. Real browser-side Go logic and a production WASM island ABI remain planned. |
 | PRD-015 | Provide language tools for `.gwdk` token inspection, formatting, validation, manifest output, and LSP editor integration. | High | Implemented | `internal/lang`, `internal/lsp`, and CLI commands exist. |
 | PRD-016 | Keep hybrid pages SPA by default and require explicit request-time capabilities. | High | Planned | Targeted after request-time page rendering contracts stabilize. |
@@ -64,8 +64,8 @@ language references, compiler docs, examples, and the documentation checklist in
 
 ## Open Questions
 
-- What exact GOWDK AST/analyzer contract should replace the current first-slice
-  parser/buildgen/appgen handoff structs?
+- Which downstream compiler passes should migrate from manifest compatibility
+  structs to `internal/gwdkir.Program` first?
 - What syntax should expose cache policies once generated route metadata is stable?
 - Should processor-emitted CSS become selectable named `@css` inputs through a
   future page-aware processor contract?

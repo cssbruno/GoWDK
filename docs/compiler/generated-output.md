@@ -162,9 +162,10 @@ handler, reads `GOWDK_ADDR`, defaults to `127.0.0.1:8080`, serves GET and HEAD
 requests, maps extensionless routes to nested `index.html` files, and does not
 list directories. It exposes `/_gowdk/health` and adds
 `X-GOWDK-App`, `X-GOWDK-Module`, and `X-GOWDK-Instance-ID` headers to responses.
-Request-time action/API dispatch runs through a single backend hook in
-`runtime/app`; older separate action/API hook fields remain a compatibility
-path for existing generated apps.
+Request-time action/API dispatch registers generated backend routes with
+`runtime/app.BackendRouter` and passes the router hook into `runtime/app`;
+older separate action/API hook fields remain a compatibility path for existing
+generated apps.
 It loads `gowdk-assets.json` from the embedded build output filesystem when present.
 Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 `GOWDK_INSTANCE_ID`; if no instance ID is provided, the app creates one at

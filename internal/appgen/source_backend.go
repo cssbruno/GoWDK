@@ -6,37 +6,36 @@ import (
 	"sort"
 )
 
-func backendHandlerSource(actions []ActionEndpoint, apis []APIEndpoint) string {
-	if len(actions) == 0 && len(apis) == 0 {
-		return printActionDecls([]ast.Decl{emptyBackendHandlerDecl()})
+func newBackendRouterDecl(adapter BackendAdapterIR) *ast.FuncDecl {
+	routes := []ast.Expr{}
+	for _, registration := range adapter.Registrations {
+		var method ast.Expr = stringLit(registration.Method)
+		if registration.Kind == BackendEndpointAction && registration.Method == "POST" {
+			method = sel("http", "MethodPost")
+		}
+		routes = append(routes, backendRouteExpr(method, registration.Path, id(registration.Handler)))
 	}
-	return printActionDecls([]ast.Decl{backendHandlerDecl()})
+	return funcDecl("newBackendRouter", nil, []*ast.Field{
+		{Type: &ast.StarExpr{X: sel("gowdkruntime", "BackendRouter")}},
+		{Type: id("error")},
+	}, []ast.Stmt{
+		&ast.ReturnStmt{Results: []ast.Expr{call(sel("gowdkruntime", "NewBackendRouter"), routes...)}},
+	})
+}
+
+func backendRouteExpr(method ast.Expr, route string, handler ast.Expr) ast.Expr {
+	return &ast.CompositeLit{
+		Type: sel("gowdkruntime", "BackendRoute"),
+		Elts: []ast.Expr{
+			keyValue("Method", method),
+			keyValue("Path", stringLit(route)),
+			keyValue("Handler", handler),
+		},
+	}
 }
 
 func emptyBackendHandlerDecl() *ast.FuncDecl {
 	return funcDecl("backend", actionParams(), boolResults(), []ast.Stmt{returnBool(false)})
-}
-
-func backendHandlerDecl() *ast.FuncDecl {
-	return funcDecl("backend", actionParams(), boolResults(), []ast.Stmt{
-		&ast.IfStmt{
-			Cond: call(id("api"), id("response"), id("request")),
-			Body: block(returnBool(true)),
-		},
-		&ast.IfStmt{
-			Cond: &ast.BinaryExpr{
-				X: &ast.BinaryExpr{
-					X:  selExpr(id("request"), "Method"),
-					Op: token.EQL,
-					Y:  sel("http", "MethodPost"),
-				},
-				Op: token.LAND,
-				Y:  call(id("action"), id("response"), id("request")),
-			},
-			Body: block(returnBool(true)),
-		},
-		returnBool(false),
-	})
 }
 
 func sortedAPIEndpoints(apis []APIEndpoint) []APIEndpoint {

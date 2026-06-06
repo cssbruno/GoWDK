@@ -1,8 +1,13 @@
 package buildgen
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/format"
+	"go/printer"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,19 +36,24 @@ func parseBuildData(body string, routeParams map[string]string, imports []manife
 	if err != nil {
 		return nil, err
 	}
-	if len(declarations) > 1 {
-		return nil, fmt.Errorf("build {} supports one literal data declaration")
-	}
 	if len(declarations) == 0 {
 		return nil, nil
 	}
-	data := declarations[0]
-	for key, value := range data {
-		interpolated, err := interpolateBuildValue(value, routeParams)
-		if err != nil {
-			return nil, fmt.Errorf("build field %s: %w", key, err)
+	data := map[string]string{}
+	for index, declaration := range declarations {
+		for key, value := range declaration {
+			if _, exists := data[key]; exists {
+				return nil, fmt.Errorf("duplicate build field %q", key)
+			}
+			interpolated, err := interpolateBuildValue(value, routeParams)
+			if err != nil {
+				return nil, fmt.Errorf("build field %s: %w", key, err)
+			}
+			data[key] = interpolated
 		}
-		data[key] = interpolated
+		if len(declaration) == 0 && index == 0 {
+			return nil, fmt.Errorf("build {} declaration must not be empty")
+		}
 	}
 	return data, nil
 }
@@ -110,22 +120,65 @@ func buildDataRunnerSource(alias, importPath, function string) (string, error) {
 	if strings.TrimSpace(importPath) == "" {
 		return "", fmt.Errorf("build import %q has an empty path", alias)
 	}
-	return fmt.Sprintf(`package main
+	file := &ast.File{
+		Name: ast.NewIdent("main"),
+		Decls: []ast.Decl{
+			&ast.GenDecl{Tok: token.IMPORT, Specs: []ast.Spec{
+				&ast.ImportSpec{Path: buildDataStringLit("encoding/json")},
+				&ast.ImportSpec{Path: buildDataStringLit("os")},
+				&ast.ImportSpec{Name: ast.NewIdent(alias), Path: buildDataStringLit(importPath)},
+			}},
+			buildDataMainDecl(alias, function),
+		},
+	}
+	var buffer bytes.Buffer
+	if err := printer.Fprint(&buffer, token.NewFileSet(), file); err != nil {
+		return "", fmt.Errorf("print build data runner: %w", err)
+	}
+	formatted, err := format.Source(buffer.Bytes())
+	if err != nil {
+		return "", fmt.Errorf("format build data runner: %w", err)
+	}
+	return string(formatted), nil
+}
 
-import (
-	"encoding/json"
-	"os"
-
-	%s %q
-)
-
-func main() {
-	value := %s.%s()
-	if err := json.NewEncoder(os.Stdout).Encode(value); err != nil {
-		panic(err)
+func buildDataMainDecl(alias, function string) ast.Decl {
+	return &ast.FuncDecl{
+		Name: ast.NewIdent("main"),
+		Type: &ast.FuncType{Params: &ast.FieldList{}},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent("value")},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(alias), Sel: ast.NewIdent(function)}}},
+			},
+			&ast.IfStmt{
+				Init: &ast.AssignStmt{
+					Lhs: []ast.Expr{ast.NewIdent("err")},
+					Tok: token.DEFINE,
+					Rhs: []ast.Expr{&ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X: &ast.CallExpr{
+								Fun:  &ast.SelectorExpr{X: ast.NewIdent("json"), Sel: ast.NewIdent("NewEncoder")},
+								Args: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent("os"), Sel: ast.NewIdent("Stdout")}},
+							},
+							Sel: ast.NewIdent("Encode"),
+						},
+						Args: []ast.Expr{ast.NewIdent("value")},
+					}},
+				},
+				Cond: &ast.BinaryExpr{X: ast.NewIdent("err"), Op: token.NEQ, Y: ast.NewIdent("nil")},
+				Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: &ast.CallExpr{
+					Fun:  ast.NewIdent("panic"),
+					Args: []ast.Expr{ast.NewIdent("err")},
+				}}}},
+			},
+		}},
 	}
 }
-`, alias, importPath, alias, function), nil
+
+func buildDataStringLit(value string) *ast.BasicLit {
+	return &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value)}
 }
 
 func parseBuildFunctionOutput(output []byte) (map[string]string, error) {

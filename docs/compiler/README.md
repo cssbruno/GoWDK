@@ -37,7 +37,7 @@ Not implemented yet:
 - Real user Go type resolution for typed action decoders, user action logic,
   API/fragment/SSR handlers.
 - Real user action/API/fragment execution.
-- Generated `load {}` execution, guard enforcement, and hybrid request-time
+- Generated `load {}` execution and hybrid request-time
   handlers.
 
 ## Documents

@@ -1,7 +1,9 @@
 package appgen
 
 import (
+	"bytes"
 	"go/ast"
+	"go/printer"
 	"go/token"
 	"sort"
 	"strconv"
@@ -16,20 +18,18 @@ func appPackageSource(options Options) string {
 		direct.Actions = nil
 		direct.APIs = nil
 	}
-	source := strings.ReplaceAll(appPackageSourceTemplate, "{{RUNTIME_IMPORTS}}", runtimeImportSource(options))
-	source = strings.ReplaceAll(source, "{{CSRF_SETUP}}", csrfSetupSource(options))
-	source = strings.ReplaceAll(source, "{{CSRF_HANDLER_FIELD}}", csrfHandlerFieldSource(options))
-	source = strings.ReplaceAll(source, "{{BACKEND_CALLBACK}}", backendCallbackName(options))
-	source = strings.ReplaceAll(source, "{{ACTION_HANDLER}}", actionHandlerSource(direct.Actions, csrfEnabled(direct)))
-	source = strings.ReplaceAll(source, "{{API_HANDLER}}", apiHandlerSource(direct.APIs))
-	source = strings.ReplaceAll(source, "{{BACKEND_HANDLER}}", backendHandlerSource(direct.Actions, direct.APIs))
-	source = strings.ReplaceAll(source, "{{BACKEND_PROXY}}", backendProxySource(options))
-	source = strings.ReplaceAll(source, "{{CSRF_HELPER}}", csrfHelperSource(options))
-	source = strings.ReplaceAll(source, "{{SSR_HANDLER}}", ssrHandlerSource(options.SSR))
-	return source
+	imports := runtimeImportMap(options)
+	imports["embed"] = "embed"
+	imports["fs"] = "io/fs"
+	imports["http"] = "net/http"
+	return printGoFile("gowdkapp", imports, append(appShellDecls(options), appGeneratedDecls(direct, options)...))
 }
 
 func runtimeImportSource(options Options) string {
+	return importSpecSource(runtimeImportMap(options))
+}
+
+func runtimeImportMap(options Options) map[string]string {
 	imports := map[string]string{
 		"gowdkruntime": "github.com/cssbruno/gowdk/runtime/app",
 	}
@@ -74,6 +74,10 @@ func runtimeImportSource(options Options) string {
 	if len(ssr) > 0 {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 	}
+	if generatedUsesGuards(options) {
+		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
+		imports["gowdkssr"] = "github.com/cssbruno/gowdk/addons/ssr"
+	}
 	if ssrUsesDynamicRoutes(ssr) {
 		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 	}
@@ -87,12 +91,252 @@ func runtimeImportSource(options Options) string {
 		}
 	}
 
-	return importSpecSource(imports)
+	return imports
 }
 
-// Temporary generated-Go template exception: import specs remain text while the
-// app shell owns the import block as a raw template. Replace this with AST
-// import declarations when the shell templates are retired.
+func printGoFile(packageName string, imports map[string]string, decls []ast.Decl) string {
+	file := &ast.File{Name: id(packageName)}
+	if len(imports) > 0 {
+		file.Decls = append(file.Decls, importDecl(imports))
+	}
+	file.Decls = append(file.Decls, decls...)
+
+	var buffer bytes.Buffer
+	_ = printer.Fprint(&buffer, token.NewFileSet(), file)
+	return buffer.String()
+}
+
+func importDecl(imports map[string]string) ast.Decl {
+	aliases := make([]string, 0, len(imports))
+	for alias := range imports {
+		aliases = append(aliases, alias)
+	}
+	sort.Strings(aliases)
+
+	specs := make([]ast.Spec, 0, len(aliases))
+	for _, alias := range aliases {
+		spec := &ast.ImportSpec{Path: stringLit(imports[alias])}
+		if alias != importPackageName(imports[alias]) || forceImportAlias(imports[alias]) {
+			spec.Name = id(alias)
+		}
+		specs = append(specs, spec)
+	}
+	return &ast.GenDecl{Tok: token.IMPORT, Specs: specs}
+}
+
+func importPackageName(importPath string) string {
+	if index := strings.LastIndex(importPath, "/"); index >= 0 {
+		return importPath[index+1:]
+	}
+	return importPath
+}
+
+func forceImportAlias(importPath string) bool {
+	first := importPath
+	if index := strings.Index(importPath, "/"); index >= 0 {
+		first = importPath[:index]
+	}
+	return strings.Contains(first, ".")
+}
+
+func appShellDecls(options Options) []ast.Decl {
+	decls := []ast.Decl{
+		maxActionBodyBytesDecl(),
+		embeddedFilesDecl(),
+		handlerDecl(),
+		serveMuxDecl(options, true),
+	}
+	return decls
+}
+
+func backendShellDecls(options Options) []ast.Decl {
+	return []ast.Decl{
+		maxActionBodyBytesDecl(),
+		handlerDecl(),
+		serveMuxDecl(options, false),
+	}
+}
+
+func appGeneratedDecls(direct Options, full Options) []ast.Decl {
+	adapter := backendAdapterIR(direct)
+	decls := actionHandlerDecls(direct.Actions, csrfEnabled(direct))
+	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(direct.APIs)))
+	switch {
+	case adapter.HasRegistrations():
+		decls = append(decls, newBackendRouterDecl(adapter))
+	case !full.ProxyBackend || !hasBackendRoutes(full):
+		decls = append(decls, emptyBackendHandlerDecl())
+	}
+	if full.ProxyBackend {
+		decls = append(decls, backendProxyDecl(), isBackendRouteDecl(full))
+	}
+	if csrfEnabled(direct) {
+		decls = append(decls, csrfValidatorVarDecl(), csrfNewFuncDecl(direct.Config.Build.CSRF))
+	}
+	decls = append(decls, guardDecls(full)...)
+	decls = append(decls, ssrExactDecl(full.SSR), ssrDynamicDecl(full.SSR))
+	return decls
+}
+
+func backendGeneratedDecls(options Options) []ast.Decl {
+	adapter := backendAdapterIR(options)
+	decls := actionHandlerDecls(options.Actions, csrfEnabled(options))
+	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(options.APIs)))
+	if adapter.HasRegistrations() {
+		decls = append(decls, newBackendRouterDecl(adapter))
+	} else {
+		decls = append(decls, emptyBackendHandlerDecl())
+	}
+	if csrfEnabled(options) {
+		decls = append(decls, csrfValidatorVarDecl(), csrfNewFuncDecl(options.Config.Build.CSRF))
+	}
+	decls = append(decls, guardDecls(options)...)
+	return decls
+}
+
+func actionHandlerDecls(actions []ActionEndpoint, csrf bool) []ast.Decl {
+	sorted := sortedActionEndpoints(actions)
+	decls := []ast.Decl{actionFuncDecl(sorted, csrf)}
+	if len(sorted) > 0 {
+		decls = append(decls, actionRequestPathDecl())
+		decls = append(decls, actionDecoderDecls(sorted)...)
+	}
+	return decls
+}
+
+func maxActionBodyBytesDecl() ast.Decl {
+	return &ast.GenDecl{Tok: token.CONST, Specs: []ast.Spec{&ast.ValueSpec{
+		Names: []*ast.Ident{id("maxActionBodyBytes")},
+		Type:  id("int64"),
+		Values: []ast.Expr{&ast.BinaryExpr{
+			X:  intLit(1),
+			Op: token.SHL,
+			Y:  intLit(20),
+		}},
+	}}}
+}
+
+func embeddedFilesDecl() ast.Decl {
+	return &ast.GenDecl{
+		Doc: &ast.CommentGroup{List: []*ast.Comment{{Text: "//go:embed app"}}},
+		Tok: token.VAR,
+		Specs: []ast.Spec{&ast.ValueSpec{
+			Names: []*ast.Ident{id("embeddedFiles")},
+			Type:  sel("embed", "FS"),
+		}},
+	}
+}
+
+func handlerDecl() ast.Decl {
+	return funcDecl("Handler", nil, []*ast.Field{
+		{Type: sel("http", "Handler")},
+		{Type: id("error")},
+	}, []ast.Stmt{
+		&ast.ReturnStmt{Results: []ast.Expr{call(sel("ServeMux"))}},
+	})
+}
+
+func serveMuxDecl(options Options, embedded bool) ast.Decl {
+	stmts := []ast.Stmt{}
+	if embedded {
+		stmts = append(stmts,
+			define([]ast.Expr{id("root"), id("err")}, call(sel("fs", "Sub"), id("embeddedFiles"), stringLit("app"))),
+			&ast.IfStmt{
+				Cond: notNil("err"),
+				Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
+			},
+		)
+	}
+	stmts = append(stmts, csrfSetupStmts(options)...)
+	if needsBackendRouter(options, embedded) {
+		stmts = append(stmts,
+			define([]ast.Expr{id("backendRouter"), id("err")}, call(sel("newBackendRouter"))),
+			&ast.IfStmt{
+				Cond: notNil("err"),
+				Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
+			},
+		)
+	}
+	stmts = append(stmts, define([]ast.Expr{id("mux")}, call(sel("http", "NewServeMux"))))
+	if embedded {
+		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), &ast.CompositeLit{
+			Type: sel("gowdkruntime", "Handler"),
+			Elts: embeddedHandlerFields(options),
+		})))
+	} else {
+		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), backendOnlyHandlerExpr(options))))
+	}
+	stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{id("mux"), id("nil")}})
+	return funcDecl("ServeMux", nil, []*ast.Field{
+		{Type: &ast.StarExpr{X: sel("http", "ServeMux")}},
+		{Type: id("error")},
+	}, stmts)
+}
+
+func needsBackendRouter(options Options, embedded bool) bool {
+	if !hasBackendRoutes(options) {
+		return false
+	}
+	return !embedded || !options.ProxyBackend
+}
+
+func csrfSetupStmts(options Options) []ast.Stmt {
+	if !csrfEnabled(options) {
+		return nil
+	}
+	return []ast.Stmt{
+		define([]ast.Expr{id("csrfTokenSource"), id("err")}, call(sel("newCSRF"))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
+		},
+		assign([]ast.Expr{id("csrfValidator")}, id("csrfTokenSource")),
+	}
+}
+
+func embeddedHandlerFields(options Options) []ast.Expr {
+	backend := ast.Expr(id(backendCallbackName(options)))
+	if hasBackendRoutes(options) && !options.ProxyBackend {
+		backend = call(selExpr(id("backendRouter"), "HandlerFunc"))
+	}
+	fields := []ast.Expr{
+		keyValue("Root", id("root")),
+		keyValue("Identity", call(sel("gowdkruntime", "InstanceIdentity"))),
+		keyValue("Assets", call(sel("gowdkruntime", "LoadAssetManifest"), id("root"))),
+		keyValue("Backend", backend),
+	}
+	if csrfEnabled(options) {
+		fields = append(fields, keyValue("CSRF", id("csrfTokenSource")))
+	}
+	fields = append(fields,
+		keyValue("SSRExact", id("ssrExact")),
+		keyValue("SSRDynamic", id("ssrDynamic")),
+	)
+	return fields
+}
+
+func backendOnlyHandlerExpr(options Options) ast.Expr {
+	if hasBackendRoutes(options) {
+		return id("backendRouter")
+	}
+	return call(sel("http", "HandlerFunc"), backendOnlyHandlerFunc())
+}
+
+func backendOnlyHandlerFunc() ast.Expr {
+	return &ast.FuncLit{
+		Type: &ast.FuncType{Params: &ast.FieldList{List: actionParams()}},
+		Body: block(
+			&ast.IfStmt{
+				Cond: call(sel("backend"), id("response"), id("request")),
+				Body: block(&ast.ReturnStmt{}),
+			},
+			exprStmt(call(sel("http", "NotFound"), id("response"), id("request"))),
+		),
+	}
+}
+
+// importSpecSource is retained for narrow tests and package-level helpers. New
+// generated Go files use importDecl through the AST file builder.
 func importSpecSource(imports map[string]string) string {
 	if len(imports) == 0 {
 		return ""
@@ -117,26 +361,6 @@ func importSpecSource(imports map[string]string) string {
 
 func csrfEnabled(options Options) bool {
 	return options.Config.Build.CSRF.Enabled && len(options.Actions) > 0
-}
-
-// Temporary generated-Go template exception: this statement snippet belongs to
-// the raw app-shell templates. Move it into the ServeMux AST builder when the
-// shell templates are retired.
-func csrfSetupSource(options Options) string {
-	if !csrfEnabled(options) {
-		return ""
-	}
-	return "\tcsrfTokenSource, err := newCSRF()\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tcsrfValidator = csrfTokenSource\n"
-}
-
-// Temporary generated-Go template exception: this composite literal field
-// snippet belongs to the raw app-shell templates and should disappear with the
-// app-shell AST migration.
-func csrfHandlerFieldSource(options Options) string {
-	if !csrfEnabled(options) {
-		return ""
-	}
-	return "\t\tCSRF:       csrfTokenSource,\n"
 }
 
 func csrfHelperSource(options Options) string {

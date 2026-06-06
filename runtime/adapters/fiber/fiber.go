@@ -14,6 +14,6 @@ func Handler(handler http.Handler) fiberframework.Handler {
 }
 
 // Mount registers the generated GOWDK http.Handler on a Fiber app.
-func Mount(app *fiberframework.App, pattern string, handler http.Handler) {
-	app.All(pattern, Handler(handler))
+func Mount(router fiberframework.Router, pattern string, handler http.Handler) {
+	router.All(pattern, Handler(handler))
 }

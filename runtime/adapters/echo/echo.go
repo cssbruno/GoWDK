@@ -15,7 +15,11 @@ func Handler(handler http.Handler) echoframework.HandlerFunc {
 	}
 }
 
+type router interface {
+	Any(string, echoframework.HandlerFunc, ...echoframework.MiddlewareFunc) echoframework.RouteInfo
+}
+
 // Mount registers the generated GOWDK http.Handler on an Echo router.
-func Mount(router *echoframework.Echo, pattern string, handler http.Handler) {
+func Mount(router router, pattern string, handler http.Handler) {
 	router.Any(pattern, Handler(handler))
 }

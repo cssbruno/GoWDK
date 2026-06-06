@@ -761,18 +761,29 @@ Done when:
 ### 12. Dev Experience
 
 - [ ] Add browser error overlay for compiler/build failures.
-- [ ] Add precise changed-file diagnostics in dev output.
-- [ ] Decide whether component-level HMR is worth the complexity.
-- [ ] Preserve local island state across updates if HMR is implemented.
-- [ ] Add faster dependency tracking beyond polling where portable.
-- [ ] Add generated app restart diagnostics and last-good-build behavior docs.
-- [ ] Add `gowdk doctor` or equivalent environment validation if recurring
+- [x] Add precise changed-file diagnostics in dev output.
+      Decision: `gowdk dev` now prints changed, added, and removed input paths
+      before each rebuild.
+- [x] Decide whether component-level HMR is worth the complexity.
+      Decision: defer component-level HMR. Keep full-page live reload as the
+      P0 baseline until the component/client dependency graph is stable.
+- [x] Preserve local island state across updates if HMR is implemented.
+      Decision: not applicable until HMR exists. State preservation is deferred
+      with HMR.
+- [x] Add faster dependency tracking beyond polling where portable.
+      Decision: keep portable polling for now. Native watching is deferred
+      until it can stay dependency-light and cross-platform.
+- [x] Add generated app restart diagnostics and last-good-build behavior docs.
+      See `docs/reference/dev.md`.
+- [x] Add `gowdk doctor` or equivalent environment validation if recurring
       setup failures appear.
+      Decision: no `gowdk doctor` yet. Add only after recurring setup failures
+      expose a stable checklist worth automating.
 - [ ] Improve scaffolded examples for common workflows.
 
 Done when:
 
-- [ ] `gowdk dev` feels reliable for real apps, even if it intentionally does
+- [x] `gowdk dev` feels reliable for real apps, even if it intentionally does
       not provide JavaScript bundler-style HMR feature-for-feature.
 
 ### 13. LSP And Editor Support

@@ -279,6 +279,7 @@ integration blueprints without copying files by hand.
 - [Architecture](docs/engineering/architecture.md)
 - [Release readiness](docs/engineering/release.md)
 - [CLI reference](docs/reference/cli.md)
+- [Dev loop reference](docs/reference/dev.md)
 - [Config reference](docs/reference/config.md)
 - [Routing reference](docs/reference/routing.md)
 - [Hooks reference](docs/reference/hooks.md)

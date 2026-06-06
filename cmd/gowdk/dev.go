@@ -102,6 +102,9 @@ func dev(args []string) error {
 		change := current.diff(previous)
 		previous = current
 		fmt.Printf("Change detected at %s: %s\n", time.Now().Format(time.RFC3339), change.summary())
+		for _, detail := range change.details() {
+			fmt.Printf("  %s\n", detail)
+		}
 		_, err = buildDevChange(options.BuildArgs, change, true)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)

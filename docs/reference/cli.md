@@ -125,9 +125,11 @@ explicit browser island assets emitted by `g:island="wasm"`.
 `build`, resolves the output directory from `--out`, exactly one selected
 `Build.Targets` entry, or the default `gowdk_cache` dev output, serves that
 directory, polls explicit or discovered build inputs plus the loaded config
-file, rebuilds after content changes, and injects a tiny server-sent-events
-live-reload script into served HTML pages. Rebuild failures are printed and the
-last successful output keeps serving.
+file, prints changed/added/removed input paths, rebuilds after content changes,
+and injects a tiny server-sent-events live-reload script into served HTML pages.
+Rebuild failures are printed and the last successful output keeps serving. See
+[dev.md](dev.md) for HMR, polling, browser overlay, restart, and last-good-build
+behavior.
 
 Build output, route/asset manifests, generated `go.mod`, generated
 `gowdkapp/app.go`, generated `cmd/server/main.go`, and embedded build output

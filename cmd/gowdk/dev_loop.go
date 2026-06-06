@@ -279,6 +279,32 @@ func (change inputChange) summary() string {
 	return strings.Join(parts, ", ")
 }
 
+func (change inputChange) details() []string {
+	var details []string
+	for _, path := range change.Changed {
+		details = append(details, "changed: "+displayInputPath(path))
+	}
+	for _, path := range change.Added {
+		details = append(details, "added: "+displayInputPath(path))
+	}
+	for _, path := range change.Removed {
+		details = append(details, "removed: "+displayInputPath(path))
+	}
+	return details
+}
+
+func displayInputPath(path string) string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return path
+	}
+	rel, err := filepath.Rel(cwd, path)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return path
+	}
+	return rel
+}
+
 func buildInputSnapshot(args []string) (inputSnapshot, error) {
 	options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
 	if err != nil {

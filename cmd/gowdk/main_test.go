@@ -572,6 +572,31 @@ func TestInputSnapshotDiffReportsChangedAddedAndRemovedPaths(t *testing.T) {
 	}
 }
 
+func TestInputChangeDetailsReportsChangedAddedAndRemovedPaths(t *testing.T) {
+	root := t.TempDir()
+	changed := filepath.Join(root, "changed.page.gwdk")
+	added := filepath.Join(root, "added.page.gwdk")
+	removed := filepath.Join(root, "removed.page.gwdk")
+
+	withWorkingDir(t, root, func() {
+		change := inputChange{
+			Changed: []string{changed},
+			Added:   []string{added},
+			Removed: []string{removed},
+		}
+		details := strings.Join(change.details(), "\n")
+		for _, expected := range []string{
+			"changed: changed.page.gwdk",
+			"added: added.page.gwdk",
+			"removed: removed.page.gwdk",
+		} {
+			if !strings.Contains(details, expected) {
+				t.Fatalf("expected change details to contain %q, got:\n%s", expected, details)
+			}
+		}
+	})
+}
+
 func TestBuildIncrementalSPAUsesChangedPageSources(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home.page.gwdk")

@@ -622,7 +622,8 @@ Done when:
       rate limiting, CSRF, action decoding, SSR load, and panic boundaries.
       Decision: generated request-time routes attach metadata, install panic
       boundaries where supported, run rate limiting, run guards, run action
-      CSRF, decode action input, then call user handlers or SSR load/render.
+      form parsing and CSRF validation, decode action input, then call user
+      handlers or SSR load/render.
 - [x] Decide if hooks can rewrite routes.
       Decision: no generated route rewriting hook in the current contract.
 - [x] Decide if hooks can transform responses.
@@ -634,7 +635,10 @@ Done when:
       responses are needed.
       Decision: guard results remain `nil` or `error` today. Redirect/custom
       response guard results are planned work.
-- [ ] Add tests for ordering and failure behavior.
+- [x] Add tests for ordering and failure behavior.
+      Covered by `internal/appgen` generated-source ordering checks for
+      actions, APIs, fragments, and SSR, plus `addons/ssr` guard ordering and
+      missing/failing guard behavior tests.
 
 Done when:
 

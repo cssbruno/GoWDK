@@ -1211,10 +1211,19 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 			Redirect:   "/newsletter?ok=1",
 		}},
 		APIs: []APIEndpoint{{
-			PageID:  "session",
-			APIName: "Session",
-			Method:  "GET",
-			Route:   "/api/session",
+			PageID:    "session",
+			APIName:   "Session",
+			Method:    "GET",
+			Route:     "/api/session",
+			Guards:    []string{"auth.required"},
+			ErrorPage: "/errors/api.html",
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "example.com/app/session",
+				PackageName:  "session",
+				FunctionName: "Session",
+				Signature:    manifest.BackendSignatureAPI,
+			},
 		}},
 		Fragments: []FragmentEndpoint{{
 			PageID:       "patients",
@@ -1226,9 +1235,19 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 			Guards:       []string{"auth.required"},
 		}},
 		SSR: []SSRRoute{{
-			PageID: "dashboard",
-			Route:  "/dashboard",
-			HTML:   "<main>Dashboard</main>",
+			PageID:    "dashboard",
+			Route:     "/dashboard",
+			Guards:    []string{"auth.required"},
+			HasLoad:   true,
+			ErrorPage: "/errors/dashboard.html",
+			LoadBinding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "example.com/app/dashboard",
+				PackageName:  "dashboard",
+				FunctionName: "LoadDashboard",
+				Signature:    manifest.BackendSignatureLoadError,
+			},
+			HTML: "<main>Dashboard</main>",
 		}},
 	})
 	if err != nil {
@@ -1257,6 +1276,16 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 		`if runRateLimit(response, request)`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
 	)
+	apiIndex := strings.Index(source, `ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "api"`)
+	if apiIndex < 0 {
+		t.Fatalf("expected generated source to contain API endpoint context:\n%s", source)
+	}
+	assertSourceOrder(t, source[apiIndex:],
+		`defer func()`,
+		`if runRateLimit(response, request)`,
+		`if !runGuards(response, request, []string{"auth.required"})`,
+		`result, err := session.Session(ctx, request)`,
+	)
 	fragmentIndex := strings.Index(source, `ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "fragment"`)
 	if fragmentIndex < 0 {
 		t.Fatalf("expected generated source to contain fragment endpoint context:\n%s", source)
@@ -1265,6 +1294,18 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 		`if runRateLimit(response, request)`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
 		`fragment := gowdkresponse.FragmentFor("#patients", "<section>Patients</section>")`,
+	)
+	ssrIndex := strings.Index(source, `ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr"`)
+	if ssrIndex < 0 {
+		t.Fatalf("expected generated source to contain SSR route context:\n%s", source)
+	}
+	assertSourceOrder(t, source[ssrIndex:],
+		`defer func()`,
+		`if runRateLimit(response, request)`,
+		`if !runGuards(response, request, []string{"auth.required"})`,
+		`html := "<main>Dashboard</main>"`,
+		`loadContext := gowdkssr.NewLoadContext(request, nil)`,
+		`loadData, err := dashboard.LoadDashboard(loadContext)`,
 	)
 }
 

@@ -460,16 +460,25 @@ Done when:
 - [x] Define exported component values and how parent pages/components consume
       them.
 - [x] Define slot versus snippet terminology for GOWDK.
-- [ ] Add examples for default slots, named slots, scoped slots, emits,
+- [x] Add examples for default slots, named slots, scoped slots, emits,
       bindable state, typed exports, stores, and WASM islands.
-- [ ] Add component contract tests for each supported public feature.
+      See `docs/language/components.md`; bindable child state is documented as
+      not stable, with typed emits plus parent-owned state as the example path.
+- [x] Add component contract tests for each supported public feature.
+      Covered by `internal/view`, `internal/compiler`, `internal/buildgen`,
+      and `internal/clientrt` tests for props, slots, emits, state, computed
+      values, stores, CSS/asset metadata, qualified component use, and island
+      output.
 
 Done when:
 
-- [ ] A component author can predict prop, state, slot, event, store, CSS, and
+- [x] A component author can predict prop, state, slot, event, store, CSS, and
       island behavior from docs alone.
-- [ ] Component features have diagnostics that prevent accidental global lookup
+      See `docs/language/components.md` and `docs/language/markup.md`.
+- [x] Component features have diagnostics that prevent accidental global lookup
       or ambiguous cross-package resolution.
+      Covered by component validation diagnostics in `internal/compiler` and
+      exact component resolution tests in `internal/view`/`internal/buildgen`.
 
 ### 4. Client Reactivity And Stores
 

@@ -97,6 +97,125 @@ view {
 }
 ```
 
+## Examples
+
+Default slot:
+
+```gwdk
+@component Card
+
+view {
+  <section><slot /></section>
+}
+```
+
+Named slot:
+
+```gwdk
+@component Panel
+
+view {
+  <section>
+    <header><slot name="actions"><span>No actions</span></slot></header>
+    <slot />
+  </section>
+}
+```
+
+Scoped slot:
+
+```gwdk
+@component Row
+
+props {
+  label string
+}
+
+view {
+  <slot name="item" value={label} />
+}
+```
+
+```gwdk
+view {
+  <Row label="Ada">
+    <template g:slot="item" let:value>
+      <strong>{value}</strong>
+    </template>
+  </Row>
+}
+```
+
+Typed emits:
+
+```gwdk
+@component Option
+
+props {
+  ID string
+}
+
+emits {
+  select(id string)
+}
+
+client {
+  fn Pick() {
+    emit select(ID)
+  }
+}
+```
+
+Bindable child state is not a stable public contract. Use typed emits plus
+parent-owned state instead:
+
+```gwdk
+view {
+  <Option g:on:select={SelectedID = event.id} />
+}
+```
+
+Typed exports are metadata today:
+
+```gwdk
+exports {
+  selectedID string
+}
+```
+
+Stores are explicit page-scoped UI state:
+
+```gwdk
+@page cart
+
+store cart ui.CartState = ui.NewCartState()
+```
+
+```gwdk
+@component CartButton
+
+client {
+  use cart
+}
+```
+
+WASM islands require a component WASM package and an explicit call-site request:
+
+```gwdk
+@component Counter
+@wasm ./browser/counter
+
+view {
+  <button>Count</button>
+}
+```
+
+```gwdk
+view {
+  <Counter g:island="wasm" />
+}
+```
+
 ## Component Contract
 
 Component files are GOWDK compiler inputs. They are not imported by Go code and

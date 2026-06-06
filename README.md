@@ -117,12 +117,12 @@ walkthrough.
 - Generated embedded app source, local binaries, and Go `js/wasm` artifacts.
 - Action/API handlers, action redirects, partial fragments, and SSR pages with
   declared `load {}` identifier or dotted-path execution, safe load redirects,
-  and generated error pages in generated binaries.
+  endpoint-local error pages, and generated error pages in generated binaries.
 - CLI commands: `build`, `dev`, `serve`, `preview`, `check`, `fmt`, `lsp`,
   `manifest`, `sitemap`, and `routes`.
 
-Not yet: custom SSR/action/API error-boundary syntax and validation fragments.
-File uploads are intentionally left to user-owned API/server handlers.
+Not yet: broader validation fragments. File uploads are intentionally left to
+user-owned API/server handlers.
 
 ## Site Example
 

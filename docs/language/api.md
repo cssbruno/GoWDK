@@ -6,7 +6,7 @@ symbol, HTTP method, and endpoint path in `.gwdk`; normal Go owns the behavior.
 ```gowdk
 package api
 
-api Health GET "/api/health"
+api Health GET "/api/health" @error "/errors/api-health.html"
 ```
 
 Supported methods are `GET`, `POST`, `PUT`, `PATCH`, and `DELETE`.
@@ -38,7 +38,12 @@ packages, never the other way around.
 
 Generated bound API adapters attach endpoint metadata to the handler context.
 Handlers can call `app.Endpoint(ctx)` from `runtime/app` to read the generated
-endpoint kind, page ID, symbol name, method, and path.
+endpoint kind, page ID, symbol name, method, path, and optional generated error
+page.
+
+The optional endpoint-local `@error` suffix selects a generated HTML error page
+for API panics before response headers are written. Returned handler errors
+still follow normal `runtime/response.Response` behavior.
 
 APIs declared on guarded pages share the generated app guard registry with SSR
 pages and actions. Register `addons/ssr.GuardRegistry` through the generated app

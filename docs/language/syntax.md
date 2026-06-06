@@ -57,8 +57,8 @@ Supported annotations:
 - `@revalidate <seconds|duration>`: optional stale-while-revalidate duration
   such as `60`, `60s`, `5m`, or `1h`; requires `@cache`.
 - `@error "<path.html>"`: optional route-local generated HTML error page for
-  SSR load and generated render failures. The path is output-relative after
-  normalization and must stay inside generated output.
+  SSR load, generated render, and panic failures. The path is output-relative
+  after normalization and must stay inside generated output.
 - `@guard <id>[, <id>...]`: optional guard metadata.
 - `@component <Name>`: component ID for `.cmp.gwdk` build inputs.
 
@@ -94,9 +94,13 @@ view {
 Actions and APIs are top-level endpoint declarations, not blocks:
 
 ```gwdk
-act Submit POST "/signup"
-api Health GET "/api/health"
+act Submit POST "/signup" @error "/errors/signup.html"
+api Health GET "/api/health" @error "/errors/api-health.html"
 ```
+
+The endpoint-local `@error` suffix is optional. When present on `act` or `api`,
+generated action/API panic boundaries use that generated HTML page before
+falling back to `500.html`.
 
 Page files may also declare top-level Go imports before blocks:
 

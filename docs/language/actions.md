@@ -8,13 +8,16 @@ The supported declaration shape is:
 ```gwdk
 package auth
 
-act Submit POST "/signup"
+act Submit POST "/signup" @error "/errors/signup.html"
 ```
 
 Current behavior:
 
 - `act Submit POST "/signup"` binds exactly to exported Go function `Submit` in
   the same package as the `.gwdk` file.
+- The optional endpoint-local `@error` suffix selects a generated HTML error
+  page for action panics before response headers are written. Returned handler
+  errors still follow normal `runtime/response.Response` behavior.
 - Old `act submit { ... }` blocks are rejected with a migration diagnostic.
 - Actions currently require `POST`.
 - Redirects, fragments, validation, and business rules come from the Go handler

@@ -105,7 +105,8 @@ Implemented today:
 - Generated SSR, action, and API request-time lanes recover panics before
   response headers are written as no-store HTTP 500 responses without exposing
   panic values. SSR route panics use a declared route-local `@error` page when
-  one is available.
+  one is available. Action and API declarations can also use endpoint-local
+  `@error "/errors/name.html"` pages for generated panic boundaries.
 - Generated apps can return first-slice partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests and standalone
   `fragment Name GET "/path" "#target" { ... }` routes. Standalone fragment

@@ -118,6 +118,30 @@ The addon module may import other GitHub/private/local modules. The project
 `go.mod` remains the source of truth for resolving those imports, including
 `require`, `replace`, `GOPRIVATE`, and module proxy configuration.
 
+## Generated App Request Guards
+
+When generated SSR, action, or API routes declare `@guard`, the generated app
+package exposes a registration hook:
+
+```go
+package gowdkapp
+
+import gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
+
+func init() {
+	RegisterGuards(gowdkssr.GuardRegistry{
+		"auth.required": func(ctx gowdkssr.LoadContext) error {
+			return nil
+		},
+	})
+}
+```
+
+This file belongs with generated app startup code, not inside feature packages
+that declare handlers. A missing registry entry or a guard error returns HTTP
+403 before SSR load functions, action decoding, API handlers, or user business
+logic run.
+
 ## Modules
 
 `ModuleConfig` names a logical source group:

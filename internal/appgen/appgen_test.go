@@ -1811,6 +1811,126 @@ func TestGeneratedBinaryBackendGuardsFailClosedWithoutRegistry(t *testing.T) {
 	}
 }
 
+func TestGeneratedBinaryRegisteredGuardsAllowRequestTimeRoutes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Actions: []ActionEndpoint{{
+			PageID:     "newsletter",
+			ActionName: "Subscribe",
+			Method:     "POST",
+			Route:      "/newsletter",
+			Guards:     []string{"auth.required"},
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "gowdk-generated-app/backend",
+				PackageName:  "backend",
+				FunctionName: "Subscribe",
+				Signature:    manifest.BackendSignatureAction0,
+			},
+		}},
+		APIs: []APIEndpoint{{
+			PageID:  "session",
+			APIName: "Session",
+			Method:  "GET",
+			Route:   "/api/session",
+			Guards:  []string{"auth.required"},
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "gowdk-generated-app/backend",
+				PackageName:  "backend",
+				FunctionName: "Session",
+				Signature:    manifest.BackendSignatureAPI,
+			},
+		}},
+		SSR: []SSRRoute{{
+			PageID: "dashboard",
+			Route:  "/dashboard",
+			Guards: []string{"auth.required"},
+			HTML:   "<main><h1>Request Dashboard</h1></main>",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, appPackageDirName, "guards_register.go"), `package gowdkapp
+
+import gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
+
+func init() {
+	RegisterGuards(gowdkssr.GuardRegistry{
+		"auth.required": func(ctx gowdkssr.LoadContext) error {
+			return nil
+		},
+	})
+}
+`)
+	writeTestFile(t, filepath.Join(appDir, "backend", "backend.go"), `package backend
+
+import (
+	"context"
+	"net/http"
+
+	gowdkresponse "github.com/cssbruno/gowdk/runtime/response"
+)
+
+func Subscribe(context.Context) (gowdkresponse.Response, error) {
+	return gowdkresponse.RedirectTo("/newsletter?ok=1"), nil
+}
+
+func Session(context.Context, *http.Request) (gowdkresponse.Response, error) {
+	return gowdkresponse.JSONBody(http.StatusOK, `+"`"+`{"ok":true}`+"`"+`), nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	ssrBody, _, err := waitForHTTPResponse("http://" + addr + "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ssrBody, "Request Dashboard") {
+		t.Fatalf("expected registered guard to allow SSR route, got %s", ssrBody)
+	}
+
+	actionResponse, err := waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = actionResponse.Body.Close()
+	if actionResponse.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected registered guard to allow action redirect, got %d", actionResponse.StatusCode)
+	}
+
+	apiResponse, err := waitForHTTPStatus("http://"+addr+"/api/session", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiPayload, err := io.ReadAll(apiResponse.Body)
+	_ = apiResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if apiResponse.StatusCode != http.StatusOK || !strings.Contains(string(apiPayload), `"ok":true`) {
+		t.Fatalf("expected registered guard to allow API response, got %d: %s", apiResponse.StatusCode, apiPayload)
+	}
+}
+
 func TestGeneratedBinaryAppliesRegisteredRateLimiter(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

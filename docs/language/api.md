@@ -40,6 +40,12 @@ Generated bound API adapters attach endpoint metadata to the handler context.
 Handlers can call `app.Endpoint(ctx)` from `runtime/app` to read the generated
 endpoint kind, page ID, symbol name, method, and path.
 
+APIs declared on guarded pages share the generated app guard registry with SSR
+pages and actions. Register `addons/ssr.GuardRegistry` through the generated app
+package's `RegisterGuards` hook; generated API handlers run guards before user
+handler calls and fail closed with HTTP 403 when a guard is missing or rejects
+the request.
+
 ## Production Notes
 
 - API handlers own authentication, authorization, request validation, storage,

@@ -44,6 +44,37 @@ SSR is optional and must not become the default framework identity.
   run declared guards before user logic and fail closed with HTTP 403 when a
   guard is missing or returns an error.
 
+Generated app packages that include at least one guarded SSR, action, or API
+route expose:
+
+```go
+func RegisterGuards(ssr.GuardRegistry)
+```
+
+Register guards from app startup code that is compiled with the generated app
+package:
+
+```go
+package gowdkapp
+
+import gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
+
+func init() {
+	RegisterGuards(gowdkssr.GuardRegistry{
+		"auth.required": func(ctx gowdkssr.LoadContext) error {
+			// Read ctx.Request, cookies, headers, or app-owned session helpers.
+			// Return nil to allow the request to continue.
+			return nil
+		},
+	})
+}
+```
+
+Feature packages that declare page, action, or API handlers should not import
+the generated `gowdkapp` package. Keep registration in the generated app
+package, a startup integration file, or a wrapper binary that owns generated
+app initialization.
+
 ## Planned Support
 
 Future SSR work must define request layouts, custom error boundaries, route

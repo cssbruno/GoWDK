@@ -169,12 +169,10 @@ contract work that later features depend on.
 - Form token exposure and invalid-token response policy.
 - Submit intent handling.
 - Structured validation and fragment response patterns.
-- Production-safe action/API guard configuration docs.
 - Production-safe action/API docs.
 
 ### Request-Time Page Release
 
-- SSR guard success-path registration examples.
 - Typed route params.
 - Route-level metadata.
 - Custom SSR/action/API error-boundary syntax and examples.

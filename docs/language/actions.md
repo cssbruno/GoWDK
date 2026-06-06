@@ -97,6 +97,11 @@ Current behavior:
   during generated app action endpoint extraction. Uploads belong in user-owned
   API/server handlers where body limits, storage, validation, cleanup, auth, and
   logging policy are explicit.
+- Actions declared on guarded pages share the generated app guard registry with
+  SSR pages and APIs. Register `addons/ssr.GuardRegistry` through the generated
+  app package's `RegisterGuards` hook; generated action handlers run guards
+  before CSRF checks, form decoding, and user handler calls, and fail closed
+  with HTTP 403 when a guard is missing or rejects the request.
 - Form values are not logged.
 
 The current compiler-generated same-package action binding can decode direct

@@ -156,6 +156,8 @@ api Session GET "/api/session"
 - [x] Preserve no-store defaults for request-time action/API/fragment responses.
 - [x] Keep request body size limits in generated action adapters.
 - [x] Wire generated guards for SSR/action/API paths.
+- [x] Document generated guard registration/config and test registered guard
+      success paths for SSR/action/API generated binaries.
 - [x] Add runtime metrics only after handler contracts settle.
 
 ## SPA Navigation And Generated JS Guardrails

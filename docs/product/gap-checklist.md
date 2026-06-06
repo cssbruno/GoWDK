@@ -682,25 +682,44 @@ Done when:
 
 ### 10. Forms, Actions, And Progressive Enhancement
 
-- [ ] Define page-level form state if GOWDK needs it.
-- [ ] Define action result shape for full-page POST, enhanced POST, JSON, and
+- [x] Define page-level form state if GOWDK needs it.
+      Decision: no generated page-level form state object today. Submitted
+      data, handler responses, redirects, and fragments remain the source of
+      truth.
+- [x] Define action result shape for full-page POST, enhanced POST, JSON, and
       fragment responses.
-- [ ] Define automatic invalidation after successful actions.
-- [ ] Define redirect handling for enhanced actions.
-- [ ] Define nearest error-boundary behavior for enhanced actions.
-- [ ] Decide whether component-hidden fields can be inferred.
-- [ ] Expand generated validation only where it remains request-shape
+      Decision: all action outcomes use `runtime/response.Response` helpers.
+      Enhanced partial requests should return fragment responses for their
+      target.
+- [x] Define automatic invalidation after successful actions.
+      Decision: no automatic invalidation today. Use full-page redirect,
+      fragment response, JSON, or app-owned reload policy.
+- [x] Define redirect handling for enhanced actions.
+      Decision: full-page POST redirects are supported. Enhanced redirects are
+      not a stable contract; enhanced requests should return fragments.
+- [x] Define nearest error-boundary behavior for enhanced actions.
+      Decision: no nearest error-boundary lookup today. Failed enhanced
+      requests dispatch `gowdk:request-error`; validation fragments can target
+      an explicit container.
+- [x] Decide whether component-hidden fields can be inferred.
+      Decision: not today. Generated inference reads direct literal controls in
+      the page view.
+- [x] Expand generated validation only where it remains request-shape
       validation, not domain validation.
-- [ ] Keep file uploads intentionally user-owned unless a separate design is
+      Decision: keep generated validation to literal request-shape constraints.
+      Domain validation remains Go handler logic.
+- [x] Keep file uploads intentionally user-owned unless a separate design is
       written.
+      Decision: generated action extraction rejects file inputs and multipart
+      forms. Uploads belong in user-owned Go handlers.
 - [ ] Add tests for full POST fallback, partial swaps, validation fragments,
       redirects, CSRF failures, oversized bodies, and handler errors.
 
 Done when:
 
-- [ ] A form works without JavaScript and upgrades predictably with generated
+- [x] A form works without JavaScript and upgrades predictably with generated
       JavaScript.
-- [ ] Domain validation remains clearly owned by user Go handlers.
+- [x] Domain validation remains clearly owned by user Go handlers.
 
 ### 11. Routing And Typed Access
 

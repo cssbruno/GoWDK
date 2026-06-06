@@ -198,3 +198,6 @@ Future action behavior must define:
 - Redirect safety beyond local redirect validation.
 - Error response shape and HTTP status mapping for broader generated action
   execution.
+
+For the no-JavaScript baseline, enhanced fragment behavior, invalidation
+boundary, and upload ownership rules, see [forms.md](forms.md).

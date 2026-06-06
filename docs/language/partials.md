@@ -80,4 +80,5 @@ first client runtime prefers the response `X-GOWDK-Fragment-Swap` header and
 falls back to the form metadata.
 
 Field-specific generated validation messages are documented in
-`docs/language/actions.md`.
+`docs/language/actions.md`. The form enhancement contract is documented in
+[forms.md](forms.md).

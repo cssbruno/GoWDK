@@ -115,11 +115,11 @@ Do not roadmap those completed slices as future work. Future work should
 stabilize their contracts, remove generation debt, and fill the missing
 production pieces below.
 
-`docs/product/gap-checklist.md` now records product decisions for all P0 and
-P1 comparison gaps. Treat those decisions as constraints on roadmap execution:
-planned work may implement the GOWDK-native contract, defer it with clear docs
-or diagnostics, or keep it intentionally out of scope. Do not turn deferred
-comparison features into implicit commitments.
+`docs/product/gap-checklist.md` now records product decisions for all P0, P1,
+and P2 comparison gaps. Treat those decisions as constraints on roadmap
+execution: planned work may implement the GOWDK-native contract, defer it with
+clear docs or diagnostics, or keep it intentionally out of scope. Do not turn
+deferred comparison features into implicit commitments.
 
 ## Roadmap
 
@@ -204,6 +204,8 @@ contract work that later features depend on.
 - Production WASM island ABI.
 - Bounded `client {}` remains the reactivity model unless a later ADR replaces
   it with an equally Go-owned contract.
+- Full-page hydration remains out of core; browser behavior should stay static
+  output, progressive enhancement, server fragments, and explicit islands.
 
 ### Platform Tooling Release
 
@@ -213,6 +215,10 @@ contract work that later features depend on.
 - Production operations docs must cover secrets, CSRF rotation, reverse
   proxies, cache/CDN policy, health checks, metrics, logging, binary deploy,
   and rollback before any production-ready claim.
+- P2 ecosystem polish is owned by optional docs, examples, website pages, or
+  CLI generators: addon discovery, playground onboarding, performance
+  profiling, migration guides, image guidance, and PWA/offline guidance must
+  not add mandatory npm, framework, or platform dependencies to core.
 
 ## Non-Goals For Core
 

@@ -311,38 +311,72 @@ These are important product gaps once the P0 contracts are clear.
 
 These are polish, ecosystem, or expansion gaps.
 
-- [ ] Decide whether full-page hydration is a goal.
+- [x] Decide whether full-page hydration is a goal.
       GOWDK currently favors static pages, partial updates, and islands rather
       than full component JavaScript output and hydration.
-- [ ] Expand generated JavaScript island ergonomics while preserving the bounded
+      Decision: full-page hydration is not a core goal. GOWDK keeps static
+      pages, progressive form enhancement, server fragments, and explicit
+      islands as the browser model. Revisit full-page hydration only as an
+      optional addon if it can avoid owning routing, auth, validation, app
+      state, and loading policy.
+- [x] Expand generated JavaScript island ergonomics while preserving the bounded
       compiler-owned client language.
-- [ ] Expand client built-ins where they matter for real apps.
+      Decision: improve islands through compiler-owned ergonomics such as
+      clearer event syntax, lifecycle cleanup, focus helpers, local state
+      batching, and diagnostics. Do not expose arbitrary JavaScript as the
+      public app contract.
+- [x] Expand client built-ins where they matter for real apps.
       Candidate areas: date/time formatting, collection helpers, string/number
       formatting, async-safe patterns, and focus/selection helpers.
-- [ ] Improve WASM island validation and examples.
+      Decision: add a small documented standard library for formatting,
+      collection transforms, async-safe UI patterns, and focus/selection only
+      when each builtin has deterministic generated output and tests.
+- [x] Improve WASM island validation and examples.
       Keep browser-side Go logic explicit and separate from backend handlers.
-- [ ] Add service worker and offline/PWA guidance if it fits the product.
-- [ ] Add image optimization guidance or integrations.
-- [ ] Add package/addon discovery.
+      Decision: WASM islands remain explicit browser-side Go, never backend
+      handler reuse. Improve validation, ABI docs, and examples before adding
+      broader WASM ergonomics.
+- [x] Add service worker and offline/PWA guidance if it fits the product.
+      Decision: keep service worker and PWA support documentation-first and
+      optional. Do not make offline behavior, cache policy, or service workers a
+      hidden generated default.
+- [x] Add image optimization guidance or integrations.
+      Decision: document image optimization patterns first. Optional
+      integrations may emit assets or metadata, but core should not become an
+      image pipeline unless real projects need it.
+- [x] Add package/addon discovery.
       This does not need to mirror any JavaScript package ecosystem, but users
       need a way to find official and community GOWDK addons.
-- [ ] Add public playground onboarding if the playground is part of product
+      Decision: addon discovery should be docs or registry metadata owned by
+      the repository/website first. Add CLI discovery only after addon
+      versioning, trust, and compatibility rules are documented.
+- [x] Add public playground onboarding if the playground is part of product
       strategy.
       Candidate gaps: hosted playground, tutorial integration, shareable
       examples, export to project, and import from repository.
-- [ ] Add performance profiling documentation.
+      Decision: playground ownership is the website/docs surface first, with
+      CLI project export later. Hosted execution must remain sandboxed and
+      optional; local compiler/runtime behavior must not depend on it.
+- [x] Add performance profiling documentation.
       Include build time, generated app size, generated JS size, SSR latency,
       action latency, binary size, and cache behavior.
-- [ ] Add migration/onboarding guides for likely audiences.
+      Decision: add profiling docs around build time, output size, generated JS
+      size, SSR/action latency, binary size, cache behavior, and measurement
+      commands before adding automated profiling features.
+- [x] Add migration/onboarding guides for likely audiences.
       Candidate guides: Go templates to GOWDK, htmx-style apps to GOWDK,
       JavaScript-framework concepts to GOWDK, and static Go sites to GOWDK.
+      Decision: publish docs-first migration guides for Go templates,
+      htmx-style apps, JavaScript-framework concepts, and static Go sites.
+      These guides must explain GOWDK differences instead of translating
+      external framework concepts one-for-one.
 
 ## P2 Acceptance Criteria
 
-- [ ] Each P2 item has a product rationale before implementation starts.
-- [ ] Optional ecosystem features remain optional and do not add mandatory npm,
+- [x] Each P2 item has a product rationale before implementation starts.
+- [x] Optional ecosystem features remain optional and do not add mandatory npm,
       framework, or platform dependencies to core.
-- [ ] Playground, package discovery, and migration work has a documented owner
+- [x] Playground, package discovery, and migration work has a documented owner
       surface: CLI, docs, website, or repository examples.
 
 ## Detailed Workstreams

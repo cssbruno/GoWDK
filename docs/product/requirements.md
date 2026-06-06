@@ -53,7 +53,7 @@ gap checklist in `docs/product/gap-checklist.md`.
 | PRD-024 | Require project config before compiling or validating `.gwdk` code. | High | Implemented | `check`, `manifest`, `sitemap`, `routes`, `build`, and `dev` require `gowdk.config.go` in the current directory or an explicit `--config <file>`, even when explicit `.gwdk` file paths are provided. |
 | PRD-025 | Keep framework integrations optional and outside compiler/runtime core. | Medium | Implemented | Generated apps expose standard `net/http` handlers and framework-neutral code by default. Optional `runtime/adapters/echo`, `runtime/adapters/gin`, and `runtime/adapters/fiber` packages wrap the same generated `http.Handler`; docs cover Echo v5, Gin, Fiber, and Fiber adaptor caveats. |
 
-## P0/P1 Decision Backlog
+## P0/P1/P2 Decision Backlog
 
 The product gap checklist records the detailed decisions. This section keeps
 the requirement surface aligned with those decisions without treating deferred
@@ -82,6 +82,16 @@ work as implemented.
 | Diagnostics and LSP | Expand diagnostic catalogue before broad parser recovery; prioritize hover, semantic tokens, go-to-definition, and route/type navigation. | Planned |
 | Testing and scaffolding | Add optional Go handler tests, generated app smoke tests, template/addon selection, and editable generated examples. | Planned |
 | Deployment and operations | Prefer docs and optional generators for static hosts, Docker, systemd, reverse proxies, CDN policy, health checks, metrics, logging, binary deploy, rollback, and CSRF secret rotation. | Planned |
+| Full-page hydration | Keep full-page hydration out of core; use static pages, progressive enhancement, server fragments, and explicit islands. | Intentionally out of scope |
+| Island ergonomics | Improve compiler-owned island syntax, lifecycle cleanup, focus helpers, local batching, and diagnostics without exposing arbitrary JavaScript as the app contract. | Planned |
+| Client builtins | Add deterministic formatting, collection, async-safe UI, focus, and selection helpers only with generated-output tests. | Planned |
+| WASM islands | Keep browser-side Go explicit and separate from backend handlers; improve ABI docs, validation, and examples. | Planned |
+| PWA/offline | Keep service workers and PWA behavior optional and documentation-first; no hidden offline/cache defaults. | Planned |
+| Images | Document image optimization patterns first; optional integrations may emit assets or metadata without turning core into an image pipeline. | Planned |
+| Addon discovery | Start with repository/website docs or registry metadata; add CLI discovery only after addon versioning, trust, and compatibility rules exist. | Planned |
+| Playground | Own playground onboarding in website/docs first, with optional CLI export later; hosted execution must remain sandboxed and optional. | Planned |
+| Performance profiling | Document measurement for build time, output size, generated JS size, SSR/action latency, binary size, and cache behavior before adding automation. | Planned |
+| Migration guides | Publish docs-first guides for Go templates, htmx-style apps, JavaScript-framework concepts, and static Go sites while preserving GOWDK-native terminology. | Planned |
 
 ## Non-Functional Requirements
 

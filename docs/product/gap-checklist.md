@@ -719,8 +719,12 @@ Done when:
       written.
       Decision: generated action extraction rejects file inputs and multipart
       forms. Uploads belong in user-owned Go handlers.
-- [ ] Add tests for full POST fallback, partial swaps, validation fragments,
+- [x] Add tests for full POST fallback, partial swaps, validation fragments,
       redirects, CSRF failures, oversized bodies, and handler errors.
+      Covered by `internal/appgen` generated-binary tests for action POST
+      redirects, trailing-slash POST fallback, no-content actions, partial
+      action fragments with swap headers, validation fragments, CSRF failure
+      and success, oversized bodies, and returned action handler errors.
 
 Done when:
 

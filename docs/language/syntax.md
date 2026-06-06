@@ -285,9 +285,10 @@ view {
 ```
 
 The implemented client block slice supports `fn Name(...) { ... }` handlers
-with `string`, `int`, `float`, and `bool` parameters. `g:on:*` calls can pass
-typed scalar expressions as arguments. Handler statements currently support
-field increment/decrement, scalar locals such as
+and `async fn Name(...) { ... }` handlers with `string`, `int`, `float`, and
+`bool` parameters. Async handlers cannot declare return types. `g:on:*` calls
+can pass typed scalar expressions as arguments. Handler statements currently
+support field increment/decrement, scalar locals such as
 `let next int = Count + step`, and assignment from typed scalar expressions
 using `+`, `-`, `*`, `/`, `%`, comparisons, `&&`, `||`, `!`, unary `-`, and
 parentheses. Local variables are visible only to later statements in the same
@@ -295,6 +296,22 @@ client function, lifecycle block, or effect block. Expressions can read nested
 fields and indexed values from Go-typed object and slice state, such as
 `User.Name` and `Items[0].Name`. Expressions also support Go-ish conditional
 values: `if Open { "open" } else { "closed" }`.
+
+Async handlers can use the compiler-owned `await fetchJSON[T](urlExpr)` form
+only in assignment statements, such as:
+
+```gwdk
+client {
+  async fn Refresh() {
+    Items = await fetchJSON[[]ui.Item]("/api/items")
+  }
+}
+```
+
+`await` is rejected outside async handlers and is not allowed in `let`
+initializers. The target must be a state field whose type matches the fetched
+type. Async handlers still follow source order for statements in the handler;
+computed values and DOM bindings update after state assignments settle.
 
 Client blocks can declare return-valued helper functions for internal
 expression reuse:
@@ -346,9 +363,9 @@ filters such as `g:if={contains(lower(item.Name), lower(Query))}` inside
 type.
 
 Generated island JavaScript does not evaluate arbitrary JavaScript source from
-`client {}`. It interprets the compiler-owned expression subset above, including
-conditionals, scalar operators, field/index reads, helper calls, and the listed
-built-ins.
+`client {}`. It interprets the compiler-owned expression subset above,
+including conditionals, scalar operators, field/index reads, helper calls, async
+fetch assignments, and the listed built-ins.
 
 Client blocks can declare computed values:
 
@@ -369,6 +386,12 @@ and other computed values. The compiler builds a dependency graph, emits
 computed values in evaluation order, and rejects dependency cycles. The
 generated island runtime recomputes computed values after state changes before
 updating text, attributes, classes, styles, and `g:if` bindings.
+
+State updates are batched by the generated island runtime around one event,
+lifecycle, effect, or async continuation. The batch order is: apply state
+statements, recompute computed values in dependency order, update text and
+attribute bindings, update class/style/binding directives, then update
+conditional and keyed-list DOM regions.
 
 Event directives support `.prevent`, `.stop`, `.once`, `.capture`,
 `.debounce(duration)`, and `.throttle(duration)` modifier chains. Durations
@@ -404,6 +427,27 @@ after that state value changes. Effects can return a cleanup block with
 `return { ... }`; cleanup statements run before the effect reruns and before
 the island unloads. Effects are guarded by the generated runtime so cycles
 cannot run forever. Arbitrary DOM access is not implemented.
+
+Page-scoped stores are declared at page scope and used explicitly inside
+component client blocks:
+
+```gwdk
+store cart ui.CartState = ui.NewCartState()
+```
+
+```gwdk
+client {
+  use cart
+}
+```
+
+Store types and init functions are validated with the same Go type machinery
+as component state. Store names are page-local unless a component uses a
+qualified GOWDK source alias such as `use stores.cart`. Store state is
+serialized into browser-visible enhancement state and must not contain secrets
+or trusted authorization, validation, database, or action state. Runtime
+cross-island subscriptions are planned; the current contract validates
+declarations and explicit uses, but does not make stores global app state.
 
 Client blocks can declare limited DOM refs for safe methods:
 

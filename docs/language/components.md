@@ -136,6 +136,12 @@ page-local enhancement contract; it is not global application authority and it
 does not replace server-side routing, auth, validation, persistence, or action
 behavior.
 
+Store use is explicit. Same-page stores use `client { use cart }`; stores from
+another discovered `.gwdk` package require a GOWDK `use` alias and a qualified
+client store reference such as `client { use stores.cart }`. Cross-package
+stores are validated by alias and store name, not discovered globally.
+App-global stores and cross-route persistence are deferred.
+
 Exports are typed component metadata today. They document values a component
 intends to expose, but parent pages/components do not yet have a stable runtime
 API for consuming exported component values. Until that contract is generated
@@ -156,6 +162,13 @@ supported handlers, helpers, lifecycle blocks, effects, refs, list built-ins,
 bindings, conditionals, computed values, and scalar expressions are defined in
 [syntax.md](syntax.md). Generated island JavaScript interprets that bounded
 subset instead of evaluating arbitrary user JavaScript source.
+
+Client handlers run in source order. The generated runtime batches state
+updates, recomputes computed values in dependency order, runs cleanup before
+effects rerun or unload, and then updates DOM bindings. Async client handlers
+are limited to compiler-owned async helpers such as validated
+`await fetchJSON[T](urlExpr)` assignments; they cannot return values and do not
+change the ownership boundary.
 
 Generated browser runtime behavior is scoped to the island or page enhancement
 that requested it. JavaScript may update text, attributes, classes, styles,

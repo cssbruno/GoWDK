@@ -20,3 +20,4 @@ Recommended naming:
 - `0005-generated-go-emission-boundary.md`: accepted generated Go adapter boundary.
 - `0006-gowdk-compiler-and-kit-boundary.md`: accepted split between the GOWDK compiler and GOWDK app/runtime kit.
 - `0007-static-first-spa-navigation.md`: accepted static-first SPA navigation and generated JavaScript guardrails.
+- `0008-bounded-client-language.md`: accepted bounded `client {}` language and page-scoped store boundaries.

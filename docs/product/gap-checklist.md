@@ -461,24 +461,24 @@ Done when:
 
 ### 4. Client Reactivity And Stores
 
-- [ ] Write a short ADR explaining why GOWDK uses bounded `client {}` instead of
+- [x] Write a short ADR explaining why GOWDK uses bounded `client {}` instead of
       arbitrary JavaScript or external framework reactivity.
-- [ ] Document the supported client expression grammar in one place.
-- [ ] Document computed dependency tracking and cycle diagnostics.
-- [ ] Document update batching behavior.
-- [ ] Document lifecycle and effect cleanup behavior.
-- [ ] Define page store runtime semantics: initialization, subscription,
+- [x] Document the supported client expression grammar in one place.
+- [x] Document computed dependency tracking and cycle diagnostics.
+- [x] Document update batching behavior.
+- [x] Document lifecycle and effect cleanup behavior.
+- [x] Define page store runtime semantics: initialization, subscription,
       mutation, isolation, serialization, and teardown.
-- [ ] Decide whether stores can cross package boundaries.
-- [ ] Decide whether client handlers can be async and what async means for
+- [x] Decide whether stores can cross package boundaries.
+- [x] Decide whether client handlers can be async and what async means for
       update ordering.
 - [ ] Add integration tests for multi-island store sharing.
 - [ ] Add tests for effect ordering, cleanup, batching, and cycles.
 
 Done when:
 
-- [ ] The client language is intentionally bounded but coherent.
-- [ ] Store behavior is stable enough to write examples without caveats.
+- [x] The client language is intentionally bounded but coherent.
+- [x] Store behavior is stable enough to write examples without caveats.
 
 ### 5. CSS And Assets
 

@@ -32,8 +32,8 @@ optional.
 - Staging: target flow verifies one-binary serving and addon behavior.
 - Production: not a supported readiness claim yet. Current generated binaries
   can serve embedded app assets, supported action/API/fragment handlers,
-  generated guards, and SSR pages with declared `load {}` fields; broader
-  `load {}` data shapes and hybrid request-time behavior remain planned.
+  generated guards, and SSR pages with declared `load {}` identifier or dotted
+  paths; hybrid request-time behavior remains planned.
 
 ## Observability
 
@@ -59,13 +59,12 @@ gowdk build --out dist --app .gowdk/app --wasm dist/<app>.wasm <files>
 
 The current generated binary serves embedded prerendered HTML, CSS, SPA
 assets, first-slice POST redirect action handlers, first-slice partial action
-fragment responses, and first-slice concrete or dynamic SSR pages without
-`load {}` from the selected output directory. `--wasm` compiles the same
+fragment responses, and first-slice concrete or dynamic SSR pages with declared
+`load {}` paths from the selected output directory. `--wasm` compiles the same
 generated app with `GOOS=js GOARCH=wasm` for hosts that can run Go WebAssembly;
 it is not browser WASM islands. Future generated artifacts should also serve
-real typed action logic, API endpoints, general partial fragment handlers,
-broader request-time `load {}` data shapes, guard registry configuration docs, and hybrid
-request-time behavior.
+real typed action logic, API endpoints, general partial fragment handlers, guard
+registry configuration docs, and hybrid request-time behavior.
 
 Current local development can serve generated build output with:
 

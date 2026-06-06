@@ -137,7 +137,7 @@ Implemented today:
 - Explicit browser-side Go/WASM island packages with ABI export validation.
 - Feature-bound action/API handlers, first-slice action redirects, partial
   action fragments, and concrete or dynamic SSR pages with declared `load {}`
-  fields in generated binaries.
+  identifier or dotted paths in generated binaries.
 - CLI tooling for tokens, formatting, validation, manifest, sitemap, routes,
   dev, serve, and LSP.
 
@@ -145,5 +145,4 @@ Planned or partial:
 
 - Broader validation fragments.
 - Typed user input structs for action handlers.
-- Broader request-time `load {}` data shapes and guard success-path
-  configuration docs.
+- Guard success-path configuration docs.

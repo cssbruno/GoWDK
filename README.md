@@ -116,14 +116,13 @@ walkthrough.
 - Literal `build {}` data and imported no-argument Go build data functions.
 - Generated embedded app source, local binaries, and Go `js/wasm` artifacts.
 - Action/API handlers, action redirects, partial fragments, and SSR pages with
-  first-slice `load {}` field execution, safe load redirects, and generated
-  error pages in generated binaries.
+  declared `load {}` identifier or dotted-path execution, safe load redirects,
+  and generated error pages in generated binaries.
 - CLI commands: `build`, `dev`, `serve`, `preview`, `check`, `fmt`, `lsp`,
   `manifest`, `sitemap`, and `routes`.
 
-Not yet: broader `load {}` data shapes, custom SSR/action/API error-boundary
-syntax, and validation fragments. File uploads are intentionally left to
-user-owned API/server handlers.
+Not yet: custom SSR/action/API error-boundary syntax and validation fragments.
+File uploads are intentionally left to user-owned API/server handlers.
 
 ## Site Example
 

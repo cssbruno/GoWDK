@@ -174,7 +174,6 @@ contract work that later features depend on.
 
 ### Request-Time Page Release
 
-- Broader `load {}` data shapes beyond declared scalar fields.
 - SSR guard success-path registration examples.
 - Typed route params.
 - Route-level metadata.

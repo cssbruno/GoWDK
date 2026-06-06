@@ -14,15 +14,16 @@ SSR is optional and must not become the default framework identity.
 - Dynamic SSR routes such as `/blog/{slug}` can be matched by generated
   binaries in the first supported slice. Route params render through generated
   placeholders and request-time HTML escaping.
-- `load {}` is allowed only with `@render ssr` or `@render hybrid`. The first
-  generated execution slice supports field declarations such as
-  `load { => { user, title } }` and calls a same-package exported Go function
-  named `Load<PageID>`.
+- `load {}` is allowed only with `@render ssr` or `@render hybrid`. Generated
+  SSR supports declared identifier and dotted-path fields such as
+  `load { => { user, title, account.plan } }` and calls a same-package exported
+  Go function named `Load<PageID>`.
 - Supported load function signatures are
   `func LoadDashboard(ssr.LoadContext) map[string]any` and
   `func LoadDashboard(ssr.LoadContext) (map[string]any, error)`. Returned
-  scalar values replace generated SSR placeholders with request-time HTML
-  escaping.
+  values replace generated SSR placeholders with request-time HTML escaping.
+  Dotted paths resolve through nested maps with string keys, structs, pointers,
+  interfaces, exported Go field names, and `json` tag names.
 - Load functions can return `ssr.RedirectTo("/login")` or
   `ssr.Redirect("/login", http.StatusTemporaryRedirect)` to ask generated SSR
   handlers to write a no-store local redirect. Redirect URLs must be local

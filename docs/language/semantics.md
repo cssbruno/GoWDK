@@ -41,8 +41,8 @@
   SPA builds can also execute one imported no-argument Go function call such
   as `=> interop.FeaturedCopyForBuild()` when the page declares
   `import interop "github.com/..."`.
-- `load {}` runs at request time for SSR or request-time hybrid pages. The
-  first generated execution slice supports `=> { field }` declarations and
+- `load {}` runs at request time for SSR or request-time hybrid pages.
+  Generated SSR supports `=> { field, user.name }` declarations and
   same-package Go load functions named `Load<PageID>` that receive
   `ssr.LoadContext`.
 - `view {}` records block presence and raw body text for the current app-shell HTML

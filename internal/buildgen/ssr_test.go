@@ -177,9 +177,9 @@ func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 		Render: gowdk.SSR,
 		Blocks: manifest.Blocks{
 			Load:     true,
-			LoadBody: `=> { user, notice }`,
+			LoadBody: `=> { user.name, account.plan }`,
 			View:     true,
-			ViewBody: `<main><h1>{user}</h1><p>{notice}</p></main>`,
+			ViewBody: `<main><h1>{user.name}</h1><p>{account.plan}</p></main>`,
 		},
 	}}}
 
@@ -197,9 +197,14 @@ func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 	if len(artifact.LoadReplacements) != 2 {
 		t.Fatalf("expected load replacements, got %#v", artifact.LoadReplacements)
 	}
+	paths := map[string]bool{}
 	for _, replacement := range artifact.LoadReplacements {
+		paths[replacement.Path] = true
 		if !strings.Contains(artifact.HTML, replacement.Placeholder) {
 			t.Fatalf("expected placeholder %q in HTML %s", replacement.Placeholder, artifact.HTML)
 		}
+	}
+	if !paths["user.name"] || !paths["account.plan"] {
+		t.Fatalf("expected dotted load paths, got %#v", artifact.LoadReplacements)
 	}
 }

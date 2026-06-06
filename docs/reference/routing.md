@@ -249,10 +249,11 @@ present. Decode errors name the param and expected type without echoing the raw
 request value. Generated typed SSR bindings return `400` for invalid typed route
 params and `404` for missing route params before guards or page rendering run.
 
-`load { => { field } }` execution calls same-package Go `Load<PageID>`
-functions at request time through `ssr.LoadContext`. Returned declared fields
-are HTML-escaped into generated placeholders; broader load data shapes remain
-planned.
+`load { => { field, user.name } }` execution calls same-package Go
+`Load<PageID>` functions at request time through `ssr.LoadContext`. Returned
+declared identifiers and dotted paths are resolved from nested maps with string
+keys, structs, pointers, interfaces, exported Go field names, and `json` tag
+names, then HTML-escaped into generated placeholders.
 
 ## Route Plans
 

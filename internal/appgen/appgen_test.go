@@ -797,7 +797,7 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 		},
 		HTML: `<main><h1>__USER__</h1></main>`,
 		LoadReplacements: []SSRLoadReplacement{{
-			Field:       "user",
+			Path:        "user.name",
 			Placeholder: "__USER__",
 		}},
 	}}})
@@ -818,8 +818,8 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 		`redirectURL, redirectStatus, ok := gowdkssr.RedirectTarget(err)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.Response{Kind: gowdkresponse.Redirect, Status: redirectStatus, URL: redirectURL})`,
 		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, err.Error())`,
-		`loadValue0, loadOK0 := loadData["user"]`,
-		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, "missing load field user")`,
+		`loadValue0, loadOK0 := gowdkssr.LoadPath(loadData, "user.name")`,
+		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, "missing load field user.name")`,
 		`strings.ReplaceAll(html, "__USER__", gowdkhtml.Escape(fmt.Sprint(loadValue0)))`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -1506,8 +1506,8 @@ func TestGeneratedBinaryExecutesSSRLoadUserLogic(t *testing.T) {
 		},
 		HTML: `<main><h1>__USER__</h1><p>__PATH__</p></main>`,
 		LoadReplacements: []SSRLoadReplacement{
-			{Field: "user", Placeholder: "__USER__"},
-			{Field: "path", Placeholder: "__PATH__"},
+			{Path: "user.name", Placeholder: "__USER__"},
+			{Path: "request.path", Placeholder: "__PATH__"},
 		},
 	}}}); err != nil {
 		t.Fatal(err)
@@ -1517,9 +1517,12 @@ func TestGeneratedBinaryExecutesSSRLoadUserLogic(t *testing.T) {
 import "github.com/cssbruno/gowdk/addons/ssr"
 
 func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
+	type requestData struct {
+		Path string
+	}
 	return map[string]any{
-		"user": "Ada <admin>",
-		"path": ctx.Request.URL.Path,
+		"user": map[string]any{"name": "Ada <admin>"},
+		"request": requestData{Path: ctx.Request.URL.Path},
 	}, nil
 }
 `)

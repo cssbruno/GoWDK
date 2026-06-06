@@ -165,7 +165,7 @@ Generated binaries currently support:
 - First-slice required-field validation for directly declared form controls.
 - First-slice partial action fragment responses.
 - First-slice concrete and dynamic `@render ssr` pages with declared `load {}`
-  fields.
+  identifier or dotted paths.
 - Bare `@render hybrid` pages as normal build-time SPA output.
 - Optional split frontend/backend generation with `--backend-app` and
   `--backend-bin`; the frontend proxies backend routes to

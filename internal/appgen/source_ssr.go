@@ -115,11 +115,11 @@ func ssrLoadStmts(route SSRRoute) []ast.Stmt {
 		valueName := id("loadValue" + intIdentSuffix(index))
 		okName := id("loadOK" + intIdentSuffix(index))
 		stmts = append(stmts,
-			define([]ast.Expr{valueName, okName}, &ast.IndexExpr{X: id("loadData"), Index: stringLit(replacement.Field)}),
+			define([]ast.Expr{valueName, okName}, call(sel("gowdkssr", "LoadPath"), id("loadData"), stringLit(replacement.Path))),
 			&ast.IfStmt{
 				Cond: &ast.UnaryExpr{Op: token.NOT, X: okName},
 				Body: block(
-					exprStmt(call(sel("gowdkruntime", "WriteErrorPage"), id("response"), id("request"), sel("http", "StatusInternalServerError"), stringLit("missing load field "+replacement.Field))),
+					exprStmt(call(sel("gowdkruntime", "WriteErrorPage"), id("response"), id("request"), sel("http", "StatusInternalServerError"), stringLit("missing load field "+replacement.Path))),
 					returnBool(true),
 				),
 			},

@@ -36,7 +36,7 @@ type SSRReplacement struct {
 }
 
 type SSRLoadReplacement struct {
-	Field       string
+	Path        string
 	Placeholder string
 }
 
@@ -145,13 +145,17 @@ func ssrLoadData(page manifest.Page, existing map[string]string) (map[string]str
 	}
 	data := map[string]string{}
 	replacements := make([]SSRLoadReplacement, 0, len(fields))
-	for _, field := range fields {
-		if _, exists := existing[field]; exists {
-			return nil, nil, fmt.Errorf("load field %q conflicts with build data or route params", field)
+	for _, path := range fields {
+		topLevel, _, _ := strings.Cut(path, ".")
+		if _, exists := existing[path]; exists {
+			return nil, nil, fmt.Errorf("load field %q conflicts with build data or route params", path)
 		}
-		placeholder := "__GOWDK_SSR_LOAD_" + exportedSafe(page.ID) + "_" + field + "__"
-		data[field] = placeholder
-		replacements = append(replacements, SSRLoadReplacement{Field: field, Placeholder: placeholder})
+		if _, exists := existing[topLevel]; exists {
+			return nil, nil, fmt.Errorf("load field %q conflicts with build data or route params", path)
+		}
+		placeholder := "__GOWDK_SSR_LOAD_" + exportedSafe(page.ID) + "_" + exportedSafe(path) + "__"
+		data[path] = placeholder
+		replacements = append(replacements, SSRLoadReplacement{Path: path, Placeholder: placeholder})
 	}
 	return data, replacements, nil
 }
@@ -169,9 +173,9 @@ func parseLoadFields(body string) ([]string, error) {
 			return nil, fmt.Errorf("load line %d must use `=> { field }`", index+1)
 		}
 		for _, element := range literal.Elts {
-			name, ok := loadFieldName(element)
+			name, ok := loadFieldPath(element)
 			if !ok {
-				return nil, fmt.Errorf("load line %d: load fields must be bare identifiers", index+1)
+				return nil, fmt.Errorf("load line %d: load fields must be identifiers or dotted paths", index+1)
 			}
 			if seen[name] {
 				return nil, fmt.Errorf("duplicate load field %q", name)
@@ -203,12 +207,22 @@ func parseLoadLiteralLine(line string) (*ast.CompositeLit, bool, error) {
 	return literal, true, nil
 }
 
-func loadFieldName(expression ast.Expr) (string, bool) {
-	identifier, ok := expression.(*ast.Ident)
-	if !ok || !literalNamePattern.MatchString(identifier.Name) {
+func loadFieldPath(expression ast.Expr) (string, bool) {
+	switch expr := expression.(type) {
+	case *ast.Ident:
+		if !literalNamePattern.MatchString(expr.Name) {
+			return "", false
+		}
+		return expr.Name, true
+	case *ast.SelectorExpr:
+		base, ok := loadFieldPath(expr.X)
+		if !ok || !literalNamePattern.MatchString(expr.Sel.Name) {
+			return "", false
+		}
+		return base + "." + expr.Sel.Name, true
+	default:
 		return "", false
 	}
-	return identifier.Name, true
 }
 
 func exportedSafe(value string) string {

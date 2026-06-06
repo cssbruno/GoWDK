@@ -3,6 +3,8 @@ package ssr
 import (
 	"context"
 	"net/http"
+	"reflect"
+	"strings"
 )
 
 // LoadContext is passed to generated request-time load {} functions.
@@ -28,4 +30,92 @@ func NewLoadContext(request *http.Request, session map[string]any) LoadContext {
 		Request: request,
 		Session: session,
 	}
+}
+
+// LoadPath resolves a declared load {} path from generated SSR load data.
+// Supported values are nested maps with string keys, structs, pointers, and
+// interfaces. Struct fields may be matched by exported Go field name or json tag.
+func LoadPath(data map[string]any, path string) (any, bool) {
+	parts := strings.Split(strings.TrimSpace(path), ".")
+	if len(parts) == 0 || parts[0] == "" {
+		return nil, false
+	}
+	value, ok := data[parts[0]]
+	if !ok {
+		return nil, false
+	}
+	for _, part := range parts[1:] {
+		if part == "" {
+			return nil, false
+		}
+		value, ok = loadPathValue(value, part)
+		if !ok {
+			return nil, false
+		}
+	}
+	return value, true
+}
+
+func loadPathValue(value any, field string) (any, bool) {
+	if value == nil {
+		return nil, false
+	}
+	switch typed := value.(type) {
+	case map[string]any:
+		found, ok := typed[field]
+		return found, ok
+	case map[string]string:
+		found, ok := typed[field]
+		return found, ok
+	}
+
+	reflected := reflect.ValueOf(value)
+	for reflected.Kind() == reflect.Interface || reflected.Kind() == reflect.Pointer {
+		if reflected.IsNil() {
+			return nil, false
+		}
+		reflected = reflected.Elem()
+	}
+
+	switch reflected.Kind() {
+	case reflect.Map:
+		return loadMapField(reflected, field)
+	case reflect.Struct:
+		return loadStructField(reflected, field)
+	default:
+		return nil, false
+	}
+}
+
+func loadMapField(value reflect.Value, field string) (any, bool) {
+	if value.Type().Key().Kind() != reflect.String {
+		return nil, false
+	}
+	found := value.MapIndex(reflect.ValueOf(field))
+	if !found.IsValid() {
+		return nil, false
+	}
+	return found.Interface(), true
+}
+
+func loadStructField(value reflect.Value, field string) (any, bool) {
+	valueType := value.Type()
+	for index := range value.NumField() {
+		structField := valueType.Field(index)
+		if !structField.IsExported() {
+			continue
+		}
+		if structField.Name == field || strings.EqualFold(structField.Name, field) || jsonFieldName(structField) == field {
+			return value.Field(index).Interface(), true
+		}
+	}
+	return nil, false
+}
+
+func jsonFieldName(field reflect.StructField) string {
+	name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+	if name == "-" {
+		return ""
+	}
+	return name
 }

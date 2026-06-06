@@ -184,9 +184,10 @@ Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 `GOWDK_INSTANCE_ID`; if no instance ID is provided, the app creates one at
 process start from the module name, hostname, and a random token. It can also
 serve auto-detected POST redirect handlers for the first supported action
-subset and first-slice SSR pages with declared `load {}` fields. SSR load
-functions can return safe local redirects with `ssr.RedirectTo`/`ssr.Redirect`,
-and generated SSR load failures render the optional `500.html` when present.
+subset and first-slice SSR pages with declared `load {}` identifier or dotted
+paths. SSR load functions can return safe local redirects with
+`ssr.RedirectTo`/`ssr.Redirect`, and generated SSR load failures render the
+optional `500.html` when present.
 Action handlers decode allowlisted form fields into named first-slice input wrappers,
 cap request bodies before parsing, preserve repeated values, return HTTP 413
 for oversized submissions, return HTTP 400 for unexpected fields, and return

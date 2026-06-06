@@ -87,8 +87,8 @@ type SSRReplacement struct {
 }
 
 // SSRLoadReplacement maps a generated placeholder back to a request-time load
-// field.
+// field path.
 type SSRLoadReplacement struct {
-	Field       string
+	Path        string
 	Placeholder string
 }

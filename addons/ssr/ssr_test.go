@@ -48,6 +48,49 @@ func TestLoadFuncContract(t *testing.T) {
 	}
 }
 
+func TestLoadPathResolvesNestedMapsAndStructs(t *testing.T) {
+	type profile struct {
+		DisplayName string `json:"displayName"`
+	}
+	type user struct {
+		Name    string
+		Profile *profile
+	}
+	data := map[string]any{
+		"user": user{
+			Name:    "Ada",
+			Profile: &profile{DisplayName: "Ada Lovelace"},
+		},
+		"account": map[string]string{
+			"plan": "pro",
+		},
+	}
+
+	for path, expected := range map[string]any{
+		"user.name":                "Ada",
+		"user.profile.displayName": "Ada Lovelace",
+		"user.Profile.displayName": "Ada Lovelace",
+		"account.plan":             "pro",
+	} {
+		value, ok := LoadPath(data, path)
+		if !ok || value != expected {
+			t.Fatalf("LoadPath(%q) = %#v, %v; want %#v, true", path, value, ok, expected)
+		}
+	}
+}
+
+func TestLoadPathRejectsMissingOrInvalidPaths(t *testing.T) {
+	data := map[string]any{
+		"user": map[string]any{"name": "Ada"},
+	}
+
+	for _, path := range []string{"", "user.", "user.email", "missing.name"} {
+		if value, ok := LoadPath(data, path); ok {
+			t.Fatalf("LoadPath(%q) = %#v, true; want false", path, value)
+		}
+	}
+}
+
 func TestErrorHandlerContract(t *testing.T) {
 	var captured error
 	handler := ErrorHandler(func(_ http.ResponseWriter, _ *http.Request, errorValue error) {

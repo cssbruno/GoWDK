@@ -179,7 +179,7 @@ func ssrLoadReplacements(replacements []buildgen.SSRLoadReplacement) []SSRLoadRe
 	out := make([]SSRLoadReplacement, 0, len(replacements))
 	for _, replacement := range replacements {
 		out = append(out, SSRLoadReplacement{
-			Field:       replacement.Field,
+			Path:        replacement.Path,
 			Placeholder: replacement.Placeholder,
 		})
 	}

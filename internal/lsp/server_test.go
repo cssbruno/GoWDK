@@ -262,6 +262,51 @@ func TestServerReturnsDefinitionForComponentCalls(t *testing.T) {
 	assertResponseID(t, messages[6], float64(4))
 }
 
+func TestServerReturnsReferencesForProjectSymbols(t *testing.T) {
+	componentURI := "file:///tmp/product-card.cmp.gwdk"
+	pageURI := "file:///tmp/home.page.gwdk"
+	adminURI := "file:///tmp/admin.page.gwdk"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+componentURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@component ProductCard\n\nclient {\n  use cart\n}\n\nview {\n  <article></article>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\nimport ui \"github.com/cssbruno/gowdk/testfixture/islands\"\n\n@page home\n@route \"/products\"\n@guard RequireUser\n\nstore cart ui.CounterState = ui.NewCounterState()\n\nview {\n  <main><ProductCard /></main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+adminURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@page admin\n@route \"/admin\"\n@guard RequireUser\n\nview {\n  <main>Admin</main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/references","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":10,"character":11},"context":{"includeDeclaration":true}}}`) +
+		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/references","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":7,"character":7},"context":{"includeDeclaration":true}}}`) +
+		framed(`{"jsonrpc":"2.0","id":4,"method":"textDocument/references","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":5,"character":10},"context":{"includeDeclaration":true}}}`) +
+		framed(`{"jsonrpc":"2.0","id":5,"method":"textDocument/references","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":3,"character":7},"context":{"includeDeclaration":true}}}`) +
+		framed(`{"jsonrpc":"2.0","id":6,"method":"textDocument/references","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":4,"character":10},"context":{"includeDeclaration":true}}}`) +
+		framed(`{"jsonrpc":"2.0","id":7,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 10 {
+		t.Fatalf("expected 10 output messages, got %d", len(messages))
+	}
+
+	capabilities := messages[0]["result"].(map[string]any)["capabilities"].(map[string]any)
+	if capabilities["referencesProvider"] != true {
+		t.Fatalf("expected references provider capability, got %#v", capabilities)
+	}
+	assertResponseID(t, messages[4], float64(2))
+	assertReferenceURIs(t, messages[4], componentURI, pageURI)
+	assertResponseID(t, messages[5], float64(3))
+	assertReferenceURIs(t, messages[5], componentURI, pageURI)
+	assertResponseID(t, messages[6], float64(4))
+	assertReferenceURIs(t, messages[6], adminURI, pageURI)
+	assertResponseID(t, messages[7], float64(5))
+	assertReferenceURIs(t, messages[7], pageURI)
+	assertResponseID(t, messages[8], float64(6))
+	assertReferenceURIs(t, messages[8], pageURI)
+	assertResponseID(t, messages[9], float64(7))
+}
+
 func TestServerReturnsSemanticTokens(t *testing.T) {
 	uri := "file:///tmp/home.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
@@ -421,6 +466,25 @@ func assertLocation(t *testing.T, message map[string]any, uri string, line int, 
 	start := result["range"].(map[string]any)["start"].(map[string]any)
 	if start["line"] != float64(line) || start["character"] != float64(character) {
 		t.Fatalf("expected location start %d:%d, got %#v", line, character, result["range"])
+	}
+}
+
+func assertReferenceURIs(t *testing.T, message map[string]any, expected ...string) {
+	t.Helper()
+	result := message["result"].([]any)
+	if len(result) != len(expected) {
+		t.Fatalf("expected %d references, got %#v", len(expected), result)
+	}
+	seen := map[string]int{}
+	for _, raw := range result {
+		location := raw.(map[string]any)
+		seen[location["uri"].(string)]++
+	}
+	for _, uri := range expected {
+		if seen[uri] == 0 {
+			t.Fatalf("expected references to include %q, got %#v", uri, result)
+		}
+		seen[uri]--
 	}
 }
 

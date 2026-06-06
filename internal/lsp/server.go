@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -132,6 +133,7 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 				},
 				HoverProvider:              true,
 				DefinitionProvider:         true,
+				ReferencesProvider:         true,
 				DocumentFormattingProvider: true,
 				CompletionProvider: completionOptions{
 					TriggerCharacters: []string{"@", ":", "<", " "},
@@ -190,6 +192,12 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
 		}
 		return singleMessage(response(request.ID, server.definition(params)))
+	case "textDocument/references":
+		var params referenceParams
+		if err := decodeParams(request.Params, &params); err != nil {
+			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
+		}
+		return singleMessage(response(request.ID, server.references(params)))
 	case "textDocument/semanticTokens/full":
 		var params semanticTokensParams
 		if err := decodeParams(request.Params, &params); err != nil {
@@ -323,6 +331,33 @@ func (server *Server) definition(params definitionParams) *location {
 		URI:   component.URI,
 		Range: lspRangeFromSourceSpan(component.Span, component.Text),
 	}
+}
+
+func (server *Server) references(params referenceParams) []location {
+	doc, ok := server.documents[params.TextDocument.URI]
+	if !ok {
+		return []location{}
+	}
+	token := tokenAtPosition(doc.Text, params.Position)
+	if token == "" {
+		return []location{}
+	}
+	locations := make([]location, 0)
+	for _, doc := range server.documents {
+		for _, item := range referenceRanges(doc.Text, token) {
+			locations = append(locations, location{URI: doc.URI, Range: item})
+		}
+	}
+	sort.Slice(locations, func(i, j int) bool {
+		if locations[i].URI != locations[j].URI {
+			return locations[i].URI < locations[j].URI
+		}
+		if locations[i].Range.Start.Line != locations[j].Range.Start.Line {
+			return locations[i].Range.Start.Line < locations[j].Range.Start.Line
+		}
+		return locations[i].Range.Start.Character < locations[j].Range.Start.Character
+	})
+	return locations
 }
 
 func (server *Server) semanticTokens(params semanticTokensParams) semanticTokensResult {
@@ -586,6 +621,36 @@ func tokenAtPosition(source string, pos position) string {
 	return strings.TrimSpace(line[start:end])
 }
 
+func referenceRanges(source string, token string) []lspRange {
+	if token == "" {
+		return nil
+	}
+	var ranges []lspRange
+	searchStart := 0
+	for {
+		index := strings.Index(source[searchStart:], token)
+		if index < 0 {
+			return ranges
+		}
+		start := searchStart + index
+		end := start + len(token)
+		if isReferenceBoundary(source, token, start, end) {
+			ranges = append(ranges, rangeFromByteSpan(source, start, end))
+		}
+		searchStart = end
+	}
+}
+
+func isReferenceBoundary(source string, token string, start int, end int) bool {
+	if start > 0 && isIdentifierLikeByte(token[0]) && isIdentifierLikeByte(source[start-1]) {
+		return false
+	}
+	if end < len(source) && isIdentifierLikeByte(token[len(token)-1]) && isIdentifierLikeByte(source[end]) {
+		return false
+	}
+	return true
+}
+
 func componentCallAtPosition(source string, pos position) (string, bool) {
 	lines := strings.Split(source, "\n")
 	if pos.Line < 0 || pos.Line >= len(lines) {
@@ -636,6 +701,37 @@ func byteIndexFromUTF16Column(line string, column int) int {
 	return len(line)
 }
 
+func rangeFromByteSpan(source string, start int, end int) lspRange {
+	if start < 0 {
+		start = 0
+	}
+	if end < start {
+		end = start
+	}
+	if end > len(source) {
+		end = len(source)
+	}
+	startPosition := positionFromByteOffset(source, start)
+	endPosition := positionFromByteOffset(source, end)
+	return lspRange{Start: startPosition, End: endPosition}
+}
+
+func positionFromByteOffset(source string, offset int) position {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(source) {
+		offset = len(source)
+	}
+	prefix := source[:offset]
+	line := strings.Count(prefix, "\n")
+	lineStart := strings.LastIndex(prefix, "\n") + 1
+	return position{
+		Line:      line,
+		Character: utf16Length(source[lineStart:offset]),
+	}
+}
+
 func componentCallNameByte(value byte) bool {
 	switch {
 	case value >= 'A' && value <= 'Z':
@@ -645,6 +741,21 @@ func componentCallNameByte(value byte) bool {
 	case value >= '0' && value <= '9':
 		return true
 	case strings.ContainsRune("_-:.", rune(value)):
+		return true
+	default:
+		return false
+	}
+}
+
+func isIdentifierLikeByte(value byte) bool {
+	switch {
+	case value >= 'A' && value <= 'Z':
+		return true
+	case value >= 'a' && value <= 'z':
+		return true
+	case value >= '0' && value <= '9':
+		return true
+	case value == '_':
 		return true
 	default:
 		return false
@@ -1003,6 +1114,7 @@ type serverCapabilities struct {
 	TextDocumentSync           textDocumentSyncOptions `json:"textDocumentSync"`
 	HoverProvider              bool                    `json:"hoverProvider"`
 	DefinitionProvider         bool                    `json:"definitionProvider"`
+	ReferencesProvider         bool                    `json:"referencesProvider"`
 	DocumentFormattingProvider bool                    `json:"documentFormattingProvider"`
 	CompletionProvider         completionOptions       `json:"completionProvider"`
 	SemanticTokensProvider     semanticTokensOptions   `json:"semanticTokensProvider"`
@@ -1051,6 +1163,16 @@ type definitionParams struct {
 type location struct {
 	URI   string   `json:"uri"`
 	Range lspRange `json:"range"`
+}
+
+type referenceParams struct {
+	TextDocument textDocumentIdentifier `json:"textDocument"`
+	Position     position               `json:"position"`
+	Context      referenceContext       `json:"context"`
+}
+
+type referenceContext struct {
+	IncludeDeclaration bool `json:"includeDeclaration"`
 }
 
 type semanticTokensParams struct {

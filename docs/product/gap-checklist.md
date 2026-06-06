@@ -828,7 +828,10 @@ Done when:
       Decision: `gowdk lsp` resolves same-package and `use`-qualified
       component calls to open-project `@component` declarations.
 - [ ] Add go-to-definition for Go handler symbols where possible.
-- [ ] Add references for page IDs, routes, components, stores, and guards.
+- [x] Add references for page IDs, routes, components, stores, and guards.
+      Decision: `gowdk lsp` supports `textDocument/references` across open
+      `.gwdk` documents using exact token ranges for page IDs, route strings,
+      component names, stores, and guard IDs.
 - [x] Add semantic tokens for `.gwdk`.
       Decision: `gowdk lsp` advertises `textDocument/semanticTokens/full`
       and returns lexer-backed decorator, variable, string, and operator tokens.

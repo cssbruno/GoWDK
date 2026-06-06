@@ -56,56 +56,72 @@ actions and APIs, plus admin/form scaffolding from explicit SQL contracts.
 
 ## Application Scaffolding
 
-GOWDK does not ship login flows, admin panels, billing screens, or CRUD apps as
-baked-in behavior. Planned generators will cover common patterns such as auth,
-CRUD screens, form validation, file upload, background tasks, email, and
-deployment as optional, editable output.
+GOWDK core is the compiler and runtime kit, not an app template. Login, admin,
+billing, CRUD, uploads, email, and background jobs are application code.
+
+Examples or optional generators may cover those patterns later, but the output
+should be editable Go and `.gwdk` files, not hidden framework behavior.
 
 ## Getting Started
 
-During source development, run the CLI from this repository:
+GOWDK is currently used from source. No release binary yet.
+
+Requirements: Go 1.26+ and git.
 
 ```sh
-go run ./cmd/gowdk <command>
-```
-
-Build the CLI:
-
-```sh
+git clone https://github.com/cssbruno/GoWDK.git
+cd GoWDK
 go build ./cmd/gowdk
-./gowdk version
 ```
 
-Create, build, and serve an app:
+Scaffold and run a new app:
 
 ```sh
-go run ./cmd/gowdk init my-app
-cd my-app
-../gowdk build
-../gowdk serve --dir dist/site
+./gowdk init ~/my-app
+cd ~/my-app
+/path/to/GoWDK/gowdk build
+/path/to/GoWDK/gowdk serve --dir dist/site
 ```
 
-Build an example:
+Open `http://127.0.0.1:8080`.
+
+`init` writes a starter `gowdk.config.go`, one page, one component, and one CSS
+file. `build` outputs HTML and manifests to `dist/site`. `serve` is static
+only: it does not run actions, API handlers, partial fragments, or SSR routes.
+For backend handlers, use `gowdk build --app --bin` to produce a runnable
+binary.
+
+For a live rebuild loop:
 
 ```sh
-go run ./cmd/gowdk build --out /tmp/gowdk-build \
-  examples/pages/home.page.gwdk \
-  examples/pages/hero.cmp.gwdk
-
-go run ./cmd/gowdk serve --dir /tmp/gowdk-build
+/path/to/GoWDK/gowdk dev
 ```
+
+`dev` polls source files, rebuilds on change, and reloads the browser. Add
+`--app <dir>` to also recompile and restart the generated backend binary on
+changes.
 
 Project compiler commands require `gowdk.config.go` in the current directory,
 or `--config <file>`, even when explicit `.gwdk` files are passed. This source
-repository includes a root `gowdk.config.go` for example smoke commands.
+repository includes a root `gowdk.config.go` for example commands.
 
-Use `dev` for polling rebuilds, local serving, and browser reload:
+See [docs/getting-started.md](docs/getting-started.md) for the full
+walkthrough.
 
-```sh
-go run ./cmd/gowdk dev --out /tmp/gowdk-build \
-  examples/pages/home.page.gwdk \
-  examples/pages/hero.cmp.gwdk
-```
+## What Works Now
+
+- Page and component compilation, config-based discovery, and named build
+  targets.
+- Literal `paths {}` expansion for dynamic SPA routes.
+- Literal `build {}` data and imported no-argument Go build data functions.
+- Generated embedded app source, local binaries, and Go `js/wasm` artifacts.
+- Action/API handlers, action redirects, partial fragments, and SSR pages
+  without `load {}` in generated binaries.
+- CLI commands: `build`, `dev`, `serve`, `preview`, `check`, `fmt`, `lsp`,
+  `manifest`, `sitemap`, and `routes`.
+
+Not yet: typed input structs for action handlers, request-time `load {}`
+execution, full browser WASM island ABI, and validation fragments.
 
 ## Site Example
 
@@ -206,20 +222,6 @@ Run one target:
 ```sh
 gowdk build --target admin
 ```
-
-## Quality Gates
-
-```sh
-gofmt -w <changed-go-files>
-go test ./...
-go build ./cmd/gowdk
-node --check editors/vscode/extension.js
-node --check editors/vscode/extension-core.js
-node --test editors/vscode/*.test.js
-go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
-```
-
-CI also smoke-builds spa, dynamic, CSS, and embedded-binary examples.
 
 ## Docs
 

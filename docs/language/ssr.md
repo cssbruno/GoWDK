@@ -82,6 +82,9 @@ the generated `gowdkapp` package. Keep registration in the generated app
 package, a startup integration file, or a wrapper binary that owns generated
 app initialization.
 
+For the full `paths {}` / `build {}` / `load {}` / endpoint data boundary, see
+[data.md](data.md).
+
 ## Planned Support
 
 Future SSR work must define request layouts and any broader hybrid

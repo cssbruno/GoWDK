@@ -24,6 +24,8 @@ semantic/type analysis outside the component contract slice.
 - `grammar.md`: current parser grammar and future grammar boundaries.
 - `semantics.md`: current render-mode and validation rules.
 - `blocks.md`: block meanings and current parser support.
+- `data.md`: build-time data, request-time load data, endpoint data, and
+  invalidation boundaries.
 - `markup.md`: current `view {}` status and planned markup behavior.
 - `components.md`: component status and portability rules.
 - `layouts.md`: layout metadata and planned layout resolution.

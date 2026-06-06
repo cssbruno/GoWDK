@@ -525,27 +525,52 @@ Done when:
 
 ### 6. Load, Data, And Invalidation
 
-- [ ] Define the difference between `build {}` and `load {}` in terms of cache,
+- [x] Define the difference between `build {}` and `load {}` in terms of cache,
       timing, request data, and generated output.
-- [ ] Decide whether GOWDK needs a browser-side or shared load equivalent.
-- [ ] Decide whether SSR `load {}` can call multiple functions or only the
+      Decision: `build {}` is build-time static page data and must not depend
+      on an HTTP request. `load {}` is request-time page data and requires SSR
+      or an explicit hybrid request-time branch. Request-time responses stay
+      no-store unless a page cache policy explicitly applies to successful SSR
+      HTML.
+- [x] Decide whether GOWDK needs a browser-side or shared load equivalent.
+      Decision: no browser-owned or universal load in the current contract.
+      Future prefetch or reuse must be an explicit generated-client feature.
+- [x] Decide whether SSR `load {}` can call multiple functions or only the
       generated `Load<PageID>` convention.
-- [ ] Define how layout load data composes with page load data.
-- [ ] Define how action results can invalidate or refresh page data.
-- [ ] Define whether partial fragments can declare data dependencies.
-- [ ] Define whether generated client navigation can prefetch or reuse load
+      Decision: one generated same-package `Load<PageID>` function returns the
+      declared field map. Multiple load fields come from that single return
+      value, including dotted paths.
+- [x] Define how layout load data composes with page load data.
+      Decision: layouts do not have independent `load {}` data today.
+      Request-time layout data composition is planned work.
+- [x] Define how action results can invalidate or refresh page data.
+      Decision: actions own redirects, HTML, JSON, and fragments through the
+      returned Go `response.Response`. GOWDK does not automatically rerun
+      `load {}` after an action today.
+- [x] Define whether partial fragments can declare data dependencies.
+      Decision: no compiler-tracked fragment data dependencies today. Fragment
+      Go hooks own request-time fragment data.
+- [x] Define whether generated client navigation can prefetch or reuse load
       data.
-- [ ] Define redirect, not-found, forbidden, and validation behavior from load
+      Decision: generated client navigation does not prefetch or reuse
+      `load {}` data today.
+- [x] Define redirect, not-found, forbidden, and validation behavior from load
       functions.
-- [ ] Add generated typed data contracts or document the map-based contract.
+      Decision: load redirects use local `ssr.RedirectTo` or `ssr.Redirect`.
+      Guards handle guarded access. Not-found, forbidden, validation, and typed
+      expected-error helpers are planned; other load errors use generated SSR
+      error-page handling.
+- [x] Add generated typed data contracts or document the map-based contract.
+      Decision: current load data is `map[string]any`; typed load accessors are
+      planned after the load result contract is stable.
 - [ ] Add tests for parent/page load composition, redirects, errors, and action
       invalidation if implemented.
 
 Done when:
 
-- [ ] Users can choose `paths {}`, `build {}`, `load {}`, actions, APIs, and
+- [x] Users can choose `paths {}`, `build {}`, `load {}`, actions, APIs, and
       fragments without guessing when each runs.
-- [ ] Post-action behavior is deterministic for full POSTs and enhanced POSTs.
+- [x] Post-action behavior is deterministic for full POSTs and enhanced POSTs.
 
 ### 7. Hybrid Rendering
 

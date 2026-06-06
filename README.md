@@ -78,7 +78,7 @@ go build ./cmd/gowdk
 Scaffold and run a new app:
 
 ```sh
-./gowdk init ~/my-app
+./gowdk init --template site ~/my-app
 cd ~/my-app
 /path/to/GoWDK/gowdk build
 /path/to/GoWDK/gowdk serve --dir dist/site
@@ -86,8 +86,9 @@ cd ~/my-app
 
 Open `http://127.0.0.1:8080`.
 
-`init` writes a starter `gowdk.config.go`, one page, one component, and one CSS
-file. `build` outputs HTML and manifests to `dist/site`. `serve` is static
+`init --template site` writes a starter `gowdk.config.go`, one page, one
+component, and one CSS file. `init --template minimal` writes a smaller page/CSS
+starter. `build` outputs HTML and manifests to `dist/site`. `serve` is static
 only: it does not run actions, API handlers, partial fragments, or SSR routes.
 For backend handlers, use `gowdk build --app --bin` to produce a runnable
 binary.
@@ -181,7 +182,7 @@ wires the form POST and writes the returned `runtime/response.Response`.
 ## CLI
 
 ```sh
-gowdk init [--force] [dir]
+gowdk init [--force] [--template site|minimal] [dir]
 gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
 gowdk dev [--addr 127.0.0.1:8080] [--interval 1s] [build flags...]

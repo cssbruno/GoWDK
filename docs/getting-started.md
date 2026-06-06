@@ -30,12 +30,14 @@ Use the built binary when running commands from outside this repository.
 From the repository root:
 
 ```sh
-/path/to/GOWDK/gowdk init /tmp/gowdk-my-app
+/path/to/GOWDK/gowdk init --template site /tmp/gowdk-my-app
 cd /tmp/gowdk-my-app
 ```
 
-`init` writes a starter `gowdk.config.go`, one page, one component, and one CSS
-file. Existing files are not overwritten unless `--force` is passed.
+`init --template site` writes a starter `gowdk.config.go`, one page, one
+component, and one CSS file. `init --template minimal` writes a smaller
+page/CSS starter. Existing files are not overwritten unless `--force` is
+passed.
 
 The generated config discovers `src/**/*.gwdk`, discovers CSS from
 `styles/**/*.css`, writes build output to `dist/site`, and ignores the default

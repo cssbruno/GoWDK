@@ -809,7 +809,8 @@ Done when:
 
 ### 14. Scaffolding, Testing, And Examples
 
-- [ ] Add template selection to `gowdk init`.
+- [x] Add template selection to `gowdk init`.
+      Decision: `gowdk init --template site|minimal` selects the starter shape.
 - [ ] Add example apps for static site, actions, login/auth, dashboard SSR,
       API-only backend, partial updates, Tailwind, and split frontend/backend.
 - [ ] Add optional generated test scaffold.

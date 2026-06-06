@@ -8,7 +8,7 @@ development.
 
 ```sh
 gowdk version
-gowdk init [--force] [dir]
+gowdk init [--force] [--template <site|minimal>] [dir]
 gowdk tokens <file.gwdk>
 gowdk fmt [--write] <files>
 gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
@@ -26,6 +26,7 @@ gowdk lsp [--ssr]
 
 - `--ssr`: enables SSR validation by adding the SSR addon to the in-memory config.
 - `--force`: supported by `init`; overwrites starter files that already exist.
+- `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
 - `--json`: supported by `check`; prints editor-friendly diagnostic JSON.
 - `--write`: supported by `fmt`; overwrites formatted files.
 - `--config`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; loads a literal config subset from the given path instead of the required default `gowdk.config.go`.
@@ -47,7 +48,8 @@ gowdk lsp [--ssr]
 ## Examples
 
 ```sh
-go run ./cmd/gowdk init my-site
+go run ./cmd/gowdk init --template site my-site
+go run ./cmd/gowdk init --template minimal my-minimal-site
 go run ./cmd/gowdk check examples/pages/home.page.gwdk
 go run ./cmd/gowdk check --config gowdk.config.go
 go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk
@@ -73,7 +75,7 @@ go run ./cmd/gowdk serve --dir /tmp/gowdk-build
 ```
 
 `init` creates a buildable starter project in the selected directory, or the
-current directory when omitted:
+current directory when omitted. The default `site` template writes:
 
 ```text
 gowdk.config.go
@@ -85,7 +87,9 @@ styles/global.css
 The generated config discovers `src/**/*.gwdk`, writes build output to
 `dist/site`, discovers CSS under `styles/**/*.css`, and writes `.gitignore`
 with `gowdk_cache/` for the default dev output. Existing starter files
-are not overwritten unless `--force` is passed.
+are not overwritten unless `--force` is passed. The `minimal` template skips the
+starter component and writes only the config, `.gitignore`, one page, and one
+CSS file.
 
 `check`, `manifest`, `sitemap`, `routes`, `build`, and `dev` require a config
 file before they compile or validate `.gwdk` code. By default they load

@@ -29,6 +29,7 @@ import (
 const (
 	version    = "0.1.5"
 	buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
+	initUsage  = "usage: gowdk init [--force] [--template <site|minimal>] [dir]"
 )
 
 var (
@@ -89,7 +90,7 @@ func usage() {
 	fmt.Println()
 	fmt.Println("Commands:")
 	fmt.Println("  version                  print CLI version")
-	fmt.Println("  init [--force] [dir]     scaffold a starter GOWDK project")
+	fmt.Println("  init [--force] [--template <site|minimal>] [dir] scaffold a starter GOWDK project")
 	fmt.Println("  tokens <file.gwdk>       print language tokens")
 	fmt.Println("  fmt [--write] <files>    format .gwdk files")
 	fmt.Println("  check [--config <file>] [--module <name>] [--json] [--ssr] [files...] parse and validate .gwdk files")
@@ -112,7 +113,34 @@ func initProject(args []string) error {
 	if err != nil {
 		return err
 	}
-	files := []initFile{
+	files, err := initTemplateFiles(options.Template)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		target := filepath.Join(root, filepath.FromSlash(file.Path))
+		if err := writeInitFile(target, file.Body, options.Force); err != nil {
+			return err
+		}
+		fmt.Println(target)
+	}
+	fmt.Println("Run: gowdk build")
+	return nil
+}
+
+func initTemplateFiles(template string) ([]initFile, error) {
+	switch template {
+	case "", "site":
+		return siteInitTemplateFiles(), nil
+	case "minimal":
+		return minimalInitTemplateFiles(), nil
+	default:
+		return nil, fmt.Errorf("unknown init template %q", template)
+	}
+}
+
+func siteInitTemplateFiles() []initFile {
+	return []initFile{
 		{
 			Path: "gowdk.config.go",
 			Body: initConfigSource(),
@@ -185,20 +213,48 @@ body {
 `,
 		},
 	}
-	for _, file := range files {
-		target := filepath.Join(root, filepath.FromSlash(file.Path))
-		if err := writeInitFile(target, file.Body, options.Force); err != nil {
-			return err
-		}
-		fmt.Println(target)
+}
+
+func minimalInitTemplateFiles() []initFile {
+	return []initFile{
+		{
+			Path: "gowdk.config.go",
+			Body: initConfigSource(),
+		},
+		{
+			Path: ".gitignore",
+			Body: `gowdk_cache/
+`,
+		},
+		{
+			Path: "src/pages/home.page.gwdk",
+			Body: `package app
+
+@page home
+@route "/"
+
+view {
+  <main>
+    <h1>GOWDK</h1>
+  </main>
+}
+`,
+		},
+		{
+			Path: "styles/global.css",
+			Body: `body {
+  font-family: system-ui, sans-serif;
+  margin: 2rem;
+}
+`,
+		},
 	}
-	fmt.Println("Run: gowdk build")
-	return nil
 }
 
 type initOptions struct {
-	Dir   string
-	Force bool
+	Dir      string
+	Force    bool
+	Template string
 }
 
 type initFile struct {
@@ -279,25 +335,39 @@ func initStringLit(value string) *ast.BasicLit {
 }
 
 func parseInitOptions(args []string) (initOptions, error) {
-	options := initOptions{Dir: "."}
-	for _, arg := range args {
+	options := initOptions{Dir: ".", Template: "site"}
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
 		switch arg {
 		case "--force":
 			options.Force = true
+		case "--template":
+			index++
+			if index >= len(args) {
+				return initOptions{}, fmt.Errorf(initUsage)
+			}
+			options.Template = args[index]
 		case "-h", "--help":
-			return initOptions{}, fmt.Errorf("usage: gowdk init [--force] [dir]")
+			return initOptions{}, fmt.Errorf(initUsage)
 		default:
+			if strings.HasPrefix(arg, "--template=") {
+				options.Template = strings.TrimPrefix(arg, "--template=")
+				continue
+			}
 			if strings.HasPrefix(arg, "-") {
 				return initOptions{}, fmt.Errorf("unknown init flag %q", arg)
 			}
 			if options.Dir != "." {
-				return initOptions{}, fmt.Errorf("usage: gowdk init [--force] [dir]")
+				return initOptions{}, fmt.Errorf(initUsage)
 			}
 			options.Dir = arg
 		}
 	}
 	if strings.TrimSpace(options.Dir) == "" {
 		return initOptions{}, fmt.Errorf("init directory is required")
+	}
+	if _, err := initTemplateFiles(options.Template); err != nil {
+		return initOptions{}, err
 	}
 	return options, nil
 }

@@ -136,6 +136,46 @@ func TestInitCommandScaffoldsBuildableProject(t *testing.T) {
 	}
 }
 
+func TestInitCommandSupportsMinimalTemplate(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "minimal")
+	if err := run([]string{"init", "--template", "minimal", root}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		".gitignore",
+		"gowdk.config.go",
+		"src/pages/home.page.gwdk",
+		"styles/global.css",
+	} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(path))); err != nil {
+			t.Fatalf("expected scaffold file %s: %v", path, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "src", "components", "hero.cmp.gwdk")); !os.IsNotExist(err) {
+		t.Fatalf("minimal template should not create hero component, got %v", err)
+	}
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	payload, err := os.ReadFile(filepath.Join(root, "dist", "site", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), "<h1>GOWDK</h1>") {
+		t.Fatalf("unexpected minimal build output:\n%s", payload)
+	}
+}
+
+func TestInitCommandRejectsUnknownTemplate(t *testing.T) {
+	err := run([]string{"init", "--template", "admin", t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), `unknown init template "admin"`) {
+		t.Fatalf("expected unknown template error, got %v", err)
+	}
+}
+
 func TestInitCommandRejectsExistingFilesUnlessForced(t *testing.T) {
 	root := t.TempDir()
 	config := filepath.Join(root, "gowdk.config.go")

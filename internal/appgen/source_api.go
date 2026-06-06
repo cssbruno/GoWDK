@@ -8,10 +8,10 @@ import (
 )
 
 func apiHandlerSource(apis []APIEndpoint) string {
-	return printActionDecls([]ast.Decl{apiFuncDecl(sortedAPIEndpoints(apis))})
+	return printActionDecls([]ast.Decl{apiFuncDecl(sortedAPIEndpoints(apis), false)})
 }
 
-func apiFuncDecl(apis []APIEndpoint) *ast.FuncDecl {
+func apiFuncDecl(apis []APIEndpoint, rateLimit bool) *ast.FuncDecl {
 	if len(apis) == 0 {
 		return funcDecl("api", actionParams(), boolResults(), []ast.Stmt{returnBool(false)})
 	}
@@ -19,7 +19,7 @@ func apiFuncDecl(apis []APIEndpoint) *ast.FuncDecl {
 	for _, api := range apis {
 		clauses = append(clauses, &ast.CaseClause{
 			List: []ast.Expr{apiCaseExpr(api)},
-			Body: apiCaseStmts(api),
+			Body: apiCaseStmts(api, rateLimit),
 		})
 	}
 	clauses = append(clauses, &ast.CaseClause{Body: []ast.Stmt{returnBool(false)}})
@@ -51,8 +51,9 @@ func apiCaseExpr(api APIEndpoint) ast.Expr {
 	}
 }
 
-func apiCaseStmts(api APIEndpoint) []ast.Stmt {
+func apiCaseStmts(api APIEndpoint, rateLimit bool) []ast.Stmt {
 	stmts := endpointContextStmts("api", api.PageID, api.APIName, api.Method, api.Route)
+	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(api.Guards)...)
 	if api.Binding.Status != manifest.BackendBindingBound {
 		stmts = append(stmts, backendNotImplementedStmts(api.Binding, "API")...)

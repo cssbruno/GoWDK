@@ -11,8 +11,8 @@ import (
 func ssrHandlerSource(routes []SSRRoute) string {
 	sorted := sortedSSRRoutes(routes)
 	return printActionDecls([]ast.Decl{
-		ssrExactDecl(sorted),
-		ssrDynamicDecl(sorted),
+		ssrExactDecl(sorted, false),
+		ssrDynamicDecl(sorted, false),
 	})
 }
 
@@ -27,7 +27,7 @@ func sortedSSRRoutes(routes []SSRRoute) []SSRRoute {
 	return sorted
 }
 
-func ssrExactDecl(routes []SSRRoute) *ast.FuncDecl {
+func ssrExactDecl(routes []SSRRoute, rateLimit bool) *ast.FuncDecl {
 	clauses := []ast.Stmt{}
 	for _, route := range routes {
 		if len(ssrRoutePatternParams(route.Route)) > 0 {
@@ -35,7 +35,7 @@ func ssrExactDecl(routes []SSRRoute) *ast.FuncDecl {
 		}
 		clauses = append(clauses, &ast.CaseClause{
 			List: []ast.Expr{stringLit(route.Route)},
-			Body: ssrRouteBodyStmts(route, false),
+			Body: ssrRouteBodyStmts(route, false, rateLimit),
 		})
 	}
 	return funcDecl("ssrExact", actionParams(), boolResults(), []ast.Stmt{
@@ -47,21 +47,21 @@ func ssrExactDecl(routes []SSRRoute) *ast.FuncDecl {
 	})
 }
 
-func ssrDynamicDecl(routes []SSRRoute) *ast.FuncDecl {
+func ssrDynamicDecl(routes []SSRRoute, rateLimit bool) *ast.FuncDecl {
 	body := []ast.Stmt{}
 	for _, route := range routes {
 		if len(ssrRoutePatternParams(route.Route)) == 0 {
 			continue
 		}
-		body = append(body, ssrDynamicIfStmt(route))
+		body = append(body, ssrDynamicIfStmt(route, rateLimit))
 	}
 	body = append(body, returnBool(false))
 	return funcDecl("ssrDynamic", actionParams(), boolResults(), body)
 }
 
-func ssrDynamicIfStmt(route SSRRoute) ast.Stmt {
+func ssrDynamicIfStmt(route SSRRoute, rateLimit bool) ast.Stmt {
 	names := []ast.Expr{id("params"), id("ok")}
-	body := ssrRouteBodyStmts(route, true)
+	body := ssrRouteBodyStmts(route, true, rateLimit)
 	return &ast.IfStmt{
 		Init: define(names, call(sel("gowdkroute", "Match"), stringLit(route.Route), selExpr(selExpr(id("request"), "URL"), "Path"))),
 		Cond: id("ok"),
@@ -69,8 +69,9 @@ func ssrDynamicIfStmt(route SSRRoute) ast.Stmt {
 	}
 }
 
-func ssrRouteBodyStmts(route SSRRoute, includeParams bool) []ast.Stmt {
+func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool) []ast.Stmt {
 	body := ssrRouteContextStmts(route, includeParams)
+	body = append(body, rateLimitStmts(rateLimit)...)
 	body = append(body, guardStmts(route.Guards)...)
 	body = append(body, define([]ast.Expr{id("html")}, stringLit(route.HTML)))
 	for _, replacement := range route.Replacements {

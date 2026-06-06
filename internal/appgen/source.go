@@ -88,6 +88,9 @@ func runtimeImportMap(options Options) map[string]string {
 	if ssrUsesLoad(ssr) {
 		imports["fmt"] = "fmt"
 	}
+	if generatedUsesRateLimit(options) {
+		imports["gowdkratelimit"] = "github.com/cssbruno/gowdk/addons/ratelimit"
+	}
 	if !options.ProxyBackend {
 		for importPath, alias := range backendImports(actions, apis, ssr) {
 			imports[alias] = importPath
@@ -162,8 +165,8 @@ func backendShellDecls(options Options) []ast.Decl {
 
 func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	adapter := backendAdapterIR(direct)
-	decls := actionHandlerDecls(direct.Actions, csrfEnabled(direct))
-	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(direct.APIs)))
+	decls := actionHandlerDecls(direct.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
+	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(direct.APIs), generatedUsesRateLimit(direct)))
 	switch {
 	case adapter.HasRegistrations():
 		decls = append(decls, newBackendRouterDecl(adapter))
@@ -171,20 +174,21 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 		decls = append(decls, emptyBackendHandlerDecl())
 	}
 	if full.ProxyBackend {
-		decls = append(decls, backendProxyDecl(), isBackendRouteDecl(full))
+		decls = append(decls, backendProxyDecl(generatedUsesRateLimit(full)), isBackendRouteDecl(full))
 	}
 	if csrfEnabled(direct) {
 		decls = append(decls, csrfValidatorVarDecl(), csrfNewFuncDecl(direct.Config.Build.CSRF))
 	}
+	decls = append(decls, rateLimitDecls(full)...)
 	decls = append(decls, guardDecls(full)...)
-	decls = append(decls, ssrExactDecl(full.SSR), ssrDynamicDecl(full.SSR))
+	decls = append(decls, ssrExactDecl(full.SSR, generatedUsesRateLimit(full)), ssrDynamicDecl(full.SSR, generatedUsesRateLimit(full)))
 	return decls
 }
 
 func backendGeneratedDecls(options Options) []ast.Decl {
 	adapter := backendAdapterIR(options)
-	decls := actionHandlerDecls(options.Actions, csrfEnabled(options))
-	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(options.APIs)))
+	decls := actionHandlerDecls(options.Actions, csrfEnabled(options), generatedUsesRateLimit(options))
+	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(options.APIs), generatedUsesRateLimit(options)))
 	if adapter.HasRegistrations() {
 		decls = append(decls, newBackendRouterDecl(adapter))
 	} else {
@@ -193,13 +197,14 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	if csrfEnabled(options) {
 		decls = append(decls, csrfValidatorVarDecl(), csrfNewFuncDecl(options.Config.Build.CSRF))
 	}
+	decls = append(decls, rateLimitDecls(options)...)
 	decls = append(decls, guardDecls(options)...)
 	return decls
 }
 
-func actionHandlerDecls(actions []ActionEndpoint, csrf bool) []ast.Decl {
+func actionHandlerDecls(actions []ActionEndpoint, csrf bool, rateLimit bool) []ast.Decl {
 	sorted := sortedActionEndpoints(actions)
-	decls := []ast.Decl{actionFuncDecl(sorted, csrf)}
+	decls := []ast.Decl{actionFuncDecl(sorted, csrf, rateLimit)}
 	if len(sorted) > 0 {
 		decls = append(decls, actionRequestPathDecl())
 		decls = append(decls, actionDecoderDecls(sorted)...)

@@ -62,17 +62,20 @@ func backendProxySource(options Options) string {
 		return ""
 	}
 	return printActionDecls([]ast.Decl{
-		backendProxyDecl(),
+		backendProxyDecl(false),
 		isBackendRouteDecl(options),
 	})
 }
 
-func backendProxyDecl() *ast.FuncDecl {
-	return funcDecl("backendProxy", actionParams(), boolResults(), []ast.Stmt{
+func backendProxyDecl(rateLimit bool) *ast.FuncDecl {
+	stmts := []ast.Stmt{
 		&ast.IfStmt{
 			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(id("isBackendRoute"), selExpr(id("request"), "Method"), selExpr(selExpr(id("request"), "URL"), "Path"))},
 			Body: block(returnBool(false)),
 		},
+	}
+	stmts = append(stmts, rateLimitStmts(rateLimit)...)
+	stmts = append(stmts,
 		define([]ast.Expr{id("origin")}, call(sel("strings", "TrimSpace"), call(sel("os", "Getenv"), stringLit("GOWDK_BACKEND_ORIGIN")))),
 		&ast.IfStmt{
 			Cond: &ast.BinaryExpr{X: id("origin"), Op: token.EQL, Y: stringLit("")},
@@ -100,7 +103,8 @@ func backendProxyDecl() *ast.FuncDecl {
 		define([]ast.Expr{id("proxy")}, call(sel("httputil", "NewSingleHostReverseProxy"), id("target"))),
 		exprStmt(call(selExpr(id("proxy"), "ServeHTTP"), id("response"), id("request"))),
 		returnBool(true),
-	})
+	)
+	return funcDecl("backendProxy", actionParams(), boolResults(), stmts)
 }
 
 func isBackendRouteDecl(options Options) *ast.FuncDecl {

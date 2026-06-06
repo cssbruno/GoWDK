@@ -75,8 +75,10 @@ literal `tailwind.Options` value.
 
 `addons/ratelimit` provides request-time HTTP middleware with fixed-window
 decisions, rate-limit response headers, a process-local in-memory store, and a
-Redis-backed store adapter. It does not add a Redis client dependency or wire
-limits into generated handlers automatically.
+Redis-backed store adapter. It does not add a Redis client dependency or choose
+an application policy automatically. When `ratelimit.Addon()` is enabled and a
+generated app has action, API, SSR, or split-backend proxy routes, the generated
+package exposes `RegisterRateLimiter(*ratelimit.Limiter)`.
 
 ```go
 store := ratelimit.NewInMemoryStore(ratelimit.InMemoryOptions{})
@@ -91,6 +93,36 @@ if err != nil {
 
 handler := limiter.Middleware(next)
 ```
+
+Generated apps can register the same limiter from user-owned Go in the
+generated package:
+
+```go
+package gowdkapp
+
+import (
+	"time"
+
+	"github.com/cssbruno/gowdk/addons/ratelimit"
+)
+
+func init() {
+	store := ratelimit.NewInMemoryStore(ratelimit.InMemoryOptions{})
+	limiter, err := ratelimit.New(ratelimit.Options{
+		Limit:  60,
+		Window: time.Minute,
+		Store:  store,
+	})
+	if err != nil {
+		panic(err)
+	}
+	RegisterRateLimiter(limiter)
+}
+```
+
+Generated action, API, SSR, and split-backend proxy handlers call the registered
+limiter before guards and user handler logic. If no limiter is registered, the
+generated handlers continue normally.
 
 Distributed deployments can use `ratelimit.NewRedisStore` with a small
 `RedisClient` adapter:
@@ -108,4 +140,38 @@ limiter, err := ratelimit.New(ratelimit.Options{
 	Window: time.Minute,
 	Store:  redisStore,
 })
+```
+
+Example adapter for `github.com/redis/go-redis/v9`:
+
+```go
+import (
+	"context"
+	"fmt"
+
+	"github.com/redis/go-redis/v9"
+)
+
+type GoRedisRateLimitClient struct {
+	Client *redis.Client
+}
+
+func (client GoRedisRateLimitClient) EvalInt64s(ctx context.Context, script string, keys []string, args ...string) ([]int64, error) {
+	values, err := client.Client.Eval(ctx, script, keys, args).Slice()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]int64, 0, len(values))
+	for _, value := range values {
+		switch typed := value.(type) {
+		case int64:
+			out = append(out, typed)
+		case int:
+			out = append(out, int64(typed))
+		default:
+			return nil, fmt.Errorf("unexpected redis rate-limit value %T", value)
+		}
+	}
+	return out, nil
+}
 ```

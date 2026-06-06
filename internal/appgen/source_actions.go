@@ -15,7 +15,7 @@ import (
 
 func actionHandlerSource(actions []ActionEndpoint, csrf bool) string {
 	sorted := sortedActionEndpoints(actions)
-	decls := []ast.Decl{actionFuncDecl(sorted, csrf)}
+	decls := []ast.Decl{actionFuncDecl(sorted, csrf, false)}
 	if len(sorted) > 0 {
 		decls = append(decls, actionRequestPathDecl())
 		decls = append(decls, actionDecoderDecls(sorted)...)
@@ -83,7 +83,7 @@ func actionNeedsValues(action ActionEndpoint) bool {
 	return action.Binding.Signature != manifest.BackendSignatureAction0
 }
 
-func actionFuncDecl(actions []ActionEndpoint, csrf bool) *ast.FuncDecl {
+func actionFuncDecl(actions []ActionEndpoint, csrf bool, rateLimit bool) *ast.FuncDecl {
 	if len(actions) == 0 {
 		return funcDecl("action", actionParams(), boolResults(), []ast.Stmt{returnBool(false)})
 	}
@@ -91,7 +91,7 @@ func actionFuncDecl(actions []ActionEndpoint, csrf bool) *ast.FuncDecl {
 	for _, action := range actions {
 		clauses = append(clauses, &ast.CaseClause{
 			List: []ast.Expr{stringLit(cleanRoutePath(action.Route))},
-			Body: actionCaseStmts(action, csrf),
+			Body: actionCaseStmts(action, csrf, rateLimit),
 		})
 	}
 	clauses = append(clauses, &ast.CaseClause{Body: []ast.Stmt{returnBool(false)}})
@@ -114,8 +114,9 @@ func actionRequestPathDecl() *ast.FuncDecl {
 	})
 }
 
-func actionCaseStmts(action ActionEndpoint, csrf bool) []ast.Stmt {
+func actionCaseStmts(action ActionEndpoint, csrf bool, rateLimit bool) []ast.Stmt {
 	stmts := endpointContextStmts("action", action.PageID, action.ActionName, actionMethod(action), action.Route)
+	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(action.Guards)...)
 	if action.Binding.Status != "" && action.Binding.Status != manifest.BackendBindingBound {
 		stmts = append(stmts, backendNotImplementedStmts(action.Binding, "action")...)

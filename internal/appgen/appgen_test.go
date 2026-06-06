@@ -635,6 +635,19 @@ func TestSSRSourceEmitterDoesNotUseStringLineWriting(t *testing.T) {
 	}
 }
 
+func TestRateLimitSourceEmitterDoesNotUseStringLineWriting(t *testing.T) {
+	payload, err := os.ReadFile("source_rate_limit.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, forbidden := range []string{"WriteString", "strings.Builder"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("rate-limit source emitter must use go/ast, found %q in source_rate_limit.go", forbidden)
+		}
+	}
+}
+
 func TestAppShellSourceEmitterDoesNotUseRawTemplates(t *testing.T) {
 	for _, path := range []string{"source.go", "source_backend_app.go", "template.go"} {
 		payload, err := os.ReadFile(path)
@@ -1050,6 +1063,62 @@ func TestGenerateWritesGuardRegistryAndGuardChecks(t *testing.T) {
 			t.Fatalf("expected guard generated source to contain %q:\n%s", expected, source)
 		}
 	}
+}
+
+func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ratelimit", gowdk.FeatureRateLimit)}},
+		Actions: []ActionEndpoint{{
+			PageID:     "newsletter",
+			ActionName: "Subscribe",
+			Method:     "POST",
+			Route:      "/newsletter",
+			Guards:     []string{"auth.required"},
+			Redirect:   "/newsletter?ok=1",
+		}},
+		APIs: []APIEndpoint{{
+			PageID:  "session",
+			APIName: "Session",
+			Method:  "GET",
+			Route:   "/api/session",
+		}},
+		SSR: []SSRRoute{{
+			PageID: "dashboard",
+			Route:  "/dashboard",
+			HTML:   "<main>Dashboard</main>",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkratelimit "github.com/cssbruno/gowdk/addons/ratelimit"`,
+		`var rateLimiter *gowdkratelimit.Limiter`,
+		`func RegisterRateLimiter(limiter *gowdkratelimit.Limiter)`,
+		`result, err := rateLimiter.AllowRequest(request)`,
+		`gowdkratelimit.WriteHeaders(response, result)`,
+		`gowdkratelimit.DefaultLimitHandler(response, request, result)`,
+		`if runRateLimit(response, request)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected rate-limit generated source to contain %q:\n%s", expected, source)
+		}
+	}
+	assertSourceOrder(t, source,
+		`ctx := gowdkruntime.WithEndpoint(request.Context(), gowdkruntime.EndpointMetadata{Kind: "action"`,
+		`if runRateLimit(response, request)`,
+		`if !runGuards(response, request, []string{"auth.required"})`,
+	)
 }
 
 func TestGenerateAutoRoutesRequiresIR(t *testing.T) {
@@ -1667,6 +1736,91 @@ func TestGeneratedBinaryBackendGuardsFailClosedWithoutRegistry(t *testing.T) {
 	}
 	if apiResponse.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected guarded API to fail closed with 403, got %d: %s", apiResponse.StatusCode, apiPayload)
+	}
+}
+
+func TestGeneratedBinaryAppliesRegisteredRateLimiter(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ratelimit", gowdk.FeatureRateLimit)}},
+		Actions: []ActionEndpoint{{
+			PageID:      "newsletter",
+			ActionName:  "Subscribe",
+			Method:      "POST",
+			Route:       "/newsletter",
+			InputFields: []string{"email"},
+			Redirect:    "/newsletter?ok=1",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, appPackageDirName, "ratelimit_register.go"), `package gowdkapp
+
+import (
+	"time"
+
+	gowdkratelimit "github.com/cssbruno/gowdk/addons/ratelimit"
+)
+
+func init() {
+	store := gowdkratelimit.NewInMemoryStore(gowdkratelimit.InMemoryOptions{})
+	limiter, err := gowdkratelimit.New(gowdkratelimit.Options{
+		Limit: 1,
+		Window: time.Hour,
+		Store: store,
+	})
+	if err != nil {
+		panic(err)
+	}
+	RegisterRateLimiter(limiter)
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	first, err := waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = first.Body.Close()
+	if first.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected first request to reach generated action redirect, got %d", first.StatusCode)
+	}
+	if first.Header.Get("X-RateLimit-Limit") != "1" {
+		t.Fatalf("expected rate-limit headers on allowed response, got %#v", first.Header)
+	}
+
+	second, err := waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(second.Body)
+	_ = second.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected second request to be rate-limited with 429, got %d: %s", second.StatusCode, payload)
+	}
+	if second.Header.Get("Retry-After") == "" {
+		t.Fatalf("expected Retry-After header on limited response, got %#v", second.Header)
 	}
 }
 

@@ -73,6 +73,93 @@ Runtime identity environment variables:
 The selected module set is fixed at build time. `GOWDK_MODULE_NAME` does not
 change which files were embedded.
 
+Single-binary deploy is the primary GOWDK differentiator. Prefer this path when
+the app needs generated actions, APIs, partial fragments, guards, CSRF, SSR, or
+embedded assets in one artifact.
+
+## Docker
+
+GOWDK does not generate Dockerfiles. A minimal container can copy a compiled
+binary:
+
+```dockerfile
+FROM gcr.io/distroless/base-debian12
+WORKDIR /app
+COPY bin/site /app/site
+ENV GOWDK_ADDR=0.0.0.0:8080
+EXPOSE 8080
+ENTRYPOINT ["/app/site"]
+```
+
+Build the binary before the image:
+
+```sh
+gowdk build --out dist/site --app .gowdk/app --bin bin/site
+docker build -t my-gowdk-site .
+docker run --rm -p 8080:8080 my-gowdk-site
+```
+
+Pass app secrets, CSRF secrets, database URLs, and service credentials as
+runtime environment variables owned by your deployment platform.
+
+## systemd
+
+Run the single binary under systemd when deploying to a Linux VM:
+
+```ini
+[Unit]
+Description=GOWDK site
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/gowdk-site
+ExecStart=/opt/gowdk-site/bin/site
+Environment=GOWDK_ADDR=127.0.0.1:8080
+Environment=GOWDK_APP_ID=site
+Restart=on-failure
+RestartSec=2s
+User=gowdk
+Group=gowdk
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Keep secrets in systemd drop-ins, an environment file with correct filesystem
+permissions, or the host secret manager. Do not commit them to the repository.
+
+## Reverse Proxies
+
+Generated binaries speak plain HTTP. Put TLS, HTTP/2, compression, and public
+host routing in a normal reverse proxy.
+
+Caddy:
+
+```caddyfile
+example.com {
+	reverse_proxy 127.0.0.1:8080
+}
+```
+
+nginx:
+
+```nginx
+server {
+    listen 80;
+    server_name example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Configure trusted proxy behavior in app-owned middleware when handlers depend
+on forwarded IP, host, or scheme values.
+
 ## Cache Defaults
 
 Generated binaries use explicit cache headers:
@@ -100,6 +187,33 @@ Generated binaries use explicit cache headers:
   `stale-while-revalidate=<seconds>` to the generated Cache-Control header for
   successful static SPA HTML and SSR HTML responses. Accepted values are whole
   seconds or whole-second durations such as `60s`, `5m`, or `1h`.
+
+## Static Hosts And CDN
+
+For pure build-time output, deploy `gowdk build --out dist/site` to any static
+host that supports directory indexes.
+
+Recommended CDN policy:
+
+- Respect generated `Cache-Control` headers when serving through a generated
+  binary.
+- For static-file hosting, cache content-hashed assets under `assets/` for a
+  long time.
+- Revalidate HTML unless the page has an explicit `@cache` policy.
+- Do not cache action/API/fragment/SSR error responses from a generated binary.
+
+Cloudflare Pages, Vercel, and Netlify can serve static `dist/site` output when
+the app does not need generated request-time handlers. Use a generated binary,
+container, VM, or platform that can run Go when the app needs actions, APIs,
+fragments, SSR, guards, CSRF, or server validation.
+
+Cloudflare Workers compatibility is limited to generated static output or the
+separate Go `js/wasm` deploy artifact. GOWDK does not currently emit a Workers
+adapter.
+
+Kubernetes guidance is intentionally not generated. Use normal container and
+service manifests around the Docker/single-binary shape only when your
+deployment environment already requires Kubernetes.
 
 ## Module And Target Builds
 
@@ -158,6 +272,28 @@ gowdk build --out dist/site --app .gowdk/app --wasm bin/site.wasm
 This is a Go `js/wasm` deploy artifact for runtimes that can execute that
 artifact. It is separate from browser island assets emitted by
 `g:island="wasm"`.
+
+## Addons
+
+Addons are normal Go packages imported by `gowdk.config.go`:
+
+```go
+import (
+	"github.com/cssbruno/gowdk/addons/actions"
+	"github.com/cssbruno/gowdk/addons/partial"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		actions.Addon(),
+		partial.Addon(),
+	},
+}
+```
+
+Third-party addons should ship as Go modules. Versioning follows Go module
+versions, not CLI plugin discovery. GOWDK should not load production addons
+from runtime filesystem scans, network registries, or hidden project metadata.
 
 ## Request-Time Feature Limits
 

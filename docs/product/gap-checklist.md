@@ -827,23 +827,29 @@ Done when:
 
 ### 15. Deployment And Ecosystem
 
-- [ ] Keep the single-binary deploy as the primary differentiator.
-- [ ] Add Docker deployment guidance.
-- [ ] Add systemd deployment guidance.
-- [ ] Add reverse proxy examples for Caddy and nginx.
-- [ ] Add CDN/static hosting guidance for `gowdk build --out`.
-- [ ] Add Cloudflare deployment guidance if compatible with the binary/WASM
+- [x] Keep the single-binary deploy as the primary differentiator.
+      Decision: deployment docs recommend the generated single binary whenever
+      request-time handlers, SSR, guards, CSRF, or embedded assets are needed.
+- [x] Add Docker deployment guidance.
+- [x] Add systemd deployment guidance.
+- [x] Add reverse proxy examples for Caddy and nginx.
+- [x] Add CDN/static hosting guidance for `gowdk build --out`.
+- [x] Add Cloudflare deployment guidance if compatible with the binary/WASM
       story.
-- [ ] Add Vercel/Netlify static deployment guidance if useful for build-output
+- [x] Add Vercel/Netlify static deployment guidance if useful for build-output
       files.
-- [ ] Add Kubernetes guidance only if real users need it.
-- [ ] Define addon discovery and versioning expectations.
-- [ ] Define whether third-party addon packages are loaded through Go imports,
+- [x] Add Kubernetes guidance only if real users need it.
+      Decision: no generated Kubernetes manifests. Use normal container/service
+      manifests only when the deployment environment already requires them.
+- [x] Define addon discovery and versioning expectations.
+- [x] Define whether third-party addon packages are loaded through Go imports,
       CLI discovery, or project config only.
+      Decision: addons are Go packages imported and registered from
+      `gowdk.config.go`; versioning follows Go modules.
 
 Done when:
 
-- [ ] Deployment docs cover the common paths without forcing platform-specific
+- [x] Deployment docs cover the common paths without forcing platform-specific
       code into compiler/runtime core.
 
 ## Intentional Differences To Preserve

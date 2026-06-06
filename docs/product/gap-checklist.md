@@ -432,14 +432,21 @@ Done when:
 - [x] Decide whether DOM actions/attachments are core, addon, or non-goal.
 - [x] Add parser diagnostics for unsupported external-framework syntax that
       users are likely to try.
-- [ ] Add golden tests for each supported markup construct.
+- [x] Add golden tests for each supported markup construct.
+      Covered by `internal/view` exact-output tests for HTML attributes,
+      shorthand, interpolation, component calls, slots, actions, partials,
+      island events, refs, conditionals, loops, bindings, reactive attributes,
+      class/style bindings, and WASM island selection.
 - [x] Add negative tests for unsupported constructs with useful diagnostics.
 
 Done when:
 
 - [x] `docs/language/markup.md` is an exact contract, not a direction document.
 - [x] Unsupported familiar template syntax fails clearly.
-- [ ] `gowdk fmt` preserves or normalizes the supported syntax predictably.
+- [x] `gowdk fmt` preserves or normalizes the supported syntax predictably.
+      Covered by `internal/lang/format_test.go` and documented in
+      `docs/language/formatting.md` as the current line-oriented formatter
+      contract.
 
 ### 3. Component Contract
 

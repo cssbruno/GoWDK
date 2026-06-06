@@ -438,16 +438,16 @@ Done when:
 
 ### 3. Component Contract
 
-- [ ] Define inline prop types beyond `string`, or document why imported Go
+- [x] Define inline prop types beyond `string`, or document why imported Go
       structs are the only typed prop path.
-- [ ] Add prop defaults or document how users should express defaults in Go.
-- [ ] Decide whether rest/spread props are allowed.
-- [ ] Decide whether bindable child state is stable or experimental.
-- [ ] Decide whether recursive components are supported, rejected, or deferred.
-- [ ] Decide whether dynamic component selection is allowed.
-- [ ] Define exported component values and how parent pages/components consume
+- [x] Add prop defaults or document how users should express defaults in Go.
+- [x] Decide whether rest/spread props are allowed.
+- [x] Decide whether bindable child state is stable or experimental.
+- [x] Decide whether recursive components are supported, rejected, or deferred.
+- [x] Decide whether dynamic component selection is allowed.
+- [x] Define exported component values and how parent pages/components consume
       them.
-- [ ] Define slot versus snippet terminology for GOWDK.
+- [x] Define slot versus snippet terminology for GOWDK.
 - [ ] Add examples for default slots, named slots, scoped slots, emits,
       bindable state, typed exports, stores, and WASM islands.
 - [ ] Add component contract tests for each supported public feature.

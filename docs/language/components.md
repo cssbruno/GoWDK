@@ -12,6 +12,8 @@ Implemented today:
   `props ui.CounterProps`.
 - Typed state contracts that reference imported Go structs and a no-argument
   init function, such as `state ui.CounterState = ui.NewCounterState()`.
+- Typed exports metadata blocks such as `exports { selectedID string }`.
+- Typed emits metadata blocks such as `emits { select(id string) }`.
 - One `view {}` block per component.
 - Self-closing component calls such as `<Hero title="GOWDK" />`.
 - Wrapper component calls such as `<Panel>...</Panel>` with child content
@@ -37,6 +39,10 @@ Implemented today:
 - Component-local `client { fn Name(...) { ... } }` handlers can group the
   current safe typed expression subset and be called from `g:on:*` with scalar
   expressions, such as `Add(Count + 1)`.
+- Components can dispatch declared events from `client {}` handlers with
+  `emit name(Field)`. Parent components can listen on component calls with
+  `g:on:name={...}` and receive typed event fields through the compiler-owned
+  `event` scope.
 - Component-local `computed Name Type { return expr }` values can derive
   read-only browser state from props, state, and other computed values. The
   compiler orders computed values by dependency and rejects cycles.
@@ -102,11 +108,21 @@ props metadata. Parent calls can pass literal strings and the implemented
 build-data interpolation subset. Props are read-only to `client {}` code; mutable
 browser state belongs in `state` or in an explicit page store.
 
+Imported Go structs are the stable typed prop path today. Non-string inline
+props are planned, but inline `props {}` blocks currently accept only `string`.
+Defaults should be expressed in normal Go init/build data or by rendering a
+fallback in the component `view {}`. There is no rest/spread prop syntax, prop
+renaming syntax, or implicit global prop lookup in the current contract.
+
 State is component-local UI state. A `state Type = Init()` declaration runs the
 no-argument Go init function at build time for SPA/static output and serializes
 the JSON-compatible initial value into the component island. State is visible to
 the browser and must not carry secrets, trusted authorization state, database
 state, or server validation results that the server still needs to enforce.
+
+Bindable child state is not stable as a parent/child contract. Parent-child
+coordination should use typed emits plus parent-owned state, or server actions
+for trusted behavior.
 
 Computed values are read-only derived state. They can depend on props, state,
 and other computed values. The compiler builds a dependency graph for declared
@@ -119,6 +135,21 @@ declares that the island may use that store. Generated browser store state is a
 page-local enhancement contract; it is not global application authority and it
 does not replace server-side routing, auth, validation, persistence, or action
 behavior.
+
+Exports are typed component metadata today. They document values a component
+intends to expose, but parent pages/components do not yet have a stable runtime
+API for consuming exported component values. Until that contract is generated
+and documented, use props, typed emits, stores, actions, or build/load data for
+actual data flow.
+
+Slots are the reusable-markup primitive. A default slot uses `<slot />`, named
+slots use `<slot name="name">`, and scoped slots pass scalar values through
+slot props plus caller-side `let:` bindings. GOWDK does not currently have a
+separate snippet/render value model.
+
+Recursive component rendering is rejected to prevent unbounded build-time
+rendering. Dynamic component selection is deferred; component calls must name a
+known component directly or through an explicit `use` alias.
 
 `client {}` is a compiler-owned UI language, not arbitrary JavaScript. The
 supported handlers, helpers, lifecycle blocks, effects, refs, list built-ins,
@@ -144,6 +175,9 @@ islands are not a replacement for backend handlers.
 Not implemented yet:
 
 - Non-string props in inline `props {}` blocks.
+- Stable parent consumption of typed `exports {}` values.
+- Rest/spread props, prop renaming, recursive component rendering, dynamic
+  component selection, and bindable child state.
 - Full runtime validation for user browser logic in WASM islands, including
   required Go/JS entrypoint registration and export checks.
 - Wiring generated Go component packages into the generated app layout.

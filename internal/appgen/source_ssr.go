@@ -83,7 +83,7 @@ func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool) []ast
 		)))
 	}
 	body = append(body, ssrLoadStmts(route)...)
-	body = append(body, ssrWriteHTMLStmts(id("html"))...)
+	body = append(body, ssrWriteHTMLStmts(id("html"), route.Cache)...)
 	return body
 }
 
@@ -311,7 +311,13 @@ func ssrRouteRender(route SSRRoute) string {
 	return string(route.Render)
 }
 
-func ssrWriteHTMLStmts(html ast.Expr) []ast.Stmt {
+func ssrWriteHTMLStmts(html ast.Expr, cache string) []ast.Stmt {
+	if cache != "" {
+		return []ast.Stmt{
+			assign([]ast.Expr{id("_")}, call(sel("gowdkresponse", "WriteHTML"), id("response"), id("request"), html, stringLit(cache))),
+			returnBool(true),
+		}
+	}
 	return []ast.Stmt{
 		assign([]ast.Expr{id("_")}, call(sel("gowdkresponse", "WriteNoStoreHTML"), id("response"), id("request"), html)),
 		returnBool(true),

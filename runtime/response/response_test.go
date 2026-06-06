@@ -175,6 +175,38 @@ func TestWriteNoStoreHTML(t *testing.T) {
 	}
 }
 
+func TestWriteHTMLUsesExplicitCachePolicy(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	if err := WriteHTML(recorder, request, "<main>SSR</main>", "public, max-age=60"); err != nil {
+		t.Fatal(err)
+	}
+
+	if contentType := recorder.Header().Get("Content-Type"); contentType != "text/html; charset=utf-8" {
+		t.Fatalf("unexpected content type: %q", contentType)
+	}
+	if cacheControl := recorder.Header().Get("Cache-Control"); cacheControl != "public, max-age=60" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+	if recorder.Body.String() != "<main>SSR</main>" {
+		t.Fatalf("unexpected body: %s", recorder.Body.String())
+	}
+}
+
+func TestWriteHTMLDefaultsToNoStore(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	if err := WriteHTML(recorder, request, "<main>SSR</main>", " "); err != nil {
+		t.Fatal(err)
+	}
+
+	if cacheControl := recorder.Header().Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
 func TestWriteNoStoreHTMLSuppressesHeadBody(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodHead, "/", nil)

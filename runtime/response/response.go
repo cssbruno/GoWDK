@@ -204,8 +204,19 @@ func WriteNoStoreHTTP(writer http.ResponseWriter, result Response) error {
 // WriteNoStoreHTML writes a no-store HTML response and suppresses the body for
 // HEAD requests.
 func WriteNoStoreHTML(writer http.ResponseWriter, request *http.Request, body string) error {
+	return WriteHTML(writer, request, body, "no-store")
+}
+
+// WriteHTML writes an HTML response with an explicit Cache-Control policy and
+// suppresses the body for HEAD requests. An empty cache policy falls back to
+// no-store for request-time safety.
+func WriteHTML(writer http.ResponseWriter, request *http.Request, body string, cacheControl string) error {
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-	writer.Header().Set("Cache-Control", "no-store")
+	cacheControl = strings.TrimSpace(cacheControl)
+	if cacheControl == "" {
+		cacheControl = "no-store"
+	}
+	writer.Header().Set("Cache-Control", cacheControl)
 	writer.WriteHeader(http.StatusOK)
 	if request.Method == http.MethodHead {
 		return nil

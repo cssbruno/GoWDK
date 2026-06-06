@@ -84,12 +84,14 @@ Generated binaries use explicit cache headers:
   policy is `Cache-Control: public, max-age=31536000, immutable` with SHA-256
   content hashes in the asset manifest.
 - CSRF-personalized HTML, action responses, API responses, partial fragments,
-  SSR HTML, SSR load redirects, generated handler errors, generated error
-  pages, and invalid-CSRF responses use `Cache-Control: no-store`.
+  SSR HTML without an explicit `@cache`, SSR load redirects, generated handler
+  errors, generated error pages, and invalid-CSRF responses use
+  `Cache-Control: no-store`.
 - Page-level `@cache` records route response cache intent in compiler, route,
-  manifest, and generated SSR route metadata. It does not override the
-  no-store safety policy for actions, APIs, partial responses, or CSRF-mutated
-  HTML.
+  manifest, and generated SSR route metadata. Generated SSR binaries apply it
+  to HTML responses for that page. It does not override the no-store safety
+  policy for actions, APIs, partial responses, load redirects, generated
+  errors, or CSRF-mutated HTML.
 
 ## Module And Target Builds
 

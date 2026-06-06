@@ -28,6 +28,10 @@ act Subscribe POST "/newsletter/{slug}"
 
 api Health GET "/api/health"
 
+fragment List GET "/newsletter/list" "#items" {
+  <ul><li>{title}</li></ul>
+}
+
 view {
   <main><Panel><h1>{title}</h1></Panel></main>
 }
@@ -60,6 +64,12 @@ view {
 	}
 	if len(file.APIs) != 1 || file.APIs[0].Name != "Health" || file.APIs[0].Method != "GET" || file.APIs[0].Route != "/api/health" {
 		t.Fatalf("unexpected api endpoints: %#v", file.APIs)
+	}
+	if len(file.Fragments) != 1 || file.Fragments[0].Name != "List" || file.Fragments[0].Route != "/newsletter/list" || file.Fragments[0].Target != "#items" {
+		t.Fatalf("unexpected fragment endpoints: %#v", file.Fragments)
+	}
+	if file.Fragments[0].Body != "<ul><li>{title}</li></ul>" {
+		t.Fatalf("unexpected fragment body: %q", file.Fragments[0].Body)
 	}
 	view := file.Blocks[2]
 	if view.Kind != "view" || len(view.View) != 1 {

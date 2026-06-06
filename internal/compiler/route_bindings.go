@@ -26,8 +26,9 @@ const (
 type EndpointKind string
 
 const (
-	EndpointAction EndpointKind = "action"
-	EndpointAPI    EndpointKind = "api"
+	EndpointAction   EndpointKind = "action"
+	EndpointAPI      EndpointKind = "api"
+	EndpointFragment EndpointKind = "fragment"
 )
 
 // RouteMetadata is route and endpoint metadata used by the CLI routes report.
@@ -193,6 +194,19 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				BindingFunction:   binding.FunctionName,
 				BindingSignature:  binding.Signature,
 				BindingInputType:  binding.InputType,
+			})
+		case gwdkir.EndpointFragment:
+			endpoints = append(endpoints, EndpointBinding{
+				Kind:           EndpointFragment,
+				EndpointSource: string(endpoint.Source),
+				Source:         endpoint.SourceFile,
+				SourceSpan:     endpoint.Span,
+				Package:        endpoint.Package,
+				Symbol:         endpoint.Symbol,
+				Method:         endpoint.Method,
+				Route:          endpoint.Path,
+				PageID:         endpoint.PageID,
+				Handler:        "fragments." + exportedRouteName(endpoint.PageID) + exportedRouteName(endpoint.Symbol),
 			})
 		}
 	}

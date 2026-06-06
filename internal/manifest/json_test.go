@@ -28,9 +28,10 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 				Layouts: []string{"root", "blog"},
 				Paths:   true,
 				Blocks: Blocks{
-					View:     true,
-					ViewBody: `<main class="post lead" style="color: red;"><img src="/assets/post.png" /><Hero title="Blog" /><ArticleCard title="Post" /></main>`,
-					APIs:     []API{{Name: "metadata", Method: "GET", Route: "/blog/{slug}/metadata"}},
+					View:      true,
+					ViewBody:  `<main class="post lead" style="color: red;"><img src="/assets/post.png" /><Hero title="Blog" /><ArticleCard title="Post" /></main>`,
+					APIs:      []API{{Name: "metadata", Method: "GET", Route: "/blog/{slug}/metadata"}},
+					Fragments: []FragmentEndpoint{{Name: "summary", Method: "GET", Route: "/blog/summary", Target: "#summary"}},
 				},
 			},
 			{
@@ -115,12 +116,13 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 				Path string `json:"path"`
 			} `json:"artifacts"`
 			Blocks struct {
-				Paths   bool     `json:"paths"`
-				Build   bool     `json:"build"`
-				Load    bool     `json:"load"`
-				View    bool     `json:"view"`
-				Actions []string `json:"actions"`
-				APIs    []string `json:"apis"`
+				Paths     bool     `json:"paths"`
+				Build     bool     `json:"build"`
+				Load      bool     `json:"load"`
+				View      bool     `json:"view"`
+				Actions   []string `json:"actions"`
+				APIs      []string `json:"apis"`
+				Fragments []string `json:"fragments"`
 			} `json:"blocks"`
 			Actions []struct {
 				Name           string `json:"name"`
@@ -137,6 +139,12 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 				Method string `json:"method"`
 				Route  string `json:"route"`
 			} `json:"apis"`
+			Fragments []struct {
+				Name   string `json:"name"`
+				Method string `json:"method"`
+				Route  string `json:"route"`
+				Target string `json:"target"`
+			} `json:"fragments"`
 			Components []string `json:"components"`
 		} `json:"pages"`
 		Components map[string]struct {
@@ -206,8 +214,14 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 	if len(decoded.Pages["blog.post"].Blocks.APIs) != 1 || decoded.Pages["blog.post"].Blocks.APIs[0] != "metadata" {
 		t.Fatalf("expected blog.post API block name, got %#v", decoded.Pages["blog.post"].Blocks.APIs)
 	}
+	if len(decoded.Pages["blog.post"].Blocks.Fragments) != 1 || decoded.Pages["blog.post"].Blocks.Fragments[0] != "summary" {
+		t.Fatalf("expected blog.post fragment block name, got %#v", decoded.Pages["blog.post"].Blocks.Fragments)
+	}
 	if len(decoded.Pages["blog.post"].APIs) != 1 || decoded.Pages["blog.post"].APIs[0].Name != "metadata" || decoded.Pages["blog.post"].APIs[0].Method != "GET" || decoded.Pages["blog.post"].APIs[0].Route != "/blog/{slug}/metadata" {
 		t.Fatalf("expected blog.post API metadata, got %#v", decoded.Pages["blog.post"].APIs)
+	}
+	if len(decoded.Pages["blog.post"].Fragments) != 1 || decoded.Pages["blog.post"].Fragments[0].Name != "summary" || decoded.Pages["blog.post"].Fragments[0].Route != "/blog/summary" || decoded.Pages["blog.post"].Fragments[0].Target != "#summary" {
+		t.Fatalf("expected blog.post fragment metadata, got %#v", decoded.Pages["blog.post"].Fragments)
 	}
 	if strings.Join(decoded.Pages["blog.post"].Components, ",") != "ArticleCard,Hero" {
 		t.Fatalf("expected blog.post component references, got %#v", decoded.Pages["blog.post"].Components)

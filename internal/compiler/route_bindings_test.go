@@ -35,8 +35,9 @@ func TestBuildRouteMetadataSeparatesRoutesFromEndpoints(t *testing.T) {
 				Route:  "/patients",
 				Render: gowdk.SPA,
 				Blocks: manifest.Blocks{
-					View: true,
-					APIs: []manifest.API{{Name: "List", Method: "GET", Route: "/api/patients"}},
+					View:      true,
+					APIs:      []manifest.API{{Name: "List", Method: "GET", Route: "/api/patients"}},
+					Fragments: []manifest.FragmentEndpoint{{Name: "Table", Method: "GET", Route: "/patients/table", Target: "#patients", Body: "<section>Patients</section>"}},
 				},
 			},
 		},
@@ -51,6 +52,7 @@ func TestBuildRouteMetadataSeparatesRoutesFromEndpoints(t *testing.T) {
 	assertRoute(t, metadata.Routes, RouteSSR, "GET", "/dashboard", "ssr.RenderDashboard")
 	assertEndpoint(t, metadata.Endpoints, EndpointAction, "POST", "/newsletter", "actions.NewsletterSubscribe")
 	assertEndpoint(t, metadata.Endpoints, EndpointAPI, "GET", "/api/patients", "api.PatientsIndexList")
+	assertEndpoint(t, metadata.Endpoints, EndpointFragment, "GET", "/patients/table", "fragments.PatientsIndexTable")
 	assertInfo(t, metadata.Info, "ssr_disabled", "newsletter")
 	assertInfo(t, metadata.Info, "spa_disabled", "dashboard")
 }
@@ -133,12 +135,22 @@ func TestBuildRouteMetadataFromIR(t *testing.T) {
 					Signature:    manifest.BackendSignatureAction0,
 				},
 			},
+			{
+				Kind:       gwdkir.EndpointFragment,
+				Source:     gwdkir.EndpointSourceGOWDK,
+				PageID:     "newsletter",
+				Symbol:     "List",
+				Method:     "GET",
+				Path:       "/newsletter/list",
+				SourceFile: "newsletter.page.gwdk",
+			},
 		},
 	})
 
 	assertRoute(t, metadata.Routes, RouteSPA, "GET", "/newsletter", `embedded.SPA("pages/newsletter.html")`)
 	assertRoute(t, metadata.Routes, RouteSSR, "GET", "/dashboard", "ssr.RenderDashboard")
 	assertEndpoint(t, metadata.Endpoints, EndpointAction, "POST", "/newsletter", "actions.NewsletterSubscribe")
+	assertEndpoint(t, metadata.Endpoints, EndpointFragment, "GET", "/newsletter/list", "fragments.NewsletterList")
 	if metadata.Endpoints[0].BindingStatus != manifest.BackendBindingBound {
 		t.Fatalf("expected binding status from IR, got %#v", metadata.Endpoints[0])
 	}

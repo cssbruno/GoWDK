@@ -69,6 +69,46 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 		_, issues := parseRoute(api.Route)
 		diagnostics = append(diagnostics, routeDiagnostics(page, label, issues, api.RouteSpan, api.RouteParams)...)
 	}
+	for _, fragment := range page.Blocks.Fragments {
+		if !isExportedHandlerName(fragment.Name) {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "invalid_backend_handler_name",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    fragment.Span,
+				Message: fmt.Sprintf("%s fragment handler %q must be an exported Go identifier", page.ID, fragment.Name),
+			})
+		}
+		method := strings.ToUpper(strings.TrimSpace(fragment.Method))
+		if method == "" {
+			method = "GET"
+		}
+		if method != "GET" {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "unsupported_fragment_method",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    fragment.Span,
+				Message: fmt.Sprintf("%s fragment %s uses unsupported method %s; fragments currently require GET", page.ID, fragment.Name, method),
+			})
+		}
+		fragmentRoute, issues := parseRoute(fragment.Route)
+		diagnostics = append(diagnostics, routeDiagnostics(page, fmt.Sprintf("fragment %s endpoint path", fragment.Name), issues, fragment.RouteSpan, fragment.RouteParams)...)
+		if len(issues) == 0 && len(fragmentRoute.Params) > 0 {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:   "fragment_dynamic_route",
+				PageID: page.ID,
+				Source: page.Source,
+				Span:   firstNamedSpan(fragment.RouteParams, fragment.RouteSpan),
+				Message: fmt.Sprintf(
+					"%s fragment %s endpoint path %q must be concrete; dynamic fragment routes are not supported yet",
+					page.ID,
+					fragment.Name,
+					fragment.Route,
+				),
+			})
+		}
+	}
 
 	if requiresSSRFeature(mode, page) && !config.HasFeature(gowdk.FeatureSSR) {
 		diagnostics = append(diagnostics, ValidationError{

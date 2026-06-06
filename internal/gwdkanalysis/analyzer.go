@@ -154,6 +154,20 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 		})
 		page.Blocks.Spans.APIs = append(page.Blocks.Spans.APIs, manifest.NamedSpan{Name: endpoint.Name, Span: endpoint.Span})
 	}
+	for _, fragment := range ast.Fragments {
+		page.Blocks.Fragments = append(page.Blocks.Fragments, manifest.FragmentEndpoint{
+			Name:        fragment.Name,
+			Method:      fragment.Method,
+			Route:       fragment.Route,
+			Target:      fragment.Target,
+			Body:        fragment.Body,
+			Span:        fragment.Span,
+			RouteSpan:   fragment.RouteSpan,
+			TargetSpan:  fragment.TargetSpan,
+			RouteParams: routeParamSpans(fragment.Route, fragment.RouteSpan),
+		})
+		page.Blocks.Spans.Fragments = append(page.Blocks.Spans.Fragments, manifest.NamedSpan{Name: fragment.Name, Span: fragment.Span})
+	}
 	if page.ID == "" {
 		return manifest.Page{}, fmt.Errorf("%s: missing @page", source)
 	}
@@ -397,6 +411,24 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 				DynamicParams: routeParams(path),
 				SourceFile:    page.Source,
 				Span:          api.Span,
+			})
+		}
+		for _, fragment := range page.Blocks.Fragments {
+			method := fragment.Method
+			if method == "" {
+				method = "GET"
+			}
+			program.Endpoints = append(program.Endpoints, gwdkir.Endpoint{
+				Kind:          gwdkir.EndpointFragment,
+				Source:        gwdkir.EndpointSourceGOWDK,
+				Package:       page.Package,
+				PageID:        page.ID,
+				Symbol:        fragment.Name,
+				Method:        method,
+				Path:          fragment.Route,
+				DynamicParams: routeParams(fragment.Route),
+				SourceFile:    page.Source,
+				Span:          fragment.Span,
 			})
 		}
 	}
@@ -810,16 +842,18 @@ func lowerIRBlocks(blocks manifest.Blocks) gwdkir.Blocks {
 		ViewBody:   blocks.ViewBody,
 		Actions:    lowerIRActions(blocks.Actions),
 		APIs:       lowerIRAPIs(blocks.APIs),
+		Fragments:  lowerIRFragmentEndpoints(blocks.Fragments),
 		Spans: gwdkir.BlockSpans{
-			Paths:   blocks.Spans.Paths,
-			Build:   blocks.Spans.Build,
-			Load:    blocks.Spans.Load,
-			Client:  blocks.Spans.Client,
-			View:    blocks.Spans.View,
-			Actions: append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
-			APIs:    append([]manifest.NamedSpan(nil), blocks.Spans.APIs...),
-			Exports: blocks.Spans.Exports,
-			Emits:   blocks.Spans.Emits,
+			Paths:     blocks.Spans.Paths,
+			Build:     blocks.Spans.Build,
+			Load:      blocks.Spans.Load,
+			Client:    blocks.Spans.Client,
+			View:      blocks.Spans.View,
+			Actions:   append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
+			APIs:      append([]manifest.NamedSpan(nil), blocks.Spans.APIs...),
+			Fragments: append([]manifest.NamedSpan(nil), blocks.Spans.Fragments...),
+			Exports:   blocks.Spans.Exports,
+			Emits:     blocks.Spans.Emits,
 		},
 	}
 }
@@ -867,6 +901,24 @@ func lowerIRFragments(fragments []manifest.Fragment) []gwdkir.Fragment {
 	out := make([]gwdkir.Fragment, 0, len(fragments))
 	for _, fragment := range fragments {
 		out = append(out, gwdkir.Fragment{Target: fragment.Target, Body: fragment.Body, Span: fragment.Span})
+	}
+	return out
+}
+
+func lowerIRFragmentEndpoints(fragments []manifest.FragmentEndpoint) []gwdkir.FragmentEndpoint {
+	out := make([]gwdkir.FragmentEndpoint, 0, len(fragments))
+	for _, fragment := range fragments {
+		out = append(out, gwdkir.FragmentEndpoint{
+			Name:        fragment.Name,
+			Method:      fragment.Method,
+			Route:       fragment.Route,
+			Target:      fragment.Target,
+			Body:        fragment.Body,
+			Span:        fragment.Span,
+			RouteSpan:   fragment.RouteSpan,
+			TargetSpan:  fragment.TargetSpan,
+			RouteParams: append([]manifest.NamedSpan(nil), fragment.RouteParams...),
+		})
 	}
 	return out
 }

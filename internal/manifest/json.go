@@ -21,29 +21,30 @@ type manifestJSON struct {
 }
 
 type pageJSON struct {
-	Source          string           `json:"source,omitempty"`
-	Kind            string           `json:"kind"`
-	Package         string           `json:"package,omitempty"`
-	Route           string           `json:"route"`
-	Render          gowdk.RenderMode `json:"render"`
-	Cache           string           `json:"cache,omitempty"`
-	Metadata        *metadataJSON    `json:"metadata,omitempty"`
-	Imports         []importJSON     `json:"imports,omitempty"`
-	Uses            []useJSON        `json:"uses,omitempty"`
-	Layouts         []string         `json:"layouts,omitempty"`
-	DynamicParams   []string         `json:"dynamicParams,omitempty"`
-	RouteParams     []routeParamJSON `json:"routeParams,omitempty"`
-	Paths           bool             `json:"paths,omitempty"`
-	Guard           []string         `json:"guard,omitempty"`
-	CSS             []string         `json:"css,omitempty"`
-	Blocks          blocksJSON       `json:"blocks"`
-	Actions         []actionJSON     `json:"actions,omitempty"`
-	APIs            []apiJSON        `json:"apis,omitempty"`
-	Components      []string         `json:"components,omitempty"`
-	Assets          []string         `json:"assets,omitempty"`
-	CSSClasses      []string         `json:"cssClasses,omitempty"`
-	StyleAttributes []string         `json:"styleAttributes,omitempty"`
-	Artifacts       []artifactJSON   `json:"artifacts,omitempty"`
+	Source          string                 `json:"source,omitempty"`
+	Kind            string                 `json:"kind"`
+	Package         string                 `json:"package,omitempty"`
+	Route           string                 `json:"route"`
+	Render          gowdk.RenderMode       `json:"render"`
+	Cache           string                 `json:"cache,omitempty"`
+	Metadata        *metadataJSON          `json:"metadata,omitempty"`
+	Imports         []importJSON           `json:"imports,omitempty"`
+	Uses            []useJSON              `json:"uses,omitempty"`
+	Layouts         []string               `json:"layouts,omitempty"`
+	DynamicParams   []string               `json:"dynamicParams,omitempty"`
+	RouteParams     []routeParamJSON       `json:"routeParams,omitempty"`
+	Paths           bool                   `json:"paths,omitempty"`
+	Guard           []string               `json:"guard,omitempty"`
+	CSS             []string               `json:"css,omitempty"`
+	Blocks          blocksJSON             `json:"blocks"`
+	Actions         []actionJSON           `json:"actions,omitempty"`
+	APIs            []apiJSON              `json:"apis,omitempty"`
+	Fragments       []fragmentEndpointJSON `json:"fragments,omitempty"`
+	Components      []string               `json:"components,omitempty"`
+	Assets          []string               `json:"assets,omitempty"`
+	CSSClasses      []string               `json:"cssClasses,omitempty"`
+	StyleAttributes []string               `json:"styleAttributes,omitempty"`
+	Artifacts       []artifactJSON         `json:"artifacts,omitempty"`
 }
 
 type componentJSON struct {
@@ -121,12 +122,13 @@ type stateJSON struct {
 }
 
 type blocksJSON struct {
-	Paths   bool     `json:"paths"`
-	Build   bool     `json:"build"`
-	Load    bool     `json:"load"`
-	View    bool     `json:"view"`
-	Actions []string `json:"actions,omitempty"`
-	APIs    []string `json:"apis,omitempty"`
+	Paths     bool     `json:"paths"`
+	Build     bool     `json:"build"`
+	Load      bool     `json:"load"`
+	View      bool     `json:"view"`
+	Actions   []string `json:"actions,omitempty"`
+	APIs      []string `json:"apis,omitempty"`
+	Fragments []string `json:"fragments,omitempty"`
 }
 
 type actionJSON struct {
@@ -141,6 +143,13 @@ type actionJSON struct {
 }
 
 type fragmentJSON struct {
+	Target string `json:"target"`
+}
+
+type fragmentEndpointJSON struct {
+	Name   string `json:"name"`
+	Method string `json:"method,omitempty"`
+	Route  string `json:"route"`
 	Target string `json:"target"`
 }
 
@@ -215,6 +224,7 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 			Blocks:          blocksJSONFor(page),
 			Actions:         actionsJSON(page.Blocks.Actions),
 			APIs:            apisJSON(page.Blocks.APIs),
+			Fragments:       fragmentEndpointsJSON(page.Blocks.Fragments),
 			Components:      pageComponents(page),
 			Assets:          dependencies.Assets,
 			CSSClasses:      dependencies.CSSClasses,
@@ -312,12 +322,13 @@ func usesJSON(uses []Use) []useJSON {
 
 func blocksJSONFor(page Page) blocksJSON {
 	return blocksJSON{
-		Paths:   page.Paths,
-		Build:   page.Blocks.Build,
-		Load:    page.Blocks.Load,
-		View:    page.Blocks.View,
-		Actions: actionNames(page.Blocks.Actions),
-		APIs:    apiNames(page.Blocks.APIs),
+		Paths:     page.Paths,
+		Build:     page.Blocks.Build,
+		Load:      page.Blocks.Load,
+		View:      page.Blocks.View,
+		Actions:   actionNames(page.Blocks.Actions),
+		APIs:      apiNames(page.Blocks.APIs),
+		Fragments: fragmentEndpointNames(page.Blocks.Fragments),
 	}
 }
 
@@ -381,6 +392,33 @@ func apisJSON(apis []API) []apiJSON {
 	out := make([]apiJSON, 0, len(apis))
 	for _, api := range apis {
 		out = append(out, apiJSON{Name: api.Name, Method: api.Method, Route: api.Route})
+	}
+	return out
+}
+
+func fragmentEndpointNames(fragments []FragmentEndpoint) []string {
+	if len(fragments) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(fragments))
+	for _, fragment := range fragments {
+		names = append(names, fragment.Name)
+	}
+	return names
+}
+
+func fragmentEndpointsJSON(fragments []FragmentEndpoint) []fragmentEndpointJSON {
+	if len(fragments) == 0 {
+		return nil
+	}
+	out := make([]fragmentEndpointJSON, 0, len(fragments))
+	for _, fragment := range fragments {
+		out = append(out, fragmentEndpointJSON{
+			Name:   fragment.Name,
+			Method: fragment.Method,
+			Route:  fragment.Route,
+			Target: fragment.Target,
+		})
 	}
 	return out
 }

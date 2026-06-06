@@ -317,8 +317,9 @@ type Endpoint struct {
 type EndpointKind string
 
 const (
-	EndpointAction EndpointKind = "action"
-	EndpointAPI    EndpointKind = "api"
+	EndpointAction   EndpointKind = "action"
+	EndpointAPI      EndpointKind = "api"
+	EndpointFragment EndpointKind = "fragment"
 )
 
 type EndpointSource string

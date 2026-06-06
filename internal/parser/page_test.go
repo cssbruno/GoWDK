@@ -311,6 +311,40 @@ view {
 	}
 }
 
+func TestParsePageReadsFragmentEndpointMetadata(t *testing.T) {
+	page, err := ParsePage([]byte(`
+@page patients
+@route "/patients"
+
+fragment List GET "/patients/list" "#patients" {
+  <section>Patients</section>
+}
+
+view {
+  <main>Patients</main>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Blocks.Fragments) != 1 {
+		t.Fatalf("expected one fragment endpoint, got %#v", page.Blocks.Fragments)
+	}
+	fragment := page.Blocks.Fragments[0]
+	if fragment.Name != "List" || fragment.Method != "GET" || fragment.Route != "/patients/list" || fragment.Target != "#patients" {
+		t.Fatalf("unexpected fragment endpoint metadata: %#v", fragment)
+	}
+	if fragment.Body != "<section>Patients</section>" {
+		t.Fatalf("unexpected fragment body: %q", fragment.Body)
+	}
+	if fragment.Span.Start.Line != 5 || fragment.RouteSpan.Start.Line != 5 || fragment.TargetSpan.Start.Line != 5 {
+		t.Fatalf("expected fragment spans, got %#v", fragment)
+	}
+	if len(page.Blocks.Spans.Fragments) != 1 || page.Blocks.Spans.Fragments[0].Name != "List" {
+		t.Fatalf("expected fragment block span, got %#v", page.Blocks.Spans.Fragments)
+	}
+}
+
 func TestParsePageRejectsOldActionBlockSyntax(t *testing.T) {
 	_, err := ParsePage([]byte(`
 @page patients

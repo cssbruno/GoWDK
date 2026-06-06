@@ -30,6 +30,10 @@ build {
 act Login POST "/login"
 api Session GET "/api/session"
 
+fragment Feed GET "/fragments/home-feed" "#feed" {
+  <section>Feed</section>
+}
+
 view {
   <main>{title}</main>
 }
@@ -107,6 +111,9 @@ view {
 	if len(page.Blocks.APIs) != 1 || page.Blocks.APIs[0].Name != "Session" {
 		t.Fatalf("unexpected APIs: %#v", page.Blocks.APIs)
 	}
+	if len(page.Blocks.Fragments) != 1 || page.Blocks.Fragments[0].Name != "Feed" || page.Blocks.Fragments[0].Target != "#feed" {
+		t.Fatalf("unexpected fragments: %#v", page.Blocks.Fragments)
+	}
 
 	if result.IR.Version != gwdkir.Version {
 		t.Fatalf("unexpected IR version: %d", result.IR.Version)
@@ -123,11 +130,14 @@ view {
 	if len(result.IR.Pages) != 1 || result.IR.Pages[0].Revalidate != "60" {
 		t.Fatalf("unexpected IR page revalidate policy: %#v", result.IR.Pages)
 	}
-	if len(result.IR.Endpoints) != 2 {
-		t.Fatalf("expected action and API endpoints, got %#v", result.IR.Endpoints)
+	if len(result.IR.Endpoints) != 3 {
+		t.Fatalf("expected action, API, and fragment endpoints, got %#v", result.IR.Endpoints)
 	}
-	if result.IR.Endpoints[0].Path != "/api/session" || result.IR.Endpoints[1].Path != "/login" {
+	if result.IR.Endpoints[0].Path != "/api/session" || result.IR.Endpoints[1].Path != "/fragments/home-feed" || result.IR.Endpoints[1].Kind != gwdkir.EndpointFragment || result.IR.Endpoints[2].Path != "/login" {
 		t.Fatalf("expected sorted endpoints, got %#v", result.IR.Endpoints)
+	}
+	if len(result.IR.Pages[0].Blocks.Fragments) != 1 || result.IR.Pages[0].Blocks.Fragments[0].Body != "<section>Feed</section>" {
+		t.Fatalf("expected fragment in IR page blocks, got %#v", result.IR.Pages[0].Blocks.Fragments)
 	}
 	if len(result.IR.Templates) != 3 {
 		t.Fatalf("expected page, component, and layout templates, got %#v", result.IR.Templates)

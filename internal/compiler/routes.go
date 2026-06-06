@@ -234,6 +234,26 @@ func routeRegistrations(pages []manifest.Page, endpoints []manifest.EndpointDecl
 				Span:    firstSpan(api.RouteSpan, api.Span, page.Spans.Route),
 			})
 		}
+		for _, fragment := range page.Blocks.Fragments {
+			info, issues := parseRoute(fragment.Route)
+			if len(issues) > 0 {
+				continue
+			}
+			method := strings.ToUpper(strings.TrimSpace(fragment.Method))
+			if method == "" {
+				method = "GET"
+			}
+			registrations = append(registrations, routeRegistration{
+				Kind:    "fragment",
+				Owner:   "fragment " + page.ID + "." + fragment.Name,
+				Method:  method,
+				Route:   fragment.Route,
+				Pattern: info.Pattern,
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    firstSpan(fragment.RouteSpan, fragment.Span, page.Spans.Route),
+			})
+		}
 	}
 	for _, endpoint := range endpoints {
 		info, issues := parseRoute(endpoint.Route)

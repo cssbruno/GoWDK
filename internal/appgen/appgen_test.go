@@ -1627,6 +1627,51 @@ func TestGeneratedBinaryAppliesSSRCachePolicy(t *testing.T) {
 	}
 }
 
+func TestGeneratedBinaryAppliesSPAHTMLCachePolicy(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-assets.json"), `{
+  "version": 1,
+  "files": {},
+  "cache": {
+    "index.html": "public, max-age=120"
+  }
+}
+`)
+
+	if _, err := Generate(outputDir, appDir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, headers, err := waitForHTTPResponse("http://" + addr + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(body) != "<main>Home</main>" {
+		t.Fatalf("unexpected SPA response body: %s", body)
+	}
+	if cacheControl := headers.Get("Cache-Control"); cacheControl != "public, max-age=120" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
 func TestGeneratedBinaryExecutesSSRLoadUserLogic(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

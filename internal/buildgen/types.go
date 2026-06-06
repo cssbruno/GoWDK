@@ -1,9 +1,10 @@
 package buildgen
 
 type Artifact struct {
-	PageID string
-	Route  string
-	Path   string
+	PageID      string
+	Route       string
+	Path        string
+	CachePolicy string
 }
 
 type CSSArtifact struct {

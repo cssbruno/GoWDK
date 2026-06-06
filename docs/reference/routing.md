@@ -39,10 +39,10 @@ route metadata and should be a literal HTTP `Cache-Control` value:
 @cache "public, max-age=60"
 ```
 
-Generated SSR binaries apply explicit page `@cache` values to successful SSR
-HTML responses. Request-time safety policies still win for actions, APIs,
-partial responses, SSR load redirects, CSRF HTML mutation, and generated
-request-time errors; those use `no-store`.
+Generated binaries apply explicit page `@cache` values to successful static SPA
+HTML and SSR HTML responses. Request-time safety policies still win for
+actions, APIs, partial responses, SSR load redirects, CSRF HTML mutation, and
+generated request-time errors; those use `no-store`.
 
 ## SPA Routes
 

@@ -10,8 +10,8 @@ Implemented today:
 - `.cmp.gwdk` files can be passed to build or discovered by default and expanded from self-closing component calls.
 - `gowdk-routes.json` records the app route, page ID, and relative output path for emitted pages.
 - `gowdk-assets.json` records generated app assets such as CSS files emitted
-  by CSS processors, generated page CSS files, and the partial-update client
-  runtime when needed.
+  by CSS processors, generated page CSS files, the partial-update client
+  runtime when needed, and route HTML cache metadata.
 - `gowdk-build-report.json` records build-output generator validation, planning,
   write, manifest, cleanup, and completion events for every successful disk
   build.
@@ -112,8 +112,8 @@ Implemented today:
 - `/` maps to `index.html`.
 - `/patients` maps to `patients/index.html`.
 - Current asset names are stable and deterministic. `gowdk-assets.json`
-  records content hashes and cache policy for generated CSS/runtime assets,
-  but emitted filenames are not content-hashed yet.
+  records content hashes and cache policy for generated CSS/runtime assets.
+  Generated CSS is minified and emitted with content-hashed filenames.
 - Generated embedded apps skip local environment files, source maps, source
   files, VCS/dependency directories, and common temporary artifacts when copying
   build output into the embedded app.
@@ -245,13 +245,14 @@ as `/blog/hello-gowdk`.
 {
   "version": 1,
   "files": {
-    "assets/app.css": "assets/app.css"
+    "assets/app.css": "assets/app.7ada5a1234b1.css"
   },
   "hashes": {
     "assets/app.css": "sha256:..."
   },
   "cache": {
-    "assets/app.css": "public, max-age=31536000, immutable"
+    "assets/app.css": "public, max-age=31536000, immutable",
+    "index.html": "public, max-age=120"
   }
 }
 ```
@@ -259,10 +260,11 @@ as `/blog/hello-gowdk`.
 The `files` map resolves logical asset names to slash-separated paths relative
 to the selected output directory. `hashes` records SHA-256 content hashes for
 generated assets, and `cache` records the HTTP cache policy generated binaries
-should apply when serving those assets. The current implementation records CSS
-files emitted by CSS processors, generated page CSS files, partial runtime
-assets, generated island runtime assets, and generated island source maps. It
-does not record configured stylesheet URLs that were not written by the build.
+should apply when serving generated assets or route HTML files. The current
+implementation records CSS files emitted by CSS processors, generated page CSS
+files, partial runtime assets, generated island runtime assets, generated island
+source maps, and page-level `@cache` policies for generated SPA HTML. It does
+not record configured stylesheet URLs that were not written by the build.
 
 ## Current Build Report
 

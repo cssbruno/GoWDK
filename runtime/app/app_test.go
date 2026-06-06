@@ -43,6 +43,31 @@ func TestHandlerServesAppIndexAndIdentityHeaders(t *testing.T) {
 	}
 }
 
+func TestHandlerAppliesPageHTMLCachePolicy(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html": {Data: []byte("<main>Home</main>")},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets: asset.Manifest{
+			Version: 1,
+			Files:   map[string]string{},
+			Cache:   map[string]string{"index.html": "public, max-age=120"},
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "public, max-age=120" {
+		t.Fatalf("expected generated page cache policy, got %q", cache)
+	}
+}
+
 func TestHandlerAppliesAssetManifestCachePolicy(t *testing.T) {
 	handler := Handler{
 		Root: fstest.MapFS{

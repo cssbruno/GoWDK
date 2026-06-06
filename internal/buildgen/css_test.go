@@ -175,6 +175,38 @@ func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 	}
 }
 
+func TestBuildRecordsPageCachePolicyInAssetManifest(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "home",
+		Route: "/",
+		Cache: "public, max-age=120",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, assetManifestFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var assets runtimeasset.Manifest
+	if err := json.Unmarshal(payload, &assets); err != nil {
+		t.Fatal(err)
+	}
+	if cache := assets.CachePolicy("index.html"); cache != "public, max-age=120" {
+		t.Fatalf("expected page cache policy in asset manifest, got %q in %s", cache, payload)
+	}
+	if assets.Resolve("index.html") != "" {
+		t.Fatalf("did not expect HTML route to become an asset file entry: %s", payload)
+	}
+}
+
 func TestBuildRejectsUnknownPageCSSReferenceBeforeWriting(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)

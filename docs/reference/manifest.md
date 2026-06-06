@@ -165,7 +165,9 @@ SPA builds also write `gowdk-assets.json` in the selected output directory:
 }
 ```
 
-Today it records CSS files emitted by compile-time CSS processors and generated
-page CSS. Keys are stable logical asset names. Values are emitted
-slash-separated paths relative to the selected output directory; generated CSS
-is minified and emitted with content-hashed filenames.
+Today it records CSS files emitted by compile-time CSS processors, generated
+page CSS, and page-level cache policies for generated SPA HTML. Keys are stable
+logical asset names. Values are emitted slash-separated paths relative to the
+selected output directory; generated CSS is minified and emitted with
+content-hashed filenames. The `cache` map may include route HTML paths such as
+`index.html` without adding those route files to `files`.

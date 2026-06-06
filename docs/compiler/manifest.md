@@ -135,10 +135,11 @@ separate from `gowdk manifest` and records generated spa page artifacts:
 ## Current App Asset Manifest
 
 `gowdk build` also writes `gowdk-assets.json` in the selected output directory.
-It records generated spa assets that are not route entries. Today that means
-CSS files emitted by compile-time CSS processors, `gowdk.js` when server
-fragment forms need it, generated default JS island files, and explicit WASM
-island files/loaders:
+It records generated spa assets that are not route entries, plus cache metadata
+for route HTML when a page declares `@cache`. Today that means CSS files emitted
+by compile-time CSS processors, `gowdk.js` when server fragment forms need it,
+generated default JS island files, explicit WASM island files/loaders, and
+page-level cache policies:
 
 ```json
 {
@@ -152,8 +153,10 @@ island files/loaders:
 
 Keys are stable logical asset names and values are emitted slash-separated paths
 relative to the selected output directory. Generated CSS values include a
-content hash in the filename after minification. Configured stylesheet links are
-not included unless GOWDK emits the referenced file.
+content hash in the filename after minification. The `cache` map may also
+include route HTML paths such as `index.html`; those route entries do not need
+to appear in `files`. Configured stylesheet links are not included unless GOWDK
+emits the referenced file.
 
 ## Planned Manifest Work
 

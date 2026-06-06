@@ -27,7 +27,7 @@ func pageRouteArtifacts(outputDir string, page manifest.Page) ([]Artifact, error
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
-		artifacts = append(artifacts, Artifact{PageID: page.ID, Route: output.route, Path: outputPath})
+		artifacts = append(artifacts, Artifact{PageID: page.ID, Route: output.route, Path: outputPath, CachePolicy: page.Cache})
 	}
 	return artifacts, nil
 }
@@ -56,7 +56,7 @@ func pageOutputArtifacts(config gowdk.Config, outputDir string, page manifest.Pa
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
 		artifacts = append(artifacts, plannedArtifact{
-			Artifact: Artifact{PageID: page.ID, Route: output.route, Path: outputPath},
+			Artifact: Artifact{PageID: page.ID, Route: output.route, Path: outputPath, CachePolicy: page.Cache},
 			contents: []byte(html),
 		})
 	}

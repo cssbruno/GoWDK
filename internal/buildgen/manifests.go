@@ -125,8 +125,8 @@ func outputFilePath(outputDir, rel string) (string, error) {
 	return filepath.Join(outputDir, clean), nil
 }
 
-func writeAssetManifest(outputDir string, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) (string, error) {
-	payload, err := assetManifestPayload(outputDir, cssArtifacts, assetArtifacts)
+func writeAssetManifest(outputDir string, pageArtifacts []Artifact, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) (string, error) {
+	payload, err := assetManifestPayload(outputDir, pageArtifacts, cssArtifacts, assetArtifacts)
 	if err != nil {
 		return "", err
 	}
@@ -138,10 +138,20 @@ func writeAssetManifest(outputDir string, cssArtifacts []CSSArtifact, assetArtif
 	return manifestPath, nil
 }
 
-func assetManifestPayload(outputDir string, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) ([]byte, error) {
+func assetManifestPayload(outputDir string, pageArtifacts []Artifact, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) ([]byte, error) {
 	files := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
 	hashes := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
-	cache := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
+	cache := make(map[string]string, len(pageArtifacts)+len(cssArtifacts)+len(assetArtifacts))
+	for _, artifact := range pageArtifacts {
+		if artifact.CachePolicy == "" {
+			continue
+		}
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return nil, err
+		}
+		cache[rel] = artifact.CachePolicy
+	}
 	for _, artifact := range cssArtifacts {
 		rel, err := relativeOutputPath(outputDir, artifact.Path)
 		if err != nil {

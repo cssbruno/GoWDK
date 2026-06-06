@@ -183,7 +183,7 @@ contract work that later features depend on.
 - Static-first SPA navigation enhancements.
 - Progressive form enhancement.
 - Bare hybrid pages as SPA output with explicit request-time capability gating.
-- Cache and revalidation syntax and binary enforcement.
+- Revalidation syntax and hybrid cache enforcement.
 
 ### Component And Island Release
 

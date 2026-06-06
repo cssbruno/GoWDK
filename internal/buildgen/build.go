@@ -95,7 +95,7 @@ func buildFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, 
 	}
 	result.RouteManifestPath = manifestPath
 	reporter.info("manifest", "route_manifest_written", "route manifest written", BuildEvent{Path: eventPath(outputDir, manifestPath)})
-	assetManifestPath, err := writeAssetManifest(outputDir, result.CSSArtifacts, result.AssetArtifacts)
+	assetManifestPath, err := writeAssetManifest(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)
 	}
@@ -213,7 +213,7 @@ func buildMemoryFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Pro
 	}
 	result.Files[routeManifestFile] = routeManifest
 	reporter.info("manifest", "route_manifest_collected", "route manifest collected", BuildEvent{Path: routeManifestFile})
-	assetManifest, err := assetManifestPayload(outputDir, result.CSSArtifacts, result.AssetArtifacts)
+	assetManifest, err := assetManifestPayload(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return MemoryResult{}, reporter.fail("manifest", err)
 	}
@@ -412,7 +412,7 @@ func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdki
 	}
 	result.RouteManifestPath = manifestPath
 	reporter.info("manifest", "route_manifest_written", "route manifest written", BuildEvent{Path: eventPath(outputDir, manifestPath)})
-	assetManifestPath, err := writeAssetManifest(outputDir, result.CSSArtifacts, result.AssetArtifacts)
+	assetManifestPath, err := writeAssetManifest(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)
 	}

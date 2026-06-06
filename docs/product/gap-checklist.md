@@ -608,24 +608,39 @@ Done when:
 
 ### 8. Hooks, Guards, And Middleware
 
-- [ ] Define whether GOWDK has app-wide hooks or only generated registration
+- [x] Define whether GOWDK has app-wide hooks or only generated registration
       points.
-- [ ] Decide if hooks operate on `http.Handler`, `context.Context`, or a
+      Decision: app-wide middleware is normal Go `http.Handler` wrapping around
+      the generated app handler. Generated registration points exist for guards
+      and rate limiting.
+- [x] Decide if hooks operate on `http.Handler`, `context.Context`, or a
       GOWDK-specific public contract.
-- [ ] Define hook order relative to static serving, backend routing, guards,
+      Decision: middleware uses `http.Handler`; user handlers use
+      `context.Context` plus public `runtime/app` helpers. Do not add a custom
+      GOWDK context type.
+- [x] Define hook order relative to static serving, backend routing, guards,
       rate limiting, CSRF, action decoding, SSR load, and panic boundaries.
-- [ ] Decide if hooks can rewrite routes.
-- [ ] Decide if hooks can transform responses.
-- [ ] Decide if hooks can intercept generated fetch/navigation requests.
-- [ ] Expand guard result shape beyond error/nil if redirects or custom
+      Decision: generated request-time routes attach metadata, install panic
+      boundaries where supported, run rate limiting, run guards, run action
+      CSRF, decode action input, then call user handlers or SSR load/render.
+- [x] Decide if hooks can rewrite routes.
+      Decision: no generated route rewriting hook in the current contract.
+- [x] Decide if hooks can transform responses.
+      Decision: no generated response transform hook in the current contract.
+      Wrap the generated `http.Handler` with normal Go middleware when needed.
+- [x] Decide if hooks can intercept generated fetch/navigation requests.
+      Decision: no generated fetch/navigation interception hook in core.
+- [x] Expand guard result shape beyond error/nil if redirects or custom
       responses are needed.
+      Decision: guard results remain `nil` or `error` today. Redirect/custom
+      response guard results are planned work.
 - [ ] Add tests for ordering and failure behavior.
 
 Done when:
 
-- [ ] Auth/session/cookie examples can be written without importing generated
+- [x] Auth/session/cookie examples can be written without importing generated
       app output from feature packages.
-- [ ] Hook behavior is clear enough for production middleware.
+- [x] Hook behavior is clear enough for production middleware.
 
 ### 9. Errors And Boundaries
 

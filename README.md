@@ -281,6 +281,7 @@ integration blueprints without copying files by hand.
 - [CLI reference](docs/reference/cli.md)
 - [Config reference](docs/reference/config.md)
 - [Routing reference](docs/reference/routing.md)
+- [Hooks reference](docs/reference/hooks.md)
 - [Deployment reference](docs/reference/deployment.md)
 - [Language notes](docs/language/README.md)
 - [Browser compiler](docs/compiler/browser-compiler.md)

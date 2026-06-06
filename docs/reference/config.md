@@ -142,6 +142,8 @@ that declare handlers. A missing registry entry or a guard error returns HTTP
 403 before SSR load functions, action decoding, API handlers, or user business
 logic run.
 
+See [hooks.md](hooks.md) for guard, rate-limit, and middleware ordering.
+
 ## Modules
 
 `ModuleConfig` names a logical source group:

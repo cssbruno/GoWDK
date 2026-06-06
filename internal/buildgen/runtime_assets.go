@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -124,6 +125,13 @@ func islandRuntimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDi
 			case "wasm":
 				if _, exists := planned[filepath.Join(outputDir, filepath.FromSlash(islandWASMAssetPath(component.Name)))]; !exists {
 					artifact, err := islandWASMArtifact(outputDir, component)
+					if err != nil {
+						return nil, err
+					}
+					addAsset(planned, artifact)
+				}
+				if strings.TrimSpace(component.WASM.Package) != "" {
+					artifact, err := islandWASMExecArtifact(outputDir)
 					if err != nil {
 						return nil, err
 					}
@@ -696,6 +704,18 @@ func islandWASMLoaderArtifact(outputDir, componentName string) plannedAssetArtif
 	}
 }
 
+func islandWASMExecArtifact(outputDir string) (plannedAssetArtifact, error) {
+	assetPath := islandWASMExecAssetPath()
+	contents, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "lib", "wasm", "wasm_exec.js"))
+	if err != nil {
+		return plannedAssetArtifact{}, fmt.Errorf("read Go wasm_exec.js runtime: %w", err)
+	}
+	return plannedAssetArtifact{
+		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
+		contents:      contents,
+	}, nil
+}
+
 func islandJSAssetPath(componentName string) string {
 	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".js")
 }
@@ -706,6 +726,10 @@ func islandWASMAssetPath(componentName string) string {
 
 func islandWASMLoaderAssetPath(componentName string) string {
 	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".wasm.js")
+}
+
+func islandWASMExecAssetPath() string {
+	return path.Join(islandRuntimeDir, "wasm_exec.js")
 }
 
 func islandJSSourceMapAssetPath(componentName string) string {
@@ -2026,9 +2050,11 @@ func componentSourceMapContent(component manifest.Component) string {
 func islandWASMLoaderSource(componentName string) string {
 	component := strconv.Quote(componentName)
 	wasmPath := strconv.Quote("/" + islandWASMAssetPath(componentName))
+	wasmExecPath := strconv.Quote("/" + islandWASMExecAssetPath())
 	return fmt.Sprintf(`(() => {
   const component = %s;
   const wasmPath = %s;
+  const wasmExecPath = %s;
   const mountExport = "GOWDKMount" + component;
   const handleExport = "GOWDKHandle" + component;
   const destroyExport = "GOWDKDestroy" + component;
@@ -2134,25 +2160,73 @@ func islandWASMLoaderSource(componentName string) string {
 
   function callExport(exports, name, payload) {
     const fn = exports && exports[name];
-    if (typeof fn !== "function") return undefined;
+    if (typeof fn !== "function") {
+      if (typeof console !== "undefined") console.error("GOWDK WASM island missing export", name);
+      return undefined;
+    }
     return fn(payload);
   }
 
-  async function instantiate() {
+  function missingExports(exports) {
+    return [mountExport, handleExport, destroyExport].filter((name) => typeof exports[name] !== "function");
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("failed to load " + src));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function loadGoRuntime() {
+    if (typeof Go !== "function") {
+      await loadScript(wasmExecPath);
+    }
+    if (typeof Go !== "function") return null;
+    return new Go();
+  }
+
+  async function instantiateWithImports(imports) {
     if (WebAssembly.instantiateStreaming) {
       try {
-        return await WebAssembly.instantiateStreaming(fetch(wasmPath), {});
+        return await WebAssembly.instantiateStreaming(fetch(wasmPath), imports);
       } catch (_error) {
         // Fall through for servers that do not serve application/wasm yet.
       }
     }
     const response = await fetch(wasmPath);
     const bytes = await response.arrayBuffer();
-    return WebAssembly.instantiate(bytes, {});
+    return WebAssembly.instantiate(bytes, imports);
+  }
+
+  async function instantiate() {
+    try {
+      return await instantiateWithImports({});
+    } catch (directError) {
+      const go = await loadGoRuntime();
+      if (!go) throw directError;
+      const result = await instantiateWithImports(go.importObject);
+      const run = go.run(result.instance);
+      if (run && typeof run.catch === "function") {
+        run.catch((error) => {
+          if (typeof console !== "undefined") console.error("GOWDK WASM island Go runtime failed", error);
+        });
+      }
+      return result;
+    }
   }
 
   instantiate().then((result) => {
     const exports = result.instance && result.instance.exports || {};
+    const missing = missingExports(exports);
+    if (missing.length > 0) {
+      if (typeof console !== "undefined") console.error("GOWDK WASM island missing exports", missing.join(", "));
+      return;
+    }
     roots.forEach((root) => {
       const mountPayload = bootstrap(root);
       applyPatches(root, callExport(exports, mountExport, mountPayload));
@@ -2174,7 +2248,9 @@ func islandWASMLoaderSource(componentName string) string {
         applyPatches(root, callExport(exports, destroyExport, { component, state: parseJSON(root.getAttribute("data-gowdk-state"), {}) }));
       }, { once: true });
     });
-  }).catch(() => {});
+  }).catch((error) => {
+    if (typeof console !== "undefined") console.error("GOWDK WASM island failed to start", component, error);
+  });
 })();
-`, component, wasmPath)
+`, component, wasmPath, wasmExecPath)
 }

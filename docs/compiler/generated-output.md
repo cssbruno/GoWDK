@@ -77,14 +77,15 @@ Implemented today:
   `assets/gowdk/islands/<Component>.wasm.js` only for component calls that
   explicitly set `g:island="wasm"`. When the component declares
   `@wasm <package>`, GOWDK runs `GOOS=js GOARCH=wasm go build` for that package
-  and writes the compiled browser WASM module to the component asset path.
-  Local packages are checked for browser-safe imports before build; server,
-  process, and network packages such as `net/http`, `os/exec`, and
-  `database/sql` are rejected. A package that does not produce a WASM module
-  fails the build. Components
-  without `@wasm` keep the minimal placeholder module for the loader-shape
-  slice. The loader discovers matching island roots, builds the ADR-defined
-  bootstrap object from state, props, emits, refs, and binding metadata, calls
+  and writes the compiled browser WASM module to the component asset path plus
+  `assets/gowdk/islands/wasm_exec.js` for Go's browser runtime imports. Local
+  packages are checked for browser-safe imports before build; server, process,
+  and network packages such as `net/http`, `os/exec`, and `database/sql` are
+  rejected. A package that does not produce a WASM module or omits required ABI
+  exports fails the build. Components without `@wasm` keep the minimal
+  placeholder module for the loader-shape slice and do not ship `wasm_exec.js`.
+  The loader discovers matching island roots, builds the ADR-defined bootstrap
+  object from state, props, emits, refs, and binding metadata, calls
   component-scoped WASM exports when present, captures host DOM events, and
   applies validated first-slice patch commands such as text, visibility,
   attribute, class, style, and emitted-event updates.

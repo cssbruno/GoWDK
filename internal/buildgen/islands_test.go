@@ -2,12 +2,17 @@ package buildgen
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/manifest"
@@ -1671,6 +1676,7 @@ func TestBuildEmitsWASMIslandAssetsOnlyWhenExplicit(t *testing.T) {
 	}
 	loader := readFile(t, loaderPath)
 	for _, expected := range []string{
+		`const wasmExecPath = "/assets/gowdk/islands/wasm_exec.js";`,
 		`const mountExport = "GOWDKMount" + component;`,
 		`const handleExport = "GOWDKHandle" + component;`,
 		`const destroyExport = "GOWDKDestroy" + component;`,
@@ -1687,6 +1693,9 @@ func TestBuildEmitsWASMIslandAssetsOnlyWhenExplicit(t *testing.T) {
 		`else if (patch.type === "replaceList" && node) node.innerHTML`,
 		`else if (patch.type === "emit" && patch.name) root.dispatchEvent`,
 		`console.error("GOWDK WASM island rejected patch"`,
+		`console.error("GOWDK WASM island missing exports"`,
+		`const go = await loadGoRuntime();`,
+		`go.run(result.instance)`,
 	} {
 		if !strings.Contains(loader, expected) {
 			t.Fatalf("expected %q in wasm loader:\n%s", expected, loader)
@@ -1700,6 +1709,56 @@ func TestBuildEmitsWASMIslandAssetsOnlyWhenExplicit(t *testing.T) {
 		if !strings.Contains(assetManifestPayload, expected) {
 			t.Fatalf("expected %q in asset manifest:\n%s", expected, assetManifestPayload)
 		}
+	}
+	if strings.Contains(assetManifestPayload, `"assets/gowdk/islands/wasm_exec.js"`) {
+		t.Fatalf("did not expect Go wasm runtime for placeholder wasm island:\n%s", assetManifestPayload)
+	}
+}
+
+func TestWASMIslandLoaderRunsInBrowser(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	chromium, err := lookupChromium()
+	if err != nil {
+		t.Skip(err)
+	}
+	requireNodePlaywright(t, node)
+
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []manifest.Component{counterComponent()},
+	}
+	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.FileServer(http.Dir(outputDir)))
+	defer server.Close()
+
+	script := filepath.Join(t.TempDir(), "gowdk-wasm-island-browser-test.cjs")
+	if err := os.WriteFile(script, []byte(wasmIslandBrowserHarness()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, script, server.URL, chromium)
+	command.Dir = mustWorkingDir(t)
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("browser wasm island test timed out:\n%s", output)
+	}
+	if err != nil {
+		t.Fatalf("browser wasm island test failed: %v\n%s", err, output)
 	}
 }
 
@@ -1725,8 +1784,12 @@ func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	wasmPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.wasm")
+	wasmExecPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "wasm_exec.js")
 	if !hasAssetArtifact(result.AssetArtifacts, wasmPath) {
 		t.Fatalf("expected compiled wasm asset, got %#v", result.AssetArtifacts)
+	}
+	if !hasAssetArtifact(result.AssetArtifacts, wasmExecPath) {
+		t.Fatalf("expected Go wasm_exec.js runtime asset, got %#v", result.AssetArtifacts)
 	}
 	wasm := readBytes(t, wasmPath)
 	if !bytes.HasPrefix(wasm, wasmMagic) {
@@ -1734,6 +1797,10 @@ func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
 	}
 	if bytes.Equal(wasm, []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}) {
 		t.Fatal("expected compiled Go wasm, got placeholder module")
+	}
+	wasmExec := readFile(t, wasmExecPath)
+	if !strings.Contains(wasmExec, "globalThis.Go = class") {
+		t.Fatalf("expected Go wasm runtime asset, got:\n%s", wasmExec[:min(len(wasmExec), 256)])
 	}
 }
 
@@ -1912,6 +1979,125 @@ func GOWDKHandle` + component + `() uint32 { return 0 }
 func GOWDKDestroy` + component + `() uint32 { return 0 }
 
 func main() {}`
+}
+
+func lookupChromium() (string, error) {
+	for _, name := range []string{"chromium", "chromium-browser", "google-chrome"} {
+		path, err := exec.LookPath(name)
+		if err == nil {
+			return path, nil
+		}
+	}
+	return "", errors.New("chromium is not installed")
+}
+
+func requireNodePlaywright(t *testing.T, node string) {
+	t.Helper()
+	command := exec.Command(node, "-e", `const module = require("node:module"); module.createRequire(process.cwd() + "/gowdk-test.js").resolve("playwright");`)
+	command.Dir = mustWorkingDir(t)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Skipf("playwright is not installed: %v\n%s", err, output)
+	}
+}
+
+func mustWorkingDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func wasmIslandBrowserHarness() string {
+	return `
+"use strict";
+
+const assert = require("node:assert/strict");
+const nodeModule = require("node:module");
+
+const baseURL = process.argv[2];
+const executablePath = process.argv[3];
+const { chromium } = nodeModule.createRequire(process.cwd() + "/gowdk-test.js")("playwright");
+
+async function waitForCall(calls, kind) {
+  const started = Date.now();
+  while (Date.now() - started < 5000) {
+    const call = calls.find((item) => item.kind === kind);
+    if (call) return call;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("timed out waiting for " + kind + " call; got " + JSON.stringify(calls));
+}
+
+(async () => {
+  const calls = [];
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+    args: ["--no-sandbox"]
+  });
+  const page = await browser.newPage();
+  const consoleErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("GOWDK")) consoleErrors.push(message.text());
+  });
+  await page.exposeFunction("gowdkRecordWASMCall", (call) => {
+    calls.push(call);
+  });
+  await page.addInitScript(() => {
+    const exports = {
+      GOWDKMountCounter(payload) {
+        window.gowdkRecordWASMCall({ kind: "mount", payload });
+        return [{ type: "setText", target: "b2", value: "mounted" }];
+      },
+      GOWDKHandleCounter(payload) {
+        window.gowdkRecordWASMCall({ kind: "handle", payload });
+        return [
+          { type: "setText", target: "b2", value: "clicked" },
+          { type: "emit", name: "counter-ready", detail: { count: 2 } }
+        ];
+      },
+      GOWDKDestroyCounter(payload) {
+        window.gowdkRecordWASMCall({ kind: "destroy", payload });
+        return [];
+      }
+    };
+    WebAssembly.instantiateStreaming = async () => ({ instance: { exports } });
+    WebAssembly.instantiate = async () => ({ instance: { exports } });
+  });
+
+  await page.goto(baseURL + "/counter/", { waitUntil: "networkidle" });
+  await page.waitForFunction(() => document.querySelector("[data-gowdk-binding-text='b2']")?.textContent === "mounted");
+  const mount = await waitForCall(calls, "mount");
+  assert.equal(mount.payload.component, "Counter");
+  assert.equal(mount.payload.state.Count, 1);
+  assert.equal(mount.payload.bindings.text[0].field, "Count");
+  assert.equal(mount.payload.bindings.events[0].event, "click");
+
+  await page.evaluate(() => {
+    window.__gowdkWASMEmit = null;
+    document.querySelector("gowdk-island").addEventListener("counter-ready", (event) => {
+      window.__gowdkWASMEmit = event.detail;
+    });
+  });
+  await page.click("button");
+  await page.waitForFunction(() => document.querySelector("[data-gowdk-binding-text='b2']")?.textContent === "clicked");
+  const handle = await waitForCall(calls, "handle");
+  assert.equal(handle.payload.event, "click");
+  assert.ok(handle.payload.binding);
+  assert.deepEqual(await page.evaluate(() => window.__gowdkWASMEmit), { count: 2 });
+
+  await page.goto("about:blank");
+  const destroy = await waitForCall(calls, "destroy");
+  assert.equal(destroy.payload.component, "Counter");
+  assert.deepEqual(consoleErrors, []);
+  await browser.close();
+})().catch(async (error) => {
+  console.error(error && error.stack || error);
+  process.exit(1);
+});
+`
 }
 
 func TestBuildAllowsJSAndWASMIslandsOnSamePage(t *testing.T) {

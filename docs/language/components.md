@@ -134,11 +134,12 @@ database access, trusted server validation, action behavior, or cache/loading
 policy. Real routes, direct browser refresh, and server behavior stay owned by
 the compiler manifest, generated Go, and user Go handlers.
 
-Explicit WASM islands require `@wasm` and `g:island="wasm"`. The referenced
+Production WASM islands require `@wasm` and `g:island="wasm"`. The referenced
 package is browser-side Go compiled for `GOOS=js GOARCH=wasm` with server and
-process packages rejected. The production ABI, required entrypoints, and export
-validation are still planned; WASM islands are not a replacement for backend
-handlers.
+process packages rejected. GOWDK validates the required component-scoped ABI
+entrypoints, ships Go's browser `wasm_exec.js` runtime asset for declared Go
+WASM packages, and keeps DOM mutation in the generated host loader. WASM
+islands are not a replacement for backend handlers.
 
 Not implemented yet:
 

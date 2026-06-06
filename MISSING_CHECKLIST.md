@@ -362,6 +362,8 @@ api Session GET "/api/session"
 - [x] Define and implement the production WASM island ABI from ADR 0004.
 - [x] Add browser-side Go logic contracts for explicit WASM islands.
 - [x] Validate required WASM island entrypoints and exports.
+- [x] Add browser-runtime integration coverage for the generated WASM island
+      host loader mount, event, patch, emit, and cleanup contract.
 
 ## CSS, Plugins, Assets, And Packaging
 

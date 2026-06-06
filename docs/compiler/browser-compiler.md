@@ -134,7 +134,10 @@ view {
 When `@wasm` points to a local package, GOWDK builds that package with
 `GOOS=js GOARCH=wasm`. The package must be browser-safe and cannot import
 server/process/network packages such as `net/http`, `os/exec`, `database/sql`,
-raw `syscall`, `plugin`, or `unsafe`.
+raw `syscall`, `plugin`, or `unsafe`. Declared Go WASM island packages also
+ship `assets/gowdk/islands/wasm_exec.js`; the generated component loader first
+tries a direct WASM instantiate path and falls back to Go runtime imports when a
+compiled Go module needs them.
 
 Declared browser-side Go packages must produce a browser WASM module and export
 the component-scoped ABI entrypoints:
@@ -154,7 +157,8 @@ The generated loader passes a bootstrap object containing component name, state,
 props, emits, refs, and compiler-owned binding metadata. Returned patch lists
 may use `setText`, `setAttr`, `removeAttr`, `toggleClass`, `setStyle`,
 `setHidden`, `replaceList`, and `emit`; unsupported patch operations are
-rejected with a console error.
+rejected with a console error. Missing required exports and startup failures are
+reported to the browser console instead of silently disabling the island.
 
 If a component is called with `g:island="wasm"` and no `@wasm` package is
 declared, GOWDK emits the current placeholder module plus loader shape.

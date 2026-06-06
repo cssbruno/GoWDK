@@ -101,7 +101,9 @@ Implemented today:
   for generated and future partial handlers.
 - `/` maps to `index.html`.
 - `/patients` maps to `patients/index.html`.
-- Current asset names are stable and deterministic rather than content-hashed.
+- Current asset names are stable and deterministic. `gowdk-assets.json`
+  records content hashes and cache policy for generated CSS/runtime assets,
+  but emitted filenames are not content-hashed yet.
 - Generated embedded apps skip local environment files, source maps, source
   files, VCS/dependency directories, and common temporary artifacts when copying
   build output into the embedded app.
@@ -111,8 +113,8 @@ Implemented today:
 Not implemented yet:
 
 - Route params passed into imported Go `build {}` functions.
-- CSS hashing, minification, and full page-aware third-party CSS processor
-  selection.
+- CSS filename hashing, minification, and full page-aware third-party CSS
+  processor selection.
 - Non-string props in inline `props {}` blocks.
 - General expression interpolation and arbitrary `build {}` execution.
 - Real user Go type resolution for typed action decoders, user action logic,
@@ -229,15 +231,23 @@ as `/blog/hello-gowdk`.
   "version": 1,
   "files": {
     "assets/app.css": "assets/app.css"
+  },
+  "hashes": {
+    "assets/app.css": "sha256:..."
+  },
+  "cache": {
+    "assets/app.css": "public, max-age=31536000, immutable"
   }
 }
 ```
 
 The `files` map resolves logical asset names to slash-separated paths relative
-to the selected output directory. The current implementation records CSS files
-emitted by CSS processors, generated page CSS files, partial runtime assets,
-generated island runtime assets, and generated island source maps. It does not
-record configured stylesheet URLs that were not written by the build.
+to the selected output directory. `hashes` records SHA-256 content hashes for
+generated assets, and `cache` records the HTTP cache policy generated binaries
+should apply when serving those assets. The current implementation records CSS
+files emitted by CSS processors, generated page CSS files, partial runtime
+assets, generated island runtime assets, and generated island source maps. It
+does not record configured stylesheet URLs that were not written by the build.
 
 ## Current Build Report
 

@@ -104,8 +104,8 @@ declared block presence, first-slice action metadata including fragment targets,
 API block names, direct page component references for the current spa `view {}` subset, direct spa
 asset references, direct CSS class names, direct spa `style` attribute
 values, first-slice API method/route metadata, and component declarations.
-Component declarations include typed contract metadata and emitted event
-metadata when present.
+Component declarations include component-level CSS/assets, typed contract
+metadata, typed public exports, and emitted event metadata when present.
 `paths`, `layouts`, `guard`, `css`, `actions`, `apis`, `components`,
 `uses`, `Assets`, `cssClasses`, and `styleAttributes` are omitted when empty or
 false.

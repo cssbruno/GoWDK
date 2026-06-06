@@ -381,6 +381,7 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	var viewBody []string
 	inView := false
 	inProps := false
+	inExports := false
 	inEmits := false
 	var clientBody []string
 	inClient := false
@@ -432,6 +433,24 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 				return manifest.Component{}, fmt.Errorf("line %d: prop %s uses unsupported type %q", lineNumber, match[1], match[2])
 			}
 			component.Props = append(component.Props, manifest.Prop{Name: match[1], Type: match[2], Span: sourceLineSpan(lineNumber, rawLine)})
+			continue
+		}
+		if inExports {
+			if line == "}" {
+				inExports = false
+				continue
+			}
+			if line == "" || strings.HasPrefix(line, "//") {
+				continue
+			}
+			match := propPattern.FindStringSubmatch(line)
+			if match == nil {
+				return manifest.Component{}, fmt.Errorf("line %d: invalid export declaration %q", lineNumber, line)
+			}
+			if !supportedScalarType(match[2]) {
+				return manifest.Component{}, fmt.Errorf("line %d: export %s uses unsupported type %q", lineNumber, match[1], match[2])
+			}
+			component.Exports = append(component.Exports, manifest.Export{Name: match[1], Type: match[2], Span: sourceLineSpan(lineNumber, rawLine)})
 			continue
 		}
 		if inEmits {
@@ -535,6 +554,13 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			}
 			inProps = true
 			continue
+		case "exports {":
+			if len(component.Exports) > 0 {
+				return manifest.Component{}, fmt.Errorf("line %d: component declares multiple exports blocks", lineNumber)
+			}
+			component.Blocks.Spans.Exports = sourceLineSpan(lineNumber, rawLine)
+			inExports = true
+			continue
 		case "client {":
 			if component.Blocks.Client {
 				return manifest.Component{}, fmt.Errorf("line %d: component declares multiple client blocks", lineNumber)
@@ -571,6 +597,9 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	if inProps {
 		return manifest.Component{}, fmt.Errorf("props block missing closing }")
 	}
+	if inExports {
+		return manifest.Component{}, fmt.Errorf("exports block missing closing }")
+	}
 	if inEmits {
 		return manifest.Component{}, fmt.Errorf("emits block missing closing }")
 	}
@@ -581,6 +610,10 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 		return manifest.Component{}, fmt.Errorf("missing @component")
 	}
 	return component, nil
+}
+
+func supportedScalarType(value string) bool {
+	return value == "string" || value == "int" || value == "float" || value == "bool"
 }
 
 func parseEmitDeclaration(line string, lineNumber int, rawLine string) (manifest.Emit, error) {
@@ -613,7 +646,7 @@ func parseEmitParams(source string, lineNumber int, rawLine string) ([]manifest.
 		if !identifierPattern.MatchString(name) {
 			return nil, fmt.Errorf("line %d: invalid emit parameter name %q", lineNumber, name)
 		}
-		if typ != "string" && typ != "int" && typ != "float" && typ != "bool" {
+		if !supportedScalarType(typ) {
 			return nil, fmt.Errorf("line %d: emit parameter %s uses unsupported type %q", lineNumber, name, typ)
 		}
 		if seen[name] {
@@ -742,6 +775,13 @@ func applyAnnotation(page *manifest.Page, name, rawValue string, lineNumber int,
 		}
 		page.Render = mode
 		page.Spans.Render = span
+	case "cache":
+		policy, err := cachePolicyValue(value)
+		if err != nil {
+			return err
+		}
+		page.Cache = policy
+		page.Spans.Cache = span
 	case "title":
 		title, err := annotationText(name, value)
 		if err != nil {
@@ -799,6 +839,17 @@ func annotationText(name, value string) (string, error) {
 	return text, nil
 }
 
+func cachePolicyValue(value string) (string, error) {
+	policy := strings.TrimSpace(trimQuotes(value))
+	if policy == "" {
+		return "", fmt.Errorf("@cache requires a value")
+	}
+	if strings.ContainsAny(policy, "\r\n") {
+		return "", fmt.Errorf("@cache must stay on one line")
+	}
+	return policy, nil
+}
+
 func applyLayoutAnnotation(layout *manifest.Layout, name, rawValue string, lineNumber int, rawLine string) error {
 	value := strings.TrimSpace(rawValue)
 	switch name {
@@ -831,6 +882,18 @@ func applyComponentAnnotation(component *manifest.Component, name, rawValue stri
 			Package: trimQuotes(value),
 			Span:    sourceLineSpan(lineNumber, rawLine),
 		}
+	case "css":
+		if value == "" {
+			return fmt.Errorf("@css requires a value")
+		}
+		component.CSS = splitCSSList(value)
+		component.Spans.CSS = namedValueSpans(component.CSS, lineNumber, rawLine)
+	case "asset":
+		if value == "" {
+			return fmt.Errorf("@asset requires a value")
+		}
+		component.Assets = splitCSSList(value)
+		component.Spans.Assets = namedValueSpans(component.Assets, lineNumber, rawLine)
 	default:
 		return fmt.Errorf("unsupported annotation @%s", name)
 	}

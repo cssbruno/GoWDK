@@ -61,6 +61,7 @@ func buildPageFromIR(page gwdkir.Page) manifest.Page {
 		ID:       page.ID,
 		Route:    page.Route,
 		Render:   page.Render,
+		Cache:    page.Cache,
 		Metadata: manifest.PageMetadata(page.Metadata),
 		Layouts:  append([]string(nil), page.Layouts...),
 		Guard:    append([]string(nil), page.Guards...),
@@ -75,6 +76,7 @@ func buildPageFromIR(page gwdkir.Page) manifest.Page {
 			Page:        page.Spans.Page,
 			Route:       page.Spans.Route,
 			Render:      page.Spans.Render,
+			Cache:       page.Spans.Cache,
 			Title:       page.Spans.Title,
 			Description: page.Spans.Description,
 			Canonical:   page.Spans.Canonical,
@@ -94,14 +96,21 @@ func buildComponentFromIR(component gwdkir.Component) manifest.Component {
 		Name:        component.Name,
 		Imports:     buildImportsFromIR(component.Imports),
 		Uses:        buildUsesFromIR(component.Uses),
+		CSS:         append([]string(nil), component.CSS...),
+		Assets:      append([]string(nil), component.Assets...),
 		Props:       buildPropsFromIR(component.Props),
 		PropsType:   buildGoTypeRefFromIR(component.PropsType),
 		State:       buildStateContractFromIR(component.State),
 		WASM:        manifest.WASMContract(component.WASM),
+		Exports:     buildExportsFromIR(component.Exports),
 		Emits:       buildEmitsFromIR(component.Emits),
 		Blocks:      buildBlocksFromIR(component.Blocks),
 		Span:        component.Span,
 		PackageSpan: component.PackageSpan,
+		Spans: manifest.ComponentSpans{
+			CSS:    append([]manifest.NamedSpan(nil), component.Spans.CSS...),
+			Assets: append([]manifest.NamedSpan(nil), component.Spans.Assets...),
+		},
 	}
 }
 
@@ -138,6 +147,7 @@ func buildBlocksFromIR(blocks gwdkir.Blocks) manifest.Blocks {
 			View:    blocks.Spans.View,
 			Actions: append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
 			APIs:    append([]manifest.NamedSpan(nil), blocks.Spans.APIs...),
+			Exports: blocks.Spans.Exports,
 			Emits:   blocks.Spans.Emits,
 		},
 	}
@@ -223,6 +233,14 @@ func buildPropsFromIR(props []gwdkir.Prop) []manifest.Prop {
 	out := make([]manifest.Prop, 0, len(props))
 	for _, prop := range props {
 		out = append(out, manifest.Prop{Name: prop.Name, Type: prop.Type, Span: prop.Span})
+	}
+	return out
+}
+
+func buildExportsFromIR(exports []gwdkir.Export) []manifest.Export {
+	out := make([]manifest.Export, 0, len(exports))
+	for _, export := range exports {
+		out = append(out, manifest.Export{Name: export.Name, Type: export.Type, Span: export.Span})
 	}
 	return out
 }

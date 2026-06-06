@@ -17,6 +17,7 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 				ID:      "blog.post",
 				Route:   "/blog/{slug}",
 				Render:  gowdk.SPA,
+				Cache:   "public, max-age=60",
 				Metadata: PageMetadata{
 					Title:       "Blog post",
 					Description: "A generated blog post.",
@@ -60,7 +61,10 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 				Source:  "components/hero.cmp.gwdk",
 				Package: "components",
 				Name:    "Hero",
+				CSS:     []string{"./hero.css"},
+				Assets:  []string{"./hero.png"},
 				Props:   []Prop{{Name: "title", Type: "string"}},
+				Exports: []Export{{Name: "selectedID", Type: "string"}, {Name: "count", Type: "int"}},
 				Emits: []Emit{{
 					Name:   "select",
 					Params: []EmitParam{{Name: "id", Type: "string"}, {Name: "active", Type: "bool"}},
@@ -88,6 +92,7 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 			Package  string           `json:"package"`
 			Route    string           `json:"route"`
 			Render   gowdk.RenderMode `json:"render"`
+			Cache    string           `json:"cache"`
 			Metadata struct {
 				Title       string `json:"title"`
 				Description string `json:"description"`
@@ -135,13 +140,19 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 			Components []string `json:"components"`
 		} `json:"pages"`
 		Components map[string]struct {
-			Source  string `json:"source"`
-			Kind    string `json:"kind"`
-			Package string `json:"package"`
+			Source  string   `json:"source"`
+			Kind    string   `json:"kind"`
+			Package string   `json:"package"`
+			CSS     []string `json:"css"`
+			Assets  []string `json:"assets"`
 			Props   []struct {
 				Name string `json:"name"`
 				Type string `json:"type"`
 			} `json:"props"`
+			Exports []struct {
+				Name string `json:"name"`
+				Type string `json:"type"`
+			} `json:"exports"`
 			Emits []struct {
 				Name   string `json:"name"`
 				Params []struct {
@@ -164,6 +175,9 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 	}
 	if decoded.Pages["blog.post"].Render != gowdk.SPA {
 		t.Fatalf("expected blog.post render spa, got %q", decoded.Pages["blog.post"].Render)
+	}
+	if decoded.Pages["blog.post"].Cache != "public, max-age=60" {
+		t.Fatalf("expected blog.post cache policy, got %#v", decoded.Pages["blog.post"])
 	}
 	if decoded.Pages["blog.post"].Source != "pages/blog.post.gwdk" || decoded.Pages["blog.post"].Kind != "page" {
 		t.Fatalf("unexpected blog.post identity: %#v", decoded.Pages["blog.post"])
@@ -239,8 +253,14 @@ func TestManifestJSONIncludesRenderModeAndPaths(t *testing.T) {
 	if component.Package != "components" {
 		t.Fatalf("unexpected component package metadata: %#v", component)
 	}
+	if strings.Join(component.CSS, ",") != "./hero.css" || strings.Join(component.Assets, ",") != "./hero.png" {
+		t.Fatalf("unexpected component asset metadata: %#v", component)
+	}
 	if len(component.Props) != 1 || component.Props[0].Name != "title" || component.Props[0].Type != "string" {
 		t.Fatalf("unexpected component props: %#v", component.Props)
+	}
+	if len(component.Exports) != 2 || component.Exports[0].Name != "selectedID" || component.Exports[0].Type != "string" || component.Exports[1].Name != "count" || component.Exports[1].Type != "int" {
+		t.Fatalf("unexpected component exports: %#v", component.Exports)
 	}
 	if len(component.Emits) != 1 || component.Emits[0].Name != "select" {
 		t.Fatalf("unexpected component emits: %#v", component.Emits)

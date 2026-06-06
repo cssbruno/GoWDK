@@ -17,6 +17,7 @@ type SSRArtifact struct {
 	PageID        string
 	Route         string
 	Render        gowdk.RenderMode
+	Cache         string
 	DynamicParams []string
 	Guards        []string
 	HasLoad       bool
@@ -90,6 +91,7 @@ func ssrArtifact(config gowdk.Config, page manifest.Page, components map[string]
 		PageID:        page.ID,
 		Route:         page.Route,
 		Render:        page.Render,
+		Cache:         page.Cache,
 		DynamicParams: page.DynamicParams(),
 		Guards:        append([]string(nil), page.Guard...),
 		HasLoad:       page.Blocks.Load,

@@ -26,6 +26,7 @@ type pageJSON struct {
 	Package         string           `json:"package,omitempty"`
 	Route           string           `json:"route"`
 	Render          gowdk.RenderMode `json:"render"`
+	Cache           string           `json:"cache,omitempty"`
 	Metadata        *metadataJSON    `json:"metadata,omitempty"`
 	Imports         []importJSON     `json:"imports,omitempty"`
 	Uses            []useJSON        `json:"uses,omitempty"`
@@ -50,9 +51,12 @@ type componentJSON struct {
 	Package   string       `json:"package,omitempty"`
 	Imports   []importJSON `json:"imports,omitempty"`
 	Uses      []useJSON    `json:"uses,omitempty"`
+	CSS       []string     `json:"css,omitempty"`
+	Assets    []string     `json:"assets,omitempty"`
 	Props     []propJSON   `json:"props,omitempty"`
 	PropsType *goTypeJSON  `json:"propsType,omitempty"`
 	State     *stateJSON   `json:"state,omitempty"`
+	Exports   []propJSON   `json:"exports,omitempty"`
 	Emits     []emitJSON   `json:"emits,omitempty"`
 }
 
@@ -192,6 +196,7 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 			Package:         page.Package,
 			Route:           page.Route,
 			Render:          page.RenderMode(gowdk.SPA),
+			Cache:           page.Cache,
 			Metadata:        metadataJSONFor(page.Metadata),
 			Imports:         importsJSON(page.Imports),
 			Uses:            usesJSON(page.Uses),
@@ -416,9 +421,12 @@ func componentsJSON(components []Component) map[string]componentJSON {
 			Package:   component.Package,
 			Imports:   importsJSON(component.Imports),
 			Uses:      usesJSON(component.Uses),
+			CSS:       append([]string(nil), component.CSS...),
+			Assets:    append([]string(nil), component.Assets...),
 			Props:     propsJSON(component.Props),
 			PropsType: goTypeRefJSON(component.PropsType),
 			State:     stateContractJSON(component.State),
+			Exports:   exportsJSON(component.Exports),
 			Emits:     emitsJSON(component.Emits),
 		}
 	}
@@ -448,6 +456,17 @@ func propsJSON(props []Prop) []propJSON {
 	out := make([]propJSON, 0, len(props))
 	for _, prop := range props {
 		out = append(out, propJSON{Name: prop.Name, Type: prop.Type})
+	}
+	return out
+}
+
+func exportsJSON(exports []Export) []propJSON {
+	if len(exports) == 0 {
+		return nil
+	}
+	out := make([]propJSON, 0, len(exports))
+	for _, export := range exports {
+		out = append(out, propJSON{Name: export.Name, Type: export.Type})
 	}
 	return out
 }

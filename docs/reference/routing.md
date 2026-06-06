@@ -30,6 +30,18 @@ Current route rules:
 - Duplicate page route patterns are rejected. `/blog/{slug}` and `/blog/{id}`
   are the same route pattern.
 
+Pages may declare response cache intent with `@cache`. The value is carried as
+route metadata and should be a literal HTTP `Cache-Control` value:
+
+```gwdk
+@page docs
+@route "/docs"
+@cache "public, max-age=60"
+```
+
+Request-time safety policies still win: actions, APIs, partial responses, CSRF
+HTML mutation, and generated request-time errors use `no-store`.
+
 ## SPA Routes
 
 SPA render is the default:

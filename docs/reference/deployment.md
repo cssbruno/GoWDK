@@ -73,14 +73,19 @@ change which files were embedded.
 
 Generated binaries use explicit cache headers:
 
-- Embedded static files, SPA HTML, generated CSS, and generated browser runtime
-  assets use `Cache-Control: no-cache`, so browsers may store them but must
-  revalidate before reuse.
+- Embedded SPA HTML uses `Cache-Control: no-cache`, so browsers may store it
+  but must revalidate before reuse.
+- Generated CSS and generated browser runtime assets recorded in
+  `gowdk-assets.json` use their recorded cache policy. The current generated
+  policy is `Cache-Control: public, max-age=31536000, immutable` with SHA-256
+  content hashes in the asset manifest.
 - CSRF-personalized HTML, action responses, API responses, partial fragments,
   SSR HTML, generated handler errors, and invalid-CSRF responses use
   `Cache-Control: no-store`.
-- Long-lived immutable asset caching is intentionally deferred until generated
-  asset hashing rules are implemented.
+- Page-level `@cache` records route response cache intent in compiler, route,
+  manifest, and generated SSR route metadata. It does not override the
+  no-store safety policy for actions, APIs, partial responses, or CSRF-mutated
+  HTML.
 
 ## Module And Target Builds
 

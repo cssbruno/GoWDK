@@ -43,6 +43,31 @@ func TestHandlerServesAppIndexAndIdentityHeaders(t *testing.T) {
 	}
 }
 
+func TestHandlerAppliesAssetManifestCachePolicy(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"assets/app.css": {Data: []byte("body{}")},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets: asset.Manifest{
+			Version: 1,
+			Files:   map[string]string{"assets/app.css": "assets/app.css"},
+			Cache:   map[string]string{"assets/app.css": "public, max-age=31536000, immutable"},
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/assets/app.css", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "public, max-age=31536000, immutable" {
+		t.Fatalf("expected manifest cache policy, got %q", cache)
+	}
+}
+
 func TestHandlerHealth(t *testing.T) {
 	handler := Handler{
 		Root:     fstest.MapFS{},

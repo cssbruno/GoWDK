@@ -13,6 +13,7 @@ func TestAnalyzeLowersASTIntoManifestAndIR(t *testing.T) {
 	pageAST := mustParse(t, `package pages
 @page home
 @route "/"
+@cache "public, max-age=60"
 @layout ui.root
 @guard auth.required
 @css "./home.css"
@@ -44,6 +45,9 @@ view {
 	if len(pageAST.Guards) != 1 || pageAST.Guards[0].Name != "auth.required" {
 		t.Fatalf("expected typed guard refs, got %#v", pageAST.Guards)
 	}
+	if pageAST.Cache == nil || pageAST.Cache.Policy != "public, max-age=60" {
+		t.Fatalf("expected typed cache policy, got %#v", pageAST.Cache)
+	}
 	if len(pageAST.CSS) != 1 || pageAST.CSS[0].Path != "./home.css" {
 		t.Fatalf("expected typed CSS refs, got %#v", pageAST.CSS)
 	}
@@ -53,9 +57,15 @@ view {
 		{Path: "components/hero.cmp.gwdk", Kind: SourceComponent, AST: mustParse(t, `package components
 @component Hero
 @wasm ./hero/browser
+@css "./hero.css"
+@asset "./hero.png"
 
 props {
   title string
+}
+
+exports {
+  selectedID string
 }
 
 client {
@@ -84,7 +94,7 @@ view {
 		t.Fatalf("unexpected manifest pages: %#v", result.Manifest.Pages)
 	}
 	page := result.Manifest.Pages[0]
-	if page.Package != "pages" || page.Route != "/" || len(page.Stores) != 1 {
+	if page.Package != "pages" || page.Route != "/" || page.Cache != "public, max-age=60" || len(page.Stores) != 1 {
 		t.Fatalf("unexpected lowered page: %#v", page)
 	}
 	if len(page.Blocks.Actions) != 1 || page.Blocks.Actions[0].Name != "Login" {
@@ -115,8 +125,26 @@ view {
 	if len(result.IR.ClientBehaviors) != 1 || result.IR.ClientBehaviors[0].Component != "Hero" {
 		t.Fatalf("unexpected client behaviors: %#v", result.IR.ClientBehaviors)
 	}
-	if len(result.IR.Assets) != 2 {
+	if len(result.Manifest.Components) != 1 || len(result.Manifest.Components[0].Exports) != 1 || result.Manifest.Components[0].Exports[0].Name != "selectedID" {
+		t.Fatalf("unexpected manifest component exports: %#v", result.Manifest.Components)
+	}
+	if len(result.IR.Components) != 1 || len(result.IR.Components[0].Exports) != 1 || result.IR.Components[0].Exports[0].Type != "string" {
+		t.Fatalf("unexpected IR component exports: %#v", result.IR.Components)
+	}
+	if len(result.IR.Assets) != 4 {
 		t.Fatalf("expected CSS and WASM assets, got %#v", result.IR.Assets)
+	}
+	var componentCSS, componentAsset bool
+	for _, asset := range result.IR.Assets {
+		if asset.OwnerID == "Hero" && asset.Kind == gwdkir.AssetCSS && asset.Path == "./hero.css" {
+			componentCSS = true
+		}
+		if asset.OwnerID == "Hero" && asset.Kind == gwdkir.AssetFile && asset.Path == "./hero.png" {
+			componentAsset = true
+		}
+	}
+	if !componentCSS || !componentAsset {
+		t.Fatalf("expected component CSS and asset IR entries, got %#v", result.IR.Assets)
 	}
 }
 

@@ -7,11 +7,15 @@ type Artifact struct {
 }
 
 type CSSArtifact struct {
-	Path string
+	Path        string
+	Hash        string
+	CachePolicy string
 }
 
 type AssetArtifact struct {
-	Path string
+	Path        string
+	Hash        string
+	CachePolicy string
 }
 
 type Result struct {

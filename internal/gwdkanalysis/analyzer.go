@@ -96,6 +96,10 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 		page.Render = gowdk.RenderMode(ast.Render.Mode)
 		page.Spans.Render = ast.Render.Span
 	}
+	if ast.Cache != nil {
+		page.Cache = ast.Cache.Policy
+		page.Spans.Cache = ast.Cache.Span
+	}
 	for _, layout := range ast.Layouts {
 		page.Layouts = append(page.Layouts, layout.ID)
 		page.Spans.Layouts = append(page.Spans.Layouts, manifest.NamedSpan{Name: layout.ID, Span: layout.Span})
@@ -160,6 +164,14 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 	}
 	component.Imports = lowerImports(ast.Imports)
 	component.Uses = lowerUses(ast.Uses)
+	for _, asset := range ast.CSS {
+		component.CSS = append(component.CSS, asset.Path)
+		component.Spans.CSS = append(component.Spans.CSS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+	}
+	for _, asset := range ast.Assets {
+		component.Assets = append(component.Assets, asset.Path)
+		component.Spans.Assets = append(component.Spans.Assets, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+	}
 	if ast.PropsType != nil {
 		component.PropsType = lowerGoTypeRef(*ast.PropsType)
 	}
@@ -190,6 +202,16 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 			if component.WASM.Package == "" {
 				component.WASM = manifest.WASMContract{Package: trimQuotes(annotation.Value), Span: annotation.Span}
 			}
+		case "css":
+			if len(component.CSS) == 0 {
+				component.CSS = splitCSSList(annotation.Value)
+				component.Spans.CSS = namedSpans(component.CSS, annotation.Span)
+			}
+		case "asset":
+			if len(component.Assets) == 0 {
+				component.Assets = splitCSSList(annotation.Value)
+				component.Spans.Assets = namedSpans(component.Assets, annotation.Span)
+			}
 		default:
 			return manifest.Component{}, fmt.Errorf("%s: unsupported component annotation @%s", source, annotation.Name)
 		}
@@ -198,6 +220,9 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 		switch block.Kind {
 		case "props":
 			component.Props = lowerProps(block.Props)
+		case "exports":
+			component.Exports = lowerExports(block.Exports)
+			component.Blocks.Spans.Exports = block.Span
 		case "emits":
 			component.Emits = lowerEmits(block.Emits)
 			component.Blocks.Spans.Emits = block.Span
@@ -290,6 +315,7 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 			PageID:        page.ID,
 			Package:       page.Package,
 			Render:        mode,
+			Cache:         page.Cache,
 			DynamicParams: page.DynamicParams(),
 			Layouts:       append([]string(nil), page.Layouts...),
 			Guards:        append([]string(nil), page.Guard...),
@@ -372,6 +398,26 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 		pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: component.Source, Kind: gwdkir.SourceComponent, Package: component.Package, Name: component.Name, Span: component.Span})
 		appendPackageImports(pkg, component.Imports)
 		appendPackageUses(pkg, component.Uses)
+		for _, css := range component.CSS {
+			program.Assets = append(program.Assets, gwdkir.Asset{
+				Kind:    gwdkir.AssetCSS,
+				OwnerID: component.Name,
+				Package: component.Package,
+				Source:  component.Source,
+				Path:    css,
+				Span:    spanForName(component.Spans.CSS, css, component.Span),
+			})
+		}
+		for _, asset := range component.Assets {
+			program.Assets = append(program.Assets, gwdkir.Asset{
+				Kind:    gwdkir.AssetFile,
+				OwnerID: component.Name,
+				Package: component.Package,
+				Source:  component.Source,
+				Path:    asset,
+				Span:    spanForName(component.Spans.Assets, asset, component.Span),
+			})
+		}
 		if component.Blocks.View {
 			program.Templates = append(program.Templates, gwdkir.Template{
 				OwnerKind: gwdkir.SourceComponent,
@@ -538,6 +584,13 @@ func applyPageAnnotation(page *manifest.Page, annotation gwdkast.Annotation) err
 	case "render":
 		page.Render = gowdk.RenderMode(value)
 		page.Spans.Render = annotation.Span
+	case "cache":
+		policy, err := cachePolicyValue(value)
+		if err != nil {
+			return err
+		}
+		page.Cache = policy
+		page.Spans.Cache = annotation.Span
 	case "layout":
 		page.Layouts = splitCommaList(value)
 		page.Spans.Layouts = namedSpans(page.Layouts, annotation.Span)
@@ -573,6 +626,8 @@ func hasTypedPageAnnotation(ast gwdkast.File, name string) bool {
 		return ast.Route != nil
 	case "render":
 		return ast.Render != nil
+	case "cache":
+		return ast.Cache != nil
 	case "layout":
 		return len(ast.Layouts) > 0
 	case "guard":
@@ -627,6 +682,7 @@ func lowerIRPage(page manifest.Page) gwdkir.Page {
 		ID:       page.ID,
 		Route:    page.Route,
 		Render:   page.Render,
+		Cache:    page.Cache,
 		Metadata: gwdkir.PageMetadata(page.Metadata),
 		Layouts:  append([]string(nil), page.Layouts...),
 		Guards:   append([]string(nil), page.Guard...),
@@ -640,6 +696,7 @@ func lowerIRPage(page manifest.Page) gwdkir.Page {
 			Page:        page.Spans.Page,
 			Route:       page.Spans.Route,
 			Render:      page.Spans.Render,
+			Cache:       page.Spans.Cache,
 			Title:       page.Spans.Title,
 			Description: page.Spans.Description,
 			Canonical:   page.Spans.Canonical,
@@ -659,14 +716,21 @@ func lowerIRComponent(component manifest.Component) gwdkir.Component {
 		Name:        component.Name,
 		Imports:     lowerIRImports(component.Imports),
 		Uses:        lowerIRUses(component.Uses),
+		CSS:         append([]string(nil), component.CSS...),
+		Assets:      append([]string(nil), component.Assets...),
 		Props:       lowerIRProps(component.Props),
 		PropsType:   lowerIRGoTypeRef(component.PropsType),
 		State:       lowerIRStateContract(component.State),
 		WASM:        gwdkir.WASMContract(component.WASM),
+		Exports:     lowerIRExports(component.Exports),
 		Emits:       lowerIREmits(component.Emits),
 		Blocks:      lowerIRBlocks(component.Blocks),
 		Span:        component.Span,
 		PackageSpan: component.PackageSpan,
+		Spans: gwdkir.ComponentSpans{
+			CSS:    append([]manifest.NamedSpan(nil), component.Spans.CSS...),
+			Assets: append([]manifest.NamedSpan(nil), component.Spans.Assets...),
+		},
 	}
 }
 
@@ -703,6 +767,7 @@ func lowerIRBlocks(blocks manifest.Blocks) gwdkir.Blocks {
 			View:    blocks.Spans.View,
 			Actions: append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
 			APIs:    append([]manifest.NamedSpan(nil), blocks.Spans.APIs...),
+			Exports: blocks.Spans.Exports,
 			Emits:   blocks.Spans.Emits,
 		},
 	}
@@ -792,6 +857,14 @@ func lowerIRProps(in []manifest.Prop) []gwdkir.Prop {
 	return out
 }
 
+func lowerIRExports(in []manifest.Export) []gwdkir.Export {
+	out := make([]gwdkir.Export, 0, len(in))
+	for _, item := range in {
+		out = append(out, gwdkir.Export{Name: item.Name, Type: item.Type, Span: item.Span})
+	}
+	return out
+}
+
 func lowerIREmits(in []manifest.Emit) []gwdkir.Emit {
 	out := make([]gwdkir.Emit, 0, len(in))
 	for _, item := range in {
@@ -861,6 +934,14 @@ func lowerProps(in []gwdkast.Prop) []manifest.Prop {
 	out := make([]manifest.Prop, 0, len(in))
 	for _, item := range in {
 		out = append(out, manifest.Prop{Name: item.Name, Type: item.Type, Span: item.Span})
+	}
+	return out
+}
+
+func lowerExports(in []gwdkast.Export) []manifest.Export {
+	out := make([]manifest.Export, 0, len(in))
+	for _, item := range in {
+		out = append(out, manifest.Export{Name: item.Name, Type: item.Type, Span: item.Span})
 	}
 	return out
 }
@@ -969,6 +1050,17 @@ func splitCSSList(value string) []string {
 		}
 	}
 	return out
+}
+
+func cachePolicyValue(value string) (string, error) {
+	policy := strings.TrimSpace(trimQuotes(value))
+	if policy == "" {
+		return "", fmt.Errorf("@cache requires a value")
+	}
+	if strings.ContainsAny(policy, "\r\n") {
+		return "", fmt.Errorf("@cache must stay on one line")
+	}
+	return policy, nil
 }
 
 func spanForName(spans []manifest.NamedSpan, name string, fallback manifest.SourceSpan) manifest.SourceSpan {

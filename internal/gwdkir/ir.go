@@ -80,6 +80,7 @@ type Page struct {
 	ID       string
 	Route    string
 	Render   gowdk.RenderMode
+	Cache    string
 	Metadata PageMetadata
 	Layouts  []string
 	Guards   []string
@@ -118,6 +119,7 @@ type PageSpans struct {
 	Page        manifest.SourceSpan
 	Route       manifest.SourceSpan
 	Render      manifest.SourceSpan
+	Cache       manifest.SourceSpan
 	Title       manifest.SourceSpan
 	Description manifest.SourceSpan
 	Canonical   manifest.SourceSpan
@@ -136,6 +138,7 @@ type BlockSpans struct {
 	View    manifest.SourceSpan
 	Actions []manifest.NamedSpan
 	APIs    []manifest.NamedSpan
+	Exports manifest.SourceSpan
 	Emits   manifest.SourceSpan
 }
 
@@ -179,14 +182,23 @@ type Component struct {
 	Name        string
 	Imports     []Import
 	Uses        []Use
+	CSS         []string
+	Assets      []string
 	Props       []Prop
 	PropsType   GoRef
 	State       StateContract
 	WASM        WASMContract
+	Exports     []Export
 	Emits       []Emit
 	Blocks      Blocks
 	Span        manifest.SourceSpan
 	PackageSpan manifest.SourceSpan
+	Spans       ComponentSpans
+}
+
+type ComponentSpans struct {
+	CSS    []manifest.NamedSpan
+	Assets []manifest.NamedSpan
 }
 
 type StateContract struct {
@@ -201,6 +213,12 @@ type WASMContract struct {
 }
 
 type Prop struct {
+	Name string
+	Type string
+	Span manifest.SourceSpan
+}
+
+type Export struct {
 	Name string
 	Type string
 	Span manifest.SourceSpan
@@ -245,6 +263,7 @@ type Route struct {
 	PageID        string
 	Package       string
 	Render        gowdk.RenderMode
+	Cache         string
 	DynamicParams []string
 	Layouts       []string
 	Guards        []string
@@ -340,6 +359,7 @@ type AssetKind string
 
 const (
 	AssetCSS  AssetKind = "css"
+	AssetFile AssetKind = "asset"
 	AssetWASM AssetKind = "wasm"
 )
 

@@ -13,6 +13,8 @@ const assetManifestFile = "gowdk-assets.json"
 
 const buildReportFile = "gowdk-build-report.json"
 
+const immutableAssetCachePolicy = "public, max-age=31536000, immutable"
+
 const defaultPageCSSDir = "assets/gowdk"
 
 const clientRuntimeAssetPath = "assets/gowdk/" + clientrt.Filename

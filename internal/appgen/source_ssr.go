@@ -85,6 +85,9 @@ func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
 		keyValue("Path", stringLit(route.Route)),
 		keyValue("Render", stringLit(ssrRouteRender(route))),
 	}
+	if route.Cache != "" {
+		metadata = append(metadata, keyValue("Cache", stringLit(route.Cache)))
+	}
 	dynamicParams := route.DynamicParams
 	if len(dynamicParams) == 0 {
 		dynamicParams = ssrRoutePatternParams(route.Route)

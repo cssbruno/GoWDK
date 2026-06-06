@@ -68,6 +68,7 @@ type SSRRoute struct {
 	PageID        string
 	Route         string
 	Render        gowdk.RenderMode
+	Cache         string
 	DynamicParams []string
 	Guards        []string
 	HasLoad       bool

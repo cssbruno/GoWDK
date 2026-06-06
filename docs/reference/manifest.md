@@ -110,6 +110,7 @@ Fields:
   package-less layout IDs; qualified names such as `chrome.root` resolve through
   page `use chrome "package"` declarations.
 - `dynamicParams`: route params declared in dynamic route segments.
+- `cache`: optional page `@cache` route response metadata.
 - `paths`: optional boolean present when `paths {}` exists.
 - `guard`: optional guard metadata.
 - `css`: optional `@css` page selection metadata.
@@ -132,8 +133,9 @@ Fields:
   directory, such as `index.html`, `newsletter/index.html`, or
   `blog/{slug}/index.html`. SSR-only pages omit app-shell HTML artifacts.
 - `components`: component declarations known to the manifest.
-  Component declarations may include `props`, typed `propsType`/`state`
-  contracts, and emitted browser-island event metadata under `emits`.
+  Component declarations may include `css`, `assets`, inline `props`, typed
+  `propsType`/`state` contracts, typed public `exports`, and emitted
+  browser-island event metadata under `emits`.
 - `backendBindings`: action/API handler binding metadata. Entries include
   endpoint kind, source, page ID, declared block name, method, endpoint path,
   Go package/import details, exact handler symbol, signature/input metadata when

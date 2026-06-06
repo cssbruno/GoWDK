@@ -332,7 +332,7 @@ api Session GET "/api/session"
 - [ ] Define hybrid pages as SPA by default with explicit request-time capabilities.
 - [x] Define cache and revalidation behavior for static files, SPA routes,
       backend endpoints, partial responses, SSR routes, and hybrid pages.
-- [ ] Add syntax for route/cache policy once generated route metadata stabilizes.
+- [x] Add syntax for route/cache policy once generated route metadata stabilizes.
 - [x] Ensure generated binaries apply cache policy consistently.
 - [x] Keep SSR optional instead of making it the framework identity.
 
@@ -344,9 +344,9 @@ api Session GET "/api/session"
 - [x] Add parent-to-child expression props beyond current string/build-data interpolation.
 - [x] Add child-to-parent events.
 - [x] Add bindable child state.
-- [ ] Add typed component exports.
+- [x] Add typed component exports.
 - [x] Add named slots and scalar scoped slots.
-- [ ] Add scoped component CSS and component-level assets.
+- [x] Add scoped component CSS and component-level assets.
 - [x] Add a documented contract for component state, props, stores, client code, and generated runtime behavior.
 - [x] Add a proper reactive dependency graph.
 - [x] Track dependencies for computed values automatically across the supported
@@ -367,7 +367,7 @@ api Session GET "/api/session"
 - [x] Add Tailwind and CSS deployment docs with real commands.
 - [x] Keep module selection as artifact packaging, not runtime module orchestration.
 - [x] Keep generated app WASM deploy artifacts separate from explicit browser WASM islands.
-- [ ] Add asset cache policy and hashing rules for generated binaries.
+- [x] Add asset cache policy and hashing rules for generated binaries.
 
 ## Dev, Playground, And Tooling
 

@@ -23,6 +23,7 @@ type RouteMetadata struct {
 	Method        string
 	Path          string
 	Render        string
+	Cache         string
 	DynamicParams []string
 	Guards        []string
 	HasLoad       bool

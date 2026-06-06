@@ -700,20 +700,23 @@ view {
 	}
 }
 
-func TestParsePageRejectsUnknownAnnotation(t *testing.T) {
-	_, err := ParsePage([]byte(`
+func TestParsePageReadsCachePolicy(t *testing.T) {
+	page, err := ParsePage([]byte(`
 @page home
 @route "/"
-@cache public
+@cache "public, max-age=60"
 
 view {
 }
 `))
-	if err == nil {
-		t.Fatal("expected unknown annotation error")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err.Error() != `line 4: unsupported annotation @cache` {
-		t.Fatalf("unexpected error: %v", err)
+	if page.Cache != "public, max-age=60" {
+		t.Fatalf("unexpected cache policy: %#v", page)
+	}
+	if page.Spans.Cache.Start.Line != 4 {
+		t.Fatalf("unexpected cache span: %#v", page.Spans.Cache)
 	}
 }
 
@@ -807,6 +810,60 @@ view {
 	if component.State.Type.Alias != "ui" || component.State.Type.Name != "CounterState" ||
 		component.State.Init.Alias != "ui" || component.State.Init.Name != "NewCounterState" {
 		t.Fatalf("unexpected state contract: %#v", component.State)
+	}
+}
+
+func TestParseComponentReadsTypedExports(t *testing.T) {
+	component, err := ParseComponent([]byte(`
+@component Counter
+
+exports {
+  selectedID string
+  count int
+  active bool
+}
+
+view {
+  <button>{selectedID}</button>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(component.Exports) != 3 {
+		t.Fatalf("expected typed exports, got %#v", component.Exports)
+	}
+	if component.Exports[0].Name != "selectedID" || component.Exports[0].Type != "string" ||
+		component.Exports[1].Name != "count" || component.Exports[1].Type != "int" ||
+		component.Exports[2].Name != "active" || component.Exports[2].Type != "bool" {
+		t.Fatalf("unexpected exports: %#v", component.Exports)
+	}
+	if component.Blocks.Spans.Exports.Start.Line != 4 {
+		t.Fatalf("expected exports span line 4, got %#v", component.Blocks.Spans.Exports)
+	}
+}
+
+func TestParseComponentReadsScopedCSSAndAssets(t *testing.T) {
+	component, err := ParseComponent([]byte(`
+@component Hero
+@css "./hero.css"
+@asset "./hero.png"
+
+view {
+  <section>Hero</section>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(component.CSS) != 1 || component.CSS[0] != "./hero.css" {
+		t.Fatalf("unexpected component CSS: %#v", component.CSS)
+	}
+	if len(component.Assets) != 1 || component.Assets[0] != "./hero.png" {
+		t.Fatalf("unexpected component assets: %#v", component.Assets)
+	}
+	if component.Spans.CSS[0].Span.Start.Line != 3 || component.Spans.Assets[0].Span.Start.Line != 4 {
+		t.Fatalf("unexpected component asset spans: %#v %#v", component.Spans.CSS, component.Spans.Assets)
 	}
 }
 

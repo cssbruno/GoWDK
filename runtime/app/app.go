@@ -109,7 +109,7 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 		return
 	}
 
-	payload, info, ok := handler.SPAFile(request.URL.Path)
+	payload, info, assetName, ok := handler.SPAFile(request.URL.Path)
 	if !ok {
 		if handler.SSRDynamic != nil && handler.SSRDynamic(response, request) {
 			return
@@ -123,7 +123,7 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 	if !csrfOK {
 		return
 	}
-	setGeneratedStaticCache(response)
+	handler.setGeneratedStaticCache(response, assetName)
 	http.ServeContent(response, request, info.Name(), info.ModTime(), bytes.NewReader(payload))
 }
 
@@ -238,8 +238,12 @@ func csrfHiddenInput(fieldName string, token string) []byte {
 	return []byte(`<input type="hidden" name="` + html.EscapeString(fieldName) + `" value="` + html.EscapeString(token) + `">`)
 }
 
-func setGeneratedStaticCache(response http.ResponseWriter) {
+func (handler Handler) setGeneratedStaticCache(response http.ResponseWriter, assetName string) {
 	if response.Header().Get("Cache-Control") != "" {
+		return
+	}
+	if policy := handler.Assets.CachePolicy(assetName); policy != "" {
+		response.Header().Set("Cache-Control", policy)
 		return
 	}
 	response.Header().Set("Cache-Control", "no-cache")
@@ -319,14 +323,14 @@ func (handler Handler) health(response http.ResponseWriter) {
 	})
 }
 
-func (handler Handler) SPAFile(requestPath string) ([]byte, fs.FileInfo, bool) {
+func (handler Handler) SPAFile(requestPath string) ([]byte, fs.FileInfo, string, bool) {
 	for _, candidate := range SPACandidates(requestPath) {
 		payload, info, ok := readSPAFile(handler.Root, candidate)
 		if ok {
-			return payload, info, true
+			return payload, info, candidate, true
 		}
 	}
-	return nil, nil, false
+	return nil, nil, "", false
 }
 
 func SPACandidates(requestPath string) []string {

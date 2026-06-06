@@ -65,6 +65,8 @@ func buildFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, 
 			return Result{}, reporter.fail("write", err)
 		}
 		reporter.debug("write", "css_written", "CSS artifact written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
+		artifact.CSSArtifact.Hash = contentHash(artifact.contents)
+		artifact.CSSArtifact.CachePolicy = immutableAssetCachePolicy
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
 	}
 	for _, artifact := range planned.assets {
@@ -72,6 +74,8 @@ func buildFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, 
 			return Result{}, reporter.fail("write", err)
 		}
 		reporter.debug("write", "asset_written", "runtime asset written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
+		artifact.AssetArtifact.Hash = contentHash(artifact.contents)
+		artifact.AssetArtifact.CachePolicy = immutableAssetCachePolicy
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 	}
 	for _, artifact := range planned.pages {
@@ -172,6 +176,8 @@ func buildMemoryFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Pro
 		if err != nil {
 			return MemoryResult{}, reporter.fail("memory", err)
 		}
+		artifact.CSSArtifact.Hash = contentHash(artifact.contents)
+		artifact.CSSArtifact.CachePolicy = immutableAssetCachePolicy
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
 		result.Files[rel] = append([]byte(nil), artifact.contents...)
 		reporter.debug("memory", "css_collected", "CSS artifact collected", BuildEvent{Path: rel})
@@ -181,6 +187,8 @@ func buildMemoryFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Pro
 		if err != nil {
 			return MemoryResult{}, reporter.fail("memory", err)
 		}
+		artifact.AssetArtifact.Hash = contentHash(artifact.contents)
+		artifact.AssetArtifact.CachePolicy = immutableAssetCachePolicy
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 		result.Files[rel] = append([]byte(nil), artifact.contents...)
 		reporter.debug("memory", "asset_collected", "runtime asset collected", BuildEvent{Path: rel})

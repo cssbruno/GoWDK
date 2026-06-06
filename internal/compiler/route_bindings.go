@@ -44,6 +44,7 @@ type RouteBinding struct {
 	Method  string
 	Route   string
 	PageID  string
+	Cache   string
 	Handler string
 }
 
@@ -106,6 +107,7 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Method:  route.Method,
 				Route:   route.Path,
 				PageID:  route.PageID,
+				Cache:   route.Cache,
 				Handler: "ssr.Render" + exportedRouteName(route.PageID),
 			})
 			info = append(info, RouteInfo{
@@ -120,6 +122,7 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Method:  route.Method,
 				Route:   route.Path,
 				PageID:  route.PageID,
+				Cache:   route.Cache,
 				Handler: "hybrid.Render" + exportedRouteName(route.PageID),
 			})
 		default:
@@ -128,6 +131,7 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Method:  route.Method,
 				Route:   route.Path,
 				PageID:  route.PageID,
+				Cache:   route.Cache,
 				Handler: fmt.Sprintf(`embedded.SPA("pages/%s.html")`, routeAssetName(route.PageID)),
 			})
 			info = append(info, RouteInfo{

@@ -8,6 +8,12 @@ func TestManifestResolve(t *testing.T) {
 		Files: map[string]string{
 			"assets/app.css": "assets/app.css",
 		},
+		Hashes: map[string]string{
+			"assets/app.css": "sha256:abc",
+		},
+		Cache: map[string]string{
+			"assets/app.css": "public, max-age=31536000, immutable",
+		},
 	}
 
 	if got := manifest.Resolve("assets/app.css"); got != "assets/app.css" {
@@ -15,6 +21,12 @@ func TestManifestResolve(t *testing.T) {
 	}
 	if got := manifest.Resolve("missing.css"); got != "" {
 		t.Fatalf("expected missing asset to resolve empty, got %q", got)
+	}
+	if got := manifest.Hash("assets/app.css"); got != "sha256:abc" {
+		t.Fatalf("expected asset hash, got %q", got)
+	}
+	if got := manifest.CachePolicy("assets/app.css"); got != "public, max-age=31536000, immutable" {
+		t.Fatalf("expected asset cache policy, got %q", got)
 	}
 	if got := (Manifest{}).Resolve("assets/app.css"); got != "" {
 		t.Fatalf("expected nil manifest to resolve empty, got %q", got)

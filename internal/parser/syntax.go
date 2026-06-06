@@ -13,7 +13,7 @@ import (
 
 var (
 	literalRecordPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
-	syntaxBlockPattern   = regexp.MustCompile(`^(paths|build|load|client|view|props|emits)\s*\{`)
+	syntaxBlockPattern   = regexp.MustCompile(`^(paths|build|load|client|view|props|exports|emits)\s*\{`)
 )
 
 type SyntaxFile = gwdkast.File
@@ -30,6 +30,7 @@ type WASMContract = gwdkast.WASMContract
 type LiteralRecord = gwdkast.LiteralRecord
 type BuildCall = gwdkast.BuildCall
 type Prop = gwdkast.Prop
+type Export = gwdkast.Export
 type Emit = gwdkast.Emit
 type EmitParam = gwdkast.EmitParam
 type ActionStatement = gwdkast.ActionStatement
@@ -242,6 +243,8 @@ func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNu
 		file.Route = &gwdkast.RouteDecl{Path: path, Params: routeParams, Span: annotation.Span}
 	case "render":
 		file.Render = &gwdkast.RenderDecl{Mode: value, Span: annotation.Span}
+	case "cache":
+		file.Cache = &gwdkast.CacheDecl{Policy: trimQuotes(value), Span: annotation.Span}
 	case "guard":
 		for _, span := range namedValueSpans(splitList(value), lineNumber, rawLine) {
 			file.Guards = append(file.Guards, gwdkast.GuardRef{Name: span.Name, Span: span.Span})
@@ -249,6 +252,10 @@ func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNu
 	case "css":
 		for _, span := range namedValueSpans(splitCSSList(value), lineNumber, rawLine) {
 			file.CSS = append(file.CSS, gwdkast.AssetRef{Kind: "css", Path: span.Name, Span: span.Span})
+		}
+	case "asset":
+		for _, span := range namedValueSpans(splitCSSList(value), lineNumber, rawLine) {
+			file.Assets = append(file.Assets, gwdkast.AssetRef{Kind: "asset", Path: span.Name, Span: span.Span})
 		}
 	}
 }
@@ -295,6 +302,12 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 			return SyntaxBlock{}, err
 		}
 		block.Props = props
+	case "exports":
+		exports, err := parseSyntaxExports(body)
+		if err != nil {
+			return SyntaxBlock{}, err
+		}
+		block.Exports = exports
 	case "emits":
 		emits, err := parseSyntaxEmits(body)
 		if err != nil {
@@ -411,6 +424,25 @@ func parseSyntaxProps(body []syntaxBodyLine) ([]Prop, error) {
 
 func supportedSyntaxPropType(value string) bool {
 	return value == "string"
+}
+
+func parseSyntaxExports(body []syntaxBodyLine) ([]Export, error) {
+	var exports []Export
+	for _, raw := range body {
+		line := strings.TrimSpace(raw.Text)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		match := propPattern.FindStringSubmatch(line)
+		if match == nil {
+			return nil, fmt.Errorf("line %d: unsupported export syntax %q", raw.Line, line)
+		}
+		if !supportedScalarType(match[2]) {
+			return nil, fmt.Errorf("line %d: unsupported export type %q", raw.Line, match[2])
+		}
+		exports = append(exports, Export{Name: match[1], Type: match[2], Span: sourceLineSpan(raw.Line, raw.Text)})
+	}
+	return exports, nil
 }
 
 func parseSyntaxEmits(body []syntaxBodyLine) ([]Emit, error) {

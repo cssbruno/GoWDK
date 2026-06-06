@@ -256,6 +256,12 @@ func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 	if assets.Version != 1 || assets.Resolve("assets/app.css") != "assets/app.css" {
 		t.Fatalf("unexpected asset manifest: %s", assetManifestPayload)
 	}
+	if hash := assets.Hash("assets/app.css"); !strings.HasPrefix(hash, "sha256:") {
+		t.Fatalf("expected asset hash, got %q in %s", hash, assetManifestPayload)
+	}
+	if policy := assets.CachePolicy("assets/app.css"); policy != immutableAssetCachePolicy {
+		t.Fatalf("expected immutable asset cache policy, got %q", policy)
+	}
 }
 
 func TestBuildRejectsUnsafeCSSAssetsBeforeWriting(t *testing.T) {

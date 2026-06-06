@@ -96,6 +96,7 @@ type PageSpans struct {
 	Page        SourceSpan
 	Route       SourceSpan
 	Render      SourceSpan
+	Cache       SourceSpan
 	Title       SourceSpan
 	Description SourceSpan
 	Canonical   SourceSpan
@@ -104,6 +105,12 @@ type PageSpans struct {
 	Guard       []NamedSpan
 	CSS         []NamedSpan
 	RouteParams []NamedSpan
+}
+
+// ComponentSpans records source ranges for component annotations.
+type ComponentSpans struct {
+	CSS    []NamedSpan
+	Assets []NamedSpan
 }
 
 // BlockSpans records source ranges for page, component, or layout blocks.
@@ -115,6 +122,7 @@ type BlockSpans struct {
 	View    SourceSpan
 	Actions []NamedSpan
 	APIs    []NamedSpan
+	Exports SourceSpan
 	Emits   SourceSpan
 }
 
@@ -125,6 +133,7 @@ type Page struct {
 	ID       string
 	Route    string
 	Render   gowdk.RenderMode
+	Cache    string
 	Metadata PageMetadata
 	Layouts  []string
 	Guard    []string
@@ -168,14 +177,18 @@ type Component struct {
 	Name        string
 	Imports     []Import
 	Uses        []Use
+	CSS         []string
+	Assets      []string
 	Props       []Prop
 	PropsType   GoTypeRef
 	State       StateContract
 	WASM        WASMContract
+	Exports     []Export
 	Emits       []Emit
 	Blocks      Blocks
 	Span        SourceSpan
 	PackageSpan SourceSpan
+	Spans       ComponentSpans
 }
 
 // Layout describes a .layout.gwdk layout after parsing and normalization.
@@ -191,6 +204,13 @@ type Layout struct {
 
 // Prop describes one component prop declaration.
 type Prop struct {
+	Name string
+	Type string
+	Span SourceSpan
+}
+
+// Export describes one typed public component export.
+type Export struct {
 	Name string
 	Type string
 	Span SourceSpan

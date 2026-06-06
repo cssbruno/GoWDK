@@ -13,9 +13,11 @@ type File struct {
 	Page        *PageDecl
 	Route       *RouteDecl
 	Render      *RenderDecl
+	Cache       *CacheDecl
 	Layouts     []LayoutRef
 	Guards      []GuardRef
 	CSS         []AssetRef
+	Assets      []AssetRef
 	Component   *ComponentDecl
 	Layout      *LayoutDecl
 	Imports     []Import
@@ -77,6 +79,12 @@ type RouteParam struct {
 type RenderDecl struct {
 	Mode string
 	Span manifest.SourceSpan
+}
+
+// CacheDecl is an @cache route response policy declaration.
+type CacheDecl struct {
+	Policy string
+	Span   manifest.SourceSpan
 }
 
 // LayoutRef is one @layout reference on a page.
@@ -157,6 +165,7 @@ type Block struct {
 	Records []LiteralRecord
 	Call    *BuildCall
 	Props   []Prop
+	Exports []Export
 	Emits   []Emit
 	Actions []ActionStatement
 	APIs    []APIStatement
@@ -186,6 +195,13 @@ type BuildCall struct {
 
 // Prop is one scalar prop declaration inside props {}.
 type Prop struct {
+	Name string
+	Type string
+	Span manifest.SourceSpan
+}
+
+// Export is one typed public component export inside exports {}.
+type Export struct {
 	Name string
 	Type string
 	Span manifest.SourceSpan

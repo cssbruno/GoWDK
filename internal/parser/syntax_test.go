@@ -115,6 +115,8 @@ func TestParseSyntaxReturnsGOWDKAST(t *testing.T) {
 	var _ gwdkast.File = mustParseSyntax(t, []byte(`package ui
 @component Counter
 @wasm ./counter/browser
+@css "./counter.css"
+@asset "./counter.svg"
 
 import ui "github.com/cssbruno/gowdk/examples/ui"
 
@@ -125,6 +127,11 @@ state ui.CounterState = ui.NewCounterState()
 props {
   title string
   subtitle string
+}
+
+exports {
+  selectedID string
+  count int
 }
 
 emits {
@@ -147,6 +154,8 @@ func TestParseSyntaxReadsStoresAndComponentContracts(t *testing.T) {
 	file := mustParseSyntax(t, []byte(`package ui
 @component Counter
 @wasm ./counter/browser
+@css "./counter.css"
+@asset "./counter.svg"
 
 import ui "github.com/cssbruno/gowdk/examples/ui"
 
@@ -157,6 +166,11 @@ state ui.CounterState = ui.NewCounterState()
 props {
   title string
   subtitle string
+}
+
+exports {
+  selectedID string
+  count int
 }
 
 emits {
@@ -189,19 +203,29 @@ view {
 	if file.WASM == nil || file.WASM.Package != "./counter/browser" {
 		t.Fatalf("unexpected wasm contract: %#v", file.WASM)
 	}
+	if len(file.CSS) != 1 || file.CSS[0].Path != "./counter.css" {
+		t.Fatalf("unexpected component CSS assets: %#v", file.CSS)
+	}
+	if len(file.Assets) != 1 || file.Assets[0].Path != "./counter.svg" {
+		t.Fatalf("unexpected component assets: %#v", file.Assets)
+	}
 	props := file.Blocks[0]
 	if props.Kind != "props" || len(props.Props) != 2 || props.Props[0].Name != "title" || props.Props[1].Name != "subtitle" {
 		t.Fatalf("unexpected props block: %#v", props)
 	}
-	emits := file.Blocks[1]
+	exports := file.Blocks[1]
+	if exports.Kind != "exports" || len(exports.Exports) != 2 || exports.Exports[0].Name != "selectedID" || exports.Exports[1].Type != "int" {
+		t.Fatalf("unexpected exports block: %#v", exports)
+	}
+	emits := file.Blocks[2]
 	if emits.Kind != "emits" || len(emits.Emits) != 1 || emits.Emits[0].Name != "select" || emits.Emits[0].Params[0].Name != "id" {
 		t.Fatalf("unexpected emits block: %#v", emits)
 	}
-	client := file.Blocks[2]
+	client := file.Blocks[3]
 	if client.Kind != "client" || client.Body == "" {
 		t.Fatalf("unexpected client block: %#v", client)
 	}
-	view := file.Blocks[3]
+	view := file.Blocks[4]
 	if view.Kind != "view" || len(view.View) != 1 {
 		t.Fatalf("unexpected view block: %#v", view)
 	}

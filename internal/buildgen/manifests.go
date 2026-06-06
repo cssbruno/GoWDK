@@ -2,6 +2,7 @@ package buildgen
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -139,12 +140,20 @@ func writeAssetManifest(outputDir string, cssArtifacts []CSSArtifact, assetArtif
 
 func assetManifestPayload(outputDir string, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) ([]byte, error) {
 	files := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
+	hashes := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
+	cache := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
 	for _, artifact := range cssArtifacts {
 		rel, err := relativeOutputPath(outputDir, artifact.Path)
 		if err != nil {
 			return nil, err
 		}
 		files[rel] = rel
+		if artifact.Hash != "" {
+			hashes[rel] = artifact.Hash
+		}
+		if artifact.CachePolicy != "" {
+			cache[rel] = artifact.CachePolicy
+		}
 	}
 	for _, artifact := range assetArtifacts {
 		rel, err := relativeOutputPath(outputDir, artifact.Path)
@@ -152,9 +161,22 @@ func assetManifestPayload(outputDir string, cssArtifacts []CSSArtifact, assetArt
 			return nil, err
 		}
 		files[rel] = rel
+		if artifact.Hash != "" {
+			hashes[rel] = artifact.Hash
+		}
+		if artifact.CachePolicy != "" {
+			cache[rel] = artifact.CachePolicy
+		}
 	}
 
-	payload, err := json.MarshalIndent(runtimeasset.Manifest{Version: 1, Files: files}, "", "  ")
+	manifest := runtimeasset.Manifest{Version: 1, Files: files}
+	if len(hashes) > 0 {
+		manifest.Hashes = hashes
+	}
+	if len(cache) > 0 {
+		manifest.Cache = cache
+	}
+	payload, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return nil, err
 	}
@@ -174,6 +196,11 @@ func writeFileIfChanged(filePath string, contents []byte) error {
 		return err
 	}
 	return os.WriteFile(filePath, contents, 0o644)
+}
+
+func contentHash(contents []byte) string {
+	sum := sha256.Sum256(contents)
+	return fmt.Sprintf("sha256:%x", sum[:])
 }
 
 func relativeOutputPath(outputDir, filePath string) (string, error) {

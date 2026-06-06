@@ -109,10 +109,19 @@ Implemented today:
 - `g:island="wasm"` on component calls to opt that instance into explicit WASM
   island assets. Unknown `g:island` values are compile/render errors. Without
   `g:island`, stateful component calls use generated JavaScript by default.
+- Familiar external-template block syntax such as `{#if}`, `{#each}`,
+  `{#await}`, `{#snippet}`, `{@render}`, `{@html}`, `{@const}`, and `{@debug}`
+  is rejected with diagnostics that point to the current GOWDK-native
+  alternatives. These diagnostics are guidance only; they do not imply that
+  GOWDK will implement those external constructs feature-for-feature.
 
 Not implemented yet:
 
 - Non-string component props in inline `props {}` blocks.
+- Raw HTML rendering escape hatches.
+- Snippet/render block syntax as a first-class reusable markup value.
+- Template-level await blocks, local const tags, debug tags, transitions,
+  animations, DOM actions, and document/window/body/head special targets.
 - Full client-side expressions beyond the first safe island subset, including
   broader date/time built-ins and JavaScript-style ternaries.
 - Other `g:` directives beyond `g:post`, `g:target`, `g:swap`, `g:on:*`,

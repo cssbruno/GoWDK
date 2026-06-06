@@ -42,10 +42,45 @@ func (parser *parser) nodes(until string) ([]Node, error) {
 			nodes = append(nodes, node)
 			continue
 		}
+		start := parser.index
 		if text := parser.text(); strings.TrimSpace(text) != "" {
+			if offset, message, ok := unsupportedTemplateSyntax(text); ok {
+				parser.index = start + offset
+				return nil, parser.errorf("%s", message)
+			}
 			nodes = append(nodes, Text{Value: text})
 		}
 	}
+}
+
+func unsupportedTemplateSyntax(text string) (int, string, bool) {
+	for _, marker := range []string{"{#", "{:", "{/", "{@"} {
+		offset := strings.Index(text, marker)
+		if offset < 0 {
+			continue
+		}
+		fragment := strings.TrimSpace(text[offset:])
+		if len(fragment) > 32 {
+			fragment = fragment[:32]
+		}
+		switch {
+		case strings.HasPrefix(fragment, "{#if"), strings.HasPrefix(fragment, "{:else"), strings.HasPrefix(fragment, "{/if"):
+			return offset, "unsupported template conditional syntax; use g:if, g:else-if, and g:else on elements", true
+		case strings.HasPrefix(fragment, "{#each"), strings.HasPrefix(fragment, "{/each"):
+			return offset, "unsupported template loop syntax; use g:for with g:key on elements inside stateful components", true
+		case strings.HasPrefix(fragment, "{#await"), strings.HasPrefix(fragment, "{/await"):
+			return offset, "unsupported template await syntax; use build/load data, actions, APIs, or fragments for asynchronous data", true
+		case strings.HasPrefix(fragment, "{#snippet"), strings.HasPrefix(fragment, "{/snippet"), strings.HasPrefix(fragment, "{@render"):
+			return offset, "unsupported template snippet/render syntax; use GOWDK component slots for supported reusable markup", true
+		case strings.HasPrefix(fragment, "{@html"):
+			return offset, "unsupported raw HTML syntax; GOWDK escapes rendered text by default and has no raw HTML escape hatch in this slice", true
+		case strings.HasPrefix(fragment, "{@const"), strings.HasPrefix(fragment, "{@debug"):
+			return offset, "unsupported template tag syntax; declare data in build/load blocks or component client code", true
+		default:
+			return offset, fmt.Sprintf("unsupported template syntax near %q", fragment), true
+		}
+	}
+	return 0, "", false
 }
 
 func (parser *parser) element() (Node, error) {

@@ -271,7 +271,7 @@ integration blueprints without copying files by hand.
 - [Product vision](docs/product/vision.md)
 - [Requirements](docs/product/requirements.md)
 - [Roadmap](docs/product/roadmap.md)
-- [Documentation checklist](docs/product/documentation-checklist.md)
+- [Svelte/SvelteKit gap checklist](docs/product/svelte-sveltekit-gap-checklist.md)
 - [Architecture](docs/engineering/architecture.md)
 - [Release readiness](docs/engineering/release.md)
 - [CLI reference](docs/reference/cli.md)

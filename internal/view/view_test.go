@@ -49,6 +49,46 @@ func TestRenderSPARejectsMissingComponent(t *testing.T) {
 	}
 }
 
+func TestParseRejectsUnsupportedTemplateSyntaxWithGOWDKAlternatives(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		message string
+	}{
+		{
+			name:    "conditional",
+			source:  `<main>{#if open}<p>Open</p>{/if}</main>`,
+			message: "use g:if, g:else-if, and g:else",
+		},
+		{
+			name:    "loop",
+			source:  `<ul>{#each items as item}<li>{item.Name}</li>{/each}</ul>`,
+			message: "use g:for with g:key",
+		},
+		{
+			name:    "raw html",
+			source:  `<main>{@html body}</main>`,
+			message: "GOWDK escapes rendered text by default",
+		},
+		{
+			name:    "snippet",
+			source:  `<main>{#snippet row(item)}<p>{item}</p>{/snippet}</main>`,
+			message: "use GOWDK component slots",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Parse(test.source)
+			if err == nil {
+				t.Fatal("expected unsupported template syntax error")
+			}
+			if !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected error containing %q, got %v", test.message, err)
+			}
+		})
+	}
+}
+
 func TestRenderWithComponentsExpandsSPAStringProps(t *testing.T) {
 	got, err := RenderWithComponents(`<main><Hero title="GOWDK & compiler" /></main>`, map[string]Component{
 		"Hero": {

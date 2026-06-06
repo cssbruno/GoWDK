@@ -39,6 +39,29 @@ modules define what gets emitted to `--out`, copied into `--app`, and embedded
 into `--bin`. When the loaded config has no root or module include, discovery
 falls back to `**/*.gwdk` and an explicit `--out` directory.
 
+`.gwdk` files are selected by source discovery, explicit CLI paths, or selected
+modules. Go `import` declarations inside `.gwdk` files import normal Go
+packages for typed contracts and build functions; they do not import `.gwdk`
+components, layouts, or pages. Same-package `.gwdk` and `.go` files are peers,
+except `gowdk.config.go`, which is project configuration rather than
+application package code.
+
+Cross-package GOWDK source imports use `use`, not Go `import`:
+
+```gwdk
+package pages
+
+use ui "components"
+
+view {
+  <main><ui.Hero title="GOWDK" /></main>
+}
+```
+
+The quoted `use` target is a discovered `.gwdk` package name. Pages and
+components can use qualified component calls through their own scoped aliases.
+Layout, store, and asset use semantics remain planned.
+
 Current file-kind classification treats files ending in `.cmp.gwdk` or
 containing `@component` as components, files ending in `.layout.gwdk` as layout
 files, files ending in `.asset.gwdk` as asset-adjacent planning files, files
@@ -58,5 +81,6 @@ Future compiler work must define:
 - Whether build targets need per-target addons, render settings, or package
   layout controls.
 - How examples and fixture apps are kept runnable.
+- Cross-package layout, store, and asset use behavior.
 
 Routes and layouts must remain declared inside files, not inferred from folder location.

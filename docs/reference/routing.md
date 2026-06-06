@@ -49,9 +49,19 @@ view {
 current output is `<dir>/docs/index.html`. For `/`, the output is
 `<dir>/index.html`.
 
+When a SPA page, layout, or referenced component contains a literal internal
+link such as `<a href="/docs">`, the build emits the small
+`assets/gowdk/gowdk.js` enhancement runtime. That runtime intercepts normal
+same-origin link clicks, fetches the real generated HTML page, replaces the
+current document head/body, updates browser history, and preserves focus/scroll
+where possible. It does not define routes or decide whether a route exists; the
+generated files or generated server remain the source of truth, and direct page
+open/refresh must keep working.
+
 ## Dynamic SPA Routes
 
-Dynamic spa or action routes require `paths {}`:
+Dynamic SPA routes require `paths {}`. Action endpoints on a dynamic SPA page
+inherit that page's generated concrete paths:
 
 ```gwdk
 @page blog.post
@@ -90,51 +100,58 @@ Generated output:
 
 Imported Go build functions do not receive route params yet.
 
-## Action Routes
+## Action Endpoints
 
-An `act` block on a page adds a same-page `POST` route in the current generated
+An `act` declaration on a page adds a `POST` endpoint in the current generated
 app slice:
 
 ```gwdk
+package signup
+
 @page signup
 @route "/signup"
 @render action
 
-act submit {
-  input := form SignupInput
-  valid(input)?
-  -> "/signup?ok=1"
-}
+act Submit POST "/signup"
 
 view {
-  <form g:post={submit}>
+  <form g:post={Submit}>
     <input name="email" required />
     <button type="submit">Sign up</button>
   </form>
 }
 ```
 
-App-shell HTML lowers `g:post={submit}` to a normal POST form. Generated apps
-built with `--app --bin` serve concrete action routes. If the same directory as
-the `.gwdk` file contains an exported Go function named from the block, for
-example `act submit` -> `Submit`, and it has signature
-`func(context.Context, form.Values) (response.Response, error)`, the generated
-handler calls it. Missing or unsupported functions generate HTTP 501 handlers.
+App-shell HTML lowers `g:post={Submit}` to a normal POST form. Generated apps
+built with `--app --bin` serve concrete action endpoints. If the same directory
+as the `.gwdk` file contains an exported Go function with the exact declared
+symbol, the generated handler calls it when it uses one of these signatures:
 
-Generated action handlers do not wire CSRF checks yet.
+```go
+func Submit(context.Context) (response.Response, error)
+func Submit(context.Context, SignupInput) (response.Response, error)
+func Submit(context.Context, *SignupInput) (response.Response, error)
+func Submit(context.Context, form.Values) (response.Response, error)
+```
+
+Missing or unsupported functions generate HTTP 501 handlers.
+
+When `Build.CSRF.Enabled` is set, generated action handlers validate CSRF
+tokens before generated decoding or user handlers run. Missing or invalid
+tokens return HTTP 403 with `invalid csrf token` and `Cache-Control: no-store`.
 
 ## API Routes
 
-API route metadata is parsed, appears in route plans, and can bind to
+API endpoint metadata is parsed, appears in route plans, and can bind to
 same-package Go handlers:
 
 ```gwdk
+package api
+
 @page status
 @route "/status"
 
-api health {
-  GET "/api/health"
-}
+api Health GET "/api/health"
 
 view {
   <main>
@@ -145,8 +162,8 @@ view {
 
 Supported methods today: `GET`, `POST`, `PUT`, `PATCH`, and `DELETE`.
 
-`api health` maps to exported Go function `Health` in the same package as the
-`.gwdk` file when the function has signature
+`api Health GET "/api/health"` maps to exported Go function `Health` in the
+same package as the `.gwdk` file when the function has signature
 `func(context.Context, *http.Request) (response.Response, error)`. Missing or
 unsupported functions generate HTTP 501 handlers.
 
@@ -169,17 +186,46 @@ gowdk build --ssr --out /tmp/gowdk-ssr-build \
 ```
 
 Dynamic SSR route params render through generated placeholders and request-time
-HTML escaping. `load {}` execution, guard enforcement, and broad request-time
-user logic are still planned.
+HTML escaping. Generated SSR handlers attach route metadata through
+`runtime/app.Route(ctx)` and dynamic params through `runtime/app.Params(ctx)`.
+User Go can decode those params with `runtime/route` helpers:
+
+```go
+params := app.Params(ctx)
+id, ok, err := route.Int(params, "id")
+if err != nil {
+  return response.HTMLBody(400, "invalid route param"), err
+}
+if !ok {
+  return response.HTMLBody(404, "missing route param"), nil
+}
+_ = id
+```
+
+The helpers support `String`, `Int`, `Int64`, `Uint`, `Uint64`, `Bool`, and
+`Float64`. `Required` returns a missing-param error when a required param is not
+present. Decode errors name the param and expected type without echoing the raw
+request value. Route-param type declarations and generated typed bindings are
+still planned.
+
+`load {}` execution, guard enforcement, and broad request-time user logic are
+still planned.
 
 ## Route Plans
 
-Use `gowdk routes` to inspect the validated route-binding plan:
+Use `gowdk routes` to inspect validated route and endpoint metadata:
 
 ```sh
 gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
 ```
 
-The current JSON schema is version `1` and includes route kind, method, route
-pattern, page ID, planned handler information, and backend binding status for
-action/API routes.
+The current JSON schema is version `1`. `routes` contains only page/file route
+kinds such as `static`, `spa`, `ssr`, and `hybrid`; `endpoints` contains one
+framework-neutral endpoint record per action/API declaration. Endpoint records
+include `endpointSource` (`gwdk` today), source file and source span, `.gwdk`
+package, Go package path/name when known, exact declared symbol, method, path,
+planned adapter handler information, and backend binding status/message.
+Backend binding details repeat the Go package name, import path when known,
+handler symbol, and supported signature/input metadata when the handler is
+bound. The `info` list reports disabled route-mode lanes, for example SSR
+disabled on a SPA route.

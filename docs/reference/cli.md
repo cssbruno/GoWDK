@@ -15,7 +15,7 @@ gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
-gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
+gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
 gowdk lsp [--ssr]
@@ -29,12 +29,15 @@ gowdk lsp [--ssr]
 - `--write`: supported by `fmt`; overwrites formatted files.
 - `--config`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; loads a literal config subset from the given path instead of the required default `gowdk.config.go`.
 - `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
+- `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
 - `--module`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
 - `--out`: supported by `build`; selects the output directory and overrides `Build.Output`.
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
 - `--wasm`: supported by `build`; requires `--app` and compiles the generated app with `GOOS=js GOARCH=wasm go build -o <file>`.
+- `--backend-app`: supported by `build`; writes generated backend-only Go app source for feature-bound action/API endpoints.
+- `--backend-bin`: supported by `build`; requires `--backend-app` and compiles the generated backend app with `go build -o <file>`.
 - `--addr`: supported by `dev` and `serve`; selects the listen address and defaults to `127.0.0.1:8080`.
 - `--interval`: supported by `dev`; sets the polling interval, such as `500ms`, `1s`, or `2s`.
 - `--dir`: supported by `serve`; selects the generated build output directory.
@@ -51,6 +54,7 @@ go run ./cmd/gowdk sitemap --module frontend --ssr
 go run ./cmd/gowdk routes --module frontend --ssr
 go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 go run ./cmd/gowdk build --debug --out /tmp/gowdk-build examples/pages/home.page.gwdk
+go run ./cmd/gowdk build --allow-missing-backend --out /tmp/gowdk-build examples/actions/signup.page.gwdk
 go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/ssr/simple-ssr.page.gwdk
 go run ./cmd/gowdk build --module frontend --module backend --out /tmp/gowdk-build
 go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
@@ -138,9 +142,16 @@ stable ID. `GOWDK_MODULE_NAME` is runtime identity metadata; it does not change
 which modules were embedded. Embedded module composition is fixed at build time
 by `Build.Targets` or the selected `--module` flags.
 
-`gowdk routes` prints the validated route-binding plan as JSON. The current
-schema is version `1` and includes route kind, method, route pattern, page ID,
-and planned handler symbol or app embedded asset handler expression.
+`gowdk routes` prints validated route and endpoint metadata as JSON. The current
+schema is version `1`. The `routes` list is limited to page/file route kinds
+such as `static`, `spa`, `ssr`, and `hybrid`; backend actions and APIs appear
+in the separate `endpoints` list with source path, `.gwdk` package, method,
+path, page ID, planned adapter handler, and backend binding metadata. Backend
+binding metadata includes the Go package name, import path when known, handler
+symbol, signature/input metadata when bound, status, and binding message.
+Non-fatal route-mode notes, such as SSR disabled on a SPA route or static SPA
+output disabled on an SSR route, appear in `info` and are also mirrored to
+stderr as `info:` console lines.
 
 Current `build` limitations: it emits only simple app-shell HTML files,
 `gowdk-routes.json`, `gowdk-assets.json`, generated embedded app source,
@@ -151,15 +162,15 @@ string props, first-slice action redirect handlers with form decoder wrappers
 and required-field validation, and first-slice action fragment responses for
 partial requests.
 
-Current generated binary limitations: it serves embedded build output files for the
-selected build output and local POST redirects for the first supported action
-subset, including first-slice form input decoder wrappers and required-field
-validation. It can also serve first-slice action fragment responses for
-`X-GOWDK-Partial` requests and first-slice concrete or dynamic SSR pages
+Current generated binary limitations: it serves embedded build output files for
+the selected build output and local POST endpoints for the first supported
+action subset, including first-slice form input decoder wrappers and
+required-field validation. It can also serve first-slice action fragment
+responses for `X-GOWDK-Partial` requests, CSRF validation when
+`Build.CSRF.Enabled` is set, and first-slice concrete or dynamic SSR pages
 rendered from `view {}` and literal or imported `build {}` data. It does not
-run real user Go type-bound action decoders, user action logic, CSRF, APIs,
-general fragment routes, `load {}` execution, guards, or hybrid request-time
-behavior.
+run general fragment endpoints, `load {}` execution, guards, or hybrid
+request-time behavior.
 
 Current `serve` limitations: it serves generated build output files only. It does not
 run generated actions, APIs, partial fragments, or SSR routes.

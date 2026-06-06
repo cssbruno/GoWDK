@@ -69,6 +69,19 @@ Runtime identity environment variables:
 The selected module set is fixed at build time. `GOWDK_MODULE_NAME` does not
 change which files were embedded.
 
+## Cache Defaults
+
+Generated binaries use explicit cache headers:
+
+- Embedded static files, SPA HTML, generated CSS, and generated browser runtime
+  assets use `Cache-Control: no-cache`, so browsers may store them but must
+  revalidate before reuse.
+- CSRF-personalized HTML, action responses, API responses, partial fragments,
+  SSR HTML, generated handler errors, and invalid-CSRF responses use
+  `Cache-Control: no-store`.
+- Long-lived immutable asset caching is intentionally deferred until generated
+  asset hashing rules are implemented.
+
 ## Module And Target Builds
 
 Use modules for source selection:
@@ -132,9 +145,12 @@ artifact. It is separate from browser island assets emitted by
 Generated binaries currently support:
 
 - Embedded app file serving.
-- Feature-bound same-package action handlers.
+- Feature-bound same-package action handlers with no-input, typed value, typed
+  pointer, or `form.Values` signatures.
 - Feature-bound same-package API handlers.
 - First-slice same-page POST action redirects.
+- CSRF-wired generated action handlers when `Build.CSRF.Enabled` is set and
+  the configured secret environment variable is present.
 - First-slice required-field validation for directly declared form controls.
 - First-slice partial action fragment responses.
 - First-slice concrete and dynamic `@render ssr` pages without `load {}`.
@@ -144,8 +160,6 @@ Generated binaries currently support:
 
 Generated binaries do not yet support:
 
-- CSRF-wired generated handlers.
-- Typed user input structs for action handlers.
 - Request-time `load {}` execution.
 - Guard enforcement.
 - General fragment routes.

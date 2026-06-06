@@ -73,14 +73,12 @@ GOWDK runtime contracts, and user feature packages.
 - `.llm/plans/go-native-adapter-boundary.md`
 - `docs/engineering/decisions/0005-generated-go-emission-boundary.md`
 - `docs/engineering/generated-code-policy.md`
-- `docs/compiler/codegen.md`
 - `docs/compiler/generated-output.md`
 - `docs/compiler/project-structure.md`
 - `docs/reference/cli.md`
 - `docs/reference/routing.md`
 - `internal/appgen`
 - `internal/compiler`
-- `internal/codegen`
 - `internal/manifest`
 - `cmd/gowdk`
 - `examples/login`
@@ -164,7 +162,7 @@ GOWDK runtime contracts, and user feature packages.
 - Integration:
   - generated one-binary app calls normal Go action/API handlers.
   - generated split backend app calls the same handlers.
-  - generated frontend proxy forwards backend action/API routes.
+  - generated frontend proxy forwards backend action/API endpoints.
   - missing handlers return clear `501` responses.
   - generated Go files are produced from AST builders and format successfully.
 
@@ -181,7 +179,7 @@ GOWDK runtime contracts, and user feature packages.
 
 ```sh
 gofmt -w <changed-go-files>
-go test ./internal/compiler ./internal/appgen ./internal/codegen ./cmd/gowdk
+go test ./internal/compiler ./internal/appgen ./cmd/gowdk
 go test ./...
 go build ./cmd/gowdk
 cd examples/login && make check

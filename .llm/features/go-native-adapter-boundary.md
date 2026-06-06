@@ -48,7 +48,7 @@ imports user packages and wires runtime contracts.
 
 ## User Flow
 
-1. A developer writes package-peer `.gwdk` route declarations next to normal Go
+1. A developer writes package-peer `.gwdk` endpoint declarations next to normal Go
    feature code.
 2. Action and API declarations name exact exported Go symbols.
 3. The compiler validates declarations and discovers matching Go handlers.
@@ -117,7 +117,7 @@ imports user packages and wires runtime contracts.
 ## Dependencies
 
 - Internal: `internal/compiler`, `internal/manifest`, `internal/appgen`,
-  `internal/codegen`, `runtime/app`, `runtime/form`, `runtime/response`.
+  `runtime/app`, `runtime/form`, `runtime/response`.
 - External: Go toolchain only.
 
 ## Open Questions

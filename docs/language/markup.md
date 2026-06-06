@@ -106,7 +106,7 @@ Implemented today:
 Not implemented yet:
 
 - Named slots or scoped slots.
-- Non-string component props in legacy `props {}` blocks.
+- Non-string component props in inline `props {}` blocks.
 - Full client-side expressions beyond the first safe island subset, including
   broader date/time built-ins, JavaScript-style ternaries, and event object
   reads.

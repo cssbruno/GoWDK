@@ -88,7 +88,7 @@ Does not own:
 ## Canonical Roadmap Order
 
 1. Package-integrated `.gwdk` language.
-2. Exact exported action/API route declarations.
+2. Exact exported action/API endpoint declarations.
 3. GOWDK AST and analyzer metadata.
 4. Go package ownership and binding through standard `go/parser`, `go/ast`, and
    `go/types`.
@@ -139,7 +139,7 @@ act login {
 }
 ```
 
-with route declarations:
+with endpoint declarations:
 
 ```gwdk
 act Login POST "/"
@@ -153,7 +153,7 @@ api session {
 }
 ```
 
-with route declarations:
+with endpoint declarations:
 
 ```gwdk
 api Session GET "/api/session"
@@ -181,7 +181,7 @@ api Session GET "/api/session"
 - [ ] Required `.gwdk package <name>` parser and diagnostics.
 - [ ] GOWDK AST and analyzer metadata.
 - [ ] Exact exported `act`/`api` declaration parser.
-- [ ] Legacy action/API syntax migration diagnostics.
+- [ ] Old action/API syntax rejection diagnostics.
 - [ ] Package mismatch validation with sibling Go files.
 - [ ] `go/types` handler binding.
 - [ ] Runtime backend router.

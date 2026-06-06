@@ -45,6 +45,8 @@ normal Go; generated code remains adapter glue.
   package as the first non-comment declaration.
 - Validate that a `.gwdk` package matches sibling `.go` files in the same
   directory.
+- Keep Go `import` limited to normal Go packages and use explicit GOWDK
+  `use alias "package"` declarations for cross-package source reuse.
 - Replace old `act name { ... }` and `api name { ... }` blocks with top-level
   declarations that name exact exported Go symbols.
 - Keep routes in `.gwdk` files while moving redirects, fragments, validation,
@@ -78,10 +80,10 @@ normal Go; generated code remains adapter glue.
 
 1. A developer writes `package auth` at the top of `login.page.gwdk`.
 2. The same directory contains normal Go files using `package auth`.
-3. The page declares route ownership with exact exported symbols:
+3. The page declares endpoint ownership with exact exported symbols:
    `act Login POST "/"` and `api Session GET "/api/session"`.
 4. The page view posts with `<form g:post={Login}>`.
-5. The compiler validates the package declaration, route declarations, and
+5. The compiler validates the package declaration, endpoint declarations, and
    same-package Go handler signatures.
 6. GOWDK emits adapter code that decodes the request, calls `auth.Login` or
    `auth.Session`, and writes `runtime/response.Response`.
@@ -96,10 +98,17 @@ normal Go; generated code remains adapter glue.
 - A package declaration must appear before annotations, imports, stores, route
   declarations, and blocks, ignoring blank lines and `//` comments.
 - Package mismatch with sibling `.go` files must be a compiler diagnostic.
-- `act <ExportedGoFunc> POST "<route>"` must declare an action route.
-- `api <ExportedGoFunc> <METHOD> "<route>"` must declare an API route.
+- Go `import` inside `.gwdk` files must import normal Go packages only.
+- Page-level cross-package component calls must use `use alias "package"` and
+  qualified tags such as `<ui.Hero />`.
+- Imported components must resolve sibling components in their own package
+  without making those names page-global.
+- Component-scoped cross-package `use` declarations remain unsupported until
+  their renderer and build-asset behavior is designed.
+- `act <ExportedGoFunc> POST "<path>"` must declare an action endpoint.
+- `api <ExportedGoFunc> <METHOD> "<path>"` must declare an API endpoint.
 - Action route methods must be `POST` for the first slice.
-- API route methods must support `GET`, `POST`, `PUT`, `PATCH`, and `DELETE`.
+- API endpoint methods must support `GET`, `POST`, `PUT`, `PATCH`, and `DELETE`.
 - Handler names must be exact exported Go symbols. No lowercase-to-exported
   mapping is allowed.
 - Old `act name { ... }` and `api name { ... }` forms must produce migration
@@ -140,6 +149,10 @@ normal Go; generated code remains adapter glue.
 - [ ] A `.gwdk` file without `package <name>` fails with a focused diagnostic.
 - [ ] A `.gwdk` file whose package differs from sibling `.go` files fails with
       a focused diagnostic.
+- [x] `use ui "components"` plus `<ui.Hero />` renders a component from a
+      discovered package named `components`.
+- [x] A page cannot call an imported package component by bare name unless that
+      component is in the page's own package.
 - [ ] `act Login POST "/"` binds only to exported `Login`, not to `login` or a
       transformed name.
 - [ ] Old `act login {}` and `api session {}` syntax produces migration
@@ -149,6 +162,8 @@ normal Go; generated code remains adapter glue.
 - [ ] Missing and unsupported handlers return `501` without broken imports.
 - [ ] Typed action input structs decode from request form values and reject
       unknown fields.
+- [x] Sibling Go package type-check errors fail validation with
+      `go_package_error`.
 - [ ] Generated one-binary and split-binary apps use the same backend route
       metadata.
 - [ ] Generated Go route adapters are emitted through Go AST construction and
@@ -172,14 +187,14 @@ normal Go; generated code remains adapter glue.
 ## Dependencies
 
 - Internal: `internal/parser`, `internal/lang`, `internal/manifest`,
-  `internal/compiler`, `internal/appgen`, `internal/codegen`, `runtime/app`,
+  `internal/compiler`, `internal/appgen`, `runtime/app`,
   `runtime/form`, `runtime/response`, examples and docs.
 - External: Go toolchain only.
 
 ## Open Questions
 
-- Should routes in `act <Name> POST "<route>"` default to the page route when
-  the route literal is omitted, or should the route remain mandatory?
+- Should endpoint paths in `act <Name> POST "<path>"` default to the page route
+  when the path literal is omitted, or should the path remain mandatory?
 - Should server fragments stay exclusively in user Go `response.Response`, or
   should `.gwdk` regain declarative fragment templates later?
 - What thin helper layer over `go/ast` keeps full-AST emission readable without

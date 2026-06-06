@@ -13,7 +13,7 @@ Implemented today:
   validation through `internal/compiler`.
 - SPA `view {}` markup and component invocation parsing through `internal/view`.
 - Imported Go props/state contract resolution through `internal/gotypes`.
-- Route-binding planning through `internal/codegen`.
+- Route-binding metadata for `gowdk routes` through `internal/compiler`.
 - App-shell HTML, route manifest, and asset manifest emission for simple build-time
   pages, literal build data, imported Go build data functions, literal dynamic
   paths, components, partial runtime assets, and island runtime assets through
@@ -49,4 +49,3 @@ Not implemented yet:
   explicit WASM island behavior.
 - `SPA-build-report.md`: generated build report schema and CLI debug output.
 - `manifest.md`: manifest and site-map JSON contracts.
-- `codegen.md`: route-binding planning and future emitters.

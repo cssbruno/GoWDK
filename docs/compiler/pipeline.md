@@ -7,7 +7,7 @@ project config plus explicit file paths or configured discovery
   -> parse source files
   -> build manifest
   -> validate render rules
-  -> emit diagnostics, manifest JSON, site-map JSON, route-binding plans, simple app-shell HTML files, browser runtime assets, or generated app output
+  -> emit diagnostics, manifest JSON, site-map JSON, route/endpoint metadata, simple app-shell HTML files, browser runtime assets, or generated app output
 ```
 
 Project-level compiler commands require `gowdk.config.go` or `--config <file>`.
@@ -30,11 +30,13 @@ source set. The current rendered page subset covers simple `spa` and
 literal `build {}` data, imported Go build data functions, lowercase HTML
 markup in `view {}`, and `.cmp.gwdk` component files.
 
-`internal/parser.ParseSyntax` exposes a typed AST for the current source subset:
-annotations, supported top-level blocks, parsed `view {}` markup nodes, literal
-`paths {}`/`build {}` records, action statements, API route statements, and
-source spans. Existing manifest parsing still drives the CLI while compiler
-passes migrate toward that AST.
+`internal/gwdkast` owns the typed GOWDK AST. `internal/parser.ParseSyntax`
+returns that AST for the current source subset: package declarations,
+annotations, Go imports, GOWDK uses, stores, typed component contracts,
+supported top-level blocks, parsed `view {}` markup nodes, literal
+`paths {}`/`build {}` records, action/API endpoint declarations, and source
+spans. Existing manifest parsing still drives the CLI while compiler passes
+migrate toward that AST.
 
 Browser-facing output is generated only when the source requires it. Partial
 form metadata can emit `assets/gowdk/gowdk.js`; stateful components can emit

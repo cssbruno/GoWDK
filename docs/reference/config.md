@@ -62,6 +62,13 @@ var Config = gowdk.Config{
 	},
 	Build: gowdk.BuildConfig{
 		Output: "dist/site",
+		Mode: gowdk.Production,
+		Head: gowdk.HeadConfig{
+			SiteName: "Example",
+			Favicon: "/favicon.ico",
+			Image: "https://example.com/social.png",
+			TwitterCard: "summary",
+		},
 		Stylesheets: []gowdk.Stylesheet{
 			{Href: "/assets/app.css"},
 		},
@@ -143,9 +150,11 @@ artifacts from another module selection cannot be copied into the next binary.
 
 ## Build
 
-`BuildConfig.Output`, `BuildConfig.Mode`, `BuildConfig.Assets`, `BuildConfig.Stylesheets`, and
+`BuildConfig.Output`, `BuildConfig.Mode`, `BuildConfig.Assets`,
+`BuildConfig.Head`, `BuildConfig.CSRF`, `BuildConfig.AllowMissingBackend`, `BuildConfig.Stylesheets`, and
 `BuildConfig.Targets` are target build settings. Current `gowdk build` reads
-literal `Build.Output`, `Build.Mode`, `Build.Stylesheets`, and `Build.Targets` from
+literal `Build.Output`, `Build.Mode`, `Build.Head`, `Build.CSRF`,
+`Build.AllowMissingBackend`, `Build.Stylesheets`, and `Build.Targets` from
 `gowdk.config.go`; `--out` overrides `Build.Output` for ad hoc builds.
 `BuildConfig.Assets` remains planned.
 
@@ -153,11 +162,30 @@ literal `Build.Output`, `Build.Mode`, `Build.Stylesheets`, and `Build.Targets` f
 
 ```go
 type BuildConfig struct {
-	Output      string
-	Mode        gowdk.BuildMode
-	Assets      gowdk.AssetMode
-	Stylesheets []gowdk.Stylesheet
-	Targets     []gowdk.BuildTargetConfig
+	Output              string
+	Mode                gowdk.BuildMode
+	Assets              gowdk.AssetMode
+	Head                gowdk.HeadConfig
+	CSRF                gowdk.CSRFConfig
+	AllowMissingBackend bool
+	Stylesheets         []gowdk.Stylesheet
+	Targets             []gowdk.BuildTargetConfig
+}
+
+type HeadConfig struct {
+	SiteName    string
+	Favicon     string
+	Image       string
+	TwitterCard string
+}
+
+type CSRFConfig struct {
+	Enabled    bool
+	SecretEnv  string
+	CookieName string
+	FieldName  string
+	HeaderName string
+	Insecure   bool
 }
 
 type BuildTargetConfig struct {
@@ -178,6 +206,25 @@ island source maps. Set `Mode: gowdk.Production` to omit `.js.map` artifacts and
 `sourceMappingURL` comments and to compact generated island JavaScript by
 trimming formatting-only whitespace.
 
+Production mode also requires explicitly declared `act` and `api` endpoints to
+bind to supported same-package Go handlers. Missing or unsupported handlers fail
+the build by default. Set `AllowMissingBackend: true` or pass
+`--allow-missing-backend` when intentionally generating HTTP 501 stubs during a
+migration.
+
+`Head` controls app-level document head tags. `Favicon` emits
+`<link rel="icon">`. `SiteName`, `Image`, and `TwitterCard` enable generated
+Open Graph and Twitter metadata. A page-level `@image` overrides `Head.Image`
+for that page.
+
+`CSRF` controls generated action CSRF wiring. When `Enabled` is true, generated
+apps require a signing secret from `SecretEnv` or `GOWDK_CSRF_SECRET`, inject a
+hidden token field into served HTML POST forms, and validate action POSTs before
+generated decoding or user handlers run. Invalid or missing tokens return HTTP
+403 with `invalid csrf token` and `Cache-Control: no-store`. `CookieName`,
+`FieldName`, and `HeaderName` override the generated token transport names.
+`Insecure` disables the Secure cookie flag for local HTTP development only.
+
 `Name` and `Output` are required. `Modules` selects configured modules; omit it
 to use the default configured discovery set. `App` is optional and writes a
 generated Go app that embeds the target output. `Binary` is optional, requires
@@ -186,7 +233,7 @@ optional, requires `App`, and compiles the generated app with
 `GOOS=js GOARCH=wasm`.
 
 `BackendApp` is optional and writes a generated backend-only Go app for
-feature-bound action/API routes. `BackendBinary` is optional, requires
+feature-bound action/API endpoints. `BackendBinary` is optional, requires
 `BackendApp`, and compiles that backend app. When a target has both frontend
 `App`/`Binary` and `BackendApp`/`BackendBinary`, the frontend binary proxies
 generated backend routes to `GOWDK_BACKEND_ORIGIN`.

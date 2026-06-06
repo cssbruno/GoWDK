@@ -61,7 +61,7 @@ fragment responses, and first-slice concrete or dynamic SSR pages without
 `load {}` from the selected output directory. `--wasm` compiles the same
 generated app with `GOOS=js GOARCH=wasm` for hosts that can run Go WebAssembly;
 it is not browser WASM islands. Future generated artifacts should also serve
-real typed action logic, API routes, general partial fragment handlers,
+real typed action logic, API endpoints, general partial fragment handlers,
 request-time `load {}`, guard enforcement, and hybrid request-time behavior.
 
 Current local development can serve generated build output with:
@@ -113,8 +113,9 @@ readiness claim:
 - Set `MaxHeaderBytes`.
 - Cap action/API request body size before form or JSON decoding; generated
   action handlers currently use a fixed 1 MiB cap.
-- Use signed CSRF tokens with HttpOnly, Secure, SameSite=Lax cookies when
-  generated action handlers wire CSRF.
+- Enable `Build.CSRF.Enabled` for generated action handlers and provide a
+  stable `GOWDK_CSRF_SECRET` or configured `Build.CSRF.SecretEnv` value in each
+  runtime environment.
 - Return explicit method-not-allowed responses for unsupported methods.
 - Serve app assets with deterministic cache headers.
 - Avoid public debug endpoints by default.

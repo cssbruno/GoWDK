@@ -14,7 +14,7 @@ Configure discovery when the default `**/*.css` scan is too broad:
 var Config = gowdk.Config{
 	CSS: gowdk.CSSConfig{
 		Include: []string{"styles/**/*.css"},
-		Exclude: []string{"styles/legacy.css"},
+		Exclude: []string{"styles/old.css"},
 	},
 }
 ```
@@ -170,6 +170,65 @@ The addon does not install Tailwind, use npm, run `npx`, vendor binaries, or
 auto-download executable code during `gowdk build`. Projects should download a
 pinned standalone executable from the official Tailwind Labs release page and
 point `Options.Command` at it.
+
+Example Linux x64 setup:
+
+```sh
+mkdir -p .gowdk/bin assets
+curl -L -o .gowdk/bin/tailwindcss \
+  https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
+chmod +x .gowdk/bin/tailwindcss
+printf '@import "tailwindcss";\n' > assets/app.css
+.gowdk/bin/tailwindcss --help >/dev/null
+```
+
+Example macOS arm64 download:
+
+```sh
+mkdir -p .gowdk/bin
+curl -L -o .gowdk/bin/tailwindcss \
+  https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-macos-arm64
+chmod +x .gowdk/bin/tailwindcss
+```
+
+Example Windows x64 PowerShell download:
+
+```powershell
+New-Item -ItemType Directory -Force .gowdk/bin, assets
+Invoke-WebRequest `
+  https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-windows-x64.exe `
+  -OutFile .gowdk/bin/tailwindcss.exe
+Set-Content -Path assets/app.css -Value '@import "tailwindcss";'
+```
+
+Then configure GOWDK:
+
+```go
+package main
+
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/tailwind"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		tailwind.Addon(tailwind.Options{
+			Input:   "assets/app.css",
+			Command: ".gowdk/bin/tailwindcss",
+			Minify:  true,
+		}),
+	},
+}
+```
+
+Build output, generated app output, and generated binaries all receive the
+processor-emitted stylesheet link and generated CSS asset:
+
+```sh
+gowdk build --out dist/site
+gowdk build --out dist/site --app .gowdk/app --bin bin/site
+```
 
 The literal `gowdk.config.go` parser supports this known literal constructor
 shape when `tailwind` is imported from

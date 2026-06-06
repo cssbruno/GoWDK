@@ -1,85 +1,153 @@
 # Actions
 
-The parser records `act <name> {}` declarations and the compiler allows actions
-on SPA pages without SSR.
+Actions are endpoint declarations. A page declares the exported same-package Go
+symbol, HTTP method, and endpoint path in `.gwdk`; normal Go owns the behavior.
 
-The first supported executable action subset is:
+The supported declaration shape is:
 
 ```gwdk
-act submit {
-  input := form SignupInput
-  valid(input)?
-  -> "/signup?ok=1"
-}
+package auth
+
+act Submit POST "/signup"
 ```
 
 Current behavior:
 
-- `input := form TypeName` records the action input variable and type metadata.
-- `valid(input)?` records validation intent for the declared input variable.
-- `-> "/local-path"` records a local redirect target.
-- Redirect targets must be local absolute paths and must not start with `//`.
-- `fragment "#target" { ... }` inside an action records first-slice server
-  fragment metadata. The target must be a literal id selector and the fragment
-  body is captured for future generated handlers.
-- `<form g:post={submit}>` lowers to a standard POST form for a supported
+- `act Submit POST "/signup"` binds exactly to exported Go function `Submit` in
+  the same package as the `.gwdk` file.
+- Old `act submit { ... }` blocks are rejected with a migration diagnostic.
+- Actions currently require `POST`.
+- Redirects, fragments, validation, and business rules come from the Go handler
+  response, not from generated `.gwdk` action body code.
+- `<form g:post={Submit}>` lowers to a standard POST form for a supported
   action.
 - `gowdk build --app --bin` generates POST handlers for non-dynamic page routes.
   If a same-directory Go package exports a matching handler function, the
   generated app decodes direct literal fields from same-page `g:post` forms,
   validates required controls, calls that function, and writes its
   `runtime/response.Response`.
-- `act login` binds to exported Go function `Login` in the same package as the
-  `.gwdk` file when the function has signature
+- `Submit` must use one of the supported signatures:
+  `func(context.Context) (response.Response, error)`,
+  `func(context.Context, SignupInput) (response.Response, error)`,
+  `func(context.Context, *SignupInput) (response.Response, error)`, or
   `func(context.Context, form.Values) (response.Response, error)`.
-- Missing or unsupported action handlers are not build errors. Generated apps
-  return HTTP 501 with a clear message for those routes.
+- In development/default mode, missing or unsupported action handlers are not
+  build errors. Generated apps return HTTP 501 with a clear message for those
+  routes.
+- In production mode, explicitly declared actions must bind to supported
+  same-package Go handlers. Missing or unsupported handlers fail the build
+  unless `Build.AllowMissingBackend` or `--allow-missing-backend` is set to
+  intentionally generate HTTP 501 stubs during a migration.
 - Generated first-slice input decoders create a named input wrapper, preserve
   repeated submitted values, allow missing fields, and reject unexpected fields
   with HTTP 400.
-- When an action declares `valid(input)?`, generated handlers enforce direct
-  literal `required` controls and return HTTP 422 for missing or empty required
-  values.
+- Generated handlers enforce direct literal `required` controls for typed
+  action forms and return HTTP 422 for missing or empty required values.
 - Generated first-slice action error responses use explicit status mapping for
-  invalid forms, oversized requests, and validation failures, and set
-  `Cache-Control: no-store`.
-- `internal/codegen.GenerateActionPackage` emits registry-backed HTTP handlers:
-  each handler decodes submitted form values, calls the registered
-  application action handler with the request context, writes the returned
-  `runtime/response.Response`, and maps handler errors to HTTP responses.
+  invalid CSRF tokens, invalid forms, oversized requests, and validation
+  failures, and set `Cache-Control: no-store`.
+- Generated typed action decoders are built from same-package Go AST metadata,
+  then printed as ordinary Go code. They decode exported struct fields using
+  `form:"name"` tags first, then Go field names. They ignore `form:"-"`, reject
+  unknown user fields through the generated allowlist step, strip generated
+  runtime fields such as `_gowdk_csrf`, support `string`, `[]string`, `bool`,
+  signed integers, and unsigned integers, reject repeated scalar fields, leave
+  missing or blank numeric/boolean fields as zero values, and return structured
+  errors without submitted values.
+- `runtime/app` exposes backend helpers for generated adapters:
+  `BackendRouter`, `Action0`, `ActionForm[T]`, `ActionFormPtr[T]`,
+  `ActionValues`, `APIHandler`, and `NotImplemented`. These helpers use
+  `context.Context` plus `app.Request(ctx)`, `app.Params(ctx)`,
+  `app.CSRF(ctx)`, `app.Session(ctx)`, `app.Route(ctx)`, and
+  `app.Endpoint(ctx)` instead of a custom GOWDK context type.
+- Generated bound action adapters attach endpoint metadata to the handler
+  context. User handlers can call `app.Endpoint(ctx)` to read the generated
+  endpoint kind, page ID, symbol name, method, and path without importing
+  generated app code.
+- Feature packages that declare action handlers may import stable public GOWDK
+  packages such as `runtime/response`, `runtime/form`, and `runtime/app`; they
+  must not import generated app packages, generated `gowdkapp` output, generated
+  `cmd/server` code, or build output directories. Generated app source imports
+  feature packages, never the other way around.
+- `internal/appgen` emits the generated action adapter glue used by generated
+  apps; user action behavior remains in normal same-package Go handlers.
 - `addons/actions.ValidateRequired` exposes the same required-field behavior as
   a `runtime/validation.Result` for addon and generated-handler integrations.
 - `addons/actions.NewCSRF` provides signed double-submit CSRF tokens with an
-  HttpOnly, Secure, SameSite=Lax cookie by default. `NoopCSRF` exists for tests
-  only.
-- Field inference currently reads direct `input`, `textarea`, and `select`
-  controls with literal `name` attributes; fields hidden inside component calls
-  are not inferred yet.
+  HttpOnly, Secure, SameSite=Lax cookie by default. Normal builds do not expose
+  a no-op CSRF validator; package tests keep their no-op helper in `_test.go`.
+- `Build.CSRF.Enabled` wires generated CSRF token generation and validation for
+  generated action adapters. Generated apps read the signing secret from
+  `Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`, inject a hidden token field into
+  served HTML POST forms, validate action POSTs before generated decoding or
+  user handlers run, and return HTTP 403 with `invalid csrf token` plus
+  `Cache-Control: no-store` for missing or invalid tokens.
+- Field inference currently reads direct `input`, `textarea`, `select`, and
+  named submit controls with literal `name` attributes; fields hidden inside
+  component calls are not inferred yet.
+- User Go handlers that accept `form.Values` can decode form controls with
+  runtime helpers: `form.Select`, `form.SelectMultiple`, `form.Radio`,
+  `form.Checkbox`, and `form.CheckboxGroup`. Single checkboxes decode absent as
+  false and repeated checkbox values are reserved for explicit groups.
 - Direct `input type="file"` controls and multipart `g:post` forms are rejected
-  during generated app action route extraction until upload security rules are
+  during generated app action endpoint extraction until upload security rules are
   defined.
 - Form values are not logged.
 
-The current generated app does not resolve real user Go input structs, wire
-CSRF into generated handlers, run field-specific user validation, or generate
-general fragment routes. Feature-bound handlers receive `form.Values`, not a
-user struct. They can return redirects, fragments, HTML, or JSON through
+The current compiler-generated same-package action binding can decode direct
+literal form fields into exported same-package user input structs for supported
+typed action signatures and can wire generated CSRF when `Build.CSRF.Enabled`
+is set. It does not run field-specific user validation or generate general
+fragment routes. Handlers can return redirects, fragments, HTML, or JSON through
 `runtime/response.Response`.
+
+## Production Notes
+
+- Enable `Build.CSRF.Enabled` for generated app deployments that accept action
+  POSTs, and provide a stable runtime secret through `Build.CSRF.SecretEnv` or
+  `GOWDK_CSRF_SECRET`.
+- Keep authentication, authorization, business validation, persistence, service
+  calls, redirects, HTML, JSON, and fragment decisions in normal Go handlers.
+  Generated adapters decode the request and write the returned
+  `runtime/response.Response`; they do not generate application policy.
+- Generated required-field checks only cover direct literal controls in the
+  current `view {}` subset. Treat them as request-shape checks, not a substitute
+  for domain validation in Go.
+- `runtime/response.ValidationJSON` and
+  `runtime/response.ValidationFragment` provide reusable patterns for returning
+  structured validation errors or an escaped fragment for partial form updates.
+- Generated action redirects must stay local. User handlers should also keep
+  redirects local unless they intentionally implement and audit an external
+  redirect allowlist.
+- Generated action, validation, redirect, fragment, invalid-form, oversized
+  body, missing-handler, unsupported-handler, and invalid-CSRF responses use
+  `Cache-Control: no-store`.
+- Handler errors are written with `runtime/response.HandlerStatus`, defaulting
+  to HTTP 500 when the error does not carry a safer explicit status. Do not put
+  sensitive submitted values in error messages.
+- File uploads are intentionally rejected until body limits, storage,
+  validation, cleanup, and logging rules are designed.
 
 ## Forms
 
 Current form behavior is intentionally narrow and literal-analysis driven:
 
-- Forms post only when they declare `g:post={action}` and the action exists on
+- Forms post only when they declare `g:post={Action}` and the action exists on
   the same page.
 - SPA builds lower `g:post` to `method="post"` and the current concrete page
   route.
-- Field inference reads direct `input`, `textarea`, and `select` controls with
-  literal `name` attributes.
+- Field inference reads direct `input`, `textarea`, `select`, and named submit
+  controls with literal `name` attributes.
+- Named submit controls such as `<button name="intent" value="save">` and
+  `<input type="submit" name="intent">` are treated as explicit submit-intent
+  fields before unknown-field rejection. Non-submitting controls such as
+  `type="button"` and `type="reset"` are ignored.
 - Required-field validation is generated only from direct literal controls with
   `required`.
-- Generated decoders preserve repeated submitted values, allow missing fields,
-  reject unexpected fields, and avoid logging form values.
+- Generated first-slice decoders preserve repeated submitted values, allow
+  missing fields, reject unexpected fields, and avoid logging form values.
+- Generated typed action decoders reject repeated scalar fields and support
+  repeated values only for `[]string`.
 - `input type="file"` and multipart `g:post` forms are rejected until upload
   security rules are defined.
 - Component-hidden fields are not inferred yet.
@@ -87,7 +155,7 @@ Current form behavior is intentionally narrow and literal-analysis driven:
 Partial form metadata can be added to a supported action form:
 
 ```gwdk
-<form g:post={refresh} g:target="#patients" g:swap="innerHTML">
+<form g:post={Refresh} g:target="#patients" g:swap="innerHTML">
   <input name="query" />
   <button>Refresh</button>
 </form>
@@ -98,12 +166,9 @@ markup subset. Current swap modes are `innerHTML` and `outerHTML`.
 
 Future action behavior must define:
 
-- User Go type resolution and field-specific generated struct members.
 - User-defined validation integration.
 - File upload handling, including body limits, storage rules, validation, and
   cleanup.
-- Wiring CSRF token generation, storage, validation, and failure behavior into
-  generated handlers.
 - Redirect safety beyond local redirect validation.
 - Error response shape and HTTP status mapping for broader generated action
   execution.

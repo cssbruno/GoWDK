@@ -58,7 +58,8 @@ Compiler lanes:
 - [x] `@render ssr` is non-default request-time page rendering and is rejected
       unless the SSR feature is enabled.
 - [x] `load {}` is rejected on SPA pages.
-- [x] Dynamic SPA/action routes require `paths {}`.
+- [x] Dynamic SPA routes require `paths {}`; action endpoints inherit generated
+      concrete page paths.
 - [x] First literal dynamic `paths {}` subset can prerender SPA output.
 - [x] Project compiler commands require `gowdk.config.go` or `--config`.
 - [x] Build output emits SPA HTML, route manifest, asset manifest, and build report.
@@ -69,21 +70,39 @@ Compiler lanes:
 - [x] Component discovery, imported props/state contracts, slots, generated JS islands, and explicit WASM island assets exist.
 - [x] First-slice client language supports local variables, helpers, computed values, events, refs, lists, and selected built-ins.
 - [x] First-slice action/API backend binding can call same-directory Go handlers with narrow signatures.
-- [x] Missing or unsupported first-slice action/API bindings generate clear `501` responses.
+- [x] Missing or unsupported first-slice action/API bindings generate clear
+      `501` responses in development or explicit stub mode.
 - [x] Generated app Go source is formatted before write.
 - [x] CLI tooling includes `tokens`, `fmt`, `check`, `manifest`, `sitemap`, `routes`, and `lsp`.
 
 ## GOWDK Compiler
 
-- [ ] Define the GOWDK AST for package declarations, annotations, routes,
+- [x] Define the GOWDK AST for package declarations, annotations, routes,
       imports, stores, blocks, component contracts, and source spans.
 - [ ] Add a GOWDK analyzer that lowers the GOWDK AST into normalized route,
       component, package, type, asset, and generated adapter metadata.
-- [ ] Require `package <name>` as the first non-comment declaration in every page, layout, and component `.gwdk` file.
-- [ ] Store package name and package source span in manifest records.
-- [ ] Validate `.gwdk` package names against sibling `.go` files.
-- [ ] Fail check/build on Go package type-check errors with `go_package_error`.
-- [ ] Replace legacy action/API blocks with exact exported route declarations:
+- [ ] Define the GOWDK source import model:
+  - [x] Go `import` inside `.gwdk` imports normal Go packages only.
+  - [x] Same-package `.gwdk` and `.go` files are peers and need no import.
+  - [x] Page-level cross-package component calls use explicit GOWDK
+        `use alias "package"` declarations and qualified tags such as
+        `<ui.Hero />`.
+  - [x] Imported components resolve their own same-package child components by
+        bare name without making those names page-global.
+  - [x] Component-scoped cross-package `use` declarations need explicit
+        semantics and renderer/build-asset support.
+  - [x] Cross-package layouts use explicit GOWDK `use alias "package"`
+        declarations and qualified `@layout alias.id` references.
+  - [ ] Cross-package stores and assets need explicit GOWDK import/use
+        semantics, not accidental global lookup.
+  - [x] Decide syntax for qualified layout references before broad
+        multi-package layout reuse.
+- [x] Require `package <name>` as the first non-comment declaration in every real page, layout, and component `.gwdk` file.
+- [x] Store package name and package source span in manifest records.
+- [x] Validate `.gwdk` package names against sibling `.go` files.
+- [x] Fail check/build on Go package parse/package errors with `go_package_error`.
+- [x] Fail check/build on Go package type-check errors with `go_package_error`.
+- [x] Replace old action/API blocks with exact exported endpoint declarations:
 
 ```gwdk
 package auth
@@ -92,97 +111,206 @@ act Login POST "/"
 api Session GET "/api/session"
 ```
 
-- [ ] Reject legacy action/API block syntax with migration diagnostics.
-- [ ] Reject non-exported handler names in `act`, `api`, and `g:post`.
-- [ ] Reject non-POST action methods.
-- [ ] Keep route declarations in `.gwdk`; keep behavior in normal Go.
-- [ ] Add package, handler symbol, route, method, binding status, and binding message to manifest, routes output, and build report metadata.
+- [x] Reject old action/API block syntax with direct migration diagnostics.
+- [x] Reject non-exported handler names in `act`, `api`, and `g:post`.
+- [x] Reject non-POST action methods.
+- [x] Keep route declarations in `.gwdk`; keep behavior in normal Go.
+- [x] Add package, handler symbol, endpoint path, method, binding status, and binding message to manifest, routes output, and build report metadata.
 - [ ] Add a stable internal IR for templates, client behavior, routes, assets, and generated output.
 - [ ] Expand source spans and suggestions across parser, route, view, component, client, package, and build errors.
-- [ ] Support same-package build functions or document why explicit imports remain required.
+- [x] Support same-package build functions or document why explicit imports remain required.
 - [ ] Support broader build-time data beyond the first literal/imported no-argument subset.
-- [ ] Use generated route metadata in request-time handlers instead of only embedding it with build output.
+- [x] Attach generated endpoint metadata to bound action/API handler contexts
+      instead of only embedding it in route/build output.
+- [x] Attach generated page route metadata and dynamic params to generated SSR
+      handler contexts.
+- [ ] Reuse the generated page route context for future request-time
+      `load {}` and guard user logic.
 
 ## App Runtime Kit
 
-- [ ] Add shared backend routing primitives in `runtime/app`:
-  - [ ] `BackendHandler`
-  - [ ] `BackendRouter`
-  - [ ] `NewBackendRouter`
-  - [ ] action and API route registration
-  - [ ] method/path dispatch with normalized paths
-- [ ] Add runtime adapter helpers:
-  - [ ] `Action0`
-  - [ ] `ActionForm[T]`
-  - [ ] `ActionFormPtr[T]`
-  - [ ] `ActionValues`
-  - [ ] `APIHandler`
-  - [ ] `NotImplemented`
-- [ ] Update generated apps to use one backend hook instead of separate action/API hook shapes.
-- [ ] Preserve no-store defaults for request-time action/API/fragment responses.
-- [ ] Keep request body size limits in generated action adapters.
+- [x] Add shared backend routing primitives in `runtime/app`:
+  - [x] `BackendHandler`
+  - [x] `BackendRouter`
+  - [x] `NewBackendRouter`
+  - [x] action and API endpoint registration
+  - [x] method/path dispatch with normalized paths
+- [x] Add runtime adapter helpers:
+  - [x] `Action0`
+  - [x] `ActionForm[T]`
+  - [x] `ActionFormPtr[T]`
+  - [x] `ActionValues`
+  - [x] `APIHandler`
+  - [x] `NotImplemented`
+- [x] Update generated apps to use one backend hook instead of separate action/API hook shapes.
+- [x] Preserve no-store defaults for request-time action/API/fragment responses.
+- [x] Keep request body size limits in generated action adapters.
 - [ ] Wire generated guards for SSR/action/API paths.
 - [ ] Add runtime metrics only after handler contracts settle.
 
+## SPA Navigation And Generated JS Guardrails
+
+- [x] Define SPA as static-first with optional client navigation, not a
+      client-owned application shell.
+- [x] Ensure every generated SPA route remains a real URL that works on direct
+      open and browser refresh.
+- [x] Allow generated JS to enhance navigation by intercepting internal links,
+      fetching real built page shells, replacing the current document, and
+      preserving browser history, scroll, and focus without owning route
+      existence.
+- [x] Forbid generated JS from owning the app contract:
+  - [x] route existence
+  - [x] auth or authorization decisions
+  - [x] business rules
+  - [x] database access
+  - [x] trusted server validation
+  - [x] action behavior
+  - [x] global app state
+  - [x] page loading policy
+  - [x] cache/revalidation policy
+- [x] Keep the compiler manifest, generated Go runtime, and user Go code as the
+      source of truth for routes, backend behavior, request-time data, and
+      security policy.
+- [x] Keep forms progressively enhanced: generated JS may improve submission and
+      partial swaps, but supported action forms should degrade to normal HTTP
+      POST behavior where possible.
+- [x] Keep `client {}` limited to local component/UI behavior such as toggles,
+      tabs, counters, focus, small filters, and visual state.
+
 ## Go Handler Binding
 
-- [ ] Resolve same-package handler ownership through `go list`.
-- [ ] Validate exported handlers and input types through standard `go/parser`,
-      `go/ast`, and `go/types`.
-- [ ] Cache package inspection by source directory or import path.
-- [ ] Bind exact exported handler symbols. Do not map lowercase names to exported names.
-- [ ] Keep missing handler symbols non-fatal and generate `501`.
-- [ ] Keep unsupported signatures non-fatal and generate `501`.
-- [ ] Support action signatures:
-  - [ ] `func Name(context.Context) (response.Response, error)`
-  - [ ] `func Name(context.Context, Input) (response.Response, error)`
-  - [ ] `func Name(context.Context, *Input) (response.Response, error)`
-  - [ ] `func Name(context.Context, form.Values) (response.Response, error)`
-- [ ] Support API signature:
-  - [ ] `func Name(context.Context, *http.Request) (response.Response, error)`
-- [ ] Record binding signature kind, input type, pointer mode, package, and import requirements.
-- [ ] Handle generated import alias collisions deterministically.
-- [ ] Document that feature packages must not import generated app output.
+- [x] Resolve same-package handler ownership through `go list`.
+- [x] Validate exported handlers and input types through standard `go/parser`
+      and `go/ast`.
+- [x] Add sibling package type-check validation through standard `go/types`.
+- [x] Cache package inspection by source directory or import path.
+- [x] Bind exact exported handler symbols. Do not map lowercase names to exported names.
+- [x] Keep missing handler symbols non-fatal in development/stub mode and
+      generate `501`.
+- [x] Keep unsupported signatures non-fatal in development/stub mode and
+      generate `501`.
+- [x] Support action signatures:
+  - [x] `func Name(context.Context) (response.Response, error)`
+  - [x] `func Name(context.Context, Input) (response.Response, error)`
+  - [x] `func Name(context.Context, *Input) (response.Response, error)`
+  - [x] `func Name(context.Context, form.Values) (response.Response, error)`
+- [x] Support API signature:
+  - [x] `func Name(context.Context, *http.Request) (response.Response, error)`
+- [x] Record binding signature kind, input type, pointer mode, package, and import requirements.
+- [x] Handle generated import alias collisions deterministically.
+- [x] Document that feature packages must not import generated app output.
+- [x] Define the request-scoped context contract before broad action/API support:
+  - [x] decide whether handlers receive `context.Context` plus runtime helpers
+        such as `app.Request(ctx)`, `app.Params(ctx)`, `app.CSRF(ctx)`, and
+        `app.Session(ctx)`.
+  - [x] decide not to use an explicit `app.Context`.
+- [x] Define binding severity policy:
+  - [x] dev/migration mode may report missing or unsupported handlers and
+        generate `501`.
+  - [x] strict/production mode should fail build for missing or unsupported
+        explicitly declared handlers.
+  - [x] optional stub mode, if kept, should require an explicit flag such as
+        `--allow-missing-backend`.
+
+## Endpoint Metadata And Discovery
+
+- [x] Normalize all endpoints into one framework-neutral endpoint metadata model.
+- [x] Include endpoint source, kind, package path, package name, symbol, method,
+      path, signature kind, input type, source span, and binding status.
+- [ ] Merge endpoint metadata from `.gwdk` endpoint declarations and explicit Go
+      endpoint comments.
+- [ ] Support explicit Go endpoint comments as an optional discovery source:
+  - [ ] `//gowdk:act POST /login`
+  - [ ] `//gowdk:api GET /api/session`
+- [x] Do not auto-discover endpoints from function names alone.
+- [x] Do not scan Gin/Echo/Fiber route registration code in the first endpoint
+      discovery model.
+- [ ] Make route conflicts between `.gwdk` declarations and Go endpoint comments
+      hard diagnostics; never silently pick a winner.
+- [ ] Keep adapter IR independent of whether an endpoint came from `.gwdk` or a
+      Go comment.
+- [x] Keep route metadata limited to `static`, `spa`, `ssr`, and `hybrid`;
+      actions and APIs are endpoint metadata, not route kinds.
+- [x] Surface route-mode disabled lanes as `info` metadata in `gowdk routes`
+      output and as `info:` console lines on stderr.
 
 ## Forms, Actions, API, And Fragments
 
-- [ ] Add `runtime/form.DecodeStruct[T any](Values) (T, error)`.
-- [ ] Decode typed action structs from `form:"name"` tags first, then exported Go field names.
-- [ ] Ignore `form:"-"` fields.
-- [ ] Reject unknown submitted fields.
-- [ ] Support `string`, `[]string`, `bool`, signed integers, and unsigned integers.
-- [ ] Define empty-value behavior for numeric and boolean fields.
-- [ ] Return structured decode errors without exposing submitted values.
-- [ ] Wire CSRF token generation and validation into generated action adapters.
-- [ ] Define generated form token exposure for SPA/action pages.
-- [ ] Define invalid-CSRF response status and body shape.
-- [ ] Keep `NoopCSRF` test-only.
+- [x] Generate typed action struct decoders from same-package Go AST metadata;
+      do not use runtime reflection for struct shape decoding.
+- [x] Keep `runtime/form` limited to value normalization, allowlist checks, and
+      scalar parse helpers used by generated decoder code.
+- [x] Decode typed action structs from `form:"name"` tags first, then exported Go field names.
+- [x] Ignore `form:"-"` fields.
+- [x] Reject unknown submitted fields.
+- [x] Support `string`, `[]string`, `bool`, signed integers, and unsigned integers.
+- [x] Define empty-value behavior for numeric and boolean fields.
+- [x] Strip or reserve runtime fields before user input decoding, including
+      `_csrf`, `_gwdk`, `_method`, and any generated runtime metadata fields.
+- [x] Decide submit button intent handling before unknown-field rejection.
+- [x] Decide checkbox absence behavior.
+- [x] Decide repeated scalar behavior: reject, first value, or last value.
+- [x] Keep nested structs, maps, and slices other than `[]string` unsupported in
+      v1 unless explicitly designed.
+- [x] Return structured decode errors without exposing submitted values.
+- [x] Wire CSRF token generation and validation into generated action adapters.
+- [x] Define generated form token exposure for SPA/action pages.
+- [x] Define invalid-CSRF response status and body shape.
+- [x] Keep `NoopCSRF` test-only.
 - [ ] Keep redirects, JSON, HTML, fragments, validation, auth, and storage in user Go handlers returning `runtime/response.Response`.
-- [ ] Add structured form error and validation fragment patterns.
+- [x] Add structured form error and validation fragment patterns.
 - [ ] Add file upload support only after body limits, storage, validation, cleanup, and security rules are defined.
-- [ ] Improve `select`, radio, and checkbox group handling for server forms.
-- [ ] Add production-safe action/API docs covering CSRF, redirects, validation, fragments, cache/no-store, and error handling.
+- [x] Improve `select`, radio, and checkbox group handling for server forms.
+- [x] Add production-safe action/API docs covering CSRF, redirects, validation, fragments, cache/no-store, and error handling.
+
+## Framework Adapters
+
+- [x] Keep GOWDK core `net/http` compatible.
+- [x] Ensure generated apps expose or mount as `http.Handler`.
+- [x] Keep Gin, Echo, and Fiber out of compiler/runtime core dependencies.
+- [ ] Add optional adapter packages only after the core handler contract is
+      stable:
+  - [ ] `runtime/adapters/gin`
+  - [ ] `runtime/adapters/echo`
+  - [ ] `runtime/adapters/fiber`
+- [ ] Make adapters wrap the same `http.Handler` produced by GOWDK; do not emit
+      framework-specific code by default.
+- [x] Document Fiber's `net/http` adaptor overhead and semantic differences if a
+      Fiber adapter is added.
+- [x] Keep endpoint metadata framework-neutral so framework adapters consume the
+      same route/action/API model as the standard generated app.
 
 ## Generated Adapter Source
 
-- [ ] Define a typed backend adapter IR for imports, route registrations, decoding, handler calls, response writing, and `501` fallbacks.
-- [ ] Generate backend route registration from the IR through Go AST.
-- [ ] Replace broad action/API string builders with full Go AST emission.
+- [ ] Define a typed backend adapter IR for imports, endpoint registrations, decoding, handler calls, response writing, and `501` fallbacks.
+- [ ] Generate backend endpoint registration from the IR through Go AST.
+- [x] Replace broad action/API string builders with full Go AST emission.
+  - [x] Action handler source is emitted through `go/ast` and guarded against
+        `WriteString`/`strings.Builder` regression.
+  - [x] API handler source is emitted through `go/ast` and guarded against
+        `WriteString`/`strings.Builder` regression.
+  - [x] Backend dispatch/proxy source is emitted through `go/ast` and guarded
+        against `WriteString`/`strings.Builder` regression.
+  - [x] SSR exact/dynamic handler source is emitted through `go/ast` and
+        guarded against `WriteString`/`strings.Builder` regression.
+  - [x] Generated CSRF helper declarations are emitted through `go/ast`.
 - [ ] Generate all generated Go with `go/ast` and `go/printer`, then run `go/format`.
-- [ ] Ban hardcoded line writing, `WriteString` chains, token concatenation, and source snippets for generated Go unless a documented temporary exception is strictly necessary.
+- [x] Ban hardcoded line writing, `WriteString` chains, token concatenation, and source snippets for generated Go unless a documented temporary exception is strictly necessary.
 - [ ] Replace generated app shell Go templates with AST emission.
-- [ ] Preserve `//go:embed app` comments.
-- [ ] Sort imports and routes deterministically.
-- [ ] Never generate user handler functions, input structs, auth logic, validation policy, storage code, or service code.
-- [ ] Do not import missing or unsupported handler packages solely for `501` routes.
+- [x] Preserve `//go:embed app` comments.
+- [x] Sort imports and routes deterministically.
+- [x] Never generate user handler functions, input structs, auth logic, validation policy, storage code, or service code.
+- [x] Do not import missing or unsupported handler packages solely for `501` routes.
 - [ ] Drive one-binary, split frontend proxy, and backend-only app generation from the same route metadata.
-- [ ] Add structural tests for generated imports, route dispatch, and missing-handler output.
+- [x] Add structural tests for generated imports, route dispatch, and missing-handler output.
 
 ## Routing, Rendering, SSR, Hybrid, And Cache
 
-- [ ] Add typed route param decoding.
-- [ ] Add route-level metadata.
-- [ ] Generate sitemap output from the full route graph.
+- [x] Add runtime typed route param decoding helpers.
+- [ ] Add generated typed route param bindings once route-param type syntax
+      exists.
+- [x] Add route-level metadata.
+- [x] Generate sitemap output from the full route graph.
 - [ ] Add redirects and error pages.
 - [ ] Execute request-time `load {}` in generated SSR handlers.
 - [ ] Wire generated SSR guards.
@@ -190,27 +318,28 @@ api Session GET "/api/session"
       handlers.
 - [ ] Add SSR/action/API error boundaries.
 - [ ] Define hybrid pages as SPA by default with explicit request-time capabilities.
-- [ ] Define cache and revalidation behavior for SPA, action, API, partial, SSR, and hybrid routes.
+- [x] Define cache and revalidation behavior for static files, SPA routes,
+      backend endpoints, partial responses, SSR routes, and hybrid pages.
 - [ ] Add syntax for route/cache policy once generated route metadata stabilizes.
-- [ ] Ensure generated binaries apply cache policy consistently.
-- [ ] Keep SSR optional instead of making it the framework identity.
+- [x] Ensure generated binaries apply cache policy consistently.
+- [x] Keep SSR optional instead of making it the framework identity.
 
 ## Components, Client Language, And Islands
 
 - [ ] Add real branch mount/unmount for `g:if`.
 - [ ] Keep hidden-toggle `g:if` only as an explicit mode if useful.
 - [ ] Add parent-to-child expression props beyond current string/build-data interpolation.
-- [ ] Add child-to-parent events.
+- [x] Add child-to-parent events.
 - [ ] Add bindable child state.
 - [ ] Add typed component exports.
 - [ ] Add named slots and scoped slots.
 - [ ] Add scoped component CSS and component-level assets.
-- [ ] Add a documented contract for component state, props, stores, client code, and generated runtime behavior.
-- [ ] Add a proper reactive dependency graph.
+- [x] Add a documented contract for component state, props, stores, client code, and generated runtime behavior.
+- [x] Add a proper reactive dependency graph.
 - [ ] Track dependencies for computed values automatically across the full client language.
 - [ ] Allow richer computed bodies, loops inside `client {}`, event object access, and broader compiler-owned built-ins.
 - [ ] Batch updates predictably and detect reactive cycles with useful diagnostics.
-- [ ] Keep browser behavior typed and compiler-owned instead of turning `client {}` into unbounded JavaScript.
+- [x] Keep browser behavior typed and compiler-owned instead of turning `client {}` into unbounded JavaScript.
 - [ ] Define and implement the production WASM island ABI from ADR 0004.
 - [ ] Add browser-side Go logic contracts for explicit WASM islands.
 - [ ] Validate required WASM island entrypoints and exports.
@@ -220,9 +349,9 @@ api Session GET "/api/session"
 - [ ] Add full addon/plugin loading.
 - [ ] Add component ASTs for CSS scoping and hashing.
 - [ ] Add page-aware CSS processor selections.
-- [ ] Add Tailwind and CSS deployment docs with real commands.
-- [ ] Keep module selection as artifact packaging, not runtime module orchestration.
-- [ ] Keep generated app WASM deploy artifacts separate from explicit browser WASM islands.
+- [x] Add Tailwind and CSS deployment docs with real commands.
+- [x] Keep module selection as artifact packaging, not runtime module orchestration.
+- [x] Keep generated app WASM deploy artifacts separate from explicit browser WASM islands.
 - [ ] Add asset cache policy and hashing rules for generated binaries.
 
 ## Dev, Playground, And Tooling
@@ -235,21 +364,24 @@ api Session GET "/api/session"
 - [ ] Add browser playground UI.
 - [ ] Load the GOWDK compiler as WebAssembly in the browser UI.
 - [ ] Add editable project tree, live preview, generated HTML/CSS/JS viewers, diagnostics panel, starter templates, shareable links, and export/download.
-- [ ] Improve LSP completions for components, routes, props, state, stores, and directives.
-- [ ] Add editor navigation for component calls, route IDs, guards, stores, and imported Go contracts.
+- [x] Improve baseline LSP completions for components, routes, props, state,
+      stores, client constructs, and directives.
+- [ ] Add project-aware LSP completions for concrete component names, route
+      IDs, prop names, state fields, store names, and directives.
+- [x] Add editor navigation for component calls, route IDs, guards, stores, and imported Go contracts.
 - [ ] Add editor release workflow coverage.
 
 ## Documentation
 
-- [ ] Update README examples to package-first action/API syntax.
-- [ ] Update language docs for required package declarations.
-- [ ] Update action/API docs around exact exported Go handlers.
-- [ ] Update routing docs for package-integrated route declarations.
-- [ ] Update deployment docs for one-binary and split runtime-kit flow.
-- [ ] Update architecture docs for GOWDK compiler plus app/runtime kit.
-- [ ] Update requirements statuses after package integration lands.
-- [ ] Update login example to package-first syntax and typed action input.
-- [ ] Keep README, requirements, architecture, roadmap, and this checklist in sync.
+- [x] Update README examples to package-first action/API syntax.
+- [x] Update language docs for required package declarations.
+- [x] Update action/API docs around exact exported Go handlers.
+- [x] Update routing docs for package-integrated endpoint declarations.
+- [x] Update deployment docs for one-binary and split runtime-kit flow.
+- [x] Update architecture docs for GOWDK compiler plus app/runtime kit.
+- [x] Update requirements statuses after package integration lands.
+- [x] Update login example to package-first syntax and typed action input.
+- [x] Keep README, requirements, architecture, roadmap, and this checklist in sync.
 
 ## Verification Commands
 

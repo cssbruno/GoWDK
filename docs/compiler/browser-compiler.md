@@ -45,7 +45,7 @@ When a page uses a fragment-producing action form with `g:target` and `g:swap`,
 SPA builds emit the client runtime:
 
 ```gwdk
-<form g:post={refresh} g:target="#patients" g:swap="innerHTML">
+<form g:post={Refresh} g:target="#patients" g:swap="innerHTML">
   <input name="query" />
   <button>Refresh</button>
 </form>

@@ -74,6 +74,8 @@ go run ./cmd/gowdk dev --out /tmp/gowdk-build \
 ## Site Example
 
 ```gwdk
+package blog
+
 @page blog.post
 @route "/blog/{slug}"
 @layout root, blog
@@ -91,16 +93,7 @@ build {
   }
 }
 
-act refresh {
-  input := form ArticleFilter
-  fragment "#article-list" {
-    <section>
-      <h2>Updated articles</h2>
-      <p>Server-rendered fragment returned by an action.</p>
-    </section>
-  }
-  -> "/blog/{slug}"
-}
+act Refresh POST "/blog/{slug}"
 
 view {
   <main class="page">
@@ -110,7 +103,7 @@ view {
       <p data-slug="{slug}">{description}</p>
     </header>
 
-    <form g:post={refresh} g:target="#article-list" g:swap="innerHTML">
+    <form g:post={Refresh} g:target="#article-list" g:swap="innerHTML">
       <input name="query" placeholder="Filter articles" />
       <button>Refresh</button>
     </form>
@@ -124,6 +117,9 @@ view {
   </main>
 }
 ```
+
+`Refresh` is a normal exported Go function in package `blog`; generated code
+wires the form POST and writes the returned `runtime/response.Response`.
 
 ## CLI
 

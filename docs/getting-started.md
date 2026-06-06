@@ -130,7 +130,7 @@ Implemented today:
 
 Planned or partial:
 
-- CSRF wiring in generated handlers.
+- Broader validation fragments and upload handling.
 - Typed user input structs for action handlers.
 - Request-time `load {}` execution and guard enforcement.
 - Full browser-side Go/WASM island ABI.

@@ -41,7 +41,6 @@ public release, confirm:
 The following features are known blockers for any production-readiness claim:
 
 - Real user Go action execution.
-- CSRF-wired generated action handlers.
 - Generated API handlers.
 - Request-time `load {}` execution.
 - Generated guard enforcement.

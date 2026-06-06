@@ -3,21 +3,21 @@
 ## Current Internal Model
 
 The internal manifest tracks pages with source path, page ID, route, render
-mode, layouts, guard metadata, page CSS selection metadata, paths presence,
+package name, mode, layouts, guard metadata, page CSS selection metadata, paths presence,
 block presence, captured `paths {}` body text, captured `build {}` body text,
 captured `view {}` body text, and first-slice action metadata. It also tracks
-component build inputs with source path, component name, component Go imports,
-legacy string props, typed props/state contracts, and captured `view {}` body
+component build inputs with source path, package name, component name, component Go imports,
+inline string props, typed props/state contracts, and captured `view {}` body
 text. Stateful components can also carry captured `client {}` body text for
 component-local generated-JS handlers and `emits {}` metadata for component
 events.
 
 Compiler validation now rejects malformed routes, duplicate route params,
 duplicate page route patterns, and same-method route conflicts before generated
-output runs. Page routes own `GET`, current action routes own `POST` on the page
-route, and current API metadata defaults to `GET` on the page route when API
-method or route data is absent. Current pages must also declare `view {}` because
-they own a page `GET` route.
+output runs. Page routes own `GET`; action and API behavior is backend endpoint
+metadata with declared method/path. Current API metadata defaults to `GET` on
+the page route when API method or route data is absent. Current pages must also
+declare `view {}` because they own a page `GET` route.
 
 ## Current Public Manifest JSON
 
@@ -30,8 +30,12 @@ they own a page `GET` route.
     "home": {
       "source": "examples/pages/home.page.gwdk",
       "kind": "page",
+      "package": "pages",
       "route": "/",
       "render": "spa",
+      "uses": [
+        {"alias": "ui", "package": "components"}
+      ],
       "layouts": ["root"],
       "paths": true,
       "guard": ["auth.required"],
@@ -72,6 +76,7 @@ they own a page `GET` route.
     "Hero": {
       "source": "examples/pages/hero.cmp.gwdk",
       "kind": "component",
+      "package": "components",
       "imports": [
         {"alias": "ui", "path": "github.com/acme/app/ui"}
       ],
@@ -94,7 +99,7 @@ they own a page `GET` route.
 ```
 
 `version` is the public manifest schema version. Public manifest JSON includes
-known source paths, file kind, page route metadata, dynamic route params,
+known source paths, file kind, package names, page-level GOWDK source uses, page route and document metadata, dynamic route params,
 declared block presence, first-slice action metadata including fragment targets,
 API block names, direct page component references for the current spa `view {}` subset, direct spa
 asset references, direct CSS class names, direct spa `style` attribute
@@ -102,7 +107,7 @@ values, first-slice API method/route metadata, and component declarations.
 Component declarations include typed contract metadata and emitted event
 metadata when present.
 `paths`, `layouts`, `guard`, `css`, `actions`, `apis`, `components`,
-`Assets`, `cssClasses`, and `styleAttributes` are omitted when empty or
+`uses`, `Assets`, `cssClasses`, and `styleAttributes` are omitted when empty or
 false.
 
 ## Current Site-Map JSON

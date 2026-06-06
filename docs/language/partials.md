@@ -25,9 +25,6 @@ Current support:
   requests with rendered fragment HTML, `Cache-Control: no-store`, and fragment
   target metadata. Normal POST requests still use the redirect/no-content
   fallback path.
-- `internal/codegen` can emit first-slice server fragment render functions and
-  HTTP handlers that write `runtime/response.FragmentFor(target, body)`
-  envelopes.
 - `internal/clientrt` emits a small `gowdk.js` runtime that enhances
   `form[data-gowdk-target]` submissions, sends `X-GOWDK-Partial`,
   `X-GOWDK-Target`, and `X-GOWDK-Swap`, applies `innerHTML` or `outerHTML`
@@ -55,6 +52,5 @@ falls back to the form metadata.
 
 Not implemented yet:
 
-- CSRF wiring for generated partial action handlers.
-- User-owned action logic and typed Go struct resolution.
+- General fragment routes independent of action POSTs.
 - Component expansion inside generated fragment bodies.

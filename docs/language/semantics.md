@@ -7,16 +7,24 @@
 - `@render ssr` and `@render hybrid` require the SSR addon in the current validator.
 - Page IDs must be unique within the manifest.
 - Component names must be unique within the manifest.
-- Dynamic SPA/action routes such as `/blog/{slug}` require a `paths {}` block.
+- Dynamic SPA routes such as `/blog/{slug}` require a `paths {}` block. Action
+  endpoints on those pages inherit the generated concrete paths.
+- SPA navigation enhancement is optional runtime behavior over literal internal
+  links. Route existence, route output, auth, and server behavior remain owned
+  by generated files and generated Go.
 - `load {}` runs at request time and requires `@render ssr` or `@render hybrid`.
 - SPA pages may declare `act` blocks without SSR.
 
 ## Current Metadata Semantics
 
 - `@page` and `@route` are required.
-- `@layout` records ordered page layout IDs. Layout files can declare layout
-  identity with `@layout <id>`; when layout files are present, validation
-  resolves page layout refs by ID.
+- `@title`, `@description`, `@canonical`, and `@image` record document metadata
+  used by generated HTML output. If `@title` is omitted, generated output falls
+  back to the page ID. `@image` feeds generated Open Graph and Twitter image
+  tags when social head output is enabled by page or config metadata.
+- `@layout` records ordered page layout references. Bare references resolve to
+  same-package layout IDs or legacy package-less layouts. Cross-package layouts
+  require `use alias "package"` and qualified refs such as `alias.root`.
 - `@guard` records guard IDs as metadata only.
 - `paths {}` records that dynamic SPA paths are declared and preserves raw
   body text internally. SPA builds can execute literal string declarations
@@ -32,10 +40,10 @@
 - `view {}` records block presence and raw body text for the current app-shell HTML
   subset. SPA builds interpolate route params and component props in text and
   attribute values, escaping the result.
-- `act <name> {}` records action names plus the first supported form-input,
-  validation-intent, and local redirect subset.
-- `api <name> {}` records names plus the first method/route metadata line, such
-  as `GET "/api/health"`.
+- `act Name POST "/path"` records exact exported action handler symbols and
+  endpoint paths.
+- `api Name METHOD "/path"` records exact exported API handler symbols, methods,
+  and endpoint paths.
 
 ## Planned Semantics
 

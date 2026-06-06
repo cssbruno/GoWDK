@@ -53,9 +53,22 @@ engine := gin.Default()
 engine.Any("/*path", gin.WrapH(gowdkHandler))
 ```
 
+## Fiber
+
+Fiber is not built on `net/http`, so mounting a generated GOWDK app requires
+Fiber's adaptor package, for example `adaptor.HTTPHandler(gowdkHandler)`.
+That bridge adds adapter overhead and Fiber-specific semantics around request
+and response objects, middleware ordering, context cancellation, streaming,
+and protocol features. Keep security, auth, validation, and persistence in
+normal Go handlers behind GOWDK's `net/http` contract, and test behavior through
+the final Fiber stack before deploying.
+
+GOWDK core does not import Fiber and generated apps do not emit Fiber-specific
+code by default. A future optional Fiber adapter should wrap the same generated
+`http.Handler` contract instead of changing generated app output.
+
 ## Contract
 
 GOWDK's generated app package is `net/http`-first. Framework compatibility comes
 from the standard handler contract, so applications can choose Gin, Chi, Echo,
-or plain `net/http` without changing GOWDK core.
-
+Fiber through an adaptor, or plain `net/http` without changing GOWDK core.

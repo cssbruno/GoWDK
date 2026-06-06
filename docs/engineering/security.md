@@ -2,9 +2,9 @@
 
 ## Current Status
 
-The initial implementation is a compiler/runtime scaffold. Security-critical behavior will appear in the actions, partial, API, embed, and SSR addons.
+The initial implementation is a compiler/runtime scaffold. Security-critical behavior appears incrementally in the actions, partial, API, embed, and SSR addons.
 
-Do not treat current `act`, `api`, `partial`, `@guard`, or SSR scaffolding as production enforcement. Current validation records and checks metadata; generated execution, authorization, request decoding, and CSRF enforcement are still planned.
+Do not treat current `act`, `api`, `partial`, `@guard`, or SSR scaffolding as complete production enforcement. Current validation records and checks metadata; generated request decoding and opt-in CSRF enforcement exist, while authorization and broader request-time policy are still planned.
 
 ## Baseline Rules
 
@@ -18,7 +18,8 @@ Do not treat current `act`, `api`, `partial`, `@guard`, or SSR scaffolding as pr
 
 ## GOWDK-Specific Security Rules
 
-- `actions` must include CSRF protection before production use.
+- Generated actions must enable `Build.CSRF.Enabled` and set a stable CSRF
+  secret before production use.
 - Generated form decoders must validate expected fields and avoid mass assignment.
 - Generated action forms must reject direct file inputs until upload size,
   storage, validation, cleanup, and logging rules exist.
@@ -33,7 +34,7 @@ Do not treat current `act`, `api`, `partial`, `@guard`, or SSR scaffolding as pr
 
 Before generated app output is considered production-ready:
 
-- Real CSRF token generation, storage, validation, and failure handling must replace placeholder behavior.
+- Generated action CSRF must be enabled and configured with a runtime secret.
 - Redirects must reject unsafe external destinations unless explicitly allowed.
 - Generated decoders must define how unknown, missing, repeated, and file fields are handled.
 - Guards must have a documented execution contract, failure behavior, and test coverage.

@@ -32,7 +32,7 @@ Current diagnostic fields:
 - `message`: user-facing diagnostic message.
 - `suggestion`: optional editor-facing fix hint for common mistakes.
 
-Current compiler diagnostic codes include:
+Current diagnostic codes include:
 
 - `parse_error`
 - `component_client_error`
@@ -41,6 +41,18 @@ Current compiler diagnostic codes include:
 - `duplicate_component_name`
 - `duplicate_layout_id`
 - `duplicate_page_id`
+- GOWDK source import diagnostics such as `malformed_gowdk_use`,
+  `duplicate_gowdk_use_alias`, `unknown_gowdk_use_package`,
+  `unknown_gowdk_use_alias`, `unknown_gowdk_component`, and
+  `unsupported_gowdk_use_scope`
+- package diagnostics such as `missing_package_declaration`,
+  `package_must_be_first`, `package_mismatch`, and `go_package_error`.
+  `go_package_error` covers sibling Go parse errors, mixed package names, and
+  `go/types` type-check errors.
+- endpoint diagnostics such as `invalid_backend_handler_name`,
+  `unsupported_action_method`, `old_action_block_syntax`, and
+  `old_api_block_syntax`
+- backend binding diagnostics such as `backend_binding_required`
 - `missing_ssr_addon`
 - `redundant_component`
 - route diagnostics such as `duplicate_page_route`,

@@ -68,12 +68,17 @@ Compiler lanes:
       action/API handlers.
 - [x] Existing generated app source is passed through `go/format` before write.
 - [x] Existing build config and CLI include split backend app/binary fields.
-- [ ] `.gwdk` files require a `package <name>` declaration.
-- [ ] `.gwdk` package names are validated against sibling `.go` files.
-- [ ] Action/API syntax uses exact exported route declarations instead of old
+- [x] `.gwdk` files require a `package <name>` declaration.
+- [x] `.gwdk` package names are validated against sibling `.go` files.
+- [x] Go `import` and GOWDK `use` are separate source lanes.
+- [x] Page-level `use alias "package"` supports qualified component calls such
+      as `<ui.Hero />`.
+- [x] Action/API syntax uses exact exported endpoint declarations instead of old
       block bodies.
-- [ ] Handler binding uses exact exported names instead of name transformation.
+- [x] Handler binding uses exact exported names instead of name transformation.
 - [ ] Handler signature discovery uses `go/types` instead of AST-only checks.
+- [x] Sibling Go package parse and type-check failures are reported as
+      `go_package_error`.
 - [ ] Typed action structs are decoded from form tags and field types.
 - [ ] Runtime has a shared backend router/adapter API.
 - [ ] Generated route adapters are emitted through Go AST instead of broad raw
@@ -88,7 +93,7 @@ Compiler lanes:
 ## Proposed Changes
 
 - Add package declarations to the `.gwdk` language model.
-- Replace action/API block parsing with exported route declarations.
+- Replace action/API block parsing with exported endpoint declarations.
 - Promote backend binding from first-slice name mapping to exact Go symbol
   resolution.
 - Add typed form decoding for user-owned Go structs.
@@ -104,6 +109,7 @@ Compiler lanes:
 
 - [ ] Define the GOWDK AST nodes used by package declarations, annotations,
       routes, imports, stores, blocks, component contracts, and source spans.
+- [x] Parse GOWDK source uses with `use alias "package"`.
 - [ ] Add a package declaration parser for `package <identifier>`.
 - [ ] Treat the package declaration as required for pages, components, and
       layouts.
@@ -119,31 +125,33 @@ Compiler lanes:
 - [ ] Reject non-exported handler names in `act`, `api`, and `g:post`
       references.
 - [ ] Reject non-POST action methods.
-- [ ] Preserve API route validation for `GET`, `POST`, `PUT`, `PATCH`, and
+- [ ] Preserve API endpoint validation for `GET`, `POST`, `PUT`, `PATCH`, and
       `DELETE`.
 - [ ] Remove action body fields from the current route model after migration:
       input variable, pseudo validation, redirects, and declarative fragments.
 - [ ] Emit migration diagnostics for old `act name {}` and `api name {}` forms.
 - [ ] Update formatter, token tests, grammar golden files, diagnostics golden
       files, manifest golden files, and LSP completions.
+- [x] Add diagnostics for duplicate/unknown GOWDK source uses and unknown
+      qualified component references.
 
 ### 2. Manifest, Route Metadata, And Diagnostics
 
 - [ ] Add package metadata to public manifest JSON where useful.
-- [ ] Add handler symbol, method, route, package, binding status, and message to
+- [x] Add handler symbol, method, route, package, binding status, and message to
       route/build metadata consistently.
-- [ ] Update `gowdk routes` to report exact handler symbols and route methods.
-- [ ] Make duplicate method/route checks use declared action/API route literals,
+- [x] Update `gowdk routes` to report exact handler symbols and route methods.
+- [ ] Make duplicate method/path checks use declared action/API endpoint literals,
       not implicit page route behavior.
 - [ ] Add diagnostics:
-  - [ ] `missing_package_declaration`
-  - [ ] `package_must_be_first`
-  - [ ] `package_mismatch`
-  - [ ] `invalid_backend_handler_name`
-  - [ ] `unsupported_action_method`
-  - [ ] `legacy_action_syntax`
-  - [ ] `legacy_api_syntax`
-  - [ ] `go_package_error`
+  - [x] `missing_package_declaration`
+  - [x] `package_must_be_first`
+  - [x] `package_mismatch`
+  - [x] `invalid_backend_handler_name`
+  - [x] `unsupported_action_method`
+  - [x] `old_action_block_syntax`
+  - [x] `old_api_block_syntax`
+  - [x] `go_package_error`
   - [ ] `unsupported_action_input_type`
 - [ ] Update `docs/reference/diagnostics.md`.
 
@@ -153,9 +161,9 @@ Compiler lanes:
 - [ ] Use `go list` to discover import path, package name, and files.
 - [ ] Use standard `go/parser`, `go/ast`, and `go/types` to validate exported
       handlers and input types.
-- [ ] Surface type-check errors as focused GOWDK diagnostics.
+- [x] Surface type-check errors as focused GOWDK diagnostics.
 - [ ] Validate `.gwdk` package name against sibling Go package name.
-- [ ] Fail on Go package type-check errors with `go_package_error`.
+- [x] Fail on Go package type-check errors with `go_package_error`.
 - [ ] Cache inspected packages by absolute directory or import path.
 - [ ] Resolve exact exported handler symbols. Remove lowercase-to-exported name
       mapping.
@@ -191,7 +199,7 @@ Compiler lanes:
 - [ ] Update `runtime/app.Handler` to use one `Backend HandlerFunc` hook.
 - [ ] Keep existing `Action` and `API` fields temporarily only if needed for
       internal compatibility.
-- [ ] Ensure backend adapters set no-store on request-time responses.
+- [x] Ensure backend adapters set no-store on request-time responses.
 - [ ] Preserve request body limits for action forms.
 
 ### 5. Typed Form Decoding
@@ -272,19 +280,19 @@ Compiler lanes:
 
 ### 9. Tests
 
-- [ ] Parser accepts `package auth` as the first non-comment declaration.
+- [x] Parser accepts `package auth` as the first non-comment declaration.
 - [ ] Parser rejects missing package declarations.
-- [ ] Parser rejects package declarations after annotations/imports/blocks.
-- [ ] Parser accepts `act Login POST "/"`.
-- [ ] Parser accepts `api Session GET "/api/session"`.
-- [ ] Parser rejects lowercase or otherwise non-exported handler names.
-- [ ] Parser rejects old action/API block syntax with migration diagnostics.
-- [ ] Compiler rejects package mismatch with sibling Go files.
-- [ ] Compiler fails on Go package type-check errors.
-- [ ] Compiler reports missing handlers.
-- [ ] Compiler reports unsupported signatures.
-- [ ] Compiler resolves exact same-package exported handlers.
-- [ ] Compiler resolves typed action input structs and rejects unexported input
+- [x] Parser rejects package declarations after annotations/imports/blocks.
+- [x] Parser accepts `act Login POST "/"`.
+- [x] Parser accepts `api Session GET "/api/session"`.
+- [x] Parser rejects lowercase or otherwise non-exported handler names.
+- [x] Parser rejects old action/API block syntax with migration diagnostics.
+- [x] Compiler rejects package mismatch with sibling Go files.
+- [x] Compiler fails on Go package type-check errors.
+- [x] Compiler reports missing handlers.
+- [x] Compiler reports unsupported signatures.
+- [x] Compiler resolves exact same-package exported handlers.
+- [x] Compiler resolves typed action input structs and rejects unexported input
       types.
 - [ ] Runtime `BackendRouter` dispatches by method and normalized path.
 - [ ] Runtime action/API adapter helpers write `response.Response`.
@@ -318,7 +326,6 @@ Compiler lanes:
 - `internal/manifest`
 - `internal/compiler`
 - `internal/appgen`
-- `internal/codegen`
 - `runtime/app`
 - `runtime/form`
 - `runtime/response`
@@ -328,7 +335,7 @@ Compiler lanes:
 
 - `.gwdk` syntax changes:
   - add required `package <name>`.
-  - replace action/API blocks with route declarations.
+  - replace action/API blocks with endpoint declarations.
   - require exported handler references in `g:post`.
 - Manifest/build/route metadata gains package and exact symbol details.
 - Generated app internals move toward `BackendRouter`.
@@ -340,7 +347,7 @@ Compiler lanes:
 
 ```sh
 gofmt -w <changed-go-files>
-go test ./internal/parser ./internal/lang ./internal/compiler ./runtime/app ./runtime/form ./internal/appgen ./internal/codegen ./cmd/gowdk
+go test ./internal/parser ./internal/lang ./internal/compiler ./runtime/app ./runtime/form ./internal/appgen ./cmd/gowdk
 go test ./...
 go build ./cmd/gowdk
 cd examples/login && make check

@@ -15,8 +15,10 @@ Implemented today:
 - `gowdk-build-report.json` records build-output generator validation, planning,
   write, manifest, cleanup, and completion events for every successful disk
   build.
-- Configured stylesheets and CSS processor stylesheet links are emitted in page
-  `<head>` elements.
+- Page `@title`, `@description`, `@canonical`, `@image`, app-level
+  `Build.Head`, configured stylesheets, and CSS processor stylesheet links are
+  emitted in page `<head>` elements. `Build.Head` enables favicon, Open Graph,
+  and Twitter card tags without a post-build patcher.
 - CSS processors can emit CSS asset files under the output directory.
 - Discovered page CSS inputs selected by implicit `default page` or explicit
   `@css` annotations are concatenated into generated page CSS files.
@@ -33,14 +35,19 @@ Implemented today:
   output under `<dir>/SPA`.
 - `gowdk build --bin <file>` requires `--app` and compiles that generated app
   into one local binary.
-- Generated apps include POST redirect handlers for the first supported
-  action subset on concrete SPA/action routes.
-- Generated app creation auto-detects supported action routes and first-slice
+- Generated apps include POST endpoint handlers for the first supported
+  action subset on concrete SPA page paths.
+- Generated apps pass one backend hook into `runtime/app.Handler`; generated
+  action and API dispatch are internal details behind that hook.
+- Generated app creation auto-detects supported action endpoints and first-slice
   SSR routes from the parsed manifest used by `gowdk build --app`, so the CLI
   does not need to manually register those handler hooks.
 - Generated apps include first-slice form input decoder functions that
   preserve repeated values and reject unexpected fields inferred from direct
   literal controls in same-page `g:post` forms.
+- Named submit controls discovered in literal `g:post` forms are included in
+  the allowlist as submit-intent fields before unknown-field rejection; local
+  `type="button"` and reset controls are not included.
 - Generated action handlers cap request bodies before form parsing and return
   HTTP 413 for oversized submissions.
 - Generated apps return HTTP 422 for missing or empty direct SPA
@@ -86,16 +93,8 @@ Implemented today:
   placeholders with request-time HTML escaping.
 - Generated apps can return first-slice partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests.
-- Generated app action route extraction rejects direct file inputs and
+- Generated app action endpoint extraction rejects direct file inputs and
   multipart `g:post` forms until upload security rules are defined.
-- `internal/codegen.GenerateRouteRegistration` can emit formatted Go route
-  registration source from `internal/codegen.RouteBinding` plans for future
-  generated `internal/routes` packages.
-- `internal/codegen.GenerateComponentPackage` can emit formatted Go render
-  functions for current `.cmp.gwdk` components with string props and direct
-  `{prop}` interpolation. Generated component code writes compiler-owned
-  chunks through `runtime/render.Builder.Markup` and expression output through
-  `runtime/render.Builder.Text`, which escapes by default.
 - `internal/gotypes` resolves component prop/state structs through Go module
   import paths using `go list`, `go/parser`, and `go/types`.
 - `runtime/response` defines fragment responses with target and swap metadata
@@ -114,10 +113,10 @@ Not implemented yet:
 - Route params passed into imported Go `build {}` functions.
 - CSS hashing, minification, and full page-aware third-party CSS processor
   selection.
-- Non-string props in legacy `props {}` blocks.
+- Non-string props in inline `props {}` blocks.
 - General expression interpolation and arbitrary `build {}` execution.
 - Real user Go type resolution for typed action decoders, user action logic,
-  CSRF, API handlers, general fragment routes, and SSR `load {}` handlers.
+  API handlers, general fragment routes, and SSR `load {}` handlers.
 
 ## Target Artifacts
 
@@ -125,8 +124,7 @@ The target output can include:
 
 - App-shell HTML for `spa` and `action` pages.
 - Route manifest JSON.
-- Generated Go route registration.
-- Generated Go component render functions.
+- Generated Go app/runtime adapter code.
 - Generated action handlers and typed form decoders.
 - Generated API handlers.
 - Generated server fragment handlers.
@@ -164,6 +162,9 @@ handler, reads `GOWDK_ADDR`, defaults to `127.0.0.1:8080`, serves GET and HEAD
 requests, maps extensionless routes to nested `index.html` files, and does not
 list directories. It exposes `/_gowdk/health` and adds
 `X-GOWDK-App`, `X-GOWDK-Module`, and `X-GOWDK-Instance-ID` headers to responses.
+Request-time action/API dispatch runs through a single backend hook in
+`runtime/app`; older separate action/API hook fields remain a compatibility
+path for existing generated apps.
 It loads `gowdk-assets.json` from the embedded build output filesystem when present.
 Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 `GOWDK_INSTANCE_ID`; if no instance ID is provided, the app creates one at
@@ -177,10 +178,24 @@ HTTP 422 for first-slice required-field validation failures. Direct file inputs
 and multipart action forms are rejected before generated app output. For
 partial requests, generated handlers can return the first parsed action
 fragment matching `X-GOWDK-Target` and expose fragment target/swap metadata in
-headers. The generated app does not execute user action logic, enforce CSRF,
-resolve real user Go input structs, run user-defined validation, handle uploads,
-or serve API handlers, general fragment routes, `load {}` SSR, guards, or
-hybrid request-time handlers today.
+headers. Feature-bound generated action handlers can call no-input,
+`form.Values`, typed value, and typed pointer same-package Go handlers; typed
+handlers decode through generated normal Go functions built from Go AST input
+struct metadata. When `Build.CSRF.Enabled` is true, generated apps read a
+signing secret from `Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`, inject hidden
+CSRF token fields into served HTML POST forms, validate action POSTs before
+generated decoding or user handlers run, and return HTTP 403
+`invalid csrf token` with `Cache-Control: no-store` for invalid tokens. The
+generated app does not run user-defined validation beyond handler logic, handle
+uploads, or serve general fragment routes, `load {}` SSR, guards, or hybrid
+request-time handlers today.
+
+Generated app source is an output artifact and sits downstream of feature
+packages. Feature packages may import stable public GOWDK runtime/addon
+packages, but must not import generated `gowdkapp` packages, generated
+`cmd/server` packages, build output directories, or any path under the selected
+generated app directory. This keeps the dependency direction one-way: generated
+adapters import user feature packages and call exported handlers.
 
 ## Current SPA Route Manifest
 

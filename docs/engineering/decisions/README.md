@@ -19,3 +19,4 @@ Recommended naming:
 - `0004-production-wasm-island-abi.md`: proposed production ABI for explicit WASM islands.
 - `0005-generated-go-emission-boundary.md`: accepted generated Go adapter boundary.
 - `0006-gowdk-compiler-and-kit-boundary.md`: accepted split between the GOWDK compiler and GOWDK app/runtime kit.
+- `0007-static-first-spa-navigation.md`: accepted static-first SPA navigation and generated JavaScript guardrails.

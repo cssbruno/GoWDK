@@ -15,8 +15,12 @@ Current JSON shape:
     "dashboard": {
       "source": "examples/ssr/dashboard.page.gwdk",
       "kind": "page",
+      "package": "dashboard",
       "route": "/dashboard",
       "render": "ssr",
+      "uses": [
+        {"alias": "ui", "package": "components"}
+      ],
       "layouts": ["root", "dashboard"],
       "guard": ["auth.required"],
       "css": ["default", "page", "forms"],
@@ -71,6 +75,7 @@ Current JSON shape:
     "Hero": {
       "source": "examples/pages/hero.cmp.gwdk",
       "kind": "component",
+      "package": "components",
       "props": [
         {"name": "title", "type": "string"},
         {"name": "tagline", "type": "string"}
@@ -94,9 +99,16 @@ Fields:
 - `version`: public manifest schema version.
 - `source`: source file path.
 - `kind`: file kind, currently `page` or `component`.
+- `package`: `.gwdk` package name when declared.
+- `uses`: optional GOWDK source package imports declared as
+  `use alias "package"`; these are separate from normal Go imports.
 - `route`: declared route path.
 - `render`: effective render mode after applying default `spa`.
-- `layouts`: optional ordered layout IDs.
+- `metadata`: optional page document metadata from `@title`, `@description`,
+  `@canonical`, and `@image`.
+- `layouts`: optional ordered layout references. Bare names are same-package or
+  package-less layout IDs; qualified names such as `chrome.root` resolve through
+  page `use chrome "package"` declarations.
 - `dynamicParams`: route params declared in dynamic route segments.
 - `paths`: optional boolean present when `paths {}` exists.
 - `guard`: optional guard metadata.
@@ -106,7 +118,7 @@ Fields:
   subset, including input metadata, validation intent, local redirects, and
   fragment targets declared with `fragment "#id" {}`.
 - `apis`: optional API block metadata, including method and route when declared
-  with the first supported API route metadata subset.
+  with the first supported API endpoint metadata subset.
 - page `components`: optional sorted component names directly referenced by the
   current literal `view {}` parser subset.
 - `Assets`: optional sorted literal `src`, `href`, and `poster`
@@ -122,8 +134,16 @@ Fields:
 - `components`: component declarations known to the manifest.
   Component declarations may include `props`, typed `propsType`/`state`
   contracts, and emitted browser-island event metadata under `emits`.
+- `backendBindings`: action/API handler binding metadata. Entries include
+  endpoint kind, source, page ID, declared block name, method, endpoint path,
+  Go package/import details, exact handler symbol, signature/input metadata when
+  supported, binding status, and binding message.
 
-The site-map command emits broader editor-facing JSON that includes source paths, dynamic route params, and block presence.
+The site-map command emits broader editor-facing JSON that includes source
+paths, dynamic route params, block presence, and the normalized route graph.
+The route graph adds `routes` entries for page/file routes and `endpoints`
+entries for action/API declarations, including method, path, page ID, symbol,
+package, and backend binding summary fields.
 
 `gowdk build` also writes a separate SPA route manifest named
 `gowdk-routes.json` in the selected output directory. That generated file records

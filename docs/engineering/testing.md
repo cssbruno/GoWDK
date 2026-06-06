@@ -47,7 +47,7 @@ must pass `--config <file>`.
 | Manifest smoke | `go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk` | Manifest, parser, or CLI output changes. |
 | SPA build smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk && test -f /tmp/gowdk-build/gowdk-routes.json && test -f /tmp/gowdk-build/gowdk-assets.json` | Parser, view, buildgen, component, or CLI build changes. |
 | Dev loop tests | `go test ./cmd/gowdk` | Dev mode changes. |
-| Action redirect smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/actions/signup.page.gwdk` | Action parsing or generated action route changes. |
+| Action redirect smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/actions/signup.page.gwdk` | Action parsing or generated action endpoint changes. |
 | Local serve tests | `go test ./cmd/gowdk` | CLI serving or option parsing changes. |
 | Generated app tests | `go test ./cmd/gowdk ./internal/appgen` | Generated embedded app or binary-serving changes. |
 
@@ -74,7 +74,8 @@ must pass `--config <file>`.
 - `internal/lang` tests cover lexical tokenization, diagnostics, formatting, file checks, and manifest JSON from parsed source files.
 - `internal/lang` tests cover site-map JSON for movable page files.
 - `internal/manifest` tests cover route manifest JSON render/path/guard/action output.
-- `internal/codegen` tests cover route bindings for SPA pages, actions, SSR pages, APIs, and missing SSR addon rejection.
+- `internal/compiler` tests cover route metadata for SPA/SSR routes, endpoint
+  metadata for actions/APIs, and missing SSR addon rejection.
 - `internal/clientrt` tests cover the emitted partial-update runtime source and
   run a dependency-free Node DOM harness for innerHTML and outerHTML swaps when
   `node` is available.

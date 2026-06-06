@@ -6,6 +6,19 @@ The current parser recognizes a small top-level subset.
 
 Line comments start with `//`. Empty lines and line comments are ignored by the metadata parser.
 
+## Package
+
+Every real page, component, and layout `.gwdk` file must start with a Go-style
+package declaration as the first non-comment declaration:
+
+```gwdk
+package auth
+```
+
+The package name must match sibling `.go` files in the same directory.
+`gowdk.config.go` is project configuration and is not treated as a sibling
+application package for this check.
+
 ## Annotations
 
 Annotations must start at the beginning of the trimmed line:
@@ -13,6 +26,10 @@ Annotations must start at the beginning of the trimmed line:
 ```gwdk
 @page home
 @route "/"
+@title "Home"
+@description "Compile-first Go web output."
+@canonical "https://example.com/"
+@image "https://example.com/social.png"
 @layout root, marketing
 @render spa
 @guard auth.required, billing.active
@@ -24,6 +41,11 @@ Supported annotations:
 
 - `@page <id>`: required page ID.
 - `@route "<path>"`: required route path. Quotes are trimmed.
+- `@title "<text>"`: optional HTML document title for generated page output.
+- `@description "<text>"`: optional HTML document description meta value.
+- `@canonical "<url>"`: optional canonical URL link for generated page output.
+- `@image "<url>"`: optional social preview image URL for Open Graph and
+  Twitter metadata.
 - `@layout <id>[, <id>...]`: optional page layout IDs, or a layout identity in
   `.layout.gwdk` files.
 - `@render spa|action|hybrid|ssr`: optional render mode.
@@ -54,15 +76,56 @@ paths {
 build {
 load {
 view {
-act subscribe {
-api patients {
-api {
+```
+
+Actions and APIs are top-level endpoint declarations, not blocks:
+
+```gwdk
+act Submit POST "/signup"
+api Health GET "/api/health"
 ```
 
 Page files may also declare top-level Go imports before blocks:
 
 ```gwdk
 import interop "github.com/cssbruno/gowdk/examples/go-interop"
+```
+
+These are normal Go package imports used for Go types/functions. They do not
+import other `.gwdk` files.
+
+GOWDK source packages use a separate `use` declaration:
+
+```gwdk
+use ui "components"
+```
+
+The quoted value is a discovered `.gwdk` package name, not a Go import path.
+Pages and components use this for cross-package component calls:
+
+```gwdk
+view {
+  <ui.Hero title="GOWDK" />
+}
+```
+
+Same-package `.gwdk` and `.go` files are peers and need no import. A page can
+call same-package components by bare component name, such as `<Hero />`.
+Cross-package page calls must use a declared alias, such as `<ui.Hero />`.
+Imported components still resolve their own same-package child components by
+bare name inside the imported component body.
+Component aliases are scoped to the component that declares them:
+
+```gwdk
+package marketing
+
+use icons "icons"
+
+@component Hero
+
+view {
+  <section><icons.Badge /></section>
+}
 ```
 
 Component files can declare Go imports for typed props and state contracts:
@@ -85,23 +148,22 @@ build {
 }
 ```
 
+The function must be reached through an explicit `.gwdk` Go import alias, even
+when the Go function lives in a sibling same-package `.go` file. This keeps
+build-time execution dependencies explicit in the first analyzer slice and
+prevents accidental execution of same-package symbols by bare name.
+
 The function must return a JSON-encodable object. Scalar fields are exposed to
 `view {}` as string interpolation data.
-
-API blocks may declare one route metadata line in the current subset:
-
-```gwdk
-api health {
-  GET "/api/health"
-}
-```
 
 Unsupported top-level block declarations that look like `name ... {` are
 rejected until their feature slice is implemented.
 
-`internal/parser.ParseSyntax` returns a typed AST for the current subset:
-annotations, blocks, parsed `view {}` markup nodes, literal `paths {}` and
-`build {}` records, action statements, API route statements, and source spans.
+`internal/gwdkast` defines the typed GOWDK AST. `internal/parser.ParseSyntax`
+returns that AST for the current subset: package declarations, annotations,
+Go imports, GOWDK uses, stores, typed component contracts, blocks, parsed
+`view {}` markup nodes, literal `paths {}` and `build {}` records, endpoint
+declarations, and source spans.
 The manifest parser still preserves raw block body text for compatibility.
 SPA builds can expand literal `paths {}` lines such as:
 
@@ -130,26 +192,18 @@ rendering. Duplicate IDs on one element are rejected.
 Attributes can use quoted strings, booleans, or first-slice expression values
 such as `data-title={post.Title}`.
 
-`act {}` bodies currently support the first form-input/validation-intent/local
-redirect subset:
-
-```gwdk
-input := form SignupInput
-valid(input)?
--> "/signup?ok=1"
-```
-
-Broader statement syntax inside preserved block bodies is still opaque to the parser.
+Old `act name { ... }` and `api name { ... }` forms are rejected with migration
+diagnostics.
 
 Current page files must declare `view {}` because every page owns a page `GET`
 route. API-only file or route semantics are planned separately.
 
 Inside `view {}`, the current spa markup subset supports
-`<form g:post={submit}>` when `submit` is a supported action on the same page.
+`<form g:post={Submit}>` when `Submit` is a supported action on the same page.
 Forms with `g:post` can also declare first-slice partial metadata:
 
 ```gwdk
-<form g:post={refresh} g:target="#patients" g:swap="outerHTML">
+<form g:post={Refresh} g:target="#patients" g:swap="outerHTML">
 ```
 
 `g:target` must be a spa id selector that references an `id` in the same
@@ -268,6 +322,11 @@ filters such as `g:if={contains(lower(item.Name), lower(Query))}` inside
 `g:for`. `string(value)` converts scalar values to `string`. `int(value)` and
 `float(value)` accept strings or numeric values and return the requested numeric
 type.
+
+Generated island JavaScript does not evaluate arbitrary JavaScript source from
+`client {}`. It interprets the compiler-owned expression subset above, including
+conditionals, scalar operators, field/index reads, helper calls, and the listed
+built-ins.
 
 Client blocks can declare computed values:
 

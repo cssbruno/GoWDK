@@ -24,14 +24,15 @@ Block semantics:
 - `paths {}` runs at build time and declares dynamic SPA routes.
 - `build {}` runs at build time.
 - `load {}` runs at request time and requires request-time rendering.
-- `act {}` runs POST/action requests.
-- `api {}` runs API requests.
+- `act Name POST "/path"` declares POST/action endpoints.
+- `api Name METHOD "/path"` declares API endpoints.
 - `view {}` renders markup.
 
 Compiler rules:
 
 - Default render mode is `spa`.
-- Dynamic SPA/action routes require `paths {}`.
+- Dynamic SPA routes require `paths {}`; action endpoints inherit generated
+  concrete page paths.
 - `@render ssr` requires `ssr.Addon()`.
 - `load {}` is rejected on SPA/action pages.
 - Actions can exist without SSR.

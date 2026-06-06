@@ -99,12 +99,17 @@ If a future package adds a more specific validation command, document it in `REA
 - Reusable LLM task workflows live in `.llm/workflows/`.
 - Reusable LLM output templates live in `.llm/templates/`.
 - Update documentation in the same change that makes it stale.
-- Prefer concise, direct, functional documentation. State what works, what is
-  missing, and what to do next without narrative filler.
-- Keep examples and commands practical. Avoid broad explanations unless they
-  prevent a real implementation or usage mistake.
+- Documentation should be concise, direct, and functional. Prefer short
+  sections, clear bullets, and concrete commands over narrative explanation.
+- State only what a reader needs to know: what works, what is partial, what is
+  missing, what is intentionally out of scope, and what command or file to use.
+- Put practical examples before explanation. Remove filler, marketing tone,
+  repeated background, and framework comparisons unless they prevent a real
+  implementation or usage mistake.
 - Do not duplicate long status descriptions across docs. Link to the source of
   truth when a short reference is enough.
+- Keep checklists actionable: each item should describe a decision, shipped
+  behavior, missing behavior, test, or documentation task.
 
 ## Implementation Direction
 

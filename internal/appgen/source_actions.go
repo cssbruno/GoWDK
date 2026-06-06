@@ -401,7 +401,7 @@ func endpointContextStmt(kind, pageID, name, method, route string) ast.Stmt {
 		[]ast.Expr{id("ctx")},
 		call(
 			sel("gowdkruntime", "WithEndpoint"),
-			call(selExpr(id("request"), "Context")),
+			call(sel("gowdkruntime", "WithRequest"), call(selExpr(id("request"), "Context")), id("request")),
 			endpointMetadataExpr(kind, pageID, name, method, route),
 		),
 	)

@@ -33,16 +33,24 @@ Current support:
   Generated apps register these as backend endpoints, not page route kinds.
   They currently require `GET`, a concrete absolute path without route params,
   and a literal id-selector target.
+- If the same package exports a function with the fragment name and signature
+  `func(context.Context) (response.Response, error)`, generated apps call that
+  user-owned hook at request time. The hook owns data loading, validation,
+  redirects, HTML, JSON, and fragment response decisions through
+  `runtime/response.Response`. `runtime/app.Request(ctx)` exposes the current
+  request. If no function with the fragment name exists, the generated handler
+  serves the static rendered fragment body.
 - Generated embedded app action handlers can respond to `X-GOWDK-Partial`
   requests with rendered fragment HTML, `Cache-Control: no-store`, and fragment
   target metadata. Normal POST requests still use the redirect/no-content
   fallback path.
-- Generated standalone fragment handlers return rendered static fragment HTML,
-  `Cache-Control: no-store`, `Content-Type: text/html; charset=utf-8`, and
-  fragment target/swap headers.
+- Generated standalone fragment handlers return no-store responses. Static
+  fallback fragments return rendered HTML, `Content-Type: text/html;
+  charset=utf-8`, and fragment target/swap headers.
 - Static standalone fragment bodies expand known components at app generation
   time, including page-level `use` aliases and component-scoped child
-  components. They do not execute request-time data hooks.
+  components. They are used only when no same-package request-time fragment
+  hook is bound.
 - Generated required-field validation failures on partial requests with
   `X-GOWDK-Target` return an escaped validation fragment for that target, also
   with `Cache-Control: no-store`.
@@ -73,5 +81,4 @@ falls back to the form metadata.
 
 Not implemented yet:
 
-- Request-time data hooks for fragment routes.
 - Field-specific user validation syntax.

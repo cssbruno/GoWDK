@@ -78,6 +78,8 @@ type FragmentEndpoint struct {
 	Package      string
 	Uses         map[string]string
 	Guards       []string
+	Binding      manifest.BackendBinding
+	BackendAlias string
 }
 
 // ActionFragment describes a generated partial response fragment.

@@ -101,7 +101,7 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["gowdkratelimit"] = "github.com/cssbruno/gowdk/addons/ratelimit"
 	}
 	if !options.ProxyBackend {
-		for importPath, alias := range backendImports(actions, apis, ssr) {
+		for importPath, alias := range backendImports(actions, apis, fragments, ssr) {
 			imports[alias] = importPath
 		}
 	}
@@ -448,7 +448,7 @@ func hasBackendRoutes(options Options) bool {
 	return len(options.Actions) > 0 || len(options.APIs) > 0 || len(options.Fragments) > 0
 }
 
-func backendImports(actions []ActionEndpoint, apis []APIEndpoint, ssr []SSRRoute) map[string]string {
+func backendImports(actions []ActionEndpoint, apis []APIEndpoint, fragments []FragmentEndpoint, ssr []SSRRoute) map[string]string {
 	imports := map[string]string{}
 	for _, action := range actions {
 		if action.Binding.ImportPath != "" && action.BackendAlias != "" {
@@ -458,6 +458,11 @@ func backendImports(actions []ActionEndpoint, apis []APIEndpoint, ssr []SSRRoute
 	for _, api := range apis {
 		if api.Binding.ImportPath != "" && api.BackendAlias != "" {
 			imports[api.Binding.ImportPath] = api.BackendAlias
+		}
+	}
+	for _, fragment := range fragments {
+		if fragment.Binding.ImportPath != "" && fragment.BackendAlias != "" {
+			imports[fragment.Binding.ImportPath] = fragment.BackendAlias
 		}
 	}
 	for _, route := range ssr {

@@ -85,6 +85,7 @@ func APIEndpoints(app manifest.Manifest) ([]APIEndpoint, error) {
 // from a parsed manifest.
 func FragmentEndpoints(app manifest.Manifest) ([]FragmentEndpoint, error) {
 	var endpoints []FragmentEndpoint
+	bindings := backendBindingsByBlock(app.BackendBindings)
 	components := fragmentComponentsFromManifest(app.Components)
 	for _, page := range app.Pages {
 		for _, fragment := range page.Blocks.Fragments {
@@ -106,6 +107,7 @@ func FragmentEndpoints(app manifest.Manifest) ([]FragmentEndpoint, error) {
 				HTML:         html,
 				Package:      page.Package,
 				Uses:         uses,
+				Binding:      bindings[backendBindingKey("fragment", page.ID, fragment.Name, method, strings.TrimSpace(fragment.Route))],
 			})
 		}
 	}

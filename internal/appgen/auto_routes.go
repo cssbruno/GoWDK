@@ -97,6 +97,11 @@ func assignBackendAliases(options *Options) {
 			paths[api.Binding.ImportPath] = api.Binding.PackageName
 		}
 	}
+	for _, fragment := range options.Fragments {
+		if fragment.Binding.Status == manifest.BackendBindingBound && fragment.Binding.ImportPath != "" {
+			paths[fragment.Binding.ImportPath] = fragment.Binding.PackageName
+		}
+	}
 	for _, route := range options.SSR {
 		if route.LoadBinding.Status == manifest.BackendBindingBound && route.LoadBinding.ImportPath != "" {
 			paths[route.LoadBinding.ImportPath] = route.LoadBinding.PackageName
@@ -132,6 +137,9 @@ func assignBackendAliases(options *Options) {
 	}
 	for index := range options.APIs {
 		options.APIs[index].BackendAlias = aliases[options.APIs[index].Binding.ImportPath]
+	}
+	for index := range options.Fragments {
+		options.Fragments[index].BackendAlias = aliases[options.Fragments[index].Binding.ImportPath]
 	}
 	for index := range options.SSR {
 		options.SSR[index].LoadBackendAlias = aliases[options.SSR[index].LoadBinding.ImportPath]

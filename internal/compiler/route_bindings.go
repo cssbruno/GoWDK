@@ -197,16 +197,24 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 			})
 		case gwdkir.EndpointFragment:
 			endpoints = append(endpoints, EndpointBinding{
-				Kind:           EndpointFragment,
-				EndpointSource: string(endpoint.Source),
-				Source:         endpoint.SourceFile,
-				SourceSpan:     endpoint.Span,
-				Package:        endpoint.Package,
-				Symbol:         endpoint.Symbol,
-				Method:         endpoint.Method,
-				Route:          endpoint.Path,
-				PageID:         endpoint.PageID,
-				Handler:        "fragments." + exportedRouteName(endpoint.PageID) + exportedRouteName(endpoint.Symbol),
+				Kind:              EndpointFragment,
+				EndpointSource:    string(endpoint.Source),
+				Source:            endpoint.SourceFile,
+				SourceSpan:        endpoint.Span,
+				Package:           endpoint.Package,
+				PackagePath:       binding.ImportPath,
+				PackageName:       binding.PackageName,
+				Symbol:            endpoint.Symbol,
+				Method:            endpoint.Method,
+				Route:             endpoint.Path,
+				PageID:            endpoint.PageID,
+				Handler:           "fragments." + exportedRouteName(endpoint.PageID) + exportedRouteName(endpoint.Symbol),
+				BindingStatus:     binding.Status,
+				BindingMessage:    binding.Message,
+				BindingImportPath: binding.ImportPath,
+				BindingPackage:    binding.PackageName,
+				BindingFunction:   binding.FunctionName,
+				BindingSignature:  binding.Signature,
 			})
 		}
 	}

@@ -15,7 +15,7 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	if hasBackendRoutes(options) {
 		imports["gowdkruntime"] = "github.com/cssbruno/gowdk/runtime/app"
 	}
-	if len(options.Actions) > 0 || len(options.APIs) > 0 {
+	if len(options.Actions) > 0 || len(options.APIs) > 0 || len(options.Fragments) > 0 {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 	}
 	if len(options.Actions) > 0 {
@@ -30,6 +30,9 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	if len(options.APIs) > 0 {
 		imports["path"] = "path"
 	}
+	if len(options.Fragments) > 0 {
+		imports["path"] = "path"
+	}
 	if actionsUseValidation(options.Actions) {
 		imports["gowdkvalidation"] = "github.com/cssbruno/gowdk/runtime/validation"
 	}
@@ -39,7 +42,7 @@ func backendRuntimeImportMap(options Options) map[string]string {
 		imports["os"] = "os"
 		imports["strings"] = "strings"
 	}
-	for importPath, alias := range backendImports(options.Actions, options.APIs, nil) {
+	for importPath, alias := range backendImports(options.Actions, options.APIs, options.Fragments, nil) {
 		imports[alias] = importPath
 	}
 

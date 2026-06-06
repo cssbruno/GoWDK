@@ -283,7 +283,7 @@ api Session GET "/api/session"
       endpoints, not page route kinds.
 - [x] Expand first-slice standalone static fragment bodies with known
       components during app generation.
-- [ ] Add request-time fragment rendering with user-owned data/validation
+- [x] Add request-time fragment rendering with user-owned data/validation
       hooks.
 - [x] Keep file uploads out of generated actions; uploads belong in user-owned
       API/server handlers with explicit body limits, storage, validation,

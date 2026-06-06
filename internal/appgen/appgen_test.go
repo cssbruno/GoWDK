@@ -447,7 +447,7 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 		`field3, ok, err := gowdkform.Bool(values, "remember")`,
 		`input.Remember = field3`,
 		`input, err := decodeLoginLoginBoundInput(values)`,
-		`ctx := gowdkruntime.WithEndpoint(request.Context(), gowdkruntime.EndpointMetadata{Kind: "action", PageID: "Login", Name: "Login", Method: "POST", Path: "/Login"})`,
+		`ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "action", PageID: "Login", Name: "Login", Method: "POST", Path: "/Login"})`,
 		`result, err := auth.Login(ctx, input)`,
 		`result, err := auth.Save(ctx, &input)`,
 		`result, err := auth.Ping(ctx)`,
@@ -727,7 +727,7 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 		`func api(response http.ResponseWriter, request *http.Request) bool`,
 		`requestPath := path.Clean("/" + request.URL.Path)`,
 		`case request.Method == "GET" && requestPath == "/api/health":`,
-		`ctx := gowdkruntime.WithEndpoint(request.Context(), gowdkruntime.EndpointMetadata{Kind: "api", PageID: "status", Name: "Health", Method: "GET", Path: "/api/health"})`,
+		`ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "api", PageID: "status", Name: "Health", Method: "GET", Path: "/api/health"})`,
 		`result, err := status.Health(ctx, request)`,
 		`gowdkresponse.WriteNoStoreError(response, gowdkresponse.HandlerStatus(err, http.StatusInternalServerError), err.Error())`,
 		`gowdkresponse.WriteNoStoreHTTP(response, result)`,
@@ -1190,11 +1190,11 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 		}
 	}
 	assertSourceOrder(t, source,
-		`ctx := gowdkruntime.WithEndpoint(request.Context(), gowdkruntime.EndpointMetadata{Kind: "action"`,
+		`ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "action"`,
 		`if runRateLimit(response, request)`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
 	)
-	fragmentIndex := strings.Index(source, `ctx := gowdkruntime.WithEndpoint(request.Context(), gowdkruntime.EndpointMetadata{Kind: "fragment"`)
+	fragmentIndex := strings.Index(source, `ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "fragment"`)
 	if fragmentIndex < 0 {
 		t.Fatalf("expected generated source to contain fragment endpoint context:\n%s", source)
 	}
@@ -2746,6 +2746,85 @@ func TestGeneratedBinaryServesStandaloneFragmentRoute(t *testing.T) {
 	}
 	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("expected no-store on standalone fragment response, got %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinaryExecutesFragmentUserHook(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		PageID:       "patients",
+		FragmentName: "List",
+		Method:       "GET",
+		Route:        "/patients/list",
+		Target:       "#patients",
+		HTML:         "<section><p>Static fallback</p></section>",
+		Binding: manifest.BackendBinding{
+			Status:       manifest.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/patients",
+			PackageName:  "patients",
+			FunctionName: "List",
+			Signature:    manifest.BackendSignatureFragment,
+		},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
+
+import (
+	"context"
+
+	gowdkapp "github.com/cssbruno/gowdk/runtime/app"
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+func List(ctx context.Context) (response.Response, error) {
+	request, ok := gowdkapp.Request(ctx)
+	if !ok {
+		return response.HTMLBody(500, "missing request"), nil
+	}
+	return response.FragmentFor("#patients", "<section><p>Runtime "+request.URL.Query().Get("q")+"</p></section>"), nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/patients/list?q=hook", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected fragment response status 200, got %d: %s", response.StatusCode, payload)
+	}
+	if strings.TrimSpace(string(payload)) != "<section><p>Runtime hook</p></section>" {
+		t.Fatalf("expected runtime fragment hook response, got %s", payload)
+	}
+	if strings.Contains(string(payload), "Static fallback") {
+		t.Fatalf("expected runtime hook to replace static fallback, got %s", payload)
+	}
+	if response.Header.Get("X-GOWDK-Fragment-Target") != "#patients" {
+		t.Fatalf("unexpected fragment target: %q", response.Header.Get("X-GOWDK-Fragment-Target"))
 	}
 }
 

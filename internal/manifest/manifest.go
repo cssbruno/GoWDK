@@ -350,6 +350,7 @@ const (
 	BackendSignatureActionForm    BackendSignatureKind = "action_form"
 	BackendSignatureActionFormPtr BackendSignatureKind = "action_form_ptr"
 	BackendSignatureAPI           BackendSignatureKind = "api"
+	BackendSignatureFragment      BackendSignatureKind = "fragment"
 	BackendSignatureLoad          BackendSignatureKind = "load"
 	BackendSignatureLoadError     BackendSignatureKind = "load_error"
 )

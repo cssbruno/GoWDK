@@ -103,9 +103,12 @@ Implemented today:
   response headers are written as no-store HTTP 500 responses without exposing
   panic values.
 - Generated apps can return first-slice partial fragment responses from
-  action handlers for `X-GOWDK-Partial` requests and standalone static
-  `fragment Name GET "/path" "#target" { ... }` routes. Standalone static
-  fragment bodies can expand known components at app generation time.
+  action handlers for `X-GOWDK-Partial` requests and standalone
+  `fragment Name GET "/path" "#target" { ... }` routes. Standalone fragment
+  bodies can expand known components at app generation time. If the source
+  package exports `func Name(context.Context) (response.Response, error)`, the
+  generated fragment handler calls that request-time hook instead of the static
+  fallback.
 - Generated app action endpoint extraction rejects direct file inputs and
   multipart `g:post` forms. Uploads belong in user-owned API/server handlers.
 - `internal/gotypes` resolves component prop/state structs through Go module

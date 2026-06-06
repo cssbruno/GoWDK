@@ -64,6 +64,14 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 func Bad(LoginInput) (response.Response, error) {
 	return response.Response{}, nil
 }
+
+func List(context.Context) (response.Response, error) {
+	return response.FragmentFor("#patients", "<p>runtime</p>"), nil
+}
+
+func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
+	return response.Response{}, nil
+}
 `)
 
 	app := BindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{{
@@ -85,6 +93,11 @@ func Bad(LoginInput) (response.Response, error) {
 				Method: "GET",
 				Route:  "/api/Session",
 			}},
+			Fragments: []manifest.FragmentEndpoint{
+				{Name: "List", Method: "GET", Route: "/patients/list", Target: "#patients"},
+				{Name: "BrokenFragment", Method: "GET", Route: "/patients/broken", Target: "#patients"},
+				{Name: "MissingFragment", Method: "GET", Route: "/patients/missing", Target: "#patients"},
+			},
 		},
 	}}})
 
@@ -106,6 +119,13 @@ func Bad(LoginInput) (response.Response, error) {
 	}
 	if got := bindings["Missing"]; got.Status != manifest.BackendBindingMissing {
 		t.Fatalf("expected Missing binding, got %#v", got)
+	}
+	assertBinding(t, bindings["List"], manifest.BackendBindingBound, manifest.BackendSignatureFragment, "", false)
+	if got := bindings["BrokenFragment"]; got.Status != manifest.BackendBindingUnsupportedSignature {
+		t.Fatalf("expected BrokenFragment unsupported signature, got %#v", got)
+	}
+	if _, ok := bindings["MissingFragment"]; ok {
+		t.Fatalf("did not expect missing static fragment fallback to create a backend binding")
 	}
 }
 

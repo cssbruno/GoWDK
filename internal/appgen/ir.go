@@ -108,6 +108,7 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 
 func fragmentEndpointsFromIR(ir gwdkir.Program) ([]FragmentEndpoint, error) {
 	var endpoints []FragmentEndpoint
+	bindings := irBindingsByEndpoint(ir.Endpoints)
 	components := fragmentComponentsFromIR(ir.Components)
 	for _, page := range ir.Pages {
 		for _, fragment := range page.Blocks.Fragments {
@@ -130,6 +131,7 @@ func fragmentEndpointsFromIR(ir gwdkir.Program) ([]FragmentEndpoint, error) {
 				Package:      page.Package,
 				Uses:         uses,
 				Guards:       append([]string(nil), page.Guards...),
+				Binding:      bindings[irEndpointKey(gwdkir.EndpointFragment, page.ID, fragment.Name, method, strings.TrimSpace(fragment.Route))],
 			})
 		}
 	}

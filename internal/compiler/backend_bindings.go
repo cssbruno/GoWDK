@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	actionHandlerKind = "action"
-	apiHandlerKind    = "api"
-	loadHandlerKind   = "load"
+	actionHandlerKind   = "action"
+	apiHandlerKind      = "api"
+	fragmentHandlerKind = "fragment"
+	loadHandlerKind     = "load"
 
 	contextImportPath  = "context"
 	formImportPath     = "github.com/cssbruno/gowdk/runtime/form"
@@ -37,7 +38,7 @@ func BindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 	var bindings []manifest.BackendBinding
 	cache := map[string]featurePackage{}
 	for _, page := range app.Pages {
-		if len(page.Blocks.Actions) == 0 && len(page.Blocks.APIs) == 0 && !page.Blocks.Load {
+		if len(page.Blocks.Actions) == 0 && len(page.Blocks.APIs) == 0 && len(page.Blocks.Fragments) == 0 && !page.Blocks.Load {
 			continue
 		}
 		dir := sourceDir(page.Source)
@@ -54,6 +55,11 @@ func BindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 		}
 		for _, api := range page.Blocks.APIs {
 			bindings = append(bindings, bindAPI(page, api, pkg))
+		}
+		for _, fragment := range page.Blocks.Fragments {
+			if binding, ok := bindFragment(page, fragment, pkg); ok {
+				bindings = append(bindings, binding)
+			}
 		}
 	}
 	for _, endpoint := range app.Endpoints {
@@ -223,6 +229,26 @@ func bindAPI(page manifest.Page, api manifest.API, pkg featurePackage) manifest.
 	return binding
 }
 
+func bindFragment(page manifest.Page, fragment manifest.FragmentEndpoint, pkg featurePackage) (manifest.BackendBinding, bool) {
+	method := strings.TrimSpace(fragment.Method)
+	if method == "" {
+		method = "GET"
+	}
+	binding := baseBackendBinding(page, fragmentHandlerKind, fragment.Name, method, strings.TrimSpace(fragment.Route), pkg)
+	function, ok := pkg.Functions[binding.FunctionName]
+	if !ok {
+		return manifest.BackendBinding{}, false
+	}
+	if !function.Fragment() {
+		binding.Status = manifest.BackendBindingUnsupportedSignature
+		binding.Message = fmt.Sprintf("GOWDK fragment handler %s.%s must have signature func(context.Context) (response.Response, error)", packageLabel(pkg), binding.FunctionName)
+		return binding, true
+	}
+	binding.Signature = manifest.BackendSignatureFragment
+	binding.Status = manifest.BackendBindingBound
+	return binding, true
+}
+
 func baseBackendBinding(page manifest.Page, kind, blockName, method, route string, pkg featurePackage) manifest.BackendBinding {
 	return manifest.BackendBinding{
 		Kind:         kind,
@@ -302,6 +328,10 @@ func (function featureFunction) Action() bool {
 
 func (function featureFunction) API() bool {
 	return function.Signature == manifest.BackendSignatureAPI
+}
+
+func (function featureFunction) Fragment() bool {
+	return function.Signature == manifest.BackendSignatureAction0 || function.Signature == manifest.BackendSignatureFragment
 }
 
 func (function featureFunction) Load() bool {

@@ -596,6 +596,8 @@ func attachBackendBindings(program *gwdkir.Program, bindings []manifest.BackendB
 		kind := gwdkir.EndpointAction
 		if binding.Kind == "api" {
 			kind = gwdkir.EndpointAPI
+		} else if binding.Kind == "fragment" {
+			kind = gwdkir.EndpointFragment
 		}
 		byEndpoint[endpointKey(kind, binding.PageID, binding.BlockName, binding.Method, binding.Route)] = binding
 	}

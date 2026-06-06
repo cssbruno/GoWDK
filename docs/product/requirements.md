@@ -11,8 +11,7 @@ page.
 Current user-facing documentation now separates implemented behavior from
 planned behavior across the README, CLI/config/routing/deployment references,
 language references, compiler docs, examples, `MISSING_CHECKLIST.md`, and the
-Svelte/SvelteKit comparison checklist in
-`docs/product/svelte-sveltekit-gap-checklist.md`.
+gap checklist in `docs/product/gap-checklist.md`.
 
 ## Requirements
 
@@ -40,7 +39,7 @@ Svelte/SvelteKit comparison checklist in
 | PRD-020 | Allow generated apps and binaries to package selected configured modules. | High | Implemented | `Build.Targets` SPAally declares module sets, output dirs, generated app dirs, and binaries. `gowdk build` runs all configured targets, `--target` selects named targets, and ad hoc repeated or comma-separated `--module` flags remain supported. |
 | PRD-021 | Provide a dependency-free fast local development loop. | High | Partial | `gowdk dev` polls discovered inputs, compares content hashes, rebuilds only on real input changes, can incrementally render changed page sources for plain build output, serves the generated output, and live reloads browsers after successful rebuilds. SPA/app generation skips identical file writes. |
 | PRD-022 | Allow generated app output to compile to a WASM deploy artifact. | Medium | Partial | `gowdk build --wasm <file>` and `Build.Targets[].WASM` compile the generated app with `GOOS=js GOARCH=wasm`. This remains separate from explicit browser island assets emitted by `g:island="wasm"`. |
-| PRD-023 | Keep current documentation aligned with implemented CLI, config, compiler, language, routing, deployment, and examples. | High | Implemented | `README.md`, `docs/getting-started.md`, reference docs, language docs, compiler docs, `examples/README.md`, `MISSING_CHECKLIST.md`, and `docs/product/svelte-sveltekit-gap-checklist.md` describe current support and call out planned behavior. |
+| PRD-023 | Keep current documentation aligned with implemented CLI, config, compiler, language, routing, deployment, and examples. | High | Implemented | `README.md`, `docs/getting-started.md`, reference docs, language docs, compiler docs, `examples/README.md`, `MISSING_CHECKLIST.md`, and `docs/product/gap-checklist.md` describe current support and call out planned behavior. |
 | PRD-024 | Require project config before compiling or validating `.gwdk` code. | High | Implemented | `check`, `manifest`, `sitemap`, `routes`, `build`, and `dev` require `gowdk.config.go` in the current directory or an explicit `--config <file>`, even when explicit `.gwdk` file paths are provided. |
 | PRD-025 | Keep framework integrations optional and outside compiler/runtime core. | Medium | Implemented | Generated apps expose standard `net/http` handlers and framework-neutral code by default. Optional `runtime/adapters/echo`, `runtime/adapters/gin`, and `runtime/adapters/fiber` packages wrap the same generated `http.Handler`; docs cover Echo v5, Gin, Fiber, and Fiber adaptor caveats. |
 

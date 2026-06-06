@@ -1,10 +1,12 @@
-# GOWDK Gap Checklist From Svelte/SvelteKit Comparison
+# GOWDK Gap Checklist
 
-This checklist tracks what is missing or weaker in GOWDK when compared with
-Svelte and SvelteKit. It is not a request to clone their product model or
-implement their full feature set. Use it to decide which comparison points need
-a GOWDK-native answer, which should be deferred, and which should be rejected as
-intentional non-goals.
+This checklist tracks gaps that still need product, compiler, runtime, tooling,
+documentation, or ecosystem decisions before GOWDK can be presented as a
+polished Go-first full web app platform. Some gaps were found by comparing
+GOWDK with Svelte and SvelteKit, but this document is not a request to clone
+their product model or implement their full feature set. Use it to decide which
+comparison points need a GOWDK-native answer, which should be deferred, and
+which should be rejected as intentional non-goals.
 
 Comparison anchors, not implementation requirements:
 
@@ -26,8 +28,8 @@ Comparison anchors, not implementation requirements:
 - Prefer completing contract work before feature breadth. A narrow, stable Go
   contract is better than a wide feature surface that cannot be explained or
   generated safely.
-- Update `docs/product/requirements.md`, `docs/product/roadmap.md`, and
-  `MISSING_CHECKLIST.md` when an item changes status.
+- Update `docs/product/requirements.md`, `docs/product/roadmap.md`,
+  `MISSING_CHECKLIST.md`, and this checklist when an item changes status.
 
 Status legend:
 
@@ -244,8 +246,8 @@ Use these workstreams to turn the high-level gaps into reviewable slices.
 
 - [ ] Choose one source-of-truth status model for all product docs.
 - [ ] Add a status legend to `docs/product/requirements.md`.
-- [ ] Update `MISSING_CHECKLIST.md` so checked items match implemented,
-      documented, and verified behavior.
+- [x] Add this product gap checklist under `docs/product/` while preserving
+      `MISSING_CHECKLIST.md` as the detailed implementation-status checklist.
 - [ ] Update `docs/product/roadmap.md` so completed slices are not described as
       future work.
 - [ ] Update `docs/engineering/architecture.md` so current baseline and target
@@ -585,9 +587,13 @@ Done when:
 
 ## Documentation Cleanup Checklist
 
-- [ ] Reconcile `MISSING_CHECKLIST.md` with `docs/product/requirements.md`.
-- [ ] Reconcile `MISSING_CHECKLIST.md` with `docs/product/roadmap.md`.
-- [ ] Reconcile `MISSING_CHECKLIST.md` with `docs/engineering/architecture.md`.
+- [ ] Reconcile `MISSING_CHECKLIST.md` with `docs/product/gap-checklist.md`.
+- [ ] Reconcile `docs/product/gap-checklist.md` with
+      `docs/product/requirements.md`.
+- [ ] Reconcile `docs/product/gap-checklist.md` with
+      `docs/product/roadmap.md`.
+- [ ] Reconcile `docs/product/gap-checklist.md` with
+      `docs/engineering/architecture.md`.
 - [ ] Reconcile generated binary support descriptions across
       `docs/reference/cli.md`, `docs/reference/deployment.md`,
       `docs/getting-started.md`, and `README.md`.

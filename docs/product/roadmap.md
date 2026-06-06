@@ -80,7 +80,9 @@ These are the durable rules. Changing them should require an ADR.
 ## Current Baseline
 
 `MISSING_CHECKLIST.md` is the detailed source of truth for what is done and what
-is still missing. At a high level, the current baseline already includes:
+is still missing. `docs/product/gap-checklist.md` tracks broader product gaps
+and comparison-driven follow-up work. At a high level, the current baseline
+already includes:
 
 - project config loading, source discovery, build targets, module selection,
   manifests, route validation, sitemap output, formatting, diagnostics, CLI
@@ -140,7 +142,7 @@ are stable.
 | 17 | CSS, assets, and packaging | Full plugin loading, page-aware CSS processor selection, component AST/IR scope and hash metadata, Tailwind/CSS deployment docs, asset hashing, and binary cache policy are implemented. Module selection remains artifact packaging, not runtime module orchestration. |
 | 18 | Framework adapters | Core remains `net/http`. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
 | 19 | Dev, playground, and tooling | `gowdk dev` can run generated app/runtime-kit flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, browser playground, browser-compiled GOWDK, richer LSP completions, and editor navigation are added. |
-| 20 | Documentation sync | README, requirements, architecture, deployment, roadmap, examples, and `MISSING_CHECKLIST.md` stay synchronized with implemented behavior and commands. |
+| 20 | Documentation sync | README, requirements, architecture, deployment, roadmap, examples, `MISSING_CHECKLIST.md`, and `docs/product/gap-checklist.md` stay synchronized with implemented behavior and commands. |
 
 ## Candidate Release Order
 
@@ -212,6 +214,7 @@ contract work that later features depend on.
 ## Planning Sources
 
 - `MISSING_CHECKLIST.md`: detailed missing-work checklist.
+- `docs/product/gap-checklist.md`: broader product gap and comparison follow-up checklist.
 - `docs/product/requirements.md`: requirement status.
 - `docs/engineering/architecture.md`: architecture and implemented boundaries.
 - `.llm/plans/gowdk-world-roadmap.md`: active implementation planning index.

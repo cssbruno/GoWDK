@@ -358,6 +358,7 @@ type Template struct {
 	Package   string
 	Source    string
 	Route     string
+	Imports   []Import
 	Body      string
 	Span      manifest.SourceSpan
 	BodyStart manifest.SourcePosition
@@ -366,18 +367,22 @@ type Template struct {
 // ContractReference records a source-level reference to a backend contract.
 // Binding to Go contract metadata is a later analyzer step.
 type ContractReference struct {
-	Kind      ContractKind
-	Name      string
-	Method    string
-	Path      string
-	Status    ContractBindingStatus
-	Handler   string
-	Message   string
-	OwnerKind SourceKind
-	OwnerID   string
-	Package   string
-	Source    string
-	Span      manifest.SourceSpan
+	Kind        ContractKind
+	Name        string
+	ImportAlias string
+	ImportPath  string
+	Type        string
+	Result      string
+	Method      string
+	Path        string
+	Status      ContractBindingStatus
+	Handler     string
+	Message     string
+	OwnerKind   SourceKind
+	OwnerID     string
+	Package     string
+	Source      string
+	Span        manifest.SourceSpan
 }
 
 type ContractKind string

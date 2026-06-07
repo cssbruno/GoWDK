@@ -64,15 +64,19 @@ type BackendFallback struct {
 }
 
 type BackendContractExposure struct {
-	Endpoint  BackendEndpointRegistration
-	Contract  string
-	Status    gwdkir.ContractBindingStatus
-	Handler   string
-	Message   string
-	OwnerKind gwdkir.SourceKind
-	OwnerID   string
-	Package   string
-	Source    string
+	Endpoint    BackendEndpointRegistration
+	Contract    string
+	ImportAlias string
+	ImportPath  string
+	Type        string
+	Result      string
+	Status      gwdkir.ContractBindingStatus
+	Handler     string
+	Message     string
+	OwnerKind   gwdkir.SourceKind
+	OwnerID     string
+	Package     string
+	Source      string
 }
 
 func backendAdapterIR(options Options) BackendAdapterIR {
@@ -178,15 +182,19 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				Name:    ref.Name,
 			}
 			ir.ContractExposures = append(ir.ContractExposures, BackendContractExposure{
-				Endpoint:  endpoint,
-				Contract:  ref.Name,
-				Status:    ref.Status,
-				Handler:   ref.Handler,
-				Message:   ref.Message,
-				OwnerKind: ref.OwnerKind,
-				OwnerID:   ref.OwnerID,
-				Package:   ref.Package,
-				Source:    ref.Source,
+				Endpoint:    endpoint,
+				Contract:    ref.Name,
+				ImportAlias: ref.ImportAlias,
+				ImportPath:  ref.ImportPath,
+				Type:        ref.Type,
+				Result:      ref.Result,
+				Status:      ref.Status,
+				Handler:     ref.Handler,
+				Message:     ref.Message,
+				OwnerKind:   ref.OwnerKind,
+				OwnerID:     ref.OwnerID,
+				Package:     ref.Package,
+				Source:      ref.Source,
 			})
 		}
 	}

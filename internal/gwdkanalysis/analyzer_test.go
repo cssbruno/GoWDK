@@ -190,6 +190,8 @@ func TestAnalyzeAddsCommandReferencesToIR(t *testing.T) {
 @page patients
 @route "/patients"
 
+import patients "example.com/app/patients"
+
 view {
   <form method="post" action="/patients" g:command="patients.CreatePatient">
     <input name="name" />
@@ -211,9 +213,12 @@ view {
 	if ref.Method != "POST" || ref.Path != "/patients" {
 		t.Fatalf("unexpected command method/path: %#v", ref)
 	}
-	wantColumn := strings.Index(sourceLine(source, 6), "g:command") + 1
-	if ref.Span.Start.Line != 6 || ref.Span.Start.Column != wantColumn {
-		t.Fatalf("expected g:command span at 6:%d, got %#v", wantColumn, ref.Span)
+	if ref.ImportAlias != "patients" || ref.ImportPath != "example.com/app/patients" || ref.Type != "CreatePatient" {
+		t.Fatalf("unexpected command import/type metadata: %#v", ref)
+	}
+	wantColumn := strings.Index(sourceLine(source, 8), "g:command") + 1
+	if ref.Span.Start.Line != 8 || ref.Span.Start.Column != wantColumn {
+		t.Fatalf("expected g:command span at 8:%d, got %#v", wantColumn, ref.Span)
 	}
 }
 
@@ -221,6 +226,8 @@ func TestAnalyzeAddsQueryReferencesToIR(t *testing.T) {
 	source := `package pages
 @page patients
 @route "/patients"
+
+import patients "example.com/app/patients"
 
 view {
   <section g:query="patients.GetPatientPage">
@@ -243,9 +250,12 @@ view {
 	if ref.Method != "GET" || ref.Path != "/patients" {
 		t.Fatalf("unexpected query method/path: %#v", ref)
 	}
-	wantColumn := strings.Index(sourceLine(source, 6), "g:query") + 1
-	if ref.Span.Start.Line != 6 || ref.Span.Start.Column != wantColumn {
-		t.Fatalf("expected g:query span at 6:%d, got %#v", wantColumn, ref.Span)
+	if ref.ImportAlias != "patients" || ref.ImportPath != "example.com/app/patients" || ref.Type != "GetPatientPage" {
+		t.Fatalf("unexpected query import/type metadata: %#v", ref)
+	}
+	wantColumn := strings.Index(sourceLine(source, 8), "g:query") + 1
+	if ref.Span.Start.Line != 8 || ref.Span.Start.Column != wantColumn {
+		t.Fatalf("expected g:query span at 8:%d, got %#v", wantColumn, ref.Span)
 	}
 }
 

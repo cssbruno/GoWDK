@@ -183,10 +183,10 @@ func HandleCreatePatientAgain(ctx context.Context, command CreatePatient) (Creat
 func TestLinkReferencesMarksBoundMissingAndInvalidContractRefs(t *testing.T) {
 	report := Report{
 		Contracts: []Contract{
-			{Kind: runtimecontracts.Command, Package: "patients", Type: "CreatePatient", Handler: "HandleCreatePatient"},
-			{Kind: runtimecontracts.Command, Package: "billing", Type: "PayInvoice", Handler: "HandlePayInvoice"},
-			{Kind: runtimecontracts.Query, Package: "patients", Type: "GetPatientPage", Handler: "LoadPatientPage"},
-			{Kind: runtimecontracts.Query, Package: "billing", Type: "GetInvoicePage", Handler: "LoadInvoicePage"},
+			{Kind: runtimecontracts.Command, Package: "patients", Type: "CreatePatient", Result: "CreatePatientResult", Handler: "HandleCreatePatient"},
+			{Kind: runtimecontracts.Command, Package: "billing", Type: "PayInvoice", Result: "PayInvoiceResult", Handler: "HandlePayInvoice"},
+			{Kind: runtimecontracts.Query, Package: "patients", Type: "GetPatientPage", Result: "PatientPageData", Handler: "LoadPatientPage"},
+			{Kind: runtimecontracts.Query, Package: "billing", Type: "GetInvoicePage", Result: "InvoicePageData", Handler: "LoadInvoicePage"},
 		},
 		Diagnostics: []Diagnostic{
 			{Severity: "error", Kind: runtimecontracts.Command, Package: "billing", Type: "PayInvoice", Handler: "HandlePayInvoice", Message: "bad handler"},
@@ -208,6 +208,9 @@ func TestLinkReferencesMarksBoundMissingAndInvalidContractRefs(t *testing.T) {
 	if linked[0].Status != gwdkir.ContractBindingBound || linked[0].Handler != "HandleCreatePatient" {
 		t.Fatalf("expected bound command, got %#v", linked[0])
 	}
+	if linked[0].Type != "CreatePatient" || linked[0].Result != "CreatePatientResult" {
+		t.Fatalf("expected bound command type/result metadata, got %#v", linked[0])
+	}
 	if linked[1].Status != gwdkir.ContractBindingInvalid || linked[1].Handler != "HandlePayInvoice" || linked[1].Message != "bad handler" {
 		t.Fatalf("expected invalid command, got %#v", linked[1])
 	}
@@ -217,11 +220,37 @@ func TestLinkReferencesMarksBoundMissingAndInvalidContractRefs(t *testing.T) {
 	if linked[3].Status != gwdkir.ContractBindingBound || linked[3].Handler != "LoadPatientPage" {
 		t.Fatalf("expected bound query, got %#v", linked[3])
 	}
+	if linked[3].Type != "GetPatientPage" || linked[3].Result != "PatientPageData" {
+		t.Fatalf("expected bound query type/result metadata, got %#v", linked[3])
+	}
 	if linked[4].Status != gwdkir.ContractBindingInvalid || linked[4].Handler != "LoadInvoicePage" || linked[4].Message != "bad query handler" {
 		t.Fatalf("expected invalid query, got %#v", linked[4])
 	}
 	if linked[5].Status != gwdkir.ContractBindingMissing || !strings.Contains(linked[5].Message, "no scanned Go registration") {
 		t.Fatalf("expected missing query, got %#v", linked[5])
+	}
+}
+
+func TestLinkReferencesUsesCapturedTypeForImportAliases(t *testing.T) {
+	report := Report{
+		Contracts: []Contract{
+			{Kind: runtimecontracts.Command, Package: "patients", Type: "CreatePatient", Result: "CreatePatientResult", Handler: "HandleCreatePatient"},
+			{Kind: runtimecontracts.Query, Package: "patients", Type: "GetPatientPage", Result: "PatientPageData", Handler: "LoadPatientPage"},
+		},
+	}
+	linked := LinkReferences([]gwdkir.ContractReference{
+		{Kind: gwdkir.ContractCommand, Name: "p.CreatePatient", ImportAlias: "p", ImportPath: "example.com/app/contracts/patients", Type: "CreatePatient"},
+		{Kind: gwdkir.ContractQuery, Name: "p.GetPatientPage", ImportAlias: "p", ImportPath: "example.com/app/contracts/patients", Type: "GetPatientPage"},
+	}, report)
+
+	if len(linked) != 2 {
+		t.Fatalf("expected two linked refs, got %#v", linked)
+	}
+	if linked[0].Status != gwdkir.ContractBindingBound || linked[0].Handler != "HandleCreatePatient" || linked[0].Result != "CreatePatientResult" {
+		t.Fatalf("expected alias command to bind by captured type, got %#v", linked[0])
+	}
+	if linked[1].Status != gwdkir.ContractBindingBound || linked[1].Handler != "LoadPatientPage" || linked[1].Result != "PatientPageData" {
+		t.Fatalf("expected alias query to bind by captured type, got %#v", linked[1])
 	}
 }
 

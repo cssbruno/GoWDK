@@ -152,6 +152,9 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 		if event.Data["name"] != "patients.CreatePatient" || event.Data["status"] != "bound" || event.Data["handler"] != "HandleCreatePatient" {
 			t.Fatalf("unexpected contract reference event: %#v", event.Data)
 		}
+		if event.Data["type"] != "CreatePatient" || event.Data["result"] != "CreatePatientResult" {
+			t.Fatalf("unexpected command type/result metadata: %#v", event.Data)
+		}
 		if event.Data["method"] != "POST" || event.Data["path"] != "/patients" {
 			t.Fatalf("unexpected command method/path: %#v", event.Data)
 		}
@@ -228,6 +231,9 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 		}
 		if event.Data["kind"] != "query" || event.Data["name"] != "patients.GetPatientPage" || event.Data["status"] != "bound" || event.Data["handler"] != "LoadPatientPage" {
 			t.Fatalf("unexpected contract reference event: %#v", event.Data)
+		}
+		if event.Data["type"] != "GetPatientPage" || event.Data["result"] != "PatientPageData" {
+			t.Fatalf("unexpected query type/result metadata: %#v", event.Data)
 		}
 		wantColumn := strings.Index(testSourceLine(pageSource, 8), "g:query") + 1
 		if event.Data["line"] != "8" || event.Data["column"] != strconv.Itoa(wantColumn) {

@@ -214,14 +214,18 @@ func LinkReferences(refs []gwdkir.ContractReference, report Report) []gwdkir.Con
 			}
 			continue
 		}
-		contract, ok := kindContracts[ref.Name]
+		contract, ok := lookupContractReference(kindContracts, ref)
 		if !ok {
 			linked[index].Status = gwdkir.ContractBindingMissing
 			linked[index].Message = fmt.Sprintf("%s %s has no scanned Go registration", ref.Kind, ref.Name)
 			continue
 		}
 		linked[index].Handler = contract.Handler
-		if diagnostic, bad := invalid[ref.Kind][ref.Name]; bad {
+		if linked[index].Type == "" {
+			linked[index].Type = contract.Type
+		}
+		linked[index].Result = contract.Result
+		if diagnostic, bad := lookupContractDiagnostic(invalid[ref.Kind], ref); bad {
 			linked[index].Status = gwdkir.ContractBindingInvalid
 			linked[index].Message = diagnostic.Message
 			continue
@@ -229,6 +233,48 @@ func LinkReferences(refs []gwdkir.ContractReference, report Report) []gwdkir.Con
 		linked[index].Status = gwdkir.ContractBindingBound
 	}
 	return linked
+}
+
+func lookupContractReference(contracts map[string]Contract, ref gwdkir.ContractReference) (Contract, bool) {
+	for _, key := range contractReferenceLookupKeys(ref) {
+		if contract, ok := contracts[key]; ok {
+			return contract, true
+		}
+	}
+	return Contract{}, false
+}
+
+func lookupContractDiagnostic(diagnostics map[string]Diagnostic, ref gwdkir.ContractReference) (Diagnostic, bool) {
+	for _, key := range contractReferenceLookupKeys(ref) {
+		if diagnostic, ok := diagnostics[key]; ok {
+			return diagnostic, true
+		}
+	}
+	return Diagnostic{}, false
+}
+
+func contractReferenceLookupKeys(ref gwdkir.ContractReference) []string {
+	var keys []string
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		for _, key := range keys {
+			if key == value {
+				return
+			}
+		}
+		keys = append(keys, value)
+	}
+	add(ref.Name)
+	if ref.Type != "" {
+		add(ref.Type)
+		if ref.ImportAlias != "" {
+			add(ref.ImportAlias + "." + ref.Type)
+		}
+	}
+	return keys
 }
 
 func irContractKind(kind runtimecontracts.Kind) (gwdkir.ContractKind, bool) {

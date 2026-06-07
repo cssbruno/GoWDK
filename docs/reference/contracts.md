@@ -229,6 +229,9 @@ Current behavior:
 
 - Renders `data-gowdk-command="patients.CreatePatient"`.
 - Adds a command reference to `internal/gwdkir.Program.ContractRefs`.
+- Records the reference alias, imported package path when declared with a
+  `.gwdk import`, local command type, bound result type, binding status, and
+  handler name in IR/build-report metadata when known.
 - Records literal form `method` and `action` as command adapter IR method/path.
 - `gowdk build` links command references to scanned Go command registrations
   and adds `contract_reference` events with status and source line/column to
@@ -255,6 +258,9 @@ Current behavior:
 
 - Renders `data-gowdk-query="patients.GetPatientPage"`.
 - Adds a query reference to `internal/gwdkir.Program.ContractRefs`.
+- Records the reference alias, imported package path when declared with a
+  `.gwdk import`, local query type, bound result type, binding status, and
+  handler name in IR/build-report metadata when known.
 - `gowdk build` links query references to scanned Go query registrations and
   adds `contract_reference` events with status and source line/column to
   `gowdk-build-report.json`.
@@ -280,9 +286,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 ## Current Limits
 
 - Generated adapters do not execute command/query contracts yet.
-- `.gwdk` command/query reference linking is first-slice only: it matches
-  package name plus local contract type name, such as
-  `patients.CreatePatient` or `patients.GetPatientPage`.
+- `.gwdk` command/query reference linking is first-slice only: it matches the
+  full reference name, or the captured local contract type when the `.gwdk`
+  import alias differs from the Go package name.
 - Form-local `g:command` references and element-local `g:query` references
   include exact source line and column in IR and build reports.
 - Missing or invalid command/query references produce `contract_reference_*`
@@ -314,7 +320,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Queue/outbox adapters can implement the dependency-free `EventSource`
   interface and drive worker-role subscribers through `RunEventWorker`.
 - `internal/appgen` records first-slice command/query contract exposure
-  metadata in backend adapter IR for future generated adapters.
+  metadata in backend adapter IR for future generated adapters, including
+  reference name, alias, import path, local contract type, result type, binding
+  status, handler, owner, and source.
 - Command contract adapter IR includes literal form method/path.
 - Page-owned query contract adapter IR includes `GET` plus the page route.
 - Full package graph validation and imported handler validation are planned.

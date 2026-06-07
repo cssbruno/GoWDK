@@ -93,28 +93,36 @@ func TestBackendAdapterIRCapturesFallbackMetadata(t *testing.T) {
 func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{
 		{
-			Kind:      gwdkir.ContractQuery,
-			Name:      "patients.GetPatientPage",
-			Method:    "GET",
-			Path:      "/patients",
-			Status:    gwdkir.ContractBindingMissing,
-			Message:   "query missing",
-			OwnerKind: gwdkir.SourcePage,
-			OwnerID:   "patients",
-			Package:   "patients",
-			Source:    "patients.page.gwdk",
+			Kind:        gwdkir.ContractQuery,
+			Name:        "patients.GetPatientPage",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "GetPatientPage",
+			Result:      "PatientPageData",
+			Method:      "GET",
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingMissing,
+			Message:     "query missing",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+			Package:     "patients",
+			Source:      "patients.page.gwdk",
 		},
 		{
-			Kind:      gwdkir.ContractCommand,
-			Name:      "patients.CreatePatient",
-			Method:    "POST",
-			Path:      "/patients",
-			Status:    gwdkir.ContractBindingBound,
-			Handler:   "HandleCreatePatient",
-			OwnerKind: gwdkir.SourcePage,
-			OwnerID:   "patients",
-			Package:   "patients",
-			Source:    "patients.page.gwdk",
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Method:      "POST",
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+			Package:     "patients",
+			Source:      "patients.page.gwdk",
 		},
 	}}
 
@@ -132,6 +140,9 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 	if command.Contract != "patients.CreatePatient" || command.Status != gwdkir.ContractBindingBound || command.Handler != "HandleCreatePatient" {
 		t.Fatalf("unexpected command exposure: %#v", command)
 	}
+	if command.ImportAlias != "patients" || command.ImportPath != "example.com/app/contracts/patients" || command.Type != "CreatePatient" || command.Result != "CreatePatientResult" {
+		t.Fatalf("unexpected command contract metadata: %#v", command)
+	}
 	query := ir.ContractExposures[1]
 	if query.Endpoint.Kind != BackendEndpointQuery || query.Endpoint.Handler != "query" {
 		t.Fatalf("unexpected query exposure endpoint: %#v", query.Endpoint)
@@ -141,5 +152,8 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 	}
 	if query.Contract != "patients.GetPatientPage" || query.Status != gwdkir.ContractBindingMissing || query.Message != "query missing" {
 		t.Fatalf("unexpected query exposure: %#v", query)
+	}
+	if query.ImportAlias != "patients" || query.ImportPath != "example.com/app/contracts/patients" || query.Type != "GetPatientPage" || query.Result != "PatientPageData" {
+		t.Fatalf("unexpected query contract metadata: %#v", query)
 	}
 }

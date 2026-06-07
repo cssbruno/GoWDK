@@ -363,6 +363,7 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 				Package:   page.Package,
 				Source:    page.Source,
 				Route:     page.Route,
+				Imports:   lowerIRImports(page.Imports),
 				Body:      page.Blocks.ViewBody,
 				Span:      page.Blocks.Spans.View,
 				BodyStart: page.Blocks.Spans.ViewBodyStart,
@@ -485,6 +486,7 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 				OwnerID:   component.Name,
 				Package:   component.Package,
 				Source:    component.Source,
+				Imports:   lowerIRImports(component.Imports),
 				Body:      component.Blocks.ViewBody,
 				Span:      component.Blocks.Spans.View,
 				BodyStart: component.Blocks.Spans.ViewBodyStart,
@@ -593,18 +595,43 @@ func appendContractReferences(program *gwdkir.Program, template gwdkir.Template)
 			method = "GET"
 			path = template.Route
 		}
+		importAlias, contractType := splitContractReferenceName(ref.Name)
+		importPath := contractReferenceImportPath(template.Imports, importAlias)
 		program.ContractRefs = append(program.ContractRefs, gwdkir.ContractReference{
-			Kind:      irContractReferenceKind(ref.Kind),
-			Name:      ref.Name,
-			Method:    method,
-			Path:      path,
-			OwnerKind: template.OwnerKind,
-			OwnerID:   template.OwnerID,
-			Package:   template.Package,
-			Source:    template.Source,
-			Span:      templateOffsetSpan(template, ref.Start, ref.End),
+			Kind:        irContractReferenceKind(ref.Kind),
+			Name:        ref.Name,
+			ImportAlias: importAlias,
+			ImportPath:  importPath,
+			Type:        contractType,
+			Method:      method,
+			Path:        path,
+			OwnerKind:   template.OwnerKind,
+			OwnerID:     template.OwnerID,
+			Package:     template.Package,
+			Source:      template.Source,
+			Span:        templateOffsetSpan(template, ref.Start, ref.End),
 		})
 	}
+}
+
+func splitContractReferenceName(name string) (string, string) {
+	before, after, ok := strings.Cut(name, ".")
+	if !ok {
+		return "", name
+	}
+	return before, after
+}
+
+func contractReferenceImportPath(imports []gwdkir.Import, alias string) string {
+	if alias == "" {
+		return ""
+	}
+	for _, item := range imports {
+		if item.Alias == alias {
+			return item.Path
+		}
+	}
+	return ""
 }
 
 func irContractReferenceKind(kind view.ContractReferenceKind) gwdkir.ContractKind {

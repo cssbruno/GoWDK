@@ -2841,8 +2841,37 @@ func TestLiveReloadFileHandlerInjectsScript(t *testing.T) {
 	if !strings.Contains(body, `new EventSource("/__gowdk/reload")`) {
 		t.Fatalf("expected live reload script:\n%s", body)
 	}
+	for _, expected := range []string{
+		`__gowdk-error-overlay`,
+		`events.addEventListener("build-error"`,
+		`GOWDK build failed`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected browser overlay script to contain %q:\n%s", expected, body)
+		}
+	}
 	if strings.Index(body, "<script>") > strings.Index(body, "</body>") {
 		t.Fatalf("expected script before body close:\n%s", body)
+	}
+}
+
+func TestLiveReloadEventSerializesBuildErrors(t *testing.T) {
+	var output strings.Builder
+	writeLiveReloadEvent(&output, liveReloadEvent{
+		Name: "build-error",
+		Data: "pages/home.page.gwdk:12: invalid view\nbuild failed",
+	})
+
+	got := output.String()
+	for _, expected := range []string{
+		"event: build-error\n",
+		"data: pages/home.page.gwdk:12: invalid view\n",
+		"data: build failed\n",
+		"\n",
+	} {
+		if !strings.Contains(got, expected) {
+			t.Fatalf("expected serialized event to contain %q, got:\n%s", expected, got)
+		}
 	}
 }
 

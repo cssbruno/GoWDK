@@ -13,6 +13,7 @@ The command:
 - polls explicit or discovered `.gwdk`, CSS, and config inputs;
 - prints changed, added, and removed input paths when a rebuild starts;
 - injects a small server-sent-events live-reload script into served HTML;
+- shows a browser overlay for rebuild compiler/build failures;
 - keeps serving the last successful output when rebuilds fail.
 
 When `--app <dir>` or a selected target has `App`, `dev` also builds the
@@ -42,13 +43,19 @@ Component-level HMR is not part of the current contract. The P0 baseline is
 full-page live reload with last-good-output serving.
 
 Local island state preservation is also not a current contract. Add it only
-after GOWDK has a stable component/client dependency graph and browser overlay.
+after GOWDK has a stable component/client dependency graph.
 
 ## Browser Overlay
 
-Browser error overlay is planned and not implemented today. Compiler and build
-failures are printed to the terminal. The last successful output continues to
-serve while the error is fixed.
+For plain SPA/static dev serving, rebuild compiler/build failures are printed
+to the terminal and sent to the browser over the existing live-reload event
+stream. The injected script shows a fixed overlay with the failure text while
+the last successful output continues to serve. The overlay is removed on the
+next successful rebuild and page reload.
+
+Generated app runtime mode keeps runtime stdout/stderr attached to the terminal.
+Browser overlay delivery there is limited by the generated app process serving
+the HTTP traffic.
 
 ## File Watching
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -124,8 +125,28 @@ func liveReloadFileHandler(root string, reload *liveReloadBroker) http.Handler {
 func injectLiveReloadScript(html []byte) []byte {
 	const script = `<script>
 (() => {
+  const overlayID = "__gowdk-error-overlay";
+  const removeOverlay = () => {
+    const current = document.getElementById(overlayID);
+    if (current) current.remove();
+  };
+  const showOverlay = (message) => {
+    let overlay = document.getElementById(overlayID);
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = overlayID;
+      overlay.setAttribute("role", "alert");
+      overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(24,24,27,.96);color:#fff;font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:24px;overflow:auto;white-space:pre-wrap;";
+      document.body.appendChild(overlay);
+    }
+    overlay.textContent = "GOWDK build failed\n\n" + message;
+  };
   const events = new EventSource("/__gowdk/reload");
-  events.addEventListener("reload", () => window.location.reload());
+  events.addEventListener("reload", () => {
+    removeOverlay();
+    window.location.reload();
+  });
+  events.addEventListener("build-error", (event) => showOverlay(event.data || "Check the terminal for details."));
 })();
 </script>`
 	lower := strings.ToLower(string(html))
@@ -145,19 +166,28 @@ func injectLiveReloadScript(html []byte) []byte {
 
 type liveReloadBroker struct {
 	mu      sync.Mutex
-	clients map[chan string]bool
+	clients map[chan liveReloadEvent]bool
 }
 
 func newLiveReloadBroker() *liveReloadBroker {
-	return &liveReloadBroker{clients: map[chan string]bool{}}
+	return &liveReloadBroker{clients: map[chan liveReloadEvent]bool{}}
+}
+
+type liveReloadEvent struct {
+	Name string
+	Data string
 }
 
 func (broker *liveReloadBroker) notify(event string) {
+	broker.notifyData(event, fmt.Sprint(time.Now().UnixMilli()))
+}
+
+func (broker *liveReloadBroker) notifyData(event string, data string) {
 	broker.mu.Lock()
 	defer broker.mu.Unlock()
 	for client := range broker.clients {
 		select {
-		case client <- event:
+		case client <- liveReloadEvent{Name: event, Data: data}:
 		default:
 		}
 	}
@@ -174,7 +204,7 @@ func (broker *liveReloadBroker) serve(w http.ResponseWriter, request *http.Reque
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return
 	}
-	client := make(chan string, 4)
+	client := make(chan liveReloadEvent, 4)
 	broker.mu.Lock()
 	broker.clients[client] = true
 	broker.mu.Unlock()
@@ -198,11 +228,18 @@ func (broker *liveReloadBroker) serve(w http.ResponseWriter, request *http.Reque
 		case <-request.Context().Done():
 			return
 		case event := <-client:
-			_, _ = fmt.Fprintf(w, "event: %s\n", event)
-			_, _ = fmt.Fprintf(w, "data: %d\n\n", time.Now().UnixMilli())
+			writeLiveReloadEvent(w, event)
 			flusher.Flush()
 		}
 	}
+}
+
+func writeLiveReloadEvent(w io.Writer, event liveReloadEvent) {
+	_, _ = fmt.Fprintf(w, "event: %s\n", event.Name)
+	for _, line := range strings.Split(event.Data, "\n") {
+		_, _ = fmt.Fprintf(w, "data: %s\n", line)
+	}
+	_, _ = fmt.Fprintln(w)
 }
 
 func outputFilePath(root, requestPath string) (string, bool) {

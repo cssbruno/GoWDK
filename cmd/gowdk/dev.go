@@ -94,6 +94,7 @@ func dev(args []string) error {
 		current, err := buildInputSnapshot(options.BuildArgs)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
+			reload.notifyData("build-error", err.Error())
 			continue
 		}
 		if current.same(previous) {
@@ -108,15 +109,18 @@ func dev(args []string) error {
 		_, err = buildDevChange(options.BuildArgs, change, true)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
+			reload.notifyData("build-error", err.Error())
 			continue
 		}
 		if process != nil {
 			if _, err := appgen.BuildBinary(runtime.AppDir, runtime.BinaryPath); err != nil {
 				fmt.Fprintln(os.Stderr, err)
+				reload.notifyData("build-error", err.Error())
 				continue
 			}
 			if err := process.restart(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
+				reload.notifyData("build-error", err.Error())
 				continue
 			}
 		}

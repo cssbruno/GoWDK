@@ -185,14 +185,20 @@ Svelte/SvelteKit implementation.
 
 - [x] Every P0 item has a product decision: implement, defer, or intentional
       non-goal.
-- [ ] Every implemented P0 item has language docs, reference docs, examples,
+- [x] Every implemented P0 item has language docs, reference docs, examples,
       and tests.
-- [ ] Every deferred P0 item has a diagnostic or explicit documentation entry
+      Final audit: implemented P0 slices are represented in `docs/language/`,
+      `docs/reference/`, examples, and focused generated-output/runtime tests.
+- [x] Every deferred P0 item has a diagnostic or explicit documentation entry
       that tells users what is unsupported.
+      Final audit: deferred P0 behavior is called out in language/reference
+      docs or has compiler/runtime diagnostics and negative tests.
 - [x] The public README, requirements, roadmap, and missing checklist use the
       same status language.
-- [ ] `go test ./...` and `go build ./cmd/gowdk` pass after each implementation
+- [x] `go test ./...` and `go build ./cmd/gowdk` pass after each implementation
       slice.
+      Verified after the scoped CSS, load/action coverage, and dev-overlay
+      implementation slices.
 
 ## P1 Gaps
 
@@ -306,11 +312,17 @@ These are important product gaps once the P0 contracts are clear.
 
 - [x] Routing, form, API, cache, guard, CSS, LSP, testing, scaffold, and
       deployment decisions are each represented in requirements and roadmap.
-- [ ] User-facing gaps have examples or clear unsupported diagnostics.
-- [ ] New generated contracts are stable enough for application code to import
+- [x] User-facing gaps have examples or clear unsupported diagnostics.
+      Final audit: examples cover current core flows; unsupported or deferred
+      language/runtime behavior is documented or rejected with diagnostics.
+- [x] New generated contracts are stable enough for application code to import
       only public `runtime/` or addon packages, never generated output.
-- [ ] Docs include migration guidance for apps built against the previous
+      Final audit: app-facing contracts are documented through public
+      `runtime/` and addon packages; generated app code remains output only.
+- [x] Docs include migration guidance for apps built against the previous
       first-slice behavior.
+      See `docs/reference/migration.md`, old action/API syntax diagnostics,
+      and missing-backend migration mode documentation.
 
 ## P2 Gaps
 
@@ -802,7 +814,11 @@ Done when:
 
 ### 12. Dev Experience
 
-- [ ] Add browser error overlay for compiler/build failures.
+- [x] Add browser error overlay for compiler/build failures.
+      `gowdk dev` emits build-error events over the live-reload SSE channel
+      after rebuild failures. The injected browser script shows the failure text
+      in a fixed overlay, keeps serving the last successful output, and clears
+      the overlay on the next successful reload.
 - [x] Add precise changed-file diagnostics in dev output.
       Decision: `gowdk dev` now prints changed, added, and removed input paths
       before each rebuild.

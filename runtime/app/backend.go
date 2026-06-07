@@ -37,6 +37,7 @@ type backendRouteKey struct {
 }
 
 type backendRouteEntry struct {
+	kind    string
 	handler BackendHandler
 }
 
@@ -74,7 +75,7 @@ func (router *BackendRouter) handle(kind string, method string, routePath string
 	if _, exists := router.routes[key]; exists {
 		return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
 	}
-	router.routes[key] = backendRouteEntry{handler: BackendBoundary(kind, handler)}
+	router.routes[key] = backendRouteEntry{kind: strings.ToLower(strings.TrimSpace(kind)), handler: BackendBoundary(kind, handler)}
 	return nil
 }
 
@@ -100,7 +101,36 @@ func (router *BackendRouter) Dispatch(writer http.ResponseWriter, request *http.
 	if route.handler == nil {
 		return false
 	}
+	if route.kind == "query" && !isContractQueryRequest(request) {
+		return false
+	}
 	return route.handler(writer, request)
+}
+
+func isContractQueryRequest(request *http.Request) bool {
+	if request == nil {
+		return false
+	}
+	queryHeader := strings.TrimSpace(request.Header.Get("X-GOWDK-Query"))
+	if strings.EqualFold(queryHeader, "1") || strings.EqualFold(queryHeader, "true") {
+		return true
+	}
+	for _, accept := range request.Header.Values("Accept") {
+		if acceptsJSON(accept) {
+			return true
+		}
+	}
+	return false
+}
+
+func acceptsJSON(header string) bool {
+	for _, part := range strings.Split(header, ",") {
+		mediaType := strings.ToLower(strings.TrimSpace(strings.Split(part, ";")[0]))
+		if mediaType == "application/json" || strings.HasSuffix(mediaType, "+json") {
+			return true
+		}
+	}
+	return false
 }
 
 // HandlerFunc returns the router as a generated runtime hook.

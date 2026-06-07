@@ -375,6 +375,10 @@ Current behavior:
   local `runtime/contracts.Registry`, route page-owned query references through
   the backend router, execute the query with `ExecuteQueryForRole(...,
   contracts.RoleWeb, input)`, and return the query result as no-store JSON.
+- Page-owned query routes share the page path, so generated apps dispatch them
+  only for explicit query requests: `Accept: application/json`, another
+  `+json` media type, or `X-GOWDK-Query: true`. Normal document requests keep
+  serving the page HTML at the same route.
 - When the scanner can see the exported query input struct fields, generated
   adapters decode supported URL query parameters into the typed query input.
 - Query references on guarded pages inherit the page guards. When rate limiting
@@ -473,6 +477,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   backend endpoint metadata with contract binding details.
 - Command contract adapter IR includes literal form method/path.
 - Page-owned query contract adapter IR includes `GET` plus the page route.
+- Page-owned generated query routes use JSON/query request negotiation so they
+  do not replace normal static, SPA, or SSR page responses.
 - Cross-package contract input field discovery remains planned.
 - Database-backed outbox implementations, concrete broker adapters, retry
   backoff policy, split web/worker/cron binaries, and concrete SSE/WebSocket

@@ -2895,6 +2895,107 @@ func TestGeneratedBinaryContractFallbacksAreExplicitNoStore(t *testing.T) {
 	}
 }
 
+func TestGeneratedBinaryServesPageAndExecutesContractQuery(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients page</main>")
+
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
+		Kind:        gwdkir.ContractQuery,
+		Name:        "patients.GetPatientPage",
+		ImportAlias: "patients",
+		ImportPath:  "gowdk-generated-app/patients",
+		Type:        "GetPatientPage",
+		Result:      "PatientPageData",
+		InputFields: []manifest.BackendInputField{{FieldName: "Filter", FormName: "filter", Type: "string"}},
+		Method:      http.MethodGet,
+		Path:        "/patients",
+		Status:      gwdkir.ContractBindingBound,
+		Handler:     "LoadPatientPage",
+		Register:    "Register",
+		OwnerKind:   gwdkir.SourcePage,
+		OwnerID:     "patients",
+	}}}
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{IR: program}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type GetPatientPage struct {
+	Filter string
+}
+
+type PatientPageData struct {
+	Filter string `+"`json:\"filter\"`"+`
+	Source string `+"`json:\"source\"`"+`
+}
+
+func Register(registry *contracts.Registry) {
+	contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage)
+}
+
+func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData, error) {
+	return PatientPageData{Filter: query.Filter, Source: "contract-query"}, nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, headers, err := waitForHTTPResponse("http://" + addr + "/patients")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, "<main>Patients page</main>") {
+		t.Fatalf("expected normal page response, got %s", body)
+	}
+	if headers.Get("Content-Type") != "text/html; charset=utf-8" {
+		t.Fatalf("expected HTML page content type, got %q", headers.Get("Content-Type"))
+	}
+
+	response, err := waitForHTTPStatusWithHeaders("http://"+addr+"/patients?filter=active", http.MethodGet, "", map[string]string{
+		"Accept": "application/json",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected query response status 200, got %d: %s", response.StatusCode, payload)
+	}
+	for _, expected := range []string{`"filter":"active"`, `"source":"contract-query"`} {
+		if !strings.Contains(string(payload), expected) {
+			t.Fatalf("expected query response to contain %q, got %s", expected, payload)
+		}
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on query response, got %q", cacheControl)
+	}
+}
+
 func TestGeneratedBinaryRegisteredGuardsAllowRequestTimeRoutes(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

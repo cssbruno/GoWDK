@@ -407,7 +407,9 @@ wherever the contract is HTTP-exposed.
       metadata.
 - [x] Generate Go adapter code with Go AST/printer/format only.
 - [x] Wire command form submission to generated request decoding.
-- [ ] Wire query execution for request-time page/fragment/API needs.
+- [x] Wire page-route query execution for request-time JSON/query requests
+      without hijacking normal page HTML.
+- [ ] Wire query execution for fragment/API-specific needs.
 - [x] Keep CSRF validation before command decoding for form POSTs.
 - [x] Keep guards/rate limits before user command/query handlers when exposed
       through HTTP.

@@ -547,6 +547,49 @@ func TestBackendRouterRejectsDuplicateRoutes(t *testing.T) {
 	}
 }
 
+func TestBackendRouterOnlyDispatchesQueryRoutesForJSONRequests(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Method: http.MethodGet,
+		Path:   "/patients",
+		Kind:   "query",
+		Handler: func(writer http.ResponseWriter, request *http.Request) bool {
+			writer.WriteHeader(http.StatusAccepted)
+			return true
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests := []*http.Request{
+		httptest.NewRequest(http.MethodGet, "/patients", nil),
+		httptest.NewRequest(http.MethodGet, "/patients", nil),
+	}
+	requests[1].Header.Set("Accept", "text/html")
+	for _, request := range requests {
+		recorder := httptest.NewRecorder()
+		if router.Dispatch(recorder, request) {
+			t.Fatalf("expected document request not to dispatch query route, got status %d", recorder.Code)
+		}
+	}
+
+	jsonRequest := httptest.NewRequest(http.MethodGet, "/patients", nil)
+	jsonRequest.Header.Set("Accept", "application/json")
+	jsonRecorder := httptest.NewRecorder()
+	if !router.Dispatch(jsonRecorder, jsonRequest) {
+		t.Fatal("expected JSON request to dispatch query route")
+	}
+	if jsonRecorder.Code != http.StatusAccepted {
+		t.Fatalf("unexpected JSON query status: %d", jsonRecorder.Code)
+	}
+
+	headerRequest := httptest.NewRequest(http.MethodGet, "/patients", nil)
+	headerRequest.Header.Set("X-GOWDK-Query", "true")
+	headerRecorder := httptest.NewRecorder()
+	if !router.Dispatch(headerRecorder, headerRequest) {
+		t.Fatal("expected X-GOWDK-Query request to dispatch query route")
+	}
+}
+
 func TestBackendRouterRecoversActionPanic(t *testing.T) {
 	router, err := NewBackendRouter(BackendRoute{
 		Method: http.MethodPost,

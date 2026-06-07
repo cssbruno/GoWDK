@@ -437,6 +437,8 @@ var Config = gowdk.Config{
 		tw.Addon(tw.Options{
 			Input: "styles/app.css",
 			Command: "gowdk-tailwind-missing-executable",
+			Version: "v4.2.4",
+			DownloadDir: ".gowdk/bin",
 			OutputPath: "assets/site.css",
 			Href: "/assets/site.css",
 			Minify: true,

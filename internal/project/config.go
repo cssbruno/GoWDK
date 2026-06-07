@@ -639,6 +639,10 @@ func parseTailwindOptions(expression ast.Expr, imports map[string]string) tailwi
 			options.Href = parseString(keyValue.Value)
 		case "Command":
 			options.Command = parseString(keyValue.Value)
+		case "Version":
+			options.Version = parseString(keyValue.Value)
+		case "DownloadDir":
+			options.DownloadDir = parseString(keyValue.Value)
 		case "Minify":
 			options.Minify = parseBool(keyValue.Value)
 		}

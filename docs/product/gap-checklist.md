@@ -497,7 +497,10 @@ Done when:
       Covered by `TestJSIslandsSharePageStoreInBrowser`, which builds two
       store-backed JS islands, clicks each island in a browser, and verifies
       both island DOM roots and the shared page store update together.
-- [ ] Add tests for effect ordering, cleanup, batching, and cycles.
+- [x] Add tests for effect ordering, cleanup, batching, and cycles.
+      Covered by browser-level JS island tests for batched multi-statement
+      updates and effect cleanup-before-next-effect behavior, plus build/client
+      parser tests for computed dependency cycles.
 
 Done when:
 

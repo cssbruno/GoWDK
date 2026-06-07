@@ -248,6 +248,102 @@ func TestJSIslandsSharePageStoreInBrowser(t *testing.T) {
 	}
 }
 
+func TestJSIslandEffectsCleanupAndBatchingInBrowser(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	chromium, err := lookupChromium()
+	if err != nil {
+		t.Skip(err)
+	}
+	requireNodePlaywright(t, node)
+
+	outputDir := t.TempDir()
+	component := counterComponent()
+	component.Blocks.Client = true
+	component.Blocks.ClientBody = `effect when Open {
+  Count = Count + 1
+  return {
+    Count = if Open { 10 } else { 20 }
+  }
+}
+
+fn Burst() {
+  Count++
+  Count++
+}
+
+fn Flip() {
+  Open = !Open
+}`
+	component.Blocks.ViewBody = `<section><button id="burst" g:on:click={Burst()}><span id="count">{Count}</span></button><button id="flip" g:on:click={Flip()}><span id="open">{Open}</span></button></section>`
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.FileServer(http.Dir(outputDir)))
+	defer server.Close()
+
+	script := filepath.Join(t.TempDir(), "gowdk-js-effects-browser-test.cjs")
+	if err := os.WriteFile(script, []byte(jsIslandEffectsBrowserHarness()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, script, server.URL, chromium)
+	command.Dir = mustWorkingDir(t)
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("browser JS effects test timed out:\n%s", output)
+	}
+	if err != nil {
+		t.Fatalf("browser JS effects test failed: %v\n%s", err, output)
+	}
+}
+
+func TestBuildRejectsComputedDependencyCycle(t *testing.T) {
+	outputDir := t.TempDir()
+	component := counterComponent()
+	component.Blocks.Client = true
+	component.Blocks.ClientBody = `computed A string {
+  return B
+}
+
+computed B string {
+  return A
+}`
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected computed dependency cycle error")
+	}
+	if !strings.Contains(err.Error(), "computed dependency cycle") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestIslandJSSourceMapMappingsUseComponentSpans(t *testing.T) {
 	component := counterComponent()
 	component.Span = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 2, Column: 1}, End: manifest.SourcePosition{Line: 2, Column: 19}}
@@ -2106,6 +2202,66 @@ async function waitForButtonTexts(page, expected) {
   await page.evaluate(() => document.querySelectorAll("gowdk-island button")[1].click());
   await waitForButtonTexts(page, ["3", "3"]);
   assert.equal(await page.evaluate(() => window.__gowdkStores.get("cart").Count), 3);
+  assert.deepEqual(consoleErrors, []);
+  await browser.close();
+})().catch(async (error) => {
+  console.error(error && error.stack || error);
+  process.exit(1);
+});
+`
+}
+
+func jsIslandEffectsBrowserHarness() string {
+	return `
+"use strict";
+
+const assert = require("node:assert/strict");
+const nodeModule = require("node:module");
+
+const baseURL = process.argv[2];
+const executablePath = process.argv[3];
+const { chromium } = nodeModule.createRequire(process.cwd() + "/gowdk-test.js")("playwright");
+
+async function waitForText(page, selector, expected) {
+  await page.waitForFunction(({ selector, expected }) => {
+    return document.querySelector(selector)?.textContent === expected;
+  }, { selector, expected });
+}
+
+(async () => {
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+    args: ["--no-sandbox"]
+  });
+  const page = await browser.newPage();
+  const consoleErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("GOWDK")) consoleErrors.push(message.text());
+  });
+
+  await page.goto(baseURL + "/counter/", { waitUntil: "networkidle" });
+  await waitForText(page, "#count", "1");
+  await waitForText(page, "#open", "false");
+  await page.evaluate(() => {
+    window.__gowdkCountTextChanges = [];
+    const target = document.querySelector("#count");
+    new MutationObserver(() => {
+      window.__gowdkCountTextChanges.push(target.textContent);
+    }).observe(target, { childList: true, subtree: true, characterData: true });
+  });
+
+  await page.click("#burst");
+  await waitForText(page, "#count", "3");
+  assert.deepEqual(await page.evaluate(() => window.__gowdkCountTextChanges), ["3"]);
+
+  await page.click("#flip");
+  await waitForText(page, "#open", "true");
+  await waitForText(page, "#count", "4");
+
+  await page.click("#flip");
+  await waitForText(page, "#open", "false");
+  await waitForText(page, "#count", "21");
   assert.deepEqual(consoleErrors, []);
   await browser.close();
 })().catch(async (error) => {

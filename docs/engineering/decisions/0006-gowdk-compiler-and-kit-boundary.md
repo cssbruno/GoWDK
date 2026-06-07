@@ -1,4 +1,4 @@
-# ADR 0006: GOWDK Compiler And Kit Boundary
+# ADR 0006: GOWDK And GOWDK Kit Boundary
 
 Date: 2026-06-05
 
@@ -7,13 +7,15 @@ Status: Accepted
 ## Context
 
 GOWDK needs to grow from an early `.gwdk` page/component compiler into a full
-Go-first web app system. The intended shape is similar to the way Svelte and
-SvelteKit relate, but adapted for Go:
+Go-first web app system. The product naming should make the split as clear as
+Svelte and SvelteKit, but adapted for Go:
 
 ```text
-GOWDK component/page compiler
+GOWDK
+component/page compiler
         +
-GOWDK app/runtime kit
+GOWDK Kit
+app/runtime layer
         =
 Go-first full web app
 ```
@@ -25,19 +27,22 @@ would weaken the product and make future implementation plans conflict.
 
 ## Decision
 
-GOWDK is split into two product layers:
+GOWDK is split into two named product layers:
 
 ```text
-GOWDK Compiler:
+GOWDK:
   Parses and validates .gwdk package-peer files.
   Compiles pages, layouts, components, build data, CSS, islands, manifests,
   static output, and generated adapter source.
 
-GOWDK App/Runtime Kit:
+GOWDK Kit:
   Provides routing, form decoding, response envelopes, action/API adapters,
   partial fragments, CSRF, SSR addon contracts, embedded assets, and one-binary
   app serving.
 ```
+
+The repository and Go module can continue to ship both layers together for now.
+This ADR is a product-language boundary, not an import-path rename.
 
 The compiler has two input lanes:
 

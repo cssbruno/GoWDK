@@ -20,9 +20,11 @@ Use `plans/gowdk-world-roadmap.md` before starting broad feature work. It
 aligns the current plans around the product split:
 
 ```text
-GOWDK component/page compiler
+GOWDK
+component/page compiler
         +
-GOWDK app/runtime kit
+GOWDK Kit
+app/runtime layer
         =
 Go-first full web app
 ```

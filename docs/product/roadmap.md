@@ -5,17 +5,20 @@
 GOWDK is a Go-first full web app platform built from two coordinated parts:
 
 ```text
-GOWDK component/page compiler
+GOWDK
+component/page compiler
         +
-GOWDK app/runtime kit
+GOWDK Kit
+app/runtime layer
         =
 Go-first full web app
 ```
 
-The compiler turns package-peer `.gwdk` files and normal Go packages into page
-output, CSS, client assets, manifests, endpoint metadata, generated adapter Go,
-and deployable artifacts. The app/runtime kit serves those artifacts and runs
-request-time behavior.
+GOWDK is the `.gwdk` language and component/page compiler. It turns
+package-peer `.gwdk` files and normal Go packages into page output, CSS, client
+assets, manifests, endpoint metadata, generated adapter Go, and deployable
+artifacts. GOWDK Kit is the app/runtime layer that serves those artifacts and
+runs request-time behavior.
 
 GOWDK has three execution lanes:
 
@@ -23,7 +26,7 @@ GOWDK has three execution lanes:
 - Backend endpoint lane: actions, APIs, and fragments run at request time
   without making the page itself request-rendered.
 - Request-time page lane: `@render ssr` pages are compiled into generated SSR
-  handlers and run through the same app/runtime kit. This lane is integrated
+  handlers and run through GOWDK Kit. This lane is integrated
   into the codebase; it is not a separate product layer. It is selected per
   page and currently enabled through the SSR feature gate in config or `--ssr`.
 
@@ -36,7 +39,7 @@ typed inputs, service calls, and business rules stay in normal Go.
 layouts, component usage, build-time data, dynamic paths, endpoint declarations,
 stores, client blocks, and view markup.
 
-The compiler owns parsing, formatting, diagnostics, manifests, route metadata,
+GOWDK owns parsing, formatting, diagnostics, manifests, route metadata,
 endpoint metadata, component/page compilation, CSS and asset planning, build
 reports, and generated adapter source.
 
@@ -45,7 +48,7 @@ calling exported Go handlers, writing `runtime/response.Response`, and returning
 clear `501` responses for missing or unsupported bindings where that mode is
 allowed.
 
-The app/runtime kit owns `http.Handler` serving, embedded assets, backend
+GOWDK Kit owns `http.Handler` serving, embedded assets, backend
 routing, request context helpers, form decoding primitives, response envelopes,
 CSRF, partial fragments, SSR contracts, and one-binary or split-binary wiring.
 

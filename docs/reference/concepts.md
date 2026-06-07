@@ -1,7 +1,8 @@
 # Concepts For Web Framework Users
 
-GOWDK is a Go-first compiler and runtime kit. It is not a browser-owned app
-framework.
+GOWDK is the Go-first `.gwdk` compiler. GOWDK Kit is its app/runtime layer. The
+pair forms a Go web app framework without making the browser the owner of app
+behavior.
 
 ## Mental Model
 
@@ -10,7 +11,8 @@ framework.
 .go files   -> go/parser -> go/ast -> go/types -> handler/type validation
 ```
 
-The compiler owns generated structure. Application Go owns behavior.
+GOWDK owns generated structure. GOWDK Kit owns runtime contracts. Application
+Go owns behavior.
 
 ## Pages
 

@@ -2,11 +2,11 @@
 
 ## Current Status
 
-The product direction is Go-first full web app compilation: a component/page
-compiler plus an app/runtime kit. Build-time page output is the default,
-actions/APIs/fragments are core request-time endpoint behavior, and `@render
-ssr` is an integrated non-default request-time page-rendering lane selected per
-page.
+The product direction is Go-first full web app compilation: GOWDK is the
+`.gwdk` component/page compiler, and GOWDK Kit is the app/runtime layer.
+Build-time page output is the default, actions/APIs/fragments are core
+request-time endpoint behavior, and `@render ssr` is an integrated non-default
+request-time page-rendering lane selected per page.
 
 Current user-facing documentation now separates implemented behavior from
 planned behavior across the README, CLI/config/routing/deployment references,

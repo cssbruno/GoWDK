@@ -1,4 +1,4 @@
-# Implementation Plan: GOWDK Compiler Plus App Runtime Kit
+# Implementation Plan: GOWDK Plus GOWDK Kit
 
 ## Context
 
@@ -18,9 +18,11 @@ Primary active planning sources:
 This roadmap reorganizes existing `.llm` plans around the product split:
 
 ```text
-GOWDK component/page compiler
+GOWDK
+component/page compiler
         +
-GOWDK app/runtime kit
+GOWDK Kit
+app/runtime layer
         =
 Go-first full web app
 ```
@@ -47,7 +49,7 @@ Compiler lanes:
 
 ## Product Layers
 
-### GOWDK Compiler
+### GOWDK
 
 Owns:
 
@@ -66,7 +68,7 @@ Does not own:
 - Auth/storage/business validation logic.
 - Long-lived runtime state outside generated app/runtime contracts.
 
-### GOWDK App/Runtime Kit
+### GOWDK Kit
 
 Owns:
 

@@ -11,13 +11,15 @@
 ![Build](https://img.shields.io/badge/build-succeeds-2ea44f)
 ![Quality](https://img.shields.io/badge/quality-gated-2ea44f)
 
-A compiler and runtime kit for full-stack Go web applications.
+GOWDK plus GOWDK Kit: a compiler and app/runtime kit for full-stack Go web
+applications.
 
-GOWDK processes `.gwdk` files: pages, components, layouts, actions, APIs,
-fragments, and assets. It generates Go adapter code for route dispatch, form
-decoding, response writing, CSRF, embedded assets, partial updates, and SSR
-hooks. Your domain logic, storage, auth, validation, and services stay in
-normal Go packages.
+GOWDK is the `.gwdk` language and component/page compiler. GOWDK Kit is the
+app/runtime layer for routing, actions, APIs, fragments, SSR hooks, embedded
+assets, and one-binary serving. The `gowdk` CLI drives both layers and
+generates Go adapter code for route dispatch, form decoding, response writing,
+CSRF, embedded assets, partial updates, and SSR hooks. Your domain logic,
+storage, auth, validation, and services stay in normal Go packages.
 
 **Status: pre-release.** The compiler handles core page and component
 compilation, embedded app builds, generated JavaScript islands, explicit WASM
@@ -30,9 +32,10 @@ Demo source: [cssbruno/gowdk-page](https://github.com/cssbruno/gowdk-page)
 
 ## How It Works
 
-Write `.gwdk` files for your web-facing contracts. The compiler emits
-`net/http`-compatible Go. There is no reflection and no hidden request-time
-magic in the generated adapters.
+Write `.gwdk` files for your web-facing contracts. GOWDK compiles those files
+into `net/http`-compatible Go. GOWDK Kit serves the generated app/runtime
+contracts. There is no reflection and no hidden request-time magic in the
+generated adapters.
 
 Full pages default to build-time output. Actions, APIs, and fragments run as
 backend endpoints without forcing full-page SSR. Pages that need request data,
@@ -57,7 +60,7 @@ actions and APIs, plus admin/form scaffolding from explicit SQL contracts.
 
 ## Application Scaffolding
 
-GOWDK core is the compiler and runtime kit, not an app template. Login, admin,
+GOWDK core is the compiler plus GOWDK Kit, not an app template. Login, admin,
 billing, CRUD, uploads, email, and background jobs are application code.
 
 Examples or optional generators may cover those patterns later, but the output

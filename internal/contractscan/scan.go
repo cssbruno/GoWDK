@@ -43,6 +43,7 @@ type Contract struct {
 // Diagnostic describes a validation issue found while scanning contracts.
 type Diagnostic struct {
 	Severity string                `json:"severity"`
+	Code     string                `json:"code,omitempty"`
 	Kind     runtimecontracts.Kind `json:"kind,omitempty"`
 	Package  string                `json:"package,omitempty"`
 	Type     string                `json:"type,omitempty"`
@@ -366,11 +367,11 @@ func validateContracts(contracts []Contract, functions map[string]functionInfo) 
 		}
 		function := functions[contract.Handler]
 		if function.Signature == nil {
-			diagnostics = append(diagnostics, contractDiagnostic(contract, fmt.Sprintf("handler %s was not found in the scanned file", contract.Handler)))
+			diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_handler_missing", fmt.Sprintf("handler %s was not found in the scanned file", contract.Handler)))
 			continue
 		}
 		if message := validateHandlerSignature(contract, function); message != "" {
-			diagnostics = append(diagnostics, contractDiagnostic(contract, message))
+			diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_handler_invalid", message))
 		}
 	}
 	return diagnostics
@@ -399,7 +400,7 @@ func duplicateCommandDiagnostics(contracts []Contract) []Diagnostic {
 		}
 		sort.Strings(handlers)
 		for _, match := range matches[1:] {
-			diagnostics = append(diagnostics, contractDiagnostic(match, fmt.Sprintf("command %s has multiple owner registrations: %s", commandIdentity(match), strings.Join(handlers, ", "))))
+			diagnostics = append(diagnostics, contractDiagnostic(match, "duplicate_command_owner", fmt.Sprintf("command %s has multiple owner registrations: %s", commandIdentity(match), strings.Join(handlers, ", "))))
 		}
 	}
 	return diagnostics
@@ -488,9 +489,10 @@ func scanTypeString(typ types.Type, local *types.Package) string {
 	})
 }
 
-func contractDiagnostic(contract Contract, message string) Diagnostic {
+func contractDiagnostic(contract Contract, code string, message string) Diagnostic {
 	return Diagnostic{
 		Severity: "error",
+		Code:     code,
 		Kind:     contract.Kind,
 		Package:  contract.Package,
 		Type:     contract.Type,

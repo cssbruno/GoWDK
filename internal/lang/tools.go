@@ -279,18 +279,33 @@ func CheckFiles(config gowdk.Config, paths []string) (manifest.Manifest, Diagnos
 
 func validateContractReferences(config gowdk.Config, app manifest.Manifest) Diagnostics {
 	ir := gwdkanalysis.BuildIR(config, app)
-	if len(ir.ContractRefs) == 0 {
-		return nil
-	}
 	report, err := contractscan.Scan(".")
 	if err != nil {
 		return Diagnostics{{Severity: "error", Message: fmt.Sprintf("scan Go contracts: %v", err)}}
 	}
+	diagnostics := contractScanDiagnostics(report.Diagnostics)
+	if len(ir.ContractRefs) == 0 {
+		return diagnostics
+	}
 	ir.ContractRefs = contractscan.LinkReferences(ir.ContractRefs, report)
 	if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
-		return compilerDiagnostics(err, app)
+		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 	}
-	return nil
+	return diagnostics
+}
+
+func contractScanDiagnostics(scanDiagnostics []contractscan.Diagnostic) Diagnostics {
+	diagnostics := make(Diagnostics, 0, len(scanDiagnostics))
+	for _, item := range scanDiagnostics {
+		diagnostics = append(diagnostics, Diagnostic{
+			File:     item.Source,
+			Code:     item.Code,
+			Pos:      Position{Line: item.Line, Column: item.Column},
+			Severity: item.Severity,
+			Message:  item.Message,
+		})
+	}
+	return diagnostics
 }
 
 // CheckSource parses and validates one in-memory .gwdk source buffer.

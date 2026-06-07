@@ -145,6 +145,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Contract scan reports include first same-file `go/types` diagnostics for
   command, query, event, and job handler signatures.
 - Contract scan reports duplicate command owner registrations.
+- `gowdk check` and CLI `gowdk build` fail on contract scan diagnostics such
+  as invalid handler signatures and duplicate command owners.
 - `gowdk graph` detects command-emitted events when command handlers call
   `contracts.EmitDomain`, `contracts.EmitIntegration`, or
   `contracts.EmitPresentation` with a visible event type.

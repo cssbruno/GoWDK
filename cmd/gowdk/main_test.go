@@ -271,6 +271,55 @@ view {
 	}
 }
 
+func TestCheckJSONReportsInvalidGoContractRegistration(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	page := filepath.Join(root, "pages", "patients.page.gwdk")
+	writeCLIFile(t, page, `package pages
+
+@page patients
+@route "/patients"
+
+view {
+  <main>Patients</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "contracts", "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient)
+}
+
+func HandleCreatePatient(ctx context.Context, command string) (CreatePatientResult, error) {
+	return CreatePatientResult{}, nil
+}
+`)
+
+	var output string
+	var err error
+	withWorkingDir(t, root, func() {
+		output, err = captureCLIStdout(t, func() error {
+			return run([]string{"check", "--config", config, "--json", page})
+		})
+	})
+	if err == nil {
+		t.Fatal("expected invalid Go contract registration to fail check")
+	}
+	if !strings.Contains(output, `"code": "contract_handler_invalid"`) ||
+		!strings.Contains(output, "second parameter must be CreatePatient") ||
+		!strings.Contains(output, "contracts/patients.go") {
+		t.Fatalf("expected invalid contract handler diagnostic, got:\n%s", output)
+	}
+}
+
 func TestBuildFailsForMissingContractReference(t *testing.T) {
 	root := t.TempDir()
 	config := writeMinimalCLIConfig(t, root)
@@ -295,6 +344,56 @@ view {
 	})
 	if err == nil {
 		t.Fatal("expected missing query contract reference to fail build")
+	}
+	if _, statErr := os.Stat(filepath.Join(outputDir, "gowdk-build-report.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected build to stop before writing output, stat err=%v", statErr)
+	}
+}
+
+func TestBuildFailsForDuplicateCommandOwner(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	page := filepath.Join(root, "pages", "patients.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, page, `package pages
+
+@page patients
+@route "/patients"
+
+view {
+  <main>Patients</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "contracts", "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient)
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatientAgain)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{}, nil
+}
+
+func HandleCreatePatientAgain(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{}, nil
+}
+`)
+
+	var err error
+	withWorkingDir(t, root, func() {
+		err = run([]string{"build", "--config", config, "--out", outputDir, page})
+	})
+	if err == nil {
+		t.Fatal("expected duplicate command owner to fail build")
 	}
 	if _, statErr := os.Stat(filepath.Join(outputDir, "gowdk-build-report.json")); !os.IsNotExist(statErr) {
 		t.Fatalf("expected build to stop before writing output, stat err=%v", statErr)

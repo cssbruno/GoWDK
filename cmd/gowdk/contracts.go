@@ -24,15 +24,28 @@ func contractsReport(args []string) error {
 }
 
 func linkIRContractReferences(ir *gwdkir.Program, root string) error {
-	if ir == nil || len(ir.ContractRefs) == 0 {
-		return nil
-	}
 	report, err := contractscan.Scan(root)
 	if err != nil {
 		return err
 	}
-	ir.ContractRefs = contractscan.LinkReferences(ir.ContractRefs, report)
+	if err := validateContractScanReport(report); err != nil {
+		return err
+	}
+	if ir != nil && len(ir.ContractRefs) > 0 {
+		ir.ContractRefs = contractscan.LinkReferences(ir.ContractRefs, report)
+	}
 	return nil
+}
+
+func validateContractScanReport(report contractscan.Report) error {
+	if len(report.Diagnostics) == 0 {
+		return nil
+	}
+	messages := make([]string, 0, len(report.Diagnostics))
+	for _, diagnostic := range report.Diagnostics {
+		messages = append(messages, fmt.Sprintf("%s:%d:%d: %s", diagnostic.Source, diagnostic.Line, diagnostic.Column, diagnostic.Message))
+	}
+	return errors.New(strings.Join(messages, "\n"))
 }
 
 func listContracts(args []string) error {

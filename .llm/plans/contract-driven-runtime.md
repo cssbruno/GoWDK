@@ -347,6 +347,8 @@ wherever the contract is HTTP-exposed.
 - [ ] Expand Go validation across full packages and imported handler symbols.
 - [ ] Validate exported contract structs and handler functions.
 - [x] Detect duplicate command owner registrations in scanned Go files.
+- [x] Surface same-file handler signature and duplicate command owner scan
+      diagnostics through `gowdk check` and CLI `gowdk build`.
 - [ ] Validate command input and result types.
 - [ ] Validate query input and result types.
 - [x] Validate first same-file command, query, event subscriber, and job handler

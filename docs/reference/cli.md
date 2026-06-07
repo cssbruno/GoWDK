@@ -41,7 +41,8 @@ gowdk lsp [--ssr]
   `g:command` forms and `g:query` elements with `unknown`, `bound`, `missing`,
   or `invalid` status.
 - `gowdk check` and CLI `gowdk build` fail on linked `missing` or `invalid`
-  contract references.
+  contract references, invalid contract handler signatures, and duplicate
+  command owners.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
 - `--module`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.

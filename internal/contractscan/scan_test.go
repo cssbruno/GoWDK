@@ -124,7 +124,7 @@ func HandleCreatePatient(ctx context.Context, command string) (CreatePatientResu
 	if len(report.Diagnostics) != 1 {
 		t.Fatalf("expected one diagnostic, got %#v", report.Diagnostics)
 	}
-	if report.Diagnostics[0].Severity != "error" || report.Diagnostics[0].Source != "patients.go" {
+	if report.Diagnostics[0].Severity != "error" || report.Diagnostics[0].Code != "contract_handler_invalid" || report.Diagnostics[0].Source != "patients.go" {
 		t.Fatalf("unexpected diagnostic metadata: %#v", report.Diagnostics[0])
 	}
 	if want := "second parameter must be CreatePatient"; !strings.Contains(report.Diagnostics[0].Message, want) {
@@ -172,7 +172,7 @@ func HandleCreatePatientAgain(ctx context.Context, command CreatePatient) (Creat
 	if duplicate.Message == "" {
 		t.Fatalf("expected duplicate command diagnostic, got %#v", report.Diagnostics)
 	}
-	if duplicate.Kind != runtimecontracts.Command || duplicate.Package != "patients" || duplicate.Type != "CreatePatient" {
+	if duplicate.Code != "duplicate_command_owner" || duplicate.Kind != runtimecontracts.Command || duplicate.Package != "patients" || duplicate.Type != "CreatePatient" {
 		t.Fatalf("unexpected duplicate diagnostic metadata: %#v", duplicate)
 	}
 }

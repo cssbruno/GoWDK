@@ -19,6 +19,7 @@ contracts, SSR hooks, embedded assets, and one-binary wiring.
 
 Live demo: [gowdk.com](https://gowdk.com/)
 Demo source: [cssbruno/gowdk-page](https://github.com/cssbruno/gowdk-page)
+Simple login example: [cssbruno/gowdk-simple-login](https://github.com/cssbruno/gowdk-simple-login)
 
 **Status:** pre-release. Public contracts can still change. Not production
 ready.

@@ -3,6 +3,7 @@ package tailwind
 @page tailwind
 @route "/tailwind"
 @render spa
+@css none
 
 view {
   <main class="min-h-screen bg-slate-950 px-6 py-12 text-white">

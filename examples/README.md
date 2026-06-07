@@ -28,7 +28,7 @@ even when explicit `.gwdk` files are passed.
 | `go-interop/imported-build.page.gwdk` | Buildable `.gwdk` import example that calls Go code from `build {}`. | `go run ./cmd/gowdk build --out /tmp/gowdk-go-interop examples/go-interop/imported-build.page.gwdk` |
 | `embed/site.page.gwdk` | Standalone one-binary generated app example. | `go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk` |
 | `css/styled.page.gwdk` | Configured stylesheet-link example. | `go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk` |
-| `tailwind/site.page.gwdk` | Tailwind-style markup with a configured stylesheet link. | `go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk` |
+| `tailwind/site.page.gwdk` | Tailwind v4 addon example using the standalone CLI. | `go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk` |
 | `components/base/base-components.page.gwdk` | Source-level base component examples for `Button`, `TextField`, and `Card`. | `go run ./cmd/gowdk build --out /tmp/gowdk-base-components examples/components/base/*.gwdk` |
 | `components/css/scoped-card.page.gwdk` | Component-local `@css` metadata example. | `go run ./cmd/gowdk check examples/components/css/*.gwdk` |
 
@@ -103,11 +103,13 @@ grep -F '<link rel="stylesheet" href="/assets/site.css">' /tmp/gowdk-css-build/s
 go test ./examples/css
 ```
 
-Build the Tailwind-style stylesheet-link example:
+Build the Tailwind addon example. The addon uses `tailwindcss` from `PATH` or
+downloads the official standalone executable into `.gowdk/bin`:
 
 ```sh
 go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk
 test -f /tmp/gowdk-tailwind-build/tailwind/index.html
+grep -F 'assets/app.' /tmp/gowdk-tailwind-build/tailwind/index.html
 ```
 
 Build the source-level base component examples:

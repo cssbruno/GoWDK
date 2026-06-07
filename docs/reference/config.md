@@ -382,16 +382,17 @@ import "github.com/cssbruno/gowdk/addons/tailwind"
 var Config = gowdk.Config{
 	Addons: []gowdk.Addon{
 		tailwind.Addon(tailwind.Options{
-			Input:   "styles/app.css",
-			Command: ".gowdk/bin/tailwindcss",
-			Minify:  true,
+			Input:  "styles/app.css",
+			Minify: true,
 		}),
 	},
 }
 ```
 
-The executable bridge runs project config code only when the AST-only loader
-finds addon constructors it cannot reduce safely.
+When `Command` is omitted, the Tailwind addon uses `tailwindcss` from `PATH` or
+downloads the official standalone executable into `.gowdk/bin`. The executable
+bridge runs project config code only when the AST-only loader finds addon
+constructors it cannot reduce safely.
 
 When `ratelimit.Addon()` is enabled, generated apps with request-time action,
 API, fragment, SSR, or split-backend proxy routes expose

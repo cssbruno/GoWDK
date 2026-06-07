@@ -1,11 +1,15 @@
 package main
 
-import "github.com/cssbruno/gowdk"
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/tailwind"
+)
 
 var Config = gowdk.Config{
-	Build: gowdk.BuildConfig{
-		Stylesheets: []gowdk.Stylesheet{
-			{Href: "/assets/app.css"},
-		},
+	Addons: []gowdk.Addon{
+		tailwind.Addon(tailwind.Options{
+			Input:  "examples/tailwind/app.css",
+			Minify: true,
+		}),
 	},
 }

@@ -273,21 +273,23 @@ also emits the referenced file.
 ## Tailwind Addon
 
 `addons/tailwind` provides an experimental Tailwind v4-oriented processor that
-wraps a user-provided Tailwind standalone CLI executable:
+uses the standalone CLI:
 
 ```go
 Addons: []gowdk.Addon{
 	tailwind.Addon(tailwind.Options{
-		Input:   "assets/app.css",
-		Command: ".gowdk/bin/tailwindcss",
-		Minify:  true,
+		Input:  "assets/app.css",
+		Minify: true,
 	}),
 }
 ```
 
 Defaults:
 
-- `Command`: `tailwindcss`
+- `Command`: use `tailwindcss` from `PATH`, or download the official standalone
+  binary into `.gowdk/bin`.
+- `Version`: `latest`
+- `DownloadDir`: `.gowdk/bin`
 - `OutputPath`: `assets/app.css`
 - `Href`: `/assets/app.css`
 
@@ -296,12 +298,31 @@ configured `Input` CSS and adds `@source` declarations for discovered GOWDK
 source files. This follows Tailwind v4's CSS/source directive model. It then
 runs the standalone executable with `-i <temp-input> -o <temp-output>`.
 
-The addon does not install Tailwind, use npm, run `npx`, vendor binaries, or
-auto-download executable code during `gowdk build`. Projects should download a
-pinned standalone executable from the official Tailwind Labs release page and
-point `Options.Command` at it.
+The addon does not use npm, run `npx`, or run through a shell. If `Command` is
+omitted and `tailwindcss` is not available on `PATH`, `gowdk build` downloads
+the official standalone executable for the current OS/architecture from the
+Tailwind Labs GitHub releases page and caches it under `DownloadDir`.
 
-Example Linux x64 setup:
+Pin a release when builds should not track the latest release:
+
+```go
+tailwind.Addon(tailwind.Options{
+	Input:   "assets/app.css",
+	Version: "v4.2.4",
+})
+```
+
+Use an explicit executable when downloads are not allowed in the build
+environment:
+
+```go
+tailwind.Addon(tailwind.Options{
+	Input:   "assets/app.css",
+	Command: ".gowdk/bin/tailwindcss",
+})
+```
+
+Manual Linux x64 setup for explicit `Command`:
 
 ```sh
 mkdir -p .gowdk/bin assets
@@ -344,9 +365,8 @@ import (
 var Config = gowdk.Config{
 	Addons: []gowdk.Addon{
 		tailwind.Addon(tailwind.Options{
-			Input:   "assets/app.css",
-			Command: ".gowdk/bin/tailwindcss",
-			Minify:  true,
+			Input:  "assets/app.css",
+			Minify: true,
 		}),
 	},
 }

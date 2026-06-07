@@ -73,13 +73,16 @@ Add a small runtime-kit package for typed registration:
 
 ```go
 func RegisterPatients(r gowdk.Registry) {
-    r.Query[PatientPageQuery, PatientPageData](LoadPatientPage)
-    r.Command[CreatePatient, CreatePatientResult](HandleCreatePatient)
-    r.Event[PatientCreated](SendWelcomeEmail)
-    r.Event[PatientCreated](WriteAuditLog)
-    r.Job[SyncPatients](RunPatientSync)
+    contracts.RegisterQuery[PatientPageQuery, PatientPageData](r, LoadPatientPage)
+    contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient)
+    contracts.RegisterDomainEvent[PatientCreated](r, SendWelcomeEmail)
+    contracts.RegisterDomainEvent[PatientCreated](r, WriteAuditLog)
+    contracts.RegisterJob[SyncPatients](r, RunPatientSync)
 }
 ```
+
+Go does not support generic methods, so the first implemented API uses generic
+functions over `*contracts.Registry` instead of `r.Command[T]` method syntax.
 
 The first implementation can keep registration explicit and local:
 
@@ -308,56 +311,75 @@ wherever the contract is HTTP-exposed.
 
 ### Phase 0: Design Lock
 
-- [ ] Decide exact names for public APIs: root `gowdk.Registry` versus
-      `contracts.Registry`.
+- [x] Decide first API shape: `runtime/contracts.Registry` plus generic
+      registration and execution functions.
 - [ ] Decide whether commands return events directly, through a result field, or
       through a dispatcher on context.
-- [ ] Decide how domain, integration, and presentation events are represented
-      in public APIs.
-- [ ] Decide first `.gwdk` syntax for command/query binding.
-- [ ] Explicitly reject frontend-originated domain event syntax.
+- [x] Decide first event representation: domain, integration, and presentation
+      categories in registry metadata.
+- [x] Decide first `.gwdk` syntax for command binding:
+      form-local `g:command="pkg.Command"`.
+- [x] Decide first `.gwdk` syntax for query binding:
+      element-local `g:query="pkg.Query"`.
+- [x] Explicitly reject frontend-originated domain event syntax.
 - [ ] Decide first runtime roles and their config shape.
 - [ ] Add an ADR if the syntax or runtime role model is hard to reverse.
 
 ### Phase 1: Runtime Registry
 
-- [ ] Add typed query registration.
-- [ ] Add typed command registration with one-owner enforcement.
-- [ ] Add typed event subscriber registration.
-- [ ] Separate domain events, integration events, and presentation events in
+- [x] Add typed query registration.
+- [x] Add typed command registration with one-owner enforcement.
+- [x] Add typed event subscriber registration.
+- [x] Separate domain events, integration events, and presentation events in
       registry metadata.
-- [ ] Add typed job registration.
-- [ ] Add in-process dispatch helpers.
-- [ ] Ensure local domain events are emitted only after command success.
-- [ ] Add context propagation.
-- [ ] Add duplicate command owner errors.
-- [ ] Add unsupported signature errors.
-- [ ] Add unit tests for registration and dispatch.
+- [x] Add typed job registration.
+- [x] Add in-process dispatch helpers.
+- [x] Ensure local domain events are emitted only after command success.
+- [x] Add context propagation.
+- [x] Add duplicate command owner errors.
+- [x] Add unsupported signature errors.
+- [x] Add unit tests for registration and dispatch.
 
 ### Phase 2: Go Contract Discovery And Validation
 
-- [ ] Use `go/parser`, `go/ast`, and `go/types` to validate exported contract
-      structs and handler functions.
+- [x] Add first `go/parser`, `go/ast`, and `go/types` scan pass for local
+      registration calls and same-file handler signatures.
+- [ ] Expand Go validation across full packages and imported handler symbols.
+- [ ] Validate exported contract structs and handler functions.
+- [x] Detect duplicate command owner registrations in scanned Go files.
 - [ ] Validate command input and result types.
 - [ ] Validate query input and result types.
-- [ ] Validate event subscriber signatures.
+- [x] Validate first same-file command, query, event subscriber, and job handler
+      signatures.
+- [ ] Validate event subscriber signatures across full packages and imports.
 - [ ] Validate event category and naming convention metadata.
-- [ ] Validate job handler signatures.
+- [ ] Validate job handler signatures across full packages and imports.
 - [ ] Detect import cycles caused by feature packages importing generated app
       output.
 - [ ] Cache package inspection by package path/directory.
 
 ### Phase 3: Compiler IR Integration
 
-- [ ] Add contract nodes or references to `internal/gwdkast`.
-- [ ] Lower contract references through `internal/gwdkanalysis`.
-- [ ] Add contract metadata to `internal/gwdkir`.
-- [ ] Link `.gwdk` command/query references to Go contract metadata.
-- [ ] Reject `.gwdk` domain-event emission from templates.
+- [x] Add first command-reference source metadata through `internal/gwdkast`
+      view body starts and view attribute offsets.
+- [x] Lower first form-local command references through
+      `internal/gwdkanalysis`.
+- [x] Add first command-reference metadata to `internal/gwdkir`.
+- [x] Link first `.gwdk` command references to scanned Go command metadata.
+- [x] Add first element-local query references through `internal/gwdkanalysis`.
+- [x] Add first query-reference metadata to `internal/gwdkir`.
+- [x] Link first `.gwdk` query references to scanned Go query metadata.
+- [ ] Expand command linking across import aliases and full package paths.
+- [x] Reject `.gwdk` domain-event emission from templates through `g:event`.
 - [ ] Add presentation-event references for realtime UI notifications only
       after backend event metadata exists.
 - [ ] Preserve existing endpoint metadata.
-- [ ] Add diagnostics for unresolved references and duplicate owners.
+- [x] Add first missing/invalid command/query reference status in build
+      reports.
+- [ ] Add diagnostics for unresolved references.
+- [x] Add first duplicate command owner diagnostics from Go contract scans.
+- [x] Add exact `.gwdk` source spans for form-local command references and
+      element-local query references in IR and build reports.
 - [ ] Add source spans for all contract diagnostics.
 
 ### Phase 4: Generated Adapter Integration
@@ -396,17 +418,18 @@ wherever the contract is HTTP-exposed.
 
 ### Phase 7: CLI And Observability
 
-- [ ] Add `gowdk contracts`.
-- [ ] Add `gowdk list commands`.
-- [ ] Add `gowdk list queries`.
-- [ ] Add `gowdk list events`.
-- [ ] Add `gowdk contracts --json`.
-- [ ] Add `gowdk graph`.
+- [x] Add `gowdk contracts`.
+- [x] Add `gowdk list commands`.
+- [x] Add `gowdk list queries`.
+- [x] Add `gowdk list events`.
+- [x] Add `gowdk list jobs`.
+- [x] Add `gowdk contracts --json`.
+- [x] Add `gowdk graph`.
 - [ ] Add `gowdk trace` after runtime trace metadata exists.
 - [ ] Link `gowdk routes` endpoints to contracts where applicable.
-- [ ] Include contract metadata in build reports.
+- [x] Include first command/query-reference metadata in build reports.
 - [ ] Add stable names for logs/metrics/traces.
-- [ ] Add tests for text and JSON output.
+- [x] Add tests for text and JSON output.
 
 ### Phase 8: Examples And Docs
 

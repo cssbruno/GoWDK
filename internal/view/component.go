@@ -97,6 +97,9 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 				parentListeners = append(parentListeners, listener)
 				continue
 			}
+			if attr.Name == "g:event" {
+				return fmt.Errorf("component %s must not declare g:event; domain and integration events are backend-owned facts", node.Name)
+			}
 			return fmt.Errorf("component %s uses unsupported directive attribute %q", node.Name, attr.Name)
 		}
 		if attr.Boolean {

@@ -12,6 +12,7 @@ Reference docs describe current command and data contracts.
 - `testing.md`: scaffolded smoke tests, browser smoke, accessibility, and performance checks.
 - `migration.md`: migration paths from Go HTTP apps, Go templates, htmx-style apps, JavaScript framework apps, and previous GOWDK slices.
 - `concepts.md`: GOWDK concepts for users coming from other web frameworks.
+- `contracts.md`: current runtime contract registry and planned compiler integration.
 - `css.md`: current CSS extension point.
 - `manifest.md`: current manifest JSON.
 - `addons.md`: current addon feature registration.

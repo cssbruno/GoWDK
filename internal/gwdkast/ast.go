@@ -184,18 +184,19 @@ type WASMContract struct {
 
 // Block is one parsed top-level block.
 type Block struct {
-	Kind    string
-	Name    string
-	Body    string
-	Span    manifest.SourceSpan
-	View    []view.Node
-	Records []LiteralRecord
-	Call    *BuildCall
-	Props   []Prop
-	Exports []Export
-	Emits   []Emit
-	Actions []ActionStatement
-	APIs    []APIStatement
+	Kind      string
+	Name      string
+	Body      string
+	Span      manifest.SourceSpan
+	BodyStart manifest.SourcePosition
+	View      []view.Node
+	Records   []LiteralRecord
+	Call      *BuildCall
+	Props     []Prop
+	Exports   []Export
+	Emits     []Emit
+	Actions   []ActionStatement
+	APIs      []APIStatement
 }
 
 // Endpoint is one exact action or API endpoint declaration.

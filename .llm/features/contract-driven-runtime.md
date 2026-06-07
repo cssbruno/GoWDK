@@ -224,6 +224,8 @@ authorization, persistence, and transaction success.
   with existing `act` declarations?
 - Should command handlers return events directly, append them to a result, or
   publish through a context-bound dispatcher?
+- Should root-package helpers wrap `runtime/contracts`, or should users import
+  `runtime/contracts` directly?
 - Should the first durable outbox contract be tied to explicit transactions, or
   should it start as a persistence-agnostic interface only?
 - What is the smallest useful outbox API that does not force a database layer

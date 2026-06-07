@@ -268,10 +268,16 @@ func (node Element) SPAInputType(value string) bool {
 }
 
 type postDirectives struct {
-	Action string
-	Route  string
-	Target string
-	Swap   string
+	Action       string
+	Route        string
+	Command      string
+	CommandStart int
+	CommandEnd   int
+	Query        string
+	QueryStart   int
+	QueryEnd     int
+	Target       string
+	Swap         string
 }
 
 func (node Element) postDirectives(ctx *renderContext) (postDirectives, error) {
@@ -283,7 +289,13 @@ func (node Element) postDirectives(ctx *renderContext) (postDirectives, error) {
 		if directives.Target != "" || directives.Swap != "" {
 			return postDirectives{}, fmt.Errorf("g:target and g:swap require g:post")
 		}
-		return postDirectives{}, nil
+		return directives, nil
+	}
+	if directives.Command != "" {
+		return postDirectives{}, fmt.Errorf("form must not declare both g:post and g:command")
+	}
+	if directives.Query != "" {
+		return postDirectives{}, fmt.Errorf("form must not declare both g:post and g:query")
 	}
 	route, ok := ctx.actions[directives.Action]
 	if !ok {
@@ -361,11 +373,27 @@ func (node Element) directiveValues() (postDirectives, error) {
 			}
 			continue
 		}
-		if attr.Name != "g:post" && attr.Name != "g:target" && attr.Name != "g:swap" {
+		if attr.Name == "g:event" {
+			return postDirectives{}, fmt.Errorf("frontend templates must not declare g:event; domain and integration events are backend-owned facts, use g:command for backend intent or g:on:* for local UI events")
+		}
+		if attr.Name != "g:post" && attr.Name != "g:command" && attr.Name != "g:query" && attr.Name != "g:target" && attr.Name != "g:swap" {
 			return postDirectives{}, fmt.Errorf("unsupported directive attribute %q in SPA build", attr.Name)
 		}
 		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
 			return postDirectives{}, fmt.Errorf("%s requires a value", attr.Name)
+		}
+		if attr.Name == "g:query" {
+			if directives.Query != "" {
+				return postDirectives{}, fmt.Errorf("element declares multiple g:query directives")
+			}
+			query := strings.TrimSpace(attr.Value)
+			if !contractReferencePattern.MatchString(query) {
+				return postDirectives{}, fmt.Errorf("g:query %q must be a package-qualified Go contract reference", query)
+			}
+			directives.Query = query
+			directives.QueryStart = attr.Start
+			directives.QueryEnd = attr.End
+			continue
 		}
 		if node.Name != "form" {
 			return postDirectives{}, fmt.Errorf("%s is only supported on <form>", attr.Name)
@@ -376,6 +404,17 @@ func (node Element) directiveValues() (postDirectives, error) {
 				return postDirectives{}, fmt.Errorf("form declares multiple g:post directives")
 			}
 			directives.Action = strings.TrimSpace(attr.Value)
+		case "g:command":
+			if directives.Command != "" {
+				return postDirectives{}, fmt.Errorf("form declares multiple g:command directives")
+			}
+			command := strings.TrimSpace(attr.Value)
+			if !contractReferencePattern.MatchString(command) {
+				return postDirectives{}, fmt.Errorf("g:command %q must be a package-qualified Go contract reference", command)
+			}
+			directives.Command = command
+			directives.CommandStart = attr.Start
+			directives.CommandEnd = attr.End
 		case "g:target":
 			if directives.Target != "" {
 				return postDirectives{}, fmt.Errorf("form declares multiple g:target directives")
@@ -398,6 +437,9 @@ func (node Element) directiveValues() (postDirectives, error) {
 			}
 			directives.Swap = swap
 		}
+	}
+	if directives.Command != "" && directives.Query != "" {
+		return postDirectives{}, fmt.Errorf("form must not declare both g:command and g:query")
 	}
 	if directives.Swap != "" && directives.Target == "" {
 		return postDirectives{}, fmt.Errorf("g:swap requires g:target")

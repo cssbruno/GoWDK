@@ -185,6 +185,7 @@ const (
 	FeatureEmbed     Feature = "embed"
 	FeatureCSS       Feature = "css"
 	FeatureRateLimit Feature = "ratelimit"
+	FeatureContracts Feature = "contracts"
 )
 
 // Addon is the minimal contract every optional GOWDK capability implements.

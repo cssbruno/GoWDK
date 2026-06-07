@@ -39,6 +39,7 @@ func buildFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, 
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
 	reportBackendBindings(reporter, app.BackendBindings)
+	reportContractReferences(reporter, ir.ContractRefs)
 	if err := compiler.ValidateBackendBindingPolicy(config, app); err != nil {
 		return Result{}, reporter.fail("bind", err)
 	}
@@ -144,6 +145,7 @@ func buildMemoryFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Pro
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
 	reportBackendBindings(reporter, app.BackendBindings)
+	reportContractReferences(reporter, ir.ContractRefs)
 	if err := compiler.ValidateBackendBindingPolicy(config, app); err != nil {
 		return MemoryResult{}, reporter.fail("bind", err)
 	}
@@ -268,6 +270,40 @@ func reportBackendBindings(reporter *buildReporter, bindings []manifest.BackendB
 	}
 }
 
+func reportContractReferences(reporter *buildReporter, refs []gwdkir.ContractReference) {
+	for _, ref := range refs {
+		status := ref.Status
+		if status == "" {
+			status = gwdkir.ContractBindingUnknown
+		}
+		data := map[string]string{
+			"kind":      string(ref.Kind),
+			"name":      ref.Name,
+			"status":    string(status),
+			"ownerKind": string(ref.OwnerKind),
+			"owner":     ref.OwnerID,
+		}
+		if ref.Span.Start.Line > 0 {
+			data["line"] = fmt.Sprint(ref.Span.Start.Line)
+			data["column"] = fmt.Sprint(ref.Span.Start.Column)
+		}
+		if ref.Handler != "" {
+			data["handler"] = ref.Handler
+		}
+		if ref.Message != "" {
+			data["message"] = ref.Message
+		}
+		if ref.Package != "" {
+			data["package"] = ref.Package
+		}
+		reporter.info("bind", "contract_reference", "contract reference discovered", BuildEvent{
+			PageID: ref.OwnerID,
+			Path:   ref.Source,
+			Data:   data,
+		})
+	}
+}
+
 func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir string, changedPageSources []string) (Result, error) {
 	return buildIncrementalFromIR(config, app, gwdkanalysis.BuildIR(config, app), outputDir, changedPageSources)
 }
@@ -293,6 +329,7 @@ func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdki
 		return Result{}, reporter.fail("validate", err)
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
+	reportContractReferences(reporter, ir.ContractRefs)
 	if err := compiler.ValidateBackendBindingPolicy(config, app); err != nil {
 		return Result{}, reporter.fail("bind", err)
 	}

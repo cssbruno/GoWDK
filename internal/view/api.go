@@ -14,6 +14,8 @@ type Attr struct {
 	Value      string
 	Boolean    bool
 	Expression bool
+	Start      int
+	End        int
 }
 
 // Component is a literal component template known to the view renderer.
@@ -113,6 +115,35 @@ type ComponentCallUsage struct {
 	Component     string
 	Island        string
 	ReactiveProps bool
+}
+
+// ContractReference records one template-local backend contract intent.
+type ContractReference struct {
+	Kind  ContractReferenceKind
+	Name  string
+	Start int
+	End   int
+}
+
+type ContractReferenceKind string
+
+const (
+	ContractReferenceCommand ContractReferenceKind = "command"
+	ContractReferenceQuery   ContractReferenceKind = "query"
+)
+
+// CommandReference records one form-local backend command intent.
+type CommandReference struct {
+	Command string
+	Start   int
+	End     int
+}
+
+// QueryReference records one template-local backend query intent.
+type QueryReference struct {
+	Query string
+	Start int
+	End   int
 }
 
 // RenderWithOptions renders a view markup fragment with component support,
@@ -240,6 +271,48 @@ func ComponentCallUsages(source string) ([]ComponentCallUsage, error) {
 		return nil, err
 	}
 	return usages, nil
+}
+
+// CommandReferences returns package-qualified command references declared by
+// g:command on direct form elements in a view fragment.
+func CommandReferences(source string) ([]CommandReference, error) {
+	nodes, err := Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	var refs []CommandReference
+	if err := collectCommandReferences(nodes, &refs); err != nil {
+		return nil, err
+	}
+	return refs, nil
+}
+
+// QueryReferences returns package-qualified query references declared by
+// g:query on direct HTML elements in a view fragment.
+func QueryReferences(source string) ([]QueryReference, error) {
+	nodes, err := Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	var refs []QueryReference
+	if err := collectQueryReferences(nodes, &refs); err != nil {
+		return nil, err
+	}
+	return refs, nil
+}
+
+// ContractReferences returns package-qualified command and query references
+// declared by GOWDK view directives.
+func ContractReferences(source string) ([]ContractReference, error) {
+	nodes, err := Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	var refs []ContractReference
+	if err := collectContractReferences(nodes, &refs); err != nil {
+		return nil, err
+	}
+	return refs, nil
 }
 
 // Canonical returns a deterministic AST-backed representation of a view body.
@@ -589,6 +662,96 @@ func collectActionFormFields(nodes []Node, fields map[string]map[string]ActionFo
 		}
 	}
 	return nil
+}
+
+func collectCommandReferences(nodes []Node, refs *[]CommandReference) error {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case Element:
+			directives, err := typed.directiveValues()
+			if err != nil {
+				return err
+			}
+			if directives.Command != "" {
+				*refs = append(*refs, CommandReference{Command: directives.Command, Start: directives.CommandStart, End: directives.CommandEnd})
+			}
+			if err := collectCommandReferences(typed.Children, refs); err != nil {
+				return err
+			}
+		case ComponentCall:
+			for _, attr := range typed.Attrs {
+				if attr.Name == "g:event" {
+					return fmt.Errorf("component %s must not declare g:event; domain and integration events are backend-owned facts", typed.Name)
+				}
+			}
+			if err := collectCommandReferences(typed.Children, refs); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func collectQueryReferences(nodes []Node, refs *[]QueryReference) error {
+	contracts, err := contractReferencesFromNodes(nodes)
+	if err != nil {
+		return err
+	}
+	for _, ref := range contracts {
+		if ref.Kind == ContractReferenceQuery {
+			*refs = append(*refs, QueryReference{Query: ref.Name, Start: ref.Start, End: ref.End})
+		}
+	}
+	return nil
+}
+
+func collectContractReferences(nodes []Node, refs *[]ContractReference) error {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case Element:
+			directives, err := typed.directiveValues()
+			if err != nil {
+				return err
+			}
+			if directives.Command != "" {
+				*refs = append(*refs, ContractReference{
+					Kind:  ContractReferenceCommand,
+					Name:  directives.Command,
+					Start: directives.CommandStart,
+					End:   directives.CommandEnd,
+				})
+			}
+			if directives.Query != "" {
+				*refs = append(*refs, ContractReference{
+					Kind:  ContractReferenceQuery,
+					Name:  directives.Query,
+					Start: directives.QueryStart,
+					End:   directives.QueryEnd,
+				})
+			}
+			if err := collectContractReferences(typed.Children, refs); err != nil {
+				return err
+			}
+		case ComponentCall:
+			for _, attr := range typed.Attrs {
+				if attr.Name == "g:event" {
+					return fmt.Errorf("component %s must not declare g:event; domain and integration events are backend-owned facts", typed.Name)
+				}
+			}
+			if err := collectContractReferences(typed.Children, refs); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func contractReferencesFromNodes(nodes []Node) ([]ContractReference, error) {
+	var refs []ContractReference
+	if err := collectContractReferences(nodes, &refs); err != nil {
+		return nil, err
+	}
+	return refs, nil
 }
 
 func validateActionForm(element Element) error {

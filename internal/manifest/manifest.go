@@ -120,16 +120,17 @@ type ComponentSpans struct {
 
 // BlockSpans records source ranges for page, component, or layout blocks.
 type BlockSpans struct {
-	Paths     SourceSpan
-	Build     SourceSpan
-	Load      SourceSpan
-	Client    SourceSpan
-	View      SourceSpan
-	Actions   []NamedSpan
-	APIs      []NamedSpan
-	Fragments []NamedSpan
-	Exports   SourceSpan
-	Emits     SourceSpan
+	Paths         SourceSpan
+	Build         SourceSpan
+	Load          SourceSpan
+	Client        SourceSpan
+	View          SourceSpan
+	ViewBodyStart SourcePosition
+	Actions       []NamedSpan
+	APIs          []NamedSpan
+	Fragments     []NamedSpan
+	Exports       SourceSpan
+	Emits         SourceSpan
 }
 
 // Page describes a .gwdk page after parsing and normalization.

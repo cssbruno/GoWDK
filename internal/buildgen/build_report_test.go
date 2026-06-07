@@ -271,6 +271,61 @@ func TestBuildMemoryReturnsSPAArtifactsWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestBuildReportIncludesContractReferences(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		Source:  "pages/patients.page.gwdk",
+		Package: "pages",
+		ID:      "patients",
+		Route:   "/patients",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main><form method="post" action="/patients" g:command="patients.CreatePatient"><input name="name" /></form></main>`,
+		},
+	}}}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := findBuildReportEvent(result.Report, "bind", "contract_reference")
+	if event == nil {
+		t.Fatalf("missing contract_reference event in %#v", result.Report.Events)
+	}
+	if event.PageID != "patients" || event.Path != "pages/patients.page.gwdk" {
+		t.Fatalf("unexpected contract reference owner: %#v", event)
+	}
+	if event.Data["kind"] != "command" || event.Data["name"] != "patients.CreatePatient" || event.Data["status"] != "unknown" || event.Data["ownerKind"] != "page" {
+		t.Fatalf("unexpected contract reference data: %#v", event.Data)
+	}
+}
+
+func TestBuildReportIncludesQueryContractReferences(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		Source:  "pages/patients.page.gwdk",
+		Package: "pages",
+		ID:      "patients",
+		Route:   "/patients",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main><section g:query="patients.GetPatientPage"><h1>Patients</h1></section></main>`,
+		},
+	}}}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := findBuildReportEvent(result.Report, "bind", "contract_reference")
+	if event == nil {
+		t.Fatalf("missing contract_reference event in %#v", result.Report.Events)
+	}
+	if event.Data["kind"] != "query" || event.Data["name"] != "patients.GetPatientPage" || event.Data["status"] != "unknown" || event.Data["ownerKind"] != "page" {
+		t.Fatalf("unexpected contract reference data: %#v", event.Data)
+	}
+}
+
 func TestBuildReportIncludesBackendBindingEndpointMetadata(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

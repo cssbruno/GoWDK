@@ -1095,6 +1095,94 @@ func TestRenderWithOptionsLowersGPostDirective(t *testing.T) {
 	}
 }
 
+func TestRenderWithOptionsMarksGCommandForm(t *testing.T) {
+	got, err := RenderWithOptions(`<form method="post" action="/patients" g:command="patients.CreatePatient"><input name="email" /></form>`, nil, nil, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<form method="post" action="/patients" data-gowdk-command="patients.CreatePatient"><input name="email"></input></form>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderWithOptionsMarksGQueryElement(t *testing.T) {
+	got, err := RenderWithOptions(`<section g:query="patients.GetPatientPage"><h1>Patients</h1></section>`, nil, nil, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<section data-gowdk-query="patients.GetPatientPage"><h1>Patients</h1></section>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestCommandReferencesFindsGCommandForms(t *testing.T) {
+	refs, err := CommandReferences(`<main><form g:command="patients.CreatePatient"></form><form g:command={billing.PayInvoice}></form></main>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 2 || refs[0].Command != "patients.CreatePatient" || refs[1].Command != "billing.PayInvoice" {
+		t.Fatalf("unexpected command refs: %#v", refs)
+	}
+}
+
+func TestContractReferencesFindsCommandsAndQueries(t *testing.T) {
+	refs, err := ContractReferences(`<main><section g:query="patients.GetPatientPage"></section><form g:command={patients.CreatePatient}></form></main>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 2 {
+		t.Fatalf("expected two contract refs, got %#v", refs)
+	}
+	if refs[0].Kind != ContractReferenceQuery || refs[0].Name != "patients.GetPatientPage" {
+		t.Fatalf("unexpected query ref: %#v", refs[0])
+	}
+	if refs[1].Kind != ContractReferenceCommand || refs[1].Name != "patients.CreatePatient" {
+		t.Fatalf("unexpected command ref: %#v", refs[1])
+	}
+}
+
+func TestRenderWithOptionsRejectsFrontendDomainEventDirective(t *testing.T) {
+	_, err := RenderWithOptions(`<form g:event="PatientCreated"></form>`, nil, nil, Options{})
+	if err == nil {
+		t.Fatal("expected g:event rejection")
+	}
+	if !strings.Contains(err.Error(), `frontend templates must not declare g:event`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithOptionsRejectsInvalidGCommand(t *testing.T) {
+	_, err := RenderWithOptions(`<form g:command="CreatePatient"></form>`, nil, nil, Options{})
+	if err == nil {
+		t.Fatal("expected invalid g:command error")
+	}
+	if !strings.Contains(err.Error(), `must be a package-qualified Go contract reference`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithOptionsRejectsInvalidGQuery(t *testing.T) {
+	_, err := RenderWithOptions(`<section g:query="GetPatientPage"></section>`, nil, nil, Options{})
+	if err == nil {
+		t.Fatal("expected invalid g:query error")
+	}
+	if !strings.Contains(err.Error(), `must be a package-qualified Go contract reference`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithOptionsRejectsGCommandAndGQueryOnSameForm(t *testing.T) {
+	_, err := RenderWithOptions(`<form g:command="patients.CreatePatient" g:query="patients.GetPatientPage"></form>`, nil, nil, Options{})
+	if err == nil {
+		t.Fatal("expected mixed g:command/g:query error")
+	}
+	if !strings.Contains(err.Error(), `must not declare both g:command and g:query`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRenderWithOptionsAllowsGPostWithLocalValueBinding(t *testing.T) {
 	got, err := RenderWithOptions(`<Search />`, map[string]Component{
 		"Search": {

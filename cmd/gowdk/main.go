@@ -67,6 +67,12 @@ func run(args []string) error {
 		return siteMapJSON(args[1:])
 	case "routes":
 		return routesJSON(args[1:])
+	case "contracts":
+		return contractsReport(args[1:])
+	case "graph":
+		return contractGraph(args[1:])
+	case "list":
+		return listContracts(args[1:])
 	case "build":
 		return build(args[1:])
 	case "dev":
@@ -97,6 +103,9 @@ func usage() {
 	fmt.Println("  manifest [--config <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
 	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
+	fmt.Println("  contracts [--json] [dir]  print Go contract registration metadata")
+	fmt.Println("  graph [--json] [dir]      print command/event contract graph")
+	fmt.Println("  list commands|queries|events|jobs [--json] [dir] print filtered contract metadata")
 	fmt.Println("  build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
 	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload")
 	fmt.Println("  preview [--addr <addr>] [--hot] [build flags...] build and serve a local deploy preview")
@@ -718,6 +727,10 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	}
 	app = compiler.BindBackendHandlers(app)
 	ir := gwdkanalysis.BuildIR(options.Config, app)
+	if err := linkIRContractReferences(&ir, "."); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return fmt.Errorf("build failed")
+	}
 
 	result, err := buildgen.BuildFromIR(options.Config, ir, outputDir)
 	if err != nil {

@@ -27,10 +27,16 @@ and bare `@render hybrid` pages as SPA output unless an explicit `load {}`
 branch opts into request-time rendering. The app generator uses typed IR and
 Go AST/printer output before `go/format`.
 
+`runtime/contracts` now provides the first local typed registry for queries,
+commands, backend-owned domain and integration events, presentation events, and
+jobs. Compiler IR, `.gwdk` syntax, generated adapters, CLI graph output,
+durable outbox, worker roles, cron roles, and realtime fanout for those
+contracts remain planned.
+
 Still partial: broad local client-side reactivity, scoped component CSS/asset
 emission, richer load/action invalidation, broader hybrid request-time
-behavior beyond the explicit `load {}` branch, app-wide middleware policy, and
-production operations guidance.
+behavior beyond the explicit `load {}` branch, contract compiler integration,
+app-wide middleware policy, and production operations guidance.
 
 ## System Context
 
@@ -96,6 +102,7 @@ the lanes through package, route, type, component, and handler binding metadata.
 | `runtime/asset` | Asset manifest resolution. | Runtime | Initial manifest helper implemented. |
 | `runtime/route` | Runtime route matching for generated request-time routes. | Runtime | Dynamic route matcher for first-slice generated SSR routes implemented. |
 | `runtime/app` | Shared generated app HTTP server. | Runtime | Serves embedded spa files, identity headers, health checks, asset manifest counts, optional generated 404/500 pages, no-JS cookie acknowledgement, server-side cookie notice hiding, generated CSRF token injection for POST forms, request-time panic boundaries, and action/SSR callback hooks for generated apps. |
+| `runtime/contracts` | Typed contract registry and in-process dispatch. | Runtime | First runtime slice implemented for queries, commands, backend-owned domain and integration events, presentation events, jobs, metadata, and local command-buffered event dispatch. Compiler/generator integration remains planned. |
 | `addons/spa` | Build-time prerendering. | Addon | Capability boundary implemented; prerender execution is planned. |
 | `addons/actions` | Typed backend actions, form decoding, CSRF. | Addon | Capability boundary, required-field validation helper, generated required-field validation fragments for partial requests, signed CSRF validator, and generated action CSRF wiring implemented; broader field-specific validation patterns remain planned. |
 | `addons/partial` | Server fragments and swaps. | Addon | Capability boundary implemented; first generated action fragment execution slice exists. |

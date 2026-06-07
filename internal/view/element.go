@@ -299,6 +299,16 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		out.WriteString(gowhtml.Escape(directives.Route))
 		out.WriteByte('"')
 	}
+	if directives.Command != "" {
+		out.WriteString(` data-gowdk-command="`)
+		out.WriteString(gowhtml.Escape(directives.Command))
+		out.WriteByte('"')
+	}
+	if directives.Query != "" {
+		out.WriteString(` data-gowdk-query="`)
+		out.WriteString(gowhtml.Escape(directives.Query))
+		out.WriteByte('"')
+	}
 	if directives.Target != "" {
 		out.WriteString(` data-gowdk-target="`)
 		out.WriteString(gowhtml.Escape(directives.Target))

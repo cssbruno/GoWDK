@@ -159,6 +159,7 @@ func (parser *parser) attr() (Attr, error) {
 	if attr, ok, err := parser.shorthandAttr(); ok || err != nil {
 		return attr, err
 	}
+	start := parser.index
 	name, err := parser.attrName()
 	if err != nil {
 		return Attr{}, err
@@ -169,24 +170,27 @@ func (parser *parser) attr() (Attr, error) {
 
 	parser.skipSpace()
 	if !parser.consume("=") {
-		return Attr{Name: name, Boolean: true}, nil
+		return Attr{Name: name, Boolean: true, Start: start, End: parser.index}, nil
 	}
 	parser.skipSpace()
 	if strings.HasPrefix(name, "g:") {
-		return parser.directiveAttr(name)
+		attr, err := parser.directiveAttr(name)
+		attr.Start = start
+		attr.End = parser.index
+		return attr, err
 	}
 	if parser.startsWith("{") {
 		value, err := parser.expressionAttrValue(name)
 		if err != nil {
 			return Attr{}, err
 		}
-		return Attr{Name: name, Value: value, Expression: true}, nil
+		return Attr{Name: name, Value: value, Expression: true, Start: start, End: parser.index}, nil
 	}
 	value, err := parser.quotedAttrValue(name)
 	if err != nil {
 		return Attr{}, err
 	}
-	return Attr{Name: name, Value: value}, nil
+	return Attr{Name: name, Value: value, Start: start, End: parser.index}, nil
 }
 
 func (parser *parser) attrName() (string, error) {
@@ -220,20 +224,21 @@ func (parser *parser) shorthandAttr() (Attr, bool, error) {
 	if prefix != '.' && prefix != '#' {
 		return Attr{}, false, nil
 	}
-	parser.advance()
 	start := parser.index
+	parser.advance()
+	valueStart := parser.index
 	for !parser.done() && isShorthandPart(parser.peek()) {
 		parser.advance()
 	}
-	if start == parser.index {
+	if valueStart == parser.index {
 		return Attr{}, true, parser.errorf("empty shorthand attribute")
 	}
-	value := string(parser.source[start:parser.index])
+	value := string(parser.source[valueStart:parser.index])
 	switch prefix {
 	case '.':
-		return Attr{Name: "class", Value: value}, true, nil
+		return Attr{Name: "class", Value: value, Start: start, End: parser.index}, true, nil
 	case '#':
-		return Attr{Name: "id", Value: value}, true, nil
+		return Attr{Name: "id", Value: value, Start: start, End: parser.index}, true, nil
 	default:
 		return Attr{}, false, nil
 	}

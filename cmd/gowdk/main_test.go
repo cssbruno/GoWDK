@@ -87,6 +87,154 @@ view {
 	}
 }
 
+func TestBuildCommandReportsBoundContractReference(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	pageSource := `package pages
+
+@page patients
+@route "/patients"
+
+view {
+  <main>
+    <form method="post" action="/patients" g:command="patients.CreatePatient">
+      <input name="name" />
+    </form>
+  </main>
+}
+`
+	page := filepath.Join(root, "pages", "patients.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, page, pageSource)
+	writeCLIFile(t, filepath.Join(root, "contracts", "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{}, nil
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build", "--config", config, "--out", outputDir, page}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	payload, err := os.ReadFile(filepath.Join(outputDir, "gowdk-build-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		Events []struct {
+			Stage string            `json:"stage"`
+			Kind  string            `json:"kind"`
+			Data  map[string]string `json:"data"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(payload, &report); err != nil {
+		t.Fatalf("invalid build report: %v\n%s", err, payload)
+	}
+	for _, event := range report.Events {
+		if event.Stage != "bind" || event.Kind != "contract_reference" {
+			continue
+		}
+		if event.Data["name"] != "patients.CreatePatient" || event.Data["status"] != "bound" || event.Data["handler"] != "HandleCreatePatient" {
+			t.Fatalf("unexpected contract reference event: %#v", event.Data)
+		}
+		wantColumn := strings.Index(testSourceLine(pageSource, 8), "g:command") + 1
+		if event.Data["line"] != "8" || event.Data["column"] != strconv.Itoa(wantColumn) {
+			t.Fatalf("unexpected command source location: %#v", event.Data)
+		}
+		return
+	}
+	t.Fatalf("missing contract_reference event in report: %s", payload)
+}
+
+func TestBuildReportsBoundQueryContractReference(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	pageSource := `package pages
+
+@page patients
+@route "/patients"
+
+view {
+  <main>
+    <section g:query="patients.GetPatientPage">
+      <h1>Patients</h1>
+    </section>
+  </main>
+}
+`
+	page := filepath.Join(root, "pages", "patients.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, page, pageSource)
+	writeCLIFile(t, filepath.Join(root, "contracts", "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type GetPatientPage struct{}
+type PatientPageData struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterQuery[GetPatientPage, PatientPageData](r, LoadPatientPage)
+}
+
+func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData, error) {
+	return PatientPageData{}, nil
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build", "--config", config, "--out", outputDir, page}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	payload, err := os.ReadFile(filepath.Join(outputDir, "gowdk-build-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		Events []struct {
+			Stage string            `json:"stage"`
+			Kind  string            `json:"kind"`
+			Data  map[string]string `json:"data"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(payload, &report); err != nil {
+		t.Fatalf("invalid build report: %v\n%s", err, payload)
+	}
+	for _, event := range report.Events {
+		if event.Stage != "bind" || event.Kind != "contract_reference" {
+			continue
+		}
+		if event.Data["kind"] != "query" || event.Data["name"] != "patients.GetPatientPage" || event.Data["status"] != "bound" || event.Data["handler"] != "LoadPatientPage" {
+			t.Fatalf("unexpected contract reference event: %#v", event.Data)
+		}
+		wantColumn := strings.Index(testSourceLine(pageSource, 8), "g:query") + 1
+		if event.Data["line"] != "8" || event.Data["column"] != strconv.Itoa(wantColumn) {
+			t.Fatalf("unexpected query source location: %#v", event.Data)
+		}
+		return
+	}
+	t.Fatalf("missing contract_reference event in report: %s", payload)
+}
+
 func TestInitCommandScaffoldsBuildableProject(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "site")
 	if err := run([]string{"init", root}); err != nil {
@@ -1493,6 +1641,146 @@ func TestRunWithoutArgsPrintsUsage(t *testing.T) {
 	}
 	if !strings.Contains(output, "Commands:") || !strings.Contains(output, "check [--config <file>]") {
 		t.Fatalf("expected usage output, got:\n%s", output)
+	}
+}
+
+func TestContractsCommandReportsGoRegistrations(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "patients.go"), `package patients
+
+import (
+	"context"
+
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type GetPatient struct{}
+type PatientPage struct{}
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+type PatientCreated struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterQuery[GetPatient, PatientPage](r, LoadPatient, contracts.RoleWeb)
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, contracts.RoleWeb)
+	contracts.RegisterDomainEvent[PatientCreated](r, SendWelcomeEmail, contracts.RoleWorker)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	if err := contracts.EmitDomain(ctx, PatientCreated{}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	return CreatePatientResult{}, nil
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"contracts", root})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %s", stderr)
+	}
+	for _, expected := range []string{
+		"COMMAND CreatePatient",
+		"handler: HandleCreatePatient",
+		"result: CreatePatientResult",
+		"DOMAIN EVENT PatientCreated",
+		"QUERY GetPatient",
+		"source: patients.go:",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected contracts output to contain %q:\n%s", expected, output)
+		}
+	}
+}
+
+func TestGraphCommandReportsCommandEventEdges(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "patients.go"), `package patients
+
+import (
+	"context"
+
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+type PatientCreated struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, contracts.RoleWeb)
+	contracts.RegisterDomainEvent[PatientCreated](r, SendWelcomeEmail, contracts.RoleWorker)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	if err := contracts.EmitDomain(ctx, PatientCreated{}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	return CreatePatientResult{}, nil
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"graph", root})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %s", stderr)
+	}
+	for _, expected := range []string{
+		"COMMAND CreatePatient",
+		"emits:",
+		"- DOMAIN EVENT PatientCreated",
+		"DOMAIN EVENT PatientCreated",
+		"subscribers:",
+		"- SendWelcomeEmail",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected graph output to contain %q:\n%s", expected, output)
+		}
+	}
+}
+
+func TestListCommandsJSONFiltersContracts(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "patients.go"), `package patients
+
+import contracts "github.com/cssbruno/gowdk/runtime/contracts"
+
+type GetPatient struct{}
+type PatientPage struct{}
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterQuery[GetPatient, PatientPage](r, LoadPatient, contracts.RoleWeb)
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, contracts.RoleWeb)
+}
+`)
+
+	output, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"list", "commands", "--json", root})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		Contracts []struct {
+			Kind string `json:"kind"`
+			Type string `json:"type"`
+		} `json:"contracts"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid contracts JSON: %v\n%s", err, output)
+	}
+	if len(report.Contracts) != 1 || report.Contracts[0].Kind != "command" || report.Contracts[0].Type != "CreatePatient" {
+		t.Fatalf("unexpected command report: %s", output)
 	}
 }
 
@@ -2927,6 +3215,14 @@ func withWorkingDir(t *testing.T, dir string, fn func()) {
 		}
 	}()
 	fn()
+}
+
+func testSourceLine(source string, line int) string {
+	lines := strings.Split(source, "\n")
+	if line <= 0 || line > len(lines) {
+		return ""
+	}
+	return lines[line-1]
 }
 
 func captureCLIStdout(t *testing.T, fn func() error) (string, error) {

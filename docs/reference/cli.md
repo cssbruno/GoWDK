@@ -15,6 +15,9 @@ gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
+gowdk contracts [--json] [dir]
+gowdk graph [--json] [dir]
+gowdk list commands|queries|events|jobs [--json] [dir]
 gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk preview [--addr <addr>] [--hot] [build flags...]
@@ -28,10 +31,15 @@ gowdk lsp [--ssr]
 - `--force`: supported by `init`; overwrites starter files that already exist.
 - `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
-- `--json`: supported by `check`; prints editor-friendly diagnostic JSON.
+- `--json`: supported by `check`, `contracts`, `graph`, and `list`; prints
+  editor/tooling-friendly JSON. Contract JSON includes same-file handler
+  signature diagnostics when available.
 - `--write`: supported by `fmt`; overwrites formatted files.
 - `--config`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; loads a literal config subset from the given path instead of the required default `gowdk.config.go`.
 - `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
+- `gowdk build` writes `contract_reference` build-report events for
+  `g:command` forms and `g:query` elements with `unknown`, `bound`, `missing`,
+  or `invalid` status.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
 - `--module`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
@@ -58,6 +66,10 @@ go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk
 go run ./cmd/gowdk manifest --module frontend --ssr
 go run ./cmd/gowdk sitemap --module frontend --ssr
 go run ./cmd/gowdk routes --module frontend --ssr
+go run ./cmd/gowdk contracts --json .
+go run ./cmd/gowdk graph .
+go run ./cmd/gowdk list commands .
+go run ./cmd/gowdk list events --json .
 go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 go run ./cmd/gowdk build --debug --out /tmp/gowdk-build examples/pages/home.page.gwdk
 go run ./cmd/gowdk build --allow-missing-backend --out /tmp/gowdk-build examples/actions/signup.page.gwdk

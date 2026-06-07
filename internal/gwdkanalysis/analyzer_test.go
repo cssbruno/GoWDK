@@ -1,6 +1,7 @@
 package gwdkanalysis
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
@@ -184,6 +185,64 @@ view {
 	}
 }
 
+func TestAnalyzeAddsCommandReferencesToIR(t *testing.T) {
+	source := `package pages
+@page patients
+@route "/patients"
+
+view {
+  <form method="post" action="/patients" g:command="patients.CreatePatient">
+    <input name="name" />
+  </form>
+}
+`
+	pageAST := mustParse(t, source)
+	result, err := Analyze(gowdk.Config{}, []SourceFile{{Path: "pages/patients.page.gwdk", Kind: SourcePage, AST: pageAST}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.IR.ContractRefs) != 1 {
+		t.Fatalf("expected one contract ref, got %#v", result.IR.ContractRefs)
+	}
+	ref := result.IR.ContractRefs[0]
+	if ref.Kind != gwdkir.ContractCommand || ref.Name != "patients.CreatePatient" || ref.OwnerKind != gwdkir.SourcePage || ref.OwnerID != "patients" {
+		t.Fatalf("unexpected contract ref: %#v", ref)
+	}
+	wantColumn := strings.Index(sourceLine(source, 6), "g:command") + 1
+	if ref.Span.Start.Line != 6 || ref.Span.Start.Column != wantColumn {
+		t.Fatalf("expected g:command span at 6:%d, got %#v", wantColumn, ref.Span)
+	}
+}
+
+func TestAnalyzeAddsQueryReferencesToIR(t *testing.T) {
+	source := `package pages
+@page patients
+@route "/patients"
+
+view {
+  <section g:query="patients.GetPatientPage">
+    <h1>Patients</h1>
+  </section>
+}
+`
+	pageAST := mustParse(t, source)
+	result, err := Analyze(gowdk.Config{}, []SourceFile{{Path: "pages/patients.page.gwdk", Kind: SourcePage, AST: pageAST}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.IR.ContractRefs) != 1 {
+		t.Fatalf("expected one contract ref, got %#v", result.IR.ContractRefs)
+	}
+	ref := result.IR.ContractRefs[0]
+	if ref.Kind != gwdkir.ContractQuery || ref.Name != "patients.GetPatientPage" || ref.OwnerKind != gwdkir.SourcePage || ref.OwnerID != "patients" {
+		t.Fatalf("unexpected contract ref: %#v", ref)
+	}
+	wantColumn := strings.Index(sourceLine(source, 6), "g:query") + 1
+	if ref.Span.Start.Line != 6 || ref.Span.Start.Column != wantColumn {
+		t.Fatalf("expected g:query span at 6:%d, got %#v", wantColumn, ref.Span)
+	}
+}
+
 func TestBuildIRAttachesBackendBindings(t *testing.T) {
 	ir := BuildIR(gowdk.Config{}, manifest.Manifest{
 		Pages: []manifest.Page{{
@@ -294,4 +353,12 @@ func mustParse(t *testing.T, source string) parser.SyntaxFile {
 		t.Fatal(err)
 	}
 	return file
+}
+
+func sourceLine(source string, line int) string {
+	lines := strings.Split(source, "\n")
+	if line <= 0 || line > len(lines) {
+		return ""
+	}
+	return lines[line-1]
 }

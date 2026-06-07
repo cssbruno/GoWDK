@@ -357,6 +357,7 @@ type syntaxBodyLine struct {
 
 func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, error) {
 	block.Body = strings.TrimSpace(joinSyntaxBody(body))
+	block.BodyStart = syntaxBodyStart(body)
 	switch block.Kind {
 	case "view":
 		nodes, err := view.Parse(block.Body)
@@ -418,6 +419,18 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 		block.APIs = statements
 	}
 	return block, nil
+}
+
+func syntaxBodyStart(body []syntaxBodyLine) manifest.SourcePosition {
+	for _, raw := range body {
+		for index, char := range []rune(raw.Text) {
+			if strings.TrimSpace(string(char)) == "" {
+				continue
+			}
+			return manifest.SourcePosition{Line: raw.Line, Column: index + 1}
+		}
+	}
+	return manifest.SourcePosition{}
 }
 
 func parseBuildCall(body []syntaxBodyLine) (BuildCall, bool, error) {

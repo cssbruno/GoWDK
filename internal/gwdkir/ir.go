@@ -19,6 +19,7 @@ type Program struct {
 	Routes          []Route
 	Endpoints       []Endpoint
 	Templates       []Template
+	ContractRefs    []ContractReference
 	ClientBehaviors []ClientBehavior
 	Assets          []Asset
 	Generated       GeneratedOutput
@@ -138,16 +139,17 @@ type PageSpans struct {
 }
 
 type BlockSpans struct {
-	Paths     manifest.SourceSpan
-	Build     manifest.SourceSpan
-	Load      manifest.SourceSpan
-	Client    manifest.SourceSpan
-	View      manifest.SourceSpan
-	Actions   []manifest.NamedSpan
-	APIs      []manifest.NamedSpan
-	Fragments []manifest.NamedSpan
-	Exports   manifest.SourceSpan
-	Emits     manifest.SourceSpan
+	Paths         manifest.SourceSpan
+	Build         manifest.SourceSpan
+	Load          manifest.SourceSpan
+	Client        manifest.SourceSpan
+	View          manifest.SourceSpan
+	ViewBodyStart manifest.SourcePosition
+	Actions       []manifest.NamedSpan
+	APIs          []manifest.NamedSpan
+	Fragments     []manifest.NamedSpan
+	Exports       manifest.SourceSpan
+	Emits         manifest.SourceSpan
 }
 
 type Action struct {
@@ -357,7 +359,39 @@ type Template struct {
 	Source    string
 	Body      string
 	Span      manifest.SourceSpan
+	BodyStart manifest.SourcePosition
 }
+
+// ContractReference records a source-level reference to a backend contract.
+// Binding to Go contract metadata is a later analyzer step.
+type ContractReference struct {
+	Kind      ContractKind
+	Name      string
+	Status    ContractBindingStatus
+	Handler   string
+	Message   string
+	OwnerKind SourceKind
+	OwnerID   string
+	Package   string
+	Source    string
+	Span      manifest.SourceSpan
+}
+
+type ContractKind string
+
+const (
+	ContractCommand ContractKind = "command"
+	ContractQuery   ContractKind = "query"
+)
+
+type ContractBindingStatus string
+
+const (
+	ContractBindingUnknown ContractBindingStatus = "unknown"
+	ContractBindingBound   ContractBindingStatus = "bound"
+	ContractBindingMissing ContractBindingStatus = "missing"
+	ContractBindingInvalid ContractBindingStatus = "invalid"
+)
 
 // ClientBehavior records a compiler-owned client block. The body is retained
 // until the client language has a dedicated full AST.

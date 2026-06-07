@@ -17,6 +17,7 @@ Current feature IDs:
 - `embed`
 - `css`
 - `ratelimit`
+- `contracts`
 
 Current packages:
 
@@ -29,6 +30,7 @@ Current packages:
 - `addons/css`
 - `addons/tailwind`
 - `addons/ratelimit`
+- `addons/contracts`
 
 The current compiler validator checks whether SSR is enabled when a page uses
 `@render ssr` or `@render hybrid`. SPA builds also invoke addons that
@@ -47,8 +49,13 @@ Addons: []gowdk.Addon{
 	embed.Addon(),
 	css.Addon(),
 	ratelimit.Addon(),
+	contracts.Addon(),
 }
 ```
+
+`addons/contracts` registers the contract-driven runtime feature. The current
+runtime registry lives in `runtime/contracts`; compiler syntax, generated
+adapters, CLI graph output, durable outbox, and worker roles remain planned.
 
 External addons use normal Go imports:
 

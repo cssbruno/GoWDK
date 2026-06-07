@@ -16,6 +16,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkast"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/view"
 )
 
 var routeParamPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)(?::([A-Za-z_][A-Za-z0-9_]*))?\}`)
@@ -264,6 +265,7 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 			component.Blocks.View = true
 			component.Blocks.ViewBody = block.Body
 			component.Blocks.Spans.View = block.Span
+			component.Blocks.Spans.ViewBodyStart = block.BodyStart
 		default:
 			return manifest.Component{}, fmt.Errorf("%s: unsupported component block %q", source, block.Kind)
 		}
@@ -305,6 +307,7 @@ func LowerLayout(source string, ast gwdkast.File) (manifest.Layout, error) {
 		layout.Blocks.View = true
 		layout.Blocks.ViewBody = block.Body
 		layout.Blocks.Spans.View = block.Span
+		layout.Blocks.Spans.ViewBodyStart = block.BodyStart
 	}
 	if layout.ID == "" {
 		return manifest.Layout{}, fmt.Errorf("%s: missing @layout", source)
@@ -354,14 +357,17 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 			Span:          page.Spans.Route,
 		})
 		if page.Blocks.View {
-			program.Templates = append(program.Templates, gwdkir.Template{
+			template := gwdkir.Template{
 				OwnerKind: gwdkir.SourcePage,
 				OwnerID:   page.ID,
 				Package:   page.Package,
 				Source:    page.Source,
 				Body:      page.Blocks.ViewBody,
 				Span:      page.Blocks.Spans.View,
-			})
+				BodyStart: page.Blocks.Spans.ViewBodyStart,
+			}
+			program.Templates = append(program.Templates, template)
+			appendContractReferences(&program, template)
 		}
 		for _, css := range page.CSS {
 			name, useAlias, usePackage := assetUse(page.Uses, css)
@@ -473,14 +479,17 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 			})
 		}
 		if component.Blocks.View {
-			program.Templates = append(program.Templates, gwdkir.Template{
+			template := gwdkir.Template{
 				OwnerKind: gwdkir.SourceComponent,
 				OwnerID:   component.Name,
 				Package:   component.Package,
 				Source:    component.Source,
 				Body:      component.Blocks.ViewBody,
 				Span:      component.Blocks.Spans.View,
-			})
+				BodyStart: component.Blocks.Spans.ViewBodyStart,
+			}
+			program.Templates = append(program.Templates, template)
+			appendContractReferences(&program, template)
 		}
 		if component.Blocks.Client {
 			program.ClientBehaviors = append(program.ClientBehaviors, gwdkir.ClientBehavior{
@@ -509,14 +518,17 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 		pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: layout.Source, Kind: gwdkir.SourceLayout, Package: layout.Package, Name: layout.ID, Span: layout.Span})
 		appendPackageUses(pkg, layout.Uses)
 		if layout.Blocks.View {
-			program.Templates = append(program.Templates, gwdkir.Template{
+			template := gwdkir.Template{
 				OwnerKind: gwdkir.SourceLayout,
 				OwnerID:   layout.ID,
 				Package:   layout.Package,
 				Source:    layout.Source,
 				Body:      layout.Blocks.ViewBody,
 				Span:      layout.Blocks.Spans.View,
-			})
+				BodyStart: layout.Blocks.Spans.ViewBodyStart,
+			}
+			program.Templates = append(program.Templates, template)
+			appendContractReferences(&program, template)
 		}
 	}
 	for _, endpoint := range app.Endpoints {
@@ -566,6 +578,69 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 	})
 	attachBackendBindings(&program, app.BackendBindings)
 	return program
+}
+
+func appendContractReferences(program *gwdkir.Program, template gwdkir.Template) {
+	refs, err := view.ContractReferences(template.Body)
+	if err != nil {
+		return
+	}
+	for _, ref := range refs {
+		program.ContractRefs = append(program.ContractRefs, gwdkir.ContractReference{
+			Kind:      irContractReferenceKind(ref.Kind),
+			Name:      ref.Name,
+			OwnerKind: template.OwnerKind,
+			OwnerID:   template.OwnerID,
+			Package:   template.Package,
+			Source:    template.Source,
+			Span:      templateOffsetSpan(template, ref.Start, ref.End),
+		})
+	}
+}
+
+func irContractReferenceKind(kind view.ContractReferenceKind) gwdkir.ContractKind {
+	switch kind {
+	case view.ContractReferenceQuery:
+		return gwdkir.ContractQuery
+	default:
+		return gwdkir.ContractCommand
+	}
+}
+
+func templateOffsetSpan(template gwdkir.Template, start int, end int) manifest.SourceSpan {
+	if start < 0 || end <= start || start >= len([]rune(template.Body)) {
+		return template.Span
+	}
+	startPos := templateOffsetPosition(template, start)
+	endPos := templateOffsetPosition(template, end)
+	if startPos.Line == 0 || endPos.Line == 0 {
+		return template.Span
+	}
+	return manifest.SourceSpan{Start: startPos, End: endPos}
+}
+
+func templateOffsetPosition(template gwdkir.Template, offset int) manifest.SourcePosition {
+	line := template.BodyStart.Line
+	column := template.BodyStart.Column
+	if line == 0 {
+		line = template.Span.Start.Line + 1
+		column = 1
+	}
+	for index, char := range []rune(template.Body) {
+		if index == offset {
+			return manifest.SourcePosition{Line: line, Column: column}
+		}
+		if char == '\n' {
+			line++
+			column = 1
+			continue
+		}
+		column++
+	}
+	if offset == len([]rune(template.Body)) {
+		return manifest.SourcePosition{Line: line, Column: column}
+	}
+	return manifest.SourcePosition{}
 }
 
 func endpointSource(source manifest.EndpointSource) gwdkir.EndpointSource {
@@ -748,6 +823,7 @@ func applyPageBlock(page *manifest.Page, block gwdkast.Block) {
 		page.Blocks.View = true
 		page.Blocks.ViewBody = block.Body
 		page.Blocks.Spans.View = block.Span
+		page.Blocks.Spans.ViewBodyStart = block.BodyStart
 	}
 }
 
@@ -865,16 +941,17 @@ func lowerIRBlocks(blocks manifest.Blocks) gwdkir.Blocks {
 		APIs:       lowerIRAPIs(blocks.APIs),
 		Fragments:  lowerIRFragmentEndpoints(blocks.Fragments),
 		Spans: gwdkir.BlockSpans{
-			Paths:     blocks.Spans.Paths,
-			Build:     blocks.Spans.Build,
-			Load:      blocks.Spans.Load,
-			Client:    blocks.Spans.Client,
-			View:      blocks.Spans.View,
-			Actions:   append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
-			APIs:      append([]manifest.NamedSpan(nil), blocks.Spans.APIs...),
-			Fragments: append([]manifest.NamedSpan(nil), blocks.Spans.Fragments...),
-			Exports:   blocks.Spans.Exports,
-			Emits:     blocks.Spans.Emits,
+			Paths:         blocks.Spans.Paths,
+			Build:         blocks.Spans.Build,
+			Load:          blocks.Spans.Load,
+			Client:        blocks.Spans.Client,
+			View:          blocks.Spans.View,
+			ViewBodyStart: blocks.Spans.ViewBodyStart,
+			Actions:       append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
+			APIs:          append([]manifest.NamedSpan(nil), blocks.Spans.APIs...),
+			Fragments:     append([]manifest.NamedSpan(nil), blocks.Spans.Fragments...),
+			Exports:       blocks.Spans.Exports,
+			Emits:         blocks.Spans.Emits,
 		},
 	}
 }

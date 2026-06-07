@@ -44,14 +44,13 @@ declarations fail when they have an identifier-like first token and a trailing
 `{`. SPA builds also accept the first imported `buildCall` subset when the
 page declares the referenced import.
 
-Default `go {}` and `go spa {}` blocks can provide no-argument
-build-data functions for `build { => LocalFunc() }`. Saved default and
-`go spa {}` blocks are type-checked with sibling Go files in the same
-package during validation. `go ssr {}` can provide generated SSR load
-handlers when request-time rendering is enabled. Generated app source writes
-default, `go spa {}`, and `go ssr {}` blocks under `gowdk_go/`.
-Page-level `go spa {}` blocks that export `GOWDKMount<PageID>` with
-`//go:wasmexport` compile to browser Go WASM and emit a page mount loader.
+Default `go {}` blocks can provide no-argument build-data functions for
+`build { => LocalFunc() }`. Saved default `go {}` blocks are type-checked with
+sibling Go files in the same package during validation. `go ssr {}` can provide
+generated SSR load handlers when request-time rendering is enabled. Generated
+app source writes default `go {}` and `go ssr {}` blocks under `gowdk_go/`.
+Page-level `go client {}` blocks that export `GOWDKMount<PageID>` with
+`//go:wasmexport` compile to client-side Go WASM and emit a page mount loader.
 Targets such as `addon.contracts` are preserved for lane-specific extraction.
 Configured addons that implement
 `gowdk.GoBlockConsumer` can validate `go addon.<name> {}` blocks and emit

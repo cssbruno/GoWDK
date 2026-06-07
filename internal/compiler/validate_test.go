@@ -279,7 +279,7 @@ func TestValidateManifestReportsDefaultScriptTypeErrors(t *testing.T) {
 	}
 }
 
-func TestValidateManifestTypeChecksSPAGoBlockAsStaticPackageGo(t *testing.T) {
+func TestValidateManifestTypeChecksDefaultGoBlockAsStaticPackageGo(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")
 	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
@@ -293,7 +293,6 @@ func TestValidateManifestTypeChecksSPAGoBlockAsStaticPackageGo(t *testing.T) {
 		Blocks: manifest.Blocks{
 			View: true,
 			GoBlocks: []manifest.GoBlock{{
-				Target: "spa",
 				Body: `func StaticSeed() string {
 	return MissingSeed
 }`,
@@ -303,13 +302,13 @@ func TestValidateManifestTypeChecksSPAGoBlockAsStaticPackageGo(t *testing.T) {
 
 	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
 	if err == nil {
-		t.Fatal("expected spa go block type-check diagnostic")
+		t.Fatal("expected default go block type-check diagnostic")
 	}
 	if !strings.Contains(err.Error(), "undefined: MissingSeed") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if strings.Contains(err.Error(), "request-time") {
-		t.Fatalf("spa go block should not imply request-time behavior: %v", err)
+		t.Fatalf("default go block should not imply request-time behavior: %v", err)
 	}
 }
 

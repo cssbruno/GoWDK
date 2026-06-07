@@ -341,20 +341,19 @@ func HomePageForBuild() PageCopy {
 	}
 }
 
-func TestBuildUsesSPAGoBlockGoBuildData(t *testing.T) {
+func TestBuildUsesDefaultGoBlockGoBuildData(t *testing.T) {
 	outputDir := t.TempDir()
 	sourceDir := t.TempDir()
 	source := filepath.Join(sourceDir, "home.page.gwdk")
 	app := manifest.Manifest{Pages: []manifest.Page{{
-		ID:      "go.spa",
+		ID:      "go.default",
 		Package: "pages",
 		Source:  source,
-		Route:   "/go-spa",
+		Route:   "/go-default",
 		Blocks: manifest.Blocks{
 			Build:     true,
 			BuildBody: `=> StaticPageForBuild()`,
 			GoBlocks: []manifest.GoBlock{{
-				Target: "spa",
 				Body: `type PageCopy struct {
 	Title string ` + "`json:\"title\"`" + `
 	Slug string ` + "`json:\"slug\"`" + `
@@ -376,13 +375,13 @@ func StaticPageForBuild() PageCopy {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := os.ReadFile(filepath.Join(outputDir, "go-spa", "index.html"))
+	payload, err := os.ReadFile(filepath.Join(outputDir, "go-default", "index.html"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	output := string(payload)
 	if !strings.Contains(output, `<main data-slug="static-first-script"><h1>Static-first script</h1></main>`) {
-		t.Fatalf("expected spa script build data output:\n%s", output)
+		t.Fatalf("expected default go block build data output:\n%s", output)
 	}
 }
 

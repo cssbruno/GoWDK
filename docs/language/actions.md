@@ -14,7 +14,7 @@ act Submit POST "/signup" @error "/errors/signup.html"
 Current behavior:
 
 - `act Submit POST "/signup"` binds exactly to exported Go function `Submit` in
-  the same package as the `.gwdk` file.
+  a same-package `.go` file or default `go {}` block.
 - The optional endpoint-local `@error` suffix selects a generated HTML error
   page for action panics before response headers are written. Returned handler
   errors still follow normal `runtime/response.Response` behavior.

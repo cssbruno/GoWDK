@@ -100,21 +100,42 @@ function gowdkSourceRunInvocation(args, cwd) {
 function toolInvocation(args, options = {}) {
   const cwd = options.cwd;
   if (options.cliPath) {
-    return { command: options.cliPath, args, cwd };
+    return { command: options.cliPath, args, cwd, source: 'cliPath' };
   }
   if (options.isSourceWorkspace) {
-    return gowdkSourceRunInvocation(args, cwd);
+    return { ...gowdkSourceRunInvocation(args, cwd), source: 'sourceWorkspace' };
   }
   if (options.localBinary) {
-    return { command: options.localBinary, args, cwd };
+    return { command: options.localBinary, args, cwd, source: 'localBinary' };
   }
   if (options.sourceWorkspaceRoot) {
-    return gowdkSourceRunInvocation(args, options.sourceWorkspaceRoot);
+    return { ...gowdkSourceRunInvocation(args, options.sourceWorkspaceRoot), source: 'sourcePath' };
   }
   if (options.requiresGOWDK) {
-    return { command: 'go', args: gowdkModuleRunArgs(args), cwd };
+    return { command: 'go', args: gowdkModuleRunArgs(args), cwd, source: 'module' };
   }
-  return { command: 'gowdk', args, cwd };
+  return { command: 'gowdk', args, cwd, source: 'path' };
+}
+
+function isMissingExecutableError(error = {}) {
+  return error.code === 'ENOENT' || /\bENOENT\b/.test(String(error.message || ''));
+}
+
+function missingExecutableMessage(invocation = {}, error = {}) {
+  if (!isMissingExecutableError(error)) {
+    return '';
+  }
+  const command = String(invocation.command || 'gowdk');
+  if (command === 'gowdk') {
+    return 'GOWDK CLI was not found on PATH. Install gowdk or set gowdk.cliPath to a built GOWDK binary.';
+  }
+  if (invocation.source === 'cliPath') {
+    return `Configured GOWDK CLI was not found: ${command}. Update gowdk.cliPath to a valid binary.`;
+  }
+  if (command === 'go') {
+    return 'GOWDK could not start Go. Install Go, fix PATH, or set gowdk.cliPath to a built GOWDK binary.';
+  }
+  return `GOWDK could not start ${command}. Update gowdk.cliPath or fix PATH.`;
 }
 
 function isGOWDKSourceDir(dir) {
@@ -1304,7 +1325,9 @@ module.exports = {
   gowdkModuleRunArgs,
   groupDiagnosticsByFile,
   hoverMarkdown,
+  isMissingExecutableError,
   isGOWDKSourceDir,
+  missingExecutableMessage,
   nearbyGOWDKSourceRoot,
   nearestProjectRoot,
   parseDiagnostics,

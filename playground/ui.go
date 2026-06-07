@@ -118,6 +118,7 @@ const playgroundHTML = `<!doctype html>
     };
     let project = loadProjectFromHash() || clone(starters.basic);
     let activeFile = Object.keys(project).sort()[0];
+    let previewObjectURLs = [];
     async function boot() {
       const go = new Go();
       const result = await WebAssembly.instantiateStreaming(fetch("gowdk.wasm"), go.importObject);
@@ -225,9 +226,45 @@ const playgroundHTML = `<!doctype html>
       const result = JSON.parse(window.gowdkCompile(JSON.stringify(request)));
       diagnostics.textContent = JSON.stringify(result.diagnostics || [], null, 2);
       const first = Object.keys(result.html || {}).sort()[0];
-      preview.srcdoc = first ? result.html[first] : "";
+      if (first) {
+        preview.srcdoc = preparePreviewHTML(result, result.html[first]);
+      } else {
+        clearPreviewObjectURLs();
+        preview.srcdoc = "";
+      }
       renderGenerated(result);
       status.textContent = (result.diagnostics || []).some((item) => item.severity === "error") ? "errors" : "compiled";
+    }
+    function preparePreviewHTML(result, html) {
+      clearPreviewObjectURLs();
+      const files = result.files || {};
+      Object.keys(files).sort().forEach((name) => {
+        if (!name.startsWith("assets/")) return;
+        const url = URL.createObjectURL(new Blob([files[name]], { type: previewMimeType(name) }));
+        previewObjectURLs.push(url);
+        html = rewritePreviewAssetURL(html, name, url);
+      });
+      return html;
+    }
+    function clearPreviewObjectURLs() {
+      previewObjectURLs.forEach((url) => URL.revokeObjectURL(url));
+      previewObjectURLs = [];
+    }
+    function previewMimeType(name) {
+      if (name.endsWith(".css")) return "text/css";
+      if (name.endsWith(".js")) return "text/javascript";
+      if (name.endsWith(".wasm")) return "application/wasm";
+      if (name.endsWith(".json")) return "application/json";
+      return "text/plain";
+    }
+    function rewritePreviewAssetURL(html, filePath, assetURL) {
+      const escapedPath = escapeRegExp(filePath);
+      const escapedAbsolutePath = escapeRegExp("/" + filePath);
+      const pattern = new RegExp("(\\b(?:href|src)\\s*=\\s*[\"'])(" + escapedAbsolutePath + "|" + escapedPath + ")([\"'])", "gi");
+      return html.replace(pattern, "$1" + assetURL + "$3");
+    }
+    function escapeRegExp(value) {
+      return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
     function renderGenerated(result) {
       const html = result.html || {};

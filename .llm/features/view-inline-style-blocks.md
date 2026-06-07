@@ -1,4 +1,4 @@
-# Feature Spec: View Inline Style Blocks
+# Feature Spec: Style Blocks
 
 ## Problem
 
@@ -9,11 +9,10 @@ separate file.
 
 ## Goals
 
-- Allow `style {}` blocks nested directly inside `view {}`.
-- Remove nested `style {}` content from rendered markup before `view {}` HTML
-  parsing.
-- Emit nested style CSS through the existing generated CSS asset pipeline.
-- Preserve scoped CSS behavior for component-owned inline styles.
+- Allow `style {}` blocks as siblings of `view {}`.
+- Keep `view {}` markup parsing separate from CSS parsing.
+- Emit style block CSS through the existing generated CSS asset pipeline.
+- Preserve scoped CSS behavior for component-owned style blocks.
 
 ## Non-Goals
 
@@ -30,7 +29,7 @@ separate file.
 
 ## User Flow
 
-1. Author writes `style {}` inside a page, component, or layout `view {}`.
+1. Author writes `style {}` after `view {}` in a page, component, or layout.
 2. GOWDK parses the style body separately from the markup body.
 3. GOWDK build emits generated CSS and links it from affected pages.
 
@@ -38,18 +37,18 @@ separate file.
 
 ### Functional
 
-- Pages can declare `style {}` under `view {}` and receive a generated page CSS
+- Pages can declare sibling `style {}` and receive a generated page CSS
   asset.
-- Components can declare `style {}` under `view {}` and receive scoped generated
+- Components can declare sibling `style {}` and receive scoped generated
   component CSS.
-- Layouts can declare `style {}` under `view {}` and pages using the layout link
+- Layouts can declare sibling `style {}` and pages using the layout link
   the generated layout CSS asset.
-- CSS braces inside `style {}` must not close the parent `view {}` block.
+- CSS braces inside `style {}` must not close the style block early.
 
 ### Non-Functional
 
 - Performance: reuse existing CSS minification and content-hash output.
-- Reliability: parser errors must report unclosed nested style blocks.
+- Reliability: parser errors must report unclosed style blocks.
 - Accessibility: no direct impact.
 - Security/privacy: inline CSS is treated as public generated CSS.
 - Observability: generated CSS continues to appear in build reports and asset
@@ -57,17 +56,17 @@ separate file.
 
 ## Acceptance Criteria
 
-- [x] `style {}` nested under a page `view {}` builds into a linked generated CSS
+- [x] sibling `style {}` builds into a linked generated CSS
   asset.
 - [x] The rendered HTML does not contain the `style {}` source block.
-- [x] Component nested styles are scoped with `data-gowdk-scope`.
-- [x] Nested CSS rule braces do not terminate `view {}` early.
+- [x] Component style blocks are scoped with `data-gowdk-scope`.
+- [x] CSS rule braces do not terminate `style {}` early.
 
 ## Edge Cases
 
-- `@css none` disables discovered page CSS but does not suppress direct nested
-  page style blocks.
-- Multiple nested style blocks are concatenated in declaration order.
+- `@css none` disables discovered page CSS but does not suppress direct page
+  style blocks.
+- Multiple style blocks are not supported in this slice.
 - Empty style blocks do not emit CSS assets.
 
 ## Dependencies

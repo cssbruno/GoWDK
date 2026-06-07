@@ -22,6 +22,10 @@ func TestUIHTMLIncludesCompilerPreviewAndDiagnostics(t *testing.T) {
 		`wasm_exec.js`,
 		`gowdk.wasm`,
 		`window.gowdkCompile`,
+		`preview.srcdoc = preparePreviewHTML(result, result.html[first]);`,
+		`URL.createObjectURL`,
+		`rewritePreviewAssetURL`,
+		`text/css`,
 	} {
 		if !strings.Contains(html, expected) {
 			t.Fatalf("expected %q in playground UI:\n%s", expected, html)

@@ -150,7 +150,7 @@ func pageScripts(config gowdk.Config, page manifest.Page, viewSource string, com
 		scripts = append(scripts, storeRuntimeHref)
 	}
 	scripts = append(scripts, islandScriptHrefs(viewSource, components, page.Package, componentUses(page.Uses))...)
-	scripts = append(scripts, spaScriptHrefs(page)...)
+	scripts = append(scripts, clientGoBlockHrefs(page)...)
 	return scripts
 }
 

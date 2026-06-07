@@ -143,7 +143,8 @@ test('toolInvocation prefers source workspace go run over PATH lookup', () => {
   }), {
     command: 'go',
     args: ['run', './cmd/gowdk', 'version'],
-    cwd: '/workspace/GOWDK'
+    cwd: '/workspace/GOWDK',
+    source: 'sourceWorkspace'
   });
 });
 
@@ -154,7 +155,8 @@ test('toolInvocation uses a workspace-local binary before bare gowdk', () => {
   }), {
     command: '/workspace/app/gowdk',
     args: ['check', 'home.page.gwdk'],
-    cwd: '/workspace/app'
+    cwd: '/workspace/app',
+    source: 'localBinary'
   });
 });
 
@@ -166,7 +168,8 @@ test('toolInvocation uses a source checkout before module go run', () => {
   }), {
     command: 'go',
     args: ['run', './cmd/gowdk', 'check', '--json'],
-    cwd: '/workspace/GOWDK'
+    cwd: '/workspace/GOWDK',
+    source: 'sourcePath'
   });
 });
 
@@ -177,8 +180,28 @@ test('toolInvocation uses module go run for GOWDK app modules', () => {
   }), {
     command: 'go',
     args: ['run', 'github.com/cssbruno/gowdk/cmd/gowdk', 'sitemap'],
-    cwd: '/workspace/app'
+    cwd: '/workspace/app',
+    source: 'module'
   });
+});
+
+test('missingExecutableMessage explains missing GOWDK CLI resolution', () => {
+  assert.equal(core.isMissingExecutableError({ code: 'ENOENT' }), true);
+  assert.equal(core.isMissingExecutableError(new Error('spawn gowdk ENOENT')), true);
+  assert.equal(core.isMissingExecutableError(new Error('exit status 1')), false);
+
+  assert.equal(
+    core.missingExecutableMessage({ command: 'gowdk', source: 'path' }, { code: 'ENOENT' }),
+    'GOWDK CLI was not found on PATH. Install gowdk or set gowdk.cliPath to a built GOWDK binary.'
+  );
+  assert.equal(
+    core.missingExecutableMessage({ command: '/missing/gowdk', source: 'cliPath' }, { code: 'ENOENT' }),
+    'Configured GOWDK CLI was not found: /missing/gowdk. Update gowdk.cliPath to a valid binary.'
+  );
+  assert.equal(
+    core.missingExecutableMessage({ command: 'go', source: 'module' }, { code: 'ENOENT' }),
+    'GOWDK could not start Go. Install Go, fix PATH, or set gowdk.cliPath to a built GOWDK binary.'
+  );
 });
 
 test('nearestProjectRoot finds nested GOWDK app roots inside broad workspaces', () => {

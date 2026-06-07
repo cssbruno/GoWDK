@@ -8,6 +8,7 @@ const core = require('./extension-core');
 
 const LANGUAGE_ID = 'gwdk';
 const semanticLegend = new vscode.SemanticTokensLegend(core.SEMANTIC_TOKEN_TYPES, []);
+const missingExecutableNotifications = new Set();
 
 function activate(context) {
   const diagnostics = vscode.languages.createDiagnosticCollection('gowdk');
@@ -359,7 +360,8 @@ function runGowdk(args, document) {
       maxBuffer: 1024 * 1024
     }, (error, stdout, stderr) => {
       if (error) {
-        error.message = stderr.trim() || stdout.trim() || error.message;
+        notifyMissingExecutable(invocation, error);
+        error.message = stderr.trim() || stdout.trim() || core.missingExecutableMessage(invocation, error) || error.message;
         if (stdout.trim() && args.includes('--json')) {
           resolve({ stdout, stderr });
           return;
@@ -369,6 +371,23 @@ function runGowdk(args, document) {
       }
       resolve({ stdout, stderr });
     });
+  });
+}
+
+function notifyMissingExecutable(invocation, error) {
+  const message = core.missingExecutableMessage(invocation, error);
+  if (!message) {
+    return;
+  }
+  const key = `${invocation.cwd || ''}:${invocation.command}`;
+  if (missingExecutableNotifications.has(key)) {
+    return;
+  }
+  missingExecutableNotifications.add(key);
+  vscode.window.showErrorMessage(message, 'Open Settings').then((selection) => {
+    if (selection === 'Open Settings') {
+      vscode.commands.executeCommand('workbench.action.openSettings', 'gowdk.cliPath');
+    }
   });
 }
 

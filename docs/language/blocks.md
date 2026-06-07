@@ -14,9 +14,10 @@ The parser records whether these top-level blocks are present:
   then rejected on SPA/action pages.
 - `go {}` and `go target {}`: optional inline Go authoring blocks.
   Presence, target, raw body text, and source span are recorded. Default
-  `go {}` and `go spa {}` can provide no-argument build-data functions
-  called by `build { => LocalFunc() }`. Page-level `go spa {}` can also
-  opt into browser execution by exporting `GOWDKMount<PageID>` with
+  `go {}` can provide no-argument build-data functions called by
+  `build { => LocalFunc() }` and same-page action, API, or fragment handlers.
+  Page-level `go client {}` can opt into client-side execution by exporting
+  `GOWDKMount<PageID>` with
   `//go:wasmexport`; GOWDK compiles that Go block to browser Go WASM and emits a
   page loader. `go ssr {}` can provide generated SSR load handlers.
   Configured addons that implement `gowdk.GoBlockConsumer` can validate
@@ -43,18 +44,19 @@ api Health GET "/api/health"
   by bare name in the current slice; importing the package keeps build-time
   execution dependencies visible and avoids implicit same-package execution.
 - `load {}` is request-time behavior and must not make SPA pages implicitly SSR.
-- `go {}` and `go spa {}` are parsed as Go and can run static
-  build-time helpers for `build {}`. Saved default and `go spa {}` blocks
-  are also type-checked with sibling Go files in the same package during
-  validation. `go spa {}` is static-first and must not imply request-time
-  rendering. A page-level `go spa {}` runs in the browser only when it
+- `go {}` is parsed as Go and can run static build-time helpers for
+  `build {}`. Saved default `go {}` blocks are also type-checked with
+  sibling Go files in the same package during validation. Generated apps can
+  bind supported same-page action, API, and fragment handlers from default
+  `go {}` when no same-package `.go` handler exists. A page-level
+  `go client {}` runs on the client only when it
   declares a `//go:wasmexport GOWDKMount<PageID>` function; that browser lane is
   compiled with `GOOS=js GOARCH=wasm` and mounted by the generated page loader.
   `go ssr {}` is
   request-time and requires SSR or explicit hybrid request-time behavior;
   current generated apps can bind `Load<PageID>` from `go ssr {}`.
-  Generated app source writes default, `go spa {}`, and `go ssr {}`
-  blocks as normal Go packages under `gowdk_go/`. `go addon.<name> {}`
+  Generated app source writes default `go {}` and `go ssr {}` blocks as
+  normal Go packages under `gowdk_go/`. `go addon.<name> {}`
   is reserved for addon-owned validation and generated app file emission.
 - `act` and `api` endpoint declarations describe request handlers that should
   work without full-page SSR. Normal Go handlers own behavior and return
@@ -88,8 +90,7 @@ CSS asset pipeline:
 
 ## Go Blocks
 
-Use a default `go {}` or `go spa {}` block for colocated build-time Go
-helpers:
+Use a default `go {}` block for colocated build-time Go helpers:
 
 ```gwdk
 import strings "strings"
@@ -123,14 +124,12 @@ style {
 ```
 
 The compiler parses the go block body as Go and runs the referenced no-argument
-function during build. Returned JSON object fields become build data. Use
-`go spa {}` when the helper is explicitly static-first SPA authoring; it
-does not make the page request-rendered.
+function during build. Returned JSON object fields become build data.
 
-When generated app source is emitted, default and `go spa {}` blocks are
-also written under `gowdk_go/<package>/go.go` so `go test ./...` in
-the generated app can type-check them as normal Go packages. GOWDK does not
-write extracted files beside the user's source files.
+When generated app source is emitted, default `go {}` blocks are also written
+under `gowdk_go/<package>/go.go` so `go test ./...` in the generated app can
+type-check them as normal Go packages. GOWDK does not write extracted files
+beside the user's source files.
 
 Use `go ssr {}` for colocated SSR load handlers:
 
@@ -156,12 +155,12 @@ Generated apps emit the SSR go block as normal Go under `gowdk_go/` in the
 generated app module and call it through the same load-handler adapter used for
 separate `.go` files.
 
-Use a page-level `go spa {}` mount when the page needs browser Go:
+Use a page-level `go client {}` mount when the page needs client-side Go:
 
 ```gwdk
 page home "/"
 
-go spa {
+go client {
 import "syscall/js"
 
 //go:wasmexport GOWDKMountHome
@@ -189,8 +188,8 @@ style {
 For page `home`, the required browser mount export is `GOWDKMountHome`.
 GOWDK emits `assets/gowdk/islands/pages/Home.wasm`,
 `assets/gowdk/islands/pages/Home.wasm.js`, and Go's `wasm_exec.js` runtime.
-Without that `//go:wasmexport` mount, `go spa {}` remains a static
-build-time/helper go block and no browser WASM asset is emitted.
+Without that `//go:wasmexport` mount, `go client {}` is validated as Go but no
+browser WASM asset is emitted.
 
 Use `go addon.<name> {}` when a configured addon owns the target:
 

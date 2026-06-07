@@ -180,7 +180,7 @@ func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 	}
 }
 
-func TestBuildEmitsNestedPageViewStyleBlock(t *testing.T) {
+func TestBuildEmitsPageStyleBlock(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{{
 		ID:    "styled",
@@ -531,7 +531,7 @@ func TestBuildEmitsScopedComponentCSSWithManifestAndCacheHeaders(t *testing.T) {
 	}
 }
 
-func TestBuildEmitsScopedNestedComponentViewStyleBlock(t *testing.T) {
+func TestBuildEmitsScopedComponentStyleBlock(t *testing.T) {
 	outputDir := t.TempDir()
 	component := manifest.Component{
 		Package: "components",
@@ -579,7 +579,7 @@ func TestBuildEmitsScopedNestedComponentViewStyleBlock(t *testing.T) {
 	}
 }
 
-func TestBuildLinksNestedLayoutViewStyleBlockToUsingPages(t *testing.T) {
+func TestBuildLinksLayoutStyleBlockToUsingPages(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{
 		Pages: []manifest.Page{

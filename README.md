@@ -118,22 +118,100 @@ style {
 ```
 
 Programming logic stays in Go. Today that means normal `.go` files imported or
-referenced from `.gwdk`, plus default and `go spa {}` blocks for colocated
-static helpers. Saved default and `go spa {}` blocks are type-checked with
+referenced from `.gwdk`, plus default `go {}` blocks for colocated
+static helpers. Saved default `go {}` blocks are type-checked with
 sibling Go files during validation. `build {}` can call an imported or inline
 no-argument Go function at build time, JSON-encode its returned object, and
 expose scalar fields to `view {}`. Request-time and addon-targeted go blocks are
 parsed and validated; generated apps can execute `go ssr {}` load handlers,
-page-level `go spa {}` can opt into browser Go by exporting
+page-level `go client {}` can opt into client-side Go by exporting
 `//go:wasmexport GOWDKMount<PageID>` for a generated WASM page loader, and
 configured addons that implement `gowdk.GoBlockConsumer` can validate
 `go addon.<name> {}` blocks and emit generated app Go files. Generated app source
-materializes default, `go spa {}`, and `go ssr {}` blocks as normal Go
+materializes default `go {}` and `go ssr {}` blocks as normal Go
 packages under `gowdk_go/`.
 
 Pages can stay build-time while components own local reactive state; the
 compiler generates the island runtime for `client {}` handlers, computed
 values, bindings, class toggles, and conditional DOM.
+
+### API And Frontend In One File
+
+Page files can declare backend endpoints beside the frontend they serve. Default
+`go {}` blocks can provide build-time copy and same-page API handlers when the
+handler uses the supported API signature.
+
+```gwdk
+// pages/dashboard.page.gwdk
+package pages
+
+@page dashboard
+@route "/dashboard"
+
+api Session GET "/api/session"
+
+build {
+  => DashboardCopyForBuild()
+}
+
+go {
+import (
+	"context"
+	"net/http"
+	"strings"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+type DashboardCopy struct {
+	Title   string `json:"title"`
+	Summary string `json:"summary"`
+}
+
+func DashboardCopyForBuild() DashboardCopy {
+	return DashboardCopy{
+		Title:   "Dashboard",
+		Summary: "This page and its API live in one GOWDK file.",
+	}
+}
+
+func Session(_ context.Context, request *http.Request) (response.Response, error) {
+	user := strings.TrimSpace(request.URL.Query().Get("user"))
+	if user == "" {
+		user = "guest"
+	}
+
+	return response.JSONValue(http.StatusOK, map[string]any{
+		"authenticated": user != "guest",
+		"user":          user,
+		"source":        "pages/dashboard.page.gwdk",
+	})
+}
+}
+
+view {
+  <main class="dashboard">
+    <section class="panel">
+      <h1>{title}</h1>
+      <p>{summary}</p>
+
+      <form method="get" action="/api/session">
+        <label for="user">User</label>
+        <input id="user" name="user" value="ada" />
+        <button type="submit">Open API JSON</button>
+      </form>
+
+      <a href="/api/session?user=ada">Inspect session API</a>
+    </section>
+  </main>
+}
+
+style {
+  .dashboard { min-height: 100vh; display: grid; place-items: center; }
+  .panel { display: grid; gap: 1rem; max-width: 34rem; }
+  form { display: flex; gap: 0.5rem; align-items: end; }
+}
+```
 
 ## How It Works
 
@@ -234,8 +312,8 @@ See [CLI reference](docs/reference/cli.md).
 | Component behavior, client behavior, and scoped CSS | Partial |
 | WASM islands | Partial |
 | `go {}` metadata for inline Go authoring | Available |
-| Build-time default/SPA go block functions for `build {}` | Partial |
-| Browser `go spa {}` page mounts through Go WASM | Partial |
+| Build-time default go block functions for `build {}` | Partial |
+| Client-side `go client {}` page mounts through Go WASM | Partial |
 | Request-time `go ssr {}` load execution | Partial |
 | Addon inline Go adapter file generation | Partial |
 | Hybrid rendering beyond explicit request-time branches | Planned |

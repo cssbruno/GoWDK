@@ -383,7 +383,7 @@ func goBlockImportAliasForValidation(item manifest.Import) string {
 
 func isPackageGoBlockTarget(target string) bool {
 	switch strings.TrimSpace(target) {
-	case "", "spa":
+	case "":
 		return true
 	default:
 		return false

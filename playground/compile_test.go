@@ -33,6 +33,45 @@ view {
 	}
 }
 
+func TestCompileReturnsStyleBlockCSS(t *testing.T) {
+	result := Compile(Project{Files: map[string]string{
+		"src/pages/styled.page.gwdk": `@page styled
+@route "/styled"
+
+view {
+  <main class="hero">Styled playground</main>
+}
+
+style {
+  .hero {
+    color: red;
+  }
+}`,
+	}})
+
+	if len(result.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %#v", result.Diagnostics)
+	}
+	html := result.HTML["styled/index.html"]
+	if !strings.Contains(html, `rel="stylesheet"`) || !strings.Contains(html, `/assets/`) {
+		t.Fatalf("expected rendered HTML to link generated CSS, got %q", html)
+	}
+	var cssPath, cssBody string
+	for path, body := range result.CSS {
+		if strings.Contains(body, ".hero") {
+			cssPath = path
+			cssBody = body
+			break
+		}
+	}
+	if cssPath == "" {
+		t.Fatalf("expected generated CSS for style block, got %#v", result.CSS)
+	}
+	if !strings.Contains(result.Files[cssPath], ".hero") || !strings.Contains(cssBody, "color:red") {
+		t.Fatalf("expected generated style CSS, path=%q css=%q file=%q", cssPath, cssBody, result.Files[cssPath])
+	}
+}
+
 func TestCompileReportsDiagnostics(t *testing.T) {
 	result := Compile(Project{Files: map[string]string{
 		"src/pages/broken.page.gwdk": `@page broken

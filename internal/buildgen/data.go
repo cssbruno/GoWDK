@@ -461,7 +461,7 @@ func packageScriptWithFunction(scripts []manifest.GoBlock, function string) (man
 
 func isStaticPackageGoBlockTarget(target string) bool {
 	switch strings.TrimSpace(target) {
-	case "", "spa":
+	case "":
 		return true
 	default:
 		return false

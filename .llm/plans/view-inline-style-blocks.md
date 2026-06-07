@@ -1,4 +1,4 @@
-# Implementation Plan: View Inline Style Blocks
+# Implementation Plan: Style Blocks
 
 ## Context
 
@@ -6,15 +6,15 @@ Relevant spec: `.llm/features/view-inline-style-blocks.md`
 
 ## Assumptions
 
-- `style {}` is only supported as a direct nested block inside `view {}`.
+- `style {}` is only supported as a sibling block outside `view {}`.
 - Generated CSS assets are preferred over inline `<style>` tags.
 
 ## Proposed Changes
 
-- Extend block metadata to carry nested style CSS.
-- Update parser entrypoints to extract direct nested `style {}` from view bodies.
-- Lower nested style CSS through manifest and IR compatibility paths.
-- Emit page, component, and layout inline style CSS through buildgen.
+- Extend block metadata to carry style block CSS.
+- Update parser entrypoints to capture top-level `style {}` blocks.
+- Lower style block CSS through manifest and IR compatibility paths.
+- Emit page, component, and layout style block CSS through buildgen.
 - Document the syntax and add focused tests.
 
 ## Files Expected To Change
@@ -42,7 +42,7 @@ Relevant spec: `.llm/features/view-inline-style-blocks.md`
   CSS emission.
 - Integration: targeted `go test` packages.
 - End-to-end: `go test ./...`.
-- Manual: inspect generated HTML/CSS for a page with nested `style {}`.
+- Manual: inspect generated HTML/CSS for a page with sibling `style {}`.
 
 ## Verification Commands
 
@@ -54,7 +54,7 @@ go build ./cmd/gowdk
 
 ## Rollback Plan
 
-- Remove nested style extraction and the new block fields; existing external CSS
+- Remove style block capture and the new block fields; existing external CSS
   behavior remains unchanged.
 
 ## Risks

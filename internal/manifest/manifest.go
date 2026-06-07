@@ -234,7 +234,7 @@ type Blocks struct {
 }
 
 // GoBlock records one optional inline Go authoring block. Target is empty
-// for general package Go, or a lane/addon target such as "spa", "ssr", or
+// for general package Go, or a lane/addon target such as "client", "ssr", or
 // "addon.contracts".
 type GoBlock struct {
 	Target string

@@ -59,7 +59,7 @@ func validateGoBlockSyntax(packageName string, source string, pageID string, com
 func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, source string, packageName string, mode gowdk.RenderMode, hasLoad bool, block manifest.GoBlock) []ValidationError {
 	target := strings.TrimSpace(block.Target)
 	switch {
-	case target == "" || target == "spa":
+	case target == "" || target == "client":
 		return nil
 	case target == "ssr":
 		if mode == gowdk.SSR || mode == gowdk.Hybrid && hasLoad {
@@ -82,7 +82,7 @@ func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.A
 			ComponentName: componentName,
 			Source:        source,
 			Span:          block.Span,
-			Message:       fmt.Sprintf("unknown go block target %q; use go {}, go spa {}, go ssr {}, or go addon.<name> {}", target),
+			Message:       fmt.Sprintf("unknown go block target %q; use go {}, go client {}, go ssr {}, or go addon.<name> {}", target),
 		}}
 	}
 }
@@ -90,8 +90,17 @@ func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.A
 func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, source string, packageName string, block manifest.GoBlock) []ValidationError {
 	target := strings.TrimSpace(block.Target)
 	switch {
-	case target == "" || target == "spa":
+	case target == "":
 		return nil
+	case target == "client":
+		return []ValidationError{{
+			Code:          "go_client_requires_page",
+			PageID:        pageID,
+			ComponentName: componentName,
+			Source:        source,
+			Span:          block.Span,
+			Message:       "go client {} is page-level client-side behavior; use a page go client {} block or a component @wasm package",
+		}}
 	case target == "ssr":
 		if config.HasFeature(gowdk.FeatureSSR) {
 			return nil
@@ -113,7 +122,7 @@ func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]
 			ComponentName: componentName,
 			Source:        source,
 			Span:          block.Span,
-			Message:       fmt.Sprintf("unknown go block target %q; use go {}, go spa {}, go ssr {}, or go addon.<name> {}", target),
+			Message:       fmt.Sprintf("unknown go block target %q; use go {}, go client {}, go ssr {}, or go addon.<name> {}", target),
 		}}
 	}
 }

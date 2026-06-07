@@ -42,7 +42,7 @@ func HomePageForBuild() PageCopy {
 Lane-targeted go blocks:
 
 ```gwdk
-go spa {
+go client {
 func ClientSeed() ClientState {
 	return ClientState{}
 }
@@ -74,7 +74,7 @@ addon.
 | Target | Owner | Planned Meaning |
 | --- | --- | --- |
 | empty `go {}` | Compiler core | General package Go extracted into the declaring package. |
-| `go spa {}` | Compiler core or SPA addon | Build-time/static-first helpers, SPA-only generated wiring, and client seed data. Must not imply request-time page rendering. |
+| `go client {}` | Compiler core | Page-level client-side Go compiled to Go WASM when it exports the required mount ABI. Must not imply request-time page rendering. |
 | `go ssr {}` | SSR addon | Request-time helpers such as load functions, guards, SSR-only response helpers, and route-local logic. Requires SSR/hybrid request-time capability before execution. |
 | `go addon.<name> {}` | Named addon | Addon-owned extracted Go and validation hooks. The addon decides required imports, signatures, generated adapter wiring, and diagnostics. |
 
@@ -128,7 +128,7 @@ Disallowed:
 - auth/session/database access at browser runtime;
 - hidden full-page SSR.
 
-`go spa {}` must never make a page request-rendered. If it needs server
+`go client {}` must never make a page request-rendered. If it needs server
 data at request time, the page must use `@render ssr` or a future explicit
 hybrid branch.
 
@@ -216,9 +216,9 @@ Required diagnostics:
 - Keep generated adapters unchanged except for seeing symbols from extracted
   Go.
 - Status: partial. Build-time helper execution and validation-time type
-  checking with normal `.go` files exist for saved default and `go spa {}`
-  blocks. Generated app source materializes default, `go spa {}`, and
-  `go ssr {}` blocks under `gowdk_go/`. Source-adjacent extracted
+  checking with normal `.go` files exist for saved default `go {}` blocks.
+  Generated app source materializes default `go {}` and `go ssr {}` blocks
+  under `gowdk_go/`. Source-adjacent extracted
   files remain planned.
 
 ### Phase 3: Build-Time Integration
@@ -226,8 +226,11 @@ Required diagnostics:
 - Allow `build { => LocalFunc() }` to resolve functions from extracted inline
   Go in the same package.
 - Keep imported build functions working.
+- Bind generated same-page action, API, and fragment endpoints from default
+  inline Go when no same-package `.go` handler exists.
 - Add tests for slug/data shaping authored in `go {}`.
-- Status: implemented for default and `go spa {}` build-data functions.
+- Status: implemented for default `go {}` build-data functions and same-page
+  action, API, and fragment handlers.
 
 ### Phase 4: SSR Integration
 
@@ -237,19 +240,17 @@ Required diagnostics:
 - Status: implemented for generated SSR load handlers. Guard/helper symbols
   remain planned.
 
-### Phase 5: SPA/Addons
+### Phase 5: Client/Addons
 
-- Define `go spa {}` behavior for static-first helpers and client seed
-  state.
-- Compile page-level `go spa {}` browser mounts to Go WASM when the block
+- Define `go client {}` behavior for page-level client-side Go.
+- Compile page-level `go client {}` mounts to Go WASM when the block
   exports `GOWDKMount<PageID>` with `//go:wasmexport`.
 - Add addon go block consumer registration.
 - Let addons validate and emit adapter Go for `go addon.<name> {}`.
 - Add docs for addon authors.
 - Status: implemented for configured addons that implement
-  `gowdk.GoBlockConsumer`, for `go spa {}` static build-data helpers, and
-  for page-level browser `go spa {}` WASM mounts. SPA client seed state and
-  broader addon adapter semantics remain planned.
+  `gowdk.GoBlockConsumer` and for page-level `go client {}` WASM mounts.
+  Broader addon adapter semantics remain planned.
 
 ## Files Expected To Change
 

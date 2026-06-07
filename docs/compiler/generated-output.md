@@ -21,15 +21,14 @@ Implemented today:
   and Twitter card tags without a post-build patcher.
 - CSS processors can emit CSS asset files under the output directory.
 - Discovered page CSS inputs selected by implicit `default page` or explicit
-  `@css` annotations are concatenated into generated page CSS files. Direct
-  nested page `view { style {} }` CSS is appended to the same generated page
-  CSS asset.
+  `@css` annotations are concatenated into generated page CSS files. Page
+  `style {}` CSS is appended to the same generated page CSS asset.
 - Component `@css` files are emitted as scoped CSS assets, linked from
   generated pages, content-hashed, recorded in `gowdk-assets.json`, and served
-  with immutable cache headers by generated binaries. Direct nested component
-  `view { style {} }` CSS is emitted through the same scoped CSS path.
-- Layout `view { style {} }` CSS is emitted as generated CSS and linked by
-  pages that declare the layout.
+  with immutable cache headers by generated binaries. Component `style {}` CSS
+  is emitted through the same scoped CSS path.
+- Layout `style {}` CSS is emitted as generated CSS and linked by pages that
+  declare the layout.
 - Dynamic app routes with literal `paths {}` declarations are expanded by
   `gowdk build`.
 - Literal dynamic route params can render in the current literal `view {}`

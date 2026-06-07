@@ -1965,7 +1965,7 @@ func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
 	}
 }
 
-func TestBuildCompilesSPAGoBlockBrowserMount(t *testing.T) {
+func TestBuildCompilesClientGoBlockMount(t *testing.T) {
 	sourceDir := t.TempDir()
 	outputDir := t.TempDir()
 	app := manifest.Manifest{
@@ -1975,7 +1975,7 @@ func TestBuildCompilesSPAGoBlockBrowserMount(t *testing.T) {
 			Source: filepath.Join(sourceDir, "home.gwdk"),
 			Blocks: manifest.Blocks{
 				GoBlocks: []manifest.GoBlock{{
-					Target: "spa",
+					Target: "client",
 					Body: `//go:wasmexport GOWDKMountHome
 func GOWDKMountHome() uint32 { return 0 }
 `,
@@ -1995,27 +1995,27 @@ func GOWDKMountHome() uint32 { return 0 }
 	wasmExecPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "wasm_exec.js")
 	for _, path := range []string{wasmPath, loaderPath, wasmExecPath} {
 		if !hasAssetArtifact(result.AssetArtifacts, path) {
-			t.Fatalf("expected SPA browser go block asset %s, got %#v", path, result.AssetArtifacts)
+			t.Fatalf("expected client go block asset %s, got %#v", path, result.AssetArtifacts)
 		}
 	}
 	html := readFile(t, filepath.Join(outputDir, "index.html"))
 	if !strings.Contains(html, `<script src="/assets/gowdk/islands/pages/Home.wasm.js" defer></script>`) {
-		t.Fatalf("expected SPA browser go block loader in page:\n%s", html)
+		t.Fatalf("expected client go block loader in page:\n%s", html)
 	}
 	wasm := readBytes(t, wasmPath)
 	if !bytes.HasPrefix(wasm, wasmMagic) {
-		t.Fatalf("expected browser wasm module, got %#v", wasm[:min(len(wasm), 8)])
+		t.Fatalf("expected client-side wasm module, got %#v", wasm[:min(len(wasm), 8)])
 	}
 	loader := readFile(t, loaderPath)
 	for _, expected := range []string{
 		`const mountExport = "GOWDKMountHome";`,
-		`window.__gowdkMountSPAGoBlocks`,
+		`window.__gowdkMountClientGoBlocks`,
 		`exports[mountExport]();`,
 		`go.run(result.instance)`,
-		`GOWDK SPA go block mount failed`,
+		`GOWDK client go block mount failed`,
 	} {
 		if !strings.Contains(loader, expected) {
-			t.Fatalf("expected %q in SPA browser go block loader:\n%s", expected, loader)
+			t.Fatalf("expected %q in client go block loader:\n%s", expected, loader)
 		}
 	}
 	assetManifestPayload := readFile(t, filepath.Join(outputDir, assetManifestFile))
@@ -2030,7 +2030,7 @@ func GOWDKMountHome() uint32 { return 0 }
 	}
 }
 
-func TestBuildKeepsStaticSPAGoBlockOutOfBrowser(t *testing.T) {
+func TestBuildKeepsDefaultGoBlockOutOfBrowser(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{
 		Pages: []manifest.Page{{
@@ -2038,7 +2038,6 @@ func TestBuildKeepsStaticSPAGoBlockOutOfBrowser(t *testing.T) {
 			Route: "/",
 			Blocks: manifest.Blocks{
 				GoBlocks: []manifest.GoBlock{{
-					Target: "spa",
 					Body: `func HomePageForBuild() map[string]string {
 	return map[string]string{"title": "GOWDK ships apps"}
 }
@@ -2060,12 +2059,12 @@ func TestBuildKeepsStaticSPAGoBlockOutOfBrowser(t *testing.T) {
 		filepath.Join(outputDir, "assets", "gowdk", "islands", "wasm_exec.js"),
 	} {
 		if hasAssetArtifact(result.AssetArtifacts, path) {
-			t.Fatalf("did not expect static SPA go block to emit browser asset %s: %#v", path, result.AssetArtifacts)
+			t.Fatalf("did not expect default go block to emit browser asset %s: %#v", path, result.AssetArtifacts)
 		}
 	}
 	html := readFile(t, filepath.Join(outputDir, "index.html"))
 	if strings.Contains(html, `Home.wasm.js`) {
-		t.Fatalf("did not expect SPA browser go block loader in static script page:\n%s", html)
+		t.Fatalf("did not expect client go block loader in default go block page:\n%s", html)
 	}
 }
 

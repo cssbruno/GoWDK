@@ -2457,7 +2457,6 @@ func TestGenerateWritesStaticInlineGoBlockPackages(t *testing.T) {
 }`,
 				},
 				{
-					Target: "spa",
 					Body: `func HomeSeed() string {
 	return "static"
 }`,
@@ -2468,7 +2467,6 @@ func TestGenerateWritesStaticInlineGoBlockPackages(t *testing.T) {
 			Package: "components",
 			Name:    "Badge",
 			Blocks: gwdkir.Blocks{GoBlocks: []gwdkir.GoBlock{{
-				Target: "spa",
 				Body: `func BadgeSeed() string {
 	return "badge"
 }`,

@@ -49,11 +49,11 @@ func runtimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDir stri
 		return nil, err
 	}
 	artifacts = append(artifacts, islands...)
-	spaScripts, err := spaScriptRuntimeArtifacts(app.Pages, outputDir)
+	clientGoBlocks, err := clientGoBlockRuntimeArtifacts(app.Pages, outputDir)
 	if err != nil {
 		return nil, err
 	}
-	artifacts = append(artifacts, spaScripts...)
+	artifacts = append(artifacts, clientGoBlocks...)
 	return dedupeAssetArtifacts(artifacts), nil
 }
 
@@ -197,14 +197,14 @@ func islandScriptHrefs(source string, components map[string]view.Component, owne
 	return scripts
 }
 
-func spaScriptRuntimeArtifacts(pages []manifest.Page, outputDir string) ([]plannedAssetArtifact, error) {
+func clientGoBlockRuntimeArtifacts(pages []manifest.Page, outputDir string) ([]plannedAssetArtifact, error) {
 	planned := map[string]plannedAssetArtifact{}
 	for _, page := range pages {
-		script, ok := spaBrowserScript(page)
+		script, ok := clientGoBlock(page)
 		if !ok {
 			continue
 		}
-		wasm, err := spaScriptWASMArtifact(outputDir, page, script)
+		wasm, err := clientGoBlockWASMArtifact(outputDir, page, script)
 		if err != nil {
 			return nil, err
 		}
@@ -214,7 +214,7 @@ func spaScriptRuntimeArtifacts(pages []manifest.Page, outputDir string) ([]plann
 			return nil, err
 		}
 		addAsset(planned, execArtifact)
-		addAsset(planned, spaScriptWASMLoaderArtifact(outputDir, page))
+		addAsset(planned, clientGoBlockWASMLoaderArtifact(outputDir, page))
 	}
 	if len(planned) == 0 {
 		return nil, nil
@@ -231,17 +231,17 @@ func spaScriptRuntimeArtifacts(pages []manifest.Page, outputDir string) ([]plann
 	return artifacts, nil
 }
 
-func spaScriptHrefs(page manifest.Page) []string {
-	if _, ok := spaBrowserScript(page); !ok {
+func clientGoBlockHrefs(page manifest.Page) []string {
+	if _, ok := clientGoBlock(page); !ok {
 		return nil
 	}
-	return []string{"/" + spaScriptWASMLoaderAssetPath(page)}
+	return []string{"/" + clientGoBlockWASMLoaderAssetPath(page)}
 }
 
-func spaBrowserScript(page manifest.Page) (manifest.GoBlock, bool) {
-	required := spaScriptMountExportName(page)
+func clientGoBlock(page manifest.Page) (manifest.GoBlock, bool) {
+	required := clientGoBlockMountExportName(page)
 	for _, script := range page.Blocks.GoBlocks {
-		if script.Target != "spa" {
+		if script.Target != "client" {
 			continue
 		}
 		if strings.Contains(script.Body, "//go:wasmexport "+required) || strings.Contains(script.Body, "//go:wasmexport\t"+required) {
@@ -530,9 +530,9 @@ func buildWASMIslandPackage(component manifest.Component) ([]byte, error) {
 	return contents, nil
 }
 
-func spaScriptWASMArtifact(outputDir string, page manifest.Page, script manifest.GoBlock) (plannedAssetArtifact, error) {
-	assetPath := spaScriptWASMAssetPath(page)
-	contents, err := buildSPAScriptWASM(page, script)
+func clientGoBlockWASMArtifact(outputDir string, page manifest.Page, script manifest.GoBlock) (plannedAssetArtifact, error) {
+	assetPath := clientGoBlockWASMAssetPath(page)
+	contents, err := buildClientGoBlockWASM(page, script)
 	if err != nil {
 		return plannedAssetArtifact{}, err
 	}
@@ -542,38 +542,38 @@ func spaScriptWASMArtifact(outputDir string, page manifest.Page, script manifest
 	}, nil
 }
 
-func buildSPAScriptWASM(page manifest.Page, script manifest.GoBlock) ([]byte, error) {
-	temp, err := os.CreateTemp(sourceDir(page.Source), ".gowdk-"+spaScriptAssetName(page)+"-*.wasm")
+func buildClientGoBlockWASM(page manifest.Page, script manifest.GoBlock) ([]byte, error) {
+	temp, err := os.CreateTemp(sourceDir(page.Source), ".gowdk-"+clientGoBlockAssetName(page)+"-*.wasm")
 	if err != nil {
-		return nil, spaGoBlockDiagnosticError(page, "spa_script_wasm_build_error", fmt.Errorf("create temp output: %w", err))
+		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_build_error", fmt.Errorf("create temp output: %w", err))
 	}
 	tempPath := temp.Name()
 	if err := temp.Close(); err != nil {
 		_ = os.Remove(tempPath)
-		return nil, spaGoBlockDiagnosticError(page, "spa_script_wasm_build_error", fmt.Errorf("close temp output: %w", err))
+		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_build_error", fmt.Errorf("close temp output: %w", err))
 	}
 	defer os.Remove(tempPath)
 
-	source, err := spaScriptWASMSource(page, script)
+	source, err := clientGoBlockWASMSource(page, script)
 	if err != nil {
-		return nil, spaGoBlockDiagnosticError(page, "spa_script_wasm_source_error", err)
+		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_source_error", err)
 	}
-	sourceFile, err := os.CreateTemp(sourceDir(page.Source), "gowdk-"+spaScriptAssetName(page)+"-*.go")
+	sourceFile, err := os.CreateTemp(sourceDir(page.Source), "gowdk-"+clientGoBlockAssetName(page)+"-*.go")
 	if err != nil {
-		return nil, spaGoBlockDiagnosticError(page, "spa_script_wasm_build_error", fmt.Errorf("create temp source: %w", err))
+		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_build_error", fmt.Errorf("create temp source: %w", err))
 	}
 	sourcePath := sourceFile.Name()
 	if _, err := sourceFile.WriteString(source); err != nil {
 		sourceFile.Close()
 		_ = os.Remove(sourcePath)
-		return nil, spaGoBlockDiagnosticError(page, "spa_script_wasm_build_error", fmt.Errorf("write temp source: %w", err))
+		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_build_error", fmt.Errorf("write temp source: %w", err))
 	}
 	if err := sourceFile.Close(); err != nil {
 		_ = os.Remove(sourcePath)
-		return nil, spaGoBlockDiagnosticError(page, "spa_script_wasm_build_error", fmt.Errorf("close temp source: %w", err))
+		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_build_error", fmt.Errorf("close temp source: %w", err))
 	}
 	defer os.Remove(sourcePath)
-	if err := validateSPAScriptWASMImports(page, sourcePath); err != nil {
+	if err := validateClientGoBlockWASMImports(page, sourcePath); err != nil {
 		return nil, err
 	}
 
@@ -582,31 +582,31 @@ func buildSPAScriptWASM(page manifest.Page, script manifest.GoBlock) ([]byte, er
 	command.Env = append(envWithout(os.Environ(), "GOOS", "GOARCH"), "GOOS=js", "GOARCH=wasm")
 	output, err := command.CombinedOutput()
 	if err != nil {
-		return nil, spaGoBlockDiagnosticError(page, "spa_script_wasm_build_error", fmt.Errorf("failed to build with GOOS=js GOARCH=wasm: %w\n%s", err, strings.TrimSpace(string(output))))
+		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_build_error", fmt.Errorf("failed to build with GOOS=js GOARCH=wasm: %w\n%s", err, strings.TrimSpace(string(output))))
 	}
 	contents, err := os.ReadFile(tempPath)
 	if err != nil {
-		return nil, spaGoBlockDiagnosticError(page, "spa_script_wasm_build_error", fmt.Errorf("read built artifact: %w", err))
+		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_build_error", fmt.Errorf("read built artifact: %w", err))
 	}
 	if !bytes.HasPrefix(contents, wasmMagic) {
-		return nil, spaGoBlockDiagnosticError(page, "spa_script_wasm_entrypoint_error", fmt.Errorf("did not produce a browser WASM module"))
+		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_entrypoint_error", fmt.Errorf("did not produce a client-side WASM module"))
 	}
-	if err := validateSPAScriptWASMExports(page, contents); err != nil {
+	if err := validateClientGoBlockWASMExports(page, contents); err != nil {
 		return nil, err
 	}
 	return contents, nil
 }
 
-func spaScriptWASMSource(page manifest.Page, script manifest.GoBlock) (string, error) {
+func clientGoBlockWASMSource(page manifest.Page, script manifest.GoBlock) (string, error) {
 	body := strings.TrimSpace(script.Body)
 	sourceWithoutImports := "package main\n" + body + "\n"
-	file, err := parser.ParseFile(token.NewFileSet(), "script_spa.gwdk.go", sourceWithoutImports, parser.ParseComments|parser.AllErrors)
+	file, err := parser.ParseFile(token.NewFileSet(), "go_client.gwdk.go", sourceWithoutImports, parser.ParseComments|parser.AllErrors)
 	if err != nil {
-		return "", fmt.Errorf("go spa block has invalid browser Go: %w", err)
+		return "", fmt.Errorf("go client block has invalid client-side Go: %w", err)
 	}
 	var builder strings.Builder
 	builder.WriteString("package main\n\n")
-	builder.WriteString(spaScriptGOWDKImportBlock(page.Imports, file))
+	builder.WriteString(clientGoBlockGOWDKImportBlock(page.Imports, file))
 	builder.WriteString(body)
 	builder.WriteString("\n\n")
 	if !fileDeclaresMain(file) {
@@ -615,7 +615,7 @@ func spaScriptWASMSource(page manifest.Page, script manifest.GoBlock) (string, e
 	return builder.String(), nil
 }
 
-func spaScriptGOWDKImportBlock(imports []manifest.Import, file *ast.File) string {
+func clientGoBlockGOWDKImportBlock(imports []manifest.Import, file *ast.File) string {
 	used := usedIdentifiers(file)
 	localImports := map[string]bool{}
 	for _, spec := range importSpecs(file) {
@@ -633,7 +633,7 @@ func spaScriptGOWDKImportBlock(imports []manifest.Import, file *ast.File) string
 		if importPath == "" {
 			continue
 		}
-		alias := spaScriptImportAlias(item)
+		alias := clientGoBlockImportAlias(item)
 		if !used[alias] || localImports[alias] {
 			continue
 		}
@@ -650,33 +650,33 @@ func spaScriptGOWDKImportBlock(imports []manifest.Import, file *ast.File) string
 	return "import (\n\t" + strings.Join(specs, "\n\t") + "\n)\n\n"
 }
 
-func validateSPAScriptWASMImports(page manifest.Page, sourcePath string) error {
+func validateClientGoBlockWASMImports(page manifest.Page, sourcePath string) error {
 	file, err := parser.ParseFile(token.NewFileSet(), sourcePath, nil, parser.ImportsOnly)
 	if err != nil {
-		return spaGoBlockDiagnosticError(page, "spa_script_wasm_import_error", fmt.Errorf("parse imports: %w", err))
+		return clientGoBlockDiagnosticError(page, "client_go_block_wasm_import_error", fmt.Errorf("parse imports: %w", err))
 	}
 	for _, item := range file.Imports {
 		importPath, err := strconv.Unquote(item.Path.Value)
 		if err != nil {
-			return spaGoBlockDiagnosticError(page, "spa_script_wasm_import_error", fmt.Errorf("parse import path: %w", err))
+			return clientGoBlockDiagnosticError(page, "client_go_block_wasm_import_error", fmt.Errorf("parse import path: %w", err))
 		}
 		reason, forbidden := forbiddenWASMIslandImports[importPath]
 		if !forbidden {
 			continue
 		}
-		return spaGoBlockDiagnosticError(page, "unsupported_wasm_import", fmt.Errorf("imports unsupported browser package %q: %s", importPath, reason))
+		return clientGoBlockDiagnosticError(page, "unsupported_wasm_import", fmt.Errorf("imports unsupported client-side package %q: %s", importPath, reason))
 	}
 	return nil
 }
 
-func validateSPAScriptWASMExports(page manifest.Page, contents []byte) error {
+func validateClientGoBlockWASMExports(page manifest.Page, contents []byte) error {
 	exports, err := wasmExportNames(contents)
 	if err != nil {
-		return spaGoBlockDiagnosticError(page, "spa_script_wasm_export_error", err)
+		return clientGoBlockDiagnosticError(page, "client_go_block_wasm_export_error", err)
 	}
-	required := spaScriptMountExportName(page)
+	required := clientGoBlockMountExportName(page)
 	if !exports[required] {
-		return spaGoBlockDiagnosticError(page, "spa_script_wasm_export_error", fmt.Errorf("missing required WASM export: %s", required))
+		return clientGoBlockDiagnosticError(page, "client_go_block_wasm_export_error", fmt.Errorf("missing required WASM export: %s", required))
 	}
 	return nil
 }
@@ -812,40 +812,40 @@ func wasmIslandDiagnosticError(component manifest.Component, code, packagePath s
 	}
 }
 
-type spaScriptBuildDiagnosticError struct {
+type clientGoBlockBuildDiagnosticError struct {
 	err        error
 	diagnostic BuildDiagnostic
 }
 
-func (err *spaScriptBuildDiagnosticError) Error() string {
+func (err *clientGoBlockBuildDiagnosticError) Error() string {
 	if err == nil || err.err == nil {
 		return ""
 	}
 	return err.err.Error()
 }
 
-func (err *spaScriptBuildDiagnosticError) Unwrap() error {
+func (err *clientGoBlockBuildDiagnosticError) Unwrap() error {
 	if err == nil {
 		return nil
 	}
 	return err.err
 }
 
-func (err *spaScriptBuildDiagnosticError) BuildDiagnostics() []BuildDiagnostic {
+func (err *clientGoBlockBuildDiagnosticError) BuildDiagnostics() []BuildDiagnostic {
 	if err == nil {
 		return nil
 	}
 	return []BuildDiagnostic{err.diagnostic}
 }
 
-func spaGoBlockDiagnosticError(page manifest.Page, code string, cause error) error {
-	message := fmt.Sprintf("page %s go spa browser WASM: %v", page.ID, cause)
-	return &spaScriptBuildDiagnosticError{
+func clientGoBlockDiagnosticError(page manifest.Page, code string, cause error) error {
+	message := fmt.Sprintf("page %s go client WASM: %v", page.ID, cause)
+	return &clientGoBlockBuildDiagnosticError{
 		err: fmt.Errorf("%s", message),
 		diagnostic: BuildDiagnostic{
 			Code:    code,
 			Source:  page.Source,
-			Span:    goBlockTargetSpan(page.Blocks.Spans.GoBlocks, "spa"),
+			Span:    goBlockTargetSpan(page.Blocks.Spans.GoBlocks, "client"),
 			Message: message,
 		},
 	}
@@ -928,7 +928,7 @@ func fileDeclaresMain(file *ast.File) bool {
 	return false
 }
 
-func spaScriptImportAlias(item manifest.Import) string {
+func clientGoBlockImportAlias(item manifest.Import) string {
 	if strings.TrimSpace(item.Alias) != "" {
 		return item.Alias
 	}
@@ -1049,11 +1049,11 @@ func islandWASMLoaderArtifact(outputDir, componentName string) plannedAssetArtif
 	}
 }
 
-func spaScriptWASMLoaderArtifact(outputDir string, page manifest.Page) plannedAssetArtifact {
-	assetPath := spaScriptWASMLoaderAssetPath(page)
+func clientGoBlockWASMLoaderArtifact(outputDir string, page manifest.Page) plannedAssetArtifact {
+	assetPath := clientGoBlockWASMLoaderAssetPath(page)
 	return plannedAssetArtifact{
 		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
-		contents:      []byte(spaScriptWASMLoaderSource(page)),
+		contents:      []byte(clientGoBlockWASMLoaderSource(page)),
 	}
 }
 
@@ -1081,12 +1081,12 @@ func islandWASMLoaderAssetPath(componentName string) string {
 	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".wasm.js")
 }
 
-func spaScriptWASMAssetPath(page manifest.Page) string {
-	return path.Join(islandRuntimeDir, "pages", spaScriptAssetName(page)+".wasm")
+func clientGoBlockWASMAssetPath(page manifest.Page) string {
+	return path.Join(islandRuntimeDir, "pages", clientGoBlockAssetName(page)+".wasm")
 }
 
-func spaScriptWASMLoaderAssetPath(page manifest.Page) string {
-	return path.Join(islandRuntimeDir, "pages", spaScriptAssetName(page)+".wasm.js")
+func clientGoBlockWASMLoaderAssetPath(page manifest.Page) string {
+	return path.Join(islandRuntimeDir, "pages", clientGoBlockAssetName(page)+".wasm.js")
 }
 
 func islandWASMExecAssetPath() string {
@@ -1105,7 +1105,7 @@ func componentAssetName(componentName string) string {
 	return name
 }
 
-func spaScriptAssetName(page manifest.Page) string {
+func clientGoBlockAssetName(page manifest.Page) string {
 	name := exportedPascalSafe(page.ID)
 	if name == "" {
 		return "Page"
@@ -1113,8 +1113,8 @@ func spaScriptAssetName(page manifest.Page) string {
 	return name
 }
 
-func spaScriptMountExportName(page manifest.Page) string {
-	return "GOWDKMount" + spaScriptAssetName(page)
+func clientGoBlockMountExportName(page manifest.Page) string {
+	return "GOWDKMount" + clientGoBlockAssetName(page)
 }
 
 func exportedPascalSafe(value string) string {
@@ -2443,20 +2443,20 @@ func componentSourceMapContent(component manifest.Component) string {
 	return "client {\n" + component.Blocks.ClientBody + "\n}\n\nview {\n" + component.Blocks.ViewBody + "\n}\n"
 }
 
-func spaScriptWASMLoaderSource(page manifest.Page) string {
+func clientGoBlockWASMLoaderSource(page manifest.Page) string {
 	pageID := strconv.Quote(page.ID)
-	loaderPath := strconv.Quote("/" + spaScriptWASMLoaderAssetPath(page))
-	wasmPath := strconv.Quote("/" + spaScriptWASMAssetPath(page))
+	loaderPath := strconv.Quote("/" + clientGoBlockWASMLoaderAssetPath(page))
+	wasmPath := strconv.Quote("/" + clientGoBlockWASMAssetPath(page))
 	wasmExecPath := strconv.Quote("/" + islandWASMExecAssetPath())
-	mountExport := strconv.Quote(spaScriptMountExportName(page))
+	mountExport := strconv.Quote(clientGoBlockMountExportName(page))
 	return fmt.Sprintf(`(() => {
   const pageID = %s;
   const loaderPath = %s;
   const wasmPath = %s;
   const wasmExecPath = %s;
   const mountExport = %s;
-  const registry = window.__gowdkSPAScriptRegistry || (window.__gowdkSPAScriptRegistry = { entries: Object.create(null) });
-  window.__gowdkMountSPAGoBlocks = () => {
+  const registry = window.__gowdkClientGoBlockRegistry || (window.__gowdkClientGoBlockRegistry = { entries: Object.create(null) });
+  window.__gowdkMountClientGoBlocks = () => {
     Object.keys(registry.entries).forEach((key) => registry.entries[key].mount());
   };
   if (typeof WebAssembly === "undefined") return;
@@ -2495,7 +2495,7 @@ func spaScriptWASMLoaderSource(page manifest.Page) string {
     const result = await instantiate(go);
     const exports = result.instance && result.instance.exports || {};
     if (typeof exports[mountExport] !== "function") {
-      if (typeof console !== "undefined") console.error("GOWDK SPA go block missing export", mountExport);
+      if (typeof console !== "undefined") console.error("GOWDK client go block missing export", mountExport);
       return;
     }
     const mountedBodies = new WeakSet();
@@ -2506,19 +2506,19 @@ func spaScriptWASMLoaderSource(page manifest.Page) string {
         try {
           exports[mountExport]();
         } catch (error) {
-          if (typeof console !== "undefined") console.error("GOWDK SPA go block mount failed", pageID, error);
+          if (typeof console !== "undefined") console.error("GOWDK client go block mount failed", pageID, error);
         }
       }
     };
     const run = go.run(result.instance);
     if (run && typeof run.catch === "function") {
       run.catch((error) => {
-        if (typeof console !== "undefined") console.error("GOWDK SPA go block Go runtime failed", pageID, error);
+        if (typeof console !== "undefined") console.error("GOWDK client go block Go runtime failed", pageID, error);
       });
     }
-    window.__gowdkMountSPAGoBlocks();
+    window.__gowdkMountClientGoBlocks();
   }).catch((error) => {
-    if (typeof console !== "undefined") console.error("GOWDK SPA go block failed to start", pageID, error);
+    if (typeof console !== "undefined") console.error("GOWDK client go block failed to start", pageID, error);
   });
 })();
 `, pageID, loaderPath, wasmPath, wasmExecPath, mountExport)

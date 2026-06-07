@@ -59,8 +59,8 @@ const runtimeSource = `(function () {
       if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
         window.__gowdkMountIslands();
       }
-      if (typeof window !== 'undefined' && window.__gowdkMountSPAGoBlocks) {
-        window.__gowdkMountSPAGoBlocks();
+      if (typeof window !== 'undefined' && window.__gowdkMountClientGoBlocks) {
+        window.__gowdkMountClientGoBlocks();
       }
       restoreFocus(focused);
       form.dispatchEvent(new CustomEvent('gowdk:after-swap', {
@@ -158,8 +158,8 @@ const runtimeSource = `(function () {
     if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
       window.__gowdkMountIslands();
     }
-    if (typeof window !== 'undefined' && window.__gowdkMountSPAGoBlocks) {
-      window.__gowdkMountSPAGoBlocks();
+    if (typeof window !== 'undefined' && window.__gowdkMountClientGoBlocks) {
+      window.__gowdkMountClientGoBlocks();
     }
     restoreFocus(focused);
     if (window.location.hash) {

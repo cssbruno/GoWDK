@@ -48,17 +48,42 @@ func BindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 			pkg = inspectFeaturePackage(dir)
 			cache[dir] = pkg
 		}
+		var inlinePkg featurePackage
+		inlineLoaded := false
+		defaultInlinePkg := func() featurePackage {
+			if !inlineLoaded {
+				inlinePkg = inspectInlineScriptFeaturePackage(page, "")
+				inlineLoaded = true
+			}
+			return inlinePkg
+		}
 		if page.Blocks.Load {
 			bindings = append(bindings, bindLoad(page, pkg))
 		}
 		for _, action := range page.Blocks.Actions {
-			bindings = append(bindings, bindAction(page, action, pkg))
+			binding := bindAction(page, action, pkg)
+			if binding.Status == manifest.BackendBindingMissing {
+				inlineBinding := bindAction(page, action, defaultInlinePkg())
+				if inlineBinding.Status != manifest.BackendBindingMissing {
+					binding = inlineBinding
+				}
+			}
+			bindings = append(bindings, binding)
 		}
 		for _, api := range page.Blocks.APIs {
-			bindings = append(bindings, bindAPI(page, api, pkg))
+			binding := bindAPI(page, api, pkg)
+			if binding.Status == manifest.BackendBindingMissing {
+				inlineBinding := bindAPI(page, api, defaultInlinePkg())
+				if inlineBinding.Status != manifest.BackendBindingMissing {
+					binding = inlineBinding
+				}
+			}
+			bindings = append(bindings, binding)
 		}
 		for _, fragment := range page.Blocks.Fragments {
 			if binding, ok := bindFragment(page, fragment, pkg); ok {
+				bindings = append(bindings, binding)
+			} else if binding, ok := bindFragment(page, fragment, defaultInlinePkg()); ok {
 				bindings = append(bindings, binding)
 			}
 		}

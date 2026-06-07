@@ -240,6 +240,65 @@ func TestBindBackendHandlersBindsInlineSSRScriptLoad(t *testing.T) {
 	}
 }
 
+func TestBindBackendHandlersBindsDefaultInlineGoBlockEndpoints(t *testing.T) {
+	root := t.TempDir()
+	page := manifest.Page{
+		ID:      "home",
+		Package: "pages",
+		Source:  filepath.Join(root, "home.page.gwdk"),
+		Route:   "/",
+		Blocks: manifest.Blocks{
+			Actions: []manifest.Action{{
+				Name:   "Subscribe",
+				Method: "POST",
+				Route:  "/newsletter",
+			}},
+			APIs: []manifest.API{{
+				Name:   "Session",
+				Method: "GET",
+				Route:  "/api/session",
+			}},
+			Fragments: []manifest.FragmentEndpoint{{
+				Name:   "List",
+				Method: "GET",
+				Route:  "/items",
+				Target: "#items",
+			}},
+			GoBlocks: []manifest.GoBlock{{
+				Body: `import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+func Subscribe(context.Context) (response.Response, error) {
+	return response.RedirectTo("/?subscribed=1"), nil
+}
+
+func Session(context.Context, *http.Request) (response.Response, error) {
+	return response.JSONValue(http.StatusOK, map[string]bool{"authenticated": true})
+}
+
+func List(context.Context) (response.Response, error) {
+	return response.FragmentFor("#items", "<ul><li>One</li></ul>"), nil
+}`,
+			}},
+		},
+	}
+
+	app := BindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{page}})
+	bindings := compilerBindingsByBlock(app.BackendBindings)
+	for _, name := range []string{"Subscribe", "Session", "List"} {
+		if bindings[name].ImportPath != goblockgen.GeneratedImportPath("pages") || bindings[name].PackageName != "pages" {
+			t.Fatalf("expected %s to bind generated inline go package, got %#v", name, bindings[name])
+		}
+	}
+	assertBinding(t, bindings["Subscribe"], manifest.BackendBindingBound, manifest.BackendSignatureAction0, "", false)
+	assertBinding(t, bindings["Session"], manifest.BackendBindingBound, manifest.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["List"], manifest.BackendBindingBound, manifest.BackendSignatureFragment, "", false)
+}
+
 func TestDiscoverGoEndpointCommentsBindsStandaloneEndpoints(t *testing.T) {
 	root := t.TempDir()
 	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n")

@@ -49,11 +49,13 @@ language.
 - Preserve go block body, target, and source span in manifest compatibility
   records and IR.
 - Parse go block bodies as Go during validation.
-- Type-check saved default and `go spa {}` blocks with sibling Go files in
-  the same package during validation.
-- Execute default and `go spa {}` no-argument build-data functions when
-  referenced by `build { => LocalFunc() }`.
-- Compile page-level `go spa {}` browser mounts to Go WASM when the block
+- Type-check saved default `go {}` blocks with sibling Go files in the same
+  package during validation.
+- Execute default `go {}` no-argument build-data functions when referenced by
+  `build { => LocalFunc() }`.
+- Bind same-page action, API, and fragment handlers from default `go {}` when
+  no same-package `.go` handler exists.
+- Compile page-level `go client {}` mounts to Go WASM when the block
   exports `GOWDKMount<PageID>` with `//go:wasmexport`.
 - Execute `go ssr {}` load handlers through generated SSR adapters.
 - Diagnose `go ssr {}` on pure SPA pages.
@@ -76,12 +78,14 @@ language.
 - [x] Analyzer lowers go blocks into compiler IR.
 - [x] Docs describe current build-time, SSR-load, and addon-consumer
   `go {}` behavior.
-- [x] Saved default and `go spa {}` blocks are type-checked with sibling Go
-  files during validation.
-- [x] Default and `go spa {}` build-data functions can feed `build {}`.
-- [x] Generated app source materializes default, `go spa {}`, and
-  `go ssr {}` blocks under `gowdk_go/`.
-- [x] Page-level browser `go spa {}` mounts emit WASM and loader assets.
+- [x] Saved default `go {}` blocks are type-checked with sibling Go files
+  during validation.
+- [x] Default `go {}` build-data functions can feed `build {}`.
+- [x] Default `go {}` action, API, and fragment handlers can bind generated
+  backend endpoints.
+- [x] Generated app source materializes default `go {}` and `go ssr {}`
+  blocks under `gowdk_go/`.
+- [x] Page-level `go client {}` mounts emit WASM and loader assets.
 - [x] `go ssr {}` load handlers execute in generated app binaries.
 - [x] Addon go block targets produce semantic diagnostics.
 - [x] Addon go block consumers can emit generated app Go files.

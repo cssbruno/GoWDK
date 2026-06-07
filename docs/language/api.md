@@ -14,8 +14,9 @@ The route must be a quoted absolute route path.
 Old `api health { ... }` blocks are rejected with a migration diagnostic.
 
 Generated apps bind same-package Go handlers for the first API slice. `api
-Health GET "/api/health"` maps exactly to exported Go function `Health` in the
-same package as the `.gwdk` file when the function has signature:
+Health GET "/api/health"` maps exactly to exported Go function `Health` in a
+same-package `.go` file or default `go {}` block when the function has
+signature:
 
 ```go
 func Health(context.Context, *http.Request) (response.Response, error)

@@ -260,7 +260,7 @@ func HandleCreatePatientAgain(ctx context.Context, command CreatePatient) (Creat
 func TestLinkReferencesMarksBoundMissingAndInvalidContractRefs(t *testing.T) {
 	report := Report{
 		Contracts: []Contract{
-			{Kind: runtimecontracts.Command, Package: "patients", Type: "CreatePatient", Result: "CreatePatientResult", Handler: "HandleCreatePatient", Register: "Register"},
+			{Kind: runtimecontracts.Command, Package: "patients", Type: "CreatePatient", Result: "CreatePatientResult", Handler: "HandleCreatePatient", Register: "Register", Roles: []string{"web"}},
 			{Kind: runtimecontracts.Command, Package: "billing", Type: "PayInvoice", Result: "PayInvoiceResult", Handler: "HandlePayInvoice"},
 			{Kind: runtimecontracts.Query, Package: "patients", Type: "GetPatientPage", Result: "PatientPageData", Handler: "LoadPatientPage", Register: "Register"},
 			{Kind: runtimecontracts.Query, Package: "billing", Type: "GetInvoicePage", Result: "InvoicePageData", Handler: "LoadInvoicePage"},
@@ -290,6 +290,9 @@ func TestLinkReferencesMarksBoundMissingAndInvalidContractRefs(t *testing.T) {
 	}
 	if linked[0].Type != "CreatePatient" || linked[0].Result != "CreatePatientResult" {
 		t.Fatalf("expected bound command type/result metadata, got %#v", linked[0])
+	}
+	if len(linked[0].Roles) != 1 || linked[0].Roles[0] != "web" {
+		t.Fatalf("expected bound command role metadata, got %#v", linked[0].Roles)
 	}
 	if linked[1].Status != gwdkir.ContractBindingInvalid || linked[1].Handler != "HandlePayInvoice" || linked[1].Message != "bad handler" {
 		t.Fatalf("expected invalid command, got %#v", linked[1])

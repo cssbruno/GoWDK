@@ -117,6 +117,7 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 			ImportPath:  "example.com/app/contracts/patients",
 			Type:        "CreatePatient",
 			Result:      "CreatePatientResult",
+			Roles:       []string{"web"},
 			InputFields: []manifest.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
 			Method:      "POST",
 			Path:        "/patients",
@@ -149,6 +150,9 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 	}
 	if len(command.InputFields) != 1 || command.InputFields[0].FormName != "name" {
 		t.Fatalf("unexpected command input fields: %#v", command.InputFields)
+	}
+	if len(command.Roles) != 1 || command.Roles[0] != "web" {
+		t.Fatalf("unexpected command roles: %#v", command.Roles)
 	}
 	query := ir.ContractExposures[1]
 	if query.Endpoint.Kind != BackendEndpointQuery || query.Endpoint.Handler != "query" {

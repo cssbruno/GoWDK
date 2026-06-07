@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
@@ -335,6 +336,48 @@ func TestBuildReportIncludesQueryContractReferences(t *testing.T) {
 	}
 	if event.Data["method"] != "GET" || event.Data["path"] != "/patients" {
 		t.Fatalf("unexpected query method/path: %#v", event.Data)
+	}
+}
+
+func TestBuildReportIncludesBoundContractReferenceRoles(t *testing.T) {
+	outputDir := t.TempDir()
+	result, err := BuildFromIR(gowdk.Config{}, gwdkir.Program{
+		Version: gwdkir.Version,
+		Pages: []gwdkir.Page{{
+			Source: "pages/patients.page.gwdk",
+			ID:     "patients",
+			Route:  "/patients",
+			Render: gowdk.SPA,
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main>Patients</main>`,
+			},
+		}},
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:      gwdkir.ContractCommand,
+			Name:      "patients.CreatePatient",
+			Type:      "CreatePatient",
+			Result:    "CreatePatientResult",
+			Roles:     []string{"web", "admin"},
+			Method:    "POST",
+			Path:      "/patients",
+			Status:    gwdkir.ContractBindingBound,
+			Handler:   "HandleCreatePatient",
+			Register:  "Register",
+			OwnerKind: gwdkir.SourcePage,
+			OwnerID:   "patients",
+			Source:    "pages/patients.page.gwdk",
+		}},
+	}, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := findBuildReportEvent(result.Report, "bind", "contract_reference")
+	if event == nil {
+		t.Fatalf("missing contract_reference event in %#v", result.Report.Events)
+	}
+	if event.Data["roles"] != "web,admin" || event.Data["status"] != "bound" {
+		t.Fatalf("unexpected contract reference role data: %#v", event.Data)
 	}
 }
 

@@ -31,13 +31,15 @@ Go AST/printer output before `go/format`.
 commands, backend-owned domain and integration events, presentation events, and
 jobs. Compiler IR command/query references, `.gwdk` command/query syntax,
 contract diagnostics, CLI graph/trace output, and runtime role filtering exist.
-Generated adapters, split runtime binaries, durable outbox, and realtime fanout
-for those contracts remain planned.
+Generated web adapters can execute routable command/query references through
+the local registry with the `web` role, and compiler validation rejects
+web references to non-web-only registrations. Split runtime binaries, durable
+outbox implementations, and realtime fanout adapters remain planned.
 
 Still partial: broad local client-side reactivity, scoped component CSS/asset
 emission, richer load/action invalidation, broader hybrid request-time
-behavior beyond the explicit `load {}` branch, generated contract adapters,
-app-wide middleware policy, and production operations guidance.
+behavior beyond the explicit `load {}` branch, split worker/cron contract
+adapter wiring, app-wide middleware policy, and production operations guidance.
 
 ## System Context
 
@@ -92,7 +94,7 @@ the lanes through package, route, type, component, and handler binding metadata.
 | `internal/project` | Load project-level config, module source groups, build targets, and future source roots. | Compiler | SPA `gowdk.config.go` subset implemented for build discovery, output, and `Build.Targets`; project-level CLI commands require this config or an explicit `--config` file before compiling `.gwdk` code. |
 | `internal/compiler` | Validate manifests and coordinate compilation metadata. | Compiler | Render-mode, duplicate identity, redundant component implementation, component Go contract, route shape, duplicate route param, duplicate route pattern, route-method, required page-view validation, and backend binding implemented. CLI route/endpoint reports now convert through `internal/gwdkir.Program`. |
 | `internal/buildgen` | Emit route-derived spa HTML files for build-time pages and SSR render artifacts. | Compiler | Disk builds, memory builds, incremental SPA builds, and SSR artifact planning consume `internal/gwdkir.Program`. Initial simple page, literal build data, imported Go build data calls, literal dynamic path expansion, component expansion, partial runtime asset emission, default JS island asset emission, explicit WASM island asset emission, concrete and dynamic SSR page rendering with declared `load {}` placeholders, route manifest emission, asset manifest emission, mandatory build report emission, identical-output write skipping, and incremental changed-page spa rendering implemented. |
-| `internal/appgen` | Emit generated Go app source for embedded spa output and request-time routes. | Compiler | Auto route planning consumes `internal/gwdkir.Program`, backend adapter planning uses typed appgen IR, and generated app Go files are assembled with `go/ast`/`go/printer` before `go/format`. Generates `go.mod`, `main.go`, copied spa assets, thin `runtime/app` server wiring, `runtime/app.BackendRouter` registrations for feature-bound action/API routes, 501 stubs for missing/unsupported handlers, POST redirect and partial fragment action handlers backed by `runtime/form`, `runtime/response`, and `runtime/validation`, form input decoders, concrete and dynamic SSR route handlers backed by `runtime/route`, declared SSR load path calls with redirect/error-page handling, split backend apps, first command/query contract exposure metadata in adapter IR, identical-output write skipping, stale embedded spa cleanup, and can invoke `go build` for local binaries or Go `js/wasm` artifacts. |
+| `internal/appgen` | Emit generated Go app source for embedded spa output and request-time routes. | Compiler | Auto route planning consumes `internal/gwdkir.Program`, backend adapter planning uses typed appgen IR, and generated app Go files are assembled with `go/ast`/`go/printer` before `go/format`. Generates `go.mod`, `main.go`, copied spa assets, thin `runtime/app` server wiring, `runtime/app.BackendRouter` registrations for feature-bound action/API routes, 501 stubs for missing/unsupported handlers, POST redirect and partial fragment action handlers backed by `runtime/form`, `runtime/response`, and `runtime/validation`, form input decoders, concrete and dynamic SSR route handlers backed by `runtime/route`, declared SSR load path calls with redirect/error-page handling, split backend apps, command/query contract exposure metadata in adapter IR including runtime roles, identical-output write skipping, stale embedded spa cleanup, and can invoke `go build` for local binaries or Go `js/wasm` artifacts. |
 | `internal/clientrt` | Emit client runtime for partial updates. | Runtime | First partial form enhancement runtime emits lifecycle hooks, target/swap request headers, swaps, focus restoration, and loading state metadata. |
 | `runtime/render` | Core rendering engine used by spa, actions, partials, and SSR. | Runtime | Renderer and generated-code builder implemented; expression text writes escape by default. |
 | `runtime/component` | Generated component runtime contract. | Runtime | Initial component interface implemented. |

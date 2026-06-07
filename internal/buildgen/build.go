@@ -305,6 +305,9 @@ func reportContractReferences(reporter *buildReporter, refs []gwdkir.ContractRef
 		if ref.Result != "" {
 			data["result"] = ref.Result
 		}
+		if len(ref.Roles) > 0 {
+			data["roles"] = strings.Join(ref.Roles, ",")
+		}
 		if len(ref.InputFields) > 0 {
 			var fields []string
 			for _, field := range ref.InputFields {

@@ -1,9 +1,9 @@
 # Contracts
 
-`runtime/contracts` is the first runtime slice of GOWDK's contract-driven
-backend model. It is usable from normal Go today. `.gwdk` command references
-are discoverable in compiler IR and build reports; generated HTTP adapters are
-still planned.
+`runtime/contracts` is the first runtime slice of GOWDK Kit's
+contract-driven backend model. It is usable from normal Go today. `.gwdk`
+command and query references are discoverable in compiler IR, build reports,
+and generated web adapters when they have a routable method/path.
 
 ## Trust Boundary
 
@@ -74,6 +74,11 @@ single-binary apps. Role-specific helpers run handlers with no explicit roles
 and handlers registered for the selected role. They skip handlers registered
 only for another role and return `role_not_allowed` when the selected role
 tries to execute a command, query, or job that is not available to that role.
+
+Generated web adapters always execute command/query references with
+`contracts.RoleWeb`. A `.gwdk` `g:command` or `g:query` reference to a
+worker/cron/admin/API-only contract is a compiler diagnostic, not a generated
+route that fails later.
 
 Inside a command handler, emit backend-owned events through the command context:
 
@@ -231,7 +236,8 @@ Current behavior:
 - Adds a command reference to `internal/gwdkir.Program.ContractRefs`.
 - Records the reference alias, imported package path when declared with a
   `.gwdk import`, local command type, bound result type, binding status, and
-  handler/register function names in IR/build-report metadata when known.
+  handler/register function names and runtime roles in IR/build-report
+  metadata when known.
 - Records literal form `method` and `action` as command adapter IR method/path.
 - `gowdk build` links command references to scanned Go command registrations
   and adds `contract_reference` events with status and source line/column to
@@ -247,8 +253,9 @@ Current behavior:
 - When generated CSRF is enabled, command contract forms receive the same
   hidden token injection as POST action forms, and generated command adapters
   validate the submitted token before dispatch.
-- `gowdk check` and CLI `gowdk build` fail when a command reference is missing
-  or linked to an invalid Go handler signature.
+- `gowdk check` and CLI `gowdk build` fail when a command reference is missing,
+  linked to an invalid Go handler signature, or bound only to non-web runtime
+  roles.
 - Requires a package-qualified Go reference such as `patients.CreatePatient`.
 - Must not be combined with `g:post`.
 
@@ -271,7 +278,8 @@ Current behavior:
 - Adds a query reference to `internal/gwdkir.Program.ContractRefs`.
 - Records the reference alias, imported package path when declared with a
   `.gwdk import`, local query type, bound result type, binding status, and
-  handler/register function names in IR/build-report metadata when known.
+  handler/register function names and runtime roles in IR/build-report
+  metadata when known.
 - `gowdk build` links query references to scanned Go query registrations and
   adds `contract_reference` events with status and source line/column to
   `gowdk-build-report.json`.
@@ -283,8 +291,9 @@ Current behavior:
   contracts.RoleWeb, input)`, and return the query result as no-store JSON.
 - When the scanner can see the exported query input struct fields, generated
   adapters decode supported URL query parameters into the typed query input.
-- `gowdk check` and CLI `gowdk build` fail when a query reference is missing or
-  linked to an invalid Go handler signature.
+- `gowdk check` and CLI `gowdk build` fail when a query reference is missing,
+  linked to an invalid Go handler signature, or bound only to non-web runtime
+  roles.
 - Requires a package-qualified Go reference such as `patients.GetPatientPage`.
 - Must not be combined with `g:post` or `g:command` on the same form.
 
@@ -311,8 +320,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   import alias differs from the Go package name.
 - Form-local `g:command` references and element-local `g:query` references
   include exact source line and column in IR and build reports.
-- Missing or invalid command/query references produce `contract_reference_*`
-  diagnostics in `gowdk check` and stop CLI builds.
+- Missing, invalid, or non-web-only command/query references produce
+  `contract_reference_*` diagnostics in `gowdk check` and stop CLI builds.
 - Other contract diagnostics do not all have exact source spans yet.
 - `gowdk contracts`, `gowdk list commands|queries|events|jobs`, `gowdk graph`,
   and `gowdk trace <contract>` can scan Go AST registration calls today.
@@ -320,6 +329,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   command, query, event, and job handler signatures.
 - Contract scan reports include the top-level package registration function
   that accepts `*contracts.Registry`, when the registration call is inside one.
+- Contract scan roles are propagated into linked IR, app adapter IR, and
+  build-report metadata.
 - Contract scan reports include same-package exported command/query input struct
   fields for generated form/query decoders.
 - Contract scan reports duplicate command owner registrations.
@@ -345,8 +356,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   interface and drive worker-role subscribers through `RunEventWorker`.
 - `internal/appgen` records command/query contract exposure metadata in backend
   adapter IR, including reference name, alias, import path, local contract
-  type, result type, decoded input fields, binding status, handler, register
-  function, owner, and source.
+  type, result type, runtime roles, decoded input fields, binding status,
+  handler, register function, owner, and source.
 - Command contract adapter IR includes literal form method/path.
 - Page-owned query contract adapter IR includes `GET` plus the page route.
 - Full package graph validation and imported handler validation are planned.

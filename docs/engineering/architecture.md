@@ -30,7 +30,8 @@ Go AST/printer output before `go/format`.
 `runtime/contracts` now provides the first local typed registry for queries,
 commands, backend-owned domain and integration events, presentation events, and
 jobs. Compiler IR command/query references, `.gwdk` command/query syntax,
-contract diagnostics, CLI graph/trace output, and runtime role filtering exist.
+local and imported-handler contract diagnostics, CLI graph/trace output, and
+runtime role filtering exist.
 Generated web adapters can execute routable command/query references through
 the local registry with the `web` role, compiler validation rejects web
 references to non-web-only registrations, and `runtime/contracts/fileoutbox`

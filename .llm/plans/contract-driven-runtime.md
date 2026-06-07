@@ -349,7 +349,8 @@ wherever the contract is HTTP-exposed.
 - [x] Add first `go/parser`, `go/ast`, and `go/types` scan pass for local
       registration calls and same-file handler signatures.
 - [x] Expand Go validation across full local package files.
-- [ ] Expand Go validation across full packages and imported handler symbols.
+- [x] Expand Go validation across full local package files and imported
+      handler symbols resolved by `go/types`.
 - [x] Validate local exported contract structs and handler functions.
 - [x] Detect duplicate command owner registrations in scanned Go files.
 - [x] Surface same-file handler signature and duplicate command owner scan
@@ -358,10 +359,12 @@ wherever the contract is HTTP-exposed.
 - [x] Validate local query input and result types.
 - [x] Validate first same-file command, query, event subscriber, and job handler
       signatures.
-- [ ] Validate event subscriber signatures across full packages and imports.
+- [x] Validate event subscriber signatures across full local packages and
+      imported handler symbols resolved by `go/types`.
 - [x] Validate first browser-UI and vague `Changed` event-name anti-patterns.
 - [ ] Expand event category and naming convention validation.
-- [ ] Validate job handler signatures across full packages and imports.
+- [x] Validate job handler signatures across full local packages and imported
+      handler symbols resolved by `go/types`.
 - [ ] Detect import cycles caused by feature packages importing generated app
       output.
 - [ ] Cache package inspection by package path/directory.

@@ -12,8 +12,10 @@ import (
 	"go/printer"
 	"go/token"
 	"go/types"
+	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -387,7 +389,11 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile) fileScan {
 	}
 	types := collectContractTypes(astFiles)
 	inputStructs := collectContractInputStructs(astFiles)
-	functions := typedFunctions(fset, astFiles)
+	packageDir := ""
+	if len(files) > 0 {
+		packageDir = filepath.Dir(files[0].Path)
+	}
+	functions := typedFunctions(fset, packageDir, astFiles)
 	var contracts []Contract
 	var diagnostics []Diagnostic
 	emitsByHandler := map[string][]EventRef{}
@@ -834,10 +840,13 @@ type functionInfo struct {
 	Package   *types.Package
 }
 
-func typedFunctions(fset *token.FileSet, files []*ast.File) map[string]functionInfo {
-	info := &types.Info{Defs: map[*ast.Ident]types.Object{}}
+func typedFunctions(fset *token.FileSet, packageDir string, files []*ast.File) map[string]functionInfo {
+	info := &types.Info{
+		Defs: map[*ast.Ident]types.Object{},
+		Uses: map[*ast.Ident]types.Object{},
+	}
 	config := types.Config{
-		Importer: importer.Default(),
+		Importer: contractScanImporter(packageDir, fset, files),
 		Error:    func(error) {},
 	}
 	packageName := ""
@@ -863,7 +872,92 @@ func typedFunctions(fset *token.FileSet, files []*ast.File) map[string]functionI
 			functions[fn.Name.Name] = functionInfo{Signature: signature, Package: pkg}
 		}
 	}
+	for _, file := range files {
+		ast.Inspect(file, func(node ast.Node) bool {
+			selector, ok := node.(*ast.SelectorExpr)
+			if !ok || selector.Sel == nil {
+				return true
+			}
+			obj, ok := info.Uses[selector.Sel].(*types.Func)
+			if !ok || obj == nil {
+				return true
+			}
+			signature, ok := obj.Type().(*types.Signature)
+			if !ok {
+				return true
+			}
+			functions[exprString(fset, selector)] = functionInfo{Signature: signature, Package: pkg}
+			return true
+		})
+	}
 	return functions
+}
+
+func contractScanImporter(packageDir string, fset *token.FileSet, files []*ast.File) types.Importer {
+	importPaths := scanImportedGoPaths(files)
+	if packageDir == "" || len(importPaths) == 0 {
+		return importer.Default()
+	}
+	exports, err := scanGoListExportFiles(packageDir, importPaths)
+	if err != nil || len(exports) == 0 {
+		return importer.Default()
+	}
+	return importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
+		exportPath := exports[path]
+		if exportPath == "" {
+			return nil, fmt.Errorf("missing export data for %s", path)
+		}
+		return os.Open(exportPath)
+	})
+}
+
+func scanImportedGoPaths(files []*ast.File) []string {
+	seen := map[string]bool{}
+	var paths []string
+	for _, file := range files {
+		for _, spec := range file.Imports {
+			if spec.Path == nil {
+				continue
+			}
+			path, err := strconv.Unquote(spec.Path.Value)
+			if err != nil || path == "" || seen[path] {
+				continue
+			}
+			seen[path] = true
+			paths = append(paths, path)
+		}
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func scanGoListExportFiles(packageDir string, importPaths []string) (map[string]string, error) {
+	args := append([]string{"list", "-deps", "-export", "-json"}, importPaths...)
+	command := exec.Command("go", args...)
+	command.Dir = packageDir
+	output, err := command.Output()
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(output)))
+	exports := map[string]string{}
+	for {
+		var item struct {
+			ImportPath string
+			Export     string
+		}
+		if err := decoder.Decode(&item); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		if item.ImportPath == "" || item.Export == "" {
+			continue
+		}
+		exports[item.ImportPath] = item.Export
+	}
+	return exports, nil
 }
 
 func validateContracts(contracts []Contract, functions map[string]functionInfo) []Diagnostic {
@@ -873,14 +967,18 @@ func validateContracts(contracts []Contract, functions map[string]functionInfo) 
 		case strings.TrimSpace(contract.Handler) == "":
 			diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_handler_invalid", fmt.Sprintf("%s registration must pass an exported handler function", contract.Kind)))
 			continue
-		case !isLocalIdentifier(contract.Handler):
-			continue
-		case !ast.IsExported(contract.Handler):
+		case isLocalIdentifier(contract.Handler) && !ast.IsExported(contract.Handler):
 			diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_handler_invalid", fmt.Sprintf("%s handler %s must be exported", contract.Kind, contract.Handler)))
+			continue
+		}
+		if !isLocalIdentifier(contract.Handler) && !isSelectorHandler(contract.Handler) {
 			continue
 		}
 		function := functions[contract.Handler]
 		if function.Signature == nil {
+			if !isLocalIdentifier(contract.Handler) {
+				continue
+			}
 			diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_handler_missing", fmt.Sprintf("handler %s was not found in the scanned package", contract.Handler)))
 			continue
 		}
@@ -1008,6 +1106,11 @@ func isLocalIdentifier(value string) bool {
 		return false
 	}
 	return token.IsIdentifier(value)
+}
+
+func isSelectorHandler(value string) bool {
+	qualifier, name, ok := strings.Cut(value, ".")
+	return ok && token.IsIdentifier(qualifier) && token.IsIdentifier(name) && ast.IsExported(name)
 }
 
 func contractDiagnostic(contract Contract, code string, message string) Diagnostic {

@@ -407,8 +407,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Other contract diagnostics do not all have exact source spans yet.
 - `gowdk contracts`, `gowdk list commands|queries|events|jobs`, `gowdk graph`,
   and `gowdk trace <contract>` can scan Go AST registration calls today.
-- Contract scan reports include same-package `go/types` diagnostics for
-  command, query, event, and job handler signatures.
+- Contract scan reports include `go/types` diagnostics for command, query,
+  event, and job handler signatures across local package files and imported
+  handler symbols when the standard Go importer can resolve them.
 - Contract scan reports include the top-level package registration function
   that accepts `*contracts.Registry`, when the registration call is inside one.
 - Contract scan roles are propagated into linked IR, app adapter IR, and
@@ -450,7 +451,7 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   backend endpoint metadata with contract binding details.
 - Command contract adapter IR includes literal form method/path.
 - Page-owned query contract adapter IR includes `GET` plus the page route.
-- Imported/qualified handler and contract type validation is planned.
+- Imported/qualified contract type validation remains planned.
 - Cross-package contract input field discovery remains planned.
 - Database-backed outbox implementations, concrete broker adapters, retry
   backoff policy, split web/worker/cron binaries, and concrete SSE/WebSocket

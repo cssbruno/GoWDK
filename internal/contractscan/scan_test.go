@@ -212,6 +212,79 @@ func HandleCreatePatient(ctx context.Context, command string) (CreatePatientResu
 	}
 }
 
+func TestScanReportsInvalidImportedHandlerSignatures(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n\nrequire github.com/cssbruno/gowdk v0.0.0\nreplace github.com/cssbruno/gowdk => "+gowdkRepoRoot(t)+"\n")
+	writeFile(t, filepath.Join(root, "contractdefs", "types.go"), `package contractdefs
+
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+type PatientCreated struct{}
+type SyncPatients struct{}
+`)
+	writeFile(t, filepath.Join(root, "patienthandlers", "handlers.go"), `package patienthandlers
+
+import (
+	"context"
+
+	"example.com/app/contractdefs"
+)
+
+func HandleCreatePatient(ctx context.Context, command string) (contractdefs.CreatePatientResult, error) {
+	return contractdefs.CreatePatientResult{}, nil
+}
+
+func SendWelcomeEmail(ctx context.Context, event contractdefs.PatientCreated) (int, error) {
+	return 0, nil
+}
+
+func SyncPatients(ctx context.Context, job contractdefs.SyncPatients) {
+}
+`)
+	writeFile(t, filepath.Join(root, "patients", "register.go"), `package patients
+
+import (
+	"example.com/app/contractdefs"
+	"example.com/app/patienthandlers"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[contractdefs.CreatePatient, contractdefs.CreatePatientResult](r, patienthandlers.HandleCreatePatient)
+	contracts.RegisterDomainEvent[contractdefs.PatientCreated](r, patienthandlers.SendWelcomeEmail)
+	contracts.RegisterJob[contractdefs.SyncPatients](r, patienthandlers.SyncPatients)
+}
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var command, event, job Diagnostic
+	for _, diagnostic := range report.Diagnostics {
+		if diagnostic.Code != "contract_handler_invalid" {
+			continue
+		}
+		switch diagnostic.Kind {
+		case runtimecontracts.Command:
+			command = diagnostic
+		case runtimecontracts.Event:
+			event = diagnostic
+		case runtimecontracts.Job:
+			job = diagnostic
+		}
+	}
+	if command.Handler != "patienthandlers.HandleCreatePatient" || !strings.Contains(command.Message, "second parameter must be contractdefs.CreatePatient") {
+		t.Fatalf("unexpected imported command diagnostic: %#v in %#v", command, report.Diagnostics)
+	}
+	if event.Handler != "patienthandlers.SendWelcomeEmail" || !strings.Contains(event.Message, "must return error") {
+		t.Fatalf("unexpected imported event diagnostic: %#v in %#v", event, report.Diagnostics)
+	}
+	if job.Handler != "patienthandlers.SyncPatients" || !strings.Contains(job.Message, "must return error") {
+		t.Fatalf("unexpected imported job diagnostic: %#v in %#v", job, report.Diagnostics)
+	}
+}
+
 func TestScanReportsUnexportedLocalHandler(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "patients.go"), `package patients
@@ -554,4 +627,13 @@ func writeFile(t *testing.T, path string, body string) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func gowdkRepoRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.ToSlash(root)
 }

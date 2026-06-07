@@ -1,6 +1,7 @@
 package appgen
 
 import (
+	"go/format"
 	"io"
 	"net"
 	"net/http"
@@ -965,6 +966,51 @@ func TestAppShellSourceEmitterDoesNotUseRawTemplates(t *testing.T) {
 				t.Fatalf("app shell source emitter must use go/ast, found %q in %s", forbidden, path)
 			}
 		}
+	}
+}
+
+func TestGeneratedPackageSourceIsGoFormatted(t *testing.T) {
+	source := appPackageSource(Options{IR: &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
+		Kind:        gwdkir.ContractCommand,
+		Name:        "patients.CreatePatient",
+		ImportAlias: "patients",
+		ImportPath:  "example.com/app/contracts/patients",
+		Type:        "CreatePatient",
+		Result:      "CreatePatientResult",
+		Method:      http.MethodPost,
+		Path:        "/patients",
+		Status:      gwdkir.ContractBindingBound,
+		Handler:     "HandleCreatePatient",
+		Register:    "Register",
+		OwnerKind:   gwdkir.SourcePage,
+		OwnerID:     "patients",
+	}}}})
+	formatted, err := format.Source([]byte(source))
+	if err != nil {
+		t.Fatalf("generated package source is not valid Go: %v\n%s", err, source)
+	}
+	if source != string(formatted) {
+		t.Fatalf("generated package source must be gofmt-formatted")
+	}
+}
+
+func TestGeneratedDeclarationSnippetIsGoFormatted(t *testing.T) {
+	source := actionHandlerSource([]ActionEndpoint{{
+		PageID:      "newsletter",
+		ActionName:  "Subscribe",
+		Method:      http.MethodPost,
+		Route:       "/newsletter",
+		InputFields: []string{"email"},
+		Redirect:    "/newsletter?ok=1",
+	}}, false)
+	wrapped := []byte("package gowdkapp\n\n" + source)
+	formatted, err := format.Source(wrapped)
+	if err != nil {
+		t.Fatalf("generated declaration snippet is not valid Go: %v\n%s", err, source)
+	}
+	formattedSnippet := strings.TrimSuffix(strings.TrimPrefix(string(formatted), "package gowdkapp\n\n"), "\n")
+	if source != formattedSnippet {
+		t.Fatalf("generated declaration snippet must be gofmt-formatted")
 	}
 }
 

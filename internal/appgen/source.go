@@ -3,6 +3,7 @@ package appgen
 import (
 	"bytes"
 	"go/ast"
+	"go/format"
 	"go/printer"
 	"go/token"
 	"sort"
@@ -138,7 +139,24 @@ func printGoFile(packageName string, imports map[string]string, decls []ast.Decl
 
 	var buffer bytes.Buffer
 	_ = printer.Fprint(&buffer, token.NewFileSet(), file)
-	return buffer.String()
+	return formatGoSource(buffer.Bytes())
+}
+
+func formatGoSource(source []byte) string {
+	formatted, err := format.Source(source)
+	if err != nil {
+		return string(source)
+	}
+	return string(formatted)
+}
+
+func formatGoDeclSnippet(source string) string {
+	const packagePrefix = "package gowdkapp\n\n"
+	formatted := formatGoSource([]byte(packagePrefix + source))
+	if strings.HasPrefix(formatted, packagePrefix) {
+		return strings.TrimSuffix(strings.TrimPrefix(formatted, packagePrefix), "\n")
+	}
+	return source
 }
 
 func importDecl(imports map[string]string) ast.Decl {

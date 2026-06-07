@@ -405,7 +405,7 @@ wherever the contract is HTTP-exposed.
       directives.
 - [x] Extend query adapter IR with first page-route request-time source
       metadata.
-- [ ] Generate Go adapter code with Go AST/printer/format only.
+- [x] Generate Go adapter code with Go AST/printer/format only.
 - [x] Wire command form submission to generated request decoding.
 - [ ] Wire query execution for request-time page/fragment/API needs.
 - [x] Keep CSRF validation before command decoding for form POSTs.

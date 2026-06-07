@@ -32,7 +32,7 @@ func printActionDecls(decls []ast.Decl) string {
 		}
 		_ = printer.Fprint(&buffer, fileSet, decl)
 	}
-	return buffer.String()
+	return formatGoDeclSnippet(buffer.String())
 }
 
 func actionsUseValidation(actions []ActionEndpoint) bool {

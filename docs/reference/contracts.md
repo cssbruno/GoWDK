@@ -466,6 +466,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   adapter IR, including reference name, alias, import path, local contract
   type, result type, runtime roles, decoded input fields, binding status,
   handler, register function, owner, and source.
+- Generated app adapter source is assembled from Go AST nodes, printed with
+  `go/printer`, and normalized with `go/format`; contract adapter emitters do
+  not use string line writing.
 - `gowdk routes` includes routable `g:command` and `g:query` references as
   backend endpoint metadata with contract binding details.
 - Command contract adapter IR includes literal form method/path.

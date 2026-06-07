@@ -357,6 +357,8 @@ wherever the contract is HTTP-exposed.
       diagnostics through `gowdk check` and CLI `gowdk build`.
 - [x] Validate local command input and result types.
 - [x] Validate local query input and result types.
+- [x] Validate imported/qualified contract and result types resolved by
+      `go/types`.
 - [x] Validate first same-file command, query, event subscriber, and job handler
       signatures.
 - [x] Validate event subscriber signatures across full local packages and

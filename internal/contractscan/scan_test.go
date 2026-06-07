@@ -288,6 +288,65 @@ func Register(r *contracts.Registry) {
 	}
 }
 
+func TestScanReportsInvalidImportedContractTypes(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n\nrequire github.com/cssbruno/gowdk v0.0.0\nreplace github.com/cssbruno/gowdk => "+gowdkRepoRoot(t)+"\n")
+	writeFile(t, filepath.Join(root, "contractdefs", "types.go"), `package contractdefs
+
+type CreatePatient string
+type CreatePatientResult string
+type PatientCreated string
+`)
+	writeFile(t, filepath.Join(root, "patients", "register.go"), `package patients
+
+import (
+	"context"
+
+	defs "example.com/app/contractdefs"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[defs.CreatePatient, defs.CreatePatientResult](r, HandleCreatePatient)
+	contracts.RegisterDomainEvent[defs.PatientCreated](r, SendWelcomeEmail)
+}
+
+func HandleCreatePatient(ctx context.Context, command defs.CreatePatient) (defs.CreatePatientResult, error) {
+	return "", nil
+}
+
+func SendWelcomeEmail(ctx context.Context, event defs.PatientCreated) error {
+	return nil
+}
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Diagnostics) < 3 {
+		t.Fatalf("expected imported type diagnostics, got %#v", report.Diagnostics)
+	}
+	input := findDiagnostic(t, report.Diagnostics, "contract_type_invalid")
+	if input.Type != "defs.CreatePatient" || input.TypeImportPath != "example.com/app/contractdefs" || !strings.Contains(input.Message, "command contract type defs.CreatePatient must be a struct") {
+		t.Fatalf("unexpected imported input diagnostic: %#v", input)
+	}
+	result := findDiagnostic(t, report.Diagnostics, "contract_result_invalid")
+	if result.Type != "defs.CreatePatient" || result.TypeImportPath != "example.com/app/contractdefs" || !strings.Contains(result.Message, "command result type defs.CreatePatientResult must be a struct") {
+		t.Fatalf("unexpected imported result diagnostic: %#v", result)
+	}
+	var event Diagnostic
+	for _, diagnostic := range report.Diagnostics {
+		if diagnostic.Code == "contract_type_invalid" && diagnostic.Kind == runtimecontracts.Event {
+			event = diagnostic
+			break
+		}
+	}
+	if event.Type != "defs.PatientCreated" || event.TypeImportPath != "example.com/app/contractdefs" || !strings.Contains(event.Message, "event contract type defs.PatientCreated must be a struct") {
+		t.Fatalf("unexpected imported event diagnostic: %#v in %#v", event, report.Diagnostics)
+	}
+}
+
 func TestScanReportsUnexportedLocalHandler(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "patients.go"), `package patients

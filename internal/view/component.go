@@ -151,6 +151,7 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		components:   ctx.components,
 		ownerPackage: component.Package,
 		uses:         component.Uses,
+		scopeIDs:     append([]string(nil), component.ScopeIDs...),
 		values:       values,
 		tainted:      taintedValues,
 		actions:      ctx.actions,

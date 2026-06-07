@@ -5,13 +5,18 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/discover"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
 )
+
+var cssKeyframesPattern = regexp.MustCompile(`(?i)@(-[a-z]+-)?keyframes\s+([_a-zA-Z][-_a-zA-Z0-9]*)`)
+var cssAnimationDeclarationPattern = regexp.MustCompile(`(?i)(animation(?:-name)?\s*:\s*)([^;}]*)`)
 
 type cssPlan struct {
 	assets          []plannedCSSArtifact
@@ -86,6 +91,10 @@ func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssP
 			planned.pageStylesheets[pageID] = append(planned.pageStylesheets[pageID], stylesheets...)
 		}
 	}
+	componentCSS, componentStylesheets, componentFailures := planComponentCSS(app.Components, outputDir, seen)
+	failures = append(failures, componentFailures...)
+	planned.assets = append(planned.assets, componentCSS...)
+	planned.stylesheets = append(planned.stylesheets, componentStylesheets...)
 	failures = append(failures, finalizeCSSPlan(outputDir, &planned)...)
 	return planned, failures
 }
@@ -187,6 +196,82 @@ func planPageCSS(config gowdk.Config, pages []manifest.Page, outputDir string, i
 	return assets, stylesheets, failures
 }
 
+func planComponentCSS(components []manifest.Component, outputDir string, seenAssets map[string]bool) ([]plannedCSSArtifact, []gowdk.Stylesheet, []string) {
+	var assets []plannedCSSArtifact
+	var stylesheets []gowdk.Stylesheet
+	var failures []string
+	for _, component := range components {
+		for _, cssPath := range component.CSS {
+			sourcePath, err := componentCSSSourcePath(component.Source, cssPath)
+			if err != nil {
+				failures = append(failures, fmt.Sprintf("component %s css %q: %v", component.Name, cssPath, err))
+				continue
+			}
+			contents, err := os.ReadFile(sourcePath)
+			if err != nil {
+				failures = append(failures, fmt.Sprintf("component %s css %q: %v", component.Name, cssPath, err))
+				continue
+			}
+			hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, cssPath)
+			scopeID := cssscope.ScopeID(hashKey)
+			logicalPath := componentCSSLogicalPath(component, scopeID)
+			outputPath, err := cssOutputPath(outputDir, logicalPath)
+			if err != nil {
+				failures = append(failures, fmt.Sprintf("component %s css %q: %v", component.Name, cssPath, err))
+				continue
+			}
+			if seenAssets[outputPath] {
+				failures = append(failures, fmt.Sprintf("component %s css %q: duplicate css asset path %q", component.Name, cssPath, outputPath))
+				continue
+			}
+			seenAssets[outputPath] = true
+			logicalHref := "/" + strings.TrimLeft(filepath.ToSlash(logicalPath), "/")
+			assets = append(assets, plannedCSSArtifact{
+				CSSArtifact: CSSArtifact{Path: outputPath, LogicalPath: logicalPath, LogicalHref: logicalHref},
+				contents:    scopeComponentCSS(contents, scopeID),
+			})
+			stylesheets = append(stylesheets, gowdk.Stylesheet{Href: logicalHref})
+		}
+	}
+	return assets, stylesheets, failures
+}
+
+func componentCSSSourcePath(componentSource string, cssPath string) (string, error) {
+	if strings.TrimSpace(cssPath) == "" {
+		return "", fmt.Errorf("path is required")
+	}
+	if filepath.IsAbs(cssPath) {
+		return "", fmt.Errorf("path must be relative")
+	}
+	baseDir := "."
+	if strings.TrimSpace(componentSource) != "" {
+		baseDir = filepath.Dir(filepath.FromSlash(componentSource))
+	}
+	return filepath.Clean(filepath.Join(baseDir, filepath.FromSlash(cssPath))), nil
+}
+
+func componentCSSLogicalPath(component manifest.Component, scopeID string) string {
+	packagePart := safeCSSPathPart(component.Package)
+	if packagePart == "" {
+		packagePart = "_"
+	}
+	componentPart := safeCSSPathPart(componentAssetName(component.Name))
+	if componentPart == "" {
+		componentPart = "component"
+	}
+	return path.Join(defaultPageCSSDir, "components", packagePart, componentPart, scopeID+".css")
+}
+
+func safeCSSPathPart(value string) string {
+	value = strings.TrimSpace(filepath.ToSlash(value))
+	value = strings.Trim(value, "/")
+	if value == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer("/", "_", "\\", "_", ".", "_", " ", "_", ":", "_")
+	return replacer.Replace(value)
+}
+
 func finalizeCSSPlan(outputDir string, planned *cssPlan) []string {
 	var failures []string
 	hrefs := map[string]string{}
@@ -226,6 +311,189 @@ func finalizeCSSPlan(outputDir string, planned *cssPlan) []string {
 		planned.pageStylesheets[pageID] = rewriteStylesheets(stylesheets, hrefs)
 	}
 	return failures
+}
+
+func scopeComponentCSS(contents []byte, scopeID string) []byte {
+	if strings.TrimSpace(scopeID) == "" {
+		return append([]byte(nil), contents...)
+	}
+	css := rewriteCSSKeyframes(string(contents), scopeID)
+	return []byte(scopeCSSRules(css, componentCSSScopeSelector(scopeID)))
+}
+
+func rewriteCSSKeyframes(contents string, scopeID string) string {
+	renames := map[string]string{}
+	for _, match := range cssKeyframesPattern.FindAllStringSubmatch(contents, -1) {
+		if len(match) < 3 || strings.TrimSpace(match[2]) == "" {
+			continue
+		}
+		renames[match[2]] = match[2] + "-" + scopeID
+	}
+	if len(renames) == 0 {
+		return contents
+	}
+	contents = cssKeyframesPattern.ReplaceAllStringFunc(contents, func(match string) string {
+		parts := cssKeyframesPattern.FindStringSubmatch(match)
+		if len(parts) < 3 {
+			return match
+		}
+		return strings.TrimSuffix(match, parts[2]) + renames[parts[2]]
+	})
+	return cssAnimationDeclarationPattern.ReplaceAllStringFunc(contents, func(match string) string {
+		parts := cssAnimationDeclarationPattern.FindStringSubmatch(match)
+		if len(parts) < 3 {
+			return match
+		}
+		value := parts[2]
+		for name, scoped := range renames {
+			value = regexp.MustCompile(`\b`+regexp.QuoteMeta(name)+`\b`).ReplaceAllString(value, scoped)
+		}
+		return parts[1] + value
+	})
+}
+
+func componentCSSScopeSelector(scopeID string) string {
+	return `:where([data-gowdk-scope~="` + scopeID + `"])`
+}
+
+func scopeCSSRules(contents string, scopeSelector string) string {
+	var out strings.Builder
+	for cursor := 0; cursor < len(contents); {
+		open := strings.IndexByte(contents[cursor:], '{')
+		if open < 0 {
+			out.WriteString(contents[cursor:])
+			break
+		}
+		open += cursor
+		close := matchingCSSBrace(contents, open)
+		if close < 0 {
+			out.WriteString(contents[cursor:])
+			break
+		}
+		prefix := contents[cursor:open]
+		body := contents[open+1 : close]
+		selector := strings.TrimSpace(prefix)
+		switch {
+		case selector == "":
+			out.WriteString(prefix)
+			out.WriteByte('{')
+			out.WriteString(body)
+			out.WriteByte('}')
+		case strings.HasPrefix(selector, "@"):
+			out.WriteString(prefix)
+			out.WriteByte('{')
+			if cssAtRuleHasNestedRules(selector) {
+				out.WriteString(scopeCSSRules(body, scopeSelector))
+			} else {
+				out.WriteString(body)
+			}
+			out.WriteByte('}')
+		default:
+			leading := prefix[:len(prefix)-len(strings.TrimLeft(prefix, " \n\r\t\f"))]
+			trailing := prefix[len(strings.TrimRight(prefix, " \n\r\t\f")):]
+			out.WriteString(leading)
+			out.WriteString(scopeCSSSelectorList(selector, scopeSelector))
+			out.WriteString(trailing)
+			out.WriteByte('{')
+			out.WriteString(body)
+			out.WriteByte('}')
+		}
+		cursor = close + 1
+	}
+	return out.String()
+}
+
+func cssAtRuleHasNestedRules(selector string) bool {
+	lower := strings.ToLower(strings.TrimSpace(selector))
+	if strings.Contains(lower, "keyframes") {
+		return false
+	}
+	return strings.HasPrefix(lower, "@media") || strings.HasPrefix(lower, "@supports") || strings.HasPrefix(lower, "@container") || strings.HasPrefix(lower, "@layer")
+}
+
+func matchingCSSBrace(contents string, open int) int {
+	depth := 0
+	inString := rune(0)
+	escaped := false
+	for index, current := range contents[open:] {
+		absolute := open + index
+		if inString != 0 {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if current == '\\' {
+				escaped = true
+				continue
+			}
+			if current == inString {
+				inString = 0
+			}
+			continue
+		}
+		if current == '"' || current == '\'' {
+			inString = current
+			continue
+		}
+		switch current {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return absolute
+			}
+		}
+	}
+	return -1
+}
+
+func scopeCSSSelectorList(selectorList string, scopeSelector string) string {
+	selectors := splitCSSSelectorList(selectorList)
+	for index, selector := range selectors {
+		selectors[index] = scopeCSSSelector(strings.TrimSpace(selector), scopeSelector)
+	}
+	return strings.Join(selectors, ", ")
+}
+
+func splitCSSSelectorList(selectorList string) []string {
+	var selectors []string
+	start := 0
+	parenDepth := 0
+	bracketDepth := 0
+	for index, current := range selectorList {
+		switch current {
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
+		case '[':
+			bracketDepth++
+		case ']':
+			if bracketDepth > 0 {
+				bracketDepth--
+			}
+		case ',':
+			if parenDepth == 0 && bracketDepth == 0 {
+				selectors = append(selectors, selectorList[start:index])
+				start = index + 1
+			}
+		}
+	}
+	selectors = append(selectors, selectorList[start:])
+	return selectors
+}
+
+func scopeCSSSelector(selector string, scopeSelector string) string {
+	if selector == "" || strings.Contains(selector, ":global(") {
+		return selector
+	}
+	if index := strings.LastIndex(selector, "::"); index >= 0 {
+		return strings.TrimSpace(selector[:index]) + scopeSelector + selector[index:]
+	}
+	return selector + scopeSelector
 }
 
 func hashedCSSPath(logicalPath string, hash string) string {

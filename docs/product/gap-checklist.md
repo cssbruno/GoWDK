@@ -535,8 +535,12 @@ Done when:
       immutable generated binary cache headers when output support is added.
 - [x] Document the relationship between page CSS, component CSS, CSS processors,
       Tailwind, hashing, and asset manifests.
-- [ ] Add tests for scoped CSS output, hashed filenames, manifest mappings, and
+- [x] Add tests for scoped CSS output, hashed filenames, manifest mappings, and
       generated binary cache headers.
+      Covered by buildgen coverage for component `@css` scoped selector output,
+      scoped keyframes, generated page stylesheet links, content-hashed
+      filenames, `gowdk-assets.json` mappings/hashes/cache policy, and runtime
+      generated binary cache headers for the emitted CSS asset.
 - [x] Add examples for plain CSS, scoped component CSS, Tailwind, and external
       CSS processors.
       Covered by `examples/css`, `examples/components/css`,

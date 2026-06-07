@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
+	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
@@ -72,6 +73,7 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 			Name:         component.Name,
 			Package:      component.Package,
 			Uses:         componentUses(component.Uses),
+			ScopeIDs:     componentScopeIDs(component),
 			Props:        props,
 			State:        state,
 			StateJSON:    stateJSON,
@@ -89,6 +91,18 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 		}
 	}
 	return registry, failures
+}
+
+func componentScopeIDs(component manifest.Component) []string {
+	if len(component.CSS) == 0 {
+		return nil
+	}
+	scopeIDs := make([]string, 0, len(component.CSS))
+	for _, css := range component.CSS {
+		hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, css)
+		scopeIDs = append(scopeIDs, cssscope.ScopeID(hashKey))
+	}
+	return scopeIDs
 }
 
 func componentUses(uses []manifest.Use) map[string]string {

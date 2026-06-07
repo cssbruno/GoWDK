@@ -22,6 +22,9 @@ Implemented today:
 - CSS processors can emit CSS asset files under the output directory.
 - Discovered page CSS inputs selected by implicit `default page` or explicit
   `@css` annotations are concatenated into generated page CSS files.
+- Component `@css` files are emitted as scoped CSS assets, linked from
+  generated pages, content-hashed, recorded in `gowdk-assets.json`, and served
+  with immutable cache headers by generated binaries.
 - Dynamic app routes with literal `paths {}` declarations are expanded by
   `gowdk build`.
 - Literal dynamic route params can render in the current literal `view {}`

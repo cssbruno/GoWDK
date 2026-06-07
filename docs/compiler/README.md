@@ -33,7 +33,7 @@ Not implemented yet:
 - Full AST/semantic/type analysis beyond the current component contract slice.
 - Full component compilation, arbitrary `build {}` statements beyond expression
   records, and full `paths {}` execution.
-- Broader generated-client reactivity, scoped component CSS/asset emission, and
+- Broader generated-client reactivity, component non-CSS asset emission, and
   load/action invalidation.
 - Broader hybrid request-time behavior beyond explicit `load {}` branches.
 

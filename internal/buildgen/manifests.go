@@ -164,6 +164,7 @@ func assetManifestPayload(outputDir string, pageArtifacts []Artifact, cssArtifac
 		}
 		if artifact.CachePolicy != "" {
 			cache[logical] = artifact.CachePolicy
+			cache[rel] = artifact.CachePolicy
 		}
 	}
 	for _, artifact := range assetArtifacts {
@@ -178,6 +179,7 @@ func assetManifestPayload(outputDir string, pageArtifacts []Artifact, cssArtifac
 		}
 		if artifact.CachePolicy != "" {
 			cache[logical] = artifact.CachePolicy
+			cache[rel] = artifact.CachePolicy
 		}
 	}
 

@@ -142,10 +142,13 @@ Current implementation status:
 - Page CSS discovery, configured stylesheets, processor-emitted CSS, minified
   hashed filenames, asset manifest mappings, and generated binary cache headers
   are implemented for build output.
-- Component `@css` and `@asset` annotations are parsed and analyzed as
-  metadata with stable owner, hash-key, and scope metadata.
-- Emitting component CSS files, rewriting selectors, scoping keyframes, and
-  emitting component-level assets from that metadata are planned work.
+- Component `@css` annotations are parsed, analyzed, emitted as scoped CSS
+  files, content-hashed, linked from generated pages, recorded in
+  `gowdk-assets.json`, and served with immutable generated binary cache
+  headers.
+- Component `@asset` annotations are parsed and analyzed as metadata with
+  stable owner data. Emitting component-level non-CSS assets from that metadata
+  is planned work.
 - Full component AST bodies are not yet passed to CSS processors. Processors
   receive source metadata and the current extracted class subset.
 
@@ -165,15 +168,16 @@ The component CSS scoping contract is:
   CSS for application-wide styles. A future explicit `:global(...)` escape can
   be added, but implicit global selectors in component CSS are not part of the
   contract.
-- Component-level emitted assets are content-hashed, recorded in
+- Emitted component CSS assets are content-hashed, recorded in
   `gowdk-assets.json`, and served with the same generated binary cache policy
-  as other immutable emitted assets.
+  as other immutable emitted assets. Non-CSS component asset emission remains
+  planned.
 
 Relationship to other CSS features:
 
 - Page CSS is the implemented build-output path today.
-- Component CSS is the component-local authoring contract and metadata path
-  today; emitted scoped component CSS is the next implementation step.
+- Component CSS is the component-local authoring and emitted build-output path
+  today.
 - CSS processors and Tailwind are optional. They can operate on discovered
   source metadata and emitted assets, but they must not become mandatory core
   dependencies.

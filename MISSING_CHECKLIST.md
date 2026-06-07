@@ -395,8 +395,8 @@ api Session GET "/api/session"
 - [x] Add named slots and scalar scoped slots.
 - [x] Add component CSS and component asset metadata with deterministic scope
       and hash keys.
-- [ ] Emit scoped component CSS and component-level assets from the existing
-      metadata.
+- [x] Emit scoped component CSS from the existing metadata.
+- [ ] Emit component-level non-CSS assets from the existing metadata.
 - [x] Add a documented contract for component state, props, stores, client code, and generated runtime behavior.
 - [x] Add a proper reactive dependency graph.
 - [x] Track dependencies for computed values automatically across the supported

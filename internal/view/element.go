@@ -100,6 +100,11 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		out.WriteString(gowhtml.Escape(ctx.loopKeyValue(ctx.loopItem.KeyExpr)))
 		out.WriteByte('"')
 	}
+	if len(ctx.scopeIDs) > 0 {
+		out.WriteString(` data-gowdk-scope="`)
+		out.WriteString(gowhtml.Escape(strings.Join(ctx.scopeIDs, " ")))
+		out.WriteByte('"')
+	}
 	for _, attr := range node.Attrs {
 		if strings.HasPrefix(attr.Name, "g:on:") {
 			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {

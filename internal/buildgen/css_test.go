@@ -3,13 +3,18 @@ package buildgen
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	runtimeapp "github.com/cssbruno/gowdk/runtime/app"
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
@@ -331,6 +336,123 @@ func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 	}
 	if policy := assets.CachePolicy("assets/app.css"); policy != immutableAssetCachePolicy {
 		t.Fatalf("expected immutable asset cache policy, got %q", policy)
+	}
+}
+
+func TestBuildEmitsScopedComponentCSSWithManifestAndCacheHeaders(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	if err := os.MkdirAll("components", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "components", "hero.css"), `
+.hero {
+  animation: fade 1s ease;
+  color: red;
+}
+.hero h1, .hero > p {
+  color: blue;
+}
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (min-width: 40rem) {
+  .hero { padding: 1rem; }
+}
+`)
+	outputDir := filepath.Join(root, "dist")
+	component := manifest.Component{
+		Package: "components",
+		Source:  "components/hero.cmp.gwdk",
+		Name:    "Hero",
+		CSS:     []string{"./hero.css"},
+		Props:   []manifest.Prop{{Name: "title", Type: "string"}},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<section .hero><h1>{title}</h1></section>`,
+		},
+	}
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "components",
+			ID:      "home",
+			Route:   "/",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Hero title="GOWDK" /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+
+	result, err := Build(gowdk.Config{CSS: gowdk.CSSConfig{Include: []string{DisableCSSDiscovery}}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, "./hero.css")
+	scopeID := cssscope.ScopeID(hashKey)
+	logicalPath := componentCSSLogicalPath(component, scopeID)
+	artifact := cssArtifactByLogicalPath(t, result.CSSArtifacts, logicalPath)
+	emittedRel := filepath.ToSlash(mustRelativePath(t, outputDir, artifact.Path))
+	if !strings.Contains(emittedRel, "/"+scopeID+".") || !strings.HasSuffix(emittedRel, ".css") {
+		t.Fatalf("expected scoped component css to use hashed filename, got %q", emittedRel)
+	}
+
+	html := readFile(t, filepath.Join(outputDir, "index.html"))
+	if !strings.Contains(html, `<link rel="stylesheet" href="/`+emittedRel+`">`) {
+		t.Fatalf("expected scoped css link in html:\n%s", html)
+	}
+	if !strings.Contains(html, `class="hero" data-gowdk-scope="`+scopeID+`"`) ||
+		!strings.Contains(html, `<h1 data-gowdk-scope="`+scopeID+`">GOWDK</h1>`) {
+		t.Fatalf("expected component scope marker in html:\n%s", html)
+	}
+
+	css := readFile(t, artifact.Path)
+	scopeSelector := componentCSSScopeSelector(scopeID)
+	for _, expected := range []string{
+		`.hero` + scopeSelector + `{animation:fade-` + scopeID + ` 1s ease;color:red;}`,
+		`.hero h1` + scopeSelector + `,.hero>p` + scopeSelector + `{color:blue;}`,
+		`@keyframes fade-` + scopeID + `{from{opacity:0;}to{opacity:1;}}`,
+		`@media(min-width:40rem){.hero` + scopeSelector + `{padding:1rem;}}`,
+	} {
+		if !strings.Contains(css, expected) {
+			t.Fatalf("expected %q in scoped css:\n%s", expected, css)
+		}
+	}
+
+	manifestPayload, err := os.ReadFile(filepath.Join(outputDir, assetManifestFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var assets runtimeasset.Manifest
+	if err := json.Unmarshal(manifestPayload, &assets); err != nil {
+		t.Fatal(err)
+	}
+	if assets.Resolve(logicalPath) != emittedRel {
+		t.Fatalf("expected manifest mapping for component css, got %s", manifestPayload)
+	}
+	if hash := assets.Hash(logicalPath); !strings.HasPrefix(hash, "sha256:") {
+		t.Fatalf("expected component css hash, got %q in %s", hash, manifestPayload)
+	}
+	if policy := assets.CachePolicy(logicalPath); policy != immutableAssetCachePolicy {
+		t.Fatalf("expected immutable component css cache policy, got %q", policy)
+	}
+
+	handler := runtimeapp.Handler{
+		Root: fstest.MapFS{
+			emittedRel: {Data: []byte(css)},
+		},
+		Assets: assets,
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/"+emittedRel, nil)
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected generated binary asset status: %d", recorder.Code)
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != immutableAssetCachePolicy {
+		t.Fatalf("expected generated binary cache header, got %q", cache)
 	}
 }
 

@@ -21,6 +21,7 @@ type Component struct {
 	Name         string
 	Package      string
 	Uses         map[string]string
+	ScopeIDs     []string
 	Props        []string
 	State        map[string]string
 	StateJSON    string
@@ -906,6 +907,7 @@ type renderContext struct {
 	islandSeq    *int
 	loopItem     *loopItemRender
 	templateLoop *templateLoopRender
+	scopeIDs     []string
 	selectBound  bool
 	selectValue  string
 }

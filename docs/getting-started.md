@@ -154,6 +154,6 @@ Implemented today:
 Planned or partial:
 
 - Broader generated validation coverage.
-- Scoped component CSS/asset emission from existing metadata.
+- Component non-CSS asset emission from existing metadata.
 - Broader hybrid request-time behavior beyond explicit `load {}` branches.
 - Richer generated-client reactivity and load/action invalidation.

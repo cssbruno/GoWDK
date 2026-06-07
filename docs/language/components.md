@@ -62,9 +62,11 @@ Implemented today:
 - Duplicate component names are rejected during manifest validation.
 - Redundant component implementations are rejected during manifest validation
   with `redundant_component_implementation`, even when their names differ.
-- Component `@css` and `@asset` declarations are parsed and lowered into
-  compiler metadata with deterministic CSS scope and hash metadata. Emitted
-  scoped component CSS and component-level asset output are planned work.
+- Component `@css` declarations are parsed, lowered into compiler metadata,
+  emitted as scoped component CSS, linked from generated pages, content-hashed,
+  manifest-mapped, and served with immutable cache headers. Component `@asset`
+  declarations are parsed as metadata; non-CSS component asset output remains
+  planned work.
 - Component files are compiler inputs, not Go imports. A page can call a
   same-package component by name, such as `<Hero />`, when that component file
   is part of the same build/module input set. Cross-package page calls must use

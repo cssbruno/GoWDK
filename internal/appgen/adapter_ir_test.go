@@ -3,6 +3,7 @@ package appgen
 import (
 	"testing"
 
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -86,5 +87,52 @@ func TestBackendAdapterIRCapturesFallbackMetadata(t *testing.T) {
 	}
 	if ir.Fallbacks[0].Status != manifest.BackendBindingMissing || ir.Fallbacks[0].Endpoint.Path != "/newsletter" {
 		t.Fatalf("unexpected fallback metadata: %#v", ir.Fallbacks[0])
+	}
+}
+
+func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{
+		{
+			Kind:      gwdkir.ContractQuery,
+			Name:      "patients.GetPatientPage",
+			Status:    gwdkir.ContractBindingMissing,
+			Message:   "query missing",
+			OwnerKind: gwdkir.SourcePage,
+			OwnerID:   "patients",
+			Package:   "patients",
+			Source:    "patients.page.gwdk",
+		},
+		{
+			Kind:      gwdkir.ContractCommand,
+			Name:      "patients.CreatePatient",
+			Status:    gwdkir.ContractBindingBound,
+			Handler:   "HandleCreatePatient",
+			OwnerKind: gwdkir.SourcePage,
+			OwnerID:   "patients",
+			Package:   "patients",
+			Source:    "patients.page.gwdk",
+		},
+	}}
+
+	ir := backendAdapterIR(Options{IR: program})
+	if len(ir.ContractExposures) != 2 {
+		t.Fatalf("expected two contract exposures, got %#v", ir.ContractExposures)
+	}
+	command := ir.ContractExposures[0]
+	if command.Endpoint.Kind != BackendEndpointCommand || command.Endpoint.Handler != "command" {
+		t.Fatalf("unexpected command exposure endpoint: %#v", command.Endpoint)
+	}
+	if command.Contract != "patients.CreatePatient" || command.Status != gwdkir.ContractBindingBound || command.Handler != "HandleCreatePatient" {
+		t.Fatalf("unexpected command exposure: %#v", command)
+	}
+	query := ir.ContractExposures[1]
+	if query.Endpoint.Kind != BackendEndpointQuery || query.Endpoint.Handler != "query" {
+		t.Fatalf("unexpected query exposure endpoint: %#v", query.Endpoint)
+	}
+	if query.Contract != "patients.GetPatientPage" || query.Status != gwdkir.ContractBindingMissing || query.Message != "query missing" {
+		t.Fatalf("unexpected query exposure: %#v", query)
+	}
+	if command.Endpoint.Method != "" || command.Endpoint.Path != "" {
+		t.Fatalf("contract exposure should not invent HTTP method/path yet: %#v", command.Endpoint)
 	}
 }

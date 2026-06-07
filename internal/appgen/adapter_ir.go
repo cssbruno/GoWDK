@@ -1,13 +1,19 @@
 package appgen
 
-import "github.com/cssbruno/gowdk/internal/manifest"
+import (
+	"sort"
+
+	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
+)
 
 type BackendAdapterIR struct {
-	Registrations []BackendEndpointRegistration
-	Decoders      []BackendDecoder
-	Calls         []BackendHandlerCall
-	Responses     []BackendResponse
-	Fallbacks     []BackendFallback
+	Registrations     []BackendEndpointRegistration
+	ContractExposures []BackendContractExposure
+	Decoders          []BackendDecoder
+	Calls             []BackendHandlerCall
+	Responses         []BackendResponse
+	Fallbacks         []BackendFallback
 }
 
 type BackendEndpointKind string
@@ -16,6 +22,8 @@ const (
 	BackendEndpointAction   BackendEndpointKind = "action"
 	BackendEndpointAPI      BackendEndpointKind = "api"
 	BackendEndpointFragment BackendEndpointKind = "fragment"
+	BackendEndpointCommand  BackendEndpointKind = "command"
+	BackendEndpointQuery    BackendEndpointKind = "query"
 )
 
 type BackendEndpointRegistration struct {
@@ -53,6 +61,18 @@ type BackendFallback struct {
 	Endpoint BackendEndpointRegistration
 	Status   manifest.BackendBindingStatus
 	Message  string
+}
+
+type BackendContractExposure struct {
+	Endpoint  BackendEndpointRegistration
+	Contract  string
+	Status    gwdkir.ContractBindingStatus
+	Handler   string
+	Message   string
+	OwnerKind gwdkir.SourceKind
+	OwnerID   string
+	Package   string
+	Source    string
 }
 
 func backendAdapterIR(options Options) BackendAdapterIR {
@@ -147,9 +167,56 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			Partial:  true,
 		})
 	}
+	if options.IR != nil {
+		for _, ref := range sortedContractReferences(options.IR.ContractRefs) {
+			endpoint := BackendEndpointRegistration{
+				Kind:    backendContractEndpointKind(ref.Kind),
+				Handler: string(ref.Kind),
+				PageID:  ref.OwnerID,
+				Name:    ref.Name,
+			}
+			ir.ContractExposures = append(ir.ContractExposures, BackendContractExposure{
+				Endpoint:  endpoint,
+				Contract:  ref.Name,
+				Status:    ref.Status,
+				Handler:   ref.Handler,
+				Message:   ref.Message,
+				OwnerKind: ref.OwnerKind,
+				OwnerID:   ref.OwnerID,
+				Package:   ref.Package,
+				Source:    ref.Source,
+			})
+		}
+	}
 	return ir
 }
 
 func (ir BackendAdapterIR) HasRegistrations() bool {
 	return len(ir.Registrations) > 0
+}
+
+func backendContractEndpointKind(kind gwdkir.ContractKind) BackendEndpointKind {
+	switch kind {
+	case gwdkir.ContractQuery:
+		return BackendEndpointQuery
+	default:
+		return BackendEndpointCommand
+	}
+}
+
+func sortedContractReferences(refs []gwdkir.ContractReference) []gwdkir.ContractReference {
+	out := append([]gwdkir.ContractReference(nil), refs...)
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].OwnerKind != out[j].OwnerKind {
+			return out[i].OwnerKind < out[j].OwnerKind
+		}
+		if out[i].OwnerID != out[j].OwnerID {
+			return out[i].OwnerID < out[j].OwnerID
+		}
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
 }

@@ -310,6 +310,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   `ExecuteCommandToPresentationFanout` or `SendPresentationEventsToFanout`.
 - Queue/outbox adapters can implement the dependency-free `EventSource`
   interface and drive worker-role subscribers through `RunEventWorker`.
+- `internal/appgen` records first-slice command/query contract exposure
+  metadata in backend adapter IR for future generated adapters.
 - Full package graph validation and imported handler validation are planned.
+- Contract adapter IR does not yet include template-derived HTTP method/path.
 - Durable outbox implementations, concrete broker adapters, split
   web/worker/cron binaries, and concrete SSE/WebSocket adapters are planned.

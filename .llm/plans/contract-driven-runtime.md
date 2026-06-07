@@ -410,7 +410,8 @@ wherever the contract is HTTP-exposed.
 - [x] Add role filtering so web binaries do not accidentally run worker-only
       subscribers unless configured.
 - [ ] Add graceful shutdown for background handlers.
-- [ ] Document failure behavior for subscriber errors.
+- [x] Add event-envelope replay helpers for worker/outbox delivery code.
+- [x] Document failure behavior for subscriber errors.
 
 ### Phase 6: Optional Reliability Adapters
 

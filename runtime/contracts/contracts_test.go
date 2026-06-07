@@ -227,6 +227,77 @@ func TestExecuteCommandToOutboxReturnsStoreError(t *testing.T) {
 	}
 }
 
+func TestPublishEnvelopeDispatchesCapturedEvent(t *testing.T) {
+	registry := NewRegistry()
+	var handled []string
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		handled = append(handled, event.ID)
+		return nil
+	}))
+
+	err := PublishEnvelope(context.Background(), registry, EventEnvelope{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	})
+	if err != nil {
+		t.Fatalf("publish envelope: %v", err)
+	}
+	if !reflect.DeepEqual(handled, []string{"patient-1"}) {
+		t.Fatalf("handled = %#v, want patient-1", handled)
+	}
+}
+
+func TestPublishEnvelopesForRoleFiltersSubscribers(t *testing.T) {
+	registry := NewRegistry()
+	var webHandled, workerHandled, rolelessHandled int
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		webHandled++
+		return nil
+	}, RoleWeb))
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		workerHandled++
+		return nil
+	}, RoleWorker))
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		rolelessHandled++
+		return nil
+	}))
+
+	events := []EventEnvelope{{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}}
+	if err := PublishEnvelopesForRole(context.Background(), registry, RoleWorker, events); err != nil {
+		t.Fatalf("publish envelopes for role: %v", err)
+	}
+	if webHandled != 0 || workerHandled != 1 || rolelessHandled != 1 {
+		t.Fatalf("unexpected role dispatch counts: web=%d worker=%d roleless=%d", webHandled, workerHandled, rolelessHandled)
+	}
+}
+
+func TestPublishEnvelopeRejectsWrongValueType(t *testing.T) {
+	registry := NewRegistry()
+	var handled int
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		handled++
+		return nil
+	}))
+
+	err := PublishEnvelope(context.Background(), registry, EventEnvelope{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreatedNotice{ID: "patient-1"},
+	})
+	if !Is(err, ErrUnsupportedHandler) {
+		t.Fatalf("publish envelope error = %v, want %s", err, ErrUnsupportedHandler)
+	}
+	if handled != 0 {
+		t.Fatalf("handled = %d, want 0", handled)
+	}
+}
+
 func TestCommandCanHaveOnlyOneOwner(t *testing.T) {
 	registry := NewRegistry()
 	handler := func(ctx context.Context, command createPatient) (createPatientResult, error) {

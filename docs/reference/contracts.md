@@ -141,6 +141,18 @@ subscriber dispatch is enough. Use `CaptureCommandEvents` or
 `ExecuteCommandToOutbox` when subscribers should run from a later worker or
 broker delivery path.
 
+Worker or broker adapter code can replay captured events through the same typed
+subscriber registry:
+
+```go
+err := contracts.PublishEnvelopesForRole(ctx, r, contracts.RoleWorker, events)
+```
+
+Envelope replay keeps the original event category and type. Subscribers still
+run through role filtering. If a subscriber returns an error, replay stops and
+returns `subscriber_failed`; adapter retry and idempotency policy stays outside
+the core runtime.
+
 ## `.gwdk` Command References
 
 Use `g:command` on forms to declare backend command intent:
@@ -227,6 +239,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - `runtime/contracts` can capture command-emitted events as `EventEnvelope`
   values and pass them to a dependency-free `Outbox` interface without
   dispatching subscribers.
+- Captured event envelopes can be replayed later with
+  `PublishEnvelope`, `PublishEnvelopes`, and role-filtered variants.
 - Full package graph validation and imported handler validation are planned.
 - Durable outbox implementations, broker adapters, split web/worker/cron
   binaries, and realtime SSE/WebSocket fanout are planned.

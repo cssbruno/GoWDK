@@ -336,6 +336,62 @@ func PublishPresentationForRole[E any](ctx context.Context, registry *Registry, 
 	return dispatchEventForRole(ctx, registry, PresentationEvent, event, role)
 }
 
+// PublishEnvelope dispatches one captured event envelope immediately.
+func PublishEnvelope(ctx context.Context, registry *Registry, event EventEnvelope) error {
+	return publishEnvelopeForRole(ctx, registry, event, "")
+}
+
+// PublishEnvelopeForRole dispatches one captured event envelope to subscribers
+// available to role.
+func PublishEnvelopeForRole(ctx context.Context, registry *Registry, role Role, event EventEnvelope) error {
+	return publishEnvelopeForRole(ctx, registry, event, role)
+}
+
+// PublishEnvelopes dispatches captured event envelopes in order.
+func PublishEnvelopes(ctx context.Context, registry *Registry, events []EventEnvelope) error {
+	return publishEnvelopesForRole(ctx, registry, events, "")
+}
+
+// PublishEnvelopesForRole dispatches captured event envelopes in order to
+// subscribers available to role.
+func PublishEnvelopesForRole(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+	return publishEnvelopesForRole(ctx, registry, events, role)
+}
+
+func publishEnvelopesForRole(ctx context.Context, registry *Registry, events []EventEnvelope, role Role) error {
+	for _, event := range events {
+		if err := publishEnvelopeForRole(ctx, registry, event, role); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func publishEnvelopeForRole(ctx context.Context, registry *Registry, event EventEnvelope, role Role) error {
+	key := eventKey{category: event.Category, event: event.Type}
+	entries := registry.eventEntries(key)
+	for index, entry := range entries {
+		if !rolesAllow(entry.roles, role) {
+			continue
+		}
+		if entry.dispatch == nil {
+			return unsupportedHandlerError(Event, key.event)
+		}
+		if err := entry.dispatch(ctx, event.Value); err != nil {
+			if Is(err, ErrUnsupportedHandler) {
+				return err
+			}
+			return Error{
+				Kind:     ErrSubscriberFailed,
+				Contract: key.event,
+				Message:  fmt.Sprintf("%s event subscriber %d for %s failed: %v", key.category, index, key.event, err),
+				Cause:    err,
+			}
+		}
+	}
+	return nil
+}
+
 // RegisterJob registers one background or scheduled job handler.
 func RegisterJob[J any](registry *Registry, handler JobHandler[J], roles ...Role) error {
 	if handler == nil {
@@ -436,9 +492,9 @@ type eventKey struct {
 }
 
 type eventEntry struct {
-	event   string
-	handler any
-	roles   []Role
+	event    string
+	dispatch func(context.Context, any) error
+	roles    []Role
 }
 
 type jobEntry struct {
@@ -488,8 +544,26 @@ func registerEvent[E any](registry *Registry, category EventCategory, handler Ev
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
 	key := eventKey{category: category, event: typeName[E]()}
-	registry.events[key] = append(registry.events[key], eventEntry{event: key.event, handler: handler, roles: copyRoles(roles)})
+	registry.events[key] = append(registry.events[key], eventEntry{
+		event:    key.event,
+		dispatch: eventDispatcher(handler),
+		roles:    copyRoles(roles),
+	})
 	return nil
+}
+
+func eventDispatcher[E any](handler EventHandler[E]) func(context.Context, any) error {
+	return func(ctx context.Context, value any) error {
+		event, ok := value.(E)
+		if !ok {
+			return Error{
+				Kind:     ErrUnsupportedHandler,
+				Contract: typeName[E](),
+				Message:  fmt.Sprintf("event %s envelope value has type %T", typeName[E](), value),
+			}
+		}
+		return handler(ctx, event)
+	}
 }
 
 func dispatchEvent[E any](ctx context.Context, registry *Registry, category EventCategory, event E) error {
@@ -497,26 +571,11 @@ func dispatchEvent[E any](ctx context.Context, registry *Registry, category Even
 }
 
 func dispatchEventForRole[E any](ctx context.Context, registry *Registry, category EventCategory, event E, role Role) error {
-	key := eventKey{category: category, event: typeName[E]()}
-	entries := registry.eventEntries(key)
-	for index, entry := range entries {
-		if !rolesAllow(entry.roles, role) {
-			continue
-		}
-		handler, ok := entry.handler.(EventHandler[E])
-		if !ok {
-			return unsupportedHandlerError(Event, key.event)
-		}
-		if err := handler(ctx, event); err != nil {
-			return Error{
-				Kind:     ErrSubscriberFailed,
-				Contract: key.event,
-				Message:  fmt.Sprintf("%s event subscriber %d for %s failed: %v", category, index, key.event, err),
-				Cause:    err,
-			}
-		}
-	}
-	return nil
+	return publishEnvelopeForRole(ctx, registry, EventEnvelope{
+		Category: category,
+		Type:     typeName[E](),
+		Value:    event,
+	}, role)
 }
 
 func (registry *Registry) eventEntries(key eventKey) []eventEntry {

@@ -589,6 +589,8 @@ func appendContractReferences(program *gwdkir.Program, template gwdkir.Template)
 		program.ContractRefs = append(program.ContractRefs, gwdkir.ContractReference{
 			Kind:      irContractReferenceKind(ref.Kind),
 			Name:      ref.Name,
+			Method:    ref.Method,
+			Path:      ref.Path,
 			OwnerKind: template.OwnerKind,
 			OwnerID:   template.OwnerID,
 			Package:   template.Package,

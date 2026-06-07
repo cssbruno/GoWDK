@@ -208,6 +208,9 @@ view {
 	if ref.Kind != gwdkir.ContractCommand || ref.Name != "patients.CreatePatient" || ref.OwnerKind != gwdkir.SourcePage || ref.OwnerID != "patients" {
 		t.Fatalf("unexpected contract ref: %#v", ref)
 	}
+	if ref.Method != "POST" || ref.Path != "/patients" {
+		t.Fatalf("unexpected command method/path: %#v", ref)
+	}
 	wantColumn := strings.Index(sourceLine(source, 6), "g:command") + 1
 	if ref.Span.Start.Line != 6 || ref.Span.Start.Column != wantColumn {
 		t.Fatalf("expected g:command span at 6:%d, got %#v", wantColumn, ref.Span)

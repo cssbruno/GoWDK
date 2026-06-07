@@ -171,6 +171,8 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 		for _, ref := range sortedContractReferences(options.IR.ContractRefs) {
 			endpoint := BackendEndpointRegistration{
 				Kind:    backendContractEndpointKind(ref.Kind),
+				Method:  ref.Method,
+				Path:    ref.Path,
 				Handler: string(ref.Kind),
 				PageID:  ref.OwnerID,
 				Name:    ref.Name,

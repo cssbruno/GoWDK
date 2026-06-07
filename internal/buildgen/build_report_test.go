@@ -298,6 +298,9 @@ func TestBuildReportIncludesContractReferences(t *testing.T) {
 	if event.Data["kind"] != "command" || event.Data["name"] != "patients.CreatePatient" || event.Data["status"] != "unknown" || event.Data["ownerKind"] != "page" {
 		t.Fatalf("unexpected contract reference data: %#v", event.Data)
 	}
+	if event.Data["method"] != "POST" || event.Data["path"] != "/patients" {
+		t.Fatalf("unexpected command method/path: %#v", event.Data)
+	}
 }
 
 func TestBuildReportIncludesQueryContractReferences(t *testing.T) {

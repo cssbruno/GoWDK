@@ -229,9 +229,10 @@ Current behavior:
 
 - Renders `data-gowdk-command="patients.CreatePatient"`.
 - Adds a command reference to `internal/gwdkir.Program.ContractRefs`.
+- Records literal form `method` and `action` as command adapter IR method/path.
 - `gowdk build` links command references to scanned Go command registrations
   and adds `contract_reference` events with status and source line/column to
-  `gowdk-build-report.json`.
+  `gowdk-build-report.json`. Command events include method/path when present.
 - `gowdk check` and CLI `gowdk build` fail when a command reference is missing
   or linked to an invalid Go handler signature.
 - Requires a package-qualified Go reference such as `patients.CreatePatient`.
@@ -312,7 +313,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   interface and drive worker-role subscribers through `RunEventWorker`.
 - `internal/appgen` records first-slice command/query contract exposure
   metadata in backend adapter IR for future generated adapters.
+- Command contract adapter IR includes literal form method/path.
 - Full package graph validation and imported handler validation are planned.
-- Contract adapter IR does not yet include template-derived HTTP method/path.
+- Query contract adapter IR does not yet include request-time execution path
+  metadata.
 - Durable outbox implementations, concrete broker adapters, split
   web/worker/cron binaries, and concrete SSE/WebSocket adapters are planned.

@@ -1118,17 +1118,23 @@ func TestRenderWithOptionsMarksGQueryElement(t *testing.T) {
 }
 
 func TestCommandReferencesFindsGCommandForms(t *testing.T) {
-	refs, err := CommandReferences(`<main><form g:command="patients.CreatePatient"></form><form g:command={billing.PayInvoice}></form></main>`)
+	refs, err := CommandReferences(`<main><form method="patch" action="/patients" g:command="patients.CreatePatient"></form><form g:command={billing.PayInvoice}></form></main>`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(refs) != 2 || refs[0].Command != "patients.CreatePatient" || refs[1].Command != "billing.PayInvoice" {
 		t.Fatalf("unexpected command refs: %#v", refs)
 	}
+	if refs[0].Method != "PATCH" || refs[0].Path != "/patients" {
+		t.Fatalf("unexpected command method/path: %#v", refs[0])
+	}
+	if refs[1].Method != "POST" || refs[1].Path != "" {
+		t.Fatalf("unexpected default command method/path: %#v", refs[1])
+	}
 }
 
 func TestContractReferencesFindsCommandsAndQueries(t *testing.T) {
-	refs, err := ContractReferences(`<main><section g:query="patients.GetPatientPage"></section><form g:command={patients.CreatePatient}></form></main>`)
+	refs, err := ContractReferences(`<main><section g:query="patients.GetPatientPage"></section><form method="post" action="/patients" g:command={patients.CreatePatient}></form></main>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1138,7 +1144,7 @@ func TestContractReferencesFindsCommandsAndQueries(t *testing.T) {
 	if refs[0].Kind != ContractReferenceQuery || refs[0].Name != "patients.GetPatientPage" {
 		t.Fatalf("unexpected query ref: %#v", refs[0])
 	}
-	if refs[1].Kind != ContractReferenceCommand || refs[1].Name != "patients.CreatePatient" {
+	if refs[1].Kind != ContractReferenceCommand || refs[1].Name != "patients.CreatePatient" || refs[1].Method != "POST" || refs[1].Path != "/patients" {
 		t.Fatalf("unexpected command ref: %#v", refs[1])
 	}
 }

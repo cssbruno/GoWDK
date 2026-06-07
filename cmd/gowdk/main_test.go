@@ -152,6 +152,9 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 		if event.Data["name"] != "patients.CreatePatient" || event.Data["status"] != "bound" || event.Data["handler"] != "HandleCreatePatient" {
 			t.Fatalf("unexpected contract reference event: %#v", event.Data)
 		}
+		if event.Data["method"] != "POST" || event.Data["path"] != "/patients" {
+			t.Fatalf("unexpected command method/path: %#v", event.Data)
+		}
 		wantColumn := strings.Index(testSourceLine(pageSource, 8), "g:command") + 1
 		if event.Data["line"] != "8" || event.Data["column"] != strconv.Itoa(wantColumn) {
 			t.Fatalf("unexpected command source location: %#v", event.Data)

@@ -389,8 +389,10 @@ wherever the contract is HTTP-exposed.
 ### Phase 4: Generated Adapter Integration
 
 - [x] Add first adapter IR metadata for command/query contract exposure.
-- [ ] Extend command/query adapter IR with HTTP method/path from template
+- [x] Extend command adapter IR with HTTP method/path from form template
       directives.
+- [ ] Extend query adapter IR with request-time source metadata when query
+      execution syntax is defined.
 - [ ] Generate Go adapter code with Go AST/printer/format only.
 - [ ] Wire command form submission to generated request decoding.
 - [ ] Wire query execution for request-time page/fragment/API needs.

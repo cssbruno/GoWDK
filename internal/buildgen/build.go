@@ -290,6 +290,12 @@ func reportContractReferences(reporter *buildReporter, refs []gwdkir.ContractRef
 		if ref.Handler != "" {
 			data["handler"] = ref.Handler
 		}
+		if ref.Method != "" {
+			data["method"] = ref.Method
+		}
+		if ref.Path != "" {
+			data["path"] = ref.Path
+		}
 		if ref.Message != "" {
 			data["message"] = ref.Message
 		}

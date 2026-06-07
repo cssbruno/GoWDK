@@ -119,10 +119,12 @@ type ComponentCallUsage struct {
 
 // ContractReference records one template-local backend contract intent.
 type ContractReference struct {
-	Kind  ContractReferenceKind
-	Name  string
-	Start int
-	End   int
+	Kind   ContractReferenceKind
+	Name   string
+	Method string
+	Path   string
+	Start  int
+	End    int
 }
 
 type ContractReferenceKind string
@@ -135,6 +137,8 @@ const (
 // CommandReference records one form-local backend command intent.
 type CommandReference struct {
 	Command string
+	Method  string
+	Path    string
 	Start   int
 	End     int
 }
@@ -673,7 +677,8 @@ func collectCommandReferences(nodes []Node, refs *[]CommandReference) error {
 				return err
 			}
 			if directives.Command != "" {
-				*refs = append(*refs, CommandReference{Command: directives.Command, Start: directives.CommandStart, End: directives.CommandEnd})
+				method, path := formMethodPath(typed)
+				*refs = append(*refs, CommandReference{Command: directives.Command, Method: method, Path: path, Start: directives.CommandStart, End: directives.CommandEnd})
 			}
 			if err := collectCommandReferences(typed.Children, refs); err != nil {
 				return err
@@ -714,11 +719,14 @@ func collectContractReferences(nodes []Node, refs *[]ContractReference) error {
 				return err
 			}
 			if directives.Command != "" {
+				method, path := formMethodPath(typed)
 				*refs = append(*refs, ContractReference{
-					Kind:  ContractReferenceCommand,
-					Name:  directives.Command,
-					Start: directives.CommandStart,
-					End:   directives.CommandEnd,
+					Kind:   ContractReferenceCommand,
+					Name:   directives.Command,
+					Method: method,
+					Path:   path,
+					Start:  directives.CommandStart,
+					End:    directives.CommandEnd,
 				})
 			}
 			if directives.Query != "" {
@@ -744,6 +752,29 @@ func collectContractReferences(nodes []Node, refs *[]ContractReference) error {
 		}
 	}
 	return nil
+}
+
+func formMethodPath(node Element) (string, string) {
+	if node.Name != "form" {
+		return "", ""
+	}
+	method := "POST"
+	path := ""
+	for _, attr := range node.Attrs {
+		if attr.Expression {
+			continue
+		}
+		switch strings.ToLower(attr.Name) {
+		case "method":
+			value := strings.TrimSpace(attr.Value)
+			if value != "" {
+				method = strings.ToUpper(value)
+			}
+		case "action":
+			path = strings.TrimSpace(attr.Value)
+		}
+	}
+	return method, path
 }
 
 func contractReferencesFromNodes(nodes []Node) ([]ContractReference, error) {

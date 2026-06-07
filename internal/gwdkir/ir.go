@@ -367,6 +367,8 @@ type Template struct {
 type ContractReference struct {
 	Kind      ContractKind
 	Name      string
+	Method    string
+	Path      string
 	Status    ContractBindingStatus
 	Handler   string
 	Message   string

@@ -105,6 +105,8 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 		{
 			Kind:      gwdkir.ContractCommand,
 			Name:      "patients.CreatePatient",
+			Method:    "POST",
+			Path:      "/patients",
 			Status:    gwdkir.ContractBindingBound,
 			Handler:   "HandleCreatePatient",
 			OwnerKind: gwdkir.SourcePage,
@@ -122,6 +124,9 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 	if command.Endpoint.Kind != BackendEndpointCommand || command.Endpoint.Handler != "command" {
 		t.Fatalf("unexpected command exposure endpoint: %#v", command.Endpoint)
 	}
+	if command.Endpoint.Method != "POST" || command.Endpoint.Path != "/patients" {
+		t.Fatalf("unexpected command exposure method/path: %#v", command.Endpoint)
+	}
 	if command.Contract != "patients.CreatePatient" || command.Status != gwdkir.ContractBindingBound || command.Handler != "HandleCreatePatient" {
 		t.Fatalf("unexpected command exposure: %#v", command)
 	}
@@ -132,7 +137,7 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 	if query.Contract != "patients.GetPatientPage" || query.Status != gwdkir.ContractBindingMissing || query.Message != "query missing" {
 		t.Fatalf("unexpected query exposure: %#v", query)
 	}
-	if command.Endpoint.Method != "" || command.Endpoint.Path != "" {
-		t.Fatalf("contract exposure should not invent HTTP method/path yet: %#v", command.Endpoint)
+	if query.Endpoint.Method != "" || query.Endpoint.Path != "" {
+		t.Fatalf("query exposure should not invent HTTP method/path yet: %#v", query.Endpoint)
 	}
 }

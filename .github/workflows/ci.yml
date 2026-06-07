@@ -60,14 +60,18 @@ jobs:
         run: |
           set -euxo pipefail
           cd examples/login
-          rm -rf dist
+          rm -rf .gowdk bin dist
           go run ../../cmd/gowdk build
-          test -f dist/site/index.html
-          test -f dist/site/dashboard/index.html
-          login_css="$(sed -nE 's/.*"login.css": "([^"]+)".*/\1/p' dist/site/gowdk-assets.json | head -n1)"
+          output=".gowdk/output/login"
+          test -f "$output/index.html"
+          test -f "$output/dashboard/index.html"
+          test -x bin/login
+          test -x bin/login-frontend
+          test -x bin/login-backend
+          login_css="$(sed -nE 's/.*"login.css": "([^"]+)".*/\1/p' "$output/gowdk-assets.json" | head -n1)"
           echo "login.css resolves to ${login_css}"
           test -n "$login_css"
-          test -f "dist/site/$login_css"
+          test -f "$output/$login_css"
           go test ./src/features/auth
 
       - name: Smoke build CSS example output

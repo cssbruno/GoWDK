@@ -259,21 +259,23 @@ go build ./cmd/gowdk
 
 ## Quickstart
 
-### Static Site
+### Scaffolded App
 
 ```sh
 ./gowdk init --tests --template site ~/my-app
 cd ~/my-app
 /path/to/GoWDK/gowdk build
-/path/to/GoWDK/gowdk serve --dir dist/site
+./bin/site
 ```
 
 Open `http://127.0.0.1:8080`.
 
-`serve` is static only. It is for generated frontend output without backend
-handlers.
+The scaffolded config builds hidden frontend output in `.gowdk/output/site`,
+generates `.gowdk/site`, and compiles `bin/site`. Use
+`gowdk serve --dir .gowdk/output/site` only for static inspection; it does not
+run backend handlers.
 
-### Full App
+### Ad Hoc Binary
 
 ```sh
 /path/to/GoWDK/gowdk build --app dist/app --bin dist/my-app

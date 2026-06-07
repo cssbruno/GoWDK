@@ -1,7 +1,7 @@
 # Getting Started
 
 GOWDK is currently used from source. The fastest path is clone, build the CLI,
-scaffold a small app, build build output, and serve the generated directory.
+scaffold a small app, build the generated app binary, and run it locally.
 
 ## Prerequisites
 
@@ -41,8 +41,10 @@ unless `GOWDK_BIN` points at a built `gowdk` CLI. Existing files are not
 overwritten unless `--force` is passed.
 
 The generated config discovers `src/**/*.gwdk`, discovers CSS from
-`styles/**/*.css`, writes build output to `dist/site`, and ignores the default
-dev output directory `gowdk_cache` in the scaffolded `.gitignore`.
+`styles/**/*.css`, declares a `site` build target, generates app source in
+`.gowdk/site`, compiles `bin/site`, and ignores generated outputs in the
+scaffolded `.gitignore`. The target's intermediate build output is inferred as
+`.gowdk/output/site`.
 
 ## Build
 
@@ -58,29 +60,33 @@ Run the optional scaffolded smoke test:
 GOWDK_BIN=/path/to/GOWDK/gowdk go test ./tests
 ```
 
-The build writes app-shell HTML and manifests under `dist/site`:
+The build writes app-shell HTML and manifests under `.gowdk/output/site`, then
+embeds that output into `bin/site`:
 
 ```text
-dist/site/
+.gowdk/output/site/
   index.html
   gowdk-routes.json
   gowdk-assets.json
   gowdk-build-report.json
+.gowdk/site/
+bin/site
 ```
 
 Every successful disk build writes `gowdk-build-report.json`.
 
-## Serve
+## Run
 
 ```sh
-/path/to/GOWDK/gowdk serve --dir dist/site
+./bin/site
 ```
 
 Open `http://127.0.0.1:8080/`.
 
-`serve` serves generated build output files only. It does not run generated
-actions, API handlers, partial fragments, or SSR routes. Use `gowdk build
---app --bin` for a generated binary that runs request-time handlers.
+The generated binary serves embedded frontend output and supported request-time
+handlers. For static-only inspection, `gowdk serve --dir .gowdk/output/site`
+still serves the generated directory, but it does not run generated actions, API
+handlers, partial fragments, or SSR routes.
 
 ## Development Loop
 

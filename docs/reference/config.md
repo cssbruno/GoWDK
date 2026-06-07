@@ -269,12 +269,13 @@ generated decoding or user handlers run. Invalid or missing tokens return HTTP
 `FieldName`, and `HeaderName` override the generated token transport names.
 `Insecure` disables the Secure cookie flag for local HTTP development only.
 
-`Name` and `Output` are required. `Modules` selects configured modules; omit it
-to use the default configured discovery set. `App` is optional and writes a
-generated Go app that embeds the target output. `Binary` is optional, requires
-`App`, and compiles that generated app for the local platform. `WASM` is
-optional, requires `App`, and compiles the generated app with
-`GOOS=js GOARCH=wasm`.
+`Name` is required. `Output` is optional and defaults to
+`.gowdk/output/<target-name>` when omitted. `Modules` selects configured
+modules; omit it to use the default configured discovery set. `App` is optional
+and writes a generated Go app that embeds the target output. `Binary` is
+optional, requires `App`, and compiles that generated app for the local
+platform. `WASM` is optional, requires `App`, and compiles the generated app
+with `GOOS=js GOARCH=wasm`.
 
 `BackendApp` is optional and writes a generated backend-only Go app for
 feature-bound action/API endpoints. `BackendBinary` is optional, requires

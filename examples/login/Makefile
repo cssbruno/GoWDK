@@ -8,7 +8,7 @@ BACKEND_BIN ?= bin/login-backend
 .PHONY: build split-build check serve serve-split frontend backend dev clean
 
 build:
-	$(GOWDK) build --target app
+	$(GOWDK) build --target login
 
 split-build:
 	$(GOWDK) build --target split
@@ -37,7 +37,7 @@ backend:
 	GOWDK_ADDR=$(BACKEND_ADDR) $(BACKEND_BIN)
 
 dev:
-	$(GOWDK) dev --target app
+	$(GOWDK) dev --target login
 
 clean:
-	rm -rf dist .gowdk bin
+	rm -rf dist .gowdk bin gowdk_cache

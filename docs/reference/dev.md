@@ -8,7 +8,7 @@ The command:
 
 - forwards build flags to `gowdk build`;
 - writes to `gowdk_cache` unless `--out` or one selected build target supplies
-  an output directory;
+  or infers an output directory;
 - serves build output for SPA/static development;
 - polls explicit or discovered `.gwdk`, CSS, and config inputs;
 - prints changed, added, and removed input paths when a rebuild starts;

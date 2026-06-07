@@ -429,8 +429,10 @@ func TestInitCommandScaffoldsBuildableProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(ignorePayload), "gowdk_cache/") {
-		t.Fatalf("expected scaffold .gitignore to ignore gowdk_cache, got:\n%s", ignorePayload)
+	for _, expected := range []string{"gowdk_cache/", ".gowdk/", "bin/"} {
+		if !strings.Contains(string(ignorePayload), expected) {
+			t.Fatalf("expected scaffold .gitignore to contain %q, got:\n%s", expected, ignorePayload)
+		}
 	}
 
 	previous, err := os.Getwd()
@@ -449,12 +451,20 @@ func TestInitCommandScaffoldsBuildableProject(t *testing.T) {
 	if err := run([]string{"build"}); err != nil {
 		t.Fatal(err)
 	}
-	payload, err := os.ReadFile(filepath.Join(root, "dist", "site", "index.html"))
+	payload, err := os.ReadFile(filepath.Join(root, ".gowdk", "output", "site", "index.html"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(payload), "Hello from GOWDK") {
 		t.Fatalf("unexpected initialized build output:\n%s", payload)
+	}
+	if _, err := os.Stat(filepath.Join(root, "bin", "site")); err != nil {
+		t.Fatalf("expected initialized build to create binary: %v", err)
+	}
+	if payload, err := os.ReadFile(filepath.Join(root, "gowdk.config.go")); err != nil {
+		t.Fatal(err)
+	} else if strings.Contains(string(payload), "Output:") {
+		t.Fatalf("expected scaffold config to omit inferred Output:\n%s", payload)
 	}
 }
 
@@ -482,12 +492,15 @@ func TestInitCommandSupportsMinimalTemplate(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	payload, err := os.ReadFile(filepath.Join(root, "dist", "site", "index.html"))
+	payload, err := os.ReadFile(filepath.Join(root, ".gowdk", "output", "site", "index.html"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(payload), "<h1>GOWDK</h1>") {
 		t.Fatalf("unexpected minimal build output:\n%s", payload)
+	}
+	if _, err := os.Stat(filepath.Join(root, "bin", "site")); err != nil {
+		t.Fatalf("expected minimal build to create binary: %v", err)
 	}
 }
 
@@ -504,7 +517,8 @@ func TestInitCommandSupportsOptionalTestScaffold(t *testing.T) {
 		"package gowdktest",
 		`os.Getenv("GOWDK_BIN")`,
 		`t.Skip("set GOWDK_BIN=/path/to/gowdk to run generated app smoke tests")`,
-		`exec.Command(gowdkBin, "build", "--out", outDir)`,
+		`exec.Command(gowdkBin, "build")`,
+		`filepath.Join(projectRoot, "bin", "site")`,
 		`cmd.Dir = projectRoot`,
 	} {
 		if !strings.Contains(string(payload), expected) {
@@ -1656,6 +1670,47 @@ view {
 	}
 	if _, err := os.Stat(filepath.Join(root, "dist", "public", "index.html")); !os.IsNotExist(err) {
 		t.Fatalf("expected unselected public target to be skipped, stat err: %v", err)
+	}
+}
+
+func TestBuildCommandInfersConfiguredTargetOutput(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Targets: []gowdk.BuildTargetConfig{
+			{Name: "site", App: ".gowdk/site", Binary: "bin/site"},
+		},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
+
+@page home
+@route "/"
+
+view {
+  <main>Inferred output</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	for _, path := range []string{
+		filepath.Join(root, ".gowdk", "output", "site", "index.html"),
+		filepath.Join(root, ".gowdk", "site", "gowdkapp", "app", "index.html"),
+		filepath.Join(root, "bin", "site"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected inferred target artifact %s: %v", path, err)
+		}
 	}
 }
 

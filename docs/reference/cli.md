@@ -110,15 +110,16 @@ tests/gowdk_smoke_test.go
 ```
 
 The smoke test skips by default. Set `GOWDK_BIN=/path/to/gowdk` to make it run
-`gowdk build --out <tempdir>` from the scaffolded project root and assert that
-`index.html` was generated.
+`gowdk build` from the scaffolded project root and assert that `index.html` and
+`bin/site` were generated.
 
-The generated config discovers `src/**/*.gwdk`, writes build output to
-`dist/site`, discovers CSS under `styles/**/*.css`, and writes `.gitignore`
-with `gowdk_cache/` for the default dev output. Existing starter files
-are not overwritten unless `--force` is passed. The `minimal` template skips the
-starter component and writes only the config, `.gitignore`, one page, and one
-CSS file.
+The generated config discovers `src/**/*.gwdk`, discovers CSS under
+`styles/**/*.css`, declares a `site` build target, generates app source in
+`.gowdk/site`, compiles `bin/site`, and writes `.gitignore` entries for
+generated outputs. The target's intermediate build output is inferred as
+`.gowdk/output/site`. Existing starter files are not overwritten unless
+`--force` is passed. The `minimal` template skips the starter component and
+writes only the config, `.gitignore`, one page, and one CSS file.
 
 `check`, `manifest`, `sitemap`, `routes`, `build`, and `dev` require a config
 file before they compile or validate `.gwdk` code. By default they load
@@ -138,17 +139,18 @@ is required for `build`. Every successful disk build writes
 `gowdk-build-report.json` to the output root. Passing `--debug` prints the same
 build report to stderr for validation, planning, write, manifest, cleanup, and
 completion events without changing stdout artifact-path output. `gowdk dev`
-uses `gowdk_cache` as its default output directory unless `--out <dir>` or a
-selected build target supplies an explicit output.
+uses `gowdk_cache` as its default output directory unless `--out <dir>` or one
+selected build target supplies or infers an output directory.
 
 For generated apps and binaries, the selected modules are the packaging set:
 `--app` copies the selected build output; `--bin` and `--wasm` embed it. Prefer
-`Build.Targets` in `gowdk.config.go` for repeatable packaging. With targets
-configured, `gowdk build` runs all targets when no ad hoc output, module, app,
-binary, or explicit file arguments are passed; `gowdk build --target <name>`
-runs selected targets. `--target` cannot be combined with `--module`, `--out`,
-`--app`, `--bin`, `--wasm`, or explicit files. The ad hoc flags remain useful
-for one-off builds.
+`Build.Targets` in `gowdk.config.go` for repeatable packaging. Target `Output`
+is optional; when omitted, it defaults to `.gowdk/output/<target-name>`. With
+targets configured, `gowdk build` runs all targets when no ad hoc output,
+module, app, binary, or explicit file arguments are passed; `gowdk build
+--target <name>` runs selected targets. `--target` cannot be combined with
+`--module`, `--out`, `--app`, `--bin`, `--wasm`, or explicit files. The ad hoc
+flags remain useful for one-off builds.
 
 `--wasm` produces a Go `js/wasm` compile artifact from the generated app. This
 is a deploy artifact for hosts that can run Go WebAssembly; it is separate from

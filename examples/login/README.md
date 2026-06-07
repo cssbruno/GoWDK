@@ -21,9 +21,10 @@ feature package.
 - `src/features/auth/login-app.cmp.gwdk`: reusable login panel component.
 - `src/features/auth/login-error.page.gwdk`: failed-login route.
 - `styles/auth.css`: CSS input selected by pages with `@css auth`.
-- `dist/site`: generated app output.
-- `.gowdk/app`: generated one-binary Go app source.
-- `.gowdk/frontend` and `.gowdk/backend`: generated split app sources.
+- `.gowdk/output/login`: inferred generated output for the one-binary target.
+- `.gowdk/output/split`: inferred generated output for the split target.
+- `.gowdk/login`: generated one-binary Go app source.
+- `.gowdk/login-frontend` and `.gowdk/login-backend`: generated split app sources.
 - `bin/login`: generated one-binary app.
 - `bin/login-frontend` and `bin/login-backend`: generated split binaries.
 
@@ -70,7 +71,7 @@ backend:  http://127.0.0.1:8091/
 
 ```sh
 cd examples/login
-go run ../../cmd/gowdk build --target app
+go run ../../cmd/gowdk build --target login
 GOWDK_ADDR=127.0.0.1:8090 bin/login
 ```
 

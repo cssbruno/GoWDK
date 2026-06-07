@@ -163,6 +163,8 @@ func siteInitTemplateFiles() []initFile {
 		{
 			Path: ".gitignore",
 			Body: `gowdk_cache/
+.gowdk/
+bin/
 `,
 		},
 		{
@@ -239,6 +241,8 @@ func minimalInitTemplateFiles() []initFile {
 		{
 			Path: ".gitignore",
 			Body: `gowdk_cache/
+.gowdk/
+bin/
 `,
 		},
 		{
@@ -337,8 +341,7 @@ func initSmokeTestSource() string {
 						Body: initBlock(initExprStmt(initCall(initSel("t", "Fatal"), ast.NewIdent("err")))),
 					},
 					initDefine([]ast.Expr{ast.NewIdent("projectRoot")}, initCall(initSel("filepath", "Dir"), ast.NewIdent("cwd"))),
-					initDefine([]ast.Expr{ast.NewIdent("outDir")}, initCall(initSel("filepath", "Join"), initCall(initSel("t", "TempDir")), initStringLit("site"))),
-					initDefine([]ast.Expr{ast.NewIdent("cmd")}, initCall(initSel("exec", "Command"), ast.NewIdent("gowdkBin"), initStringLit("build"), initStringLit("--out"), ast.NewIdent("outDir"))),
+					initDefine([]ast.Expr{ast.NewIdent("cmd")}, initCall(initSel("exec", "Command"), ast.NewIdent("gowdkBin"), initStringLit("build"))),
 					initAssign([]ast.Expr{initSel("cmd", "Dir")}, ast.NewIdent("projectRoot")),
 					initDefine([]ast.Expr{ast.NewIdent("payload"), ast.NewIdent("err")}, initCall(initSel("cmd", "CombinedOutput"))),
 					&ast.IfStmt{
@@ -346,9 +349,14 @@ func initSmokeTestSource() string {
 						Body: initBlock(initExprStmt(initCall(initSel("t", "Fatalf"), initStringLit("gowdk build failed: %v\n%s"), ast.NewIdent("err"), ast.NewIdent("payload")))),
 					},
 					&ast.IfStmt{
-						Init: initDefine([]ast.Expr{ast.NewIdent("_"), ast.NewIdent("err")}, initCall(initSel("os", "Stat"), initCall(initSel("filepath", "Join"), ast.NewIdent("outDir"), initStringLit("index.html")))),
+						Init: initDefine([]ast.Expr{ast.NewIdent("_"), ast.NewIdent("err")}, initCall(initSel("os", "Stat"), initCall(initSel("filepath", "Join"), ast.NewIdent("projectRoot"), initStringLit(".gowdk"), initStringLit("output"), initStringLit("site"), initStringLit("index.html")))),
 						Cond: initNotNil("err"),
 						Body: initBlock(initExprStmt(initCall(initSel("t", "Fatalf"), initStringLit("expected generated index.html: %v"), ast.NewIdent("err")))),
+					},
+					&ast.IfStmt{
+						Init: initDefine([]ast.Expr{ast.NewIdent("_"), ast.NewIdent("err")}, initCall(initSel("os", "Stat"), initCall(initSel("filepath", "Join"), ast.NewIdent("projectRoot"), initStringLit("bin"), initStringLit("site")))),
+						Cond: initNotNil("err"),
+						Body: initBlock(initExprStmt(initCall(initSel("t", "Fatalf"), initStringLit("expected generated app binary: %v"), ast.NewIdent("err")))),
 					},
 				),
 			},
@@ -379,7 +387,17 @@ func initConfigExpr() ast.Expr {
 			initKeyValue("Build", &ast.CompositeLit{
 				Type: initSel("gowdk", "BuildConfig"),
 				Elts: []ast.Expr{
-					initKeyValue("Output", initStringLit("dist/site")),
+					initKeyValue("Targets", &ast.CompositeLit{
+						Type: &ast.ArrayType{Elt: initSel("gowdk", "BuildTargetConfig")},
+						Elts: []ast.Expr{&ast.CompositeLit{
+							Type: initSel("gowdk", "BuildTargetConfig"),
+							Elts: []ast.Expr{
+								initKeyValue("Name", initStringLit("site")),
+								initKeyValue("App", initStringLit(".gowdk/site")),
+								initKeyValue("Binary", initStringLit("bin/site")),
+							},
+						}},
+					}),
 				},
 			}),
 			initKeyValue("CSS", &ast.CompositeLit{
@@ -885,7 +903,7 @@ func selectBuildTargets(targets []gowdk.BuildTargetConfig, targetNames []string)
 		target.Name = name
 		target.Modules = cleanNames(target.Modules)
 		if strings.TrimSpace(target.Output) == "" {
-			return nil, fmt.Errorf("build target %q is missing output", name)
+			target.Output = defaultBuildTargetOutput(name)
 		}
 		if strings.TrimSpace(target.Binary) != "" && strings.TrimSpace(target.App) == "" {
 			return nil, fmt.Errorf("build target %q binary requires app", name)
@@ -918,6 +936,10 @@ func selectBuildTargets(targets []gowdk.BuildTargetConfig, targetNames []string)
 		selected = append(selected, target)
 	}
 	return selected, nil
+}
+
+func defaultBuildTargetOutput(name string) string {
+	return filepath.ToSlash(filepath.Join(".gowdk", "output", name))
 }
 
 func printBuildgenBuildErrorReport(err error, debug bool) {

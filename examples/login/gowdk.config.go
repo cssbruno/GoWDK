@@ -8,20 +8,17 @@ var Config = gowdk.Config{
 		Include: []string{"src/**/*.gwdk"},
 	},
 	Build: gowdk.BuildConfig{
-		Output: "dist/site",
 		Targets: []gowdk.BuildTargetConfig{
 			{
-				Name:   "app",
-				Output: "dist/site",
-				App:    ".gowdk/app",
+				Name:   "login",
+				App:    ".gowdk/login",
 				Binary: "bin/login",
 			},
 			{
 				Name:          "split",
-				Output:        "dist/site",
-				App:           ".gowdk/frontend",
+				App:           ".gowdk/login-frontend",
 				Binary:        "bin/login-frontend",
-				BackendApp:    ".gowdk/backend",
+				BackendApp:    ".gowdk/login-backend",
 				BackendBinary: "bin/login-backend",
 			},
 		},

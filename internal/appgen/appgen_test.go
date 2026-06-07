@@ -961,6 +961,66 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 	}
 }
 
+func TestGenerateKeepsActionHandlersIndependentFromSSRLoad(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		SSR: []SSRRoute{{
+			PageID:  "dashboard",
+			Route:   "/dashboard",
+			HasLoad: true,
+			LoadBinding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "example.com/app/dashboard",
+				PackageName:  "dashboard",
+				FunctionName: "LoadDashboard",
+				Signature:    manifest.BackendSignatureLoadError,
+			},
+			HTML: `<main><h1>__USER__</h1></main>`,
+			LoadReplacements: []SSRLoadReplacement{{
+				Path:        "user.name",
+				Placeholder: "__USER__",
+			}},
+		}},
+		Actions: []ActionEndpoint{{
+			PageID:     "dashboard",
+			ActionName: "Save",
+			Method:     http.MethodPost,
+			Route:      "/dashboard",
+			Binding: manifest.BackendBinding{
+				Status:       manifest.BackendBindingBound,
+				ImportPath:   "example.com/app/dashboard",
+				PackageName:  "dashboard",
+				FunctionName: "Save",
+				Signature:    manifest.BackendSignatureAction0,
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	if count := strings.Count(source, "LoadDashboard(loadContext)"); count != 1 {
+		t.Fatalf("expected SSR load to be called only by the SSR handler, got %d calls:\n%s", count, source)
+	}
+	actionSource := generatedFunctionSource(t, source, "action")
+	for _, forbidden := range []string{"LoadDashboard(loadContext)", "gowdkssr.NewLoadContext", "LoadPath(loadData"} {
+		if strings.Contains(actionSource, forbidden) {
+			t.Fatalf("action handler must not rerun SSR load via %q:\n%s", forbidden, actionSource)
+		}
+	}
+	if !strings.Contains(actionSource, "Save(ctx)") {
+		t.Fatalf("expected action handler to call the action binding:\n%s", actionSource)
+	}
+}
+
 func TestGenerateWritesDynamicSSRHandler(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -3499,6 +3559,22 @@ func assertSourceOrder(t *testing.T, source string, snippets ...string) {
 		}
 		previous = index
 	}
+}
+
+func generatedFunctionSource(t *testing.T, source string, name string) string {
+	t.Helper()
+	start := strings.Index(source, "\nfunc "+name+"(")
+	if start < 0 {
+		start = strings.Index(source, "func "+name+"(")
+	}
+	if start < 0 {
+		t.Fatalf("expected generated source to contain func %s:\n%s", name, source)
+	}
+	end := strings.Index(source[start+1:], "\nfunc ")
+	if end < 0 {
+		return source[start:]
+	}
+	return source[start : start+1+end]
 }
 
 func waitForHTTPResponse(url string) (string, http.Header, error) {

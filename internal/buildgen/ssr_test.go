@@ -217,3 +217,47 @@ func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 		t.Fatalf("expected dotted load paths, got %#v", artifact.LoadReplacements)
 	}
 }
+
+func TestSSRArtifactsComposePageLoadThroughLayouts(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:      "dashboard",
+			Route:   "/dashboard",
+			Render:  gowdk.SSR,
+			Layouts: []string{"shell"},
+			Blocks: manifest.Blocks{
+				Load:     true,
+				LoadBody: `=> { user.name }`,
+				View:     true,
+				ViewBody: `<main>{user.name}</main>`,
+			},
+		}},
+		Layouts: []manifest.Layout{{
+			ID: "shell",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<section><header>{user.name}</header><slot /></section>`,
+			},
+		}},
+	}
+
+	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one artifact, got %#v", artifacts)
+	}
+	artifact := artifacts[0]
+	if len(artifact.LoadReplacements) != 1 || artifact.LoadReplacements[0].Path != "user.name" {
+		t.Fatalf("expected page load replacement to be shared with layout, got %#v", artifact.LoadReplacements)
+	}
+	placeholder := artifact.LoadReplacements[0].Placeholder
+	if strings.Count(artifact.HTML, placeholder) != 2 {
+		t.Fatalf("expected page load placeholder in layout and page body, got:\n%s", artifact.HTML)
+	}
+	if !strings.Contains(artifact.HTML, "<header>"+placeholder+"</header><main>"+placeholder+"</main>") {
+		t.Fatalf("expected layout and page to compose around page load data, got:\n%s", artifact.HTML)
+	}
+}

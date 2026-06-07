@@ -591,8 +591,11 @@ Done when:
 - [x] Add generated typed data contracts or document the map-based contract.
       Decision: current load data is `map[string]any`; typed load accessors are
       planned after the load result contract is stable.
-- [ ] Add tests for parent/page load composition, redirects, errors, and action
+- [x] Add tests for parent/page load composition, redirects, errors, and action
       invalidation if implemented.
+      Covered by SSR artifact tests for page load placeholders composed through
+      layouts, generated app tests for load redirects and custom load error
+      pages, and generated source tests proving actions do not rerun SSR load.
 
 Done when:
 

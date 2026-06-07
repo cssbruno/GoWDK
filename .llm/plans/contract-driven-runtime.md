@@ -423,6 +423,8 @@ wherever the contract is HTTP-exposed.
 - [x] Define broker adapter interface.
 - [x] Define optional outbox interface without choosing an ORM or database.
 - [x] Define transaction/outbox ordering rules for domain events.
+- [x] Add a dependency-free file outbox adapter for local durable JSON Lines
+      storage and worker replay.
 - [ ] Define retry and idempotency guidance for subscribers.
 - [x] Add docs for when in-process dispatch is enough.
 - [x] Add docs for when outbox/queue/broker support is needed.
@@ -464,6 +466,7 @@ wherever the contract is HTTP-exposed.
   - registry duplicate command owner detection;
   - typed dispatch success and failure paths;
   - event fan-out order and error behavior;
+  - file outbox store, decode, ack, nack, and worker replay behavior;
   - domain event category and naming metadata;
   - presentation event metadata does not register as trusted input;
   - job registration and role filtering;

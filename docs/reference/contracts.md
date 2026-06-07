@@ -146,6 +146,36 @@ subscriber dispatch is enough. Use `CaptureCommandEvents` or
 `ExecuteCommandToOutbox` when subscribers should run from a later worker or
 broker delivery path.
 
+GOWDK Kit also includes a dependency-free file outbox adapter for local durable
+JSON Lines storage:
+
+```go
+import "github.com/cssbruno/gowdk/runtime/contracts/fileoutbox"
+
+outbox := fileoutbox.New(
+    "var/gowdk-outbox.jsonl",
+    fileoutbox.WithJSONTypeDecoder[PatientCreated](),
+)
+
+_, err := contracts.ExecuteCommandToOutbox[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    outbox,
+    command,
+)
+
+err = contracts.RunEventWorker(ctx, r, outbox)
+```
+
+The file outbox implements both `contracts.Outbox` and
+`contracts.EventSource`. It appends captured envelopes as JSON Lines records,
+decodes records through explicitly registered decoders, removes records only
+after worker `Ack`, and keeps records after `Nack` for retry. It is useful for
+local development, small single-host deployments, and tests. Applications that
+need database transactions, cross-process locking, idempotency, retry backoff,
+dead-letter queues, or broker delivery should use a database-backed or
+broker-backed adapter.
+
 External broker adapters can implement the dependency-free `Broker` interface:
 
 ```go
@@ -346,6 +376,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   dispatching subscribers.
 - Captured event envelopes can be replayed later with
   `PublishEnvelope`, `PublishEnvelopes`, and role-filtered variants.
+- `runtime/contracts/fileoutbox` provides a dependency-free JSON Lines adapter
+  that implements `contracts.Outbox` and `contracts.EventSource`.
 - External broker adapters can implement the dependency-free `Broker`
   interface and receive captured envelopes through `ExecuteCommandToBroker` or
   `PublishEventsToBroker`.
@@ -362,5 +394,5 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Page-owned query contract adapter IR includes `GET` plus the page route.
 - Full package graph validation and imported handler validation are planned.
 - Cross-package contract input field discovery remains planned.
-- Durable outbox implementations, concrete broker adapters, split
+- Database-backed outbox implementations, concrete broker adapters, split
   web/worker/cron binaries, and concrete SSE/WebSocket adapters are planned.

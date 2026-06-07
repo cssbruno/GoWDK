@@ -1,0 +1,303 @@
+// Package fileoutbox provides a dependency-free JSON Lines outbox adapter for
+// runtime/contracts.
+package fileoutbox
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"sync"
+	"time"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+const defaultBatchSize = 100
+
+// Decoder converts one persisted JSON payload back into the typed Go event
+// value expected by runtime/contracts subscribers.
+type Decoder func(json.RawMessage) (any, error)
+
+// Record is one durable outbox row stored as a JSON Lines object.
+type Record struct {
+	ID       string                  `json:"id"`
+	StoredAt time.Time               `json:"storedAt"`
+	Category contracts.EventCategory `json:"category"`
+	Type     string                  `json:"type"`
+	Value    json.RawMessage         `json:"value"`
+}
+
+// Store appends event envelopes to a JSON Lines file and can replay them as an
+// EventSource. Ack removes delivered records; Nack leaves them for retry.
+type Store struct {
+	mu        sync.Mutex
+	path      string
+	batchSize int
+	decoders  map[string]Decoder
+	seq       uint64
+	now       func() time.Time
+}
+
+// Option configures a Store.
+type Option func(*Store)
+
+// WithBatchSize sets the maximum number of records returned by one worker
+// batch. Non-positive values keep the default.
+func WithBatchSize(size int) Option {
+	return func(store *Store) {
+		if size > 0 {
+			store.batchSize = size
+		}
+	}
+}
+
+// WithDecoder registers a decoder for one stored event type.
+func WithDecoder(eventType string, decoder Decoder) Option {
+	return func(store *Store) {
+		if eventType != "" && decoder != nil {
+			store.decoders[eventType] = decoder
+		}
+	}
+}
+
+// WithJSONDecoder registers a JSON decoder for one stored event type.
+func WithJSONDecoder[T any](eventType string) Option {
+	return WithDecoder(eventType, func(raw json.RawMessage) (any, error) {
+		var value T
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return nil, err
+		}
+		return value, nil
+	})
+}
+
+// WithJSONTypeDecoder registers a JSON decoder using the same Go type name
+// stored by runtime/contracts when T is emitted.
+func WithJSONTypeDecoder[T any]() Option {
+	return WithJSONDecoder[T](typeName[T]())
+}
+
+// New creates a file-backed outbox at path.
+func New(path string, options ...Option) *Store {
+	store := &Store{
+		path:      path,
+		batchSize: defaultBatchSize,
+		decoders:  map[string]Decoder{},
+		now:       time.Now,
+	}
+	for _, option := range options {
+		if option != nil {
+			option(store)
+		}
+	}
+	return store
+}
+
+// StoreEvents appends events to the outbox file.
+func (store *Store) StoreEvents(ctx context.Context, events []contracts.EventEnvelope) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(events) == 0 {
+		return nil
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(store.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+
+	encoder := json.NewEncoder(file)
+	for _, event := range events {
+		value, err := json.Marshal(event.Value)
+		if err != nil {
+			file.Close()
+			return err
+		}
+		record := Record{
+			ID:       store.nextID(),
+			StoredAt: store.now().UTC(),
+			Category: event.Category,
+			Type:     event.Type,
+			Value:    value,
+		}
+		if err := encoder.Encode(record); err != nil {
+			file.Close()
+			return err
+		}
+	}
+	return file.Close()
+}
+
+// Records returns all currently pending outbox records.
+func (store *Store) Records(ctx context.Context) ([]Record, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.readRecordsLocked()
+}
+
+// ReceiveEventBatch returns the next pending records as typed event envelopes.
+// It returns contracts.ErrEventSourceClosed when the outbox is empty.
+func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch, error) {
+	if err := ctx.Err(); err != nil {
+		return contracts.EventBatch{}, err
+	}
+	store.mu.Lock()
+	records, err := store.readRecordsLocked()
+	if err != nil {
+		store.mu.Unlock()
+		return contracts.EventBatch{}, err
+	}
+	if len(records) == 0 {
+		store.mu.Unlock()
+		return contracts.EventBatch{}, contracts.ErrEventSourceClosed
+	}
+	limit := store.batchSize
+	if limit > len(records) {
+		limit = len(records)
+	}
+	selected := append([]Record(nil), records[:limit]...)
+	events, err := store.decodeRecordsLocked(selected)
+	store.mu.Unlock()
+	if err != nil {
+		return contracts.EventBatch{}, err
+	}
+
+	acked := map[string]bool{}
+	for _, record := range selected {
+		acked[record.ID] = true
+	}
+	return contracts.EventBatch{
+		Events: events,
+		Ack: func(ctx context.Context) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			store.mu.Lock()
+			defer store.mu.Unlock()
+			return store.removeRecordsLocked(acked)
+		},
+		Nack: func(context.Context, error) error {
+			return nil
+		},
+	}, nil
+}
+
+func (store *Store) nextID() string {
+	store.seq++
+	return fmt.Sprintf("%d-%d", store.now().UTC().UnixNano(), store.seq)
+}
+
+func typeName[T any]() string {
+	t := reflect.TypeOf((*T)(nil)).Elem()
+	if t.PkgPath() == "" || t.Name() == "" {
+		return t.String()
+	}
+	return t.PkgPath() + "." + t.Name()
+}
+
+func (store *Store) decodeRecordsLocked(records []Record) ([]contracts.EventEnvelope, error) {
+	events := make([]contracts.EventEnvelope, 0, len(records))
+	for _, record := range records {
+		decoder := store.decoders[record.Type]
+		if decoder == nil {
+			return nil, fmt.Errorf("file outbox event %s has no decoder", record.Type)
+		}
+		value, err := decoder(record.Value)
+		if err != nil {
+			return nil, fmt.Errorf("file outbox event %s cannot be decoded: %w", record.Type, err)
+		}
+		events = append(events, contracts.EventEnvelope{
+			Category: record.Category,
+			Type:     record.Type,
+			Value:    value,
+		})
+	}
+	return events, nil
+}
+
+func (store *Store) readRecordsLocked() ([]Record, error) {
+	file, err := os.Open(store.path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	var records []Record
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	line := 0
+	for scanner.Scan() {
+		line++
+		text := bytes.TrimSpace(scanner.Bytes())
+		if len(text) == 0 {
+			continue
+		}
+		var record Record
+		if err := json.Unmarshal(text, &record); err != nil {
+			return nil, fmt.Errorf("file outbox %s line %d is invalid: %w", store.path, line, err)
+		}
+		record.Value = append(json.RawMessage(nil), record.Value...)
+		records = append(records, record)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return records, nil
+}
+
+func (store *Store) removeRecordsLocked(remove map[string]bool) error {
+	records, err := store.readRecordsLocked()
+	if err != nil {
+		return err
+	}
+	var kept []Record
+	for _, record := range records {
+		if !remove[record.ID] {
+			kept = append(kept, record)
+		}
+	}
+	if len(kept) == 0 {
+		if err := os.Remove(store.path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
+		return err
+	}
+	temp, err := os.CreateTemp(filepath.Dir(store.path), ".gowdk-outbox-*")
+	if err != nil {
+		return err
+	}
+	tempName := temp.Name()
+	encoder := json.NewEncoder(temp)
+	for _, record := range kept {
+		if err := encoder.Encode(record); err != nil {
+			temp.Close()
+			os.Remove(tempName)
+			return err
+		}
+	}
+	if err := temp.Close(); err != nil {
+		os.Remove(tempName)
+		return err
+	}
+	return os.Rename(tempName, store.path)
+}

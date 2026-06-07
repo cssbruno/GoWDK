@@ -357,6 +357,7 @@ type Template struct {
 	OwnerID   string
 	Package   string
 	Source    string
+	Route     string
 	Body      string
 	Span      manifest.SourceSpan
 	BodyStart manifest.SourcePosition

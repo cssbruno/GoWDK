@@ -327,6 +327,9 @@ func TestBuildReportIncludesQueryContractReferences(t *testing.T) {
 	if event.Data["kind"] != "query" || event.Data["name"] != "patients.GetPatientPage" || event.Data["status"] != "unknown" || event.Data["ownerKind"] != "page" {
 		t.Fatalf("unexpected contract reference data: %#v", event.Data)
 	}
+	if event.Data["method"] != "GET" || event.Data["path"] != "/patients" {
+		t.Fatalf("unexpected query method/path: %#v", event.Data)
+	}
 }
 
 func TestBuildReportIncludesBackendBindingEndpointMetadata(t *testing.T) {

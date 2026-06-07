@@ -95,6 +95,8 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 		{
 			Kind:      gwdkir.ContractQuery,
 			Name:      "patients.GetPatientPage",
+			Method:    "GET",
+			Path:      "/patients",
 			Status:    gwdkir.ContractBindingMissing,
 			Message:   "query missing",
 			OwnerKind: gwdkir.SourcePage,
@@ -134,10 +136,10 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 	if query.Endpoint.Kind != BackendEndpointQuery || query.Endpoint.Handler != "query" {
 		t.Fatalf("unexpected query exposure endpoint: %#v", query.Endpoint)
 	}
+	if query.Endpoint.Method != "GET" || query.Endpoint.Path != "/patients" {
+		t.Fatalf("unexpected query exposure method/path: %#v", query.Endpoint)
+	}
 	if query.Contract != "patients.GetPatientPage" || query.Status != gwdkir.ContractBindingMissing || query.Message != "query missing" {
 		t.Fatalf("unexpected query exposure: %#v", query)
-	}
-	if query.Endpoint.Method != "" || query.Endpoint.Path != "" {
-		t.Fatalf("query exposure should not invent HTTP method/path yet: %#v", query.Endpoint)
 	}
 }

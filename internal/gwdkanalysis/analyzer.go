@@ -362,6 +362,7 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 				OwnerID:   page.ID,
 				Package:   page.Package,
 				Source:    page.Source,
+				Route:     page.Route,
 				Body:      page.Blocks.ViewBody,
 				Span:      page.Blocks.Spans.View,
 				BodyStart: page.Blocks.Spans.ViewBodyStart,
@@ -586,11 +587,17 @@ func appendContractReferences(program *gwdkir.Program, template gwdkir.Template)
 		return
 	}
 	for _, ref := range refs {
+		method := ref.Method
+		path := ref.Path
+		if ref.Kind == view.ContractReferenceQuery && path == "" && template.Route != "" {
+			method = "GET"
+			path = template.Route
+		}
 		program.ContractRefs = append(program.ContractRefs, gwdkir.ContractReference{
 			Kind:      irContractReferenceKind(ref.Kind),
 			Name:      ref.Name,
-			Method:    ref.Method,
-			Path:      ref.Path,
+			Method:    method,
+			Path:      path,
 			OwnerKind: template.OwnerKind,
 			OwnerID:   template.OwnerID,
 			Package:   template.Package,

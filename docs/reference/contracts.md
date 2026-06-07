@@ -258,6 +258,8 @@ Current behavior:
 - `gowdk build` links query references to scanned Go query registrations and
   adds `contract_reference` events with status and source line/column to
   `gowdk-build-report.json`.
+- Page-owned query references record `GET` plus the page route as first
+  request-time source metadata.
 - `gowdk check` and CLI `gowdk build` fail when a query reference is missing or
   linked to an invalid Go handler signature.
 - Requires a package-qualified Go reference such as `patients.GetPatientPage`.
@@ -314,8 +316,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - `internal/appgen` records first-slice command/query contract exposure
   metadata in backend adapter IR for future generated adapters.
 - Command contract adapter IR includes literal form method/path.
+- Page-owned query contract adapter IR includes `GET` plus the page route.
 - Full package graph validation and imported handler validation are planned.
-- Query contract adapter IR does not yet include request-time execution path
-  metadata.
+- Generated command/query execution remains planned.
 - Durable outbox implementations, concrete broker adapters, split
   web/worker/cron binaries, and concrete SSE/WebSocket adapters are planned.

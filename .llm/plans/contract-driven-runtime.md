@@ -391,8 +391,8 @@ wherever the contract is HTTP-exposed.
 - [x] Add first adapter IR metadata for command/query contract exposure.
 - [x] Extend command adapter IR with HTTP method/path from form template
       directives.
-- [ ] Extend query adapter IR with request-time source metadata when query
-      execution syntax is defined.
+- [x] Extend query adapter IR with first page-route request-time source
+      metadata.
 - [ ] Generate Go adapter code with Go AST/printer/format only.
 - [ ] Wire command form submission to generated request decoding.
 - [ ] Wire query execution for request-time page/fragment/API needs.

@@ -403,6 +403,7 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile) fileScan {
 	}
 	applyContractInputFields(contracts, inputStructs)
 	diagnostics = append(diagnostics, validateContractTypes(contracts, types)...)
+	diagnostics = append(diagnostics, validateEventNames(contracts)...)
 	diagnostics = append(diagnostics, validateContracts(contracts, functions)...)
 	diagnostics = append(diagnostics, validateContractInputStructs(contracts, inputStructs)...)
 	return fileScan{
@@ -708,6 +709,99 @@ func validateLocalContractType(contract Contract, types map[string]contractTypeI
 		return []Diagnostic{contractDiagnostic(contract, code, fmt.Sprintf("%s %s must be a struct", label, name))}
 	}
 	return nil
+}
+
+func validateEventNames(contracts []Contract) []Diagnostic {
+	var diagnostics []Diagnostic
+	for _, contract := range contracts {
+		if contract.Kind != runtimecontracts.Event {
+			continue
+		}
+		if message := eventNameMessage(contract); message != "" {
+			diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_event_name_invalid", message))
+		}
+	}
+	return diagnostics
+}
+
+func eventNameMessage(contract Contract) string {
+	name := localContractName(contract.Type)
+	if name == "" {
+		return ""
+	}
+	if strings.HasSuffix(name, "Changed") {
+		return fmt.Sprintf("event %s is too vague; use a specific backend fact such as PatientCreated or PatientUpdated", name)
+	}
+	words := camelWords(name)
+	if hasAnyWord(words, uiEventSubjects) && hasAnyWord(words, uiEventActions) {
+		return fmt.Sprintf("event %s looks like a browser UI event; UI events must trigger commands or queries, not backend events", name)
+	}
+	return ""
+}
+
+func localContractName(name string) string {
+	name = strings.TrimSpace(name)
+	if index := strings.LastIndex(name, "."); index >= 0 {
+		name = name[index+1:]
+	}
+	return name
+}
+
+var uiEventSubjects = map[string]bool{
+	"Button":    true,
+	"Checkbox":  true,
+	"Component": true,
+	"Dialog":    true,
+	"Dropdown":  true,
+	"Field":     true,
+	"Form":      true,
+	"Input":     true,
+	"Modal":     true,
+	"Page":      true,
+	"Select":    true,
+	"Tab":       true,
+	"View":      true,
+}
+
+var uiEventActions = map[string]bool{
+	"Blurred":   true,
+	"Changed":   true,
+	"Clicked":   true,
+	"Closed":    true,
+	"Focused":   true,
+	"Hovered":   true,
+	"Opened":    true,
+	"Pressed":   true,
+	"Selected":  true,
+	"Submitted": true,
+	"Toggled":   true,
+	"Typed":     true,
+}
+
+func camelWords(value string) []string {
+	var words []string
+	start := 0
+	var previous rune
+	for index, current := range value {
+		if index > 0 && previous >= 'a' && previous <= 'z' && current >= 'A' && current <= 'Z' {
+			words = append(words, value[start:index])
+			start = index
+		}
+		previous = current
+	}
+	if start < len(value) {
+		words = append(words, value[start:])
+	}
+	return words
+}
+
+func hasAnyWord(words []string, choices map[string]bool) bool {
+	for _, word := range words {
+		if choices[word] {
+			return true
+		}
+	}
+	return false
 }
 
 func contractRegisterFunction(fn *ast.FuncDecl, aliases map[string]bool) string {

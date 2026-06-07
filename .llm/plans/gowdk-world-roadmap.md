@@ -112,7 +112,7 @@ Does not own:
 3. GOWDK AST and analyzer metadata.
 4. Go package ownership and binding through standard `go/parser`, `go/ast`, and
    `go/types`.
-5. Runtime-kit backend router and typed form decoder.
+5. Runtime backend router and typed form decoder.
 6. Full Go AST generated adapter emission.
 7. One-binary and split-binary route unification.
 8. CSRF-wired action adapters.

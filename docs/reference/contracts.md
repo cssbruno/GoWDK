@@ -19,6 +19,8 @@ frontend <- result or presentation event
 - Integration events are backend facts intended for durable delivery later.
 - Presentation events are browser-facing notifications; they are not trusted
   input.
+- Contract scanning rejects first browser-UI and vague event-name anti-patterns
+  such as `ButtonClicked`, `FormSubmitted`, and `PatientChanged`.
 
 ## Runtime API
 

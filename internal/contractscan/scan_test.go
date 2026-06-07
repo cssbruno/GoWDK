@@ -300,6 +300,56 @@ func SendWelcomeEmail(ctx context.Context, event PatientCreated) error {
 	}
 }
 
+func TestScanReportsNoisyEventNames(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type ButtonClicked struct{}
+type PatientChanged struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterDomainEvent[ButtonClicked](r, HandleButtonClicked)
+	contracts.RegisterIntegrationEvent[PatientChanged](r, HandlePatientChanged)
+}
+
+func HandleButtonClicked(ctx context.Context, event ButtonClicked) error {
+	return nil
+}
+
+func HandlePatientChanged(ctx context.Context, event PatientChanged) error {
+	return nil
+}
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var button, changed Diagnostic
+	for _, diagnostic := range report.Diagnostics {
+		if diagnostic.Code != "contract_event_name_invalid" {
+			continue
+		}
+		switch diagnostic.Type {
+		case "ButtonClicked":
+			button = diagnostic
+		case "PatientChanged":
+			changed = diagnostic
+		}
+	}
+	if button.Message == "" || !strings.Contains(button.Message, "looks like a browser UI event") {
+		t.Fatalf("expected UI event diagnostic, got %#v in %#v", button, report.Diagnostics)
+	}
+	if changed.Message == "" || !strings.Contains(changed.Message, "too vague") {
+		t.Fatalf("expected vague event diagnostic, got %#v in %#v", changed, report.Diagnostics)
+	}
+}
+
 func TestScanReportsDuplicateCommandOwners(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "patients.go"), `package patients

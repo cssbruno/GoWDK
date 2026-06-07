@@ -98,8 +98,10 @@ Names should be checked by convention:
 - domain and integration events use past-tense names, such as
   `PatientCreated`;
 - vague contracts such as `ButtonClicked`, `FormSubmitted`, `PatientChanged`,
-  `ThingUpdated`, and `DoStuff` should be rejected by docs first and later by
-  optional lint diagnostics.
+  `ThingUpdated`, and `DoStuff` should be rejected by docs first; the scanner
+  now rejects the first browser-UI and vague `Changed` event-name anti-patterns
+  as hard diagnostics because check/build currently fail on all scan
+  diagnostics.
 
 ### Add Contract Metadata To Compiler IR
 
@@ -357,7 +359,8 @@ wherever the contract is HTTP-exposed.
 - [x] Validate first same-file command, query, event subscriber, and job handler
       signatures.
 - [ ] Validate event subscriber signatures across full packages and imports.
-- [ ] Validate event category and naming convention metadata.
+- [x] Validate first browser-UI and vague `Changed` event-name anti-patterns.
+- [ ] Expand event category and naming convention validation.
 - [ ] Validate job handler signatures across full packages and imports.
 - [ ] Detect import cycles caused by feature packages importing generated app
       output.

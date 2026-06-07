@@ -141,6 +141,28 @@ subscriber dispatch is enough. Use `CaptureCommandEvents` or
 `ExecuteCommandToOutbox` when subscribers should run from a later worker or
 broker delivery path.
 
+External broker adapters can implement the dependency-free `Broker` interface:
+
+```go
+type PatientBroker struct{}
+
+func (PatientBroker) PublishEvents(ctx context.Context, events []contracts.EventEnvelope) error {
+    return nil
+}
+
+result, err := contracts.ExecuteCommandToBroker[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    PatientBroker{},
+    command,
+)
+```
+
+`ExecuteCommandToBroker` publishes captured events only after the command
+handler succeeds. It does not dispatch local subscribers. Broker adapters own
+serialization, acknowledgements, retries, dead-letter behavior, and delivery
+guarantees.
+
 Worker or broker adapter code can replay captured events through the same typed
 subscriber registry:
 
@@ -241,6 +263,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   dispatching subscribers.
 - Captured event envelopes can be replayed later with
   `PublishEnvelope`, `PublishEnvelopes`, and role-filtered variants.
+- External broker adapters can implement the dependency-free `Broker`
+  interface and receive captured envelopes through `ExecuteCommandToBroker` or
+  `PublishEventsToBroker`.
 - Full package graph validation and imported handler validation are planned.
-- Durable outbox implementations, broker adapters, split web/worker/cron
-  binaries, and realtime SSE/WebSocket fanout are planned.
+- Durable outbox implementations, concrete broker adapters, split
+  web/worker/cron binaries, and realtime SSE/WebSocket fanout are planned.

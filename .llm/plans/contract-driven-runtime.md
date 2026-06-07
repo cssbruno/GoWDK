@@ -415,7 +415,7 @@ wherever the contract is HTTP-exposed.
 
 ### Phase 6: Optional Reliability Adapters
 
-- [ ] Define broker adapter interface.
+- [x] Define broker adapter interface.
 - [x] Define optional outbox interface without choosing an ORM or database.
 - [x] Define transaction/outbox ordering rules for domain events.
 - [ ] Define retry and idempotency guidance for subscribers.

@@ -62,6 +62,12 @@ type Outbox interface {
 	StoreEvents(context.Context, []EventEnvelope) error
 }
 
+// Broker publishes command-emitted events to an external delivery system.
+// Implementations decide serialization, acknowledgements, and delivery policy.
+type Broker interface {
+	PublishEvents(context.Context, []EventEnvelope) error
+}
+
 // ErrorKind identifies contract registry or dispatch failures.
 type ErrorKind string
 
@@ -250,6 +256,33 @@ func executeCommandToOutbox[C, R any](ctx context.Context, registry *Registry, o
 	return result, nil
 }
 
+// ExecuteCommandToBroker runs a command and publishes emitted events to broker
+// after the command handler succeeds. Subscribers are not dispatched.
+func ExecuteCommandToBroker[C, R any](ctx context.Context, registry *Registry, broker Broker, command C) (R, error) {
+	return executeCommandToBroker[C, R](ctx, registry, broker, command, "")
+}
+
+// ExecuteCommandToBrokerForRole runs a command for role and publishes emitted
+// events to broker after the command handler succeeds.
+func ExecuteCommandToBrokerForRole[C, R any](ctx context.Context, registry *Registry, broker Broker, role Role, command C) (R, error) {
+	return executeCommandToBroker[C, R](ctx, registry, broker, command, role)
+}
+
+func executeCommandToBroker[C, R any](ctx context.Context, registry *Registry, broker Broker, command C, role Role) (R, error) {
+	var zero R
+	if broker == nil {
+		return zero, Error{Kind: ErrNilHandler, Contract: typeName[C](), Message: "command event broker cannot be nil"}
+	}
+	result, events, err := captureCommandEvents[C, R](ctx, registry, command, role)
+	if err != nil {
+		return zero, err
+	}
+	if err := PublishEventsToBroker(ctx, broker, events); err != nil {
+		return zero, err
+	}
+	return result, nil
+}
+
 func runCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, *eventRecorder, error) {
 	var zero R
 	entry, ok := registry.command(typeName[C]())
@@ -356,6 +389,17 @@ func PublishEnvelopes(ctx context.Context, registry *Registry, events []EventEnv
 // subscribers available to role.
 func PublishEnvelopesForRole(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
 	return publishEnvelopesForRole(ctx, registry, events, role)
+}
+
+// PublishEventsToBroker sends captured events to broker in one ordered batch.
+func PublishEventsToBroker(ctx context.Context, broker Broker, events []EventEnvelope) error {
+	if broker == nil {
+		return Error{Kind: ErrNilHandler, Message: "event broker cannot be nil"}
+	}
+	if len(events) == 0 {
+		return nil
+	}
+	return broker.PublishEvents(ctx, events)
 }
 
 func publishEnvelopesForRole(ctx context.Context, registry *Registry, events []EventEnvelope, role Role) error {

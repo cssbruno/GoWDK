@@ -41,11 +41,26 @@ type recordingOutbox struct {
 	err    error
 }
 
+type recordingBroker struct {
+	events []EventEnvelope
+	calls  int
+	err    error
+}
+
 func (outbox *recordingOutbox) StoreEvents(ctx context.Context, events []EventEnvelope) error {
 	if outbox.err != nil {
 		return outbox.err
 	}
 	outbox.events = append(outbox.events, events...)
+	return nil
+}
+
+func (broker *recordingBroker) PublishEvents(ctx context.Context, events []EventEnvelope) error {
+	broker.calls++
+	if broker.err != nil {
+		return broker.err
+	}
+	broker.events = append(broker.events, events...)
 	return nil
 }
 
@@ -224,6 +239,70 @@ func TestExecuteCommandToOutboxReturnsStoreError(t *testing.T) {
 	}
 	if len(outbox.events) != 0 {
 		t.Fatalf("outbox.events = %#v, want none after store error", outbox.events)
+	}
+}
+
+func TestExecuteCommandToBrokerPublishesEventsAfterSuccess(t *testing.T) {
+	registry := NewRegistry()
+	var handled int
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		handled++
+		return nil
+	}))
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{ID: "patient-1"}, EmitIntegration(ctx, patientCreated{ID: "patient-1"})
+	}))
+	broker := &recordingBroker{}
+
+	result, err := ExecuteCommandToBroker[createPatient, createPatientResult](context.Background(), registry, broker, createPatient{Name: "Ada"})
+	if err != nil {
+		t.Fatalf("execute command to broker: %v", err)
+	}
+	if result.ID != "patient-1" {
+		t.Fatalf("result.ID = %q, want patient-1", result.ID)
+	}
+	if handled != 0 {
+		t.Fatalf("handled = %d, want 0", handled)
+	}
+	if broker.calls != 1 {
+		t.Fatalf("broker.calls = %d, want 1", broker.calls)
+	}
+	if len(broker.events) != 1 {
+		t.Fatalf("len(broker.events) = %d, want 1: %#v", len(broker.events), broker.events)
+	}
+	if broker.events[0].Category != IntegrationEvent || broker.events[0].Type != typeName[patientCreated]() {
+		t.Fatalf("broker event = %#v, want integration patientCreated", broker.events[0])
+	}
+}
+
+func TestExecuteCommandToBrokerReturnsPublishError(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{ID: "patient-1"}, EmitIntegration(ctx, patientCreated{ID: "patient-1"})
+	}))
+	publishErr := errors.New("broker unavailable")
+	broker := &recordingBroker{err: publishErr}
+
+	_, err := ExecuteCommandToBroker[createPatient, createPatientResult](context.Background(), registry, broker, createPatient{Name: "Ada"})
+	if !errors.Is(err, publishErr) {
+		t.Fatalf("execute command to broker error = %v, want %v", err, publishErr)
+	}
+	if broker.calls != 1 {
+		t.Fatalf("broker.calls = %d, want 1", broker.calls)
+	}
+	if len(broker.events) != 0 {
+		t.Fatalf("broker.events = %#v, want none after publish error", broker.events)
+	}
+}
+
+func TestPublishEventsToBrokerSkipsEmptyBatches(t *testing.T) {
+	broker := &recordingBroker{}
+
+	if err := PublishEventsToBroker(context.Background(), broker, nil); err != nil {
+		t.Fatalf("publish empty batch to broker: %v", err)
+	}
+	if broker.calls != 0 {
+		t.Fatalf("broker.calls = %d, want 0", broker.calls)
 	}
 }
 

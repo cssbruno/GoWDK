@@ -68,4 +68,4 @@ runtime assumptions.
 ## Doctor
 
 There is no `gowdk doctor` command today. Add it only when repeated setup
-failures show a stable checklist worth automating.
+failures show a stable diagnostic flow worth automating.

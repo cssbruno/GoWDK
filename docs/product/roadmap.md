@@ -79,12 +79,10 @@ These are the durable rules. Changing them should require an ADR.
 
 ## Current Baseline
 
-`MISSING_CHECKLIST.md` is the detailed source of truth for what is done and what
-is still missing. `docs/product/gap-checklist.md` tracks broader product gaps
-and comparison-driven follow-up work. Status terms must match
-`docs/product/requirements.md`: implemented, partial, experimental, planned,
-and intentionally out of scope. At a high level, the current baseline already
-includes:
+`docs/product/requirements.md` records product status and broader product
+decisions. Status terms must match `docs/product/requirements.md`: implemented,
+partial, experimental, planned, and intentionally out of scope. At a high
+level, the current baseline already includes:
 
 - project config loading, source discovery, build targets, module selection,
   manifests, route validation, sitemap output, formatting, diagnostics, CLI
@@ -117,11 +115,11 @@ Do not roadmap those completed slices as future work. Future work should
 stabilize their contracts, remove generation debt, and fill the missing
 production pieces below.
 
-`docs/product/gap-checklist.md` now records product decisions for all P0, P1,
-and P2 comparison gaps. Treat those decisions as constraints on roadmap
-execution: planned work may implement the GOWDK-native contract, defer it with
-clear docs or diagnostics, or keep it intentionally out of scope. Do not turn
-deferred comparison features into implicit commitments.
+`docs/product/requirements.md` records product decisions for comparison-driven
+gaps. Treat those decisions as constraints on roadmap execution: planned work
+may implement the GOWDK-native contract, defer it with clear docs or
+diagnostics, or keep it intentionally out of scope. Do not turn deferred
+comparison features into implicit commitments.
 
 ## Roadmap
 
@@ -150,7 +148,7 @@ are stable.
 | 17 | CSS, assets, and packaging | Full plugin loading, page-aware CSS processor selection, component AST/IR scope and hash metadata, Tailwind/CSS deployment docs, asset hashing, and binary cache policy are implemented. Module selection remains artifact packaging, not runtime module orchestration. |
 | 18 | Framework adapters | Core remains `net/http`. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
 | 19 | Dev, playground, and tooling | `gowdk dev` can run generated app/runtime-kit flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, browser playground, browser-compiled GOWDK, richer LSP completions, and editor navigation are added. |
-| 20 | Documentation sync | README, requirements, architecture, deployment, roadmap, examples, `MISSING_CHECKLIST.md`, and `docs/product/gap-checklist.md` stay synchronized with implemented behavior and commands. |
+| 20 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
 
 ## Candidate Release Order
 
@@ -164,9 +162,9 @@ contract work that later features depend on.
 - Explicit source import semantics.
 - Better spans and diagnostics.
 - Broader build-time data contract.
-- P0/P1 language decisions from `docs/product/gap-checklist.md` remain
-  enforced: no arbitrary JavaScript, no external template semantics, and no
-  generated JS ownership of trusted app behavior.
+- P0/P1 language decisions from `docs/product/requirements.md` remain enforced:
+  no arbitrary JavaScript, no external template semantics, and no generated JS
+  ownership of trusted app behavior.
 
 ### Endpoint And Adapter Release
 
@@ -235,8 +233,6 @@ contract work that later features depend on.
 
 ## Planning Sources
 
-- `MISSING_CHECKLIST.md`: detailed missing-work checklist.
-- `docs/product/gap-checklist.md`: broader product gap and comparison follow-up checklist.
 - `docs/product/requirements.md`: requirement status.
 - `docs/engineering/architecture.md`: architecture and implemented boundaries.
 - `.llm/plans/gowdk-world-roadmap.md`: active implementation planning index.

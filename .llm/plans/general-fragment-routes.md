@@ -19,7 +19,7 @@ Spec: `.llm/features/general-fragment-routes.md`
 - Lower fragments through analyzer and expose generated endpoint metadata.
 - Add `FragmentEndpoint` to appgen options, route planning, backend adapter IR,
   imports, split proxy detection, and generated handler source.
-- Update docs/examples/checklist for implemented fragment route support.
+- Update docs and examples for implemented fragment route support.
 
 ## Files Expected To Change
 
@@ -31,7 +31,6 @@ Spec: `.llm/features/general-fragment-routes.md`
 - `internal/appgen/*`
 - `docs/language/partials.md`
 - `docs/product/requirements.md`
-- `MISSING_CHECKLIST.md`
 
 ## Data And API Impact
 

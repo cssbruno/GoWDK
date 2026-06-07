@@ -28,7 +28,6 @@ Spec: `.llm/features/ssr-load-execution.md`
 - `internal/gwdkir/ir.go`
 - `internal/appgen/*`
 - SSR language and reference docs
-- `MISSING_CHECKLIST.md`
 
 ## Tests
 

@@ -32,7 +32,7 @@ Feature spec: `.llm/features/compiler-contract-completion.md`
 - `internal/buildgen`
 - `internal/lang`
 - `cmd/gowdk`
-- Docs and checklist
+- Docs
 
 ## Data And API Impact
 

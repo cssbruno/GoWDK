@@ -68,6 +68,12 @@ type Broker interface {
 	PublishEvents(context.Context, []EventEnvelope) error
 }
 
+// PresentationFanout sends browser-facing presentation events to a realtime
+// transport such as SSE or WebSocket.
+type PresentationFanout interface {
+	SendPresentationEvents(context.Context, []EventEnvelope) error
+}
+
 // ErrorKind identifies contract registry or dispatch failures.
 type ErrorKind string
 
@@ -283,6 +289,34 @@ func executeCommandToBroker[C, R any](ctx context.Context, registry *Registry, b
 	return result, nil
 }
 
+// ExecuteCommandToPresentationFanout runs a command and sends presentation
+// events to fanout after the command handler succeeds. Subscribers are not
+// dispatched and non-presentation events are not sent to fanout.
+func ExecuteCommandToPresentationFanout[C, R any](ctx context.Context, registry *Registry, fanout PresentationFanout, command C) (R, error) {
+	return executeCommandToPresentationFanout[C, R](ctx, registry, fanout, command, "")
+}
+
+// ExecuteCommandToPresentationFanoutForRole runs a command for role and sends
+// presentation events to fanout after the command handler succeeds.
+func ExecuteCommandToPresentationFanoutForRole[C, R any](ctx context.Context, registry *Registry, fanout PresentationFanout, role Role, command C) (R, error) {
+	return executeCommandToPresentationFanout[C, R](ctx, registry, fanout, command, role)
+}
+
+func executeCommandToPresentationFanout[C, R any](ctx context.Context, registry *Registry, fanout PresentationFanout, command C, role Role) (R, error) {
+	var zero R
+	if fanout == nil {
+		return zero, Error{Kind: ErrNilHandler, Contract: typeName[C](), Message: "command presentation fanout cannot be nil"}
+	}
+	result, events, err := captureCommandEvents[C, R](ctx, registry, command, role)
+	if err != nil {
+		return zero, err
+	}
+	if err := SendPresentationEventsToFanout(ctx, fanout, events); err != nil {
+		return zero, err
+	}
+	return result, nil
+}
+
 func runCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, *eventRecorder, error) {
 	var zero R
 	entry, ok := registry.command(typeName[C]())
@@ -400,6 +434,18 @@ func PublishEventsToBroker(ctx context.Context, broker Broker, events []EventEnv
 		return nil
 	}
 	return broker.PublishEvents(ctx, events)
+}
+
+// SendPresentationEventsToFanout sends only presentation events to fanout.
+func SendPresentationEventsToFanout(ctx context.Context, fanout PresentationFanout, events []EventEnvelope) error {
+	if fanout == nil {
+		return Error{Kind: ErrNilHandler, Message: "presentation fanout cannot be nil"}
+	}
+	presentation := eventsForCategory(events, PresentationEvent)
+	if len(presentation) == 0 {
+		return nil
+	}
+	return fanout.SendPresentationEvents(ctx, presentation)
 }
 
 func publishEnvelopesForRole(ctx context.Context, registry *Registry, events []EventEnvelope, role Role) error {
@@ -710,6 +756,16 @@ func eventEntriesForRole(entries []eventEntry, role Role) []eventEntry {
 		}
 	}
 	return allowed
+}
+
+func eventsForCategory(events []EventEnvelope, category EventCategory) []EventEnvelope {
+	var filtered []EventEnvelope
+	for _, event := range events {
+		if event.Category == category {
+			filtered = append(filtered, event)
+		}
+	}
+	return filtered
 }
 
 func eventRoles(entries []eventEntry) []Role {

@@ -163,6 +163,27 @@ handler succeeds. It does not dispatch local subscribers. Broker adapters own
 serialization, acknowledgements, retries, dead-letter behavior, and delivery
 guarantees.
 
+Realtime adapters can implement `PresentationFanout` for browser-facing output:
+
+```go
+type PatientFanout struct{}
+
+func (PatientFanout) SendPresentationEvents(ctx context.Context, events []contracts.EventEnvelope) error {
+    return nil
+}
+
+result, err := contracts.ExecuteCommandToPresentationFanout[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    PatientFanout{},
+    command,
+)
+```
+
+Only presentation events are sent to fanout. Domain and integration events are
+filtered out. Fanout adapters own SSE/WebSocket sessions, serialization, client
+targeting, buffering, and disconnect behavior.
+
 Worker or broker adapter code can replay captured events through the same typed
 subscriber registry:
 
@@ -266,6 +287,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - External broker adapters can implement the dependency-free `Broker`
   interface and receive captured envelopes through `ExecuteCommandToBroker` or
   `PublishEventsToBroker`.
+- Realtime adapters can implement the dependency-free `PresentationFanout`
+  interface and receive only presentation envelopes through
+  `ExecuteCommandToPresentationFanout` or `SendPresentationEventsToFanout`.
 - Full package graph validation and imported handler validation are planned.
 - Durable outbox implementations, concrete broker adapters, split
-  web/worker/cron binaries, and realtime SSE/WebSocket fanout are planned.
+  web/worker/cron binaries, and concrete SSE/WebSocket adapters are planned.

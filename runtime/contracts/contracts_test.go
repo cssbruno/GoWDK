@@ -47,6 +47,12 @@ type recordingBroker struct {
 	err    error
 }
 
+type recordingFanout struct {
+	events []EventEnvelope
+	calls  int
+	err    error
+}
+
 func (outbox *recordingOutbox) StoreEvents(ctx context.Context, events []EventEnvelope) error {
 	if outbox.err != nil {
 		return outbox.err
@@ -61,6 +67,15 @@ func (broker *recordingBroker) PublishEvents(ctx context.Context, events []Event
 		return broker.err
 	}
 	broker.events = append(broker.events, events...)
+	return nil
+}
+
+func (fanout *recordingFanout) SendPresentationEvents(ctx context.Context, events []EventEnvelope) error {
+	fanout.calls++
+	if fanout.err != nil {
+		return fanout.err
+	}
+	fanout.events = append(fanout.events, events...)
 	return nil
 }
 
@@ -303,6 +318,81 @@ func TestPublishEventsToBrokerSkipsEmptyBatches(t *testing.T) {
 	}
 	if broker.calls != 0 {
 		t.Fatalf("broker.calls = %d, want 0", broker.calls)
+	}
+}
+
+func TestExecuteCommandToPresentationFanoutSendsOnlyPresentationEvents(t *testing.T) {
+	registry := NewRegistry()
+	var handled int
+	must(t, RegisterPresentationEvent[patientCreatedNotice](registry, func(ctx context.Context, event patientCreatedNotice) error {
+		handled++
+		return nil
+	}))
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		if err := EmitDomain(ctx, patientCreated{ID: "patient-1"}); err != nil {
+			return createPatientResult{}, err
+		}
+		if err := EmitPresentation(ctx, patientCreatedNotice{ID: "patient-1"}); err != nil {
+			return createPatientResult{}, err
+		}
+		return createPatientResult{ID: "patient-1"}, nil
+	}))
+	fanout := &recordingFanout{}
+
+	result, err := ExecuteCommandToPresentationFanout[createPatient, createPatientResult](context.Background(), registry, fanout, createPatient{Name: "Ada"})
+	if err != nil {
+		t.Fatalf("execute command to presentation fanout: %v", err)
+	}
+	if result.ID != "patient-1" {
+		t.Fatalf("result.ID = %q, want patient-1", result.ID)
+	}
+	if handled != 0 {
+		t.Fatalf("handled = %d, want 0", handled)
+	}
+	if fanout.calls != 1 {
+		t.Fatalf("fanout.calls = %d, want 1", fanout.calls)
+	}
+	if len(fanout.events) != 1 {
+		t.Fatalf("len(fanout.events) = %d, want 1: %#v", len(fanout.events), fanout.events)
+	}
+	if fanout.events[0].Category != PresentationEvent || fanout.events[0].Type != typeName[patientCreatedNotice]() {
+		t.Fatalf("fanout event = %#v, want presentation patientCreatedNotice", fanout.events[0])
+	}
+}
+
+func TestExecuteCommandToPresentationFanoutReturnsSendError(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{ID: "patient-1"}, EmitPresentation(ctx, patientCreatedNotice{ID: "patient-1"})
+	}))
+	sendErr := errors.New("fanout unavailable")
+	fanout := &recordingFanout{err: sendErr}
+
+	_, err := ExecuteCommandToPresentationFanout[createPatient, createPatientResult](context.Background(), registry, fanout, createPatient{Name: "Ada"})
+	if !errors.Is(err, sendErr) {
+		t.Fatalf("execute command to presentation fanout error = %v, want %v", err, sendErr)
+	}
+	if fanout.calls != 1 {
+		t.Fatalf("fanout.calls = %d, want 1", fanout.calls)
+	}
+	if len(fanout.events) != 0 {
+		t.Fatalf("fanout.events = %#v, want none after send error", fanout.events)
+	}
+}
+
+func TestSendPresentationEventsToFanoutSkipsNonPresentationBatches(t *testing.T) {
+	fanout := &recordingFanout{}
+
+	err := SendPresentationEventsToFanout(context.Background(), fanout, []EventEnvelope{{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}})
+	if err != nil {
+		t.Fatalf("send presentation events to fanout: %v", err)
+	}
+	if fanout.calls != 0 {
+		t.Fatalf("fanout.calls = %d, want 0", fanout.calls)
 	}
 }
 

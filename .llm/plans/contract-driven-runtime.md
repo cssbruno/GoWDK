@@ -406,7 +406,7 @@ wherever the contract is HTTP-exposed.
       and metadata.
 - [ ] Add worker role binary wiring for event subscribers and queued jobs.
 - [ ] Add cron role binary wiring for scheduled jobs.
-- [ ] Add presentation-event fanout hook for SSE/WebSocket adapters.
+- [x] Add presentation-event fanout hook for SSE/WebSocket adapters.
 - [x] Add role filtering so web binaries do not accidentally run worker-only
       subscribers unless configured.
 - [ ] Add graceful shutdown for background handlers.

@@ -522,6 +522,109 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 	if strings.Contains(source, `Kind: "action", Handler: action`) {
 		t.Fatalf("did not expect a classic action route for contract-only CSRF app:\n%s", source)
 	}
+	commandIndex := strings.Index(source, `ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "command"`)
+	if commandIndex < 0 {
+		t.Fatalf("expected generated source to contain command contract endpoint context:\n%s", source)
+	}
+	assertSourceOrder(t, source[commandIndex:],
+		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
+		`if err := request.ParseForm(); err != nil`,
+		`err := csrfValidator.Validate(request)`,
+		`input := patients.CreatePatient{}`,
+		`gowdkcontracts.ExecuteCommandForRole[patients.CreatePatient, patients.CreatePatientResult]`,
+	)
+}
+
+func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), `<main>Patients</main>`)
+
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{
+		{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Guards:      []string{"auth.required"},
+			InputFields: []manifest.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
+			Method:      "POST",
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		},
+		{
+			Kind:        gwdkir.ContractQuery,
+			Name:        "patients.GetPatientPage",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "GetPatientPage",
+			Result:      "PatientPageData",
+			Guards:      []string{"auth.required"},
+			InputFields: []manifest.BackendInputField{{FieldName: "Filter", FormName: "filter", Type: "string"}},
+			Method:      "GET",
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "LoadPatientPage",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		},
+	}}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ratelimit", gowdk.FeatureRateLimit)}},
+		IR:     program,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkratelimit "github.com/cssbruno/gowdk/addons/ratelimit"`,
+		`gowdkssr "github.com/cssbruno/gowdk/addons/ssr"`,
+		`func RegisterRateLimiter(limiter *gowdkratelimit.Limiter)`,
+		`func RegisterGuards(registry gowdkssr.GuardRegistry)`,
+		`if runRateLimit(response, request)`,
+		`if !runGuards(response, request, []string{"auth.required"})`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected guarded/rate-limited contract source to contain %q:\n%s", expected, source)
+		}
+	}
+	commandIndex := strings.Index(source, `ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "command"`)
+	if commandIndex < 0 {
+		t.Fatalf("expected generated source to contain command contract endpoint context:\n%s", source)
+	}
+	assertSourceOrder(t, source[commandIndex:],
+		`if runRateLimit(response, request)`,
+		`if !runGuards(response, request, []string{"auth.required"})`,
+		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
+		`values := gowdkform.FromURLValues(request.PostForm)`,
+		`input, err := decodeContractPatientsCreatePatientInput(values)`,
+		`gowdkcontracts.ExecuteCommandForRole[patients.CreatePatient, patients.CreatePatientResult]`,
+	)
+	queryIndex := strings.Index(source, `ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "query"`)
+	if queryIndex < 0 {
+		t.Fatalf("expected generated source to contain query contract endpoint context:\n%s", source)
+	}
+	assertSourceOrder(t, source[queryIndex:],
+		`if runRateLimit(response, request)`,
+		`if !runGuards(response, request, []string{"auth.required"})`,
+		`values := gowdkform.FromURLValues(request.URL.Query())`,
+		`input, err := decodeContractPatientsGetPatientPageInput(values)`,
+		`gowdkcontracts.ExecuteQueryForRole[patients.GetPatientPage, patients.PatientPageData]`,
+	)
 }
 
 func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {

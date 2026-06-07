@@ -9,6 +9,9 @@ func generatedUsesGuards(options Options) bool {
 	if endpointsUseGuards(options.Actions, options.APIs, options.Fragments) {
 		return true
 	}
+	if contractExposuresUseGuards(backendAdapterIR(options).ContractExposures) {
+		return true
+	}
 	for _, route := range options.SSR {
 		if len(route.Guards) > 0 {
 			return true
@@ -30,6 +33,15 @@ func endpointsUseGuards(actions []ActionEndpoint, apis []APIEndpoint, fragments 
 	}
 	for _, fragment := range fragments {
 		if len(fragment.Guards) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func contractExposuresUseGuards(exposures []BackendContractExposure) bool {
+	for _, exposure := range routableContractExposures(exposures) {
+		if len(exposure.Guards) > 0 {
 			return true
 		}
 	}

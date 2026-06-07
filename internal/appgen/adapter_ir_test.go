@@ -118,6 +118,7 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 			Type:        "CreatePatient",
 			Result:      "CreatePatientResult",
 			Roles:       []string{"web"},
+			Guards:      []string{"auth.required"},
 			InputFields: []manifest.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
 			Method:      "POST",
 			Path:        "/patients",
@@ -153,6 +154,9 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 	}
 	if len(command.Roles) != 1 || command.Roles[0] != "web" {
 		t.Fatalf("unexpected command roles: %#v", command.Roles)
+	}
+	if len(command.Guards) != 1 || command.Guards[0] != "auth.required" {
+		t.Fatalf("unexpected command guards: %#v", command.Guards)
 	}
 	query := ir.ContractExposures[1]
 	if query.Endpoint.Kind != BackendEndpointQuery || query.Endpoint.Handler != "query" {

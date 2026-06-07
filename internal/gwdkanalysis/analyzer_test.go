@@ -189,6 +189,7 @@ func TestAnalyzeAddsCommandReferencesToIR(t *testing.T) {
 	source := `package pages
 @page patients
 @route "/patients"
+@guard auth.required
 
 import patients "example.com/app/patients"
 
@@ -213,12 +214,15 @@ view {
 	if ref.Method != "POST" || ref.Path != "/patients" {
 		t.Fatalf("unexpected command method/path: %#v", ref)
 	}
+	if len(ref.Guards) != 1 || ref.Guards[0] != "auth.required" {
+		t.Fatalf("expected command ref to inherit page guards, got %#v", ref.Guards)
+	}
 	if ref.ImportAlias != "patients" || ref.ImportPath != "example.com/app/patients" || ref.Type != "CreatePatient" {
 		t.Fatalf("unexpected command import/type metadata: %#v", ref)
 	}
-	wantColumn := strings.Index(sourceLine(source, 8), "g:command") + 1
-	if ref.Span.Start.Line != 8 || ref.Span.Start.Column != wantColumn {
-		t.Fatalf("expected g:command span at 8:%d, got %#v", wantColumn, ref.Span)
+	wantColumn := strings.Index(sourceLine(source, 9), "g:command") + 1
+	if ref.Span.Start.Line != 9 || ref.Span.Start.Column != wantColumn {
+		t.Fatalf("expected g:command span at 9:%d, got %#v", wantColumn, ref.Span)
 	}
 }
 

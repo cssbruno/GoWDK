@@ -9,12 +9,12 @@ import (
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-func contractHandlerDecls(exposures []BackendContractExposure, csrf bool) []ast.Decl {
+func contractHandlerDecls(exposures []BackendContractExposure, csrf bool, rateLimit bool) []ast.Decl {
 	routable := routableContractExposures(exposures)
 	decls := make([]ast.Decl, 0, len(routable))
 	for _, exposure := range routable {
 		if contractExposureExecutable(exposure) {
-			decls = append(decls, executableContractHandlerDecl(exposure, csrf))
+			decls = append(decls, executableContractHandlerDecl(exposure, csrf, rateLimit))
 			continue
 		}
 		decls = append(decls, fallbackContractHandlerDecl(exposure))
@@ -22,7 +22,7 @@ func contractHandlerDecls(exposures []BackendContractExposure, csrf bool) []ast.
 	return decls
 }
 
-func executableContractHandlerDecl(exposure BackendContractExposure, csrf bool) *ast.FuncDecl {
+func executableContractHandlerDecl(exposure BackendContractExposure, csrf bool, rateLimit bool) *ast.FuncDecl {
 	return funcDecl(contractHandlerName(exposure), []*ast.Field{
 		{Names: []*ast.Ident{id("contractRegistry")}, Type: &ast.StarExpr{X: sel("gowdkcontracts", "Registry")}},
 	}, []*ast.Field{{Type: sel("gowdkruntime", "BackendHandler")}}, []ast.Stmt{
@@ -31,12 +31,12 @@ func executableContractHandlerDecl(exposure BackendContractExposure, csrf bool) 
 				Params:  &ast.FieldList{List: actionParams()},
 				Results: &ast.FieldList{List: boolResults()},
 			},
-			Body: block(executableContractHandlerStmts(exposure, csrf)...),
+			Body: block(executableContractHandlerStmts(exposure, csrf, rateLimit)...),
 		}}},
 	})
 }
 
-func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool) []ast.Stmt {
+func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool, rateLimit bool) []ast.Stmt {
 	stmts := endpointContextStmts(
 		string(exposure.Endpoint.Kind),
 		exposure.Endpoint.PageID,
@@ -45,6 +45,8 @@ func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool)
 		exposure.Endpoint.Path,
 		"",
 	)
+	stmts = append(stmts, rateLimitStmts(rateLimit)...)
+	stmts = append(stmts, guardStmts(exposure.Guards)...)
 	stmts = append(stmts, contractInputStmts(exposure, csrf)...)
 	execute := "ExecuteCommandForRole"
 	if exposure.Endpoint.Kind == BackendEndpointQuery {

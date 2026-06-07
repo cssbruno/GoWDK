@@ -71,6 +71,7 @@ type BackendContractExposure struct {
 	Type        string
 	Result      string
 	Roles       []string
+	Guards      []string
 	InputFields []manifest.BackendInputField
 	Status      gwdkir.ContractBindingStatus
 	Handler     string
@@ -192,6 +193,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				Type:        ref.Type,
 				Result:      ref.Result,
 				Roles:       append([]string(nil), ref.Roles...),
+				Guards:      append([]string(nil), ref.Guards...),
 				InputFields: append([]manifest.BackendInputField(nil), ref.InputFields...),
 				Status:      ref.Status,
 				Handler:     ref.Handler,

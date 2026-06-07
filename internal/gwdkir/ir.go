@@ -358,6 +358,7 @@ type Template struct {
 	Package   string
 	Source    string
 	Route     string
+	Guards    []string
 	Imports   []Import
 	Body      string
 	Span      manifest.SourceSpan
@@ -374,6 +375,7 @@ type ContractReference struct {
 	Type        string
 	Result      string
 	Roles       []string
+	Guards      []string
 	InputFields []manifest.BackendInputField
 	Method      string
 	Path        string

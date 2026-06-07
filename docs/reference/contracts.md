@@ -335,6 +335,10 @@ Current behavior:
 - When generated CSRF is enabled, command contract forms receive the same
   hidden token injection as POST action forms, and generated command adapters
   validate the submitted token before dispatch.
+- Command references on guarded pages inherit the page guards. When rate
+  limiting is enabled, generated command adapters run rate limiting first,
+  guards second, then form parsing, CSRF validation, typed input decoding, and
+  command execution.
 - `gowdk check` and CLI `gowdk build` fail when a command reference is missing,
   linked to an invalid Go handler signature, or bound only to non-web runtime
   roles.
@@ -373,6 +377,9 @@ Current behavior:
   contracts.RoleWeb, input)`, and return the query result as no-store JSON.
 - When the scanner can see the exported query input struct fields, generated
   adapters decode supported URL query parameters into the typed query input.
+- Query references on guarded pages inherit the page guards. When rate limiting
+  is enabled, generated query adapters run rate limiting first, guards second,
+  then typed URL query decoding and query execution.
 - `gowdk check` and CLI `gowdk build` fail when a query reference is missing,
   linked to an invalid Go handler signature, or bound only to non-web runtime
   roles.
@@ -419,6 +426,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   that accepts `*contracts.Registry`, when the registration call is inside one.
 - Contract scan roles are propagated into linked IR, app adapter IR, and
   build-report metadata.
+- Page guards are propagated into linked IR and app adapter IR for generated
+  command/query routes.
 - Contract scan reports include same-package exported command/query input struct
   fields for generated form/query decoders.
 - Contract scan reports validate local and imported contract/result types

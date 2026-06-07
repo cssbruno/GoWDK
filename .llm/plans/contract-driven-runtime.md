@@ -406,10 +406,10 @@ wherever the contract is HTTP-exposed.
 - [x] Extend query adapter IR with first page-route request-time source
       metadata.
 - [ ] Generate Go adapter code with Go AST/printer/format only.
-- [ ] Wire command form submission to generated request decoding.
+- [x] Wire command form submission to generated request decoding.
 - [ ] Wire query execution for request-time page/fragment/API needs.
-- [ ] Keep CSRF validation before command decoding for form POSTs.
-- [ ] Keep guards/rate limits before user command/query handlers when exposed
+- [x] Keep CSRF validation before command decoding for form POSTs.
+- [x] Keep guards/rate limits before user command/query handlers when exposed
       through HTTP.
 - [ ] Keep missing/unsupported contract responses explicit and no-store.
 - [ ] Ensure command results and presentation events are browser-facing outputs,

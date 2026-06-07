@@ -1,4 +1,4 @@
-# ADR 0006: GOWDK And GOWDK Kit Boundary
+# ADR 0006: GOWDK Compiler And Runtime Boundary
 
 Date: 2026-06-05
 
@@ -11,10 +11,10 @@ Go-first web app system. The product naming should make the split as clear as
 Svelte and SvelteKit, but adapted for Go:
 
 ```text
-GOWDK
+GOWDK Compiler
 component/page compiler
         +
-GOWDK Kit
+GOWDK Runtime
 app/runtime layer
         =
 Go-first full web app
@@ -30,12 +30,12 @@ would weaken the product and make future implementation plans conflict.
 GOWDK is split into two named product layers:
 
 ```text
-GOWDK:
+GOWDK Compiler:
   Parses and validates .gwdk package-peer files.
   Compiles pages, layouts, components, build data, CSS, islands, manifests,
   static output, and generated adapter source.
 
-GOWDK Kit:
+GOWDK Runtime:
   Provides routing, form decoding, response envelopes, action/API adapters,
   partial fragments, CSRF, SSR addon contracts, embedded assets, and one-binary
   app serving.
@@ -48,14 +48,16 @@ The naming contract is:
 
 | Name | Meaning |
 | --- | --- |
-| GOWDK | The `.gwdk` language/compiler layer: parser, AST, analyzer, IR, diagnostics, generated adapter source, build output, manifests, route metadata, asset metadata, formatter, and LSP. |
-| GOWDK Kit | The app/runtime layer: `runtime/`, `addons/`, generated `net/http` app serving, routing, request context, form decoding, response envelopes, actions, APIs, fragments, SSR hooks, embedded assets, contract runtime, and one-binary or split-binary wiring. |
+| GOWDK | Product name and repository wordmark. |
+| GOWDK Compiler | The `.gwdk` language/compiler layer: parser, AST, analyzer, IR, diagnostics, generated adapter source, build output, manifests, route metadata, asset metadata, formatter, and LSP. |
+| GOWDK Runtime | The app/runtime layer: `runtime/`, `addons/`, generated `net/http` app serving, routing, request context, form decoding, response envelopes, actions, APIs, fragments, SSR hooks, embedded assets, contract runtime, and one-binary or split-binary wiring. |
 | `gowdk` | The CLI binary, Go package name, module path segment, generated prefixes, and config filename prefix. |
-| GOWDK app | A user application built through GOWDK and served through GOWDK Kit. |
-| addon | Optional feature-registration or integration package. Addons extend GOWDK Kit or compiler behavior; they are not a third product layer. |
+| GOWDK app | A user application built by GOWDK Compiler and served through GOWDK Runtime. |
+| addon | Optional feature-registration or integration package. Addons extend GOWDK Runtime or compiler behavior; they are not a third product layer. |
 
 Avoid bare `core` in product docs because it hides the layer boundary. Use
-`compiler core`, `Kit core`, or `repository core` when the distinction matters.
+`compiler core`, `runtime core`, or `repository core` when the distinction
+matters.
 Avoid creating public names such as `GOWDK World`, `GOWDK Core`, or `GOWDK
 Framework` unless a later ADR accepts that rename.
 
@@ -85,7 +87,7 @@ normalized route, component, package, type, and handler binding metadata.
 
 GOWDK will not fork the Go compiler for the current roadmap. User application
 logic stays in normal Go packages. `.gwdk` is the custom compiler surface that
-connects markup, routes, components, build-time data, and runtime-kit bindings
+connects markup, routes, components, build-time data, and runtime bindings
 to normal Go code.
 
 The package-integrated direction is:
@@ -118,7 +120,7 @@ func Login(ctx context.Context, input LoginInput) (response.Response, error) {
 ```
 
 Generated Go remains adapter glue. It may decode requests, call user handlers,
-wire runtime-kit contracts, and package assets, but it must not generate user
+wire runtime contracts, and package assets, but it must not generate user
 domain logic, handlers, stores, auth, validation policy, or storage code.
 
 ## Consequences
@@ -130,7 +132,7 @@ domain logic, handlers, stores, auth, validation policy, or storage code.
 - `go test`, `go build`, Go modules, editors, and deployment stay standard.
 - `.gwdk` can be more ergonomic than raw Go where web UI needs a compiler.
 - Backend behavior stays inspectable and user-owned.
-- Planning docs have a clear boundary for compiler work versus runtime-kit
+- Planning docs have a clear boundary for compiler work versus runtime
   work.
 
 ### Negative
@@ -138,8 +140,7 @@ domain logic, handlers, stores, auth, validation policy, or storage code.
 - `.gwdk` is a real language surface and must carry migration diagnostics.
 - Package-aware `.gwdk` parsing touches parser, compiler, docs, examples, LSP,
   and test fixtures together.
-- Runtime-kit contracts must be designed carefully so generated adapters stay
-  small.
+- Runtime contracts must be designed carefully so generated adapters stay small.
 
 ### Neutral
 
@@ -162,6 +163,6 @@ domain logic, handlers, stores, auth, validation policy, or storage code.
 - Treat `.llm/features/deep-go-package-integration.md` as the language-facing
   package integration source of truth.
 - Treat `.llm/plans/go-native-adapter-boundary.md` as the generated adapter and
-  runtime-kit implementation source of truth.
+  runtime implementation source of truth.
 - Keep `.llm/plans/gowdk-world-roadmap.md` as the active planning index.
-- Keep server fragments in runtime-kit responses, not old action body syntax.
+- Keep server fragments in runtime responses, not old action body syntax.

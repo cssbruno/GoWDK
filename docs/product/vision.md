@@ -9,33 +9,34 @@ just ships apps.
 
 ## One-Line Description
 
-GOWDK is a Go-first web app compiler paired with GOWDK Kit, its app/runtime
-layer.
+GOWDK ships Go web apps through GOWDK Compiler plus GOWDK Runtime.
 
 ## Product Layer Names
 
-- GOWDK: the `.gwdk` language, parser, analyzer, component/page compiler,
-  diagnostics, LSP, and generated adapter source.
-- GOWDK Kit: the app/runtime layer for serving, routing, request context, form
+- GOWDK: the product name and repository wordmark.
+- GOWDK Compiler: the `.gwdk` language, parser, analyzer, component/page
+  compiler, diagnostics, LSP, and generated adapter source.
+- GOWDK Runtime: the app/runtime layer for serving, routing, request context, form
   decoding, response envelopes, actions, APIs, CSRF, partial fragments, SSR
   contracts, embedded assets, and one-binary or split-binary wiring.
 - `gowdk`: the CLI that runs the compiler, produces build artifacts, and wires
-  GOWDK Kit output.
+  GOWDK Runtime output.
 
-This mirrors the Svelte/SvelteKit product split at the naming level:
-compiler/language first, app/runtime kit second. It does not rename Go module
-paths or public runtime packages yet.
+This keeps the Svelte/SvelteKit-style separation without saying `GOWDK Kit`,
+because the `K` already carries the kit idea in the product wordmark. It does
+not rename Go module paths or public runtime packages yet.
 
 Use the names this way:
 
 | Name | Product Meaning |
 | --- | --- |
-| GOWDK | Language/compiler layer. It owns `.gwdk`, AST/analyzer/IR, generated Go adapter source, build output, manifests, route metadata, asset metadata, diagnostics, formatting, and LSP. |
-| GOWDK Kit | Runtime/app layer. It owns `runtime/`, `addons/`, generated `net/http` serving, backend routing, form decoding, responses, actions, APIs, fragments, SSR hooks, embedded assets, contract runtime, and one-binary or split-binary wiring. |
+| GOWDK | Product name and wordmark. |
+| GOWDK Compiler | Language/compiler layer. It owns `.gwdk`, AST/analyzer/IR, generated Go adapter source, build output, manifests, route metadata, asset metadata, diagnostics, formatting, and LSP. |
+| GOWDK Runtime | Runtime/app layer. It owns `runtime/`, `addons/`, generated `net/http` serving, backend routing, form decoding, responses, actions, APIs, fragments, SSR hooks, embedded assets, contract runtime, and one-binary or split-binary wiring. |
 | `gowdk` | CLI and Go package/module spelling. The CLI drives both layers. |
 
 Avoid treating `GOWDK World`, `GOWDK Core`, or `GOWDK Framework` as separate
-public names. In docs, use `compiler core`, `Kit core`, or `repository core`
+public names. In docs, use `compiler core`, `runtime core`, or `repository core`
 when `core` is unavoidable.
 
 ## Product Shape
@@ -43,24 +44,24 @@ when `core` is unavoidable.
 GOWDK grows as two coordinated parts:
 
 ```text
-GOWDK
+GOWDK Compiler
 component/page compiler
         +
-GOWDK Kit
+GOWDK Runtime
 app/runtime layer
         =
 Go-first full web app
 ```
 
-GOWDK owns package-peer `.gwdk` files, pages, layouts, components, build-time
-output, CSS, islands, manifests, diagnostics, endpoint metadata, and generated
-adapter source. GOWDK Kit owns serving, routing, request context helpers, form
-decoding, response envelopes, actions, APIs, CSRF, partial fragments, SSR
-contracts, embedded assets, contract runtime, and one-binary or split-binary
-wiring.
+GOWDK Compiler owns package-peer `.gwdk` files, pages, layouts, components,
+build-time output, CSS, islands, manifests, diagnostics, endpoint metadata, and
+generated adapter source. GOWDK Runtime owns serving, routing, request context
+helpers, form decoding, response envelopes, actions, APIs, CSRF, partial
+fragments, SSR contracts, embedded assets, contract runtime, and one-binary or
+split-binary wiring.
 
 User application behavior stays in normal Go packages. GOWDK should improve Go
-web authoring through `.gwdk` compilation, GOWDK Kit contracts, and generated
+web authoring through `.gwdk` compilation, GOWDK Runtime contracts, and generated
 adapters before considering any custom Go compiler work.
 
 ## Execution Lanes
@@ -69,7 +70,7 @@ adapters before considering any custom Go compiler work.
 - Backend endpoint lane: actions, APIs, and fragments run at request time
   without making the page itself request-rendered.
 - Request-time page lane: `@render ssr` pages are compiled into generated SSR
-  handlers and run through GOWDK Kit.
+  handlers and run through GOWDK Runtime.
 
 SSR is integrated into the compiler/runtime code path and selected per page. The
 current `addons/ssr` package and `--ssr` flag are feature gates for enabling
@@ -108,7 +109,7 @@ keeping the route, handler, and runtime contracts explicit.
 ## Success Metrics
 
 - Developers can explain GOWDK in one sentence: GOWDK ships Go web apps through
-  a component/page compiler plus GOWDK Kit.
+  GOWDK Compiler plus GOWDK Runtime.
 - The compiler can produce real build-time page output, route metadata, endpoint
   metadata, CSS/assets, generated adapter Go, and deployable artifacts from
   package-peer `.gwdk` files.

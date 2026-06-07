@@ -69,7 +69,7 @@ has made the state change real.
 
 ### Add A Public Contract Registry
 
-Add a small runtime-kit package for typed registration:
+Add a small runtime package for typed registration:
 
 ```go
 func RegisterPatients(r gowdk.Registry) {

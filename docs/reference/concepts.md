@@ -1,8 +1,8 @@
 # Concepts For Web Framework Users
 
-GOWDK is the Go-first `.gwdk` compiler. GOWDK Kit is its app/runtime layer. The
-pair forms a Go web app framework without making the browser the owner of app
-behavior.
+GOWDK is the product wordmark. GOWDK Compiler is the Go-first `.gwdk`
+compiler. GOWDK Runtime is its app/runtime layer. The pair forms a Go web app
+framework without making the browser the owner of app behavior.
 
 ## Mental Model
 
@@ -11,18 +11,18 @@ behavior.
 .go files   -> go/parser -> go/ast -> go/types -> handler/type validation
 ```
 
-GOWDK owns generated structure. GOWDK Kit owns runtime contracts. Application
-Go owns behavior.
+GOWDK Compiler owns generated structure. GOWDK Runtime owns runtime contracts.
+Application Go owns behavior.
 
 ## Names
 
-Use `GOWDK` for the `.gwdk` language/compiler layer. Use `GOWDK Kit` for the
-runtime/app layer that serves generated output and runs request-time behavior.
-Use `gowdk` only for the CLI, Go package name, module path segment, and file or
-asset prefixes.
+Use `GOWDK Compiler` for the `.gwdk` language/compiler layer. Use
+`GOWDK Runtime` for the runtime/app layer that serves generated output and runs
+request-time behavior. Use `gowdk` only for the CLI, Go package name, module
+path segment, and file or asset prefixes.
 
 The split is intentionally similar to Svelte versus SvelteKit at the naming
-level: language/compiler first, app/runtime kit second. It does not mean GOWDK
+level: language/compiler first, app/runtime layer second. It does not mean GOWDK
 copies Svelte's JavaScript runtime model.
 
 ## Pages

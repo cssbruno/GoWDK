@@ -6,8 +6,8 @@ Spec: `.llm/features/go-native-adapter-boundary.md`
 
 ADR: `docs/engineering/decisions/0005-generated-go-emission-boundary.md`
 
-Compiler/runtime-kit boundary:
-`docs/engineering/decisions/0006-gowdk-compiler-and-kit-boundary.md`
+Compiler/runtime boundary:
+`docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary.md`
 
 Language source of truth: `.llm/plans/deep-go-package-integration.md`
 

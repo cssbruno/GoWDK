@@ -1,10 +1,10 @@
-# Implementation Plan: GOWDK Plus GOWDK Kit
+# Implementation Plan: GOWDK Compiler Plus Runtime
 
 ## Context
 
 Architecture decision:
 
-- `docs/engineering/decisions/0006-gowdk-compiler-and-kit-boundary.md`
+- `docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary.md`
 
 Primary active planning sources:
 
@@ -18,10 +18,10 @@ Primary active planning sources:
 This roadmap reorganizes existing `.llm` plans around the product split:
 
 ```text
-GOWDK
+GOWDK Compiler
 component/page compiler
         +
-GOWDK Kit
+GOWDK Runtime
 app/runtime layer
         =
 Go-first full web app
@@ -29,15 +29,16 @@ Go-first full web app
 
 Naming rules:
 
-- `GOWDK` means the `.gwdk` language/compiler layer.
-- `GOWDK Kit` means the app/runtime layer.
+- `GOWDK` means the product and repository wordmark.
+- `GOWDK Compiler` means the `.gwdk` language/compiler layer.
+- `GOWDK Runtime` means the app/runtime layer.
 - `gowdk` means CLI, package/module spelling, config prefixes, and generated
   asset/runtime prefixes.
 - `GOWDK app` means user-owned app output produced by the compiler and served
-  through GOWDK Kit.
+  through GOWDK Runtime.
 - `addon` means optional feature-registration or integration package, not a
   third product layer.
-- Avoid bare `core`; write `compiler core`, `Kit core`, or `repository core`.
+- Avoid bare `core`; write `compiler core`, `runtime core`, or `repository core`.
 
 Compiler lanes:
 
@@ -61,7 +62,7 @@ Compiler lanes:
 
 ## Product Layers
 
-### GOWDK
+### GOWDK Compiler
 
 Owns:
 
@@ -80,7 +81,7 @@ Does not own:
 - Auth/storage/business validation logic.
 - Long-lived runtime state outside generated app/runtime contracts.
 
-### GOWDK Kit
+### GOWDK Runtime
 
 Owns:
 
@@ -129,7 +130,7 @@ Does not own:
 | Plan | Status | Required Alignment |
 | --- | --- | --- |
 | `deep-go-package-integration.md` | Active source of truth | Owns package-first `.gwdk`, exact symbols, typed action inputs, and migration diagnostics. |
-| `go-native-adapter-boundary.md` | Active supporting plan | Owns generated adapter shape and runtime-kit glue; must not define competing syntax. |
+| `go-native-adapter-boundary.md` | Active supporting plan | Owns generated adapter shape and runtime glue; must not define competing syntax. |
 | `contract-driven-runtime.md` | Planned after endpoint/adapter IR stability | Owns typed query/command/domain-event/integration-event/presentation-event/job registry, local runtime dispatch, optional worker/cron roles, and contract graph tooling; frontend UI events trigger commands or queries and must not become backend facts. |
 | `golangish-reactive-islands.md` | Active compiler-side UI plan | Client language is a GOWDK subset, not forked Go or arbitrary JavaScript. |
 
@@ -140,12 +141,12 @@ sources of truth. Their useful direction is now folded into this roadmap:
 
 - `feature-bound-backend-integration.md`: superseded by package-integrated
   exact exported declarations.
-- `interactive-runtime.md`: folded into runtime-kit fragment and island phases.
+- `interactive-runtime.md`: folded into runtime fragment and island phases.
 - `auto-route-detection.md`: folded into normalized route metadata and adapter
   generation phases.
 - `gwdk-go-build-import.md`: folded into package-aware build data follow-up.
 - `fast-dev-redeploy.md`: implemented static/dev slice; future app dev belongs
-  to runtime-kit phases.
+  to runtime phases.
 - `module-binary-packaging.md`: implemented packaging slice; keep module
   selection as artifact packaging, not runtime module orchestration.
 - `wasm-deploy-artifact.md`: implemented deploy artifact slice; explicit
@@ -192,9 +193,9 @@ api Session GET "/api/session"
 
 ### Reorganization
 
-- [x] Add ADR for compiler/runtime-kit boundary.
-- [x] Define stable product-layer names for GOWDK, GOWDK Kit, `gowdk`, GOWDK
-      app, and addons.
+- [x] Add ADR for compiler/runtime boundary.
+- [x] Define stable product-layer names for GOWDK, GOWDK Compiler,
+      GOWDK Runtime, `gowdk`, GOWDK app, and addons.
 - [x] Add this roadmap as the planning index.
 - [x] Scope the adapter-boundary plan under package integration.
 - [x] Remove superseded and absorbed first-slice `.llm` feature/plan files.

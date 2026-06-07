@@ -4,7 +4,7 @@
 
 This spec supports the package-integrated direction in
 `.llm/features/deep-go-package-integration.md` and ADR 0006. It owns generated
-adapter and app/runtime-kit boundaries; it does not define an independent
+adapter and app/runtime boundaries; it does not define an independent
 `.gwdk` syntax.
 
 ## Problem

@@ -1,6 +1,6 @@
 # Contracts
 
-`runtime/contracts` is the first runtime slice of GOWDK Kit's
+`runtime/contracts` is the first runtime slice of the GOWDK Runtime
 contract-driven backend model. It is usable from normal Go today. `.gwdk`
 command and query references are discoverable in compiler IR, build reports,
 and generated web adapters when they have a routable method/path.
@@ -186,8 +186,8 @@ subscriber dispatch is enough. Use `CaptureCommandEvents` or
 `ExecuteCommandToOutbox` when subscribers should run from a later worker or
 broker delivery path.
 
-GOWDK Kit also includes a dependency-free file outbox adapter for local durable
-JSON Lines storage:
+GOWDK Runtime also includes a dependency-free file outbox adapter for local
+durable JSON Lines storage:
 
 ```go
 import "github.com/cssbruno/gowdk/runtime/contracts/fileoutbox"
@@ -223,8 +223,8 @@ database-backed or broker-backed adapter.
 Subscriber handlers must be idempotent for any durable delivery adapter. A
 worker can crash after a subscriber side effect but before `Ack`, or an adapter
 can retry after `Nack`. Use a stable domain key, event id, outbox record id, or
-application-level dedupe table to make repeated deliveries safe. GOWDK Kit does
-not hide retries behind generated JavaScript or browser state.
+application-level dedupe table to make repeated deliveries safe. GOWDK Runtime
+does not hide retries behind generated JavaScript or browser state.
 
 External broker adapters can implement the dependency-free `Broker` interface:
 

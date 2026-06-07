@@ -18,6 +18,7 @@ Recommended naming:
 - `0003-js-default-explicit-wasm-islands.md`: accepted default JS islands and explicit WASM island opt-in.
 - `0004-production-wasm-island-abi.md`: accepted production ABI for explicit WASM islands.
 - `0005-generated-go-emission-boundary.md`: accepted generated Go adapter boundary.
-- `0006-gowdk-compiler-and-kit-boundary.md`: accepted split between GOWDK and GOWDK Kit.
+- `0006-gowdk-compiler-and-runtime-boundary.md`: accepted split between
+  GOWDK Compiler and GOWDK Runtime.
 - `0007-static-first-spa-navigation.md`: accepted static-first SPA navigation and generated JavaScript guardrails.
 - `0008-bounded-client-language.md`: accepted bounded `client {}` language and page-scoped store boundaries.

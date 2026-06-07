@@ -9,7 +9,7 @@ Related plans and decisions:
 - `.llm/plans/gowdk-world-roadmap.md`
 - `.llm/plans/go-native-adapter-boundary.md`
 - `docs/engineering/decisions/0005-generated-go-emission-boundary.md`
-- `docs/engineering/decisions/0006-gowdk-compiler-and-kit-boundary.md`
+- `docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary.md`
 
 The current worktree already contains first-slice backend binding, generated
 action/API calls, backend binding metadata, split frontend/backend options, and

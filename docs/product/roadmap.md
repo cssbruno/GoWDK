@@ -5,29 +5,30 @@
 GOWDK is a Go-first full web app platform built from two coordinated parts:
 
 ```text
-GOWDK
+GOWDK Compiler
 component/page compiler
         +
-GOWDK Kit
+GOWDK Runtime
 app/runtime layer
         =
 Go-first full web app
 ```
 
-GOWDK is the `.gwdk` language and component/page compiler. It turns
+GOWDK Compiler is the `.gwdk` language and component/page compiler. It turns
 package-peer `.gwdk` files and normal Go packages into page output, CSS, client
 assets, manifests, endpoint metadata, generated adapter Go, and deployable
-artifacts. GOWDK Kit is the app/runtime layer that serves those artifacts and
+artifacts. GOWDK Runtime is the app/runtime layer that serves those artifacts and
 runs request-time behavior.
 
 The public naming rule is deliberately narrow:
 
-- `GOWDK` means compiler/language layer.
-- `GOWDK Kit` means app/runtime layer.
+- `GOWDK` means the product and repository wordmark.
+- `GOWDK Compiler` means compiler/language layer.
+- `GOWDK Runtime` means app/runtime layer.
 - `gowdk` means CLI, Go package/module spelling, and generated file prefixes.
 - `addon` means optional feature-registration or integration package inside
-  the GOWDK Kit/compiler ecosystem, not a separate product.
-- Avoid bare `core`; use `compiler core`, `Kit core`, or `repository core`.
+  the compiler/runtime ecosystem, not a separate product.
+- Avoid bare `core`; use `compiler core`, `runtime core`, or `repository core`.
 
 GOWDK has three execution lanes:
 
@@ -35,7 +36,7 @@ GOWDK has three execution lanes:
 - Backend endpoint lane: actions, APIs, and fragments run at request time
   without making the page itself request-rendered.
 - Request-time page lane: `@render ssr` pages are compiled into generated SSR
-  handlers and run through GOWDK Kit. This lane is integrated
+  handlers and run through GOWDK Runtime. This lane is integrated
   into the codebase; it is not a separate product layer. It is selected per
   page and currently enabled through the SSR feature gate in config or `--ssr`.
 
@@ -48,22 +49,22 @@ typed inputs, service calls, and business rules stay in normal Go.
 layouts, component usage, build-time data, dynamic paths, endpoint declarations,
 stores, client blocks, and view markup.
 
-GOWDK owns parsing, formatting, diagnostics, manifests, route metadata,
-endpoint metadata, component/page compilation, CSS and asset planning, build
-reports, and generated adapter source.
+GOWDK Compiler owns parsing, formatting, diagnostics, manifests, route
+metadata, endpoint metadata, component/page compilation, CSS and asset planning,
+build reports, and generated adapter source.
 
 The generated adapter owns glue: request decoding, route and endpoint dispatch,
 calling exported Go handlers, writing `runtime/response.Response`, and returning
 clear `501` responses for missing or unsupported bindings where that mode is
 allowed.
 
-GOWDK Kit owns `http.Handler` serving, embedded assets, backend
+GOWDK Runtime owns `http.Handler` serving, embedded assets, backend
 routing, request context helpers, form decoding primitives, response envelopes,
 CSRF, partial fragments, SSR contracts, and one-binary or split-binary wiring.
 
 Addons are package-level extension points around those layers. They can enable
-or extend GOWDK compiler behavior or GOWDK Kit runtime behavior, but they must
-not become a third app framework model with different ownership rules.
+or extend compiler behavior or runtime behavior, but they must not become a
+third app framework model with different ownership rules.
 
 Generated JavaScript may enhance navigation, forms, fragments, and local
 component state, but it must not become the source of truth for routes, auth,
@@ -163,8 +164,8 @@ are stable.
 | 16 | Components and client language | Components gain real `g:if` mount/unmount, richer expression props, child-to-parent events, bindable state, typed exports, named/scoped slots, scoped CSS/assets, a documented component contract, a proper reactive dependency graph, predictable batching, and cycle diagnostics. |
 | 17 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Explicit WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
 | 18 | CSS, assets, and packaging | Full plugin loading, page-aware CSS processor selection, component AST/IR scope and hash metadata, Tailwind/CSS deployment docs, asset hashing, and binary cache policy are implemented. Module selection remains artifact packaging, not runtime module orchestration. |
-| 19 | Framework adapters | GOWDK Kit remains `net/http` first. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
-| 20 | Dev, playground, and tooling | `gowdk dev` can run generated app/runtime-kit flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, browser playground, browser-compiled GOWDK, richer LSP completions, and editor navigation are added. |
+| 19 | Framework adapters | GOWDK Runtime remains `net/http` first. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
+| 20 | Dev, playground, and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, browser playground, browser-compiled GOWDK, richer LSP completions, and editor navigation are added. |
 | 21 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
 
 ## Candidate Release Order

@@ -86,7 +86,7 @@ deploying.
 
 GOWDK's generated app package is `net/http`-first. Framework compatibility comes
 from the standard handler contract, so applications can choose Gin, Chi, Echo,
-Fiber through an adaptor, or plain `net/http` without changing GOWDK Kit or the
+Fiber through an adaptor, or plain `net/http` without changing GOWDK Runtime or the
 generated app contract.
 Generated apps do not emit framework-specific code by default; optional adapter
 packages wrap the same generated `http.Handler`.

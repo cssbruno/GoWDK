@@ -20,23 +20,23 @@ Use `plans/gowdk-world-roadmap.md` before starting broad feature work. It
 aligns the current plans around the product split:
 
 ```text
-GOWDK
+GOWDK Compiler
 component/page compiler
         +
-GOWDK Kit
+GOWDK Runtime
 app/runtime layer
         =
 Go-first full web app
 ```
 
-Use `GOWDK` for the language/compiler layer and `GOWDK Kit` for the app/runtime
-layer. Use lowercase `gowdk` only for the CLI, Go package/module spelling, and
-generated prefixes. Avoid bare `core` in plans; prefer `compiler core`, `Kit
-core`, or `repository core`.
+Use `GOWDK Compiler` for the language/compiler layer and `GOWDK Runtime` for
+the app/runtime layer. Use lowercase `gowdk` only for the CLI, Go
+package/module spelling, and generated prefixes. Avoid bare `core` in plans;
+prefer `compiler core`, `runtime core`, or `repository core`.
 
 For package-first backend work, use `features/deep-go-package-integration.md`
 and `plans/deep-go-package-integration.md` as the language source of truth.
 Use `features/go-native-adapter-boundary.md` and
-`plans/go-native-adapter-boundary.md` for generated adapter and runtime-kit
+`plans/go-native-adapter-boundary.md` for generated adapter and runtime
 implementation planning. Older first-slice feature and plan files were removed
 after their useful direction was folded into the roadmap.

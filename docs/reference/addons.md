@@ -77,7 +77,7 @@ proxy settings. GOWDK does not vendor, sandbox, or rewrite addon imports.
 
 `addons/tailwind` is an experimental Tailwind v4 CSS processor wrapper around a
 user-provided standalone CLI executable. It does not use npm, download Tailwind
-automatically, add Tailwind to the compiler core or Kit core, or generate
+automatically, add Tailwind to the compiler core or runtime core, or generate
 Tailwind v3 content configuration. The literal config loader recognizes
 `tailwind.Addon` with a literal `tailwind.Options` value.
 

@@ -44,7 +44,7 @@ authorization, persistence, and transaction success.
   generated JavaScript own routing, auth, validation, business rules, global
   state, or page loading policy.
 - Layer this model on top of the existing AST, analyzer, IR, endpoint metadata,
-  generated adapter IR, and runtime-kit work.
+  generated adapter IR, and runtime work.
 
 ## Non-Goals
 

@@ -22,7 +22,11 @@ func backendRuntimeImportMap(options Options) map[string]string {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 	}
 	if len(executableContracts) > 0 {
+		imports["context"] = "context"
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
+	}
+	if len(executableCommandContractExposures(contractExposures)) > 0 {
+		imports["sync"] = "sync"
 	}
 	if contractExposuresUseForm(executableContracts) {
 		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"

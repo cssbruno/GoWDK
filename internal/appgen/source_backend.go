@@ -24,11 +24,8 @@ func newBackendRouterDecl(adapter BackendAdapterIR) *ast.FuncDecl {
 	stmts := []ast.Stmt{}
 	if len(executableContractExposures(adapter.ContractExposures)) > 0 {
 		stmts = append(stmts,
-			define([]ast.Expr{id("contractRegistry")}, call(sel("gowdkcontracts", "NewRegistry"))),
+			define([]ast.Expr{id("contractRegistry")}, call(id("NewContractRegistry"))),
 		)
-		for _, registration := range contractRegisterCalls(adapter.ContractExposures) {
-			stmts = append(stmts, exprStmt(call(sel(registration.Alias, registration.Function), id("contractRegistry"))))
-		}
 	}
 	stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{call(sel("gowdkruntime", "NewBackendRouter"), routes...)}})
 	return funcDecl("newBackendRouter", nil, []*ast.Field{

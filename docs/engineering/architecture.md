@@ -36,9 +36,12 @@ Generated web adapters can execute routable command/query references through
 the local registry with the `web` role, compiler validation rejects web
 references to non-web-only registrations, and `runtime/contracts/fileoutbox`
 provides a dependency-free JSON Lines outbox/EventSource adapter with nack
-retry metadata and opt-in dead-letter storage. Split runtime binaries,
-database-backed outbox implementations, retry backoff policy, and realtime
-fanout adapters remain planned.
+retry metadata and opt-in dead-letter storage. Runtime also includes
+in-memory, Redis Streams, and NATS broker/EventSource adapters plus SSE and
+WebSocket presentation fanout adapters. Generated apps can expose contract
+event sink registration, fresh registry construction, and a worker replay
+helper for executable contract registrations. Split runtime binaries, retry
+backoff policy, and managed deployment recipes remain planned.
 
 Still partial: broad local client-side reactivity, scoped component CSS/asset
 emission, richer load/action invalidation, broader hybrid request-time
@@ -122,7 +125,7 @@ the lanes through package, route, type, component, and handler binding metadata.
 | `runtime/asset` | Asset manifest resolution. | Runtime | Initial manifest helper implemented. |
 | `runtime/route` | Runtime route matching for generated request-time routes. | Runtime | Dynamic route matcher for first-slice generated SSR routes implemented. |
 | `runtime/app` | Shared generated app HTTP server. | Runtime | Serves embedded spa files, identity headers, health checks, asset manifest counts, optional generated 404/500 pages, no-JS cookie acknowledgement, server-side cookie notice hiding, generated CSRF token injection for POST forms, request-time panic boundaries, and action/SSR callback hooks for generated apps. |
-| `runtime/contracts` | Typed contract registry and in-process dispatch. | Runtime | First runtime slice implemented for queries, commands, backend-owned domain and integration events, presentation events, jobs, metadata, stable observation names and labels for logs/metrics/traces, local command-buffered event dispatch, event-envelope capture/replay, dependency-free outbox/broker/presentation-fanout/event-source interfaces, an event worker loop with ack/nack plus context cancellation, and a dependency-free file outbox adapter. Split worker/cron generation and concrete broker/realtime adapters remain planned. |
+| `runtime/contracts` | Typed contract registry and in-process dispatch. | Runtime | First runtime slice implemented for queries, commands, backend-owned domain and integration events, presentation events, jobs, metadata, stable observation names and labels for logs/metrics/traces, local command-buffered event dispatch, event-envelope capture/replay, dependency-free outbox/broker/presentation-fanout/event-source interfaces, command event sinks, an event worker loop with ack/nack plus context cancellation, a dependency-free file outbox adapter, in-memory, Redis Streams, and NATS broker/EventSource adapters, and SSE/WebSocket presentation fanout adapters. Split worker/cron generation, retry backoff policy, and managed deployment recipes remain planned. |
 | `addons/spa` | Build-time prerendering. | Addon | Capability boundary implemented; prerender execution is planned. |
 | `addons/actions` | Typed backend actions, form decoding, CSRF. | Addon | Capability boundary, required-field validation helper, generated required-field validation fragments for partial requests, signed CSRF validator, and generated action CSRF wiring implemented; broader field-specific validation patterns remain planned. |
 | `addons/partial` | Server fragments and swaps. | Addon | Capability boundary implemented; first generated action fragment execution slice exists. |

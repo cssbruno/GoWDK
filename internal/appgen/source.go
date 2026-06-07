@@ -67,7 +67,11 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 	}
 	if len(executableContracts) > 0 {
+		imports["context"] = "context"
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
+	}
+	if len(executableCommandContractExposures(contractExposures)) > 0 {
+		imports["sync"] = "sync"
 	}
 	if contractExposuresUseForm(executableContracts) {
 		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
@@ -217,6 +221,8 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	decls = append(decls, fragmentFuncDecl(direct.Fragments, generatedUsesRateLimit(direct)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(direct), generatedUsesRateLimit(direct))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
 	switch {
 	case adapter.HasRegistrations():
 		decls = append(decls, newBackendRouterDecl(adapter))
@@ -242,6 +248,8 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	decls = append(decls, fragmentFuncDecl(options.Fragments, generatedUsesRateLimit(options)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(options), generatedUsesRateLimit(options))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
 	if adapter.HasRegistrations() {
 		decls = append(decls, newBackendRouterDecl(adapter))
 	} else {

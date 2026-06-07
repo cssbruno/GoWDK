@@ -36,7 +36,8 @@ The implemented runtime registry is currently independent from compiler
 integration.
 
 Go does not support generic methods, so the API uses generic functions over a
-registry:
+registry. Keep this shape while the repository targets Go 1.26; revisit it when
+the project upgrades to Go 1.27 and the language supports generic methods:
 
 ```go
 r := contracts.NewRegistry()
@@ -301,6 +302,238 @@ cleanly when the source returns `ErrEventSourceClosed`, and returns the context
 error when `ctx` is canceled. `RunEventWorkerForRole` can be used for another
 runtime role.
 
+Generated command routes use the same event-plumbing boundary through one
+configurable sink:
+
+```go
+gowdkapp.RegisterContractEventSink(contracts.OutboxCommandEventSink(outbox))
+```
+
+The generated app API exists when routable command contract adapters are
+generated. Passing `nil` restores the default in-process sink:
+
+```go
+gowdkapp.RegisterContractEventSink(nil)
+```
+
+Available sink helpers:
+
+- `InProcessCommandEventSink()` dispatches captured events through the local
+  registry with role filtering.
+- `OutboxCommandEventSink(outbox)` stores captured events without local
+  subscriber dispatch.
+- `BrokerCommandEventSink(broker)` publishes captured events to a broker.
+- `PresentationFanoutCommandEventSink(fanout)` sends only presentation events.
+- `CompositeCommandEventSink(...)` sends the same captured event batch to
+  multiple sinks in order.
+
+Apps that need more than one destination can implement
+`contracts.CommandEventSink` directly or use `CompositeCommandEventSink`.
+
+Choose the sink based on where subscribers should run:
+
+| Need | Sink |
+| --- | --- |
+| Small single-binary app | `InProcessCommandEventSink()` |
+| Local durable queue or test fixture | `OutboxCommandEventSink(fileoutbox.New(...))` |
+| Local in-memory queue | `BrokerCommandEventSink(membroker.New())` |
+| Redis Streams queue | `BrokerCommandEventSink(redisstream.New(...))` |
+| Core NATS live pub/sub | `BrokerCommandEventSink(natsbroker.New(...))` |
+| Browser notifications over SSE or WebSocket | `PresentationFanoutCommandEventSink(hub)` |
+| More than one destination | `CompositeCommandEventSink(...)` |
+
+`CompositeCommandEventSink` sends the same captured batch to each sink in
+order. A later sink is not called after an earlier sink returns an error.
+Presentation fanout sinks filter non-presentation events themselves. Broker and
+outbox sinks receive the full event batch.
+
+Generated packages with executable contract registrations also expose:
+
+```go
+registry := gowdkapp.NewContractRegistry()
+err := gowdkapp.RunContractEventWorker(ctx, source)
+```
+
+`NewContractRegistry` creates a fresh registry using the scanned registration
+functions. `RunContractEventWorker` replays an `EventSource` through the same
+registrations with the worker role.
+
+Dependency-free adapters:
+
+- `runtime/contracts/fileoutbox` stores JSON Lines records on disk and
+  implements both `Outbox` and `EventSource`.
+- `runtime/contracts/membroker` provides an in-memory `Broker` and
+  `EventSource` for tests, local development, and single-process apps.
+- `runtime/contracts/sse` provides an `http.Handler` and
+  `PresentationFanout` for server-sent browser presentation events.
+
+Optional broker and realtime adapters:
+
+- `runtime/contracts/redisstream` uses Redis Streams as a `Broker` and
+  `EventSource`.
+- `runtime/contracts/natsbroker` uses core NATS publish/subscribe as a
+  `Broker` and `EventSource`.
+- `runtime/contracts/websocketfanout` provides an `http.Handler` and
+  `PresentationFanout` for browser WebSocket clients.
+
+## Sink Recipes
+
+### Redis Streams
+
+Use Redis Streams when command routes should append events to a queue and a
+worker should replay subscribers later:
+
+```go
+import (
+    "time"
+
+    "github.com/cssbruno/gowdk/runtime/contracts"
+    "github.com/cssbruno/gowdk/runtime/contracts/redisstream"
+    redis "github.com/redis/go-redis/v9"
+)
+
+client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
+
+events := redisstream.New(
+    client,
+    "gowdk:events",
+    "gowdk-workers",
+    "worker-1",
+    redisstream.WithBlock(5*time.Second),
+    redisstream.WithJSONDecoder[PatientCreated]("patients.PatientCreated"),
+)
+
+if err := events.EnsureGroup(ctx); err != nil {
+    return err
+}
+
+gowdkapp.RegisterContractEventSink(contracts.BrokerCommandEventSink(events))
+```
+
+A worker can use the same adapter as an `EventSource`:
+
+```go
+if err := gowdkapp.RunContractEventWorker(ctx, events); err != nil {
+    return err
+}
+```
+
+`Ack` calls `XACK` and then `XDEL`. Subscriber failures leave messages pending
+for the Redis consumer group to handle according to app-owned retry policy.
+Register JSON decoders for event types that need typed Go values when replayed
+through subscribers.
+
+### NATS
+
+Use the NATS adapter for live event distribution where subscribers are expected
+to be online:
+
+```go
+import (
+    "time"
+
+    "github.com/cssbruno/gowdk/runtime/contracts"
+    "github.com/cssbruno/gowdk/runtime/contracts/natsbroker"
+    nats "github.com/nats-io/nats.go"
+)
+
+conn, err := nats.Connect(nats.DefaultURL)
+if err != nil {
+    return err
+}
+
+events := natsbroker.New(
+    conn,
+    "gowdk.events",
+    natsbroker.WithQueue("gowdk-workers"),
+    natsbroker.WithTimeout(5*time.Second),
+    natsbroker.WithJSONDecoder[PatientCreated]("patients.PatientCreated"),
+)
+defer events.Close()
+
+gowdkapp.RegisterContractEventSink(contracts.BrokerCommandEventSink(events))
+```
+
+Worker replay uses the same adapter:
+
+```go
+if err := gowdkapp.RunContractEventWorker(ctx, events); err != nil {
+    return err
+}
+```
+
+This adapter uses core NATS publish/subscribe. It does not provide durable
+replay for offline subscribers. Use Redis Streams, the file outbox, or a
+custom JetStream adapter when events must survive worker downtime.
+
+### SSE Presentation Fanout
+
+Use SSE when the app needs one-way browser presentation events:
+
+```go
+import (
+    "net/http"
+
+    "github.com/cssbruno/gowdk/runtime/contracts"
+    "github.com/cssbruno/gowdk/runtime/contracts/sse"
+)
+
+hub := sse.New()
+http.Handle("/gowdk/events", hub)
+
+gowdkapp.RegisterContractEventSink(
+    contracts.PresentationFanoutCommandEventSink(hub),
+)
+```
+
+The browser receives `event: gowdk-presentation` messages whose `data` value is
+the JSON `contracts.EventEnvelope`. Domain and integration events are ignored.
+
+### WebSocket Presentation Fanout
+
+Use WebSocket fanout when clients need a persistent bidirectional transport for
+presentation events:
+
+```go
+import (
+    "net/http"
+
+    "github.com/coder/websocket"
+    "github.com/cssbruno/gowdk/runtime/contracts"
+    "github.com/cssbruno/gowdk/runtime/contracts/websocketfanout"
+)
+
+hub := websocketfanout.New(websocketfanout.WithAcceptOptions(websocket.AcceptOptions{
+    OriginPatterns: []string{"https://example.com"},
+}))
+http.Handle("/gowdk/events/ws", hub)
+
+gowdkapp.RegisterContractEventSink(
+    contracts.PresentationFanoutCommandEventSink(hub),
+)
+```
+
+Each presentation event is written as one text JSON `contracts.EventEnvelope`.
+Slow clients can drop queued messages when their buffer fills; tune
+`WithBufferSize` for the app's realtime behavior.
+
+### Fanout Plus Queue
+
+Apps can send browser presentation events immediately and still queue the full
+event batch for backend workers:
+
+```go
+sink := contracts.CompositeCommandEventSink(
+    contracts.PresentationFanoutCommandEventSink(hub),
+    contracts.BrokerCommandEventSink(events),
+)
+
+gowdkapp.RegisterContractEventSink(sink)
+```
+
+The generated command route fails before writing JSON success if any sink
+returns an error.
+
 ## `.gwdk` Command References
 
 Use `g:command` on forms to declare backend command intent:
@@ -326,9 +559,10 @@ Current behavior:
   `gowdk-build-report.json`. Command events include method/path when present.
 - Generated apps register the scanned package registration function once in a
   local `runtime/contracts.Registry`, route the form method/action through the
-  backend router, execute the command with `ExecuteCommandForRole(...,
-  contracts.RoleWeb, input)`, dispatch emitted backend events after command
-  success, and return the command result as no-store JSON.
+  backend router, capture emitted backend events with
+  `CaptureCommandEventsForRole(..., contracts.RoleWeb, input)`, send captured
+  events to the configured command event sink, and return the command result as
+  no-store JSON.
 - When the scanner can see the exported command input struct fields, generated
   adapters parse submitted form values, allow only the scanned fields, decode
   supported scalar fields, and pass the typed command input to the registry.
@@ -464,6 +698,11 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Realtime adapters can implement the dependency-free `PresentationFanout`
   interface and receive only presentation envelopes through
   `ExecuteCommandToPresentationFanout` or `SendPresentationEventsToFanout`.
+- Generated command adapters expose `RegisterContractEventSink`; a registered
+  `CommandEventSink` receives captured command events before the generated
+  adapter writes the JSON command result.
+- Generated contract packages expose `NewContractRegistry` and
+  `RunContractEventWorker` when executable contract registrations are present.
 - Queue/outbox adapters can implement the dependency-free `EventSource`
   interface and drive worker-role subscribers through `RunEventWorker`.
 - `internal/appgen` records command/query contract exposure metadata in backend
@@ -480,6 +719,5 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Page-owned generated query routes use JSON/query request negotiation so they
   do not replace normal static, SPA, or SSR page responses.
 - Cross-package contract input field discovery remains planned.
-- Database-backed outbox implementations, concrete broker adapters, retry
-  backoff policy, split web/worker/cron binaries, and concrete SSE/WebSocket
-  adapters are planned.
+- Retry backoff policy, split web/worker/cron binaries, and managed deployment
+  recipes remain planned.

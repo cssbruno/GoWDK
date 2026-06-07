@@ -74,6 +74,19 @@ type PresentationFanout interface {
 	SendPresentationEvents(context.Context, []EventEnvelope) error
 }
 
+// CommandEventSink receives events captured from a successful command. The
+// registry and role let sinks choose between in-process subscriber dispatch,
+// durable storage, broker publication, or browser-facing presentation delivery.
+type CommandEventSink interface {
+	HandleCommandEvents(context.Context, *Registry, Role, []EventEnvelope) error
+}
+
+type commandEventSinkFunc func(context.Context, *Registry, Role, []EventEnvelope) error
+
+func (sink commandEventSinkFunc) HandleCommandEvents(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+	return sink(ctx, registry, role, events)
+}
+
 // ErrorKind identifies contract registry or dispatch failures.
 type ErrorKind string
 
@@ -547,6 +560,90 @@ func SendPresentationEventsToFanout(ctx context.Context, fanout PresentationFano
 		return nil
 	}
 	return fanout.SendPresentationEvents(ctx, presentation)
+}
+
+// DispatchCommandEvents sends captured command events to sink. A nil sink uses
+// the default in-process subscriber dispatch path.
+func DispatchCommandEvents(ctx context.Context, sink CommandEventSink, registry *Registry, role Role, events []EventEnvelope) error {
+	if len(events) == 0 {
+		return nil
+	}
+	if sink == nil {
+		sink = InProcessCommandEventSink()
+	}
+	return sink.HandleCommandEvents(ctx, registry, role, events)
+}
+
+// InProcessCommandEventSink returns a sink that dispatches captured events
+// through the local registry with role filtering.
+func InProcessCommandEventSink() CommandEventSink {
+	return commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		if len(events) == 0 {
+			return nil
+		}
+		if registry == nil {
+			return Error{Kind: ErrNilHandler, Message: "contract event registry cannot be nil"}
+		}
+		return PublishEnvelopesForRole(ctx, registry, role, events)
+	})
+}
+
+// OutboxCommandEventSink returns a sink that stores captured events in outbox
+// without dispatching local subscribers.
+func OutboxCommandEventSink(outbox Outbox) CommandEventSink {
+	return commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		if len(events) == 0 {
+			return nil
+		}
+		if outbox == nil {
+			return Error{Kind: ErrNilHandler, Message: "command outbox cannot be nil"}
+		}
+		return outbox.StoreEvents(ctx, events)
+	})
+}
+
+// CompositeCommandEventSink returns a sink that sends the same captured event
+// batch to each sink in order. Nil sinks are ignored.
+func CompositeCommandEventSink(sinks ...CommandEventSink) CommandEventSink {
+	copied := make([]CommandEventSink, 0, len(sinks))
+	for _, sink := range sinks {
+		if sink != nil {
+			copied = append(copied, sink)
+		}
+	}
+	return commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		if len(events) == 0 {
+			return nil
+		}
+		for _, sink := range copied {
+			if err := sink.HandleCommandEvents(ctx, registry, role, events); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// BrokerCommandEventSink returns a sink that publishes captured events to
+// broker without dispatching local subscribers.
+func BrokerCommandEventSink(broker Broker) CommandEventSink {
+	return commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		if len(events) == 0 {
+			return nil
+		}
+		return PublishEventsToBroker(ctx, broker, events)
+	})
+}
+
+// PresentationFanoutCommandEventSink returns a sink that sends only
+// presentation events to fanout.
+func PresentationFanoutCommandEventSink(fanout PresentationFanout) CommandEventSink {
+	return commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		if len(events) == 0 {
+			return nil
+		}
+		return SendPresentationEventsToFanout(ctx, fanout, events)
+	})
 }
 
 func publishEnvelopesForRole(ctx context.Context, registry *Registry, events []EventEnvelope, role Role) error {

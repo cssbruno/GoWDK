@@ -329,17 +329,26 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
+		`context`,
 		`gowdkcontracts "github.com/cssbruno/gowdk/runtime/contracts"`,
 		`patients "example.com/app/contracts/patients"`,
+		`sync`,
 		`contractRegistry := gowdkcontracts.NewRegistry()`,
 		`patients.Register(contractRegistry)`,
 		`Kind: "command", Handler: commandPatientsCreatePatientPOSTPatients(contractRegistry)`,
 		`Kind: "query", Handler: queryPatientsGetPatientPageGETPatients(contractRegistry)`,
+		`var contractEventSink gowdkcontracts.CommandEventSink`,
+		`func RegisterContractEventSink(sink gowdkcontracts.CommandEventSink)`,
+		`contractEventSinkMu.Lock()`,
+		`contractEventSinkMu.RLock()`,
+		`func NewContractRegistry() *gowdkcontracts.Registry`,
+		`func RunContractEventWorker(ctx context.Context, source gowdkcontracts.EventSource) error`,
 		`func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler`,
 		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`values := gowdkform.FromURLValues(request.PostForm)`,
 		`input, err := decodeContractPatientsCreatePatientInput(values)`,
-		`gowdkcontracts.ExecuteCommandForRole[patients.CreatePatient, patients.CreatePatientResult]`,
+		`gowdkcontracts.CaptureCommandEventsForRole[patients.CreatePatient, patients.CreatePatientResult]`,
+		`gowdkcontracts.DispatchCommandEvents(ctx, currentContractEventSink(), contractRegistry, gowdkcontracts.RoleWeb, events)`,
 		`func decodeContractPatientsCreatePatientInput(values gowdkform.Values) (patients.CreatePatient, error)`,
 		`gowdkform.DecodeExpected(values, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "name"}, {Name: "tag"}, {Name: "age"}, {Name: "remember"}}})`,
 		`input.Name = field0`,
@@ -357,6 +366,9 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated contract app source to contain %q:\n%s", expected, source)
 		}
+	}
+	if strings.Contains(source, `gowdkcontracts.ExecuteCommandForRole[patients.CreatePatient, patients.CreatePatientResult]`) {
+		t.Fatalf("generated command contract must capture events instead of direct command execution:\n%s", source)
 	}
 }
 
@@ -515,6 +527,8 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 		`err := csrfValidator.Validate(request)`,
 		`gowdkresponse.WriteNoStoreError(response, http.StatusForbidden, "invalid csrf token")`,
 		`input := patients.CreatePatient{}`,
+		`gowdkcontracts.CaptureCommandEventsForRole[patients.CreatePatient, patients.CreatePatientResult]`,
+		`gowdkcontracts.DispatchCommandEvents(ctx, currentContractEventSink(), contractRegistry, gowdkcontracts.RoleWeb, events)`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated command contract CSRF source to contain %q:\n%s", expected, source)
@@ -532,7 +546,8 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 		`if err := request.ParseForm(); err != nil`,
 		`err := csrfValidator.Validate(request)`,
 		`input := patients.CreatePatient{}`,
-		`gowdkcontracts.ExecuteCommandForRole[patients.CreatePatient, patients.CreatePatientResult]`,
+		`gowdkcontracts.CaptureCommandEventsForRole[patients.CreatePatient, patients.CreatePatientResult]`,
+		`gowdkcontracts.DispatchCommandEvents(ctx, currentContractEventSink(), contractRegistry, gowdkcontracts.RoleWeb, events)`,
 	)
 }
 
@@ -613,7 +628,8 @@ func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
 		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`values := gowdkform.FromURLValues(request.PostForm)`,
 		`input, err := decodeContractPatientsCreatePatientInput(values)`,
-		`gowdkcontracts.ExecuteCommandForRole[patients.CreatePatient, patients.CreatePatientResult]`,
+		`gowdkcontracts.CaptureCommandEventsForRole[patients.CreatePatient, patients.CreatePatientResult]`,
+		`gowdkcontracts.DispatchCommandEvents(ctx, currentContractEventSink(), contractRegistry, gowdkcontracts.RoleWeb, events)`,
 	)
 	queryIndex := strings.Index(source, `ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "query"`)
 	if queryIndex < 0 {
@@ -2993,6 +3009,129 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 	}
 	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("expected no-store on query response, got %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinaryCommandContractUsesRegisteredEventSink(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	eventPath := filepath.Join(root, "events.log")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients page</main>")
+
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
+		Kind:        gwdkir.ContractCommand,
+		Name:        "patients.CreatePatient",
+		ImportAlias: "patients",
+		ImportPath:  "gowdk-generated-app/patients",
+		Type:        "CreatePatient",
+		Result:      "CreatePatientResult",
+		InputFields: []manifest.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
+		Method:      http.MethodPost,
+		Path:        "/patients",
+		Status:      gwdkir.ContractBindingBound,
+		Handler:     "HandleCreatePatient",
+		Register:    "Register",
+		OwnerKind:   gwdkir.SourcePage,
+		OwnerID:     "patients",
+	}}}
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{IR: program}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct {
+	Name string
+}
+
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+type PatientCreated struct {
+	ID string
+}
+
+func Register(registry *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	if err := contracts.EmitDomain(ctx, PatientCreated{ID: "patient-1"}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	return CreatePatientResult{ID: "patient-1"}, nil
+}
+`)
+	writeTestFile(t, filepath.Join(appDir, appPackageDirName, "contract_sink_register.go"), `package gowdkapp
+
+import (
+	"context"
+	"os"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type testContractEventSink struct{}
+
+func (testContractEventSink) HandleCommandEvents(ctx context.Context, registry *contracts.Registry, role contracts.Role, events []contracts.EventEnvelope) error {
+	path := os.Getenv("GOWDK_TEST_EVENT_SINK")
+	payload := ""
+	for _, event := range events {
+		payload += string(role) + "|" + string(event.Category) + "|" + event.Type + "\n"
+	}
+	return os.WriteFile(path, []byte(payload), 0600)
+}
+
+func init() {
+	RegisterContractEventSink(testContractEventSink{})
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr, "GOWDK_TEST_EVENT_SINK="+eventPath)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/patients", http.MethodPost, "name=Ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected command response status 200, got %d: %s", response.StatusCode, payload)
+	}
+	if !strings.Contains(string(payload), `"id":"patient-1"`) {
+		t.Fatalf("expected command response result, got %s", payload)
+	}
+	eventPayload, err := os.ReadFile(eventPath)
+	if err != nil {
+		t.Fatalf("read event sink output: %v", err)
+	}
+	for _, expected := range []string{"web|domain|", "patients.PatientCreated"} {
+		if !strings.Contains(string(eventPayload), expected) {
+			t.Fatalf("expected event sink output to contain %q, got %s", expected, eventPayload)
+		}
 	}
 }
 

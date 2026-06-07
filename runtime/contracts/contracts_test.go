@@ -396,6 +396,169 @@ func TestSendPresentationEventsToFanoutSkipsNonPresentationBatches(t *testing.T)
 	}
 }
 
+func TestDispatchCommandEventsUsesDefaultInProcessSink(t *testing.T) {
+	registry := NewRegistry()
+	var handled []string
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		handled = append(handled, event.ID)
+		return nil
+	}, RoleWeb))
+
+	err := DispatchCommandEvents(context.Background(), nil, registry, RoleWeb, []EventEnvelope{{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}})
+	if err != nil {
+		t.Fatalf("dispatch command events: %v", err)
+	}
+	if !reflect.DeepEqual(handled, []string{"patient-1"}) {
+		t.Fatalf("handled = %#v, want patient-1", handled)
+	}
+}
+
+func TestDispatchCommandEventsSkipsEmptyBatch(t *testing.T) {
+	called := false
+	sink := commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		called = true
+		return nil
+	})
+
+	if err := DispatchCommandEvents(context.Background(), sink, NewRegistry(), RoleWeb, nil); err != nil {
+		t.Fatalf("dispatch empty command events: %v", err)
+	}
+	if called {
+		t.Fatalf("sink was called for empty event batch")
+	}
+}
+
+func TestInProcessCommandEventSinkReturnsSubscriberError(t *testing.T) {
+	registry := NewRegistry()
+	subscriberErr := errors.New("audit failed")
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		return subscriberErr
+	}, RoleWeb))
+
+	err := DispatchCommandEvents(context.Background(), InProcessCommandEventSink(), registry, RoleWeb, []EventEnvelope{{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}})
+	if !errors.Is(err, subscriberErr) || !Is(err, ErrSubscriberFailed) {
+		t.Fatalf("dispatch command events error = %v, want subscriber_failed wrapping %v", err, subscriberErr)
+	}
+}
+
+func TestOutboxCommandEventSinkStoresEvents(t *testing.T) {
+	outbox := &recordingOutbox{}
+	events := []EventEnvelope{{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}}
+
+	if err := DispatchCommandEvents(context.Background(), OutboxCommandEventSink(outbox), NewRegistry(), RoleWeb, events); err != nil {
+		t.Fatalf("outbox command event sink: %v", err)
+	}
+	if !reflect.DeepEqual(outbox.events, events) {
+		t.Fatalf("outbox.events = %#v, want %#v", outbox.events, events)
+	}
+}
+
+func TestBrokerCommandEventSinkPublishesEvents(t *testing.T) {
+	broker := &recordingBroker{}
+	events := []EventEnvelope{{
+		Category: IntegrationEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}}
+
+	if err := DispatchCommandEvents(context.Background(), BrokerCommandEventSink(broker), NewRegistry(), RoleWeb, events); err != nil {
+		t.Fatalf("broker command event sink: %v", err)
+	}
+	if broker.calls != 1 {
+		t.Fatalf("broker.calls = %d, want 1", broker.calls)
+	}
+	if !reflect.DeepEqual(broker.events, events) {
+		t.Fatalf("broker.events = %#v, want %#v", broker.events, events)
+	}
+}
+
+func TestCommandEventSinkAdaptersSkipEmptyBatches(t *testing.T) {
+	ctx := context.Background()
+	registry := NewRegistry()
+	for name, sink := range map[string]CommandEventSink{
+		"in-process":   InProcessCommandEventSink(),
+		"outbox":       OutboxCommandEventSink(nil),
+		"broker":       BrokerCommandEventSink(nil),
+		"presentation": PresentationFanoutCommandEventSink(nil),
+	} {
+		if err := sink.HandleCommandEvents(ctx, registry, RoleWeb, nil); err != nil {
+			t.Fatalf("%s sink empty batch error = %v, want nil", name, err)
+		}
+	}
+}
+
+func TestCompositeCommandEventSinkRunsSinksInOrder(t *testing.T) {
+	var calls []string
+	first := commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		calls = append(calls, "first")
+		return nil
+	})
+	second := commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		calls = append(calls, "second")
+		return nil
+	})
+	events := []EventEnvelope{{Category: DomainEvent, Type: typeName[patientCreated](), Value: patientCreated{ID: "patient-1"}}}
+
+	err := DispatchCommandEvents(context.Background(), CompositeCommandEventSink(first, nil, second), NewRegistry(), RoleWeb, events)
+	if err != nil {
+		t.Fatalf("composite command event sink: %v", err)
+	}
+	if !slices.Equal(calls, []string{"first", "second"}) {
+		t.Fatalf("calls = %#v, want first then second", calls)
+	}
+}
+
+func TestCompositeCommandEventSinkStopsOnError(t *testing.T) {
+	sinkErr := errors.New("sink failed")
+	var secondCalled bool
+	first := commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		return sinkErr
+	})
+	second := commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		secondCalled = true
+		return nil
+	})
+	events := []EventEnvelope{{Category: DomainEvent, Type: typeName[patientCreated](), Value: patientCreated{ID: "patient-1"}}}
+
+	err := DispatchCommandEvents(context.Background(), CompositeCommandEventSink(first, second), NewRegistry(), RoleWeb, events)
+	if !errors.Is(err, sinkErr) {
+		t.Fatalf("composite command event sink error = %v, want %v", err, sinkErr)
+	}
+	if secondCalled {
+		t.Fatalf("second sink was called after first sink error")
+	}
+}
+
+func TestPresentationFanoutCommandEventSinkSendsOnlyPresentationEvents(t *testing.T) {
+	fanout := &recordingFanout{}
+
+	err := DispatchCommandEvents(context.Background(), PresentationFanoutCommandEventSink(fanout), NewRegistry(), RoleWeb, []EventEnvelope{
+		{Category: DomainEvent, Type: typeName[patientCreated](), Value: patientCreated{ID: "patient-1"}},
+		{Category: PresentationEvent, Type: typeName[patientCreatedNotice](), Value: patientCreatedNotice{ID: "patient-1"}},
+	})
+	if err != nil {
+		t.Fatalf("presentation fanout command event sink: %v", err)
+	}
+	if fanout.calls != 1 {
+		t.Fatalf("fanout.calls = %d, want 1", fanout.calls)
+	}
+	if len(fanout.events) != 1 || fanout.events[0].Category != PresentationEvent {
+		t.Fatalf("fanout.events = %#v, want one presentation event", fanout.events)
+	}
+}
+
 func TestPublishEnvelopeDispatchesCapturedEvent(t *testing.T) {
 	registry := NewRegistry()
 	var handled []string

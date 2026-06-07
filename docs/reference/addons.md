@@ -54,9 +54,13 @@ Addons: []gowdk.Addon{
 ```
 
 `addons/contracts` registers the contract-driven runtime feature. The current
-runtime registry lives in `runtime/contracts`; generated adapters, split
-runtime binaries, durable outbox implementations, concrete broker adapters, and
-concrete realtime adapters remain planned.
+runtime registry lives in `runtime/contracts`; generated adapters can use local
+in-process dispatch, file outbox, Redis Streams, NATS, SSE, or WebSocket
+adapters. The addon enables compiler integration and generated route plumbing;
+apps still choose their sink in Go with `RegisterContractEventSink`. See
+`docs/reference/contracts.md` for Redis, NATS, SSE, WebSocket, outbox, and
+composite sink examples. Split runtime binaries and retry backoff policy remain
+planned.
 
 External addons use normal Go imports:
 

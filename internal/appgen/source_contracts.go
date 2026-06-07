@@ -2,6 +2,7 @@ package appgen
 
 import (
 	"go/ast"
+	"go/token"
 	"sort"
 	"strings"
 
@@ -48,25 +49,12 @@ func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool,
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(exposure.Guards)...)
 	stmts = append(stmts, contractInputStmts(exposure, csrf)...)
-	execute := "ExecuteCommandForRole"
-	if exposure.Endpoint.Kind == BackendEndpointQuery {
-		execute = "ExecuteQueryForRole"
+	if exposure.Endpoint.Kind == BackendEndpointCommand {
+		stmts = append(stmts, executableCommandContractStmts(exposure)...)
+	} else {
+		stmts = append(stmts, executableQueryContractStmts(exposure)...)
 	}
 	stmts = append(stmts,
-		define([]ast.Expr{id("result"), id("err")}, call(&ast.IndexListExpr{
-			X: sel("gowdkcontracts", execute),
-			Indices: []ast.Expr{
-				sel(exposure.ImportAlias, exposure.Type),
-				sel(exposure.ImportAlias, exposure.Result),
-			},
-		}, id("ctx"), id("contractRegistry"), sel("gowdkcontracts", "RoleWeb"), id("input"))),
-		&ast.IfStmt{
-			Cond: notNil("err"),
-			Body: block(
-				writeNoStoreErrorExprStmt(call(sel("gowdkresponse", "HandlerStatus"), id("err"), sel("http", "StatusInternalServerError")), call(selExpr(id("err"), "Error"))),
-				returnBool(true),
-			),
-		},
 		define([]ast.Expr{id("httpResult"), id("err")}, call(sel("gowdkresponse", "JSONValue"), sel("http", "StatusOK"), id("result"))),
 		&ast.IfStmt{
 			Cond: notNil("err"),
@@ -79,6 +67,52 @@ func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool,
 		returnBool(true),
 	)
 	return stmts
+}
+
+func executableCommandContractStmts(exposure BackendContractExposure) []ast.Stmt {
+	return []ast.Stmt{
+		define([]ast.Expr{id("result"), id("events"), id("err")}, call(&ast.IndexListExpr{
+			X: sel("gowdkcontracts", "CaptureCommandEventsForRole"),
+			Indices: []ast.Expr{
+				sel(exposure.ImportAlias, exposure.Type),
+				sel(exposure.ImportAlias, exposure.Result),
+			},
+		}, id("ctx"), id("contractRegistry"), sel("gowdkcontracts", "RoleWeb"), id("input"))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(
+				writeNoStoreErrorExprStmt(call(sel("gowdkresponse", "HandlerStatus"), id("err"), sel("http", "StatusInternalServerError")), call(selExpr(id("err"), "Error"))),
+				returnBool(true),
+			),
+		},
+		&ast.IfStmt{
+			Init: define([]ast.Expr{id("dispatchErr")}, call(sel("gowdkcontracts", "DispatchCommandEvents"), id("ctx"), call(id("currentContractEventSink")), id("contractRegistry"), sel("gowdkcontracts", "RoleWeb"), id("events"))),
+			Cond: notNil("dispatchErr"),
+			Body: block(
+				writeNoStoreErrorExprStmt(call(sel("gowdkresponse", "HandlerStatus"), id("dispatchErr"), sel("http", "StatusInternalServerError")), call(selExpr(id("dispatchErr"), "Error"))),
+				returnBool(true),
+			),
+		},
+	}
+}
+
+func executableQueryContractStmts(exposure BackendContractExposure) []ast.Stmt {
+	return []ast.Stmt{
+		define([]ast.Expr{id("result"), id("err")}, call(&ast.IndexListExpr{
+			X: sel("gowdkcontracts", "ExecuteQueryForRole"),
+			Indices: []ast.Expr{
+				sel(exposure.ImportAlias, exposure.Type),
+				sel(exposure.ImportAlias, exposure.Result),
+			},
+		}, id("ctx"), id("contractRegistry"), sel("gowdkcontracts", "RoleWeb"), id("input"))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(
+				writeNoStoreErrorExprStmt(call(sel("gowdkresponse", "HandlerStatus"), id("err"), sel("http", "StatusInternalServerError")), call(selExpr(id("err"), "Error"))),
+				returnBool(true),
+			),
+		},
+	}
 }
 
 func contractInputStmts(exposure BackendContractExposure, csrf bool) []ast.Stmt {
@@ -207,6 +241,17 @@ func executableContractExposures(exposures []BackendContractExposure) []BackendC
 	return out
 }
 
+func executableCommandContractExposures(exposures []BackendContractExposure) []BackendContractExposure {
+	executable := executableContractExposures(exposures)
+	out := make([]BackendContractExposure, 0, len(executable))
+	for _, exposure := range executable {
+		if exposure.Endpoint.Kind == BackendEndpointCommand {
+			out = append(out, exposure)
+		}
+	}
+	return out
+}
+
 func contractExposureExecutable(exposure BackendContractExposure) bool {
 	return exposure.Status == gwdkir.ContractBindingBound &&
 		strings.TrimSpace(exposure.ImportAlias) != "" &&
@@ -232,6 +277,86 @@ func contractExposuresParseForm(exposures []BackendContractExposure) bool {
 		}
 	}
 	return false
+}
+
+func contractEventSinkDecls(exposures []BackendContractExposure) []ast.Decl {
+	if len(executableCommandContractExposures(exposures)) == 0 {
+		return nil
+	}
+	return []ast.Decl{
+		contractEventSinkMutexVarDecl(),
+		contractEventSinkVarDecl(),
+		registerContractEventSinkDecl(),
+		currentContractEventSinkDecl(),
+	}
+}
+
+func contractRegistryDecls(exposures []BackendContractExposure) []ast.Decl {
+	if len(executableContractExposures(exposures)) == 0 {
+		return nil
+	}
+	return []ast.Decl{
+		newContractRegistryDecl(exposures),
+		runContractEventWorkerDecl(),
+	}
+}
+
+func newContractRegistryDecl(exposures []BackendContractExposure) ast.Decl {
+	stmts := []ast.Stmt{
+		define([]ast.Expr{id("contractRegistry")}, call(sel("gowdkcontracts", "NewRegistry"))),
+	}
+	for _, registration := range contractRegisterCalls(exposures) {
+		stmts = append(stmts, exprStmt(call(sel(registration.Alias, registration.Function), id("contractRegistry"))))
+	}
+	stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{id("contractRegistry")}})
+	return funcDecl("NewContractRegistry", nil, []*ast.Field{
+		{Type: &ast.StarExpr{X: sel("gowdkcontracts", "Registry")}},
+	}, stmts)
+}
+
+func runContractEventWorkerDecl() ast.Decl {
+	return funcDecl("RunContractEventWorker", []*ast.Field{
+		{Names: []*ast.Ident{id("ctx")}, Type: sel("context", "Context")},
+		{Names: []*ast.Ident{id("source")}, Type: sel("gowdkcontracts", "EventSource")},
+	}, []*ast.Field{{Type: id("error")}}, []ast.Stmt{
+		&ast.ReturnStmt{Results: []ast.Expr{
+			call(sel("gowdkcontracts", "RunEventWorker"), id("ctx"), call(id("NewContractRegistry")), id("source")),
+		}},
+	})
+}
+
+func contractEventSinkMutexVarDecl() ast.Decl {
+	return &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+		Names: []*ast.Ident{id("contractEventSinkMu")},
+		Type:  sel("sync", "RWMutex"),
+	}}}
+}
+
+func contractEventSinkVarDecl() ast.Decl {
+	return &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+		Names: []*ast.Ident{id("contractEventSink")},
+		Type:  sel("gowdkcontracts", "CommandEventSink"),
+	}}}
+}
+
+func registerContractEventSinkDecl() ast.Decl {
+	return funcDecl("RegisterContractEventSink", []*ast.Field{
+		{Names: []*ast.Ident{id("sink")}, Type: sel("gowdkcontracts", "CommandEventSink")},
+	}, nil, []ast.Stmt{
+		exprStmt(call(selExpr(id("contractEventSinkMu"), "Lock"))),
+		&ast.DeferStmt{Call: call(selExpr(id("contractEventSinkMu"), "Unlock"))},
+		assign([]ast.Expr{id("contractEventSink")}, id("sink")),
+	})
+}
+
+func currentContractEventSinkDecl() ast.Decl {
+	return funcDecl("currentContractEventSink", nil, []*ast.Field{
+		{Type: sel("gowdkcontracts", "CommandEventSink")},
+	}, []ast.Stmt{
+		exprStmt(call(selExpr(id("contractEventSinkMu"), "RLock"))),
+		&ast.DeferStmt{Call: call(selExpr(id("contractEventSinkMu"), "RUnlock"))},
+		&ast.ReturnStmt{Results: []ast.Expr{id("contractEventSink")}},
+	})
 }
 
 type contractRegisterCall struct {

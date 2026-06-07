@@ -13,7 +13,7 @@ GOWDK ships Go web apps through GOWDK Compiler plus GOWDK Runtime.
 - Build-time pages by default.
 - Backend actions, APIs, fragments, commands, and queries at request time.
 - SSR only when a page opts in with `@render ssr`.
-- Direct `view { style {} }` blocks emit generated CSS assets.
+- Direct `style {}` blocks emit generated CSS assets.
 - Generated Go stays adapter glue; app logic stays in normal Go packages.
 - One-binary deploys are supported.
 
@@ -73,14 +73,14 @@ commands, queries, fragments, and SSR routes.
 paths { => { slug: "hello-gowdk" } }
 build { => { title: "GOWDK ships apps" } }
 
+style {
+  h1 { color: #0f766e; }
+}
+
 act Refresh POST "/blog/{slug}"
 
 view {
   <main>
-    style {
-      h1 { color: #0f766e; }
-    }
-
     <h1>{title}</h1>
     <form g:post={Refresh} g:target="#article-list" g:swap="innerHTML">
       <button>Refresh</button>

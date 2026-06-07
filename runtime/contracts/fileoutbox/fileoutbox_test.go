@@ -100,7 +100,8 @@ func TestReceiveEventBatchNackKeepsRecords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("receive batch: %v", err)
 	}
-	if err := batch.Nack(context.Background(), errors.New("subscriber failed")); err != nil {
+	nackErr := errors.New("subscriber failed")
+	if err := batch.Nack(context.Background(), nackErr); err != nil {
 		t.Fatalf("nack batch: %v", err)
 	}
 	records, err := store.Records(context.Background())
@@ -109,6 +110,9 @@ func TestReceiveEventBatchNackKeepsRecords(t *testing.T) {
 	}
 	if len(records) != 1 {
 		t.Fatalf("len(records) = %d, want 1", len(records))
+	}
+	if records[0].Attempts != 1 || records[0].LastError != nackErr.Error() || records[0].LastAttemptAt == nil {
+		t.Fatalf("unexpected retry metadata after nack: %#v", records[0])
 	}
 }
 

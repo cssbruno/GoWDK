@@ -25,15 +25,19 @@ type Decoder func(json.RawMessage) (any, error)
 
 // Record is one durable outbox row stored as a JSON Lines object.
 type Record struct {
-	ID       string                  `json:"id"`
-	StoredAt time.Time               `json:"storedAt"`
-	Category contracts.EventCategory `json:"category"`
-	Type     string                  `json:"type"`
-	Value    json.RawMessage         `json:"value"`
+	ID            string                  `json:"id"`
+	StoredAt      time.Time               `json:"storedAt"`
+	Category      contracts.EventCategory `json:"category"`
+	Type          string                  `json:"type"`
+	Value         json.RawMessage         `json:"value"`
+	Attempts      int                     `json:"attempts,omitempty"`
+	LastAttemptAt *time.Time              `json:"lastAttemptAt,omitempty"`
+	LastError     string                  `json:"lastError,omitempty"`
 }
 
 // Store appends event envelopes to a JSON Lines file and can replay them as an
-// EventSource. Ack removes delivered records; Nack leaves them for retry.
+// EventSource. Ack removes delivered records; Nack records retry metadata and
+// leaves records for later delivery.
 type Store struct {
 	mu        sync.Mutex
 	path      string
@@ -190,8 +194,13 @@ func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch
 			defer store.mu.Unlock()
 			return store.removeRecordsLocked(acked)
 		},
-		Nack: func(context.Context, error) error {
-			return nil
+		Nack: func(ctx context.Context, cause error) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			store.mu.Lock()
+			defer store.mu.Unlock()
+			return store.markRecordsFailedLocked(acked, cause)
 		},
 	}, nil
 }
@@ -273,7 +282,32 @@ func (store *Store) removeRecordsLocked(remove map[string]bool) error {
 			kept = append(kept, record)
 		}
 	}
-	if len(kept) == 0 {
+	return store.writeRecordsLocked(kept)
+}
+
+func (store *Store) markRecordsFailedLocked(mark map[string]bool, cause error) error {
+	records, err := store.readRecordsLocked()
+	if err != nil {
+		return err
+	}
+	now := store.now().UTC()
+	message := ""
+	if cause != nil {
+		message = cause.Error()
+	}
+	for index := range records {
+		if !mark[records[index].ID] {
+			continue
+		}
+		records[index].Attempts++
+		records[index].LastAttemptAt = &now
+		records[index].LastError = message
+	}
+	return store.writeRecordsLocked(records)
+}
+
+func (store *Store) writeRecordsLocked(records []Record) error {
+	if len(records) == 0 {
 		if err := os.Remove(store.path); err != nil && !os.IsNotExist(err) {
 			return err
 		}
@@ -288,7 +322,7 @@ func (store *Store) removeRecordsLocked(remove map[string]bool) error {
 	}
 	tempName := temp.Name()
 	encoder := json.NewEncoder(temp)
-	for _, record := range kept {
+	for _, record := range records {
 		if err := encoder.Encode(record); err != nil {
 			temp.Close()
 			os.Remove(tempName)

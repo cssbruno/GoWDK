@@ -425,7 +425,7 @@ wherever the contract is HTTP-exposed.
 - [x] Define transaction/outbox ordering rules for domain events.
 - [x] Add a dependency-free file outbox adapter for local durable JSON Lines
       storage and worker replay.
-- [ ] Define retry and idempotency guidance for subscribers.
+- [x] Define retry and idempotency guidance for subscribers.
 - [x] Add docs for when in-process dispatch is enough.
 - [x] Add docs for when outbox/queue/broker support is needed.
 - [x] Keep all external adapters outside core dependencies.

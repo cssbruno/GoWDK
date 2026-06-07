@@ -170,11 +170,18 @@ err = contracts.RunEventWorker(ctx, r, outbox)
 The file outbox implements both `contracts.Outbox` and
 `contracts.EventSource`. It appends captured envelopes as JSON Lines records,
 decodes records through explicitly registered decoders, removes records only
-after worker `Ack`, and keeps records after `Nack` for retry. It is useful for
-local development, small single-host deployments, and tests. Applications that
-need database transactions, cross-process locking, idempotency, retry backoff,
-dead-letter queues, or broker delivery should use a database-backed or
+after worker `Ack`, and keeps records after `Nack` for retry. Nack records the
+attempt count, last attempt time, and last error in the durable record. It is
+useful for local development, small single-host deployments, and tests.
+Applications that need database transactions, cross-process locking, retry
+backoff, dead-letter queues, or broker delivery should use a database-backed or
 broker-backed adapter.
+
+Subscriber handlers must be idempotent for any durable delivery adapter. A
+worker can crash after a subscriber side effect but before `Ack`, or an adapter
+can retry after `Nack`. Use a stable domain key, event id, outbox record id, or
+application-level dedupe table to make repeated deliveries safe. GOWDK Kit does
+not hide retries behind generated JavaScript or browser state.
 
 External broker adapters can implement the dependency-free `Broker` interface:
 
@@ -377,7 +384,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Captured event envelopes can be replayed later with
   `PublishEnvelope`, `PublishEnvelopes`, and role-filtered variants.
 - `runtime/contracts/fileoutbox` provides a dependency-free JSON Lines adapter
-  that implements `contracts.Outbox` and `contracts.EventSource`.
+  that implements `contracts.Outbox` and `contracts.EventSource`, including
+  nack retry metadata.
 - External broker adapters can implement the dependency-free `Broker`
   interface and receive captured envelopes through `ExecuteCommandToBroker` or
   `PublishEventsToBroker`.
@@ -394,5 +402,6 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Page-owned query contract adapter IR includes `GET` plus the page route.
 - Full package graph validation and imported handler validation are planned.
 - Cross-package contract input field discovery remains planned.
-- Database-backed outbox implementations, concrete broker adapters, split
-  web/worker/cron binaries, and concrete SSE/WebSocket adapters are planned.
+- Database-backed outbox implementations, concrete broker adapters, retry
+  backoff/dead-letter policies, split web/worker/cron binaries, and concrete
+  SSE/WebSocket adapters are planned.

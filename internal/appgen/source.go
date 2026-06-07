@@ -197,7 +197,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	decls := actionHandlerDecls(direct.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
 	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(direct.APIs), generatedUsesRateLimit(direct)))
 	decls = append(decls, fragmentFuncDecl(direct.Fragments, generatedUsesRateLimit(direct)))
-	decls = append(decls, contractHandlerDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(direct))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
 	switch {
 	case adapter.HasRegistrations():
@@ -222,7 +222,7 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	decls := actionHandlerDecls(options.Actions, csrfEnabled(options), generatedUsesRateLimit(options))
 	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(options.APIs), generatedUsesRateLimit(options)))
 	decls = append(decls, fragmentFuncDecl(options.Fragments, generatedUsesRateLimit(options)))
-	decls = append(decls, contractHandlerDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(options))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
 	if adapter.HasRegistrations() {
 		decls = append(decls, newBackendRouterDecl(adapter))
@@ -446,7 +446,7 @@ func importSpecSource(imports map[string]string) string {
 }
 
 func csrfEnabled(options Options) bool {
-	return options.Config.Build.CSRF.Enabled && len(options.Actions) > 0
+	return options.Config.Build.CSRF.Enabled && (len(options.Actions) > 0 || contractExposuresParseForm(executableContractExposures(backendAdapterIR(options).ContractExposures)))
 }
 
 func csrfHelperSource(options Options) string {

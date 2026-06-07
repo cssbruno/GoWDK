@@ -460,6 +460,70 @@ func TestGenerateWiresCSRFWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), `<main><form method="post" action="/patients" g:command="patients.CreatePatient"></form></main>`)
+
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
+		Kind:        gwdkir.ContractCommand,
+		Name:        "patients.CreatePatient",
+		ImportAlias: "patients",
+		ImportPath:  "example.com/app/contracts/patients",
+		Type:        "CreatePatient",
+		Result:      "CreatePatientResult",
+		Method:      "POST",
+		Path:        "/patients",
+		Status:      gwdkir.ContractBindingBound,
+		Handler:     "HandleCreatePatient",
+		Register:    "Register",
+		OwnerKind:   gwdkir.SourcePage,
+		OwnerID:     "patients",
+	}}}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
+			Enabled:    true,
+			SecretEnv:  "GOWDK_TEST_CSRF_SECRET",
+			CookieName: "csrf",
+			FieldName:  "_csrf",
+			HeaderName: "X-CSRF",
+			Insecure:   true,
+		}}},
+		IR: program,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
+		`CSRF: csrfTokenSource,`,
+		`csrfTokenSource, err := newCSRF()`,
+		`csrfValidator = csrfTokenSource`,
+		`var csrfValidator gowdkactions.CSRFValidator`,
+		`func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler`,
+		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
+		`if err := request.ParseForm(); err != nil`,
+		`if csrfValidator != nil {`,
+		`err := csrfValidator.Validate(request)`,
+		`gowdkresponse.WriteNoStoreError(response, http.StatusForbidden, "invalid csrf token")`,
+		`input := patients.CreatePatient{}`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated command contract CSRF source to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, `Kind: "action", Handler: action`) {
+		t.Fatalf("did not expect a classic action route for contract-only CSRF app:\n%s", source)
+	}
+}
+
 func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

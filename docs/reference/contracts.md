@@ -244,14 +244,16 @@ Current behavior:
 - When the scanner can see the exported command input struct fields, generated
   adapters parse submitted form values, allow only the scanned fields, decode
   supported scalar fields, and pass the typed command input to the registry.
+- When generated CSRF is enabled, command contract forms receive the same
+  hidden token injection as POST action forms, and generated command adapters
+  validate the submitted token before dispatch.
 - `gowdk check` and CLI `gowdk build` fail when a command reference is missing
   or linked to an invalid Go handler signature.
 - Requires a package-qualified Go reference such as `patients.CreatePatient`.
 - Must not be combined with `g:post`.
 
-CSRF wiring for contract command forms is still planned. If the scanner cannot
-see the command input fields yet, generated command adapters construct a
-zero-value command input before dispatch.
+If the scanner cannot see the command input fields yet, generated command
+adapters construct a zero-value command input before dispatch.
 
 ## `.gwdk` Query References
 

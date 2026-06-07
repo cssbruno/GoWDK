@@ -60,6 +60,5 @@ Keep performance checks coarse and repeatable:
 - SSR routes respond under a small local threshold after warmup.
 - Generated JavaScript stays bounded to islands/partial runtime behavior.
 
-Record budgets in the app repository. GOWDK core should not add mandatory
-browser-performance dependencies to scaffolded apps.
-
+Record budgets in the app repository. The repository core should not add
+mandatory browser-performance dependencies to scaffolded apps.

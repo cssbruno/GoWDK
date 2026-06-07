@@ -29,6 +29,11 @@ app/runtime layer
 Go-first full web app
 ```
 
+Use `GOWDK` for the language/compiler layer and `GOWDK Kit` for the app/runtime
+layer. Use lowercase `gowdk` only for the CLI, Go package/module spelling, and
+generated prefixes. Avoid bare `core` in plans; prefer `compiler core`, `Kit
+core`, or `repository core`.
+
 For package-first backend work, use `features/deep-go-package-integration.md`
 and `plans/deep-go-package-integration.md` as the language source of truth.
 Use `features/go-native-adapter-boundary.md` and

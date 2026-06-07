@@ -162,7 +162,7 @@ These are the supported `g:` directives in `view {}` markup:
 
 All other `g:` directives are unsupported today. In particular, there is no
 `g:html`, `g:head`, `g:window`, `g:body`, `g:document`, `g:transition`,
-`g:animate`, or `g:action` directive in core.
+`g:animate`, or `g:action` directive in the compiler core.
 
 Not implemented yet:
 

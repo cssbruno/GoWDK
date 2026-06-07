@@ -61,7 +61,8 @@ Compiler rules:
 ## Alternatives Considered
 
 - Make SSR the default framework identity. Rejected because it conflicts with portable compile-first output and one-binary app serving.
-- Make build output an addon. Rejected because build-time rendering is the core product behavior.
+- Make build output an addon. Rejected because build-time rendering is the
+  compiler core product behavior.
 - Treat partial updates as SSR. Rejected because server fragments are smaller and do not require full-page request-time rendering.
 
 ## Follow-Up
@@ -69,5 +70,6 @@ Compiler rules:
 - Implement `.gwdk` discovery and manifest generation.
 - Implement parser support for `paths`, `build`, `load`, `act`, `api`, and `view`.
 - Implement build-output/prerender codegen.
-- Implement CSS/plugin extension points. Tailwind should remain an optional addon/plugin, not initial core.
+- Implement CSS/plugin extension points. Tailwind should remain an optional
+  addon/plugin, not part of the initial compiler core or Kit core.
 - Implement one-binary serving before SSR addon internals.

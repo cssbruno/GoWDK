@@ -14,6 +14,17 @@ behavior.
 GOWDK owns generated structure. GOWDK Kit owns runtime contracts. Application
 Go owns behavior.
 
+## Names
+
+Use `GOWDK` for the `.gwdk` language/compiler layer. Use `GOWDK Kit` for the
+runtime/app layer that serves generated output and runs request-time behavior.
+Use `gowdk` only for the CLI, Go package name, module path segment, and file or
+asset prefixes.
+
+The split is intentionally similar to Svelte versus SvelteKit at the naming
+level: language/compiler first, app/runtime kit second. It does not mean GOWDK
+copies Svelte's JavaScript runtime model.
+
 ## Pages
 
 Pages default to build-time output. Use `@render ssr` only when a page needs

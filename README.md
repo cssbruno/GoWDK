@@ -60,8 +60,9 @@ actions and APIs, plus admin/form scaffolding from explicit SQL contracts.
 
 ## Application Scaffolding
 
-GOWDK core is the compiler plus GOWDK Kit, not an app template. Login, admin,
-billing, CRUD, uploads, email, and background jobs are application code.
+This repository ships the GOWDK compiler plus GOWDK Kit. It is not an app
+template. Login, admin, billing, CRUD, uploads, email, and background jobs are
+application code.
 
 Examples or optional generators may cover those patterns later, but the output
 should be editable Go and `.gwdk` files, not hidden framework behavior.

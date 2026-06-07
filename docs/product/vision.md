@@ -26,6 +26,18 @@ This mirrors the Svelte/SvelteKit product split at the naming level:
 compiler/language first, app/runtime kit second. It does not rename Go module
 paths or public runtime packages yet.
 
+Use the names this way:
+
+| Name | Product Meaning |
+| --- | --- |
+| GOWDK | Language/compiler layer. It owns `.gwdk`, AST/analyzer/IR, generated Go adapter source, build output, manifests, route metadata, asset metadata, diagnostics, formatting, and LSP. |
+| GOWDK Kit | Runtime/app layer. It owns `runtime/`, `addons/`, generated `net/http` serving, backend routing, form decoding, responses, actions, APIs, fragments, SSR hooks, embedded assets, contract runtime, and one-binary or split-binary wiring. |
+| `gowdk` | CLI and Go package/module spelling. The CLI drives both layers. |
+
+Avoid treating `GOWDK World`, `GOWDK Core`, or `GOWDK Framework` as separate
+public names. In docs, use `compiler core`, `Kit core`, or `repository core`
+when `core` is unavoidable.
+
 ## Product Shape
 
 GOWDK grows as two coordinated parts:
@@ -44,7 +56,8 @@ GOWDK owns package-peer `.gwdk` files, pages, layouts, components, build-time
 output, CSS, islands, manifests, diagnostics, endpoint metadata, and generated
 adapter source. GOWDK Kit owns serving, routing, request context helpers, form
 decoding, response envelopes, actions, APIs, CSRF, partial fragments, SSR
-contracts, embedded assets, and one-binary or split-binary wiring.
+contracts, embedded assets, contract runtime, and one-binary or split-binary
+wiring.
 
 User application behavior stays in normal Go packages. GOWDK should improve Go
 web authoring through `.gwdk` compilation, GOWDK Kit contracts, and generated

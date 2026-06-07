@@ -20,6 +20,15 @@ assets, manifests, endpoint metadata, generated adapter Go, and deployable
 artifacts. GOWDK Kit is the app/runtime layer that serves those artifacts and
 runs request-time behavior.
 
+The public naming rule is deliberately narrow:
+
+- `GOWDK` means compiler/language layer.
+- `GOWDK Kit` means app/runtime layer.
+- `gowdk` means CLI, Go package/module spelling, and generated file prefixes.
+- `addon` means optional feature-registration or integration package inside
+  the GOWDK Kit/compiler ecosystem, not a separate product.
+- Avoid bare `core`; use `compiler core`, `Kit core`, or `repository core`.
+
 GOWDK has three execution lanes:
 
 - Build-time page lane: full pages default to static SPA/prerender output.
@@ -51,6 +60,10 @@ allowed.
 GOWDK Kit owns `http.Handler` serving, embedded assets, backend
 routing, request context helpers, form decoding primitives, response envelopes,
 CSRF, partial fragments, SSR contracts, and one-binary or split-binary wiring.
+
+Addons are package-level extension points around those layers. They can enable
+or extend GOWDK compiler behavior or GOWDK Kit runtime behavior, but they must
+not become a third app framework model with different ownership rules.
 
 Generated JavaScript may enhance navigation, forms, fragments, and local
 component state, but it must not become the source of truth for routes, auth,
@@ -150,7 +163,7 @@ are stable.
 | 16 | Components and client language | Components gain real `g:if` mount/unmount, richer expression props, child-to-parent events, bindable state, typed exports, named/scoped slots, scoped CSS/assets, a documented component contract, a proper reactive dependency graph, predictable batching, and cycle diagnostics. |
 | 17 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Explicit WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
 | 18 | CSS, assets, and packaging | Full plugin loading, page-aware CSS processor selection, component AST/IR scope and hash metadata, Tailwind/CSS deployment docs, asset hashing, and binary cache policy are implemented. Module selection remains artifact packaging, not runtime module orchestration. |
-| 19 | Framework adapters | Core remains `net/http`. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
+| 19 | Framework adapters | GOWDK Kit remains `net/http` first. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
 | 20 | Dev, playground, and tooling | `gowdk dev` can run generated app/runtime-kit flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, browser playground, browser-compiled GOWDK, richer LSP completions, and editor navigation are added. |
 | 21 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
 
@@ -219,7 +232,7 @@ contract work that later features depend on.
 - Production WASM island ABI.
 - Bounded `client {}` remains the reactivity model unless a later ADR replaces
   it with an equally Go-owned contract.
-- Full-page hydration remains out of core; browser behavior should stay static
+- Full-page hydration remains out of the repository core; browser behavior should stay static
   output, progressive enhancement, server fragments, and explicit islands.
 
 ### Platform Tooling Release
@@ -233,15 +246,17 @@ contract work that later features depend on.
 - P2 ecosystem polish is owned by optional docs, examples, website pages, or
   CLI generators: addon discovery, playground onboarding, performance
   profiling, migration guides, image guidance, and PWA/offline guidance must
-  not add mandatory npm, framework, or platform dependencies to core.
+  not add mandatory npm, framework, or platform dependencies to the repository
+  core.
 
-## Non-Goals For Core
+## Non-Goals For Repository Core
 
 - Making full-page request rendering the default.
 - Making browser JavaScript the app contract.
 - Generating user domain logic, services, stores, auth, storage, or business
   validation.
-- Requiring npm, Tailwind, Gin, Echo, Fiber, or another framework in core.
+- Requiring npm, Tailwind, Gin, Echo, Fiber, or another framework in the
+  repository core.
 - Making WASM islands the default component runtime.
 - Treating folder placement as route truth.
 - Auto-discovering backend endpoints from function names.

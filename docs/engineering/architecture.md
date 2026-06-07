@@ -46,9 +46,22 @@ adapter wiring, app-wide middleware policy, and production operations guidance.
 
 ## System Context
 
-GOWDK users write portable `.gwdk` pages and components. In the target architecture, the compiler discovers those files, builds a manifest, validates render rules, emits assets and Go handlers, and packages output for hosted files or one-binary deploy.
+GOWDK users write portable `.gwdk` pages and components. GOWDK is the
+language/compiler layer: it discovers those files, builds compiler metadata,
+validates render rules, emits assets and generated Go adapters, and packages
+output for hosted files or app binaries. GOWDK Kit is the app/runtime layer: it
+serves generated output, runs request-time handlers, and owns the public
+runtime/addon packages used by generated adapters.
 
-The target core output can include spa pages, components, typed actions, API handlers, server fragment handlers, embedded assets, and a Go binary. CSS tooling, including Tailwind, belongs in optional addons or plugins rather than the initial core. SSR is enabled only when `ssr.Addon()` is present and a page opts into request-time rendering.
+The target GOWDK plus GOWDK Kit output can include spa pages, components, typed
+actions, API handlers, server fragment handlers, embedded assets, and a Go
+binary. CSS tooling, including Tailwind, belongs in optional addons or plugins
+rather than the compiler core or Kit core. SSR is enabled only when
+`ssr.Addon()` is present and a page opts into request-time rendering.
+
+When this document uses `Compiler`, it means GOWDK internals under `internal/`.
+When it uses `Runtime` or `Addon`, it means implementation packages that belong
+to GOWDK Kit. Avoid reading those owner labels as separate product names.
 
 ## Compiler Lanes
 

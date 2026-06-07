@@ -65,8 +65,8 @@ authorization, persistence, and transaction success.
 
 - Primary users: Go developers building small apps that can later split into
   larger deployments.
-- Roles or permissions: no new permission model in core; user Go still owns
-  auth, guards, roles, tenancy, and policy.
+- Roles or permissions: no new permission model in the repository core; user Go
+  still owns auth, guards, roles, tenancy, and policy.
 - Data visibility rules: contract reports may show symbols, paths, binaries,
   and binding status, but must not expose secrets, request bodies, or private
   runtime data.

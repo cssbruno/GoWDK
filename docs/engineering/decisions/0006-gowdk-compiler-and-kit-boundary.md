@@ -44,6 +44,21 @@ GOWDK Kit:
 The repository and Go module can continue to ship both layers together for now.
 This ADR is a product-language boundary, not an import-path rename.
 
+The naming contract is:
+
+| Name | Meaning |
+| --- | --- |
+| GOWDK | The `.gwdk` language/compiler layer: parser, AST, analyzer, IR, diagnostics, generated adapter source, build output, manifests, route metadata, asset metadata, formatter, and LSP. |
+| GOWDK Kit | The app/runtime layer: `runtime/`, `addons/`, generated `net/http` app serving, routing, request context, form decoding, response envelopes, actions, APIs, fragments, SSR hooks, embedded assets, contract runtime, and one-binary or split-binary wiring. |
+| `gowdk` | The CLI binary, Go package name, module path segment, generated prefixes, and config filename prefix. |
+| GOWDK app | A user application built through GOWDK and served through GOWDK Kit. |
+| addon | Optional feature-registration or integration package. Addons extend GOWDK Kit or compiler behavior; they are not a third product layer. |
+
+Avoid bare `core` in product docs because it hides the layer boundary. Use
+`compiler core`, `Kit core`, or `repository core` when the distinction matters.
+Avoid creating public names such as `GOWDK World`, `GOWDK Core`, or `GOWDK
+Framework` unless a later ADR accepts that rename.
+
 The compiler has two input lanes:
 
 ```text

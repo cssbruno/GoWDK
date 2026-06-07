@@ -27,6 +27,18 @@ app/runtime layer
 Go-first full web app
 ```
 
+Naming rules:
+
+- `GOWDK` means the `.gwdk` language/compiler layer.
+- `GOWDK Kit` means the app/runtime layer.
+- `gowdk` means CLI, package/module spelling, config prefixes, and generated
+  asset/runtime prefixes.
+- `GOWDK app` means user-owned app output produced by the compiler and served
+  through GOWDK Kit.
+- `addon` means optional feature-registration or integration package, not a
+  third product layer.
+- Avoid bare `core`; write `compiler core`, `Kit core`, or `repository core`.
+
 Compiler lanes:
 
 ```text
@@ -181,6 +193,8 @@ api Session GET "/api/session"
 ### Reorganization
 
 - [x] Add ADR for compiler/runtime-kit boundary.
+- [x] Define stable product-layer names for GOWDK, GOWDK Kit, `gowdk`, GOWDK
+      app, and addons.
 - [x] Add this roadmap as the planning index.
 - [x] Scope the adapter-boundary plan under package integration.
 - [x] Remove superseded and absorbed first-slice `.llm` feature/plan files.

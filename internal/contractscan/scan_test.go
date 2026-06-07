@@ -277,6 +277,9 @@ func Register(r *contracts.Registry) {
 	if command.Handler != "patienthandlers.HandleCreatePatient" || !strings.Contains(command.Message, "second parameter must be contractdefs.CreatePatient") {
 		t.Fatalf("unexpected imported command diagnostic: %#v in %#v", command, report.Diagnostics)
 	}
+	if command.TypeImportPath != "example.com/app/contractdefs" {
+		t.Fatalf("command TypeImportPath = %q, want example.com/app/contractdefs", command.TypeImportPath)
+	}
 	if event.Handler != "patienthandlers.SendWelcomeEmail" || !strings.Contains(event.Message, "must return error") {
 		t.Fatalf("unexpected imported event diagnostic: %#v in %#v", event, report.Diagnostics)
 	}
@@ -531,8 +534,10 @@ func TestLinkReferencesMarksBoundMissingAndInvalidContractRefs(t *testing.T) {
 func TestLinkReferencesUsesCapturedTypeForImportAliases(t *testing.T) {
 	report := Report{
 		Contracts: []Contract{
-			{Kind: runtimecontracts.Command, Package: "patients", Type: "CreatePatient", Result: "CreatePatientResult", Handler: "HandleCreatePatient"},
-			{Kind: runtimecontracts.Query, Package: "patients", Type: "GetPatientPage", Result: "PatientPageData", Handler: "LoadPatientPage"},
+			{Kind: runtimecontracts.Command, Package: "handlers", Type: "patientdefs.CreatePatient", TypeImportPath: "example.com/app/contracts/patients", Result: "patientdefs.CreatePatientResult", ResultImportPath: "example.com/app/contracts/patients", Handler: "HandleCreatePatient"},
+			{Kind: runtimecontracts.Command, Package: "handlers", Type: "billingdefs.CreatePatient", TypeImportPath: "example.com/app/contracts/billing", Result: "billingdefs.CreatePatientResult", ResultImportPath: "example.com/app/contracts/billing", Handler: "HandleBillingCreatePatient"},
+			{Kind: runtimecontracts.Query, Package: "handlers", Type: "patientdefs.GetPatientPage", TypeImportPath: "example.com/app/contracts/patients", Result: "patientdefs.PatientPageData", ResultImportPath: "example.com/app/contracts/patients", Handler: "LoadPatientPage"},
+			{Kind: runtimecontracts.Query, Package: "handlers", Type: "billingdefs.GetPatientPage", TypeImportPath: "example.com/app/contracts/billing", Result: "billingdefs.BillingPatientPageData", ResultImportPath: "example.com/app/contracts/billing", Handler: "LoadBillingPatientPage"},
 		},
 	}
 	linked := LinkReferences([]gwdkir.ContractReference{
@@ -543,10 +548,10 @@ func TestLinkReferencesUsesCapturedTypeForImportAliases(t *testing.T) {
 	if len(linked) != 2 {
 		t.Fatalf("expected two linked refs, got %#v", linked)
 	}
-	if linked[0].Status != gwdkir.ContractBindingBound || linked[0].Handler != "HandleCreatePatient" || linked[0].Result != "CreatePatientResult" {
+	if linked[0].Status != gwdkir.ContractBindingBound || linked[0].Handler != "HandleCreatePatient" || linked[0].Result != "patientdefs.CreatePatientResult" {
 		t.Fatalf("expected alias command to bind by captured type, got %#v", linked[0])
 	}
-	if linked[1].Status != gwdkir.ContractBindingBound || linked[1].Handler != "LoadPatientPage" || linked[1].Result != "PatientPageData" {
+	if linked[1].Status != gwdkir.ContractBindingBound || linked[1].Handler != "LoadPatientPage" || linked[1].Result != "patientdefs.PatientPageData" {
 		t.Fatalf("expected alias query to bind by captured type, got %#v", linked[1])
 	}
 }

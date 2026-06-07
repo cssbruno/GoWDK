@@ -397,9 +397,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   `runtime/contracts` when the `.gwdk` reference has a routable method/path,
   an import path, a local contract type, a result type, and a scanned package
   registration function.
-- `.gwdk` command/query reference linking is first-slice only: it matches the
-  full reference name, or the captured local contract type when the `.gwdk`
-  import alias differs from the Go package name.
+- `.gwdk` command/query reference linking matches the full reference name, the
+  captured local contract type, and the scanned Go contract type import path
+  when the `.gwdk` import alias differs from the Go package name.
 - Form-local `g:command` references and element-local `g:query` references
   include exact source line and column in IR and build reports.
 - Missing, invalid, or non-web-only command/query references produce

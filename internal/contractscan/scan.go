@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	pathpkg "path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -30,33 +31,36 @@ const RuntimeImportPath = "github.com/cssbruno/gowdk/runtime/contracts"
 
 // Contract describes one discovered registration call.
 type Contract struct {
-	Kind          runtimecontracts.Kind          `json:"kind"`
-	EventCategory runtimecontracts.EventCategory `json:"eventCategory,omitempty"`
-	Package       string                         `json:"package,omitempty"`
-	Type          string                         `json:"type"`
-	Result        string                         `json:"result,omitempty"`
-	Handler       string                         `json:"handler,omitempty"`
-	Register      string                         `json:"register,omitempty"`
-	InputFields   []manifest.BackendInputField   `json:"inputFields,omitempty"`
-	Emits         []EventRef                     `json:"emits,omitempty"`
-	Roles         []string                       `json:"roles,omitempty"`
-	Source        string                         `json:"source"`
-	Line          int                            `json:"line"`
-	Column        int                            `json:"column"`
+	Kind             runtimecontracts.Kind          `json:"kind"`
+	EventCategory    runtimecontracts.EventCategory `json:"eventCategory,omitempty"`
+	Package          string                         `json:"package,omitempty"`
+	Type             string                         `json:"type"`
+	TypeImportPath   string                         `json:"typeImportPath,omitempty"`
+	Result           string                         `json:"result,omitempty"`
+	ResultImportPath string                         `json:"resultImportPath,omitempty"`
+	Handler          string                         `json:"handler,omitempty"`
+	Register         string                         `json:"register,omitempty"`
+	InputFields      []manifest.BackendInputField   `json:"inputFields,omitempty"`
+	Emits            []EventRef                     `json:"emits,omitempty"`
+	Roles            []string                       `json:"roles,omitempty"`
+	Source           string                         `json:"source"`
+	Line             int                            `json:"line"`
+	Column           int                            `json:"column"`
 }
 
 // Diagnostic describes a validation issue found while scanning contracts.
 type Diagnostic struct {
-	Severity string                `json:"severity"`
-	Code     string                `json:"code,omitempty"`
-	Kind     runtimecontracts.Kind `json:"kind,omitempty"`
-	Package  string                `json:"package,omitempty"`
-	Type     string                `json:"type,omitempty"`
-	Handler  string                `json:"handler,omitempty"`
-	Source   string                `json:"source"`
-	Line     int                   `json:"line"`
-	Column   int                   `json:"column"`
-	Message  string                `json:"message"`
+	Severity       string                `json:"severity"`
+	Code           string                `json:"code,omitempty"`
+	Kind           runtimecontracts.Kind `json:"kind,omitempty"`
+	Package        string                `json:"package,omitempty"`
+	Type           string                `json:"type,omitempty"`
+	TypeImportPath string                `json:"typeImportPath,omitempty"`
+	Handler        string                `json:"handler,omitempty"`
+	Source         string                `json:"source"`
+	Line           int                   `json:"line"`
+	Column         int                   `json:"column"`
+	Message        string                `json:"message"`
 }
 
 // EventRef describes one event a command handler can emit.
@@ -279,6 +283,9 @@ func contractReferenceLookupKeys(ref gwdkir.ContractReference) []string {
 	}
 	add(ref.Name)
 	if ref.Type != "" {
+		if ref.ImportPath != "" {
+			add(contractImportTypeKey(ref.ImportPath, ref.Type))
+		}
 		add(ref.Type)
 		if ref.ImportAlias != "" {
 			add(ref.ImportAlias + "." + ref.Type)
@@ -300,6 +307,9 @@ func irContractKind(kind runtimecontracts.Kind) (gwdkir.ContractKind, bool) {
 
 func contractReferenceKeys(contract Contract) []string {
 	keys := []string{contract.Type}
+	if contract.TypeImportPath != "" {
+		keys = append(keys, contractImportTypeKey(contract.TypeImportPath, localContractName(contract.Type)))
+	}
 	if contract.Package != "" && contract.Type != "" && !strings.Contains(contract.Type, ".") {
 		keys = append(keys, contract.Package+"."+contract.Type)
 	}
@@ -308,10 +318,17 @@ func contractReferenceKeys(contract Contract) []string {
 
 func diagnosticReferenceKeys(diagnostic Diagnostic) []string {
 	keys := []string{diagnostic.Type}
+	if diagnostic.TypeImportPath != "" {
+		keys = append(keys, contractImportTypeKey(diagnostic.TypeImportPath, localContractName(diagnostic.Type)))
+	}
 	if diagnostic.Package != "" && diagnostic.Type != "" && !strings.Contains(diagnostic.Type, ".") {
 		keys = append(keys, diagnostic.Package+"."+diagnostic.Type)
 	}
 	return keys
+}
+
+func contractImportTypeKey(importPath string, typeName string) string {
+	return strings.TrimSpace(importPath) + "\x00" + strings.TrimSpace(localContractName(typeName))
 }
 
 type fileScan struct {
@@ -336,6 +353,7 @@ type parsedGoFile struct {
 	Package string
 	File    *ast.File
 	Aliases map[string]bool
+	Imports map[string]string
 }
 
 func parseScanPackages(fset *token.FileSet, root string, files []string) ([][]parsedGoFile, error) {
@@ -380,6 +398,7 @@ func parseScanFile(fset *token.FileSet, root string, path string) (parsedGoFile,
 		Package: file.Name.Name,
 		File:    file,
 		Aliases: contractsImportAliases(file),
+		Imports: goImportAliases(file),
 	}, nil
 }
 
@@ -402,7 +421,7 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile, inspectionCache *pac
 		if len(file.Aliases) == 0 {
 			continue
 		}
-		discovered := scanContractRegistrations(fset, file.File, file.Aliases, file.Rel)
+		discovered := scanContractRegistrations(fset, file.File, file.Aliases, file.Imports, file.Rel)
 		contracts = append(contracts, discovered...)
 		for handler, emits := range emittedEventsByHandler(fset, file.File, file.Aliases) {
 			emitsByHandler[handler] = append(emitsByHandler[handler], emits...)
@@ -626,7 +645,7 @@ func contractInputFieldType(expression ast.Expr) (string, bool) {
 	return "[]string", true
 }
 
-func scanContractRegistrations(fset *token.FileSet, file *ast.File, aliases map[string]bool, source string) []Contract {
+func scanContractRegistrations(fset *token.FileSet, file *ast.File, aliases map[string]bool, imports map[string]string, source string) []Contract {
 	var contracts []Contract
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
@@ -664,16 +683,29 @@ func scanContractRegistrations(fset *token.FileSet, file *ast.File, aliases map[
 				Roles:         roleNames(call),
 			}
 			if len(typeArgs) > 0 {
-				contract.Type = exprString(fset, typeArgs[0])
+				contract.Type, contract.TypeImportPath = contractTypeName(fset, typeArgs[0], imports)
 			}
 			if len(typeArgs) > 1 {
-				contract.Result = exprString(fset, typeArgs[1])
+				contract.Result, contract.ResultImportPath = contractTypeName(fset, typeArgs[1], imports)
 			}
 			contracts = append(contracts, contract)
 			return true
 		})
 	}
 	return contracts
+}
+
+func contractTypeName(fset *token.FileSet, expr ast.Expr, imports map[string]string) (string, string) {
+	name := exprString(fset, expr)
+	selector, ok := expr.(*ast.SelectorExpr)
+	if !ok || selector.Sel == nil {
+		return name, ""
+	}
+	ident, ok := selector.X.(*ast.Ident)
+	if !ok || ident == nil {
+		return name, ""
+	}
+	return name, imports[ident.Name]
 }
 
 func validateContractTypes(contracts []Contract, types map[string]contractTypeInfo) []Diagnostic {
@@ -1150,16 +1182,17 @@ func isSelectorHandler(value string) bool {
 
 func contractDiagnostic(contract Contract, code string, message string) Diagnostic {
 	return Diagnostic{
-		Severity: "error",
-		Code:     code,
-		Kind:     contract.Kind,
-		Package:  contract.Package,
-		Type:     contract.Type,
-		Handler:  contract.Handler,
-		Source:   contract.Source,
-		Line:     contract.Line,
-		Column:   contract.Column,
-		Message:  message,
+		Severity:       "error",
+		Code:           code,
+		Kind:           contract.Kind,
+		Package:        contract.Package,
+		Type:           contract.Type,
+		TypeImportPath: contract.TypeImportPath,
+		Handler:        contract.Handler,
+		Source:         contract.Source,
+		Line:           contract.Line,
+		Column:         contract.Column,
+		Message:        message,
 	}
 }
 
@@ -1175,6 +1208,29 @@ func contractsImportAliases(file *ast.File) map[string]bool {
 			aliases["contracts"] = true
 		case importSpec.Name.Name != "." && importSpec.Name.Name != "_":
 			aliases[importSpec.Name.Name] = true
+		}
+	}
+	return aliases
+}
+
+func goImportAliases(file *ast.File) map[string]string {
+	aliases := map[string]string{}
+	for _, importSpec := range file.Imports {
+		importPath, err := strconv.Unquote(importSpec.Path.Value)
+		if err != nil || importPath == "" {
+			continue
+		}
+		alias := ""
+		switch {
+		case importSpec.Name == nil:
+			alias = pathpkg.Base(importPath)
+		case importSpec.Name.Name == "." || importSpec.Name.Name == "_":
+			continue
+		default:
+			alias = importSpec.Name.Name
+		}
+		if alias != "" {
+			aliases[alias] = importPath
 		}
 	}
 	return aliases

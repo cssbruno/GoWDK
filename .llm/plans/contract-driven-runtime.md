@@ -380,7 +380,8 @@ wherever the contract is HTTP-exposed.
 - [x] Add first element-local query references through `internal/gwdkanalysis`.
 - [x] Add first query-reference metadata to `internal/gwdkir`.
 - [x] Link first `.gwdk` query references to scanned Go query metadata.
-- [ ] Expand command linking across import aliases and full package paths.
+- [x] Expand command/query linking across import aliases and full package
+      paths.
 - [x] Reject `.gwdk` domain-event emission from templates through `g:event`.
 - [ ] Add presentation-event references for realtime UI notifications only
       after backend event metadata exists.

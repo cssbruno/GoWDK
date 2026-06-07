@@ -648,6 +648,91 @@ func TestContractsForRoleFiltersMetadata(t *testing.T) {
 	}
 }
 
+func TestMetadataObservationUsesStableNameAndCopiedLabels(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{}, nil
+	}, RoleWeb))
+
+	metadata := registry.ContractsForRole(RoleWeb)
+	if len(metadata) != 1 {
+		t.Fatalf("len(metadata) = %d, want 1: %#v", len(metadata), metadata)
+	}
+	observation := metadata[0].ObservationForRole(ObservationExecuteCommand, RoleWeb)
+	if observation.Name != "gowdk.contract.execute.command" {
+		t.Fatalf("observation name = %q", observation.Name)
+	}
+	if observation.Labels.Role != RoleWeb {
+		t.Fatalf("role = %q, want web", observation.Labels.Role)
+	}
+	if observation.Labels.Kind != Command {
+		t.Fatalf("kind = %q, want command", observation.Labels.Kind)
+	}
+	if observation.Labels.Contract != ContractName[createPatient]() {
+		t.Fatalf("contract = %q, want createPatient", observation.Labels.Contract)
+	}
+	if observation.Labels.Result != ContractName[createPatientResult]() {
+		t.Fatalf("result = %q, want createPatientResult", observation.Labels.Result)
+	}
+	if observation.Labels.Handlers != 1 {
+		t.Fatalf("handlers = %d, want 1", observation.Labels.Handlers)
+	}
+	if !slices.Equal(observation.Labels.Roles, []Role{RoleWeb}) {
+		t.Fatalf("roles = %#v, want web", observation.Labels.Roles)
+	}
+
+	observation.Labels.Roles[0] = RoleAdmin
+	if metadata[0].Roles[0] != RoleWeb {
+		t.Fatalf("observation roles alias metadata roles: %#v", metadata[0].Roles)
+	}
+}
+
+func TestNewObservationCopiesRoleLabels(t *testing.T) {
+	roles := []Role{RoleWorker}
+	observation := NewObservation(ObservationWorkerReceiveEventBatch, ObservationLabels{
+		Kind:     Event,
+		Role:     RoleWorker,
+		Roles:    roles,
+		Handlers: 2,
+	})
+
+	roles[0] = RoleAdmin
+	if !slices.Equal(observation.Labels.Roles, []Role{RoleWorker}) {
+		t.Fatalf("observation roles = %#v, want copied worker role", observation.Labels.Roles)
+	}
+	if observation.Labels.Role != RoleWorker {
+		t.Fatalf("role = %q, want worker", observation.Labels.Role)
+	}
+}
+
+func TestEventEnvelopeObservationUsesStableLabels(t *testing.T) {
+	envelope := EventEnvelope{
+		Category: DomainEvent,
+		Type:     ContractName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}
+
+	observation := envelope.ObservationForRole(ObservationPublishEvent, RoleWorker)
+	if observation.Name != "gowdk.contract.publish.event" {
+		t.Fatalf("observation name = %q", observation.Name)
+	}
+	if observation.Labels.Role != RoleWorker {
+		t.Fatalf("role = %q, want worker", observation.Labels.Role)
+	}
+	if observation.Labels.Kind != Event {
+		t.Fatalf("kind = %q, want event", observation.Labels.Kind)
+	}
+	if observation.Labels.EventCategory != DomainEvent {
+		t.Fatalf("event category = %q, want domain", observation.Labels.EventCategory)
+	}
+	if observation.Labels.Contract != ContractName[patientCreated]() {
+		t.Fatalf("contract = %q, want patientCreated", observation.Labels.Contract)
+	}
+	if observation.Labels.Handlers != 0 {
+		t.Fatalf("handlers = %d, want 0 for envelope labels", observation.Labels.Handlers)
+	}
+}
+
 func TestMetadataIsDeterministic(t *testing.T) {
 	registry := NewRegistry()
 	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {

@@ -444,7 +444,7 @@ wherever the contract is HTTP-exposed.
       contracts.
 - [x] Link `gowdk routes` endpoints to contracts where applicable.
 - [x] Include first command/query-reference metadata in build reports.
-- [ ] Add stable names for logs/metrics/traces.
+- [x] Add stable names for logs/metrics/traces.
 - [x] Add tests for text and JSON output.
 
 ### Phase 8: Examples And Docs

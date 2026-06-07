@@ -80,6 +80,46 @@ Generated web adapters always execute command/query references with
 worker/cron/admin/API-only contract is a compiler diagnostic, not a generated
 route that fails later.
 
+## Observability
+
+`runtime/contracts` exposes stable operation names and labels for logs,
+metrics, and traces. These names are API values, not CLI display text.
+
+```go
+metadata := r.ContractsForRole(contracts.RoleWeb)
+observation := metadata[0].ObservationForRole(
+    contracts.ObservationExecuteCommand,
+    contracts.RoleWeb,
+)
+```
+
+The stable operation names include:
+
+| Operation | Name |
+| --- | --- |
+| Register query | `gowdk.contract.register.query` |
+| Register command | `gowdk.contract.register.command` |
+| Register event | `gowdk.contract.register.event` |
+| Register job | `gowdk.contract.register.job` |
+| Execute query | `gowdk.contract.execute.query` |
+| Execute command | `gowdk.contract.execute.command` |
+| Capture command events | `gowdk.contract.capture.command` |
+| Execute job | `gowdk.contract.execute.job` |
+| Publish event | `gowdk.contract.publish.event` |
+| Store command events in outbox | `gowdk.contract.outbox.store` |
+| Publish broker events | `gowdk.contract.broker.publish` |
+| Send presentation events | `gowdk.contract.presentation.send` |
+| Worker receive batch | `gowdk.contract.worker.receive` |
+| Worker ack batch | `gowdk.contract.worker.ack` |
+| Worker nack batch | `gowdk.contract.worker.nack` |
+
+`Metadata.ObservationLabels()` returns the stable contract labels: kind, event
+category, contract type name, result type name, role, roles, and handler count
+when known. `EventEnvelope.ObservationLabels()` returns the event kind,
+category, and captured event contract type. `ContractName[T]()` returns the same
+Go contract type name used by metadata and event envelopes.
+`ObservationForRole` records the runtime role that performed the operation.
+
 Inside a command handler, emit backend-owned events through the command context:
 
 ```go

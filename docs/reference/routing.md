@@ -306,11 +306,14 @@ gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partia
 
 The current JSON schema is version `1`. `routes` contains only page/file route
 kinds such as `static`, `spa`, `ssr`, and `hybrid`; `endpoints` contains one
-framework-neutral endpoint record per action/API declaration. Endpoint records
-include `endpointSource` (`gwdk` today), source file and source span, `.gwdk`
-package, Go package path/name when known, exact declared symbol, method, path,
-planned adapter handler information, and backend binding status/message.
-Backend binding details repeat the Go package name, import path when known,
-handler symbol, and supported signature/input metadata when the handler is
-bound. The `info` list reports disabled route-mode lanes, for example SSR
-disabled on a SPA route.
+framework-neutral endpoint record per action/API/fragment declaration and
+routable `g:command`/`g:query` contract reference. Endpoint records include
+`endpointSource` (`gwdk` or `contract`), source file and source span, `.gwdk`
+package, Go package path/name when known, exact declared symbol or contract
+reference, method, path, planned adapter handler information, and binding
+status/message. Backend binding details repeat the Go package name, import path
+when known, handler symbol, and supported signature/input metadata when the
+handler is bound. Contract binding details include the contract kind, reference
+name, binding status, local input type, result type, roles, handler, register
+function, and message when known. The `info` list reports disabled route-mode
+lanes, for example SSR disabled on a SPA route.

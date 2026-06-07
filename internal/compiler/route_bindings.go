@@ -29,6 +29,8 @@ const (
 	EndpointAction   EndpointKind = "action"
 	EndpointAPI      EndpointKind = "api"
 	EndpointFragment EndpointKind = "fragment"
+	EndpointCommand  EndpointKind = "command"
+	EndpointQuery    EndpointKind = "query"
 )
 
 // RouteMetadata is route and endpoint metadata used by the CLI routes report.
@@ -71,6 +73,23 @@ type EndpointBinding struct {
 	BindingFunction   string
 	BindingSignature  manifest.BackendSignatureKind
 	BindingInputType  string
+	Contract          ContractEndpointBinding
+}
+
+// ContractEndpointBinding describes a command/query contract exposed through a
+// generated backend endpoint.
+type ContractEndpointBinding struct {
+	Name        string
+	Kind        gwdkir.ContractKind
+	Status      gwdkir.ContractBindingStatus
+	Message     string
+	ImportAlias string
+	ImportPath  string
+	Type        string
+	Result      string
+	Roles       []string
+	Handler     string
+	Register    string
 }
 
 // RouteInfo is non-fatal route metadata surfaced by CLI inspection commands.
@@ -218,8 +237,50 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 			})
 		}
 	}
+	for _, ref := range ir.ContractRefs {
+		if strings.TrimSpace(ref.Method) == "" || strings.TrimSpace(ref.Path) == "" {
+			continue
+		}
+		kind := EndpointCommand
+		if ref.Kind == gwdkir.ContractQuery {
+			kind = EndpointQuery
+		}
+		endpoints = append(endpoints, EndpointBinding{
+			Kind:           kind,
+			EndpointSource: "contract",
+			Source:         ref.Source,
+			SourceSpan:     ref.Span,
+			Package:        ref.Package,
+			PackagePath:    ref.ImportPath,
+			Symbol:         ref.Name,
+			Method:         ref.Method,
+			Route:          ref.Path,
+			PageID:         ref.OwnerID,
+			Handler:        "contracts." + string(ref.Kind) + "." + ref.Name,
+			Contract: ContractEndpointBinding{
+				Name:        ref.Name,
+				Kind:        ref.Kind,
+				Status:      contractBindingStatus(ref.Status),
+				Message:     ref.Message,
+				ImportAlias: ref.ImportAlias,
+				ImportPath:  ref.ImportPath,
+				Type:        ref.Type,
+				Result:      ref.Result,
+				Roles:       append([]string(nil), ref.Roles...),
+				Handler:     ref.Handler,
+				Register:    ref.Register,
+			},
+		})
+	}
 
 	return RouteMetadata{Routes: routes, Endpoints: endpoints, Info: info}
+}
+
+func contractBindingStatus(status gwdkir.ContractBindingStatus) gwdkir.ContractBindingStatus {
+	if status == "" {
+		return gwdkir.ContractBindingUnknown
+	}
+	return status
 }
 
 func routeAssetName(pageID string) string {

@@ -2660,6 +2660,92 @@ view {
 	}
 }
 
+func TestRoutesCommandPrintsContractEndpoints(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "patients.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package pages
+
+@page patients
+@route "/patients"
+
+view {
+  <main>
+    <form method="post" action="/patients" g:command="patients.CreatePatient">
+      <input name="name" />
+    </form>
+  </main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "contracts", "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct {
+	Name string `+"`json:\"name\" form:\"name\"`"+`
+}
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, contracts.RoleWeb)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{ID: command.Name}, nil
+}
+`)
+
+	var output string
+	withWorkingDir(t, root, func() {
+		captured, err := captureCLIStdout(t, func() error {
+			return run([]string{"routes", "--config", config, page})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		output = captured
+	})
+
+	var report routeMetadataReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
+	}
+	assertEndpointBinding(t, report.Endpoints, endpointBindingJSON{
+		Kind:           "command",
+		EndpointSource: "contract",
+		Source:         page,
+		Package:        "pages",
+		PackagePath:    "",
+		Symbol:         "patients.CreatePatient",
+		Method:         "POST",
+		Route:          "/patients",
+		PageID:         "patients",
+		Handler:        "contracts.command.patients.CreatePatient",
+		Contract: &contractBindingJSON{
+			Name:        "patients.CreatePatient",
+			Kind:        "command",
+			Status:      "bound",
+			ImportAlias: "patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Roles:       []string{"web"},
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+		},
+	})
+	if len(report.Endpoints) != 1 {
+		t.Fatalf("expected one contract endpoint, got %#v", report.Endpoints)
+	}
+	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 8 {
+		t.Fatalf("expected endpoint source span for contract reference, got %#v", report.Endpoints[0].SourceSpan)
+	}
+}
+
 func TestBuildCommandWritesGeneratedEmbeddedApp(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "home.page.gwdk")
@@ -3622,14 +3708,41 @@ func assertEndpointBinding(t *testing.T, endpoints []endpointBindingJSON, expect
 			endpoint.InputType != expected.InputType {
 			continue
 		}
-		if expected.BackendBinding == nil {
-			return
+		if expected.BackendBinding != nil {
+			if endpoint.BackendBinding == nil || *endpoint.BackendBinding != *expected.BackendBinding {
+				continue
+			}
 		}
-		if endpoint.BackendBinding != nil && *endpoint.BackendBinding == *expected.BackendBinding {
-			return
+		if expected.Contract != nil {
+			if endpoint.Contract == nil || !contractBindingEqual(endpoint.Contract, expected.Contract) {
+				continue
+			}
 		}
+		return
 	}
 	t.Fatalf("missing endpoint binding %#v in %#v", expected, endpoints)
+}
+
+func contractBindingEqual(actual *contractBindingJSON, expected *contractBindingJSON) bool {
+	if actual.Name != expected.Name ||
+		actual.Kind != expected.Kind ||
+		actual.Status != expected.Status ||
+		actual.Message != expected.Message ||
+		actual.ImportAlias != expected.ImportAlias ||
+		actual.ImportPath != expected.ImportPath ||
+		actual.Type != expected.Type ||
+		actual.Result != expected.Result ||
+		actual.Handler != expected.Handler ||
+		actual.Register != expected.Register ||
+		len(actual.Roles) != len(expected.Roles) {
+		return false
+	}
+	for index := range actual.Roles {
+		if actual.Roles[index] != expected.Roles[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func assertRouteInfo(t *testing.T, infos []routeInfoJSON, code string, pageID string) {

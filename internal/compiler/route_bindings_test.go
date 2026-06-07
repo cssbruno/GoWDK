@@ -145,14 +145,40 @@ func TestBuildRouteMetadataFromIR(t *testing.T) {
 				SourceFile: "newsletter.page.gwdk",
 			},
 		},
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Roles:       []string{"web"},
+			Method:      "POST",
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+			Package:     "pages",
+			Source:      "patients.page.gwdk",
+		}},
 	})
 
 	assertRoute(t, metadata.Routes, RouteSPA, "GET", "/newsletter", `embedded.SPA("pages/newsletter.html")`)
 	assertRoute(t, metadata.Routes, RouteSSR, "GET", "/dashboard", "ssr.RenderDashboard")
 	assertEndpoint(t, metadata.Endpoints, EndpointAction, "POST", "/newsletter", "actions.NewsletterSubscribe")
 	assertEndpoint(t, metadata.Endpoints, EndpointFragment, "GET", "/newsletter/list", "fragments.NewsletterList")
+	assertEndpoint(t, metadata.Endpoints, EndpointCommand, "POST", "/patients", "contracts.command.patients.CreatePatient")
 	if metadata.Endpoints[0].BindingStatus != manifest.BackendBindingBound {
 		t.Fatalf("expected binding status from IR, got %#v", metadata.Endpoints[0])
+	}
+	command := findEndpoint(t, metadata.Endpoints, EndpointCommand, "POST", "/patients")
+	if command.Contract.Name != "patients.CreatePatient" ||
+		command.Contract.Status != gwdkir.ContractBindingBound ||
+		command.Contract.Handler != "HandleCreatePatient" ||
+		len(command.Contract.Roles) != 1 ||
+		command.Contract.Roles[0] != "web" {
+		t.Fatalf("unexpected command contract endpoint metadata: %#v", command.Contract)
 	}
 }
 
@@ -168,12 +194,22 @@ func assertRoute(t *testing.T, routes []RouteBinding, kind RouteKind, method, ro
 
 func assertEndpoint(t *testing.T, endpoints []EndpointBinding, kind EndpointKind, method, route, handler string) {
 	t.Helper()
+	_ = findEndpoint(t, endpoints, kind, method, route, handler)
+}
+
+func findEndpoint(t *testing.T, endpoints []EndpointBinding, kind EndpointKind, method, route string, handler ...string) EndpointBinding {
+	t.Helper()
 	for _, binding := range endpoints {
-		if binding.Kind == kind && binding.Method == method && binding.Route == route && binding.Handler == handler {
-			return
+		if binding.Kind != kind || binding.Method != method || binding.Route != route {
+			continue
 		}
+		if len(handler) > 0 && binding.Handler != handler[0] {
+			continue
+		}
+		return binding
 	}
-	t.Fatalf("Missing endpoint kind=%s method=%s route=%s handler=%s in %#v", kind, method, route, handler, endpoints)
+	t.Fatalf("Missing endpoint kind=%s method=%s route=%s handler=%v in %#v", kind, method, route, handler, endpoints)
+	return EndpointBinding{}
 }
 
 func assertInfo(t *testing.T, infos []RouteInfo, code string, pageID string) {

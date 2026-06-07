@@ -626,10 +626,11 @@ func routesJSON(args []string) error {
 		return fmt.Errorf("routes failed")
 	}
 
-	metadata, err := compiler.BuildRouteMetadata(options.Config, app)
-	if err != nil {
+	ir := gwdkanalysis.BuildIR(options.Config, app)
+	if err := linkIRContractReferences(&ir, "."); err != nil {
 		return err
 	}
+	metadata := compiler.BuildRouteMetadataFromIR(options.Config, ir)
 	printRouteInfos(metadata.Info)
 	payload, err := json.MarshalIndent(routeMetadataJSON(metadata), "", "  ")
 	if err != nil {
@@ -1184,6 +1185,7 @@ type endpointBindingJSON struct {
 	Signature      string                `json:"signature,omitempty"`
 	InputType      string                `json:"inputType,omitempty"`
 	BackendBinding *backendBindingJSON   `json:"backendBinding,omitempty"`
+	Contract       *contractBindingJSON  `json:"contract,omitempty"`
 }
 
 type sourceSpanJSON struct {
@@ -1204,6 +1206,20 @@ type backendBindingJSON struct {
 	Signature    string `json:"signature,omitempty"`
 	InputType    string `json:"inputType,omitempty"`
 	Message      string `json:"message,omitempty"`
+}
+
+type contractBindingJSON struct {
+	Name        string   `json:"name"`
+	Kind        string   `json:"kind"`
+	Status      string   `json:"status"`
+	Message     string   `json:"message,omitempty"`
+	ImportAlias string   `json:"importAlias,omitempty"`
+	ImportPath  string   `json:"importPath,omitempty"`
+	Type        string   `json:"type,omitempty"`
+	Result      string   `json:"result,omitempty"`
+	Roles       []string `json:"roles,omitempty"`
+	Handler     string   `json:"handler,omitempty"`
+	Register    string   `json:"register,omitempty"`
 }
 
 type routeInfoJSON struct {
@@ -1252,6 +1268,21 @@ func routeMetadataJSON(metadata compiler.RouteMetadata) routeMetadataReport {
 				Signature:    string(binding.BindingSignature),
 				InputType:    binding.BindingInputType,
 				Message:      binding.BindingMessage,
+			}
+		}
+		if binding.Contract.Name != "" {
+			item.Contract = &contractBindingJSON{
+				Name:        binding.Contract.Name,
+				Kind:        string(binding.Contract.Kind),
+				Status:      string(binding.Contract.Status),
+				Message:     binding.Contract.Message,
+				ImportAlias: binding.Contract.ImportAlias,
+				ImportPath:  binding.Contract.ImportPath,
+				Type:        binding.Contract.Type,
+				Result:      binding.Contract.Result,
+				Roles:       append([]string(nil), binding.Contract.Roles...),
+				Handler:     binding.Contract.Handler,
+				Register:    binding.Contract.Register,
 			}
 		}
 		endpoints = append(endpoints, item)

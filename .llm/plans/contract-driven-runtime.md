@@ -442,7 +442,7 @@ wherever the contract is HTTP-exposed.
 - [x] Add `gowdk graph`.
 - [x] Add first static `gowdk trace` for scanned command/query/event/job
       contracts.
-- [ ] Link `gowdk routes` endpoints to contracts where applicable.
+- [x] Link `gowdk routes` endpoints to contracts where applicable.
 - [x] Include first command/query-reference metadata in build reports.
 - [ ] Add stable names for logs/metrics/traces.
 - [x] Add tests for text and JSON output.

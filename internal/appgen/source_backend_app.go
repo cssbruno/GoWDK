@@ -12,11 +12,17 @@ func backendRuntimeImportSource(options Options) string {
 
 func backendRuntimeImportMap(options Options) map[string]string {
 	imports := map[string]string{}
+	contractExposures := backendAdapterIR(options).ContractExposures
+	routableContracts := routableContractExposures(contractExposures)
+	executableContracts := executableContractExposures(contractExposures)
 	if hasBackendRoutes(options) {
 		imports["gowdkruntime"] = "github.com/cssbruno/gowdk/runtime/app"
 	}
-	if len(options.Actions) > 0 || len(options.APIs) > 0 || len(options.Fragments) > 0 {
+	if len(options.Actions) > 0 || len(options.APIs) > 0 || len(options.Fragments) > 0 || len(routableContracts) > 0 {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
+	}
+	if len(executableContracts) > 0 {
+		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
 	}
 	if len(options.Actions) > 0 {
 		imports["path"] = "path"
@@ -43,6 +49,9 @@ func backendRuntimeImportMap(options Options) map[string]string {
 		imports["strings"] = "strings"
 	}
 	for importPath, alias := range backendImports(options.Actions, options.APIs, options.Fragments, nil) {
+		imports[alias] = importPath
+	}
+	for importPath, alias := range backendContractImports(executableContracts) {
 		imports[alias] = importPath
 	}
 

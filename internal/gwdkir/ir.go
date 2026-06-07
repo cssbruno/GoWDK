@@ -377,6 +377,7 @@ type ContractReference struct {
 	Path        string
 	Status      ContractBindingStatus
 	Handler     string
+	Register    string
 	Message     string
 	OwnerKind   SourceKind
 	OwnerID     string

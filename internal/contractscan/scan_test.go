@@ -84,6 +84,9 @@ func RegisterTest(r *c.Registry) {
 	assertContract(t, report.Contracts, runtimecontracts.Event, runtimecontracts.PresentationEvent, "PatientNotice", "", "NotifyBrowser")
 	assertContract(t, report.Contracts, runtimecontracts.Job, "", "SyncPatients", "", "Sync")
 	command := findContract(t, report.Contracts, runtimecontracts.Command, "CreatePatient")
+	if command.Register != "Register" {
+		t.Fatalf("unexpected command register function: %#v", command)
+	}
 	if len(command.Roles) != 1 || command.Roles[0] != "web" {
 		t.Fatalf("unexpected command roles: %#v", command.Roles)
 	}
@@ -183,9 +186,9 @@ func HandleCreatePatientAgain(ctx context.Context, command CreatePatient) (Creat
 func TestLinkReferencesMarksBoundMissingAndInvalidContractRefs(t *testing.T) {
 	report := Report{
 		Contracts: []Contract{
-			{Kind: runtimecontracts.Command, Package: "patients", Type: "CreatePatient", Result: "CreatePatientResult", Handler: "HandleCreatePatient"},
+			{Kind: runtimecontracts.Command, Package: "patients", Type: "CreatePatient", Result: "CreatePatientResult", Handler: "HandleCreatePatient", Register: "Register"},
 			{Kind: runtimecontracts.Command, Package: "billing", Type: "PayInvoice", Result: "PayInvoiceResult", Handler: "HandlePayInvoice"},
-			{Kind: runtimecontracts.Query, Package: "patients", Type: "GetPatientPage", Result: "PatientPageData", Handler: "LoadPatientPage"},
+			{Kind: runtimecontracts.Query, Package: "patients", Type: "GetPatientPage", Result: "PatientPageData", Handler: "LoadPatientPage", Register: "Register"},
 			{Kind: runtimecontracts.Query, Package: "billing", Type: "GetInvoicePage", Result: "InvoicePageData", Handler: "LoadInvoicePage"},
 		},
 		Diagnostics: []Diagnostic{
@@ -208,6 +211,9 @@ func TestLinkReferencesMarksBoundMissingAndInvalidContractRefs(t *testing.T) {
 	if linked[0].Status != gwdkir.ContractBindingBound || linked[0].Handler != "HandleCreatePatient" {
 		t.Fatalf("expected bound command, got %#v", linked[0])
 	}
+	if linked[0].Register != "Register" {
+		t.Fatalf("expected bound command register metadata, got %#v", linked[0])
+	}
 	if linked[0].Type != "CreatePatient" || linked[0].Result != "CreatePatientResult" {
 		t.Fatalf("expected bound command type/result metadata, got %#v", linked[0])
 	}
@@ -219,6 +225,9 @@ func TestLinkReferencesMarksBoundMissingAndInvalidContractRefs(t *testing.T) {
 	}
 	if linked[3].Status != gwdkir.ContractBindingBound || linked[3].Handler != "LoadPatientPage" {
 		t.Fatalf("expected bound query, got %#v", linked[3])
+	}
+	if linked[3].Register != "Register" {
+		t.Fatalf("expected bound query register metadata, got %#v", linked[3])
 	}
 	if linked[3].Type != "GetPatientPage" || linked[3].Result != "PatientPageData" {
 		t.Fatalf("expected bound query type/result metadata, got %#v", linked[3])

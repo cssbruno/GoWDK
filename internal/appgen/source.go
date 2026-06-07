@@ -37,10 +37,15 @@ func runtimeImportMap(options Options) map[string]string {
 	actions := options.Actions
 	apis := options.APIs
 	fragments := options.Fragments
+	contractExposures := backendAdapterIR(options).ContractExposures
+	routableContracts := routableContractExposures(contractExposures)
+	executableContracts := executableContractExposures(contractExposures)
 	if options.ProxyBackend {
 		actions = nil
 		apis = nil
 		fragments = nil
+		routableContracts = nil
+		executableContracts = nil
 	}
 	ssr := options.SSR
 	if len(actions) > 0 || len(fragments) > 0 {
@@ -56,6 +61,12 @@ func runtimeImportMap(options Options) map[string]string {
 	if len(apis) > 0 {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 		imports["path"] = "path"
+	}
+	if len(routableContracts) > 0 {
+		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
+	}
+	if len(executableContracts) > 0 {
+		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
 	}
 	if options.ProxyBackend {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
@@ -102,6 +113,9 @@ func runtimeImportMap(options Options) map[string]string {
 	}
 	if !options.ProxyBackend {
 		for importPath, alias := range backendImports(actions, apis, fragments, ssr) {
+			imports[alias] = importPath
+		}
+		for importPath, alias := range backendContractImports(executableContracts) {
 			imports[alias] = importPath
 		}
 	}
@@ -177,6 +191,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	decls := actionHandlerDecls(direct.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
 	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(direct.APIs), generatedUsesRateLimit(direct)))
 	decls = append(decls, fragmentFuncDecl(direct.Fragments, generatedUsesRateLimit(direct)))
+	decls = append(decls, contractHandlerDecls(adapter.ContractExposures)...)
 	switch {
 	case adapter.HasRegistrations():
 		decls = append(decls, newBackendRouterDecl(adapter))
@@ -200,6 +215,7 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	decls := actionHandlerDecls(options.Actions, csrfEnabled(options), generatedUsesRateLimit(options))
 	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(options.APIs), generatedUsesRateLimit(options)))
 	decls = append(decls, fragmentFuncDecl(options.Fragments, generatedUsesRateLimit(options)))
+	decls = append(decls, contractHandlerDecls(adapter.ContractExposures)...)
 	if adapter.HasRegistrations() {
 		decls = append(decls, newBackendRouterDecl(adapter))
 	} else {
@@ -487,7 +503,7 @@ func backendCallbackName(options Options) string {
 }
 
 func hasBackendRoutes(options Options) bool {
-	return len(options.Actions) > 0 || len(options.APIs) > 0 || len(options.Fragments) > 0
+	return len(options.Actions) > 0 || len(options.APIs) > 0 || len(options.Fragments) > 0 || hasRoutableContractReferences(options)
 }
 
 func backendImports(actions []ActionEndpoint, apis []APIEndpoint, fragments []FragmentEndpoint, ssr []SSRRoute) map[string]string {

@@ -86,6 +86,11 @@ func optionsUsesModuleImports(options Options, modulePath string) bool {
 			return true
 		}
 	}
+	for importPath := range backendContractImports(executableContractExposures(backendAdapterIR(options).ContractExposures)) {
+		if importPath == modulePath || strings.HasPrefix(importPath, modulePath+"/") {
+			return true
+		}
+	}
 	return false
 }
 

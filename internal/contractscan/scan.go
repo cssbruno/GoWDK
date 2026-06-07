@@ -33,6 +33,7 @@ type Contract struct {
 	Type          string                         `json:"type"`
 	Result        string                         `json:"result,omitempty"`
 	Handler       string                         `json:"handler,omitempty"`
+	Register      string                         `json:"register,omitempty"`
 	Emits         []EventRef                     `json:"emits,omitempty"`
 	Roles         []string                       `json:"roles,omitempty"`
 	Source        string                         `json:"source"`
@@ -221,6 +222,7 @@ func LinkReferences(refs []gwdkir.ContractReference, report Report) []gwdkir.Con
 			continue
 		}
 		linked[index].Handler = contract.Handler
+		linked[index].Register = contract.Register
 		if linked[index].Type == "" {
 			linked[index].Type = contract.Type
 		}
@@ -328,50 +330,88 @@ func scanFile(fset *token.FileSet, root string, path string) (fileScan, error) {
 		rel = path
 	}
 	rel = filepath.ToSlash(rel)
-	var contracts []Contract
-	ast.Inspect(file, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		selector, typeArgs := registrationSelector(call.Fun)
-		if selector == nil {
-			return true
-		}
-		ident, ok := selector.X.(*ast.Ident)
-		if !ok || !aliases[ident.Name] {
-			return true
-		}
-		kind, category, ok := registrationKind(selector.Sel.Name)
-		if !ok {
-			return true
-		}
-		position := fset.Position(call.Pos())
-		contract := Contract{
-			Kind:          kind,
-			EventCategory: category,
-			Package:       file.Name.Name,
-			Source:        rel,
-			Line:          position.Line,
-			Column:        position.Column,
-			Handler:       handlerName(call),
-			Roles:         roleNames(call),
-		}
-		if len(typeArgs) > 0 {
-			contract.Type = exprString(fset, typeArgs[0])
-		}
-		if len(typeArgs) > 1 {
-			contract.Result = exprString(fset, typeArgs[1])
-		}
-		contracts = append(contracts, contract)
-		return true
-	})
+	contracts := scanContractRegistrations(fset, file, aliases, rel)
 	functions := typedFunctions(fset, file)
 	return fileScan{
 		Contracts:      contracts,
 		Diagnostics:    validateContracts(contracts, functions),
 		EmitsByHandler: emittedEventsByHandler(fset, file, aliases),
 	}, nil
+}
+
+func scanContractRegistrations(fset *token.FileSet, file *ast.File, aliases map[string]bool, source string) []Contract {
+	var contracts []Contract
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		register := contractRegisterFunction(fn, aliases)
+		ast.Inspect(fn.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, typeArgs := registrationSelector(call.Fun)
+			if selector == nil {
+				return true
+			}
+			ident, ok := selector.X.(*ast.Ident)
+			if !ok || !aliases[ident.Name] {
+				return true
+			}
+			kind, category, ok := registrationKind(selector.Sel.Name)
+			if !ok {
+				return true
+			}
+			position := fset.Position(call.Pos())
+			contract := Contract{
+				Kind:          kind,
+				EventCategory: category,
+				Package:       file.Name.Name,
+				Source:        source,
+				Line:          position.Line,
+				Column:        position.Column,
+				Handler:       handlerName(call),
+				Register:      register,
+				Roles:         roleNames(call),
+			}
+			if len(typeArgs) > 0 {
+				contract.Type = exprString(fset, typeArgs[0])
+			}
+			if len(typeArgs) > 1 {
+				contract.Result = exprString(fset, typeArgs[1])
+			}
+			contracts = append(contracts, contract)
+			return true
+		})
+	}
+	return contracts
+}
+
+func contractRegisterFunction(fn *ast.FuncDecl, aliases map[string]bool) string {
+	if fn.Name == nil || fn.Name.Name == "init" || fn.Recv != nil || fn.Type == nil || fn.Type.Params == nil {
+		return ""
+	}
+	for _, field := range fn.Type.Params.List {
+		if isRegistryPointer(field.Type, aliases) {
+			return fn.Name.Name
+		}
+	}
+	return ""
+}
+
+func isRegistryPointer(expr ast.Expr, aliases map[string]bool) bool {
+	pointer, ok := expr.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := pointer.X.(*ast.SelectorExpr)
+	if !ok || selector.Sel == nil || selector.Sel.Name != "Registry" {
+		return false
+	}
+	ident, ok := selector.X.(*ast.Ident)
+	return ok && aliases[ident.Name]
 }
 
 type functionInfo struct {

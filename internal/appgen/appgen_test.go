@@ -13,6 +13,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -265,6 +266,75 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
+
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{
+		{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Method:      "POST",
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		},
+		{
+			Kind:        gwdkir.ContractQuery,
+			Name:        "patients.GetPatientPage",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "GetPatientPage",
+			Result:      "PatientPageData",
+			Method:      "GET",
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "LoadPatientPage",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		},
+	}}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{IR: program})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkcontracts "github.com/cssbruno/gowdk/runtime/contracts"`,
+		`patients "example.com/app/contracts/patients"`,
+		`contractRegistry := gowdkcontracts.NewRegistry()`,
+		`patients.Register(contractRegistry)`,
+		`Kind: "command", Handler: commandPatientsCreatePatientPOSTPatients(contractRegistry)`,
+		`Kind: "query", Handler: queryPatientsGetPatientPageGETPatients(contractRegistry)`,
+		`func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler`,
+		`var input patients.CreatePatient`,
+		`gowdkcontracts.ExecuteCommandForRole[patients.CreatePatient, patients.CreatePatientResult]`,
+		`func queryPatientsGetPatientPageGETPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler`,
+		`var input patients.GetPatientPage`,
+		`gowdkcontracts.ExecuteQueryForRole[patients.GetPatientPage, patients.PatientPageData]`,
+		`gowdkresponse.JSONValue(http.StatusOK, result)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated contract app source to contain %q:\n%s", expected, source)
 		}
 	}
 }

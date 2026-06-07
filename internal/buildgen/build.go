@@ -290,6 +290,9 @@ func reportContractReferences(reporter *buildReporter, refs []gwdkir.ContractRef
 		if ref.Handler != "" {
 			data["handler"] = ref.Handler
 		}
+		if ref.Register != "" {
+			data["register"] = ref.Register
+		}
 		if ref.ImportAlias != "" {
 			data["importAlias"] = ref.ImportAlias
 		}

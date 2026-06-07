@@ -103,6 +103,7 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 			Path:        "/patients",
 			Status:      gwdkir.ContractBindingMissing,
 			Message:     "query missing",
+			Register:    "Register",
 			OwnerKind:   gwdkir.SourcePage,
 			OwnerID:     "patients",
 			Package:     "patients",
@@ -119,6 +120,7 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 			Path:        "/patients",
 			Status:      gwdkir.ContractBindingBound,
 			Handler:     "HandleCreatePatient",
+			Register:    "Register",
 			OwnerKind:   gwdkir.SourcePage,
 			OwnerID:     "patients",
 			Package:     "patients",
@@ -137,7 +139,7 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 	if command.Endpoint.Method != "POST" || command.Endpoint.Path != "/patients" {
 		t.Fatalf("unexpected command exposure method/path: %#v", command.Endpoint)
 	}
-	if command.Contract != "patients.CreatePatient" || command.Status != gwdkir.ContractBindingBound || command.Handler != "HandleCreatePatient" {
+	if command.Contract != "patients.CreatePatient" || command.Status != gwdkir.ContractBindingBound || command.Handler != "HandleCreatePatient" || command.Register != "Register" {
 		t.Fatalf("unexpected command exposure: %#v", command)
 	}
 	if command.ImportAlias != "patients" || command.ImportPath != "example.com/app/contracts/patients" || command.Type != "CreatePatient" || command.Result != "CreatePatientResult" {

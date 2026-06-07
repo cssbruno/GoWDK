@@ -17,12 +17,43 @@ func newBackendRouterDecl(adapter BackendAdapterIR) *ast.FuncDecl {
 		}
 		routes = append(routes, backendRouteExpr(method, registration.Kind, registration.Path, id(registration.Handler)))
 	}
+	for _, exposure := range routableContractExposures(adapter.ContractExposures) {
+		method := contractExposureMethodExpr(exposure)
+		routes = append(routes, backendRouteExpr(method, exposure.Endpoint.Kind, exposure.Endpoint.Path, contractRouteHandlerExpr(exposure)))
+	}
+	stmts := []ast.Stmt{}
+	if len(executableContractExposures(adapter.ContractExposures)) > 0 {
+		stmts = append(stmts,
+			define([]ast.Expr{id("contractRegistry")}, call(sel("gowdkcontracts", "NewRegistry"))),
+		)
+		for _, registration := range contractRegisterCalls(adapter.ContractExposures) {
+			stmts = append(stmts, exprStmt(call(sel(registration.Alias, registration.Function), id("contractRegistry"))))
+		}
+	}
+	stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{call(sel("gowdkruntime", "NewBackendRouter"), routes...)}})
 	return funcDecl("newBackendRouter", nil, []*ast.Field{
 		{Type: &ast.StarExpr{X: sel("gowdkruntime", "BackendRouter")}},
 		{Type: id("error")},
-	}, []ast.Stmt{
-		&ast.ReturnStmt{Results: []ast.Expr{call(sel("gowdkruntime", "NewBackendRouter"), routes...)}},
-	})
+	}, stmts)
+}
+
+func contractRouteHandlerExpr(exposure BackendContractExposure) ast.Expr {
+	handler := sel(contractHandlerName(exposure))
+	if contractExposureExecutable(exposure) {
+		return call(handler, id("contractRegistry"))
+	}
+	return handler
+}
+
+func contractExposureMethodExpr(exposure BackendContractExposure) ast.Expr {
+	switch {
+	case exposure.Endpoint.Kind == BackendEndpointCommand && exposure.Endpoint.Method == "POST":
+		return sel("http", "MethodPost")
+	case exposure.Endpoint.Kind == BackendEndpointQuery && exposure.Endpoint.Method == "GET":
+		return sel("http", "MethodGet")
+	default:
+		return stringLit(exposure.Endpoint.Method)
+	}
 }
 
 func backendRouteExpr(method ast.Expr, kind BackendEndpointKind, route string, handler ast.Expr) ast.Expr {
@@ -126,6 +157,12 @@ func isBackendRouteDecl(options Options) *ast.FuncDecl {
 	for _, fragment := range sortedFragmentEndpoints(options.Fragments) {
 		clauses = append(clauses, &ast.CaseClause{
 			List: []ast.Expr{backendRouteCond(stringLit(fragment.Method), fragment.Route)},
+			Body: []ast.Stmt{returnBool(true)},
+		})
+	}
+	for _, exposure := range routableContractExposures(backendAdapterIR(options).ContractExposures) {
+		clauses = append(clauses, &ast.CaseClause{
+			List: []ast.Expr{backendRouteCond(contractExposureMethodExpr(exposure), exposure.Endpoint.Path)},
 			Body: []ast.Stmt{returnBool(true)},
 		})
 	}

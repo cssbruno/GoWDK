@@ -72,6 +72,7 @@ type BackendContractExposure struct {
 	Result      string
 	Status      gwdkir.ContractBindingStatus
 	Handler     string
+	Register    string
 	Message     string
 	OwnerKind   gwdkir.SourceKind
 	OwnerID     string
@@ -190,6 +191,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				Result:      ref.Result,
 				Status:      ref.Status,
 				Handler:     ref.Handler,
+				Register:    ref.Register,
 				Message:     ref.Message,
 				OwnerKind:   ref.OwnerKind,
 				OwnerID:     ref.OwnerID,
@@ -202,7 +204,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 }
 
 func (ir BackendAdapterIR) HasRegistrations() bool {
-	return len(ir.Registrations) > 0
+	return len(ir.Registrations) > 0 || len(routableContractExposures(ir.ContractExposures)) > 0
 }
 
 func backendContractEndpointKind(kind gwdkir.ContractKind) BackendEndpointKind {

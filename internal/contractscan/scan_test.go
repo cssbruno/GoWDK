@@ -575,6 +575,32 @@ func TestReportJSONCanFilterByKind(t *testing.T) {
 	}
 }
 
+func TestPackageInspectionCacheReusesExportFiles(t *testing.T) {
+	calls := 0
+	cache := &packageInspectionCache{
+		exports: map[string]map[string]string{},
+		loadExportFiles: func(packageDir string, importPaths []string) (map[string]string, error) {
+			calls++
+			return map[string]string{"example.com/app/handlers": "/tmp/handlers.a"}, nil
+		},
+	}
+
+	first, err := cache.exportFiles("/repo/patients", []string{"example.com/app/handlers", "example.com/app/contracts"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := cache.exportFiles("/repo/patients", []string{"example.com/app/contracts", "example.com/app/handlers"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("load calls = %d, want 1", calls)
+	}
+	if first["example.com/app/handlers"] != "/tmp/handlers.a" || second["example.com/app/handlers"] != "/tmp/handlers.a" {
+		t.Fatalf("unexpected cached exports: first=%#v second=%#v", first, second)
+	}
+}
+
 func assertContract(t *testing.T, contracts []Contract, kind runtimecontracts.Kind, category runtimecontracts.EventCategory, typ, result, handler string) {
 	t.Helper()
 	for _, contract := range contracts {

@@ -367,7 +367,7 @@ wherever the contract is HTTP-exposed.
       handler symbols resolved by `go/types`.
 - [ ] Detect import cycles caused by feature packages importing generated app
       output.
-- [ ] Cache package inspection by package path/directory.
+- [x] Cache package inspection by package path/directory inside each scan.
 
 ### Phase 3: Compiler IR Integration
 

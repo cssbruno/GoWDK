@@ -106,8 +106,9 @@ func Scan(root string) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
+	inspectionCache := newPackageInspectionCache()
 	for _, pkg := range packages {
-		discovered := scanPackage(fset, pkg)
+		discovered := scanPackage(fset, pkg, inspectionCache)
 		contracts = append(contracts, discovered.Contracts...)
 		diagnostics = append(diagnostics, discovered.Diagnostics...)
 		for handler, emits := range discovered.EmitsByHandler {
@@ -382,7 +383,7 @@ func parseScanFile(fset *token.FileSet, root string, path string) (parsedGoFile,
 	}, nil
 }
 
-func scanPackage(fset *token.FileSet, files []parsedGoFile) fileScan {
+func scanPackage(fset *token.FileSet, files []parsedGoFile, inspectionCache *packageInspectionCache) fileScan {
 	astFiles := make([]*ast.File, 0, len(files))
 	for _, file := range files {
 		astFiles = append(astFiles, file.File)
@@ -393,7 +394,7 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile) fileScan {
 	if len(files) > 0 {
 		packageDir = filepath.Dir(files[0].Path)
 	}
-	functions := typedFunctions(fset, packageDir, astFiles)
+	functions := typedFunctions(fset, packageDir, astFiles, inspectionCache)
 	var contracts []Contract
 	var diagnostics []Diagnostic
 	emitsByHandler := map[string][]EventRef{}
@@ -840,13 +841,13 @@ type functionInfo struct {
 	Package   *types.Package
 }
 
-func typedFunctions(fset *token.FileSet, packageDir string, files []*ast.File) map[string]functionInfo {
+func typedFunctions(fset *token.FileSet, packageDir string, files []*ast.File, inspectionCache *packageInspectionCache) map[string]functionInfo {
 	info := &types.Info{
 		Defs: map[*ast.Ident]types.Object{},
 		Uses: map[*ast.Ident]types.Object{},
 	}
 	config := types.Config{
-		Importer: contractScanImporter(packageDir, fset, files),
+		Importer: contractScanImporter(packageDir, fset, files, inspectionCache),
 		Error:    func(error) {},
 	}
 	packageName := ""
@@ -893,12 +894,46 @@ func typedFunctions(fset *token.FileSet, packageDir string, files []*ast.File) m
 	return functions
 }
 
-func contractScanImporter(packageDir string, fset *token.FileSet, files []*ast.File) types.Importer {
+type packageInspectionCache struct {
+	exports         map[string]map[string]string
+	loadExportFiles func(packageDir string, importPaths []string) (map[string]string, error)
+}
+
+func newPackageInspectionCache() *packageInspectionCache {
+	return &packageInspectionCache{
+		exports:         map[string]map[string]string{},
+		loadExportFiles: scanGoListExportFiles,
+	}
+}
+
+func (cache *packageInspectionCache) exportFiles(packageDir string, importPaths []string) (map[string]string, error) {
+	if cache == nil {
+		return scanGoListExportFiles(packageDir, importPaths)
+	}
+	key := packageInspectionCacheKey(packageDir, importPaths)
+	if exports, ok := cache.exports[key]; ok {
+		return exports, nil
+	}
+	exports, err := cache.loadExportFiles(packageDir, importPaths)
+	if err != nil {
+		return nil, err
+	}
+	cache.exports[key] = exports
+	return exports, nil
+}
+
+func packageInspectionCacheKey(packageDir string, importPaths []string) string {
+	paths := append([]string(nil), importPaths...)
+	sort.Strings(paths)
+	return packageDir + "\x00" + strings.Join(paths, "\x00")
+}
+
+func contractScanImporter(packageDir string, fset *token.FileSet, files []*ast.File, inspectionCache *packageInspectionCache) types.Importer {
 	importPaths := scanImportedGoPaths(files)
 	if packageDir == "" || len(importPaths) == 0 {
 		return importer.Default()
 	}
-	exports, err := scanGoListExportFiles(packageDir, importPaths)
+	exports, err := inspectionCache.exportFiles(packageDir, importPaths)
 	if err != nil || len(exports) == 0 {
 		return importer.Default()
 	}

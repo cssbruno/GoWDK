@@ -410,6 +410,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Contract scan reports include `go/types` diagnostics for command, query,
   event, and job handler signatures across local package files and imported
   handler symbols when the standard Go importer can resolve them.
+- Contract scanning caches package import/export inspection by package directory
+  and import set inside each scan.
 - Contract scan reports include the top-level package registration function
   that accepts `*contracts.Registry`, when the registration call is inside one.
 - Contract scan roles are propagated into linked IR, app adapter IR, and

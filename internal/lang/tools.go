@@ -11,6 +11,8 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/contractscan"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/parser"
 )
@@ -270,8 +272,25 @@ func CheckFiles(config gowdk.Config, paths []string) (manifest.Manifest, Diagnos
 	}
 	if !diagnostics.HasErrors() {
 		app = compiler.BindBackendHandlers(app)
+		diagnostics = append(diagnostics, validateContractReferences(config, app)...)
 	}
 	return app, diagnostics
+}
+
+func validateContractReferences(config gowdk.Config, app manifest.Manifest) Diagnostics {
+	ir := gwdkanalysis.BuildIR(config, app)
+	if len(ir.ContractRefs) == 0 {
+		return nil
+	}
+	report, err := contractscan.Scan(".")
+	if err != nil {
+		return Diagnostics{{Severity: "error", Message: fmt.Sprintf("scan Go contracts: %v", err)}}
+	}
+	ir.ContractRefs = contractscan.LinkReferences(ir.ContractRefs, report)
+	if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
+		return compilerDiagnostics(err, app)
+	}
+	return nil
 }
 
 // CheckSource parses and validates one in-memory .gwdk source buffer.

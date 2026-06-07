@@ -235,6 +235,72 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 	t.Fatalf("missing contract_reference event in report: %s", payload)
 }
 
+func TestCheckJSONReportsMissingContractReference(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	pageSource := `package pages
+
+@page patients
+@route "/patients"
+
+view {
+  <main>
+    <form method="post" action="/patients" g:command="patients.CreatePatient">
+      <input name="name" />
+    </form>
+  </main>
+}
+`
+	page := filepath.Join(root, "pages", "patients.page.gwdk")
+	writeCLIFile(t, page, pageSource)
+
+	var output string
+	var err error
+	withWorkingDir(t, root, func() {
+		output, err = captureCLIStdout(t, func() error {
+			return run([]string{"check", "--config", config, "--json", page})
+		})
+	})
+	if err == nil {
+		t.Fatal("expected missing contract reference to fail check")
+	}
+	if !strings.Contains(output, `"code": "contract_reference_missing"`) ||
+		!strings.Contains(output, "command patients.CreatePatient has no scanned Go registration") ||
+		!strings.Contains(output, `"line": 8`) {
+		t.Fatalf("expected missing contract diagnostic with source span, got:\n%s", output)
+	}
+}
+
+func TestBuildFailsForMissingContractReference(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	pageSource := `package pages
+
+@page patients
+@route "/patients"
+
+view {
+  <main g:query="patients.GetPatientPage">
+    <h1>Patients</h1>
+  </main>
+}
+`
+	page := filepath.Join(root, "pages", "patients.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, page, pageSource)
+
+	var err error
+	withWorkingDir(t, root, func() {
+		err = run([]string{"build", "--config", config, "--out", outputDir, page})
+	})
+	if err == nil {
+		t.Fatal("expected missing query contract reference to fail build")
+	}
+	if _, statErr := os.Stat(filepath.Join(outputDir, "gowdk-build-report.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected build to stop before writing output, stat err=%v", statErr)
+	}
+}
+
 func TestInitCommandScaffoldsBuildableProject(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "site")
 	if err := run([]string{"init", root}); err != nil {

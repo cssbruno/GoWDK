@@ -87,6 +87,8 @@ Current behavior:
 - `gowdk build` links command references to scanned Go command registrations
   and adds `contract_reference` events with status and source line/column to
   `gowdk-build-report.json`.
+- `gowdk check` and CLI `gowdk build` fail when a command reference is missing
+  or linked to an invalid Go handler signature.
 - Requires a package-qualified Go reference such as `patients.CreatePatient`.
 - Must not be combined with `g:post`.
 
@@ -110,6 +112,8 @@ Current behavior:
 - `gowdk build` links query references to scanned Go query registrations and
   adds `contract_reference` events with status and source line/column to
   `gowdk-build-report.json`.
+- `gowdk check` and CLI `gowdk build` fail when a query reference is missing or
+  linked to an invalid Go handler signature.
 - Requires a package-qualified Go reference such as `patients.GetPatientPage`.
 - Must not be combined with `g:post` or `g:command` on the same form.
 
@@ -133,6 +137,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   `patients.CreatePatient` or `patients.GetPatientPage`.
 - Form-local `g:command` references and element-local `g:query` references
   include exact source line and column in IR and build reports.
+- Missing or invalid command/query references produce `contract_reference_*`
+  diagnostics in `gowdk check` and stop CLI builds.
 - Other contract diagnostics do not all have exact source spans yet.
 - `gowdk contracts`, `gowdk list commands|queries|events|jobs`, and
   `gowdk graph` can scan Go AST registration calls today.

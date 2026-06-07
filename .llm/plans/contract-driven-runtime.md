@@ -376,7 +376,7 @@ wherever the contract is HTTP-exposed.
 - [ ] Preserve existing endpoint metadata.
 - [x] Add first missing/invalid command/query reference status in build
       reports.
-- [ ] Add diagnostics for unresolved references.
+- [x] Add diagnostics for unresolved or invalid command/query references.
 - [x] Add first duplicate command owner diagnostics from Go contract scans.
 - [x] Add exact `.gwdk` source spans for form-local command references and
       element-local query references in IR and build reports.

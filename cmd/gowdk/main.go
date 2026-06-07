@@ -731,6 +731,10 @@ func buildOnce(options cliOptions, request buildRequest) error {
 		fmt.Fprintln(os.Stderr, err)
 		return fmt.Errorf("build failed")
 	}
+	if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return fmt.Errorf("build failed")
+	}
 
 	result, err := buildgen.BuildFromIR(options.Config, ir, outputDir)
 	if err != nil {

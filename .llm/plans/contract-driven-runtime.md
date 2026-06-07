@@ -409,7 +409,8 @@ wherever the contract is HTTP-exposed.
 - [x] Add presentation-event fanout hook for SSE/WebSocket adapters.
 - [x] Add role filtering so web binaries do not accidentally run worker-only
       subscribers unless configured.
-- [ ] Add graceful shutdown for background handlers.
+- [x] Add event worker source loop with ack/nack and context cancellation.
+- [ ] Add graceful shutdown for generated background handlers and cron jobs.
 - [x] Add event-envelope replay helpers for worker/outbox delivery code.
 - [x] Document failure behavior for subscriber errors.
 

@@ -196,6 +196,24 @@ run through role filtering. If a subscriber returns an error, replay stops and
 returns `subscriber_failed`; adapter retry and idempotency policy stays outside
 the core runtime.
 
+Queue or outbox adapters can drive worker subscribers with `EventSource`:
+
+```go
+type PatientEventSource struct{}
+
+func (PatientEventSource) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch, error) {
+    return contracts.EventBatch{}, contracts.ErrEventSourceClosed
+}
+
+err := contracts.RunEventWorker(ctx, r, PatientEventSource{})
+```
+
+`RunEventWorker` dispatches batches with `RoleWorker`, calls `Ack` after
+successful subscriber replay, calls `Nack` when subscriber replay fails, stops
+cleanly when the source returns `ErrEventSourceClosed`, and returns the context
+error when `ctx` is canceled. `RunEventWorkerForRole` can be used for another
+runtime role.
+
 ## `.gwdk` Command References
 
 Use `g:command` on forms to declare backend command intent:
@@ -290,6 +308,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Realtime adapters can implement the dependency-free `PresentationFanout`
   interface and receive only presentation envelopes through
   `ExecuteCommandToPresentationFanout` or `SendPresentationEventsToFanout`.
+- Queue/outbox adapters can implement the dependency-free `EventSource`
+  interface and drive worker-role subscribers through `RunEventWorker`.
 - Full package graph validation and imported handler validation are planned.
 - Durable outbox implementations, concrete broker adapters, split
   web/worker/cron binaries, and concrete SSE/WebSocket adapters are planned.

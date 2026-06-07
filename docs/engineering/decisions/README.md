@@ -22,3 +22,4 @@ Recommended naming:
   GOWDK Compiler and GOWDK Runtime.
 - `0007-static-first-spa-navigation.md`: accepted static-first SPA navigation and generated JavaScript guardrails.
 - `0008-bounded-client-language.md`: accepted bounded `client {}` language and page-scoped store boundaries.
+- `0009-optional-inline-go-authoring.md`: accepted optional inline Go authoring direction, with extraction to normal package Go.

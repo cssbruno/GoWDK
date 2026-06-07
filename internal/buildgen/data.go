@@ -27,7 +27,7 @@ func parsePathParams(source string) (map[string]string, error) {
 	return parseLiteralStringMap(source, "path param")
 }
 
-func parseBuildData(body string, routeParams map[string]string, imports []manifest.Import, source string) (map[string]string, error) {
+func parseBuildData(body string, routeParams map[string]string, imports []manifest.Import, scripts []manifest.GoBlock, source string) (map[string]string, error) {
 	lines := significantBuildLines(body)
 	if len(lines) == 1 {
 		call, ok, err := parseBuildDataCallLine(lines[0])
@@ -35,7 +35,7 @@ func parseBuildData(body string, routeParams map[string]string, imports []manife
 			return nil, err
 		}
 		if ok {
-			return runBuildDataCallRef(call, imports, source)
+			return runBuildDataCallRef(call, imports, scripts, source)
 		}
 	}
 	data := map[string]buildValue{}
@@ -422,8 +422,11 @@ func significantBuildLines(body string) []string {
 	return lines
 }
 
-func runBuildDataCallRef(ref buildCallRef, imports []manifest.Import, source string) (map[string]string, error) {
+func runBuildDataCallRef(ref buildCallRef, imports []manifest.Import, scripts []manifest.GoBlock, source string) (map[string]string, error) {
 	if ref.Alias == "" {
+		if script, ok := packageScriptWithFunction(scripts, ref.Function); ok {
+			return runInlineBuildDataCall(script, imports, source, ref.Function)
+		}
 		importPath, err := samePackageImportPath(source)
 		if err != nil {
 			return nil, err
@@ -435,6 +438,207 @@ func runBuildDataCallRef(ref buildCallRef, imports []manifest.Import, source str
 		return nil, fmt.Errorf("build import %q is not declared", ref.Alias)
 	}
 	return runBuildDataCall(ref.Alias, item.Path, ref.Function)
+}
+
+func packageScriptWithFunction(scripts []manifest.GoBlock, function string) (manifest.GoBlock, bool) {
+	for _, script := range scripts {
+		if !isStaticPackageGoBlockTarget(script.Target) {
+			continue
+		}
+		file, err := parseInlineGoBlockFile(script, "gowdkinline")
+		if err != nil {
+			return manifest.GoBlock{}, false
+		}
+		for _, declaration := range file.Decls {
+			functionDeclaration, ok := declaration.(*ast.FuncDecl)
+			if ok && functionDeclaration.Name.Name == function {
+				return script, true
+			}
+		}
+	}
+	return manifest.GoBlock{}, false
+}
+
+func isStaticPackageGoBlockTarget(target string) bool {
+	switch strings.TrimSpace(target) {
+	case "", "spa":
+		return true
+	default:
+		return false
+	}
+}
+
+func runInlineBuildDataCall(script manifest.GoBlock, imports []manifest.Import, source string, function string) (map[string]string, error) {
+	runnerSource, err := inlineBuildDataRunnerSource(script, imports, source, function)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.CreateTemp("", "gowdk-inline-build-data-*.go")
+	if err != nil {
+		return nil, err
+	}
+	path := file.Name()
+	defer os.Remove(path)
+	if _, err := file.WriteString(runnerSource); err != nil {
+		file.Close()
+		return nil, err
+	}
+	if err := file.Close(); err != nil {
+		return nil, err
+	}
+
+	command := exec.Command("go", "run", path)
+	command.Dir = sourceDir(source)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("run inline build data function %s: %w\n%s", function, err, strings.TrimSpace(string(output)))
+	}
+	return parseBuildFunctionOutput(output)
+}
+
+func inlineBuildDataRunnerSource(script manifest.GoBlock, imports []manifest.Import, source string, function string) (string, error) {
+	if !literalNamePattern.MatchString(function) {
+		return "", fmt.Errorf("invalid build function name %q", function)
+	}
+	file, err := parseInlineGoBlockFile(script, packageNameForInlineScript(source))
+	if err != nil {
+		return "", err
+	}
+
+	decls := []ast.Decl{inlineBuildDataImportDecl(imports, file)}
+	for _, declaration := range file.Decls {
+		if gen, ok := declaration.(*ast.GenDecl); ok && gen.Tok == token.IMPORT {
+			continue
+		}
+		decls = append(decls, declaration)
+	}
+	decls = append(decls, inlineBuildDataMainDecl(function))
+
+	runner := &ast.File{Name: ast.NewIdent("main"), Decls: decls}
+	var buffer bytes.Buffer
+	if err := printer.Fprint(&buffer, token.NewFileSet(), runner); err != nil {
+		return "", fmt.Errorf("print inline build data runner: %w", err)
+	}
+	formatted, err := format.Source(buffer.Bytes())
+	if err != nil {
+		return "", fmt.Errorf("format inline build data runner: %w", err)
+	}
+	return string(formatted), nil
+}
+
+func parseInlineGoBlockFile(script manifest.GoBlock, packageName string) (*ast.File, error) {
+	source := "package " + packageName + "\n" + script.Body
+	file, err := parser.ParseFile(token.NewFileSet(), "inline-script.gwdk.go", source, parser.AllErrors)
+	if err != nil {
+		line := script.Span.Start.Line
+		if line > 0 {
+			return nil, fmt.Errorf("go block starting on line %d has invalid Go: %w", line, err)
+		}
+		return nil, fmt.Errorf("go block has invalid Go: %w", err)
+	}
+	return file, nil
+}
+
+func packageNameForInlineScript(source string) string {
+	base := filepath.Base(sourceDir(source))
+	if literalNamePattern.MatchString(base) {
+		return base
+	}
+	return "gowdkinline"
+}
+
+func inlineBuildDataImportDecl(imports []manifest.Import, scriptFile *ast.File) ast.Decl {
+	specs := []ast.Spec{
+		&ast.ImportSpec{Name: ast.NewIdent("gowdkjson"), Path: buildDataStringLit("encoding/json")},
+		&ast.ImportSpec{Name: ast.NewIdent("gowdkos"), Path: buildDataStringLit("os")},
+	}
+	seen := map[string]bool{
+		importKey("gowdkjson", "encoding/json"): true,
+		importKey("gowdkos", "os"):              true,
+	}
+	for _, item := range imports {
+		path := strings.TrimSpace(item.Path)
+		if path == "" {
+			continue
+		}
+		alias := strings.TrimSpace(item.Alias)
+		key := importKey(alias, path)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		spec := &ast.ImportSpec{Path: buildDataStringLit(path)}
+		if alias != "" {
+			spec.Name = ast.NewIdent(alias)
+		}
+		specs = append(specs, spec)
+	}
+	for _, declaration := range scriptFile.Decls {
+		gen, ok := declaration.(*ast.GenDecl)
+		if !ok || gen.Tok != token.IMPORT {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			importSpec, ok := spec.(*ast.ImportSpec)
+			if !ok {
+				continue
+			}
+			path, err := strconv.Unquote(importSpec.Path.Value)
+			if err != nil {
+				path = importSpec.Path.Value
+			}
+			alias := ""
+			if importSpec.Name != nil {
+				alias = importSpec.Name.Name
+			}
+			key := importKey(alias, path)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			specs = append(specs, importSpec)
+		}
+	}
+	return &ast.GenDecl{Tok: token.IMPORT, Specs: specs}
+}
+
+func importKey(alias string, path string) string {
+	return alias + "\x00" + path
+}
+
+func inlineBuildDataMainDecl(function string) ast.Decl {
+	return &ast.FuncDecl{
+		Name: ast.NewIdent("main"),
+		Type: &ast.FuncType{Params: &ast.FieldList{}},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent("value")},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent(function)}},
+			},
+			&ast.IfStmt{
+				Init: &ast.AssignStmt{
+					Lhs: []ast.Expr{ast.NewIdent("err")},
+					Tok: token.DEFINE,
+					Rhs: []ast.Expr{&ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X: &ast.CallExpr{
+								Fun:  &ast.SelectorExpr{X: ast.NewIdent("gowdkjson"), Sel: ast.NewIdent("NewEncoder")},
+								Args: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent("gowdkos"), Sel: ast.NewIdent("Stdout")}},
+							},
+							Sel: ast.NewIdent("Encode"),
+						},
+						Args: []ast.Expr{ast.NewIdent("value")},
+					}},
+				},
+				Cond: &ast.BinaryExpr{X: ast.NewIdent("err"), Op: token.NEQ, Y: ast.NewIdent("nil")},
+				Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: &ast.CallExpr{
+					Fun:  ast.NewIdent("panic"),
+					Args: []ast.Expr{ast.NewIdent("err")},
+				}}}},
+			},
+		}},
+	}
 }
 
 func samePackageImportPath(source string) (string, error) {

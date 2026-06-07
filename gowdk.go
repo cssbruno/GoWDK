@@ -194,6 +194,58 @@ type Addon interface {
 	Features() []Feature
 }
 
+// GoBlockConsumer is an optional addon extension point for targeted go blocks
+// such as go addon.contracts {}.
+type GoBlockConsumer interface {
+	GoBlockTargets() []string
+	ValidateGoBlock(target GoBlockTarget, context GoBlockContext) []GoBlockDiagnostic
+	GeneratedGo(target GoBlockTarget, context GoBlockContext) ([]GoBlockFile, error)
+}
+
+// GoBlockTarget describes one parsed go block passed to an addon.
+type GoBlockTarget struct {
+	Target       string
+	OwnerKind    string
+	OwnerID      string
+	OwnerPackage string
+	SourcePath   string
+	Body         string
+	Span         SourceSpan
+}
+
+// GoBlockContext describes the compiler lane that owns a go block target.
+type GoBlockContext struct {
+	Render RenderMode
+}
+
+// GoBlockDiagnostic is an addon-produced diagnostic for a go block target.
+type GoBlockDiagnostic struct {
+	Code    string
+	Message string
+	Span    SourceSpan
+}
+
+// GoBlockFile is a generated file emitted by an addon go block consumer. Path is
+// relative to the generated app directory.
+type GoBlockFile struct {
+	Path    string
+	Source  string
+	Package string
+}
+
+// SourcePosition is a 1-based source location exposed to addon go block
+// consumers.
+type SourcePosition struct {
+	Line   int
+	Column int
+}
+
+// SourceSpan is a 1-based source range exposed to addon go block consumers.
+type SourceSpan struct {
+	Start SourcePosition
+	End   SourcePosition
+}
+
 type addon struct {
 	name     string
 	features []Feature

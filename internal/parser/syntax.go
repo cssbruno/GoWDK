@@ -15,7 +15,8 @@ import (
 
 var (
 	literalRecordPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
-	syntaxBlockPattern   = regexp.MustCompile(`^(paths|build|load|client|view|props|exports|emits)\s*\{`)
+	syntaxBlockPattern   = regexp.MustCompile(`^(paths|build|load|client|view|style|props|exports|emits)\s*\{`)
+	goBlockPattern       = regexp.MustCompile(`^go(?:\s+([A-Za-z_][A-Za-z0-9_.-]*))?\s*\{$`)
 )
 
 type SyntaxFile = gwdkast.File
@@ -47,8 +48,8 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 	var captured SyntaxBlock
 	var capturedFragment *SyntaxFragmentEndpoint
 	depth := 0
-	viewStyleDepth := 0
 	seenDeclaration := false
+	seenGoBlocks := map[string]manifest.SourceSpan{}
 
 	scanner := bufio.NewScanner(bytes.NewReader(source))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
@@ -66,20 +67,8 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 			continue
 		}
 		if captured.Kind != "" {
-			if captured.Kind == "view" {
-				if viewStyleDepth > 0 {
-					body = append(body, syntaxBodyLine{Text: rawLine, Line: lineNumber})
-					viewStyleDepth += braceDelta(rawLine)
-					if viewStyleDepth < 0 {
-						return SyntaxFile{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
-					}
-					continue
-				}
-				if isStyleBlockStart(line) {
-					viewStyleDepth = 1
-					body = append(body, syntaxBodyLine{Text: rawLine, Line: lineNumber})
-					continue
-				}
+			if captured.Kind == "view" && line == "style {" {
+				return SyntaxFile{}, fmt.Errorf("line %d: style block must be outside view {}", lineNumber)
 			}
 			if line == "}" {
 				depth--
@@ -101,6 +90,18 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 			}
 			if captured.Kind == "client" && strings.Contains(line, "{") {
 				depth += strings.Count(line, "{")
+			}
+			if captured.Kind == "go" {
+				depth += braceDelta(rawLine)
+				if depth < 1 {
+					return SyntaxFile{}, fmt.Errorf("line %d: go block closed unexpectedly", lineNumber)
+				}
+			}
+			if captured.Kind == "style" {
+				depth += braceDelta(rawLine)
+				if depth < 1 {
+					return SyntaxFile{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+				}
 			}
 			body = append(body, syntaxBodyLine{Text: rawLine, Line: lineNumber})
 			continue
@@ -202,6 +203,21 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 			depth = 1
 			continue
 		}
+		if match := goBlockPattern.FindStringSubmatch(line); match != nil {
+			target := strings.TrimSpace(match[1])
+			if span, exists := seenGoBlocks[target]; exists {
+				label := "go"
+				if target != "" {
+					label = "go " + target
+				}
+				return SyntaxFile{}, fmt.Errorf("line %d: duplicate %s block; first declared on line %d", lineNumber, label, span.Start.Line)
+			}
+			span := sourceLineSpan(lineNumber, rawLine)
+			seenGoBlocks[target] = span
+			captured = SyntaxBlock{Kind: "go", Name: target, Span: span}
+			depth = 1
+			continue
+		}
 		if match := actionEndpointPattern.FindStringSubmatch(line); match != nil {
 			if !isExportedIdentifier(match[1]) {
 				return SyntaxFile{}, fmt.Errorf("line %d: action handler %q must be an exported Go identifier", lineNumber, match[1])
@@ -277,9 +293,6 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 		return SyntaxFile{}, err
 	}
 	if captured.Kind != "" {
-		if viewStyleDepth > 0 {
-			return SyntaxFile{}, fmt.Errorf("style block missing closing }")
-		}
 		return SyntaxFile{}, fmt.Errorf("%s block missing closing }", captured.Kind)
 	}
 	if capturedFragment != nil {
@@ -379,18 +392,13 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 	block.BodyStart = syntaxBodyStart(body)
 	switch block.Kind {
 	case "view":
-		viewBody, styleBody, err := splitSyntaxViewStyleBlocks(body)
-		if err != nil {
-			return SyntaxBlock{}, err
-		}
-		block.Body = strings.TrimSpace(joinSyntaxBody(viewBody))
-		block.StyleBody = strings.TrimSpace(joinSyntaxBody(styleBody))
-		block.BodyStart = syntaxBodyStart(viewBody)
 		nodes, err := view.Parse(block.Body)
 		if err != nil {
 			return SyntaxBlock{}, fmt.Errorf("line %d: view body: %w", block.Span.Start.Line, err)
 		}
 		block.View = nodes
+	case "style":
+		block.StyleBody = block.Body
 	case "paths":
 		records, err := parseLiteralRecords(body)
 		if err != nil {
@@ -445,35 +453,6 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 		block.APIs = statements
 	}
 	return block, nil
-}
-
-func splitSyntaxViewStyleBlocks(body []syntaxBodyLine) ([]syntaxBodyLine, []syntaxBodyLine, error) {
-	var viewBody []syntaxBodyLine
-	var styleBody []syntaxBodyLine
-	styleDepth := 0
-	for _, raw := range body {
-		line := strings.TrimSpace(raw.Text)
-		if styleDepth > 0 {
-			styleDepth += braceDelta(raw.Text)
-			if styleDepth < 0 {
-				return nil, nil, fmt.Errorf("line %d: style block closed unexpectedly", raw.Line)
-			}
-			if styleDepth == 0 {
-				continue
-			}
-			styleBody = append(styleBody, raw)
-			continue
-		}
-		if isStyleBlockStart(line) {
-			styleDepth = 1
-			continue
-		}
-		viewBody = append(viewBody, raw)
-	}
-	if styleDepth > 0 {
-		return nil, nil, fmt.Errorf("style block missing closing }")
-	}
-	return viewBody, styleBody, nil
 }
 
 func syntaxBodyStart(body []syntaxBodyLine) manifest.SourcePosition {

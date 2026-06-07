@@ -162,6 +162,7 @@ func buildBlocksFromIR(blocks gwdkir.Blocks) manifest.Blocks {
 		LoadBody:   blocks.LoadBody,
 		Client:     blocks.Client,
 		ClientBody: blocks.ClientBody,
+		GoBlocks:   buildScriptsFromIR(blocks.GoBlocks),
 		View:       blocks.View,
 		ViewBody:   blocks.ViewBody,
 		Style:      blocks.Style,
@@ -174,6 +175,7 @@ func buildBlocksFromIR(blocks gwdkir.Blocks) manifest.Blocks {
 			Build:         blocks.Spans.Build,
 			Load:          blocks.Spans.Load,
 			Client:        blocks.Spans.Client,
+			GoBlocks:      append([]manifest.NamedSpan(nil), blocks.Spans.GoBlocks...),
 			View:          blocks.Spans.View,
 			ViewBodyStart: blocks.Spans.ViewBodyStart,
 			Actions:       append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
@@ -183,6 +185,18 @@ func buildBlocksFromIR(blocks gwdkir.Blocks) manifest.Blocks {
 			Emits:         blocks.Spans.Emits,
 		},
 	}
+}
+
+func buildScriptsFromIR(scripts []gwdkir.GoBlock) []manifest.GoBlock {
+	out := make([]manifest.GoBlock, 0, len(scripts))
+	for _, script := range scripts {
+		out = append(out, manifest.GoBlock{
+			Target: script.Target,
+			Body:   script.Body,
+			Span:   script.Span,
+		})
+	}
+	return out
 }
 
 func buildActionsFromIR(actions []gwdkir.Action) []manifest.Action {

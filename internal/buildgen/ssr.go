@@ -83,7 +83,7 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 
 func ssrArtifact(config gowdk.Config, page manifest.Page, components map[string]view.Component, layouts map[string]manifest.Layout, stylesheets []gowdk.Stylesheet) (SSRArtifact, error) {
 	routeData, replacements := ssrRouteData(page)
-	buildData, err := parseBuildData(page.Blocks.BuildBody, routeData, page.Imports, page.Source)
+	buildData, err := parseBuildData(page.Blocks.BuildBody, routeData, page.Imports, page.Blocks.GoBlocks, page.Source)
 	if err != nil {
 		return SSRArtifact{}, fmt.Errorf("%s: %w", page.ID, err)
 	}

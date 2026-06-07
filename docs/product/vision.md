@@ -60,9 +60,12 @@ helpers, form decoding, response envelopes, actions, APIs, CSRF, partial
 fragments, SSR contracts, embedded assets, contract runtime, and one-binary or
 split-binary wiring.
 
-User application behavior stays in normal Go packages. GOWDK should improve Go
-web authoring through `.gwdk` compilation, GOWDK Runtime contracts, and generated
-adapters before considering any custom Go compiler work.
+User application behavior stays in Go. Separate `.go` files remain the default
+path today, and optional inline Go authoring in `.gwdk` is accepted as planned
+surface only when it extracts to normal importable, testable Go package code.
+GOWDK should improve Go web authoring through `.gwdk` compilation, GOWDK Runtime
+contracts, and generated adapters before considering any custom Go compiler
+work.
 
 ## Execution Lanes
 
@@ -102,7 +105,7 @@ keeping the route, handler, and runtime contracts explicit.
   route kinds.
 - Partial updates use server fragments instead of full-page request rendering.
 - SSR is an integrated non-default request-time page lane selected per page.
-- User behavior stays in normal Go packages; generated Go is adapter glue.
+- User behavior stays in Go; generated Go is adapter glue.
 - Production can ship as one Go binary with embedded frontend assets and
   generated request-time handlers.
 

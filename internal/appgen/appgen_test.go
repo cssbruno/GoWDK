@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
@@ -2361,6 +2363,261 @@ func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	if cacheControl := headers.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("unexpected cache control: %q", cacheControl)
 	}
+}
+
+func TestGeneratedBinaryExecutesInlineSSRScriptLoad(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	sourceDir := filepath.Join(root, "src")
+	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:      "dashboard",
+		Package: "pages",
+		Source:  filepath.Join(sourceDir, "dashboard.page.gwdk"),
+		Route:   "/dashboard",
+		Render:  gowdk.SSR,
+		Imports: []manifest.Import{{
+			Alias: "ssr",
+			Path:  "github.com/cssbruno/gowdk/addons/ssr",
+		}},
+		Blocks: manifest.Blocks{
+			Load:     true,
+			LoadBody: `=> { user.name, request.path }`,
+			View:     true,
+			ViewBody: `<main><h1>{user.name}</h1><p>{request.path}</p></main>`,
+			GoBlocks: []manifest.GoBlock{{
+				Target: "ssr",
+				Body: `func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
+	return map[string]any{
+		"user": map[string]any{"name": "Inline Ada"},
+		"request": map[string]any{"path": ctx.Request.URL.Path},
+	}, nil
+}`,
+			}},
+		},
+	}}}
+	app = compiler.BindBackendHandlers(app)
+	ir := gwdkanalysis.BuildIR(config, app)
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{AutoRoutes: true, Config: config, IR: &ir}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(appDir, "gowdk_go", "pages", "go.go")); err != nil {
+		t.Fatalf("expected generated inline go block package: %v", err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, _, err := waitForHTTPResponse("http://" + addr + "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Inline Ada", "<p>/dashboard</p>"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in SSR response body:\n%s", expected, body)
+		}
+	}
+}
+
+func TestGenerateWritesStaticInlineGoBlockPackages(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	ir := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Imports: []gwdkir.Import{{Alias: "strings", Path: "strings"}},
+			Blocks: gwdkir.Blocks{GoBlocks: []gwdkir.GoBlock{
+				{
+					Body: `func HomeTitle() string {
+	return strings.ToUpper("gowdk")
+}`,
+				},
+				{
+					Target: "spa",
+					Body: `func HomeSeed() string {
+	return "static"
+}`,
+				},
+			}},
+		}},
+		Components: []gwdkir.Component{{
+			Package: "components",
+			Name:    "Badge",
+			Blocks: gwdkir.Blocks{GoBlocks: []gwdkir.GoBlock{{
+				Target: "spa",
+				Body: `func BadgeSeed() string {
+	return "badge"
+}`,
+			}}},
+		}},
+		Layouts: []gwdkir.Layout{{
+			Package: "layouts",
+			ID:      "root",
+			Blocks: gwdkir.Blocks{GoBlocks: []gwdkir.GoBlock{{
+				Body: `func LayoutName() string {
+	return "root"
+}`,
+			}}},
+		}},
+	}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{IR: &ir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedFiles := []string{
+		filepath.Join("gowdk_go", "pages", "go.go"),
+		filepath.Join("gowdk_go", "components", "go.go"),
+		filepath.Join("gowdk_go", "layouts", "go.go"),
+	}
+	for _, relPath := range expectedFiles {
+		if !containsString(result.Files, relPath) {
+			t.Fatalf("expected result files to include %s, got %#v", relPath, result.Files)
+		}
+		payload, err := os.ReadFile(filepath.Join(appDir, relPath))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(payload), "func ") {
+			t.Fatalf("expected generated go block file to contain functions:\n%s", payload)
+		}
+	}
+	pagePayload, err := os.ReadFile(filepath.Join(appDir, "gowdk_go", "pages", "go.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{`package pages`, `import strings "strings"`, `func HomeTitle`, `func HomeSeed`} {
+		if !strings.Contains(string(pagePayload), expected) {
+			t.Fatalf("expected page go block file to contain %q:\n%s", expected, pagePayload)
+		}
+	}
+	command := exec.Command("go", "test", "./...")
+	command.Dir = appDir
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("expected generated app go block packages to pass go test ./...: %v\n%s", err, output)
+	}
+}
+
+func TestInlineGoBlockImportsParticipateInModuleDetection(t *testing.T) {
+	ir := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Imports: []gwdkir.Import{{Alias: "copy", Path: "example.com/site/content"}},
+			Blocks: gwdkir.Blocks{GoBlocks: []gwdkir.GoBlock{{
+				Body: `import local "example.com/site/local"
+
+func HomeTitle() string {
+	return copy.Title() + local.Suffix()
+}`,
+			}}},
+		}},
+	}
+	imports := inlineGoBlockImports(&ir)
+	for _, expected := range []string{"example.com/site/content", "example.com/site/local"} {
+		if !imports[expected] {
+			t.Fatalf("expected inline go block imports to include %s, got %#v", expected, imports)
+		}
+	}
+	if !optionsUsesModuleImports(Options{IR: &ir}, "example.com/site") {
+		t.Fatalf("expected inline go blocks to mark example.com/site as used")
+	}
+}
+
+func TestGenerateWritesAddonGoBlockConsumerFiles(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	program := gwdkir.Program{Version: gwdkir.Version, Pages: []gwdkir.Page{{
+		ID:      "patients",
+		Package: "pages",
+		Source:  "patients.page.gwdk",
+		Route:   "/patients",
+		Blocks: gwdkir.Blocks{GoBlocks: []gwdkir.GoBlock{{
+			Target: "addon.contracts",
+			Body:   `func RegisterContracts() {}`,
+		}}},
+	}}}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Addons: []gowdk.Addon{appgenGoBlockAddon{}}},
+		IR:     &program,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	generatedPath := filepath.Join(appDir, "contracts", "generated.go")
+	payload, err := os.ReadFile(generatedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), `func RegisteredContract() string`) {
+		t.Fatalf("expected addon-generated go block file, got:\n%s", payload)
+	}
+	if !containsString(result.Files, filepath.Join("contracts", "generated.go")) {
+		t.Fatalf("expected result files to include addon go block file, got %#v", result.Files)
+	}
+}
+
+type appgenGoBlockAddon struct{}
+
+func (addon appgenGoBlockAddon) Name() string {
+	return "contracts"
+}
+
+func (addon appgenGoBlockAddon) Features() []gowdk.Feature {
+	return []gowdk.Feature{gowdk.FeatureContracts}
+}
+
+func (addon appgenGoBlockAddon) GoBlockTargets() []string {
+	return []string{"addon.contracts"}
+}
+
+func (addon appgenGoBlockAddon) ValidateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
+	return nil
+}
+
+func (addon appgenGoBlockAddon) GeneratedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
+	return []gowdk.GoBlockFile{{
+		Path:   filepath.Join("contracts", "generated.go"),
+		Source: "package contracts\n\nfunc RegisteredContract() string { return " + strconv.Quote(target.OwnerID) + " }\n",
+	}}, nil
+}
+
+func containsString(values []string, value string) bool {
+	for _, item := range values {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 func TestGeneratedBinaryUsesCustomSSRLoadErrorPage(t *testing.T) {

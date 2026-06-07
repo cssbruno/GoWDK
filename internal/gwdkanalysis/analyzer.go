@@ -261,13 +261,21 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 			component.Blocks.Client = true
 			component.Blocks.ClientBody = block.Body
 			component.Blocks.Spans.Client = block.Span
+		case "go":
+			component.Blocks.GoBlocks = append(component.Blocks.GoBlocks, manifest.GoBlock{
+				Target: block.Name,
+				Body:   block.Body,
+				Span:   block.Span,
+			})
+			component.Blocks.Spans.GoBlocks = append(component.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: block.Name, Span: block.Span})
 		case "view":
 			component.Blocks.View = true
 			component.Blocks.ViewBody = block.Body
-			component.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
-			component.Blocks.StyleBody = block.StyleBody
 			component.Blocks.Spans.View = block.Span
 			component.Blocks.Spans.ViewBodyStart = block.BodyStart
+		case "style":
+			component.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
+			component.Blocks.StyleBody = block.StyleBody
 		default:
 			return manifest.Component{}, fmt.Errorf("%s: unsupported component block %q", source, block.Kind)
 		}
@@ -303,13 +311,25 @@ func LowerLayout(source string, ast gwdkast.File) (manifest.Layout, error) {
 		}
 	}
 	for _, block := range ast.Blocks {
+		if block.Kind == "go" {
+			layout.Blocks.GoBlocks = append(layout.Blocks.GoBlocks, manifest.GoBlock{
+				Target: block.Name,
+				Body:   block.Body,
+				Span:   block.Span,
+			})
+			layout.Blocks.Spans.GoBlocks = append(layout.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: block.Name, Span: block.Span})
+			continue
+		}
+		if block.Kind == "style" {
+			layout.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
+			layout.Blocks.StyleBody = block.StyleBody
+			continue
+		}
 		if block.Kind != "view" {
 			return manifest.Layout{}, fmt.Errorf("%s: unsupported layout block %q", source, block.Kind)
 		}
 		layout.Blocks.View = true
 		layout.Blocks.ViewBody = block.Body
-		layout.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
-		layout.Blocks.StyleBody = block.StyleBody
 		layout.Blocks.Spans.View = block.Span
 		layout.Blocks.Spans.ViewBodyStart = block.BodyStart
 	}
@@ -861,13 +881,21 @@ func applyPageBlock(page *manifest.Page, block gwdkast.Block) {
 		page.Blocks.Client = true
 		page.Blocks.ClientBody = block.Body
 		page.Blocks.Spans.Client = block.Span
+	case "go":
+		page.Blocks.GoBlocks = append(page.Blocks.GoBlocks, manifest.GoBlock{
+			Target: block.Name,
+			Body:   block.Body,
+			Span:   block.Span,
+		})
+		page.Blocks.Spans.GoBlocks = append(page.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: block.Name, Span: block.Span})
 	case "view":
 		page.Blocks.View = true
 		page.Blocks.ViewBody = block.Body
-		page.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
-		page.Blocks.StyleBody = block.StyleBody
 		page.Blocks.Spans.View = block.Span
 		page.Blocks.Spans.ViewBodyStart = block.BodyStart
+	case "style":
+		page.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
+		page.Blocks.StyleBody = block.StyleBody
 	}
 }
 
@@ -979,6 +1007,7 @@ func lowerIRBlocks(blocks manifest.Blocks) gwdkir.Blocks {
 		LoadBody:   blocks.LoadBody,
 		Client:     blocks.Client,
 		ClientBody: blocks.ClientBody,
+		GoBlocks:   lowerIRGoBlocks(blocks.GoBlocks),
 		View:       blocks.View,
 		ViewBody:   blocks.ViewBody,
 		Style:      blocks.Style,
@@ -991,6 +1020,7 @@ func lowerIRBlocks(blocks manifest.Blocks) gwdkir.Blocks {
 			Build:         blocks.Spans.Build,
 			Load:          blocks.Spans.Load,
 			Client:        blocks.Spans.Client,
+			GoBlocks:      append([]manifest.NamedSpan(nil), blocks.Spans.GoBlocks...),
 			View:          blocks.Spans.View,
 			ViewBodyStart: blocks.Spans.ViewBodyStart,
 			Actions:       append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
@@ -1040,6 +1070,18 @@ func lowerIRAPIs(apis []manifest.API) []gwdkir.API {
 			RouteSpan:     api.RouteSpan,
 			RouteParams:   append([]manifest.NamedSpan(nil), api.RouteParams...),
 			ErrorPageSpan: api.ErrorPageSpan,
+		})
+	}
+	return out
+}
+
+func lowerIRGoBlocks(scripts []manifest.GoBlock) []gwdkir.GoBlock {
+	out := make([]gwdkir.GoBlock, 0, len(scripts))
+	for _, block := range scripts {
+		out = append(out, gwdkir.GoBlock{
+			Target: block.Target,
+			Body:   block.Body,
+			Span:   block.Span,
 		})
 	}
 	return out

@@ -29,6 +29,12 @@ build {
   => { title: "Home" }
 }
 
+go ssr {
+func LoadHome() string {
+	return "home"
+}
+}
+
 act Login POST "/login" @error "/errors/login.html"
 api Session GET "/api/session" @error "/errors/session.html"
 
@@ -87,12 +93,22 @@ client {
   }
 }
 
+go addon.hero {
+func RegisterHero() {}
+}
+
 view {
   <section>{title}</section>
 }
 `)},
 		{Path: "components/root.layout.gwdk", Kind: SourceLayout, AST: mustParse(t, `package components
 @layout root
+
+go ssr {
+func LayoutData() string {
+	return "root"
+}
+}
 
 view {
   <slot />
@@ -125,6 +141,9 @@ view {
 	if len(page.Blocks.Fragments) != 1 || page.Blocks.Fragments[0].Name != "Feed" || page.Blocks.Fragments[0].Target != "#feed" {
 		t.Fatalf("unexpected fragments: %#v", page.Blocks.Fragments)
 	}
+	if len(page.Blocks.GoBlocks) != 1 || page.Blocks.GoBlocks[0].Target != "ssr" || !strings.Contains(page.Blocks.GoBlocks[0].Body, "LoadHome") {
+		t.Fatalf("unexpected page go blocks: %#v", page.Blocks.GoBlocks)
+	}
 
 	if result.IR.Version != gwdkir.Version {
 		t.Fatalf("unexpected IR version: %d", result.IR.Version)
@@ -153,6 +172,9 @@ view {
 	if len(result.IR.Pages[0].Blocks.Fragments) != 1 || result.IR.Pages[0].Blocks.Fragments[0].Body != "<section>Feed</section>" {
 		t.Fatalf("expected fragment in IR page blocks, got %#v", result.IR.Pages[0].Blocks.Fragments)
 	}
+	if len(result.IR.Pages[0].Blocks.GoBlocks) != 1 || result.IR.Pages[0].Blocks.GoBlocks[0].Target != "ssr" || !strings.Contains(result.IR.Pages[0].Blocks.GoBlocks[0].Body, "LoadHome") {
+		t.Fatalf("expected go block in IR page blocks, got %#v", result.IR.Pages[0].Blocks.GoBlocks)
+	}
 	if len(result.IR.Templates) != 3 {
 		t.Fatalf("expected page, component, and layout templates, got %#v", result.IR.Templates)
 	}
@@ -162,8 +184,17 @@ view {
 	if len(result.Manifest.Components) != 1 || len(result.Manifest.Components[0].Exports) != 1 || result.Manifest.Components[0].Exports[0].Name != "selectedID" {
 		t.Fatalf("unexpected manifest component exports: %#v", result.Manifest.Components)
 	}
+	if len(result.Manifest.Components[0].Blocks.GoBlocks) != 1 || result.Manifest.Components[0].Blocks.GoBlocks[0].Target != "addon.hero" {
+		t.Fatalf("unexpected manifest component go blocks: %#v", result.Manifest.Components[0].Blocks.GoBlocks)
+	}
 	if len(result.IR.Components) != 1 || len(result.IR.Components[0].Exports) != 1 || result.IR.Components[0].Exports[0].Type != "string" {
 		t.Fatalf("unexpected IR component exports: %#v", result.IR.Components)
+	}
+	if len(result.IR.Components[0].Blocks.GoBlocks) != 1 || result.IR.Components[0].Blocks.GoBlocks[0].Target != "addon.hero" {
+		t.Fatalf("unexpected IR component go blocks: %#v", result.IR.Components[0].Blocks.GoBlocks)
+	}
+	if len(result.IR.Layouts) != 1 || len(result.IR.Layouts[0].Blocks.GoBlocks) != 1 || result.IR.Layouts[0].Blocks.GoBlocks[0].Target != "ssr" {
+		t.Fatalf("unexpected IR layout go blocks: %#v", result.IR.Layouts)
 	}
 	if len(result.IR.Assets) != 4 {
 		t.Fatalf("expected CSS and WASM assets, got %#v", result.IR.Assets)

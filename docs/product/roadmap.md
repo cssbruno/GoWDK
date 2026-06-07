@@ -44,8 +44,10 @@ GOWDK has three execution lanes:
 
 ## Ownership Boundaries
 
-Application Go packages own behavior: handlers, validation, auth, storage,
-typed inputs, service calls, and business rules stay in normal Go.
+Application Go code owns behavior: handlers, validation, auth, storage, typed
+inputs, service calls, and business rules stay in Go. Separate `.go` files are
+the default path today; optional inline Go authoring in `.gwdk` is planned only
+when extracted code remains normal importable, testable package Go.
 
 `.gwdk` files own web declarations: package, page identity, route, render mode,
 layouts, component usage, build-time data, dynamic paths, endpoint declarations,
@@ -86,7 +88,8 @@ These are the durable rules. Changing them should require an ADR.
    explicit hybrid request-time branch.
 7. `act` and `api` declarations name exact exported Go symbols.
 8. Actions and APIs are endpoint metadata, not page route kinds.
-9. User behavior stays in normal Go packages.
+9. User behavior stays in Go code. Inline Go authoring is optional and must
+   extract to normal package Go.
 10. Generated Go is adapter glue, not generated application logic.
 11. Actions, APIs, and fragments can work without full-page request rendering.
 12. SSR is an integrated non-default request-time page-rendering lane.
@@ -112,7 +115,7 @@ level, the current baseline already includes:
   `//gowdk:act` and `//gowdk:api` Go endpoint comments, and migration
   diagnostics for old action/API block syntax;
 - build-time SPA output for simple pages, dynamic `paths {}` subsets, literal,
-  imported, and same-package build data subsets, layouts, components, CSS
+  imported, same-package, and default `go {}` build data subsets, layouts, components, CSS
   assets, route manifests, asset manifests, build reports, generated app
   output, embedded assets, local binaries, WASM deploy artifacts, and a polling
   dev server with live reload;

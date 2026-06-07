@@ -112,6 +112,7 @@ type Blocks struct {
 	LoadBody   string
 	Client     bool
 	ClientBody string
+	GoBlocks   []GoBlock
 	View       bool
 	ViewBody   string
 	Style      bool
@@ -120,6 +121,14 @@ type Blocks struct {
 	APIs       []API
 	Fragments  []FragmentEndpoint
 	Spans      BlockSpans
+}
+
+// GoBlock records one optional inline Go authoring block preserved for the
+// extraction pipeline.
+type GoBlock struct {
+	Target string
+	Body   string
+	Span   manifest.SourceSpan
 }
 
 type PageSpans struct {
@@ -145,6 +154,7 @@ type BlockSpans struct {
 	Build         manifest.SourceSpan
 	Load          manifest.SourceSpan
 	Client        manifest.SourceSpan
+	GoBlocks      []manifest.NamedSpan
 	View          manifest.SourceSpan
 	ViewBodyStart manifest.SourcePosition
 	Actions       []manifest.NamedSpan

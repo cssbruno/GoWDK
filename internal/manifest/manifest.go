@@ -124,6 +124,7 @@ type BlockSpans struct {
 	Build         SourceSpan
 	Load          SourceSpan
 	Client        SourceSpan
+	GoBlocks      []NamedSpan
 	View          SourceSpan
 	ViewBodyStart SourcePosition
 	Actions       []NamedSpan
@@ -221,6 +222,7 @@ type Blocks struct {
 	LoadBody   string
 	Client     bool
 	ClientBody string
+	GoBlocks   []GoBlock
 	View       bool
 	ViewBody   string
 	Style      bool
@@ -229,6 +231,15 @@ type Blocks struct {
 	APIs       []API
 	Fragments  []FragmentEndpoint
 	Spans      BlockSpans
+}
+
+// GoBlock records one optional inline Go authoring block. Target is empty
+// for general package Go, or a lane/addon target such as "spa", "ssr", or
+// "addon.contracts".
+type GoBlock struct {
+	Target string
+	Body   string
+	Span   SourceSpan
 }
 
 // Component describes a .cmp.gwdk component after parsing and normalization.

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/goblockgen"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -199,6 +200,43 @@ func LoadBroken() map[string]any {
 	}
 	if app.Pages[0].LoadBinding.FunctionName != "LoadDashboard" || app.Pages[0].LoadBinding.Status != manifest.BackendBindingBound {
 		t.Fatalf("expected page load binding to be attached, got %#v", app.Pages[0].LoadBinding)
+	}
+}
+
+func TestBindBackendHandlersBindsInlineSSRScriptLoad(t *testing.T) {
+	root := t.TempDir()
+	page := manifest.Page{
+		ID:      "dashboard",
+		Package: "pages",
+		Source:  filepath.Join(root, "dashboard.page.gwdk"),
+		Route:   "/dashboard",
+		Render:  gowdk.SSR,
+		Imports: []manifest.Import{{
+			Alias: "ssr",
+			Path:  ssrImportPath,
+		}},
+		Blocks: manifest.Blocks{
+			Load: true,
+			GoBlocks: []manifest.GoBlock{{
+				Target: "ssr",
+				Body: `func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
+	return map[string]any{"user": "Ada"}, nil
+}`,
+			}},
+		},
+	}
+
+	app := BindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{page}})
+	bindings := compilerBindingsByBlock(app.BackendBindings)
+	binding := bindings["LoadDashboard"]
+	if binding.Status != manifest.BackendBindingBound || binding.Signature != manifest.BackendSignatureLoadError {
+		t.Fatalf("expected inline SSR load binding, got %#v", binding)
+	}
+	if binding.ImportPath != goblockgen.GeneratedImportPath("pages") || binding.PackageName != "pages" {
+		t.Fatalf("unexpected inline go block import metadata: %#v", binding)
+	}
+	if app.Pages[0].LoadBinding.ImportPath != goblockgen.GeneratedImportPath("pages") {
+		t.Fatalf("expected page load binding to use generated go block package, got %#v", app.Pages[0].LoadBinding)
 	}
 }
 

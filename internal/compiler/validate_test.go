@@ -175,6 +175,144 @@ func TestValidateManifestReportsGoPackageTypeErrors(t *testing.T) {
 	}
 }
 
+func TestValidateManifestTypeChecksDefaultScriptWithSiblingGoFiles(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	goFile := filepath.Join(root, "copy.go")
+	if err := os.WriteFile(goFile, []byte(`package app
+
+type PageCopy struct {
+	Title string
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source:  source,
+		Package: "app",
+		ID:      "home",
+		Route:   "/",
+		Blocks: manifest.Blocks{
+			View: true,
+			GoBlocks: []manifest.GoBlock{{
+				Body: `func HomeCopy() PageCopy {
+	return PageCopy{Title: "GOWDK ships apps"}
+}`,
+			}},
+		},
+	}
+
+	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+		t.Fatalf("expected inline go block to type-check with sibling Go files, got %v", err)
+	}
+}
+
+func TestValidateManifestTypeChecksDefaultScriptWithGOWDKImports(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source:  source,
+		Package: "app",
+		ID:      "home",
+		Route:   "/",
+		Imports: []manifest.Import{{Alias: "strings", Path: "strings"}},
+		Blocks: manifest.Blocks{
+			View: true,
+			GoBlocks: []manifest.GoBlock{{
+				Body: `func HomeSlug() string {
+	return strings.ToLower("GOWDK Ships Apps")
+}`,
+			}},
+		},
+	}
+
+	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+		t.Fatalf("expected inline go block to type-check with GOWDK imports, got %v", err)
+	}
+}
+
+func TestValidateManifestReportsDefaultScriptTypeErrors(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source:  source,
+		Package: "app",
+		ID:      "home",
+		Route:   "/",
+		Blocks: manifest.Blocks{
+			View: true,
+			GoBlocks: []manifest.GoBlock{{
+				Span: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 8, Column: 1}},
+				Body: `func BrokenCopy() string {
+	return MissingTitle
+}`,
+			}},
+		},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	if err == nil {
+		t.Fatal("expected inline go block type-check diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	diagnostic := firstDiagnostic(diagnostics, "go_package_error")
+	if diagnostic == nil {
+		t.Fatalf("missing Go package error diagnostic: %#v", diagnostics)
+	}
+	if diagnostic.Source != source {
+		t.Fatalf("expected diagnostic source %s, got %#v", source, diagnostic)
+	}
+	if !strings.Contains(diagnostic.Message, "undefined: MissingTitle") {
+		t.Fatalf("expected undefined inline go block symbol in diagnostic, got %q", diagnostic.Message)
+	}
+	if diagnostic.Span.Start.Line < 8 {
+		t.Fatalf("expected diagnostic to map to go block source line, got %#v", diagnostic.Span)
+	}
+}
+
+func TestValidateManifestTypeChecksSPAGoBlockAsStaticPackageGo(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		Source:  source,
+		Package: "app",
+		ID:      "home",
+		Route:   "/",
+		Blocks: manifest.Blocks{
+			View: true,
+			GoBlocks: []manifest.GoBlock{{
+				Target: "spa",
+				Body: `func StaticSeed() string {
+	return MissingSeed
+}`,
+			}},
+		},
+	}
+
+	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	if err == nil {
+		t.Fatal("expected spa go block type-check diagnostic")
+	}
+	if !strings.Contains(err.Error(), "undefined: MissingSeed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(err.Error(), "request-time") {
+		t.Fatalf("spa go block should not imply request-time behavior: %v", err)
+	}
+}
+
 func TestValidateManifestSkipsSiblingGoPackageForUnsavedAbsoluteSource(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "handlers.go"), []byte("package main\n\nfunc Broken() int { return missing }\n"), 0o644); err != nil {
@@ -3303,6 +3441,149 @@ func TestValidatePageRejectsMissingViewBlock(t *testing.T) {
 	if diagnostics[0].Code != "missing_view_block" {
 		t.Fatalf("unexpected diagnostic code: %s", diagnostics[0].Code)
 	}
+}
+
+func TestValidateManifestRejectsInvalidScriptGo(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:      "home",
+		Package: "pages",
+		Route:   "/",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+			GoBlocks: []manifest.GoBlock{{
+				Body: `func Broken( {`,
+			}},
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected invalid go block error")
+	}
+	if !strings.Contains(err.Error(), "invalid Go") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateManifestRejectsSSRScriptOnSPAPage(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:      "home",
+		Package: "pages",
+		Route:   "/",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+			GoBlocks: []manifest.GoBlock{{
+				Target: "ssr",
+				Body:   `func LoadHome() map[string]any { return nil }`,
+			}},
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected ssr go block render-lane error")
+	}
+	if !strings.Contains(err.Error(), "go ssr") || !strings.Contains(err.Error(), "requires @render ssr") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateManifestRejectsUnknownAddonGoBlockTarget(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:      "home",
+		Package: "pages",
+		Route:   "/",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+			GoBlocks: []manifest.GoBlock{{
+				Target: "addon.contracts",
+				Body:   `func RegisterContracts() {}`,
+			}},
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown addon go block target error")
+	}
+	if !strings.Contains(err.Error(), `requires an enabled addon named "contracts"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateManifestAllowsKnownAddonGoBlockTarget(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:      "home",
+		Package: "pages",
+		Route:   "/",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+			GoBlocks: []manifest.GoBlock{{
+				Target: "addon.contracts",
+				Body:   `func RegisterContracts() {}`,
+			}},
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("contracts", gowdk.FeatureContracts)}}, app)
+	if err != nil {
+		t.Fatalf("expected known addon target to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestUsesAddonGoBlockConsumerDiagnostics(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:      "home",
+		Package: "pages",
+		Route:   "/",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+			GoBlocks: []manifest.GoBlock{{
+				Target: "addon.contracts",
+				Body:   `func RegisterContracts() {}`,
+			}},
+		},
+	}}}
+
+	err := ValidateManifest(gowdk.Config{Addons: []gowdk.Addon{compilerGoBlockAddon{diagnostic: "contract go block rejected"}}}, app)
+	if err == nil {
+		t.Fatal("expected addon go block diagnostic")
+	}
+	if !strings.Contains(err.Error(), "contract go block rejected") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+type compilerGoBlockAddon struct {
+	diagnostic string
+}
+
+func (addon compilerGoBlockAddon) Name() string {
+	return "contracts"
+}
+
+func (addon compilerGoBlockAddon) Features() []gowdk.Feature {
+	return []gowdk.Feature{gowdk.FeatureContracts}
+}
+
+func (addon compilerGoBlockAddon) GoBlockTargets() []string {
+	return []string{"addon.contracts"}
+}
+
+func (addon compilerGoBlockAddon) ValidateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
+	if addon.diagnostic == "" {
+		return nil
+	}
+	return []gowdk.GoBlockDiagnostic{{Code: "contract_script_rejected", Message: addon.diagnostic}}
+}
+
+func (addon compilerGoBlockAddon) GeneratedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
+	return nil, nil
 }
 
 func TestValidateManifestAcceptsQualifiedCSSAssetUse(t *testing.T) {

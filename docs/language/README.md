@@ -7,16 +7,24 @@ imports for build-time data, GOWDK `use` declarations for page-level
 cross-package component calls, explicit component metadata, top-level block
 detection, the first typed action input/redirect/fragment-metadata subset, the
 first API method/route metadata subset, minimal literal `view {}` markup parsing,
+metadata capture for `go {}` inline Go authoring blocks,
 first-slice `g:post`, `g:target`, and `g:swap` lowering, literal dynamic SPA
 route expansion, literal build data, imported no-argument Go build data
-functions, route/build-data interpolation in views, Go-typed component
-props/state contracts, first-slice generated JavaScript islands for stateful
-components, component-level `@wasm` island asset emission, formatting, diagnostics,
-manifest output, build output for simple SPA pages/components, generated
-partial fragment responses for embedded apps, and LSP/editor integration. It
-does not yet parse non-string inline props, full typed action semantics, API
-request/response bodies, broad local client-side reactivity, or full
-semantic/type analysis outside the component contract slice.
+functions, default and `go spa {}` build-data functions, package
+type-checking for saved default and `go spa {}` blocks, generated
+`gowdk_go/` packages for default, `go spa {}`, and `go ssr {}`
+blocks, page-level browser `go spa {}` WASM mounts, `go ssr {}` load
+handlers, configured-addon
+`go addon.<name> {}` validation and generated app Go file emission through
+`gowdk.GoBlockConsumer`, route/build-data
+interpolation in views, Go-typed component props/state contracts, first-slice
+generated JavaScript islands for stateful components, component-level `@wasm`
+island asset emission, formatting, diagnostics, manifest output, build output
+for simple SPA pages/components, generated partial fragment responses for
+embedded apps, and LSP/editor integration. It does not yet parse non-string
+inline props, full typed action semantics, API request/response bodies, broad
+local client-side reactivity, or full semantic/type analysis outside the
+component contract and inline package-go-block slices.
 
 ## Current Files
 

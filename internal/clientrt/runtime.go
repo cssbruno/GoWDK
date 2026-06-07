@@ -59,6 +59,9 @@ const runtimeSource = `(function () {
       if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
         window.__gowdkMountIslands();
       }
+      if (typeof window !== 'undefined' && window.__gowdkMountSPAGoBlocks) {
+        window.__gowdkMountSPAGoBlocks();
+      }
       restoreFocus(focused);
       form.dispatchEvent(new CustomEvent('gowdk:after-swap', {
         detail: { form: form, target: target, swap: swap }
@@ -154,6 +157,9 @@ const runtimeSource = `(function () {
     }
     if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
       window.__gowdkMountIslands();
+    }
+    if (typeof window !== 'undefined' && window.__gowdkMountSPAGoBlocks) {
+      window.__gowdkMountSPAGoBlocks();
     }
     restoreFocus(focused);
     if (window.location.hash) {

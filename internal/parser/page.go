@@ -16,7 +16,6 @@ import (
 
 var (
 	annotationPattern       = regexp.MustCompile(`^@([A-Za-z_][A-Za-z0-9_]*)\s*(.*)$`)
-	blockPattern            = regexp.MustCompile(`^(paths|build|load|view)\s*\{`)
 	packagePattern          = regexp.MustCompile(`^package\s+([A-Za-z_][A-Za-z0-9_]*)$`)
 	importPattern           = regexp.MustCompile(`^import(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s+"([^"]+)"$`)
 	usePattern              = regexp.MustCompile(`^use\s+([A-Za-z_][A-Za-z0-9_]*)\s+"([A-Za-z_][A-Za-z0-9_]*)"$`)
@@ -41,399 +40,11 @@ var (
 
 // ParsePage extracts page metadata and top-level block declarations.
 func ParsePage(source []byte) (manifest.Page, error) {
-	var page manifest.Page
-	var blockBody []string
-	capturedBlock := ""
-	viewStyleDepth := 0
-	var actionBody []string
-	capturedAction := -1
-	actionDepth := 0
-	var apiBody []string
-	capturedAPI := -1
-	var fragmentBody []string
-	capturedFragment := -1
-	seenDeclaration := false
-
-	scanner := bufio.NewScanner(bytes.NewReader(source))
-	for lineNumber := 1; scanner.Scan(); lineNumber++ {
-		rawLine := scanner.Text()
-		line := strings.TrimSpace(rawLine)
-		if capturedFragment >= 0 {
-			if line == "}" {
-				page.Blocks.Fragments[capturedFragment].Body = strings.TrimSpace(strings.Join(fragmentBody, "\n"))
-				capturedFragment = -1
-				fragmentBody = nil
-				continue
-			}
-			fragmentBody = append(fragmentBody, rawLine)
-			continue
-		}
-		if capturedAPI >= 0 {
-			if line == "}" {
-				api, err := parseAPIBody(page.Blocks.APIs[capturedAPI], apiBody)
-				if err != nil {
-					return manifest.Page{}, fmt.Errorf("line %d: %w", lineNumber, err)
-				}
-				page.Blocks.APIs[capturedAPI] = api
-				capturedAPI = -1
-				apiBody = nil
-				continue
-			}
-			apiBody = append(apiBody, rawLine)
-			continue
-		}
-		if capturedAction >= 0 {
-			if line == "}" {
-				actionDepth--
-				if actionDepth == 0 {
-					action, err := parseActionBody(page.Blocks.Actions[capturedAction], actionBody)
-					if err != nil {
-						return manifest.Page{}, fmt.Errorf("line %d: %w", lineNumber, err)
-					}
-					page.Blocks.Actions[capturedAction] = action
-					capturedAction = -1
-					actionBody = nil
-					continue
-				}
-				actionBody = append(actionBody, rawLine)
-				continue
-			}
-			if actionFragmentPattern.FindStringSubmatch(line) != nil {
-				actionDepth++
-				actionBody = append(actionBody, rawLine)
-				continue
-			}
-			actionBody = append(actionBody, rawLine)
-			continue
-		}
-		if capturedBlock != "" {
-			if capturedBlock == "view" {
-				if viewStyleDepth > 0 {
-					blockBody = append(blockBody, rawLine)
-					viewStyleDepth += braceDelta(rawLine)
-					if viewStyleDepth < 0 {
-						return manifest.Page{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
-					}
-					continue
-				}
-				if isStyleBlockStart(line) {
-					viewStyleDepth = 1
-					blockBody = append(blockBody, rawLine)
-					continue
-				}
-			}
-			if line == "}" {
-				applyBlockBody(&page, capturedBlock, blockBody)
-				capturedBlock = ""
-				blockBody = nil
-				continue
-			}
-			blockBody = append(blockBody, rawLine)
-			continue
-		}
-
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
-		}
-
-		if match := packagePattern.FindStringSubmatch(line); match != nil {
-			if seenDeclaration {
-				return manifest.Page{}, fmt.Errorf("line %d: package declaration must be the first non-comment declaration", lineNumber)
-			}
-			page.Package = match[1]
-			page.Spans.Package = sourceLineSpan(lineNumber, rawLine)
-			seenDeclaration = true
-			continue
-		}
-		if strings.HasPrefix(line, "package ") {
-			return manifest.Page{}, fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line)
-		}
-		seenDeclaration = true
-
-		if strings.HasPrefix(line, "@") {
-			match := annotationPattern.FindStringSubmatch(line)
-			if match == nil {
-				return manifest.Page{}, fmt.Errorf("line %d: malformed annotation %q", lineNumber, line)
-			}
-			if err := applyAnnotation(&page, match[1], match[2], lineNumber, rawLine); err != nil {
-				return manifest.Page{}, fmt.Errorf("line %d: %w", lineNumber, err)
-			}
-			continue
-		}
-
-		if match := importPattern.FindStringSubmatch(line); match != nil {
-			page.Imports = append(page.Imports, manifest.Import{
-				Alias: match[1],
-				Path:  match[2],
-				Span:  sourceLineSpan(lineNumber, rawLine),
-			})
-			continue
-		}
-		if isMalformedImport(line) {
-			return manifest.Page{}, fmt.Errorf("line %d: malformed import %q", lineNumber, line)
-		}
-		if match := usePattern.FindStringSubmatch(line); match != nil {
-			page.Uses = append(page.Uses, manifest.Use{
-				Alias:   match[1],
-				Package: match[2],
-				Span:    sourceLineSpan(lineNumber, rawLine),
-			})
-			continue
-		}
-		if isMalformedUse(line) {
-			return manifest.Page{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
-		}
-
-		if match := storePattern.FindStringSubmatch(line); match != nil {
-			span := sourceLineSpan(lineNumber, rawLine)
-			page.Stores = append(page.Stores, manifest.Store{
-				Name: match[1],
-				Type: manifest.GoTypeRef{Alias: match[2], Name: match[3], Span: span},
-				Init: manifest.GoFuncRef{Alias: match[4], Name: match[5], Span: span},
-				Span: span,
-			})
-			continue
-		}
-
-		if match := blockPattern.FindStringSubmatch(line); match != nil {
-			name := match[1]
-			applyBlock(&page, name)
-			applyBlockSpan(&page.Blocks, name, lineNumber, rawLine)
-			if capturesBlockBody(name) {
-				capturedBlock = name
-			}
-			continue
-		}
-
-		if match := actionEndpointPattern.FindStringSubmatch(line); match != nil {
-			name := match[1]
-			method := match[2]
-			route := match[3]
-			span := sourceLineSpan(lineNumber, rawLine)
-			if !isExportedIdentifier(name) {
-				return manifest.Page{}, fmt.Errorf("line %d: action handler %q must be an exported Go identifier", lineNumber, name)
-			}
-			if method != "POST" {
-				return manifest.Page{}, fmt.Errorf("line %d: action %s uses unsupported method %s; actions currently require POST", lineNumber, name, method)
-			}
-			errorPage, err := endpointErrorPage(match, lineNumber)
-			if err != nil {
-				return manifest.Page{}, err
-			}
-			page.Blocks.Actions = append(page.Blocks.Actions, manifest.Action{
-				Name:          name,
-				Method:        method,
-				Route:         route,
-				ErrorPage:     errorPage,
-				Span:          span,
-				RouteSpan:     span,
-				RouteParams:   routeParamSpans(route, lineNumber, rawLine),
-				ErrorPageSpan: endpointErrorPageSpan(match, span),
-			})
-			page.Blocks.Spans.Actions = append(page.Blocks.Spans.Actions, manifest.NamedSpan{Name: name, Span: span})
-			continue
-		}
-		if match := actionPattern.FindStringSubmatch(line); match != nil {
-			return manifest.Page{}, fmt.Errorf("line %d: old action block syntax is not supported; use `act %s POST \"<path>\"` and move behavior to Go", lineNumber, exportedIdentifierSuggestion(match[1]))
-		}
-
-		if match := apiEndpointPattern.FindStringSubmatch(line); match != nil {
-			name := match[1]
-			method := match[2]
-			route := match[3]
-			span := sourceLineSpan(lineNumber, rawLine)
-			if !isExportedIdentifier(name) {
-				return manifest.Page{}, fmt.Errorf("line %d: API handler %q must be an exported Go identifier", lineNumber, name)
-			}
-			errorPage, err := endpointErrorPage(match, lineNumber)
-			if err != nil {
-				return manifest.Page{}, err
-			}
-			page.Blocks.APIs = append(page.Blocks.APIs, manifest.API{
-				Name:          name,
-				Method:        method,
-				Route:         route,
-				ErrorPage:     errorPage,
-				Span:          span,
-				RouteSpan:     span,
-				RouteParams:   routeParamSpans(route, lineNumber, rawLine),
-				ErrorPageSpan: endpointErrorPageSpan(match, span),
-			})
-			page.Blocks.Spans.APIs = append(page.Blocks.Spans.APIs, manifest.NamedSpan{Name: name, Span: span})
-			continue
-		}
-		if match := apiPattern.FindStringSubmatch(line); match != nil {
-			return manifest.Page{}, fmt.Errorf("line %d: old API block syntax is not supported; use `api %s GET \"<path>\"` and move behavior to Go", lineNumber, exportedIdentifierSuggestion(match[1]))
-		}
-
-		if match := fragmentEndpointPattern.FindStringSubmatch(line); match != nil {
-			name := match[1]
-			method := match[2]
-			route := match[3]
-			target := match[4]
-			span := sourceLineSpan(lineNumber, rawLine)
-			if method != "GET" {
-				return manifest.Page{}, fmt.Errorf("line %d: fragment %s uses unsupported method %s; fragments currently require GET", lineNumber, name, method)
-			}
-			if err := validateFragmentTarget(target); err != nil {
-				return manifest.Page{}, fmt.Errorf("line %d: %w", lineNumber, err)
-			}
-			page.Blocks.Fragments = append(page.Blocks.Fragments, manifest.FragmentEndpoint{
-				Name:        name,
-				Method:      method,
-				Route:       route,
-				Target:      target,
-				Span:        span,
-				RouteSpan:   span,
-				TargetSpan:  span,
-				RouteParams: routeParamSpans(route, lineNumber, rawLine),
-			})
-			page.Blocks.Spans.Fragments = append(page.Blocks.Spans.Fragments, manifest.NamedSpan{Name: name, Span: span})
-			capturedFragment = len(page.Blocks.Fragments) - 1
-			fragmentBody = nil
-			continue
-		}
-
-		if name := unsupportedTopLevelBlockName(line); name != "" {
-			return manifest.Page{}, fmt.Errorf("line %d: unsupported top-level block %q", lineNumber, name)
-		}
-	}
-	if err := scanner.Err(); err != nil {
+	ast, err := ParseSyntax(source)
+	if err != nil {
 		return manifest.Page{}, err
 	}
-	if capturedBlock != "" {
-		if viewStyleDepth > 0 {
-			return manifest.Page{}, fmt.Errorf("style block missing closing }")
-		}
-		return manifest.Page{}, fmt.Errorf("%s block missing closing }", capturedBlock)
-	}
-	if capturedAction >= 0 {
-		return manifest.Page{}, fmt.Errorf("act %s block missing closing }", page.Blocks.Actions[capturedAction].Name)
-	}
-	if capturedAPI >= 0 {
-		return manifest.Page{}, fmt.Errorf("api %s block missing closing }", page.Blocks.APIs[capturedAPI].Name)
-	}
-	if capturedFragment >= 0 {
-		return manifest.Page{}, fmt.Errorf("fragment %s block missing closing }", page.Blocks.Fragments[capturedFragment].Name)
-	}
-
-	if page.ID == "" {
-		return manifest.Page{}, fmt.Errorf("missing @page")
-	}
-	if page.Route == "" {
-		return manifest.Page{}, fmt.Errorf("%s missing @route", page.ID)
-	}
-	return page, nil
-}
-
-func parseActionBody(action manifest.Action, body []string) (manifest.Action, error) {
-	action.Body = strings.TrimSpace(strings.Join(body, "\n"))
-	baseLine := action.Span.Start.Line + 1
-	for index := 0; index < len(body); index++ {
-		rawLine := body[index]
-		line := strings.TrimSpace(rawLine)
-		span := sourceLineSpan(baseLine+index, rawLine)
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
-		}
-		if match := actionFragmentPattern.FindStringSubmatch(line); match != nil {
-			fragment, nextIndex, err := parseActionFragment(action.Name, body, index, match[1], baseLine)
-			if err != nil {
-				return manifest.Action{}, err
-			}
-			action.Fragments = append(action.Fragments, fragment)
-			index = nextIndex
-			continue
-		}
-		if match := actionInputPattern.FindStringSubmatch(line); match != nil {
-			if action.InputName != "" {
-				return manifest.Action{}, fmt.Errorf("action %s line %d declares multiple form inputs", action.Name, index+1)
-			}
-			action.InputName = match[1]
-			action.InputType = match[2]
-			action.InputSpan = span
-			continue
-		}
-		if match := actionValidPattern.FindStringSubmatch(line); match != nil {
-			if action.InputName == "" {
-				return manifest.Action{}, fmt.Errorf("action %s line %d validates before declaring form input", action.Name, index+1)
-			}
-			if match[1] != action.InputName {
-				return manifest.Action{}, fmt.Errorf("action %s line %d validates %q but input is %q", action.Name, index+1, match[1], action.InputName)
-			}
-			action.ValidatesInput = true
-			action.ValidationSpan = span
-			continue
-		}
-		if match := actionRedirectPattern.FindStringSubmatch(line); match != nil {
-			if action.Redirect != "" {
-				return manifest.Action{}, fmt.Errorf("action %s line %d declares multiple redirects", action.Name, index+1)
-			}
-			redirect := match[1]
-			if err := validateActionRedirect(redirect); err != nil {
-				return manifest.Action{}, fmt.Errorf("action %s line %d: %w", action.Name, index+1, err)
-			}
-			action.Redirect = redirect
-			action.RedirectSpan = span
-			continue
-		}
-		return manifest.Action{}, fmt.Errorf("action %s line %d has unsupported syntax %q", action.Name, index+1, line)
-	}
-	return action, nil
-}
-
-func parseActionFragment(actionName string, body []string, start int, target string, baseLine int) (manifest.Fragment, int, error) {
-	if err := validateFragmentTarget(target); err != nil {
-		return manifest.Fragment{}, start, fmt.Errorf("action %s line %d: %w", actionName, start+1, err)
-	}
-	var fragmentBody []string
-	for index := start + 1; index < len(body); index++ {
-		line := strings.TrimSpace(body[index])
-		if line == "}" {
-			return manifest.Fragment{
-				Target: target,
-				Body:   strings.TrimSpace(strings.Join(fragmentBody, "\n")),
-				Span:   sourceLineSpan(baseLine+start, body[start]),
-			}, index, nil
-		}
-		fragmentBody = append(fragmentBody, body[index])
-	}
-	return manifest.Fragment{}, start, fmt.Errorf("action %s line %d fragment %q missing closing }", actionName, start+1, target)
-}
-
-func parseAPIBody(api manifest.API, body []string) (manifest.API, error) {
-	baseLine := api.Span.Start.Line + 1
-	for index, rawLine := range body {
-		line := strings.TrimSpace(rawLine)
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
-		}
-		if match := apiRoutePattern.FindStringSubmatch(line); match != nil {
-			if api.Method != "" || api.Route != "" {
-				return manifest.API{}, fmt.Errorf("api %s line %d declares multiple routes", api.Name, index+1)
-			}
-			api.Method = match[1]
-			api.Route = match[2]
-			api.RouteSpan = sourceLineSpan(baseLine+index, rawLine)
-			api.RouteParams = routeParamSpans(api.Route, baseLine+index, rawLine)
-			continue
-		}
-		return manifest.API{}, fmt.Errorf("api %s line %d has unsupported syntax %q", api.Name, index+1, line)
-	}
-	return api, nil
-}
-
-func validateActionRedirect(value string) error {
-	if !strings.HasPrefix(value, "/") {
-		return fmt.Errorf("redirect %q must be a local absolute path", value)
-	}
-	if strings.HasPrefix(value, "//") {
-		return fmt.Errorf("redirect %q must not be protocol-relative", value)
-	}
-	if strings.ContainsAny(value, "\r\n") {
-		return fmt.Errorf("redirect %q must not contain newlines", value)
-	}
-	return nil
+	return lowerPageSyntax(source, ast)
 }
 
 func validateFragmentTarget(value string) error {
@@ -457,19 +68,68 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	var component manifest.Component
 	var viewBody []string
 	inView := false
-	viewStyleDepth := 0
+	var styleBody []string
+	inStyle := false
+	styleDepth := 0
 	inProps := false
 	inExports := false
 	inEmits := false
 	var clientBody []string
 	inClient := false
 	clientDepth := 0
+	var goBlockBody []string
+	inGoBlock := false
+	goBlockDepth := 0
+	goBlockTarget := ""
+	seenGoBlocks := map[string]manifest.SourceSpan{}
 	seenDeclaration := false
 
 	scanner := bufio.NewScanner(bytes.NewReader(source))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
+		if inGoBlock {
+			if line == "}" {
+				goBlockDepth--
+				if goBlockDepth == 0 {
+					component.Blocks.GoBlocks = append(component.Blocks.GoBlocks, manifest.GoBlock{
+						Target: goBlockTarget,
+						Body:   strings.TrimSpace(strings.Join(goBlockBody, "\n")),
+						Span:   seenGoBlocks[goBlockTarget],
+					})
+					component.Blocks.Spans.GoBlocks = append(component.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: goBlockTarget, Span: seenGoBlocks[goBlockTarget]})
+					inGoBlock = false
+					goBlockBody = nil
+					goBlockDepth = 0
+					goBlockTarget = ""
+					continue
+				}
+				goBlockBody = append(goBlockBody, rawLine)
+				continue
+			}
+			goBlockDepth += braceDelta(rawLine)
+			if goBlockDepth < 1 {
+				return manifest.Component{}, fmt.Errorf("line %d: go block closed unexpectedly", lineNumber)
+			}
+			goBlockBody = append(goBlockBody, rawLine)
+			continue
+		}
+		if inStyle {
+			styleDepth += braceDelta(rawLine)
+			if styleDepth < 0 {
+				return manifest.Component{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+			}
+			if styleDepth == 0 {
+				component.Blocks.StyleBody = strings.TrimSpace(strings.Join(styleBody, "\n"))
+				component.Blocks.Style = component.Blocks.StyleBody != ""
+				inStyle = false
+				styleBody = nil
+				styleDepth = 0
+				continue
+			}
+			styleBody = append(styleBody, rawLine)
+			continue
+		}
 		if inClient {
 			if line == "}" && clientDepth == 1 {
 				component.Blocks.ClientBody = strings.TrimSpace(strings.Join(clientBody, "\n"))
@@ -486,27 +146,11 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			continue
 		}
 		if inView {
-			if viewStyleDepth > 0 {
-				viewBody = append(viewBody, rawLine)
-				viewStyleDepth += braceDelta(rawLine)
-				if viewStyleDepth < 0 {
-					return manifest.Component{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
-				}
-				continue
-			}
-			if isStyleBlockStart(line) {
-				viewStyleDepth = 1
-				viewBody = append(viewBody, rawLine)
-				continue
+			if line == "style {" {
+				return manifest.Component{}, fmt.Errorf("line %d: style block must be outside view {}", lineNumber)
 			}
 			if line == "}" {
-				view, style, err := splitViewStyleBlocks(viewBody)
-				if err != nil {
-					return manifest.Component{}, err
-				}
-				component.Blocks.ViewBody = view
-				component.Blocks.StyleBody = style
-				component.Blocks.Style = style != ""
+				component.Blocks.ViewBody = strings.TrimSpace(strings.Join(viewBody, "\n"))
 				inView = false
 				viewBody = nil
 				continue
@@ -667,6 +311,16 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			inClient = true
 			clientDepth = 1
 			continue
+		case "go {":
+			span := sourceLineSpan(lineNumber, rawLine)
+			if first, exists := seenGoBlocks[""]; exists {
+				return manifest.Component{}, fmt.Errorf("line %d: duplicate go block; first declared on line %d", lineNumber, first.Start.Line)
+			}
+			seenGoBlocks[""] = span
+			inGoBlock = true
+			goBlockDepth = 1
+			goBlockTarget = ""
+			continue
 		case "emits {":
 			if len(component.Emits) > 0 {
 				return manifest.Component{}, fmt.Errorf("line %d: component declares multiple emits blocks", lineNumber)
@@ -679,6 +333,30 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			component.Blocks.Spans.View = sourceLineSpan(lineNumber, rawLine)
 			inView = true
 			continue
+		case "style {":
+			if component.Blocks.Style {
+				return manifest.Component{}, fmt.Errorf("line %d: component declares multiple style blocks", lineNumber)
+			}
+			component.Blocks.Style = true
+			inStyle = true
+			styleDepth = 1
+			continue
+		}
+		if match := goBlockPattern.FindStringSubmatch(line); match != nil {
+			target := strings.TrimSpace(match[1])
+			span := sourceLineSpan(lineNumber, rawLine)
+			if first, exists := seenGoBlocks[target]; exists {
+				label := "go"
+				if target != "" {
+					label = "go " + target
+				}
+				return manifest.Component{}, fmt.Errorf("line %d: duplicate %s block; first declared on line %d", lineNumber, label, first.Start.Line)
+			}
+			seenGoBlocks[target] = span
+			inGoBlock = true
+			goBlockDepth = 1
+			goBlockTarget = target
+			continue
 		}
 
 		if name := unsupportedTopLevelBlockName(line); name != "" {
@@ -689,10 +367,10 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 		return manifest.Component{}, err
 	}
 	if inView {
-		if viewStyleDepth > 0 {
-			return manifest.Component{}, fmt.Errorf("style block missing closing }")
-		}
 		return manifest.Component{}, fmt.Errorf("view block missing closing }")
+	}
+	if inStyle {
+		return manifest.Component{}, fmt.Errorf("style block missing closing }")
 	}
 	if inProps {
 		return manifest.Component{}, fmt.Errorf("props block missing closing }")
@@ -705,6 +383,9 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	}
 	if inClient {
 		return manifest.Component{}, fmt.Errorf("client block missing closing }")
+	}
+	if inGoBlock {
+		return manifest.Component{}, fmt.Errorf("go block missing closing }")
 	}
 	if component.Name == "" {
 		return manifest.Component{}, fmt.Errorf("missing @component")
@@ -763,36 +444,69 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 	var layout manifest.Layout
 	var viewBody []string
 	inView := false
-	viewStyleDepth := 0
+	var styleBody []string
+	inStyle := false
+	styleDepth := 0
+	var goBlockBody []string
+	inGoBlock := false
+	goBlockDepth := 0
+	goBlockTarget := ""
+	seenGoBlocks := map[string]manifest.SourceSpan{}
 	seenDeclaration := false
 
 	scanner := bufio.NewScanner(bytes.NewReader(source))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
-		if inView {
-			if viewStyleDepth > 0 {
-				viewBody = append(viewBody, rawLine)
-				viewStyleDepth += braceDelta(rawLine)
-				if viewStyleDepth < 0 {
-					return manifest.Layout{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+		if inGoBlock {
+			if line == "}" {
+				goBlockDepth--
+				if goBlockDepth == 0 {
+					layout.Blocks.GoBlocks = append(layout.Blocks.GoBlocks, manifest.GoBlock{
+						Target: goBlockTarget,
+						Body:   strings.TrimSpace(strings.Join(goBlockBody, "\n")),
+						Span:   seenGoBlocks[goBlockTarget],
+					})
+					layout.Blocks.Spans.GoBlocks = append(layout.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: goBlockTarget, Span: seenGoBlocks[goBlockTarget]})
+					inGoBlock = false
+					goBlockBody = nil
+					goBlockDepth = 0
+					goBlockTarget = ""
+					continue
 				}
+				goBlockBody = append(goBlockBody, rawLine)
 				continue
 			}
-			if isStyleBlockStart(line) {
-				viewStyleDepth = 1
-				viewBody = append(viewBody, rawLine)
+			goBlockDepth += braceDelta(rawLine)
+			if goBlockDepth < 1 {
+				return manifest.Layout{}, fmt.Errorf("line %d: go block closed unexpectedly", lineNumber)
+			}
+			goBlockBody = append(goBlockBody, rawLine)
+			continue
+		}
+		if inStyle {
+			styleDepth += braceDelta(rawLine)
+			if styleDepth < 0 {
+				return manifest.Layout{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+			}
+			if styleDepth == 0 {
+				layout.Blocks.StyleBody = strings.TrimSpace(strings.Join(styleBody, "\n"))
+				layout.Blocks.Style = layout.Blocks.StyleBody != ""
+				inStyle = false
+				styleBody = nil
+				styleDepth = 0
 				continue
+			}
+			styleBody = append(styleBody, rawLine)
+			continue
+		}
+		if inView {
+			if line == "style {" {
+				return manifest.Layout{}, fmt.Errorf("line %d: style block must be outside view {}", lineNumber)
 			}
 			if line == "}" {
-				view, style, err := splitViewStyleBlocks(viewBody)
-				if err != nil {
-					return manifest.Layout{}, err
-				}
 				layout.Blocks.View = true
-				layout.Blocks.ViewBody = view
-				layout.Blocks.StyleBody = style
-				layout.Blocks.Style = style != ""
+				layout.Blocks.ViewBody = strings.TrimSpace(strings.Join(viewBody, "\n"))
 				inView = false
 				viewBody = nil
 				continue
@@ -847,6 +561,40 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 			layout.Blocks.Spans.View = sourceLineSpan(lineNumber, rawLine)
 			inView = true
 			continue
+		case "style {":
+			if layout.Blocks.Style {
+				return manifest.Layout{}, fmt.Errorf("line %d: layout declares multiple style blocks", lineNumber)
+			}
+			layout.Blocks.Style = true
+			inStyle = true
+			styleDepth = 1
+			continue
+		case "go {":
+			span := sourceLineSpan(lineNumber, rawLine)
+			if first, exists := seenGoBlocks[""]; exists {
+				return manifest.Layout{}, fmt.Errorf("line %d: duplicate go block; first declared on line %d", lineNumber, first.Start.Line)
+			}
+			seenGoBlocks[""] = span
+			inGoBlock = true
+			goBlockDepth = 1
+			goBlockTarget = ""
+			continue
+		}
+		if match := goBlockPattern.FindStringSubmatch(line); match != nil {
+			target := strings.TrimSpace(match[1])
+			span := sourceLineSpan(lineNumber, rawLine)
+			if first, exists := seenGoBlocks[target]; exists {
+				label := "go"
+				if target != "" {
+					label = "go " + target
+				}
+				return manifest.Layout{}, fmt.Errorf("line %d: duplicate %s block; first declared on line %d", lineNumber, label, first.Start.Line)
+			}
+			seenGoBlocks[target] = span
+			inGoBlock = true
+			goBlockDepth = 1
+			goBlockTarget = target
+			continue
 		}
 
 		if name := unsupportedTopLevelBlockName(line); name != "" {
@@ -857,10 +605,13 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 		return manifest.Layout{}, err
 	}
 	if inView {
-		if viewStyleDepth > 0 {
-			return manifest.Layout{}, fmt.Errorf("style block missing closing }")
-		}
 		return manifest.Layout{}, fmt.Errorf("view block missing closing }")
+	}
+	if inStyle {
+		return manifest.Layout{}, fmt.Errorf("style block missing closing }")
+	}
+	if inGoBlock {
+		return manifest.Layout{}, fmt.Errorf("go block missing closing }")
 	}
 	if layout.ID == "" {
 		return manifest.Layout{}, fmt.Errorf("missing @layout")
@@ -1082,91 +833,6 @@ func applyComponentAnnotation(component *manifest.Component, name, rawValue stri
 		return fmt.Errorf("unsupported annotation @%s", name)
 	}
 	return nil
-}
-
-func applyBlock(page *manifest.Page, name string) {
-	switch name {
-	case "paths":
-		page.Paths = true
-	case "build":
-		page.Blocks.Build = true
-	case "load":
-		page.Blocks.Load = true
-	case "view":
-		page.Blocks.View = true
-	}
-}
-
-func applyBlockSpan(blocks *manifest.Blocks, name string, lineNumber int, rawLine string) {
-	span := sourceLineSpan(lineNumber, rawLine)
-	switch name {
-	case "paths":
-		blocks.Spans.Paths = span
-	case "build":
-		blocks.Spans.Build = span
-	case "load":
-		blocks.Spans.Load = span
-	case "view":
-		blocks.Spans.View = span
-	}
-}
-
-func capturesBlockBody(name string) bool {
-	return name == "paths" || name == "build" || name == "load" || name == "view"
-}
-
-func applyBlockBody(page *manifest.Page, name string, body []string) {
-	text := strings.TrimSpace(strings.Join(body, "\n"))
-	switch name {
-	case "paths":
-		page.Blocks.PathsBody = text
-	case "build":
-		page.Blocks.BuildBody = text
-	case "load":
-		page.Blocks.LoadBody = text
-	case "view":
-		view, style, err := splitViewStyleBlocks(body)
-		if err != nil {
-			page.Blocks.ViewBody = text
-			return
-		}
-		page.Blocks.ViewBody = view
-		page.Blocks.StyleBody = style
-		page.Blocks.Style = style != ""
-	}
-}
-
-func isStyleBlockStart(line string) bool {
-	return line == "style {"
-}
-
-func splitViewStyleBlocks(lines []string) (string, string, error) {
-	var viewLines []string
-	var styleLines []string
-	styleDepth := 0
-	for _, rawLine := range lines {
-		line := strings.TrimSpace(rawLine)
-		if styleDepth > 0 {
-			styleDepth += braceDelta(rawLine)
-			if styleDepth < 0 {
-				return "", "", fmt.Errorf("style block closed unexpectedly")
-			}
-			if styleDepth == 0 {
-				continue
-			}
-			styleLines = append(styleLines, rawLine)
-			continue
-		}
-		if isStyleBlockStart(line) {
-			styleDepth = 1
-			continue
-		}
-		viewLines = append(viewLines, rawLine)
-	}
-	if styleDepth > 0 {
-		return "", "", fmt.Errorf("style block missing closing }")
-	}
-	return strings.TrimSpace(strings.Join(viewLines, "\n")), strings.TrimSpace(strings.Join(styleLines, "\n")), nil
 }
 
 func splitList(value string) []string {

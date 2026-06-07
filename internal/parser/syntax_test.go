@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk/internal/gwdkast"
@@ -97,32 +98,33 @@ build {
 	}
 }
 
-func TestParseSyntaxExtractsNestedViewStyleBlock(t *testing.T) {
+func TestParseSyntaxReadsStyleBlockOutsideView(t *testing.T) {
 	file := mustParseSyntax(t, []byte(`@page styled
 @route "/styled"
 
 view {
   <main class="hero">Styled</main>
+}
 
-  style {
-    .hero {
-      color: red;
-    }
+style {
+  .hero {
+    color: red;
   }
 }
 `))
-	if len(file.Blocks) != 1 {
-		t.Fatalf("expected view block, got %#v", file.Blocks)
+	if len(file.Blocks) != 2 {
+		t.Fatalf("expected view and style blocks, got %#v", file.Blocks)
 	}
-	block := file.Blocks[0]
-	if block.Body != `<main class="hero">Styled</main>` {
-		t.Fatalf("unexpected view body: %q", block.Body)
+	viewBlock := file.Blocks[0]
+	if viewBlock.Kind != "view" || viewBlock.Body != `<main class="hero">Styled</main>` {
+		t.Fatalf("unexpected view block: %#v", viewBlock)
 	}
-	if block.StyleBody != ".hero {\n      color: red;\n    }" {
-		t.Fatalf("unexpected style body: %q", block.StyleBody)
+	if len(viewBlock.View) != 1 {
+		t.Fatalf("expected parsed view AST, got %#v", viewBlock.View)
 	}
-	if len(block.View) != 1 {
-		t.Fatalf("expected parsed view AST, got %#v", block.View)
+	styleBlock := file.Blocks[1]
+	if styleBlock.Kind != "style" || styleBlock.StyleBody != ".hero {\n    color: red;\n  }" {
+		t.Fatalf("unexpected style block: %#v", styleBlock)
 	}
 }
 
@@ -151,6 +153,71 @@ view {
 	}
 	if file.Blocks[0].Call.Alias != "interop" || file.Blocks[0].Call.Function != "FeaturedCopyForBuild" {
 		t.Fatalf("unexpected build call: %#v", file.Blocks[0].Call)
+	}
+}
+
+func TestParseSyntaxReadsGoBlocks(t *testing.T) {
+	file, err := ParseSyntax([]byte(`package pages
+@page home
+@route "/"
+
+go {
+func HomePageForBuild() PageCopy {
+	return PageCopy{Title: "Home"}
+}
+}
+
+go ssr {
+func LoadDashboard() string {
+	return "dashboard"
+}
+}
+
+view {
+  <main>Home</main>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Blocks) != 3 {
+		t.Fatalf("expected go block, go ssr, and view blocks, got %#v", file.Blocks)
+	}
+	if file.Blocks[0].Kind != "go" || file.Blocks[0].Name != "" {
+		t.Fatalf("unexpected default go block block: %#v", file.Blocks[0])
+	}
+	if !strings.Contains(file.Blocks[0].Body, "func HomePageForBuild") {
+		t.Fatalf("unexpected default go block body: %q", file.Blocks[0].Body)
+	}
+	if file.Blocks[1].Kind != "go" || file.Blocks[1].Name != "ssr" {
+		t.Fatalf("unexpected targeted go block block: %#v", file.Blocks[1])
+	}
+	if !strings.Contains(file.Blocks[1].Body, "func LoadDashboard") {
+		t.Fatalf("unexpected targeted go block body: %q", file.Blocks[1].Body)
+	}
+}
+
+func TestParseSyntaxRejectsDuplicateGoBlockTarget(t *testing.T) {
+	_, err := ParseSyntax([]byte(`@page home
+@route "/"
+
+go ssr {
+func One() {}
+}
+
+go ssr {
+func Two() {}
+}
+
+view {
+  <main>Home</main>
+}
+`))
+	if err == nil {
+		t.Fatal("expected duplicate go target error")
+	}
+	if !strings.Contains(err.Error(), "duplicate go ssr block") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

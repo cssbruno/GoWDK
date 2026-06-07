@@ -113,22 +113,22 @@ view {
 	}
 }
 
-func TestParsePageExtractsNestedViewStyleBlock(t *testing.T) {
+func TestParsePageReadsStyleBlockOutsideView(t *testing.T) {
 	page, err := ParsePage([]byte(`
 @page styled
 @route "/styled"
 
 view {
   <main class="hero">Styled</main>
+}
 
-  style {
-    .hero {
-      color: red;
-    }
+style {
+  .hero {
+    color: red;
+  }
 
-    @media (min-width: 40rem) {
-      .hero { color: blue; }
-    }
+  @media (min-width: 40rem) {
+    .hero { color: blue; }
   }
 }
 `))
@@ -138,8 +138,8 @@ view {
 	if page.Blocks.ViewBody != `<main class="hero">Styled</main>` {
 		t.Fatalf("unexpected view body: %q", page.Blocks.ViewBody)
 	}
-	if !page.Blocks.Style || !strings.Contains(page.Blocks.StyleBody, ".hero {\n      color: red;\n    }") {
-		t.Fatalf("expected nested style body, got %#v", page.Blocks)
+	if !page.Blocks.Style || !strings.Contains(page.Blocks.StyleBody, ".hero {\n    color: red;\n  }") {
+		t.Fatalf("expected style body, got %#v", page.Blocks)
 	}
 	if strings.Contains(page.Blocks.ViewBody, "style") {
 		t.Fatalf("did not expect style block in view body: %q", page.Blocks.ViewBody)
@@ -1062,6 +1062,89 @@ view {
 	}
 	if component.Blocks.Spans.Client.Start.Line != 4 {
 		t.Fatalf("expected client span line 4, got %#v", component.Blocks.Spans.Client)
+	}
+}
+
+func TestParsePageReadsGoBlocks(t *testing.T) {
+	page, err := ParsePage([]byte(`
+@page home
+@route "/"
+
+go {
+func HomePageForBuild() PageCopy {
+	return PageCopy{Title: "Home"}
+}
+}
+
+go ssr {
+func LoadHome() string {
+	return "Home"
+}
+}
+
+view {
+  <main>Home</main>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Blocks.GoBlocks) != 2 {
+		t.Fatalf("expected two go blocks, got %#v", page.Blocks.GoBlocks)
+	}
+	if page.Blocks.GoBlocks[0].Target != "" || !strings.Contains(page.Blocks.GoBlocks[0].Body, "HomePageForBuild") {
+		t.Fatalf("unexpected default go block: %#v", page.Blocks.GoBlocks[0])
+	}
+	if page.Blocks.GoBlocks[1].Target != "ssr" || !strings.Contains(page.Blocks.GoBlocks[1].Body, "LoadHome") {
+		t.Fatalf("unexpected ssr go block: %#v", page.Blocks.GoBlocks[1])
+	}
+	if len(page.Blocks.Spans.GoBlocks) != 2 || page.Blocks.Spans.GoBlocks[1].Name != "ssr" {
+		t.Fatalf("unexpected go spans: %#v", page.Blocks.Spans.GoBlocks)
+	}
+}
+
+func TestParseComponentReadsGoBlock(t *testing.T) {
+	component, err := ParseComponent([]byte(`
+@component Counter
+
+go addon.counter {
+func RegisterCounter() {}
+}
+
+view {
+  <button>Count</button>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(component.Blocks.GoBlocks) != 1 || component.Blocks.GoBlocks[0].Target != "addon.counter" {
+		t.Fatalf("unexpected component go blocks: %#v", component.Blocks.GoBlocks)
+	}
+	if !strings.Contains(component.Blocks.GoBlocks[0].Body, "RegisterCounter") {
+		t.Fatalf("unexpected component go block body: %q", component.Blocks.GoBlocks[0].Body)
+	}
+}
+
+func TestParseLayoutReadsGoBlock(t *testing.T) {
+	layout, err := ParseLayout([]byte(`
+@layout root
+
+go ssr {
+func LayoutData() string {
+	return "root"
+}
+}
+
+view {
+  <slot />
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(layout.Blocks.GoBlocks) != 1 || layout.Blocks.GoBlocks[0].Target != "ssr" {
+		t.Fatalf("unexpected layout go blocks: %#v", layout.Blocks.GoBlocks)
 	}
 }
 

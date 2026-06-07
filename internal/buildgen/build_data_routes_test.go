@@ -292,6 +292,100 @@ func TestBuildUsesImportedGoBuildData(t *testing.T) {
 	}
 }
 
+func TestBuildUsesInlineGoBlockGoBuildData(t *testing.T) {
+	outputDir := t.TempDir()
+	sourceDir := t.TempDir()
+	source := filepath.Join(sourceDir, "home.page.gwdk")
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:      "go.inline",
+		Package: "pages",
+		Source:  source,
+		Route:   "/go-inline",
+		Imports: []manifest.Import{{
+			Alias: "strings",
+			Path:  "strings",
+		}},
+		Blocks: manifest.Blocks{
+			Build:     true,
+			BuildBody: `=> HomePageForBuild()`,
+			GoBlocks: []manifest.GoBlock{{
+				Body: `type PageCopy struct {
+	Title string ` + "`json:\"title\"`" + `
+	Slug string ` + "`json:\"slug\"`" + `
+}
+
+func HomePageForBuild() PageCopy {
+	title := "GOWDK ships apps"
+	return PageCopy{
+		Title: title,
+		Slug: strings.ToLower(strings.ReplaceAll(title, " ", "-")),
+	}
+}`,
+			}},
+			View:     true,
+			ViewBody: `<main data-slug="{slug}"><h1>{title}</h1></main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "go-inline", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	if !strings.Contains(output, `<main data-slug="gowdk-ships-apps"><h1>GOWDK ships apps</h1></main>`) {
+		t.Fatalf("expected inline go block build data output:\n%s", output)
+	}
+}
+
+func TestBuildUsesSPAGoBlockGoBuildData(t *testing.T) {
+	outputDir := t.TempDir()
+	sourceDir := t.TempDir()
+	source := filepath.Join(sourceDir, "home.page.gwdk")
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:      "go.spa",
+		Package: "pages",
+		Source:  source,
+		Route:   "/go-spa",
+		Blocks: manifest.Blocks{
+			Build:     true,
+			BuildBody: `=> StaticPageForBuild()`,
+			GoBlocks: []manifest.GoBlock{{
+				Target: "spa",
+				Body: `type PageCopy struct {
+	Title string ` + "`json:\"title\"`" + `
+	Slug string ` + "`json:\"slug\"`" + `
+}
+
+func StaticPageForBuild() PageCopy {
+	return PageCopy{
+		Title: "Static-first script",
+		Slug: "static-first-script",
+	}
+}`,
+			}},
+			View:     true,
+			ViewBody: `<main data-slug="{slug}"><h1>{title}</h1></main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "go-spa", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	if !strings.Contains(output, `<main data-slug="static-first-script"><h1>Static-first script</h1></main>`) {
+		t.Fatalf("expected spa script build data output:\n%s", output)
+	}
+}
+
 func TestBuildRejectsMissingGoBuildDataImport(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{{

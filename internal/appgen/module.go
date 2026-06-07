@@ -3,12 +3,17 @@ package appgen
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/goblockgen"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 const gowdkRuntimeModulePath = "github.com/cssbruno/gowdk"
@@ -91,7 +96,50 @@ func optionsUsesModuleImports(options Options, modulePath string) bool {
 			return true
 		}
 	}
+	for importPath := range inlineGoBlockImports(options.IR) {
+		if importPath == modulePath || strings.HasPrefix(importPath, modulePath+"/") {
+			return true
+		}
+	}
 	return false
+}
+
+func inlineGoBlockImports(ir *gwdkir.Program) map[string]bool {
+	imports := map[string]bool{}
+	if ir == nil {
+		return imports
+	}
+	for _, group := range inlineGoBlockGroups(*ir) {
+		for _, item := range group.imports {
+			if strings.TrimSpace(item.Path) != "" {
+				imports[item.Path] = true
+			}
+		}
+		for _, script := range group.goBlocks {
+			file, err := goblockgen.ParseFile("goBlocks", script)
+			if err != nil {
+				continue
+			}
+			for _, spec := range file.Imports {
+				importPath := importSpecPath(spec)
+				if importPath != "" {
+					imports[importPath] = true
+				}
+			}
+		}
+	}
+	return imports
+}
+
+func importSpecPath(spec *ast.ImportSpec) string {
+	if spec == nil || spec.Path == nil {
+		return ""
+	}
+	importPath := strings.Trim(spec.Path.Value, `"`)
+	if unquoted, err := strconv.Unquote(spec.Path.Value); err == nil {
+		importPath = unquoted
+	}
+	return strings.TrimSpace(importPath)
 }
 
 func gowdkRuntimeModuleVersion() string {

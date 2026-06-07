@@ -25,6 +25,8 @@ type packageDeclaration struct {
 	PageID        string
 	ComponentName string
 	Package       string
+	Imports       []manifest.Import
+	GoBlocks      []manifest.GoBlock
 	Span          manifest.SourceSpan
 }
 
@@ -59,7 +61,7 @@ func validatePackages(app manifest.Manifest) []ValidationError {
 
 	for dir, group := range byDir {
 		diagnostics = append(diagnostics, validateGOWDKPackageGroup(dir, group)...)
-		goInfo := inspectGoPackageForValidation(dir)
+		goInfo := inspectGoPackageForValidation(dir, group)
 		diagnostics = append(diagnostics, goInfo.Diagnostics...)
 		if goInfo.Name == "" {
 			continue
@@ -102,11 +104,13 @@ func packageDeclarations(app manifest.Manifest) []packageDeclaration {
 	var declarations []packageDeclaration
 	for _, page := range app.Pages {
 		declarations = append(declarations, packageDeclaration{
-			Source:  page.Source,
-			Label:   sourceLabel(page.Source, page.ID+".page.gwdk"),
-			PageID:  page.ID,
-			Package: page.Package,
-			Span:    firstSpan(page.Spans.Package, page.Spans.Page, page.Spans.Route),
+			Source:   page.Source,
+			Label:    sourceLabel(page.Source, page.ID+".page.gwdk"),
+			PageID:   page.ID,
+			Package:  page.Package,
+			Imports:  page.Imports,
+			GoBlocks: page.Blocks.GoBlocks,
+			Span:     firstSpan(page.Spans.Package, page.Spans.Page, page.Spans.Route),
 		})
 	}
 	for _, component := range app.Components {
@@ -115,15 +119,18 @@ func packageDeclarations(app manifest.Manifest) []packageDeclaration {
 			Label:         sourceLabel(component.Source, component.Name+".cmp.gwdk"),
 			ComponentName: component.Name,
 			Package:       component.Package,
+			Imports:       component.Imports,
+			GoBlocks:      component.Blocks.GoBlocks,
 			Span:          firstSpan(component.PackageSpan, component.Span),
 		})
 	}
 	for _, layout := range app.Layouts {
 		declarations = append(declarations, packageDeclaration{
-			Source:  layout.Source,
-			Label:   sourceLabel(layout.Source, layout.ID+".layout.gwdk"),
-			Package: layout.Package,
-			Span:    firstSpan(layout.PackageSpan, layout.Span),
+			Source:   layout.Source,
+			Label:    sourceLabel(layout.Source, layout.ID+".layout.gwdk"),
+			Package:  layout.Package,
+			GoBlocks: layout.Blocks.GoBlocks,
+			Span:     firstSpan(layout.PackageSpan, layout.Span),
 		})
 	}
 	return declarations
@@ -162,7 +169,7 @@ func validateGOWDKPackageGroup(dir string, group []packageDeclaration) []Validat
 	return diagnostics
 }
 
-func inspectGoPackageForValidation(dir string) goPackageInfo {
+func inspectGoPackageForValidation(dir string, group []packageDeclaration) goPackageInfo {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return goPackageInfo{}
@@ -210,10 +217,177 @@ func inspectGoPackageForValidation(dir string) goPackageInfo {
 			})
 		}
 	}
+	for _, declaration := range group {
+		for _, block := range declaration.GoBlocks {
+			if !isPackageGoBlockTarget(block.Target) {
+				continue
+			}
+			file, err := parseGoBlockPackageFileForValidation(fileSet, declaration, block)
+			if err != nil {
+				info.Diagnostics = append(info.Diagnostics, *err)
+				continue
+			}
+			if file == nil {
+				continue
+			}
+			files = append(files, file)
+			name := file.Name.Name
+			if info.Name == "" {
+				info.Name = name
+				info.Source = declaration.Source
+				continue
+			}
+			if name != info.Name {
+				info.Diagnostics = append(info.Diagnostics, ValidationError{
+					Code:    "go_package_error",
+					Source:  declaration.Source,
+					Span:    block.Span,
+					Message: fmt.Sprintf("GOWDK go block in %s declares package %s, but sibling Go package declares package %s", declaration.Source, name, info.Name),
+				})
+			}
+		}
+	}
 	if len(info.Diagnostics) == 0 && len(files) > 0 {
 		info.Diagnostics = append(info.Diagnostics, typeCheckGoPackageForValidation(dir, info.Name, fileSet, files)...)
 	}
 	return info
+}
+
+func parseGoBlockPackageFileForValidation(fileSet *token.FileSet, declaration packageDeclaration, block manifest.GoBlock) (*ast.File, *ValidationError) {
+	source, err := goBlockPackageSourceForValidation(declaration, block)
+	if err != nil {
+		return nil, nil
+	}
+	file, parseErr := parser.ParseFile(fileSet, declaration.Source, source, parser.AllErrors)
+	if parseErr != nil {
+		diagnostic := ValidationError{
+			Code:          "invalid_go_block",
+			PageID:        declaration.PageID,
+			ComponentName: declaration.ComponentName,
+			Source:        declaration.Source,
+			Span:          block.Span,
+			Message:       fmt.Sprintf("go %s contains invalid Go: %v", goBlockLabel(block.Target), parseErr),
+		}
+		return nil, &diagnostic
+	}
+	return file, nil
+}
+
+func goBlockPackageSourceForValidation(declaration packageDeclaration, block manifest.GoBlock) (string, error) {
+	packageName := strings.TrimSpace(declaration.Package)
+	if packageName == "" {
+		return "", fmt.Errorf("go block package is missing")
+	}
+	body := strings.TrimSpace(block.Body)
+	if body == "" {
+		return "package " + packageName + "\n", nil
+	}
+	bodyFile, err := parser.ParseFile(token.NewFileSet(), declaration.Source, "package "+packageName+"\n"+block.Body, parser.AllErrors)
+	if err != nil {
+		return "", err
+	}
+	var builder strings.Builder
+	builder.WriteString("package ")
+	builder.WriteString(packageName)
+	builder.WriteString("\n")
+	writeGoBlockGOWDKImportsForValidation(&builder, declaration.Imports, bodyFile)
+	line := block.Span.Start.Line
+	if line <= 0 {
+		line = 1
+	}
+	builder.WriteString("//line ")
+	builder.WriteString(filepath.ToSlash(declaration.Source))
+	builder.WriteString(":")
+	builder.WriteString(strconv.Itoa(line))
+	builder.WriteString("\n")
+	builder.WriteString(block.Body)
+	if !strings.HasSuffix(block.Body, "\n") {
+		builder.WriteString("\n")
+	}
+	return builder.String(), nil
+}
+
+func writeGoBlockGOWDKImportsForValidation(builder *strings.Builder, imports []manifest.Import, bodyFile *ast.File) {
+	used := usedScriptIdentifiersForValidation(bodyFile)
+	localImports := goBlockImportAliasesForValidation(bodyFile)
+	var specs []string
+	for _, item := range imports {
+		importPath := strings.TrimSpace(item.Path)
+		if importPath == "" {
+			continue
+		}
+		alias := goBlockImportAliasForValidation(item)
+		if !used[alias] || localImports[alias] {
+			continue
+		}
+		if strings.TrimSpace(item.Alias) == "" {
+			specs = append(specs, strconv.Quote(importPath))
+			continue
+		}
+		specs = append(specs, item.Alias+" "+strconv.Quote(importPath))
+	}
+	if len(specs) == 0 {
+		return
+	}
+	sort.Strings(specs)
+	builder.WriteString("import (\n")
+	for _, spec := range specs {
+		builder.WriteString("\t")
+		builder.WriteString(spec)
+		builder.WriteString("\n")
+	}
+	builder.WriteString(")\n")
+}
+
+func usedScriptIdentifiersForValidation(file *ast.File) map[string]bool {
+	used := map[string]bool{}
+	ast.Inspect(file, func(node ast.Node) bool {
+		ident, ok := node.(*ast.Ident)
+		if ok {
+			used[ident.Name] = true
+		}
+		return true
+	})
+	return used
+}
+
+func goBlockImportAliasesForValidation(file *ast.File) map[string]bool {
+	aliases := map[string]bool{}
+	for _, spec := range file.Imports {
+		importPath := ""
+		if spec.Path != nil {
+			if unquoted, err := strconv.Unquote(spec.Path.Value); err == nil {
+				importPath = unquoted
+			}
+		}
+		alias := ""
+		if spec.Name != nil {
+			alias = spec.Name.Name
+		}
+		if alias == "" {
+			alias = filepath.Base(importPath)
+		}
+		if alias != "" {
+			aliases[alias] = true
+		}
+	}
+	return aliases
+}
+
+func goBlockImportAliasForValidation(item manifest.Import) string {
+	if strings.TrimSpace(item.Alias) != "" {
+		return item.Alias
+	}
+	return filepath.Base(strings.TrimSpace(item.Path))
+}
+
+func isPackageGoBlockTarget(target string) bool {
+	switch strings.TrimSpace(target) {
+	case "", "spa":
+		return true
+	default:
+		return false
+	}
 }
 
 func typeCheckGoPackageForValidation(packageDir string, packageName string, fileSet *token.FileSet, files []*ast.File) []ValidationError {

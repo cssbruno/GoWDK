@@ -92,6 +92,16 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (Result, err
 	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), appSource); err != nil {
 		return Result{}, err
 	}
+	scriptFiles, err := writeInlineGoBlockFiles(absApp, options)
+	if err != nil {
+		return Result{}, err
+	}
+	addonGoBlockFiles, err := writeAddonGoBlockFiles(absApp, options)
+	if err != nil {
+		return Result{}, err
+	}
+	files = append(files, scriptFiles...)
+	files = append(files, addonGoBlockFiles...)
 	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(serverMainSource())); err != nil {
 		return Result{}, err
 	}
@@ -144,6 +154,12 @@ func GenerateBackendWithOptions(appDir string, options Options) (Result, error) 
 		return Result{}, err
 	}
 	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), appSource); err != nil {
+		return Result{}, err
+	}
+	if _, err := writeInlineGoBlockFiles(absApp, options); err != nil {
+		return Result{}, err
+	}
+	if _, err := writeAddonGoBlockFiles(absApp, options); err != nil {
 		return Result{}, err
 	}
 	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(serverMainSource())); err != nil {

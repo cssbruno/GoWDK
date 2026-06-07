@@ -90,9 +90,11 @@ Go source and generated Go source. The two models meet through analyzer output:
 normalized route, component, package, type, and handler binding metadata.
 
 GOWDK will not fork the Go compiler for the current roadmap. User application
-logic stays in normal Go packages. `.gwdk` is the custom compiler surface that
-connects markup, routes, components, build-time data, and runtime bindings
-to normal Go code.
+logic stays in normal Go code. ADR 0009 amends the authoring boundary: separate
+`.go` files remain supported, and future optional inline Go in `.gwdk` must
+extract to normal importable, testable package Go. `.gwdk` is the custom
+compiler surface that connects markup, routes, components, build-time data, and
+runtime bindings to normal Go code.
 
 The package-integrated direction is:
 
@@ -157,8 +159,10 @@ domain logic, handlers, stores, auth, validation policy, or storage code.
 
 - Fork or customize the Go compiler now. Rejected because it would break too
   much tooling before the product model is stable.
-- Keep backend behavior inside `.gwdk act {}` bodies. Rejected because it
-  creates a second backend language and conflicts with normal Go ownership.
+- Keep backend behavior inside non-Go `.gwdk act {}` bodies. Rejected because
+  it creates a second backend language and conflicts with normal Go ownership.
+  Optional inline Go authoring is allowed by ADR 0009 only when extracted code
+  remains ordinary Go.
 - Generate user backend code. Rejected because it makes the framework own
   application logic and creates trust/debugging problems.
 

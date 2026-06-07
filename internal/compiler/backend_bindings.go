@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/goblockgen"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -102,20 +103,32 @@ func BindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 
 func bindLoad(page manifest.Page, pkg featurePackage) manifest.BackendBinding {
 	functionName := loadFunctionName(page.ID)
+	if function, ok := pkg.Functions[functionName]; ok {
+		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
+		if !function.Load() {
+			binding.Status = manifest.BackendBindingUnsupportedSignature
+			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", packageLabel(pkg), functionName)
+			return binding
+		}
+		binding.Signature = function.Signature
+		binding.Status = manifest.BackendBindingBound
+		return binding
+	}
+	inlinePkg := inspectInlineScriptFeaturePackage(page, "ssr")
+	if function, ok := inlinePkg.Functions[functionName]; ok {
+		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, inlinePkg)
+		if !function.Load() {
+			binding.Status = manifest.BackendBindingUnsupportedSignature
+			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", packageLabel(inlinePkg), functionName)
+			return binding
+		}
+		binding.Signature = function.Signature
+		binding.Status = manifest.BackendBindingBound
+		return binding
+	}
 	binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
-	function, ok := pkg.Functions[functionName]
-	if !ok {
-		binding.Status = manifest.BackendBindingMissing
-		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", packageLabel(pkg), functionName)
-		return binding
-	}
-	if !function.Load() {
-		binding.Status = manifest.BackendBindingUnsupportedSignature
-		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", packageLabel(pkg), functionName)
-		return binding
-	}
-	binding.Signature = function.Signature
-	binding.Status = manifest.BackendBindingBound
+	binding.Status = manifest.BackendBindingMissing
+	binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", packageLabel(pkg), functionName)
 	return binding
 }
 
@@ -372,6 +385,64 @@ func inspectFeaturePackage(dir string) featurePackage {
 	inputStructs := collectInputStructs(files)
 	for _, file := range files {
 		imports := astImportAliases(file)
+		for _, declaration := range file.Decls {
+			fn, ok := declaration.(*ast.FuncDecl)
+			if !ok || fn.Recv != nil || fn.Name == nil || !fn.Name.IsExported() {
+				continue
+			}
+			signature, inputType, inputPointer := backendSignature(fn.Type, imports)
+			var inputFields []manifest.BackendInputField
+			var supportMessage string
+			if signature == manifest.BackendSignatureActionForm || signature == manifest.BackendSignatureActionFormPtr {
+				inputStruct, ok := inputStructs[inputType]
+				if !ok {
+					supportMessage = fmt.Sprintf("typed action input %s must be an exported struct in the same package", inputType)
+					signature = ""
+				} else if inputStruct.Message != "" {
+					supportMessage = inputStruct.Message
+					signature = ""
+				} else {
+					inputFields = append([]manifest.BackendInputField(nil), inputStruct.Fields...)
+				}
+			}
+			pkg.Functions[fn.Name.Name] = featureFunction{
+				Name:           fn.Name.Name,
+				Signature:      signature,
+				InputType:      inputType,
+				InputPointer:   inputPointer,
+				InputFields:    inputFields,
+				SupportMessage: supportMessage,
+			}
+		}
+	}
+	return pkg
+}
+
+func inspectInlineScriptFeaturePackage(page manifest.Page, target string) featurePackage {
+	pkg := featurePackage{
+		ImportPath: goblockgen.GeneratedImportPath(page.Package),
+		Name:       goblockgen.SafePackageName(page.Package),
+		Functions:  map[string]featureFunction{},
+	}
+	var files []*ast.File
+	var importMaps []map[string]string
+	for _, block := range page.Blocks.GoBlocks {
+		if strings.TrimSpace(block.Target) != target {
+			continue
+		}
+		file, err := goblockgen.ParseFile(page.Package, block)
+		if err != nil {
+			continue
+		}
+		files = append(files, file)
+		importMaps = append(importMaps, goblockgen.ImportAliases(file, page.Imports))
+	}
+	if len(files) == 0 {
+		return pkg
+	}
+	inputStructs := collectInputStructs(files)
+	for index, file := range files {
+		imports := importMaps[index]
 		for _, declaration := range file.Decls {
 			fn, ok := declaration.(*ast.FuncDecl)
 			if !ok || fn.Recv != nil || fn.Name == nil || !fn.Name.IsExported() {

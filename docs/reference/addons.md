@@ -4,8 +4,9 @@ Addons currently register feature IDs with the compiler. The config loader
 parses built-in addon constructors from `gowdk.config.go` through the Go AST
 when possible. If an addon constructor comes from another importable Go module,
 the loader uses an executable config bridge so GitHub-hosted addons can return
-real `gowdk.Addon` values. The CSS processor contract can run during SPA
-builds; other addon packages do not yet execute full generated behavior.
+real `gowdk.Addon` values. CSS processors can run during SPA builds, and addon
+go block consumers can validate targeted `.gwdk` go blocks and emit generated
+app files.
 
 Current feature IDs:
 
@@ -33,8 +34,9 @@ Current packages:
 - `addons/contracts`
 
 The current compiler validator checks whether SSR is enabled when a page uses
-`@render ssr` or `@render hybrid`. SPA builds also invoke addons that
-implement `gowdk.CSSProcessor`.
+`@render ssr` or `@render hybrid`. SPA builds invoke addons that implement
+`gowdk.CSSProcessor`. Generated app builds invoke configured addons that
+implement `gowdk.GoBlockConsumer` for `go addon.<name> {}` blocks.
 
 The literal config loader recognizes no-argument constructors for these
 built-ins:
@@ -79,11 +81,32 @@ to resolve the addon and its dependency graph with the Go toolchain through
 `go.mod`, `go.sum`, `replace`, `GOPRIVATE`, or the user's configured module
 proxy settings. GOWDK does not vendor, sandbox, or rewrite addon imports.
 
-`addons/tailwind` is an experimental Tailwind v4 CSS processor wrapper around a
-user-provided standalone CLI executable. It does not use npm, download Tailwind
-automatically, add Tailwind to the compiler core or runtime core, or generate
-Tailwind v3 content configuration. The literal config loader recognizes
-`tailwind.Addon` with a literal `tailwind.Options` value.
+## Targeted Go Blocks
+
+External addons can opt into targeted inline Go through
+`gowdk.GoBlockConsumer`:
+
+```go
+type GoBlockConsumer interface {
+	GoBlockTargets() []string
+	ValidateGoBlock(gowdk.GoBlockTarget, gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic
+	GeneratedGo(gowdk.GoBlockTarget, gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error)
+}
+```
+
+For a `.gwdk` block like `go addon.contracts {}`, the addon named
+`contracts` receives target `addon.contracts`. `GoBlockTargets` controls which
+targets the addon accepts. `ValidateGoBlock` can return addon-owned diagnostics.
+`GeneratedGo` can return files relative to the generated app directory; `.go`
+files are formatted before writing. File paths must stay relative to the
+generated app directory.
+
+`addons/tailwind` is an experimental Tailwind v4 CSS processor wrapper around
+the standalone CLI. When `Options.Command` is omitted it uses `tailwindcss` from
+`PATH` or downloads the official standalone executable into `.gowdk/bin`. It
+does not use npm, add Tailwind to the compiler core or runtime core, or
+generate Tailwind v3 content configuration. The literal config loader
+recognizes `tailwind.Addon` with a literal `tailwind.Options` value.
 
 `addons/ratelimit` provides request-time HTTP middleware with fixed-window
 decisions, rate-limit response headers, a process-local in-memory store, and a

@@ -35,8 +35,9 @@ Generated web adapters can execute routable command/query references through
 the local registry with the `web` role, compiler validation rejects web
 references to non-web-only registrations, and `runtime/contracts/fileoutbox`
 provides a dependency-free JSON Lines outbox/EventSource adapter with nack
-retry metadata. Split runtime binaries, database-backed outbox implementations,
-retry backoff/dead-letter policy, and realtime fanout adapters remain planned.
+retry metadata and opt-in dead-letter storage. Split runtime binaries,
+database-backed outbox implementations, retry backoff policy, and realtime
+fanout adapters remain planned.
 
 Still partial: broad local client-side reactivity, scoped component CSS/asset
 emission, richer load/action invalidation, broader hybrid request-time

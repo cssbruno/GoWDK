@@ -155,6 +155,7 @@ import "github.com/cssbruno/gowdk/runtime/contracts/fileoutbox"
 outbox := fileoutbox.New(
     "var/gowdk-outbox.jsonl",
     fileoutbox.WithJSONTypeDecoder[PatientCreated](),
+    fileoutbox.WithDeadLetter("var/gowdk-outbox.dead.jsonl", 5),
 )
 
 _, err := contracts.ExecuteCommandToOutbox[CreatePatient, CreatePatientResult](
@@ -173,9 +174,11 @@ decodes records through explicitly registered decoders, removes records only
 after worker `Ack`, and keeps records after `Nack` for retry. Nack records the
 attempt count, last attempt time, and last error in the durable record. It is
 useful for local development, small single-host deployments, and tests.
+When `WithDeadLetter(path, maxAttempts)` is configured, records move to the
+dead-letter JSON Lines file after the configured failed delivery count.
 Applications that need database transactions, cross-process locking, retry
-backoff, dead-letter queues, or broker delivery should use a database-backed or
-broker-backed adapter.
+backoff, broker delivery, or operational dead-letter processing should use a
+database-backed or broker-backed adapter.
 
 Subscriber handlers must be idempotent for any durable delivery adapter. A
 worker can crash after a subscriber side effect but before `Ack`, or an adapter
@@ -385,7 +388,7 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   `PublishEnvelope`, `PublishEnvelopes`, and role-filtered variants.
 - `runtime/contracts/fileoutbox` provides a dependency-free JSON Lines adapter
   that implements `contracts.Outbox` and `contracts.EventSource`, including
-  nack retry metadata.
+  nack retry metadata and an opt-in dead-letter file.
 - External broker adapters can implement the dependency-free `Broker`
   interface and receive captured envelopes through `ExecuteCommandToBroker` or
   `PublishEventsToBroker`.
@@ -403,5 +406,5 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Full package graph validation and imported handler validation are planned.
 - Cross-package contract input field discovery remains planned.
 - Database-backed outbox implementations, concrete broker adapters, retry
-  backoff/dead-letter policies, split web/worker/cron binaries, and concrete
-  SSE/WebSocket adapters are planned.
+  backoff policy, split web/worker/cron binaries, and concrete SSE/WebSocket
+  adapters are planned.

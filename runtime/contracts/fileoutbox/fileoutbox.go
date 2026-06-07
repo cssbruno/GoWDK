@@ -39,12 +39,14 @@ type Record struct {
 // EventSource. Ack removes delivered records; Nack records retry metadata and
 // leaves records for later delivery.
 type Store struct {
-	mu        sync.Mutex
-	path      string
-	batchSize int
-	decoders  map[string]Decoder
-	seq       uint64
-	now       func() time.Time
+	mu             sync.Mutex
+	path           string
+	batchSize      int
+	deadLetterPath string
+	maxAttempts    int
+	decoders       map[string]Decoder
+	seq            uint64
+	now            func() time.Time
 }
 
 // Option configures a Store.
@@ -56,6 +58,17 @@ func WithBatchSize(size int) Option {
 	return func(store *Store) {
 		if size > 0 {
 			store.batchSize = size
+		}
+	}
+}
+
+// WithDeadLetter moves records to deadLetterPath after maxAttempts failed
+// deliveries. Non-positive maxAttempts or an empty path disables dead-lettering.
+func WithDeadLetter(deadLetterPath string, maxAttempts int) Option {
+	return func(store *Store) {
+		if deadLetterPath != "" && maxAttempts > 0 {
+			store.deadLetterPath = deadLetterPath
+			store.maxAttempts = maxAttempts
 		}
 	}
 }
@@ -153,6 +166,20 @@ func (store *Store) Records(ctx context.Context) ([]Record, error) {
 	return store.readRecordsLocked()
 }
 
+// DeadLetterRecords returns records moved out of the pending outbox by the
+// configured dead-letter policy.
+func (store *Store) DeadLetterRecords(ctx context.Context) ([]Record, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if store.deadLetterPath == "" {
+		return nil, nil
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.readRecordsFromPathLocked(store.deadLetterPath)
+}
+
 // ReceiveEventBatch returns the next pending records as typed event envelopes.
 // It returns contracts.ErrEventSourceClosed when the outbox is empty.
 func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch, error) {
@@ -239,7 +266,11 @@ func (store *Store) decodeRecordsLocked(records []Record) ([]contracts.EventEnve
 }
 
 func (store *Store) readRecordsLocked() ([]Record, error) {
-	file, err := os.Open(store.path)
+	return store.readRecordsFromPathLocked(store.path)
+}
+
+func (store *Store) readRecordsFromPathLocked(path string) ([]Record, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -260,7 +291,7 @@ func (store *Store) readRecordsLocked() ([]Record, error) {
 		}
 		var record Record
 		if err := json.Unmarshal(text, &record); err != nil {
-			return nil, fmt.Errorf("file outbox %s line %d is invalid: %w", store.path, line, err)
+			return nil, fmt.Errorf("file outbox %s line %d is invalid: %w", path, line, err)
 		}
 		record.Value = append(json.RawMessage(nil), record.Value...)
 		records = append(records, record)
@@ -295,15 +326,28 @@ func (store *Store) markRecordsFailedLocked(mark map[string]bool, cause error) e
 	if cause != nil {
 		message = cause.Error()
 	}
-	for index := range records {
-		if !mark[records[index].ID] {
+	var kept []Record
+	var dead []Record
+	for _, record := range records {
+		if !mark[record.ID] {
+			kept = append(kept, record)
 			continue
 		}
-		records[index].Attempts++
-		records[index].LastAttemptAt = &now
-		records[index].LastError = message
+		record.Attempts++
+		record.LastAttemptAt = &now
+		record.LastError = message
+		if store.deadLetterPath != "" && store.maxAttempts > 0 && record.Attempts >= store.maxAttempts {
+			dead = append(dead, record)
+			continue
+		}
+		kept = append(kept, record)
 	}
-	return store.writeRecordsLocked(records)
+	if len(dead) > 0 {
+		if err := store.appendRecordsToPathLocked(store.deadLetterPath, dead); err != nil {
+			return err
+		}
+	}
+	return store.writeRecordsLocked(kept)
 }
 
 func (store *Store) writeRecordsLocked(records []Record) error {
@@ -334,4 +378,25 @@ func (store *Store) writeRecordsLocked(records []Record) error {
 		return err
 	}
 	return os.Rename(tempName, store.path)
+}
+
+func (store *Store) appendRecordsToPathLocked(path string, records []Record) error {
+	if len(records) == 0 {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(file)
+	for _, record := range records {
+		if err := encoder.Encode(record); err != nil {
+			file.Close()
+			return err
+		}
+	}
+	return file.Close()
 }

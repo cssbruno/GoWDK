@@ -116,6 +116,68 @@ func TestReceiveEventBatchNackKeepsRecords(t *testing.T) {
 	}
 }
 
+func TestReceiveEventBatchMovesRecordToDeadLetterAfterMaxAttempts(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "outbox.jsonl")
+	deadLetterPath := filepath.Join(root, "dead-letter.jsonl")
+	store := New(path, WithJSONTypeDecoder[patientCreated](), WithDeadLetter(deadLetterPath, 2))
+	store.now = func() time.Time { return time.Unix(123, 0).UTC() }
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    patientCreated{ID: "patient-1"},
+	}}); err != nil {
+		t.Fatalf("store events: %v", err)
+	}
+
+	first, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive first batch: %v", err)
+	}
+	if err := first.Nack(context.Background(), errors.New("first failure")); err != nil {
+		t.Fatalf("first nack: %v", err)
+	}
+	records, err := store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records after first nack: %v", err)
+	}
+	if len(records) != 1 || records[0].Attempts != 1 {
+		t.Fatalf("unexpected pending records after first nack: %#v", records)
+	}
+	dead, err := store.DeadLetterRecords(context.Background())
+	if err != nil {
+		t.Fatalf("dead letter records after first nack: %v", err)
+	}
+	if len(dead) != 0 {
+		t.Fatalf("dead letter records after first nack = %#v, want empty", dead)
+	}
+
+	second, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive second batch: %v", err)
+	}
+	if err := second.Nack(context.Background(), errors.New("second failure")); err != nil {
+		t.Fatalf("second nack: %v", err)
+	}
+	records, err = store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records after second nack: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("pending records after second nack = %#v, want empty", records)
+	}
+	dead, err = store.DeadLetterRecords(context.Background())
+	if err != nil {
+		t.Fatalf("dead letter records after second nack: %v", err)
+	}
+	if len(dead) != 1 {
+		t.Fatalf("len(dead) = %d, want 1: %#v", len(dead), dead)
+	}
+	if dead[0].Attempts != 2 || dead[0].LastError != "second failure" || dead[0].LastAttemptAt == nil {
+		t.Fatalf("unexpected dead letter retry metadata: %#v", dead[0])
+	}
+}
+
 func TestReceiveEventBatchHonorsBatchSize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "outbox.jsonl")
 	store := New(path, WithBatchSize(1), WithJSONTypeDecoder[patientCreated]())

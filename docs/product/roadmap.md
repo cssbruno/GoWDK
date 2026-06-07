@@ -28,6 +28,8 @@ The public naming rule is deliberately narrow:
 - `gowdk` means CLI, Go package/module spelling, and generated file prefixes.
 - `addon` means optional feature-registration or integration package inside
   the compiler/runtime ecosystem, not a separate product.
+- Never write `GOWDK Kit`; it is the redundant "kit kit" form because the `K`
+  in `GOWDK` already carries that meaning.
 - Avoid bare `core`; use `compiler core`, `runtime core`, or `repository core`.
 
 GOWDK has three execution lanes:

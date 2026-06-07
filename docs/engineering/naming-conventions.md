@@ -7,7 +7,8 @@
   must be explicit.
 - Use `GOWDK Runtime` for the app/runtime product layer.
 - Do not write `GoWDK`, `Go WDK`, `GOWDK Kit`, or invent an expansion for
-  `WDK`.
+  `WDK`. `GOWDK Kit` is especially forbidden because it reads as "kit kit":
+  the `K` in the wordmark already carries the kit idea.
 - When referring to the product direction, prefer concrete wording such as
   "GOWDK ships apps" or "GOWDK is a portable Go web compiler."
 - When referring to the combined layer model, write `GOWDK Compiler plus
@@ -19,7 +20,7 @@
 
 | Name | Use For | Do Not Use For |
 | --- | --- | --- |
-| `GOWDK` | Product name and wordmark for the whole repository/product direction. | A hidden expansion of `WDK`, or the redundant phrase `GOWDK Kit`. |
+| `GOWDK` | Product name and wordmark for the whole repository/product direction. | A hidden expansion of `WDK`, or the redundant "kit kit" phrase `GOWDK Kit`. |
 | `GOWDK Compiler` | `.gwdk` language, parser, analyzer, compiler, diagnostics, LSP, generated adapter source, build output, route metadata, asset metadata. | Runtime request handling, server process ownership, auth, storage, or user business behavior. |
 | `GOWDK Runtime` | Runtime/app layer: `runtime/`, `addons/`, generated `net/http` app serving, routing, request context, form decoding, response envelopes, actions, APIs, fragments, SSR hooks, embedded assets, one-binary and split-binary wiring. | `.gwdk` syntax, parser semantics, compiler AST ownership, or user-owned domain logic. |
 | `gowdk` | CLI binary, Go package name, module path segment, config filename prefixes, generated asset prefixes, generated JavaScript runtime prefixes. | User-facing prose product name. |

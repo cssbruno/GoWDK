@@ -55,6 +55,10 @@ The naming contract is:
 | GOWDK app | A user application built by GOWDK Compiler and served through GOWDK Runtime. |
 | addon | Optional feature-registration or integration package. Addons extend GOWDK Runtime or compiler behavior; they are not a third product layer. |
 
+Do not use `GOWDK Kit` for the app/runtime layer. It is redundant because the
+`K` in `GOWDK` already carries the kit idea, so `GOWDK Kit` reads as "kit kit."
+Use `GOWDK Runtime` when the app/runtime layer must be named.
+
 Avoid bare `core` in product docs because it hides the layer boundary. Use
 `compiler core`, `runtime core`, or `repository core` when the distinction
 matters.

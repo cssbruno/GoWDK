@@ -55,7 +55,8 @@ Uses only `reset.css`, `tokens.css`, and `forms.css`.
 @css none
 ```
 
-Emits no generated page stylesheet.
+Disables discovered page CSS inputs. A direct nested `style {}` block in
+`view {}` still emits generated CSS for the page.
 
 Generated page CSS defaults to:
 
@@ -80,6 +81,32 @@ var Config = gowdk.Config{
 	},
 }
 ```
+
+## Inline View Styles
+
+Pages, components, and layouts can declare a direct nested `style {}` block
+inside `view {}`:
+
+```gwdk
+view {
+  <main class="hero">Home</main>
+
+  style {
+    .hero {
+      color: red;
+    }
+  }
+}
+```
+
+The style block is extracted from the view body before markup parsing. GOWDK
+emits the CSS as generated CSS assets instead of inline `<style>` tags:
+
+- Page style blocks are appended to that page's generated CSS asset.
+- Component style blocks are scoped like component `@css` files.
+- Layout style blocks are linked by pages that declare that layout.
+
+Multiple style blocks in one view are concatenated in source order.
 
 ## Configured Stylesheets
 
@@ -139,13 +166,15 @@ files.
 
 Current implementation status:
 
-- Page CSS discovery, configured stylesheets, processor-emitted CSS, minified
-  hashed filenames, asset manifest mappings, and generated binary cache headers
-  are implemented for build output.
+- Page CSS discovery, nested page `view { style {} }` CSS, configured
+  stylesheets, processor-emitted CSS, minified hashed filenames, asset manifest
+  mappings, and generated binary cache headers are implemented for build
+  output.
 - Component `@css` annotations are parsed, analyzed, emitted as scoped CSS
   files, content-hashed, linked from generated pages, recorded in
   `gowdk-assets.json`, and served with immutable generated binary cache
-  headers.
+  headers. Nested component `view { style {} }` CSS uses the same scoped
+  emission path.
 - Component `@asset` annotations are parsed and analyzed as metadata with
   stable owner data. Emitting component-level non-CSS assets from that metadata
   is planned work.

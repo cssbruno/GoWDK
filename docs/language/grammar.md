@@ -24,7 +24,9 @@ blockName   = letterOrUnderscore (letter | digit | "_" | "." | "-")*
 
 The parser currently scans each trimmed line independently. It records
 declarations and captures raw body text for `paths {}`, `build {}`, `load {}`,
-and `view {}` blocks until a line that contains only `}`. `act` and `api`
+and `view {}` blocks until a line that contains only `}`. A direct nested
+`style {}` block inside `view {}` is extracted as CSS, and CSS braces inside
+that nested block do not close the parent `view {}` block. `act` and `api`
 declarations name exact exported Go handler symbols; behavior lives in normal
 same-package Go handlers. `gowdk build` parses the first literal `paths {}` and
 `build {}` subsets at app-generation time:

@@ -17,6 +17,8 @@ const immutableAssetCachePolicy = "public, max-age=31536000, immutable"
 
 const defaultPageCSSDir = "assets/gowdk"
 
+const inlineStyleAssetPath = "<inline-style>"
+
 const clientRuntimeAssetPath = "assets/gowdk/" + clientrt.Filename
 
 const clientRuntimeHref = "/" + clientRuntimeAssetPath
@@ -38,5 +40,5 @@ var (
 
 var (
 	defaultCSSIncludes = []string{"**/*.css"}
-	defaultCSSExcludes = []string{".git/**", "vendor/**", "node_modules/**"}
+	defaultCSSExcludes = []string{".git/**", "**/.git/**", "vendor/**", "**/vendor/**", "node_modules/**", "**/node_modules/**", ".gowdk/**", "**/.gowdk/**", "dist/**", "**/dist/**"}
 )

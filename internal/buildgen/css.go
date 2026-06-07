@@ -91,6 +91,12 @@ func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssP
 			planned.pageStylesheets[pageID] = append(planned.pageStylesheets[pageID], stylesheets...)
 		}
 	}
+	layoutCSS, layoutStylesheets, layoutFailures := planLayoutStyleCSS(app.Pages, app.Layouts, outputDir, seen)
+	failures = append(failures, layoutFailures...)
+	planned.assets = append(planned.assets, layoutCSS...)
+	for pageID, stylesheets := range layoutStylesheets {
+		planned.pageStylesheets[pageID] = append(planned.pageStylesheets[pageID], stylesheets...)
+	}
 	componentCSS, componentStylesheets, componentFailures := planComponentCSS(app.Components, outputDir, seen)
 	failures = append(failures, componentFailures...)
 	planned.assets = append(planned.assets, componentCSS...)
@@ -168,7 +174,8 @@ func planPageCSS(config gowdk.Config, pages []manifest.Page, outputDir string, i
 			failures = append(failures, err.Error())
 			continue
 		}
-		if len(names) == 0 {
+		inlineStyle := strings.TrimSpace(page.Blocks.StyleBody)
+		if len(names) == 0 && inlineStyle == "" {
 			continue
 		}
 		assetPath, err := pageCSSOutputPath(config.CSS.Output, outputDir, page.ID)
@@ -189,9 +196,59 @@ func planPageCSS(config gowdk.Config, pages []manifest.Page, outputDir string, i
 		logicalHref := pageCSSHref(config.CSS.Output, page.ID)
 		assets = append(assets, plannedCSSArtifact{
 			CSSArtifact: CSSArtifact{Path: assetPath, LogicalPath: logicalPath, LogicalHref: logicalHref},
-			contents:    pageCSSContents(names, inputs),
+			contents:    pageCSSContents(names, inputs, inlineStyle),
 		})
 		stylesheets[page.ID] = []gowdk.Stylesheet{{Href: logicalHref}}
+	}
+	return assets, stylesheets, failures
+}
+
+func planLayoutStyleCSS(pages []manifest.Page, layouts []manifest.Layout, outputDir string, seenAssets map[string]bool) ([]plannedCSSArtifact, map[string][]gowdk.Stylesheet, []string) {
+	var assets []plannedCSSArtifact
+	stylesheets := map[string][]gowdk.Stylesheet{}
+	var failures []string
+	layoutRegistry := map[string]manifest.Layout{}
+	for _, layout := range layouts {
+		layoutRegistry[layoutRegistryKey(layout.Package, layout.ID)] = layout
+	}
+	layoutHrefs := map[string]gowdk.Stylesheet{}
+	for _, layout := range layouts {
+		style := strings.TrimSpace(layout.Blocks.StyleBody)
+		if style == "" {
+			continue
+		}
+		hashKey := cssscope.HashKey("layout", layout.Package, layout.ID, layout.Source, inlineStyleAssetPath)
+		scopeID := cssscope.ScopeID(hashKey)
+		logicalPath := layoutStyleLogicalPath(layout, scopeID)
+		outputPath, err := cssOutputPath(outputDir, logicalPath)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("layout %s style: %v", layout.ID, err))
+			continue
+		}
+		if seenAssets[outputPath] {
+			failures = append(failures, fmt.Sprintf("layout %s style: duplicate css asset path %q", layout.ID, outputPath))
+			continue
+		}
+		seenAssets[outputPath] = true
+		logicalHref := "/" + strings.TrimLeft(filepath.ToSlash(logicalPath), "/")
+		assets = append(assets, plannedCSSArtifact{
+			CSSArtifact: CSSArtifact{Path: outputPath, LogicalPath: logicalPath, LogicalHref: logicalHref},
+			contents:    []byte(style),
+		})
+		layoutHrefs[layoutRegistryKey(layout.Package, layout.ID)] = gowdk.Stylesheet{Href: logicalHref}
+	}
+	for _, page := range pages {
+		for _, layoutRef := range page.Layouts {
+			layout, ok := resolvePageLayout(page, layoutRegistry, layoutRef)
+			if !ok {
+				continue
+			}
+			stylesheet, ok := layoutHrefs[layoutRegistryKey(layout.Package, layout.ID)]
+			if !ok {
+				continue
+			}
+			stylesheets[page.ID] = append(stylesheets[page.ID], stylesheet)
+		}
 	}
 	return assets, stylesheets, failures
 }
@@ -232,6 +289,29 @@ func planComponentCSS(components []manifest.Component, outputDir string, seenAss
 			})
 			stylesheets = append(stylesheets, gowdk.Stylesheet{Href: logicalHref})
 		}
+		style := strings.TrimSpace(component.Blocks.StyleBody)
+		if style == "" {
+			continue
+		}
+		hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, inlineStyleAssetPath)
+		scopeID := cssscope.ScopeID(hashKey)
+		logicalPath := componentCSSLogicalPath(component, scopeID)
+		outputPath, err := cssOutputPath(outputDir, logicalPath)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("component %s style: %v", component.Name, err))
+			continue
+		}
+		if seenAssets[outputPath] {
+			failures = append(failures, fmt.Sprintf("component %s style: duplicate css asset path %q", component.Name, outputPath))
+			continue
+		}
+		seenAssets[outputPath] = true
+		logicalHref := "/" + strings.TrimLeft(filepath.ToSlash(logicalPath), "/")
+		assets = append(assets, plannedCSSArtifact{
+			CSSArtifact: CSSArtifact{Path: outputPath, LogicalPath: logicalPath, LogicalHref: logicalHref},
+			contents:    scopeComponentCSS([]byte(style), scopeID),
+		})
+		stylesheets = append(stylesheets, gowdk.Stylesheet{Href: logicalHref})
 	}
 	return assets, stylesheets, failures
 }
@@ -260,6 +340,18 @@ func componentCSSLogicalPath(component manifest.Component, scopeID string) strin
 		componentPart = "component"
 	}
 	return path.Join(defaultPageCSSDir, "components", packagePart, componentPart, scopeID+".css")
+}
+
+func layoutStyleLogicalPath(layout manifest.Layout, scopeID string) string {
+	packagePart := safeCSSPathPart(layout.Package)
+	if packagePart == "" {
+		packagePart = "_"
+	}
+	layoutPart := safeCSSPathPart(layout.ID)
+	if layoutPart == "" {
+		layoutPart = "layout"
+	}
+	return path.Join(defaultPageCSSDir, "layouts", packagePart, layoutPart, scopeID+".css")
 }
 
 func safeCSSPathPart(value string) string {
@@ -702,7 +794,7 @@ func defaultCSSInputs(config gowdk.Config, inputs map[string]cssInput) ([]string
 	return nil, nil
 }
 
-func pageCSSContents(names []string, inputs map[string]cssInput) []byte {
+func pageCSSContents(names []string, inputs map[string]cssInput, inlineStyle string) []byte {
 	var builder strings.Builder
 	for _, name := range names {
 		input := inputs[name]
@@ -713,6 +805,11 @@ func pageCSSContents(names []string, inputs map[string]cssInput) []byte {
 		if len(input.contents) == 0 || input.contents[len(input.contents)-1] != '\n' {
 			builder.WriteString("\n")
 		}
+	}
+	if strings.TrimSpace(inlineStyle) != "" {
+		builder.WriteString("/* gowdk inline style */\n")
+		builder.WriteString(strings.TrimSpace(inlineStyle))
+		builder.WriteString("\n")
 	}
 	return []byte(builder.String())
 }

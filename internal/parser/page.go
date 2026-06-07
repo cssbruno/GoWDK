@@ -44,6 +44,7 @@ func ParsePage(source []byte) (manifest.Page, error) {
 	var page manifest.Page
 	var blockBody []string
 	capturedBlock := ""
+	viewStyleDepth := 0
 	var actionBody []string
 	capturedAction := -1
 	actionDepth := 0
@@ -106,6 +107,21 @@ func ParsePage(source []byte) (manifest.Page, error) {
 			continue
 		}
 		if capturedBlock != "" {
+			if capturedBlock == "view" {
+				if viewStyleDepth > 0 {
+					blockBody = append(blockBody, rawLine)
+					viewStyleDepth += braceDelta(rawLine)
+					if viewStyleDepth < 0 {
+						return manifest.Page{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+					}
+					continue
+				}
+				if isStyleBlockStart(line) {
+					viewStyleDepth = 1
+					blockBody = append(blockBody, rawLine)
+					continue
+				}
+			}
 			if line == "}" {
 				applyBlockBody(&page, capturedBlock, blockBody)
 				capturedBlock = ""
@@ -286,6 +302,9 @@ func ParsePage(source []byte) (manifest.Page, error) {
 		return manifest.Page{}, err
 	}
 	if capturedBlock != "" {
+		if viewStyleDepth > 0 {
+			return manifest.Page{}, fmt.Errorf("style block missing closing }")
+		}
 		return manifest.Page{}, fmt.Errorf("%s block missing closing }", capturedBlock)
 	}
 	if capturedAction >= 0 {
@@ -438,6 +457,7 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	var component manifest.Component
 	var viewBody []string
 	inView := false
+	viewStyleDepth := 0
 	inProps := false
 	inExports := false
 	inEmits := false
@@ -466,8 +486,27 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			continue
 		}
 		if inView {
+			if viewStyleDepth > 0 {
+				viewBody = append(viewBody, rawLine)
+				viewStyleDepth += braceDelta(rawLine)
+				if viewStyleDepth < 0 {
+					return manifest.Component{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+				}
+				continue
+			}
+			if isStyleBlockStart(line) {
+				viewStyleDepth = 1
+				viewBody = append(viewBody, rawLine)
+				continue
+			}
 			if line == "}" {
-				component.Blocks.ViewBody = strings.TrimSpace(strings.Join(viewBody, "\n"))
+				view, style, err := splitViewStyleBlocks(viewBody)
+				if err != nil {
+					return manifest.Component{}, err
+				}
+				component.Blocks.ViewBody = view
+				component.Blocks.StyleBody = style
+				component.Blocks.Style = style != ""
 				inView = false
 				viewBody = nil
 				continue
@@ -650,6 +689,9 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 		return manifest.Component{}, err
 	}
 	if inView {
+		if viewStyleDepth > 0 {
+			return manifest.Component{}, fmt.Errorf("style block missing closing }")
+		}
 		return manifest.Component{}, fmt.Errorf("view block missing closing }")
 	}
 	if inProps {
@@ -721,6 +763,7 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 	var layout manifest.Layout
 	var viewBody []string
 	inView := false
+	viewStyleDepth := 0
 	seenDeclaration := false
 
 	scanner := bufio.NewScanner(bytes.NewReader(source))
@@ -728,9 +771,28 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
 		if inView {
+			if viewStyleDepth > 0 {
+				viewBody = append(viewBody, rawLine)
+				viewStyleDepth += braceDelta(rawLine)
+				if viewStyleDepth < 0 {
+					return manifest.Layout{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+				}
+				continue
+			}
+			if isStyleBlockStart(line) {
+				viewStyleDepth = 1
+				viewBody = append(viewBody, rawLine)
+				continue
+			}
 			if line == "}" {
+				view, style, err := splitViewStyleBlocks(viewBody)
+				if err != nil {
+					return manifest.Layout{}, err
+				}
 				layout.Blocks.View = true
-				layout.Blocks.ViewBody = strings.TrimSpace(strings.Join(viewBody, "\n"))
+				layout.Blocks.ViewBody = view
+				layout.Blocks.StyleBody = style
+				layout.Blocks.Style = style != ""
 				inView = false
 				viewBody = nil
 				continue
@@ -795,6 +857,9 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 		return manifest.Layout{}, err
 	}
 	if inView {
+		if viewStyleDepth > 0 {
+			return manifest.Layout{}, fmt.Errorf("style block missing closing }")
+		}
 		return manifest.Layout{}, fmt.Errorf("view block missing closing }")
 	}
 	if layout.ID == "" {
@@ -1060,8 +1125,48 @@ func applyBlockBody(page *manifest.Page, name string, body []string) {
 	case "load":
 		page.Blocks.LoadBody = text
 	case "view":
-		page.Blocks.ViewBody = text
+		view, style, err := splitViewStyleBlocks(body)
+		if err != nil {
+			page.Blocks.ViewBody = text
+			return
+		}
+		page.Blocks.ViewBody = view
+		page.Blocks.StyleBody = style
+		page.Blocks.Style = style != ""
 	}
+}
+
+func isStyleBlockStart(line string) bool {
+	return line == "style {"
+}
+
+func splitViewStyleBlocks(lines []string) (string, string, error) {
+	var viewLines []string
+	var styleLines []string
+	styleDepth := 0
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if styleDepth > 0 {
+			styleDepth += braceDelta(rawLine)
+			if styleDepth < 0 {
+				return "", "", fmt.Errorf("style block closed unexpectedly")
+			}
+			if styleDepth == 0 {
+				continue
+			}
+			styleLines = append(styleLines, rawLine)
+			continue
+		}
+		if isStyleBlockStart(line) {
+			styleDepth = 1
+			continue
+		}
+		viewLines = append(viewLines, rawLine)
+	}
+	if styleDepth > 0 {
+		return "", "", fmt.Errorf("style block missing closing }")
+	}
+	return strings.TrimSpace(strings.Join(viewLines, "\n")), strings.TrimSpace(strings.Join(styleLines, "\n")), nil
 }
 
 func splitList(value string) []string {

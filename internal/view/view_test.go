@@ -940,6 +940,31 @@ func TestRenderWithComponentsRejectsUnknownIslandMode(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsUsesComponentDefaultWASMIsland(t *testing.T) {
+	got, err := RenderWithComponents(`<Counter />`, map[string]Component{
+		"Counter": {
+			Name:          "Counter",
+			DefaultIsland: "wasm",
+			Body:          `<button>Count</button>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`<gowdk-island data-gowdk-component="Counter"`,
+		`data-gowdk-runtime="wasm"`,
+		`<button>Count</button>`,
+	} {
+		if !strings.Contains(got, expected) {
+			t.Fatalf("expected %q in default wasm island output:\n%s", expected, got)
+		}
+	}
+	if strings.Contains(got, `g:island`) {
+		t.Fatalf("did not expect source g:island in output:\n%s", got)
+	}
+}
+
 func TestCanonicalNormalizesDirectiveExpressions(t *testing.T) {
 	left, err := Canonical(`<button class:active={Open&&Count>0} g:on:click={Count=Count+1}>{Count}</button>`)
 	if err != nil {

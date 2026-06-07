@@ -52,13 +52,15 @@ Implemented today:
   store type/init contracts and rejects unknown store uses. Runtime shared-state
   subscriptions are still planned.
 - A component can declare `@wasm ./browser/counter` to compile a browser-side
-  Go package for explicit WASM island calls. The package is built with
+  Go package and make normal calls to that component use the WASM island
+  runtime by default. The package is built with
   `GOOS=js GOARCH=wasm`, must produce a real browser WASM module, and must not
   import server/process/network packages such as `net/http`, `os/exec`,
   `database/sql`, raw `syscall`, `plugin`, or `unsafe`.
 - A component call can explicitly request the WASM island artifact with
-  `<Counter g:island="wasm" />`. If the component has no `@wasm` package,
-  GOWDK still emits the first-slice placeholder module plus loader shape.
+  `<Counter g:island="wasm" />` when a call-site override is needed. If the
+  component has no `@wasm` package, GOWDK still emits the first-slice
+  placeholder module plus loader shape for that explicit call.
 - Duplicate component names are rejected during manifest validation.
 - Redundant component implementations are rejected during manifest validation
   with `redundant_component_implementation`, even when their names differ.
@@ -201,7 +203,7 @@ client {
 }
 ```
 
-WASM islands require a component WASM package and an explicit call-site request:
+WASM islands are declared on the component:
 
 ```gwdk
 @component Counter
@@ -214,7 +216,7 @@ view {
 
 ```gwdk
 view {
-  <Counter g:island="wasm" />
+  <Counter />
 }
 ```
 
@@ -302,12 +304,13 @@ database access, trusted server validation, action behavior, or cache/loading
 policy. Real routes, direct browser refresh, and server behavior stay owned by
 the compiler manifest, generated Go, and user Go handlers.
 
-Production WASM islands require `@wasm` and `g:island="wasm"`. The referenced
-package is browser-side Go compiled for `GOOS=js GOARCH=wasm` with server and
-process packages rejected. GOWDK validates the required component-scoped ABI
-entrypoints, ships Go's browser `wasm_exec.js` runtime asset for declared Go
-WASM packages, and keeps DOM mutation in the generated host loader. WASM
-islands are not a replacement for backend handlers.
+Production WASM islands are declared with component-level `@wasm`. Normal calls
+to that component use the WASM island runtime by default. The referenced package
+is browser-side Go compiled for `GOOS=js GOARCH=wasm` with server and process
+packages rejected. GOWDK validates the required component-scoped ABI entrypoints,
+ships Go's browser `wasm_exec.js` runtime asset for declared Go WASM packages,
+and keeps DOM mutation in the generated host loader. WASM islands are not a
+replacement for backend handlers.
 
 Not implemented yet:
 

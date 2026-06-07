@@ -97,6 +97,35 @@ build {
 	}
 }
 
+func TestParseSyntaxExtractsNestedViewStyleBlock(t *testing.T) {
+	file := mustParseSyntax(t, []byte(`@page styled
+@route "/styled"
+
+view {
+  <main class="hero">Styled</main>
+
+  style {
+    .hero {
+      color: red;
+    }
+  }
+}
+`))
+	if len(file.Blocks) != 1 {
+		t.Fatalf("expected view block, got %#v", file.Blocks)
+	}
+	block := file.Blocks[0]
+	if block.Body != `<main class="hero">Styled</main>` {
+		t.Fatalf("unexpected view body: %q", block.Body)
+	}
+	if block.StyleBody != ".hero {\n      color: red;\n    }" {
+		t.Fatalf("unexpected style body: %q", block.StyleBody)
+	}
+	if len(block.View) != 1 {
+		t.Fatalf("expected parsed view AST, got %#v", block.View)
+	}
+}
+
 func TestParseSyntaxReadsImportedBuildCall(t *testing.T) {
 	file, err := ParseSyntax([]byte(`@page imported
 @route "/imported"

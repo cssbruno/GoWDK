@@ -70,20 +70,21 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 			continue
 		}
 		compiled := view.Component{
-			Name:         component.Name,
-			Package:      component.Package,
-			Uses:         componentUses(component.Uses),
-			ScopeIDs:     componentScopeIDs(component),
-			Props:        props,
-			State:        state,
-			StateJSON:    stateJSON,
-			Handlers:     handlers,
-			HandlersJSON: handlersJSON,
-			StateTypes:   stateTypes,
-			Refs:         refs,
-			Emits:        emits,
-			Computed:     computeds,
-			Body:         component.Blocks.ViewBody,
+			Name:          component.Name,
+			Package:       component.Package,
+			Uses:          componentUses(component.Uses),
+			ScopeIDs:      componentScopeIDs(component),
+			DefaultIsland: componentDefaultIsland(component),
+			Props:         props,
+			State:         state,
+			StateJSON:     stateJSON,
+			Handlers:      handlers,
+			HandlersJSON:  handlersJSON,
+			StateTypes:    stateTypes,
+			Refs:          refs,
+			Emits:         emits,
+			Computed:      computeds,
+			Body:          component.Blocks.ViewBody,
 		}
 		registry[key] = compiled
 		if component.Package == "" {
@@ -93,13 +94,24 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 	return registry, failures
 }
 
+func componentDefaultIsland(component manifest.Component) string {
+	if strings.TrimSpace(component.WASM.Package) != "" {
+		return "wasm"
+	}
+	return ""
+}
+
 func componentScopeIDs(component manifest.Component) []string {
-	if len(component.CSS) == 0 {
+	if len(component.CSS) == 0 && strings.TrimSpace(component.Blocks.StyleBody) == "" {
 		return nil
 	}
-	scopeIDs := make([]string, 0, len(component.CSS))
+	scopeIDs := make([]string, 0, len(component.CSS)+1)
 	for _, css := range component.CSS {
 		hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, css)
+		scopeIDs = append(scopeIDs, cssscope.ScopeID(hashKey))
+	}
+	if strings.TrimSpace(component.Blocks.StyleBody) != "" {
+		hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, inlineStyleAssetPath)
 		scopeIDs = append(scopeIDs, cssscope.ScopeID(hashKey))
 	}
 	return scopeIDs

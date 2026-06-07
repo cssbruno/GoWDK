@@ -114,9 +114,9 @@ Unsupported today:
 - Recursive helper functions.
 - User-defined browser runtime imports.
 
-## Explicit WASM Islands
+## Component-Level WASM Islands
 
-Components can opt an instance into a WASM island:
+Components declare WASM at the component level:
 
 ```gwdk
 @component Counter
@@ -128,7 +128,7 @@ view {
 ```
 
 ```gwdk
-<Counter g:island="wasm" />
+<Counter />
 ```
 
 When `@wasm` points to a local package, GOWDK builds that package with
@@ -160,8 +160,9 @@ may use `setText`, `setAttr`, `removeAttr`, `toggleClass`, `setStyle`,
 rejected with a console error. Missing required exports and startup failures are
 reported to the browser console instead of silently disabling the island.
 
-If a component is called with `g:island="wasm"` and no `@wasm` package is
-declared, GOWDK emits the current placeholder module plus loader shape.
+Normal calls to a component with `@wasm` use the WASM island runtime. If a
+component is called with `g:island="wasm"` and no `@wasm` package is declared,
+GOWDK emits the current placeholder module plus loader shape.
 
 ## Production Mode
 

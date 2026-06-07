@@ -47,6 +47,7 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 	var captured SyntaxBlock
 	var capturedFragment *SyntaxFragmentEndpoint
 	depth := 0
+	viewStyleDepth := 0
 	seenDeclaration := false
 
 	scanner := bufio.NewScanner(bytes.NewReader(source))
@@ -65,6 +66,21 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 			continue
 		}
 		if captured.Kind != "" {
+			if captured.Kind == "view" {
+				if viewStyleDepth > 0 {
+					body = append(body, syntaxBodyLine{Text: rawLine, Line: lineNumber})
+					viewStyleDepth += braceDelta(rawLine)
+					if viewStyleDepth < 0 {
+						return SyntaxFile{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+					}
+					continue
+				}
+				if isStyleBlockStart(line) {
+					viewStyleDepth = 1
+					body = append(body, syntaxBodyLine{Text: rawLine, Line: lineNumber})
+					continue
+				}
+			}
 			if line == "}" {
 				depth--
 				if depth == 0 {
@@ -261,6 +277,9 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 		return SyntaxFile{}, err
 	}
 	if captured.Kind != "" {
+		if viewStyleDepth > 0 {
+			return SyntaxFile{}, fmt.Errorf("style block missing closing }")
+		}
 		return SyntaxFile{}, fmt.Errorf("%s block missing closing }", captured.Kind)
 	}
 	if capturedFragment != nil {
@@ -360,6 +379,13 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 	block.BodyStart = syntaxBodyStart(body)
 	switch block.Kind {
 	case "view":
+		viewBody, styleBody, err := splitSyntaxViewStyleBlocks(body)
+		if err != nil {
+			return SyntaxBlock{}, err
+		}
+		block.Body = strings.TrimSpace(joinSyntaxBody(viewBody))
+		block.StyleBody = strings.TrimSpace(joinSyntaxBody(styleBody))
+		block.BodyStart = syntaxBodyStart(viewBody)
 		nodes, err := view.Parse(block.Body)
 		if err != nil {
 			return SyntaxBlock{}, fmt.Errorf("line %d: view body: %w", block.Span.Start.Line, err)
@@ -419,6 +445,35 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 		block.APIs = statements
 	}
 	return block, nil
+}
+
+func splitSyntaxViewStyleBlocks(body []syntaxBodyLine) ([]syntaxBodyLine, []syntaxBodyLine, error) {
+	var viewBody []syntaxBodyLine
+	var styleBody []syntaxBodyLine
+	styleDepth := 0
+	for _, raw := range body {
+		line := strings.TrimSpace(raw.Text)
+		if styleDepth > 0 {
+			styleDepth += braceDelta(raw.Text)
+			if styleDepth < 0 {
+				return nil, nil, fmt.Errorf("line %d: style block closed unexpectedly", raw.Line)
+			}
+			if styleDepth == 0 {
+				continue
+			}
+			styleBody = append(styleBody, raw)
+			continue
+		}
+		if isStyleBlockStart(line) {
+			styleDepth = 1
+			continue
+		}
+		viewBody = append(viewBody, raw)
+	}
+	if styleDepth > 0 {
+		return nil, nil, fmt.Errorf("style block missing closing }")
+	}
+	return viewBody, styleBody, nil
 }
 
 func syntaxBodyStart(body []syntaxBodyLine) manifest.SourcePosition {

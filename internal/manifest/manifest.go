@@ -223,6 +223,8 @@ type Blocks struct {
 	ClientBody string
 	View       bool
 	ViewBody   string
+	Style      bool
+	StyleBody  string
 	Actions    []Action
 	APIs       []API
 	Fragments  []FragmentEndpoint

@@ -164,6 +164,8 @@ func buildBlocksFromIR(blocks gwdkir.Blocks) manifest.Blocks {
 		ClientBody: blocks.ClientBody,
 		View:       blocks.View,
 		ViewBody:   blocks.ViewBody,
+		Style:      blocks.Style,
+		StyleBody:  blocks.StyleBody,
 		Actions:    buildActionsFromIR(blocks.Actions),
 		APIs:       buildAPIsFromIR(blocks.APIs),
 		Fragments:  buildFragmentEndpointsFromIR(blocks.Fragments),

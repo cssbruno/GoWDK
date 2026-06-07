@@ -264,6 +264,8 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 		case "view":
 			component.Blocks.View = true
 			component.Blocks.ViewBody = block.Body
+			component.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
+			component.Blocks.StyleBody = block.StyleBody
 			component.Blocks.Spans.View = block.Span
 			component.Blocks.Spans.ViewBodyStart = block.BodyStart
 		default:
@@ -306,6 +308,8 @@ func LowerLayout(source string, ast gwdkast.File) (manifest.Layout, error) {
 		}
 		layout.Blocks.View = true
 		layout.Blocks.ViewBody = block.Body
+		layout.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
+		layout.Blocks.StyleBody = block.StyleBody
 		layout.Blocks.Spans.View = block.Span
 		layout.Blocks.Spans.ViewBodyStart = block.BodyStart
 	}
@@ -860,6 +864,8 @@ func applyPageBlock(page *manifest.Page, block gwdkast.Block) {
 	case "view":
 		page.Blocks.View = true
 		page.Blocks.ViewBody = block.Body
+		page.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
+		page.Blocks.StyleBody = block.StyleBody
 		page.Blocks.Spans.View = block.Span
 		page.Blocks.Spans.ViewBodyStart = block.BodyStart
 	}
@@ -975,6 +981,8 @@ func lowerIRBlocks(blocks manifest.Blocks) gwdkir.Blocks {
 		ClientBody: blocks.ClientBody,
 		View:       blocks.View,
 		ViewBody:   blocks.ViewBody,
+		Style:      blocks.Style,
+		StyleBody:  blocks.StyleBody,
 		Actions:    lowerIRActions(blocks.Actions),
 		APIs:       lowerIRAPIs(blocks.APIs),
 		Fragments:  lowerIRFragmentEndpoints(blocks.Fragments),

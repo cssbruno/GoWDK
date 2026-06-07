@@ -20,20 +20,21 @@ type Attr struct {
 
 // Component is a literal component template known to the view renderer.
 type Component struct {
-	Name         string
-	Package      string
-	Uses         map[string]string
-	ScopeIDs     []string
-	Props        []string
-	State        map[string]string
-	StateJSON    string
-	Handlers     map[string]clientlang.Handler
-	HandlersJSON string
-	StateTypes   map[string]clientlang.ValueType
-	Refs         map[string]clientlang.Ref
-	Emits        map[string]clientlang.Emit
-	Computed     []clientlang.Computed
-	Body         string
+	Name          string
+	Package       string
+	Uses          map[string]string
+	ScopeIDs      []string
+	DefaultIsland string
+	Props         []string
+	State         map[string]string
+	StateJSON     string
+	Handlers      map[string]clientlang.Handler
+	HandlersJSON  string
+	StateTypes    map[string]clientlang.ValueType
+	Refs          map[string]clientlang.Ref
+	Emits         map[string]clientlang.Emit
+	Computed      []clientlang.Computed
+	Body          string
 }
 
 // HasProp reports whether a component declares a prop.

@@ -1925,7 +1925,7 @@ func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
 			Route: "/counter",
 			Blocks: manifest.Blocks{
 				View:     true,
-				ViewBody: `<main><Counter g:island="wasm" /></main>`,
+				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
 		Components: []manifest.Component{component},
@@ -1942,6 +1942,15 @@ func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
 	}
 	if !hasAssetArtifact(result.AssetArtifacts, wasmExecPath) {
 		t.Fatalf("expected Go wasm_exec.js runtime asset, got %#v", result.AssetArtifacts)
+	}
+	html := readFile(t, filepath.Join(outputDir, "counter", "index.html"))
+	for _, expected := range []string{
+		`<script src="/assets/gowdk/islands/Counter.wasm.js" defer></script>`,
+		`data-gowdk-runtime="wasm"`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in declared wasm component page:\n%s", expected, html)
+		}
 	}
 	wasm := readBytes(t, wasmPath)
 	if !bytes.HasPrefix(wasm, wasmMagic) {

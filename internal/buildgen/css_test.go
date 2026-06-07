@@ -180,6 +180,39 @@ func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 	}
 }
 
+func TestBuildEmitsNestedPageViewStyleBlock(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "styled",
+		Route: "/styled",
+		CSS:   []string{"none"},
+		Blocks: manifest.Blocks{
+			View:      true,
+			ViewBody:  `<main class="hero">Styled</main>`,
+			Style:     true,
+			StyleBody: `.hero { color: red; }`,
+		},
+	}}}
+
+	result, err := Build(gowdk.Config{CSS: gowdk.CSSConfig{Include: []string{DisableCSSDiscovery}}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact := cssArtifactByLogicalPath(t, result.CSSArtifacts, "assets/gowdk/styled.css")
+	html := readFile(t, filepath.Join(outputDir, "styled", "index.html"))
+	emittedRel := filepath.ToSlash(mustRelativePath(t, outputDir, artifact.Path))
+	if !strings.Contains(html, `<link rel="stylesheet" href="/`+emittedRel+`">`) {
+		t.Fatalf("expected inline style stylesheet link:\n%s", html)
+	}
+	if strings.Contains(html, "style {") {
+		t.Fatalf("did not expect source style block in html:\n%s", html)
+	}
+	css := readFile(t, artifact.Path)
+	if css != ".hero{color:red;}" {
+		t.Fatalf("unexpected inline page css: %q", css)
+	}
+}
+
 func TestBuildRecordsPageCachePolicyInAssetManifest(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{Pages: []manifest.Page{{
@@ -210,6 +243,48 @@ func TestBuildRecordsPageCachePolicyInAssetManifest(t *testing.T) {
 	}
 	if assets.Resolve("index.html") != "" {
 		t.Fatalf("did not expect HTML route to become an asset file entry: %s", payload)
+	}
+}
+
+func TestBuildDefaultCSSDiscoveryExcludesGeneratedOutputDirs(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	if err := os.MkdirAll(filepath.Join(root, "styles"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "styles", "global.css"), "body { color: black; }\n")
+	for _, generated := range []string{
+		filepath.Join(root, ".gowdk", "app", "gowdkapp", "app", "login.f1503fdf7590.css"),
+		filepath.Join(root, ".gowdk", "frontend", "gowdkapp", "app", "login.f1503fdf7590.css"),
+		filepath.Join(root, "dist", "site", "login.f1503fdf7590.css"),
+	} {
+		if err := os.MkdirAll(filepath.Dir(generated), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, generated, ".generated { color: red; }\n")
+	}
+
+	outputDir := filepath.Join(root, "build")
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:    "home",
+		Route: "/",
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+		},
+	}}}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	homeArtifact := cssArtifactByLogicalPath(t, result.CSSArtifacts, "assets/gowdk/home.css")
+	homeCSS := readFile(t, homeArtifact.Path)
+	if !strings.Contains(homeCSS, "body{color:black;}") {
+		t.Fatalf("expected source css in home css:\n%s", homeCSS)
+	}
+	if strings.Contains(homeCSS, ".generated") {
+		t.Fatalf("did not expect generated css inputs in home css:\n%s", homeCSS)
 	}
 }
 
@@ -453,6 +528,99 @@ func TestBuildEmitsScopedComponentCSSWithManifestAndCacheHeaders(t *testing.T) {
 	}
 	if cache := recorder.Header().Get("Cache-Control"); cache != immutableAssetCachePolicy {
 		t.Fatalf("expected generated binary cache header, got %q", cache)
+	}
+}
+
+func TestBuildEmitsScopedNestedComponentViewStyleBlock(t *testing.T) {
+	outputDir := t.TempDir()
+	component := manifest.Component{
+		Package: "components",
+		Source:  "components/card.cmp.gwdk",
+		Name:    "Card",
+		Blocks: manifest.Blocks{
+			View:      true,
+			ViewBody:  `<section class="card">Card</section>`,
+			Style:     true,
+			StyleBody: `.card { color: red; }`,
+		},
+	}
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "components",
+			ID:      "home",
+			Route:   "/",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Card /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+
+	result, err := Build(gowdk.Config{CSS: gowdk.CSSConfig{Include: []string{DisableCSSDiscovery}}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, inlineStyleAssetPath)
+	scopeID := cssscope.ScopeID(hashKey)
+	artifact := cssArtifactByLogicalPath(t, result.CSSArtifacts, componentCSSLogicalPath(component, scopeID))
+	html := readFile(t, filepath.Join(outputDir, "index.html"))
+	emittedRel := filepath.ToSlash(mustRelativePath(t, outputDir, artifact.Path))
+	if !strings.Contains(html, `<link rel="stylesheet" href="/`+emittedRel+`">`) {
+		t.Fatalf("expected component inline style link:\n%s", html)
+	}
+	if !strings.Contains(html, `class="card" data-gowdk-scope="`+scopeID+`"`) {
+		t.Fatalf("expected component inline style scope marker:\n%s", html)
+	}
+	css := readFile(t, artifact.Path)
+	expected := `.card` + componentCSSScopeSelector(scopeID) + `{color:red;}`
+	if css != expected {
+		t.Fatalf("unexpected scoped inline component css:\nwant %q\n got %q", expected, css)
+	}
+}
+
+func TestBuildLinksNestedLayoutViewStyleBlockToUsingPages(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{
+			{
+				ID:      "home",
+				Route:   "/",
+				Layouts: []string{"root"},
+				Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Home</main>`},
+			},
+			{
+				ID:     "plain",
+				Route:  "/plain",
+				Blocks: manifest.Blocks{View: true, ViewBody: `<main>Plain</main>`},
+			},
+		},
+		Layouts: []manifest.Layout{{
+			ID: "root",
+			Blocks: manifest.Blocks{
+				View:      true,
+				ViewBody:  `<section class="shell"><slot /></section>`,
+				Style:     true,
+				StyleBody: `.shell { padding: 1rem; }`,
+			},
+		}},
+	}
+
+	result, err := Build(gowdk.Config{CSS: gowdk.CSSConfig{Include: []string{DisableCSSDiscovery}}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.CSSArtifacts) != 1 {
+		t.Fatalf("expected one layout css artifact, got %#v", result.CSSArtifacts)
+	}
+	emittedRel := filepath.ToSlash(mustRelativePath(t, outputDir, result.CSSArtifacts[0].Path))
+	home := readFile(t, filepath.Join(outputDir, "index.html"))
+	if !strings.Contains(home, `<link rel="stylesheet" href="/`+emittedRel+`">`) {
+		t.Fatalf("expected layout style link on using page:\n%s", home)
+	}
+	plain := readFile(t, filepath.Join(outputDir, "plain", "index.html"))
+	if strings.Contains(plain, emittedRel) {
+		t.Fatalf("did not expect layout style link on non-using page:\n%s", plain)
 	}
 }
 

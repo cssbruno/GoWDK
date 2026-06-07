@@ -406,7 +406,7 @@ func discoverBuildCSSFiles(config gowdk.Config, outputDir string) ([]string, err
 	if err != nil {
 		return nil, err
 	}
-	excludes := []string{".git/**", "vendor/**", "node_modules/**"}
+	excludes := []string{".git/**", "**/.git/**", "vendor/**", "**/vendor/**", "node_modules/**", "**/node_modules/**", ".gowdk/**", "**/.gowdk/**", "dist/**", "**/dist/**"}
 	excludes = appendPatterns(excludes, config.CSS.Exclude)
 	if pattern := outputExcludePattern(root, outputDir); pattern != "" {
 		excludes = append(excludes, pattern)

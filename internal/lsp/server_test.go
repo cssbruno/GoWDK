@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -260,6 +262,50 @@ func TestServerReturnsDefinitionForComponentCalls(t *testing.T) {
 	assertResponseID(t, messages[5], float64(3))
 	assertLocation(t, messages[5], importedComponentURI, 2, 0)
 	assertResponseID(t, messages[6], float64(4))
+}
+
+func TestServerReturnsDefinitionForWorkspaceComponentFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "gowdk.config.go"), []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pagePath := filepath.Join(root, "assets", "playground", "examples", "wasm", "src", "pages", "app.page.gwdk")
+	componentPath := filepath.Join(root, "assets", "playground", "examples", "wasm", "src", "components", "runtime-card.cmp.gwdk")
+	if err := os.MkdirAll(filepath.Dir(pagePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(componentPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pageSource := "package playground\n\n@page app\n@route \"/\"\n\nview {\n  <main><RuntimeCard /></main>\n}\n"
+	componentSource := "package playground\n\n@component RuntimeCard\n\nview {\n  <section></section>\n}\n"
+	if err := os.WriteFile(pagePath, []byte(pageSource), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(componentPath, []byte(componentSource), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pageURI := fileURI(pagePath)
+	componentURI := fileURI(componentPath)
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":`+strconv.Quote(pageSource)+`}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":6,"character":10}}}`) +
+		framed(`{"jsonrpc":"2.0","id":3,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 4 {
+		t.Fatalf("expected 4 output messages, got %d", len(messages))
+	}
+	assertResponseID(t, messages[2], float64(2))
+	assertLocation(t, messages[2], componentURI, 2, 0)
 }
 
 func TestServerReturnsDefinitionForOpenGoHandlerSymbols(t *testing.T) {

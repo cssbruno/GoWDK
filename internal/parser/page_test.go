@@ -113,6 +113,39 @@ view {
 	}
 }
 
+func TestParsePageExtractsNestedViewStyleBlock(t *testing.T) {
+	page, err := ParsePage([]byte(`
+@page styled
+@route "/styled"
+
+view {
+  <main class="hero">Styled</main>
+
+  style {
+    .hero {
+      color: red;
+    }
+
+    @media (min-width: 40rem) {
+      .hero { color: blue; }
+    }
+  }
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Blocks.ViewBody != `<main class="hero">Styled</main>` {
+		t.Fatalf("unexpected view body: %q", page.Blocks.ViewBody)
+	}
+	if !page.Blocks.Style || !strings.Contains(page.Blocks.StyleBody, ".hero {\n      color: red;\n    }") {
+		t.Fatalf("expected nested style body, got %#v", page.Blocks)
+	}
+	if strings.Contains(page.Blocks.ViewBody, "style") {
+		t.Fatalf("did not expect style block in view body: %q", page.Blocks.ViewBody)
+	}
+}
+
 func TestParsePageNormalizesTypedRouteParams(t *testing.T) {
 	page, err := ParsePage([]byte(`
 @page patient

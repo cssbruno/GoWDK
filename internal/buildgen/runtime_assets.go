@@ -121,7 +121,7 @@ func islandRuntimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDi
 		}
 		for _, usage := range usages {
 			component := usage.component
-			switch usage.call.Island {
+			switch manifestComponentRuntimeMode(usage.call.Island, component) {
 			case "wasm":
 				if _, exists := planned[filepath.Join(outputDir, filepath.FromSlash(islandWASMAssetPath(component.Name)))]; !exists {
 					artifact, err := islandWASMArtifact(outputDir, component)
@@ -173,7 +173,7 @@ func islandScriptHrefs(source string, components map[string]view.Component, owne
 	for _, usage := range usages {
 		href := ""
 		component := usage.component
-		switch usage.call.Island {
+		switch viewComponentRuntimeMode(usage.call.Island, component) {
 		case "wasm":
 			href = "/" + islandWASMLoaderAssetPath(component.Name)
 		case "":
@@ -189,6 +189,23 @@ func islandScriptHrefs(source string, components map[string]view.Component, owne
 	}
 	sort.Strings(scripts)
 	return scripts
+}
+
+func manifestComponentRuntimeMode(explicit string, component manifest.Component) string {
+	if explicit != "" {
+		return explicit
+	}
+	if strings.TrimSpace(component.WASM.Package) != "" {
+		return "wasm"
+	}
+	return ""
+}
+
+func viewComponentRuntimeMode(explicit string, component view.Component) string {
+	if explicit != "" {
+		return explicit
+	}
+	return component.DefaultIsland
 }
 
 type resolvedViewComponentCallUsage struct {

@@ -306,8 +306,8 @@ type CSSOutputConfig struct {
 ```
 
 When omitted, CSS discovery scans `**/*.css`, excludes `.git`, `vendor`,
-`node_modules`, and the selected build output directory, and uses `global.css`
-as the default CSS input when present.
+`node_modules`, `.gowdk`, `dist`, and the selected build output directory, and
+uses `global.css` as the default CSS input when present.
 
 `CSS.Default` names discovered CSS inputs used by the `default` built-in in
 `@css`. Generated page CSS defaults to `assets/gowdk/<page-id>.css` and hrefs

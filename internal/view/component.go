@@ -80,6 +80,9 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 	if err != nil {
 		return err
 	}
+	if mode == "" {
+		mode = component.DefaultIsland
+	}
 	props := map[string]string{}
 	propExpressions := map[string]string{}
 	taintedValues := map[string]bool{}

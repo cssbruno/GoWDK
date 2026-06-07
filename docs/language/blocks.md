@@ -13,7 +13,8 @@ The parser records whether these top-level blocks are present:
 - `load {}`: request-time data block. Presence and raw body text are recorded,
   then rejected on SPA/action pages.
 - `view {}`: markup render block. Presence and body text are recorded; a
-  minimal app-shell HTML subset is parsed for `gowdk build`.
+  minimal app-shell HTML subset is parsed for `gowdk build`. A direct nested
+  `style {}` block can declare CSS for that page, component, or layout.
 
 Actions and APIs are endpoint declarations, not blocks:
 
@@ -36,3 +37,28 @@ api Health GET "/api/health"
   work without full-page SSR. Normal Go handlers own behavior and return
   `runtime/response.Response`.
 - `view {}` renders markup for spa, action, partial, and SSR output.
+
+## View Styles
+
+Declare CSS close to markup with a direct nested `style {}` block:
+
+```gwdk
+view {
+  <main class="hero">
+    <h1>GOWDK</h1>
+  </main>
+
+  style {
+    .hero {
+      color: red;
+    }
+  }
+}
+```
+
+The nested style block is not rendered as markup. GOWDK emits it through the
+generated CSS asset pipeline:
+
+- Page styles are appended to the page CSS asset.
+- Component styles are emitted as scoped component CSS.
+- Layout styles are linked only by pages that declare the layout.

@@ -190,6 +190,7 @@ type Block struct {
 	Span      manifest.SourceSpan
 	BodyStart manifest.SourcePosition
 	View      []view.Node
+	StyleBody string
 	Records   []LiteralRecord
 	Call      *BuildCall
 	Props     []Prop

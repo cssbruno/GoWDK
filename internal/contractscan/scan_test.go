@@ -84,6 +84,9 @@ func RegisterTest(r *c.Registry) {
 	assertContract(t, report.Contracts, runtimecontracts.Event, runtimecontracts.PresentationEvent, "PatientNotice", "", "NotifyBrowser")
 	assertContract(t, report.Contracts, runtimecontracts.Job, "", "SyncPatients", "", "Sync")
 	command := findContract(t, report.Contracts, runtimecontracts.Command, "CreatePatient")
+	if len(command.Roles) != 1 || command.Roles[0] != "web" {
+		t.Fatalf("unexpected command roles: %#v", command.Roles)
+	}
 	if len(command.Emits) != 2 {
 		t.Fatalf("command emits = %#v, want two events", command.Emits)
 	}

@@ -150,8 +150,8 @@ authorization, persistence, and transaction success.
   - `gowdk list commands`, `gowdk list queries`, `gowdk list events`, and
     `gowdk contracts` list contracts, owners, subscribers, usage, and binaries.
   - `gowdk graph` can output a contract graph.
-  - `gowdk trace` can explain a command/event path once runtime trace metadata
-    exists.
+  - `gowdk trace` can explain a static scanned command/event path; runtime
+    execution trace metadata remains a later layer.
   - `gowdk check` validates missing owners, duplicate command handlers,
     unsupported signatures, unresolved contract references, and unsafe
     generated-JS ownership.

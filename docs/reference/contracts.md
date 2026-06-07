@@ -140,8 +140,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Missing or invalid command/query references produce `contract_reference_*`
   diagnostics in `gowdk check` and stop CLI builds.
 - Other contract diagnostics do not all have exact source spans yet.
-- `gowdk contracts`, `gowdk list commands|queries|events|jobs`, and
-  `gowdk graph` can scan Go AST registration calls today.
+- `gowdk contracts`, `gowdk list commands|queries|events|jobs`, `gowdk graph`,
+  and `gowdk trace <contract>` can scan Go AST registration calls today.
 - Contract scan reports include first same-file `go/types` diagnostics for
   command, query, event, and job handler signatures.
 - Contract scan reports duplicate command owner registrations.
@@ -150,7 +150,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - `gowdk graph` detects command-emitted events when command handlers call
   `contracts.EmitDomain`, `contracts.EmitIntegration`, or
   `contracts.EmitPresentation` with a visible event type.
+- `gowdk trace <contract>` reports a single command/query/event/job, command
+  emitted events, event subscribers, source locations, handlers, and roles.
 - Full package graph validation and imported handler validation are planned.
-- `gowdk trace` is planned.
 - Durable outbox, broker adapters, worker roles, cron roles, and realtime
   SSE/WebSocket fanout are planned.

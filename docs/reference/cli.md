@@ -17,6 +17,7 @@ gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
+gowdk trace <contract> [--json] [dir]
 gowdk list commands|queries|events|jobs [--json] [dir]
 gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
@@ -31,7 +32,7 @@ gowdk lsp [--ssr]
 - `--force`: supported by `init`; overwrites starter files that already exist.
 - `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
-- `--json`: supported by `check`, `contracts`, `graph`, and `list`; prints
+- `--json`: supported by `check`, `contracts`, `graph`, `trace`, and `list`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available.
 - `--write`: supported by `fmt`; overwrites formatted files.
@@ -68,6 +69,7 @@ go run ./cmd/gowdk check --config gowdk.config.go
 go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk
 go run ./cmd/gowdk manifest --module frontend --ssr
 go run ./cmd/gowdk sitemap --module frontend --ssr
+go run ./cmd/gowdk trace patients.CreatePatient
 go run ./cmd/gowdk routes --module frontend --ssr
 go run ./cmd/gowdk contracts --json .
 go run ./cmd/gowdk graph .

@@ -71,6 +71,8 @@ func run(args []string) error {
 		return contractsReport(args[1:])
 	case "graph":
 		return contractGraph(args[1:])
+	case "trace":
+		return contractTrace(args[1:])
 	case "list":
 		return listContracts(args[1:])
 	case "build":
@@ -105,6 +107,7 @@ func usage() {
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
 	fmt.Println("  contracts [--json] [dir]  print Go contract registration metadata")
 	fmt.Println("  graph [--json] [dir]      print command/event contract graph")
+	fmt.Println("  trace <contract> [--json] [dir] print one command/query/event/job contract trace")
 	fmt.Println("  list commands|queries|events|jobs [--json] [dir] print filtered contract metadata")
 	fmt.Println("  build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
 	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload")

@@ -647,9 +647,33 @@ func roleNames(call *ast.CallExpr) []string {
 	}
 	roles := make([]string, 0, len(call.Args)-2)
 	for _, arg := range call.Args[2:] {
-		roles = append(roles, exprString(token.NewFileSet(), arg))
+		roles = append(roles, roleName(arg))
 	}
 	return roles
+}
+
+func roleName(expr ast.Expr) string {
+	switch typed := expr.(type) {
+	case *ast.SelectorExpr:
+		switch typed.Sel.Name {
+		case "RoleWeb":
+			return string(runtimecontracts.RoleWeb)
+		case "RoleWorker":
+			return string(runtimecontracts.RoleWorker)
+		case "RoleCron":
+			return string(runtimecontracts.RoleCron)
+		case "RoleAPI":
+			return string(runtimecontracts.RoleAPI)
+		case "RoleAdmin":
+			return string(runtimecontracts.RoleAdmin)
+		}
+	case *ast.BasicLit:
+		value, err := strconv.Unquote(typed.Value)
+		if err == nil {
+			return value
+		}
+	}
+	return exprString(token.NewFileSet(), expr)
 }
 
 func exprString(fset *token.FileSet, expr ast.Expr) string {

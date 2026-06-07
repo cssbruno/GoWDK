@@ -1837,6 +1837,10 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 	}
 	return CreatePatientResult{}, nil
 }
+
+func SendWelcomeEmail(ctx context.Context, event PatientCreated) error {
+	return nil
+}
 `)
 
 	output, stderr, err := captureCLIOutput(t, func() error {
@@ -1887,6 +1891,10 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 	}
 	return CreatePatientResult{}, nil
 }
+
+func SendWelcomeEmail(ctx context.Context, event PatientCreated) error {
+	return nil
+}
 `)
 
 	output, stderr, err := captureCLIOutput(t, func() error {
@@ -1909,6 +1917,127 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected graph output to contain %q:\n%s", expected, output)
 		}
+	}
+}
+
+func TestTraceCommandReportsHandlersEmitsAndSubscribers(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "patients.go"), `package patients
+
+import (
+	"context"
+
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+type PatientCreated struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, contracts.RoleWeb)
+	contracts.RegisterDomainEvent[PatientCreated](r, SendWelcomeEmail, contracts.RoleWorker)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	if err := contracts.EmitDomain(ctx, PatientCreated{}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	return CreatePatientResult{}, nil
+}
+
+func SendWelcomeEmail(ctx context.Context, event PatientCreated) error {
+	return nil
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"trace", "patients.CreatePatient", root})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %s", stderr)
+	}
+	for _, expected := range []string{
+		"COMMAND CreatePatient (patients.CreatePatient)",
+		"handler: HandleCreatePatient",
+		"roles: web",
+		"emits:",
+		"- DOMAIN EVENT PatientCreated",
+		"subscribers:",
+		"- SendWelcomeEmail",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected trace output to contain %q:\n%s", expected, output)
+		}
+	}
+}
+
+func TestTraceCommandJSONReportsEmitsAndSubscribers(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "patients.go"), `package patients
+
+import (
+	"context"
+
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+type PatientCreated struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, contracts.RoleWeb)
+	contracts.RegisterDomainEvent[PatientCreated](r, SendWelcomeEmail, contracts.RoleWorker)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	if err := contracts.EmitDomain(ctx, PatientCreated{}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	return CreatePatientResult{}, nil
+}
+
+func SendWelcomeEmail(ctx context.Context, event PatientCreated) error {
+	return nil
+}
+`)
+
+	output, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"trace", "CreatePatient", "--json", root})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		Target  string `json:"target"`
+		Matches []struct {
+			Contract struct {
+				Kind string `json:"kind"`
+				Type string `json:"type"`
+			} `json:"contract"`
+			Emits []struct {
+				Type        string `json:"type"`
+				Subscribers []struct {
+					Handler string `json:"handler"`
+				} `json:"subscribers"`
+			} `json:"emits"`
+		} `json:"matches"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid trace JSON: %v\n%s", err, output)
+	}
+	if report.Target != "CreatePatient" || len(report.Matches) != 1 || report.Matches[0].Contract.Kind != "command" {
+		t.Fatalf("unexpected trace JSON: %s", output)
+	}
+	if len(report.Matches[0].Emits) != 1 || report.Matches[0].Emits[0].Type != "PatientCreated" {
+		t.Fatalf("unexpected trace emits JSON: %s", output)
+	}
+	if len(report.Matches[0].Emits[0].Subscribers) != 1 || report.Matches[0].Emits[0].Subscribers[0].Handler != "SendWelcomeEmail" {
+		t.Fatalf("unexpected trace subscriber JSON: %s", output)
 	}
 }
 

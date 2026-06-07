@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -82,9 +83,39 @@ func contractGraph(args []string) error {
 	return printContractGraph(report)
 }
 
+func contractTrace(args []string) error {
+	options, err := parseContractTraceOptions(args)
+	if err != nil {
+		return err
+	}
+	report, err := contractscan.Scan(options.Dir)
+	if err != nil {
+		return err
+	}
+	trace := buildContractTrace(report, options.Target)
+	if len(trace.Matches) == 0 {
+		return fmt.Errorf("contract %q was not found", options.Target)
+	}
+	if options.JSON {
+		payload, err := json.MarshalIndent(trace, "", "  ")
+		if err != nil {
+			return err
+		}
+		_, err = os.Stdout.Write(append(payload, '\n'))
+		return err
+	}
+	return printContractTrace(trace)
+}
+
 type contractReportOptions struct {
 	Dir  string
 	JSON bool
+}
+
+type contractTraceOptions struct {
+	Target string
+	Dir    string
+	JSON   bool
 }
 
 func parseContractReportOptions(args []string) (contractReportOptions, error) {
@@ -103,6 +134,28 @@ func parseContractReportOptions(args []string) (contractReportOptions, error) {
 			}
 			options.Dir = arg
 		}
+	}
+	return options, nil
+}
+
+func parseContractTraceOptions(args []string) (contractTraceOptions, error) {
+	options := contractTraceOptions{Dir: "."}
+	for _, arg := range args {
+		switch {
+		case arg == "--json":
+			options.JSON = true
+		case strings.HasPrefix(arg, "-"):
+			return contractTraceOptions{}, fmt.Errorf("unknown trace flag %q", arg)
+		case options.Target == "":
+			options.Target = arg
+		case options.Dir == ".":
+			options.Dir = arg
+		default:
+			return contractTraceOptions{}, errors.New("usage: gowdk trace <contract> [--json] [dir]")
+		}
+	}
+	if options.Target == "" {
+		return contractTraceOptions{}, errors.New("usage: gowdk trace <contract> [--json] [dir]")
 	}
 	return options, nil
 }
@@ -230,4 +283,144 @@ func eventSubscribers(events []contractscan.Contract, event contractscan.Contrac
 		}
 	}
 	return subscribers
+}
+
+type contractTraceReport struct {
+	Version     int                       `json:"version"`
+	Target      string                    `json:"target"`
+	Matches     []contractTraceMatch      `json:"matches"`
+	Diagnostics []contractscan.Diagnostic `json:"diagnostics,omitempty"`
+}
+
+type contractTraceMatch struct {
+	Contract    contractscan.Contract   `json:"contract"`
+	Emits       []contractTraceEvent    `json:"emits,omitempty"`
+	Subscribers []contractscan.Contract `json:"subscribers,omitempty"`
+}
+
+type contractTraceEvent struct {
+	Category    runtimecontracts.EventCategory `json:"category"`
+	Type        string                         `json:"type"`
+	Subscribers []contractscan.Contract        `json:"subscribers,omitempty"`
+}
+
+func buildContractTrace(report contractscan.Report, target string) contractTraceReport {
+	trace := contractTraceReport{Version: report.Version, Target: target, Diagnostics: report.Diagnostics}
+	for _, contract := range report.Contracts {
+		if !contractMatchesTarget(contract, target) {
+			continue
+		}
+		match := contractTraceMatch{Contract: contract}
+		switch contract.Kind {
+		case runtimecontracts.Command:
+			for _, emitted := range contract.Emits {
+				match.Emits = append(match.Emits, contractTraceEvent{
+					Category:    emitted.Category,
+					Type:        emitted.Type,
+					Subscribers: subscriberContracts(report.Contracts, emitted.Category, emitted.Type),
+				})
+			}
+		case runtimecontracts.Event:
+			match.Subscribers = subscriberContracts(report.Contracts, contract.EventCategory, contract.Type)
+		}
+		trace.Matches = append(trace.Matches, match)
+	}
+	return trace
+}
+
+func contractMatchesTarget(contract contractscan.Contract, target string) bool {
+	if target == contract.Type || target == contract.Handler || target == contractIdentity(contract) {
+		return true
+	}
+	if contract.Kind == runtimecontracts.Event {
+		categoryTarget := string(contract.EventCategory) + ":" + contract.Type
+		qualifiedCategoryTarget := string(contract.EventCategory) + ":" + contractIdentity(contract)
+		return target == categoryTarget || target == qualifiedCategoryTarget
+	}
+	return false
+}
+
+func contractIdentity(contract contractscan.Contract) string {
+	if contract.Package == "" || strings.Contains(contract.Type, ".") {
+		return contract.Type
+	}
+	return contract.Package + "." + contract.Type
+}
+
+func subscriberContracts(contracts []contractscan.Contract, category runtimecontracts.EventCategory, typ string) []contractscan.Contract {
+	var subscribers []contractscan.Contract
+	for _, contract := range contracts {
+		if contract.Kind == runtimecontracts.Event && contract.EventCategory == category && contract.Type == typ && contract.Handler != "" {
+			subscribers = append(subscribers, contract)
+		}
+	}
+	return subscribers
+}
+
+func printContractTrace(trace contractTraceReport) error {
+	for matchIndex, match := range trace.Matches {
+		if matchIndex > 0 {
+			fmt.Println()
+		}
+		contract := match.Contract
+		heading := contractHeading(contract)
+		if suffix := contractIdentitySuffix(contract); suffix != "" {
+			heading += " " + suffix
+		}
+		fmt.Println(heading)
+		fmt.Printf("  handler: %s\n", emptyValue(contract.Handler))
+		if contract.Result != "" {
+			fmt.Printf("  result: %s\n", contract.Result)
+		}
+		if len(contract.Roles) > 0 {
+			fmt.Printf("  roles: %s\n", strings.Join(contract.Roles, ", "))
+		}
+		fmt.Printf("  source: %s:%d:%d\n", contract.Source, contract.Line, contract.Column)
+		switch contract.Kind {
+		case runtimecontracts.Command:
+			printTraceEmits(match.Emits)
+		case runtimecontracts.Event:
+			printTraceSubscribers(match.Subscribers)
+		}
+	}
+	printContractDiagnostics(trace.Diagnostics)
+	return nil
+}
+
+func contractIdentitySuffix(contract contractscan.Contract) string {
+	identity := contractIdentity(contract)
+	if identity == "" || identity == contract.Type {
+		return ""
+	}
+	return "(" + identity + ")"
+}
+
+func printTraceEmits(events []contractTraceEvent) {
+	if len(events) == 0 {
+		fmt.Println("  emits: none detected")
+		return
+	}
+	fmt.Println("  emits:")
+	for _, event := range events {
+		fmt.Printf("    - %s EVENT %s\n", strings.ToUpper(string(event.Category)), event.Type)
+		if len(event.Subscribers) == 0 {
+			fmt.Println("      subscribers: none")
+			continue
+		}
+		fmt.Println("      subscribers:")
+		for _, subscriber := range event.Subscribers {
+			fmt.Printf("        - %s\n", emptyValue(subscriber.Handler))
+		}
+	}
+}
+
+func printTraceSubscribers(subscribers []contractscan.Contract) {
+	if len(subscribers) == 0 {
+		fmt.Println("  subscribers: none")
+		return
+	}
+	fmt.Println("  subscribers:")
+	for _, subscriber := range subscribers {
+		fmt.Printf("    - %s\n", emptyValue(subscriber.Handler))
+	}
 }

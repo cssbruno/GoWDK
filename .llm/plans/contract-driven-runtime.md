@@ -362,7 +362,9 @@ wherever the contract is HTTP-exposed.
 - [x] Validate event subscriber signatures across full local packages and
       imported handler symbols resolved by `go/types`.
 - [x] Validate first browser-UI and vague `Changed` event-name anti-patterns.
-- [ ] Expand event category and naming convention validation.
+- [x] Validate emitted event category conflicts against scanned event
+      registrations.
+- [ ] Expand event naming convention validation.
 - [x] Validate job handler signatures across full local packages and imported
       handler symbols resolved by `go/types`.
 - [x] Detect import cycles caused by feature packages importing generated app

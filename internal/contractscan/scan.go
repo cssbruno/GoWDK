@@ -66,8 +66,9 @@ type Diagnostic struct {
 
 // EventRef describes one event a command handler can emit.
 type EventRef struct {
-	Category runtimecontracts.EventCategory `json:"category"`
-	Type     string                         `json:"type"`
+	Category       runtimecontracts.EventCategory `json:"category"`
+	Type           string                         `json:"type"`
+	TypeImportPath string                         `json:"typeImportPath,omitempty"`
 }
 
 // Report is the full discovery output.
@@ -127,6 +128,7 @@ func Scan(root string) (Report, error) {
 		}
 		contracts[index].Emits = copyEventRefs(emitsByHandler[contracts[index].Handler])
 	}
+	diagnostics = append(diagnostics, emittedEventCategoryDiagnostics(contracts)...)
 	sort.Slice(contracts, func(i, j int) bool {
 		if contracts[i].Kind != contracts[j].Kind {
 			return contracts[i].Kind < contracts[j].Kind
@@ -427,7 +429,7 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile, inspectionCache *pac
 		}
 		discovered := scanContractRegistrations(fset, file.File, file.Aliases, file.Imports, file.Rel)
 		contracts = append(contracts, discovered...)
-		for handler, emits := range emittedEventsByHandler(fset, file.File, file.Aliases) {
+		for handler, emits := range emittedEventsByHandler(fset, file.File, file.Aliases, file.Imports) {
 			emitsByHandler[handler] = append(emitsByHandler[handler], emits...)
 		}
 	}
@@ -1114,6 +1116,59 @@ func duplicateCommandDiagnostics(contracts []Contract) []Diagnostic {
 	return diagnostics
 }
 
+func emittedEventCategoryDiagnostics(contracts []Contract) []Diagnostic {
+	events := map[string]map[runtimecontracts.EventCategory]bool{}
+	for _, contract := range contracts {
+		if contract.Kind != runtimecontracts.Event {
+			continue
+		}
+		key := eventIdentity(contract.TypeImportPath, contract.Type)
+		if key == "" {
+			continue
+		}
+		if events[key] == nil {
+			events[key] = map[runtimecontracts.EventCategory]bool{}
+		}
+		events[key][contract.EventCategory] = true
+	}
+	var diagnostics []Diagnostic
+	for _, contract := range contracts {
+		if contract.Kind != runtimecontracts.Command || len(contract.Emits) == 0 {
+			continue
+		}
+		for _, emit := range contract.Emits {
+			key := eventIdentity(emit.TypeImportPath, emit.Type)
+			registeredCategories := events[key]
+			if len(registeredCategories) == 0 || registeredCategories[emit.Category] {
+				continue
+			}
+			diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_event_category_invalid", fmt.Sprintf("command %s emits %s event %s but scanned registrations use event categories %s", contract.Type, emit.Category, emit.Type, eventCategoryList(registeredCategories))))
+		}
+	}
+	return diagnostics
+}
+
+func eventIdentity(importPath string, typeName string) string {
+	typeName = strings.TrimSpace(localContractName(typeName))
+	if typeName == "" {
+		return ""
+	}
+	importPath = strings.TrimSpace(importPath)
+	if importPath == "" {
+		return typeName
+	}
+	return importPath + "\x00" + typeName
+}
+
+func eventCategoryList(categories map[runtimecontracts.EventCategory]bool) string {
+	values := make([]string, 0, len(categories))
+	for category := range categories {
+		values = append(values, string(category))
+	}
+	sort.Strings(values)
+	return strings.Join(values, ", ")
+}
+
 func commandIdentity(contract Contract) string {
 	if contract.Type == "" {
 		return ""
@@ -1299,7 +1354,7 @@ func registrationKind(name string) (runtimecontracts.Kind, runtimecontracts.Even
 	}
 }
 
-func emittedEventsByHandler(fset *token.FileSet, file *ast.File, aliases map[string]bool) map[string][]EventRef {
+func emittedEventsByHandler(fset *token.FileSet, file *ast.File, aliases map[string]bool, imports map[string]string) map[string][]EventRef {
 	out := map[string][]EventRef{}
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
@@ -1324,11 +1379,11 @@ func emittedEventsByHandler(fset *token.FileSet, file *ast.File, aliases map[str
 			if !ok {
 				return true
 			}
-			eventType := emittedEventType(fset, call, typeArgs)
+			eventType, eventImportPath := emittedEventType(fset, call, typeArgs, imports)
 			if eventType == "" {
 				return true
 			}
-			ref := EventRef{Category: category, Type: eventType}
+			ref := EventRef{Category: category, Type: eventType, TypeImportPath: eventImportPath}
 			if !seen[ref] {
 				out[fn.Name.Name] = append(out[fn.Name.Name], ref)
 				seen[ref] = true
@@ -1360,22 +1415,22 @@ func emitCategory(name string) (runtimecontracts.EventCategory, bool) {
 	}
 }
 
-func emittedEventType(fset *token.FileSet, call *ast.CallExpr, typeArgs []ast.Expr) string {
+func emittedEventType(fset *token.FileSet, call *ast.CallExpr, typeArgs []ast.Expr, imports map[string]string) (string, string) {
 	if len(typeArgs) > 0 {
-		return exprString(fset, typeArgs[0])
+		return contractTypeName(fset, typeArgs[0], imports)
 	}
 	if len(call.Args) < 2 {
-		return ""
+		return "", ""
 	}
 	switch arg := call.Args[1].(type) {
 	case *ast.CompositeLit:
-		return exprString(fset, arg.Type)
+		return contractTypeName(fset, arg.Type, imports)
 	case *ast.UnaryExpr:
 		if literal, ok := arg.X.(*ast.CompositeLit); ok {
-			return exprString(fset, literal.Type)
+			return contractTypeName(fset, literal.Type, imports)
 		}
 	}
-	return ""
+	return "", ""
 }
 
 func handlerName(call *ast.CallExpr) string {

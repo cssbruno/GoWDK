@@ -426,6 +426,49 @@ func HandlePatientChanged(ctx context.Context, event PatientChanged) error {
 	}
 }
 
+func TestScanReportsEmittedEventCategoryMismatch(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+type PatientCreated struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient)
+	contracts.RegisterDomainEvent[PatientCreated](r, SendWelcomeEmail)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	if err := contracts.EmitPresentation(ctx, PatientCreated{}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	return CreatePatientResult{}, nil
+}
+
+func SendWelcomeEmail(ctx context.Context, event PatientCreated) error {
+	return nil
+}
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagnostic := findDiagnostic(t, report.Diagnostics, "contract_event_category_invalid")
+	if diagnostic.Kind != runtimecontracts.Command || diagnostic.Type != "CreatePatient" {
+		t.Fatalf("unexpected event category diagnostic metadata: %#v", diagnostic)
+	}
+	if want := "emits presentation event PatientCreated but scanned registrations use event categories domain"; !strings.Contains(diagnostic.Message, want) {
+		t.Fatalf("expected %q in diagnostic: %#v", want, diagnostic)
+	}
+}
+
 func TestScanReportsGeneratedAppImportCycles(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "patients.go"), `package patients

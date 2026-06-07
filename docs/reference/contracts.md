@@ -430,6 +430,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - `gowdk graph` detects command-emitted events when command handlers call
   `contracts.EmitDomain`, `contracts.EmitIntegration`, or
   `contracts.EmitPresentation` with a visible event type.
+- Contract scanning reports `contract_event_category_invalid` when a command
+  emits a visible event type under one category but the scanner only sees
+  registrations for that event type under another category.
 - `gowdk trace <contract>` reports a single command/query/event/job, command
   emitted events, event subscribers, source locations, handlers, and roles.
 - `runtime/contracts` can capture command-emitted events as `EventEnvelope`

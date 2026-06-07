@@ -44,13 +44,17 @@ jobs:
           node --test editors/vscode/*.test.js
           go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
           (
+            set -euxo pipefail
             cd examples/login
             rm -rf dist
             go run ../../cmd/gowdk build
             test -f dist/site/index.html
             test -f dist/site/dashboard/index.html
-            test -f dist/site/login.css
-            go build .
+            login_css="$(sed -nE 's/.*"login.css": "([^"]+)".*/\1/p' dist/site/gowdk-assets.json | head -n1)"
+            echo "login.css resolves to ${login_css}"
+            test -n "$login_css"
+            test -f "dist/site/$login_css"
+            go test ./src/features/auth
           )
           rm -rf /tmp/gowdk-css-build
           go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk

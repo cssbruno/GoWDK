@@ -58,13 +58,17 @@ jobs:
 
       - name: Build login backend example
         run: |
+          set -euxo pipefail
           cd examples/login
           rm -rf dist
           go run ../../cmd/gowdk build
           test -f dist/site/index.html
           test -f dist/site/dashboard/index.html
-          test -f dist/site/login.css
-          go build .
+          login_css="$(sed -nE 's/.*"login.css": "([^"]+)".*/\1/p' dist/site/gowdk-assets.json | head -n1)"
+          echo "login.css resolves to ${login_css}"
+          test -n "$login_css"
+          test -f "dist/site/$login_css"
+          go test ./src/features/auth
 
       - name: Smoke build CSS example output
         run: |

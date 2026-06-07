@@ -7,16 +7,16 @@ Status: Accepted
 ## Context
 
 ADR 0003 keeps generated JavaScript as the default island runtime and makes
-WASM explicit through `g:island="wasm"`. The current WASM slice only emits a
-placeholder artifact and loader shape. Before GOWDK supports user-authored
-browser-side Go logic, the compiler needs a stable ABI for bootstrapping state,
-passing props, dispatching events, lifecycle calls, and DOM updates.
+WASM explicit through component-level `@wasm` declarations, with
+`g:island="wasm"` retained as a call-site override. The compiler needs a stable
+ABI for bootstrapping state, passing props, dispatching events, lifecycle calls,
+and DOM updates.
 
 The ABI must preserve the compile-first model:
 
 - App-shell HTML is still the initial rendered output.
 - JavaScript remains the host that discovers island roots and loads WASM.
-- WASM is opt-in per component call.
+- WASM is opt-in per component, with call-site override support.
 - Components must not require full-page hydration.
 
 ## Decision

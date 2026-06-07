@@ -7,66 +7,71 @@
 [![CI](https://github.com/cssbruno/GOWDK/actions/workflows/ci.yml/badge.svg)](https://github.com/cssbruno/GOWDK/actions/workflows/ci.yml)
 [![Release](https://github.com/cssbruno/GOWDK/actions/workflows/release.yml/badge.svg)](https://github.com/cssbruno/GOWDK/actions/workflows/release.yml)
 ![Go](https://img.shields.io/badge/Go-1.26-00ADD8)
-
 ![Build](https://img.shields.io/badge/build-succeeds-2ea44f)
 ![Quality](https://img.shields.io/badge/quality-gated-2ea44f)
 
-GOWDK Compiler plus GOWDK Runtime: language/compiler plus app/runtime layer for
-full-stack Go web applications.
+GOWDK ships Go web apps through GOWDK Compiler plus GOWDK Runtime.
 
-GOWDK Compiler is the `.gwdk` language and component/page compiler. GOWDK
-Runtime is the app/runtime layer for routing, actions, APIs, fragments, SSR
-hooks, embedded assets, and one-binary serving. The `gowdk` CLI drives both
-layers and generates Go adapter code for route dispatch, form decoding,
-response writing, CSRF, embedded assets, partial updates, and SSR hooks. Your
-domain logic, storage, auth, validation, and services stay in normal Go
-packages.
+- **GOWDK Compiler** turns package-peer `.gwdk` files into page output,
+  manifests, assets, diagnostics, and generated Go adapter source.
+- **GOWDK Runtime** serves the generated app, routes backend behavior, runs
+  actions/APIs/fragments/SSR hooks, and owns the typed contract runtime.
+- **`gowdk`** is the CLI that drives both layers.
 
-**Status: pre-release.** The compiler handles core page and component
-compilation, embedded app builds, generated JavaScript islands, explicit WASM
-islands, CSRF-wired action handlers, partial fragments, and concrete or dynamic
-SSR pages with declared `load {}` fields. The runtime model and language
-surface are still evolving. Not ready for production use.
+Full pages default to build-time SPA output. Backend actions, APIs, fragments,
+commands, and queries run at request time without forcing full-page SSR. Pages
+that need request data opt into request-time page rendering with `@render ssr`.
+
+**Status: pre-release.** The compiler and runtime already cover build-time
+pages, components, generated JS islands, component-level WASM islands, CSRF-wired
+actions, partial fragments, action/API handlers, contract references, and
+concrete or dynamic SSR pages with declared `load {}` fields. The language and
+runtime contracts are still evolving. Not ready for production use.
 
 Live demo: [gowdk.com](https://gowdk.com/)
 Demo source: [cssbruno/gowdk-page](https://github.com/cssbruno/gowdk-page)
 
-## How It Works
+## Event-Driven Runtime
 
-Write `.gwdk` files for your web-facing contracts. GOWDK Compiler compiles
-those files into `net/http`-compatible Go. GOWDK Runtime serves the generated
-app/runtime contracts. There is no reflection and no hidden request-time magic
-in the generated adapters.
+GOWDK is not only page compilation. `runtime/contracts` provides the first
+event-driven backend slice:
 
-Full pages default to build-time output. Actions, APIs, and fragments run as
-backend endpoints without forcing full-page SSR. Pages that need request data,
-guards, sessions, or per-request state opt into request-time rendering with
-`@render ssr`.
+```text
+frontend UI event -> command/query -> backend handler -> backend-owned event
+frontend <- result or presentation event
+```
 
-The generated handlers are plain `http.Handler` values. Echo, Gin, Chi, Fiber,
-and similar frameworks are integration targets, not core dependencies.
+- `g:command` on forms declares backend command intent.
+- `g:query` on elements declares readonly backend query intent.
+- Commands have one owner handler.
+- Queries read state and should not mutate it.
+- Domain and integration events are emitted after backend command success.
+- Presentation events can notify UI; they are not trusted input.
+- Jobs and worker-style event replay are part of the same contract model.
 
-## Data Access
+The local in-process registry works today for single-binary apps. Compiler
+scanning, generated web adapters, role filtering, contract graph/trace CLI
+commands, event envelope capture/replay, and a dependency-free file outbox are
+implemented. Split worker/cron wiring, database outboxes, concrete broker
+adapters, retry policy, and realtime fanout adapters remain planned.
 
-GOWDK does not include an ORM or a data layer. The project is intentionally
-against GORM and ORM-first application design as the recommended path.
+See [Contracts](docs/reference/contracts.md) for the runtime API and current
+compiler integration details.
 
-The preferred approach is explicit SQL: `sqlc` for type-safe generated queries,
-with `database/sql`, `pgx`, `sqlx`, or similar focused libraries for everything
-else. Explicit SQL is easier to review, test, and reason about than hidden query
-generation, model magic, or framework-owned schema state.
+## Execution Model
 
-Planned work includes helpers for wiring `sqlc`-generated query packages into
-actions and APIs, plus admin/form scaffolding from explicit SQL contracts.
-
-## Application Scaffolding
-
-This repository ships GOWDK Compiler plus GOWDK Runtime. It is not an app
-template. Login, admin, billing, CRUD, uploads, email, and background jobs are
-application code.
-
-Examples or optional generators may cover those patterns later, but the output
-should be editable Go and `.gwdk` files, not hidden framework behavior.
+- Routes are declared in `.gwdk` files, not inferred from folders.
+- `.gwdk` files are peers of Go files and declare `package <name>`.
+- `paths {}` runs at build time and declares dynamic SPA routes.
+- `build {}` runs at build time.
+- `load {}` runs at request time and requires request-time rendering.
+- `act Name POST "/path"` declares POST/action endpoints.
+- `api Name METHOD "/path"` declares API endpoints.
+- `view {}` renders markup.
+- User behavior, storage, auth, validation, and services stay in normal Go.
+- Generated Go is adapter glue, not generated application logic.
+- Core stays `net/http` compatible; Gin, Echo, Fiber, and similar frameworks
+  are optional adapters.
 
 ## Getting Started
 
@@ -92,12 +97,9 @@ GOWDK_BIN=/path/to/GoWDK/gowdk go test ./tests
 
 Open `http://127.0.0.1:8080`.
 
-`init --template site` writes a starter `gowdk.config.go`, one page, one
-component, and one CSS file. `init --template minimal` writes a smaller page/CSS
-starter. `init --tests` adds an optional smoke test that uses `GOWDK_BIN` to run
-the CLI. `build` outputs HTML and manifests to `dist/site`. `serve` is static
-only: it does not run actions, API handlers, partial fragments, or SSR routes.
-For backend handlers, use `gowdk build --app --bin` to produce a runnable binary.
+`serve` is static only. It does not run actions, APIs, fragments, commands,
+queries, or SSR routes. For backend handlers, use `gowdk build --app --bin` to
+produce a runnable binary.
 
 For a live rebuild loop:
 
@@ -105,44 +107,39 @@ For a live rebuild loop:
 /path/to/GoWDK/gowdk dev
 ```
 
-`dev` polls source files, rebuilds on change, and reloads the browser. Add
-`--app <dir>` to also recompile and restart the generated backend binary on
+Add `--app <dir>` to recompile and restart the generated backend binary on
 changes.
 
-Project compiler commands require `gowdk.config.go` in the current directory,
-or `--config <file>`, even when explicit `.gwdk` files are passed. This source
-repository includes a root `gowdk.config.go` for example commands.
+Project compiler commands require `gowdk.config.go` in the current directory or
+`--config <file>`, even when explicit `.gwdk` files are passed.
 
-See [docs/getting-started.md](docs/getting-started.md) for the full
-walkthrough.
+See [Getting started](docs/getting-started.md) for the full walkthrough.
 
-## What Works Now
+## Status Snapshot
 
-- Page and component compilation, config-based discovery, and named build
-  targets.
-- Literal `paths {}` expansion for dynamic SPA routes.
-- Literal `build {}` data and imported no-argument Go build data functions.
-- Generated embedded app source, local binaries, and Go `js/wasm` artifacts.
-- Action/API handlers, action redirects, partial fragments, CSRF-wired action
-  handlers, guards, endpoint-local error pages, and SSR pages with
-  declared `load {}` identifier or dotted-path execution, safe load redirects,
-  and generated error pages in generated binaries.
-- CLI commands: `build`, `dev`, `serve`, `preview`, `check`, `fmt`, `lsp`,
-  `manifest`, `sitemap`, and `routes`.
+Implemented or usable today:
 
-Partial or planned: broader generated validation coverage, richer fragment data
-contracts, scoped component CSS/asset emission, and broader local browser
-reactivity. File uploads are intentionally left to user-owned API/server
-handlers.
+- Page/component compilation, build-time SPA output, layouts, CSS assets,
+  generated JS islands, component-level WASM islands, manifests, route reports, LSP,
+  generated app source, binaries, and selected-module packaging.
+- Action/API handlers, partial fragments, form decoding, CSRF-wired actions,
+  guards, endpoint error pages, no-store request-time responses, and concrete
+  or dynamic SSR pages with declared `load {}` fields.
+- Typed runtime contracts for queries, commands, backend-owned events,
+  presentation events, jobs, role filtering, graph/trace/list CLI, event
+  capture/replay, and file outbox/event-source support.
 
-## Site Example
+Partial or planned: richer fragment data, broader browser reactivity, split
+worker/cron contract wiring, database outboxes, broker/realtime adapters,
+hybrid behavior, and production operations docs.
+
+## Example
 
 ```gwdk
 package blog
 
 @page blog.post
 @route "/blog/{slug}"
-@layout root, blog
 @render spa
 
 paths {
@@ -160,12 +157,9 @@ build {
 act Refresh POST "/blog/{slug}"
 
 view {
-  <main class="page">
-    <header class="hero">
-      <p>Compile-first Go UI</p>
-      <h1>{title}</h1>
-      <p data-slug="{slug}">{description}</p>
-    </header>
+  <main>
+    <h1>{title}</h1>
+    <p data-slug="{slug}">{description}</p>
 
     <form g:post={Refresh} g:target="#article-list" g:swap="innerHTML">
       <input name="query" placeholder="Filter articles" />
@@ -175,26 +169,31 @@ view {
     <section id="article-list">
       <article>
         <h2>{slug}</h2>
-        <p>Generated as spa HTML at build time.</p>
+        <p>Generated as SPA HTML at build time.</p>
       </article>
     </section>
   </main>
 }
 ```
 
-`Refresh` is a normal exported Go function in package `blog`; generated code
+`Refresh` is a normal exported Go function in package `blog`. Generated code
 wires the form POST and writes the returned `runtime/response.Response`.
 
 ## CLI
 
 ```sh
+gowdk version
 gowdk init [--force] [--tests] [--template site|minimal] [dir]
 gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
-gowdk build [--config <file>] [--debug] [--ssr] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
+gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [files...]
 gowdk dev [--addr 127.0.0.1:8080] [--interval 1s] [build flags...]
 gowdk preview [--addr 127.0.0.1:8080] [--hot] [build flags...]
 gowdk serve --dir <dir> [--addr 127.0.0.1:8080]
-gowdk fmt [--write] <file.gwdk>
+gowdk contracts [--json] [dir]
+gowdk graph [--json] [dir]
+gowdk trace <contract> [--json] [dir]
+gowdk list commands|queries|events|jobs [--json] [dir]
+gowdk fmt [--write] <files>
 gowdk tokens <file.gwdk>
 gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
@@ -202,79 +201,17 @@ gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk lsp [--ssr]
 ```
 
-Every successful disk build writes `gowdk-build-report.json`. Pass `--debug` to
-mirror the structured report to stderr.
+See [CLI reference](docs/reference/cli.md) for flags and examples.
 
-`gowdk dev --app <dir>` generates the app, compiles a dev binary, and restarts
-that generated process after successful rebuilds. `gowdk preview` builds once
-into a temporary deploy-preview output and serves it; `gowdk preview --hot`
-uses the dev loop for local hot preview.
+## Boundaries
 
-## Build Targets
+GOWDK does not include an ORM, data layer, login system, admin app, billing
+stack, upload service, email service, or background job platform. Those are
+application code.
 
-`gowdk.config.go` can declare named outputs for separate deployables:
-
-```go
-Build: gowdk.BuildConfig{
-	Targets: []gowdk.BuildTargetConfig{
-		{
-			Name:    "site",
-			Modules: []string{"public"},
-			Output:  "dist/site",
-			App:     ".gowdk/site",
-			Binary:  "bin/site",
-		},
-		{
-			Name:    "admin",
-			Modules: []string{"admin"},
-			Output:  "dist/admin",
-			App:     ".gowdk/admin",
-			Binary:  "bin/admin",
-		},
-		{
-			Name:    "api",
-			Modules: []string{"api"},
-			Output:  "dist/api",
-			App:     ".gowdk/api",
-			Binary:  "bin/api",
-		},
-		{
-			Name:    "web",
-			Modules: []string{"public", "admin"},
-			Output:  "dist/web",
-			App:     ".gowdk/web",
-			Binary:  "bin/web",
-		},
-	},
-}
-```
-
-Run all configured targets:
-
-```sh
-gowdk build
-```
-
-Run one deployable:
-
-```sh
-gowdk build --target admin
-```
-
-Run multiple deployables together:
-
-```sh
-gowdk build --target site --target api
-```
-
-The `site`, `admin`, and `api` targets build separate outputs and binaries. The
-`web` target packages two frontend modules together when one binary should serve
-both the public site and admin UI.
-
-Modules are local source groups today. A future module system should also allow
-importing reusable GOWDK modules from GitHub repositories, Go module paths, or
-similar sources, so apps can share pages, components, admin screens, and
-integration blueprints without copying files by hand.
+The preferred data-access direction is explicit SQL with tools such as `sqlc`,
+`database/sql`, `pgx`, or `sqlx`. ORM-first behavior is not the recommended
+path for GOWDK apps.
 
 ## Docs
 
@@ -283,7 +220,7 @@ integration blueprints without copying files by hand.
 - [Requirements](docs/product/requirements.md)
 - [Roadmap](docs/product/roadmap.md)
 - [Architecture](docs/engineering/architecture.md)
-- [Release readiness](docs/engineering/release.md)
+- [Contracts](docs/reference/contracts.md)
 - [CLI reference](docs/reference/cli.md)
 - [Dev loop reference](docs/reference/dev.md)
 - [Config reference](docs/reference/config.md)

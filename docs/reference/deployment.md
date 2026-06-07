@@ -270,8 +270,8 @@ gowdk build --out dist/site --app .gowdk/app --wasm bin/site.wasm
 ```
 
 This is a Go `js/wasm` deploy artifact for runtimes that can execute that
-artifact. It is separate from browser island assets emitted by
-`g:island="wasm"`.
+artifact. It is separate from browser island assets emitted for component-level
+`@wasm` declarations.
 
 ## Addons
 

@@ -50,8 +50,8 @@ Go are constructed as Go ASTs, printed, and formatted before use or write.
 
 Browser-facing output is generated only when the source requires it. Partial
 form metadata can emit `assets/gowdk/gowdk.js`; stateful components can emit
-generated JavaScript island assets; explicit `g:island="wasm"` component calls
-can emit WASM island loader assets. See `browser-compiler.md`.
+generated JavaScript island assets; component-level `@wasm` declarations can
+emit WASM island loader assets. See `browser-compiler.md`.
 
 ## Target Pipeline
 

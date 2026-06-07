@@ -1,4 +1,4 @@
-# ADR 0003: JS Default, Explicit WASM Islands
+# ADR 0003: JS Default, Component-Declared WASM Islands
 
 Date: 2026-06-04
 
@@ -10,9 +10,10 @@ GOWDK needs local component interactivity without becoming a React, Svelte, or
 npm-centered runtime. App-shell HTML remains the first output, server fragments
 handle action-driven updates, and local state needs a small browser runtime.
 
-WASM is still important for future richer browser-side Go logic, but making it
-implicit would force every stateful component through a heavier runtime and make
-simple counters, toggles, and disclosure widgets harder to inspect.
+WASM is still important for richer browser-side Go logic, but making it the
+implicit runtime for every stateful component would force simple counters,
+toggles, and disclosure widgets through a heavier runtime and make them harder
+to inspect.
 
 ## Decision
 
@@ -21,10 +22,11 @@ with `state <alias>.<Type> = <alias>.<Init>()` renders initial state at build
 time and emits `assets/gowdk/islands/<Component>.js` when a page calls it
 without an island override.
 
-WASM is explicit per component instance. `<Counter g:island="wasm" />` emits
-`assets/gowdk/islands/Counter.wasm` and
-`assets/gowdk/islands/Counter.wasm.js`. Unknown `g:island` values are compiler
-errors.
+WASM is declared on the component with `@wasm <package>`. Normal calls to that
+component emit `assets/gowdk/islands/Counter.wasm` and
+`assets/gowdk/islands/Counter.wasm.js`. `g:island="wasm"` remains available as
+a call-site override for compatibility and targeted experiments. Unknown
+`g:island` values are compiler errors.
 
 ## Consequences
 
@@ -32,8 +34,8 @@ errors.
 
 - The default interactive path stays dependency-free, inspectable, and small.
 - App-shell HTML remains the initial output for stateful components.
-- WASM work has an explicit opt-in boundary instead of becoming a hidden
-  default.
+- WASM work has an explicit component-level opt-in boundary instead of becoming
+  a hidden default for every stateful component.
 
 ### Negative
 

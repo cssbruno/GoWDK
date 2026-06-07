@@ -127,9 +127,10 @@ Implemented today:
 - Client expressions support first-slice compiler-owned built-ins:
   `len(value)`, `lower(value)`, `upper(value)`, `contains(value, query)`,
   `string(value)`, `int(value)`, and `float(value)`.
-- `g:island="wasm"` on component calls to opt that instance into explicit WASM
-  island assets. Unknown `g:island` values are compile/render errors. Without
-  `g:island`, stateful component calls use generated JavaScript by default.
+- Component-level `@wasm` declarations make normal calls to that component use
+  WASM island assets. `g:island="wasm"` remains a call-site override. Unknown
+  `g:island` values are compile/render errors. Without `@wasm` or `g:island`,
+  stateful component calls use generated JavaScript by default.
 - Familiar external-template block syntax such as `{#if}`, `{#each}`,
   `{#await}`, `{#snippet}`, `{@render}`, `{@html}`, `{@const}`, and `{@debug}`
   is rejected with diagnostics that point to the current GOWDK-native
@@ -158,7 +159,7 @@ These are the supported `g:` directives in `view {}` markup:
   components.
 - `g:slot="name"` on caller-side `<template>` elements for named and scoped
   slots.
-- `g:island="wasm"` on component calls.
+- `g:island="wasm"` on component calls when a call-site WASM override is needed.
 
 All other `g:` directives are unsupported today. In particular, there is no
 `g:html`, `g:head`, `g:window`, `g:body`, `g:document`, `g:transition`,

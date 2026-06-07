@@ -11,7 +11,7 @@ first-slice `g:post`, `g:target`, and `g:swap` lowering, literal dynamic SPA
 route expansion, literal build data, imported no-argument Go build data
 functions, route/build-data interpolation in views, Go-typed component
 props/state contracts, first-slice generated JavaScript islands for stateful
-components, explicit `g:island="wasm"` asset emission, formatting, diagnostics,
+components, component-level `@wasm` island asset emission, formatting, diagnostics,
 manifest output, build output for simple SPA pages/components, generated
 partial fragment responses for embedded apps, and LSP/editor integration. It
 does not yet parse non-string inline props, full typed action semantics, API

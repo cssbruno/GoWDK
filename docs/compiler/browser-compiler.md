@@ -6,8 +6,8 @@ The current browser-facing compiler slices are:
 - In-memory playground compilation through `playground.Compile`.
 - Partial form enhancement runtime emitted as `assets/gowdk/gowdk.js`.
 - Generated JavaScript islands for stateful components.
-- Explicit WASM island asset emission for component calls that request
-  `g:island="wasm"`.
+- Component-level WASM island asset emission for components that declare
+  `@wasm`, with `g:island="wasm"` still supported as a call-site override.
 
 ## Playground Compile API
 
@@ -29,7 +29,7 @@ result := playground.Compile(playground.Project{
 - `CSS`: generated CSS artifacts keyed by output path.
 - `Files`: every generated artifact, including `gowdk-routes.json`,
   `gowdk-assets.json`, partial runtime assets, JavaScript island assets, and
-  explicit WASM island assets.
+  WASM island assets.
 - `Routes`: emitted route-to-file mappings.
 - `Diagnostics`: source or compiler diagnostics safe to show in browser UIs.
 

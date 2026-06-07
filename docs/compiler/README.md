@@ -43,6 +43,6 @@ Not implemented yet:
 - `project-structure.md`: current source inputs and planned project layout.
 - `generated-output.md`: planned generated artifacts and current limitations.
 - `browser-compiler.md`: browser-facing partial runtime, JavaScript islands, and
-  explicit WASM island behavior.
+  component-level WASM island behavior.
 - `SPA-build-report.md`: generated build report schema and CLI debug output.
 - `manifest.md`: manifest and site-map JSON contracts.

@@ -152,7 +152,7 @@ for one-off builds.
 
 `--wasm` produces a Go `js/wasm` compile artifact from the generated app. This
 is a deploy artifact for hosts that can run Go WebAssembly; it is separate from
-explicit browser island assets emitted by `g:island="wasm"`.
+component-level browser island assets emitted for `@wasm` components.
 
 `dev` is the one-command SPA development loop. It forwards non-dev flags to
 `build`, resolves the output directory from `--out`, exactly one selected

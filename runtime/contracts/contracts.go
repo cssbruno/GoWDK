@@ -49,6 +49,19 @@ type (
 	JobHandler[J any]        func(context.Context, J) error
 )
 
+// EventEnvelope is a backend-owned event captured from a successful command.
+type EventEnvelope struct {
+	Category EventCategory
+	Type     string
+	Value    any
+}
+
+// Outbox stores command-emitted events for durable delivery. Implementations
+// decide persistence, transactions, retries, and broker publication.
+type Outbox interface {
+	StoreEvents(context.Context, []EventEnvelope) error
+}
+
 // ErrorKind identifies contract registry or dispatch failures.
 type ErrorKind string
 
@@ -175,27 +188,87 @@ func ExecuteCommandForRole[C, R any](ctx context.Context, registry *Registry, ro
 }
 
 func executeCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, error) {
+	result, recorder, err := runCommand[C, R](ctx, registry, command, role)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	if err := recorder.dispatchForRole(ctx, registry, role); err != nil {
+		var zero R
+		return zero, err
+	}
+	return result, nil
+}
+
+// CaptureCommandEvents runs a command and returns events recorded with Emit*
+// after the command handler succeeds. Subscribers are not dispatched.
+func CaptureCommandEvents[C, R any](ctx context.Context, registry *Registry, command C) (R, []EventEnvelope, error) {
+	return captureCommandEvents[C, R](ctx, registry, command, "")
+}
+
+// CaptureCommandEventsForRole runs a command for role and captures emitted
+// events without dispatching subscribers.
+func CaptureCommandEventsForRole[C, R any](ctx context.Context, registry *Registry, role Role, command C) (R, []EventEnvelope, error) {
+	return captureCommandEvents[C, R](ctx, registry, command, role)
+}
+
+func captureCommandEvents[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, []EventEnvelope, error) {
+	result, recorder, err := runCommand[C, R](ctx, registry, command, role)
+	if err != nil {
+		var zero R
+		return zero, nil, err
+	}
+	return result, recorder.envelopes(), nil
+}
+
+// ExecuteCommandToOutbox runs a command and stores emitted events in outbox
+// after the command handler succeeds. Subscribers are not dispatched.
+func ExecuteCommandToOutbox[C, R any](ctx context.Context, registry *Registry, outbox Outbox, command C) (R, error) {
+	return executeCommandToOutbox[C, R](ctx, registry, outbox, command, "")
+}
+
+// ExecuteCommandToOutboxForRole runs a command for role and stores emitted
+// events in outbox after the command handler succeeds.
+func ExecuteCommandToOutboxForRole[C, R any](ctx context.Context, registry *Registry, outbox Outbox, role Role, command C) (R, error) {
+	return executeCommandToOutbox[C, R](ctx, registry, outbox, command, role)
+}
+
+func executeCommandToOutbox[C, R any](ctx context.Context, registry *Registry, outbox Outbox, command C, role Role) (R, error) {
+	var zero R
+	if outbox == nil {
+		return zero, Error{Kind: ErrNilHandler, Contract: typeName[C](), Message: "command outbox cannot be nil"}
+	}
+	result, events, err := captureCommandEvents[C, R](ctx, registry, command, role)
+	if err != nil {
+		return zero, err
+	}
+	if len(events) > 0 {
+		if err := outbox.StoreEvents(ctx, events); err != nil {
+			return zero, err
+		}
+	}
+	return result, nil
+}
+
+func runCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, *eventRecorder, error) {
 	var zero R
 	entry, ok := registry.command(typeName[C]())
 	if !ok {
-		return zero, missingHandlerError(Command, typeName[C]())
+		return zero, nil, missingHandlerError(Command, typeName[C]())
 	}
 	if !rolesAllow(entry.roles, role) {
-		return zero, roleNotAllowedError(Command, typeName[C](), role)
+		return zero, nil, roleNotAllowedError(Command, typeName[C](), role)
 	}
 	handler, ok := entry.handler.(CommandHandler[C, R])
 	if !ok {
-		return zero, unsupportedHandlerError(Command, typeName[C]())
+		return zero, nil, unsupportedHandlerError(Command, typeName[C]())
 	}
 	commandCtx, recorder := withRecorder(ctx)
 	result, err := handler(commandCtx, command)
 	if err != nil {
-		return zero, err
+		return zero, nil, err
 	}
-	if err := recorder.dispatchForRole(ctx, registry, role); err != nil {
-		return zero, err
-	}
-	return result, nil
+	return result, recorder, nil
 }
 
 // RegisterDomainEvent registers a subscriber for a backend-owned domain event.

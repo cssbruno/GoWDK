@@ -313,8 +313,9 @@ wherever the contract is HTTP-exposed.
 
 - [x] Decide first API shape: `runtime/contracts.Registry` plus generic
       registration and execution functions.
-- [ ] Decide whether commands return events directly, through a result field, or
-      through a dispatcher on context.
+- [x] Decide whether commands return events directly, through a result field, or
+      through a dispatcher on context: first slice uses `Emit*` on the command
+      context, then dispatches or captures recorded events after success.
 - [x] Decide first event representation: domain, integration, and presentation
       categories in registry metadata.
 - [x] Decide first `.gwdk` syntax for command binding:
@@ -414,12 +415,12 @@ wherever the contract is HTTP-exposed.
 ### Phase 6: Optional Reliability Adapters
 
 - [ ] Define broker adapter interface.
-- [ ] Define optional outbox interface without choosing an ORM or database.
-- [ ] Define transaction/outbox ordering rules for domain events.
+- [x] Define optional outbox interface without choosing an ORM or database.
+- [x] Define transaction/outbox ordering rules for domain events.
 - [ ] Define retry and idempotency guidance for subscribers.
-- [ ] Add docs for when in-process dispatch is enough.
-- [ ] Add docs for when outbox/queue/broker support is needed.
-- [ ] Keep all external adapters outside core dependencies.
+- [x] Add docs for when in-process dispatch is enough.
+- [x] Add docs for when outbox/queue/broker support is needed.
+- [x] Keep all external adapters outside core dependencies.
 
 ### Phase 7: CLI And Observability
 

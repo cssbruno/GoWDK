@@ -10,6 +10,7 @@ type eventRecorder struct {
 
 type recordedEvent struct {
 	category        EventCategory
+	eventType       string
 	value           any
 	dispatch        func(context.Context, *Registry) error
 	dispatchForRole func(context.Context, *Registry, Role) error
@@ -30,8 +31,9 @@ func emit[E any](ctx context.Context, category EventCategory, event E) error {
 		}
 	}
 	recorder.events = append(recorder.events, recordedEvent{
-		category: category,
-		value:    event,
+		category:  category,
+		eventType: typeName[E](),
+		value:     event,
 		dispatch: func(dispatchCtx context.Context, registry *Registry) error {
 			return dispatchEvent(dispatchCtx, registry, category, event)
 		},
@@ -49,6 +51,21 @@ func (recorder *eventRecorder) dispatch(ctx context.Context, registry *Registry)
 		}
 	}
 	return nil
+}
+
+func (recorder *eventRecorder) envelopes() []EventEnvelope {
+	if len(recorder.events) == 0 {
+		return nil
+	}
+	envelopes := make([]EventEnvelope, 0, len(recorder.events))
+	for _, event := range recorder.events {
+		envelopes = append(envelopes, EventEnvelope{
+			Category: event.category,
+			Type:     event.eventType,
+			Value:    event.value,
+		})
+	}
+	return envelopes
 }
 
 func (recorder *eventRecorder) dispatchForRole(ctx context.Context, registry *Registry, role Role) error {

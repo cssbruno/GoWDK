@@ -90,6 +90,57 @@ func HandleCreatePatient(ctx context.Context, cmd CreatePatient) (CreatePatientR
 Emitted events are dispatched only after the command handler returns
 successfully. If the command returns an error, recorded events are discarded.
 
+Capture events instead of dispatching subscribers when a command needs an
+outbox boundary:
+
+```go
+result, events, err := contracts.CaptureCommandEvents[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    command,
+)
+```
+
+Each captured `EventEnvelope` contains the event category, Go type name, and
+typed value. Capturing does not run event subscribers.
+
+For dependency-free outbox integration, implement the small `Outbox` interface:
+
+```go
+type PatientOutbox struct{}
+
+func (PatientOutbox) StoreEvents(ctx context.Context, events []contracts.EventEnvelope) error {
+    return nil
+}
+
+result, err := contracts.ExecuteCommandToOutbox[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    PatientOutbox{},
+    command,
+)
+```
+
+`ExecuteCommandToOutbox` stores events only after the command handler succeeds.
+It does not dispatch subscribers. Database transactions, outbox tables, retry
+policy, idempotency, broker publication, and worker delivery remain adapter
+responsibilities outside the core package.
+
+For durable domain events, adapter code should preserve this order:
+
+```text
+start transaction
+apply state change
+store domain event in outbox
+commit transaction
+publish from worker
+```
+
+Use plain `ExecuteCommand` for small single-binary apps where in-process
+subscriber dispatch is enough. Use `CaptureCommandEvents` or
+`ExecuteCommandToOutbox` when subscribers should run from a later worker or
+broker delivery path.
+
 ## `.gwdk` Command References
 
 Use `g:command` on forms to declare backend command intent:
@@ -173,6 +224,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   `contracts.EmitPresentation` with a visible event type.
 - `gowdk trace <contract>` reports a single command/query/event/job, command
   emitted events, event subscribers, source locations, handlers, and roles.
+- `runtime/contracts` can capture command-emitted events as `EventEnvelope`
+  values and pass them to a dependency-free `Outbox` interface without
+  dispatching subscribers.
 - Full package graph validation and imported handler validation are planned.
-- Split web/worker/cron binaries, durable outbox, broker adapters, and
-  realtime SSE/WebSocket fanout are planned.
+- Durable outbox implementations, broker adapters, split web/worker/cron
+  binaries, and realtime SSE/WebSocket fanout are planned.

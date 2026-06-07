@@ -36,6 +36,19 @@ type syncPatientsJob struct {
 	Limit int
 }
 
+type recordingOutbox struct {
+	events []EventEnvelope
+	err    error
+}
+
+func (outbox *recordingOutbox) StoreEvents(ctx context.Context, events []EventEnvelope) error {
+	if outbox.err != nil {
+		return outbox.err
+	}
+	outbox.events = append(outbox.events, events...)
+	return nil
+}
+
 func TestCommandDispatchesDomainEventsAfterSuccess(t *testing.T) {
 	registry := NewRegistry()
 	var handled []string
@@ -93,6 +106,124 @@ func TestCommandDoesNotDispatchEventsAfterFailure(t *testing.T) {
 	}
 	if handled != 0 {
 		t.Fatalf("handled = %d, want 0", handled)
+	}
+}
+
+func TestCaptureCommandEventsDoesNotDispatchSubscribers(t *testing.T) {
+	registry := NewRegistry()
+	var handled int
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		handled++
+		return nil
+	}))
+	must(t, RegisterPresentationEvent[patientCreatedNotice](registry, func(ctx context.Context, event patientCreatedNotice) error {
+		handled++
+		return nil
+	}))
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		if err := EmitDomain(ctx, patientCreated{ID: "patient-1"}); err != nil {
+			return createPatientResult{}, err
+		}
+		if err := EmitPresentation(ctx, patientCreatedNotice{ID: "patient-1"}); err != nil {
+			return createPatientResult{}, err
+		}
+		return createPatientResult{ID: "patient-1"}, nil
+	}))
+
+	result, events, err := CaptureCommandEvents[createPatient, createPatientResult](context.Background(), registry, createPatient{Name: "Ada"})
+	if err != nil {
+		t.Fatalf("capture command events: %v", err)
+	}
+	if result.ID != "patient-1" {
+		t.Fatalf("result.ID = %q, want patient-1", result.ID)
+	}
+	if handled != 0 {
+		t.Fatalf("handled = %d, want 0", handled)
+	}
+	if len(events) != 2 {
+		t.Fatalf("len(events) = %d, want 2: %#v", len(events), events)
+	}
+	if events[0].Category != DomainEvent || events[0].Type != typeName[patientCreated]() {
+		t.Fatalf("first event = %#v, want domain patientCreated", events[0])
+	}
+	if value, ok := events[0].Value.(patientCreated); !ok || value.ID != "patient-1" {
+		t.Fatalf("first event value = %#v, want patientCreated patient-1", events[0].Value)
+	}
+	if events[1].Category != PresentationEvent || events[1].Type != typeName[patientCreatedNotice]() {
+		t.Fatalf("second event = %#v, want presentation patientCreatedNotice", events[1])
+	}
+}
+
+func TestCaptureCommandEventsDropsEventsAfterFailure(t *testing.T) {
+	registry := NewRegistry()
+	var handled int
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		handled++
+		return nil
+	}))
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		if err := EmitDomain(ctx, patientCreated{ID: "patient-1"}); err != nil {
+			return createPatientResult{}, err
+		}
+		return createPatientResult{}, errors.New("insert failed")
+	}))
+
+	_, events, err := CaptureCommandEvents[createPatient, createPatientResult](context.Background(), registry, createPatient{Name: "Ada"})
+	if err == nil {
+		t.Fatal("capture command events returned nil error")
+	}
+	if events != nil {
+		t.Fatalf("events = %#v, want nil", events)
+	}
+	if handled != 0 {
+		t.Fatalf("handled = %d, want 0", handled)
+	}
+}
+
+func TestExecuteCommandToOutboxStoresEventsAfterSuccess(t *testing.T) {
+	registry := NewRegistry()
+	var handled int
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		handled++
+		return nil
+	}))
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{ID: "patient-1"}, EmitDomain(ctx, patientCreated{ID: "patient-1"})
+	}))
+	outbox := &recordingOutbox{}
+
+	result, err := ExecuteCommandToOutbox[createPatient, createPatientResult](context.Background(), registry, outbox, createPatient{Name: "Ada"})
+	if err != nil {
+		t.Fatalf("execute command to outbox: %v", err)
+	}
+	if result.ID != "patient-1" {
+		t.Fatalf("result.ID = %q, want patient-1", result.ID)
+	}
+	if handled != 0 {
+		t.Fatalf("handled = %d, want 0", handled)
+	}
+	if len(outbox.events) != 1 {
+		t.Fatalf("len(outbox.events) = %d, want 1: %#v", len(outbox.events), outbox.events)
+	}
+	if outbox.events[0].Category != DomainEvent || outbox.events[0].Type != typeName[patientCreated]() {
+		t.Fatalf("outbox event = %#v, want domain patientCreated", outbox.events[0])
+	}
+}
+
+func TestExecuteCommandToOutboxReturnsStoreError(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{ID: "patient-1"}, EmitDomain(ctx, patientCreated{ID: "patient-1"})
+	}))
+	storeErr := errors.New("outbox unavailable")
+	outbox := &recordingOutbox{err: storeErr}
+
+	_, err := ExecuteCommandToOutbox[createPatient, createPatientResult](context.Background(), registry, outbox, createPatient{Name: "Ada"})
+	if !errors.Is(err, storeErr) {
+		t.Fatalf("execute command to outbox error = %v, want %v", err, storeErr)
+	}
+	if len(outbox.events) != 0 {
+		t.Fatalf("outbox.events = %#v, want none after store error", outbox.events)
 	}
 }
 

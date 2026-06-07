@@ -413,6 +413,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   build-report metadata.
 - Contract scan reports include same-package exported command/query input struct
   fields for generated form/query decoders.
+- Contract scan reports validate local package command/query input and result
+  types, event/job contract types, and local handlers as exported struct and
+  function symbols.
 - Contract scan reports duplicate command owner registrations.
 - `gowdk check` and CLI `gowdk build` fail on contract scan diagnostics such
   as invalid handler signatures and duplicate command owners.
@@ -445,7 +448,7 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   backend endpoint metadata with contract binding details.
 - Command contract adapter IR includes literal form method/path.
 - Page-owned query contract adapter IR includes `GET` plus the page route.
-- Full package graph validation and imported handler validation are planned.
+- Imported/qualified handler and contract type validation is planned.
 - Cross-package contract input field discovery remains planned.
 - Database-backed outbox implementations, concrete broker adapters, retry
   backoff policy, split web/worker/cron binaries, and concrete SSE/WebSocket

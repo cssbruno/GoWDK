@@ -322,6 +322,11 @@ type inputStruct struct {
 	Message string
 }
 
+type contractTypeInfo struct {
+	Exported bool
+	Struct   bool
+}
+
 type parsedGoFile struct {
 	Path    string
 	Rel     string
@@ -380,6 +385,7 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile) fileScan {
 	for _, file := range files {
 		astFiles = append(astFiles, file.File)
 	}
+	types := collectContractTypes(astFiles)
 	inputStructs := collectContractInputStructs(astFiles)
 	functions := typedFunctions(fset, astFiles)
 	var contracts []Contract
@@ -396,6 +402,7 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile) fileScan {
 		}
 	}
 	applyContractInputFields(contracts, inputStructs)
+	diagnostics = append(diagnostics, validateContractTypes(contracts, types)...)
 	diagnostics = append(diagnostics, validateContracts(contracts, functions)...)
 	diagnostics = append(diagnostics, validateContractInputStructs(contracts, inputStructs)...)
 	return fileScan{
@@ -403,6 +410,30 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile) fileScan {
 		Diagnostics:    diagnostics,
 		EmitsByHandler: emitsByHandler,
 	}
+}
+
+func collectContractTypes(files []*ast.File) map[string]contractTypeInfo {
+	types := map[string]contractTypeInfo{}
+	for _, file := range files {
+		for _, declaration := range file.Decls {
+			gen, ok := declaration.(*ast.GenDecl)
+			if !ok || gen.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok || typeSpec.Name == nil {
+					continue
+				}
+				_, isStruct := typeSpec.Type.(*ast.StructType)
+				types[typeSpec.Name.Name] = contractTypeInfo{
+					Exported: typeSpec.Name.IsExported(),
+					Struct:   isStruct,
+				}
+			}
+		}
+	}
+	return types
 }
 
 func collectContractInputStructs(files []*ast.File) map[string]inputStruct {
@@ -637,6 +668,48 @@ func scanContractRegistrations(fset *token.FileSet, file *ast.File, aliases map[
 	return contracts
 }
 
+func validateContractTypes(contracts []Contract, types map[string]contractTypeInfo) []Diagnostic {
+	var diagnostics []Diagnostic
+	for _, contract := range contracts {
+		diagnostics = append(diagnostics, validateContractType(contract, types)...)
+		if contract.Kind == runtimecontracts.Command || contract.Kind == runtimecontracts.Query {
+			diagnostics = append(diagnostics, validateContractResultType(contract, types)...)
+		}
+	}
+	return diagnostics
+}
+
+func validateContractType(contract Contract, types map[string]contractTypeInfo) []Diagnostic {
+	if strings.TrimSpace(contract.Type) == "" {
+		return []Diagnostic{contractDiagnostic(contract, "contract_type_invalid", fmt.Sprintf("%s registration must declare a contract type", contract.Kind))}
+	}
+	return validateLocalContractType(contract, types, contract.Type, "contract_type_invalid", fmt.Sprintf("%s contract type", contract.Kind))
+}
+
+func validateContractResultType(contract Contract, types map[string]contractTypeInfo) []Diagnostic {
+	if strings.TrimSpace(contract.Result) == "" {
+		return []Diagnostic{contractDiagnostic(contract, "contract_result_invalid", fmt.Sprintf("%s registration must declare a result type", contract.Kind))}
+	}
+	return validateLocalContractType(contract, types, contract.Result, "contract_result_invalid", fmt.Sprintf("%s result type", contract.Kind))
+}
+
+func validateLocalContractType(contract Contract, types map[string]contractTypeInfo, name string, code string, label string) []Diagnostic {
+	if !isLocalIdentifier(name) {
+		return nil
+	}
+	info, ok := types[name]
+	if !ok {
+		return []Diagnostic{contractDiagnostic(contract, code, fmt.Sprintf("%s %s was not found in the scanned package", label, name))}
+	}
+	if !info.Exported {
+		return []Diagnostic{contractDiagnostic(contract, code, fmt.Sprintf("%s %s must be exported", label, name))}
+	}
+	if !info.Struct {
+		return []Diagnostic{contractDiagnostic(contract, code, fmt.Sprintf("%s %s must be a struct", label, name))}
+	}
+	return nil
+}
+
 func contractRegisterFunction(fn *ast.FuncDecl, aliases map[string]bool) string {
 	if fn.Name == nil || fn.Name.Name == "init" || fn.Recv != nil || fn.Type == nil || fn.Type.Params == nil {
 		return ""
@@ -702,7 +775,14 @@ func typedFunctions(fset *token.FileSet, files []*ast.File) map[string]functionI
 func validateContracts(contracts []Contract, functions map[string]functionInfo) []Diagnostic {
 	var diagnostics []Diagnostic
 	for _, contract := range contracts {
-		if contract.Handler == "" || strings.Contains(contract.Handler, ".") {
+		switch {
+		case strings.TrimSpace(contract.Handler) == "":
+			diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_handler_invalid", fmt.Sprintf("%s registration must pass an exported handler function", contract.Kind)))
+			continue
+		case !isLocalIdentifier(contract.Handler):
+			continue
+		case !ast.IsExported(contract.Handler):
+			diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_handler_invalid", fmt.Sprintf("%s handler %s must be exported", contract.Kind, contract.Handler)))
 			continue
 		}
 		function := functions[contract.Handler]
@@ -827,6 +907,13 @@ func scanTypeString(typ types.Type, local *types.Package) string {
 		}
 		return pkg.Name()
 	})
+}
+
+func isLocalIdentifier(value string) bool {
+	if value == "" || strings.Contains(value, ".") {
+		return false
+	}
+	return token.IsIdentifier(value)
 }
 
 func contractDiagnostic(contract Contract, code string, message string) Diagnostic {

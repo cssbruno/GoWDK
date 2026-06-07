@@ -212,6 +212,94 @@ func HandleCreatePatient(ctx context.Context, command string) (CreatePatientResu
 	}
 }
 
+func TestScanReportsUnexportedLocalHandler(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, handleCreatePatient)
+}
+
+func handleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{}, nil
+}
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagnostic := findDiagnostic(t, report.Diagnostics, "contract_handler_invalid")
+	if diagnostic.Handler != "handleCreatePatient" {
+		t.Fatalf("handler = %q, want handleCreatePatient", diagnostic.Handler)
+	}
+	if want := "handler handleCreatePatient must be exported"; !strings.Contains(diagnostic.Message, want) {
+		t.Fatalf("expected %q in diagnostic: %#v", want, diagnostic)
+	}
+}
+
+func TestScanReportsInvalidLocalContractTypes(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type createPatient struct{}
+type CreatePatientResult string
+type PatientCreated string
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[createPatient, CreatePatientResult](r, HandleCreatePatient)
+	contracts.RegisterDomainEvent[PatientCreated](r, SendWelcomeEmail)
+}
+
+func HandleCreatePatient(ctx context.Context, command createPatient) (CreatePatientResult, error) {
+	return "", nil
+}
+
+func SendWelcomeEmail(ctx context.Context, event PatientCreated) error {
+	return nil
+}
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Diagnostics) < 3 {
+		t.Fatalf("expected at least three diagnostics, got %#v", report.Diagnostics)
+	}
+	input := findDiagnostic(t, report.Diagnostics, "contract_type_invalid")
+	if input.Type != "createPatient" || !strings.Contains(input.Message, "command contract type createPatient must be exported") {
+		t.Fatalf("unexpected input diagnostic: %#v", input)
+	}
+	result := findDiagnostic(t, report.Diagnostics, "contract_result_invalid")
+	if result.Type != "createPatient" || !strings.Contains(result.Message, "command result type CreatePatientResult must be a struct") {
+		t.Fatalf("unexpected result diagnostic: %#v", result)
+	}
+	var event Diagnostic
+	for _, diagnostic := range report.Diagnostics {
+		if diagnostic.Code == "contract_type_invalid" && diagnostic.Kind == runtimecontracts.Event {
+			event = diagnostic
+			break
+		}
+	}
+	if event.Message == "" || !strings.Contains(event.Message, "event contract type PatientCreated must be a struct") {
+		t.Fatalf("unexpected event diagnostic: %#v in %#v", event, report.Diagnostics)
+	}
+}
+
 func TestScanReportsDuplicateCommandOwners(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "patients.go"), `package patients
@@ -387,6 +475,17 @@ func findContract(t *testing.T, contracts []Contract, kind runtimecontracts.Kind
 	}
 	t.Fatalf("missing contract kind=%s type=%s in %#v", kind, typ, contracts)
 	return Contract{}
+}
+
+func findDiagnostic(t *testing.T, diagnostics []Diagnostic, code string) Diagnostic {
+	t.Helper()
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code == code {
+			return diagnostic
+		}
+	}
+	t.Fatalf("missing diagnostic code=%s in %#v", code, diagnostics)
+	return Diagnostic{}
 }
 
 func inputFieldsString(fields []manifest.BackendInputField) string {

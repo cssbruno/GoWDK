@@ -346,13 +346,14 @@ wherever the contract is HTTP-exposed.
 
 - [x] Add first `go/parser`, `go/ast`, and `go/types` scan pass for local
       registration calls and same-file handler signatures.
+- [x] Expand Go validation across full local package files.
 - [ ] Expand Go validation across full packages and imported handler symbols.
-- [ ] Validate exported contract structs and handler functions.
+- [x] Validate local exported contract structs and handler functions.
 - [x] Detect duplicate command owner registrations in scanned Go files.
 - [x] Surface same-file handler signature and duplicate command owner scan
       diagnostics through `gowdk check` and CLI `gowdk build`.
-- [ ] Validate command input and result types.
-- [ ] Validate query input and result types.
+- [x] Validate local command input and result types.
+- [x] Validate local query input and result types.
 - [x] Validate first same-file command, query, event subscriber, and job handler
       signatures.
 - [ ] Validate event subscriber signatures across full packages and imports.

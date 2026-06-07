@@ -142,13 +142,14 @@ are stable.
 | 11 | Guards and runtime context | Generated guards work for SSR, actions, and APIs. The request context helper contract is documented around `context.Context`, `app.Request(ctx)`, `app.Params(ctx)`, `app.CSRF(ctx)`, and `app.Session(ctx)`, or the project deliberately switches to an explicit app context. |
 | 12 | Request-time page rendering | Generated SSR handlers execute `load {}`, enforce guards, decode typed route params, expose route-level metadata, support redirects and error pages, and run full request-time user logic through the integrated request-time page lane. |
 | 13 | Errors, cache, and hybrid | SSR/action/API error boundaries are defined. Static files, SPA routes, backend endpoints, partial responses, SSR routes, and hybrid pages get cache and revalidation policy. Hybrid pages stay SPA by default and opt into request-time capabilities explicitly. |
-| 14 | Static-first SPA navigation | SPA routes remain real URLs that work on direct open and refresh. Generated JS may intercept internal links, fetch built page shells or fragments, swap page regions, preserve scroll/focus, prefetch static route assets, and show loading/error UI, but it must not own routing, auth, business rules, validation, backend behavior, global app state, loading policy, or cache policy. |
-| 15 | Components and client language | Components gain real `g:if` mount/unmount, richer expression props, child-to-parent events, bindable state, typed exports, named/scoped slots, scoped CSS/assets, a documented component contract, a proper reactive dependency graph, predictable batching, and cycle diagnostics. |
-| 16 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Explicit WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
-| 17 | CSS, assets, and packaging | Full plugin loading, page-aware CSS processor selection, component AST/IR scope and hash metadata, Tailwind/CSS deployment docs, asset hashing, and binary cache policy are implemented. Module selection remains artifact packaging, not runtime module orchestration. |
-| 18 | Framework adapters | Core remains `net/http`. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
-| 19 | Dev, playground, and tooling | `gowdk dev` can run generated app/runtime-kit flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, browser playground, browser-compiled GOWDK, richer LSP completions, and editor navigation are added. |
-| 20 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
+| 14 | Contract-driven runtime | Queries, commands, domain events, integration events, presentation events, and jobs are typed Go contracts. Frontend UI events trigger commands or queries. Commands have one owner. Domain and integration events are backend-owned facts emitted after backend success. Presentation events notify realtime UI. Local in-process dispatch is default, optional worker/cron roles can run the same registrations, and CLI tooling can list, trace, or graph contracts. |
+| 15 | Static-first SPA navigation | SPA routes remain real URLs that work on direct open and refresh. Generated JS may intercept internal links, fetch built page shells or fragments, swap page regions, preserve scroll/focus, prefetch static route assets, and show loading/error UI, but it must not own routing, auth, business rules, validation, backend behavior, global app state, loading policy, or cache policy. |
+| 16 | Components and client language | Components gain real `g:if` mount/unmount, richer expression props, child-to-parent events, bindable state, typed exports, named/scoped slots, scoped CSS/assets, a documented component contract, a proper reactive dependency graph, predictable batching, and cycle diagnostics. |
+| 17 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Explicit WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
+| 18 | CSS, assets, and packaging | Full plugin loading, page-aware CSS processor selection, component AST/IR scope and hash metadata, Tailwind/CSS deployment docs, asset hashing, and binary cache policy are implemented. Module selection remains artifact packaging, not runtime module orchestration. |
+| 19 | Framework adapters | Core remains `net/http`. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
+| 20 | Dev, playground, and tooling | `gowdk dev` can run generated app/runtime-kit flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, browser playground, browser-compiled GOWDK, richer LSP completions, and editor navigation are added. |
+| 21 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
 
 ## Candidate Release Order
 
@@ -196,6 +197,17 @@ contract work that later features depend on.
 - Bare hybrid pages as SPA output with explicit request-time capability gating.
 - Revalidation syntax and hybrid cache enforcement.
 
+### Contract Runtime Release
+
+- Typed query, command, event, and job registry.
+- Command owner and event subscriber validation.
+- Domain events are backend-owned facts emitted after state changes succeed.
+- Presentation events can notify realtime UI without becoming trusted input.
+- Local in-process dispatch as the default.
+- Optional web, worker, cron, API, and admin runtime roles.
+- CLI contract listing, trace, and graph output.
+- No backend bus messages for low-level UI events.
+
 ### Component And Island Release
 
 - Richer component contract.
@@ -238,5 +250,7 @@ contract work that later features depend on.
 - `.llm/plans/gowdk-world-roadmap.md`: active implementation planning index.
 - `.llm/plans/deep-go-package-integration.md`: package-first language work.
 - `.llm/plans/go-native-adapter-boundary.md`: generated adapter boundary work.
+- `.llm/plans/contract-driven-runtime.md`: query, command, event, job, and
+  runtime-role planning.
 - `.llm/features/golangish-reactive-islands.md`: client language and island
   direction.

@@ -12,6 +12,8 @@ Primary active planning sources:
 - `.llm/plans/deep-go-package-integration.md`
 - `.llm/features/go-native-adapter-boundary.md`
 - `.llm/plans/go-native-adapter-boundary.md`
+- `.llm/features/contract-driven-runtime.md`
+- `.llm/plans/contract-driven-runtime.md`
 
 This roadmap reorganizes existing `.llm` plans around the product split:
 
@@ -70,6 +72,8 @@ Owns:
 
 - `runtime/app` serving, backend route dispatch, embedded assets, health, and
   one-binary app contracts.
+- Typed query, command, event, and job registration once the contract runtime
+  slice lands.
 - `runtime/form` typed and raw form decoding.
 - `runtime/response` HTML, redirect, fragment, JSON, cookie, and error
   envelopes.
@@ -84,6 +88,7 @@ Does not own:
 - Full-page SSR as the default identity.
 - Generated user application logic.
 - Mandatory JavaScript framework or npm runtime.
+- Mandatory external queue, broker, scheduler, or ORM.
 
 ## Canonical Roadmap Order
 
@@ -98,9 +103,12 @@ Does not own:
 8. CSRF-wired action adapters.
 9. Server fragments through `runtime/response`.
 10. Request-time SSR `load {}` and guards through the SSR addon.
-11. Hybrid render policy, cache policy, and revalidation.
-12. GOWDK client language for generated JS islands.
-13. Explicit WASM island ABI.
+11. Contract-driven runtime for typed queries, commands, backend-owned domain
+    and integration events, presentation events, jobs, and optional
+    web/worker/cron roles.
+12. Hybrid render policy, cache policy, and revalidation.
+13. GOWDK client language for generated JS islands.
+14. Explicit WASM island ABI.
 
 ## Plan Alignment
 
@@ -108,6 +116,7 @@ Does not own:
 | --- | --- | --- |
 | `deep-go-package-integration.md` | Active source of truth | Owns package-first `.gwdk`, exact symbols, typed action inputs, and migration diagnostics. |
 | `go-native-adapter-boundary.md` | Active supporting plan | Owns generated adapter shape and runtime-kit glue; must not define competing syntax. |
+| `contract-driven-runtime.md` | Planned after endpoint/adapter IR stability | Owns typed query/command/domain-event/integration-event/presentation-event/job registry, local runtime dispatch, optional worker/cron roles, and contract graph tooling; frontend UI events trigger commands or queries and must not become backend facts. |
 | `golangish-reactive-islands.md` | Active compiler-side UI plan | Client language is a GOWDK subset, not forked Go or arbitrary JavaScript. |
 
 ## Absorbed Or Removed Planning Files
@@ -188,6 +197,8 @@ api Session GET "/api/session"
 - [ ] Typed `runtime/form.DecodeStruct`.
 - [ ] Full Go AST generated adapter emission.
 - [ ] CSRF-wired generated action adapters.
+- [ ] Contract-driven runtime registry, backend-owned events, presentation-event
+      metadata, and CLI contract graph.
 - [ ] Login example migration.
 - [ ] Full docs migration.
 

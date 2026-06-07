@@ -28,6 +28,7 @@ import (
 )
 
 const RuntimeImportPath = "github.com/cssbruno/gowdk/runtime/contracts"
+const generatedAppModulePath = "gowdk-generated-app"
 
 // Contract describes one discovered registration call.
 type Contract struct {
@@ -418,6 +419,9 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile, inspectionCache *pac
 	var diagnostics []Diagnostic
 	emitsByHandler := map[string][]EventRef{}
 	for _, file := range files {
+		diagnostics = append(diagnostics, generatedAppImportDiagnostics(fset, file)...)
+	}
+	for _, file := range files {
 		if len(file.Aliases) == 0 {
 			continue
 		}
@@ -513,6 +517,31 @@ func validateContractInputStructs(contracts []Contract, structs map[string]input
 		diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_input_invalid", inputStruct.Message))
 	}
 	return diagnostics
+}
+
+func generatedAppImportDiagnostics(fset *token.FileSet, file parsedGoFile) []Diagnostic {
+	var diagnostics []Diagnostic
+	for _, importSpec := range file.File.Imports {
+		importPath, err := strconv.Unquote(importSpec.Path.Value)
+		if err != nil || !isGeneratedAppImportPath(importPath) {
+			continue
+		}
+		position := fset.Position(importSpec.Pos())
+		diagnostics = append(diagnostics, Diagnostic{
+			Severity: "error",
+			Code:     "generated_app_import_cycle",
+			Package:  file.Package,
+			Source:   file.Rel,
+			Line:     position.Line,
+			Column:   position.Column,
+			Message:  fmt.Sprintf("feature package must not import generated app output %q; keep generated app startup and registration code outside feature packages", importPath),
+		})
+	}
+	return diagnostics
+}
+
+func isGeneratedAppImportPath(importPath string) bool {
+	return importPath == generatedAppModulePath || strings.HasPrefix(importPath, generatedAppModulePath+"/")
 }
 
 func contractInputStruct(typeName string, structType *ast.StructType) inputStruct {

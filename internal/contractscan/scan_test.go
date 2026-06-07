@@ -426,6 +426,28 @@ func HandlePatientChanged(ctx context.Context, event PatientChanged) error {
 	}
 }
 
+func TestScanReportsGeneratedAppImportCycles(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "patients.go"), `package patients
+
+import gowdkapp "gowdk-generated-app/gowdkapp"
+
+var _ = gowdkapp.Handler
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagnostic := findDiagnostic(t, report.Diagnostics, "generated_app_import_cycle")
+	if diagnostic.Package != "patients" || diagnostic.Source != "patients.go" || diagnostic.Line != 3 {
+		t.Fatalf("unexpected generated app import diagnostic metadata: %#v", diagnostic)
+	}
+	if want := `must not import generated app output "gowdk-generated-app/gowdkapp"`; !strings.Contains(diagnostic.Message, want) {
+		t.Fatalf("expected %q in diagnostic: %#v", want, diagnostic)
+	}
+}
+
 func TestScanReportsDuplicateCommandOwners(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "patients.go"), `package patients

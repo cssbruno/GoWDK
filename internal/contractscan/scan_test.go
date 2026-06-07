@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 	runtimecontracts "github.com/cssbruno/gowdk/runtime/contracts"
 )
 
@@ -20,9 +21,16 @@ import (
 	gowdkcontracts "github.com/cssbruno/gowdk/runtime/contracts"
 )
 
-type GetPatient struct{}
+type GetPatient struct {
+	ID string
+}
 type PatientPage struct{}
-type CreatePatient struct{}
+type CreatePatient struct {
+	Name string
+	Tags []string
+	Age int
+	Remember bool
+}
 type CreatePatientResult struct{}
 type PatientCreated struct{}
 type PatientNotice struct{}
@@ -86,6 +94,13 @@ func RegisterTest(r *c.Registry) {
 	command := findContract(t, report.Contracts, runtimecontracts.Command, "CreatePatient")
 	if command.Register != "Register" {
 		t.Fatalf("unexpected command register function: %#v", command)
+	}
+	if got := inputFieldsString(command.InputFields); got != "Name:Name:string,Tags:Tags:[]string,Age:Age:int,Remember:Remember:bool" {
+		t.Fatalf("unexpected command input fields: %s", got)
+	}
+	query := findContract(t, report.Contracts, runtimecontracts.Query, "GetPatient")
+	if got := inputFieldsString(query.InputFields); got != "ID:ID:string" {
+		t.Fatalf("unexpected query input fields: %s", got)
 	}
 	if len(command.Roles) != 1 || command.Roles[0] != "web" {
 		t.Fatalf("unexpected command roles: %#v", command.Roles)
@@ -310,6 +325,14 @@ func findContract(t *testing.T, contracts []Contract, kind runtimecontracts.Kind
 	}
 	t.Fatalf("missing contract kind=%s type=%s in %#v", kind, typ, contracts)
 	return Contract{}
+}
+
+func inputFieldsString(fields []manifest.BackendInputField) string {
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		parts = append(parts, field.FieldName+":"+field.FormName+":"+field.Type)
+	}
+	return strings.Join(parts, ",")
 }
 
 func writeFile(t *testing.T, path string, body string) {

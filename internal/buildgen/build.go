@@ -305,6 +305,13 @@ func reportContractReferences(reporter *buildReporter, refs []gwdkir.ContractRef
 		if ref.Result != "" {
 			data["result"] = ref.Result
 		}
+		if len(ref.InputFields) > 0 {
+			var fields []string
+			for _, field := range ref.InputFields {
+				fields = append(fields, field.FieldName+":"+field.FormName+":"+field.Type)
+			}
+			data["inputFields"] = strings.Join(fields, ",")
+		}
 		if ref.Method != "" {
 			data["method"] = ref.Method
 		}

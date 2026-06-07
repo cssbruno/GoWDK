@@ -241,14 +241,17 @@ Current behavior:
   backend router, execute the command with `ExecuteCommandForRole(...,
   contracts.RoleWeb, input)`, dispatch emitted backend events after command
   success, and return the command result as no-store JSON.
+- When the scanner can see the exported command input struct fields, generated
+  adapters parse submitted form values, allow only the scanned fields, decode
+  supported scalar fields, and pass the typed command input to the registry.
 - `gowdk check` and CLI `gowdk build` fail when a command reference is missing
   or linked to an invalid Go handler signature.
 - Requires a package-qualified Go reference such as `patients.CreatePatient`.
 - Must not be combined with `g:post`.
 
-Typed form decoding from submitted values into the command struct and CSRF
-wiring for contract command forms are still planned. Current generated command
-adapters construct a zero-value command input before dispatch.
+CSRF wiring for contract command forms is still planned. If the scanner cannot
+see the command input fields yet, generated command adapters construct a
+zero-value command input before dispatch.
 
 ## `.gwdk` Query References
 
@@ -276,13 +279,15 @@ Current behavior:
   local `runtime/contracts.Registry`, route page-owned query references through
   the backend router, execute the query with `ExecuteQueryForRole(...,
   contracts.RoleWeb, input)`, and return the query result as no-store JSON.
+- When the scanner can see the exported query input struct fields, generated
+  adapters decode supported URL query parameters into the typed query input.
 - `gowdk check` and CLI `gowdk build` fail when a query reference is missing or
   linked to an invalid Go handler signature.
 - Requires a package-qualified Go reference such as `patients.GetPatientPage`.
 - Must not be combined with `g:post` or `g:command` on the same form.
 
-Typed query input decoding from URL/search parameters is still planned. Current
-generated query adapters construct a zero-value query input before dispatch.
+If the scanner cannot see the query input fields yet, generated query adapters
+construct a zero-value query input before dispatch.
 
 Templates must not declare backend facts:
 
@@ -313,6 +318,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   command, query, event, and job handler signatures.
 - Contract scan reports include the top-level package registration function
   that accepts `*contracts.Registry`, when the registration call is inside one.
+- Contract scan reports include same-file exported command/query input struct
+  fields for generated form/query decoders.
 - Contract scan reports duplicate command owner registrations.
 - `gowdk check` and CLI `gowdk build` fail on contract scan diagnostics such
   as invalid handler signatures and duplicate command owners.
@@ -336,11 +343,11 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   interface and drive worker-role subscribers through `RunEventWorker`.
 - `internal/appgen` records command/query contract exposure metadata in backend
   adapter IR, including reference name, alias, import path, local contract
-  type, result type, binding status, handler, register function, owner, and
-  source.
+  type, result type, decoded input fields, binding status, handler, register
+  function, owner, and source.
 - Command contract adapter IR includes literal form method/path.
 - Page-owned query contract adapter IR includes `GET` plus the page route.
 - Full package graph validation and imported handler validation are planned.
-- Typed contract input decoding from form/query values remains planned.
+- Cross-file and cross-package contract input field discovery remains planned.
 - Durable outbox implementations, concrete broker adapters, split
   web/worker/cron binaries, and concrete SSE/WebSocket adapters are planned.

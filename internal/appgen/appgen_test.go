@@ -284,13 +284,19 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 			ImportPath:  "example.com/app/contracts/patients",
 			Type:        "CreatePatient",
 			Result:      "CreatePatientResult",
-			Method:      "POST",
-			Path:        "/patients",
-			Status:      gwdkir.ContractBindingBound,
-			Handler:     "HandleCreatePatient",
-			Register:    "Register",
-			OwnerKind:   gwdkir.SourcePage,
-			OwnerID:     "patients",
+			InputFields: []manifest.BackendInputField{
+				{FieldName: "Name", FormName: "name", Type: "string"},
+				{FieldName: "Tags", FormName: "tag", Type: "[]string"},
+				{FieldName: "Age", FormName: "age", Type: "int"},
+				{FieldName: "Remember", FormName: "remember", Type: "bool"},
+			},
+			Method:    "POST",
+			Path:      "/patients",
+			Status:    gwdkir.ContractBindingBound,
+			Handler:   "HandleCreatePatient",
+			Register:  "Register",
+			OwnerKind: gwdkir.SourcePage,
+			OwnerID:   "patients",
 		},
 		{
 			Kind:        gwdkir.ContractQuery,
@@ -299,13 +305,16 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 			ImportPath:  "example.com/app/contracts/patients",
 			Type:        "GetPatientPage",
 			Result:      "PatientPageData",
-			Method:      "GET",
-			Path:        "/patients",
-			Status:      gwdkir.ContractBindingBound,
-			Handler:     "LoadPatientPage",
-			Register:    "Register",
-			OwnerKind:   gwdkir.SourcePage,
-			OwnerID:     "patients",
+			InputFields: []manifest.BackendInputField{
+				{FieldName: "Filter", FormName: "filter", Type: "string"},
+			},
+			Method:    "GET",
+			Path:      "/patients",
+			Status:    gwdkir.ContractBindingBound,
+			Handler:   "LoadPatientPage",
+			Register:  "Register",
+			OwnerKind: gwdkir.SourcePage,
+			OwnerID:   "patients",
 		},
 	}}
 
@@ -326,11 +335,22 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 		`Kind: "command", Handler: commandPatientsCreatePatientPOSTPatients(contractRegistry)`,
 		`Kind: "query", Handler: queryPatientsGetPatientPageGETPatients(contractRegistry)`,
 		`func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler`,
-		`var input patients.CreatePatient`,
+		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
+		`values := gowdkform.FromURLValues(request.PostForm)`,
+		`input, err := decodeContractPatientsCreatePatientInput(values)`,
 		`gowdkcontracts.ExecuteCommandForRole[patients.CreatePatient, patients.CreatePatientResult]`,
+		`func decodeContractPatientsCreatePatientInput(values gowdkform.Values) (patients.CreatePatient, error)`,
+		`gowdkform.DecodeExpected(values, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "name"}, {Name: "tag"}, {Name: "age"}, {Name: "remember"}}})`,
+		`input.Name = field0`,
+		`input.Tags = field1`,
+		`input.Age = int(field2)`,
+		`input.Remember = field3`,
 		`func queryPatientsGetPatientPageGETPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler`,
-		`var input patients.GetPatientPage`,
+		`values := gowdkform.FromURLValues(request.URL.Query())`,
+		`input, err := decodeContractPatientsGetPatientPageInput(values)`,
 		`gowdkcontracts.ExecuteQueryForRole[patients.GetPatientPage, patients.PatientPageData]`,
+		`func decodeContractPatientsGetPatientPageInput(values gowdkform.Values) (patients.GetPatientPage, error)`,
+		`input.Filter = field0`,
 		`gowdkresponse.JSONValue(http.StatusOK, result)`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -718,6 +738,19 @@ func TestBackendSourceEmitterDoesNotUseStringLineWriting(t *testing.T) {
 	for _, forbidden := range []string{"WriteString", "strings.Builder"} {
 		if strings.Contains(source, forbidden) {
 			t.Fatalf("backend source emitter must use go/ast, found %q in source_backend.go", forbidden)
+		}
+	}
+}
+
+func TestContractSourceEmitterDoesNotUseStringLineWriting(t *testing.T) {
+	payload, err := os.ReadFile("source_contracts.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, forbidden := range []string{"WriteString", "strings.Builder"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("contract source emitter must use go/ast, found %q in source_contracts.go", forbidden)
 		}
 	}
 }

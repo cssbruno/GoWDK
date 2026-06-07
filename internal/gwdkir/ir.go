@@ -373,6 +373,7 @@ type ContractReference struct {
 	ImportPath  string
 	Type        string
 	Result      string
+	InputFields []manifest.BackendInputField
 	Method      string
 	Path        string
 	Status      ContractBindingStatus

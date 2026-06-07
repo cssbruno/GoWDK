@@ -70,6 +70,7 @@ type BackendContractExposure struct {
 	ImportPath  string
 	Type        string
 	Result      string
+	InputFields []manifest.BackendInputField
 	Status      gwdkir.ContractBindingStatus
 	Handler     string
 	Register    string
@@ -189,6 +190,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				ImportPath:  ref.ImportPath,
 				Type:        ref.Type,
 				Result:      ref.Result,
+				InputFields: append([]manifest.BackendInputField(nil), ref.InputFields...),
 				Status:      ref.Status,
 				Handler:     ref.Handler,
 				Register:    ref.Register,

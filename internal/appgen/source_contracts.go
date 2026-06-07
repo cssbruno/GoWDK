@@ -2,11 +2,11 @@ package appgen
 
 import (
 	"go/ast"
-	"go/token"
 	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func contractHandlerDecls(exposures []BackendContractExposure) []ast.Decl {
@@ -45,12 +45,7 @@ func executableContractHandlerStmts(exposure BackendContractExposure) []ast.Stmt
 		exposure.Endpoint.Path,
 		"",
 	)
-	stmts = append(stmts,
-		&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
-			Names: []*ast.Ident{id("input")},
-			Type:  sel(exposure.ImportAlias, exposure.Type),
-		}}}},
-	)
+	stmts = append(stmts, contractInputStmts(exposure)...)
 	execute := "ExecuteCommandForRole"
 	if exposure.Endpoint.Kind == BackendEndpointQuery {
 		execute = "ExecuteQueryForRole"
@@ -82,6 +77,82 @@ func executableContractHandlerStmts(exposure BackendContractExposure) []ast.Stmt
 		returnBool(true),
 	)
 	return stmts
+}
+
+func contractInputStmts(exposure BackendContractExposure) []ast.Stmt {
+	if len(exposure.InputFields) == 0 {
+		return []ast.Stmt{
+			define([]ast.Expr{id("input")}, &ast.CompositeLit{Type: sel(exposure.ImportAlias, exposure.Type)}),
+		}
+	}
+	switch exposure.Endpoint.Kind {
+	case BackendEndpointCommand:
+		stmts := actionParseFormStmts(false)
+		stmts = append(stmts,
+			define([]ast.Expr{id("values")}, call(sel("gowdkform", "FromURLValues"), selExpr(id("request"), "PostForm"))),
+			define([]ast.Expr{id("input"), id("err")}, call(sel(contractDecoderName(exposure)), id("values"))),
+			ifErrReturnInvalidForm(),
+		)
+		return stmts
+	case BackendEndpointQuery:
+		return []ast.Stmt{
+			define([]ast.Expr{id("values")}, call(sel("gowdkform", "FromURLValues"), call(selExpr(selExpr(id("request"), "URL"), "Query")))),
+			define([]ast.Expr{id("input"), id("err")}, call(sel(contractDecoderName(exposure)), id("values"))),
+			ifErrReturnInvalidForm(),
+		}
+	default:
+		return []ast.Stmt{
+			define([]ast.Expr{id("input")}, &ast.CompositeLit{Type: sel(exposure.ImportAlias, exposure.Type)}),
+		}
+	}
+}
+
+func contractDecoderDecls(exposures []BackendContractExposure) []ast.Decl {
+	seen := map[string]bool{}
+	var decls []ast.Decl
+	for _, exposure := range executableContractExposures(exposures) {
+		if len(exposure.InputFields) == 0 {
+			continue
+		}
+		name := contractDecoderName(exposure)
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		decls = append(decls, contractDecoderDecl(exposure))
+	}
+	return decls
+}
+
+func contractDecoderDecl(exposure BackendContractExposure) *ast.FuncDecl {
+	inputType := sel(exposure.ImportAlias, exposure.Type)
+	stmts := []ast.Stmt{
+		define([]ast.Expr{id("decoded"), id("err")}, call(sel("gowdkform", "DecodeExpected"), id("values"), contractFormSchemaExpr(exposure.InputFields))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{
+				&ast.CompositeLit{Type: inputType},
+				id("err"),
+			}}),
+		},
+		assign([]ast.Expr{id("values")}, id("decoded")),
+		define([]ast.Expr{id("input")}, &ast.CompositeLit{Type: inputType}),
+	}
+	for index, field := range exposure.InputFields {
+		stmts = append(stmts, boundActionFieldDecodeStmts(index, field)...)
+	}
+	stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{id("input"), id("nil")}})
+	return funcDecl(contractDecoderName(exposure), []*ast.Field{
+		{Names: []*ast.Ident{id("values")}, Type: sel("gowdkform", "Values")},
+	}, []*ast.Field{{Type: inputType}, {Type: id("error")}}, stmts)
+}
+
+func contractFormSchemaExpr(fields []manifest.BackendInputField) ast.Expr {
+	names := make([]string, 0, len(fields))
+	for _, field := range fields {
+		names = append(names, field.FormName)
+	}
+	return formSchemaExpr(names)
 }
 
 func fallbackContractHandlerDecl(exposure BackendContractExposure) *ast.FuncDecl {
@@ -139,6 +210,24 @@ func contractExposureExecutable(exposure BackendContractExposure) bool {
 		strings.TrimSpace(exposure.Register) != ""
 }
 
+func contractExposuresUseForm(exposures []BackendContractExposure) bool {
+	for _, exposure := range exposures {
+		if len(exposure.InputFields) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func contractExposuresParseForm(exposures []BackendContractExposure) bool {
+	for _, exposure := range exposures {
+		if exposure.Endpoint.Kind == BackendEndpointCommand && len(exposure.InputFields) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 type contractRegisterCall struct {
 	Alias    string
 	Function string
@@ -185,4 +274,8 @@ func contractHandlerName(exposure BackendContractExposure) string {
 		exportedIdentifier(exposure.Type) +
 		exportedIdentifier(exposure.Endpoint.Method) +
 		exportedIdentifier(exposure.Endpoint.Path)
+}
+
+func contractDecoderName(exposure BackendContractExposure) string {
+	return "decodeContract" + exportedIdentifier(exposure.ImportAlias) + exportedIdentifier(exposure.Type) + "Input"
 }

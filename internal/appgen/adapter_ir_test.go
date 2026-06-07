@@ -99,6 +99,7 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 			ImportPath:  "example.com/app/contracts/patients",
 			Type:        "GetPatientPage",
 			Result:      "PatientPageData",
+			InputFields: []manifest.BackendInputField{{FieldName: "Filter", FormName: "filter", Type: "string"}},
 			Method:      "GET",
 			Path:        "/patients",
 			Status:      gwdkir.ContractBindingMissing,
@@ -116,6 +117,7 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 			ImportPath:  "example.com/app/contracts/patients",
 			Type:        "CreatePatient",
 			Result:      "CreatePatientResult",
+			InputFields: []manifest.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
 			Method:      "POST",
 			Path:        "/patients",
 			Status:      gwdkir.ContractBindingBound,
@@ -145,6 +147,9 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 	if command.ImportAlias != "patients" || command.ImportPath != "example.com/app/contracts/patients" || command.Type != "CreatePatient" || command.Result != "CreatePatientResult" {
 		t.Fatalf("unexpected command contract metadata: %#v", command)
 	}
+	if len(command.InputFields) != 1 || command.InputFields[0].FormName != "name" {
+		t.Fatalf("unexpected command input fields: %#v", command.InputFields)
+	}
 	query := ir.ContractExposures[1]
 	if query.Endpoint.Kind != BackendEndpointQuery || query.Endpoint.Handler != "query" {
 		t.Fatalf("unexpected query exposure endpoint: %#v", query.Endpoint)
@@ -157,5 +162,8 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 	}
 	if query.ImportAlias != "patients" || query.ImportPath != "example.com/app/contracts/patients" || query.Type != "GetPatientPage" || query.Result != "PatientPageData" {
 		t.Fatalf("unexpected query contract metadata: %#v", query)
+	}
+	if len(query.InputFields) != 1 || query.InputFields[0].FormName != "filter" {
+		t.Fatalf("unexpected query input fields: %#v", query.InputFields)
 	}
 }

@@ -24,6 +24,12 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	if len(executableContracts) > 0 {
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
 	}
+	if contractExposuresUseForm(executableContracts) {
+		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
+	}
+	if contractExposuresParseForm(executableContracts) {
+		imports["strings"] = "strings"
+	}
 	if len(options.Actions) > 0 {
 		imports["path"] = "path"
 	}

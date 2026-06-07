@@ -68,6 +68,12 @@ func runtimeImportMap(options Options) map[string]string {
 	if len(executableContracts) > 0 {
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
 	}
+	if contractExposuresUseForm(executableContracts) {
+		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
+	}
+	if contractExposuresParseForm(executableContracts) {
+		imports["strings"] = "strings"
+	}
 	if options.ProxyBackend {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 		imports["neturl"] = "net/url"
@@ -192,6 +198,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(direct.APIs), generatedUsesRateLimit(direct)))
 	decls = append(decls, fragmentFuncDecl(direct.Fragments, generatedUsesRateLimit(direct)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
 	switch {
 	case adapter.HasRegistrations():
 		decls = append(decls, newBackendRouterDecl(adapter))
@@ -216,6 +223,7 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(options.APIs), generatedUsesRateLimit(options)))
 	decls = append(decls, fragmentFuncDecl(options.Fragments, generatedUsesRateLimit(options)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
 	if adapter.HasRegistrations() {
 		decls = append(decls, newBackendRouterDecl(adapter))
 	} else {

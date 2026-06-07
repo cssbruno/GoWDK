@@ -2793,6 +2793,62 @@ func TestGeneratedBinaryBackendGuardsFailClosedWithoutRegistry(t *testing.T) {
 	}
 }
 
+func TestGeneratedBinaryContractFallbacksAreExplicitNoStore(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
+
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
+		Kind:      gwdkir.ContractCommand,
+		Name:      "patients.CreatePatient",
+		Type:      "CreatePatient",
+		Method:    "POST",
+		Path:      "/patients",
+		Status:    gwdkir.ContractBindingMissing,
+		Message:   "command patients.CreatePatient is not registered",
+		OwnerKind: gwdkir.SourcePage,
+		OwnerID:   "patients",
+	}}}
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{IR: program}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/patients", http.MethodPost, "name=Ana")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("expected missing contract response status 501, got %d: %s", response.StatusCode, payload)
+	}
+	if !strings.Contains(string(payload), "command patients.CreatePatient is not registered") {
+		t.Fatalf("expected explicit missing contract response, got %s", payload)
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("expected no-store on missing contract response, got %q", cacheControl)
+	}
+}
+
 func TestGeneratedBinaryRegisteredGuardsAllowRequestTimeRoutes(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

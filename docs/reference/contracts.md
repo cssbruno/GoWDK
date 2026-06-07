@@ -411,6 +411,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   include exact source line and column in IR and build reports.
 - Missing, invalid, or non-web-only command/query references produce
   `contract_reference_*` diagnostics in `gowdk check` and stop CLI builds.
+- Generated fallback contract routes that remain in appgen for allowed
+  non-bound modes return explicit HTTP 501 no-store responses.
 - Other contract diagnostics do not all have exact source spans yet.
 - `gowdk contracts`, `gowdk list commands|queries|events|jobs`, `gowdk graph`,
   and `gowdk trace <contract>` can scan Go AST registration calls today.

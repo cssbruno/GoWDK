@@ -411,7 +411,7 @@ wherever the contract is HTTP-exposed.
 - [x] Keep CSRF validation before command decoding for form POSTs.
 - [x] Keep guards/rate limits before user command/query handlers when exposed
       through HTTP.
-- [ ] Keep missing/unsupported contract responses explicit and no-store.
+- [x] Keep missing/unsupported contract responses explicit and no-store.
 - [ ] Ensure command results and presentation events are browser-facing outputs,
       not backend truth inputs.
 

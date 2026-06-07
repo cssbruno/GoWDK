@@ -54,8 +54,8 @@ Addons: []gowdk.Addon{
 ```
 
 `addons/contracts` registers the contract-driven runtime feature. The current
-runtime registry lives in `runtime/contracts`; compiler syntax, generated
-adapters, CLI graph output, durable outbox, and worker roles remain planned.
+runtime registry lives in `runtime/contracts`; generated adapters, split
+runtime binaries, durable outbox, and realtime fanout remain planned.
 
 External addons use normal Go imports:
 

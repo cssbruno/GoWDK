@@ -29,13 +29,14 @@ Go AST/printer output before `go/format`.
 
 `runtime/contracts` now provides the first local typed registry for queries,
 commands, backend-owned domain and integration events, presentation events, and
-jobs. Compiler IR, `.gwdk` syntax, generated adapters, CLI graph output,
-durable outbox, worker roles, cron roles, and realtime fanout for those
-contracts remain planned.
+jobs. Compiler IR command/query references, `.gwdk` command/query syntax,
+contract diagnostics, CLI graph/trace output, and runtime role filtering exist.
+Generated adapters, split runtime binaries, durable outbox, and realtime fanout
+for those contracts remain planned.
 
 Still partial: broad local client-side reactivity, scoped component CSS/asset
 emission, richer load/action invalidation, broader hybrid request-time
-behavior beyond the explicit `load {}` branch, contract compiler integration,
+behavior beyond the explicit `load {}` branch, generated contract adapters,
 app-wide middleware policy, and production operations guidance.
 
 ## System Context

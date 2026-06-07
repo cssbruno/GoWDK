@@ -177,6 +177,106 @@ func TestQueryAndJobDispatch(t *testing.T) {
 	}
 }
 
+func TestRoleSpecificCommandDispatchSkipsOtherRoleSubscribers(t *testing.T) {
+	registry := NewRegistry()
+	var webHandled, workerHandled, rolelessHandled int
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		webHandled++
+		return nil
+	}, RoleWeb))
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		workerHandled++
+		return nil
+	}, RoleWorker))
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		rolelessHandled++
+		return nil
+	}))
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{}, EmitDomain(ctx, patientCreated{ID: "patient-1"})
+	}, RoleWeb))
+
+	if _, err := ExecuteCommandForRole[createPatient, createPatientResult](context.Background(), registry, RoleWeb, createPatient{}); err != nil {
+		t.Fatalf("execute command for role: %v", err)
+	}
+	if webHandled != 1 || workerHandled != 0 || rolelessHandled != 1 {
+		t.Fatalf("unexpected role dispatch counts: web=%d worker=%d roleless=%d", webHandled, workerHandled, rolelessHandled)
+	}
+
+	_, err := ExecuteCommandForRole[createPatient, createPatientResult](context.Background(), registry, RoleWorker, createPatient{})
+	if !Is(err, ErrRoleNotAllowed) {
+		t.Fatalf("wrong-role command error = %v, want %s", err, ErrRoleNotAllowed)
+	}
+}
+
+func TestRoleSpecificPublishAndJobExecution(t *testing.T) {
+	registry := NewRegistry()
+	var webHandled, workerHandled int
+	must(t, RegisterPresentationEvent[patientCreatedNotice](registry, func(ctx context.Context, event patientCreatedNotice) error {
+		webHandled++
+		return nil
+	}, RoleWeb))
+	must(t, RegisterPresentationEvent[patientCreatedNotice](registry, func(ctx context.Context, event patientCreatedNotice) error {
+		workerHandled++
+		return nil
+	}, RoleWorker))
+	var jobRuns int
+	must(t, RegisterJob[syncPatientsJob](registry, func(ctx context.Context, job syncPatientsJob) error {
+		jobRuns++
+		return nil
+	}, RoleCron))
+
+	if err := PublishPresentationForRole(context.Background(), registry, RoleWeb, patientCreatedNotice{}); err != nil {
+		t.Fatalf("publish presentation for web: %v", err)
+	}
+	if webHandled != 1 || workerHandled != 0 {
+		t.Fatalf("unexpected presentation handlers: web=%d worker=%d", webHandled, workerHandled)
+	}
+	if err := ExecuteJobForRole(context.Background(), registry, RoleWorker, syncPatientsJob{}); !Is(err, ErrRoleNotAllowed) {
+		t.Fatalf("wrong-role job error = %v, want %s", err, ErrRoleNotAllowed)
+	}
+	if err := ExecuteJobForRole(context.Background(), registry, RoleCron, syncPatientsJob{}); err != nil {
+		t.Fatalf("execute cron job: %v", err)
+	}
+	if jobRuns != 1 {
+		t.Fatalf("jobRuns = %d, want 1", jobRuns)
+	}
+}
+
+func TestContractsForRoleFiltersMetadata(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{}, nil
+	}, RoleWeb))
+	must(t, RegisterQuery[patientPageQuery, patientPage](registry, func(ctx context.Context, query patientPageQuery) (patientPage, error) {
+		return patientPage{}, nil
+	}))
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		return nil
+	}, RoleWorker))
+	must(t, RegisterPresentationEvent[patientCreatedNotice](registry, func(ctx context.Context, event patientCreatedNotice) error {
+		return nil
+	}, RoleWeb))
+	must(t, RegisterJob[syncPatientsJob](registry, func(ctx context.Context, job syncPatientsJob) error {
+		return nil
+	}, RoleCron))
+
+	metadata := registry.ContractsForRole(RoleWeb)
+	var kinds []Kind
+	for _, item := range metadata {
+		kinds = append(kinds, item.Kind)
+		if item.Kind == Event && item.Type == typeName[patientCreated]() {
+			t.Fatalf("worker-only domain event leaked into web metadata: %#v", metadata)
+		}
+		if item.Kind == Job {
+			t.Fatalf("cron job leaked into web metadata: %#v", metadata)
+		}
+	}
+	if !slices.Equal(kinds, []Kind{Command, Event, Query}) {
+		t.Fatalf("web metadata kinds = %#v, want command, event, query", kinds)
+	}
+}
+
 func TestMetadataIsDeterministic(t *testing.T) {
 	registry := NewRegistry()
 	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {

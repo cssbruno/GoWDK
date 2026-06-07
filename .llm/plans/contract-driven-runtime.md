@@ -322,7 +322,8 @@ wherever the contract is HTTP-exposed.
 - [x] Decide first `.gwdk` syntax for query binding:
       element-local `g:query="pkg.Query"`.
 - [x] Explicitly reject frontend-originated domain event syntax.
-- [ ] Decide first runtime roles and their config shape.
+- [x] Decide first runtime role identifiers: `web`, `worker`, `cron`, `api`,
+      and `admin`; split-binary config shape remains planned.
 - [ ] Add an ADR if the syntax or runtime role model is hard to reverse.
 
 ### Phase 1: Runtime Registry
@@ -399,11 +400,13 @@ wherever the contract is HTTP-exposed.
 
 ### Phase 5: Event And Job Runtime Roles
 
-- [ ] Add single-binary default role behavior.
-- [ ] Add worker role for event subscribers and queued jobs.
-- [ ] Add cron role for scheduled jobs.
+- [x] Add single-binary default role behavior.
+- [x] Add runtime role filtering helpers for commands, queries, events, jobs,
+      and metadata.
+- [ ] Add worker role binary wiring for event subscribers and queued jobs.
+- [ ] Add cron role binary wiring for scheduled jobs.
 - [ ] Add presentation-event fanout hook for SSE/WebSocket adapters.
-- [ ] Add role filtering so web binaries do not accidentally run worker-only
+- [x] Add role filtering so web binaries do not accidentally run worker-only
       subscribers unless configured.
 - [ ] Add graceful shutdown for background handlers.
 - [ ] Document failure behavior for subscriber errors.

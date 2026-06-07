@@ -54,6 +54,27 @@ result, err := contracts.ExecuteCommand[CreatePatient, CreatePatientResult](ctx,
 err := contracts.ExecuteJob(ctx, r, job)
 ```
 
+Run a role-filtered runtime:
+
+```go
+result, err := contracts.ExecuteCommandForRole[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    contracts.RoleWeb,
+    command,
+)
+
+err := contracts.PublishDomainForRole(ctx, r, contracts.RoleWorker, PatientCreated{ID: id})
+err := contracts.ExecuteJobForRole(ctx, r, contracts.RoleCron, SyncPatients{})
+metadata := r.ContractsForRole(contracts.RoleWeb)
+```
+
+Default execution helpers run the whole in-process registry for small
+single-binary apps. Role-specific helpers run handlers with no explicit roles
+and handlers registered for the selected role. They skip handlers registered
+only for another role and return `role_not_allowed` when the selected role
+tries to execute a command, query, or job that is not available to that role.
+
 Inside a command handler, emit backend-owned events through the command context:
 
 ```go
@@ -153,5 +174,5 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - `gowdk trace <contract>` reports a single command/query/event/job, command
   emitted events, event subscribers, source locations, handlers, and roles.
 - Full package graph validation and imported handler validation are planned.
-- Durable outbox, broker adapters, worker roles, cron roles, and realtime
-  SSE/WebSocket fanout are planned.
+- Split web/worker/cron binaries, durable outbox, broker adapters, and
+  realtime SSE/WebSocket fanout are planned.

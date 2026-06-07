@@ -59,6 +59,7 @@ const (
 	ErrNilHandler         ErrorKind = "nil_handler"
 	ErrNoEventRecorder    ErrorKind = "no_event_recorder"
 	ErrSubscriberFailed   ErrorKind = "subscriber_failed"
+	ErrRoleNotAllowed     ErrorKind = "role_not_allowed"
 )
 
 // Error is returned for contract registry and dispatch failures.
@@ -128,10 +129,22 @@ func RegisterQuery[Q, R any](registry *Registry, handler QueryHandler[Q, R], rol
 
 // ExecuteQuery runs a registered query handler.
 func ExecuteQuery[Q, R any](ctx context.Context, registry *Registry, query Q) (R, error) {
+	return executeQuery[Q, R](ctx, registry, query, "")
+}
+
+// ExecuteQueryForRole runs a query handler only when it is available to role.
+func ExecuteQueryForRole[Q, R any](ctx context.Context, registry *Registry, role Role, query Q) (R, error) {
+	return executeQuery[Q, R](ctx, registry, query, role)
+}
+
+func executeQuery[Q, R any](ctx context.Context, registry *Registry, query Q, role Role) (R, error) {
 	var zero R
 	entry, ok := registry.query(typeName[Q]())
 	if !ok {
 		return zero, missingHandlerError(Query, typeName[Q]())
+	}
+	if !rolesAllow(entry.roles, role) {
+		return zero, roleNotAllowedError(Query, typeName[Q](), role)
 	}
 	handler, ok := entry.handler.(QueryHandler[Q, R])
 	if !ok {
@@ -152,10 +165,23 @@ func RegisterCommand[C, R any](registry *Registry, handler CommandHandler[C, R],
 // ExecuteCommand runs a command and dispatches events recorded with Emit* only
 // after the command handler succeeds.
 func ExecuteCommand[C, R any](ctx context.Context, registry *Registry, command C) (R, error) {
+	return executeCommand[C, R](ctx, registry, command, "")
+}
+
+// ExecuteCommandForRole runs a command owner for role and dispatches only
+// matching event subscribers after the command succeeds.
+func ExecuteCommandForRole[C, R any](ctx context.Context, registry *Registry, role Role, command C) (R, error) {
+	return executeCommand[C, R](ctx, registry, command, role)
+}
+
+func executeCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, error) {
 	var zero R
 	entry, ok := registry.command(typeName[C]())
 	if !ok {
 		return zero, missingHandlerError(Command, typeName[C]())
+	}
+	if !rolesAllow(entry.roles, role) {
+		return zero, roleNotAllowedError(Command, typeName[C](), role)
 	}
 	handler, ok := entry.handler.(CommandHandler[C, R])
 	if !ok {
@@ -166,7 +192,7 @@ func ExecuteCommand[C, R any](ctx context.Context, registry *Registry, command C
 	if err != nil {
 		return zero, err
 	}
-	if err := recorder.dispatch(ctx, registry); err != nil {
+	if err := recorder.dispatchForRole(ctx, registry, role); err != nil {
 		return zero, err
 	}
 	return result, nil
@@ -212,14 +238,29 @@ func PublishDomain[E any](ctx context.Context, registry *Registry, event E) erro
 	return dispatchEvent(ctx, registry, DomainEvent, event)
 }
 
+// PublishDomainForRole dispatches a domain event to subscribers available to role.
+func PublishDomainForRole[E any](ctx context.Context, registry *Registry, role Role, event E) error {
+	return dispatchEventForRole(ctx, registry, DomainEvent, event, role)
+}
+
 // PublishIntegration dispatches an integration event immediately.
 func PublishIntegration[E any](ctx context.Context, registry *Registry, event E) error {
 	return dispatchEvent(ctx, registry, IntegrationEvent, event)
 }
 
+// PublishIntegrationForRole dispatches an integration event to subscribers available to role.
+func PublishIntegrationForRole[E any](ctx context.Context, registry *Registry, role Role, event E) error {
+	return dispatchEventForRole(ctx, registry, IntegrationEvent, event, role)
+}
+
 // PublishPresentation dispatches a presentation event immediately.
 func PublishPresentation[E any](ctx context.Context, registry *Registry, event E) error {
 	return dispatchEvent(ctx, registry, PresentationEvent, event)
+}
+
+// PublishPresentationForRole dispatches a presentation event to subscribers available to role.
+func PublishPresentationForRole[E any](ctx context.Context, registry *Registry, role Role, event E) error {
+	return dispatchEventForRole(ctx, registry, PresentationEvent, event, role)
 }
 
 // RegisterJob registers one background or scheduled job handler.
@@ -232,9 +273,21 @@ func RegisterJob[J any](registry *Registry, handler JobHandler[J], roles ...Role
 
 // ExecuteJob runs a registered job handler.
 func ExecuteJob[J any](ctx context.Context, registry *Registry, job J) error {
+	return executeJob(ctx, registry, job, "")
+}
+
+// ExecuteJobForRole runs a job handler only when it is available to role.
+func ExecuteJobForRole[J any](ctx context.Context, registry *Registry, role Role, job J) error {
+	return executeJob(ctx, registry, job, role)
+}
+
+func executeJob[J any](ctx context.Context, registry *Registry, job J, role Role) error {
 	entry, ok := registry.job(typeName[J]())
 	if !ok {
 		return missingHandlerError(Job, typeName[J]())
+	}
+	if !rolesAllow(entry.roles, role) {
+		return roleNotAllowedError(Job, typeName[J](), role)
 	}
 	handler, ok := entry.handler.(JobHandler[J])
 	if !ok {
@@ -245,20 +298,38 @@ func ExecuteJob[J any](ctx context.Context, registry *Registry, job J) error {
 
 // Contracts returns deterministic metadata for registered contracts.
 func (registry *Registry) Contracts() []Metadata {
+	return registry.contractsForRole("")
+}
+
+// ContractsForRole returns deterministic metadata for contracts available to role.
+func (registry *Registry) ContractsForRole(role Role) []Metadata {
+	return registry.contractsForRole(role)
+}
+
+func (registry *Registry) contractsForRole(role Role) []Metadata {
 	registry.mu.RLock()
 	defer registry.mu.RUnlock()
 	metadata := make([]Metadata, 0, len(registry.queries)+len(registry.commands)+len(registry.events)+len(registry.jobs))
 	for _, entry := range registry.queries {
-		metadata = append(metadata, Metadata{Kind: Query, Type: entry.query, Result: entry.result, Handlers: 1, Roles: copyRoles(entry.roles)})
+		if rolesAllow(entry.roles, role) {
+			metadata = append(metadata, Metadata{Kind: Query, Type: entry.query, Result: entry.result, Handlers: 1, Roles: copyRoles(entry.roles)})
+		}
 	}
 	for _, entry := range registry.commands {
-		metadata = append(metadata, Metadata{Kind: Command, Type: entry.command, Result: entry.result, Handlers: 1, Roles: copyRoles(entry.roles)})
+		if rolesAllow(entry.roles, role) {
+			metadata = append(metadata, Metadata{Kind: Command, Type: entry.command, Result: entry.result, Handlers: 1, Roles: copyRoles(entry.roles)})
+		}
 	}
 	for key, entries := range registry.events {
-		metadata = append(metadata, Metadata{Kind: Event, EventCategory: key.category, Type: key.event, Handlers: len(entries), Roles: eventRoles(entries)})
+		allowedEntries := eventEntriesForRole(entries, role)
+		if len(allowedEntries) > 0 {
+			metadata = append(metadata, Metadata{Kind: Event, EventCategory: key.category, Type: key.event, Handlers: len(allowedEntries), Roles: eventRoles(allowedEntries)})
+		}
 	}
 	for _, entry := range registry.jobs {
-		metadata = append(metadata, Metadata{Kind: Job, Type: entry.job, Handlers: 1, Roles: copyRoles(entry.roles)})
+		if rolesAllow(entry.roles, role) {
+			metadata = append(metadata, Metadata{Kind: Job, Type: entry.job, Handlers: 1, Roles: copyRoles(entry.roles)})
+		}
 	}
 	sort.Slice(metadata, func(i, j int) bool {
 		if metadata[i].Kind != metadata[j].Kind {
@@ -349,9 +420,16 @@ func registerEvent[E any](registry *Registry, category EventCategory, handler Ev
 }
 
 func dispatchEvent[E any](ctx context.Context, registry *Registry, category EventCategory, event E) error {
+	return dispatchEventForRole(ctx, registry, category, event, "")
+}
+
+func dispatchEventForRole[E any](ctx context.Context, registry *Registry, category EventCategory, event E, role Role) error {
 	key := eventKey{category: category, event: typeName[E]()}
 	entries := registry.eventEntries(key)
 	for index, entry := range entries {
+		if !rolesAllow(entry.roles, role) {
+			continue
+		}
 		handler, ok := entry.handler.(EventHandler[E])
 		if !ok {
 			return unsupportedHandlerError(Event, key.event)
@@ -406,6 +484,10 @@ func unsupportedHandlerError(kind Kind, contract string) error {
 	return Error{Kind: ErrUnsupportedHandler, Contract: contract, Message: fmt.Sprintf("%s %s has an unsupported handler signature", kind, contract)}
 }
 
+func roleNotAllowedError(kind Kind, contract string, role Role) error {
+	return Error{Kind: ErrRoleNotAllowed, Contract: contract, Message: fmt.Sprintf("%s %s is not available to role %q", kind, contract, role)}
+}
+
 func nilHandlerError(kind Kind, contract string) error {
 	return Error{Kind: ErrNilHandler, Contract: contract, Message: fmt.Sprintf("%s %s cannot register a nil handler", kind, contract)}
 }
@@ -425,6 +507,33 @@ func copyRoles(roles []Role) []Role {
 	copied := make([]Role, len(roles))
 	copy(copied, roles)
 	return copied
+}
+
+func rolesAllow(roles []Role, role Role) bool {
+	if role == "" || len(roles) == 0 {
+		return true
+	}
+	for _, candidate := range roles {
+		if candidate == role {
+			return true
+		}
+	}
+	return false
+}
+
+func eventEntriesForRole(entries []eventEntry, role Role) []eventEntry {
+	if role == "" {
+		copied := make([]eventEntry, len(entries))
+		copy(copied, entries)
+		return copied
+	}
+	var allowed []eventEntry
+	for _, entry := range entries {
+		if rolesAllow(entry.roles, role) {
+			allowed = append(allowed, entry)
+		}
+	}
+	return allowed
 }
 
 func eventRoles(entries []eventEntry) []Role {

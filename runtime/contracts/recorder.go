@@ -9,9 +9,10 @@ type eventRecorder struct {
 }
 
 type recordedEvent struct {
-	category EventCategory
-	value    any
-	dispatch func(context.Context, *Registry) error
+	category        EventCategory
+	value           any
+	dispatch        func(context.Context, *Registry) error
+	dispatchForRole func(context.Context, *Registry, Role) error
 }
 
 func withRecorder(ctx context.Context) (context.Context, *eventRecorder) {
@@ -34,6 +35,9 @@ func emit[E any](ctx context.Context, category EventCategory, event E) error {
 		dispatch: func(dispatchCtx context.Context, registry *Registry) error {
 			return dispatchEvent(dispatchCtx, registry, category, event)
 		},
+		dispatchForRole: func(dispatchCtx context.Context, registry *Registry, role Role) error {
+			return dispatchEventForRole(dispatchCtx, registry, category, event, role)
+		},
 	})
 	return nil
 }
@@ -41,6 +45,15 @@ func emit[E any](ctx context.Context, category EventCategory, event E) error {
 func (recorder *eventRecorder) dispatch(ctx context.Context, registry *Registry) error {
 	for _, event := range recorder.events {
 		if err := event.dispatch(ctx, registry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (recorder *eventRecorder) dispatchForRole(ctx context.Context, registry *Registry, role Role) error {
+	for _, event := range recorder.events {
+		if err := event.dispatchForRole(ctx, registry, role); err != nil {
 			return err
 		}
 	}

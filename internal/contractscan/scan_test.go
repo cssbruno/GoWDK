@@ -117,6 +117,65 @@ func RegisterTest(r *c.Registry) {
 	}
 }
 
+func TestScanLinksContractsAcrossPackageFiles(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "register.go"), `package patients
+
+import contracts "github.com/cssbruno/gowdk/runtime/contracts"
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterQuery[GetPatient, PatientPage](r, LoadPatient, contracts.RoleWeb)
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, contracts.RoleWeb)
+}
+`)
+	writeFile(t, filepath.Join(root, "types.go"), `package patients
+
+type GetPatient struct {
+	ID string
+}
+
+type PatientPage struct{}
+
+type CreatePatient struct {
+	Name string
+	Tags []string
+}
+
+type CreatePatientResult struct{}
+`)
+	writeFile(t, filepath.Join(root, "handlers.go"), `package patients
+
+import "context"
+
+func LoadPatient(ctx context.Context, query GetPatient) (PatientPage, error) {
+	return PatientPage{}, nil
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{}, nil
+}
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %#v", report.Diagnostics)
+	}
+	command := findContract(t, report.Contracts, runtimecontracts.Command, "CreatePatient")
+	if command.Register != "Register" || command.Handler != "HandleCreatePatient" {
+		t.Fatalf("unexpected cross-file command metadata: %#v", command)
+	}
+	if got := inputFieldsString(command.InputFields); got != "Name:Name:string,Tags:Tags:[]string" {
+		t.Fatalf("unexpected cross-file command input fields: %s", got)
+	}
+	query := findContract(t, report.Contracts, runtimecontracts.Query, "GetPatient")
+	if got := inputFieldsString(query.InputFields); got != "ID:ID:string" {
+		t.Fatalf("unexpected cross-file query input fields: %s", got)
+	}
+}
+
 func TestScanReportsInvalidHandlerSignatures(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "patients.go"), `package patients

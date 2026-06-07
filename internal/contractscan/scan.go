@@ -100,11 +100,12 @@ func Scan(root string) (Report, error) {
 	var contracts []Contract
 	var diagnostics []Diagnostic
 	emitsByHandler := map[string][]EventRef{}
-	for _, file := range files {
-		discovered, err := scanFile(fset, absRoot, file)
-		if err != nil {
-			return Report{}, err
-		}
+	packages, err := parseScanPackages(fset, absRoot, files)
+	if err != nil {
+		return Report{}, err
+	}
+	for _, pkg := range packages {
+		discovered := scanPackage(fset, pkg)
 		contracts = append(contracts, discovered.Contracts...)
 		diagnostics = append(diagnostics, discovered.Diagnostics...)
 		for handler, emits := range discovered.EmitsByHandler {
@@ -320,54 +321,108 @@ type inputStruct struct {
 	Message string
 }
 
-func scanFile(fset *token.FileSet, root string, path string) (fileScan, error) {
+type parsedGoFile struct {
+	Path    string
+	Rel     string
+	Package string
+	File    *ast.File
+	Aliases map[string]bool
+}
+
+func parseScanPackages(fset *token.FileSet, root string, files []string) ([][]parsedGoFile, error) {
+	groups := map[string][]parsedGoFile{}
+	var keys []string
+	for _, path := range files {
+		parsed, err := parseScanFile(fset, root, path)
+		if err != nil {
+			return nil, err
+		}
+		key := filepath.Dir(parsed.Path) + "\x00" + parsed.Package
+		if _, exists := groups[key]; !exists {
+			keys = append(keys, key)
+		}
+		groups[key] = append(groups[key], parsed)
+	}
+	sort.Strings(keys)
+	packages := make([][]parsedGoFile, 0, len(keys))
+	for _, key := range keys {
+		packages = append(packages, groups[key])
+	}
+	return packages, nil
+}
+
+func parseScanFile(fset *token.FileSet, root string, path string) (parsedGoFile, error) {
 	source, err := os.ReadFile(path)
 	if err != nil {
-		return fileScan{}, err
+		return parsedGoFile{}, err
 	}
 	file, err := parser.ParseFile(fset, path, source, 0)
 	if err != nil {
-		return fileScan{}, err
-	}
-	aliases := contractsImportAliases(file)
-	if len(aliases) == 0 {
-		return fileScan{}, nil
+		return parsedGoFile{}, err
 	}
 	rel, err := filepath.Rel(root, path)
 	if err != nil {
 		rel = path
 	}
 	rel = filepath.ToSlash(rel)
-	contracts := scanContractRegistrations(fset, file, aliases, rel)
-	inputStructs := collectContractInputStructs(file)
+	return parsedGoFile{
+		Path:    path,
+		Rel:     rel,
+		Package: file.Name.Name,
+		File:    file,
+		Aliases: contractsImportAliases(file),
+	}, nil
+}
+
+func scanPackage(fset *token.FileSet, files []parsedGoFile) fileScan {
+	astFiles := make([]*ast.File, 0, len(files))
+	for _, file := range files {
+		astFiles = append(astFiles, file.File)
+	}
+	inputStructs := collectContractInputStructs(astFiles)
+	functions := typedFunctions(fset, astFiles)
+	var contracts []Contract
+	var diagnostics []Diagnostic
+	emitsByHandler := map[string][]EventRef{}
+	for _, file := range files {
+		if len(file.Aliases) == 0 {
+			continue
+		}
+		discovered := scanContractRegistrations(fset, file.File, file.Aliases, file.Rel)
+		contracts = append(contracts, discovered...)
+		for handler, emits := range emittedEventsByHandler(fset, file.File, file.Aliases) {
+			emitsByHandler[handler] = append(emitsByHandler[handler], emits...)
+		}
+	}
 	applyContractInputFields(contracts, inputStructs)
-	functions := typedFunctions(fset, file)
-	diagnostics := validateContracts(contracts, functions)
+	diagnostics = append(diagnostics, validateContracts(contracts, functions)...)
 	diagnostics = append(diagnostics, validateContractInputStructs(contracts, inputStructs)...)
 	return fileScan{
 		Contracts:      contracts,
 		Diagnostics:    diagnostics,
-		EmitsByHandler: emittedEventsByHandler(fset, file, aliases),
-	}, nil
+		EmitsByHandler: emitsByHandler,
+	}
 }
 
-func collectContractInputStructs(file *ast.File) map[string]inputStruct {
+func collectContractInputStructs(files []*ast.File) map[string]inputStruct {
 	structs := map[string]inputStruct{}
-	for _, declaration := range file.Decls {
-		gen, ok := declaration.(*ast.GenDecl)
-		if !ok || gen.Tok != token.TYPE {
-			continue
-		}
-		for _, spec := range gen.Specs {
-			typeSpec, ok := spec.(*ast.TypeSpec)
-			if !ok || typeSpec.Name == nil || !typeSpec.Name.IsExported() {
+	for _, file := range files {
+		for _, declaration := range file.Decls {
+			gen, ok := declaration.(*ast.GenDecl)
+			if !ok || gen.Tok != token.TYPE {
 				continue
 			}
-			structType, ok := typeSpec.Type.(*ast.StructType)
-			if !ok {
-				continue
+			for _, spec := range gen.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok || typeSpec.Name == nil || !typeSpec.Name.IsExported() {
+					continue
+				}
+				structType, ok := typeSpec.Type.(*ast.StructType)
+				if !ok {
+					continue
+				}
+				structs[typeSpec.Name.Name] = contractInputStruct(typeSpec.Name.Name, structType)
 			}
-			structs[typeSpec.Name.Name] = contractInputStruct(typeSpec.Name.Name, structType)
 		}
 	}
 	return structs
@@ -611,28 +666,34 @@ type functionInfo struct {
 	Package   *types.Package
 }
 
-func typedFunctions(fset *token.FileSet, file *ast.File) map[string]functionInfo {
+func typedFunctions(fset *token.FileSet, files []*ast.File) map[string]functionInfo {
 	info := &types.Info{Defs: map[*ast.Ident]types.Object{}}
 	config := types.Config{
 		Importer: importer.Default(),
 		Error:    func(error) {},
 	}
-	pkg, _ := config.Check(file.Name.Name, fset, []*ast.File{file}, info)
+	packageName := ""
+	if len(files) > 0 && files[0].Name != nil {
+		packageName = files[0].Name.Name
+	}
+	pkg, _ := config.Check(packageName, fset, files, info)
 	functions := map[string]functionInfo{}
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Recv != nil {
-			continue
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv != nil {
+				continue
+			}
+			obj, ok := info.Defs[fn.Name].(*types.Func)
+			if !ok || obj == nil {
+				continue
+			}
+			signature, ok := obj.Type().(*types.Signature)
+			if !ok {
+				continue
+			}
+			functions[fn.Name.Name] = functionInfo{Signature: signature, Package: pkg}
 		}
-		obj, ok := info.Defs[fn.Name].(*types.Func)
-		if !ok || obj == nil {
-			continue
-		}
-		signature, ok := obj.Type().(*types.Signature)
-		if !ok {
-			continue
-		}
-		functions[fn.Name.Name] = functionInfo{Signature: signature, Package: pkg}
 	}
 	return functions
 }
@@ -645,7 +706,7 @@ func validateContracts(contracts []Contract, functions map[string]functionInfo) 
 		}
 		function := functions[contract.Handler]
 		if function.Signature == nil {
-			diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_handler_missing", fmt.Sprintf("handler %s was not found in the scanned file", contract.Handler)))
+			diagnostics = append(diagnostics, contractDiagnostic(contract, "contract_handler_missing", fmt.Sprintf("handler %s was not found in the scanned package", contract.Handler)))
 			continue
 		}
 		if message := validateHandlerSignature(contract, function); message != "" {

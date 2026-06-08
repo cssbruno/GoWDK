@@ -74,7 +74,7 @@ type CounterState struct {
 }
 
 func NewCounterState() CounterState {
-	return CounterState{}
+	return CounterState{Count: 0}
 }
 ```
 
@@ -89,12 +89,8 @@ import ui "github.com/acme/hello-gowdk/ui"
 state ui.CounterState = ui.NewCounterState()
 
 client {
-  computed Label string {
-    return if Count == 0 { "Start" } else { string(Count) }
-  }
-
   fn Increment() {
-    Count++
+    Count = Count + 1
   }
 
   fn Reset() {
@@ -104,7 +100,7 @@ client {
 
 view {
   <section>
-    <p class:active={Count > 0}>{Label}</p>
+    <p class:active={Count > 0}>Count: {Count}</p>
     <button g:on:click={Increment()}>Add</button>
     <button g:if={Count > 0} g:on:click={Reset()}>Reset</button>
   </section>

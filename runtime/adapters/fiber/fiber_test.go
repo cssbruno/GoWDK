@@ -11,7 +11,12 @@ import (
 func TestHandlerWrapsHTTPHandler(t *testing.T) {
 	app := fiberframework.New()
 	Mount(app, "/*", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		context, ok := Context(request.Context())
+		if !ok {
+			t.Fatal("expected Fiber context")
+		}
 		writer.Header().Set("X-GOWDK-Test", "fiber")
+		writer.Header().Set("X-GOWDK-Route", context.Route().Path)
 		_, _ = writer.Write([]byte(request.Method + " " + request.URL.Path))
 	}))
 
@@ -42,6 +47,9 @@ func TestHandlerWrapsHTTPHandler(t *testing.T) {
 		}
 		if response.Header.Get("X-GOWDK-Test") != "fiber" {
 			t.Fatalf("expected wrapped handler header, got %#v", response.Header)
+		}
+		if response.Header.Get("X-GOWDK-Route") != "/*" {
+			t.Fatalf("expected attached Fiber context route, got %#v", response.Header)
 		}
 	}
 }

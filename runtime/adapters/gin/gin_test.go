@@ -12,7 +12,12 @@ func TestHandlerWrapsHTTPHandler(t *testing.T) {
 	ginframework.SetMode(ginframework.TestMode)
 	engine := ginframework.New()
 	Mount(engine, "/*path", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		context, ok := Context(request.Context())
+		if !ok {
+			t.Fatal("expected Gin context")
+		}
 		writer.Header().Set("X-GOWDK-Test", "gin")
+		writer.Header().Set("X-GOWDK-Route", context.FullPath())
 		_, _ = writer.Write([]byte(request.Method + " " + request.URL.Path))
 	}))
 
@@ -33,6 +38,9 @@ func TestHandlerWrapsHTTPHandler(t *testing.T) {
 		}
 		if recorder.Header().Get("X-GOWDK-Test") != "gin" {
 			t.Fatalf("expected wrapped handler header, got %#v", recorder.Header())
+		}
+		if recorder.Header().Get("X-GOWDK-Route") != "/*path" {
+			t.Fatalf("expected attached Gin context route, got %#v", recorder.Header())
 		}
 	}
 }

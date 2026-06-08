@@ -11,7 +11,12 @@ import (
 func TestHandlerWrapsHTTPHandler(t *testing.T) {
 	engine := echoframework.New()
 	Mount(engine, "/*", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		context, ok := Context(request.Context())
+		if !ok {
+			t.Fatal("expected Echo context")
+		}
 		writer.Header().Set("X-GOWDK-Test", "echo")
+		writer.Header().Set("X-GOWDK-Route", context.Path())
 		_, _ = writer.Write([]byte(request.Method + " " + request.URL.Path))
 	}))
 
@@ -32,6 +37,9 @@ func TestHandlerWrapsHTTPHandler(t *testing.T) {
 		}
 		if recorder.Header().Get("X-GOWDK-Test") != "echo" {
 			t.Fatalf("expected wrapped handler header, got %#v", recorder.Header())
+		}
+		if recorder.Header().Get("X-GOWDK-Route") != "/*" {
+			t.Fatalf("expected attached Echo context route, got %#v", recorder.Header())
 		}
 	}
 }

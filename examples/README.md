@@ -87,7 +87,10 @@ Build the current generated hybrid page without `load {}`:
 ```sh
 go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk
 test -x /tmp/gowdk-hybrid-site
-go run ./cmd/gowdk routes --ssr examples/ssr/hybrid-static.page.gwdk | grep -F '"kind": "hybrid"'
+go run ./cmd/gowdk routes --ssr examples/ssr/hybrid-static.page.gwdk > /tmp/gowdk-hybrid-routes.json
+grep -F '"kind": "ssr"' /tmp/gowdk-hybrid-routes.json
+grep -F '"pageId": "hybrid.static"' /tmp/gowdk-hybrid-routes.json
+grep -F '"code": "spa_disabled"' /tmp/gowdk-hybrid-routes.json
 ```
 
 Build the current `.gwdk` Go import example:

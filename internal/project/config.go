@@ -287,6 +287,8 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 			build.AllowMissingBackend = parseBool(keyValue.Value)
 		case "Stylesheets":
 			build.Stylesheets = parseStylesheets(keyValue.Value)
+		case "Scripts":
+			build.Scripts = parseScripts(keyValue.Value)
 		case "Targets":
 			build.Targets = parseBuildTargets(keyValue.Value)
 		}
@@ -478,6 +480,48 @@ func parseStylesheet(expression ast.Expr) gowdk.Stylesheet {
 		stylesheet.Href = parseString(keyValue.Value)
 	}
 	return stylesheet
+}
+
+func parseScripts(expression ast.Expr) []gowdk.Script {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil
+	}
+
+	var scripts []gowdk.Script
+	for _, element := range literal.Elts {
+		script := parseScript(element)
+		if script.Src == "" {
+			continue
+		}
+		scripts = append(scripts, script)
+	}
+	return scripts
+}
+
+func parseScript(expression ast.Expr) gowdk.Script {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.Script{}
+	}
+	var script gowdk.Script
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "Src":
+			script.Src = parseString(keyValue.Value)
+		case "Type":
+			script.Type = parseString(keyValue.Value)
+		}
+	}
+	return script
 }
 
 func parseCSSConfig(expression ast.Expr) gowdk.CSSConfig {

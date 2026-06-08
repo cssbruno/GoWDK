@@ -69,6 +69,10 @@ var Config = gowdk.Config{
 			{Href: "/assets/app.css"},
 			{Href: "/assets/theme.css"},
 		},
+		Scripts: []gowdk.Script{
+			{Src: "/assets/app.js", Type: "module"},
+			{Src: "/assets/legacy.js"},
+		},
 		Targets: []gowdk.BuildTargetConfig{
 			{
 				Name: "admin",
@@ -150,6 +154,9 @@ var Config = gowdk.Config{
 	}
 	if len(config.Build.Stylesheets) != 2 || config.Build.Stylesheets[0].Href != "/assets/app.css" || config.Build.Stylesheets[1].Href != "/assets/theme.css" {
 		t.Fatalf("unexpected stylesheets: %#v", config.Build.Stylesheets)
+	}
+	if len(config.Build.Scripts) != 2 || config.Build.Scripts[0].Src != "/assets/app.js" || config.Build.Scripts[0].Type != "module" || config.Build.Scripts[1].Src != "/assets/legacy.js" || config.Build.Scripts[1].Type != "" {
+		t.Fatalf("unexpected scripts: %#v", config.Build.Scripts)
 	}
 	if len(config.Build.Targets) != 2 {
 		t.Fatalf("unexpected build targets: %#v", config.Build.Targets)

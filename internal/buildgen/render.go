@@ -138,19 +138,23 @@ func actionRoutes(page manifest.Page, data map[string]string) map[string]string 
 	return routes
 }
 
-func pageScripts(config gowdk.Config, page manifest.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) []string {
+func pageScripts(config gowdk.Config, page manifest.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) []gowdk.Script {
+	scripts := append([]gowdk.Script{}, nonEmptyScripts(config.Build.Scripts)...)
 	if policy != renderModeSPA {
-		return nil
+		return scripts
 	}
-	var scripts []string
 	if pageUsesPartialRuntime(page, viewSource) || pageUsesSPANavigationRuntime(config, page, viewSource, components) {
-		scripts = append(scripts, clientRuntimeHref)
+		scripts = append(scripts, gowdk.Script{Src: clientRuntimeHref})
 	}
 	if len(page.Stores) > 0 {
-		scripts = append(scripts, storeRuntimeHref)
+		scripts = append(scripts, gowdk.Script{Src: storeRuntimeHref})
 	}
-	scripts = append(scripts, islandScriptHrefs(viewSource, components, page.Package, componentUses(page.Uses))...)
-	scripts = append(scripts, clientGoBlockHrefs(page)...)
+	for _, href := range islandScriptHrefs(viewSource, components, page.Package, componentUses(page.Uses)) {
+		scripts = append(scripts, gowdk.Script{Src: href})
+	}
+	for _, href := range clientGoBlockHrefs(page) {
+		scripts = append(scripts, gowdk.Script{Src: href})
+	}
 	return scripts
 }
 
@@ -244,7 +248,7 @@ func pageStoreSeeds(page manifest.Page) ([]pageStoreSeed, error) {
 	return seeds, nil
 }
 
-func document(config gowdk.Config, page manifest.Page, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []string) string {
+func document(config gowdk.Config, page manifest.Page, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []gowdk.Script) string {
 	title := page.ID
 	if page.Metadata.Title != "" {
 		title = page.Metadata.Title
@@ -309,11 +313,13 @@ func document(config gowdk.Config, page manifest.Page, body string, stylesheets 
 		}
 		head = append(head, "  <script type=\"application/json\""+gowhtml.Attr("data-gowdk-store", seed.Name)+">"+escapeScriptJSON(seed.JSON)+"</script>")
 	}
-	for _, script := range scripts {
-		if strings.TrimSpace(script) == "" {
-			continue
+	for _, script := range nonEmptyScripts(scripts) {
+		tag := "  <script"
+		if strings.TrimSpace(script.Type) != "" {
+			tag += gowhtml.Attr("type", script.Type)
 		}
-		head = append(head, "  <script"+gowhtml.Attr("src", script)+" defer></script>")
+		tag += gowhtml.Attr("src", script.Src) + " defer></script>"
+		head = append(head, tag)
 	}
 	head = append(head, "</head>")
 
@@ -324,6 +330,17 @@ func document(config gowdk.Config, page manifest.Page, body string, stylesheets 
 		body + "\n" +
 		"</body>\n" +
 		"</html>\n"
+}
+
+func nonEmptyScripts(scripts []gowdk.Script) []gowdk.Script {
+	out := make([]gowdk.Script, 0, len(scripts))
+	for _, script := range scripts {
+		if strings.TrimSpace(script.Src) == "" {
+			continue
+		}
+		out = append(out, script)
+	}
+	return out
 }
 
 func socialHeadEnabled(head gowdk.HeadConfig, metadata manifest.PageMetadata) bool {

@@ -52,6 +52,7 @@ type BuildConfig struct {
 	CSRF                CSRFConfig
 	AllowMissingBackend bool
 	Stylesheets         []Stylesheet
+	Scripts             []Script
 	Targets             []BuildTargetConfig
 }
 
@@ -291,6 +292,13 @@ func (config Config) HasFeature(feature Feature) bool {
 // Stylesheet describes one stylesheet link emitted into generated HTML.
 type Stylesheet struct {
 	Href string
+}
+
+// Script describes one script tag emitted into generated HTML.
+// Type is optional; use "module" for ES module bundles.
+type Script struct {
+	Src  string
+	Type string
 }
 
 // CSSSource describes one discovered source file for compile-time CSS plugins.

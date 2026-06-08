@@ -186,6 +186,7 @@ func TestBuildWritesPageMetadataToSPAHTMLHead(t *testing.T) {
 			TwitterCard: "summary",
 		},
 		Stylesheets: []gowdk.Stylesheet{{Href: "/assets/app.css"}},
+		Scripts:     []gowdk.Script{{Src: "/assets/app.js", Type: "module"}},
 	}}
 	if _, err := Build(config, app, outputDir); err != nil {
 		t.Fatal(err)
@@ -212,6 +213,7 @@ func TestBuildWritesPageMetadataToSPAHTMLHead(t *testing.T) {
 		`<meta name="twitter:description" content="Portable .gwdk pages compiled into Go web output.">`,
 		`<meta name="twitter:image" content="https://gowdk.com/assets/social.png">`,
 		`<link rel="stylesheet" href="/assets/app.css">`,
+		`<script type="module" src="/assets/app.js" defer></script>`,
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("expected %q in output:\n%s", want, output)
@@ -220,6 +222,10 @@ func TestBuildWritesPageMetadataToSPAHTMLHead(t *testing.T) {
 	assertHTMLOrder(t, output,
 		`<meta name="twitter:image" content="https://gowdk.com/assets/social.png">`,
 		`<link rel="stylesheet" href="/assets/app.css">`,
+	)
+	assertHTMLOrder(t, output,
+		`<link rel="stylesheet" href="/assets/app.css">`,
+		`<script type="module" src="/assets/app.js" defer></script>`,
 	)
 }
 

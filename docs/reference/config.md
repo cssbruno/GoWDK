@@ -72,6 +72,9 @@ var Config = gowdk.Config{
 		Stylesheets: []gowdk.Stylesheet{
 			{Href: "/assets/app.css"},
 		},
+		Scripts: []gowdk.Script{
+			{Src: "/assets/app.js", Type: "module"},
+		},
 		Targets: []gowdk.BuildTargetConfig{
 			{
 				Name: "admin",
@@ -195,11 +198,13 @@ artifacts from another module selection cannot be copied into the next binary.
 ## Build
 
 `BuildConfig.Output`, `BuildConfig.Mode`, `BuildConfig.Assets`,
-`BuildConfig.Head`, `BuildConfig.CSRF`, `BuildConfig.AllowMissingBackend`, `BuildConfig.Stylesheets`, and
+`BuildConfig.Head`, `BuildConfig.CSRF`, `BuildConfig.AllowMissingBackend`,
+`BuildConfig.Stylesheets`, `BuildConfig.Scripts`, and
 `BuildConfig.Targets` are target build settings. Current `gowdk build` reads
 literal `Build.Output`, `Build.Mode`, `Build.Head`, `Build.CSRF`,
-`Build.AllowMissingBackend`, `Build.Stylesheets`, and `Build.Targets` from
-`gowdk.config.go`; `--out` overrides `Build.Output` for ad hoc builds.
+`Build.AllowMissingBackend`, `Build.Stylesheets`, `Build.Scripts`, and
+`Build.Targets` from `gowdk.config.go`; `--out` overrides `Build.Output` for
+ad hoc builds.
 `BuildConfig.Assets` remains planned.
 
 `Build.Targets` declares repeatable module-to-output packaging:
@@ -213,6 +218,7 @@ type BuildConfig struct {
 	CSRF                gowdk.CSRFConfig
 	AllowMissingBackend bool
 	Stylesheets         []gowdk.Stylesheet
+	Scripts             []gowdk.Script
 	Targets             []gowdk.BuildTargetConfig
 }
 
@@ -230,6 +236,11 @@ type CSRFConfig struct {
 	FieldName  string
 	HeaderName string
 	Insecure   bool
+}
+
+type Script struct {
+	Src  string
+	Type string
 }
 
 type BuildTargetConfig struct {

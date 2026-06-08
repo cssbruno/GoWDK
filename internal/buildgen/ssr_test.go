@@ -68,7 +68,12 @@ func TestSSRArtifactsRenderConcreteSSRPage(t *testing.T) {
 		}},
 	}
 
-	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	artifacts, err := SSRArtifacts(gowdk.Config{
+		Build: gowdk.BuildConfig{
+			Scripts: []gowdk.Script{{Src: "/assets/app.js", Type: "module"}},
+		},
+		Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)},
+	}, app, outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,6 +91,9 @@ func TestSSRArtifactsRenderConcreteSSRPage(t *testing.T) {
 	}
 	if !strings.Contains(artifacts[0].HTML, "<h1>Dashboard</h1>") {
 		t.Fatalf("expected rendered SSR HTML, got %s", artifacts[0].HTML)
+	}
+	if !strings.Contains(artifacts[0].HTML, `<script type="module" src="/assets/app.js" defer></script>`) {
+		t.Fatalf("expected configured script in SSR HTML, got %s", artifacts[0].HTML)
 	}
 }
 

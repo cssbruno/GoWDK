@@ -5,6 +5,8 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -61,6 +63,23 @@ type SiteMapEndpoint struct {
 
 // BuildSiteMap converts a manifest into the editor-facing site map.
 func BuildSiteMap(config gowdk.Config, app manifest.Manifest) SiteMap {
+	pages := siteMapPages(config, app)
+	metadata, err := compiler.BuildRouteMetadata(config, app)
+	if err != nil {
+		return SiteMap{Pages: pages}
+	}
+	return siteMapFromMetadata(pages, metadata)
+}
+
+// BuildSiteMapFromIR converts stable compiler IR into the editor-facing site
+// map while preserving manifest-backed public page fields.
+func BuildSiteMapFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program) SiteMap {
+	pages := siteMapPages(config, app)
+	metadata := compiler.BuildRouteMetadataFromIR(config, ir)
+	return siteMapFromMetadata(pages, metadata)
+}
+
+func siteMapPages(config gowdk.Config, app manifest.Manifest) []SiteMapPage {
 	pages := make([]SiteMapPage, 0, len(app.Pages))
 	for _, page := range app.Pages {
 		pages = append(pages, SiteMapPage{
@@ -81,10 +100,10 @@ func BuildSiteMap(config gowdk.Config, app manifest.Manifest) SiteMap {
 			},
 		})
 	}
-	metadata, err := compiler.BuildRouteMetadata(config, app)
-	if err != nil {
-		return SiteMap{Pages: pages}
-	}
+	return pages
+}
+
+func siteMapFromMetadata(pages []SiteMapPage, metadata compiler.RouteMetadata) SiteMap {
 	return SiteMap{
 		Pages:     pages,
 		Routes:    siteMapRoutes(metadata.Routes),
@@ -98,7 +117,8 @@ func SiteMapJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
 	if diagnostics.HasErrors() {
 		return nil, diagnostics
 	}
-	payload, err := json.MarshalIndent(BuildSiteMap(config, app), "", "  ")
+	ir := gwdkanalysis.BuildIR(config, app)
+	payload, err := json.MarshalIndent(BuildSiteMapFromIR(config, app, ir), "", "  ")
 	if err != nil {
 		return nil, Diagnostics{{Severity: "error", Message: err.Error()}}
 	}

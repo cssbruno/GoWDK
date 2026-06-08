@@ -4,7 +4,6 @@ package discover
 import (
 	"io/fs"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 )
@@ -48,54 +47,88 @@ func Files(root string, includes, excludes []string) ([]string, error) {
 	return files, nil
 }
 
-func compileGlobs(patterns []string) ([]*regexp.Regexp, error) {
-	var matchers []*regexp.Regexp
+type globPattern string
+
+func compileGlobs(patterns []string) ([]globPattern, error) {
+	var matchers []globPattern
 	for _, pattern := range patterns {
 		if strings.TrimSpace(pattern) == "" {
 			continue
 		}
-		matcher, err := regexp.Compile(globToRegex(filepath.ToSlash(pattern)))
-		if err != nil {
-			return nil, err
-		}
-		matchers = append(matchers, matcher)
+		matchers = append(matchers, globPattern(filepath.ToSlash(pattern)))
 	}
 	return matchers, nil
 }
 
-func matchesAny(matchers []*regexp.Regexp, value string) bool {
+func matchesAny(matchers []globPattern, value string) bool {
 	for _, matcher := range matchers {
-		if matcher.MatchString(value) {
+		if matcher.match(value) {
 			return true
 		}
 	}
 	return false
 }
 
-func globToRegex(pattern string) string {
-	parts := []string{"^"}
-	for i := 0; i < len(pattern); i++ {
-		switch pattern[i] {
-		case '*':
-			if i+1 < len(pattern) && pattern[i+1] == '*' {
-				i++
-				if i+1 < len(pattern) && pattern[i+1] == '/' {
-					i++
-					parts = append(parts, "(?:.*/)?")
-				} else {
-					parts = append(parts, ".*")
-				}
-			} else {
-				parts = append(parts, "[^/]*")
-			}
-		case '?':
-			parts = append(parts, "[^/]")
-		case '.', '+', '(', ')', '|', '{', '}', '[', ']', '^', '$', '\\':
-			parts = append(parts, `\`+string(pattern[i]))
-		default:
-			parts = append(parts, string(pattern[i]))
+func (pattern globPattern) match(value string) bool {
+	glob := string(pattern)
+	memo := map[[2]int]bool{}
+	var match func(int, int) bool
+	match = func(patternIndex, valueIndex int) bool {
+		key := [2]int{patternIndex, valueIndex}
+		if result, ok := memo[key]; ok {
+			return result
 		}
+		if patternIndex == len(glob) {
+			memo[key] = valueIndex == len(value)
+			return memo[key]
+		}
+		if glob[patternIndex] == '*' {
+			if patternIndex+1 < len(glob) && glob[patternIndex+1] == '*' {
+				if patternIndex+2 < len(glob) && glob[patternIndex+2] == '/' {
+					if match(patternIndex+3, valueIndex) {
+						memo[key] = true
+						return true
+					}
+					for cursor := valueIndex; cursor < len(value); cursor++ {
+						if value[cursor] == '/' && match(patternIndex+3, cursor+1) {
+							memo[key] = true
+							return true
+						}
+					}
+					memo[key] = false
+					return false
+				}
+				for cursor := valueIndex; cursor <= len(value); cursor++ {
+					if match(patternIndex+2, cursor) {
+						memo[key] = true
+						return true
+					}
+				}
+				memo[key] = false
+				return false
+			}
+			for cursor := valueIndex; cursor <= len(value); cursor++ {
+				if cursor > valueIndex && value[cursor-1] == '/' {
+					break
+				}
+				if match(patternIndex+1, cursor) {
+					memo[key] = true
+					return true
+				}
+			}
+			memo[key] = false
+			return false
+		}
+		if valueIndex >= len(value) {
+			memo[key] = false
+			return false
+		}
+		if glob[patternIndex] == '?' {
+			memo[key] = value[valueIndex] != '/' && match(patternIndex+1, valueIndex+1)
+			return memo[key]
+		}
+		memo[key] = glob[patternIndex] == value[valueIndex] && match(patternIndex+1, valueIndex+1)
+		return memo[key]
 	}
-	parts = append(parts, "$")
-	return strings.Join(parts, "")
+	return match(0, 0)
 }

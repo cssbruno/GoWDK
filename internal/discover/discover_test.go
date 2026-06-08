@@ -31,6 +31,29 @@ func TestFilesMatchesRecursiveGWDKIncludes(t *testing.T) {
 	}
 }
 
+func TestGlobPatternMatch(t *testing.T) {
+	tests := []struct {
+		pattern string
+		value   string
+		want    bool
+	}{
+		{"src/**/*.gwdk", "src/home.page.gwdk", true},
+		{"src/**/*.gwdk", "src/nested/card.cmp.gwdk", true},
+		{"src/*.gwdk", "src/nested/card.cmp.gwdk", false},
+		{"**/*.css", "theme.css", true},
+		{"**/*.css", "assets/theme.css", true},
+		{"src/file?.gwdk", "src/file1.gwdk", true},
+		{"src/file?.gwdk", "src/file10.gwdk", false},
+		{"dist/**", "dist/assets/app.js", true},
+	}
+
+	for _, test := range tests {
+		if got := globPattern(test.pattern).match(test.value); got != test.want {
+			t.Fatalf("globPattern(%q).match(%q) = %v, want %v", test.pattern, test.value, got, test.want)
+		}
+	}
+}
+
 func writeFile(t *testing.T, root, name string) {
 	t.Helper()
 	path := filepath.Join(root, filepath.FromSlash(name))

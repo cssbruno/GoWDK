@@ -119,8 +119,8 @@ Package a local `.vsix`:
 
 ```sh
 cd editors/vscode
-npm install -g @vscode/vsce
-npm run package
+node scripts/sync-version.js
+node scripts/package-vsix.js
 ```
 
 For Marketplace publishing, create a Visual Studio Marketplace publisher token
@@ -129,7 +129,8 @@ outside this repository and run:
 ```sh
 cd editors/vscode
 node scripts/sync-version.js
-vsce publish
+node scripts/package-vsix.js
+vsce publish --packagePath gowdk-vscode-$(node -e 'process.stdout.write(require("./package.json").version)').vsix
 ```
 
 Do not commit Marketplace tokens or generated `.vsix` files.
@@ -140,7 +141,7 @@ Do not commit Marketplace tokens or generated `.vsix` files.
 2. Run `node editors/vscode/scripts/sync-version.js`.
 3. Run `node --check editors/vscode/extension.js` and `node --check editors/vscode/extension-core.js`.
 4. Run `node --test editors/vscode/*.test.js`.
-5. Package the extension with `npm --prefix editors/vscode run package`.
+5. Package the extension with `node editors/vscode/scripts/package-vsix.js`.
 6. Publish after the repository release artifacts are available.
 
 GitHub Actions can publish the extension through
@@ -148,6 +149,8 @@ GitHub Actions can publish the extension through
 secret `VSCE_PAT` with a Visual Studio Marketplace Personal Access Token that
 has Marketplace Manage scope, then run the `Publish VS Code Extension` workflow
 manually. The workflow verifies the extension, packages a `.vsix`, uploads the
-package as a workflow artifact, and publishes with `vsce publish`. The current
-Marketplace version must not already exist; bump the main GOWDK version before
-running the publish workflow again.
+package as a workflow artifact, and publishes the package with `vsce publish`.
+Release packaging does not install npm packages; the publish workflow uses
+`vsce` only for the Marketplace upload step. The current Marketplace version
+must not already exist; bump the main GOWDK version before running the publish
+workflow again.

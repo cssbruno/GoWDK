@@ -34,9 +34,6 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Install vsce
-        run: npm install -g @vscode/vsce
-
       - name: Verify extension
         run: |
           node scripts/sync-version.js --check
@@ -48,10 +45,7 @@ jobs:
         run: |
           rm -f *.vsix
           node scripts/sync-version.js
-          vsce package \
-            --no-dependencies \
-            --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} \
-            --baseImagesUrl https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}
+          node scripts/package-vsix.js
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
@@ -59,6 +53,9 @@ jobs:
           name: gowdk-vscode-vsix
           path: editors/vscode/*.vsix
           if-no-files-found: error
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
 
       - name: Publish to Visual Studio Marketplace
         env:
@@ -73,6 +70,7 @@ jobs:
           publish_args=(
             publish
             --pat "$VSCE_PAT"
+            --packagePath "gowdk-vscode-$(node -e 'process.stdout.write(require("./package.json").version)').vsix"
             --baseContentUrl "https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}"
             --baseImagesUrl "https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}"
           )

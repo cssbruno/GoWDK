@@ -45,5 +45,5 @@ Not implemented yet:
 - `generated-output.md`: planned generated artifacts and current limitations.
 - `browser-compiler.md`: browser-facing partial runtime, JavaScript islands, and
   component-level WASM island behavior.
-- `SPA-build-report.md`: generated build report schema and CLI debug output.
+- `build-report.md`: generated build report schema and CLI debug output.
 - `manifest.md`: manifest and site-map JSON contracts.

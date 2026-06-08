@@ -274,7 +274,7 @@ without making any minor version a production-readiness target.
 - `docs/engineering/architecture.md`: architecture and implemented boundaries.
 - `docs/engineering/release-plan.md`: open-ended 0.x hardening checklist.
 - `.llm/plans/gowdk-world-roadmap.md`: active implementation planning index.
-- `.llm/plans/deep-go-package-integration.md`: package-first language work.
+- `.llm/features/deep-go-package-integration.md`: package-first language work.
 - `.llm/plans/go-native-adapter-boundary.md`: generated adapter boundary work.
 - `.llm/plans/contract-driven-runtime.md`: query, command, event, job, and
   runtime-role planning.

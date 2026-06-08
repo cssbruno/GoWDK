@@ -37,8 +37,7 @@ idea. Avoid bare `core` in plans; prefer `compiler core`, `runtime core`, or
 `repository core`.
 
 For package-first backend work, use `features/deep-go-package-integration.md`
-and `plans/deep-go-package-integration.md` as the language source of truth.
-Use `features/go-native-adapter-boundary.md` and
-`plans/go-native-adapter-boundary.md` for generated adapter and runtime
+as the language source of truth. Use `features/go-native-adapter-boundary.md`
+and `plans/go-native-adapter-boundary.md` for generated adapter and runtime
 implementation planning. Older first-slice feature and plan files were removed
 after their useful direction was folded into the roadmap.

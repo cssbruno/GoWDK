@@ -9,7 +9,7 @@ ADR: `docs/engineering/decisions/0005-generated-go-emission-boundary.md`
 Compiler/runtime boundary:
 `docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary.md`
 
-Language source of truth: `.llm/plans/deep-go-package-integration.md`
+Language source of truth: `.llm/features/deep-go-package-integration.md`
 
 GOWDK should stay compile-first, but Go developers should not have to trust a
 large generated codebase that appears to own their backend. The right boundary

@@ -39,9 +39,8 @@ as stable.
 
 ## Required Verification
 
-Link the release checklist:
-
-- `docs/engineering/v0.x-release-checklist.md`
+Link the current release checklist, for example
+`docs/engineering/v0.2-release-checklist.md` for v0.2.
 
 Required local gates:
 

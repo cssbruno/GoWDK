@@ -6,8 +6,7 @@ Spec: `.llm/features/contract-driven-runtime.md`
 
 Related plans:
 
-- `.llm/plans/compiler-contract-completion.md`
-- `.llm/plans/deep-go-package-integration.md`
+- `.llm/features/deep-go-package-integration.md`
 - `.llm/plans/go-native-adapter-boundary.md`
 - `.llm/plans/gowdk-world-roadmap.md`
 

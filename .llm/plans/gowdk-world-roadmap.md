@@ -9,7 +9,6 @@ Architecture decision:
 Primary active planning sources:
 
 - `.llm/features/deep-go-package-integration.md`
-- `.llm/plans/deep-go-package-integration.md`
 - `.llm/features/go-native-adapter-boundary.md`
 - `.llm/plans/go-native-adapter-boundary.md`
 - `.llm/features/contract-driven-runtime.md`
@@ -129,29 +128,29 @@ Does not own:
 
 | Plan | Status | Required Alignment |
 | --- | --- | --- |
-| `deep-go-package-integration.md` | Active source of truth | Owns package-first `.gwdk`, exact symbols, typed action inputs, and migration diagnostics. |
-| `go-native-adapter-boundary.md` | Active supporting plan | Owns generated adapter shape and runtime glue; must not define competing syntax. |
-| `contract-driven-runtime.md` | Planned after endpoint/adapter IR stability | Owns typed query/command/domain-event/integration-event/presentation-event/job registry, local runtime dispatch, optional worker/cron roles, and contract graph tooling; frontend UI events trigger commands or queries and must not become backend facts. |
-| `golangish-reactive-islands.md` | Active compiler-side UI plan | Client language is a GOWDK subset, not forked Go or arbitrary JavaScript. |
+| `.llm/features/deep-go-package-integration.md` | Active source of truth | Owns package-first `.gwdk`, exact symbols, typed action inputs, and migration diagnostics. |
+| `.llm/plans/go-native-adapter-boundary.md` | Active supporting plan | Owns generated adapter shape and runtime glue; must not define competing syntax. |
+| `.llm/plans/contract-driven-runtime.md` | Planned after endpoint/adapter IR stability | Owns typed query/command/domain-event/integration-event/presentation-event/job registry, local runtime dispatch, optional worker/cron roles, and contract graph tooling; frontend UI events trigger commands or queries and must not become backend facts. |
+| `.llm/features/golangish-reactive-islands.md` | Active compiler-side UI plan | Client language is a GOWDK subset, not forked Go or arbitrary JavaScript. |
 
 ## Absorbed Or Removed Planning Files
 
 The previous fine-grained first-slice files were removed to avoid competing
 sources of truth. Their useful direction is now folded into this roadmap:
 
-- `feature-bound-backend-integration.md`: superseded by package-integrated
+- Feature-bound backend integration: superseded by package-integrated
   exact exported declarations.
-- `interactive-runtime.md`: folded into runtime fragment and island phases.
-- `auto-route-detection.md`: folded into normalized route metadata and adapter
+- Interactive runtime: folded into runtime fragment and island phases.
+- Auto route detection: folded into normalized route metadata and adapter
   generation phases.
-- `gwdk-go-build-import.md`: folded into package-aware build data follow-up.
-- `fast-dev-redeploy.md`: implemented static/dev slice; future app dev belongs
+- GOWDK Go build imports: folded into package-aware build data follow-up.
+- Fast dev redeploy: implemented static/dev slice; future app dev belongs
   to runtime phases.
-- `module-binary-packaging.md`: implemented packaging slice; keep module
+- Module binary packaging: implemented packaging slice; keep module
   selection as artifact packaging, not runtime module orchestration.
-- `wasm-deploy-artifact.md`: implemented deploy artifact slice; explicit
+- WASM deploy artifact: implemented deploy artifact slice; explicit
   browser WASM islands remain separate.
-- `vscode-extension-publish-workflow.md`: removed from product roadmap planning.
+- VS Code extension publish workflow: removed from product roadmap planning.
 
 ## Migration Rules For Existing Plans
 

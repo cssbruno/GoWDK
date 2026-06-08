@@ -10,7 +10,6 @@ Reference docs describe current command and data contracts.
 - `errors.md`: current error pages, panic boundaries, and cache policy.
 - `deployment.md`: current output and deploy shapes.
 - `testing.md`: scaffolded smoke tests, browser smoke, accessibility, and performance checks.
-- `concepts.md`: GOWDK concepts for users coming from other web frameworks.
 - `contracts.md`: current runtime contract registry and planned compiler integration.
 - `css.md`: current CSS extension point.
 - `manifest.md`: current manifest JSON.

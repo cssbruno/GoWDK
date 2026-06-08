@@ -1,5 +1,7 @@
 package actions
 
+use ui "components"
+
 @page newsletter
 @route "/newsletter"
 @layout root
@@ -8,7 +10,7 @@ act Subscribe POST "/newsletter"
 
 view {
   <form g:post={Subscribe}>
-    <Input name="email" label="Email" />
-    <Button>Subscribe</Button>
+    <ui.TextField name="email" label="Email" type="email" />
+    <ui.Button>Subscribe</ui.Button>
   </form>
 }

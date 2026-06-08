@@ -1294,6 +1294,38 @@ view {
 	}
 }
 
+func TestBuildCommandBuildsActionExampleWithImportedComponents(t *testing.T) {
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputDir := t.TempDir()
+	config := filepath.Join(repoRoot, "gowdk.config.go")
+	files := []string{
+		filepath.Join(repoRoot, "examples", "actions", "newsletter.page.gwdk"),
+		filepath.Join(repoRoot, "examples", "components", "base", "button.cmp.gwdk"),
+		filepath.Join(repoRoot, "examples", "components", "base", "text-field.cmp.gwdk"),
+	}
+	args := append([]string{"build", "--config", config, "--ssr", "--out", outputDir}, files...)
+	if err := run(args); err != nil {
+		t.Fatal(err)
+	}
+
+	payload, err := os.ReadFile(filepath.Join(outputDir, "newsletter", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, expected := range []string{
+		`<label class="gowdk-field"><span>Email</span><input name="email" type="email"></input></label>`,
+		`<button class="gowdk-button" type="submit">Subscribe</button>`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in newsletter output:\n%s", expected, output)
+		}
+	}
+}
+
 func TestBuildCommandUsesTailwindAddonFromConfig(t *testing.T) {
 	root := t.TempDir()
 	fakeTailwind := filepath.Join(root, "tailwindcss")

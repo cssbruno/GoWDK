@@ -28,7 +28,7 @@ tooling contracts may change before a stable release.
 - Published artifact smoke workflow for Linux, macOS Intel, macOS ARM, and
   Windows CLI artifacts.
 - Release policy guard script for no production-ready claim, no hidden mandatory
-  npm install in CI/release packaging, and draft/pre-release release metadata.
+  npm install in CI/release packaging, and visible pre-release metadata.
 - `gowdk version --json` for release workflow verification.
 - `v0.1.5` GitHub release metadata corrected to pre-release with an
   experimental/not-production-ready warning at the top of the release body.

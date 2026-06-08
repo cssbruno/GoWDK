@@ -89,7 +89,7 @@ code --install-extension gowdk-vscode-<version>.vsix
 
 ## Release Metadata Checks
 
-- [ ] Release is draft until manual review is complete.
+- [ ] Release is visible and has all expected download assets.
 - [ ] Release is marked pre-release.
 - [ ] Release body starts with experimental and not-production-ready warnings.
 - [ ] Release body includes known gaps.

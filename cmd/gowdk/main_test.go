@@ -2592,7 +2592,7 @@ view {
 	})
 }
 
-func TestRoutesCommandPrintsBareHybridAsHybridRoute(t *testing.T) {
+func TestRoutesCommandPrintsBareHybridAsSSRRoute(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "dashboard.page.gwdk")
 	config := writeMinimalCLIConfig(t, root)
@@ -2615,8 +2615,8 @@ view {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(stderr, "ssr_disabled: dashboard") {
-		t.Fatalf("did not expect disabled request-time route info for hybrid without load, got:\n%s", stderr)
+	if !strings.Contains(stderr, "spa_disabled: dashboard uses request-time page behavior") {
+		t.Fatalf("expected spa disabled info for hybrid route, got:\n%s", stderr)
 	}
 
 	var report routeMetadataReport

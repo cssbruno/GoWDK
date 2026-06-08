@@ -31,6 +31,13 @@ router.Mount("/", gowdkHandler)
 
 ## Echo
 
+The Echo adapter is a nested optional module. Add it only when the application
+uses Echo:
+
+```sh
+go get github.com/cssbruno/gowdk/runtime/adapters/echo
+```
+
 ```go
 import gowdkecho "github.com/cssbruno/gowdk/runtime/adapters/echo"
 import "github.com/labstack/echo/v5"
@@ -44,7 +51,21 @@ app := echo.New()
 gowdkecho.Mount(app, "/*", gowdkHandler)
 ```
 
+Code reached by the generated handler can read the active Echo context when the
+app is mounted through this adapter:
+
+```go
+echoContext, ok := gowdkecho.Context(ctx)
+```
+
 ## Gin
+
+The Gin adapter is a nested optional module. Add it only when the application
+uses Gin:
+
+```sh
+go get github.com/cssbruno/gowdk/runtime/adapters/gin
+```
 
 ```go
 import gowdkgin "github.com/cssbruno/gowdk/runtime/adapters/gin"
@@ -59,7 +80,21 @@ engine := gin.Default()
 gowdkgin.Mount(engine, "/*path", gowdkHandler)
 ```
 
+Code reached by the generated handler can read the active Gin context when the
+app is mounted through this adapter:
+
+```go
+ginContext, ok := gowdkgin.Context(ctx)
+```
+
 ## Fiber
+
+The Fiber adapter is a nested optional module. Add it only when the application
+uses Fiber:
+
+```sh
+go get github.com/cssbruno/gowdk/runtime/adapters/fiber
+```
 
 ```go
 import gowdkfiber "github.com/cssbruno/gowdk/runtime/adapters/fiber"
@@ -72,6 +107,13 @@ if err != nil {
 
 app := fiber.New()
 gowdkfiber.Mount(app, "/*", gowdkHandler)
+```
+
+Code reached by the generated handler can read the active Fiber context when the
+app is mounted through this adapter:
+
+```go
+fiberContext, ok := gowdkfiber.Context(ctx)
 ```
 
 Fiber is not built on `net/http`, so `runtime/adapters/fiber` uses Fiber's
@@ -90,3 +132,7 @@ Fiber through an adaptor, or plain `net/http` without changing GOWDK Runtime or 
 generated app contract.
 Generated apps do not emit framework-specific code by default; optional adapter
 packages wrap the same generated `http.Handler`.
+Framework context accessors are integration escape hatches for applications
+that intentionally opt into a framework adapter. GOWDK route declarations,
+handler binding, CSRF, fragments, APIs, and SSR behavior still use the generated
+`net/http` request flow as the source of truth.

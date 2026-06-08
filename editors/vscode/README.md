@@ -119,7 +119,6 @@ Package a local `.vsix`:
 
 ```sh
 cd editors/vscode
-npm install -g @vscode/vsce
 npm run package
 ```
 

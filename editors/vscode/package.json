@@ -26,7 +26,7 @@
     "sync-version": "node scripts/sync-version.js",
     "check": "node scripts/sync-version.js --check && node --check extension.js && node --check extension-core.js",
     "test": "node --test *.test.js",
-    "package": "node scripts/sync-version.js && vsce package --no-dependencies"
+    "package": "node scripts/sync-version.js && node scripts/package-vsix.js"
   },
   "engines": {
     "vscode": "^1.85.0"

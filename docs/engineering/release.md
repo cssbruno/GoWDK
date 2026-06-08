@@ -93,11 +93,12 @@ gh workflow run release.yml -f version=v0.1.5
 
 ## Install Script
 
-`scripts/install.sh` installs the latest visible GitHub release by default,
-including 0.x pre-releases. It selects the current operating system and
-architecture, downloads the matching CLI binary from GitHub Releases, downloads
-`checksums.txt`, verifies the binary SHA-256, and writes `gowdk` into
-`GOWDK_INSTALL_DIR` or `/usr/local/bin`.
+`scripts/install.sh` installs the latest visible published GitHub release by
+default, including 0.x pre-releases. It selects the current operating system
+and architecture, downloads `checksums.txt`, verifies that the matching CLI
+artifact exists for the current platform before binary download, verifies the
+binary SHA-256, and writes `gowdk` into `GOWDK_INSTALL_DIR` or
+`/usr/local/bin`.
 
 Pinned install:
 

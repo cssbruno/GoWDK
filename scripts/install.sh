@@ -1,7 +1,6 @@
 #!/usr/bin/env sh
 set -eu
 
-repo="${GOWDK_REPO:-cssbruno/GoWDK}"
 version="${GOWDK_VERSION:-latest}"
 install_dir="${GOWDK_INSTALL_DIR:-/usr/local/bin}"
 
@@ -21,7 +20,7 @@ arm64|aarch64) arch="arm64" ;;
 esac
 
 asset="gowdk-$os-$arch"
-base_url="https://github.com/$repo/releases"
+base_url="https://github.com/cssbruno/GoWDK/releases"
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
@@ -30,7 +29,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if [ "$version" = "latest" ]; then
-	api_url="https://api.github.com/repos/$repo/releases"
+	api_url="https://api.github.com/repos/cssbruno/GoWDK/releases"
 	if command -v curl >/dev/null 2>&1; then
 		curl -fsSL "$api_url" -o "$tmp_dir/releases.json"
 	elif command -v wget >/dev/null 2>&1; then
@@ -50,29 +49,35 @@ download_url="$base_url/download/$version/$asset"
 checksum_url="$base_url/download/$version/checksums.txt"
 
 if command -v curl >/dev/null 2>&1; then
-	curl -fsSL "$download_url" -o "$tmp_dir/gowdk"
 	curl -fsSL "$checksum_url" -o "$tmp_dir/checksums.txt"
 elif command -v wget >/dev/null 2>&1; then
-	wget -qO "$tmp_dir/gowdk" "$download_url"
 	wget -qO "$tmp_dir/checksums.txt" "$checksum_url"
 else
 	echo "curl or wget is required to download GOWDK" >&2
 	exit 1
 fi
 
-if command -v sha256sum >/dev/null 2>&1; then
-	expected="$(awk -v asset="$asset" '$2 == asset { print $1 }' "$tmp_dir/checksums.txt")"
-	actual="$(sha256sum "$tmp_dir/gowdk" | awk '{ print $1 }')"
-elif command -v shasum >/dev/null 2>&1; then
-	expected="$(awk -v asset="$asset" '$2 == asset { print $1 }' "$tmp_dir/checksums.txt")"
-	actual="$(shasum -a 256 "$tmp_dir/gowdk" | awk '{ print $1 }')"
-else
-	echo "sha256sum or shasum is required to verify GOWDK" >&2
+expected="$(awk -v asset="$asset" '$2 == asset { print $1 }' "$tmp_dir/checksums.txt")"
+if [ -z "$expected" ]; then
+	echo "release $version does not publish $asset" >&2
+	echo "supported install script artifacts are listed in $checksum_url" >&2
 	exit 1
 fi
 
-if [ -z "$expected" ]; then
-	echo "checksum for $asset was not found in checksums.txt" >&2
+echo "Installing GOWDK $version for $os/$arch"
+
+if command -v curl >/dev/null 2>&1; then
+	curl -fsSL "$download_url" -o "$tmp_dir/gowdk"
+else
+	wget -qO "$tmp_dir/gowdk" "$download_url"
+fi
+
+if command -v sha256sum >/dev/null 2>&1; then
+	actual="$(sha256sum "$tmp_dir/gowdk" | awk '{ print $1 }')"
+elif command -v shasum >/dev/null 2>&1; then
+	actual="$(shasum -a 256 "$tmp_dir/gowdk" | awk '{ print $1 }')"
+else
+	echo "sha256sum or shasum is required to verify GOWDK" >&2
 	exit 1
 fi
 
@@ -98,4 +103,13 @@ else
 fi
 
 echo "Installed gowdk to $install_dir/gowdk"
+case ":$PATH:" in
+*":$install_dir:"*) ;;
+*)
+	echo "Add $install_dir to PATH if 'gowdk' is not found by your shell."
+	echo "For zsh:  printf '%s\n' 'export PATH=\"$install_dir:\$PATH\"' >> \"\$HOME/.zshrc\""
+	echo "For bash: printf '%s\n' 'export PATH=\"$install_dir:\$PATH\"' >> \"\$HOME/.bashrc\""
+	echo "Then restart your shell or run: export PATH=\"$install_dir:\$PATH\""
+	;;
+esac
 "$install_dir/gowdk" version

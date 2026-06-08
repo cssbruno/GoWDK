@@ -18,15 +18,70 @@ curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install
 gowdk version
 ```
 
-Pin a specific release or install into a user-writable directory:
+Pin the current CLI release or install into a user-writable directory:
 
 ```sh
 GOWDK_VERSION=v0.1.5 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
 ```
 
-The installer downloads the matching binary from GitHub Releases and verifies
-it against the published `checksums.txt`.
+The installer resolves `latest` from published GitHub releases, downloads the
+matching binary for the current OS/architecture, verifies it against the
+published `checksums.txt`, and fails before binary download if that release
+does not publish the matching artifact.
+
+## Add `gowdk` To Your Shell
+
+If you install into `$HOME/.local/bin`, make sure that directory is on `PATH`.
+
+For zsh:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.zshrc"
+exec zsh
+gowdk version
+```
+
+For bash:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.bashrc"
+exec bash
+gowdk version
+```
+
+For POSIX login shells:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.profile"
+. "$HOME/.profile"
+gowdk version
+```
+
+For fish:
+
+```fish
+mkdir -p "$HOME/.local/bin"
+fish_add_path "$HOME/.local/bin"
+gowdk version
+```
+
+For PowerShell:
+
+```powershell
+$installDir = "$HOME\.local\bin"
+New-Item -ItemType Directory -Force -Path $installDir
+[Environment]::SetEnvironmentVariable(
+  "Path",
+  "$installDir;$([Environment]::GetEnvironmentVariable('Path', 'User'))",
+  "User"
+)
+$env:Path = "$installDir;$env:Path"
+gowdk version
+```
 
 Direct artifact names:
 

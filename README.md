@@ -33,6 +33,13 @@ Install:
 curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh | sh
 ```
 
+Pin the current CLI release:
+
+```sh
+GOWDK_VERSION=v0.1.5 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
+```
+
 Build from source:
 
 ```sh

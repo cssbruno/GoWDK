@@ -18,7 +18,7 @@ even when explicit `.gwdk` files are passed.
 | `pages/blog-post.page.gwdk` | Buildable dynamic route example with literal `paths {}` source. | `go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build examples/pages/blog-post.page.gwdk` |
 | `pages/layout-stack.page.gwdk` | Page that demonstrates ordered layout metadata. | `go run ./cmd/gowdk check examples/pages/layout-stack.page.gwdk` |
 | `actions/signup.page.gwdk` | Buildable action page with the first POST redirect action subset. | `go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/actions/signup.page.gwdk` |
-| `actions/newsletter.page.gwdk` | Action-form syntax example with `g:post` and component markup. | `go run ./cmd/gowdk check examples/actions/newsletter.page.gwdk` |
+| `actions/newsletter.page.gwdk` | Action-form syntax example with `g:post` and imported component markup. | `go run ./cmd/gowdk check examples/actions/newsletter.page.gwdk examples/components/base/button.cmp.gwdk examples/components/base/text-field.cmp.gwdk` |
 | `login/` | Integrated auth-feature GWDK login with generated frontend binary plus feature-owned Go backend binary. | `cd examples/login && make serve` |
 | `partials/patients-fragment.page.gwdk` | Partial/server fragment metadata example with `fragment`, `g:target`, and `g:swap`. | `go run ./cmd/gowdk manifest examples/partials/patients-fragment.page.gwdk` |
 | `api/status.page.gwdk` | API route metadata example with a named `GET` endpoint. | `go run ./cmd/gowdk routes examples/api/status.page.gwdk` |

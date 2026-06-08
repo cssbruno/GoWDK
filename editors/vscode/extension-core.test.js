@@ -160,40 +160,40 @@ test('toolInvocation uses a workspace-local binary before bare gowdk', () => {
   });
 });
 
-test('toolInvocation keeps app module cwd before nearby source checkout', () => {
+test('toolInvocation uses PATH binary for app modules without local binary', () => {
   assert.deepEqual(core.toolInvocation(['check', '--json'], {
     cwd: '/workspace/app',
     sourceWorkspaceRoot: '/workspace/GOWDK',
     requiresGOWDK: true
   }), {
-    command: 'go',
-    args: ['run', 'github.com/cssbruno/gowdk/cmd/gowdk', 'check', '--json'],
+    command: 'gowdk',
+    args: ['check', '--json'],
     cwd: '/workspace/app',
-    source: 'module'
+    source: 'path'
   });
 });
 
-test('toolInvocation uses a source checkout for non-app workspaces', () => {
+test('toolInvocation ignores source checkout for non-source workspaces', () => {
   assert.deepEqual(core.toolInvocation(['check', '--json'], {
     cwd: '/workspace/docs',
     sourceWorkspaceRoot: '/workspace/GOWDK'
   }), {
-    command: 'go',
-    args: ['run', './cmd/gowdk', 'check', '--json'],
-    cwd: '/workspace/GOWDK',
-    source: 'sourcePath'
+    command: 'gowdk',
+    args: ['check', '--json'],
+    cwd: '/workspace/docs',
+    source: 'path'
   });
 });
 
-test('toolInvocation uses module go run for GOWDK app modules', () => {
+test('toolInvocation uses PATH binary for GOWDK app modules', () => {
   assert.deepEqual(core.toolInvocation(['sitemap'], {
     cwd: '/workspace/app',
     requiresGOWDK: true
   }), {
-    command: 'go',
-    args: ['run', 'github.com/cssbruno/gowdk/cmd/gowdk', 'sitemap'],
+    command: 'gowdk',
+    args: ['sitemap'],
     cwd: '/workspace/app',
-    source: 'module'
+    source: 'path'
   });
 });
 
@@ -204,15 +204,15 @@ test('missingExecutableMessage explains missing GOWDK CLI resolution', () => {
 
   assert.equal(
     core.missingExecutableMessage({ command: 'gowdk', source: 'path' }, { code: 'ENOENT' }),
-    'GOWDK CLI was not found on PATH. Install gowdk or set gowdk.cliPath to a built GOWDK binary.'
+    'Missing GOWDK binary. Install gowdk, add it to PATH, or set gowdk.cliPath.'
   );
   assert.equal(
     core.missingExecutableMessage({ command: '/missing/gowdk', source: 'cliPath' }, { code: 'ENOENT' }),
-    'Configured GOWDK CLI was not found: /missing/gowdk. Update gowdk.cliPath to a valid binary.'
+    'Missing configured GOWDK binary: /missing/gowdk. Update gowdk.cliPath.'
   );
   assert.equal(
     core.missingExecutableMessage({ command: 'go', source: 'module' }, { code: 'ENOENT' }),
-    'GOWDK could not start Go. Install Go, fix PATH, or set gowdk.cliPath to a built GOWDK binary.'
+    'Missing Go binary. Install Go, fix PATH, or set gowdk.cliPath to a built GOWDK binary.'
   );
 });
 
@@ -348,6 +348,7 @@ test('nearestProjectRoot finds nested GOWDK app roots inside broad workspaces', 
     const app = path.join(tmp, 'gowdk-page');
     const pageDir = path.join(app, 'src', 'pages');
     fs.mkdirSync(pageDir, { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'gowdk.config.go'), 'package main\n', 'utf8');
     fs.writeFileSync(path.join(app, 'go.mod'), `module example.com/page
 
 require github.com/cssbruno/gowdk v0.0.0
@@ -355,6 +356,21 @@ require github.com/cssbruno/gowdk v0.0.0
 
     assert.equal(core.nearestProjectRoot(pageDir, tmp), app);
     assert.equal(core.nearestProjectRoot(path.join(tmp, 'other'), tmp), tmp);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('nearestProjectRoot finds app root above a subfolder workspace', () => {
+  const tmp = fs.mkdtempSync(path.join(process.cwd(), '.tmp-gowdk-vscode-'));
+  try {
+    const app = path.join(tmp, 'gowdk-page');
+    const workspace = path.join(app, 'src', 'pages');
+    const pageDir = path.join(workspace, 'docs');
+    fs.mkdirSync(pageDir, { recursive: true });
+    fs.writeFileSync(path.join(app, 'gowdk.config.go'), 'package main\n', 'utf8');
+
+    assert.equal(core.nearestProjectRoot(pageDir, workspace), app);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

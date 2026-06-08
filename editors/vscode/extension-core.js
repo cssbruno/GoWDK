@@ -108,12 +108,6 @@ function toolInvocation(args, options = {}) {
   if (options.localBinary) {
     return { command: options.localBinary, args, cwd, source: 'localBinary' };
   }
-  if (options.requiresGOWDK) {
-    return { command: 'go', args: gowdkModuleRunArgs(args), cwd, source: 'module' };
-  }
-  if (options.sourceWorkspaceRoot) {
-    return { ...gowdkSourceRunInvocation(args, options.sourceWorkspaceRoot), source: 'sourcePath' };
-  }
   return { command: 'gowdk', args, cwd, source: 'path' };
 }
 
@@ -127,15 +121,15 @@ function missingExecutableMessage(invocation = {}, error = {}) {
   }
   const command = String(invocation.command || 'gowdk');
   if (command === 'gowdk') {
-    return 'GOWDK CLI was not found on PATH. Install gowdk or set gowdk.cliPath to a built GOWDK binary.';
+    return 'Missing GOWDK binary. Install gowdk, add it to PATH, or set gowdk.cliPath.';
   }
   if (invocation.source === 'cliPath') {
-    return `Configured GOWDK CLI was not found: ${command}. Update gowdk.cliPath to a valid binary.`;
+    return `Missing configured GOWDK binary: ${command}. Update gowdk.cliPath.`;
   }
   if (command === 'go') {
-    return 'GOWDK could not start Go. Install Go, fix PATH, or set gowdk.cliPath to a built GOWDK binary.';
+    return 'Missing Go binary. Install Go, fix PATH, or set gowdk.cliPath to a built GOWDK binary.';
   }
-  return `GOWDK could not start ${command}. Update gowdk.cliPath or fix PATH.`;
+  return `Missing GOWDK binary: ${command}. Update gowdk.cliPath or fix PATH.`;
 }
 
 function isGOWDKSourceDir(dir) {
@@ -188,12 +182,11 @@ function nearestProjectRoot(startPath, workspaceRoot) {
     return workspaceRoot;
   }
   let current = path.resolve(startPath);
-  const boundary = workspaceRoot ? path.resolve(workspaceRoot) : path.parse(current).root;
   while (true) {
     if (isProjectRoot(current)) {
       return current;
     }
-    if (current === boundary || current === path.dirname(current)) {
+    if (current === path.dirname(current)) {
       break;
     }
     current = path.dirname(current);

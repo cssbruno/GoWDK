@@ -18,6 +18,7 @@ type File struct {
 	Layouts     []LayoutRef
 	Guards      []GuardRef
 	CSS         []AssetRef
+	JS          []AssetRef
 	Assets      []AssetRef
 	Component   *ComponentDecl
 	Layout      *LayoutDecl

@@ -21,6 +21,7 @@ type Component struct {
 	Name          string
 	Package       string
 	Uses          map[string]string
+	JS            []string
 	ScopeIDs      []string
 	DefaultIsland string
 	Props         []string

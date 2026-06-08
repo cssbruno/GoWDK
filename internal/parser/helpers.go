@@ -44,6 +44,11 @@ func isMalformedUse(line string) bool {
 	return len(fields) > 0 && fields[0] == "use"
 }
 
+func isMalformedJS(line string) bool {
+	fields := strings.Fields(line)
+	return len(fields) > 0 && fields[0] == "js"
+}
+
 func isBlockName(value string) bool {
 	if value == "" {
 		return false

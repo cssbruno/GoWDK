@@ -69,6 +69,7 @@ func buildPageFromIR(page gwdkir.Page) manifest.Page {
 		Layouts:     append([]string(nil), page.Layouts...),
 		Guard:       append([]string(nil), page.Guards...),
 		CSS:         append([]string(nil), page.CSS...),
+		JS:          append([]string(nil), page.JS...),
 		Imports:     buildImportsFromIR(page.Imports),
 		Uses:        buildUsesFromIR(page.Uses),
 		Stores:      buildStoresFromIR(page.Stores),
@@ -90,6 +91,7 @@ func buildPageFromIR(page gwdkir.Page) manifest.Page {
 			Layouts:     append([]manifest.NamedSpan(nil), page.Spans.Layouts...),
 			Guard:       append([]manifest.NamedSpan(nil), page.Spans.Guard...),
 			CSS:         append([]manifest.NamedSpan(nil), page.Spans.CSS...),
+			JS:          append([]manifest.NamedSpan(nil), page.Spans.JS...),
 			RouteParams: append([]manifest.NamedSpan(nil), page.Spans.RouteParams...),
 		},
 	}
@@ -124,6 +126,7 @@ func buildComponentFromIR(component gwdkir.Component) manifest.Component {
 		Imports:     buildImportsFromIR(component.Imports),
 		Uses:        buildUsesFromIR(component.Uses),
 		CSS:         append([]string(nil), component.CSS...),
+		JS:          append([]string(nil), component.JS...),
 		Assets:      append([]string(nil), component.Assets...),
 		Props:       buildPropsFromIR(component.Props),
 		PropsType:   buildGoTypeRefFromIR(component.PropsType),
@@ -136,6 +139,7 @@ func buildComponentFromIR(component gwdkir.Component) manifest.Component {
 		PackageSpan: component.PackageSpan,
 		Spans: manifest.ComponentSpans{
 			CSS:    append([]manifest.NamedSpan(nil), component.Spans.CSS...),
+			JS:     append([]manifest.NamedSpan(nil), component.Spans.JS...),
 			Assets: append([]manifest.NamedSpan(nil), component.Spans.Assets...),
 		},
 	}

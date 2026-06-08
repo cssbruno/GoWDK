@@ -97,6 +97,50 @@ func TestSSRArtifactsRenderConcreteSSRPage(t *testing.T) {
 	}
 }
 
+func TestSSRArtifactsIncludeScopedJSScripts(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Source:  "pages/dashboard.page.gwdk",
+			Package: "pages",
+			ID:      "dashboard",
+			Route:   "/dashboard",
+			Render:  gowdk.SSR,
+			JS:      []string{"./dashboard.js"},
+			Uses:    []manifest.Use{{Alias: "charts", Package: "components"}},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><charts.SignupsChart /></main>`,
+			},
+		}},
+		Components: []manifest.Component{{
+			Source:  "components/signups-chart.cmp.gwdk",
+			Package: "components",
+			Name:    "SignupsChart",
+			JS:      []string{"./chart.js"},
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<section></section>`,
+			},
+		}},
+	}
+
+	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one SSR artifact, got %#v", artifacts)
+	}
+	html := artifacts[0].HTML
+	if !strings.Contains(html, `<script type="module" src="/assets/gowdk/pages/dashboard/dashboard.js" defer></script>`) {
+		t.Fatalf("expected page scoped JS in SSR HTML, got %s", html)
+	}
+	if !strings.Contains(html, `<script type="module" src="/assets/gowdk/components/components/SignupsChart/chart.js" defer></script>`) {
+		t.Fatalf("expected component scoped JS in SSR HTML, got %s", html)
+	}
+}
+
 func TestSSRArtifactsRenderHybridPageWithoutLoad(t *testing.T) {
 	outputDir := t.TempDir()
 	app := manifest.Manifest{

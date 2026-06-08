@@ -72,6 +72,9 @@ Implemented today:
   declarations are emitted as content-hashed files under
   `assets/gowdk/components/<package>/<component>/`, manifest-mapped, and served
   with immutable cache headers.
+- Component `js "./file.js"` declarations copy relative `.js` or `.mjs` module
+  files into generated output and link them only from pages that call that
+  component. GOWDK does not yet bundle or follow JavaScript imports.
 - Component files are compiler inputs, not Go imports. A page can call a
   same-package component by name, such as `<Hero />`, when that component file
   is part of the same build/module input set. Cross-package page calls must use

@@ -369,6 +369,7 @@ func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdki
 	components, componentFailures := buildComponents(app.Components)
 	layouts, layoutFailures := buildLayouts(app.Layouts)
 	css, cssFailures := planCSS(config, app, outputDir)
+	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
 
@@ -376,6 +377,7 @@ func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdki
 	failures = append(failures, componentFailures...)
 	failures = append(failures, layoutFailures...)
 	failures = append(failures, cssFailures...)
+	failures = append(failures, scopedJSFailures...)
 	if len(failures) > 0 {
 		return Result{}, reporter.fail("plan", errors.New(strings.Join(failures, "\n")))
 	}
@@ -383,6 +385,7 @@ func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdki
 	if err != nil {
 		return Result{}, reporter.fail("plan", err)
 	}
+	runtime = append(scopedJS, runtime...)
 	reporter.info("plan", "artifacts_planned", "incremental artifacts planned", BuildEvent{
 		Data: map[string]string{
 			"css":    fmt.Sprint(len(css.assets)),
@@ -513,6 +516,7 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	layouts, layoutFailures := buildLayouts(app.Layouts)
 	css, cssFailures := planCSS(config, app, outputDir)
 	componentAssets, componentAssetFailures := planComponentFileAssets(ir.Assets, outputDir)
+	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
 	var planned []plannedArtifact
@@ -522,6 +526,7 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	failures = append(failures, layoutFailures...)
 	failures = append(failures, cssFailures...)
 	failures = append(failures, componentAssetFailures...)
+	failures = append(failures, scopedJSFailures...)
 	for _, page := range app.Pages {
 		if isRequestTimePage(config, page) {
 			continue
@@ -554,6 +559,7 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	if err != nil {
 		return buildPlan{}, err
 	}
-	assets := append(componentAssets, runtime...)
+	assets := append(componentAssets, scopedJS...)
+	assets = append(assets, runtime...)
 	return buildPlan{pages: planned, css: css.assets, assets: assets}, nil
 }

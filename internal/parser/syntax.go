@@ -167,6 +167,17 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 		if isMalformedUse(line) {
 			return SyntaxFile{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
 		}
+		if match := jsPattern.FindStringSubmatch(line); match != nil {
+			file.JS = append(file.JS, gwdkast.AssetRef{
+				Kind: "js",
+				Path: match[1],
+				Span: sourceLineSpan(lineNumber, rawLine),
+			})
+			continue
+		}
+		if isMalformedJS(line) {
+			return SyntaxFile{}, fmt.Errorf("line %d: malformed js declaration %q", lineNumber, line)
+		}
 		if match := storePattern.FindStringSubmatch(line); match != nil {
 			span := sourceLineSpan(lineNumber, rawLine)
 			file.Stores = append(file.Stores, gwdkast.Store{

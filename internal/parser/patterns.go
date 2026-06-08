@@ -7,6 +7,7 @@ var (
 	packagePattern          = regexp.MustCompile(`^package\s+([A-Za-z_][A-Za-z0-9_]*)$`)
 	importPattern           = regexp.MustCompile(`^import(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s+"([^"]+)"$`)
 	usePattern              = regexp.MustCompile(`^use\s+([A-Za-z_][A-Za-z0-9_]*)\s+"([A-Za-z_][A-Za-z0-9_]*)"$`)
+	jsPattern               = regexp.MustCompile(`^js\s+"([^"]+)"$`)
 	buildCallPattern        = regexp.MustCompile(`^=>\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(\)$`)
 	actionEndpointPattern   = regexp.MustCompile(`^act\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Z]+)\s+"([^"]*)"(?:\s+@error\s+"([^"]*)")?$`)
 	apiEndpointPattern      = regexp.MustCompile(`^api\s+([A-Za-z_][A-Za-z0-9_]*)\s+(GET|POST|PUT|PATCH|DELETE)\s+"([^"]*)"(?:\s+@error\s+"([^"]*)")?$`)

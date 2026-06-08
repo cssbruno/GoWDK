@@ -196,6 +196,14 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 		if isMalformedUse(line) {
 			return manifest.Component{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
 		}
+		if match := jsPattern.FindStringSubmatch(line); match != nil {
+			component.JS = append(component.JS, match[1])
+			component.Spans.JS = append(component.Spans.JS, manifest.NamedSpan{Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)})
+			continue
+		}
+		if isMalformedJS(line) {
+			return manifest.Component{}, fmt.Errorf("line %d: malformed js declaration %q", lineNumber, line)
+		}
 
 		if strings.HasPrefix(line, "@") {
 			match := annotationPattern.FindStringSubmatch(line)

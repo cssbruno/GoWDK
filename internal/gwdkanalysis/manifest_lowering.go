@@ -52,6 +52,10 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 		page.CSS = append(page.CSS, asset.Path)
 		page.Spans.CSS = append(page.Spans.CSS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
 	}
+	for _, asset := range ast.JS {
+		page.JS = append(page.JS, asset.Path)
+		page.Spans.JS = append(page.Spans.JS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+	}
 
 	for _, annotation := range ast.Annotations {
 		if hasTypedPageAnnotation(ast, annotation.Name) {
@@ -126,6 +130,10 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 		component.CSS = append(component.CSS, asset.Path)
 		component.Spans.CSS = append(component.Spans.CSS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
 	}
+	for _, asset := range ast.JS {
+		component.JS = append(component.JS, asset.Path)
+		component.Spans.JS = append(component.Spans.JS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+	}
 	for _, asset := range ast.Assets {
 		component.Assets = append(component.Assets, asset.Path)
 		component.Spans.Assets = append(component.Spans.Assets, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
@@ -164,6 +172,11 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 			if len(component.CSS) == 0 {
 				component.CSS = splitCSSList(annotation.Value)
 				component.Spans.CSS = namedSpans(component.CSS, annotation.Span)
+			}
+		case "js":
+			if len(component.JS) == 0 {
+				component.JS = splitCSSList(annotation.Value)
+				component.Spans.JS = namedSpans(component.JS, annotation.Span)
 			}
 		case "asset":
 			if len(component.Assets) == 0 {

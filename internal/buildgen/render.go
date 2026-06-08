@@ -140,6 +140,9 @@ func actionRoutes(page manifest.Page, data map[string]string) map[string]string 
 
 func pageScripts(config gowdk.Config, page manifest.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) []gowdk.Script {
 	scripts := append([]gowdk.Script{}, nonEmptyScripts(config.Build.Scripts)...)
+	for _, href := range scopedScriptHrefs(page, viewSource, components) {
+		scripts = append(scripts, gowdk.Script{Src: href, Type: "module"})
+	}
 	if policy != renderModeSPA {
 		return scripts
 	}

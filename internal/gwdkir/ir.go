@@ -89,6 +89,7 @@ type Page struct {
 	Layouts     []string
 	Guards      []string
 	CSS         []string
+	JS          []string
 	Imports     []Import
 	Uses        []Use
 	Stores      []Store
@@ -146,6 +147,7 @@ type PageSpans struct {
 	Layouts     []manifest.NamedSpan
 	Guard       []manifest.NamedSpan
 	CSS         []manifest.NamedSpan
+	JS          []manifest.NamedSpan
 	RouteParams []manifest.NamedSpan
 }
 
@@ -221,6 +223,7 @@ type Component struct {
 	Imports     []Import
 	Uses        []Use
 	CSS         []string
+	JS          []string
 	Assets      []string
 	Props       []Prop
 	PropsType   GoRef
@@ -236,6 +239,7 @@ type Component struct {
 
 type ComponentSpans struct {
 	CSS    []manifest.NamedSpan
+	JS     []manifest.NamedSpan
 	Assets []manifest.NamedSpan
 }
 
@@ -447,6 +451,7 @@ type AssetKind string
 
 const (
 	AssetCSS  AssetKind = "css"
+	AssetJS   AssetKind = "js"
 	AssetFile AssetKind = "asset"
 	AssetWASM AssetKind = "wasm"
 )

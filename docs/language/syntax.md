@@ -78,6 +78,21 @@ Current route validation accepts canonical absolute paths only:
 - Duplicate page route patterns are invalid. `/blog/{slug}` and `/blog/{id}`
   are the same pattern.
 
+## Scoped JavaScript
+
+Pages and components can declare browser module files with top-level `js`
+declarations:
+
+```gwdk
+js "./dashboard.js"
+```
+
+The path is relative to the declaring `.gwdk` file and must end in `.js` or
+`.mjs`. GOWDK copies the file into generated output and emits
+`<script type="module">` only for the page that declares it, or for pages that
+call a component that declares it. This is scoped asset inclusion, not
+JavaScript bundling; imported JavaScript dependencies are not followed yet.
+
 ## Blocks
 
 The parser recognizes these top-level block declarations:

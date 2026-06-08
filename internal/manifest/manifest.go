@@ -109,12 +109,14 @@ type PageSpans struct {
 	Layouts     []NamedSpan
 	Guard       []NamedSpan
 	CSS         []NamedSpan
+	JS          []NamedSpan
 	RouteParams []NamedSpan
 }
 
 // ComponentSpans records source ranges for component annotations.
 type ComponentSpans struct {
 	CSS    []NamedSpan
+	JS     []NamedSpan
 	Assets []NamedSpan
 }
 
@@ -149,6 +151,7 @@ type Page struct {
 	Layouts     []string
 	Guard       []string
 	CSS         []string
+	JS          []string
 	Imports     []Import
 	Uses        []Use
 	Stores      []Store
@@ -250,6 +253,7 @@ type Component struct {
 	Imports     []Import
 	Uses        []Use
 	CSS         []string
+	JS          []string
 	Assets      []string
 	Props       []Prop
 	PropsType   GoTypeRef

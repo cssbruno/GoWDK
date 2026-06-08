@@ -36,6 +36,7 @@ type pageJSON struct {
 	Paths           bool                   `json:"paths,omitempty"`
 	Guard           []string               `json:"guard,omitempty"`
 	CSS             []string               `json:"css,omitempty"`
+	JS              []string               `json:"js,omitempty"`
 	Blocks          blocksJSON             `json:"blocks"`
 	Actions         []actionJSON           `json:"actions,omitempty"`
 	APIs            []apiJSON              `json:"apis,omitempty"`
@@ -54,6 +55,7 @@ type componentJSON struct {
 	Imports   []importJSON `json:"imports,omitempty"`
 	Uses      []useJSON    `json:"uses,omitempty"`
 	CSS       []string     `json:"css,omitempty"`
+	JS        []string     `json:"js,omitempty"`
 	Assets    []string     `json:"assets,omitempty"`
 	Props     []propJSON   `json:"props,omitempty"`
 	PropsType *goTypeJSON  `json:"propsType,omitempty"`
@@ -221,6 +223,7 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 			Paths:           page.Paths,
 			Guard:           page.Guard,
 			CSS:             page.CSS,
+			JS:              page.JS,
 			Blocks:          blocksJSONFor(page),
 			Actions:         actionsJSON(page.Blocks.Actions),
 			APIs:            apisJSON(page.Blocks.APIs),
@@ -482,6 +485,7 @@ func componentsJSON(components []Component) map[string]componentJSON {
 			Imports:   importsJSON(component.Imports),
 			Uses:      usesJSON(component.Uses),
 			CSS:       append([]string(nil), component.CSS...),
+			JS:        append([]string(nil), component.JS...),
 			Assets:    append([]string(nil), component.Assets...),
 			Props:     propsJSON(component.Props),
 			PropsType: goTypeRefJSON(component.PropsType),

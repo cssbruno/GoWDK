@@ -13,6 +13,7 @@ func TestParseSyntaxBuildsTypedASTForCurrentSubset(t *testing.T) {
 @route "/newsletter/{slug}"
 @guard auth.required
 @error "/errors/newsletter.html"
+js "./newsletter.js"
 
 import interop "github.com/cssbruno/gowdk/examples/go-interop"
 
@@ -52,6 +53,9 @@ view {
 	}
 	if len(file.Uses) != 1 || file.Uses[0].Alias != "ui" || file.Uses[0].Package != "components" {
 		t.Fatalf("unexpected uses: %#v", file.Uses)
+	}
+	if len(file.JS) != 1 || file.JS[0].Path != "./newsletter.js" || file.JS[0].Span.Start.Line != 6 {
+		t.Fatalf("unexpected scoped JS declarations: %#v", file.JS)
 	}
 	if len(file.Blocks) != 3 {
 		t.Fatalf("expected three blocks, got %#v", file.Blocks)
@@ -227,6 +231,7 @@ func TestParseSyntaxReturnsGOWDKAST(t *testing.T) {
 @wasm ./counter/browser
 @css "./counter.css"
 @asset "./counter.svg"
+js "./counter.js"
 
 import ui "github.com/cssbruno/gowdk/examples/ui"
 
@@ -266,6 +271,7 @@ func TestParseSyntaxReadsStoresAndComponentContracts(t *testing.T) {
 @wasm ./counter/browser
 @css "./counter.css"
 @asset "./counter.svg"
+js "./counter.js"
 
 import ui "github.com/cssbruno/gowdk/examples/ui"
 
@@ -324,6 +330,9 @@ view {
 	}
 	if len(file.Assets) != 1 || file.Assets[0].Path != "./counter.svg" {
 		t.Fatalf("unexpected component assets: %#v", file.Assets)
+	}
+	if len(file.JS) != 1 || file.JS[0].Path != "./counter.js" {
+		t.Fatalf("unexpected component JS assets: %#v", file.JS)
 	}
 	props := file.Blocks[0]
 	if props.Kind != "props" || len(props.Props) != 2 || props.Props[0].Name != "title" || props.Props[1].Name != "subtitle" {

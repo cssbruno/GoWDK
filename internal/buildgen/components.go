@@ -73,6 +73,7 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 			Name:          component.Name,
 			Package:       component.Package,
 			Uses:          componentUses(component.Uses),
+			JS:            append([]string(nil), component.JS...),
 			ScopeIDs:      componentScopeIDs(component),
 			DefaultIsland: componentDefaultIsland(component),
 			Props:         props,

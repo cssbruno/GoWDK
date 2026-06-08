@@ -23,10 +23,16 @@ Implemented today:
 - Discovered page CSS inputs selected by implicit `default page` or explicit
   `@css` annotations are concatenated into generated page CSS files. Page
   `style {}` CSS is appended to the same generated page CSS asset.
+- Page `js "./file.js"` declarations are copied under
+  `assets/gowdk/pages/<page>/` and linked only from that page as module scripts.
 - Component `@css` files are emitted as scoped CSS assets, linked from
   generated pages, content-hashed, recorded in `gowdk-assets.json`, and served
   with immutable cache headers by generated binaries. Component `style {}` CSS
   is emitted through the same scoped CSS path.
+- Component `js "./file.js"` declarations are copied under
+  `assets/gowdk/components/<package>/<component>/` and linked only from pages
+  that use the component. This first slice does not bundle JavaScript or follow
+  import graphs.
 - Layout `style {}` CSS is emitted as generated CSS and linked by pages that
   declare the layout.
 - Dynamic app routes with literal `paths {}` declarations are expanded by

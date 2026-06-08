@@ -114,10 +114,11 @@ typed action signatures and can wire generated CSRF when `Build.CSRF.Enabled`
 is set. Generated validation failures return HTTP 422 for normal requests; for
 partial requests with `X-GOWDK-Partial` and `X-GOWDK-Target`, generated handlers
 return an escaped `runtime/response.ValidationFragment` for the target instead.
-Generated `pattern` checks use Go regexp syntax and are anchored to the whole
-submitted value. GOWDK does not run user-defined domain validation or generate
-general fragment routes. Handlers can return redirects, fragments, HTML, or JSON
-through `runtime/response.Response`.
+Generated `pattern` checks use GOWDK's anchored form-pattern subset: literals,
+`.`, character classes/ranges, escapes, and `*`, `+`, `?`, `{n}`, `{n,}`, and
+`{n,m}` quantifiers. GOWDK does not run user-defined domain validation or
+generate general fragment routes. Handlers can return redirects, fragments,
+HTML, or JSON through `runtime/response.Response`.
 
 ## Production Notes
 
@@ -129,9 +130,9 @@ through `runtime/response.Response`.
   Generated adapters decode the request and write the returned
   `runtime/response.Response`; they do not generate application policy.
 - Generated checks only cover direct literal `required`, `minlength`,
-  `maxlength`, and Go-regexp-compatible `pattern` controls in the current
-  `view {}` subset. Treat them as request-shape checks, not a substitute for
-  domain validation in Go. Optional empty fields skip length and pattern checks,
+  `maxlength`, and supported `pattern` controls in the current `view {}`
+  subset. Treat them as request-shape checks, not a substitute for domain
+  validation in Go. Optional empty fields skip length and pattern checks,
   matching browser constraint behavior. Partial validation failures use an
   escaped validation fragment so the client runtime can swap the configured
   target.

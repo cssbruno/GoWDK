@@ -4,6 +4,7 @@ use ui "components"
 
 @page newsletter
 @route "/newsletter"
+@guard public
 @layout root
 
 act Subscribe POST "/newsletter"

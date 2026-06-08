@@ -2,6 +2,7 @@ package pages
 
 @page home
 @route "/"
+@guard public
 @layout root
 
 build {

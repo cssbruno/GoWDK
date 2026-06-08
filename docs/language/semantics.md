@@ -17,7 +17,10 @@
 
 ## Current Metadata Semantics
 
-- `@page` and `@route` are required.
+- `@page`, `@route`, and `@guard` are required for page sources. Public pages
+  must declare `@guard public`; protected pages must declare custom guard IDs
+  or native RBAC IDs such as `role:admin` and `permission:posts.write`.
+  `@guard public` must stand alone.
 - `@title`, `@description`, `@canonical`, and `@image` record document metadata
   used by generated HTML output. If `@title` is omitted, generated output falls
   back to the page ID. `@image` feeds generated Open Graph and Twitter image
@@ -26,8 +29,10 @@
   same-package layout IDs or legacy package-less layouts. Cross-package layouts
   require `use alias "package"` and qualified refs such as `alias.root`.
 - `@guard` records guard IDs. Generated SSR, action, and API handlers run
-  declared guards before request-time user logic and fail closed unless the
-  generated app registers matching guard functions.
+  declared non-public guards before request-time user logic. Guarded generated
+  apps require matching backing functions and fail Go compilation when those
+  functions are missing. Non-public page guards require request-time page
+  rendering because build-time SPA output emits plain static HTML.
 - Generated SSR, action, and API handlers are protected by runtime panic
   boundaries that return no-store HTTP 500 responses before headers are
   written.
@@ -57,5 +62,5 @@
 Future compiler phases must define broader symbol resolution, type checking,
 layout composition, full component resolution, route parameter binding into
 imported `build {}` calls, real typed action decoding and execution, generated
-API/fragment execution, partial updates, cache/revalidation behavior, and guard
-execution.
+API/fragment execution, partial updates, cache/revalidation behavior, and
+richer guard response behavior.

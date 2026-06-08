@@ -81,6 +81,7 @@ func TestValidateManifestAcceptsPackageMatchingSiblingGoFile(t *testing.T) {
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
+		Guard:   []string{"public"},
 		Blocks:  manifest.Blocks{View: true},
 	}
 
@@ -104,6 +105,7 @@ func TestValidateManifestIgnoresProjectConfigGoPackage(t *testing.T) {
 		Package: "css",
 		ID:      "styled",
 		Route:   "/styled",
+		Guard:   []string{"public"},
 		Blocks:  manifest.Blocks{View: true},
 	}
 
@@ -198,6 +200,7 @@ type PageCopy struct {
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
+		Guard:   []string{"public"},
 		Blocks: manifest.Blocks{
 			View: true,
 			GoBlocks: []manifest.GoBlock{{
@@ -224,6 +227,7 @@ func TestValidateManifestTypeChecksDefaultScriptWithGOWDKImports(t *testing.T) {
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
+		Guard:   []string{"public"},
 		Imports: []manifest.Import{{Alias: "strings", Path: "strings"}},
 		Blocks: manifest.Blocks{
 			View: true,
@@ -354,6 +358,7 @@ func TestValidateManifestSkipsSiblingGoPackageForUnsavedAbsoluteSource(t *testin
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
+		Guard:   []string{"public"},
 		Blocks:  manifest.Blocks{View: true},
 	}
 
@@ -397,6 +402,7 @@ func Email(values form.Values) string {
 		Package: "auth",
 		ID:      "login",
 		Route:   "/login",
+		Guard:   []string{"public"},
 		Blocks:  manifest.Blocks{View: true},
 	}
 
@@ -607,6 +613,7 @@ func TestValidatePageRejectsSSRWithoutAddon(t *testing.T) {
 	page := manifest.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard",
+		Guard:  []string{"auth.required"},
 		Render: gowdk.SSR,
 		Blocks: manifest.Blocks{
 			View: true,
@@ -622,6 +629,83 @@ func TestValidatePageRejectsSSRWithoutAddon(t *testing.T) {
 	}
 	if !strings.Contains(diagnostics[0].Message, "enable ssr.Addon()") {
 		t.Fatalf("diagnostic should suggest enabling ssr addon: %s", diagnostics[0].Message)
+	}
+}
+
+func TestValidatePageRequiresExplicitGuard(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "home.page.gwdk")
+	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		ID:     "home",
+		Route:  "/",
+		Source: source,
+		Blocks: manifest.Blocks{View: true},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{}, page)
+	if !hasDiagnosticCode(diagnostics, "missing_page_guard") {
+		t.Fatalf("missing missing_page_guard diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidatePageRequiresPublicGuardToBeExclusive(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "home.page.gwdk")
+	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		ID:     "home",
+		Route:  "/",
+		Source: source,
+		Guard:  []string{"public", "auth.required"},
+		Blocks: manifest.Blocks{View: true},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{}, page)
+	if !hasDiagnosticCode(diagnostics, "public_guard_exclusive") {
+		t.Fatalf("missing public_guard_exclusive diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidatePageRejectsProtectedGuardOnBuildTimePage(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "dashboard.page.gwdk")
+	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		ID:     "dashboard",
+		Route:  "/dashboard",
+		Source: source,
+		Guard:  []string{"auth.required"},
+		Render: gowdk.SPA,
+		Blocks: manifest.Blocks{View: true},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{}, page)
+	if !hasDiagnosticCode(diagnostics, "guard_requires_request_render") {
+		t.Fatalf("missing guard_requires_request_render diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidatePageAllowsProtectedGuardOnRequestTimePage(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "dashboard.page.gwdk")
+	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := manifest.Page{
+		ID:     "dashboard",
+		Route:  "/dashboard",
+		Source: source,
+		Guard:  []string{"auth.required"},
+		Render: gowdk.SSR,
+		Blocks: manifest.Blocks{View: true},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, page)
+	if hasDiagnosticCode(diagnostics, "guard_requires_request_render") {
+		t.Fatalf("unexpected guard_requires_request_render diagnostic: %#v", diagnostics)
 	}
 }
 
@@ -683,6 +767,7 @@ func TestValidateManifestAllowsPageStoreDeclaration(t *testing.T) {
 		ID:     "cart",
 		Route:  "/cart",
 		Source: "pages/cart.page.gwdk",
+		Guard:  []string{"public"},
 		Imports: []manifest.Import{{
 			Alias: "ui",
 			Path:  "github.com/cssbruno/gowdk/testfixture/islands",

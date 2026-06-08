@@ -115,7 +115,8 @@ Fields:
 - `cache`: optional concrete page Cache-Control response metadata from `@cache`
   and `@revalidate`.
 - `paths`: optional boolean present when `paths {}` exists.
-- `guard`: optional guard metadata.
+- `guard`: explicit page access metadata. Real page sources must declare it;
+  intentionally public pages report `["public"]`.
 - `css`: optional `@css` page selection metadata.
 - `js`: optional path-based scoped browser script declarations.
 - `inlineJS`: optional generated names for inline `js {}` browser script

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
 )
 
 func TestAddonRegistersSSRFeature(t *testing.T) {
@@ -172,6 +173,40 @@ func TestRunGuardsReportsMissingOrFailedGuard(t *testing.T) {
 	})
 	if !errors.Is(err, expected) {
 		t.Fatalf("expected wrapped guard error, got %v", err)
+	}
+}
+
+func TestRunGuardsWithAuthExecutesNativeRBACGuards(t *testing.T) {
+	provider := gowdkauth.ProviderFunc(func(*http.Request) (*gowdkauth.Principal, error) {
+		return &gowdkauth.Principal{
+			ID:          "user-1",
+			Roles:       []string{"admin"},
+			Permissions: []string{"posts.write"},
+		}, nil
+	})
+
+	err := RunGuardsWithAuth(LoadContext{}, []string{"role:admin", "permission:posts.write"}, nil, provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunGuardsWithAuthFailsClosedForNativeRBACGuards(t *testing.T) {
+	if err := RunGuardsWithAuth(LoadContext{}, []string{"role:admin"}, nil, nil); err == nil || !strings.Contains(err.Error(), "requires an auth provider") {
+		t.Fatalf("expected missing auth provider error, got %v", err)
+	}
+
+	if err := RunGuardsWithAuth(LoadContext{}, []string{"role:admin"}, nil, gowdkauth.ProviderFunc(func(*http.Request) (*gowdkauth.Principal, error) {
+		return nil, nil
+	})); !errors.Is(err, gowdkauth.ErrUnauthenticated) {
+		t.Fatalf("expected unauthenticated error, got %v", err)
+	}
+
+	err := RunGuardsWithAuth(LoadContext{}, []string{"permission:posts.write"}, nil, gowdkauth.ProviderFunc(func(*http.Request) (*gowdkauth.Principal, error) {
+		return &gowdkauth.Principal{ID: "user-1", Permissions: []string{"posts.read"}}, nil
+	}))
+	if !errors.Is(err, gowdkauth.ErrForbidden) {
+		t.Fatalf("expected forbidden error, got %v", err)
 	}
 }
 

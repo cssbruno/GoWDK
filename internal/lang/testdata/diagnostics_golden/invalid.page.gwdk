@@ -2,6 +2,7 @@ package diagnostics
 
 @page blog.post
 @route "/blog/{slug}"
+@guard public
 
 view {
   <main>Post</main>

@@ -106,6 +106,9 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 		imports["gowdkssr"] = "github.com/cssbruno/gowdk/addons/ssr"
 	}
+	if generatedUsesGuards(options) {
+		imports["gowdkauth"] = "github.com/cssbruno/gowdk/runtime/auth"
+	}
 	if ssrUsesDynamicRoutes(ssr) {
 		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 	}

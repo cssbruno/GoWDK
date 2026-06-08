@@ -56,6 +56,16 @@ tooling contracts may change before a stable release.
   rewriting, runtime form scanning, and generated action validation paths.
 - Optional framework/context bridge and nested optional adapter modules for
   Echo, Fiber, Gin, Redis Streams, NATS, and WebSocket fanout.
+- `v0.2.5` release metadata: CLI/editor versions, optional module root-version
+  requirements, root changelog, and release-doc current-version examples.
+- Explicit page access metadata: real page sources must declare
+  `@guard public` for intentionally public pages or protected guard IDs for
+  guarded pages.
+- Thin native RBAC guard IDs through `role:<name>` and `permission:<name>`,
+  backed by application-owned `runtime/auth.Provider` implementations.
+- Generated guarded apps fail Go compilation when required backing hooks are
+  missing: `GOWDKGuardRegistry` for custom guards and `GOWDKAuthProvider` for
+  native RBAC guards.
 
 ## Partial
 
@@ -74,14 +84,16 @@ tooling contracts may change before a stable release.
 - Framework comparison docs as core positioning.
 - Mandatory npm, Tailwind, Gin, Echo, Fiber, Redis, NATS, or WebSocket
   dependencies.
-- New compiler syntax or runtime feature expansion.
+- Replacing backend authorization with generated page guards.
 
 ## Known Gaps
 
-- v0.2 is primarily a trust/docs/release hygiene slice, not a compiler feature
-  release.
+- v0.2 remains experimental and includes both release-trust work and early
+  compiler/runtime feature slices.
 - Generated output remains pre-1.0 and unstable unless a reference doc marks a
   surface stable.
+- Guard metadata is a generated access redundancy layer and does not replace
+  authorization in normal Go backend handlers and services.
 
 ## Breaking Or Unstable Generated Output
 

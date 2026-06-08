@@ -30,7 +30,7 @@ files do not derive route identity from folders.
 
 Current file kinds:
 
-- Page files declare `@page`, `@route`, and `view {}`.
+- Page files declare `@page`, `@route`, `@guard`, and `view {}`.
 - Component files declare `@component` and usually `view {}`.
 - Layout files declare `@layout` and `view {}` with a `<slot />`.
 
@@ -65,6 +65,11 @@ Implemented or partial annotations:
 - `@component <Name>`
 
 Unknown annotations are errors. Malformed `@` lines are errors.
+
+Page sources must declare `@guard`. Use `@guard public` when the page is
+intentionally public. Use custom guard IDs or native RBAC IDs such as
+`role:admin` and `permission:posts.write` when the page is protected.
+`@guard public` must stand alone.
 
 ## Imports And Uses
 

@@ -17,6 +17,7 @@ func TestCheckFilesValidatesRenderRules(t *testing.T) {
 
 @page dashboard
 @route "/dashboard"
+@guard public
 
 load {
 }
@@ -100,6 +101,7 @@ func TestManifestJSONEmitsParsedPage(t *testing.T) {
 
 @page home
 @route "/"
+@guard public
 @layout root
 
 view {
@@ -122,6 +124,7 @@ func TestManifestJSONUsesConfiguredDefaultRenderMode(t *testing.T) {
 
 @page home
 @route "/"
+@guard public
 
 view {
 }
@@ -213,6 +216,7 @@ func TestParseBuildFilesParsesLayoutFilesAndSkipsNonGWDKInputs(t *testing.T) {
 
 @page home
 @route "/"
+@guard public
 @layout root
 
 view {
@@ -253,6 +257,7 @@ func TestCheckJSONReportsCompilerDiagnosticsWithFile(t *testing.T) {
 
 @page dashboard
 @route "/dashboard"
+@guard public
 
 load {
 }
@@ -272,12 +277,12 @@ view {
 	if !strings.Contains(output, `"code": "missing_ssr_addon"`) {
 		t.Fatalf("expected diagnostic code in JSON: %s", output)
 	}
-	if diagnostics[0].Pos.Line != 6 || diagnostics[0].Pos.Column != 1 {
+	if diagnostics[0].Pos.Line != 7 || diagnostics[0].Pos.Column != 1 {
 		t.Fatalf("expected compiler diagnostic at load line, got %#v", diagnostics[0].Pos)
 	}
 	if diagnostics[0].Range == nil ||
-		diagnostics[0].Range.Start.Line != 6 || diagnostics[0].Range.Start.Column != 1 ||
-		diagnostics[0].Range.End.Line != 6 || diagnostics[0].Range.End.Column != 7 {
+		diagnostics[0].Range.Start.Line != 7 || diagnostics[0].Range.Start.Column != 1 ||
+		diagnostics[0].Range.End.Line != 7 || diagnostics[0].Range.End.Column != 7 {
 		t.Fatalf("expected compiler diagnostic range for load block, got %#v", diagnostics[0].Range)
 	}
 	if !strings.Contains(output, "SSR addon is not enabled") {

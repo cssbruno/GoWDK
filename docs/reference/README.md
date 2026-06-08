@@ -15,3 +15,4 @@ Reference docs describe current command and data contracts.
 - `manifest.md`: current manifest JSON.
 - `addons.md`: current addon feature registration.
 - `diagnostics.md`: current diagnostic output.
+- `diagnostic-codes.md`: diagnostic code registry, stability, and `gowdk explain`.

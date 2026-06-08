@@ -124,26 +124,47 @@ The addon module may import other GitHub/private/local modules. The project
 ## Generated App Request Guards
 
 When generated SSR, action, or API routes declare `@guard`, the generated app
-package exposes a registration hook:
+package exposes guard registration hooks:
 
 ```go
 package gowdkapp
 
 import gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
 
-func init() {
-	RegisterGuards(gowdkssr.GuardRegistry{
+func GOWDKGuardRegistry() gowdkssr.GuardRegistry {
+	return gowdkssr.GuardRegistry{
 		"auth.required": func(ctx gowdkssr.LoadContext) error {
 			return nil
 		},
+	}
+}
+```
+
+Native RBAC guard IDs such as `role:admin` and `permission:patients.read` use
+an application-owned principal source instead of a custom guard function:
+
+```go
+import (
+	"net/http"
+
+	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
+)
+
+func GOWDKAuthProvider() gowdkauth.Provider {
+	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
+		return &gowdkauth.Principal{ID: "user-1", Roles: []string{"admin"}}, nil
 	})
 }
 ```
 
 This file belongs with generated app startup code, not inside feature packages
-that declare handlers. A missing registry entry or a guard error returns HTTP
-403 before SSR load functions, action decoding, API handlers, or user business
-logic run.
+that declare handlers. Missing required backing functions fail the generated app
+Go build. Guard errors still return HTTP 403 before SSR load functions, action
+decoding, API handlers, or user business logic run.
+
+Native RBAC guards are a defense-in-depth redundancy layer for generated
+route/page access. They must never replace backend authorization inside
+handlers, services, repositories, or external systems.
 
 See [hooks.md](hooks.md) for guard, rate-limit, and middleware ordering.
 

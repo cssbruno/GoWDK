@@ -42,32 +42,62 @@ SSR is optional and must not become the default framework identity.
   page handlers.
 - The SSR addon provides a default HTTP 500 error handler contract for
   request-time SSR failures.
-- `@guard` uses comma-separated guard IDs such as `@guard auth.required,
-  billing.active`. The SSR addon exposes `GuardFunc`, `GuardRegistry`, and
-  ordered guard execution contracts. Generated SSR, action, and API handlers
-  run declared guards before user logic and fail closed with HTTP 403 when a
-  guard is missing or returns an error.
+- Every page source must declare `@guard`. `@guard public` marks an
+  intentionally public page and must stand alone. Non-public guards use
+  comma-separated guard IDs such as `@guard auth.required, billing.active`.
+  Protected page guards require request-time page rendering so the page GET
+  route can be gated before HTML is returned. The SSR addon exposes
+  `GuardFunc`, `GuardRegistry`, and ordered guard execution contracts.
+  Generated SSR, action, and API handlers run declared guards before user
+  logic. A guarded generated app will not compile unless required guard backing
+  functions exist. Native RBAC guard IDs use `role:<name>` and
+  `permission:<name>` and resolve through an application-owned
+  `runtime/auth.Provider`.
 
 Generated app packages that include at least one guarded SSR, action, or API
-route expose:
+route require backing functions in the generated app package:
 
 ```go
-func RegisterGuards(ssr.GuardRegistry)
+func GOWDKGuardRegistry() ssr.GuardRegistry // required when custom guard IDs are used
+func GOWDKAuthProvider() auth.Provider      // required when role:/permission: IDs are used
 ```
 
-Register guards from app startup code that is compiled with the generated app
-package:
+Define custom guards in app startup code that is compiled with the generated app
+package. If this function is missing while custom guard IDs are declared, `go
+build` fails.
 
 ```go
 package gowdkapp
 
 import gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
 
-func init() {
-	RegisterGuards(gowdkssr.GuardRegistry{
+func GOWDKGuardRegistry() gowdkssr.GuardRegistry {
+	return gowdkssr.GuardRegistry{
 		"auth.required": func(ctx gowdkssr.LoadContext) error {
 			return nil
 		},
+	}
+}
+```
+
+For native RBAC guards, define only the application-owned principal source. If
+this function is missing while `role:` or `permission:` guard IDs are declared,
+`go build` fails.
+
+```go
+import (
+	"net/http"
+
+	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
+)
+
+func GOWDKAuthProvider() gowdkauth.Provider {
+	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
+		return &gowdkauth.Principal{
+			ID:          "user-1",
+			Roles:       []string{"admin"},
+			Permissions: []string{"dashboard.read"},
+		}, nil
 	})
 }
 ```
@@ -75,3 +105,7 @@ func init() {
 Feature packages that declare page, action, or API handlers should not import
 the generated `gowdkapp` package. Keep registration in the generated app
 package to avoid import cycles.
+
+Native RBAC guards are a defense-in-depth redundancy layer for generated
+route/page access. They must never replace backend authorization for protected
+resources in normal Go handlers and services.

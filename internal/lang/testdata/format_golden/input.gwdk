@@ -4,6 +4,7 @@ package format
 
 
 @route "/"
+@guard public
 
 // Keep this page spa.
 view {

@@ -46,16 +46,19 @@ The optional endpoint-local `@error` suffix selects a generated HTML error page
 for API panics before response headers are written. Returned handler errors
 still follow normal `runtime/response.Response` behavior.
 
-APIs declared on guarded pages share the generated app guard registry with SSR
-pages and actions. Register `addons/ssr.GuardRegistry` through the generated app
-package's `RegisterGuards` hook; generated API handlers run guards before user
-handler calls and fail closed with HTTP 403 when a guard is missing or rejects
-the request.
+APIs declared on guarded pages share the generated app guard hooks with SSR
+pages and actions. Custom guards require `GOWDKGuardRegistry`; native RBAC guard
+IDs such as `role:admin` and `permission:reports.read` require
+`GOWDKAuthProvider`. Missing backing hooks fail the generated app Go build.
+Generated API handlers run guards before user handler calls. Treat these as
+defense-in-depth redundancy for generated route/page access, never as backend
+resource authorization. If the page itself is protected, use request-time page
+rendering; build-time SPA HTML cannot enforce frontend page access.
 
 ## Production Notes
 
-- API handlers own authentication, authorization, request validation, storage,
-  service calls, and response shape in normal Go.
+- API handlers own authentication, backend authorization, request validation,
+  storage, service calls, and response shape in normal Go.
 - Bound API handlers return `runtime/response.Response`; generated adapters
   only dispatch by method/path, call the handler, and write the returned
   response.

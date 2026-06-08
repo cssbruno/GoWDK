@@ -18,6 +18,7 @@ func TestSiteMapJSONIncludesMovableSourceAndRoute(t *testing.T) {
 
 @page home
 @route "/"
+@guard public
 @layout root
 
 view {
@@ -66,6 +67,7 @@ func TestSiteMapJSONIncludesEndpointGraph(t *testing.T) {
 
 @page contact
 @route "/contact"
+@guard public
 
 act Submit POST "/contact"
 api Health GET "/api/health"
@@ -101,6 +103,7 @@ func TestSiteMapJSONRunsCompilerValidation(t *testing.T) {
 
 @page dashboard
 @route "/dashboard"
+@guard public
 
 go ssr {
 }

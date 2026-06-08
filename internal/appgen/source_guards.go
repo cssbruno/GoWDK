@@ -3,45 +3,47 @@ package appgen
 import (
 	"go/ast"
 	"go/token"
+
+	"github.com/cssbruno/gowdk/runtime/auth"
 )
 
 func generatedUsesGuards(options Options) bool {
-	if endpointsUseGuards(options.Actions, options.APIs, options.Fragments) {
+	if endpointsUseRuntimeGuards(options.Actions, options.APIs, options.Fragments) {
 		return true
 	}
-	if contractExposuresUseGuards(backendAdapterIR(options).ContractExposures) {
+	if contractExposuresUseRuntimeGuards(backendAdapterIR(options).ContractExposures) {
 		return true
 	}
 	for _, route := range options.SSR {
-		if len(route.Guards) > 0 {
+		if len(runtimeGuardNames(route.Guards)) > 0 {
 			return true
 		}
 	}
 	return false
 }
 
-func endpointsUseGuards(actions []ActionEndpoint, apis []APIEndpoint, fragments []FragmentEndpoint) bool {
+func endpointsUseRuntimeGuards(actions []ActionEndpoint, apis []APIEndpoint, fragments []FragmentEndpoint) bool {
 	for _, action := range actions {
-		if len(action.Guards) > 0 {
+		if len(runtimeGuardNames(action.Guards)) > 0 {
 			return true
 		}
 	}
 	for _, api := range apis {
-		if len(api.Guards) > 0 {
+		if len(runtimeGuardNames(api.Guards)) > 0 {
 			return true
 		}
 	}
 	for _, fragment := range fragments {
-		if len(fragment.Guards) > 0 {
+		if len(runtimeGuardNames(fragment.Guards)) > 0 {
 			return true
 		}
 	}
 	return false
 }
 
-func contractExposuresUseGuards(exposures []BackendContractExposure) bool {
+func contractExposuresUseRuntimeGuards(exposures []BackendContractExposure) bool {
 	for _, exposure := range routableContractExposures(exposures) {
-		if len(exposure.Guards) > 0 {
+		if len(runtimeGuardNames(exposure.Guards)) > 0 {
 			return true
 		}
 	}
@@ -52,11 +54,17 @@ func guardDecls(options Options) []ast.Decl {
 	if !generatedUsesGuards(options) {
 		return nil
 	}
-	return []ast.Decl{
+	decls := []ast.Decl{
 		guardRegistryVarDecl(),
+		authProviderVarDecl(),
 		registerGuardsDecl(),
+		registerAuthProviderDecl(),
 		runGuardsDecl(),
 	}
+	if initDecl := requiredGuardBackingInitDecl(options); initDecl != nil {
+		decls = append(decls, initDecl)
+	}
+	return decls
 }
 
 func guardRegistryVarDecl() ast.Decl {
@@ -66,12 +74,41 @@ func guardRegistryVarDecl() ast.Decl {
 	}}}
 }
 
+func authProviderVarDecl() ast.Decl {
+	return &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+		Names: []*ast.Ident{id("authProvider")},
+		Type:  sel("gowdkauth", "Provider"),
+	}}}
+}
+
 func registerGuardsDecl() ast.Decl {
 	return funcDecl("RegisterGuards", []*ast.Field{
 		{Names: []*ast.Ident{id("registry")}, Type: sel("gowdkssr", "GuardRegistry")},
 	}, nil, []ast.Stmt{
 		assign([]ast.Expr{id("guardRegistry")}, id("registry")),
 	})
+}
+
+func registerAuthProviderDecl() ast.Decl {
+	return funcDecl("RegisterAuthProvider", []*ast.Field{
+		{Names: []*ast.Ident{id("provider")}, Type: sel("gowdkauth", "Provider")},
+	}, nil, []ast.Stmt{
+		assign([]ast.Expr{id("authProvider")}, id("provider")),
+	})
+}
+
+func requiredGuardBackingInitDecl(options Options) ast.Decl {
+	var stmts []ast.Stmt
+	if generatedUsesCustomGuards(options) {
+		stmts = append(stmts, exprStmt(call(sel("RegisterGuards"), call(id("GOWDKGuardRegistry")))))
+	}
+	if generatedUsesNativeRBACGuards(options) {
+		stmts = append(stmts, exprStmt(call(sel("RegisterAuthProvider"), call(id("GOWDKAuthProvider")))))
+	}
+	if len(stmts) == 0 {
+		return nil
+	}
+	return funcDecl("init", nil, nil, stmts)
 }
 
 func runGuardsDecl() ast.Decl {
@@ -86,7 +123,7 @@ func runGuardsDecl() ast.Decl {
 		},
 		define([]ast.Expr{id("loadContext")}, call(sel("gowdkssr", "NewLoadContext"), id("request"), id("nil"))),
 		&ast.IfStmt{
-			Init: define([]ast.Expr{id("err")}, call(sel("gowdkssr", "RunGuards"), id("loadContext"), id("guards"), id("guardRegistry"))),
+			Init: define([]ast.Expr{id("err")}, call(sel("gowdkssr", "RunGuardsWithAuth"), id("loadContext"), id("guards"), id("guardRegistry"), id("authProvider"))),
 			Cond: notNil("err"),
 			Body: block(
 				writeNoStoreErrorExprStmt(sel("http", "StatusForbidden"), call(selExpr(id("err"), "Error"))),
@@ -98,6 +135,7 @@ func runGuardsDecl() ast.Decl {
 }
 
 func guardStmts(guards []string) []ast.Stmt {
+	guards = runtimeGuardNames(guards)
 	if len(guards) == 0 {
 		return nil
 	}
@@ -105,4 +143,59 @@ func guardStmts(guards []string) []ast.Stmt {
 		Cond: &ast.UnaryExpr{Op: token.NOT, X: call(sel("runGuards"), id("response"), id("request"), stringSliceExpr(guards))},
 		Body: block(returnBool(true)),
 	}}
+}
+
+func generatedUsesCustomGuards(options Options) bool {
+	for _, name := range generatedGuardNames(options) {
+		if auth.IsPublicGuard(name) {
+			continue
+		}
+		if !auth.IsNativeGuard(name) {
+			return true
+		}
+	}
+	return false
+}
+
+func generatedUsesNativeRBACGuards(options Options) bool {
+	for _, name := range generatedGuardNames(options) {
+		if auth.IsPublicGuard(name) {
+			continue
+		}
+		if auth.IsNativeGuard(name) {
+			return true
+		}
+	}
+	return false
+}
+
+func generatedGuardNames(options Options) []string {
+	var guards []string
+	for _, action := range options.Actions {
+		guards = append(guards, action.Guards...)
+	}
+	for _, api := range options.APIs {
+		guards = append(guards, api.Guards...)
+	}
+	for _, fragment := range options.Fragments {
+		guards = append(guards, fragment.Guards...)
+	}
+	for _, exposure := range routableContractExposures(backendAdapterIR(options).ContractExposures) {
+		guards = append(guards, exposure.Guards...)
+	}
+	for _, route := range options.SSR {
+		guards = append(guards, route.Guards...)
+	}
+	return guards
+}
+
+func runtimeGuardNames(guards []string) []string {
+	var filtered []string
+	for _, guard := range guards {
+		if auth.IsPublicGuard(guard) {
+			continue
+		}
+		filtered = append(filtered, guard)
+	}
+	return filtered
 }

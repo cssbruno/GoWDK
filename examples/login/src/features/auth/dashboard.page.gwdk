@@ -2,6 +2,7 @@ package auth
 
 @page dashboard
 @route "/dashboard"
+@guard public
 @css auth
 
 act Logout POST "/dashboard"

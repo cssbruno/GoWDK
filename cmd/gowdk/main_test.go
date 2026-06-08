@@ -106,7 +106,7 @@ func TestBuildCommandWritesIndexHTML(t *testing.T) {
 	source := filepath.Join(root, "home.page.gwdk")
 	outputDir := filepath.Join(root, "dist")
 	config := writeMinimalCLIConfig(t, root)
-	if err := os.WriteFile(source, []byte(`package app
+	writeCLIFile(t, source, `package app
 
 @page home
 @route "/"
@@ -116,9 +116,7 @@ view {
     <h1>GOWDK & friends</h1>
   </main>
 }
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+`)
 
 	if err := run([]string{"build", "--config", config, "--out", outputDir, source}); err != nil {
 		t.Fatal(err)
@@ -242,7 +240,7 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 			t.Fatalf("unexpected command method/path: %#v", event.Data)
 		}
 		wantColumn := strings.Index(testSourceLine(pageSource, 8), "g:command") + 1
-		if event.Data["line"] != "8" || event.Data["column"] != strconv.Itoa(wantColumn) {
+		if event.Data["line"] != "9" || event.Data["column"] != strconv.Itoa(wantColumn) {
 			t.Fatalf("unexpected command source location: %#v", event.Data)
 		}
 		return
@@ -319,7 +317,7 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 			t.Fatalf("unexpected query type/result metadata: %#v", event.Data)
 		}
 		wantColumn := strings.Index(testSourceLine(pageSource, 8), "g:query") + 1
-		if event.Data["line"] != "8" || event.Data["column"] != strconv.Itoa(wantColumn) {
+		if event.Data["line"] != "9" || event.Data["column"] != strconv.Itoa(wantColumn) {
 			t.Fatalf("unexpected query source location: %#v", event.Data)
 		}
 		return
@@ -358,7 +356,7 @@ view {
 	}
 	if !strings.Contains(output, `"code": "contract_reference_missing"`) ||
 		!strings.Contains(output, "command patients.CreatePatient has no scanned Go registration") ||
-		!strings.Contains(output, `"line": 8`) {
+		!strings.Contains(output, `"line": 9`) {
 		t.Fatalf("expected missing contract diagnostic with source span, got:\n%s", output)
 	}
 }
@@ -1189,7 +1187,7 @@ func TestBuildCommandWritesComponentExpandedHTML(t *testing.T) {
 	component := filepath.Join(root, "hero.cmp.gwdk")
 	outputDir := filepath.Join(root, "dist")
 	config := writeMinimalCLIConfig(t, root)
-	if err := os.WriteFile(page, []byte(`package app
+	writeCLIFile(t, page, `package app
 
 @page home
 @route "/"
@@ -1199,10 +1197,8 @@ view {
     <Hero title="GOWDK" />
   </main>
 }
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(component, []byte(`package app
+`)
+	writeCLIFile(t, component, `package app
 
 @component Hero
 
@@ -1215,9 +1211,7 @@ view {
     <h1>{title}</h1>
   </section>
 }
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+`)
 
 	if err := run([]string{"build", "--config", config, "--out", outputDir, page, component}); err != nil {
 		t.Fatal(err)
@@ -2629,7 +2623,7 @@ view {
 			Message:      "GOWDK action handler app.Subscribe is not implemented",
 		},
 	})
-	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 6 {
+	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 7 {
 		t.Fatalf("expected endpoint source span for action declaration, got %#v", report.Endpoints[0].SourceSpan)
 	}
 	assertRouteInfo(t, report.Info, "ssr_disabled", "newsletter")
@@ -2826,7 +2820,7 @@ view {
 			Message:      "GOWDK API handler app.Health is not implemented",
 		},
 	})
-	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 6 {
+	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 7 {
 		t.Fatalf("expected endpoint source span for API declaration, got %#v", report.Endpoints[0].SourceSpan)
 	}
 }
@@ -2912,7 +2906,7 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 	if len(report.Endpoints) != 1 {
 		t.Fatalf("expected one contract endpoint, got %#v", report.Endpoints)
 	}
-	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 8 {
+	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 9 {
 		t.Fatalf("expected endpoint source span for contract reference, got %#v", report.Endpoints[0].SourceSpan)
 	}
 }
@@ -3743,9 +3737,26 @@ func writeCLIFile(t *testing.T, path, content string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	content = withPublicGuardForPageFixture(path, content)
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func withPublicGuardForPageFixture(path, content string) string {
+	if !strings.HasSuffix(path, ".page.gwdk") ||
+		!strings.Contains(content, "\n@page ") ||
+		strings.Contains(content, "\n@guard ") {
+		return content
+	}
+	lines := strings.SplitAfter(content, "\n")
+	for index, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "@route ") {
+			lines[index] = line + "@guard public\n"
+			return strings.Join(lines, "")
+		}
+	}
+	return content
 }
 
 func writeMinimalCLIConfig(t *testing.T, root string) string {

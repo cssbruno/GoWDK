@@ -46,7 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install
 Pin the current CLI release:
 
 ```sh
-GOWDK_VERSION=v0.2.3 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+GOWDK_VERSION=v0.2.5 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
 ```
 
@@ -114,6 +114,7 @@ use widgets "components"
 
 @page home
 @route "/"
+@guard public
 
 build {
   => { title: "GOWDK ships apps" }

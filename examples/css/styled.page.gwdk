@@ -2,6 +2,7 @@ package css
 
 @page styled
 @route "/styled"
+@guard public
 @layout root
 
 view {

@@ -10,6 +10,9 @@
       "layouts": [
         "root"
       ],
+      "guard": [
+        "public"
+      ],
       "blocks": {
         "paths": false,
         "build": true,

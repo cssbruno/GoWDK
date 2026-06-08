@@ -2,6 +2,7 @@ package components
 
 @page base.components
 @route "/components/base"
+@guard public
 
 view {
   <main>

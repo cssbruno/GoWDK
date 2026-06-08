@@ -37,6 +37,7 @@ Examples:
 ```gwdk
 @page blog.post
 @route "/blog/{slug}"
+@guard public
 ```
 
 Uses `global.css` plus `blog.post.css` when those files exist.
@@ -44,6 +45,7 @@ Uses `global.css` plus `blog.post.css` when those files exist.
 ```gwdk
 @page dashboard
 @route "/dashboard"
+@guard public
 @css reset tokens forms
 ```
 
@@ -52,6 +54,7 @@ Uses only `reset.css`, `tokens.css`, and `forms.css`.
 ```gwdk
 @page embed
 @route "/embed"
+@guard public
 @css none
 ```
 

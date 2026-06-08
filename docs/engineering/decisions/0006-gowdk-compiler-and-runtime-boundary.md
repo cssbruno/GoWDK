@@ -103,6 +103,7 @@ package auth
 
 @page login
 @route "/"
+@guard public
 
 act Login POST "/"
 api Session GET "/api/session"

@@ -7,7 +7,7 @@ GOWDK's current hook model is small and `net/http`-first.
 | Extension point | Type | Scope |
 | --- | --- | --- |
 | Generated app handler | `http.Handler` | Wrap with normal Go middleware in app startup. |
-| Guards | `addons/ssr.GuardRegistry` | Generated SSR, action, API, and fragment routes with `@guard`. |
+| Guards | `addons/ssr.GuardRegistry`, `runtime/auth.Provider` | Generated request-time routes with `@guard`. |
 | Rate limiting | `*ratelimit.Limiter` | Generated action, API, fragment, SSR, and split-backend proxy routes when the addon is enabled. |
 | Handler context | `context.Context` | User handlers read request metadata through `runtime/app` helpers. |
 
@@ -26,22 +26,83 @@ http.ListenAndServe(":8080", wrapped)
 
 ## Guards
 
-Routes with `@guard` use a generated registration hook:
+Every page source must declare `@guard`. Use `@guard public` when the page is
+intentionally public. `public` is a compile-time marker, must be the only guard
+on that page, and does not require runtime backing code.
+
+Routes with non-public `@guard` IDs require backing code in the generated app
+package. A guarded generated app will not compile until the required hook
+exists. Non-public page guards also require request-time page rendering for the
+page GET route; build-time SPA pages emit static HTML and cannot enforce
+frontend access.
 
 ```go
-func init() {
-	gowdkapp.RegisterGuards(ssr.GuardRegistry{
+func GOWDKGuardRegistry() ssr.GuardRegistry {
+	return ssr.GuardRegistry{
 		"auth.required": func(ctx ssr.LoadContext) error {
 			return nil
 		},
+	}
+}
+```
+
+Native RBAC guards reuse `@guard` IDs:
+
+```gwdk
+@guard role:admin, permission:patients.read
+```
+
+Generated app packages with native RBAC guard IDs require:
+
+```go
+func GOWDKAuthProvider() auth.Provider
+```
+
+Define the application-owned principal source from generated app startup code:
+
+```go
+import (
+	"net/http"
+
+	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
+)
+
+func GOWDKAuthProvider() gowdkauth.Provider {
+	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
+		return &gowdkauth.Principal{
+			ID:          "user-1",
+			Roles:       []string{"admin"},
+			Permissions: []string{"patients.read"},
+		}, nil
 	})
 }
 ```
 
+RBAC guard behavior:
+
+- `role:<name>` requires the principal to have that role.
+- `permission:<name>` requires the principal to have that permission.
+- Multiple guard IDs are enforced in declaration order, so multiple RBAC guards
+  are an AND check.
+- A missing `GOWDKAuthProvider` function fails at Go compile time. A nil
+  principal, provider error, or missing role/permission fails closed with HTTP
+  403.
+- GOWDK does not manage users, passwords, OAuth, sessions, tenants, or storage.
+  The auth provider adapts application-owned identity into `auth.Principal`.
+- Native RBAC guards are a defense-in-depth redundancy layer for generated
+  route/page access. They must never replace backend authorization around
+  protected resources, data access, or service methods.
+
 Guard behavior:
 
+- Missing `@guard` fails source validation for real page files.
+- `@guard public` marks intentional public access and cannot be combined with
+  protected guard IDs.
+- Non-public page guards on build-time SPA/action page routes fail validation;
+  add `load {}` or `go ssr {}` with the SSR addon when the page itself is
+  protected.
 - Guards run in declaration order.
-- Missing guard registrations fail closed with HTTP 403.
+- Missing custom guard backing code fails at Go compile time.
 - Guard errors fail closed with HTTP 403.
 - Guards run before action decoding, API handler calls, fragment hooks, SSR
   `load {}`, and user business logic.

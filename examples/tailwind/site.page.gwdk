@@ -2,6 +2,7 @@ package tailwind
 
 @page tailwind
 @route "/tailwind"
+@guard public
 @css none
 
 view {

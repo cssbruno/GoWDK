@@ -2,6 +2,7 @@ package ssr
 
 @page hybrid.static
 @route "/hybrid-static"
+@guard public
 
 go ssr {
 }

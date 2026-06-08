@@ -3,6 +3,34 @@
 GOWDK is experimental 0.x software. Public syntax, generated output, runtime
 packages, and tooling contracts may change before a stable release.
 
+## v0.2.5 - 2026-06-08
+
+### Implemented
+
+- Added explicit page access validation: real page sources must declare
+  `@guard public` for public pages or protected guard IDs for guarded pages.
+- Added thin native RBAC guard IDs with `role:<name>` and
+  `permission:<name>` backed by application-owned `runtime/auth.Provider`
+  implementations.
+- Generated guarded apps now fail Go compilation when required backing hooks
+  are missing: `GOWDKGuardRegistry` for custom guards and `GOWDKAuthProvider`
+  for native RBAC guards.
+- Protected page guards now require request-time page rendering so frontend
+  page access can be checked before HTML is returned.
+
+### Changed
+
+- `gowdk version` and the VS Code extension metadata now report `0.2.5`.
+- Optional contract adapter modules require `github.com/cssbruno/gowdk v0.2.5`.
+- Examples, scaffolds, and language/reference docs now use explicit
+  `@guard public` on intentionally public pages.
+
+### Known Gaps
+
+- GOWDK remains not production-ready.
+- Guard metadata is a generated access redundancy layer and does not replace
+  authorization in normal Go backend handlers and services.
+
 ## v0.2.3 - 2026-06-08
 
 ### Implemented

@@ -52,7 +52,11 @@ Route-local SSR error pages use `@error`:
 ```gwdk
 @page dashboard
 @route "/dashboard"
+@guard auth.required
 @error "/errors/dashboard.html"
+
+load {
+}
 ```
 
 Endpoint-local action and API error pages also use `@error`:

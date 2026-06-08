@@ -325,6 +325,7 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 		ID:     "home",
 		Source: filepath.Join(root, "home.page.gwdk"),
 		Route:  "/",
+		Guard:  []string{"public"},
 		Blocks: manifest.Blocks{View: true, ViewBody: "<main>Home</main>"},
 	}}}
 

@@ -25,6 +25,24 @@ type explanationDetail struct {
 }
 
 var explanationDetails = map[string]explanationDetail{
+	"guard_requires_request_render": {
+		Details: "Protected page guards must gate the page GET route at request time. A build-time SPA page emits plain static HTML, so it cannot enforce frontend page access.",
+		NextSteps: []string{
+			"Add load {} or go ssr {} and enable the SSR addon when the page should be protected.",
+			"Use @guard public when the page is intentionally public and keep backend authorization in Go handlers.",
+		},
+		Invalid: `@page dashboard
+@route "/dashboard"
+@guard auth.required
+`,
+		Fixed: `@page dashboard
+@route "/dashboard"
+@guard auth.required
+
+load {
+}
+`,
+	},
 	"missing_ssr_addon": {
 		Details: "The source selects request-time page rendering through load {}, go ssr {}, SSR render mode, or hybrid render mode, but the loaded config does not enable the SSR addon.",
 		NextSteps: []string{

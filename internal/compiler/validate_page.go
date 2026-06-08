@@ -2,11 +2,13 @@ package compiler
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/manifest"
-	"strings"
+	"github.com/cssbruno/gowdk/runtime/auth"
 )
 
 func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
@@ -14,6 +16,8 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	var diagnostics []ValidationError
 	pageRoute, pageRouteIssues := parseRoute(page.Route)
 	diagnostics = append(diagnostics, routeDiagnostics(page, "page route", pageRouteIssues, page.Spans.Route, page.Spans.RouteParams)...)
+	diagnostics = append(diagnostics, validatePageGuards(page)...)
+	diagnostics = append(diagnostics, validateProtectedPageGuardRender(page, mode)...)
 	diagnostics = append(diagnostics, validatePageStores(page)...)
 	diagnostics = append(diagnostics, validatePageCachePolicy(page)...)
 	for _, action := range page.Blocks.Actions {
@@ -166,6 +170,74 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	diagnostics = append(diagnostics, validatePageCSS(page)...)
 
 	return diagnostics
+}
+
+func validatePageGuards(page manifest.Page) []ValidationError {
+	if !validateSourceBackedPageGuards(page) {
+		return nil
+	}
+	if len(page.Guard) == 0 {
+		return []ValidationError{{
+			Code:   "missing_page_guard",
+			PageID: page.ID,
+			Source: page.Source,
+			Span:   firstSpan(page.Spans.Page, page.Spans.Route),
+			Message: fmt.Sprintf(
+				"%s is missing @guard. Add @guard public for an intentionally public page, or add protected guard IDs such as @guard auth.required",
+				page.ID,
+			),
+		}}
+	}
+
+	public := false
+	for _, guard := range page.Guard {
+		if auth.IsPublicGuard(guard) {
+			public = true
+			break
+		}
+	}
+	if public && len(page.Guard) > 1 {
+		return []ValidationError{{
+			Code:    "public_guard_exclusive",
+			PageID:  page.ID,
+			Source:  page.Source,
+			Span:    firstNamedSpan(page.Spans.Guard, firstSpan(page.Spans.Page, page.Spans.Route)),
+			Message: fmt.Sprintf("%s declares @guard public with other guards; public must be the only guard ID", page.ID),
+		}}
+	}
+	return nil
+}
+
+func validateProtectedPageGuardRender(page manifest.Page, mode gowdk.RenderMode) []ValidationError {
+	if !validateSourceBackedPageGuards(page) || !isBuildTimeRoute(mode, page) || !hasProtectedPageGuard(page) {
+		return nil
+	}
+	return []ValidationError{{
+		Code:    "guard_requires_request_render",
+		PageID:  page.ID,
+		Source:  page.Source,
+		Span:    firstNamedSpan(page.Spans.Guard, firstSpan(page.Spans.Page, page.Spans.Route)),
+		Message: fmt.Sprintf("%s declares protected guard IDs on a build-time page route. Add load {} or go ssr {} with the SSR addon so frontend page access is request-time guarded, or use @guard public for an intentionally public page", page.ID),
+	}}
+}
+
+func validateSourceBackedPageGuards(page manifest.Page) bool {
+	if strings.TrimSpace(page.Source) == "" {
+		return false
+	}
+	if _, err := os.Stat(page.Source); err != nil {
+		return false
+	}
+	return true
+}
+
+func hasProtectedPageGuard(page manifest.Page) bool {
+	for _, guard := range page.Guard {
+		if !auth.IsPublicGuard(guard) {
+			return true
+		}
+	}
+	return false
 }
 
 func firstGoBlockSpan(page manifest.Page, target string) manifest.SourceSpan {

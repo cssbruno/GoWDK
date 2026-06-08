@@ -34,7 +34,7 @@ Annotations must start at the beginning of the trimmed line:
 @cache "public, max-age=60"
 @revalidate 5m
 @error "/errors/home.html"
-@guard auth.required, billing.active
+@guard public
 @component Hero
 @layout root
 ```
@@ -57,11 +57,20 @@ Supported annotations:
 - `@error "<path.html>"`: optional route-local generated HTML error page for
   SSR load, generated render, and panic failures. The path is output-relative
   after normalization and must stay inside generated output.
-- `@guard <id>[, <id>...]`: optional guard metadata.
+- `@guard <id>[, <id>...]`: required page access metadata. Use
+  `@guard public` for intentionally public pages. Use custom guard IDs or
+  native RBAC IDs such as `role:admin` and `permission:posts.write` for
+  protected pages.
 - `@component <Name>`: component ID for `.cmp.gwdk` build inputs.
 
 Unknown annotations are rejected. Lines starting with `@` that do not match
 `@<identifier>` are rejected as malformed annotations.
+
+`@guard public` must be the only guard on a page. Protected pages can declare
+multiple non-public guards; generated handlers enforce them in declaration
+order. Protected page guards require request-time page rendering for frontend
+page access; add `load {}` or `go ssr {}` with the SSR addon when the page is
+not public.
 
 Current route validation accepts canonical absolute paths only:
 

@@ -36,30 +36,10 @@ view fields, missing `g:key`, and malformed `g:for` syntax.
 
 ## Current Code Registry
 
-The source of truth for public diagnostic codes is
-`internal/diagnostics/registry.go`. The registry records each code, area,
-stability level, and short summary. `internal/diagnostics` tests scan non-test
-Go source for emitted diagnostic-code literals so newly emitted codes must be
-added to the registry.
-
-Current stability levels:
-
-- `stable`: safe for CLI, editor, and docs references during the 0.x line
-  unless release notes call out a migration.
-- `experimental`: emitted by partial feature slices and may change while the
-  feature hardens.
-- `addon`: emitted by addon-owned validation or fallback addon diagnostics.
-
-All current diagnostics use severity `error`. Future warning/info diagnostics
-must extend the registry and JSON schema docs before shipping.
-
-Code naming uses lower snake case. Prefer names in this form:
-
-- `<surface>_<problem>` for source validation, such as
-  `component_field_error`.
-- `duplicate_<thing>`, `missing_<thing>`, `unknown_<thing>`,
-  `invalid_<thing>`, and `unsupported_<thing>` for common validation classes.
-- `<feature>_requires_<dependency>` for missing feature-gate behavior.
+The diagnostic-code registry, stability policy, naming rules, and
+`gowdk explain` behavior live in
+[diagnostic-codes.md](../reference/diagnostic-codes.md). The implementation
+source of truth is `internal/diagnostics/registry.go`.
 
 Lexer diagnostics can emit `unterminated_string`; parser diagnostics emit
 `parse_error` until parser recovery has more specific stable codes.

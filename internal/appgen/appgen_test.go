@@ -609,9 +609,11 @@ func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`gowdkratelimit "github.com/cssbruno/gowdk/addons/ratelimit"`,
+		`gowdkauth "github.com/cssbruno/gowdk/runtime/auth"`,
 		`gowdkssr "github.com/cssbruno/gowdk/addons/ssr"`,
 		`func RegisterRateLimiter(limiter *gowdkratelimit.Limiter)`,
 		`func RegisterGuards(registry gowdkssr.GuardRegistry)`,
+		`func RegisterAuthProvider(provider gowdkauth.Provider)`,
 		`if runRateLimit(response, request)`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
 	} {
@@ -1576,9 +1578,14 @@ func TestGenerateWritesGuardRegistryAndGuardChecks(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`gowdkssr "github.com/cssbruno/gowdk/addons/ssr"`,
+		`gowdkauth "github.com/cssbruno/gowdk/runtime/auth"`,
 		`var guardRegistry gowdkssr.GuardRegistry`,
 		`func RegisterGuards(registry gowdkssr.GuardRegistry)`,
-		`gowdkssr.RunGuards(loadContext, guards, guardRegistry)`,
+		`var authProvider gowdkauth.Provider`,
+		`func RegisterAuthProvider(provider gowdkauth.Provider)`,
+		`func init()`,
+		`RegisterGuards(GOWDKGuardRegistry())`,
+		`gowdkssr.RunGuardsWithAuth(loadContext, guards, guardRegistry, authProvider)`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -2994,7 +3001,7 @@ func Session(ctx context.Context, request *http.Request) (gowdkresponse.Response
 	}
 }
 
-func TestGeneratedBinarySSRGuardFailsClosedWithoutRegistry(t *testing.T) {
+func TestGeneratedBinarySSRGuardRequiresBackingCode(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
@@ -3009,39 +3016,12 @@ func TestGeneratedBinarySSRGuardFailsClosedWithoutRegistry(t *testing.T) {
 	}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := BuildBinary(appDir, binaryPath); err != nil {
-		t.Fatal(err)
-	}
-
-	addr := freeAddr(t)
-	command := exec.Command(binaryPath)
-	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
-	if err := command.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		_ = command.Process.Kill()
-		_, _ = command.Process.Wait()
-	}()
-
-	response, err := waitForHTTPStatus("http://"+addr+"/dashboard", http.MethodGet, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payload, err := io.ReadAll(response.Body)
-	_ = response.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if response.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected guarded SSR route to fail closed with 403, got %d: %s", response.StatusCode, payload)
-	}
-	if !strings.Contains(string(payload), `SSR guard "auth.required" is not registered`) {
-		t.Fatalf("expected missing guard registry error, got %s", payload)
+	if _, err := BuildBinary(appDir, binaryPath); err == nil || !strings.Contains(err.Error(), "GOWDKGuardRegistry") {
+		t.Fatalf("expected missing GOWDKGuardRegistry compile error, got %v", err)
 	}
 }
 
-func TestGeneratedBinaryBackendGuardsFailClosedWithoutRegistry(t *testing.T) {
+func TestGeneratedBinaryBackendGuardsRequireBackingCode(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
@@ -3067,45 +3047,8 @@ func TestGeneratedBinaryBackendGuardsFailClosedWithoutRegistry(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := BuildBinary(appDir, binaryPath); err != nil {
-		t.Fatal(err)
-	}
-
-	addr := freeAddr(t)
-	command := exec.Command(binaryPath)
-	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
-	if err := command.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		_ = command.Process.Kill()
-		_, _ = command.Process.Wait()
-	}()
-
-	actionResponse, err := waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=a@example.com")
-	if err != nil {
-		t.Fatal(err)
-	}
-	actionPayload, err := io.ReadAll(actionResponse.Body)
-	_ = actionResponse.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if actionResponse.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected guarded action to fail closed with 403, got %d: %s", actionResponse.StatusCode, actionPayload)
-	}
-
-	apiResponse, err := waitForHTTPStatus("http://"+addr+"/api/session", http.MethodGet, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	apiPayload, err := io.ReadAll(apiResponse.Body)
-	_ = apiResponse.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if apiResponse.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected guarded API to fail closed with 403, got %d: %s", apiResponse.StatusCode, apiPayload)
+	if _, err := BuildBinary(appDir, binaryPath); err == nil || !strings.Contains(err.Error(), "GOWDKGuardRegistry") {
+		t.Fatalf("expected missing GOWDKGuardRegistry compile error, got %v", err)
 	}
 }
 
@@ -3438,12 +3381,12 @@ func TestGeneratedBinaryRegisteredGuardsAllowRequestTimeRoutes(t *testing.T) {
 
 import gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
 
-func init() {
-	RegisterGuards(gowdkssr.GuardRegistry{
+func GOWDKGuardRegistry() gowdkssr.GuardRegistry {
+	return gowdkssr.GuardRegistry{
 		"auth.required": func(ctx gowdkssr.LoadContext) error {
 			return nil
 		},
-	})
+	}
 }
 `)
 	writeTestFile(t, filepath.Join(appDir, "backend", "backend.go"), `package backend
@@ -3506,6 +3449,65 @@ func Session(context.Context, *http.Request) (gowdkresponse.Response, error) {
 	}
 	if apiResponse.StatusCode != http.StatusOK || !strings.Contains(string(apiPayload), `"ok":true`) {
 		t.Fatalf("expected registered guard to allow API response, got %d: %s", apiResponse.StatusCode, apiPayload)
+	}
+}
+
+func TestGeneratedBinaryNativeRBACGuardUsesRegisteredAuthProvider(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		SSR: []SSRRoute{{
+			PageID: "admin",
+			Route:  "/admin",
+			Guards: []string{"role:admin", "permission:admin.read"},
+			HTML:   "<main><h1>Admin</h1></main>",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, appPackageDirName, "auth_provider_register.go"), `package gowdkapp
+
+import (
+	"net/http"
+
+	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
+)
+
+func GOWDKAuthProvider() gowdkauth.Provider {
+	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
+		return &gowdkauth.Principal{
+			ID: "user-1",
+			Roles: []string{"admin"},
+			Permissions: []string{"admin.read"},
+		}, nil
+	})
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, _, err := waitForHTTPResponse("http://" + addr + "/admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, "Admin") {
+		t.Fatalf("expected native RBAC guard to allow SSR route, got %s", body)
 	}
 }
 

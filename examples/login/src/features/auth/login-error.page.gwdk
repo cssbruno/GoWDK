@@ -2,6 +2,7 @@ package auth
 
 @page login.error
 @route "/login/error"
+@guard public
 @css auth
 
 view {

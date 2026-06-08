@@ -2,6 +2,7 @@ package api
 
 @page status
 @route "/status"
+@guard public
 
 api Health GET "/api/health"
 

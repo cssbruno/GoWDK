@@ -58,6 +58,7 @@ The compiler currently treats every parsed file as a page file and requires:
 ```gwdk
 @page home
 @route "/"
+@guard public
 ```
 
 Component files are supported as explicit or discovered `gowdk build` inputs

@@ -200,7 +200,9 @@ are also mirrored to stderr as `info:` console lines.
 `gowdk explain <diagnostic-code>` prints the registry metadata, stability,
 summary, next steps, and examples when available for a diagnostic code. It does
 not read project config or source files. Unknown codes fail with close-code
-suggestions. Use `--json` for editor and tooling integrations.
+suggestions. Use `--json` for editor and tooling integrations. See
+[diagnostic-codes.md](diagnostic-codes.md) for the registry and stability
+policy.
 
 Current `build` limitations: it emits app-shell HTML files,
 `gowdk-routes.json`, `gowdk-assets.json`, generated embedded app source, and

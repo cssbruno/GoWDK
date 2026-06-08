@@ -161,8 +161,9 @@ grep -F 'assets/gowdk/components/componentassets/AssetBadge/badge.' /tmp/gowdk-c
   decoder wrappers, and required-field validation, plus concrete and dynamic
   SSR pages with declared `load {}` fields and hybrid pages with or without
   declared `load {}` data. It runs declared guards for generated
-  SSR/action/API routes and fails closed when guard functions are not
-  registered.
+  SSR/action/API routes, supports native `role:` and `permission:` RBAC guard
+  IDs through a required auth provider hook, and fails Go compilation when guard
+  backing code is missing.
 - `view {}` bodies are parsed only for a small app-shell HTML subset; `act` bodies
   support the first form-input/redirect subset, `api` bodies support the first
   method/route metadata line, and `load` bodies are still not parsed beyond
@@ -171,8 +172,9 @@ grep -F 'assets/gowdk/components/componentassets/AssetBadge/badge.' /tmp/gowdk-c
   `build { => alias.Func() }` for a no-argument Go function returning a JSON
   object. Generated action, API, partial, and `load {}` user handler wiring is
   implemented for the supported first request-time signatures.
-- `@guard` is enforced by generated SSR/action/API handlers. Guarded routes
-  fail closed unless the generated app registers an `ssr.GuardRegistry`.
+- `@guard` is enforced by generated SSR/action/API handlers. Custom guarded
+  routes require `GOWDKGuardRegistry`; native RBAC guard IDs such as
+  `role:admin` require `GOWDKAuthProvider`.
 - Route params from literal `paths {}` are available to the current
   `view {}` interpolation subset and to literal `build {}` string
   interpolation. Imported build functions do not receive route params yet.

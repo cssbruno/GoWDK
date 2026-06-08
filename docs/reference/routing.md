@@ -10,6 +10,7 @@ Every current page file must declare a page ID and a route:
 ```gwdk
 @page home
 @route "/"
+@guard public
 
 view {
   <main>
@@ -50,6 +51,7 @@ route metadata and should be a literal HTTP `Cache-Control` value:
 ```gwdk
 @page docs
 @route "/docs"
+@guard public
 @cache "public, max-age=60"
 ```
 
@@ -62,6 +64,7 @@ header:
 ```gwdk
 @page docs
 @route "/docs"
+@guard public
 @cache "public, max-age=60"
 @revalidate 5m
 ```
@@ -80,6 +83,7 @@ SPA render is the default:
 ```gwdk
 @page docs
 @route "/docs"
+@guard public
 
 view {
   <main>
@@ -109,6 +113,7 @@ inherit that page's generated concrete paths:
 ```gwdk
 @page blog.post
 @route "/blog/{slug}"
+@guard public
 
 paths {
   => { slug: "hello-gowdk" }
@@ -152,6 +157,7 @@ package signup
 
 @page signup
 @route "/signup"
+@guard public
 
 act Submit POST "/signup"
 
@@ -203,6 +209,7 @@ package api
 
 @page status
 @route "/status"
+@guard public
 
 api Health GET "/api/health"
 

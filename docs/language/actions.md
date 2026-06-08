@@ -101,11 +101,15 @@ Current behavior:
   during generated app action endpoint extraction. Uploads belong in user-owned
   API/server handlers where body limits, storage, validation, cleanup, auth, and
   logging policy are explicit.
-- Actions declared on guarded pages share the generated app guard registry with
-  SSR pages and APIs. Register `addons/ssr.GuardRegistry` through the generated
-  app package's `RegisterGuards` hook; generated action handlers run guards
-  before CSRF checks, form decoding, and user handler calls, and fail closed
-  with HTTP 403 when a guard is missing or rejects the request.
+- Actions declared on guarded pages share the generated app guard hooks with
+  SSR pages and APIs. Custom guards require `GOWDKGuardRegistry`; native RBAC
+  guard IDs such as `role:admin` and `permission:posts.write` require
+  `GOWDKAuthProvider`. Missing backing hooks fail the generated app Go build.
+  Generated action handlers run guards before CSRF checks, form decoding, and
+  user handler calls. Treat these as defense-in-depth redundancy for generated
+  route/page access, never as backend resource authorization. If the page
+  itself is protected, use request-time page rendering; build-time SPA HTML
+  cannot enforce frontend page access.
 - Form values are not logged.
 
 The current compiler-generated same-package action binding can decode direct
@@ -126,8 +130,8 @@ through `runtime/response.Response`.
 - Enable `Build.CSRF.Enabled` for generated app deployments that accept action
   POSTs, and provide a stable runtime secret through `Build.CSRF.SecretEnv` or
   `GOWDK_CSRF_SECRET`.
-- Keep authentication, authorization, business validation, persistence, service
-  calls, redirects, HTML, JSON, and fragment decisions in normal Go handlers.
+- Keep authentication, backend authorization, business validation, persistence,
+  service calls, redirects, HTML, JSON, and fragment decisions in normal Go handlers.
   Generated adapters decode the request and write the returned
   `runtime/response.Response`; they do not generate application policy.
 - Generated checks only cover direct literal `required`, `minlength`,

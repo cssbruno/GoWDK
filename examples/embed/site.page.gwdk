@@ -2,6 +2,7 @@ package embed
 
 @page embed.example
 @route "/embed"
+@guard public
 @layout root
 
 build {

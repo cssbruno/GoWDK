@@ -788,8 +788,8 @@ Every 0.x minor release must have:
 - [ ] Add route report cache column and build report cache section.
 - [ ] Test immutable asset cache, SPA `no-cache`, request-time `no-store`,
   `@cache`, `@revalidate`, and invalid `@revalidate`.
-- [ ] Document guard syntax, signatures, registration, fail-closed missing guard
-  behavior, and support matrix for SSR, actions, APIs, fragments, and hybrid.
+- [ ] Document guard syntax, required backing hooks, guard failure behavior, and
+  support matrix for SSR, actions, APIs, fragments, and hybrid.
 - [ ] Document request context helpers for request, params, CSRF, session, and
   app context.
 - [ ] Add user-owned session, cookie session, bearer token, admin role,

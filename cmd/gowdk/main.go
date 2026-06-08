@@ -67,6 +67,8 @@ func run(args []string) error {
 		return siteMapJSON(args[1:])
 	case "routes":
 		return routesJSON(args[1:])
+	case "explain":
+		return explainDiagnostic(args[1:])
 	case "contracts":
 		return contractsReport(args[1:])
 	case "graph":
@@ -123,6 +125,7 @@ func usage() {
 	fmt.Println("  manifest [--config <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
 	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
+	fmt.Println("  explain [--json] <diagnostic-code> explain a diagnostic code and next steps")
 	fmt.Println("  contracts [--json] [dir]  print Go contract registration metadata")
 	fmt.Println("  graph [--json] [dir]      print command/event contract graph")
 	fmt.Println("  trace <contract> [--json] [dir] print one command/query/event/job contract trace")

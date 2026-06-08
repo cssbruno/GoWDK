@@ -40,6 +40,15 @@ stability level, and summary. `go test ./internal/diagnostics` scans non-test
 Go source for emitted diagnostic-code literals and fails when a new emitted
 code is missing from the registry.
 
+Use `gowdk explain <diagnostic-code>` for user-facing details and next steps:
+
+```sh
+gowdk explain missing_ssr_addon
+gowdk explain --json spa_dynamic_route_missing_paths
+```
+
+Unknown codes return a non-zero exit status with close-code suggestions.
+
 Stability levels:
 
 - `stable`: safe for CLI, editor, and docs references during the 0.x line
@@ -62,7 +71,8 @@ Current code areas:
   `duplicate_route_param`, `duplicate_route`, `ambiguous_dynamic_route`,
   `route_method_conflict`, `missing_view_block`, `missing_ssr_addon`,
   `spa_dynamic_route_missing_paths`, `load_requires_request_render`,
-  `spa_disabled`, `ssr_disabled`.
+  `spa_disabled`, `ssr_disabled`, `missing_page_guard`,
+  `public_guard_exclusive`.
 - Backend endpoints: `invalid_backend_handler_name`,
   `invalid_go_endpoint_handler`, `go_endpoint_parse_error`,
   `duplicate_go_endpoint_comment`, `unsupported_action_method`,

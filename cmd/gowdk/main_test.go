@@ -39,6 +39,68 @@ func TestVersionCommandSupportsJSON(t *testing.T) {
 	}
 }
 
+func TestExplainCommandPrintsDiagnosticExplanation(t *testing.T) {
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"explain", "missing_ssr_addon"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	for _, expected := range []string{
+		"missing_ssr_addon",
+		"Area: rendering",
+		"Stability: stable",
+		"Next steps:",
+		"ssr.Addon()",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("expected %q in explanation:\n%s", expected, stdout)
+		}
+	}
+}
+
+func TestExplainCommandSupportsJSON(t *testing.T) {
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"explain", "--json", "missing_ssr_addon"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	var decoded struct {
+		Code      string   `json:"code"`
+		Area      string   `json:"area"`
+		Stability string   `json:"stability"`
+		NextSteps []string `json:"nextSteps"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("expected JSON explanation, got %q: %v", stdout, err)
+	}
+	if decoded.Code != "missing_ssr_addon" || decoded.Area != "rendering" || decoded.Stability != "stable" || len(decoded.NextSteps) == 0 {
+		t.Fatalf("unexpected JSON explanation: %#v", decoded)
+	}
+}
+
+func TestExplainCommandSuggestsUnknownCodes(t *testing.T) {
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"explain", "missing_ssr_adon"})
+	})
+	if err == nil {
+		t.Fatal("expected unknown diagnostic code error")
+	}
+	if stdout != "" || stderr != "" {
+		t.Fatalf("expected direct run to avoid stdout/stderr, got stdout=%q stderr=%q", stdout, stderr)
+	}
+	if !strings.Contains(err.Error(), `unknown diagnostic code "missing_ssr_adon"`) || !strings.Contains(err.Error(), "missing_ssr_addon") {
+		t.Fatalf("expected close-code suggestion, got %v", err)
+	}
+}
+
 func TestBuildCommandWritesIndexHTML(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")

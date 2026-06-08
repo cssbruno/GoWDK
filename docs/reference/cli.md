@@ -15,6 +15,7 @@ gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
+gowdk explain [--json] <diagnostic-code>
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
@@ -32,7 +33,7 @@ gowdk lsp [--ssr]
 - `--force`: supported by `init`; overwrites starter files that already exist.
 - `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
-- `--json`: supported by `check`, `contracts`, `graph`, `trace`, and `list`; prints
+- `--json`: supported by `check`, `explain`, `contracts`, `graph`, `trace`, and `list`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available.
 - `--write`: supported by `fmt`; overwrites formatted files.
@@ -67,6 +68,8 @@ go run ./cmd/gowdk init --template minimal my-minimal-site
 go run ./cmd/gowdk check examples/pages/home.page.gwdk
 go run ./cmd/gowdk check --config gowdk.config.go
 go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk
+go run ./cmd/gowdk explain missing_ssr_addon
+go run ./cmd/gowdk explain --json spa_dynamic_route_missing_paths
 go run ./cmd/gowdk manifest --module frontend --ssr
 go run ./cmd/gowdk sitemap --module frontend --ssr
 go run ./cmd/gowdk trace patients.CreatePatient
@@ -193,6 +196,11 @@ symbol, signature/input metadata when bound, status, and binding message.
 Non-fatal route-mode notes, such as request-time page rendering disabled on a
 SPA route or static SPA output disabled on an SSR route, appear in `info` and
 are also mirrored to stderr as `info:` console lines.
+
+`gowdk explain <diagnostic-code>` prints the registry metadata, stability,
+summary, next steps, and examples when available for a diagnostic code. It does
+not read project config or source files. Unknown codes fail with close-code
+suggestions. Use `--json` for editor and tooling integrations.
 
 Current `build` limitations: it emits app-shell HTML files,
 `gowdk-routes.json`, `gowdk-assets.json`, generated embedded app source, and

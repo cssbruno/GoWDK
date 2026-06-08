@@ -90,7 +90,6 @@ jobs:
           GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/gowdk-darwin-amd64 ./cmd/gowdk
           GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/gowdk-darwin-arm64 ./cmd/gowdk
           GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/gowdk-windows-amd64.exe ./cmd/gowdk
-          (cd dist && sha256sum * > checksums.txt)
 
       - name: Package VS Code extension
         run: |
@@ -101,6 +100,10 @@ jobs:
       - name: Collect VS Code package
         run: |
           find editors/vscode -maxdepth 1 -name '*.vsix' -exec cp {} dist/ \;
+
+      - name: Generate checksums
+        run: |
+          (cd dist && sha256sum * > checksums.txt)
 
       - name: Attest release artifacts
         uses: actions/attest@v4

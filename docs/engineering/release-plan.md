@@ -518,9 +518,10 @@ Every 0.x minor release must have:
 - [ ] Include matrix columns for stable enough to demo, not production
   security, docs available, example available, and tests available.
 - [ ] Add direct links from matrix rows to docs, examples, or issues.
-- [ ] Add project laws: generated Go is glue, normal Go owns app behavior, no
-  mandatory npm, no mandatory framework adapter, no mandatory broker, and
-  unsupported features produce diagnostics.
+- [x] Replace slogan-style project laws with the concrete project shape:
+  `.gwdk` source declarations, normal Go behavior, compiler IR/output,
+  generated runtime wiring, explicit request-time lanes, bounded browser
+  enhancement, optional integrations, and diagnostics for unsupported source.
 - [ ] Replace vague "full-stack" wording with concrete supported lanes.
 - [ ] Keep install from GitHub release asset as the first install path.
 - [ ] Keep build from source as the contributor/development path.

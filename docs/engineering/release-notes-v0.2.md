@@ -16,7 +16,7 @@ tooling contracts may change before a stable release.
 - v0.2 release checklist for Public Truth and Release Trust work.
 - Release note template requiring experimental, not-production-ready, known
   gaps, checksum, and attestation sections.
-- README experimental status, project laws, and current support matrix.
+- README experimental status, project shape, and current support matrix.
 - Getting started release-install path with Linux, macOS, Windows, checksum,
   attestation, and VS Code `.vsix` verification notes.
 - Root `SECURITY.md` aligned with the deeper repository security baseline.

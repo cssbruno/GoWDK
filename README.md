@@ -14,18 +14,28 @@ pages, compile frontend output, and package it into one binary.
 **Status:** experimental 0.x pre-release. Public contracts can still change.
 Not production-ready.
 
-Project laws:
+Project shape:
 
-- `.gwdk` declares web structure.
-- Normal Go owns app behavior.
-- Generated Go is adapter glue, not application logic.
-- Build-time/static pages are the default.
-- Request-time behavior, SSR, and hybrid pages are explicit.
-- Generated JavaScript is enhancement only; it does not own auth, routing truth,
-  validation truth, business logic, server state, or cache policy.
-- `net/http` is the runtime boundary; Gin, Echo, Fiber, Redis, NATS, WebSocket,
-  Tailwind, and npm stay optional.
-- Unsupported behavior should produce clear diagnostics.
+- `.gwdk` files declare pages, components, layouts, routes, views, build data,
+  browser behavior hooks, and endpoint metadata.
+- Normal Go packages own handlers, domain logic, auth, persistence, contracts,
+  jobs, integration events, and production validation.
+- The compiler parses `.gwdk`, validates contracts, lowers to IR, and emits
+  HTML, assets, manifests, build reports, and generated Go adapters.
+- Generated Go is runtime wiring: `net/http` routes, form decoders, response
+  envelopes, CSRF checks, fragments, SSR/load calls, guards, rate limits, and
+  contract web adapters.
+- Build-time SPA/static output is the default page lane. `load {}` and
+  `go ssr {}` opt pages into request-time rendering. Actions, APIs, and
+  fragments are request-time endpoints without forcing full-page SSR.
+- Generated browser code is compiler-owned enhancement for SPA navigation,
+  partial form posts, fragments, local islands, and WASM mounts. User JS,
+  TypeScript, npm assets, and framework interop stay explicit and page-scoped.
+- Runtime core stays dependency-light. Framework adapters, Tailwind, Redis,
+  NATS, WebSocket fanout, and similar integrations live in optional addons or
+  nested modules.
+- Unsupported source should fail with diagnostics before generated output gets
+  clever or surprising.
 
 Install:
 

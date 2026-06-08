@@ -151,7 +151,7 @@ view {
 	if len(result.IR.Packages) != 2 {
 		t.Fatalf("expected two packages, got %#v", result.IR.Packages)
 	}
-	if len(result.IR.Routes) != 1 || result.IR.Routes[0].Kind != gwdkir.RouteSPA || result.IR.Routes[0].PageID != "home" {
+	if len(result.IR.Routes) != 1 || result.IR.Routes[0].Kind != gwdkir.RouteSSR || result.IR.Routes[0].PageID != "home" {
 		t.Fatalf("unexpected routes: %#v", result.IR.Routes)
 	}
 	if result.IR.Routes[0].Cache != "public, max-age=60, stale-while-revalidate=60" {

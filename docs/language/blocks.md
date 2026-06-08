@@ -139,8 +139,6 @@ Use `go ssr {}` for colocated SSR load handlers:
 ```gwdk
 import ssr "github.com/cssbruno/gowdk/addons/ssr"
 
-@render ssr
-
 load {
   => { user.name }
 }

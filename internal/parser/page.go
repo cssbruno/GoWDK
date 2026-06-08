@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -647,16 +646,6 @@ func applyAnnotation(page *manifest.Page, name, rawValue string, lineNumber int,
 		}
 		page.Layouts = splitList(value)
 		page.Spans.Layouts = namedValueSpans(page.Layouts, lineNumber, rawLine)
-	case "render":
-		if value == string(gowdk.SPA) {
-			return fmt.Errorf("@render spa is redundant; omit @render because spa is the default")
-		}
-		mode, err := gowdk.ParseRenderMode(value)
-		if err != nil {
-			return err
-		}
-		page.Render = mode
-		page.Spans.Render = span
 	case "cache":
 		policy, err := cachePolicyValue(value)
 		if err != nil {

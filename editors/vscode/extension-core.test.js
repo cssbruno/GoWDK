@@ -307,7 +307,6 @@ test('completionEntries include expected language constructs', () => {
 });
 
 test('completionContext identifies project-aware completion contexts', () => {
-  assert.equal(core.completionContext('@render s'), 'render');
   assert.equal(core.completionContext('@layout root, '), 'layout');
   assert.equal(core.completionContext('@css default, '), 'css');
   assert.equal(core.completionContext('@css default '), 'css');
@@ -359,12 +358,6 @@ test('projectCompletionEntries derive layouts routes components and CSS from met
     ['Hero', 'Component from project manifest.'],
     ['StatusPanel', 'Component from project manifest.']
 	]);
-  assert.deepEqual(core.projectCompletionEntries('render', metadata).map(([name]) => name), [
-    'spa',
-    'action',
-    'hybrid',
-    'ssr'
-  ]);
   assert.deepEqual(core.projectCompletionEntries('island', metadata), [
     ['wasm', 'Use explicit WASM island assets for this component call.']
   ]);
@@ -611,7 +604,6 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
     '@image "https://example.com/social.png"',
     '@component Counter',
     '@css default page forms',
-    '@render spa',
     'act Submit POST "/submit"',
     'api Status GET "/api/status"',
     'emits {',
@@ -672,20 +664,17 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
   assert.deepEqual(simplified.filter((token) => token.text === 'forms'), [
     { line: 9, text: 'forms', tokenType: 'property' }
   ]);
-  assert.deepEqual(simplified.filter((token) => token.text === 'spa'), [
-    { line: 10, text: 'spa', tokenType: 'enumMember' }
-  ]);
   assert.deepEqual(simplified.filter((token) => token.text === 'Submit'), [
-    { line: 11, text: 'Submit', tokenType: 'function' }
+    { line: 10, text: 'Submit', tokenType: 'function' }
   ]);
   assert.deepEqual(simplified.filter((token) => token.text === 'POST'), [
-    { line: 11, text: 'POST', tokenType: 'enumMember' }
+    { line: 10, text: 'POST', tokenType: 'enumMember' }
   ]);
   assert.deepEqual(simplified.filter((token) => token.text === 'Status'), [
-    { line: 12, text: 'Status', tokenType: 'function' }
+    { line: 11, text: 'Status', tokenType: 'function' }
   ]);
   assert.deepEqual(simplified.filter((token) => token.text === 'GET'), [
-    { line: 12, text: 'GET', tokenType: 'enumMember' }
+    { line: 11, text: 'GET', tokenType: 'enumMember' }
   ]);
   assert.ok(simplified.some((token) => token.text === 'emits' && token.tokenType === 'keyword'));
   assert.ok(simplified.some((token) => token.text === 'client' && token.tokenType === 'keyword'));

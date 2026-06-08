@@ -533,11 +533,9 @@ function completionEntries() {
     ['@canonical', 'Declare the generated canonical URL.'],
     ['@image', 'Declare the generated social preview image URL.'],
     ['@layout', 'Declare one or more layout ids.'],
-    ['@render', 'Declare render mode: spa, action, hybrid, or ssr.'],
     ['@guard', 'Declare route guards.'],
     ['@component', 'Declare the component name.'],
     ['@css', 'Select page CSS inputs: default, page, none, or discovered CSS names.'],
-    ...renderModeCompletionEntries(),
     ['paths', 'Build-time dynamic route path block.'],
     ['build', 'Build-time data block.'],
     ['load', 'Request-time data block.'],
@@ -576,9 +574,6 @@ function completionEntries() {
 
 function completionContext(linePrefix) {
   const prefix = String(linePrefix || '');
-  if (/@render\s+[A-Za-z]*$/.test(prefix)) {
-    return 'render';
-  }
   if (/@layout\s+(?:[A-Za-z0-9_.-]+,\s*)*[A-Za-z0-9_.-]*$/.test(prefix)) {
     return 'layout';
   }
@@ -601,9 +596,6 @@ function completionContext(linePrefix) {
 }
 
 function projectCompletionEntries(context, metadata = {}) {
-  if (context === 'render') {
-    return renderModeCompletionEntries();
-  }
   if (context === 'island') {
     return [['wasm', 'Use explicit WASM island assets for this component call.']];
   }
@@ -626,15 +618,6 @@ function projectCompletionEntries(context, metadata = {}) {
     return cssCompletionEntries(metadata);
   }
   return completionEntries();
-}
-
-function renderModeCompletionEntries() {
-  return [
-    ['spa', 'Build-time HTML render mode.'],
-    ['action', 'SPA page with backend actions.'],
-    ['hybrid', 'SPA by default with selected request-time behavior.'],
-    ['ssr', 'Request-time full-page rendering through the SSR addon.']
-  ];
 }
 
 function directiveCompletionEntries() {

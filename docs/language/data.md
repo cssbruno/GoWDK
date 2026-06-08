@@ -9,7 +9,7 @@ Generated JavaScript does not own page loading policy.
 | --- | --- | --- | --- |
 | `paths {}` | build time | concrete dynamic SPA routes | Literal records only. Required for dynamic SPA pages unless the page uses request-time rendering. |
 | `build {}` | build time | static page data | Literal records plus imported or same-package no-argument Go functions. |
-| `load {}` | request time | SSR or explicit hybrid page data | One same-package `Load<PageID>` function returns `map[string]any` data. |
+| `load {}` | request time | SSR page data | One same-package `Load<PageID>` function returns `map[string]any` data. |
 | `act` | request time | POST/action endpoint behavior | Same-package Go handler returns `runtime/response.Response`. |
 | `api` | request time | API endpoint behavior | Same-package Go handler returns `runtime/response.Response`. |
 | `fragment` | request time | partial endpoint behavior | Same-package Go hook or static generated fragment body. |
@@ -18,8 +18,7 @@ Generated JavaScript does not own page loading policy.
 
 - `build {}` data is rendered into generated static output. It must not depend
   on the incoming HTTP request.
-- `load {}` requires `@render ssr` or `@render hybrid`. SPA pages with `load {}`
-  are rejected.
+- `load {}` selects request-time SSR and requires the SSR addon.
 - Generated SSR calls one same-package function named `Load<PageID>`.
 - Supported load signatures are:
 

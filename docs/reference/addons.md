@@ -34,7 +34,7 @@ Current packages:
 - `addons/contracts`
 
 The current compiler validator checks whether SSR is enabled when a page uses
-`@render ssr` or `@render hybrid`. SPA builds invoke addons that implement
+`load {}` or `go ssr {}`. SPA builds invoke addons that implement
 `gowdk.CSSProcessor`. Generated app builds invoke configured addons that
 implement `gowdk.GoBlockConsumer` for `go addon.<name> {}` blocks.
 

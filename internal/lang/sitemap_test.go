@@ -28,7 +28,6 @@ view {
 @page dashboard
 @route "/dashboard"
 @layout root, dashboard
-@render ssr
 @guard auth.required
 
 load {
@@ -102,7 +101,9 @@ func TestSiteMapJSONRunsCompilerValidation(t *testing.T) {
 
 @page dashboard
 @route "/dashboard"
-@render ssr
+
+go ssr {
+}
 
 view {
 }

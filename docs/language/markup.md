@@ -132,7 +132,7 @@ Implemented today:
   `g:island` values are compile/render errors. Without `@wasm` or `g:island`,
   stateful component calls use generated JavaScript by default.
 - Familiar external-template block syntax such as `{#if}`, `{#each}`,
-  `{#await}`, `{#snippet}`, `{@render}`, `{@html}`, `{@const}`, and `{@debug}`
+  `{#await}`, `{#snippet}`, `{@html}`, `{@const}`, and `{@debug}`
   is rejected with diagnostics that point to the current GOWDK-native
   alternatives. These diagnostics are guidance only; they do not imply that
   GOWDK will implement those external constructs feature-for-feature.

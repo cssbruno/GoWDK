@@ -2,7 +2,9 @@ package ssr
 
 @page simple.ssr
 @route "/ssr"
-@render ssr
+
+go ssr {
+}
 
 build {
   => { title: "SSR from GOWDK" }

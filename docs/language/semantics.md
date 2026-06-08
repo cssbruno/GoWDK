@@ -3,9 +3,8 @@
 ## Current Render Rules
 
 - Default render mode is `spa`.
-- Supported render modes are `spa`, `action`, `hybrid`, and `ssr`.
-- `@render ssr` and `@render hybrid` require the SSR addon and use generated
-  request-time route handlers.
+- Source pages do not declare render modes.
+- `load {}` or `go ssr {}` selects request-time SSR and requires the SSR addon.
 - Page IDs must be unique within the manifest.
 - Component names must be unique within the manifest.
 - Dynamic build-time routes such as `/blog/{slug}` require a `paths {}` block.
@@ -13,7 +12,7 @@
 - SPA navigation enhancement is optional runtime behavior over literal internal
   links. Route existence, route output, auth, and server behavior remain owned
   by generated files and generated Go.
-- `load {}` runs at request time and requires `@render ssr` or `@render hybrid`.
+- `load {}` runs at request time.
 - SPA pages may declare `act` blocks without SSR.
 
 ## Current Metadata Semantics

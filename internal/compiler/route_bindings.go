@@ -134,7 +134,7 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Code:    "spa_disabled",
 				PageID:  route.PageID,
 				Route:   route.Path,
-				Message: fmt.Sprintf("%s uses @render ssr; generated SPA/static page output is disabled for this route", route.PageID),
+				Message: fmt.Sprintf("%s uses request-time page behavior; generated SPA/static page output is disabled for this route", route.PageID),
 			})
 		case gwdkir.RouteHybrid:
 			routes = append(routes, RouteBinding{
@@ -158,7 +158,7 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Code:    "ssr_disabled",
 				PageID:  route.PageID,
 				Route:   route.Path,
-				Message: fmt.Sprintf("%s uses @render %s; request-time page rendering is disabled for this route", route.PageID, route.Render),
+				Message: fmt.Sprintf("%s uses build-time page output; request-time page rendering is disabled for this route", route.PageID),
 			})
 		}
 	}

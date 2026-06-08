@@ -4,18 +4,16 @@ SSR is optional and must not become the default framework identity.
 
 ## Current Support
 
-- `@render ssr` is parsed as a render mode.
-- `@render ssr` requires the SSR addon during validation.
-- `@render hybrid` is a request-time route lane and requires the SSR addon.
+- Pages default to build-time SPA output.
+- `load {}` selects request-time SSR and requires the SSR addon.
+- `go ssr {}` also selects request-time SSR and requires the SSR addon.
 - `gowdk build --ssr --app <dir> --bin <file>` can generate a binary that
-  serves concrete and dynamic `@render ssr` pages and `@render hybrid` pages
-  with or without declared `load {}` data, rendered from `view {}` and literal
-  or imported `build {}` data.
+  serves concrete and dynamic request-time SSR pages rendered from `view {}`,
+  literal or imported `build {}` data, and declared `load {}` data.
 - Dynamic SSR routes such as `/blog/{slug}` can be matched by generated
   binaries in the first supported slice. Route params render through generated
   placeholders and request-time HTML escaping.
-- `load {}` is allowed only with `@render ssr` or `@render hybrid`. Generated
-  SSR supports declared identifier and dotted-path fields such as
+- Generated SSR supports declared identifier and dotted-path fields such as
   `load { => { user, title, account.plan } }` and calls a same-package exported
   Go function named `Load<PageID>`.
 - Supported load function signatures are
@@ -68,8 +66,6 @@ import gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
 func init() {
 	RegisterGuards(gowdkssr.GuardRegistry{
 		"auth.required": func(ctx gowdkssr.LoadContext) error {
-			// Read ctx.Request, cookies, headers, or app-owned session helpers.
-			// Return nil to allow the request to continue.
 			return nil
 		},
 	})
@@ -78,14 +74,4 @@ func init() {
 
 Feature packages that declare page, action, or API handlers should not import
 the generated `gowdkapp` package. Keep registration in the generated app
-package, a startup integration file, or a wrapper binary that owns generated
-app initialization.
-
-For the full `paths {}` / `build {}` / `load {}` / endpoint data boundary, see
-[data.md](data.md). For hybrid-specific behavior, see [hybrid.md](hybrid.md).
-
-## Planned Support
-
-Future SSR work must define request layouts plus hybrid streaming, data
-refresh, and non-HTTP revalidation without making hybrid pages identical to
-full-page SSR.
+package to avoid import cycles.

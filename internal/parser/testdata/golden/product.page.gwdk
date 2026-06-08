@@ -3,7 +3,6 @@ package shop
 @page shop.product
 @route "/shop/{slug}"
 @layout root, shop
-@render action
 @guard commerce.auth
 
 paths {

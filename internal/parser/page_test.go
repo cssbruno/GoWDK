@@ -86,20 +86,20 @@ view {
 	}
 }
 
-func TestParsePageRejectsExplicitSPARenderMode(t *testing.T) {
+func TestParsePageRejectsUnknownAnnotation(t *testing.T) {
 	_, err := ParsePage([]byte(`
 @page home
 @route "/"
-@render spa
+@unknown nope
 
 view {
   <main>Home</main>
 }
 `))
 	if err == nil {
-		t.Fatal("expected explicit @render spa to be rejected")
+		t.Fatal("expected unknown annotation to be rejected")
 	}
-	if !strings.Contains(err.Error(), "@render spa is redundant") {
+	if !strings.Contains(err.Error(), "unsupported annotation @unknown") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -297,7 +297,6 @@ func TestParsePageReadsSSRLoadGuardAndActionEndpoint(t *testing.T) {
 @page dashboard
 @route "/dashboard"
 @layout root, dashboard
-@render ssr
 @guard auth.required
 
 load {
@@ -314,8 +313,11 @@ view {
 		t.Fatal(err)
 	}
 
-	if page.Render != gowdk.SSR {
-		t.Fatalf("expected ssr render, got %q", page.Render)
+	if page.Render != "" {
+		t.Fatalf("expected omitted render, got %q", page.Render)
+	}
+	if page.RenderMode(gowdk.SPA) != gowdk.SSR {
+		t.Fatalf("expected effective ssr render, got %q", page.RenderMode(gowdk.SPA))
 	}
 	if !page.Blocks.Load {
 		t.Fatal("expected load block")
@@ -330,10 +332,10 @@ view {
 	if action.Name != "Refresh" || action.Method != "POST" || action.Route != "/dashboard" {
 		t.Fatalf("expected refresh action, got %#v", page.Blocks.Actions)
 	}
-	if page.Spans.Guard[0].Name != "auth.required" || page.Spans.Guard[0].Span.Start.Line != 6 {
+	if page.Spans.Guard[0].Name != "auth.required" || page.Spans.Guard[0].Span.Start.Line != 5 {
 		t.Fatalf("expected guard span, got %#v", page.Spans.Guard)
 	}
-	if page.Blocks.Actions[0].Span.Start.Line != 13 {
+	if page.Blocks.Actions[0].Span.Start.Line != 12 {
 		t.Fatalf("expected action span, got %#v", page.Blocks.Actions[0].Span)
 	}
 }
@@ -749,14 +751,17 @@ build {
 	}
 }
 
-func TestParsePageRejectsUnknownRenderMode(t *testing.T) {
+func TestParsePageRejectsUnknownPageAnnotation(t *testing.T) {
 	_, err := ParsePage([]byte(`
 @page home
 @route "/"
-@render server-first
+@mode ssr
 `))
 	if err == nil {
-		t.Fatal("expected render mode error")
+		t.Fatal("expected unknown annotation error")
+	}
+	if !strings.Contains(err.Error(), "unsupported annotation @mode") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -855,7 +860,6 @@ func TestParsePageReadsErrorPage(t *testing.T) {
 	page, err := ParsePage([]byte(`
 @page dashboard
 @route "/dashboard"
-@render ssr
 @error "/errors/dashboard.html"
 
 view {
@@ -867,7 +871,7 @@ view {
 	if page.ErrorPage != "errors/dashboard.html" {
 		t.Fatalf("unexpected error page: %#v", page)
 	}
-	if page.Spans.ErrorPage.Start.Line != 5 {
+	if page.Spans.ErrorPage.Start.Line != 4 {
 		t.Fatalf("unexpected error page span: %#v", page.Spans.ErrorPage)
 	}
 }
@@ -876,7 +880,6 @@ func TestParsePageRejectsUnsafeErrorPage(t *testing.T) {
 	_, err := ParsePage([]byte(`
 @page dashboard
 @route "/dashboard"
-@render ssr
 @error "../secret.html"
 
 view {

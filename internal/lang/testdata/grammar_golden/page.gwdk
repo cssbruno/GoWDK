@@ -3,7 +3,6 @@ package grammar
 @page grammar.demo
 @route "/demo/{slug}"
 @layout root, demo
-@render action
 @css default page forms
 
 paths {

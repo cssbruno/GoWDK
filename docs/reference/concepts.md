@@ -27,9 +27,9 @@ copies Svelte's JavaScript runtime model.
 
 ## Pages
 
-Pages default to build-time output. Use `@render ssr` only when a page needs
-request-time rendering. Dynamic SPA routes use `paths {}`; SSR dynamic routes
-use request-time matching.
+Pages default to build-time output. Use `load {}` or `go ssr {}` only when a
+page needs request-time rendering. Dynamic SPA routes use `paths {}`; SSR
+dynamic routes use request-time matching.
 
 ## Data
 

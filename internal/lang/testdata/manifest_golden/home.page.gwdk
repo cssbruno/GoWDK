@@ -3,7 +3,6 @@ package home
 @page home
 @route "/"
 @layout root
-@render action
 
 build {
   => { title: "Home" }

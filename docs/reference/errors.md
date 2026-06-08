@@ -52,7 +52,6 @@ Route-local SSR error pages use `@error`:
 ```gwdk
 @page dashboard
 @route "/dashboard"
-@render ssr
 @error "/errors/dashboard.html"
 ```
 

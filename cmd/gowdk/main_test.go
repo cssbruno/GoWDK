@@ -2370,7 +2370,9 @@ var Config = gowdk.Config{
 
 @page dashboard
 @route "/dashboard"
-@render ssr
+
+go ssr {
+}
 
 view {
   <main>Dashboard</main>
@@ -2452,7 +2454,6 @@ func TestRoutesCommandPrintsRoutesAndEndpoints(t *testing.T) {
 
 @page newsletter
 @route "/newsletter"
-@render action
 
 act Subscribe POST "/newsletter"
 
@@ -2470,7 +2471,7 @@ view {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stderr, "info: ssr_disabled: newsletter uses @render action; request-time page rendering is disabled for this route") {
+	if !strings.Contains(stderr, "info: ssr_disabled: newsletter uses build-time page output; request-time page rendering is disabled for this route") {
 		t.Fatalf("expected disabled SSR route info on stderr, got:\n%s", stderr)
 	}
 
@@ -2513,13 +2514,13 @@ view {
 			Message:      "GOWDK action handler app.Subscribe is not implemented",
 		},
 	})
-	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 7 {
+	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 6 {
 		t.Fatalf("expected endpoint source span for action declaration, got %#v", report.Endpoints[0].SourceSpan)
 	}
 	assertRouteInfo(t, report.Info, "ssr_disabled", "newsletter")
 }
 
-func TestRoutesCommandPrintsHybridRouteKind(t *testing.T) {
+func TestRoutesCommandPrintsSSRRouteKind(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "dashboard.page.gwdk")
 	config := writeMinimalCLIConfig(t, root)
@@ -2527,7 +2528,6 @@ func TestRoutesCommandPrintsHybridRouteKind(t *testing.T) {
 
 @page dashboard
 @route "/dashboard"
-@render hybrid
 
 load {
 }
@@ -2543,8 +2543,8 @@ view {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stderr != "" {
-		t.Fatalf("expected no disabled-lane info for hybrid route, got:\n%s", stderr)
+	if !strings.Contains(stderr, "spa_disabled: dashboard uses request-time page behavior") {
+		t.Fatalf("expected spa disabled info for ssr route, got:\n%s", stderr)
 	}
 
 	var report routeMetadataReport
@@ -2552,11 +2552,11 @@ view {
 		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
 	}
 	assertRouteBinding(t, report.Routes, routeBindingJSON{
-		Kind:    "hybrid",
+		Kind:    "ssr",
 		Method:  "GET",
 		Route:   "/dashboard",
 		PageID:  "dashboard",
-		Handler: "hybrid.RenderDashboard",
+		Handler: "ssr.RenderDashboard",
 	})
 }
 
@@ -2568,7 +2568,9 @@ func TestRoutesCommandPrintsBareHybridAsHybridRoute(t *testing.T) {
 
 @page dashboard
 @route "/dashboard"
-@render hybrid
+
+go ssr {
+}
 
 view {
   <main>Dashboard</main>
@@ -2590,11 +2592,11 @@ view {
 		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
 	}
 	assertRouteBinding(t, report.Routes, routeBindingJSON{
-		Kind:    "hybrid",
+		Kind:    "ssr",
 		Method:  "GET",
 		Route:   "/dashboard",
 		PageID:  "dashboard",
-		Handler: "hybrid.RenderDashboard",
+		Handler: "ssr.RenderDashboard",
 	})
 }
 
@@ -3142,7 +3144,9 @@ func TestBuildCommandBuildsSSRBinary(t *testing.T) {
 
 @page dashboard
 @route "/dashboard"
-@render ssr
+
+go ssr {
+}
 
 build {
   => { title: "Dashboard" }
@@ -3193,7 +3197,9 @@ func TestBuildCommandBuildsDynamicSSRBinary(t *testing.T) {
 
 @page blog.post
 @route "/blog/{slug}"
-@render ssr
+
+go ssr {
+}
 
 build {
   => { title: "Post {slug}" }

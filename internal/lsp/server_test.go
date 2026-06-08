@@ -73,7 +73,7 @@ func TestServerHandlesInitializeDiagnosticsFormattingCompletionAndShutdown(t *te
 func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 	uri := "file:///tmp/bad.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@page bad\n@render nope\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@page bad\n@unknown nope\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"`+uri+`"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)
@@ -102,7 +102,7 @@ func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 	start := firstRange["start"].(map[string]any)
 	end := firstRange["end"].(map[string]any)
 	if start["line"] != float64(3) || start["character"] != float64(0) ||
-		end["line"] != float64(3) || end["character"] != float64(12) {
+		end["line"] != float64(3) || end["character"] != float64(13) {
 		t.Fatalf("expected full parse-error line range, got %#v", firstRange)
 	}
 	secondDiagnostics := messages[2]["params"].(map[string]any)["diagnostics"].([]any)

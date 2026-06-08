@@ -50,8 +50,6 @@ Supported annotations:
   Twitter metadata.
 - `@layout <id>[, <id>...]`: optional page layout IDs, or a layout identity in
   `.layout.gwdk` files.
-- `@render action|hybrid|ssr`: optional non-default render mode. Omit
-  `@render` for the default SPA output.
 - `@cache "<policy>"`: optional page Cache-Control policy for successful
   generated static SPA HTML and SSR HTML responses.
 - `@revalidate <seconds|duration>`: optional stale-while-revalidate duration

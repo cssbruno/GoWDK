@@ -115,11 +115,10 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 			Code:   "missing_ssr_addon",
 			PageID: page.ID,
 			Source: page.Source,
-			Span:   firstSpan(page.Spans.Render, page.Spans.Page),
+			Span:   firstSpan(page.Blocks.Spans.Load, firstGoBlockSpan(page, "ssr"), page.Spans.Page),
 			Message: fmt.Sprintf(
-				"%s.page.gwdk uses @render %s, but the SSR addon is not enabled. Fix: enable ssr.Addon() in gowdk.config.go",
+				"%s.page.gwdk uses request-time page behavior, but the SSR addon is not enabled. Fix: enable ssr.Addon() in gowdk.config.go",
 				page.ID,
-				mode,
 			),
 		})
 	}
@@ -147,7 +146,7 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 			Source: page.Source,
 			Span:   firstNamedSpan(page.Spans.RouteParams, page.Spans.Route),
 			Message: fmt.Sprintf(
-				"%s has dynamic route params: {%s}, but render mode is %s and no paths block exists. Fix: add paths { ... } or use @render ssr",
+				"%s has dynamic route params: {%s}, but render mode is %s and no paths block exists. Fix: add paths { ... } or declare request-time page behavior with load {} or go ssr {}",
 				page.ID,
 				strings.Join(params, ", "),
 				mode,
@@ -162,7 +161,7 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 			Source: page.Source,
 			Span:   firstSpan(page.Blocks.Spans.Load, page.Spans.Render, page.Spans.Page),
 			Message: fmt.Sprintf(
-				"%s declares load {}, but load runs at request time and requires @render ssr or @render hybrid",
+				"%s declares load {}, but load runs at request time and requires the SSR addon",
 				page.ID,
 			),
 		})
@@ -170,6 +169,15 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	diagnostics = append(diagnostics, validatePageCSS(page)...)
 
 	return diagnostics
+}
+
+func firstGoBlockSpan(page manifest.Page, target string) manifest.SourceSpan {
+	for _, block := range page.Blocks.GoBlocks {
+		if block.Target == target {
+			return block.Span
+		}
+	}
+	return manifest.SourceSpan{}
 }
 
 func requiresSSRFeature(mode gowdk.RenderMode, page manifest.Page) bool {

@@ -12,7 +12,6 @@ type File struct {
 	Annotations []Annotation
 	Page        *PageDecl
 	Route       *RouteDecl
-	Render      *RenderDecl
 	Cache       *CacheDecl
 	Revalidate  *RevalidateDecl
 	ErrorPage   *ErrorPageDecl
@@ -76,12 +75,6 @@ type RouteDecl struct {
 type RouteParam struct {
 	Name string
 	Type string
-	Span manifest.SourceSpan
-}
-
-// RenderDecl is an @render declaration.
-type RenderDecl struct {
-	Mode string
 	Span manifest.SourceSpan
 }
 

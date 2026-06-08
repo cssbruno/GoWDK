@@ -71,7 +71,7 @@ func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.A
 			ComponentName: componentName,
 			Source:        source,
 			Span:          block.Span,
-			Message:       fmt.Sprintf("%s declares go ssr {}, but ssr Go code is request-time behavior and requires @render ssr or @render hybrid", pageID),
+			Message:       fmt.Sprintf("%s declares go ssr {}, but ssr Go code is request-time behavior and requires the SSR addon", pageID),
 		}}
 	case strings.HasPrefix(target, "addon."):
 		return validateAddonGoBlockTarget(enabledAddons, pageID, componentName, source, packageName, mode, block)

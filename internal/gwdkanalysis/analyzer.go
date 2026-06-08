@@ -97,10 +97,6 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 		page.Spans.Route = ast.Route.Span
 		page.Spans.RouteParams = lowerRouteParamSpans(ast.Route.Params)
 	}
-	if ast.Render != nil {
-		page.Render = gowdk.RenderMode(ast.Render.Mode)
-		page.Spans.Render = ast.Render.Span
-	}
 	if ast.Cache != nil {
 		page.Cache = ast.Cache.Policy
 		page.Spans.Cache = ast.Cache.Span
@@ -791,9 +787,6 @@ func applyPageAnnotation(page *manifest.Page, annotation gwdkast.Annotation) err
 		page.Route = trimQuotes(value)
 		page.Spans.Route = annotation.Span
 		page.Spans.RouteParams = routeParamSpans(page.Route, annotation.Span)
-	case "render":
-		page.Render = gowdk.RenderMode(value)
-		page.Spans.Render = annotation.Span
 	case "cache":
 		policy, err := cachePolicyValue(value)
 		if err != nil {
@@ -848,8 +841,6 @@ func hasTypedPageAnnotation(ast gwdkast.File, name string) bool {
 		return ast.Page != nil
 	case "route":
 		return ast.Route != nil
-	case "render":
-		return ast.Render != nil
 	case "cache":
 		return ast.Cache != nil
 	case "layout":

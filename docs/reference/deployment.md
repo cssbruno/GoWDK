@@ -355,10 +355,8 @@ Generated binaries currently support:
   the configured secret environment variable is present.
 - First-slice required-field validation for directly declared form controls.
 - First-slice partial action fragment responses.
-- First-slice concrete and dynamic `@render ssr` pages with declared `load {}`
-  identifier or dotted paths.
-- Concrete and dynamic `@render hybrid` pages, with or without declared
-  `load {}` data, through the same supported generated request-time path.
+- First-slice concrete and dynamic request-time SSR pages with declared
+  `load {}` identifier or dotted paths.
 - Optional split frontend/backend generation with `--backend-app` and
   `--backend-bin`; the frontend proxies backend routes to
   `GOWDK_BACKEND_ORIGIN`.

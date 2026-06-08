@@ -6,7 +6,7 @@
       "kind": "page",
       "package": "home",
       "route": "/",
-      "render": "action",
+      "render": "spa",
       "layouts": [
         "root"
       ],

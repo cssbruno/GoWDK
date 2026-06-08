@@ -428,11 +428,11 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 	case "unsupported_gowdk_use_scope":
 		return "Move this use declaration to the page that calls the imported component, or keep the component in the same package."
 	case "missing_ssr_addon":
-		return "Enable ssr.Addon() in gowdk.config.go or change the page render mode."
+		return "Enable ssr.Addon() in gowdk.config.go or remove request-time page behavior."
 	case "spa_dynamic_route_missing_paths":
-		return "Add paths { ... } for the dynamic spa route or switch the page to @render ssr."
+		return "Add paths { ... } for the dynamic spa route or declare request-time page behavior with load { ... } or go ssr { ... }."
 	case "load_requires_request_render":
-		return "Use @render ssr or @render hybrid for pages with load { ... }."
+		return "Enable ssr.Addon() for pages with load { ... }."
 	case "invalid_go_endpoint_handler":
 		return "Move the gowdk endpoint comment onto an exported package-level function."
 	case "duplicate_go_endpoint_comment":

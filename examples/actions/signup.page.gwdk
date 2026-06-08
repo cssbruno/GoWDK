@@ -3,7 +3,6 @@ package actions
 @page signup
 @route "/signup"
 @layout root
-@render action
 
 act Submit POST "/signup"
 

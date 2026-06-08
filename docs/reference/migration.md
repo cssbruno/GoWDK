@@ -21,7 +21,7 @@ import public `runtime/` or addon packages only.
 Move one template at a time:
 
 - Static template data becomes `build {}` when it is known at build time.
-- Request-time template data becomes `load {}` with `@render ssr`.
+- Request-time template data becomes `load {}` and requires `ssr.Addon()`.
 - POST handlers become `act Name POST "/path"` plus exported Go functions.
 - JSON endpoints become `api Name METHOD "/path"` plus exported Go functions.
 - Shared layout decisions stay in `.gwdk`; domain decisions stay in Go.
@@ -54,4 +54,3 @@ api Session GET "/api/session"
 Missing or unsupported Go handlers may generate temporary `501` stubs only when
 the build explicitly allows missing backends. Production builds should bind to
 real exported Go handlers.
-

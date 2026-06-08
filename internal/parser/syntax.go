@@ -350,8 +350,6 @@ func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNu
 			routeParams = append(routeParams, gwdkast.RouteParam{Name: param.Name, Type: param.Type, Span: param.Span})
 		}
 		file.Route = &gwdkast.RouteDecl{Path: path, Params: routeParams, Span: annotation.Span}
-	case "render":
-		file.Render = &gwdkast.RenderDecl{Mode: value, Span: annotation.Span}
 	case "cache":
 		file.Cache = &gwdkast.CacheDecl{Policy: trimQuotes(value), Span: annotation.Span}
 	case "revalidate":

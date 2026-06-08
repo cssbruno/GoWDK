@@ -33,7 +33,7 @@ Compiler rules:
 - Default render mode is `spa`.
 - Dynamic SPA routes require `paths {}`; action endpoints inherit generated
   concrete page paths.
-- `@render ssr` requires `ssr.Addon()`.
+- `load {}` and `go ssr {}` require `ssr.Addon()`.
 - `load {}` is rejected on SPA/action pages.
 - Actions can exist without SSR.
 - Partial updates are server fragments, not full-page SSR.

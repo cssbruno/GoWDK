@@ -8,14 +8,14 @@
     {
       "file": "examples/ssr/dashboard.page.gwdk",
       "code": "missing_ssr_addon",
-      "pos": {"line": 3, "column": 1},
+      "pos": {"line": 5, "column": 1},
       "range": {
-        "start": {"line": 3, "column": 1},
-        "end": {"line": 3, "column": 12}
+        "start": {"line": 5, "column": 1},
+        "end": {"line": 5, "column": 7}
       },
       "severity": "error",
-      "message": "dashboard: dashboard.page.gwdk uses @render ssr, but the SSR addon is not enabled. Fix: enable ssr.Addon() in gowdk.config.go",
-      "suggestion": "Enable ssr.Addon() in gowdk.config.go or change the page render mode."
+      "message": "dashboard: dashboard.page.gwdk uses request-time page behavior, but the SSR addon is not enabled. Fix: enable ssr.Addon() in gowdk.config.go",
+      "suggestion": "Enable ssr.Addon() in gowdk.config.go or remove request-time page behavior."
     }
   ]
 }
@@ -83,8 +83,9 @@ Current v0.1-supported language surfaces report source locations as follows:
 
 - Parser syntax errors, including unsupported `paths {}` and `build {}` forms,
   report the offending source line with a line range.
-- Route and render-mode validation uses annotation and route-param spans where
-  available, including `@render`, route declarations, and dynamic route params.
+- Route validation uses annotation, block, and route-param spans where
+  available, including route declarations, request-time blocks, and dynamic
+  route params.
 - View and component field validation uses parsed view-node spans for the
   offending directive, field, component call, or interpolation expression.
 - Component `client {}` validation reports the offending statement line and
@@ -105,8 +106,8 @@ GOWDK keeps the v0.1 language boundary explicit through diagnostics and tests:
   and unsupported event modifiers fail with `component_client_error` or
   `component_field_error`.
 - No external template semantics: familiar external-template blocks such as
-  `{#if}`, `{@html}`, `{@render}`, snippets, await blocks, and debug tags fail
-  as parse/view diagnostics with guidance toward GOWDK-native constructs.
+  `{#if}`, `{@html}`, snippets, await blocks, and debug tags fail as parse/view
+  diagnostics with guidance toward GOWDK-native constructs.
 - No generated JavaScript as trusted business logic: frontend templates must not
   declare backend facts with `g:event`; command/query/action behavior remains
   backend-owned and invalid references fail compiler diagnostics before build

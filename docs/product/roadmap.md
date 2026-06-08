@@ -37,8 +37,8 @@ GOWDK has three execution lanes:
 - Build-time page lane: full pages default to static SPA/prerender output.
 - Backend endpoint lane: actions, APIs, and fragments run at request time
   without making the page itself request-rendered.
-- Request-time page lane: `@render ssr` pages are compiled into generated SSR
-  handlers and run through GOWDK Runtime. This lane is integrated
+- Request-time page lane: pages with `load {}` or `go ssr {}` are compiled into
+  generated SSR handlers and run through GOWDK Runtime. This lane is integrated
   into the codebase; it is not a separate product layer. It is selected per
   page and currently enabled through the SSR feature gate in config or `--ssr`.
 
@@ -49,9 +49,9 @@ inputs, service calls, and business rules stay in Go. Separate `.go` files are
 the default path today; optional inline Go authoring in `.gwdk` is planned only
 when extracted code remains normal importable, testable package Go.
 
-`.gwdk` files own web declarations: package, page identity, route, render mode,
-layouts, component usage, build-time data, dynamic paths, endpoint declarations,
-stores, client blocks, and view markup.
+`.gwdk` files own web declarations: package, page identity, route, layouts,
+component usage, build-time data, request-time data, dynamic paths, endpoint
+declarations, stores, client blocks, and view markup.
 
 GOWDK Compiler owns parsing, formatting, diagnostics, manifests, route
 metadata, endpoint metadata, component/page compilation, CSS and asset planning,
@@ -84,8 +84,7 @@ These are the durable rules. Changing them should require an ADR.
 4. Dynamic SPA routes require `paths {}` unless the page uses request-time
    rendering.
 5. `build {}` is build-time page data.
-6. `load {}` is request-time page data and requires `@render ssr` or an
-   explicit hybrid request-time branch.
+6. `load {}` is request-time page data and requires the SSR addon.
 7. `act` and `api` declarations name exact exported Go symbols.
 8. Actions and APIs are endpoint metadata, not page route kinds.
 9. User behavior stays in Go code. Inline Go authoring is optional and must
@@ -129,10 +128,9 @@ level, the current baseline already includes:
 - shared backend routing primitives in `runtime/app`, runtime action/API
   adapter helpers, one generated backend hook, request body limits, and no-store
   defaults for request-time responses;
-- first-slice action/API execution, partial fragment responses, concrete or
-  dynamic `@render ssr` pages with declared `load {}` fields, and `@render
-  hybrid` pages with or without declared `load {}` data through buildgen,
-  appgen, `runtime/app`, and `runtime/route`.
+- first-slice action/API execution, partial fragment responses, and concrete or
+  dynamic request-time SSR pages with declared `load {}` fields through
+  buildgen, appgen, `runtime/app`, and `runtime/route`.
 
 Do not roadmap those completed slices as future work. Future work should
 stabilize their contracts, remove generation debt, and fill the missing

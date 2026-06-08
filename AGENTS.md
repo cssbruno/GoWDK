@@ -8,8 +8,8 @@ This repository is GOWDK, a portable Go web compiler. WDK has no canonical
 expansion; no one knows what it stands for, and the practical product shorthand
 is that GOWDK ships apps. The product direction is GOWDK Compiler plus GOWDK
 Runtime: full pages default to build-time output, backend endpoints are core
-request-time behavior, and `@render ssr` is an integrated non-default
-request-time page lane.
+request-time behavior, and `load {}` / `go ssr {}` select the integrated
+non-default request-time page lane.
 
 Use this file as the source of truth for Codex in this repository. Shared planning workflows and output templates live in `.llm/` so they can be reused by any capable coding LLM.
 
@@ -62,16 +62,17 @@ For architectural decisions that are hard to reverse, add an ADR under `docs/eng
 
 - Full pages default to build-time SPA output.
 - SSR is an integrated non-default request-time page-rendering lane selected
-  with `@render ssr`.
+  with `load {}` or `go ssr {}`.
 - SPA and action pages can use backend endpoints without full-page SSR.
 - `paths {}` runs at build time and declares dynamic SPA routes.
 - `build {}` runs at build time.
-- `load {}` runs at request time and requires request-time rendering.
+- `load {}` runs at request time, selects request-time rendering, and requires
+  the SSR addon.
 - `act Name POST "/path"` declares POST/action endpoints.
 - `api Name METHOD "/path"` declares API endpoints.
 - `view {}` renders markup.
-- Dynamic SPA routes require `paths {}` unless switched to SSR; action endpoints
-  inherit generated concrete page paths.
+- Dynamic SPA routes require `paths {}` unless switched to request-time SSR;
+  action endpoints inherit generated concrete page paths.
 - Partial updates use server fragments, not full-page SSR.
 - Single-binary deploy must work with or without SSR.
 

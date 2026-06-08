@@ -2,7 +2,9 @@ package ssr
 
 @page dynamic.ssr
 @route "/ssr/{slug}"
-@render ssr
+
+go ssr {
+}
 
 build {
   => { title: "SSR {slug}" }

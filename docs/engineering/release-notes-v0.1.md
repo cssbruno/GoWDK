@@ -36,11 +36,9 @@ Release builds must use Go `1.26.4` or newer in the Go 1.26 line. Earlier Go
 - Feature-bound generated API handlers for the supported API signature.
 - Standalone fragments and partial form enhancement for the current fragment
   slice.
-- Concrete and dynamic `@render ssr` generated pages for the supported SSR
+- Concrete and dynamic request-time SSR generated pages for the supported SSR
   slice, including declared load paths, guards, error pages, and no-store panic
   boundaries.
-- Bare `@render hybrid` pages and `load {}` hybrid pages using the supported
-  request-time path.
 - Component JavaScript islands and explicit component-level browser WASM island
   assets for the supported ABI slice.
 - Component-level `@asset` file emission with content-hashed asset manifest

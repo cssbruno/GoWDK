@@ -17,7 +17,6 @@ func TestCheckFilesValidatesRenderRules(t *testing.T) {
 
 @page dashboard
 @route "/dashboard"
-@render ssr
 
 load {
 }
@@ -254,7 +253,6 @@ func TestCheckJSONReportsCompilerDiagnosticsWithFile(t *testing.T) {
 
 @page dashboard
 @route "/dashboard"
-@render ssr
 
 load {
 }
@@ -274,13 +272,13 @@ view {
 	if !strings.Contains(output, `"code": "missing_ssr_addon"`) {
 		t.Fatalf("expected diagnostic code in JSON: %s", output)
 	}
-	if diagnostics[0].Pos.Line != 5 || diagnostics[0].Pos.Column != 1 {
-		t.Fatalf("expected compiler diagnostic at @render line, got %#v", diagnostics[0].Pos)
+	if diagnostics[0].Pos.Line != 6 || diagnostics[0].Pos.Column != 1 {
+		t.Fatalf("expected compiler diagnostic at load line, got %#v", diagnostics[0].Pos)
 	}
 	if diagnostics[0].Range == nil ||
-		diagnostics[0].Range.Start.Line != 5 || diagnostics[0].Range.Start.Column != 1 ||
-		diagnostics[0].Range.End.Line != 5 || diagnostics[0].Range.End.Column != 12 {
-		t.Fatalf("expected compiler diagnostic range for @render, got %#v", diagnostics[0].Range)
+		diagnostics[0].Range.Start.Line != 6 || diagnostics[0].Range.Start.Column != 1 ||
+		diagnostics[0].Range.End.Line != 6 || diagnostics[0].Range.End.Column != 7 {
+		t.Fatalf("expected compiler diagnostic range for load block, got %#v", diagnostics[0].Range)
 	}
 	if !strings.Contains(output, "SSR addon is not enabled") {
 		t.Fatalf("expected SSR diagnostic in JSON: %s", output)
@@ -294,7 +292,7 @@ func TestParseFileReportsParserDiagnosticLine(t *testing.T) {
 
 @page bad
 @route "/bad"
-@render nope
+@unknown nope
 `)
 
 	_, diagnostics := ParseFile(path)
@@ -311,7 +309,7 @@ func TestParseFileReportsParserDiagnosticLine(t *testing.T) {
 		t.Fatalf("expected parse diagnostic range, got %#v", diagnostics[0])
 	}
 	if diagnostics[0].Range.Start.Line != 5 || diagnostics[0].Range.Start.Column != 1 ||
-		diagnostics[0].Range.End.Line != 5 || diagnostics[0].Range.End.Column != 13 {
+		diagnostics[0].Range.End.Line != 5 || diagnostics[0].Range.End.Column != 14 {
 		t.Fatalf("unexpected parse diagnostic range: %#v", diagnostics[0].Range)
 	}
 }
@@ -323,7 +321,7 @@ func TestCheckJSONReportsParserDiagnosticRangeAndCode(t *testing.T) {
 
 @page bad
 @route "/bad"
-@render nope
+@unknown nope
 `)
 
 	payload, diagnostics := CheckJSON(gowdk.Config{}, []string{path})

@@ -437,10 +437,23 @@ func (page Page) RenderMode(defaultMode gowdk.RenderMode) gowdk.RenderMode {
 	if page.Render != "" {
 		return page.Render
 	}
+	if page.Blocks.Load || page.HasGoBlock("ssr") {
+		return gowdk.SSR
+	}
 	if defaultMode == "" {
 		return gowdk.SPA
 	}
 	return defaultMode
+}
+
+// HasGoBlock reports whether the page declares a go block for target.
+func (page Page) HasGoBlock(target string) bool {
+	for _, block := range page.Blocks.GoBlocks {
+		if block.Target == target {
+			return true
+		}
+	}
+	return false
 }
 
 // DynamicParams returns route parameters declared with /path/{param} syntax.

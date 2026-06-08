@@ -3496,7 +3496,7 @@ func TestValidateManifestRejectsInvalidScriptGo(t *testing.T) {
 	}
 }
 
-func TestValidateManifestRejectsSSRScriptOnSPAPage(t *testing.T) {
+func TestValidateManifestRejectsSSRScriptWithoutAddon(t *testing.T) {
 	app := manifest.Manifest{Pages: []manifest.Page{{
 		ID:      "home",
 		Package: "pages",
@@ -3513,9 +3513,9 @@ func TestValidateManifestRejectsSSRScriptOnSPAPage(t *testing.T) {
 
 	err := ValidateManifest(gowdk.Config{}, app)
 	if err == nil {
-		t.Fatal("expected ssr go block render-lane error")
+		t.Fatal("expected ssr addon error")
 	}
-	if !strings.Contains(err.Error(), "go ssr") || !strings.Contains(err.Error(), "requires @render ssr") {
+	if !strings.Contains(err.Error(), "request-time page behavior") || !strings.Contains(err.Error(), "SSR addon is not enabled") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

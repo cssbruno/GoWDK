@@ -3,7 +3,7 @@
     "package": "shop",
     "id": "shop.product",
     "route": "/shop/{slug}",
-    "render": "action",
+    "render": "",
     "layouts": [
       "root",
       "shop"

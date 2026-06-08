@@ -2,7 +2,9 @@ package ssr
 
 @page hybrid.static
 @route "/hybrid-static"
-@render hybrid
+
+go ssr {
+}
 
 build {
   => { title: "Hybrid static shell" }

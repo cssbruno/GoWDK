@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkast"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
@@ -94,17 +93,6 @@ func lowerPageSyntaxAnnotations(source []byte, ast gwdkast.File, page *manifest.
 		page.Spans.Route = ast.Route.Span
 		page.Spans.RouteParams = lowerSyntaxRouteParamSpans(ast.Route.Params)
 	}
-	if ast.Render != nil {
-		if ast.Render.Mode == string(gowdk.SPA) {
-			return fmt.Errorf("line %d: @render spa is redundant; omit @render because spa is the default", ast.Render.Span.Start.Line)
-		}
-		mode, err := gowdk.ParseRenderMode(ast.Render.Mode)
-		if err != nil {
-			return fmt.Errorf("line %d: %w", ast.Render.Span.Start.Line, err)
-		}
-		page.Render = mode
-		page.Spans.Render = ast.Render.Span
-	}
 	if ast.Cache != nil {
 		page.Cache = ast.Cache.Policy
 		page.Spans.Cache = ast.Cache.Span
@@ -148,8 +136,6 @@ func pageAnnotationLoweredFromAST(ast gwdkast.File, name string) bool {
 		return ast.Page != nil
 	case "route":
 		return ast.Route != nil
-	case "render":
-		return ast.Render != nil
 	case "cache":
 		return ast.Cache != nil
 	case "revalidate":

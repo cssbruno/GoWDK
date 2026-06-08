@@ -152,7 +152,6 @@ package signup
 
 @page signup
 @route "/signup"
-@render action
 
 act Submit POST "/signup"
 
@@ -241,7 +240,7 @@ SSR is optional and must be enabled for validation:
 gowdk check --ssr examples/ssr/simple-ssr.page.gwdk
 ```
 
-First-slice concrete and dynamic `@render ssr` pages with declared `load {}`
+First-slice concrete and dynamic request-time SSR pages with declared `load {}`
 fields can be
 generated into an embedded app and binary:
 

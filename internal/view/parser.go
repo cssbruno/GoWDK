@@ -70,8 +70,8 @@ func unsupportedTemplateSyntax(text string) (int, string, bool) {
 			return offset, "unsupported template loop syntax; use g:for with g:key on elements inside stateful components", true
 		case strings.HasPrefix(fragment, "{#await"), strings.HasPrefix(fragment, "{/await"):
 			return offset, "unsupported template await syntax; use build/load data, actions, APIs, or fragments for asynchronous data", true
-		case strings.HasPrefix(fragment, "{#snippet"), strings.HasPrefix(fragment, "{/snippet"), strings.HasPrefix(fragment, "{@render"):
-			return offset, "unsupported template snippet/render syntax; use GOWDK component slots for supported reusable markup", true
+		case strings.HasPrefix(fragment, "{#snippet"), strings.HasPrefix(fragment, "{/snippet"):
+			return offset, "unsupported template snippet syntax; use GOWDK component slots for supported reusable markup", true
 		case strings.HasPrefix(fragment, "{@html"):
 			return offset, "unsupported raw HTML syntax; GOWDK escapes rendered text by default and has no raw HTML escape hatch in this slice", true
 		case strings.HasPrefix(fragment, "{@const"), strings.HasPrefix(fragment, "{@debug"):

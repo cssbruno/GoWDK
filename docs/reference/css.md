@@ -158,9 +158,11 @@ package components
 @asset "./hero.png"
 ```
 
-`@asset` paths are also relative to the component source file and are lowered
-into AST/IR metadata today. GOWDK does not implicitly bundle arbitrary sibling
-files.
+`@asset` paths are also relative to the component source file. GOWDK emits
+those files under `assets/gowdk/components/<package>/<component>/` with
+content-hashed filenames, records the logical-to-emitted mapping in
+`gowdk-assets.json`, and serves them from generated binaries with immutable
+cache headers. GOWDK does not implicitly bundle arbitrary sibling files.
 
 Current implementation status:
 
@@ -171,9 +173,9 @@ Current implementation status:
   files, content-hashed, linked from generated pages, recorded in
   `gowdk-assets.json`, and served with immutable generated binary cache
   headers. Component `style {}` CSS uses the same scoped emission path.
-- Component `@asset` annotations are parsed and analyzed as metadata with
-  stable owner data. Emitting component-level non-CSS assets from that metadata
-  is planned work.
+- Component `@asset` annotations are parsed, analyzed, emitted as
+  content-hashed files, recorded in `gowdk-assets.json`, and served with
+  immutable generated binary cache headers.
 - Full component AST bodies are not yet passed to CSS processors. Processors
   receive source metadata and the current extracted class subset.
 
@@ -193,10 +195,9 @@ The component CSS scoping contract is:
   CSS for application-wide styles. A future explicit `:global(...)` escape can
   be added, but implicit global selectors in component CSS are not part of the
   contract.
-- Emitted component CSS assets are content-hashed, recorded in
+- Emitted component CSS and `@asset` files are content-hashed, recorded in
   `gowdk-assets.json`, and served with the same generated binary cache policy
-  as other immutable emitted assets. Non-CSS component asset emission remains
-  planned.
+  as other immutable emitted assets.
 
 Relationship to other CSS features:
 
@@ -282,10 +283,7 @@ Addons: []gowdk.Addon{
 
 Defaults:
 
-- `Command`: use `tailwindcss` from `PATH`, or download the official standalone
-  binary into `.gowdk/bin`.
-- `Version`: `latest`
-- `DownloadDir`: `.gowdk/bin`
+- `Command`: use `tailwindcss` from `PATH`.
 - `OutputPath`: `assets/app.css`
 - `Href`: `/assets/app.css`
 
@@ -295,21 +293,10 @@ source files. This follows Tailwind v4's CSS/source directive model. It then
 runs the standalone executable with `-i <temp-input> -o <temp-output>`.
 
 The addon does not use npm, run `npx`, or run through a shell. If `Command` is
-omitted and `tailwindcss` is not available on `PATH`, `gowdk build` downloads
-the official standalone executable for the current OS/architecture from the
-Tailwind Labs GitHub releases page and caches it under `DownloadDir`.
-
-Pin a release when builds should not track the latest release:
-
-```go
-tailwind.Addon(tailwind.Options{
-	Input:   "assets/app.css",
-	Version: "v4.2.4",
-})
-```
-
-Use an explicit executable when downloads are not allowed in the build
-environment:
+omitted and `tailwindcss` is not available on `PATH`, `gowdk build` fails with
+an install-required error. GOWDK does not download Tailwind. Install Tailwind
+through your approved toolchain and use an explicit executable when builds need
+a pinned binary:
 
 ```go
 tailwind.Addon(tailwind.Options{
@@ -318,34 +305,20 @@ tailwind.Addon(tailwind.Options{
 })
 ```
 
-Manual Linux x64 setup for explicit `Command`:
+Minimal setup:
 
 ```sh
-mkdir -p .gowdk/bin assets
-curl -L -o .gowdk/bin/tailwindcss \
-  https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
-chmod +x .gowdk/bin/tailwindcss
+mkdir -p assets
 printf '@import "tailwindcss";\n' > assets/app.css
-.gowdk/bin/tailwindcss --help >/dev/null
+tailwindcss --help >/dev/null
 ```
 
-Example macOS arm64 download:
-
-```sh
-mkdir -p .gowdk/bin
-curl -L -o .gowdk/bin/tailwindcss \
-  https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-macos-arm64
-chmod +x .gowdk/bin/tailwindcss
-```
-
-Example Windows x64 PowerShell download:
+Windows PowerShell setup:
 
 ```powershell
-New-Item -ItemType Directory -Force .gowdk/bin, assets
-Invoke-WebRequest `
-  https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-windows-x64.exe `
-  -OutFile .gowdk/bin/tailwindcss.exe
+New-Item -ItemType Directory -Force assets
 Set-Content -Path assets/app.css -Value '@import "tailwindcss";'
+tailwindcss --help | Out-Null
 ```
 
 Then configure GOWDK:

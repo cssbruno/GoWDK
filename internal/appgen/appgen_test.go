@@ -3897,7 +3897,7 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("expected partial validation fragment to return 200, got %d: %s", response.StatusCode, payload)
 	}
-	for _, expected := range []string{`<div data-gowdk-validation>`, `data-gowdk-field="email"`, `Email is required`} {
+	for _, expected := range []string{`<div data-gowdk-validation role="alert" aria-live="polite">`, `data-gowdk-field="email"`, `Email is required`} {
 		if !strings.Contains(string(payload), expected) {
 			t.Fatalf("expected validation fragment to contain %q, got %s", expected, payload)
 		}
@@ -3924,7 +3924,7 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("expected partial pattern validation fragment to return 200, got %d: %s", response.StatusCode, payload)
 	}
-	for _, expected := range []string{`<div data-gowdk-validation>`, `data-gowdk-field="email"`, `Use a real email address`} {
+	for _, expected := range []string{`<div data-gowdk-validation role="alert" aria-live="polite">`, `data-gowdk-field="email"`, `Use a real email address`} {
 		if !strings.Contains(string(payload), expected) {
 			t.Fatalf("expected pattern validation fragment to contain %q, got %s", expected, payload)
 		}

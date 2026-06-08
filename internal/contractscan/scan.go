@@ -1032,20 +1032,33 @@ func packageInspectionCacheKey(packageDir string, importPaths []string) string {
 
 func contractScanImporter(packageDir string, fset *token.FileSet, files []*ast.File, inspectionCache *packageInspectionCache) types.Importer {
 	importPaths := scanImportedGoPaths(files)
-	if packageDir == "" || len(importPaths) == 0 {
-		return importer.Default()
+	if packageDir == "" || len(importPaths) == 0 || !insideGoModule(packageDir) {
+		return importer.ForCompiler(fset, "source", nil)
 	}
 	exports, err := inspectionCache.exportFiles(packageDir, importPaths)
-	if err != nil || len(exports) == 0 {
-		return importer.Default()
-	}
 	return importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
+		if err != nil {
+			return nil, fmt.Errorf("load export data for %s: %w", path, err)
+		}
 		exportPath := exports[path]
 		if exportPath == "" {
 			return nil, fmt.Errorf("missing export data for %s", path)
 		}
 		return os.Open(exportPath)
 	})
+}
+
+func insideGoModule(dir string) bool {
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return true
+		}
+		next := filepath.Dir(dir)
+		if next == dir {
+			return false
+		}
+		dir = next
+	}
 }
 
 func scanImportedGoPaths(files []*ast.File) []string {

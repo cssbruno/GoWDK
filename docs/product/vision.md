@@ -137,7 +137,7 @@ keeping the route, handler, and runtime contracts explicit.
   local UI state, but normal app contracts must not depend on user-written
   JavaScript.
 - Rendering: full pages default to build-time SPA output; request-time page
-  rendering is explicit with `@render ssr` or a future hybrid branch.
+  rendering is explicit with `@render ssr` or `@render hybrid`.
 - Deployment: one-binary production deploy must work with and without
   request-time page rendering.
 - Extensibility: actions, APIs, partials, SSR, embed, CSS plugins, framework

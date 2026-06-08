@@ -390,10 +390,10 @@ var Config = gowdk.Config{
 }
 ```
 
-When `Command` is omitted, the Tailwind addon uses `tailwindcss` from `PATH` or
-downloads the official standalone executable into `.gowdk/bin`. The executable
-bridge runs project config code only when the AST-only loader finds addon
-constructors it cannot reduce safely.
+When `Command` is omitted, the Tailwind addon uses `tailwindcss` from `PATH`.
+If the executable is missing, builds fail with an install-required error. The
+executable bridge runs project config code only when the AST-only loader finds
+addon constructors it cannot reduce safely.
 
 When `ratelimit.Addon()` is enabled, generated apps with request-time action,
 API, fragment, SSR, or split-backend proxy routes expose

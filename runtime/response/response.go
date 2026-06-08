@@ -20,6 +20,7 @@ const (
 	Redirect Kind = "redirect"
 	Fragment Kind = "fragment"
 	JSON     Kind = "json"
+	Reload   Kind = "reload"
 )
 
 // SwapMode identifies how a fragment response should update its target.
@@ -89,6 +90,12 @@ func RedirectTo(url string) Response {
 	return Response{Kind: Redirect, Status: 303, URL: url}
 }
 
+// ReloadPage asks enhanced clients to reload the current page. Non-enhanced
+// forms should still use normal POST/redirect/get behavior.
+func ReloadPage() Response {
+	return Response{Kind: Reload, Status: http.StatusNoContent}
+}
+
 // WithCookie returns a copy of result that sets cookie when written to HTTP.
 func WithCookie(result Response, cookie http.Cookie) Response {
 	result.Cookies = append(result.Cookies, cookie)
@@ -140,7 +147,7 @@ func ValidationFragment(target string, result validation.Result) Response {
 // ValidationHTML renders a small escaped validation message block.
 func ValidationHTML(result validation.Result) string {
 	var out strings.Builder
-	out.WriteString(`<div data-gowdk-validation>`)
+	out.WriteString(`<div data-gowdk-validation role="alert" aria-live="polite">`)
 	if len(result.Errors) > 0 {
 		out.WriteString(`<ul>`)
 		for _, validationErr := range result.Errors {
@@ -169,6 +176,9 @@ func WriteHTTP(writer http.ResponseWriter, result Response) error {
 	switch result.Kind {
 	case Redirect:
 		writer.Header().Set("Location", result.URL)
+		writer.WriteHeader(status)
+	case Reload:
+		writer.Header().Set("X-GOWDK-Reload", "1")
 		writer.WriteHeader(status)
 	case Fragment:
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")

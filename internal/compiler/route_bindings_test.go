@@ -75,7 +75,7 @@ func TestBuildRouteMetadataRejectsSSRWithoutAddon(t *testing.T) {
 	}
 }
 
-func TestBuildRouteMetadataMapsHybridWithoutExplicitLoadToSPA(t *testing.T) {
+func TestBuildRouteMetadataRejectsHybridWithoutAddon(t *testing.T) {
 	app := manifest.Manifest{Pages: []manifest.Page{{
 		ID:     "dashboard",
 		Route:  "/dashboard",
@@ -85,12 +85,27 @@ func TestBuildRouteMetadataMapsHybridWithoutExplicitLoadToSPA(t *testing.T) {
 		},
 	}}}
 
-	metadata, err := BuildRouteMetadata(gowdk.Config{}, app)
+	_, err := BuildRouteMetadata(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected missing SSR addon error")
+	}
+}
+
+func TestBuildRouteMetadataMapsHybridWithoutExplicitLoadToHybridRoute(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		ID:     "dashboard",
+		Route:  "/dashboard",
+		Render: gowdk.Hybrid,
+		Blocks: manifest.Blocks{
+			View: true,
+		},
+	}}}
+
+	metadata, err := BuildRouteMetadata(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRoute(t, metadata.Routes, RouteSPA, "GET", "/dashboard", `embedded.SPA("pages/dashboard.html")`)
-	assertInfo(t, metadata.Info, "ssr_disabled", "dashboard")
+	assertRoute(t, metadata.Routes, RouteHybrid, "GET", "/dashboard", "hybrid.RenderDashboard")
 }
 
 func TestBuildRouteMetadataMapsHybridWithLoadToHybridRoute(t *testing.T) {

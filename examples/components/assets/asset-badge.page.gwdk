@@ -1,0 +1,10 @@
+package componentassets
+
+@page component.assets
+@route "/components/assets"
+
+view {
+  <main>
+    <AssetBadge label="Component asset" />
+  </main>
+}

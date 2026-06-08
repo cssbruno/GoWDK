@@ -248,7 +248,7 @@ func isRequestTimePage(config gowdk.Config, page manifest.Page) bool {
 	case gowdk.SSR:
 		return true
 	case gowdk.Hybrid:
-		return page.Blocks.Load
+		return true
 	default:
 		return false
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
@@ -600,22 +601,38 @@ func buildClientGoBlockWASM(page manifest.Page, script manifest.GoBlock) ([]byte
 func clientGoBlockWASMSource(page manifest.Page, script manifest.GoBlock) (string, error) {
 	body := strings.TrimSpace(script.Body)
 	sourceWithoutImports := "package main\n" + body + "\n"
-	file, err := parser.ParseFile(token.NewFileSet(), "go_client.gwdk.go", sourceWithoutImports, parser.ParseComments|parser.AllErrors)
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, "go_client.gwdk.go", sourceWithoutImports, parser.ParseComments|parser.AllErrors)
 	if err != nil {
 		return "", fmt.Errorf("go client block has invalid client-side Go: %w", err)
 	}
-	var builder strings.Builder
-	builder.WriteString("package main\n\n")
-	builder.WriteString(clientGoBlockGOWDKImportBlock(page.Imports, file))
-	builder.WriteString(body)
-	builder.WriteString("\n\n")
-	if !fileDeclaresMain(file) {
-		builder.WriteString("func main() {}\n")
+
+	decls := make([]ast.Decl, 0, len(file.Decls)+2)
+	if generatedImports := clientGoBlockGOWDKImportDecl(page.Imports, file); generatedImports != nil {
+		decls = append(decls, generatedImports)
 	}
-	return builder.String(), nil
+	decls = append(decls, file.Decls...)
+	if !fileDeclaresMain(file) {
+		decls = append(decls, &ast.FuncDecl{
+			Name: ast.NewIdent("main"),
+			Type: &ast.FuncType{Params: &ast.FieldList{}},
+			Body: &ast.BlockStmt{},
+		})
+	}
+
+	generated := &ast.File{
+		Name:     ast.NewIdent("main"),
+		Decls:    decls,
+		Comments: file.Comments,
+	}
+	var buffer bytes.Buffer
+	if err := format.Node(&buffer, fileSet, generated); err != nil {
+		return "", fmt.Errorf("format generated client-side Go: %w", err)
+	}
+	return buffer.String(), nil
 }
 
-func clientGoBlockGOWDKImportBlock(imports []manifest.Import, file *ast.File) string {
+func clientGoBlockGOWDKImportDecl(imports []manifest.Import, file *ast.File) ast.Decl {
 	used := usedIdentifiers(file)
 	localImports := map[string]bool{}
 	for _, spec := range importSpecs(file) {
@@ -627,7 +644,7 @@ func clientGoBlockGOWDKImportBlock(imports []manifest.Import, file *ast.File) st
 			localImports[alias] = true
 		}
 	}
-	var specs []string
+	var specs []ast.Spec
 	for _, item := range imports {
 		importPath := strings.TrimSpace(item.Path)
 		if importPath == "" {
@@ -637,17 +654,30 @@ func clientGoBlockGOWDKImportBlock(imports []manifest.Import, file *ast.File) st
 		if !used[alias] || localImports[alias] {
 			continue
 		}
-		if strings.TrimSpace(item.Alias) == "" {
-			specs = append(specs, strconv.Quote(importPath))
-		} else {
-			specs = append(specs, item.Alias+" "+strconv.Quote(importPath))
-		}
+		specs = append(specs, importSpec(item.Alias, importPath))
 	}
 	if len(specs) == 0 {
-		return ""
+		return nil
 	}
-	sort.Strings(specs)
-	return "import (\n\t" + strings.Join(specs, "\n\t") + "\n)\n\n"
+	sort.Slice(specs, func(i, j int) bool {
+		leftAlias, leftPath := importSpecAliasPath(specs[i].(*ast.ImportSpec))
+		rightAlias, rightPath := importSpecAliasPath(specs[j].(*ast.ImportSpec))
+		if leftAlias == rightAlias {
+			return leftPath < rightPath
+		}
+		return leftAlias < rightAlias
+	})
+	return &ast.GenDecl{Tok: token.IMPORT, Specs: specs}
+}
+
+func importSpec(alias string, importPath string) ast.Spec {
+	spec := &ast.ImportSpec{
+		Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(importPath)},
+	}
+	if strings.TrimSpace(alias) != "" {
+		spec.Name = ast.NewIdent(strings.TrimSpace(alias))
+	}
+	return spec
 }
 
 func validateClientGoBlockWASMImports(page manifest.Page, sourcePath string) error {

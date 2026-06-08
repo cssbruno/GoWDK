@@ -191,8 +191,8 @@ path, page ID, planned adapter handler, and backend binding metadata. Backend
 binding metadata includes the Go package name, import path when known, handler
 symbol, signature/input metadata when bound, status, and binding message.
 Non-fatal route-mode notes, such as request-time page rendering disabled on a
-SPA or bare hybrid route, or static SPA output disabled on an SSR route, appear
-in `info` and are also mirrored to stderr as `info:` console lines.
+SPA route or static SPA output disabled on an SSR route, appear in `info` and
+are also mirrored to stderr as `info:` console lines.
 
 Current `build` limitations: it emits app-shell HTML files,
 `gowdk-routes.json`, `gowdk-assets.json`, generated embedded app source, and
@@ -209,11 +209,10 @@ subset, including form input decoder wrappers, required-field validation, CSRF
 validation when `Build.CSRF.Enabled` is set, action fragment responses for
 `X-GOWDK-Partial` requests, standalone fragment routes, feature-bound API
 handlers, guards, and concrete or dynamic SSR pages rendered from `view {}`
-and literal or imported `build {}` data. Bare hybrid pages are emitted as
-build-time SPA output; hybrid pages with `load {}` opt into the same generated
-request-time page path and appear as `hybrid` routes in `gowdk routes`. It does
-not run broader hybrid request-time behavior beyond that explicit `load {}`
-branch.
+and literal or imported `build {}` data. Hybrid pages use the same generated
+request-time page path with or without declared `load {}` data and appear as
+`hybrid` routes in `gowdk routes`. It does not stream hybrid responses, refresh
+hybrid server data in place, or run non-HTTP revalidation today.
 
 Current `serve` limitations: it serves generated build output files only. It does not
 run generated actions, APIs, partial fragments, or SSR routes.

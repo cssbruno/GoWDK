@@ -904,9 +904,6 @@ func routeKind(mode gowdk.RenderMode, page manifest.Page) gwdkir.RouteKind {
 	case gowdk.SSR:
 		return gwdkir.RouteSSR
 	case gowdk.Hybrid:
-		if !page.Blocks.Load {
-			return gwdkir.RouteSPA
-		}
 		return gwdkir.RouteHybrid
 	default:
 		return gwdkir.RouteSPA

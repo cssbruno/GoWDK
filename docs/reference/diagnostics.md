@@ -54,7 +54,12 @@ Current diagnostic codes include:
   `unsupported_action_method`, `old_action_block_syntax`, and
   `old_api_block_syntax`
 - backend binding diagnostics such as `backend_binding_required`
+  for strict production action/API handlers that are missing or use an
+  unsupported signature. Migration builds can opt into documented HTTP 501
+  stubs with `--allow-missing-backend` or `Build.AllowMissingBackend`.
 - `missing_ssr_addon`
+- `parse_error` for unsupported `paths {}` and `build {}` statement shapes
+  outside the current literal-record or no-argument build-data call contract.
 - `redundant_component`
 - route diagnostics such as `duplicate_page_route`,
   `ambiguous_dynamic_page_route`, and `route_method_conflict`
@@ -71,3 +76,38 @@ validation failures can narrow the range to the failing expression columns.
 Common route, render-mode, endpoint-comment, client-field, view-field, event,
 and `g:for` mistakes include structured suggestions when GOWDK can offer a
 concrete next step.
+
+## Span Coverage
+
+Current v0.1-supported language surfaces report source locations as follows:
+
+- Parser syntax errors, including unsupported `paths {}` and `build {}` forms,
+  report the offending source line with a line range.
+- Route and render-mode validation uses annotation and route-param spans where
+  available, including `@render`, route declarations, and dynamic route params.
+- View and component field validation uses parsed view-node spans for the
+  offending directive, field, component call, or interpolation expression.
+- Component `client {}` validation reports the offending statement line and
+  narrows supported expression failures to expression columns.
+- Package validation points at the `.gwdk` package declaration or the nearest
+  page/component/layout declaration when the package declaration is missing.
+- Build-data validation rejects unsupported statement shapes during parsing and
+  reports the offending line; build execution errors that come from external Go
+  execution keep their command/error context rather than a precise `.gwdk`
+  expression range.
+
+## P0/P1 Constraint Diagnostics
+
+GOWDK keeps the v0.1 language boundary explicit through diagnostics and tests:
+
+- No arbitrary JavaScript as the app contract: unsupported `client {}`
+  statements, unknown client values/functions, unsafe reactive URL attributes,
+  and unsupported event modifiers fail with `component_client_error` or
+  `component_field_error`.
+- No external template semantics: familiar external-template blocks such as
+  `{#if}`, `{@html}`, `{@render}`, snippets, await blocks, and debug tags fail
+  as parse/view diagnostics with guidance toward GOWDK-native constructs.
+- No generated JavaScript as trusted business logic: frontend templates must not
+  declare backend facts with `g:event`; command/query/action behavior remains
+  backend-owned and invalid references fail compiler diagnostics before build
+  output or generated adapters are accepted.

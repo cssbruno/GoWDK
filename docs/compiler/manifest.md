@@ -41,7 +41,7 @@ declare `view {}` because they own a page `GET` route.
       "guard": ["auth.required"],
       "css": ["default", "page"],
       "components": ["Hero"],
-      "Assets": ["/assets/hero.png"],
+      "assets": ["/assets/hero.png"],
       "cssClasses": ["hero", "lead"],
       "styleAttributes": ["color: red;"],
       "blocks": {
@@ -107,7 +107,7 @@ values, first-slice API method/route metadata, and component declarations.
 Component declarations include component-level CSS/assets, typed contract
 metadata, typed public exports, and emitted event metadata when present.
 `paths`, `layouts`, `guard`, `css`, `actions`, `apis`, `components`,
-`uses`, `Assets`, `cssClasses`, and `styleAttributes` are omitted when empty or
+`uses`, `assets`, `cssClasses`, and `styleAttributes` are omitted when empty or
 false.
 
 ## Current Site-Map JSON

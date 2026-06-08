@@ -6,10 +6,13 @@ The parser records whether these top-level blocks are present:
 
 - `paths {}`: declares dynamic SPA paths. Presence and raw body
   text are recorded. SPA builds support the first literal subset:
-  `=> { slug: "hello-gowdk" }`.
+  `=> { slug: "hello-gowdk" }`. Other statement forms are rejected with a
+  `parse_error` diagnostic instead of running arbitrary build-time code.
 - `build {}`: build-time data block. Presence and raw body text are recorded.
   SPA builds support the first literal subset, `=> { title: "Hello" }`, and
-  the first imported Go function subset, `=> interop.FeaturedCopyForBuild()`.
+  the first imported or same-package no-argument Go function subset,
+  `=> interop.FeaturedCopyForBuild()`. Other statement forms are rejected with
+  a `parse_error` diagnostic; arbitrary build-time statements remain planned.
 - `load {}`: request-time data block. Presence and raw body text are recorded,
   then rejected on SPA/action pages.
 - `go {}` and `go target {}`: optional inline Go authoring blocks.

@@ -132,8 +132,10 @@ Implemented today:
 - `/` maps to `index.html`.
 - `/patients` maps to `patients/index.html`.
 - Current asset names are stable and deterministic. `gowdk-assets.json`
-  records content hashes and cache policy for generated CSS/runtime assets.
-  Generated CSS is minified and emitted with content-hashed filenames.
+  records content hashes and cache policy for generated CSS/runtime assets and
+  component-level `@asset` files. Generated CSS is minified and emitted with
+  content-hashed filenames. Component `@asset` files are emitted with
+  content-hashed filenames under `assets/gowdk/components/`.
 - Generated embedded apps skip local environment files, source maps, source
   files, VCS/dependency directories, and common temporary artifacts when copying
   build output into the embedded app.
@@ -150,6 +152,33 @@ Not implemented yet:
   imported/same-package no-argument build data functions.
 - Broader user Go type resolution beyond typed action decoders, user action
   logic, API handlers, and general fragment routes.
+- Generated handlers beyond the supported action, API, fragment, and SSR load
+  signatures. Strict production builds diagnose missing or unsupported
+  action/API bindings with `backend_binding_required`; migration builds must
+  opt into `--allow-missing-backend` or `Build.AllowMissingBackend` to emit
+  explicit HTTP 501 stubs.
+
+## Compatibility Notes
+
+Generated output is still pre-1.0. Public releases must document
+generated-output changes that can affect checked-in deploy recipes, generated
+app imports, route manifests, asset manifests, cache headers, or generated
+binary behavior.
+
+The stable compatibility surface for v0.1 is intentionally narrow:
+
+- `gowdk-routes.json`, `gowdk-assets.json`, and `gowdk-build-report.json`
+  include explicit `version` fields.
+- Generated app entrypoints expose standard `net/http` handlers through
+  `gowdkapp.Handler()` and `gowdkapp.ServeMux()`.
+- Generated binaries serve selected embedded output and request-time routes from
+  the same build metadata used by `gowdk build --out`.
+- Generated asset logical paths resolve through `gowdk-assets.json`; consumers
+  should not hard-code content-hashed filenames.
+
+Generated source layout, helper function names, private package internals, and
+intermediate files under selected app/output directories may change between
+pre-1.0 releases unless a reference doc explicitly names them as public.
 
 ## Target Artifacts
 
@@ -205,8 +234,8 @@ Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 `GOWDK_INSTANCE_ID`; if no instance ID is provided, the app creates one at
 process start from the module name, hostname, and a random token. It can also
 serve auto-detected POST redirect handlers for the first supported action
-subset and supported SSR pages with declared `load {}` identifier or dotted
-paths. SSR load functions can return safe local redirects with
+subset and supported SSR/hybrid pages with or without declared `load {}`
+identifier or dotted paths. SSR load functions can return safe local redirects with
 `ssr.RedirectTo`/`ssr.Redirect`, and generated SSR load failures render the
 route-local `@error` page when declared or the optional `500.html` when
 present.
@@ -226,9 +255,9 @@ signing secret from `Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`, inject hidden
 CSRF token fields into served HTML POST forms, validate action POSTs before
 generated decoding or user handlers run, and return HTTP 403
 `invalid csrf token` with `Cache-Control: no-store` for invalid tokens. The
-generated app does not run user-defined validation beyond handler logic, handle
-uploads, or serve broad hybrid request-time handlers beyond the explicit
-`@render hybrid` plus `load {}` page branch today.
+generated app does not run user-defined validation beyond handler logic,
+handle uploads, stream hybrid responses, refresh hybrid server data in place, or
+perform non-HTTP revalidation today.
 
 Generated app source is an output artifact and sits downstream of feature
 packages. Feature packages may import stable public GOWDK runtime/addon

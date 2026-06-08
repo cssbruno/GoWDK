@@ -23,7 +23,9 @@ Implemented today:
 - Generated embedded app source and optional binary compilation through
   `internal/appgen`, including supported action/API/fragment handlers, form
   input decoder and required-field validation wrappers, CSRF wiring, guards,
-  and concrete or dynamic SSR routes with declared `load {}` fields.
+  concrete or dynamic SSR routes with declared `load {}` fields, and concrete
+  or dynamic hybrid request-time routes with or without declared `load {}`
+  fields.
 - SPA `gowdk.config.go` loading for build source discovery, build targets,
   and output through `internal/project`.
 - CLI tools for `tokens`, `fmt`, `check`, `manifest`, `sitemap`, `build`, and `lsp`.
@@ -33,9 +35,8 @@ Not implemented yet:
 - Full AST/semantic/type analysis beyond the current component contract slice.
 - Full component compilation, arbitrary `build {}` statements beyond expression
   records, and full `paths {}` execution.
-- Broader generated-client reactivity, component non-CSS asset emission, and
-  load/action invalidation.
-- Broader hybrid request-time behavior beyond explicit `load {}` branches.
+- Broader generated-client reactivity beyond explicit reload/fragment outcomes.
+- Hybrid streaming, data refresh, and non-HTTP revalidation.
 
 ## Documents
 

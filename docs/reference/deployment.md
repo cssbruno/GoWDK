@@ -102,6 +102,25 @@ docker run --rm -p 8080:8080 my-gowdk-site
 Pass app secrets, CSRF secrets, database URLs, and service credentials as
 runtime environment variables owned by your deployment platform.
 
+## CSRF Secret Rotation
+
+Generated CSRF currently validates tokens with one active signing secret from
+`Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`. There is no multi-key grace
+period yet.
+
+Rotate CSRF secrets as a coordinated deploy:
+
+1. Build and smoke-test the new binary.
+2. Set the new secret in the deployment platform.
+3. Restart or replace every generated app instance that serves action POSTs.
+4. Confirm `/_gowdk/health` is reachable on every instance.
+5. Expect forms rendered before the rotation to fail with HTTP 403
+   `invalid csrf token`; users should reload the page and resubmit.
+
+Do not run mixed old/new CSRF secrets behind the same load balancer for longer
+than the deploy window. If a rollback is needed, restore both the previous
+binary and the previous CSRF secret.
+
 ## systemd
 
 Run the single binary under systemd when deploying to a Linux VM:
@@ -215,6 +234,32 @@ Kubernetes guidance is intentionally not generated. Use normal container and
 service manifests around the Docker/single-binary shape only when your
 deployment environment already requires Kubernetes.
 
+## Rollback
+
+Keep each release artifact immutable:
+
+- the generated binary;
+- the generated build output used to create that binary;
+- the config and environment variable set used at runtime;
+- the checksum and attestation for the artifact.
+
+Rollback means restoring the previous known-good artifact and its matching
+runtime configuration. For single-binary deploys, keep the previous binary on
+the host or in the image registry and switch the process manager, container tag,
+or deployment descriptor back to that version. For static hosts, redeploy the
+previous `dist/site` output directory. For split frontend/backend deploys,
+rollback both sides together when route, endpoint, CSRF, or asset manifests
+changed.
+
+After rollback, verify:
+
+```sh
+curl -fsS http://127.0.0.1:8080/_gowdk/health
+```
+
+Then smoke-test one static page and one generated request-time route if the app
+uses actions, APIs, fragments, SSR, guards, or CSRF.
+
 ## Module And Target Builds
 
 Use modules for source selection:
@@ -312,16 +357,15 @@ Generated binaries currently support:
 - First-slice partial action fragment responses.
 - First-slice concrete and dynamic `@render ssr` pages with declared `load {}`
   identifier or dotted paths.
-- Bare `@render hybrid` pages as normal build-time SPA output.
-- `@render hybrid` pages with `load {}` as explicit request-time page routes
-  through the same supported generated load/render path.
+- Concrete and dynamic `@render hybrid` pages, with or without declared
+  `load {}` data, through the same supported generated request-time path.
 - Optional split frontend/backend generation with `--backend-app` and
   `--backend-bin`; the frontend proxies backend routes to
   `GOWDK_BACKEND_ORIGIN`.
 
 Generated binaries do not yet support:
 
-- Broader hybrid request-time behavior beyond the explicit `load {}` branch.
+- Hybrid streaming, data refresh, and non-HTTP revalidation.
 
 ## Local Development
 

@@ -10,12 +10,19 @@ claim. It identifies the current development line while the compiler, generated
 runtime, and docs continue toward the v0.1 target. Public release notes must
 call the build experimental until the release gates below are satisfied.
 
+Use `docs/engineering/v0.1-release-checklist.md` for the full v0.1 checklist.
+Use `docs/engineering/release-notes-v0.1.md` as the draft v0.1 release notes.
+
 ## Version Policy
 
 Until the full feature set is complete, public release tags must stay in the
 `0.x.y` pre-1.0 line: `v0.1.0`, `v0.1.5`, `v0.2.0`, and so on. Patch releases
 can ship maintenance, packaging, editor, and documentation updates for an
 already-published pre-1.0 line, but they must not imply production support.
+
+The VS Code extension has its own Marketplace version in
+`editors/vscode/package.json`. It does not have to match the CLI/LSP version
+unless the release intentionally publishes both tracks with the same number.
 
 Version roadmap entries in `docs/product/roadmap.md` are target milestones. A
 tag may not claim a milestone unless `docs/product/requirements.md`,
@@ -34,33 +41,36 @@ public release, confirm:
 - Release artifact list is still accurate.
 - GitHub artifact attestations are enabled for release artifacts.
 - Generated-output compatibility notes are documented when public releases begin.
-- VS Code extension package metadata and version are current.
+- VS Code extension package metadata is current for extension releases.
 - The `VSCE_PAT` GitHub secret is present before publishing the extension.
 - Security advisory process is current.
 
-The following features are known blockers for any production-readiness claim:
-
-- Broad load/action invalidation and request-time data lifecycle contracts.
-- Broader hybrid request-time behavior beyond explicit `load {}` branches.
-- Production operations guidance for secrets, CSRF rotation, reverse proxies,
-  cache/CDN policy, health checks, metrics, logging, binary deploy, and
-  rollback.
-- Richer generated validation and progressive-enhancement form behavior.
-- Scoped component CSS and component-level asset emission from existing
-  metadata.
-- Full public examples, migration guidance, and generated app smoke-test
-  scaffolds.
+No local production-readiness feature blockers are currently listed in this
+document. The external release, artifact, supply-chain, and publication gates
+below still have to pass before publishing.
 
 ## Current Manual Gates
 
 ```sh
 go test ./...
+go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 go build ./cmd/gowdk
 node --check editors/vscode/extension.js
 node --check editors/vscode/extension-core.js
 node --test editors/vscode/*.test.js
-go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
-go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
+go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk
+go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk
+```
+
+After those gates pass on the release commit, run the release workflow manually
+for the current CLI line or push the corresponding tag:
+
+```sh
+gh workflow run release.yml -f version=v0.1.5
 ```
 
 ## Artifacts
@@ -71,7 +81,7 @@ go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk 
 - `gowdk-darwin-arm64`
 - `gowdk-windows-amd64.exe`
 - `checksums.txt`
-- `gowdk-vscode-<version>.vsix`
+- `gowdk-vscode-0.1.9.vsix`
 
 ## Supply-Chain Metadata
 
@@ -86,9 +96,11 @@ gh attestation verify <artifact> -R <owner>/<repo>
 
 ## Extension Publishing
 
-The release workflow packages the extension into `gowdk-vscode-<version>.vsix`.
+The release workflow packages the extension into `gowdk-vscode-0.1.9.vsix` for
+the current VS Code extension release line.
 Marketplace publishing is handled by the `Publish VS Code Extension` workflow.
-It can be run manually or by publishing a GitHub release.
+It is manual-only so CLI/runtime releases do not accidentally republish an
+extension version that already exists on the Marketplace.
 
 Before using the workflow:
 
@@ -107,4 +119,6 @@ gh workflow run vscode-extension-publish.yml
 
 The workflow verifies the extension, packages a `.vsix`, uploads that package as
 a workflow artifact, then runs `vsce publish --pat "$VSCE_PAT"`. Use the
-workflow's `pre_release` input for Marketplace pre-release publishing.
+workflow's `pre_release` input for Marketplace pre-release publishing. The
+current Marketplace extension version `0.1.9` already exists, so publish only
+after intentionally bumping `editors/vscode/package.json`.

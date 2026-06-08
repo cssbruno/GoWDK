@@ -98,7 +98,7 @@ func TestValidationFragmentEscapesMessages(t *testing.T) {
 		t.Fatalf("unexpected validation fragment response: %#v", result)
 	}
 	for _, expected := range []string{
-		`<div data-gowdk-validation>`,
+		`<div data-gowdk-validation role="alert" aria-live="polite">`,
 		`data-gowdk-field="email&#34;"`,
 		`&lt;required&gt;`,
 	} {
@@ -233,6 +233,23 @@ func TestWriteNoStoreError(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), "invalid form") {
 		t.Fatalf("unexpected body: %s", recorder.Body.String())
+	}
+}
+
+func TestWriteHTTPWritesReloadResponse(t *testing.T) {
+	recorder := httptest.NewRecorder()
+
+	if err := WriteHTTP(recorder, ReloadPage()); err != nil {
+		t.Fatal(err)
+	}
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNoContent)
+	}
+	if reload := recorder.Header().Get("X-GOWDK-Reload"); reload != "1" {
+		t.Fatalf("reload header = %q, want 1", reload)
+	}
+	if body := recorder.Body.String(); body != "" {
+		t.Fatalf("reload body = %q, want empty", body)
 	}
 }
 

@@ -23,6 +23,7 @@ even when explicit `.gwdk` files are passed.
 | `partials/patients-fragment.page.gwdk` | Partial/server fragment metadata example with `fragment`, `g:target`, and `g:swap`. | `go run ./cmd/gowdk manifest examples/partials/patients-fragment.page.gwdk` |
 | `api/status.page.gwdk` | API route metadata example with a named `GET` endpoint. | `go run ./cmd/gowdk routes examples/api/status.page.gwdk` |
 | `ssr/simple-ssr.page.gwdk` | Simple generated SSR page without `load {}`. | `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/ssr/simple-ssr.page.gwdk` |
+| `ssr/hybrid-static.page.gwdk` | Generated hybrid request-time page without `load {}`. | `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk` |
 | `ssr/dynamic-ssr.page.gwdk` | Validation example for dynamic SSR route metadata. | `go run ./cmd/gowdk check --ssr examples/ssr/dynamic-ssr.page.gwdk` |
 | `ssr/dashboard.page.gwdk` | SSR page with `load` and guard metadata. | `go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk` |
 | `go-interop/imported-build.page.gwdk` | Buildable `.gwdk` import example that calls Go code from `build {}`. | `go run ./cmd/gowdk build --out /tmp/gowdk-go-interop examples/go-interop/imported-build.page.gwdk` |
@@ -31,14 +32,15 @@ even when explicit `.gwdk` files are passed.
 | `tailwind/site.page.gwdk` | Tailwind v4 addon example using the standalone CLI. | `go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk` |
 | `components/base/base-components.page.gwdk` | Source-level base component examples for `Button`, `TextField`, and `Card`. | `go run ./cmd/gowdk build --out /tmp/gowdk-base-components examples/components/base/*.gwdk` |
 | `components/css/scoped-card.page.gwdk` | Component-local `@css` metadata example. | `go run ./cmd/gowdk check examples/components/css/*.gwdk` |
+| `components/assets/asset-badge.page.gwdk` | Component-local `@asset` metadata and emitted asset manifest example. | `go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk` |
 
 Check all current examples with SSR validation enabled:
 
 ```sh
-go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
-go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
-go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
-go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
 ```
 
 Build the current simple page:
@@ -80,6 +82,14 @@ go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-a
 test -x /tmp/gowdk-ssr-site
 ```
 
+Build the current generated hybrid page without `load {}`:
+
+```sh
+go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk
+test -x /tmp/gowdk-hybrid-site
+go run ./cmd/gowdk routes --ssr examples/ssr/hybrid-static.page.gwdk | grep -F '"kind": "hybrid"'
+```
+
 Build the current `.gwdk` Go import example:
 
 ```sh
@@ -103,8 +113,8 @@ grep -F '<link rel="stylesheet" href="/assets/site.css">' /tmp/gowdk-css-build/s
 go test ./examples/css
 ```
 
-Build the Tailwind addon example. The addon uses `tailwindcss` from `PATH` or
-downloads the official standalone executable into `.gowdk/bin`:
+Build the Tailwind addon example. Install Tailwind separately first; the addon
+uses `tailwindcss` from `PATH` or the explicit `tailwind.Options.Command` path:
 
 ```sh
 go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk
@@ -125,6 +135,15 @@ Check the component-local CSS metadata example:
 go run ./cmd/gowdk check examples/components/css/*.gwdk
 ```
 
+Build the component-local asset example:
+
+```sh
+go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk
+test -f /tmp/gowdk-component-assets/components/assets/index.html
+grep -F '"assets/gowdk/components/componentassets/AssetBadge/badge.svg"' /tmp/gowdk-component-assets/gowdk-assets.json
+grep -F 'assets/gowdk/components/componentassets/AssetBadge/badge.' /tmp/gowdk-component-assets/gowdk-assets.json
+```
+
 ## Current Limitations
 
 - `gowdk build` emits app-shell HTML, `gowdk-routes.json`, and
@@ -136,9 +155,10 @@ go run ./cmd/gowdk check examples/components/css/*.gwdk
 - Build-output examples can be served locally with `gowdk serve` or compiled into
   an embedded binary with `gowdk build --app --bin`; the current generated
   binary supports action redirects, partial action fragments, form input
-  decoder wrappers, and required-field validation, plus concrete and
-  dynamic SSR pages with declared `load {}` fields. It runs declared guards for
-  generated SSR/action/API routes and fails closed when guard functions are not
+  decoder wrappers, and required-field validation, plus concrete and dynamic
+  SSR pages with declared `load {}` fields and hybrid pages with or without
+  declared `load {}` data. It runs declared guards for generated
+  SSR/action/API routes and fails closed when guard functions are not
   registered.
 - `view {}` bodies are parsed only for a small app-shell HTML subset; `act` bodies
   support the first form-input/redirect subset, `api` bodies support the first
@@ -156,5 +176,5 @@ go run ./cmd/gowdk check examples/components/css/*.gwdk
 - Literal `build {}` string data and scalar fields returned by imported
   no-argument Go build functions are available to the current `view {}`
   interpolation subset.
-- Component children, generated API handlers, and rich local client-side
-  reactivity are planned.
+- Rich local client-side reactivity beyond the documented component subset is
+  planned.

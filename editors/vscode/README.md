@@ -121,7 +121,7 @@ Package a local `.vsix`:
 ```sh
 cd editors/vscode
 npm install -g @vscode/vsce
-vsce package
+vsce package --no-dependencies
 ```
 
 For Marketplace publishing, create a Visual Studio Marketplace publisher token
@@ -140,13 +140,14 @@ Do not commit Marketplace tokens or generated `.vsix` files.
    published metadata changes.
 2. Run `node --check editors/vscode/extension.js` and `node --check editors/vscode/extension-core.js`.
 3. Run `node --test editors/vscode/*.test.js`.
-4. Package the extension with `vsce package`.
+4. Package the extension with `vsce package --no-dependencies`.
 5. Publish after the repository release artifacts are available.
 
 GitHub Actions can publish the extension through
 `.github/workflows/vscode-extension-publish.yml`. Configure the repository
 secret `VSCE_PAT` with a Visual Studio Marketplace Personal Access Token that
 has Marketplace Manage scope, then run the `Publish VS Code Extension` workflow
-manually or publish a GitHub release. The workflow verifies the extension,
-packages a `.vsix`, uploads the package as a workflow artifact, and publishes
-with `vsce publish`.
+manually. The workflow verifies the extension, packages a `.vsix`, uploads the
+package as a workflow artifact, and publishes with `vsce publish`. The current
+Marketplace version `0.1.9` already exists; bump `package.json` before running
+the publish workflow again.

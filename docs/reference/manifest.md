@@ -3,7 +3,7 @@
 `gowdk manifest` prints validated route metadata for explicit `.gwdk` files.
 
 ```sh
-go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
+go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
 ```
 
 Current JSON shape:
@@ -25,7 +25,7 @@ Current JSON shape:
       "guard": ["auth.required"],
       "css": ["default", "page", "forms"],
       "components": ["Hero"],
-      "Assets": ["/assets/dashboard.png"],
+      "assets": ["/assets/dashboard.png"],
       "cssClasses": ["dashboard", "panel"],
       "styleAttributes": ["color: red;"],
       "blocks": {
@@ -125,7 +125,7 @@ Fields:
   with the first supported API endpoint metadata subset.
 - page `components`: optional sorted component names directly referenced by the
   current literal `view {}` parser subset.
-- `Assets`: optional sorted literal `src`, `href`, and `poster`
+- `assets`: optional sorted literal `src`, `href`, and `poster`
   references directly visible in the current literal `view {}` parser subset.
   Interpolated and external URLs are omitted.
 - `cssClasses`: optional sorted class names directly visible in literal `class`

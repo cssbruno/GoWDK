@@ -25,7 +25,7 @@
   "scripts": {
     "check": "node --check extension.js && node --check extension-core.js",
     "test": "node --test *.test.js",
-    "package": "vsce package"
+    "package": "vsce package --no-dependencies"
   },
   "engines": {
     "vscode": "^1.85.0"

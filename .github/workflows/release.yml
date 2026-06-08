@@ -28,7 +28,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.26.4'
           cache: true
 
       - name: Set up Node.js
@@ -39,10 +39,16 @@ jobs:
       - name: Verify release gates
         run: |
           go test ./...
+          go run golang.org/x/vuln/cmd/govulncheck@latest ./...
           go build ./cmd/gowdk
           node --check editors/vscode/extension.js
+          node --check editors/vscode/extension-core.js
           node --test editors/vscode/*.test.js
-          go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
+          examples="examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk"
+          go run ./cmd/gowdk check --ssr $examples
+          go run ./cmd/gowdk manifest --ssr $examples
+          go run ./cmd/gowdk sitemap --ssr $examples
+          go run ./cmd/gowdk routes --ssr $examples
           (
             set -euxo pipefail
             cd examples/login
@@ -66,6 +72,15 @@ jobs:
           rm -rf /tmp/gowdk-embed-build /tmp/gowdk-embed-app /tmp/gowdk-embed-site
           go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
           test -x /tmp/gowdk-embed-site
+          rm -rf /tmp/gowdk-hybrid-build /tmp/gowdk-hybrid-app /tmp/gowdk-hybrid-site
+          go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk
+          test -x /tmp/gowdk-hybrid-site
+          go run ./cmd/gowdk routes --ssr examples/ssr/hybrid-static.page.gwdk | grep -F '"kind": "hybrid"'
+          rm -rf /tmp/gowdk-component-assets
+          go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk
+          test -f /tmp/gowdk-component-assets/components/assets/index.html
+          grep -F '"assets/gowdk/components/componentassets/AssetBadge/badge.svg"' /tmp/gowdk-component-assets/gowdk-assets.json
+          grep -F 'assets/gowdk/components/componentassets/AssetBadge/badge.' /tmp/gowdk-component-assets/gowdk-assets.json
 
       - name: Build CLI artifacts
         run: |
@@ -80,7 +95,7 @@ jobs:
       - name: Package VS Code extension
         run: |
           npm install -g @vscode/vsce
-          vsce package --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} --baseImagesUrl https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}
+          vsce package --no-dependencies --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} --baseImagesUrl https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}
         working-directory: editors/vscode
 
       - name: Collect VS Code package
@@ -95,5 +110,10 @@ jobs:
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: GOWDK ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          body_path: docs/engineering/release-notes-v0.1.md
           files: dist/*
           draft: true
+          prerelease: true

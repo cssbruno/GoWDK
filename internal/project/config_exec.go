@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -127,7 +130,10 @@ func runConfigHelper(configPath string, command string, input []byte, args ...st
 	}
 	defer os.RemoveAll(helperDir)
 
-	source := configHelperSource(packageInfo.ImportPath)
+	source, err := configHelperSource(packageInfo.ImportPath)
+	if err != nil {
+		return nil, err
+	}
 	if err := os.WriteFile(filepath.Join(helperDir, "main.go"), []byte(source), 0o644); err != nil {
 		return nil, err
 	}
@@ -190,8 +196,40 @@ func makeConfigHelperDir(packageInfo goListPackage) (string, error) {
 	return os.MkdirTemp(cacheRoot, "config-loader-*")
 }
 
-func configHelperSource(configImportPath string) string {
-	return fmt.Sprintf(`package main
+const configHelperImportPlaceholder = "gowdk.local/config-placeholder"
+
+func configHelperSource(configImportPath string) (string, error) {
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, "gowdk-config-helper.go", configHelperSourceTemplate, parser.ParseComments|parser.AllErrors)
+	if err != nil {
+		return "", fmt.Errorf("parse config helper source: %w", err)
+	}
+	replaced := false
+	for _, item := range file.Imports {
+		if item.Name == nil || item.Name.Name != "configpkg" {
+			continue
+		}
+		importPath, err := strconv.Unquote(item.Path.Value)
+		if err != nil {
+			return "", fmt.Errorf("parse config helper import path: %w", err)
+		}
+		if importPath != configHelperImportPlaceholder {
+			continue
+		}
+		item.Path.Value = strconv.Quote(configImportPath)
+		replaced = true
+	}
+	if !replaced {
+		return "", fmt.Errorf("config helper source is missing config package import placeholder")
+	}
+	var buffer bytes.Buffer
+	if err := format.Node(&buffer, fileSet, file); err != nil {
+		return "", fmt.Errorf("format config helper source: %w", err)
+	}
+	return buffer.String(), nil
+}
+
+const configHelperSourceTemplate = `package main
 
 import (
 	"encoding/json"
@@ -200,29 +238,29 @@ import (
 	"strconv"
 
 	"github.com/cssbruno/gowdk"
-	configpkg %q
+	configpkg "gowdk.local/config-placeholder"
 )
 
 type executableConfig struct {
-	AppName string                    `+"`json:\"appName\"`"+`
-	Source  gowdk.SourceConfig       `+"`json:\"source\"`"+`
-	Modules []gowdk.ModuleConfig     `+"`json:\"modules\"`"+`
-	Render  gowdk.RenderConfig       `+"`json:\"render\"`"+`
-	Build   gowdk.BuildConfig        `+"`json:\"build\"`"+`
-	CSS     gowdk.CSSConfig          `+"`json:\"css\"`"+`
-	Addons  []executableAddonDetails `+"`json:\"addons\"`"+`
+	AppName string                    ` + "`json:\"appName\"`" + `
+	Source  gowdk.SourceConfig       ` + "`json:\"source\"`" + `
+	Modules []gowdk.ModuleConfig     ` + "`json:\"modules\"`" + `
+	Render  gowdk.RenderConfig       ` + "`json:\"render\"`" + `
+	Build   gowdk.BuildConfig        ` + "`json:\"build\"`" + `
+	CSS     gowdk.CSSConfig          ` + "`json:\"css\"`" + `
+	Addons  []executableAddonDetails ` + "`json:\"addons\"`" + `
 }
 
 type executableAddonDetails struct {
-	Index        int             `+"`json:\"index\"`"+`
-	Name         string          `+"`json:\"name\"`"+`
-	Features     []gowdk.Feature `+"`json:\"features\"`"+`
-	CSSProcessor bool            `+"`json:\"cssProcessor\"`"+`
+	Index        int             ` + "`json:\"index\"`" + `
+	Name         string          ` + "`json:\"name\"`" + `
+	Features     []gowdk.Feature ` + "`json:\"features\"`" + `
+	CSSProcessor bool            ` + "`json:\"cssProcessor\"`" + `
 }
 
 type executableCSSResponse struct {
-	Result gowdk.CSSResult `+"`json:\"result\"`"+`
-	Error  string          `+"`json:\"error\"`"+`
+	Result gowdk.CSSResult ` + "`json:\"result\"`" + `
+	Error  string          ` + "`json:\"error\"`" + `
 }
 
 func main() {
@@ -302,5 +340,4 @@ func fail(message string) {
 	fmt.Fprintln(os.Stderr, message)
 	os.Exit(1)
 }
-`, configImportPath)
-}
+`

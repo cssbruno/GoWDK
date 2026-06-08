@@ -103,10 +103,11 @@ generated app directory.
 
 `addons/tailwind` is an experimental Tailwind v4 CSS processor wrapper around
 the standalone CLI. When `Options.Command` is omitted it uses `tailwindcss` from
-`PATH` or downloads the official standalone executable into `.gowdk/bin`. It
-does not use npm, add Tailwind to the compiler core or runtime core, or
-generate Tailwind v3 content configuration. The literal config loader
-recognizes `tailwind.Addon` with a literal `tailwind.Options` value.
+`PATH`. If the executable is missing, builds fail with an install-required
+error. GOWDK does not download Tailwind, use npm, add Tailwind to the compiler
+core or runtime core, or generate Tailwind v3 content configuration. The literal
+config loader recognizes `tailwind.Addon` with a literal `tailwind.Options`
+value.
 
 `addons/ratelimit` provides request-time HTTP middleware with fixed-window
 decisions, rate-limit response headers, a process-local in-memory store, and a

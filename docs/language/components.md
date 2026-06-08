@@ -67,8 +67,9 @@ Implemented today:
 - Component `@css` declarations are parsed, lowered into compiler metadata,
   emitted as scoped component CSS, linked from generated pages, content-hashed,
   manifest-mapped, and served with immutable cache headers. Component `@asset`
-  declarations are parsed as metadata; non-CSS component asset output remains
-  planned work.
+  declarations are emitted as content-hashed files under
+  `assets/gowdk/components/<package>/<component>/`, manifest-mapped, and served
+  with immutable cache headers.
 - Component files are compiler inputs, not Go imports. A page can call a
   same-package component by name, such as `<Hero />`, when that component file
   is part of the same build/module input set. Cross-package page calls must use

@@ -46,7 +46,7 @@ component contract and inline package-go-block slices.
 - `forms.md`: form submission, progressive enhancement, validation, and
   invalidation boundaries.
 - `ssr.md`: SSR render-mode, `load`, and guard behavior.
-- `hybrid.md`: SPA-first hybrid behavior and explicit request-time branch.
+- `hybrid.md`: hybrid request-time behavior and deferred hybrid capabilities.
 - `diagnostics.md`: current diagnostic shape and known codes.
 - `formatting.md`: current formatter behavior.
 

@@ -2560,7 +2560,7 @@ view {
 	})
 }
 
-func TestRoutesCommandPrintsBareHybridAsSPARouteWithInfo(t *testing.T) {
+func TestRoutesCommandPrintsBareHybridAsHybridRoute(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "dashboard.page.gwdk")
 	config := writeMinimalCLIConfig(t, root)
@@ -2576,13 +2576,13 @@ view {
 `)
 
 	output, stderr, err := captureCLIOutput(t, func() error {
-		return run([]string{"routes", "--config", config, page})
+		return run([]string{"routes", "--ssr", "--config", config, page})
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stderr, "info: ssr_disabled: dashboard uses @render hybrid; request-time page rendering is disabled for this route") {
-		t.Fatalf("expected disabled request-time route info for bare hybrid, got:\n%s", stderr)
+	if strings.Contains(stderr, "ssr_disabled: dashboard") {
+		t.Fatalf("did not expect disabled request-time route info for hybrid without load, got:\n%s", stderr)
 	}
 
 	var report routeMetadataReport
@@ -2590,13 +2590,12 @@ view {
 		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
 	}
 	assertRouteBinding(t, report.Routes, routeBindingJSON{
-		Kind:    "spa",
+		Kind:    "hybrid",
 		Method:  "GET",
 		Route:   "/dashboard",
 		PageID:  "dashboard",
-		Handler: `embedded.SPA("pages/dashboard.html")`,
+		Handler: "hybrid.RenderDashboard",
 	})
-	assertRouteInfo(t, report.Info, "ssr_disabled", "dashboard")
 }
 
 func TestRoutesCommandDiscoversSelectedModuleOnly(t *testing.T) {
@@ -3387,7 +3386,7 @@ func TestBuildCommandBuildsBinaryWithFeatureBoundActionAndAPI(t *testing.T) {
 	}
 	writeCLIFile(t, filepath.Join(root, "go.mod"), fmt.Sprintf(`module example.com/gowdk-bound
 
-go 1.26
+go 1.26.4
 
 require github.com/cssbruno/gowdk v0.0.0
 

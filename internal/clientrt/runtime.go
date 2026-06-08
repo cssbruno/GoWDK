@@ -44,7 +44,11 @@ const runtimeSource = `(function () {
         }
       });
       if (!response.ok) {
-        throw new Error('partial request failed with status ' + response.status);
+        throw await partialRequestError(response);
+      }
+      if (response.headers.get('X-GOWDK-Reload') === '1') {
+        reloadPage();
+        return;
       }
       var html = await response.text();
       var swap = response.headers.get('X-GOWDK-Fragment-Swap') || form.dataset.gowdkSwap || 'innerHTML';
@@ -68,7 +72,14 @@ const runtimeSource = `(function () {
       }));
     } catch (error) {
       form.dispatchEvent(new CustomEvent('gowdk:request-error', {
-        detail: { form: form, target: target, error: error }
+        detail: {
+          form: form,
+          target: target,
+          error: error,
+          status: error && error.status || 0,
+          body: error && error.body || '',
+          response: error && error.response || null
+        }
       }));
     } finally {
       form.removeAttribute('aria-busy');
@@ -119,6 +130,30 @@ const runtimeSource = `(function () {
         detail: { link: link, url: url.href, error: error }
       }));
       window.location.href = url.href;
+    }
+  }
+
+  async function partialRequestError(response) {
+    var body = '';
+    try {
+      body = await response.text();
+    } catch (error) {
+      body = '';
+    }
+    var error = new Error('partial request failed with status ' + response.status);
+    error.status = response.status;
+    error.body = body;
+    error.response = response;
+    return error;
+  }
+
+  function reloadPage() {
+    if (window.location && window.location.reload) {
+      window.location.reload();
+      return;
+    }
+    if (window.location) {
+      window.location.href = window.location.href;
     }
   }
 

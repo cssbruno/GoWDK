@@ -62,7 +62,7 @@ func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.A
 	case target == "" || target == "client":
 		return nil
 	case target == "ssr":
-		if mode == gowdk.SSR || mode == gowdk.Hybrid && hasLoad {
+		if mode == gowdk.SSR || mode == gowdk.Hybrid {
 			return nil
 		}
 		return []ValidationError{{
@@ -71,7 +71,7 @@ func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.A
 			ComponentName: componentName,
 			Source:        source,
 			Span:          block.Span,
-			Message:       fmt.Sprintf("%s declares go ssr {}, but ssr Go code is request-time behavior and requires @render ssr or @render hybrid with load {}", pageID),
+			Message:       fmt.Sprintf("%s declares go ssr {}, but ssr Go code is request-time behavior and requires @render ssr or @render hybrid", pageID),
 		}}
 	case strings.HasPrefix(target, "addon."):
 		return validateAddonGoBlockTarget(enabledAddons, pageID, componentName, source, packageName, mode, block)

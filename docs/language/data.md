@@ -63,3 +63,6 @@ func LoadDashboard(ssr.LoadContext) (map[string]any, error)
 - Generated JavaScript may enhance form submissions, fragments, islands, and
   static SPA navigation. It must not become the authority for routes, auth,
   validation, server data, action behavior, cache, or page loading policy.
+- Actions do not invalidate `load {}` data implicitly. Use redirects,
+  fragments, JSON, or `response.ReloadPage()` to make the lifecycle visible in
+  the action result.

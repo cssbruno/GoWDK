@@ -173,15 +173,13 @@ func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 }
 
 func requiresSSRFeature(mode gowdk.RenderMode, page manifest.Page) bool {
-	return mode == gowdk.SSR || mode == gowdk.Hybrid && page.Blocks.Load
+	return mode == gowdk.SSR || mode == gowdk.Hybrid
 }
 
 func isBuildTimeRoute(mode gowdk.RenderMode, page manifest.Page) bool {
 	switch mode {
 	case gowdk.SPA, gowdk.Action:
 		return true
-	case gowdk.Hybrid:
-		return !page.Blocks.Load
 	default:
 		return false
 	}

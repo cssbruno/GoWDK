@@ -126,6 +126,13 @@ global.CustomEvent = CustomEvent;
 global.document = new Document();
 const islandLifecycle = [];
 global.window = {
+  location: {
+    reloaded: false,
+    href: 'http://example.test/newsletter',
+    reload() {
+      this.reloaded = true;
+    }
+  },
   __gowdkDestroyIslands(target, includeRoot) {
     islandLifecycle.push(['destroy', target.id, includeRoot]);
   },
@@ -157,8 +164,26 @@ document.activeElement = input;
 
 let request;
 let swap = 'innerHTML';
+let fail = false;
+let reload = false;
 global.fetch = async function(url, options) {
   request = { url, options };
+  if (fail) {
+    return {
+      ok: false,
+      status: 422,
+      headers: new Headers({}),
+      text: async () => '<div data-gowdk-validation>Invalid</div>'
+    };
+  }
+  if (reload) {
+    return {
+      ok: true,
+      status: 204,
+      headers: new Headers({ 'X-GOWDK-Reload': '1' }),
+      text: async () => ''
+    };
+  }
   return {
     ok: true,
     status: 200,
@@ -206,6 +231,28 @@ async function submit() {
   assert.deepEqual(islandLifecycle.shift(), ['destroy', 'newsletter', true]);
   assert.deepEqual(islandLifecycle.shift(), ['mount']);
   assert.equal(target.replacedWith, '<p>Updated</p>');
+
+  let requestError;
+  form.addEventListener('gowdk:request-error', event => {
+    requestError = event.detail;
+  });
+  fail = true;
+  await submit();
+  assert.equal(requestError.form, form);
+  assert.equal(requestError.target, target);
+  assert.equal(requestError.status, 422);
+  assert.equal(requestError.body, '<div data-gowdk-validation>Invalid</div>');
+  assert.equal(requestError.error.status, 422);
+  assert.equal(requestError.error.body, '<div data-gowdk-validation>Invalid</div>');
+  assert.equal(requestError.response.status, 422);
+  assert.equal(form.attributes['aria-busy'], undefined);
+
+  fail = false;
+  reload = true;
+  await submit();
+  assert.equal(window.location.reloaded, true);
+  assert.equal(target.innerHTML, '<p>Updated</p>');
+  assert.equal(form.attributes['aria-busy'], undefined);
 }()).catch(error => {
   console.error(error && error.stack || error);
   process.exitCode = 1;

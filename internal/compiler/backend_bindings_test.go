@@ -13,7 +13,7 @@ import (
 
 func TestBindBackendHandlersClassifiesSupportedActionSignatures(t *testing.T) {
 	root := t.TempDir()
-	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n")
+	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26.4\n")
 	writeCompilerTestFile(t, filepath.Join(root, "auth.go"), `package auth
 
 import (
@@ -132,7 +132,7 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 
 func TestBindBackendHandlersClassifiesSSRLoadSignatures(t *testing.T) {
 	root := t.TempDir()
-	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n")
+	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26.4\n")
 	writeCompilerTestFile(t, filepath.Join(root, "dashboard.go"), `package dashboard
 
 import "github.com/cssbruno/gowdk/addons/ssr"
@@ -301,7 +301,7 @@ func List(context.Context) (response.Response, error) {
 
 func TestDiscoverGoEndpointCommentsBindsStandaloneEndpoints(t *testing.T) {
 	root := t.TempDir()
-	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n")
+	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26.4\n")
 	writeCompilerTestFile(t, filepath.Join(root, "handlers.go"), `package api
 
 import (

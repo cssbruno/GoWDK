@@ -338,7 +338,7 @@ func TestValidateManifestTypeChecksGoPackagesWithModuleImports(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(fmt.Sprintf(`module example.com/app
 
-go 1.26
+go 1.26.4
 
 require github.com/cssbruno/gowdk v0.0.0
 
@@ -3378,26 +3378,10 @@ func TestValidatePageRejectsLoadOnSPAPage(t *testing.T) {
 	}
 }
 
-func TestValidatePageAllowsHybridWithoutLoadAsBuildTime(t *testing.T) {
+func TestValidatePageRequiresSSRAddonForHybridWithoutLoad(t *testing.T) {
 	page := manifest.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard",
-		Render: gowdk.Hybrid,
-		Blocks: manifest.Blocks{
-			View: true,
-		},
-	}
-
-	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, page)
-	if len(diagnostics) != 0 {
-		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
-	}
-}
-
-func TestValidatePageRequiresPathsForDynamicHybridWithoutLoad(t *testing.T) {
-	page := manifest.Page{
-		ID:     "dashboard",
-		Route:  "/dashboard/{id}",
 		Render: gowdk.Hybrid,
 		Blocks: manifest.Blocks{
 			View: true,
@@ -3408,8 +3392,24 @@ func TestValidatePageRequiresPathsForDynamicHybridWithoutLoad(t *testing.T) {
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %#v", diagnostics)
 	}
-	if diagnostics[0].Code != "spa_dynamic_route_missing_paths" {
+	if diagnostics[0].Code != "missing_ssr_addon" {
 		t.Fatalf("unexpected diagnostic code: %s", diagnostics[0].Code)
+	}
+}
+
+func TestValidatePageAllowsDynamicHybridWithoutLoadAsRequestTime(t *testing.T) {
+	page := manifest.Page{
+		ID:     "dashboard",
+		Route:  "/dashboard/{id}",
+		Render: gowdk.Hybrid,
+		Blocks: manifest.Blocks{
+			View: true,
+		},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, page)
+	if len(diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
 	}
 }
 

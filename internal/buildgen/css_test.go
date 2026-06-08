@@ -531,6 +531,83 @@ func TestBuildEmitsScopedComponentCSSWithManifestAndCacheHeaders(t *testing.T) {
 	}
 }
 
+func TestBuildEmitsComponentFileAssetsWithManifestAndCacheHeaders(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	if err := os.MkdirAll("components", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "components", "hero.png"), "fake image\n")
+	outputDir := filepath.Join(root, "dist")
+	component := manifest.Component{
+		Package: "components",
+		Source:  "components/hero.cmp.gwdk",
+		Name:    "Hero",
+		Assets:  []string{"./hero.png"},
+		Blocks: manifest.Blocks{
+			View:     true,
+			ViewBody: `<section>Hero</section>`,
+		},
+	}
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			Package: "components",
+			ID:      "home",
+			Route:   "/",
+			Blocks: manifest.Blocks{
+				View:     true,
+				ViewBody: `<main><Hero /></main>`,
+			},
+		}},
+		Components: []manifest.Component{component},
+	}
+
+	result, err := Build(gowdk.Config{CSS: gowdk.CSSConfig{Include: []string{DisableCSSDiscovery}}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logicalPath := "assets/gowdk/components/components/Hero/hero.png"
+	artifact := assetArtifactByLogicalPath(t, result.AssetArtifacts, logicalPath)
+	emittedRel := filepath.ToSlash(mustRelativePath(t, outputDir, artifact.Path))
+	if emittedRel == logicalPath || !strings.HasPrefix(emittedRel, "assets/gowdk/components/components/Hero/hero.") || !strings.HasSuffix(emittedRel, ".png") {
+		t.Fatalf("expected content-hashed component asset filename, got %q", emittedRel)
+	}
+	if got := readFile(t, artifact.Path); got != "fake image\n" {
+		t.Fatalf("unexpected emitted asset contents: %q", got)
+	}
+
+	manifestPayload := readBytes(t, filepath.Join(outputDir, assetManifestFile))
+	var assets runtimeasset.Manifest
+	if err := json.Unmarshal(manifestPayload, &assets); err != nil {
+		t.Fatal(err)
+	}
+	if assets.Resolve(logicalPath) != emittedRel {
+		t.Fatalf("expected component asset manifest mapping, got %s", manifestPayload)
+	}
+	if hash := assets.Hash(logicalPath); !strings.HasPrefix(hash, "sha256:") {
+		t.Fatalf("expected component asset hash, got %q in %s", hash, manifestPayload)
+	}
+	if policy := assets.CachePolicy(logicalPath); policy != immutableAssetCachePolicy {
+		t.Fatalf("expected immutable component asset cache policy, got %q", policy)
+	}
+
+	handler := runtimeapp.Handler{
+		Root: fstest.MapFS{
+			emittedRel: {Data: readBytes(t, artifact.Path)},
+		},
+		Assets: assets,
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/"+emittedRel, nil)
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected generated binary asset status: %d", recorder.Code)
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != immutableAssetCachePolicy {
+		t.Fatalf("expected generated binary cache header, got %q", cache)
+	}
+}
+
 func TestBuildEmitsScopedComponentStyleBlock(t *testing.T) {
 	outputDir := t.TempDir()
 	component := manifest.Component{

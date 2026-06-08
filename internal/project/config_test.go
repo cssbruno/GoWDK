@@ -2,6 +2,8 @@ package project
 
 import (
 	"bytes"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/tailwind"
 )
 
 func TestLoadConfigFileReadsLiteralSourceAndBuildFields(t *testing.T) {
@@ -437,8 +440,6 @@ var Config = gowdk.Config{
 		tw.Addon(tw.Options{
 			Input: "styles/app.css",
 			Command: "gowdk-tailwind-missing-executable",
-			Version: "v4.2.4",
-			DownloadDir: ".gowdk/bin",
 			OutputPath: "assets/site.css",
 			Href: "/assets/site.css",
 			Minify: true,
@@ -463,6 +464,21 @@ var Config = gowdk.Config{
 	_, err = processor.ProcessCSS(gowdk.CSSContext{})
 	if err == nil || !strings.Contains(err.Error(), "tailwind executable not found") {
 		t.Fatalf("expected parsed tailwind command to be used, got %v", err)
+	}
+}
+
+func TestParseTailwindAddonRejectsRemovedDownloadOptions(t *testing.T) {
+	expression, err := parser.ParseExpr(`tw.Addon(tw.Options{
+		Input: "styles/app.css",
+		Version: "v4.2.4",
+		DownloadDir: ".gowdk/bin",
+	})`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if addon, ok := parseTailwindAddon(expression, map[string]string{"tw": tailwind.ImportPath}); ok {
+		t.Fatalf("expected removed download options to require normal Go validation, got %#v", addon)
 	}
 }
 
@@ -497,6 +513,22 @@ var Config = secretConfig("SECRET_TOKEN")
 	}
 	if strings.Contains(err.Error(), "SECRET_TOKEN") {
 		t.Fatalf("expected config error to omit secret value, got %v", err)
+	}
+}
+
+func TestConfigHelperSourceRewritesImportWithAST(t *testing.T) {
+	source, err := configHelperSource("example.com/app/config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parser.ParseFile(token.NewFileSet(), "helper.go", source, parser.AllErrors); err != nil {
+		t.Fatalf("config helper source must parse: %v\n%s", err, source)
+	}
+	if !strings.Contains(source, `configpkg "example.com/app/config"`) {
+		t.Fatalf("expected generated config import, got:\n%s", source)
+	}
+	if strings.Contains(source, configHelperImportPlaceholder) {
+		t.Fatalf("placeholder import leaked into generated source:\n%s", source)
 	}
 }
 

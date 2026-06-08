@@ -8,9 +8,6 @@ on:
         required: false
         type: boolean
         default: false
-  release:
-    types:
-      - published
 
 permissions:
   contents: read
@@ -43,12 +40,14 @@ jobs:
       - name: Verify extension
         run: |
           node --check extension.js
+          node --check extension-core.js
           node --test *.test.js
 
       - name: Package extension
         run: |
           rm -f *.vsix
           vsce package \
+            --no-dependencies \
             --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} \
             --baseImagesUrl https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}
 
@@ -62,7 +61,7 @@ jobs:
       - name: Publish to Visual Studio Marketplace
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-          PRE_RELEASE: ${{ github.event_name == 'release' && github.event.release.prerelease || inputs.pre_release || false }}
+          PRE_RELEASE: ${{ inputs.pre_release || false }}
         run: |
           if [ -z "${VSCE_PAT:-}" ]; then
             echo "Missing VSCE_PAT secret. Create a Visual Studio Marketplace PAT with Marketplace Manage scope and add it as a repository or environment secret."

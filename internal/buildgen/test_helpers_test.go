@@ -76,6 +76,17 @@ func cssArtifactByLogicalPath(t *testing.T, artifacts []CSSArtifact, logicalPath
 	return CSSArtifact{}
 }
 
+func assetArtifactByLogicalPath(t *testing.T, artifacts []AssetArtifact, logicalPath string) AssetArtifact {
+	t.Helper()
+	for _, artifact := range artifacts {
+		if artifact.LogicalPath == logicalPath {
+			return artifact
+		}
+	}
+	t.Fatalf("expected asset artifact with logical path %q, got %#v", logicalPath, artifacts)
+	return AssetArtifact{}
+}
+
 func mustRelativePath(t *testing.T, base string, path string) string {
 	t.Helper()
 	rel, err := filepath.Rel(base, path)

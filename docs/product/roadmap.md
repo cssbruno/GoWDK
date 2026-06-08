@@ -129,8 +129,9 @@ level, the current baseline already includes:
 - shared backend routing primitives in `runtime/app`, runtime action/API
   adapter helpers, one generated backend hook, request body limits, and no-store
   defaults for request-time responses;
-- first-slice action/API execution, partial fragment responses, and concrete or
-  dynamic `@render ssr` pages with declared `load {}` fields through buildgen,
+- first-slice action/API execution, partial fragment responses, concrete or
+  dynamic `@render ssr` pages with declared `load {}` fields, and `@render
+  hybrid` pages with or without declared `load {}` data through buildgen,
   appgen, `runtime/app`, and `runtime/route`.
 
 Do not roadmap those completed slices as future work. Future work should
@@ -163,12 +164,12 @@ are stable.
 | 10 | Secure actions and forms | Generated action adapters wire CSRF token generation and validation, define token exposure, invalid-CSRF status/body shape, submit-button intent handling, validation fragment patterns, and production-safe action/API docs. |
 | 11 | Guards and runtime context | Generated guards work for SSR, actions, and APIs. The request context helper contract is documented around `context.Context`, `app.Request(ctx)`, `app.Params(ctx)`, `app.CSRF(ctx)`, and `app.Session(ctx)`, or the project deliberately switches to an explicit app context. |
 | 12 | Request-time page rendering | Generated SSR handlers execute `load {}`, enforce guards, decode typed route params, expose route-level metadata, support redirects and error pages, and run full request-time user logic through the integrated request-time page lane. |
-| 13 | Errors, cache, and hybrid | SSR/action/API error boundaries are defined. Static files, SPA routes, backend endpoints, partial responses, SSR routes, and hybrid pages get cache and revalidation policy. Hybrid pages stay SPA by default and opt into request-time capabilities explicitly. |
+| 13 | Errors, cache, and hybrid | SSR/action/API error boundaries are defined. Static files, SPA routes, backend endpoints, partial responses, SSR routes, and hybrid pages get cache and revalidation policy. Hybrid pages use the explicit request-time lane while streaming, data refresh, and non-HTTP revalidation remain separate planned capabilities. |
 | 14 | Contract-driven runtime | Queries, commands, domain events, integration events, presentation events, and jobs are typed Go contracts. Frontend UI events trigger commands or queries. Commands have one owner. Domain and integration events are backend-owned facts emitted after backend success. Presentation events notify realtime UI. Local in-process dispatch is default, optional worker/cron roles can run the same registrations, and CLI tooling can list, trace, or graph contracts. |
 | 15 | Static-first SPA navigation | SPA routes remain real URLs that work on direct open and refresh. Generated JS may intercept internal links, fetch built page shells or fragments, swap page regions, preserve scroll/focus, prefetch static route assets, and show loading/error UI, but it must not own routing, auth, business rules, validation, backend behavior, global app state, loading policy, or cache policy. |
 | 16 | Components and client language | Components gain real `g:if` mount/unmount, richer expression props, child-to-parent events, bindable state, typed exports, named/scoped slots, scoped CSS/assets, a documented component contract, a proper reactive dependency graph, predictable batching, and cycle diagnostics. |
 | 17 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Component-level WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
-| 18 | CSS, assets, and packaging | Full plugin loading, page-aware CSS processor selection, component AST/IR scope and hash metadata, Tailwind/CSS deployment docs, asset hashing, and binary cache policy are implemented. Module selection remains artifact packaging, not runtime module orchestration. |
+| 18 | CSS, assets, and packaging | External plugin loading is hardened, richer page-aware CSS processor contracts are stable, and Tailwind/CSS deployment docs stay explicit that external tooling is user-installed. Implemented CSS asset hashing, component CSS scope/hash metadata, component non-CSS asset emission, and binary cache policy remain stable. Module selection remains artifact packaging, not runtime module orchestration. |
 | 19 | Framework adapters | GOWDK Runtime remains `net/http` first. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
 | 20 | Dev, playground, and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, browser playground, browser-compiled GOWDK, richer LSP completions, and editor navigation are added. |
 | 21 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
@@ -216,7 +217,7 @@ contract work that later features depend on.
 
 - Static-first SPA navigation enhancements.
 - Progressive form enhancement.
-- Bare hybrid pages as SPA output with explicit request-time capability gating.
+- Bare hybrid pages as generated request-time routes.
 - Revalidation syntax and hybrid cache enforcement.
 
 ### Contract Runtime Release

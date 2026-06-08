@@ -37,6 +37,8 @@ Full-page POST handlers return `runtime/response.Response`:
   body)` for fragment responses.
 - `response.ValidationJSON(result)` or `response.ValidationFragment(target,
   result)` for validation responses.
+- `response.ReloadPage()` for enhanced forms that should reload the current
+  page after the action completes.
 
 Generated request-shape validation is intentionally narrow. It covers direct
 literal form fields and literal constraints such as `required`, `minlength`,
@@ -65,7 +67,9 @@ submits the form with:
 Successful enhanced responses swap `innerHTML` or `outerHTML` into the target.
 The runtime dispatches `gowdk:before-request`, `gowdk:after-swap`, and
 `gowdk:request-error`, toggles `aria-busy`, preserves focus where possible,
-and remounts generated islands around replaced DOM.
+and remounts generated islands around replaced DOM. Failed enhanced requests
+dispatch `gowdk:request-error` with `detail.status`, `detail.body`, and
+`detail.response` when an HTTP response exists.
 
 Enhanced redirects are not a stable contract today. For enhanced requests,
 return a fragment response for the target. Use normal full-page POST redirects
@@ -73,16 +77,21 @@ for the no-JavaScript path.
 
 There is no nearest error-boundary lookup for enhanced actions today. Failed
 enhanced requests dispatch `gowdk:request-error`; generated validation
-fragments can target a declared error container such as `#errors`.
+fragments can target a declared error container such as `#errors`. Generated
+validation fragments are escaped live regions with `role="alert"` and
+`aria-live="polite"`.
 
 ## Invalidation
 
-GOWDK does not automatically invalidate page data after actions today.
+GOWDK does not automatically invalidate page data after actions. Action
+handlers choose the lifecycle outcome explicitly.
 
 Use one of these explicit outcomes:
 
 - Redirect after full-page POST so the browser loads fresh page output.
 - Return a fragment response for the changed region.
+- Return `response.ReloadPage()` so enhanced forms reload the current page and
+  rerun request-time `load {}` data.
 - Return JSON to a user-owned client integration.
 - Call an app-owned API or reload policy outside generated core.
 

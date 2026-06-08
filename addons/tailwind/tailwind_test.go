@@ -2,12 +2,8 @@ package tailwind
 
 import (
 	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -107,65 +103,17 @@ func TestProcessCSSReportsMissingExecutable(t *testing.T) {
 	}
 }
 
-func TestProcessCSSDownloadsStandaloneCommandWhenMissing(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake downloaded shell executable is POSIX-only")
-	}
+func TestProcessCSSRequiresInstalledCommandWhenDefaultMissing(t *testing.T) {
 	root := t.TempDir()
-	t.Chdir(root)
 	input := filepath.Join(root, "app.css")
 	if err := os.WriteFile(input, []byte(`@import "tailwindcss";`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	asset, err := tailwindAssetName(runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Fatal(err)
-	}
-	requests := 0
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		requests++
-		expectedPath := "/download/v4.2.4/" + asset
-		if request.URL.Path != expectedPath {
-			t.Fatalf("unexpected download path: got %q want %q", request.URL.Path, expectedPath)
-		}
-		io.WriteString(response, fakeTailwindScript)
-	}))
-	defer server.Close()
-
-	oldBaseURL := downloadBaseURL
-	oldClient := downloadClient
-	downloadBaseURL = server.URL
-	downloadClient = server.Client()
-	t.Cleanup(func() {
-		downloadBaseURL = oldBaseURL
-		downloadClient = oldClient
-	})
 	t.Setenv("PATH", filepath.Join(root, "empty-path"))
-	t.Setenv("TAILWIND_ARGS_FILE", filepath.Join(root, "args.txt"))
 
-	options := Options{
-		Input:       input,
-		Version:     "v4.2.4",
-		DownloadDir: filepath.Join(root, ".gowdk", "bin"),
-	}
-	result, err := Addon(options).ProcessCSS(gowdk.CSSContext{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(result.Assets[0].Contents) != "/* fake tailwind */\nbody { color: black; }\n" {
-		t.Fatalf("unexpected downloaded command output: %q", result.Assets[0].Contents)
-	}
-	downloaded := filepath.Join(options.DownloadDir, asset)
-	if info, err := os.Stat(downloaded); err != nil || info.Mode().Perm()&0o111 == 0 {
-		t.Fatalf("expected executable download at %s, info=%v err=%v", downloaded, info, err)
-	}
-
-	if _, err := Addon(options).ProcessCSS(gowdk.CSSContext{}); err != nil {
-		t.Fatal(err)
-	}
-	if requests != 1 {
-		t.Fatalf("expected cached tailwind download to be reused, got %d requests", requests)
+	_, err := Addon(Options{Input: input}).ProcessCSS(gowdk.CSSContext{})
+	if err == nil || !strings.Contains(err.Error(), "tailwindcss is not installed") {
+		t.Fatalf("expected install-required error, got %v", err)
 	}
 }
 

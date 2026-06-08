@@ -214,7 +214,7 @@ func HandleCreatePatient(ctx context.Context, command string) (CreatePatientResu
 
 func TestScanReportsInvalidImportedHandlerSignatures(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n\nrequire github.com/cssbruno/gowdk v0.0.0\nreplace github.com/cssbruno/gowdk => "+gowdkRepoRoot(t)+"\n")
+	writeFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26.4\n\nrequire github.com/cssbruno/gowdk v0.0.0\nreplace github.com/cssbruno/gowdk => "+gowdkRepoRoot(t)+"\n")
 	writeFile(t, filepath.Join(root, "contractdefs", "types.go"), `package contractdefs
 
 type CreatePatient struct{}
@@ -290,7 +290,7 @@ func Register(r *contracts.Registry) {
 
 func TestScanReportsInvalidImportedContractTypes(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n\nrequire github.com/cssbruno/gowdk v0.0.0\nreplace github.com/cssbruno/gowdk => "+gowdkRepoRoot(t)+"\n")
+	writeFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26.4\n\nrequire github.com/cssbruno/gowdk v0.0.0\nreplace github.com/cssbruno/gowdk => "+gowdkRepoRoot(t)+"\n")
 	writeFile(t, filepath.Join(root, "contractdefs", "types.go"), `package contractdefs
 
 type CreatePatient string

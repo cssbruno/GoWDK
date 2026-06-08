@@ -4,8 +4,8 @@
 
 - Default render mode is `spa`.
 - Supported render modes are `spa`, `action`, `hybrid`, and `ssr`.
-- `@render ssr` requires the SSR addon. `@render hybrid` stays build-time SPA
-  output unless it declares explicit request-time behavior such as `load {}`.
+- `@render ssr` and `@render hybrid` require the SSR addon and use generated
+  request-time route handlers.
 - Page IDs must be unique within the manifest.
 - Component names must be unique within the manifest.
 - Dynamic build-time routes such as `/blog/{slug}` require a `paths {}` block.

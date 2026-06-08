@@ -153,13 +153,13 @@ Implemented today:
 - Feature-bound action/API handlers, action redirects, partial action
   fragments, standalone fragment routes, CSRF-wired actions, guards, and
   concrete or dynamic SSR pages with declared `load {}` identifier or dotted
-  paths in generated binaries.
+  paths, plus concrete or dynamic hybrid request-time pages with or without
+  declared `load {}` data, in generated binaries.
 - CLI tooling for tokens, formatting, validation, manifest, sitemap, routes,
   dev, serve, and LSP.
 
 Planned or partial:
 
-- Broader generated validation coverage.
-- Component non-CSS asset emission from existing metadata.
-- Broader hybrid request-time behavior beyond explicit `load {}` branches.
-- Richer generated-client reactivity and load/action invalidation.
+- User-defined domain validation helpers beyond generated request-shape checks.
+- Hybrid streaming, data refresh, and non-HTTP revalidation.
+- Richer generated-client reactivity beyond explicit reload/fragment outcomes.

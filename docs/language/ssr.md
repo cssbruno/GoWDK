@@ -6,12 +6,11 @@ SSR is optional and must not become the default framework identity.
 
 - `@render ssr` is parsed as a render mode.
 - `@render ssr` requires the SSR addon during validation.
-- `@render hybrid` defaults to SPA output. It requires the SSR addon only when
-  explicit request-time behavior such as `load {}` is present.
+- `@render hybrid` is a request-time route lane and requires the SSR addon.
 - `gowdk build --ssr --app <dir> --bin <file>` can generate a binary that
   serves concrete and dynamic `@render ssr` pages and `@render hybrid` pages
-  with explicit `load {}` branches rendered from `view {}` and literal or
-  imported `build {}` data.
+  with or without declared `load {}` data, rendered from `view {}` and literal
+  or imported `build {}` data.
 - Dynamic SSR routes such as `/blog/{slug}` can be matched by generated
   binaries in the first supported slice. Route params render through generated
   placeholders and request-time HTML escaping.
@@ -87,6 +86,6 @@ For the full `paths {}` / `build {}` / `load {}` / endpoint data boundary, see
 
 ## Planned Support
 
-Future SSR work must define request layouts and any broader hybrid
-request-time features beyond the explicit `load {}` branch without making
-hybrid pages implicit full-page SSR.
+Future SSR work must define request layouts plus hybrid streaming, data
+refresh, and non-HTTP revalidation without making hybrid pages identical to
+full-page SSR.

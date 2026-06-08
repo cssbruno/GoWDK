@@ -1,0 +1,16 @@
+package ssr
+
+@page hybrid.static
+@route "/hybrid-static"
+@render hybrid
+
+build {
+  => { title: "Hybrid static shell" }
+}
+
+view {
+  <main>
+    <h1>{title}</h1>
+    <p>This hybrid page uses the request-time route lane without load data.</p>
+  </main>
+}

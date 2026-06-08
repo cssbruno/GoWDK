@@ -341,6 +341,44 @@ func TestCheckJSONReportsParserDiagnosticRangeAndCode(t *testing.T) {
 	}
 }
 
+func TestCheckJSONReportsUnsupportedBuildStatementDiagnostic(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "bad-build.page.gwdk")
+	writeGWDK(t, path, `package app
+
+@page bad
+@route "/bad"
+
+build {
+  title := "Bad"
+}
+
+view {
+  <h1>Bad</h1>
+}
+`)
+
+	payload, diagnostics := CheckJSON(gowdk.Config{}, []string{path})
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected unsupported build statement diagnostic")
+	}
+	if diagnostics[0].Code != "parse_error" {
+		t.Fatalf("expected parse_error code, got %#v", diagnostics[0])
+	}
+	if diagnostics[0].Pos.Line != 7 || diagnostics[0].Pos.Column != 1 {
+		t.Fatalf("expected build statement line diagnostic, got %#v", diagnostics[0].Pos)
+	}
+	if diagnostics[0].Range == nil ||
+		diagnostics[0].Range.Start.Line != 7 || diagnostics[0].Range.Start.Column != 1 ||
+		diagnostics[0].Range.End.Line != 7 || diagnostics[0].Range.End.Column != 17 {
+		t.Fatalf("expected build statement diagnostic range, got %#v", diagnostics[0].Range)
+	}
+	output := string(payload)
+	if !strings.Contains(output, "unsupported literal record syntax") || !strings.Contains(output, "title :=") {
+		t.Fatalf("expected unsupported build syntax diagnostic in JSON: %s", output)
+	}
+}
+
 func TestCheckJSONReportsClientStatementDiagnosticRange(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "counter.cmp.gwdk")

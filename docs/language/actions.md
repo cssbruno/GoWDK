@@ -141,7 +141,8 @@ through `runtime/response.Response`.
   appear on a control that declares the matching constraint.
 - `runtime/response.ValidationJSON` and
   `runtime/response.ValidationFragment` provide reusable patterns for returning
-  structured validation errors or an escaped fragment for partial form updates.
+  structured validation errors or an escaped live-region fragment for partial
+  form updates.
 - Generated action redirects must stay local. User handlers should also keep
   redirects local unless they intentionally implement and audit an external
   redirect allowlist.

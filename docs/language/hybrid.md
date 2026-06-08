@@ -1,19 +1,23 @@
 # Hybrid Rendering
 
-`@render hybrid` is SPA-first. It does not mean full-page SSR by default.
+`@render hybrid` is an explicit request-time page lane. It uses the same
+generated route/render path as SSR, but reports route behavior as `hybrid` so
+future hybrid-specific capabilities can stay distinct from full SSR.
 
 ## Stable Modes
 
 | Page shape | Output | Notes |
 | --- | --- | --- |
-| `@render hybrid` without `load {}` | build-time SPA output | Works like SPA output and appears as `spa` route behavior with an `ssr_disabled` info note. |
+| `@render hybrid` without `load {}` | request-time page route | Requires SSR enabled and renders build-time data through the generated request-time handler. |
 | `@render hybrid` with `load {}` | request-time page route | Requires SSR enabled and uses the same generated load/render path as SSR. |
 
 ## Rules
 
-- Bare hybrid pages are prerendered as build-time SPA output.
-- Hybrid pages with `load {}` are not prerendered as static HTML for that route;
-  they run request-time `Load<PageID>` data.
+- Hybrid pages are not prerendered as static HTML for that route; they run
+  through generated request-time handlers.
+- Hybrid pages without `load {}` render route params and build-time data at
+  request time.
+- Hybrid pages with `load {}` also run request-time `Load<PageID>` data.
 - `@cache` and `@revalidate` remain HTTP response cache policy. They do not add
   background regeneration or data-dependency revalidation.
 - Hybrid pages do not stream today.
@@ -26,13 +30,12 @@
 
 - A SPA page with `load {}` is rejected. Use `@render ssr` or
   `@render hybrid`.
-- A hybrid page with `load {}` requires the SSR feature gate. Use the SSR addon
-  in config or pass `--ssr` for CLI checks/builds.
-- A bare hybrid route reports request-time rendering as disabled in route info.
+- Any hybrid page requires the SSR feature gate. Use the SSR addon in config or
+  pass `--ssr` for CLI checks/builds.
 
 ## Examples
 
-Build-time hybrid page:
+Hybrid page without request-time load data:
 
 ```gwdk
 package pages
@@ -42,7 +45,7 @@ package pages
 @render hybrid
 
 view {
-  <main>Static page output</main>
+  <main>Request-time hybrid shell</main>
 }
 ```
 
@@ -71,5 +74,5 @@ gowdk dev --out dist/site
 gowdk dev --ssr --out dist/site --app .gowdk/app
 ```
 
-Use plain `dev` output for bare hybrid SPA pages. Use `--app` with SSR enabled
-when a hybrid page declares `load {}`.
+Use `--app` with SSR enabled for hybrid pages so the generated request-time
+route handlers can run.

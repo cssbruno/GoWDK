@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/cssbruno/GOWDK/actions/workflows/ci.yml/badge.svg)](https://github.com/cssbruno/GOWDK/actions/workflows/ci.yml)
 [![Release](https://github.com/cssbruno/GOWDK/actions/workflows/release.yml/badge.svg)](https://github.com/cssbruno/GOWDK/actions/workflows/release.yml)
-![Go](https://img.shields.io/badge/Go-1.26-00ADD8)
+![Go](https://img.shields.io/badge/Go-1.26.4-00ADD8)
 
 GOWDK is a compiler and runtime for shipping Go web apps. Write `.gwdk` files,
 get build-time pages, request-time backend behavior, opt-in SSR, and one-binary
@@ -319,10 +319,10 @@ See [CLI reference](docs/reference/cli.md).
 | Client-side `go client {}` page mounts through Go WASM | Partial |
 | Request-time `go ssr {}` load execution | Partial |
 | Addon inline Go adapter file generation | Partial |
-| Hybrid rendering beyond explicit request-time branches | Planned |
+| Hybrid request-time routes | Partial |
 | Split worker/cron contract wiring | Planned |
 | Durable outbox, broker, and realtime adapters | Partial |
-| Production operations guidance | Planned |
+| Production operations guidance | Available |
 
 See [Requirements](docs/product/requirements.md) for the full status table and
 [Roadmap](docs/product/roadmap.md) for planned work.

@@ -89,6 +89,40 @@ func TestSSRArtifactsRenderConcreteSSRPage(t *testing.T) {
 	}
 }
 
+func TestSSRArtifactsRenderHybridPageWithoutLoad(t *testing.T) {
+	outputDir := t.TempDir()
+	app := manifest.Manifest{
+		Pages: []manifest.Page{{
+			ID:     "marketing",
+			Route:  "/marketing",
+			Render: gowdk.Hybrid,
+			Blocks: manifest.Blocks{
+				BuildBody: `=> { title: "Marketing" }`,
+				View:      true,
+				ViewBody:  `<main><h1>{title}</h1></main>`,
+			},
+		}},
+	}
+
+	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one hybrid artifact, got %#v", artifacts)
+	}
+	artifact := artifacts[0]
+	if artifact.PageID != "marketing" || artifact.Route != "/marketing" || artifact.Render != gowdk.Hybrid {
+		t.Fatalf("unexpected hybrid artifact metadata: %#v", artifact)
+	}
+	if artifact.HasLoad {
+		t.Fatalf("expected hybrid route without load metadata, got %#v", artifact)
+	}
+	if !strings.Contains(artifact.HTML, "<h1>Marketing</h1>") {
+		t.Fatalf("expected rendered hybrid HTML, got %s", artifact.HTML)
+	}
+}
+
 func TestSSRArtifactsFromIRRenderConcreteSSRPage(t *testing.T) {
 	outputDir := t.TempDir()
 	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}

@@ -606,18 +606,25 @@ func parseTailwindAddon(expression ast.Expr, imports map[string]string) (gowdk.A
 	if !ok || imports[packageName.Name] != tailwind.ImportPath {
 		return nil, false
 	}
+	if len(call.Args) > 1 {
+		return nil, false
+	}
 
 	var options tailwind.Options
 	if len(call.Args) > 0 {
-		options = parseTailwindOptions(call.Args[0], imports)
+		var ok bool
+		options, ok = parseTailwindOptions(call.Args[0], imports)
+		if !ok {
+			return nil, false
+		}
 	}
 	return tailwind.Addon(options), true
 }
 
-func parseTailwindOptions(expression ast.Expr, imports map[string]string) tailwind.Options {
+func parseTailwindOptions(expression ast.Expr, imports map[string]string) (tailwind.Options, bool) {
 	literal, ok := expression.(*ast.CompositeLit)
 	if !ok || !isTailwindOptionsType(literal.Type, imports) {
-		return tailwind.Options{}
+		return tailwind.Options{}, false
 	}
 
 	var options tailwind.Options
@@ -639,15 +646,13 @@ func parseTailwindOptions(expression ast.Expr, imports map[string]string) tailwi
 			options.Href = parseString(keyValue.Value)
 		case "Command":
 			options.Command = parseString(keyValue.Value)
-		case "Version":
-			options.Version = parseString(keyValue.Value)
-		case "DownloadDir":
-			options.DownloadDir = parseString(keyValue.Value)
 		case "Minify":
 			options.Minify = parseBool(keyValue.Value)
+		default:
+			return tailwind.Options{}, false
 		}
 	}
-	return options
+	return options, true
 }
 
 func isTailwindOptionsType(expression ast.Expr, imports map[string]string) bool {

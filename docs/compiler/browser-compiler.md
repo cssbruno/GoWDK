@@ -65,8 +65,10 @@ The runtime:
 - Submits enhanced forms with `X-GOWDK-Partial`, `X-GOWDK-Target`, and
   `X-GOWDK-Swap` headers.
 - Applies `innerHTML` or `outerHTML` swaps.
+- Reloads the current page when the response carries `X-GOWDK-Reload: 1`.
 - Dispatches `gowdk:before-request`, `gowdk:after-swap`, and
-  `gowdk:request-error`.
+  `gowdk:request-error`. Failed enhanced requests include response `status`,
+  `body`, and `response` in event detail when available.
 - Toggles `aria-busy` on the submitting form.
 - Restores focus by matching the active element's `id` or `name` when possible.
 - Calls generated island destroy and mount hooks around replaced island DOM.

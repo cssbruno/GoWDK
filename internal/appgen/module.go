@@ -26,7 +26,7 @@ func moduleSource(options Options) (string, error) {
 
 	var builder strings.Builder
 	builder.WriteString("module gowdk-generated-app\n\n")
-	builder.WriteString("go 1.26\n\n")
+	builder.WriteString("go 1.26.4\n\n")
 	builder.WriteString("require ")
 	builder.WriteString(gowdkRuntimeModulePath)
 	builder.WriteByte(' ')

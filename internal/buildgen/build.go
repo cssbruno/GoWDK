@@ -512,6 +512,7 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	components, componentFailures := buildComponents(app.Components)
 	layouts, layoutFailures := buildLayouts(app.Layouts)
 	css, cssFailures := planCSS(config, app, outputDir)
+	componentAssets, componentAssetFailures := planComponentFileAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
 	var planned []plannedArtifact
@@ -520,6 +521,7 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	failures = append(failures, componentFailures...)
 	failures = append(failures, layoutFailures...)
 	failures = append(failures, cssFailures...)
+	failures = append(failures, componentAssetFailures...)
 	for _, page := range app.Pages {
 		if isRequestTimePage(config, page) {
 			continue
@@ -552,5 +554,6 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	if err != nil {
 		return buildPlan{}, err
 	}
-	return buildPlan{pages: planned, css: css.assets, assets: runtime}, nil
+	assets := append(componentAssets, runtime...)
+	return buildPlan{pages: planned, css: css.assets, assets: assets}, nil
 }

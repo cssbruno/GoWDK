@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/importer"
 	"go/parser"
 	"go/token"
@@ -14,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
@@ -203,36 +205,10 @@ func RunStateInitJSON(imports []manifest.Import, state manifest.StateContract) (
 	if !goNamePattern.MatchString(state.Init.Name) {
 		return nil, fmt.Errorf("invalid state init function name %q", state.Init.Name)
 	}
-	source := fmt.Sprintf(`package main
-
-import (
-	"encoding/json"
-	"os"
-	"reflect"
-
-	%s %q
-)
-
-func main() {
-	value := %s.%s()
-	reflected := reflect.ValueOf(value)
-	if reflected.Kind() == reflect.Pointer {
-		reflected = reflected.Elem()
+	source, err := stateInitRunnerSource(state.Init.Alias, importPath, state.Init.Name)
+	if err != nil {
+		return nil, err
 	}
-	typed := reflected.Type()
-	fields := map[string]any{}
-	for index := 0; index < reflected.NumField(); index++ {
-		field := typed.Field(index)
-		if field.PkgPath != "" {
-			continue
-		}
-		fields[field.Name] = reflected.Field(index).Interface()
-	}
-	if err := json.NewEncoder(os.Stdout).Encode(fields); err != nil {
-		panic(err)
-	}
-}
-`, state.Init.Alias, importPath, state.Init.Alias, state.Init.Name)
 	file, err := os.CreateTemp("", "gowdk-state-init-*.go")
 	if err != nil {
 		return nil, err
@@ -260,6 +236,89 @@ func main() {
 	}
 	return append([]byte(nil), output...), nil
 }
+
+const stateInitImportPlaceholder = "gowdk.local/state-init-placeholder"
+
+func stateInitRunnerSource(importAlias string, importPath string, functionName string) (string, error) {
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, "gowdk-state-init.go", stateInitRunnerSourceTemplate, parser.ParseComments|parser.AllErrors)
+	if err != nil {
+		return "", fmt.Errorf("parse state init runner source: %w", err)
+	}
+	replacedImport := false
+	for _, item := range file.Imports {
+		if item.Name == nil || item.Name.Name != "gowdkstateinit" {
+			continue
+		}
+		currentPath, err := strconv.Unquote(item.Path.Value)
+		if err != nil {
+			return "", fmt.Errorf("parse state init runner import path: %w", err)
+		}
+		if currentPath != stateInitImportPlaceholder {
+			continue
+		}
+		item.Name.Name = importAlias
+		item.Path.Value = strconv.Quote(importPath)
+		replacedImport = true
+	}
+	if !replacedImport {
+		return "", fmt.Errorf("state init runner source is missing state package import placeholder")
+	}
+	replacedCall := false
+	ast.Inspect(file, func(node ast.Node) bool {
+		selector, ok := node.(*ast.SelectorExpr)
+		if !ok || selector.Sel == nil || selector.Sel.Name != "GOWDKStateInit" {
+			return true
+		}
+		receiver, ok := selector.X.(*ast.Ident)
+		if !ok || receiver.Name != "gowdkstateinit" {
+			return true
+		}
+		receiver.Name = importAlias
+		selector.Sel.Name = functionName
+		replacedCall = true
+		return true
+	})
+	if !replacedCall {
+		return "", fmt.Errorf("state init runner source is missing state init call placeholder")
+	}
+	var buffer bytes.Buffer
+	if err := format.Node(&buffer, fileSet, file); err != nil {
+		return "", fmt.Errorf("format state init runner source: %w", err)
+	}
+	return buffer.String(), nil
+}
+
+const stateInitRunnerSourceTemplate = `package main
+
+import (
+	"encoding/json"
+	"os"
+	"reflect"
+
+	gowdkstateinit "gowdk.local/state-init-placeholder"
+)
+
+func main() {
+	value := gowdkstateinit.GOWDKStateInit()
+	reflected := reflect.ValueOf(value)
+	if reflected.Kind() == reflect.Pointer {
+		reflected = reflected.Elem()
+	}
+	typed := reflected.Type()
+	fields := map[string]any{}
+	for index := 0; index < reflected.NumField(); index++ {
+		field := typed.Field(index)
+		if field.PkgPath != "" {
+			continue
+		}
+		fields[field.Name] = reflected.Field(index).Interface()
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(fields); err != nil {
+		panic(err)
+	}
+}
+`
 
 // ImportPathForAlias returns the concrete Go import path for a .gwdk import
 // alias and rejects relative import paths.

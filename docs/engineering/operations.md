@@ -31,10 +31,9 @@ hybrid-with-load request-time slices. SSR remains optional.
 - Staging: target flow verifies one-binary serving and addon behavior.
 - Production: not a supported readiness claim yet. Current generated binaries
   can serve embedded app assets, supported action/API/fragment handlers,
-  generated guards, and SSR pages with declared `load {}` identifier or dotted
-  paths. Bare hybrid pages serve as SPA output, and hybrid pages with `load {}`
-  use the same explicit request-time page path; broader hybrid request-time
-  behavior remains planned.
+  generated guards, SSR pages with declared `load {}` identifier or dotted
+  paths, and hybrid pages with or without declared `load {}` data. Hybrid
+  streaming, data refresh, and non-HTTP revalidation remain planned.
 
 ## Observability
 
@@ -66,7 +65,7 @@ explicitly declare `load {}` from the selected output directory. `--wasm`
 compiles the same generated app with `GOOS=js GOARCH=wasm` for hosts that can
 run Go WebAssembly; it is not browser WASM islands. Future generated artifacts
 should improve production operations guidance, richer validation, broader
-hybrid request-time behavior, and load/action invalidation.
+hybrid streaming/data refresh and broader generated-client reactivity.
 
 Current local development can serve generated build output with:
 

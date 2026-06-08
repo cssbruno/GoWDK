@@ -204,6 +204,132 @@ test('missingExecutableMessage explains missing GOWDK CLI resolution', () => {
   );
 });
 
+test('completionContext detects view interpolation data fields', () => {
+  assert.equal(core.completionContext('  <h1>{tit'), 'dataField');
+  assert.equal(core.completionContext('  <Page title="{user.na'), 'dataField');
+});
+
+test('documentDataFields extracts literal build and load fields', () => {
+  const fields = core.documentDataFields(`package pages
+
+build {
+  => {
+    title: "Docs",
+    count: 2
+  }
+}
+
+load {
+  => { user.name, account.plan }
+}
+
+view {
+  <h1>{title}</h1>
+}
+`);
+
+  assert.deepEqual(fields.map((field) => [field.lane, field.name, field.origin]), [
+    ['build', 'title', 'build {}'],
+    ['build', 'count', 'build {}'],
+    ['load', 'user.name', 'load {}'],
+    ['load', 'account.plan', 'load {}']
+  ]);
+});
+
+test('documentDataFields extracts fields from imported Go build function structs', () => {
+  const tmp = fs.mkdtempSync(path.join(process.cwd(), '.tmp-gowdk-vscode-'));
+  try {
+    const interopDir = path.join(tmp, 'examples', 'go-interop');
+    fs.mkdirSync(interopDir, { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'go.mod'), `module example.com/app
+
+go 1.26
+`, 'utf8');
+    fs.writeFileSync(path.join(interopDir, 'catalog.go'), `package gointerop
+
+type FeaturedCopy struct {
+  Title string \`json:"title"\`
+  Tagline string \`json:"tagline"\`
+  Hidden string \`json:"-"\`
+}
+
+func FeaturedCopyForBuild() FeaturedCopy {
+  return FeaturedCopy{}
+}
+`, 'utf8');
+
+    const source = `package pages
+
+import interop "example.com/app/examples/go-interop"
+
+build {
+  => interop.FeaturedCopyForBuild()
+}
+
+view {
+  <h1>{title}</h1>
+}
+`;
+
+    const fields = core.documentDataFields(source, {
+      fileName: path.join(tmp, 'pages', 'home.page.gwdk'),
+      projectRoot: tmp
+    });
+
+    assert.deepEqual(fields.map((field) => ({
+      name: field.name,
+      type: field.type,
+      goField: field.goField,
+      lane: field.lane,
+      origin: field.origin
+    })), [
+      {
+        name: 'title',
+        type: 'string',
+        goField: 'Title',
+        lane: 'build',
+        origin: 'interop.FeaturedCopyForBuild()'
+      },
+      {
+        name: 'tagline',
+        type: 'string',
+        goField: 'Tagline',
+        lane: 'build',
+        origin: 'interop.FeaturedCopyForBuild()'
+      }
+    ]);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('projectCompletionEntries returns data fields and hover explains origin', () => {
+  const metadata = {
+    dataFields: [
+      {
+        name: 'title',
+        lane: 'build',
+        type: 'string',
+        origin: 'interop.FeaturedCopyForBuild()',
+        goField: 'Title'
+      }
+    ]
+  };
+
+  assert.deepEqual(core.projectCompletionEntries('dataField', metadata), [
+    ['title', 'build field string from interop.FeaturedCopyForBuild().']
+  ]);
+
+  assert.equal(core.hoverMarkdown('title', metadata), [
+    '**GOWDK data field** `title`',
+    '',
+    'Lane: `build`',
+    'Type: `string`',
+    'From: `interop.FeaturedCopyForBuild()`',
+    'Go field: `Title`'
+  ].join('\n'));
+});
+
 test('nearestProjectRoot finds nested GOWDK app roots inside broad workspaces', () => {
   const tmp = fs.mkdtempSync(path.join(process.cwd(), '.tmp-gowdk-vscode-'));
   try {

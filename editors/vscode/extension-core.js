@@ -574,6 +574,9 @@ function completionEntries() {
 
 function completionContext(linePrefix) {
   const prefix = String(linePrefix || '');
+  if (/\{[A-Za-z0-9_.-]*$/.test(prefix)) {
+    return 'dataField';
+  }
   if (/@layout\s+(?:[A-Za-z0-9_.-]+,\s*)*[A-Za-z0-9_.-]*$/.test(prefix)) {
     return 'layout';
   }
@@ -596,6 +599,10 @@ function completionContext(linePrefix) {
 }
 
 function projectCompletionEntries(context, metadata = {}) {
+  if (context === 'dataField') {
+    return projectDataFields(metadata)
+      .map((field) => [field.name, dataFieldDetail(field)]);
+  }
   if (context === 'island') {
     return [['wasm', 'Use explicit WASM island assets for this component call.']];
   }
@@ -725,6 +732,24 @@ function hoverMarkdown(token, metadata = {}, context = {}) {
   const value = String(token || '');
   if (!value) {
     return '';
+  }
+  const dataField = projectDataFields(metadata).find((field) => field.name === value);
+  if (dataField) {
+    const lines = [
+      `**GOWDK data field** \`${escapeMarkdown(value)}\``,
+      '',
+      `Lane: \`${escapeMarkdown(dataField.lane)}\``
+    ];
+    if (dataField.type) {
+      lines.push(`Type: \`${escapeMarkdown(dataField.type)}\``);
+    }
+    if (dataField.origin) {
+      lines.push(`From: \`${escapeMarkdown(dataField.origin)}\``);
+    }
+    if (dataField.goField) {
+      lines.push(`Go field: \`${escapeMarkdown(dataField.goField)}\``);
+    }
+    return lines.join('\n');
   }
   const pages = projectPages(metadata);
   const manifest = metadata.manifest || {};
@@ -1177,6 +1202,258 @@ function symbolContext(source, offset) {
   return match ? { component: match[1] } : {};
 }
 
+function documentDataFields(source, options = {}) {
+  const text = String(source || '');
+  const fields = [
+    ...literalDataFields(text, 'build'),
+    ...literalDataFields(text, 'load'),
+    ...goCallDataFields(text, options)
+  ];
+  return uniqueBy(fields.filter(Boolean), (field) => `${field.lane}\0${field.name}\0${field.origin || ''}`);
+}
+
+function projectDataFields(metadata = {}) {
+  return uniqueBy([...(metadata.dataFields || [])].filter((field) => field && field.name), (field) => `${field.lane || ''}\0${field.name}\0${field.origin || ''}`)
+    .sort((left, right) => left.name.localeCompare(right.name) || String(left.lane || '').localeCompare(String(right.lane || '')));
+}
+
+function dataFieldDetail(field = {}) {
+  const type = field.type ? ` ${field.type}` : '';
+  const origin = field.origin ? ` from ${field.origin}` : '';
+  return `${field.lane || 'data'} field${type}${origin}.`;
+}
+
+function literalDataFields(source, lane) {
+  const body = blockBody(source, lane);
+  if (!body) {
+    return [];
+  }
+  const fields = [];
+  for (const literal of arrowObjectLiterals(body)) {
+    for (const part of splitTopLevelCommas(literal)) {
+      const item = part.trim().match(/^([A-Za-z_][A-Za-z0-9_.]*)\s*(?=:|$)/);
+      if (!item) {
+        continue;
+      }
+      fields.push({
+        name: item[1],
+        lane,
+        origin: `${lane} {}`,
+        type: ''
+      });
+    }
+  }
+  return fields;
+}
+
+function splitTopLevelCommas(source) {
+  const parts = [];
+  const text = String(source || '');
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < text.length; index++) {
+    if (text[index] === '{' || text[index] === '[' || text[index] === '(') {
+      depth++;
+    }
+    if (text[index] === '}' || text[index] === ']' || text[index] === ')') {
+      depth = Math.max(0, depth - 1);
+    }
+    if (text[index] === ',' && depth === 0) {
+      parts.push(text.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts;
+}
+
+function goCallDataFields(source, options = {}) {
+  const body = blockBody(source, 'build');
+  if (!body) {
+    return [];
+  }
+  const calls = [];
+  for (const match of body.matchAll(/=>\s+(?:(([A-Za-z_][A-Za-z0-9_]*)\.)?([A-Za-z_][A-Za-z0-9_]*))\s*\(\s*\)/g)) {
+    calls.push({ alias: match[2] || '', functionName: match[3] });
+  }
+  if (calls.length === 0) {
+    return [];
+  }
+  const imports = gwdkImports(source);
+  const goSources = goSourcesForDocument(source, options, imports);
+  const fields = [];
+  for (const call of calls) {
+    const sourceSet = call.alias ? goSources.byAlias.get(call.alias) || [] : goSources.local;
+    const resultType = goFunctionReturnType(sourceSet.join('\n'), call.functionName);
+    if (!resultType) {
+      continue;
+    }
+    for (const field of goStructFields(sourceSet.join('\n'), resultType)) {
+      fields.push({
+        ...field,
+        lane: 'build',
+        origin: call.alias ? `${call.alias}.${call.functionName}()` : `${call.functionName}()`
+      });
+    }
+  }
+  return fields;
+}
+
+function blockBody(source, name) {
+  const text = String(source || '');
+  const pattern = new RegExp(`(?:^|\\n)\\s*${escapeRegExp(name)}\\s*\\{`, 'g');
+  const match = pattern.exec(text);
+  if (!match) {
+    return '';
+  }
+  const open = text.indexOf('{', match.index);
+  let depth = 0;
+  for (let index = open; index < text.length; index++) {
+    const char = text[index];
+    if (char === '{') {
+      depth++;
+    }
+    if (char === '}') {
+      depth--;
+      if (depth === 0) {
+        return text.slice(open + 1, index);
+      }
+    }
+  }
+  return text.slice(open + 1);
+}
+
+function arrowObjectLiterals(body) {
+  const text = String(body || '');
+  const literals = [];
+  for (const match of text.matchAll(/=>\s*\{/g)) {
+    const open = match.index + match[0].lastIndexOf('{');
+    let depth = 0;
+    for (let index = open; index < text.length; index++) {
+      if (text[index] === '{') {
+        depth++;
+      }
+      if (text[index] === '}') {
+        depth--;
+        if (depth === 0) {
+          literals.push(text.slice(open + 1, index));
+          break;
+        }
+      }
+    }
+  }
+  return literals;
+}
+
+function gwdkImports(source) {
+  const imports = new Map();
+  for (const match of String(source || '').matchAll(/^\s*import\s+([A-Za-z_][A-Za-z0-9_]*)\s+"([^"]+)"/gm)) {
+    imports.set(match[1], match[2]);
+  }
+  return imports;
+}
+
+function goSourcesForDocument(source, options = {}, imports = new Map()) {
+  const local = [];
+  const byAlias = new Map();
+  const inlineGo = blockBody(source, 'go');
+  if (inlineGo) {
+    local.push(inlineGo);
+  }
+  const fileName = options.fileName || '';
+  if (fileName) {
+    local.push(...readGoSources(path.dirname(fileName)));
+  }
+  const projectRoot = options.projectRoot || '';
+  const modulePath = options.modulePath || (projectRoot ? goModModulePath(readText(path.join(projectRoot, 'go.mod'))) : '');
+  for (const [alias, importPath] of imports.entries()) {
+    const dir = resolveImportDir(importPath, projectRoot, modulePath);
+    byAlias.set(alias, dir ? readGoSources(dir) : []);
+  }
+  return { local, byAlias };
+}
+
+function readGoSources(dir) {
+  if (!dir) {
+    return [];
+  }
+  try {
+    return fs.readdirSync(dir)
+      .filter((file) => file.endsWith('.go') && !file.endsWith('_test.go'))
+      .map((file) => readText(path.join(dir, file)))
+      .filter(Boolean);
+  } catch (_error) {
+    return [];
+  }
+}
+
+function resolveImportDir(importPath, projectRoot, modulePath) {
+  if (!projectRoot || !modulePath || !importPath.startsWith(modulePath)) {
+    return '';
+  }
+  const suffix = importPath.slice(modulePath.length).replace(/^\/+/, '');
+  return path.join(projectRoot, suffix);
+}
+
+function readText(file) {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch (_error) {
+    return '';
+  }
+}
+
+function goFunctionReturnType(source, functionName) {
+  const name = escapeRegExp(functionName);
+  const match = String(source || '').match(new RegExp(`func\\s+${name}\\s*\\([^)]*\\)\\s+(?:\\([^)]*,\\s*error\\)|([A-Za-z_][A-Za-z0-9_]*))`));
+  if (!match) {
+    return '';
+  }
+  if (match[1]) {
+    return match[1];
+  }
+  const tuple = match[0].match(/\)\s+\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*error\s*\)/);
+  return tuple ? tuple[1] : '';
+}
+
+function goStructFields(source, typeName) {
+  const match = String(source || '').match(new RegExp(`type\\s+${escapeRegExp(typeName)}\\s+struct\\s*\\{([\\s\\S]*?)\\n\\}`));
+  if (!match) {
+    return [];
+  }
+  const fields = [];
+  for (const line of match[1].split(/\r?\n/)) {
+    const trimmed = line.trim();
+    const field = trimmed.match(/^([A-Z][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_.\[\]]*)(?:\s+`([^`]*)`)?/);
+    if (!field) {
+      continue;
+    }
+    const jsonName = jsonTagName(field[3] || '');
+    if (jsonName === '-') {
+      continue;
+    }
+    fields.push({
+      name: jsonName || lowerFirst(field[1]),
+      type: field[2],
+      goField: field[1]
+    });
+  }
+  return fields;
+}
+
+function jsonTagName(tags) {
+  const match = String(tags || '').match(/\bjson:"([^"]*)"/);
+  if (!match) {
+    return '';
+  }
+  return match[1].split(',')[0];
+}
+
+function lowerFirst(value) {
+  const text = String(value || '');
+  return text ? text[0].toLowerCase() + text.slice(1) : '';
+}
+
 function formatEmit(event = {}) {
   const params = (event.params || []).map((param) => `${param.name} ${param.type}`.trim()).filter(Boolean).join(', ');
   return `${event.name || '(unnamed)'}(${params})`;
@@ -1302,6 +1579,7 @@ module.exports = {
   diagnosticPosition,
   diagnosticRange,
   diagnosticSeverity,
+  documentDataFields,
   escapeHTML,
   goModModulePath,
   goModRequiresGOWDK,
@@ -1315,6 +1593,7 @@ module.exports = {
   nearestProjectRoot,
   parseDiagnostics,
   pageFlow,
+  projectDataFields,
   projectLayouts,
   projectPages,
   projectCompletionEntries,

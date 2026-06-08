@@ -77,7 +77,7 @@ function activate(context) {
         return completionItems(core.completionEntries());
       }
     }
-  }, '@', '<', '"', ',', ':', '.', ' '));
+  }, '@', '<', '"', ',', ':', '.', ' ', '{'));
 
   context.subscriptions.push(vscode.languages.registerHoverProvider(LANGUAGE_ID, {
     async provideHover(document, position) {
@@ -469,7 +469,15 @@ async function loadCompletionMetadata(document) {
     loadManifest(document),
     loadCSSFiles(document)
   ]);
-  return { siteMap, manifest, cssFiles };
+  return {
+    siteMap,
+    manifest,
+    cssFiles,
+    dataFields: core.documentDataFields(document.getText(), {
+      fileName: document.fileName,
+      projectRoot: projectRoot(document)
+    })
+  };
 }
 
 async function loadProjectMetadata(document) {

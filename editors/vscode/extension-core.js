@@ -108,11 +108,11 @@ function toolInvocation(args, options = {}) {
   if (options.localBinary) {
     return { command: options.localBinary, args, cwd, source: 'localBinary' };
   }
-  if (options.sourceWorkspaceRoot) {
-    return { ...gowdkSourceRunInvocation(args, options.sourceWorkspaceRoot), source: 'sourcePath' };
-  }
   if (options.requiresGOWDK) {
     return { command: 'go', args: gowdkModuleRunArgs(args), cwd, source: 'module' };
+  }
+  if (options.sourceWorkspaceRoot) {
+    return { ...gowdkSourceRunInvocation(args, options.sourceWorkspaceRoot), source: 'sourcePath' };
   }
   return { command: 'gowdk', args, cwd, source: 'path' };
 }

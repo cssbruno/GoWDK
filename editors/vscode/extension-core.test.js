@@ -160,11 +160,23 @@ test('toolInvocation uses a workspace-local binary before bare gowdk', () => {
   });
 });
 
-test('toolInvocation uses a source checkout before module go run', () => {
+test('toolInvocation keeps app module cwd before nearby source checkout', () => {
   assert.deepEqual(core.toolInvocation(['check', '--json'], {
     cwd: '/workspace/app',
     sourceWorkspaceRoot: '/workspace/GOWDK',
     requiresGOWDK: true
+  }), {
+    command: 'go',
+    args: ['run', 'github.com/cssbruno/gowdk/cmd/gowdk', 'check', '--json'],
+    cwd: '/workspace/app',
+    source: 'module'
+  });
+});
+
+test('toolInvocation uses a source checkout for non-app workspaces', () => {
+  assert.deepEqual(core.toolInvocation(['check', '--json'], {
+    cwd: '/workspace/docs',
+    sourceWorkspaceRoot: '/workspace/GOWDK'
   }), {
     command: 'go',
     args: ['run', './cmd/gowdk', 'check', '--json'],

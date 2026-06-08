@@ -59,11 +59,8 @@ go run ./cmd/gowdk <command>
 When opened inside a GOWDK app module whose `go.mod` requires
 `github.com/cssbruno/gowdk`, or when editing files below such a nested module,
 the extension first uses a workspace-local `gowdk` binary when present. It then
-uses `gowdk.sourcePath` or a nearby sibling source checkout such as `../GOWDK`
-when that directory is a `github.com/cssbruno/gowdk` module. This keeps local
-app workspaces on the current checker/parser while developing GOWDK itself.
-
-Without a local binary or source checkout, the extension runs:
+runs from the app module so source discovery and relative config paths resolve
+against the app root:
 
 ```sh
 go run github.com/cssbruno/gowdk/cmd/gowdk <command>
@@ -71,7 +68,8 @@ go run github.com/cssbruno/gowdk/cmd/gowdk <command>
 
 In other workspaces, set `gowdk.cliPath` to an installed `gowdk` binary,
 set `gowdk.sourcePath` to a local source checkout, or keep both empty to use
-`gowdk` from `PATH`.
+`gowdk` from `PATH`. Source workspaces for `github.com/cssbruno/gowdk` still
+run `go run ./cmd/gowdk <command>` from the source checkout.
 
 Check the extension entrypoint syntax with:
 

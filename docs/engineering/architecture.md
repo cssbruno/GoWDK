@@ -112,6 +112,31 @@ there first. Removing the remaining compatibility records is planned after the
 parser, public manifest JSON, and legacy compiler entrypoints stop depending on
 them.
 
+Current manifest compatibility users:
+
+| User | Current manifest use | Migration direction |
+| --- | --- | --- |
+| `internal/parser` | Produces `manifest.Page`, `manifest.Component`, and `manifest.Layout` records for existing CLI and compiler entrypoints. | Keep typed AST as the parser source of truth; remove direct manifest output after all callers lower through analyzer/IR. |
+| `internal/gwdkanalysis` | Lowers typed AST into manifest records, then builds `gwdkir.Program` from those records. | Lower typed AST directly into IR and keep manifest output as a separate compatibility adapter. |
+| `internal/compiler` | Validators, backend binding discovery, route conflict checks, and policy checks still consume `manifest.Manifest`. | Move validation and binding metadata to IR models; keep adapters only for public manifest and legacy entrypoints. |
+| `internal/buildgen` | Public `Build`/`BuildMemory` entrypoints accept `manifest.Manifest`; supported generation paths derive or consume IR but still convert IR back to manifest models for older render helpers. | Make render helpers consume IR-native page/component/layout models, then keep manifest entrypoints as thin adapters. |
+| `internal/appgen` | Public route helpers and some backend adapter types still use manifest page, endpoint, and backend-binding records. | Keep app route planning and backend adapter planning IR-first; replace manifest-only helper entrypoints with IR helpers before removing compatibility constructors. |
+| `internal/lang` and `cmd/gowdk` | CLI `check`, `manifest`, `sitemap`, `routes`, and build setup still pass manifest records between parse, validate, report, and generation steps. | Parse/analyze into IR once per command, then derive public JSON and reports from IR adapters. |
+| `internal/lsp` | Editor diagnostics and completions use language tooling that still returns manifest records for open documents. | Keep open-document source spans, but drive project-wide symbols and diagnostics from analyzer/IR snapshots. |
+| Tests | Many generator and validator tests construct manifest records directly. | Keep fixture-style manifest construction until the tested package exposes IR-native helpers; update tests alongside each migrated package. |
+
+Migration order:
+
+1. Keep `gwdkir.Program` as the only source of truth for new generated-output
+   fields.
+2. Move compiler validation and backend binding records to IR or IR-adjacent
+   structs.
+3. Replace buildgen/appgen manifest render helpers with IR-native helpers.
+4. Convert CLI reports, sitemap output, and LSP project metadata to IR-derived
+   adapters.
+5. Keep public manifest JSON compatibility until a release plan explicitly
+   deprecates or replaces it.
+
 ## Components
 
 | Component | Responsibility | Owner | Notes |

@@ -3745,7 +3745,6 @@ func writeCLIFile(t *testing.T, path, content string) {
 
 func withPublicGuardForPageFixture(path, content string) string {
 	if !strings.HasSuffix(path, ".page.gwdk") ||
-		!strings.Contains(content, "\n@page ") ||
 		strings.Contains(content, "\n@guard ") {
 		return content
 	}

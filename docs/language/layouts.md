@@ -27,7 +27,6 @@ reference:
 ```gwdk
 package pages
 
-@page home
 @route "/"
 @guard public
 @layout chrome.root

@@ -26,7 +26,7 @@ language references, compiler docs, and examples.
 
 | ID | Requirement | Priority | Status | Notes |
 | --- | --- | --- | --- | --- |
-| PRD-001 | Compile portable package-peer `.gwdk` files that declare `package`, `@page`, `@route`, `@guard`, `@layout`, blocks, and endpoints. | High | Partial | Discovery, package parsing, metadata parsing, parser syntax validation, default build discovery, route shape/conflict validation, required page-view and page-guard validation, explicit component-file build input, typed GOWDK AST, AST analyzer, versioned compiler IR, endpoint comment discovery, and endpoint conflict diagnostics are implemented; full downstream migration to the IR remains planned. |
+| PRD-001 | Compile portable package-peer `.gwdk` files that declare `package`, optional `@page`, `@route`, `@guard`, `@layout`, blocks, and endpoints. | High | Partial | Discovery, package parsing, metadata parsing, parser syntax validation, filename-derived page IDs, default build discovery, route shape/conflict validation, required page-view and page-guard validation, explicit component-file build input, typed GOWDK AST, AST analyzer, versioned compiler IR, endpoint comment discovery, and endpoint conflict diagnostics are implemented; full downstream migration to the IR remains planned. |
 | PRD-002 | Default render mode must be `spa`. | High | Implemented | Root `RenderConfig.DefaultMode()` defaults to `gowdk.SPA`. |
 | PRD-003 | Support render modes `spa`, `action`, `hybrid`, and `ssr`. | High | Implemented | Root `RenderMode` constants exist. |
 | PRD-004 | Reject request-time page behavior unless the SSR feature is enabled in config or CLI options. | High | Implemented | `internal/compiler.ValidatePage` emits `missing_ssr_addon`. |

@@ -9,15 +9,14 @@ CLI JSON diagnostics use:
   "diagnostics": [
     {
       "file": "examples/pages/home.page.gwdk",
-      "code": "missing_view_block",
-      "pos": {"line": 1, "column": 1},
+      "code": "missing_page_guard",
+      "pos": {"line": 3, "column": 1},
       "range": {
-        "start": {"line": 1, "column": 1},
-        "end": {"line": 1, "column": 6}
+        "start": {"line": 3, "column": 1},
+        "end": {"line": 3, "column": 11}
       },
       "severity": "error",
-      "message": "missing @page",
-      "suggestion": "Add an @page declaration before page-level blocks."
+      "message": "home is missing @guard. Add @guard public for an intentionally public page, or add protected guard IDs such as @guard auth.required"
     }
   ]
 }

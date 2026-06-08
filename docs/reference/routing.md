@@ -5,10 +5,10 @@ identity.
 
 ## Page Routes
 
-Every current page file must declare a page ID and a route:
+Every current page file must declare a route and access guard. Page ID derives
+from the filename unless `@page` is present:
 
 ```gwdk
-@page home
 @route "/"
 @guard public
 
@@ -18,6 +18,8 @@ view {
   </main>
 }
 ```
+
+Use explicit `@page` only when page identity should not follow the filename.
 
 Current route rules:
 
@@ -49,7 +51,6 @@ Pages may declare response cache intent with `@cache`. The value is carried as
 route metadata and should be a literal HTTP `Cache-Control` value:
 
 ```gwdk
-@page docs
 @route "/docs"
 @guard public
 @cache "public, max-age=60"
@@ -62,7 +63,6 @@ Values may be whole seconds or Go-style whole-second durations such as `60s`,
 header:
 
 ```gwdk
-@page docs
 @route "/docs"
 @guard public
 @cache "public, max-age=60"
@@ -81,7 +81,6 @@ errors; those use `no-store`.
 SPA render is the default:
 
 ```gwdk
-@page docs
 @route "/docs"
 @guard public
 
@@ -111,7 +110,6 @@ Dynamic SPA routes require `paths {}`. Action endpoints on a dynamic SPA page
 inherit that page's generated concrete paths:
 
 ```gwdk
-@page blog.post
 @route "/blog/{slug}"
 @guard public
 
@@ -155,7 +153,6 @@ app slice:
 ```gwdk
 package signup
 
-@page signup
 @route "/signup"
 @guard public
 
@@ -207,7 +204,6 @@ same-package Go handlers:
 ```gwdk
 package api
 
-@page status
 @route "/status"
 @guard public
 

@@ -2,6 +2,7 @@ package gwdkanalysis
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkast"
@@ -115,12 +116,32 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 		page.Blocks.Spans.Fragments = append(page.Blocks.Spans.Fragments, manifest.NamedSpan{Name: fragment.Name, Span: fragment.Span})
 	}
 	if page.ID == "" {
+		page.ID = derivedPageID(source)
+	}
+	if page.ID == "" {
 		return manifest.Page{}, fmt.Errorf("%s: missing @page", source)
 	}
 	if page.Route == "" {
 		return manifest.Page{}, fmt.Errorf("%s: missing @route", source)
 	}
 	return page, nil
+}
+
+func derivedPageID(source string) string {
+	if strings.TrimSpace(source) == "" {
+		return ""
+	}
+	base := filepath.Base(source)
+	if base == "." || base == string(filepath.Separator) {
+		return ""
+	}
+	for _, suffix := range []string{".page.gwdk", ".gwdk"} {
+		if strings.HasSuffix(base, suffix) {
+			base = strings.TrimSuffix(base, suffix)
+			break
+		}
+	}
+	return strings.TrimSpace(base)
 }
 
 // LowerComponent lowers one component AST into manifest compatibility records.

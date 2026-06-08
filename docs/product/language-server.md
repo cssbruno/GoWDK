@@ -82,8 +82,8 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 
 ## Edge Cases
 
-- Missing `@page`, `@route`, or `@guard` should publish a diagnostic at the
-  relevant source location when available.
+- Missing `@route` or `@guard` should publish a diagnostic at the relevant
+  source location when available. `@page` is optional for file-backed pages.
 - Closing a document should clear diagnostics for that URI.
 - Unknown LSP requests should return a method-not-found error.
 - Notifications without params should be ignored when safe.

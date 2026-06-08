@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	version    = "0.2.5"
+	version    = "0.2.6"
 	buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
 	initUsage  = "usage: gowdk init [--force] [--tests] [--template <site|minimal>] [dir]"
 )
@@ -192,7 +192,6 @@ bin/
 			Path: "src/pages/home.page.gwdk",
 			Body: `package app
 
-@page home
 @route "/"
 @guard public
 @css default page
@@ -271,7 +270,6 @@ bin/
 			Path: "src/pages/home.page.gwdk",
 			Body: `package app
 
-@page home
 @route "/"
 @guard public
 

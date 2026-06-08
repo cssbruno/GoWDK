@@ -24,7 +24,6 @@ application package for this check.
 Annotations must start at the beginning of the trimmed line:
 
 ```gwdk
-@page home
 @route "/"
 @title "Home"
 @description "Compile-first Go web output."
@@ -41,7 +40,9 @@ Annotations must start at the beginning of the trimmed line:
 
 Supported annotations:
 
-- `@page <id>`: required page ID.
+- `@page <id>`: optional stable page ID override. When omitted from a
+  file-backed page, the ID derives from the filename by removing `.page.gwdk`
+  or `.gwdk`.
 - `@route "<path>"`: required route path. Quotes are trimmed.
 - `@title "<text>"`: optional HTML document title for generated page output.
 - `@description "<text>"`: optional HTML document description meta value.

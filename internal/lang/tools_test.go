@@ -117,6 +117,57 @@ view {
 	}
 }
 
+func TestParseSourceDerivesPageIDFromFilename(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "blog-post.page.gwdk")
+	writeGWDK(t, path, `package app
+
+@route "/blog/{slug}"
+@guard public
+
+paths {
+  => { slug: "hello" }
+}
+
+view {
+}
+`)
+
+	page, diagnostics := ParseFile(path)
+	if diagnostics.HasErrors() {
+		t.Fatal(diagnostics)
+	}
+	if page.ID != "blog-post" {
+		t.Fatalf("expected derived page ID blog-post, got %q", page.ID)
+	}
+}
+
+func TestParseSourceKeepsExplicitPageID(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "blog-post.page.gwdk")
+	writeGWDK(t, path, `package app
+
+@page blog.post
+@route "/blog/{slug}"
+@guard public
+
+paths {
+  => { slug: "hello" }
+}
+
+view {
+}
+`)
+
+	page, diagnostics := ParseFile(path)
+	if diagnostics.HasErrors() {
+		t.Fatal(diagnostics)
+	}
+	if page.ID != "blog.post" {
+		t.Fatalf("expected explicit page ID blog.post, got %q", page.ID)
+	}
+}
+
 func TestManifestJSONUsesConfiguredDefaultRenderMode(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "home.page.gwdk")

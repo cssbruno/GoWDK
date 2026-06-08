@@ -5,7 +5,7 @@ automation lives in `.github/workflows/release.yml` and creates draft releases
 from `v*` tags or a manual workflow dispatch. VS Code Marketplace publishing
 lives in `.github/workflows/vscode-extension-publish.yml`.
 
-The current CLI version is `0.2.5`, but this is not a production-readiness
+The current CLI version is `0.2.6`, but this is not a production-readiness
 claim. It identifies the current development line while the compiler, generated
 runtime, and docs continue through the 0.x line. Public release notes must
 call the build experimental until the release gates below are satisfied.
@@ -88,14 +88,14 @@ After those gates pass on the release commit, run the release workflow manually
 for the current CLI line or push the corresponding tag:
 
 ```sh
-gh workflow run release.yml -f version=v0.2.5
+gh workflow run release.yml -f version=v0.2.6
 ```
 
 After the draft release is reviewed and published, smoke the published
 artifacts for each supported OS artifact:
 
 ```sh
-gh workflow run release-smoke.yml -f version=v0.2.5
+gh workflow run release-smoke.yml -f version=v0.2.6
 ```
 
 ## Artifacts
@@ -106,7 +106,7 @@ gh workflow run release-smoke.yml -f version=v0.2.5
 - `gowdk-darwin-arm64`
 - `gowdk-windows-amd64.exe`
 - `checksums.txt`
-- `gowdk-vscode-0.2.5.vsix`
+- `gowdk-vscode-0.2.6.vsix`
 
 ## Install Script
 
@@ -120,16 +120,19 @@ binary SHA-256, and writes `gowdk` into `GOWDK_INSTALL_DIR` or
 Pinned install:
 
 ```sh
-GOWDK_VERSION=v0.2.5 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+GOWDK_VERSION=v0.2.6 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
 ```
 
 ## Supply-Chain Metadata
 
 The release workflow uses GitHub artifact attestations for files in `dist/`.
-Attestations are generated with OIDC-backed Sigstore signing through
-`actions/attest` after CLI binaries, `checksums.txt`, and the VS Code extension
-package are collected. Release reviewers can verify downloaded artifacts with:
+It uploads the same `dist/*` set as a workflow artifact for run-level downloads
+and verifies that the selected tag release contains the expected download
+assets after the release upload step. Attestations are generated with
+OIDC-backed Sigstore signing through `actions/attest` after CLI binaries,
+`checksums.txt`, and the VS Code extension package are collected. Release
+reviewers can verify downloaded artifacts with:
 
 ```sh
 gh attestation verify <artifact> -R <owner>/<repo>
@@ -138,7 +141,7 @@ gh attestation verify <artifact> -R <owner>/<repo>
 ## Extension Publishing
 
 The release workflow packages the extension into a `.vsix` named from
-`editors/vscode/package.json`, currently `gowdk-vscode-0.2.5.vsix`.
+`editors/vscode/package.json`, currently `gowdk-vscode-0.2.6.vsix`.
 Marketplace publishing is handled by the `Publish VS Code Extension` workflow.
 It is manual-only so CLI/runtime releases do not accidentally republish an
 extension version that already exists on the Marketplace.

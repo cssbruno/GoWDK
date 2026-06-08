@@ -46,7 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install
 Pin the current CLI release:
 
 ```sh
-GOWDK_VERSION=v0.1.5 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+GOWDK_VERSION=v0.2.3 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
 ```
 
@@ -205,6 +205,7 @@ scripts/vulncheck-go-modules.sh
 ## Docs
 
 - [Getting started](docs/getting-started.md)
+- [Changelog](CHANGELOG.md)
 - [0.x improvement checklist](docs/engineering/release-plan.md)
 - [v0.2 release checklist](docs/engineering/v0.2-release-checklist.md)
 - [Public 0.x hardening backlog](https://github.com/cssbruno/GoWDK/issues)

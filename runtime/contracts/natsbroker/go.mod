@@ -3,7 +3,7 @@ module github.com/cssbruno/gowdk/runtime/contracts/natsbroker
 go 1.26.4
 
 require (
-	github.com/cssbruno/gowdk v0.2.2
+	github.com/cssbruno/gowdk v0.2.3
 	github.com/nats-io/nats.go v1.52.0
 )
 

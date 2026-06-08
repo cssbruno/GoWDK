@@ -49,6 +49,13 @@ tooling contracts may change before a stable release.
   https://github.com/cssbruno/GoWDK/issues/114.
 - Public `0.x Hardening` project board:
   https://github.com/users/cssbruno/projects/2.
+- `v0.2.3` release metadata: CLI/editor versions, optional module root-version
+  requirements, root changelog, release-doc current-version examples, and
+  GitHub milestone policy.
+- Parser-style regular-expression cleanup across compiler, LSP, CSS/glob
+  rewriting, runtime form scanning, and generated action validation paths.
+- Optional framework/context bridge and nested optional adapter modules for
+  Echo, Fiber, Gin, Redis Streams, NATS, and WebSocket fanout.
 
 ## Partial
 

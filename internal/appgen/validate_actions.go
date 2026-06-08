@@ -2,10 +2,10 @@ package appgen
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/runtime/validation"
 )
 
 func validateActionEndpoints(endpoints []ActionEndpoint) error {
@@ -186,7 +186,7 @@ func validateValidationRules(endpoint ActionEndpoint) error {
 			return fmt.Errorf("generated action %s.%s validation field %q minlength exceeds maxlength", endpoint.PageID, endpoint.ActionName, field)
 		}
 		if strings.TrimSpace(rule.Pattern) != "" {
-			if _, err := regexp.Compile("^(?:" + rule.Pattern + ")$"); err != nil {
+			if err := validation.ValidatePattern(rule.Pattern); err != nil {
 				return fmt.Errorf("generated action %s.%s validation field %q has invalid pattern: %w", endpoint.PageID, endpoint.ActionName, field, err)
 			}
 		}

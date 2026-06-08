@@ -41,3 +41,35 @@ func TestResultMessages(t *testing.T) {
 		t.Fatalf("unexpected field messages: %#v", byField)
 	}
 }
+
+func TestMatchPattern(t *testing.T) {
+	tests := []struct {
+		pattern string
+		value   string
+		want    bool
+	}{
+		{`[a-z]+@[a-z]+[.][a-z]{2,4}`, "me@example.com", true},
+		{`[a-z]+@[a-z]+[.][a-z]{2,4}`, "me@example.company", false},
+		{`^go[wd]?k$`, "gowk", true},
+		{`^go[wd]?k$`, "gowdk", false},
+		{`a{2,}`, "aaaa", true},
+		{`a{2,3}`, "a", false},
+		{`file[0-9][.]txt`, "file7.txt", true},
+	}
+
+	for _, test := range tests {
+		got, err := MatchPattern(test.pattern, test.value)
+		if err != nil {
+			t.Fatalf("MatchPattern(%q, %q) error: %v", test.pattern, test.value, err)
+		}
+		if got != test.want {
+			t.Fatalf("MatchPattern(%q, %q) = %v, want %v", test.pattern, test.value, got, test.want)
+		}
+	}
+}
+
+func TestValidatePatternRejectsUnsupportedOperators(t *testing.T) {
+	if err := ValidatePattern(`(a|b)`); err == nil {
+		t.Fatal("expected unsupported alternation/group pattern to fail")
+	}
+}

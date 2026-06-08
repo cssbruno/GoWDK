@@ -58,20 +58,6 @@ func actionsUseLengthValidation(actions []ActionEndpoint) bool {
 	return false
 }
 
-func actionsUsePatternValidation(actions []ActionEndpoint) bool {
-	for _, action := range actions {
-		if !actionsUseActionValidation(action) {
-			continue
-		}
-		for _, rule := range action.ValidationRules {
-			if rule.Pattern != "" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func actionsUseActionValidation(action ActionEndpoint) bool {
 	return action.Binding.Status != manifest.BackendBindingMissing && action.Binding.Status != manifest.BackendBindingUnsupportedSignature && action.ValidatesInput
 }
@@ -349,7 +335,7 @@ func actionValidationRuleStmt(rule ActionValidationRule) ast.Stmt {
 	}
 	if rule.Pattern != "" {
 		checks = append(checks, &ast.IfStmt{
-			Init: define([]ast.Expr{id("matched"), id("err")}, call(sel("regexp", "MatchString"), stringLit("^(?:"+rule.Pattern+")$"), id("value"))),
+			Init: define([]ast.Expr{id("matched"), id("err")}, call(sel("gowdkvalidation", "MatchPattern"), stringLit(rule.Pattern), id("value"))),
 			Cond: &ast.BinaryExpr{
 				X:  notNil("err"),
 				Op: token.LOR,

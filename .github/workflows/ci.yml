@@ -38,6 +38,7 @@ jobs:
 
       - name: Check VS Code extension syntax
         run: |
+          node editors/vscode/scripts/sync-version.js --check
           node --check editors/vscode/extension.js
           node --check editors/vscode/extension-core.js
 

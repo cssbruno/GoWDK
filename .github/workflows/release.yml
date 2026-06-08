@@ -41,6 +41,7 @@ jobs:
           go test ./...
           go run golang.org/x/vuln/cmd/govulncheck@latest ./...
           go build ./cmd/gowdk
+          node editors/vscode/scripts/sync-version.js --check
           node --check editors/vscode/extension.js
           node --check editors/vscode/extension-core.js
           node --test editors/vscode/*.test.js
@@ -97,6 +98,7 @@ jobs:
       - name: Package VS Code extension
         run: |
           npm install -g @vscode/vsce
+          node scripts/sync-version.js
           vsce package --no-dependencies --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} --baseImagesUrl https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}
         working-directory: editors/vscode
 

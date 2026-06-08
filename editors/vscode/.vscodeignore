@@ -4,6 +4,7 @@ node_modules/**
 out/**
 dist/**
 src/**
+scripts/**
 test/**
 testdata/**
 *.test.js

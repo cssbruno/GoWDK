@@ -39,6 +39,7 @@ jobs:
 
       - name: Verify extension
         run: |
+          node scripts/sync-version.js --check
           node --check extension.js
           node --check extension-core.js
           node --test *.test.js
@@ -46,6 +47,7 @@ jobs:
       - name: Package extension
         run: |
           rm -f *.vsix
+          node scripts/sync-version.js
           vsce package \
             --no-dependencies \
             --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} \
@@ -79,4 +81,5 @@ jobs:
             publish_args+=(--pre-release)
           fi
 
+          node scripts/sync-version.js
           vsce "${publish_args[@]}"

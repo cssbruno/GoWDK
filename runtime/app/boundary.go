@@ -2,11 +2,30 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"runtime/debug"
 	"strings"
 
 	"github.com/cssbruno/gowdk/runtime/response"
 )
+
+// BoundaryLogger receives recovered panics from request-time handlers. The
+// message and stack are secret-redacted before they reach it. Set it to nil to
+// silence recovered-panic logging. It defaults to the standard log package.
+var BoundaryLogger func(message string) = func(message string) {
+	log.Print(message)
+}
+
+func logBoundaryPanic(kind string, value any) {
+	logger := BoundaryLogger
+	if logger == nil {
+		return
+	}
+	detail := redactSecrets(fmt.Sprintf("%v", value))
+	stack := redactSecrets(string(debug.Stack()))
+	logger(fmt.Sprintf("gowdk: recovered panic in %s handler: %s\n%s", boundaryKindLabel(kind), detail, stack))
+}
 
 // Boundary wraps a generated request-time handler with a conservative panic
 // boundary.
@@ -20,6 +39,7 @@ func Boundary(kind string, handler HandlerFunc) HandlerFunc {
 		defer func() {
 			if value := recover(); value != nil {
 				handled = true
+				logBoundaryPanic(kind, value)
 				if !boundaryWriter.wrote {
 					writeBoundaryError(boundaryWriter, request, kind, value)
 				}
@@ -90,6 +110,7 @@ func RecoverSSRRoutePanic(writer http.ResponseWriter, request *http.Request, val
 	if value == nil {
 		return
 	}
+	logBoundaryPanic("ssr", value)
 	if written, ok := writer.(interface{ Written() bool }); ok && written.Written() {
 		return
 	}
@@ -102,6 +123,7 @@ func RecoverEndpointPanic(writer http.ResponseWriter, request *http.Request, val
 	if value == nil {
 		return
 	}
+	logBoundaryPanic("endpoint", value)
 	if written, ok := writer.(interface{ Written() bool }); ok && written.Written() {
 		return
 	}

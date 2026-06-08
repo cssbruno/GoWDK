@@ -43,8 +43,8 @@ jobs:
           scripts/check-release-policy.sh
           scripts/validate-release-notes.sh .github/release-note-template.md
           scripts/validate-release-notes.sh docs/engineering/release-notes-v0.2.md
-          go test ./...
-          go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+          scripts/test-go-modules.sh
+          scripts/vulncheck-go-modules.sh
           go build ./cmd/gowdk
           node editors/vscode/scripts/sync-version.js --check
           node --check editors/vscode/extension.js

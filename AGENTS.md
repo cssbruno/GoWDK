@@ -80,7 +80,8 @@ For architectural decisions that are hard to reverse, add an ADR under `docs/eng
 
 Keep these commands current:
 
-- Run all tests: `go test ./...`
+- Run all tests: `scripts/test-go-modules.sh`
+- Run root module tests: `go test ./...`
 - Build CLI: `go build ./cmd/gowdk`
 - Format changed Go files: `gofmt -w <files>`
 

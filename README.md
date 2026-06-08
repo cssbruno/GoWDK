@@ -171,6 +171,27 @@ view {
 
 Replace `github.com/acme/hello-gowdk/ui` with your app module path.
 
+## Development
+
+Run the full Go test gate, including nested optional adapter modules:
+
+```sh
+scripts/test-go-modules.sh
+```
+
+Run the root module only:
+
+```sh
+go test ./...
+go build ./cmd/gowdk
+```
+
+Run the all-module vulnerability gate before release-style dependency changes:
+
+```sh
+scripts/vulncheck-go-modules.sh
+```
+
 ## Docs
 
 - [Getting started](docs/getting-started.md)

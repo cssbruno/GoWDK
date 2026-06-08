@@ -14,7 +14,9 @@ Use Go's standard test runner.
 ## Commands
 
 ```sh
+scripts/test-go-modules.sh
 go test ./...
+scripts/vulncheck-go-modules.sh
 go build ./cmd/gowdk
 node --check editors/vscode/extension.js
 node --test editors/vscode/*.test.js
@@ -36,7 +38,9 @@ must pass `--config <file>`.
 
 | Area | Command | When |
 | --- | --- | --- |
-| Go packages | `go test ./...` | Every code change. |
+| Go packages | `scripts/test-go-modules.sh` | Every code change; includes the root module and nested optional adapter modules. |
+| Root Go packages | `go test ./...` | Core compiler/runtime changes when optional adapter modules are not relevant. |
+| Go vulnerability scan | `scripts/vulncheck-go-modules.sh` | Release-style checks and dependency changes. |
 | CLI build | `go build ./cmd/gowdk` | CLI, compiler, runtime, addon, or release changes. |
 | Go formatting | `gofmt -w <files>` | Changed Go files before handoff. |
 | VS Code extension syntax | `node --check editors/vscode/extension.js` | Editor extension changes and broad verification. |
@@ -97,3 +101,6 @@ must pass `--config <file>`.
   route manifest refreshes, and stale route output cleanup.
 - `internal/project` tests cover literal `gowdk.config.go` parsing for source
   discovery, module source groups, build output, and build targets.
+- Nested optional adapter modules cover Echo, Fiber, Gin, Redis Streams, NATS,
+  and WebSocket integration packages without adding those third-party
+  dependencies to the root module graph.

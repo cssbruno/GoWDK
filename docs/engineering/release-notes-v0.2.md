@@ -92,8 +92,8 @@ Required local gates:
 
 ```sh
 git diff --check
-go test ./...
-go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+scripts/test-go-modules.sh
+scripts/vulncheck-go-modules.sh
 go build ./cmd/gowdk
 node --check editors/vscode/extension.js
 node --check editors/vscode/extension-core.js

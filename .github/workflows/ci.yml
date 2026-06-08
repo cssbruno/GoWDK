@@ -31,7 +31,7 @@ jobs:
         run: |
           go version
           go env GOVERSION
-          go test ./...
+          scripts/test-go-modules.sh
 
       - name: Check release policy and release notes
         run: |
@@ -40,7 +40,7 @@ jobs:
           scripts/validate-release-notes.sh docs/engineering/release-notes-v0.2.md
 
       - name: Check reachable Go vulnerabilities
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: scripts/vulncheck-go-modules.sh
 
       - name: Build CLI
         run: go build ./cmd/gowdk

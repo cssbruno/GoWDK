@@ -45,8 +45,8 @@ Link the current release checklist, for example
 Required local gates:
 
 ```sh
-go test ./...
-go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+scripts/test-go-modules.sh
+scripts/vulncheck-go-modules.sh
 go build ./cmd/gowdk
 node --check editors/vscode/extension.js
 node --check editors/vscode/extension-core.js

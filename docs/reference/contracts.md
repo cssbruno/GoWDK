@@ -376,6 +376,15 @@ Optional broker and realtime adapters:
 - `runtime/contracts/websocketfanout` provides an `http.Handler` and
   `PresentationFanout` for browser WebSocket clients.
 
+These concrete optional adapters are nested Go modules. Add only the adapter an
+application uses:
+
+```sh
+go get github.com/cssbruno/gowdk/runtime/contracts/redisstream
+go get github.com/cssbruno/gowdk/runtime/contracts/natsbroker
+go get github.com/cssbruno/gowdk/runtime/contracts/websocketfanout
+```
+
 ## Sink Recipes
 
 ### Redis Streams

@@ -7,7 +7,8 @@ GOWDK should keep dependencies minimal while avoiding risky hand-rolled implemen
 - Do not add production dependencies without a clear reason documented in the change or an ADR.
 - Prefer standard library packages for simple compiler, CLI, and runtime work.
 - Prefer maintained libraries for complex domains such as authentication, authorization, cryptography, payments, parsing, and dates.
-- Keep optional integrations behind addons or plugins when possible.
+- Keep optional integrations behind addons, plugins, or nested modules when
+  possible.
 
 ## Documentation
 
@@ -21,7 +22,8 @@ Run these gates before release packaging.
 scripts/check-release-policy.sh
 go list -m all
 go list -m -json all
-go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+scripts/test-go-modules.sh
+scripts/vulncheck-go-modules.sh
 ```
 
 Review the `go list` output for unexpected new modules and record any
@@ -44,9 +46,20 @@ readiness.
 - Compiler core: standard library plus repository packages under `internal/`.
 - Runtime core: standard library plus repository packages under `runtime/`.
 - Optional HTTP adapters: `runtime/adapters/echo`, `runtime/adapters/gin`, and
-  `runtime/adapters/fiber`; generated code remains `net/http` first by default.
+  `runtime/adapters/fiber`; each adapter is a nested Go module so framework
+  dependencies do not enter the root module graph. Generated code remains
+  `net/http` first by default.
 - Optional broker/realtime adapters: Redis Streams, NATS, SSE, and WebSocket
-  packages under `runtime/contracts`; applications opt in.
+  packages under `runtime/contracts`; concrete Redis Streams, NATS, and
+  WebSocket adapters are nested Go modules. Dependency-free adapters such as
+  file outbox, memory broker, and SSE stay in the root module. Applications opt
+  in.
+
+Nested optional modules that import the root GOWDK module should require the
+current released `github.com/cssbruno/gowdk` version and keep a local
+`replace github.com/cssbruno/gowdk => ../../..` for repository tests. Update
+those required versions when cutting a release that changes root runtime APIs
+used by nested modules.
 - Optional CSS/tool adapters: `addons/tailwind`; it shells out to a user-owned
   Tailwind executable and does not download Tailwind during normal builds.
 - Test/dev only: workflow Node checks and VS Code packaging scripts.

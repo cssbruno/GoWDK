@@ -536,8 +536,8 @@ Every 0.x minor release must have:
 
 ## Release Trust
 
-- [x] Keep `go test ./...` in the release gate.
-- [x] Keep `govulncheck ./...` in the release gate.
+- [x] Keep `scripts/test-go-modules.sh` in the release gate.
+- [x] Keep `scripts/vulncheck-go-modules.sh` in the release gate.
 - [x] Keep `go build ./cmd/gowdk` in the release gate.
 - [x] Keep Node syntax checks and VS Code Node tests.
 - [x] Keep example `check`, `manifest`, `sitemap`, and `routes` gates.
@@ -920,7 +920,7 @@ Every 0.x minor release must have:
 
 ## Testing, CI, Operations, Performance, Playground, And Addons
 
-- [ ] Keep `go test ./...`, CLI build tests, and VS Code tests.
+- [ ] Keep `scripts/test-go-modules.sh`, CLI build tests, and VS Code tests.
 - [ ] Add parser, route, form decoder, and URL escaping fuzzing.
 - [ ] Add generated Go, HTML, CSS, manifest, sitemap, route report, and build
   report schema tests.

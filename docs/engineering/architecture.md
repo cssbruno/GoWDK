@@ -36,12 +36,14 @@ Generated web adapters can execute routable command/query references through
 the local registry with the `web` role, compiler validation rejects web
 references to non-web-only registrations, and `runtime/contracts/fileoutbox`
 provides a dependency-free JSON Lines outbox/EventSource adapter with nack
-retry metadata and opt-in dead-letter storage. Runtime also includes
-in-memory, Redis Streams, and NATS broker/EventSource adapters plus SSE and
-WebSocket presentation fanout adapters. Generated apps can expose contract
-event sink registration, fresh registry construction, and a worker replay
-helper for executable contract registrations. Split runtime binaries, retry
-backoff policy, and managed deployment recipes remain planned.
+retry metadata and opt-in dead-letter storage. Runtime also includes in-memory
+broker/EventSource and SSE presentation fanout adapters in the root module.
+Concrete Redis Streams, NATS, and WebSocket adapters live as nested optional Go
+modules under `runtime/contracts` so those third-party clients do not enter the
+root module graph. Generated apps can expose contract event sink registration,
+fresh registry construction, and a worker replay helper for executable contract
+registrations. Split runtime binaries, retry backoff policy, and managed
+deployment recipes remain planned.
 
 Still partial: broad local client-side reactivity, richer hybrid streaming and
 data refresh, non-HTTP revalidation, split worker/cron contract adapter wiring,
@@ -140,7 +142,7 @@ them.
 | `runtime/asset` | Asset manifest resolution. | Runtime | Initial manifest helper implemented. |
 | `runtime/route` | Runtime route matching for generated request-time routes. | Runtime | Dynamic route matcher for first-slice generated SSR routes implemented. |
 | `runtime/app` | Shared generated app HTTP server. | Runtime | Serves embedded spa files, identity headers, health checks, asset manifest counts, optional generated 404/500 pages, no-JS cookie acknowledgement, server-side cookie notice hiding, generated CSRF token injection for POST forms, request-time panic boundaries, and action/SSR callback hooks for generated apps. |
-| `runtime/contracts` | Typed contract registry and in-process dispatch. | Runtime | First runtime slice implemented for queries, commands, backend-owned domain and integration events, presentation events, jobs, metadata, stable observation names and labels for logs/metrics/traces, local command-buffered event dispatch, event-envelope capture/replay, dependency-free outbox/broker/presentation-fanout/event-source interfaces, command event sinks, an event worker loop with ack/nack plus context cancellation, a dependency-free file outbox adapter, in-memory, Redis Streams, and NATS broker/EventSource adapters, and SSE/WebSocket presentation fanout adapters. Split worker/cron generation, retry backoff policy, and managed deployment recipes remain planned. |
+| `runtime/contracts` | Typed contract registry and in-process dispatch. | Runtime | First runtime slice implemented for queries, commands, backend-owned domain and integration events, presentation events, jobs, metadata, stable observation names and labels for logs/metrics/traces, local command-buffered event dispatch, event-envelope capture/replay, dependency-free outbox/broker/presentation-fanout/event-source interfaces, command event sinks, an event worker loop with ack/nack plus context cancellation, a dependency-free file outbox adapter, dependency-free in-memory broker/EventSource adapter, and dependency-free SSE presentation fanout adapter. Concrete Redis Streams, NATS, and WebSocket adapters are nested optional modules. Split worker/cron generation, retry backoff policy, and managed deployment recipes remain planned. |
 | `addons/spa` | Build-time prerendering. | Addon | Capability boundary implemented; prerender execution is planned. |
 | `addons/actions` | Typed backend actions, form decoding, CSRF. | Addon | Capability boundary, generated request-shape validation for direct literal required/minlength/maxlength/pattern controls, escaped live-region validation fragments for partial requests, signed CSRF validator, and generated action CSRF wiring implemented; user-defined domain validation helpers remain planned. |
 | `addons/partial` | Server fragments and swaps. | Addon | Capability boundary implemented; first generated action fragment execution slice exists. |

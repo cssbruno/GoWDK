@@ -12,6 +12,9 @@ call the build experimental until the release gates below are satisfied.
 
 Use `docs/engineering/v0.1-release-checklist.md` for the full v0.1 checklist.
 Use `docs/engineering/release-notes-v0.1.md` as the draft v0.1 release notes.
+Use `docs/engineering/release-plan.md` for the open-ended 0.x hardening
+checklist. It does not make any minor version a production-readiness target.
+Use `.github/release-note-template.md` for future 0.x release bodies.
 
 ## Version Policy
 
@@ -34,12 +37,17 @@ implemented, partial, and planned.
 No current release should be described as production-ready. Before tagging a
 public release, confirm:
 
+- The GitHub release is marked as a draft until manual review is complete.
+- The GitHub release is marked as a pre-release.
+- The release body starts with "Experimental 0.x release" and "Not
+  production-ready."
 - README, requirements, architecture, examples, generated-output docs, and
   release notes clearly separate implemented, partial, and planned behavior.
 - Version and release notes are reflected in the release draft.
 - CI workflow is passing.
 - Release artifact list is still accurate.
 - GitHub artifact attestations are enabled for release artifacts.
+- Release notes include checksum and attestation verification instructions.
 - Generated-output compatibility notes are documented when public releases begin.
 - VS Code extension package metadata is current for extension releases.
 - The `VSCE_PAT` GitHub secret is present before publishing the extension.
@@ -82,6 +90,21 @@ gh workflow run release.yml -f version=v0.1.5
 - `gowdk-windows-amd64.exe`
 - `checksums.txt`
 - `gowdk-vscode-0.1.9.vsix`
+
+## Install Script
+
+`scripts/install.sh` installs the latest visible GitHub release by default,
+including 0.x pre-releases. It selects the current operating system and
+architecture, downloads the matching CLI binary from GitHub Releases, downloads
+`checksums.txt`, verifies the binary SHA-256, and writes `gowdk` into
+`GOWDK_INSTALL_DIR` or `/usr/local/bin`.
+
+Pinned install:
+
+```sh
+GOWDK_VERSION=v0.1.5 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
+```
 
 ## Supply-Chain Metadata
 

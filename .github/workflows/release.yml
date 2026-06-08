@@ -110,13 +110,24 @@ jobs:
         with:
           subject-path: dist/*
 
+      - name: Select release notes
+        id: release_notes
+        run: |
+          version="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
+          line="$(printf '%s\n' "$version" | sed -E 's/^v?([0-9]+)\.([0-9]+).*/v\1.\2/')"
+          notes="docs/engineering/release-notes-${line}.md"
+          if [ ! -f "$notes" ]; then
+            notes=".github/release-note-template.md"
+          fi
+          echo "path=$notes" >> "$GITHUB_OUTPUT"
+
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
           target_commitish: ${{ github.sha }}
           name: GOWDK ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
-          body_path: docs/engineering/release-notes-v0.1.md
+          body_path: ${{ steps.release_notes.outputs.path }}
           files: dist/*
           draft: true
           prerelease: true

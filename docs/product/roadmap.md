@@ -176,6 +176,8 @@ are stable.
 
 The exact version numbers can change, but the release order should not skip the
 contract work that later features depend on.
+`docs/engineering/release-plan.md` tracks the open-ended 0.x hardening backlog
+without making any minor version a production-readiness target.
 
 ### Compiler Contract Release
 
@@ -270,6 +272,7 @@ contract work that later features depend on.
 
 - `docs/product/requirements.md`: requirement status.
 - `docs/engineering/architecture.md`: architecture and implemented boundaries.
+- `docs/engineering/release-plan.md`: open-ended 0.x hardening checklist.
 - `.llm/plans/gowdk-world-roadmap.md`: active implementation planning index.
 - `.llm/plans/deep-go-package-integration.md`: package-first language work.
 - `.llm/plans/go-native-adapter-boundary.md`: generated adapter boundary work.

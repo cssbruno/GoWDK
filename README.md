@@ -11,8 +11,21 @@
 GOWDK ships Go web apps as generated Go servers. Write portable `.gwdk`
 pages, compile frontend output, and package it into one binary.
 
-**Status:** pre-release. Public contracts can still change. Not production
-ready.
+**Status:** experimental 0.x pre-release. Public contracts can still change.
+Not production-ready.
+
+Project laws:
+
+- `.gwdk` declares web structure.
+- Normal Go owns app behavior.
+- Generated Go is adapter glue, not application logic.
+- Build-time/static pages are the default.
+- Request-time behavior, SSR, and hybrid pages are explicit.
+- Generated JavaScript is enhancement only; it does not own auth, routing truth,
+  validation truth, business logic, server state, or cache policy.
+- `net/http` is the runtime boundary; Gin, Echo, Fiber, Redis, NATS, WebSocket,
+  Tailwind, and npm stay optional.
+- Unsupported behavior should produce clear diagnostics.
 
 Install:
 
@@ -28,6 +41,32 @@ cd GoWDK
 go build ./cmd/gowdk
 ./gowdk version
 ```
+
+## What Works Today
+
+This matrix is a compact status view for the current 0.x line. "Demo" means
+the slice is stable enough to try in examples, not production-ready.
+
+| Surface | Status | Demo | Not production security | Docs | Example | Tests |
+| --- | --- | --- | --- | --- | --- | --- |
+| Static build output | Implemented | Yes | Yes | [CLI](docs/reference/cli.md) | [Pages](examples/pages/home.page.gwdk) | Yes |
+| Dynamic SPA paths | Partial | Yes | Yes | [Routing](docs/reference/routing.md) | [Blog](examples/pages/blog-post.page.gwdk) | Yes |
+| Build-time Go data | Partial | Yes | Yes | [Data](docs/language/data.md) | [Go interop](examples/go-interop/README.md) | Yes |
+| Actions | Partial | Yes | Yes | [Actions](docs/language/actions.md) | [Login](examples/login/README.md) | Yes |
+| APIs | Partial | Yes | Yes | [API](docs/language/api.md) | [API](examples/api/status.page.gwdk) | Yes |
+| Fragments | Partial | Yes | Yes | [Partials](docs/language/partials.md) | [Fragments](examples/partials/patients-fragment.page.gwdk) | Yes |
+| SSR | Partial | Yes | Yes | [SSR](docs/language/ssr.md) | [SSR](examples/ssr/simple-ssr.page.gwdk) | Yes |
+| Hybrid | Partial | Yes | Yes | [Hybrid](docs/language/hybrid.md) | [Hybrid](examples/ssr/hybrid-static.page.gwdk) | Yes |
+| Components | Partial | Yes | Yes | [Components](docs/language/components.md) | [Components](examples/components/base/base-components.page.gwdk) | Yes |
+| WASM islands | Partial | Yes | Yes | [Components](docs/language/components.md) | [Test fixture](testfixture/islands/islands.go) | Yes |
+| CSS/assets | Partial | Yes | Yes | [CSS](docs/reference/css.md) | [CSS](examples/css/styled.page.gwdk) | Yes |
+| One-binary output | Partial | Yes | Yes | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) | Yes |
+| Contracts | Partial | Yes | Yes | [Contracts](docs/reference/contracts.md) | [Runtime contracts](runtime/contracts) | Yes |
+| Dev server | Partial | Yes | Yes | [Dev](docs/reference/dev.md) | [Getting started](docs/getting-started.md) | Yes |
+| LSP | Implemented | Yes | Yes | [Language server](docs/product/language-server.md) | [VS Code](editors/vscode) | Yes |
+
+Known gaps and release hardening work live in
+[the 0.x improvement checklist](docs/engineering/release-plan.md).
 
 ## Single-Page Server
 
@@ -119,4 +158,6 @@ Replace `github.com/acme/hello-gowdk/ui` with your app module path.
 ## Docs
 
 - [Getting started](docs/getting-started.md)
+- [0.x improvement checklist](docs/engineering/release-plan.md)
+- [v0.2 release checklist](docs/engineering/v0.2-release-checklist.md)
 - [Examples](examples/README.md)

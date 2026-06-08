@@ -1,6 +1,12 @@
 # Security Policy
 
-GOWDK is currently an early compiler/runtime scaffold. Generated production applications, real CSRF enforcement, generated action handlers, guard execution, and generated server hardening are planned but not complete.
+GOWDK is an experimental 0.x compiler/runtime. Do not treat generated apps as
+production-ready security enforcement.
+
+First slices exist for generated action decoding, unexpected-field rejection,
+direct literal request-shape validation, opt-in CSRF, action request body caps,
+safe local redirects, guard execution, SSR panic boundaries, and no-store
+request-time responses. These are not a complete production security model.
 
 ## Reporting Vulnerabilities
 
@@ -24,7 +30,27 @@ Security-sensitive surfaces include:
 - SSR `load {}` behavior and guard execution.
 - Embedded asset selection and generated app serving.
 - VS Code extension command execution and workspace file handling.
+- WASM islands.
+- Contracts, workers, and realtime adapters.
 
 ## Current Production Warning
 
-Do not use generated action, API, partial, guard, or SSR behavior as production security enforcement until the corresponding implementation, tests, and docs are complete.
+Do not use generated action, API, partial, guard, hybrid, contract, realtime, or
+SSR behavior as production security enforcement until the corresponding
+implementation, tests, docs, and operations guidance are complete.
+
+Known incomplete production areas include:
+
+- Authentication and session policy.
+- Full guard contract coverage.
+- Multi-key CSRF secret rotation.
+- Full redirect policy.
+- Log redaction.
+- Request timeout defaults.
+- Broad request body/header limits.
+- File upload policy.
+- Public API hardening.
+- Realtime security policy.
+- Admin tooling policy.
+
+See `docs/engineering/security.md` for the repository security baseline.

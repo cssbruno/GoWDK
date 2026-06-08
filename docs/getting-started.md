@@ -1,14 +1,112 @@
 # Getting Started
 
-GOWDK is currently used from source. The fastest path is clone, build the CLI,
-scaffold a small app, build the generated app binary, and run it locally.
+GOWDK can be installed from the latest GitHub release or built from source. The
+fastest app path is install the CLI, scaffold a small app, build the generated
+app binary, and run it locally.
 
 ## Prerequisites
 
-- Go installed and available on `PATH`.
-- A local checkout of this repository.
+- Go `1.26.4` installed and available on `PATH`.
+- `curl` or `wget` for release installs.
 
-## Clone And Build
+## Install The CLI
+
+Install the latest visible GitHub release, including 0.x pre-releases:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh | sh
+gowdk version
+```
+
+Pin a specific release or install into a user-writable directory:
+
+```sh
+GOWDK_VERSION=v0.1.5 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
+```
+
+The installer downloads the matching binary from GitHub Releases and verifies
+it against the published `checksums.txt`.
+
+Direct artifact names:
+
+| Platform | Artifact |
+| --- | --- |
+| Linux amd64 | `gowdk-linux-amd64` |
+| Linux arm64 | `gowdk-linux-arm64` |
+| macOS Intel | `gowdk-darwin-amd64` |
+| macOS ARM | `gowdk-darwin-arm64` |
+| Windows amd64 | `gowdk-windows-amd64.exe` |
+
+Manual Linux install:
+
+```sh
+version=v0.1.5
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-linux-amd64"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt"
+grep ' gowdk-linux-amd64$' checksums.txt | sha256sum -c -
+chmod 0755 gowdk-linux-amd64
+mkdir -p "$HOME/.local/bin"
+mv gowdk-linux-amd64 "$HOME/.local/bin/gowdk"
+gowdk version
+```
+
+Manual macOS Intel install:
+
+```sh
+version=v0.1.5
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-darwin-amd64"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt"
+expected="$(awk '$2 == "gowdk-darwin-amd64" { print $1 }' checksums.txt)"
+actual="$(shasum -a 256 gowdk-darwin-amd64 | awk '{ print $1 }')"
+test "$expected" = "$actual"
+chmod 0755 gowdk-darwin-amd64
+mkdir -p "$HOME/.local/bin"
+mv gowdk-darwin-amd64 "$HOME/.local/bin/gowdk"
+gowdk version
+```
+
+Manual macOS ARM install:
+
+```sh
+version=v0.1.5
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-darwin-arm64"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt"
+expected="$(awk '$2 == "gowdk-darwin-arm64" { print $1 }' checksums.txt)"
+actual="$(shasum -a 256 gowdk-darwin-arm64 | awk '{ print $1 }')"
+test "$expected" = "$actual"
+chmod 0755 gowdk-darwin-arm64
+mkdir -p "$HOME/.local/bin"
+mv gowdk-darwin-arm64 "$HOME/.local/bin/gowdk"
+gowdk version
+```
+
+Manual Windows install from PowerShell:
+
+```powershell
+$version = "v0.1.5"
+Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-windows-amd64.exe" -OutFile "gowdk.exe"
+Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt" -OutFile "checksums.txt"
+$expected = (Select-String -Path checksums.txt -Pattern "gowdk-windows-amd64.exe").Line.Split(" ")[0]
+$actual = (Get-FileHash .\gowdk.exe -Algorithm SHA256).Hash.ToLower()
+if ($expected -ne $actual) { throw "checksum mismatch" }
+.\gowdk.exe version
+```
+
+Verify a downloaded artifact with GitHub attestations:
+
+```sh
+gh attestation verify ./gowdk-linux-amd64 -R cssbruno/GOWDK
+```
+
+Install the VS Code extension package from a release when a `.vsix` is
+published:
+
+```sh
+code --install-extension gowdk-vscode-0.1.9.vsix
+```
+
+## Build From Source
 
 ```sh
 git clone https://github.com/cssbruno/GOWDK.git
@@ -27,10 +125,10 @@ Use the built binary when running commands from outside this repository.
 
 ## Create An App
 
-From the repository root:
+With `gowdk` on `PATH`:
 
 ```sh
-/path/to/GOWDK/gowdk init --tests --template site /tmp/gowdk-my-app
+gowdk init --tests --template site /tmp/gowdk-my-app
 cd /tmp/gowdk-my-app
 ```
 
@@ -51,13 +149,13 @@ scaffolded `.gitignore`. The target's intermediate build output is inferred as
 From the app directory:
 
 ```sh
-/path/to/GOWDK/gowdk build
+gowdk build
 ```
 
 Run the optional scaffolded smoke test:
 
 ```sh
-GOWDK_BIN=/path/to/GOWDK/gowdk go test ./tests
+GOWDK_BIN="$(command -v gowdk)" go test ./tests
 ```
 
 The build writes app-shell HTML and manifests under `.gowdk/output/site`, then
@@ -93,7 +191,7 @@ handlers, partial fragments, or SSR routes.
 Use `dev` for polling rebuilds, local serving, and browser reload:
 
 ```sh
-/path/to/GOWDK/gowdk dev
+gowdk dev
 ```
 
 `dev` builds into `gowdk_cache` by default, serves that directory, polls source
@@ -108,7 +206,7 @@ rebuilds. Use this path for local backend, action, API, partial, and SSR flows.
 Use `preview` for a one-shot local deploy preview:
 
 ```sh
-/path/to/GOWDK/gowdk preview
+gowdk preview
 ```
 
 Add `--hot` to run the same preview output through the dev rebuild loop.
@@ -163,3 +261,16 @@ Planned or partial:
 - User-defined domain validation helpers beyond generated request-shape checks.
 - Hybrid streaming, data refresh, and non-HTTP revalidation.
 - Richer generated-client reactivity beyond explicit reload/fragment outcomes.
+
+Troubleshooting:
+
+- Missing `gowdk.config.go`: run commands from an initialized GOWDK app, run
+  `gowdk init`, or pass `--config <file>`.
+- Missing Tailwind binary: install Tailwind through your own approved toolchain
+  and configure `tailwind.Options.Command`, or remove the Tailwind addon.
+- Unsupported Go handler signature: check the action/API docs and use a
+  supported exported function signature.
+- Missing SSR feature: add the SSR addon in config or remove request-time page
+  behavior such as `load {}`.
+- Generated binary build failure: rerun `gowdk build` from the app root and
+  inspect generated app errors under `.gowdk/`.

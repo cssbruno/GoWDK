@@ -29,6 +29,7 @@ component contract and inline package-go-block slices.
 
 ## Current Files
 
+- `spec.md`: compact current `.gwdk` language contract for M2 compiler work.
 - `syntax.md`: lexical tokens and accepted top-level forms.
 - `grammar.md`: current parser grammar and future grammar boundaries.
 - `semantics.md`: current render-mode and validation rules.

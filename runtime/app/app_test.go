@@ -646,6 +646,57 @@ func TestBackendRouterRecoversAPIPanic(t *testing.T) {
 	}
 }
 
+func TestBoundaryLogsRecoveredPanicWithRedactedSecret(t *testing.T) {
+	previous := BoundaryLogger
+	t.Cleanup(func() { BoundaryLogger = previous })
+	var logged string
+	BoundaryLogger = func(message string) { logged = message }
+
+	handler := Boundary("action", func(http.ResponseWriter, *http.Request) bool {
+		panic("connect failed: password=hunter2")
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/login", nil)
+
+	if !handler(recorder, request) {
+		t.Fatal("expected boundary to handle panic")
+	}
+	if logged == "" {
+		t.Fatal("expected recovered panic to be logged")
+	}
+	if !strings.Contains(logged, "recovered panic in action handler") {
+		t.Fatalf("log missing panic context: %q", logged)
+	}
+	if strings.Contains(logged, "hunter2") {
+		t.Fatalf("secret leaked into log: %q", logged)
+	}
+	if !strings.Contains(logged, "password=[REDACTED]") {
+		t.Fatalf("expected redacted secret in log: %q", logged)
+	}
+	if strings.Contains(recorder.Body.String(), "hunter2") {
+		t.Fatalf("secret leaked into response: %q", recorder.Body.String())
+	}
+}
+
+func TestBoundaryLoggerNilSilencesPanicLog(t *testing.T) {
+	previous := BoundaryLogger
+	t.Cleanup(func() { BoundaryLogger = previous })
+	BoundaryLogger = nil
+
+	handler := Boundary("api", func(http.ResponseWriter, *http.Request) bool {
+		panic("boom")
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+
+	if !handler(recorder, request) {
+		t.Fatal("expected boundary to handle panic")
+	}
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+}
+
 func TestActionFormDecodesStructAndWritesResponse(t *testing.T) {
 	type loginInput struct {
 		Email string `form:"email"`

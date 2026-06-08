@@ -109,7 +109,6 @@ inherit that page's generated concrete paths:
 ```gwdk
 @page blog.post
 @route "/blog/{slug}"
-@render spa
 
 paths {
   => { slug: "hello-gowdk" }

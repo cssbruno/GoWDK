@@ -648,6 +648,9 @@ func applyAnnotation(page *manifest.Page, name, rawValue string, lineNumber int,
 		page.Layouts = splitList(value)
 		page.Spans.Layouts = namedValueSpans(page.Layouts, lineNumber, rawLine)
 	case "render":
+		if value == string(gowdk.SPA) {
+			return fmt.Errorf("@render spa is redundant; omit @render because spa is the default")
+		}
 		mode, err := gowdk.ParseRenderMode(value)
 		if err != nil {
 			return err

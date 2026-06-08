@@ -17,7 +17,6 @@ func TestParsePageReadsSPADynamicRouteWithPathsAndBuild(t *testing.T) {
 @page blog.post
 @route "/blog/{slug}"
 @layout root, blog
-@render spa
 @css default page forms
 
 import interop "github.com/cssbruno/gowdk/examples/go-interop"
@@ -47,8 +46,11 @@ view {
 	if page.Route != "/blog/{slug}" {
 		t.Fatalf("expected route /blog/{slug}, got %q", page.Route)
 	}
-	if page.Render != gowdk.SPA {
-		t.Fatalf("expected spa render, got %q", page.Render)
+	if page.Render != "" {
+		t.Fatalf("expected omitted render mode, got %q", page.Render)
+	}
+	if page.RenderMode(gowdk.SPA) != gowdk.SPA {
+		t.Fatalf("expected effective spa render, got %q", page.RenderMode(gowdk.SPA))
 	}
 	if !page.Paths || !page.Blocks.Build || !page.Blocks.View {
 		t.Fatalf("expected paths/build/view blocks, got %#v", page)
@@ -79,8 +81,26 @@ view {
 		page.Spans.RouteParams[0].Span.Start.Line != 3 || page.Spans.RouteParams[0].Span.Start.Column != 15 {
 		t.Fatalf("expected slug route param span, got %#v", page.Spans.RouteParams)
 	}
-	if page.Blocks.Spans.Paths.Start.Line != 10 || page.Blocks.Spans.Build.Start.Line != 15 || page.Blocks.Spans.View.Start.Line != 19 {
+	if page.Blocks.Spans.Paths.Start.Line != 9 || page.Blocks.Spans.Build.Start.Line != 14 || page.Blocks.Spans.View.Start.Line != 18 {
 		t.Fatalf("expected block spans, got %#v", page.Blocks.Spans)
+	}
+}
+
+func TestParsePageRejectsExplicitSPARenderMode(t *testing.T) {
+	_, err := ParsePage([]byte(`
+@page home
+@route "/"
+@render spa
+
+view {
+  <main>Home</main>
+}
+`))
+	if err == nil {
+		t.Fatal("expected explicit @render spa to be rejected")
+	}
+	if !strings.Contains(err.Error(), "@render spa is redundant") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

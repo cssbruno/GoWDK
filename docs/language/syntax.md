@@ -31,7 +31,6 @@ Annotations must start at the beginning of the trimmed line:
 @canonical "https://example.com/"
 @image "https://example.com/social.png"
 @layout root, marketing
-@render spa
 @cache "public, max-age=60"
 @revalidate 5m
 @error "/errors/home.html"
@@ -51,7 +50,8 @@ Supported annotations:
   Twitter metadata.
 - `@layout <id>[, <id>...]`: optional page layout IDs, or a layout identity in
   `.layout.gwdk` files.
-- `@render spa|action|hybrid|ssr`: optional render mode.
+- `@render action|hybrid|ssr`: optional non-default render mode. Omit
+  `@render` for the default SPA output.
 - `@cache "<policy>"`: optional page Cache-Control policy for successful
   generated static SPA HTML and SSR HTML responses.
 - `@revalidate <seconds|duration>`: optional stale-while-revalidate duration

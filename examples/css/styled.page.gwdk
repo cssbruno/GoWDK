@@ -3,7 +3,6 @@ package css
 @page styled
 @route "/styled"
 @layout root
-@render spa
 
 view {
   <main>

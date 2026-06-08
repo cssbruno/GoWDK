@@ -3250,7 +3250,6 @@ func TestBuildCommandBuildsActionBinaryReturns501ForMissingHandler(t *testing.T)
 
 @page newsletter
 @route "/newsletter"
-@render spa
 
 act Subscribe POST "/newsletter"
 
@@ -3313,7 +3312,6 @@ var Config = gowdk.Config{
 
 @page newsletter
 @route "/newsletter"
-@render spa
 
 act Subscribe POST "/newsletter"
 
@@ -3353,7 +3351,6 @@ var Config = gowdk.Config{
 
 @page newsletter
 @route "/newsletter"
-@render spa
 
 act Subscribe POST "/newsletter"
 
@@ -3402,7 +3399,6 @@ var Config = gowdk.Config{}
 
 @page auth
 @route "/login"
-@render spa
 
 act Login POST "/login"
 

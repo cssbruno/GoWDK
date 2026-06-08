@@ -95,6 +95,9 @@ func lowerPageSyntaxAnnotations(source []byte, ast gwdkast.File, page *manifest.
 		page.Spans.RouteParams = lowerSyntaxRouteParamSpans(ast.Route.Params)
 	}
 	if ast.Render != nil {
+		if ast.Render.Mode == string(gowdk.SPA) {
+			return fmt.Errorf("line %d: @render spa is redundant; omit @render because spa is the default", ast.Render.Span.Start.Line)
+		}
 		mode, err := gowdk.ParseRenderMode(ast.Render.Mode)
 		if err != nil {
 			return fmt.Errorf("line %d: %w", ast.Render.Span.Start.Line, err)

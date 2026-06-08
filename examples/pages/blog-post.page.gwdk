@@ -3,7 +3,6 @@ package pages
 @page blog.post
 @route "/blog/{slug}"
 @layout root, blog
-@render spa
 
 paths {
   => { slug: "hello-gowdk" }

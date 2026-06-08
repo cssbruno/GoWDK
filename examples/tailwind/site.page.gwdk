@@ -2,7 +2,6 @@ package tailwind
 
 @page tailwind
 @route "/tailwind"
-@render spa
 @css none
 
 view {

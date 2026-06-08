@@ -3,7 +3,6 @@ package embed
 @page embed.example
 @route "/embed"
 @layout root
-@render spa
 
 build {
   => { title: "Embedded GOWDK" }

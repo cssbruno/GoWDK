@@ -9,6 +9,11 @@ const core = require('./extension-core');
 const LANGUAGE_ID = 'gwdk';
 const semanticLegend = new vscode.SemanticTokensLegend(core.SEMANTIC_TOKEN_TYPES, []);
 const missingExecutableNotifications = new Set();
+const treeIconColors = {
+  page: new vscode.ThemeColor('charts.blue'),
+  layout: new vscode.ThemeColor('charts.purple'),
+  component: new vscode.ThemeColor('charts.green')
+};
 
 function activate(context) {
   const diagnostics = vscode.languages.createDiagnosticCollection('gowdk');
@@ -621,7 +626,7 @@ class SiteMapPageItem extends vscode.TreeItem {
     this.contextValue = 'gwdkPage';
     this.description = [page.render || 'spa', page.route || ''].filter(Boolean).join(' ');
     this.tooltip = `${page.id}\n${page.source}`;
-    this.iconPath = new vscode.ThemeIcon(page.render === 'ssr' ? 'server' : 'globe');
+    this.iconPath = new vscode.ThemeIcon(page.render === 'ssr' ? 'server' : 'globe', treeIconColors.page);
     this.command = {
       command: 'gowdk.openPageFile',
       title: 'Open Page File',
@@ -636,9 +641,9 @@ function pageChildren(page, root) {
   const rel = path.relative(root, page.source || '').replace(/\\/g, '/');
   children.push(infoItem(`Flow: ${core.pageFlow(page)}`, 'git-pull-request'));
   children.push(infoItem(`File: ${rel || page.source || '(unknown)'}`, 'file'));
-  children.push(infoItem(`Page: ${page.id || '(missing id)'}`, 'symbol-method'));
+  children.push(infoItem(`Page: ${page.id || '(missing id)'}`, 'symbol-method', treeIconColors.page));
   if (page.layouts && page.layouts.length) {
-    children.push(infoItem(`Layouts: ${page.layouts.join(', ')}`, 'layers'));
+    children.push(infoItem(`Layouts: ${page.layouts.join(', ')}`, 'layers', treeIconColors.layout));
   }
   if (page.guard && page.guard.length) {
     children.push(infoItem(`Guards: ${page.guard.join(', ')}`, 'shield'));
@@ -647,7 +652,7 @@ function pageChildren(page, root) {
     children.push(infoItem(`CSS: ${page.css.join(', ')}`, 'symbol-color'));
   }
   if (page.components && page.components.length) {
-    children.push(infoItem(`Components: ${page.components.join(', ')}`, 'symbol-class'));
+    children.push(infoItem(`Components: ${page.components.join(', ')}`, 'symbol-class', treeIconColors.component));
   }
   if (page.assets && page.assets.length) {
     children.push(infoItem(`Assets: ${page.assets.join(', ')}`, 'file-media'));
@@ -678,9 +683,9 @@ function pageChildren(page, root) {
   return children;
 }
 
-function infoItem(label, icon) {
+function infoItem(label, icon, color) {
   const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
-  item.iconPath = new vscode.ThemeIcon(icon);
+  item.iconPath = color ? new vscode.ThemeIcon(icon, color) : new vscode.ThemeIcon(icon);
   return item;
 }
 

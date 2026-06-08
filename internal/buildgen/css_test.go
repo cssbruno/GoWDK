@@ -531,6 +531,22 @@ func TestBuildEmitsScopedComponentCSSWithManifestAndCacheHeaders(t *testing.T) {
 	}
 }
 
+func TestRewriteCSSKeyframesRewritesAnimationNamesOnly(t *testing.T) {
+	got := rewriteCSSKeyframes(`@-webkit-keyframes fade{to{opacity:1}}.a{animation-name:fade,fade-out;animation:fade 1s ease;}`, "scope")
+	for _, expected := range []string{
+		`@-webkit-keyframes fade-scope{`,
+		`animation-name:fade-scope,fade-out`,
+		`animation:fade-scope 1s ease`,
+	} {
+		if !strings.Contains(got, expected) {
+			t.Fatalf("expected %q in rewritten css:\n%s", expected, got)
+		}
+	}
+	if strings.Contains(got, `fade-out-scope`) {
+		t.Fatalf("must not rewrite partial animation identifiers:\n%s", got)
+	}
+}
+
 func TestBuildEmitsComponentFileAssetsWithManifestAndCacheHeaders(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)

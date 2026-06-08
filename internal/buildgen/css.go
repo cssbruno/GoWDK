@@ -5,7 +5,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -14,9 +13,6 @@ import (
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
 )
-
-var cssKeyframesPattern = regexp.MustCompile(`(?i)@(-[a-z]+-)?keyframes\s+([_a-zA-Z][-_a-zA-Z0-9]*)`)
-var cssAnimationDeclarationPattern = regexp.MustCompile(`(?i)(animation(?:-name)?\s*:\s*)([^;}]*)`)
 
 type cssPlan struct {
 	assets          []plannedCSSArtifact
@@ -415,33 +411,186 @@ func scopeComponentCSS(contents []byte, scopeID string) []byte {
 
 func rewriteCSSKeyframes(contents string, scopeID string) string {
 	renames := map[string]string{}
-	for _, match := range cssKeyframesPattern.FindAllStringSubmatch(contents, -1) {
-		if len(match) < 3 || strings.TrimSpace(match[2]) == "" {
-			continue
-		}
-		renames[match[2]] = match[2] + "-" + scopeID
-	}
+	contents = rewriteCSSKeyframeDeclarations(contents, scopeID, renames)
 	if len(renames) == 0 {
 		return contents
 	}
-	contents = cssKeyframesPattern.ReplaceAllStringFunc(contents, func(match string) string {
-		parts := cssKeyframesPattern.FindStringSubmatch(match)
-		if len(parts) < 3 {
-			return match
+	return rewriteCSSAnimationDeclarations(contents, renames)
+}
+
+func rewriteCSSKeyframeDeclarations(contents string, scopeID string, renames map[string]string) string {
+	var builder strings.Builder
+	cursor := 0
+	for cursor < len(contents) {
+		at := strings.IndexByte(contents[cursor:], '@')
+		if at < 0 {
+			builder.WriteString(contents[cursor:])
+			break
 		}
-		return strings.TrimSuffix(match, parts[2]) + renames[parts[2]]
-	})
-	return cssAnimationDeclarationPattern.ReplaceAllStringFunc(contents, func(match string) string {
-		parts := cssAnimationDeclarationPattern.FindStringSubmatch(match)
-		if len(parts) < 3 {
-			return match
+		at += cursor
+		nameStart, nameEnd, ok := cssKeyframeNameRange(contents, at)
+		if !ok {
+			builder.WriteString(contents[cursor : at+1])
+			cursor = at + 1
+			continue
 		}
-		value := parts[2]
-		for name, scoped := range renames {
-			value = regexp.MustCompile(`\b`+regexp.QuoteMeta(name)+`\b`).ReplaceAllString(value, scoped)
+		name := contents[nameStart:nameEnd]
+		scoped := name + "-" + scopeID
+		renames[name] = scoped
+		builder.WriteString(contents[cursor:nameStart])
+		builder.WriteString(scoped)
+		cursor = nameEnd
+	}
+	return builder.String()
+}
+
+func cssKeyframeNameRange(contents string, at int) (int, int, bool) {
+	cursor := at + 1
+	if cursor < len(contents) && contents[cursor] == '-' {
+		cursor++
+		for cursor < len(contents) && isCSSLetter(contents[cursor]) {
+			cursor++
 		}
-		return parts[1] + value
-	})
+		if cursor >= len(contents) || contents[cursor] != '-' {
+			return 0, 0, false
+		}
+		cursor++
+	}
+	if !hasCSSWordAt(contents, cursor, "keyframes") {
+		return 0, 0, false
+	}
+	cursor += len("keyframes")
+	if cursor >= len(contents) || !isCSSSpace(contents[cursor]) {
+		return 0, 0, false
+	}
+	for cursor < len(contents) && isCSSSpace(contents[cursor]) {
+		cursor++
+	}
+	if cursor >= len(contents) || !isCSSNameStart(contents[cursor]) {
+		return 0, 0, false
+	}
+	start := cursor
+	cursor++
+	for cursor < len(contents) && isCSSNamePart(contents[cursor]) {
+		cursor++
+	}
+	return start, cursor, true
+}
+
+func rewriteCSSAnimationDeclarations(contents string, renames map[string]string) string {
+	var builder strings.Builder
+	cursor := 0
+	for cursor < len(contents) {
+		colon := strings.IndexByte(contents[cursor:], ':')
+		if colon < 0 {
+			builder.WriteString(contents[cursor:])
+			break
+		}
+		colon += cursor
+		propStart := cssDeclarationPropertyStart(contents, colon)
+		property := strings.TrimSpace(contents[propStart:colon])
+		if !isCSSAnimationProperty(property) {
+			builder.WriteString(contents[cursor : colon+1])
+			cursor = colon + 1
+			continue
+		}
+		valueEnd := cssDeclarationValueEnd(contents, colon+1)
+		value := replaceCSSAnimationNames(contents[colon+1:valueEnd], renames)
+		builder.WriteString(contents[cursor : colon+1])
+		builder.WriteString(value)
+		cursor = valueEnd
+	}
+	return builder.String()
+}
+
+func cssDeclarationPropertyStart(contents string, colon int) int {
+	start := colon
+	for start > 0 {
+		switch contents[start-1] {
+		case '{', '}', ';':
+			return start
+		default:
+			start--
+		}
+	}
+	return start
+}
+
+func cssDeclarationValueEnd(contents string, start int) int {
+	for cursor := start; cursor < len(contents); cursor++ {
+		switch contents[cursor] {
+		case ';', '}':
+			return cursor
+		case '\'', '"':
+			cursor = cssStringEnd(contents, cursor)
+		}
+	}
+	return len(contents)
+}
+
+func replaceCSSAnimationNames(value string, renames map[string]string) string {
+	var builder strings.Builder
+	for cursor := 0; cursor < len(value); {
+		if !isCSSNameStart(value[cursor]) {
+			builder.WriteByte(value[cursor])
+			cursor++
+			continue
+		}
+		start := cursor
+		cursor++
+		for cursor < len(value) && isCSSNamePart(value[cursor]) {
+			cursor++
+		}
+		token := value[start:cursor]
+		if scoped, ok := renames[token]; ok {
+			builder.WriteString(scoped)
+		} else {
+			builder.WriteString(token)
+		}
+	}
+	return builder.String()
+}
+
+func isCSSAnimationProperty(property string) bool {
+	return strings.EqualFold(property, "animation") || strings.EqualFold(property, "animation-name")
+}
+
+func hasCSSWordAt(contents string, start int, word string) bool {
+	if start+len(word) > len(contents) || !strings.EqualFold(contents[start:start+len(word)], word) {
+		return false
+	}
+	return start+len(word) == len(contents) || !isCSSNamePart(contents[start+len(word)])
+}
+
+func isCSSNameStart(char byte) bool {
+	return char == '_' || (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z')
+}
+
+func isCSSNamePart(char byte) bool {
+	return isCSSNameStart(char) || char == '-' || (char >= '0' && char <= '9')
+}
+
+func isCSSLetter(char byte) bool {
+	return (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z')
+}
+
+func isCSSSpace(char byte) bool {
+	return char == ' ' || char == '\t' || char == '\n' || char == '\r' || char == '\f'
+}
+
+func cssStringEnd(contents string, quote int) int {
+	cursor := quote + 1
+	for cursor < len(contents) {
+		if contents[cursor] == '\\' {
+			cursor += 2
+			continue
+		}
+		if contents[cursor] == contents[quote] {
+			return cursor
+		}
+		cursor++
+	}
+	return len(contents) - 1
 }
 
 func componentCSSScopeSelector(scopeID string) string {

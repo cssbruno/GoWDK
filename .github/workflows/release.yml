@@ -97,8 +97,9 @@ jobs:
 
       - name: Package VS Code extension
         run: |
+          npm install -g @vscode/vsce
           node scripts/sync-version.js
-          node scripts/package-vsix.js
+          vsce package --no-dependencies --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} --baseImagesUrl https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}
         working-directory: editors/vscode
 
       - name: Collect VS Code package

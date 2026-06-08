@@ -2825,6 +2825,170 @@ view {
 	}
 }
 
+func TestInspectIRCommandPrintsCompilerIR(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "newsletter.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+@page newsletter
+@route "/newsletter"
+
+act Subscribe POST "/newsletter"
+
+view {
+  <form g:post={Subscribe}>
+    <input name="email" required />
+    <button type="submit">Subscribe</button>
+  </form>
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"inspect", "ir", "--config", config, page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected no inspect diagnostics on stderr, got:\n%s", stderr)
+	}
+
+	var report struct {
+		Version  int `json:"Version"`
+		Packages []struct {
+			Name  string `json:"Name"`
+			Files []struct {
+				Path string `json:"Path"`
+				Kind string `json:"Kind"`
+				Name string `json:"Name"`
+			} `json:"Files"`
+		} `json:"Packages"`
+		Pages []struct {
+			ID     string   `json:"ID"`
+			Route  string   `json:"Route"`
+			Guards []string `json:"Guards"`
+		} `json:"Pages"`
+		Routes []struct {
+			Kind   string `json:"Kind"`
+			Method string `json:"Method"`
+			Path   string `json:"Path"`
+			PageID string `json:"PageID"`
+		} `json:"Routes"`
+		Endpoints []struct {
+			Kind    string `json:"Kind"`
+			Symbol  string `json:"Symbol"`
+			Method  string `json:"Method"`
+			Path    string `json:"Path"`
+			PageID  string `json:"PageID"`
+			Binding struct {
+				Status       string `json:"Status"`
+				FunctionName string `json:"FunctionName"`
+			} `json:"Binding"`
+		} `json:"Endpoints"`
+		Templates []struct {
+			OwnerKind string `json:"OwnerKind"`
+			OwnerID   string `json:"OwnerID"`
+			Body      string `json:"Body"`
+		} `json:"Templates"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid inspect ir JSON: %v\n%s", err, output)
+	}
+	if report.Version != 1 {
+		t.Fatalf("unexpected IR version: %d", report.Version)
+	}
+	if len(report.Pages) != 1 || report.Pages[0].ID != "newsletter" || report.Pages[0].Route != "/newsletter" {
+		t.Fatalf("unexpected page IR: %#v", report.Pages)
+	}
+	if len(report.Pages[0].Guards) != 1 || report.Pages[0].Guards[0] != "public" {
+		t.Fatalf("expected public guard in page IR: %#v", report.Pages[0].Guards)
+	}
+	if len(report.Routes) != 1 || report.Routes[0].Kind != "spa" || report.Routes[0].Path != "/newsletter" {
+		t.Fatalf("unexpected route IR: %#v", report.Routes)
+	}
+	if len(report.Endpoints) != 1 || report.Endpoints[0].Kind != "action" || report.Endpoints[0].Symbol != "Subscribe" {
+		t.Fatalf("unexpected endpoint IR: %#v", report.Endpoints)
+	}
+	if report.Endpoints[0].Binding.Status != "missing" || report.Endpoints[0].Binding.FunctionName != "Subscribe" {
+		t.Fatalf("expected backend binding metadata in endpoint IR: %#v", report.Endpoints[0].Binding)
+	}
+	if len(report.Templates) != 1 || report.Templates[0].OwnerID != "newsletter" || !strings.Contains(report.Templates[0].Body, "g:post") {
+		t.Fatalf("unexpected template IR: %#v", report.Templates)
+	}
+	if len(report.Packages) != 1 || report.Packages[0].Name != "app" || len(report.Packages[0].Files) != 1 || report.Packages[0].Files[0].Path != page {
+		t.Fatalf("unexpected package IR: %#v", report.Packages)
+	}
+}
+
+func TestInspectIRCommandDiscoversSelectedModuleOnly(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Modules: []gowdk.ModuleConfig{
+		{Name: "frontend"},
+		{Name: "backend"},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
+
+@page home
+@route "/"
+
+view {
+  <main>Frontend</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `package app
+
+@page admin
+@route "/admin"
+
+view {
+  <main>Backend</main>
+}
+`)
+
+	var output string
+	withWorkingDir(t, root, func() {
+		captured, err := captureCLIStdout(t, func() error {
+			return run([]string{"inspect", "ir", "--module", "backend"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		output = captured
+	})
+
+	var report struct {
+		Pages []struct {
+			ID string `json:"ID"`
+		} `json:"Pages"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid inspect ir JSON: %v\n%s", err, output)
+	}
+	if len(report.Pages) != 1 || report.Pages[0].ID != "admin" {
+		t.Fatalf("expected selected backend page only, got %#v", report.Pages)
+	}
+}
+
+func TestInspectCommandRejectsUnknownTarget(t *testing.T) {
+	_, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"inspect", "assets"})
+	})
+	if err == nil {
+		t.Fatal("expected unknown inspect target error")
+	}
+	if !strings.Contains(err.Error(), `unknown inspect target "assets"`) {
+		t.Fatalf("unexpected inspect error: %v", err)
+	}
+}
+
 func TestRoutesCommandPrintsContractEndpoints(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "patients.page.gwdk")

@@ -1,4 +1,4 @@
-# Draft v0.2 Release Notes
+# Experimental 0.x release: GOWDK v0.2
 
 GOWDK v0.2 is an experimental 0.x compiler/runtime release.
 
@@ -18,23 +18,36 @@ tooling contracts may change before a stable release.
 - Public issue templates for compiler, generated output, runtime, docs,
   examples, language, addon, and non-sensitive security hardening reports.
 - Release workflow support for version-specific release notes files.
+- `v0.1.5` GitHub release metadata corrected to pre-release with an
+  experimental/not-production-ready warning at the top of the release body.
+- Public hardening labels from `docs/engineering/release-plan.md`.
+- Public backlog issues for current `Partial` PRDs:
+  https://github.com/cssbruno/GoWDK/issues/1 through
+  https://github.com/cssbruno/GoWDK/issues/13.
+- Public backlog issues for selected `Planned` roadmap items:
+  https://github.com/cssbruno/GoWDK/issues/15 through
+  https://github.com/cssbruno/GoWDK/issues/35.
+- Public release-plan bucket and detailed backlog issues:
+  https://github.com/cssbruno/GoWDK/issues/36 through
+  https://github.com/cssbruno/GoWDK/issues/70.
+- Focused follow-up issues for optional dependencies, release trust, compiler
+  spine, diagnostics, Go interop, endpoint/security hardening, components,
+  VS Code, contracts, dev overlay, and the flagship example:
+  https://github.com/cssbruno/GoWDK/issues/71 through
+  https://github.com/cssbruno/GoWDK/issues/114.
+- Public `0.x Hardening` project board:
+  https://github.com/users/cssbruno/projects/2.
 
 ## Partial
 
-- GitHub-side release metadata still needs manual verification before
-  publication. `v0.1.5` was observed as `isPrerelease: false` on 2026-06-08 and
-  should be corrected or made explicit in the release body.
-- Public `0.x Hardening` project board, labels, and issue backlog creation are
-  manual GitHub-side follow-up work.
 - `gowdk doctor` is referenced as planned install verification but is not
   implemented yet.
 
 ## Planned
 
-- Public issue backlog for every current `Partial` requirement and selected
-  `Planned` roadmap item.
-- Release body validation for experimental warning, not-production-ready
-  warning, known gaps, checksum instructions, and attestation instructions.
+- Automated release body validation for experimental warning,
+  not-production-ready warning, known gaps, checksum instructions, and
+  attestation instructions.
 - Broader release smoke tests for generated app HTTP behavior.
 - Automated docs link checking and Markdown lint.
 
@@ -51,14 +64,20 @@ tooling contracts may change before a stable release.
 
 - v0.2 is primarily a trust/docs/release hygiene slice, not a compiler feature
   release.
-- Release metadata and project board changes require GitHub-side actions.
 - Generated output remains pre-1.0 and unstable unless a reference doc marks a
   surface stable.
 
+## Breaking Or Unstable Generated Output
+
+Generated output is pre-1.0. Treat generated Go, generated JavaScript,
+manifests, build reports, route reports, and runtime package contracts as
+unstable unless a reference doc explicitly marks a surface stable.
+
 ## Required Release Verification
 
-Run the full checklist in `docs/engineering/v0.2-release-checklist.md` before
-publishing.
+Run the full checklist before publishing:
+
+- `docs/engineering/v0.2-release-checklist.md`
 
 Required local gates:
 
@@ -92,3 +111,16 @@ Verify GitHub artifact attestations:
 ```sh
 gh attestation verify <artifact> -R cssbruno/GOWDK
 ```
+
+## VS Code Extension
+
+Install the packaged `.vsix` manually when the release includes one:
+
+```sh
+code --install-extension gowdk-vscode-<version>.vsix
+```
+
+## Tool Versions
+
+- Go: `1.26.4`
+- Node.js for extension checks: `24`

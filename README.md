@@ -51,29 +51,38 @@ go build ./cmd/gowdk
 
 ## What Works Today
 
-This matrix is a compact status view for the current 0.x line. "Demo" means
-the slice is stable enough to try in examples, not production-ready.
+This table describes the current demoable 0.x slice. "Partial" means the listed
+path works, but the public contract is not stable and the remaining limit is
+still tracked in the hardening backlog.
 
-| Surface | Status | Demo | Not production security | Docs | Example | Tests |
-| --- | --- | --- | --- | --- | --- | --- |
-| Static build output | Implemented | Yes | Yes | [CLI](docs/reference/cli.md) | [Pages](examples/pages/home.page.gwdk) | Yes |
-| Dynamic SPA paths | Partial | Yes | Yes | [Routing](docs/reference/routing.md) | [Blog](examples/pages/blog-post.page.gwdk) | Yes |
-| Build-time Go data | Partial | Yes | Yes | [Data](docs/language/data.md) | [Go interop](examples/go-interop/README.md) | Yes |
-| Actions | Partial | Yes | Yes | [Actions](docs/language/actions.md) | [Login](examples/login/README.md) | Yes |
-| APIs | Partial | Yes | Yes | [API](docs/language/api.md) | [API](examples/api/status.page.gwdk) | Yes |
-| Fragments | Partial | Yes | Yes | [Partials](docs/language/partials.md) | [Fragments](examples/partials/patients-fragment.page.gwdk) | Yes |
-| SSR | Partial | Yes | Yes | [SSR](docs/language/ssr.md) | [SSR](examples/ssr/simple-ssr.page.gwdk) | Yes |
-| Hybrid | Partial | Yes | Yes | [Hybrid](docs/language/hybrid.md) | [Hybrid](examples/ssr/hybrid-static.page.gwdk) | Yes |
-| Components | Partial | Yes | Yes | [Components](docs/language/components.md) | [Components](examples/components/base/base-components.page.gwdk) | Yes |
-| WASM islands | Partial | Yes | Yes | [Components](docs/language/components.md) | [Test fixture](testfixture/islands/islands.go) | Yes |
-| CSS/assets | Partial | Yes | Yes | [CSS](docs/reference/css.md) | [CSS](examples/css/styled.page.gwdk) | Yes |
-| One-binary output | Partial | Yes | Yes | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) | Yes |
-| Contracts | Partial | Yes | Yes | [Contracts](docs/reference/contracts.md) | [Runtime contracts](runtime/contracts) | Yes |
-| Dev server | Partial | Yes | Yes | [Dev](docs/reference/dev.md) | [Getting started](docs/getting-started.md) | Yes |
-| LSP | Implemented | Yes | Yes | [Language server](docs/product/language-server.md) | [VS Code](editors/vscode) | Yes |
+| Surface | Status | Works Today | Current Limit | Docs | Example |
+| --- | --- | --- | --- | --- | --- |
+| Static build output | Implemented | `gowdk build --out` emits HTML, route metadata, and asset metadata for simple build-time pages. | Generated output is still pre-1.0. | [CLI](docs/reference/cli.md) | [Pages](examples/pages/home.page.gwdk) |
+| Dynamic SPA paths | Partial | Dynamic SPA routes can be expanded from the first supported literal `paths {}` subset. | Dynamic SPA routes need `paths {}` unless the page uses request-time rendering. | [Routing](docs/reference/routing.md) | [Blog](examples/pages/blog-post.page.gwdk) |
+| Build-time Go data | Partial | Literal build records and supported no-argument Go build functions can feed SPA rendering. | Arbitrary build-time Go statements and broader data lifecycles are not stable. | [Data](docs/language/data.md) | [Go interop](examples/go-interop/README.md) |
+| Actions | Partial | Generated apps can serve typed POST action handlers, decode supported form inputs, validate request shape, return redirects/fragments, and opt into CSRF. | File uploads, multipart generated forms, and domain validation stay in user-owned Go handlers. | [Actions](docs/language/actions.md) | [Login](examples/login/README.md) |
+| APIs | Partial | Feature-bound API handlers can be generated for supported signatures. | Typed body/query helpers and broader error/status contracts remain planned. | [API](docs/language/api.md) | [API](examples/api/status.page.gwdk) |
+| Fragments | Partial | Partial form submissions and standalone fragment routes can return server fragments and remount local islands. | Richer fragment rendering and broader local client behavior are still hardening work. | [Partials](docs/language/partials.md) | [Fragments](examples/partials/patients-fragment.page.gwdk) |
+| SSR | Partial | Pages with `load {}` or `go ssr {}` can build request-time handlers when the SSR addon is enabled. | Typed route-param accessors, lifecycle docs, and error/cache contracts need more hardening. | [SSR](docs/language/ssr.md) | [SSR](examples/ssr/simple-ssr.page.gwdk) |
+| Hybrid | Partial | Hybrid request-time route metadata and generated request-time pages exist for the supported slice. | The public hybrid source contract, streaming, and data refresh policy are not stable. | [Hybrid](docs/language/hybrid.md) | [Hybrid](examples/ssr/hybrid-static.page.gwdk) |
+| Components | Partial | Components support imported contracts, slots, scoped CSS/assets, first local client behavior, and generated island assets. | Non-string props, richer slots/events, real `g:if`/`g:for`, lifecycle cleanup, and dependency diagnostics are planned. | [Components](docs/language/components.md) | [Components](examples/components/base/base-components.page.gwdk) |
+| WASM islands | Partial | Component-level `@wasm` and page-level `go client {}` can emit Go `js/wasm` browser assets for supported fixtures. | ABI docs, size reporting, runtime validation, and browser behavior coverage need hardening. | [Components](docs/language/components.md) | [Test fixture](testfixture/islands/islands.go) |
+| CSS/assets | Partial | CSS processors, page CSS, scoped component CSS, component assets, asset manifests, content-hashed filenames, and optional Tailwind wrapper exist. | CSS processor contracts and optional dependency boundaries need hardening. | [CSS](docs/reference/css.md) | [CSS](examples/css/styled.page.gwdk) |
+| One-binary output | Partial | `gowdk build --app --bin` can generate and compile an embedded Go server for supported SPA/backend/SSR slices. | Runtime operations, split/backend-only deploys, and artifact smoke coverage are still expanding. | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) |
+| Contracts | Partial | Runtime contracts support typed queries, commands, events, jobs, role filtering, local dispatch, file outbox, broker/fanout adapters, contract graph/trace/list commands, and generated `g:command`/`g:query` web adapters. | Split worker/cron generation, retry policy, managed deployment recipes, and editor-first contract visualization remain planned. | [Contracts](docs/reference/contracts.md) | [Runtime contracts](runtime/contracts) |
+| Dev server | Partial | `gowdk dev` polls inputs, skips no-op rebuilds, serves or runs generated output, live-reloads browsers, shows a browser overlay for rebuild failures, and keeps serving the last successful output. | Overlay diagnostics need codes, source spans, changed-file context, and better generated-app runtime attribution. Component HMR is intentionally deferred. | [Dev](docs/reference/dev.md) | [Getting started](docs/getting-started.md) |
+| Editor/LSP | Implemented | The VS Code extension and dependency-free LSP provide diagnostics, formatting, completions, hover, outline, semantic tokens, definitions, references, site-map visualization, and project-aware navigation for supported paths. | Exact source ranges, richer quick fixes, route/endpoint/contract maps, and `g:command`/`g:query` status in the editor are planned. | [Language server](docs/product/language-server.md) | [VS Code](editors/vscode) |
+
+Security note: request-time features are demoable, not production-ready. Current
+security hardening includes first slices of typed decoding, request-shape
+validation, opt-in CSRF, guards, panic boundaries, and no-store request-time
+responses, but full auth/session, redirect, timeout, upload, logging, and
+operations policy are still hardening work.
 
 Known gaps and release hardening work live in
-[the 0.x improvement checklist](docs/engineering/release-plan.md).
+[the 0.x improvement checklist](docs/engineering/release-plan.md), with public
+tracking in the
+[0.x Hardening project](https://github.com/users/cssbruno/projects/2).
 
 ## Single-Page Server
 
@@ -167,4 +176,5 @@ Replace `github.com/acme/hello-gowdk/ui` with your app module path.
 - [Getting started](docs/getting-started.md)
 - [0.x improvement checklist](docs/engineering/release-plan.md)
 - [v0.2 release checklist](docs/engineering/v0.2-release-checklist.md)
+- [Public 0.x hardening backlog](https://github.com/cssbruno/GoWDK/issues)
 - [Examples](examples/README.md)

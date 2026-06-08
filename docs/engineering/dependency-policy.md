@@ -66,5 +66,5 @@ used by nested modules.
 
 `scripts/check-release-policy.sh` is the current CI guard for the strongest
 policy invariants: no production-ready claim, no required npm install in CI or
-release packaging, draft/pre-release release metadata, and no hidden optional
-tool download in normal gates.
+release packaging, visible pre-release metadata, and no hidden optional tool
+download in normal gates.

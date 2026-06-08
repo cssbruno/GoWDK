@@ -22,7 +22,7 @@ require_file_text .github/release-note-template.md "Migration guides and framewo
 require_file_text docs/engineering/release-plan.md "Do not add migration guides."
 require_file_text docs/engineering/release-plan.md "Do not make SSR default."
 require_file_text docs/engineering/release-plan.md "Do not auto-discover endpoints by function name."
-require_file_text .github/workflows/release.yml "draft: true"
+require_file_text .github/workflows/release.yml "draft: false"
 require_file_text .github/workflows/release.yml "prerelease: true"
 require_file_text SECURITY.md "experimental 0.x compiler/runtime"
 

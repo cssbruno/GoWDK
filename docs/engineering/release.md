@@ -1,9 +1,10 @@
 # Release
 
 GOWDK is currently pre-release compiler/runtime scaffolding. Release packaging
-automation lives in `.github/workflows/release.yml` and creates draft releases
-from `v*` tags or a manual workflow dispatch. VS Code Marketplace publishing
-lives in `.github/workflows/vscode-extension-publish.yml`.
+automation lives in `.github/workflows/release.yml` and creates visible
+pre-releases with downloadable assets from `v*` tags or a manual workflow
+dispatch. VS Code Marketplace publishing lives in
+`.github/workflows/vscode-extension-publish.yml`.
 
 The current CLI version is `0.2.6`, but this is not a production-readiness
 claim. It identifies the current development line while the compiler, generated
@@ -43,13 +44,12 @@ Patch-release changes belong in `CHANGELOG.md` and the selected release notes.
 No current release should be described as production-ready. Before tagging a
 public release, confirm:
 
-- The GitHub release is marked as a draft until manual review is complete.
 - The GitHub release is marked as a pre-release.
 - The release body starts with "Experimental 0.x release" and "Not
   production-ready."
 - README, requirements, architecture, examples, generated-output docs, and
   release notes clearly separate implemented, partial, and planned behavior.
-- Version and release notes are reflected in the release draft.
+- Version and release notes are reflected in the visible pre-release.
 - CI workflow is passing.
 - Release artifact list is still accurate.
 - GitHub artifact attestations are enabled for release artifacts.
@@ -91,8 +91,8 @@ for the current CLI line or push the corresponding tag:
 gh workflow run release.yml -f version=v0.2.6
 ```
 
-After the draft release is reviewed and published, smoke the published
-artifacts for each supported OS artifact:
+After the release workflow completes, smoke the published artifacts for each
+supported OS artifact:
 
 ```sh
 gh workflow run release-smoke.yml -f version=v0.2.6

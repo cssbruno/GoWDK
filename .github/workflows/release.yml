@@ -152,7 +152,7 @@ jobs:
           body_path: ${{ steps.release_notes.outputs.path }}
           files: dist/*
           fail_on_unmatched_files: true
-          draft: true
+          draft: false
           prerelease: true
 
       - name: Verify release assets

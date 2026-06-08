@@ -169,7 +169,7 @@ are stable.
 | 17 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Component-level WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
 | 18 | CSS, assets, and packaging | External plugin loading is hardened, richer page-aware CSS processor contracts are stable, and Tailwind/CSS deployment docs stay explicit that external tooling is user-installed. Implemented CSS asset hashing, component CSS scope/hash metadata, component non-CSS asset emission, and binary cache policy remain stable. Module selection remains artifact packaging, not runtime module orchestration. |
 | 19 | Framework adapters | GOWDK Runtime remains `net/http` first. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
-| 20 | Dev, playground, and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, browser playground, browser-compiled GOWDK, richer LSP completions, and editor navigation are added. |
+| 20 | Dev and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, richer LSP completions, and editor navigation are added. |
 | 21 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
 
 ## Candidate Release Order
@@ -246,12 +246,12 @@ without making any minor version a production-readiness target.
 
 - Full CSS/plugin loading.
 - Generated app dev loop.
-- Browser playground and stronger editor tooling.
+- Stronger editor tooling.
 - Production operations docs must cover secrets, CSRF rotation, reverse
   proxies, cache/CDN policy, health checks, metrics, logging, binary deploy,
   and rollback before any production-ready claim.
 - P2 ecosystem polish is owned by optional docs, examples, website pages, or
-  CLI generators: addon discovery, playground onboarding, performance
+  CLI generators: addon discovery, performance
   profiling, migration guides, image guidance, and PWA/offline guidance must
   not add mandatory npm, framework, or platform dependencies to the repository
   core.

@@ -1897,7 +1897,7 @@ func TestWASMIslandLoaderRunsInBrowser(t *testing.T) {
 	server := httptest.NewServer(http.FileServer(http.Dir(outputDir)))
 	defer server.Close()
 
-	script := filepath.Join(t.TempDir(), "gowdk-wasm-island-browser-test.cjs")
+	script := filepath.Join(t.TempDir(), "gowdk-island-browser-test.cjs")
 	if err := os.WriteFile(script, []byte(wasmIslandBrowserHarness()), 0o600); err != nil {
 		t.Fatal(err)
 	}

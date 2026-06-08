@@ -955,10 +955,8 @@ Every 0.x minor release must have:
   from the repo automatically.
 - [ ] Add website current release badge, experimental warning, what works today,
   known gaps, cookbook, examples index, runnable snippets, generated output
-  preview, route manifest preview, build report preview, playground
-  export/download, and website link checker.
-- [ ] Define browser compiler and playground architecture with sandboxed
-  execution and no production-readiness implication.
+  preview, route manifest preview, build report preview, and website link
+  checker.
 - [ ] Document addon lifecycle, registration, config, compiler hooks, runtime
   hooks, generated file ownership, version compatibility, security
   restrictions, CSS processor addon, Tailwind addon, rate-limit addon, embed

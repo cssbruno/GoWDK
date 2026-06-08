@@ -1,49 +1,12 @@
-# Browser Compiler
+# Browser-Facing Output
 
 GOWDK does not compile arbitrary Go or JavaScript for the browser by default.
-The current browser-facing compiler slices are:
+The current browser-facing output slices are:
 
-- In-memory playground compilation through `playground.Compile`.
 - Partial form enhancement runtime emitted as `assets/gowdk/gowdk.js`.
 - Generated JavaScript islands for stateful components.
 - Component-level WASM island asset emission for components that declare
   `@wasm`, with `g:island="wasm"` still supported as a call-site override.
-
-## Playground Compile API
-
-Browser playgrounds and site playgrounds should call the compiler package
-directly:
-
-```go
-result := playground.Compile(playground.Project{
-  Files: map[string]string{
-    "src/pages/home.page.gwdk": source,
-  },
-  OutputDir: "dist/site",
-})
-```
-
-`playground.Result` is the output contract. It contains:
-
-- `HTML`: generated HTML artifacts keyed by output path.
-- `CSS`: generated CSS artifacts keyed by output path.
-- `Files`: every generated artifact, including `gowdk-routes.json`,
-  `gowdk-assets.json`, partial runtime assets, JavaScript island assets, and
-  WASM island assets.
-- `Routes`: emitted route-to-file mappings.
-- `Diagnostics`: source or compiler diagnostics safe to show in browser UIs.
-
-Preview UIs should consume those compiler-owned artifacts instead of generating
-browser code themselves. `playground.NewPreviewServer` is the helper for this
-case: it renders preview HTML from a `Result`, rewrites compiler-emitted asset
-references to a preview asset route, and serves the corresponding files from
-`Result.Files`.
-
-`playground.UIHTML` is the dependency-free browser shell used by the local
-playground. It provides an editable project tree, starter templates, generated
-HTML/CSS/JS/all-file viewers, diagnostics, iframe preview, JSON import/export,
-and hash-based share links. The browser UI still delegates compilation to
-`window.gowdkCompile`; it does not own routes, generated output, or diagnostics.
 
 ## Partial Runtime
 

@@ -269,16 +269,16 @@ func TestServerReturnsDefinitionForWorkspaceComponentFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "gowdk.config.go"), []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pagePath := filepath.Join(root, "assets", "playground", "examples", "wasm", "src", "pages", "app.page.gwdk")
-	componentPath := filepath.Join(root, "assets", "playground", "examples", "wasm", "src", "components", "runtime-card.cmp.gwdk")
+	pagePath := filepath.Join(root, "assets", "examples", "wasm", "src", "pages", "app.page.gwdk")
+	componentPath := filepath.Join(root, "assets", "examples", "wasm", "src", "components", "runtime-card.cmp.gwdk")
 	if err := os.MkdirAll(filepath.Dir(pagePath), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Dir(componentPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	pageSource := "package playground\n\n@page app\n@route \"/\"\n\nview {\n  <main><RuntimeCard /></main>\n}\n"
-	componentSource := "package playground\n\n@component RuntimeCard\n\nview {\n  <section></section>\n}\n"
+	pageSource := "package demo\n\n@page app\n@route \"/\"\n\nview {\n  <main><RuntimeCard /></main>\n}\n"
+	componentSource := "package demo\n\n@component RuntimeCard\n\nview {\n  <section></section>\n}\n"
 	if err := os.WriteFile(pagePath, []byte(pageSource), 0o644); err != nil {
 		t.Fatal(err)
 	}

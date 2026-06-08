@@ -89,7 +89,6 @@ implemented.
 | PWA/offline | Keep service workers and PWA behavior optional and documentation-first; no hidden offline/cache defaults. | Planned |
 | Images | Document image optimization patterns first; optional integrations may emit assets or metadata without turning core into an image pipeline. | Planned |
 | Addon discovery | Start with repository/website docs or registry metadata; add CLI discovery only after addon versioning, trust, and compatibility rules exist. | Planned |
-| Playground | Own playground onboarding in website/docs first, with optional CLI export later; hosted execution must remain sandboxed and optional. | Planned |
 | Performance profiling | Document measurement for build time, output size, generated JS size, SSR/action latency, binary size, and cache behavior before adding automation. | Partial |
 | Migration guides | Publish docs-first guides for Go templates, htmx-style apps, JavaScript-framework concepts, and static Go sites while preserving GOWDK-native terminology. | Partial |
 

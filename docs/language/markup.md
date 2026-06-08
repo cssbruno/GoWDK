@@ -79,8 +79,8 @@ Implemented today:
   `ref searchInput HTMLInputElement`; elements bind them with
   `g:ref={searchInput}`. Ref statements only support `Focus`, `Blur`, and
   `ScrollIntoView`.
-- Component `client {}` blocks can declare computed values such as
-  `computed Label string { return if Open { "open" } else { "closed" } }`.
+- Component `client {}` blocks can declare computed values with `return expr`
+  or one Go-style `if` return followed by a fallback return.
   Computed values are read-only, can depend on props, state, and earlier
   computed values, and update dependent bindings after state changes.
 - `g:if={boolExpr}`, `g:else-if={boolExpr}`, and `g:else` on sibling elements

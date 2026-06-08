@@ -42,6 +42,21 @@ fn Reset() {
 	}
 }
 
+func TestParseClientFunctionsAllowsFuncAlias(t *testing.T) {
+	program, err := Parse(`
+func Increment() {
+  Count++
+}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handlers := program.HandlerMap()
+	if len(handlers["Increment"].Statements) != 1 || handlers["Increment"].Statements[0] != "Count++" {
+		t.Fatalf("unexpected handlers: %#v", handlers)
+	}
+}
+
 func TestParseAsyncClientFunction(t *testing.T) {
 	program, err := Parse(`
 async fn Search() {
@@ -185,6 +200,31 @@ computed Next int {
 	}
 	if !program.NeedsBootstrap() {
 		t.Fatal("expected computed program to need bootstrap")
+	}
+}
+
+func TestParseComputedAllowsGoStyleIfReturn(t *testing.T) {
+	program, err := Parse(`
+computed Label string {
+  if Count == 0 {
+    return "Start"
+  }
+  return string(Count)
+}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Computed) != 1 {
+		t.Fatalf("expected one computed value, got %#v", program.Computed)
+	}
+	computed := program.Computed[0]
+	if computed.Name != "Label" || computed.Type != "string" ||
+		computed.Expr != `if Count == 0 { "Start" } else { string(Count) }` {
+		t.Fatalf("unexpected computed: %#v", computed)
+	}
+	if computed.ExprSpan.StartLine != 3 {
+		t.Fatalf("unexpected computed span: %#v", computed.ExprSpan)
 	}
 }
 

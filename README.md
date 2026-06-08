@@ -89,18 +89,25 @@ import ui "github.com/acme/hello-gowdk/ui"
 state ui.CounterState = ui.NewCounterState()
 
 client {
-  fn Increment() {
-    Count = Count + 1
+  computed Label string {
+    if Count == 0 {
+      return "Start"
+    }
+    return string(Count)
   }
 
-  fn Reset() {
+  func Increment() {
+    Count++
+  }
+
+  func Reset() {
     Count = 0
   }
 }
 
 view {
   <section>
-    <p class:active={Count > 0}>Count: {Count}</p>
+    <p class:active={Count > 0}>{Label}</p>
     <button g:on:click={Increment()}>Add</button>
     <button g:if={Count > 0} g:on:click={Reset()}>Reset</button>
   </section>

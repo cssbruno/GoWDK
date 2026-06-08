@@ -9,15 +9,17 @@ import (
 )
 
 var (
-	functionHeaderPattern  = regexp.MustCompile(`^(async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s*\{$`)
-	computedHeaderPattern  = regexp.MustCompile(`^computed\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_.\[\]*]*)\s*\{$`)
-	effectHeaderPattern    = regexp.MustCompile(`^effect\s+when\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{$`)
-	refPattern             = regexp.MustCompile(`^ref\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
-	usePattern             = regexp.MustCompile(`^use\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)$`)
-	identifierPattern      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	statementIncDecPattern = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_.\[\]]*)(\+\+|--)$`)
-	statementAssignPattern = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_.\[\]]*)\s*=\s*(.+)$`)
-	statementLetPattern    = regexp.MustCompile(`^let\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$`)
+	functionHeaderPattern   = regexp.MustCompile(`^(async\s+)?(?:fn|func)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s*\{$`)
+	computedHeaderPattern   = regexp.MustCompile(`^computed\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_.\[\]*]*)\s*\{$`)
+	computedIfPattern       = regexp.MustCompile(`^if\s+(.+)\s*\{$`)
+	computedIfReturnPattern = regexp.MustCompile(`^if\s+(.+)\s+\{\s*return\s+(.+)\s*\}$`)
+	effectHeaderPattern     = regexp.MustCompile(`^effect\s+when\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{$`)
+	refPattern              = regexp.MustCompile(`^ref\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
+	usePattern              = regexp.MustCompile(`^use\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)$`)
+	identifierPattern       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	statementIncDecPattern  = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_.\[\]]*)(\+\+|--)$`)
+	statementAssignPattern  = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_.\[\]]*)\s*=\s*(.+)$`)
+	statementLetPattern     = regexp.MustCompile(`^let\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$`)
 )
 
 // Program is the parsed representation of a component client {} block.
@@ -270,6 +272,34 @@ func Parse(source string) (Program, error) {
 			}
 			continue
 		}
+		if lifecycle != nil && lifecycle.Kind == "computed" && lifecycle.ComputedIf != nil {
+			if line == "}" {
+				if lifecycle.ComputedIf.Return == "" {
+					return Program{}, parseErrorf(lifecycle.ComputedIf.Span.StartLine, "client computed %s if block must return an expression", lifecycle.Field)
+				}
+				lifecycle.Statements = append(lifecycle.Statements, "if "+lifecycle.ComputedIf.Cond+" { return "+lifecycle.ComputedIf.Return+" }")
+				lifecycle.StatementSpans = append(lifecycle.StatementSpans, lifecycle.ComputedIf.Span)
+				lifecycle.ComputedIf = nil
+				continue
+			}
+			statement := strings.TrimSpace(strings.TrimSuffix(line, ";"))
+			if strings.ContainsAny(statement, "{}") && !allowsInlineBraceExpression(statement) {
+				return Program{}, parseErrorf(index+1, "client computed %s if block line %d has unsupported syntax %q", lifecycle.Field, index+1, line)
+			}
+			if !strings.HasPrefix(statement, "return ") {
+				return Program{}, parseErrorf(index+1, "client computed %s if block must use `return expr`", lifecycle.Field)
+			}
+			if lifecycle.ComputedIf.Return != "" {
+				return Program{}, parseErrorf(index+1, "client computed %s if block must contain exactly one return statement", lifecycle.Field)
+			}
+			expr := strings.TrimSpace(strings.TrimPrefix(statement, "return "))
+			if expr == "" {
+				return Program{}, parseErrorf(index+1, "client computed %s if block must return an expression", lifecycle.Field)
+			}
+			lifecycle.ComputedIf.Return = expr
+			lifecycle.ComputedIf.ReturnSpan = Span{StartLine: index + 1, EndLine: index + 1}
+			continue
+		}
 		if lifecycle != nil && lifecycle.Kind == "effect" && line == "return {" {
 			lifecycle.Cleanup = true
 			continue
@@ -293,31 +323,33 @@ func Parse(source string) (Program, error) {
 					Span:           lifecycle.Span,
 				})
 			case "computed":
-				if len(lifecycle.Statements) != 1 {
-					return Program{}, parseErrorf(lifecycle.Span.StartLine, "client computed %s must contain exactly one return statement", lifecycle.Field)
-				}
-				statement := strings.TrimSpace(lifecycle.Statements[0])
-				if !strings.HasPrefix(statement, "return ") {
-					return Program{}, parseErrorf(lifecycleStatementLine(lifecycle, 0), "client computed %s must use `return expr`", lifecycle.Field)
-				}
-				expr := strings.TrimSpace(strings.TrimPrefix(statement, "return "))
-				if expr == "" {
-					return Program{}, parseErrorf(lifecycleStatementLine(lifecycle, 0), "client computed %s must return an expression", lifecycle.Field)
-				}
-				exprSpan := Span{}
-				if len(lifecycle.StatementSpans) > 0 {
-					exprSpan = lifecycle.StatementSpans[0]
+				expr, exprSpan, err := computedReturnExpr(lifecycle)
+				if err != nil {
+					return Program{}, err
 				}
 				program.Computed = append(program.Computed, Computed{Name: lifecycle.Field, Type: lifecycle.Type, Expr: expr, Span: lifecycle.Span, ExprSpan: exprSpan})
 			}
 			lifecycle = nil
 			continue
 		}
-		if strings.HasPrefix(line, "fn ") {
+		if isClientFunctionHeaderStart(line) {
 			if current != nil {
 				return Program{}, parseErrorf(index+1, "client function %s line %d cannot declare nested functions", current.Name, index+1)
 			}
 			return Program{}, parseErrorf(index+1, "client %s block line %d cannot declare nested functions", lifecycle.Description(), index+1)
+		}
+		if lifecycle != nil && lifecycle.Kind == "computed" {
+			if match := computedIfPattern.FindStringSubmatch(line); match != nil {
+				cond := strings.TrimSpace(match[1])
+				if cond == "" {
+					return Program{}, parseErrorf(index+1, "client computed %s if block requires a condition", lifecycle.Field)
+				}
+				if _, err := ParseExpr(cond); err != nil {
+					return Program{}, parseErrorf(index+1, "client computed %s if condition is invalid: %w", lifecycle.Field, err)
+				}
+				lifecycle.ComputedIf = &computedIfBlock{Cond: cond, Span: Span{StartLine: index + 1, EndLine: index + 1}}
+				continue
+			}
 		}
 		if strings.ContainsAny(line, "{}") && !allowsInlineBraceExpression(line) {
 			return Program{}, parseErrorf(index+1, "client block line %d has unsupported syntax %q", index+1, line)
@@ -343,6 +375,9 @@ func Parse(source string) (Program, error) {
 		if lifecycle.Cleanup {
 			return Program{}, parseErrorf(lifecycle.Span.StartLine, "client effect cleanup block missing closing }")
 		}
+		if lifecycle.ComputedIf != nil {
+			return Program{}, parseErrorf(lifecycle.ComputedIf.Span.StartLine, "client computed %s if block missing closing }", lifecycle.Field)
+		}
 		return Program{}, parseErrorf(lifecycle.Span.StartLine, "client %s block missing closing }", lifecycle.Description())
 	}
 	return program, nil
@@ -357,7 +392,15 @@ type lifecycleBlock struct {
 	Cleanup           bool
 	CleanupStatements []string
 	CleanupSpans      []Span
+	ComputedIf        *computedIfBlock
 	Span              Span
+}
+
+type computedIfBlock struct {
+	Cond       string
+	Return     string
+	ReturnSpan Span
+	Span       Span
 }
 
 func (block lifecycleBlock) Description() string {
@@ -378,6 +421,42 @@ func lifecycleStatementLine(block *lifecycleBlock, index int) int {
 		return block.Span.StartLine
 	}
 	return 0
+}
+
+func computedReturnExpr(block *lifecycleBlock) (string, Span, error) {
+	if len(block.Statements) == 1 {
+		statement := strings.TrimSpace(block.Statements[0])
+		if !strings.HasPrefix(statement, "return ") {
+			return "", Span{}, parseErrorf(lifecycleStatementLine(block, 0), "client computed %s must use `return expr`", block.Field)
+		}
+		expr := strings.TrimSpace(strings.TrimPrefix(statement, "return "))
+		if expr == "" {
+			return "", Span{}, parseErrorf(lifecycleStatementLine(block, 0), "client computed %s must return an expression", block.Field)
+		}
+		exprSpan := Span{}
+		if len(block.StatementSpans) > 0 {
+			exprSpan = block.StatementSpans[0]
+		}
+		return expr, exprSpan, nil
+	}
+	if len(block.Statements) == 2 {
+		match := computedIfReturnPattern.FindStringSubmatch(strings.TrimSpace(block.Statements[0]))
+		fallback := strings.TrimSpace(block.Statements[1])
+		if match != nil && strings.HasPrefix(fallback, "return ") {
+			cond := strings.TrimSpace(match[1])
+			thenExpr := strings.TrimSpace(match[2])
+			elseExpr := strings.TrimSpace(strings.TrimPrefix(fallback, "return "))
+			if elseExpr == "" {
+				return "", Span{}, parseErrorf(lifecycleStatementLine(block, 1), "client computed %s must return an expression", block.Field)
+			}
+			exprSpan := Span{}
+			if len(block.StatementSpans) > 0 {
+				exprSpan = block.StatementSpans[0]
+			}
+			return "if " + cond + " { " + thenExpr + " } else { " + elseExpr + " }", exprSpan, nil
+		}
+	}
+	return "", Span{}, parseErrorf(block.Span.StartLine, "client computed %s must contain exactly one return statement or one if-return followed by a return", block.Field)
 }
 
 // HandlerMap returns deterministic handlers keyed by function name.
@@ -831,6 +910,14 @@ func isReservedFunctionName(name string) bool {
 	default:
 		return false
 	}
+}
+
+func isClientFunctionHeaderStart(line string) bool {
+	line = strings.TrimSpace(line)
+	return strings.HasPrefix(line, "fn ") ||
+		strings.HasPrefix(line, "func ") ||
+		strings.HasPrefix(line, "async fn ") ||
+		strings.HasPrefix(line, "async func ")
 }
 
 func splitCommaList(source string) ([]string, error) {

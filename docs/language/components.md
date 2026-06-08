@@ -36,16 +36,18 @@ Implemented today:
   the slot body.
 - A component with `state ...` renders initial state at build time and emits a
   generated JavaScript island by default when called without `g:island`.
-- Component-local `client { fn Name(...) { ... } }` handlers can group the
+- Component-local `client { func Name(...) { ... } }` handlers can group the
   current safe typed expression subset and be called from `g:on:*` with scalar
-  expressions, such as `Add(Count + 1)`.
+  expressions, such as `Add(Count + 1)`. The older `fn Name(...)` spelling
+  remains accepted.
 - Components can dispatch declared events from `client {}` handlers with
   `emit name(Field)`. Parent components can listen on component calls with
   `g:on:name={...}` and receive typed event fields through the compiler-owned
   `event` scope.
 - Component-local `computed Name Type { return expr }` values can derive
-  read-only browser state from props, state, and other computed values. The
-  compiler orders computed values by dependency and rejects cycles.
+  read-only browser state from props, state, and other computed values.
+  Computed values may also use one Go-style `if` return followed by a fallback
+  return. The compiler orders computed values by dependency and rejects cycles.
 - Pages can declare first-slice page-scoped stores with
   `store cart ui.CartState = ui.NewCartState()`. Component `client {}` blocks
   can declare explicit dependencies with `use cart`; the compiler validates

@@ -2466,6 +2466,37 @@ computed Visible bool {
 	}
 }
 
+func TestValidateManifestAllowsGoStyleComputedState(t *testing.T) {
+	app := manifest.Manifest{Components: []manifest.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: manifest.StateContract{
+			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
+			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: manifest.Blocks{
+			Client: true,
+			ClientBody: `computed Label string {
+  if Count == 0 {
+    return "Start"
+  }
+  return string(Count)
+}
+
+func Increment() {
+  Count++
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Increment()}>{Label}</button>`,
+		},
+	}}}
+
+	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected Go-style computed state to validate, got %v", err)
+	}
+}
+
 func TestValidateManifestAllowsComputedOutOfOrderDependencies(t *testing.T) {
 	app := manifest.Manifest{Components: []manifest.Component{{
 		Name:    "Counter",

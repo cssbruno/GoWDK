@@ -266,11 +266,11 @@ Stateful component files can declare a component-local client block:
 
 ```gwdk
 client {
-  fn Increment() {
+  func Increment() {
     Count++
   }
 
-  fn Add(step int) {
+  func Add(step int) {
     let next int = Count + step
     Count = next
   }
@@ -284,11 +284,12 @@ view {
 }
 ```
 
-The implemented client block slice supports `fn Name(...) { ... }` handlers
-and `async fn Name(...) { ... }` handlers with `string`, `int`, `float`, and
-`bool` parameters. Async handlers cannot declare return types. `g:on:*` calls
-can pass typed scalar expressions as arguments. Handler statements currently
-support field increment/decrement, scalar locals such as
+The implemented client block slice supports `func Name(...) { ... }` handlers
+and `async func Name(...) { ... }` handlers with `string`, `int`, `float`, and
+`bool` parameters. The older `fn Name(...)` spelling remains accepted. Async
+handlers cannot declare return types. `g:on:*` calls can pass typed scalar
+expressions as arguments. Handler statements currently support field
+increment/decrement, scalar locals such as
 `let next int = Count + step`, and assignment from typed scalar expressions
 using `+`, `-`, `*`, `/`, `%`, comparisons, `&&`, `||`, `!`, unary `-`, and
 parentheses. Local variables are visible only to later statements in the same
@@ -372,7 +373,10 @@ Client blocks can declare computed values:
 ```gwdk
 client {
   computed Label string {
-    return if Open { "open" } else { "closed" }
+    if Open {
+      return "open"
+    }
+    return "closed"
   }
 
   computed Visible bool {

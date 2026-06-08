@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -205,16 +204,11 @@ func (handler Handler) cookieAwarePayload(request *http.Request, payload []byte,
 	return bytes.Replace(payload, marker, hidden, 1)
 }
 
-var (
-	formStartTagPattern   = regexp.MustCompile(`(?is)<form\b[^>]*>`)
-	formMethodPostPattern = regexp.MustCompile(`(?i)\bmethod\s*=\s*(?:"post"|'post'|post)(?:\s|/|>)`)
-)
-
 func (handler Handler) csrfAwarePayload(response http.ResponseWriter, request *http.Request, payload []byte, name string) ([]byte, bool) {
 	if handler.CSRF == nil || request.Method != http.MethodGet || !strings.HasSuffix(name, ".html") {
 		return payload, true
 	}
-	matches := formStartTagPattern.FindAllIndex(payload, -1)
+	matches := formStartTagRanges(payload)
 	if len(matches) == 0 {
 		return payload, true
 	}
@@ -226,7 +220,7 @@ func (handler Handler) csrfAwarePayload(response http.ResponseWriter, request *h
 	injected := false
 	for _, match := range matches {
 		tag := payload[match[0]:match[1]]
-		if !formMethodPostPattern.Match(tag) {
+		if !formStartTagHasPostMethod(tag) {
 			continue
 		}
 		if token == "" {
@@ -250,6 +244,134 @@ func (handler Handler) csrfAwarePayload(response http.ResponseWriter, request *h
 	}
 	builder.Write(payload[cursor:])
 	return builder.Bytes(), true
+}
+
+func formStartTagRanges(payload []byte) [][2]int {
+	var matches [][2]int
+	for index := 0; index < len(payload); index++ {
+		if payload[index] != '<' || !bytesHasFoldPrefix(payload[index+1:], "form") {
+			continue
+		}
+		afterName := index + len("<form")
+		if afterName < len(payload) && isHTMLNameChar(payload[afterName]) {
+			continue
+		}
+		end := htmlTagEnd(payload, afterName)
+		if end < 0 {
+			break
+		}
+		matches = append(matches, [2]int{index, end + 1})
+		index = end
+	}
+	return matches
+}
+
+func formStartTagHasPostMethod(tag []byte) bool {
+	cursor := len("<form")
+	for cursor < len(tag) {
+		for cursor < len(tag) && isHTMLSpace(tag[cursor]) {
+			cursor++
+		}
+		if cursor >= len(tag) || tag[cursor] == '>' || tag[cursor] == '/' {
+			return false
+		}
+		nameStart := cursor
+		for cursor < len(tag) && !isHTMLSpace(tag[cursor]) && tag[cursor] != '=' && tag[cursor] != '/' && tag[cursor] != '>' {
+			cursor++
+		}
+		name := tag[nameStart:cursor]
+		for cursor < len(tag) && isHTMLSpace(tag[cursor]) {
+			cursor++
+		}
+		if cursor >= len(tag) || tag[cursor] != '=' {
+			continue
+		}
+		cursor++
+		for cursor < len(tag) && isHTMLSpace(tag[cursor]) {
+			cursor++
+		}
+		value, next := htmlAttrValue(tag, cursor)
+		cursor = next
+		if bytes.EqualFold(name, []byte("method")) && strings.EqualFold(string(value), http.MethodPost) {
+			return true
+		}
+	}
+	return false
+}
+
+func htmlTagEnd(payload []byte, cursor int) int {
+	var quote byte
+	for cursor < len(payload) {
+		if quote != 0 {
+			if payload[cursor] == '\\' {
+				cursor += 2
+				continue
+			}
+			if payload[cursor] == quote {
+				quote = 0
+			}
+			cursor++
+			continue
+		}
+		switch payload[cursor] {
+		case '\'', '"':
+			quote = payload[cursor]
+		case '>':
+			return cursor
+		}
+		cursor++
+	}
+	return -1
+}
+
+func htmlAttrValue(tag []byte, cursor int) ([]byte, int) {
+	if cursor >= len(tag) {
+		return nil, cursor
+	}
+	if tag[cursor] == '\'' || tag[cursor] == '"' {
+		quote := tag[cursor]
+		cursor++
+		start := cursor
+		for cursor < len(tag) && tag[cursor] != quote {
+			cursor++
+		}
+		if cursor < len(tag) {
+			return tag[start:cursor], cursor + 1
+		}
+		return tag[start:], cursor
+	}
+	start := cursor
+	for cursor < len(tag) && !isHTMLSpace(tag[cursor]) && tag[cursor] != '/' && tag[cursor] != '>' {
+		cursor++
+	}
+	return tag[start:cursor], cursor
+}
+
+func bytesHasFoldPrefix(value []byte, prefix string) bool {
+	if len(value) < len(prefix) {
+		return false
+	}
+	for index := 0; index < len(prefix); index++ {
+		if asciiLower(value[index]) != prefix[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func asciiLower(char byte) byte {
+	if char >= 'A' && char <= 'Z' {
+		return char + ('a' - 'A')
+	}
+	return char
+}
+
+func isHTMLNameChar(char byte) bool {
+	return (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '_' || char == '-'
+}
+
+func isHTMLSpace(char byte) bool {
+	return char == ' ' || char == '\t' || char == '\n' || char == '\r' || char == '\f'
 }
 
 func csrfHiddenInput(fieldName string, token string) []byte {

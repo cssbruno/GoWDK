@@ -738,6 +738,50 @@ func TestActionValuesRejectsTooLargeBody(t *testing.T) {
 	}
 }
 
+func TestAPIHandlerCapsRequestBody(t *testing.T) {
+	var readErr error
+	handler := APIHandler(func(_ context.Context, request *http.Request) (response.Response, error) {
+		_, readErr = io.ReadAll(request.Body)
+		if readErr != nil {
+			return response.Response{}, readErr
+		}
+		return response.JSONBody(http.StatusOK, `{"ok":true}`), nil
+	})
+	recorder := httptest.NewRecorder()
+	oversized := strings.Repeat("a", int(DefaultAPIBodyLimit)+1)
+	request := httptest.NewRequest(http.MethodPost, "/api/echo", strings.NewReader(oversized))
+
+	handler(recorder, request)
+
+	if readErr == nil {
+		t.Fatal("expected oversized API body read to fail")
+	}
+	if !strings.Contains(readErr.Error(), "request body too large") {
+		t.Fatalf("expected body-too-large read error, got %v", readErr)
+	}
+}
+
+func TestAPIHandlerAllowsBodyWithinLimit(t *testing.T) {
+	handler := APIHandler(func(_ context.Context, request *http.Request) (response.Response, error) {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			return response.Response{}, err
+		}
+		return response.JSONBody(http.StatusOK, string(body)), nil
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/echo", strings.NewReader(`{"ok":true}`))
+
+	handler(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), `"ok":true`) {
+		t.Fatalf("unexpected body: %s", recorder.Body.String())
+	}
+}
+
 func TestActionFormRejectsInvalidForm(t *testing.T) {
 	decode := func(values form.Values) (struct {
 		Email string `form:"email"`

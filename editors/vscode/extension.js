@@ -14,6 +14,11 @@ const treeIconColors = {
   layout: new vscode.ThemeColor('charts.purple'),
   component: new vscode.ThemeColor('charts.green')
 };
+const fileDecorations = [
+  { suffix: '.page.gwdk', badge: 'P', tooltip: 'GOWDK page', color: treeIconColors.page },
+  { suffix: '.layout.gwdk', badge: 'L', tooltip: 'GOWDK layout', color: treeIconColors.layout },
+  { suffix: '.cmp.gwdk', badge: 'C', tooltip: 'GOWDK component', color: treeIconColors.component }
+];
 
 function activate(context) {
   const diagnostics = vscode.languages.createDiagnosticCollection('gowdk');
@@ -28,6 +33,7 @@ function activate(context) {
   context.subscriptions.push(diagnostics);
   context.subscriptions.push(vscode.window.registerTreeDataProvider('gowdk.siteMapTree', siteMapTree));
   context.subscriptions.push(vscode.window.registerTreeDataProvider('gowdk.directoryOutline', directoryOutline));
+  context.subscriptions.push(vscode.window.registerFileDecorationProvider(new GOWDKFileDecorationProvider()));
 
   context.subscriptions.push(vscode.workspace.onDidOpenTextDocument((doc) => validateSoon(doc, diagnostics, pending)));
   context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((event) => validateSoon(event.document, diagnostics, pending)));
@@ -616,6 +622,20 @@ class DirectoryOutlineTreeProvider {
       fallback.iconPath = new vscode.ThemeIcon('warning');
       return [fallback];
     }
+  }
+}
+
+class GOWDKFileDecorationProvider {
+  provideFileDecoration(uri) {
+    if (!uri || uri.scheme !== 'file') {
+      return undefined;
+    }
+    const file = uri.fsPath.toLowerCase();
+    const match = fileDecorations.find((decoration) => file.endsWith(decoration.suffix));
+    if (!match) {
+      return undefined;
+    }
+    return new vscode.FileDecoration(match.badge, match.tooltip, match.color);
   }
 }
 

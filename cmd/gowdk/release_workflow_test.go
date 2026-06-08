@@ -68,9 +68,13 @@ func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 		"go env GOVERSION",
 		"version --json",
 		"sha256sum -c checksums.txt",
+		"actions/upload-artifact",
+		"if-no-files-found: error",
 		"Validate selected release notes",
-		"draft: true",
+		"fail_on_unmatched_files: true",
+		"draft: false",
 		"prerelease: true",
+		"Verify release assets",
 	} {
 		if !strings.Contains(releaseText, expected) {
 			t.Fatalf("expected %q in release.yml:\n%s", expected, releaseText)

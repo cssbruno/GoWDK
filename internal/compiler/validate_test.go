@@ -3424,12 +3424,91 @@ func TestValidatePageRejectsMalformedRoutes(t *testing.T) {
 }
 
 func TestValidatePageRejectsDuplicateRouteParams(t *testing.T) {
-	page := manifest.Page{ID: "blog.post", Route: "/blog/{slug}/{slug}", Paths: true, Blocks: manifest.Blocks{View: true}}
+	page := manifest.Page{
+		ID:     "blog.post",
+		Route:  "/blog/{slug}/{slug}",
+		Paths:  true,
+		Blocks: manifest.Blocks{View: true},
+		Spans: manifest.PageSpans{
+			Route: testSourceSpan(3, 8, 3, 28),
+			RouteParams: []manifest.NamedSpan{
+				{Name: "slug", Span: testSourceSpan(3, 14, 3, 20)},
+				{Name: "slug", Span: testSourceSpan(3, 21, 3, 27)},
+			},
+		},
+	}
 
 	diagnostics := ValidatePage(gowdk.Config{}, page)
-	if !hasDiagnosticCode(diagnostics, "duplicate_route_param") {
+	diagnostic := firstDiagnostic(diagnostics, "duplicate_route_param")
+	if diagnostic == nil {
 		t.Fatalf("Missing duplicate_route_param diagnostic: %#v", diagnostics)
 	}
+	assertSourceSpan(t, diagnostic.Span, 3, 21, 3, 27)
+}
+
+func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
+	page := manifest.Page{
+		ID:     "settings",
+		Route:  "/settings",
+		Blocks: manifest.Blocks{View: true},
+	}
+
+	t.Run("action malformed param type", func(t *testing.T) {
+		page := page
+		page.Blocks.Actions = []manifest.Action{{
+			Name:        "Save",
+			Method:      "POST",
+			Route:       "/save/{id:uuid}",
+			Span:        testSourceSpan(6, 1, 6, 32),
+			RouteSpan:   testSourceSpan(6, 17, 6, 34),
+			RouteParams: []manifest.NamedSpan{{Name: "id", Span: testSourceSpan(6, 24, 6, 33)}},
+		}}
+
+		diagnostics := ValidatePage(gowdk.Config{}, page)
+		diagnostic := firstDiagnostic(diagnostics, "malformed_route")
+		if diagnostic == nil {
+			t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
+		}
+		assertSourceSpan(t, diagnostic.Span, 6, 24, 6, 33)
+	})
+
+	t.Run("api malformed param type", func(t *testing.T) {
+		page := page
+		page.Blocks.APIs = []manifest.API{{
+			Name:        "Lookup",
+			Method:      "GET",
+			Route:       "/api/{id:uuid}",
+			Span:        testSourceSpan(9, 1, 9, 31),
+			RouteSpan:   testSourceSpan(9, 16, 9, 31),
+			RouteParams: []manifest.NamedSpan{{Name: "id", Span: testSourceSpan(9, 21, 9, 30)}},
+		}}
+
+		diagnostics := ValidatePage(gowdk.Config{}, page)
+		diagnostic := firstDiagnostic(diagnostics, "malformed_route")
+		if diagnostic == nil {
+			t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
+		}
+		assertSourceSpan(t, diagnostic.Span, 9, 21, 9, 30)
+	})
+
+	t.Run("fragment dynamic route", func(t *testing.T) {
+		page := page
+		page.Blocks.Fragments = []manifest.FragmentEndpoint{{
+			Name:        "Preview",
+			Method:      "GET",
+			Route:       "/preview/{id}",
+			Span:        testSourceSpan(12, 1, 12, 34),
+			RouteSpan:   testSourceSpan(12, 20, 12, 35),
+			RouteParams: []manifest.NamedSpan{{Name: "id", Span: testSourceSpan(12, 29, 12, 33)}},
+		}}
+
+		diagnostics := ValidatePage(gowdk.Config{}, page)
+		diagnostic := firstDiagnostic(diagnostics, "fragment_dynamic_route")
+		if diagnostic == nil {
+			t.Fatalf("Missing fragment_dynamic_route diagnostic: %#v", diagnostics)
+		}
+		assertSourceSpan(t, diagnostic.Span, 12, 29, 12, 33)
+	})
 }
 
 func TestValidatePageRejectsRevalidateWithoutCache(t *testing.T) {
@@ -3829,6 +3908,13 @@ func assertSourceSpan(t *testing.T, span manifest.SourceSpan, startLine, startCo
 	t.Helper()
 	if span.Start.Line != startLine || span.Start.Column != startColumn || span.End.Line != endLine || span.End.Column != endColumn {
 		t.Fatalf("unexpected source span: got %#v, want %d:%d-%d:%d", span, startLine, startColumn, endLine, endColumn)
+	}
+}
+
+func testSourceSpan(startLine, startColumn, endLine, endColumn int) manifest.SourceSpan {
+	return manifest.SourceSpan{
+		Start: manifest.SourcePosition{Line: startLine, Column: startColumn},
+		End:   manifest.SourcePosition{Line: endLine, Column: endColumn},
 	}
 }
 

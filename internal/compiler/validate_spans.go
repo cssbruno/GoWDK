@@ -62,6 +62,26 @@ func spanForName(spans []manifest.NamedSpan, name string, fallback manifest.Sour
 	return fallback
 }
 
+func spanForNameOccurrence(spans []manifest.NamedSpan, name string, occurrence int, fallback manifest.SourceSpan) manifest.SourceSpan {
+	if occurrence <= 1 {
+		return spanForName(spans, name, fallback)
+	}
+	seen := 0
+	for _, item := range spans {
+		if item.Name != name {
+			continue
+		}
+		seen++
+		if seen == occurrence {
+			if hasSpan(item.Span) {
+				return item.Span
+			}
+			return fallback
+		}
+	}
+	return spanForName(spans, name, fallback)
+}
+
 func hasSpan(span manifest.SourceSpan) bool {
 	return span.Start.Line > 0 && span.Start.Column > 0 && span.End.Line > 0 && span.End.Column > 0
 }

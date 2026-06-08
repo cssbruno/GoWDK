@@ -353,13 +353,17 @@ type routeInfo struct {
 }
 
 type routeIssue struct {
-	Code    string
-	Message string
-	Param   string
+	Code            string
+	Message         string
+	Param           string
+	ParamOccurrence int
 }
 
 func routeIssueSpan(issue routeIssue, routeSpan manifest.SourceSpan, paramSpans []manifest.NamedSpan) manifest.SourceSpan {
 	if issue.Param != "" {
+		if issue.ParamOccurrence > 1 {
+			return spanForNameOccurrence(paramSpans, issue.Param, issue.ParamOccurrence, routeSpan)
+		}
 		return spanForName(paramSpans, issue.Param, routeSpan)
 	}
 	return routeSpan
@@ -413,7 +417,7 @@ func parseRoute(route string) (routeInfo, []routeIssue) {
 	rawSegments := strings.Split(strings.TrimPrefix(route, "/"), "/")
 	segments := make([]string, 0, len(rawSegments))
 	params := make([]string, 0, len(rawSegments))
-	seenParams := map[string]bool{}
+	paramCounts := map[string]int{}
 	for _, segment := range rawSegments {
 		switch {
 		case segment == "":
@@ -450,15 +454,16 @@ func parseRoute(route string) (routeInfo, []routeIssue) {
 				})
 				continue
 			}
-			if seenParams[param] {
+			paramCounts[param]++
+			if paramCounts[param] > 1 {
 				issues = append(issues, routeIssue{
-					Code:    "duplicate_route_param",
-					Message: fmt.Sprintf("route %q repeats route parameter %q", route, param),
-					Param:   param,
+					Code:            "duplicate_route_param",
+					Message:         fmt.Sprintf("route %q repeats route parameter %q", route, param),
+					Param:           param,
+					ParamOccurrence: paramCounts[param],
 				})
 				continue
 			}
-			seenParams[param] = true
 			params = append(params, param)
 			segments = append(segments, "{}")
 		default:

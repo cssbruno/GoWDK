@@ -52,6 +52,8 @@ jobs:
             --no-dependencies \
             --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} \
             --baseImagesUrl https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}
+          version="$(node -e 'process.stdout.write(require("./package.json").version)')"
+          test -f "gowdk-vscode-${version}.vsix"
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
@@ -70,9 +72,11 @@ jobs:
             exit 1
           fi
 
+          version="$(node -e 'process.stdout.write(require("./package.json").version)')"
           publish_args=(
             publish
             --pat "$VSCE_PAT"
+            --packagePath "gowdk-vscode-${version}.vsix"
             --baseContentUrl "https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}"
             --baseImagesUrl "https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}"
           )

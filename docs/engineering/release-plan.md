@@ -536,19 +536,19 @@ Every 0.x minor release must have:
 
 ## Release Trust
 
-- [ ] Keep `go test ./...` in the release gate.
-- [ ] Keep `govulncheck ./...` in the release gate.
-- [ ] Keep `go build ./cmd/gowdk` in the release gate.
-- [ ] Keep Node syntax checks and VS Code Node tests.
-- [ ] Keep example `check`, `manifest`, `sitemap`, and `routes` gates.
-- [ ] Add `gowdk version --json` check after building artifacts.
-- [ ] Add smoke execution for each OS/arch artifact where possible.
-- [ ] Add generated CLI artifact checksum verification after checksum file
+- [x] Keep `go test ./...` in the release gate.
+- [x] Keep `govulncheck ./...` in the release gate.
+- [x] Keep `go build ./cmd/gowdk` in the release gate.
+- [x] Keep Node syntax checks and VS Code Node tests.
+- [x] Keep example `check`, `manifest`, `sitemap`, and `routes` gates.
+- [x] Add `gowdk version --json` check after building artifacts.
+- [x] Add smoke execution for each OS/arch artifact where possible.
+- [x] Add generated CLI artifact checksum verification after checksum file
   generation.
 - [ ] Add generated binary HTTP smoke tests for static, SSR, action POST, API
   GET, fragment, hybrid, and WASM build paths.
-- [ ] Add VS Code `.vsix` package existence check.
-- [ ] Add release body validation for experimental warning, not-production-ready
+- [x] Add VS Code `.vsix` package existence check.
+- [x] Add release body validation for experimental warning, not-production-ready
   warning, known gaps, and checksum instructions.
 - [ ] Add docs link checker.
 - [ ] Add Markdown lint.
@@ -557,27 +557,27 @@ Every 0.x minor release must have:
 - [ ] Add `gofmt` check.
 - [ ] Add `go vet ./...`.
 - [ ] Add dependency, license, module graph, and dependency-size reports.
-- [ ] Add security policy consistency check.
+- [x] Add security policy consistency check.
 - [ ] Add examples README command consistency check.
-- [ ] Add a "no migration docs" check if this becomes a hard policy.
+- [x] Add a "no migration docs" check if this becomes a hard policy.
 
 ## Toolchain And Dependency Policy
 
 - [ ] Add `toolchain go1.26.4` if stronger local toolchain behavior is desired.
 - [ ] Add `gowdk doctor` checks for Go version and required local tools.
-- [ ] Add CI and release checks that print `go version` and `go env GOVERSION`.
-- [ ] Document exact Go version requirements and future patch compatibility.
-- [ ] Explain `govulncheck` in release docs.
-- [ ] Keep `docs/engineering/dependency-policy.md` current.
-- [ ] Classify dependencies as compiler core, runtime core, optional HTTP
+- [x] Add CI and release checks that print `go version` and `go env GOVERSION`.
+- [x] Document exact Go version requirements and future patch compatibility.
+- [x] Explain `govulncheck` in release docs.
+- [x] Keep `docs/engineering/dependency-policy.md` current.
+- [x] Classify dependencies as compiler core, runtime core, optional HTTP
   adapters, optional broker adapters, optional realtime adapters, optional
   CSS/tool adapters, or test/dev only.
-- [ ] Explain why Gin, Echo, Fiber, Redis, NATS, and WebSocket packages are
+- [x] Explain why Gin, Echo, Fiber, Redis, NATS, and WebSocket packages are
   direct dependencies, or move them to optional submodules.
 - [ ] Add CI checks for new direct dependencies.
 - [ ] Add dependency diff, license report, vulnerability report, and module
   graph report to releases.
-- [ ] Enforce no mandatory npm and no build-time downloads.
+- [x] Enforce no mandatory npm and no build-time downloads.
 - [ ] Test that generated code does not import Gin, Echo, Fiber, Redis, or NATS
   by default.
 
@@ -991,14 +991,14 @@ Every 0.x minor release must have:
 
 Start with these in order:
 
-- [ ] Verify release metadata shows experimental/pre-release correctly.
-- [ ] Open public issue backlog.
-- [ ] Add `0.x Hardening` project board.
-- [ ] Update website install docs for release binaries.
-- [ ] Sync root `SECURITY.md` with deeper security baseline.
-- [ ] Keep dependency policy current and add missing enforcement.
+- [x] Verify release metadata shows experimental/pre-release correctly.
+- [x] Open public issue backlog.
+- [x] Add `0.x Hardening` project board.
+- [x] Update website install docs for release binaries.
+- [x] Sync root `SECURITY.md` with deeper security baseline.
+- [x] Keep dependency policy current and add missing enforcement.
 - [ ] Add license/dependency scan to CI.
-- [ ] Add release note template.
+- [x] Add release note template.
 - [ ] Add `gowdk doctor`.
 - [ ] Add `gowdk explain`.
 - [ ] Add `gowdk inspect go-bindings`.
@@ -1024,22 +1024,22 @@ Start with these in order:
 
 ## Do Not Add For Now
 
-- [ ] Do not add migration guides.
-- [ ] Do not add "GOWDK vs X" docs as core positioning.
-- [ ] Do not make SSR default.
-- [ ] Do not make full-page hydration default.
-- [ ] Do not make browser JavaScript the app contract.
-- [ ] Do not generate user domain logic.
-- [ ] Do not generate auth or business validation logic.
-- [ ] Do not auto-discover endpoints by function name.
-- [ ] Do not scan Gin/Echo/Fiber route registrations as route truth.
-- [ ] Do not require npm.
-- [ ] Do not require Tailwind.
-- [ ] Do not require Redis.
-- [ ] Do not require NATS.
-- [ ] Do not require Gin, Echo, or Fiber.
-- [ ] Do not download optional tools during builds.
-- [ ] Do not hide partial features behind confident wording.
+- [x] Do not add migration guides.
+- [x] Do not add "GOWDK vs X" docs as core positioning.
+- [x] Do not make SSR default.
+- [x] Do not make full-page hydration default.
+- [x] Do not make browser JavaScript the app contract.
+- [x] Do not generate user domain logic.
+- [x] Do not generate auth or business validation logic.
+- [x] Do not auto-discover endpoints by function name.
+- [x] Do not scan Gin/Echo/Fiber route registrations as route truth.
+- [x] Do not require npm.
+- [x] Do not require Tailwind.
+- [x] Do not require Redis.
+- [x] Do not require NATS.
+- [x] Do not require Gin, Echo, or Fiber.
+- [x] Do not download optional tools during builds.
+- [x] Do not hide partial features behind confident wording.
 - [ ] Do not add more syntax without diagnostics, tests, docs, and examples.
 
 ## Direction

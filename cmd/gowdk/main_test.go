@@ -18,6 +18,27 @@ import (
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
+func TestVersionCommandSupportsJSON(t *testing.T) {
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"version", "--json"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	var decoded struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("expected JSON version output, got %q: %v", stdout, err)
+	}
+	if decoded.Version != version {
+		t.Fatalf("expected version %q, got %q", version, decoded.Version)
+	}
+}
+
 func TestBuildCommandWritesIndexHTML(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")

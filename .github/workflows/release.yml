@@ -38,6 +38,11 @@ jobs:
 
       - name: Verify release gates
         run: |
+          go version
+          go env GOVERSION
+          scripts/check-release-policy.sh
+          scripts/validate-release-notes.sh .github/release-note-template.md
+          scripts/validate-release-notes.sh docs/engineering/release-notes-v0.2.md
           go test ./...
           go run golang.org/x/vuln/cmd/govulncheck@latest ./...
           go build ./cmd/gowdk
@@ -94,12 +99,12 @@ jobs:
           GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/gowdk-darwin-amd64 ./cmd/gowdk
           GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/gowdk-darwin-arm64 ./cmd/gowdk
           GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/gowdk-windows-amd64.exe ./cmd/gowdk
+          ./dist/gowdk-linux-amd64 version --json | grep -F '"version":'
 
       - name: Package VS Code extension
         run: |
-          npm install -g @vscode/vsce
           node scripts/sync-version.js
-          vsce package --no-dependencies --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} --baseImagesUrl https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}
+          node scripts/package-vsix.js
         working-directory: editors/vscode
 
       - name: Collect VS Code package
@@ -109,6 +114,7 @@ jobs:
       - name: Generate checksums
         run: |
           (cd dist && sha256sum * > checksums.txt)
+          (cd dist && sha256sum -c checksums.txt)
 
       - name: Attest release artifacts
         uses: actions/attest@v4
@@ -125,6 +131,9 @@ jobs:
             notes=".github/release-note-template.md"
           fi
           echo "path=$notes" >> "$GITHUB_OUTPUT"
+
+      - name: Validate selected release notes
+        run: scripts/validate-release-notes.sh "${{ steps.release_notes.outputs.path }}"
 
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v3

@@ -52,7 +52,7 @@ func run(args []string) error {
 
 	switch args[0] {
 	case "version":
-		fmt.Println(version)
+		return printVersion(args[1:])
 	case "init":
 		return initProject(args[1:])
 	case "tokens":
@@ -92,12 +92,30 @@ func run(args []string) error {
 	return nil
 }
 
+func printVersion(args []string) error {
+	if len(args) == 0 {
+		fmt.Println(version)
+		return nil
+	}
+	if len(args) == 1 && args[0] == "--json" {
+		payload, err := json.MarshalIndent(struct {
+			Version string `json:"version"`
+		}{Version: version}, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(payload))
+		return nil
+	}
+	return errors.New("usage: gowdk version [--json]")
+}
+
 func usage() {
 	fmt.Println("gowdk " + version)
 	fmt.Println("compile-first Go web kit: build-time output, backend actions, SSR optional")
 	fmt.Println()
 	fmt.Println("Commands:")
-	fmt.Println("  version                  print CLI version")
+	fmt.Println("  version [--json]         print CLI version")
 	fmt.Println("  init [--force] [--tests] [--template <site|minimal>] [dir] scaffold a starter GOWDK project")
 	fmt.Println("  tokens <file.gwdk>       print language tokens")
 	fmt.Println("  fmt [--write] <files>    format .gwdk files")

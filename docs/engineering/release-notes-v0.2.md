@@ -18,6 +18,13 @@ tooling contracts may change before a stable release.
 - Public issue templates for compiler, generated output, runtime, docs,
   examples, language, addon, and non-sensitive security hardening reports.
 - Release workflow support for version-specific release notes files.
+- Automated release-note validation for the release template, v0.2 draft notes,
+  and the selected release body in the release workflow.
+- Published artifact smoke workflow for Linux, macOS Intel, macOS ARM, and
+  Windows CLI artifacts.
+- Release policy guard script for no production-ready claim, no hidden mandatory
+  npm install in CI/release packaging, and draft/pre-release release metadata.
+- `gowdk version --json` for release workflow verification.
 - `v0.1.5` GitHub release metadata corrected to pre-release with an
   experimental/not-production-ready warning at the top of the release body.
 - Public hardening labels from `docs/engineering/release-plan.md`.
@@ -45,9 +52,6 @@ tooling contracts may change before a stable release.
 
 ## Planned
 
-- Automated release body validation for experimental warning,
-  not-production-ready warning, known gaps, checksum instructions, and
-  attestation instructions.
 - Broader release smoke tests for generated app HTTP behavior.
 - Automated docs link checking and Markdown lint.
 

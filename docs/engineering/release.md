@@ -10,8 +10,9 @@ claim. It identifies the current development line while the compiler, generated
 runtime, and docs continue toward the v0.1 target. Public release notes must
 call the build experimental until the release gates below are satisfied.
 
-Use `docs/engineering/v0.1-release-checklist.md` for the full v0.1 checklist.
-Use `docs/engineering/release-notes-v0.1.md` as the draft v0.1 release notes.
+Use `docs/engineering/v0.2-release-checklist.md` for the current Public Truth
+and Release Trust checklist.
+Use `docs/engineering/release-notes-v0.2.md` as the draft v0.2 release notes.
 Use `docs/engineering/release-plan.md` for the open-ended 0.x hardening
 checklist. It does not make any minor version a production-readiness target.
 Use `.github/release-note-template.md` for future 0.x release bodies.
@@ -61,8 +62,12 @@ below still have to pass before publishing.
 
 ```sh
 go test ./...
+scripts/check-release-policy.sh
+scripts/validate-release-notes.sh .github/release-note-template.md
+scripts/validate-release-notes.sh docs/engineering/release-notes-v0.2.md
 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 go build ./cmd/gowdk
+./gowdk version --json
 node --check editors/vscode/extension.js
 node --check editors/vscode/extension-core.js
 node --test editors/vscode/*.test.js
@@ -81,6 +86,13 @@ for the current CLI line or push the corresponding tag:
 gh workflow run release.yml -f version=v0.1.5
 ```
 
+After the draft release is reviewed and published, smoke the published
+artifacts for each supported OS artifact:
+
+```sh
+gh workflow run release-smoke.yml -f version=v0.1.5
+```
+
 ## Artifacts
 
 - `gowdk-linux-amd64`
@@ -89,7 +101,7 @@ gh workflow run release.yml -f version=v0.1.5
 - `gowdk-darwin-arm64`
 - `gowdk-windows-amd64.exe`
 - `checksums.txt`
-- `gowdk-vscode-0.1.9.vsix`
+- `gowdk-vscode-0.2.0.vsix`
 
 ## Install Script
 
@@ -120,8 +132,8 @@ gh attestation verify <artifact> -R <owner>/<repo>
 
 ## Extension Publishing
 
-The release workflow packages the extension into `gowdk-vscode-0.1.9.vsix` for
-the current VS Code extension release line.
+The release workflow packages the extension into a `.vsix` named from
+`editors/vscode/package.json`, currently `gowdk-vscode-0.2.0.vsix`.
 Marketplace publishing is handled by the `Publish VS Code Extension` workflow.
 It is manual-only so CLI/runtime releases do not accidentally republish an
 extension version that already exists on the Marketplace.
@@ -134,6 +146,8 @@ Before using the workflow:
 3. Add the token as the repository secret `VSCE_PAT`.
 4. Update `editors/vscode/package.json` to a version that does not already exist
    on the Marketplace.
+5. Decide whether the extension should publish as a Marketplace pre-release.
+   The workflow has a `pre_release` input for that path.
 
 Manual publish:
 
@@ -143,6 +157,7 @@ gh workflow run vscode-extension-publish.yml
 
 The workflow verifies the extension, packages a `.vsix`, uploads that package as
 a workflow artifact, then runs `vsce publish --pat "$VSCE_PAT"`. Use the
-workflow's `pre_release` input for Marketplace pre-release publishing. The
-current Marketplace extension version `0.1.9` already exists, so publish only
-after intentionally bumping `editors/vscode/package.json`.
+workflow's `pre_release` input for Marketplace pre-release publishing. The CLI
+and extension versions can differ; release notes should say whether the `.vsix`
+is bundled only as a release artifact, manually published to the Marketplace, or
+published as a Marketplace pre-release.

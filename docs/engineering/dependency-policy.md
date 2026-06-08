@@ -15,10 +15,10 @@ Document major dependency decisions in `docs/engineering/decisions/`.
 
 ## Release Review Gates
 
-Run these gates before release packaging. They are manual until CI grows a
-dedicated dependency review job.
+Run these gates before release packaging.
 
 ```sh
+scripts/check-release-policy.sh
 go list -m all
 go list -m -json all
 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
@@ -38,3 +38,20 @@ output.
 
 Add automated dependency and license checks to CI before claiming production
 readiness.
+
+## Current Dependency Classification
+
+- Compiler core: standard library plus repository packages under `internal/`.
+- Runtime core: standard library plus repository packages under `runtime/`.
+- Optional HTTP adapters: `runtime/adapters/echo`, `runtime/adapters/gin`, and
+  `runtime/adapters/fiber`; generated code remains `net/http` first by default.
+- Optional broker/realtime adapters: Redis Streams, NATS, SSE, and WebSocket
+  packages under `runtime/contracts`; applications opt in.
+- Optional CSS/tool adapters: `addons/tailwind`; it shells out to a user-owned
+  Tailwind executable and does not download Tailwind during normal builds.
+- Test/dev only: workflow Node checks and VS Code packaging scripts.
+
+`scripts/check-release-policy.sh` is the current CI guard for the strongest
+policy invariants: no production-ready claim, no required npm install in CI or
+release packaging, draft/pre-release release metadata, and no hidden optional
+tool download in normal gates.

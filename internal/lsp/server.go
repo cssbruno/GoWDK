@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 
 	"github.com/cssbruno/gowdk"
 )
@@ -36,13 +35,8 @@ const (
 )
 
 var (
-	simpleInterpolationCompletionPattern = regexp.MustCompile(`\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}`)
-	bindingCompletionPattern             = regexp.MustCompile(`g:bind:(?:value|checked)\s*=\s*\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}`)
-	assignmentCompletionPattern          = regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\+\+|--)`)
-	endpointMigrationPattern             = regexp.MustCompile("use `((?:act|api) [^`]+)` and move behavior to Go")
-	useAliasPattern                      = regexp.MustCompile("Add `use ([A-Za-z_][A-Za-z0-9_]*) \"<package>\"`")
-	semanticTokenTypes                   = []string{"decorator", "variable", "string", "operator"}
-	semanticTokenTypeIndex               = map[string]int{"decorator": 0, "variable": 1, "string": 2, "operator": 3}
+	semanticTokenTypes     = []string{"decorator", "variable", "string", "operator"}
+	semanticTokenTypeIndex = map[string]int{"decorator": 0, "variable": 1, "string": 2, "operator": 3}
 )
 
 // Server handles one LSP session.

@@ -120,11 +120,10 @@ func (server *Server) codeActions(params codeActionParams) []codeAction {
 }
 
 func endpointMigrationCodeAction(uri string, item diagnostic) (codeAction, bool) {
-	match := endpointMigrationPattern.FindStringSubmatch(item.Message)
-	if match == nil {
+	replacement, ok := endpointMigrationReplacement(item.Message)
+	if !ok {
 		return codeAction{}, false
 	}
-	replacement := match[1]
 	return codeAction{
 		Title:       "Replace old endpoint block header",
 		Kind:        "quickfix",
@@ -139,11 +138,10 @@ func endpointMigrationCodeAction(uri string, item diagnostic) (codeAction, bool)
 }
 
 func missingUseCodeAction(uri string, source string, item diagnostic) (codeAction, bool) {
-	match := useAliasPattern.FindStringSubmatch(item.Message)
-	if match == nil {
+	alias, ok := missingUseAlias(item.Message)
+	if !ok {
 		return codeAction{}, false
 	}
-	alias := match[1]
 	insert := useInsertionPosition(source, item.Range.Start)
 	return codeAction{
 		Title:       `Add use ` + alias + ` "<package>"`,
@@ -156,6 +154,42 @@ func missingUseCodeAction(uri string, source string, item diagnostic) (codeActio
 			}},
 		}},
 	}, true
+}
+
+func endpointMigrationReplacement(message string) (string, bool) {
+	start := strings.Index(message, "use `")
+	if start < 0 {
+		return "", false
+	}
+	start += len("use `")
+	end := strings.IndexByte(message[start:], '`')
+	if end < 0 {
+		return "", false
+	}
+	replacement := message[start : start+end]
+	if strings.HasPrefix(replacement, "act ") || strings.HasPrefix(replacement, "api ") {
+		if strings.Contains(message[start+end+1:], "and move behavior to Go") {
+			return replacement, true
+		}
+	}
+	return "", false
+}
+
+func missingUseAlias(message string) (string, bool) {
+	start := strings.Index(message, "Add `use ")
+	if start < 0 {
+		return "", false
+	}
+	start += len("Add `use ")
+	end := strings.Index(message[start:], ` "<package>"`)
+	if end < 0 {
+		return "", false
+	}
+	alias := message[start : start+end]
+	if !isLSPIdentifier(alias) {
+		return "", false
+	}
+	return alias, true
 }
 
 func useInsertionPosition(source string, fallback position) position {

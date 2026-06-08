@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -48,7 +49,18 @@ type Handler struct {
 	Metrics    *Metrics
 	SSRExact   HandlerFunc
 	SSRDynamic HandlerFunc
+
+	// RequestTimeout bounds how long a single request's handler context lives.
+	// When > 0, the request context is cancelled after the deadline so slow
+	// user Go (actions, contracts, SSR) sees ctx.Done() instead of running
+	// unbounded and pinning a goroutine. Zero disables the deadline.
+	RequestTimeout time.Duration
 }
+
+// DefaultRequestTimeout is the per-request handler deadline applied to
+// generated apps. It sits below the server WriteTimeout (30s) so handler
+// context cancellation fires before the connection write deadline.
+const DefaultRequestTimeout = 25 * time.Second
 
 // InstanceIdentity reads GOWDK identity settings from the environment.
 func InstanceIdentity() Identity {
@@ -85,6 +97,11 @@ func LoadAssetManifest(root fs.FS) asset.Manifest {
 func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	metrics := handler.Metrics
 	metrics.recordRequest()
+	if handler.RequestTimeout > 0 {
+		ctx, cancel := context.WithTimeout(request.Context(), handler.RequestTimeout)
+		defer cancel()
+		request = request.WithContext(ctx)
+	}
 	handler.writeIdentityHeaders(response)
 	if len(handler.ErrorPages.NotFound) > 0 || len(handler.ErrorPages.InternalServerError) > 0 || len(handler.ErrorPages.Custom) > 0 {
 		request = request.WithContext(withErrorPages(request.Context(), handler.ErrorPages))

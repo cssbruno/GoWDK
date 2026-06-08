@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
@@ -96,6 +97,8 @@ func (server *Server) workspaceComponentDefinitions(doc document) map[string]com
 	if root == "" {
 		return definitions
 	}
+	var paths []string
+	payloads := map[string]string{}
 	_ = filepath.WalkDir(root, func(filePath string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -119,13 +122,22 @@ func (server *Server) workspaceComponentDefinitions(doc document) map[string]com
 		if lang.ClassifySource(filePath, payload) != lang.FileKindComponent {
 			return nil
 		}
-		component, diagnostics := lang.ParseComponentSource(filePath, payload)
-		if diagnostics.HasErrors() || component.Name == "" {
-			return nil
+		paths = append(paths, filePath)
+		payloads[filePath] = string(payload)
+		return nil
+	})
+	if len(paths) == 0 {
+		return definitions
+	}
+	app, _ := lang.ParseBuildFiles(paths)
+	ir := gwdkanalysis.BuildIR(server.config, app)
+	for _, component := range ir.Components {
+		if component.Name == "" {
+			continue
 		}
 		definition := componentDefinition{
-			URI:     fileURI(filePath),
-			Text:    string(payload),
+			URI:     fileURI(component.Source),
+			Text:    payloads[component.Source],
 			Package: component.Package,
 			Name:    component.Name,
 			Span:    component.Span,
@@ -134,8 +146,7 @@ func (server *Server) workspaceComponentDefinitions(doc document) map[string]com
 		if component.Package == "" {
 			definitions[componentDefinitionKey("", component.Name)] = definition
 		}
-		return nil
-	})
+	}
 	return definitions
 }
 

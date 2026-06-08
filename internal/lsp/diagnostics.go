@@ -18,7 +18,7 @@ func diagnosticFromLang(item lang.Diagnostic, source string) diagnostic {
 		Severity: severity,
 		Code:     item.Code,
 		Source:   "gowdk",
-		Message:  item.Message,
+		Message:  lang.RedactMessage(item.Message),
 	}
 }
 

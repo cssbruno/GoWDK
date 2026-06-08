@@ -46,6 +46,7 @@ func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 	ciText := readWorkflow(t, "../../.github/workflows/ci.yml")
 	releaseText := readWorkflow(t, "../../.github/workflows/release.yml")
 	smokeText := readWorkflow(t, "../../.github/workflows/release-smoke.yml")
+	cacheText := readWorkflow(t, "../../.github/workflows/cache-maintenance.yml")
 
 	for workflow, text := range map[string]string{
 		"ci.yml":      ciText,
@@ -91,6 +92,18 @@ func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 	} {
 		if !strings.Contains(smokeText, expected) {
 			t.Fatalf("expected %q in release-smoke.yml:\n%s", expected, smokeText)
+		}
+	}
+
+	for _, expected := range []string{
+		"workflow_dispatch",
+		"schedule:",
+		"actions: write",
+		"scripts/prune-github-caches.sh",
+		"GOWDK_CACHE_PRUNE_KEEP",
+	} {
+		if !strings.Contains(cacheText, expected) {
+			t.Fatalf("expected %q in cache-maintenance.yml:\n%s", expected, cacheText)
 		}
 	}
 }

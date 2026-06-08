@@ -29,6 +29,27 @@ the fastest pre-handoff gate.
   `gowdk.config.go`. Any smoke command run from another directory must pass
   `--config <file>`.
 
+## Cache Maintenance
+
+GitHub Actions caching is enabled for Go through `actions/setup-go` in CI and
+release packaging. Keep those caches because they reduce module and build-cache
+work across repeated runs.
+
+GitHub-managed CodeQL default setup also creates per-commit overlay database
+caches. Those entries are safe to regenerate and can quickly fill the repository
+cache quota. `.github/workflows/cache-maintenance.yml` runs weekly and can be
+triggered manually to keep only the newest CodeQL overlay caches:
+
+```sh
+gh workflow run cache-maintenance.yml
+```
+
+For local one-off cleanup with a GitHub token:
+
+```sh
+GOWDK_CACHE_PRUNE_KEEP=20 scripts/prune-github-caches.sh cssbruno/GoWDK
+```
+
 ## Future Release Jobs
 
 Release packaging lives in `.github/workflows/release.yml`. It builds the

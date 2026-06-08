@@ -55,6 +55,11 @@ func TestMatchPattern(t *testing.T) {
 		{`a{2,}`, "aaaa", true},
 		{`a{2,3}`, "a", false},
 		{`file[0-9][.]txt`, "file7.txt", true},
+		{`(?:cat|dog)-\d+`, "dog-42", true},
+		{`(?:cat|dog)-\d+`, "bird-42", false},
+		{`\w+@\w+[.]\w{2,4}`, "me@example.dev", true},
+		{`[\dA-F]+`, "19AF", true},
+		{`[\dA-F]+`, "19AG", false},
 	}
 
 	for _, test := range tests {
@@ -69,7 +74,7 @@ func TestMatchPattern(t *testing.T) {
 }
 
 func TestValidatePatternRejectsUnsupportedOperators(t *testing.T) {
-	if err := ValidatePattern(`(a|b)`); err == nil {
-		t.Fatal("expected unsupported alternation/group pattern to fail")
+	if err := ValidatePattern(`(?=a)`); err == nil {
+		t.Fatal("expected unsupported lookahead pattern to fail")
 	}
 }

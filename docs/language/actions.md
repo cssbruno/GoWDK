@@ -115,10 +115,11 @@ is set. Generated validation failures return HTTP 422 for normal requests; for
 partial requests with `X-GOWDK-Partial` and `X-GOWDK-Target`, generated handlers
 return an escaped `runtime/response.ValidationFragment` for the target instead.
 Generated `pattern` checks use GOWDK's anchored form-pattern subset: literals,
-`.`, character classes/ranges, escapes, and `*`, `+`, `?`, `{n}`, `{n,}`, and
-`{n,m}` quantifiers. GOWDK does not run user-defined domain validation or
-generate general fragment routes. Handlers can return redirects, fragments,
-HTML, or JSON through `runtime/response.Response`.
+`.`, character classes/ranges, grouping, alternation, common escapes such as
+`\d`, `\w`, and `\s`, and `*`, `+`, `?`, `{n}`, `{n,}`, and `{n,m}`
+quantifiers. GOWDK does not run user-defined domain validation or generate
+general fragment routes. Handlers can return redirects, fragments, HTML, or JSON
+through `runtime/response.Response`.
 
 ## Production Notes
 

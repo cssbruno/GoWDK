@@ -90,6 +90,7 @@ type Page struct {
 	Guards      []string
 	CSS         []string
 	JS          []string
+	InlineJS    []manifest.InlineScript
 	Imports     []Import
 	Uses        []Use
 	Stores      []Store
@@ -148,6 +149,7 @@ type PageSpans struct {
 	Guard       []manifest.NamedSpan
 	CSS         []manifest.NamedSpan
 	JS          []manifest.NamedSpan
+	InlineJS    []manifest.NamedSpan
 	RouteParams []manifest.NamedSpan
 }
 
@@ -224,6 +226,7 @@ type Component struct {
 	Uses        []Use
 	CSS         []string
 	JS          []string
+	InlineJS    []manifest.InlineScript
 	Assets      []string
 	Props       []Prop
 	PropsType   GoRef
@@ -238,9 +241,10 @@ type Component struct {
 }
 
 type ComponentSpans struct {
-	CSS    []manifest.NamedSpan
-	JS     []manifest.NamedSpan
-	Assets []manifest.NamedSpan
+	CSS      []manifest.NamedSpan
+	JS       []manifest.NamedSpan
+	InlineJS []manifest.NamedSpan
+	Assets   []manifest.NamedSpan
 }
 
 type StateContract struct {
@@ -439,6 +443,7 @@ type Asset struct {
 	Package    string
 	Source     string
 	Path       string
+	Inline     string
 	Name       string
 	UseAlias   string
 	UsePackage string

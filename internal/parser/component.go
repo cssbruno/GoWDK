@@ -23,6 +23,9 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	var clientBody []string
 	inClient := false
 	clientDepth := 0
+	var jsBody []string
+	inJS := false
+	jsDepth := 0
 	var goBlockBody []string
 	inGoBlock := false
 	goBlockDepth := 0
@@ -89,6 +92,31 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			if clientDepth < 1 {
 				return manifest.Component{}, fmt.Errorf("line %d: client block closed unexpectedly", lineNumber)
 			}
+			continue
+		}
+		if inJS {
+			if line == "}" {
+				jsDepth--
+				if jsDepth == 0 {
+					name := manifest.InlineScriptName(len(component.InlineJS))
+					component.InlineJS = append(component.InlineJS, manifest.InlineScript{
+						Name: name,
+						Body: strings.TrimSpace(strings.Join(jsBody, "\n")),
+						Span: component.Spans.InlineJS[len(component.Spans.InlineJS)-1].Span,
+					})
+					inJS = false
+					jsBody = nil
+					jsDepth = 0
+					continue
+				}
+				jsBody = append(jsBody, rawLine)
+				continue
+			}
+			jsDepth += braceDelta(rawLine)
+			if jsDepth < 1 {
+				return manifest.Component{}, fmt.Errorf("line %d: js block closed unexpectedly", lineNumber)
+			}
+			jsBody = append(jsBody, rawLine)
 			continue
 		}
 		if inView {
@@ -199,6 +227,14 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 		if match := jsPattern.FindStringSubmatch(line); match != nil {
 			component.JS = append(component.JS, match[1])
 			component.Spans.JS = append(component.Spans.JS, manifest.NamedSpan{Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)})
+			continue
+		}
+		if jsBlockPattern.MatchString(line) {
+			span := sourceLineSpan(lineNumber, rawLine)
+			name := manifest.InlineScriptName(len(component.InlineJS))
+			component.Spans.InlineJS = append(component.Spans.InlineJS, manifest.NamedSpan{Name: name, Span: span})
+			inJS = true
+			jsDepth = 1
 			continue
 		}
 		if isMalformedJS(line) {
@@ -337,6 +373,9 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	}
 	if inClient {
 		return manifest.Component{}, fmt.Errorf("client block missing closing }")
+	}
+	if inJS {
+		return manifest.Component{}, fmt.Errorf("js block missing closing }")
 	}
 	if inGoBlock {
 		return manifest.Component{}, fmt.Errorf("go block missing closing }")

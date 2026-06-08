@@ -111,10 +111,11 @@ type GuardRef struct {
 
 // AssetRef is one source-selected asset reference.
 type AssetRef struct {
-	Kind  string
-	Path  string
-	Scope AssetScope
-	Span  manifest.SourceSpan
+	Kind   string
+	Path   string
+	Inline string
+	Scope  AssetScope
+	Span   manifest.SourceSpan
 }
 
 // AssetScope records deterministic owner metadata for scoped CSS and future

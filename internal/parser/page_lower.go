@@ -118,8 +118,14 @@ func lowerPageSyntaxAnnotations(source []byte, ast gwdkast.File, page *manifest.
 		page.Spans.CSS = append(page.Spans.CSS, manifest.NamedSpan{Name: css.Path, Span: css.Span})
 	}
 	for _, script := range ast.JS {
-		page.JS = append(page.JS, script.Path)
-		page.Spans.JS = append(page.Spans.JS, manifest.NamedSpan{Name: script.Path, Span: script.Span})
+		if strings.TrimSpace(script.Path) != "" {
+			page.JS = append(page.JS, script.Path)
+			page.Spans.JS = append(page.Spans.JS, manifest.NamedSpan{Name: script.Path, Span: script.Span})
+			continue
+		}
+		name := manifest.InlineScriptName(len(page.InlineJS))
+		page.InlineJS = append(page.InlineJS, manifest.InlineScript{Name: name, Body: script.Inline, Span: script.Span})
+		page.Spans.InlineJS = append(page.Spans.InlineJS, manifest.NamedSpan{Name: name, Span: script.Span})
 	}
 	for _, annotation := range ast.Annotations {
 		if pageAnnotationLoweredFromAST(ast, annotation.Name) {

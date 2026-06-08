@@ -53,8 +53,14 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 		page.Spans.CSS = append(page.Spans.CSS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
 	}
 	for _, asset := range ast.JS {
-		page.JS = append(page.JS, asset.Path)
-		page.Spans.JS = append(page.Spans.JS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+		if strings.TrimSpace(asset.Path) != "" {
+			page.JS = append(page.JS, asset.Path)
+			page.Spans.JS = append(page.Spans.JS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+			continue
+		}
+		name := manifest.InlineScriptName(len(page.InlineJS))
+		page.InlineJS = append(page.InlineJS, manifest.InlineScript{Name: name, Body: asset.Inline, Span: asset.Span})
+		page.Spans.InlineJS = append(page.Spans.InlineJS, manifest.NamedSpan{Name: name, Span: asset.Span})
 	}
 
 	for _, annotation := range ast.Annotations {
@@ -131,8 +137,14 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 		component.Spans.CSS = append(component.Spans.CSS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
 	}
 	for _, asset := range ast.JS {
-		component.JS = append(component.JS, asset.Path)
-		component.Spans.JS = append(component.Spans.JS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+		if strings.TrimSpace(asset.Path) != "" {
+			component.JS = append(component.JS, asset.Path)
+			component.Spans.JS = append(component.Spans.JS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+			continue
+		}
+		name := manifest.InlineScriptName(len(component.InlineJS))
+		component.InlineJS = append(component.InlineJS, manifest.InlineScript{Name: name, Body: asset.Inline, Span: asset.Span})
+		component.Spans.InlineJS = append(component.Spans.InlineJS, manifest.NamedSpan{Name: name, Span: asset.Span})
 	}
 	for _, asset := range ast.Assets {
 		component.Assets = append(component.Assets, asset.Path)

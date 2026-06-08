@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/coder/websocket v1.8.14
+	github.com/evanw/esbuild v0.28.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/labstack/echo/v5 v5.1.1

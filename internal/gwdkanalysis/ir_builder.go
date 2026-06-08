@@ -129,6 +129,22 @@ func (builder *irBuilder) addPageAssets(page manifest.Page) {
 			Span:    spanForName(page.Spans.JS, script, page.Spans.Page),
 		})
 	}
+	for index, script := range page.InlineJS {
+		name := script.Name
+		if name == "" {
+			name = manifest.InlineScriptName(index)
+		}
+		builder.program.Assets = append(builder.program.Assets, gwdkir.Asset{
+			Kind:    gwdkir.AssetJS,
+			OwnerID: page.ID,
+			Package: page.Package,
+			Source:  page.Source,
+			Path:    name,
+			Inline:  script.Body,
+			Name:    "inline",
+			Span:    script.Span,
+		})
+	}
 }
 
 func (builder *irBuilder) addPageEndpoints(page manifest.Page) {
@@ -241,6 +257,22 @@ func (builder *irBuilder) addComponentAssets(component manifest.Component) {
 			Source:  component.Source,
 			Path:    script,
 			Span:    spanForName(component.Spans.JS, script, component.Span),
+		})
+	}
+	for index, script := range component.InlineJS {
+		name := script.Name
+		if name == "" {
+			name = manifest.InlineScriptName(index)
+		}
+		builder.program.Assets = append(builder.program.Assets, gwdkir.Asset{
+			Kind:    gwdkir.AssetJS,
+			OwnerID: component.Name,
+			Package: component.Package,
+			Source:  component.Source,
+			Path:    name,
+			Inline:  script.Body,
+			Name:    "inline",
+			Span:    script.Span,
 		})
 	}
 }

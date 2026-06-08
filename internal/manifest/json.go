@@ -37,6 +37,7 @@ type pageJSON struct {
 	Guard           []string               `json:"guard,omitempty"`
 	CSS             []string               `json:"css,omitempty"`
 	JS              []string               `json:"js,omitempty"`
+	InlineJS        []string               `json:"inlineJS,omitempty"`
 	Blocks          blocksJSON             `json:"blocks"`
 	Actions         []actionJSON           `json:"actions,omitempty"`
 	APIs            []apiJSON              `json:"apis,omitempty"`
@@ -56,6 +57,7 @@ type componentJSON struct {
 	Uses      []useJSON    `json:"uses,omitempty"`
 	CSS       []string     `json:"css,omitempty"`
 	JS        []string     `json:"js,omitempty"`
+	InlineJS  []string     `json:"inlineJS,omitempty"`
 	Assets    []string     `json:"assets,omitempty"`
 	Props     []propJSON   `json:"props,omitempty"`
 	PropsType *goTypeJSON  `json:"propsType,omitempty"`
@@ -224,6 +226,7 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 			Guard:           page.Guard,
 			CSS:             page.CSS,
 			JS:              page.JS,
+			InlineJS:        inlineScriptNames(page.InlineJS),
 			Blocks:          blocksJSONFor(page),
 			Actions:         actionsJSON(page.Blocks.Actions),
 			APIs:            apisJSON(page.Blocks.APIs),
@@ -486,6 +489,7 @@ func componentsJSON(components []Component) map[string]componentJSON {
 			Uses:      usesJSON(component.Uses),
 			CSS:       append([]string(nil), component.CSS...),
 			JS:        append([]string(nil), component.JS...),
+			InlineJS:  inlineScriptNames(component.InlineJS),
 			Assets:    append([]string(nil), component.Assets...),
 			Props:     propsJSON(component.Props),
 			PropsType: goTypeRefJSON(component.PropsType),
@@ -493,6 +497,21 @@ func componentsJSON(components []Component) map[string]componentJSON {
 			Exports:   exportsJSON(component.Exports),
 			Emits:     emitsJSON(component.Emits),
 		}
+	}
+	return out
+}
+
+func inlineScriptNames(scripts []InlineScript) []string {
+	if len(scripts) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(scripts))
+	for index, script := range scripts {
+		name := script.Name
+		if name == "" {
+			name = InlineScriptName(index)
+		}
+		out = append(out, name)
 	}
 	return out
 }

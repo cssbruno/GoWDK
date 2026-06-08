@@ -9,8 +9,9 @@ tooling contracts may change before a stable release.
 
 - `BuildConfig.Scripts` for global script tags in generated build-time and
   request-time HTML documents. Use `Type: "module"` for ES module bundles.
-- Page and component `js "./file.js"` declarations for scoped browser module
-  inclusion without loading those modules on unrelated pages.
+- Page and component `js "./file.js"`, `js "./file.ts"`, and inline `js {}`
+  declarations for scoped browser module inclusion without loading those
+  modules on unrelated pages.
 - Open-ended 0.x hardening checklist with per-version planning buckets.
 - v0.2 release checklist for Public Truth and Release Trust work.
 - Release note template requiring experimental, not-production-ready, known

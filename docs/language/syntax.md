@@ -84,14 +84,26 @@ Pages and components can declare browser module files with top-level `js`
 declarations:
 
 ```gwdk
-js "./dashboard.js"
+js "./dashboard.ts"
 ```
 
-The path is relative to the declaring `.gwdk` file and must end in `.js` or
-`.mjs`. GOWDK copies the file into generated output and emits
-`<script type="module">` only for the page that declares it, or for pages that
-call a component that declares it. This is scoped asset inclusion, not
-JavaScript bundling; imported JavaScript dependencies are not followed yet.
+The path is relative to the declaring `.gwdk` file and must end in `.js`,
+`.mjs`, or `.ts`. GOWDK copies JavaScript files into generated output, transforms
+TypeScript files into `.js` module output, and emits `<script type="module">`
+only for the page that declares it, or for pages that call a component that
+declares it. TypeScript is transform-only; GOWDK does not type-check it.
+
+Inline browser code is supported for small cases, but path-based modules are
+preferred:
+
+```gwdk
+js {
+  console.log("loaded")
+}
+```
+
+This is scoped asset inclusion, not JavaScript bundling; imported JavaScript or
+TypeScript dependencies are not followed yet.
 
 ## Blocks
 

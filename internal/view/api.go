@@ -22,6 +22,7 @@ type Component struct {
 	Package       string
 	Uses          map[string]string
 	JS            []string
+	InlineJS      []InlineScript
 	ScopeIDs      []string
 	DefaultIsland string
 	Props         []string
@@ -34,6 +35,13 @@ type Component struct {
 	Emits         map[string]clientlang.Emit
 	Computed      []clientlang.Computed
 	Body          string
+}
+
+// InlineScript records browser module code declared directly inside a component
+// source file.
+type InlineScript struct {
+	Name string
+	Body string
 }
 
 // HasProp reports whether a component declares a prop.

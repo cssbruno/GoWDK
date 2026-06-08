@@ -70,6 +70,7 @@ func buildPageFromIR(page gwdkir.Page) manifest.Page {
 		Guard:       append([]string(nil), page.Guards...),
 		CSS:         append([]string(nil), page.CSS...),
 		JS:          append([]string(nil), page.JS...),
+		InlineJS:    copyInlineScripts(page.InlineJS),
 		Imports:     buildImportsFromIR(page.Imports),
 		Uses:        buildUsesFromIR(page.Uses),
 		Stores:      buildStoresFromIR(page.Stores),
@@ -92,6 +93,7 @@ func buildPageFromIR(page gwdkir.Page) manifest.Page {
 			Guard:       append([]manifest.NamedSpan(nil), page.Spans.Guard...),
 			CSS:         append([]manifest.NamedSpan(nil), page.Spans.CSS...),
 			JS:          append([]manifest.NamedSpan(nil), page.Spans.JS...),
+			InlineJS:    append([]manifest.NamedSpan(nil), page.Spans.InlineJS...),
 			RouteParams: append([]manifest.NamedSpan(nil), page.Spans.RouteParams...),
 		},
 	}
@@ -127,6 +129,7 @@ func buildComponentFromIR(component gwdkir.Component) manifest.Component {
 		Uses:        buildUsesFromIR(component.Uses),
 		CSS:         append([]string(nil), component.CSS...),
 		JS:          append([]string(nil), component.JS...),
+		InlineJS:    copyInlineScripts(component.InlineJS),
 		Assets:      append([]string(nil), component.Assets...),
 		Props:       buildPropsFromIR(component.Props),
 		PropsType:   buildGoTypeRefFromIR(component.PropsType),
@@ -138,11 +141,21 @@ func buildComponentFromIR(component gwdkir.Component) manifest.Component {
 		Span:        component.Span,
 		PackageSpan: component.PackageSpan,
 		Spans: manifest.ComponentSpans{
-			CSS:    append([]manifest.NamedSpan(nil), component.Spans.CSS...),
-			JS:     append([]manifest.NamedSpan(nil), component.Spans.JS...),
-			Assets: append([]manifest.NamedSpan(nil), component.Spans.Assets...),
+			CSS:      append([]manifest.NamedSpan(nil), component.Spans.CSS...),
+			JS:       append([]manifest.NamedSpan(nil), component.Spans.JS...),
+			InlineJS: append([]manifest.NamedSpan(nil), component.Spans.InlineJS...),
+			Assets:   append([]manifest.NamedSpan(nil), component.Spans.Assets...),
 		},
 	}
+}
+
+func copyInlineScripts(scripts []manifest.InlineScript) []manifest.InlineScript {
+	if len(scripts) == 0 {
+		return nil
+	}
+	out := make([]manifest.InlineScript, len(scripts))
+	copy(out, scripts)
+	return out
 }
 
 func buildLayoutFromIR(layout gwdkir.Layout) manifest.Layout {

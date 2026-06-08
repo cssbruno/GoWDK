@@ -273,8 +273,9 @@ Open Graph and Twitter metadata. A page-level `@image` overrides `Head.Image`
 for that page.
 
 `Scripts` declares global script tags emitted into every GOWDK-generated HTML
-document. Use page or component `js "./file.js"` declarations when a browser
-module should be copied and linked only where that page/component is used.
+document. Use page or component `js "./file.js"`, `js "./file.ts"`, or inline
+`js {}` declarations when a browser module should be emitted and linked only
+where that page/component is used.
 
 `CSRF` controls generated action CSRF wiring. When `Enabled` is true, generated
 apps require a signing secret from `SecretEnv` or `GOWDK_CSRF_SECRET`, inject a

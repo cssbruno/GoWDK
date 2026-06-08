@@ -20,7 +20,9 @@ func TestBuildEmitsScopedJSOnlyForPagesThatUseIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeFile(t, filepath.Join(root, "pages", "dashboard.js"), "import { chart } from './chart-data.js'; chart();\n")
+	writeFile(t, filepath.Join(root, "pages", "metrics.ts"), "const label: string = 'ready'; document.documentElement.dataset.metrics = label;\n")
 	writeFile(t, filepath.Join(root, "components", "chart.js"), "document.documentElement.dataset.chart = 'ready';\n")
+	writeFile(t, filepath.Join(root, "components", "panel.ts"), "type Mode = 'ready'; const mode: Mode = 'ready'; document.body.dataset.panel = mode;\n")
 
 	app := manifest.Manifest{
 		Pages: []manifest.Page{
@@ -29,7 +31,11 @@ func TestBuildEmitsScopedJSOnlyForPagesThatUseIt(t *testing.T) {
 				Package: "pages",
 				ID:      "dashboard",
 				Route:   "/dashboard",
-				JS:      []string{"./dashboard.js"},
+				JS:      []string{"./dashboard.js", "./metrics.ts"},
+				InlineJS: []manifest.InlineScript{{
+					Name: "inline-gowdk.js",
+					Body: "document.documentElement.dataset.inlineDashboard = 'ready';",
+				}},
 				Blocks: manifest.Blocks{
 					View:     true,
 					ViewBody: `<main><charts.SignupsChart /></main>`,
@@ -51,7 +57,11 @@ func TestBuildEmitsScopedJSOnlyForPagesThatUseIt(t *testing.T) {
 			Source:  "components/signups-chart.cmp.gwdk",
 			Package: "components",
 			Name:    "SignupsChart",
-			JS:      []string{"./chart.js"},
+			JS:      []string{"./chart.js", "./panel.ts"},
+			InlineJS: []manifest.InlineScript{{
+				Name: "inline-gowdk.js",
+				Body: "document.documentElement.dataset.inlineChart = 'ready';",
+			}},
 			Blocks: manifest.Blocks{
 				View:     true,
 				ViewBody: `<section data-signups-chart></section>`,
@@ -68,7 +78,11 @@ func TestBuildEmitsScopedJSOnlyForPagesThatUseIt(t *testing.T) {
 	dashboardHTML := readFile(t, filepath.Join(outputDir, "dashboard", "index.html"))
 	for _, expected := range []string{
 		`<script type="module" src="/assets/gowdk/pages/dashboard/dashboard.js" defer></script>`,
+		`<script type="module" src="/assets/gowdk/pages/dashboard/metrics.js" defer></script>`,
+		`<script type="module" src="/assets/gowdk/pages/dashboard/inline-gowdk.js" defer></script>`,
 		`<script type="module" src="/assets/gowdk/components/components/SignupsChart/chart.js" defer></script>`,
+		`<script type="module" src="/assets/gowdk/components/components/SignupsChart/panel.js" defer></script>`,
+		`<script type="module" src="/assets/gowdk/components/components/SignupsChart/inline-gowdk.js" defer></script>`,
 	} {
 		if !strings.Contains(dashboardHTML, expected) {
 			t.Fatalf("expected dashboard HTML to contain %q:\n%s", expected, dashboardHTML)
@@ -76,15 +90,19 @@ func TestBuildEmitsScopedJSOnlyForPagesThatUseIt(t *testing.T) {
 	}
 
 	aboutHTML := readFile(t, filepath.Join(outputDir, "about", "index.html"))
-	for _, unexpected := range []string{"dashboard.js", "SignupsChart/chart.js"} {
+	for _, unexpected := range []string{"dashboard.js", "metrics.js", "inline-gowdk.js", "SignupsChart/chart.js", "SignupsChart/panel.js"} {
 		if strings.Contains(aboutHTML, unexpected) {
 			t.Fatalf("did not expect %q in about HTML:\n%s", unexpected, aboutHTML)
 		}
 	}
 
 	expectedAssets := map[string]string{
-		"assets/gowdk/pages/dashboard/dashboard.js":                "chart();",
-		"assets/gowdk/components/components/SignupsChart/chart.js": "dataset.chart",
+		"assets/gowdk/pages/dashboard/dashboard.js":                       "chart();",
+		"assets/gowdk/pages/dashboard/metrics.js":                         "dataset.metrics = label",
+		"assets/gowdk/pages/dashboard/inline-gowdk.js":                    "inlineDashboard",
+		"assets/gowdk/components/components/SignupsChart/chart.js":        "dataset.chart",
+		"assets/gowdk/components/components/SignupsChart/panel.js":        "dataset.panel = mode",
+		"assets/gowdk/components/components/SignupsChart/inline-gowdk.js": "inlineChart",
 	}
 	for logicalPath, expectedContent := range expectedAssets {
 		artifact := assetArtifactByLogicalPath(t, result.AssetArtifacts, logicalPath)

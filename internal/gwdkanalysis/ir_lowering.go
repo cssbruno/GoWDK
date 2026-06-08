@@ -33,6 +33,7 @@ func lowerIRPage(page manifest.Page) gwdkir.Page {
 		Guards:      append([]string(nil), page.Guard...),
 		CSS:         append([]string(nil), page.CSS...),
 		JS:          append([]string(nil), page.JS...),
+		InlineJS:    copyInlineScripts(page.InlineJS),
 		Imports:     lowerIRImports(page.Imports),
 		Uses:        lowerIRUses(page.Uses),
 		Stores:      lowerIRStores(page.Stores),
@@ -53,6 +54,7 @@ func lowerIRPage(page manifest.Page) gwdkir.Page {
 			Guard:       append([]manifest.NamedSpan(nil), page.Spans.Guard...),
 			CSS:         append([]manifest.NamedSpan(nil), page.Spans.CSS...),
 			JS:          append([]manifest.NamedSpan(nil), page.Spans.JS...),
+			InlineJS:    append([]manifest.NamedSpan(nil), page.Spans.InlineJS...),
 			RouteParams: append([]manifest.NamedSpan(nil), page.Spans.RouteParams...),
 		},
 	}
@@ -76,6 +78,7 @@ func lowerIRComponent(component manifest.Component) gwdkir.Component {
 		Uses:        lowerIRUses(component.Uses),
 		CSS:         append([]string(nil), component.CSS...),
 		JS:          append([]string(nil), component.JS...),
+		InlineJS:    copyInlineScripts(component.InlineJS),
 		Assets:      append([]string(nil), component.Assets...),
 		Props:       lowerIRProps(component.Props),
 		PropsType:   lowerIRGoTypeRef(component.PropsType),
@@ -87,11 +90,21 @@ func lowerIRComponent(component manifest.Component) gwdkir.Component {
 		Span:        component.Span,
 		PackageSpan: component.PackageSpan,
 		Spans: gwdkir.ComponentSpans{
-			CSS:    append([]manifest.NamedSpan(nil), component.Spans.CSS...),
-			JS:     append([]manifest.NamedSpan(nil), component.Spans.JS...),
-			Assets: append([]manifest.NamedSpan(nil), component.Spans.Assets...),
+			CSS:      append([]manifest.NamedSpan(nil), component.Spans.CSS...),
+			JS:       append([]manifest.NamedSpan(nil), component.Spans.JS...),
+			InlineJS: append([]manifest.NamedSpan(nil), component.Spans.InlineJS...),
+			Assets:   append([]manifest.NamedSpan(nil), component.Spans.Assets...),
 		},
 	}
+}
+
+func copyInlineScripts(scripts []manifest.InlineScript) []manifest.InlineScript {
+	if len(scripts) == 0 {
+		return nil
+	}
+	out := make([]manifest.InlineScript, len(scripts))
+	copy(out, scripts)
+	return out
 }
 
 func lowerIRLayout(layout manifest.Layout) gwdkir.Layout {

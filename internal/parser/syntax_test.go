@@ -15,6 +15,10 @@ func TestParseSyntaxBuildsTypedASTForCurrentSubset(t *testing.T) {
 @error "/errors/newsletter.html"
 js "./newsletter.js"
 
+js {
+  console.log("newsletter")
+}
+
 import interop "github.com/cssbruno/gowdk/examples/go-interop"
 
 use ui "components"
@@ -54,8 +58,11 @@ view {
 	if len(file.Uses) != 1 || file.Uses[0].Alias != "ui" || file.Uses[0].Package != "components" {
 		t.Fatalf("unexpected uses: %#v", file.Uses)
 	}
-	if len(file.JS) != 1 || file.JS[0].Path != "./newsletter.js" || file.JS[0].Span.Start.Line != 6 {
+	if len(file.JS) != 2 || file.JS[0].Path != "./newsletter.js" || file.JS[0].Span.Start.Line != 6 {
 		t.Fatalf("unexpected scoped JS declarations: %#v", file.JS)
+	}
+	if file.JS[1].Path != "" || !strings.Contains(file.JS[1].Inline, `console.log("newsletter")`) || file.JS[1].Span.Start.Line != 8 {
+		t.Fatalf("unexpected inline JS declaration: %#v", file.JS[1])
 	}
 	if len(file.Blocks) != 3 {
 		t.Fatalf("expected three blocks, got %#v", file.Blocks)

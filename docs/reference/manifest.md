@@ -117,6 +117,9 @@ Fields:
 - `paths`: optional boolean present when `paths {}` exists.
 - `guard`: optional guard metadata.
 - `css`: optional `@css` page selection metadata.
+- `js`: optional path-based scoped browser script declarations.
+- `inlineJS`: optional generated names for inline `js {}` browser script
+  declarations. The manifest does not include inline code bodies.
 - `blocks`: declared page block presence and action/API block names.
 - `actions`: optional action metadata for the first supported action body
   subset, including input metadata, validation intent, local redirects, and
@@ -136,8 +139,8 @@ Fields:
   directory, such as `index.html`, `newsletter/index.html`, or
   `blog/{slug}/index.html`. SSR-only pages omit app-shell HTML artifacts.
 - `components`: component declarations known to the manifest.
-  Component declarations may include `css`, `assets`, inline `props`, typed
-  `propsType`/`state` contracts, typed public `exports`, and emitted
+  Component declarations may include `css`, `js`, `inlineJS`, `assets`, inline
+  `props`, typed `propsType`/`state` contracts, typed public `exports`, and emitted
   browser-island event metadata under `emits`.
 - `backendBindings`: action/API handler binding metadata. Entries include
   endpoint kind, source, page ID, declared block name, method, endpoint path,

@@ -110,14 +110,16 @@ type PageSpans struct {
 	Guard       []NamedSpan
 	CSS         []NamedSpan
 	JS          []NamedSpan
+	InlineJS    []NamedSpan
 	RouteParams []NamedSpan
 }
 
 // ComponentSpans records source ranges for component annotations.
 type ComponentSpans struct {
-	CSS    []NamedSpan
-	JS     []NamedSpan
-	Assets []NamedSpan
+	CSS      []NamedSpan
+	JS       []NamedSpan
+	InlineJS []NamedSpan
+	Assets   []NamedSpan
 }
 
 // BlockSpans records source ranges for page, component, or layout blocks.
@@ -152,6 +154,7 @@ type Page struct {
 	Guard       []string
 	CSS         []string
 	JS          []string
+	InlineJS    []InlineScript
 	Imports     []Import
 	Uses        []Use
 	Stores      []Store
@@ -159,6 +162,23 @@ type Page struct {
 	Blocks      Blocks
 	LoadBinding BackendBinding
 	Spans       PageSpans
+}
+
+// InlineScript records browser module code declared directly inside a .gwdk
+// source file. Path-based script declarations should remain preferred.
+type InlineScript struct {
+	Name string
+	Body string
+	Span SourceSpan
+}
+
+// InlineScriptName returns the deterministic generated filename for the
+// zero-based inline browser script declaration index in one source owner.
+func InlineScriptName(index int) string {
+	if index <= 0 {
+		return "inline-gowdk.js"
+	}
+	return fmt.Sprintf("inline-%d-gowdk.js", index+1)
 }
 
 // CachePolicy returns the concrete Cache-Control policy generated for the page.
@@ -254,6 +274,7 @@ type Component struct {
 	Uses        []Use
 	CSS         []string
 	JS          []string
+	InlineJS    []InlineScript
 	Assets      []string
 	Props       []Prop
 	PropsType   GoTypeRef

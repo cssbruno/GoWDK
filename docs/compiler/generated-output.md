@@ -25,14 +25,19 @@ Implemented today:
   `style {}` CSS is appended to the same generated page CSS asset.
 - Page `js "./file.js"` declarations are copied under
   `assets/gowdk/pages/<page>/` and linked only from that page as module scripts.
+  Page `js "./file.ts"` declarations are transformed to `.js` files in the same
+  directory. Inline page `js {}` blocks emit deterministic files such as
+  `inline-gowdk.js`.
 - Component `@css` files are emitted as scoped CSS assets, linked from
   generated pages, content-hashed, recorded in `gowdk-assets.json`, and served
   with immutable cache headers by generated binaries. Component `style {}` CSS
   is emitted through the same scoped CSS path.
 - Component `js "./file.js"` declarations are copied under
   `assets/gowdk/components/<package>/<component>/` and linked only from pages
-  that use the component. This first slice does not bundle JavaScript or follow
-  import graphs.
+  that use the component. Component `js "./file.ts"` declarations are
+  transformed to `.js` files in the same directory. Inline component `js {}`
+  blocks emit deterministic files such as `inline-gowdk.js`. This first slice
+  does not bundle JavaScript or follow import graphs.
 - Layout `style {}` CSS is emitted as generated CSS and linked by pages that
   declare the layout.
 - Dynamic app routes with literal `paths {}` declarations are expanded by

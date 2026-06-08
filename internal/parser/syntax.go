@@ -4,19 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkast"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
-)
-
-var (
-	literalRecordPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
-	syntaxBlockPattern   = regexp.MustCompile(`^(paths|build|load|client|view|style|props|exports|emits)\s*\{`)
-	goBlockPattern       = regexp.MustCompile(`^go(?:\s+([A-Za-z_][A-Za-z0-9_.-]*))?\s*\{$`)
 )
 
 type SyntaxFile = gwdkast.File
@@ -73,6 +66,16 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 			if line == "}" {
 				depth--
 				if depth == 0 {
+					if captured.Kind == "js" {
+						file.JS = append(file.JS, gwdkast.AssetRef{
+							Kind:   "js",
+							Inline: strings.TrimSpace(joinSyntaxBody(body)),
+							Span:   captured.Span,
+						})
+						captured = SyntaxBlock{}
+						body = nil
+						continue
+					}
 					block, err := finishSyntaxBlock(captured, body)
 					if err != nil {
 						return SyntaxFile{}, err
@@ -101,6 +104,12 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 				depth += braceDelta(rawLine)
 				if depth < 1 {
 					return SyntaxFile{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+				}
+			}
+			if captured.Kind == "js" {
+				depth += braceDelta(rawLine)
+				if depth < 1 {
+					return SyntaxFile{}, fmt.Errorf("line %d: js block closed unexpectedly", lineNumber)
 				}
 			}
 			body = append(body, syntaxBodyLine{Text: rawLine, Line: lineNumber})
@@ -173,6 +182,11 @@ func ParseSyntax(source []byte) (SyntaxFile, error) {
 				Path: match[1],
 				Span: sourceLineSpan(lineNumber, rawLine),
 			})
+			continue
+		}
+		if jsBlockPattern.MatchString(line) {
+			captured = SyntaxBlock{Kind: "js", Span: sourceLineSpan(lineNumber, rawLine)}
+			depth = 1
 			continue
 		}
 		if isMalformedJS(line) {

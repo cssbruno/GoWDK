@@ -74,6 +74,7 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 			Package:       component.Package,
 			Uses:          componentUses(component.Uses),
 			JS:            append([]string(nil), component.JS...),
+			InlineJS:      viewInlineScripts(component.InlineJS),
 			ScopeIDs:      componentScopeIDs(component),
 			DefaultIsland: componentDefaultIsland(component),
 			Props:         props,
@@ -93,6 +94,17 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 		}
 	}
 	return registry, failures
+}
+
+func viewInlineScripts(scripts []manifest.InlineScript) []view.InlineScript {
+	if len(scripts) == 0 {
+		return nil
+	}
+	out := make([]view.InlineScript, 0, len(scripts))
+	for _, script := range scripts {
+		out = append(out, view.InlineScript{Name: script.Name, Body: script.Body})
+	}
+	return out
 }
 
 func componentDefaultIsland(component manifest.Component) string {

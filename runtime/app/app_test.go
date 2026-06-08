@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/cssbruno/gowdk/runtime/asset"
 	"github.com/cssbruno/gowdk/runtime/form"
@@ -779,6 +780,63 @@ func TestAPIHandlerAllowsBodyWithinLimit(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `"ok":true`) {
 		t.Fatalf("unexpected body: %s", recorder.Body.String())
+	}
+}
+
+func TestHandlerAppliesRequestTimeoutDeadline(t *testing.T) {
+	var hadDeadline bool
+	handler := Handler{
+		RequestTimeout: 50 * time.Millisecond,
+		Backend: func(_ http.ResponseWriter, request *http.Request) bool {
+			_, hadDeadline = request.Context().Deadline()
+			return true
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/thing", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if !hadDeadline {
+		t.Fatal("expected request context to carry a deadline when RequestTimeout is set")
+	}
+}
+
+func TestHandlerWithoutRequestTimeoutHasNoDeadline(t *testing.T) {
+	var hadDeadline bool
+	handler := Handler{
+		Backend: func(_ http.ResponseWriter, request *http.Request) bool {
+			_, hadDeadline = request.Context().Deadline()
+			return true
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/thing", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if hadDeadline {
+		t.Fatal("expected no deadline when RequestTimeout is zero")
+	}
+}
+
+func TestHandlerRequestTimeoutCancelsSlowHandler(t *testing.T) {
+	var ctxErr error
+	handler := Handler{
+		RequestTimeout: 20 * time.Millisecond,
+		Backend: func(_ http.ResponseWriter, request *http.Request) bool {
+			<-request.Context().Done()
+			ctxErr = request.Context().Err()
+			return true
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/slow", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if !errors.Is(ctxErr, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded, got %v", ctxErr)
 	}
 }
 

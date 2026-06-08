@@ -66,6 +66,14 @@ tooling contracts may change before a stable release.
 - Generated guarded apps fail Go compilation when required backing hooks are
   missing: `GOWDKGuardRegistry` for custom guards and `GOWDKAuthProvider` for
   native RBAC guards.
+- `v0.2.6` release metadata: CLI/editor versions, optional module root-version
+  requirements, root changelog, and release-doc current-version examples.
+- Optional `@page` annotations with filename-derived page IDs, while keeping
+  explicit `@route` and `@guard` metadata required.
+- `gowdk init` now scaffolds the thinner route-first page shape and keeps
+  public pages explicit through `@guard public`.
+- Release packaging uploads `dist/*` as a GitHub Actions workflow artifact and
+  verifies the selected tag release contains the expected download assets.
 
 ## Partial
 

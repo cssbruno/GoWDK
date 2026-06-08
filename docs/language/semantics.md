@@ -17,10 +17,13 @@
 
 ## Current Metadata Semantics
 
-- `@page`, `@route`, and `@guard` are required for page sources. Public pages
-  must declare `@guard public`; protected pages must declare custom guard IDs
-  or native RBAC IDs such as `role:admin` and `permission:posts.write`.
+- `@route` and `@guard` are required for page sources. Public pages must
+  declare `@guard public`; protected pages must declare custom guard IDs or
+  native RBAC IDs such as `role:admin` and `permission:posts.write`.
   `@guard public` must stand alone.
+- `@page` is optional for file-backed page sources. When omitted, page ID
+  derives from the source filename by removing `.page.gwdk` or `.gwdk`.
+  Explicit `@page` keeps page identity stable across file renames.
 - `@title`, `@description`, `@canonical`, and `@image` record document metadata
   used by generated HTML output. If `@title` is omitted, generated output falls
   back to the page ID. `@image` feeds generated Open Graph and Twitter image

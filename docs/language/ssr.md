@@ -15,7 +15,8 @@ SSR is optional and must not become the default framework identity.
   placeholders and request-time HTML escaping.
 - Generated SSR supports declared identifier and dotted-path fields such as
   `load { => { user, title, account.plan } }` and calls a same-package exported
-  Go function named `Load<PageID>`.
+  Go function named `Load<PageID>`. `<PageID>` is the explicit `@page` value
+  when present, otherwise the filename-derived page ID.
 - Supported load function signatures are
   `func LoadDashboard(ssr.LoadContext) map[string]any` and
   `func LoadDashboard(ssr.LoadContext) (map[string]any, error)`. Returned

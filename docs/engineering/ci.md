@@ -31,7 +31,13 @@ the fastest pre-handoff gate.
 
 ## Future Release Jobs
 
+Release packaging lives in `.github/workflows/release.yml`. It builds the
+supported CLI binaries, packages the VS Code `.vsix`, writes `checksums.txt`,
+uploads `dist/*` as a run artifact for CI downloads, attests the same files, and
+uploads them to the selected tag release. The release job fails if any expected
+tag release asset is missing after upload.
+
 - Expand the release matrix if additional platforms become supported.
 - Verify generated-output examples with `gowdk build --out`.
-- Automate the dependency, license, and vulnerability gates documented in
+- Automate the dependency and license gates documented in
   `docs/engineering/dependency-policy.md`.

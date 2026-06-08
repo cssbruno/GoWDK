@@ -53,13 +53,15 @@ component contract and inline package-go-block slices.
 
 ## File Kinds
 
-The compiler currently treats every parsed file as a page file and requires:
+The compiler currently treats every parsed file as a page file. A minimal page
+uses:
 
 ```gwdk
-@page home
 @route "/"
 @guard public
 ```
+
+The page ID derives from the filename unless `@page` is present.
 
 Component files are supported as explicit or discovered `gowdk build` inputs
 with `@component`. Layout files are also supported. Separate island and

@@ -30,7 +30,8 @@ files do not derive route identity from folders.
 
 Current file kinds:
 
-- Page files declare `@page`, `@route`, `@guard`, and `view {}`.
+- Page files declare `@route`, `@guard`, and `view {}`. They may declare
+  `@page` when they need an explicit stable page ID.
 - Component files declare `@component` and usually `view {}`.
 - Layout files declare `@layout` and `view {}` with a `<slot />`.
 
@@ -70,6 +71,12 @@ Page sources must declare `@guard`. Use `@guard public` when the page is
 intentionally public. Use custom guard IDs or native RBAC IDs such as
 `role:admin` and `permission:posts.write` when the page is protected.
 `@guard public` must stand alone.
+
+`@page` is optional for file-backed page sources. When omitted, the compiler
+derives the page ID from the source filename by removing `.page.gwdk` or
+`.gwdk`. For example, `src/pages/blog-post.page.gwdk` derives page ID
+`blog-post`. Add `@page blog.post` when a route, filename, or file location
+change must not change page identity.
 
 ## Imports And Uses
 

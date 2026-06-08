@@ -35,15 +35,15 @@ Built-in CSS inputs:
 Examples:
 
 ```gwdk
-@page blog.post
 @route "/blog/{slug}"
 @guard public
 ```
 
-Uses `global.css` plus `blog.post.css` when those files exist.
+Uses `global.css` plus page-ID CSS when those files exist. With a derived page
+ID from `blog-post.page.gwdk`, the page-specific file is `blog-post.css`; with
+explicit `@page blog.post`, it is `blog.post.css`.
 
 ```gwdk
-@page dashboard
 @route "/dashboard"
 @guard public
 @css reset tokens forms
@@ -52,7 +52,6 @@ Uses `global.css` plus `blog.post.css` when those files exist.
 Uses only `reset.css`, `tokens.css`, and `forms.css`.
 
 ```gwdk
-@page embed
 @route "/embed"
 @guard public
 @css none

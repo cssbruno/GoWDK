@@ -397,6 +397,32 @@ view {
 	}
 }
 
+func TestAnalyzeDerivesPageIDFromFilename(t *testing.T) {
+	result, err := Analyze(gowdk.Config{}, []SourceFile{
+		{Path: "pages/blog-post.page.gwdk", Kind: SourcePage, AST: mustParse(t, `package pages
+@route "/blog/{slug}"
+@guard public
+
+paths {
+  => { slug: "hello" }
+}
+
+view {
+  <main>Post</main>
+}
+`)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Manifest.Pages) != 1 || result.Manifest.Pages[0].ID != "blog-post" {
+		t.Fatalf("expected derived page ID blog-post, got %#v", result.Manifest.Pages)
+	}
+	if len(result.IR.Routes) != 1 || result.IR.Routes[0].PageID != "blog-post" {
+		t.Fatalf("expected IR route page ID blog-post, got %#v", result.IR.Routes)
+	}
+}
+
 func mustParse(t *testing.T, source string) parser.SyntaxFile {
 	t.Helper()
 	file, err := parser.ParseSyntax([]byte(source))

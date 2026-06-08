@@ -8,7 +8,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-func lowerPageSyntax(source []byte, ast gwdkast.File) (manifest.Page, error) {
+func lowerPageSyntax(source []byte, ast gwdkast.File, defaultID string) (manifest.Page, error) {
 	var page manifest.Page
 	if ast.Package != nil {
 		page.Package = ast.Package.Name
@@ -67,6 +67,9 @@ func lowerPageSyntax(source []byte, ast gwdkast.File) (manifest.Page, error) {
 		page.Blocks.Spans.Fragments = append(page.Blocks.Spans.Fragments, manifest.NamedSpan{Name: fragment.Name, Span: fragment.Span})
 	}
 
+	if page.ID == "" {
+		page.ID = strings.TrimSpace(defaultID)
+	}
 	if page.ID == "" {
 		return manifest.Page{}, fmt.Errorf("missing @page")
 	}

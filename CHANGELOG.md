@@ -3,6 +3,27 @@
 GOWDK is experimental 0.x software. Public syntax, generated output, runtime
 packages, and tooling contracts may change before a stable release.
 
+## v0.2.6 - 2026-06-08
+
+### Changed
+
+- `@page` is now optional for page files. When omitted, GOWDK derives the page
+  ID from the source filename, such as `blog-post.page.gwdk` -> `blog-post`.
+- `@route` and `@guard` remain explicit page metadata. Public pages must still
+  declare `@guard public`.
+- `gowdk init` now generates the thinner route-first page shape without an
+  explicit `@page` annotation.
+- Release packaging now uploads `dist/*` as a GitHub Actions workflow artifact
+  and verifies the tag release has every expected download asset after upload.
+- `gowdk version` and the VS Code extension metadata now report `0.2.6`.
+- Optional contract adapter modules require `github.com/cssbruno/gowdk v0.2.6`.
+
+### Known Gaps
+
+- GOWDK remains not production-ready.
+- Explicit `@page` is still supported when a stable page ID should not follow
+  the filename.
+
 ## v0.2.5 - 2026-06-08
 
 ### Implemented

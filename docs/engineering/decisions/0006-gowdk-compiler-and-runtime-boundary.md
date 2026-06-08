@@ -101,7 +101,6 @@ The package-integrated direction is:
 ```gwdk
 package auth
 
-@page login
 @route "/"
 @guard public
 

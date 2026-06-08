@@ -86,6 +86,48 @@ view {
 	}
 }
 
+func TestParsePageWithDefaultIDAllowsOmittedPageAnnotation(t *testing.T) {
+	page, err := ParsePageWithDefaultID([]byte(`
+package pages
+
+@route "/"
+@guard public
+
+view {
+  <main>Home</main>
+}
+`), "home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.ID != "home" {
+		t.Fatalf("expected default page ID home, got %q", page.ID)
+	}
+	if page.Route != "/" {
+		t.Fatalf("expected route /, got %q", page.Route)
+	}
+}
+
+func TestParsePageWithDefaultIDKeepsExplicitPageAnnotation(t *testing.T) {
+	page, err := ParsePageWithDefaultID([]byte(`
+package pages
+
+@page marketing.home
+@route "/"
+@guard public
+
+view {
+  <main>Home</main>
+}
+`), "home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.ID != "marketing.home" {
+		t.Fatalf("expected explicit page ID marketing.home, got %q", page.ID)
+	}
+}
+
 func TestParsePageRejectsUnknownAnnotation(t *testing.T) {
 	_, err := ParsePage([]byte(`
 @page home

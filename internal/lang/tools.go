@@ -51,7 +51,7 @@ func ParseSource(path string, source []byte) (manifest.Page, Diagnostics) {
 		return manifest.Page{}, diagnostics
 	}
 
-	page, err := parser.ParsePage(source)
+	page, err := parser.ParsePageWithDefaultID(source, derivedPageID(path))
 	page.Source = path
 	if err != nil {
 		diagnostics = append(diagnostics, Diagnostic{
@@ -111,6 +111,23 @@ func parserErrorRange(source []byte, message string) *Range {
 		endColumn = 2
 	}
 	return sourceRange(position, Position{Line: position.Line, Column: endColumn})
+}
+
+func derivedPageID(path string) string {
+	if strings.TrimSpace(path) == "" {
+		return ""
+	}
+	base := filepath.Base(path)
+	if base == "." || base == string(filepath.Separator) {
+		return ""
+	}
+	for _, suffix := range []string{".page.gwdk", ".gwdk"} {
+		if strings.HasSuffix(base, suffix) {
+			base = strings.TrimSuffix(base, suffix)
+			break
+		}
+	}
+	return strings.TrimSpace(base)
 }
 
 // ParseFiles parses multiple .gwdk files into a manifest.

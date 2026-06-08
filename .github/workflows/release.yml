@@ -16,10 +16,10 @@ jobs:
     name: Package release artifacts
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       id-token: write
       attestations: write
-      artifact-metadata: write
 
     steps:
       - name: Check out repository
@@ -116,6 +116,14 @@ jobs:
           (cd dist && sha256sum * > checksums.txt)
           (cd dist && sha256sum -c checksums.txt)
 
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gowdk-release-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Attest release artifacts
         uses: actions/attest@v4
         with:
@@ -143,5 +151,34 @@ jobs:
           name: GOWDK ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
           body_path: ${{ steps.release_notes.outputs.path }}
           files: dist/*
+          fail_on_unmatched_files: true
           draft: true
           prerelease: true
+
+      - name: Verify release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+        run: |
+          set -euo pipefail
+          expected="
+          checksums.txt
+          gowdk-linux-amd64
+          gowdk-linux-arm64
+          gowdk-darwin-amd64
+          gowdk-darwin-arm64
+          gowdk-windows-amd64.exe
+          "
+          vsix="$(find dist -maxdepth 1 -name 'gowdk-vscode-*.vsix' -printf '%f\n' | head -n1)"
+          test -n "$vsix"
+          expected="$expected
+          $vsix
+          "
+          assets="$(gh release view "$RELEASE_VERSION" --json assets --jq '.assets[].name')"
+          printf '%s\n' "$assets"
+          for asset in $expected; do
+            printf '%s\n' "$assets" | grep -Fx "$asset" >/dev/null || {
+              echo "release $RELEASE_VERSION missing asset: $asset" >&2
+              exit 1
+            }
+          done

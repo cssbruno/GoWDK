@@ -198,7 +198,6 @@ exports {
 Stores are explicit page-scoped UI state:
 
 ```gwdk
-@page cart
 @route "/cart"
 @guard public
 

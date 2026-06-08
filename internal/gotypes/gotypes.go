@@ -14,14 +14,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
-
-var goNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // Field describes one resolved Go struct field.
 type Field struct {
@@ -199,10 +196,10 @@ func RunStateInitJSON(imports []manifest.Import, state manifest.StateContract) (
 	if err != nil {
 		return nil, err
 	}
-	if !goNamePattern.MatchString(state.Init.Alias) {
+	if !isGoName(state.Init.Alias) {
 		return nil, fmt.Errorf("invalid state init import alias %q", state.Init.Alias)
 	}
-	if !goNamePattern.MatchString(state.Init.Name) {
+	if !isGoName(state.Init.Name) {
 		return nil, fmt.Errorf("invalid state init function name %q", state.Init.Name)
 	}
 	source, err := stateInitRunnerSource(state.Init.Alias, importPath, state.Init.Name)
@@ -237,10 +234,10 @@ func RunStateInitJSON(imports []manifest.Import, state manifest.StateContract) (
 }
 
 func stateInitRunnerSource(importAlias string, importPath string, functionName string) (string, error) {
-	if !goNamePattern.MatchString(importAlias) {
+	if !isGoName(importAlias) {
 		return "", fmt.Errorf("invalid state init import alias %q", importAlias)
 	}
-	if !goNamePattern.MatchString(functionName) {
+	if !isGoName(functionName) {
 		return "", fmt.Errorf("invalid state init function name %q", functionName)
 	}
 	if strings.TrimSpace(importPath) == "" {
@@ -467,6 +464,26 @@ func qualifyPackage(pkg *types.Package) string {
 		return ""
 	}
 	return pkg.Path()
+}
+
+func isGoName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index := 0; index < len(value); index++ {
+		char := value[index]
+		if index == 0 {
+			if char != '_' && (char < 'A' || char > 'Z') && (char < 'a' || char > 'z') {
+				return false
+			}
+			continue
+		}
+		if char == '_' || (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 type loadedPackage struct {

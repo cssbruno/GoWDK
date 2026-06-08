@@ -112,7 +112,7 @@ func buildFieldValue(expr ast.Expr, routeParams map[string]string, data map[stri
 		return "", buildValue{}, fmt.Errorf("build field must use name: value")
 	}
 	key, ok := kv.Key.(*ast.Ident)
-	if !ok || !literalNamePattern.MatchString(key.Name) {
+	if !ok || !isLiteralName(key.Name) {
 		return "", buildValue{}, fmt.Errorf("invalid build field name")
 	}
 	value, err := buildValueFromExpr(kv.Value, routeParams, data)

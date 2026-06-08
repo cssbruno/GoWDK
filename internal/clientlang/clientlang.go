@@ -3,23 +3,8 @@ package clientlang
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
-)
-
-var (
-	functionHeaderPattern   = regexp.MustCompile(`^(async\s+)?(?:fn|func)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s*\{$`)
-	computedHeaderPattern   = regexp.MustCompile(`^computed\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_.\[\]*]*)\s*\{$`)
-	computedIfPattern       = regexp.MustCompile(`^if\s+(.+)\s*\{$`)
-	computedIfReturnPattern = regexp.MustCompile(`^if\s+(.+)\s+\{\s*return\s+(.+)\s*\}$`)
-	effectHeaderPattern     = regexp.MustCompile(`^effect\s+when\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{$`)
-	refPattern              = regexp.MustCompile(`^ref\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)$`)
-	usePattern              = regexp.MustCompile(`^use\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)$`)
-	identifierPattern       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	statementIncDecPattern  = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_.\[\]]*)(\+\+|--)$`)
-	statementAssignPattern  = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_.\[\]]*)\s*=\s*(.+)$`)
-	statementLetPattern     = regexp.MustCompile(`^let\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$`)
 )
 
 // Program is the parsed representation of a component client {} block.
@@ -88,6 +73,257 @@ func (err *ParseError) Unwrap() error {
 
 func parseErrorf(line int, format string, args ...any) error {
 	return &ParseError{Line: line, Err: fmt.Errorf(format, args...)}
+}
+
+type functionHeader struct {
+	Name       string
+	Async      bool
+	Params     string
+	ReturnType string
+}
+
+type computedHeader struct {
+	Name string
+	Type string
+}
+
+type letStatement struct {
+	Name string
+	Type string
+	Expr string
+}
+
+func parseFunctionHeader(line string) (functionHeader, bool) {
+	line = strings.TrimSpace(line)
+	if !strings.HasSuffix(line, "{") {
+		return functionHeader{}, false
+	}
+	line = strings.TrimSpace(strings.TrimSuffix(line, "{"))
+	async := false
+	if strings.HasPrefix(line, "async ") {
+		async = true
+		line = strings.TrimSpace(strings.TrimPrefix(line, "async "))
+	}
+	if strings.HasPrefix(line, "fn ") {
+		line = strings.TrimSpace(strings.TrimPrefix(line, "fn "))
+	} else if strings.HasPrefix(line, "func ") {
+		line = strings.TrimSpace(strings.TrimPrefix(line, "func "))
+	} else {
+		return functionHeader{}, false
+	}
+	open := strings.Index(line, "(")
+	close := strings.LastIndex(line, ")")
+	if open <= 0 || close < open || close == -1 {
+		return functionHeader{}, false
+	}
+	name := strings.TrimSpace(line[:open])
+	if !isIdentifier(name) {
+		return functionHeader{}, false
+	}
+	params := line[open+1 : close]
+	returnType := strings.TrimSpace(line[close+1:])
+	if returnType != "" && !isIdentifier(returnType) {
+		return functionHeader{}, false
+	}
+	return functionHeader{Name: name, Async: async, Params: params, ReturnType: returnType}, true
+}
+
+func parseComputedHeader(line string) (computedHeader, bool) {
+	body, ok := parseKeywordBlock(line, "computed")
+	if !ok {
+		return computedHeader{}, false
+	}
+	fields := strings.Fields(body)
+	if len(fields) != 2 || !isIdentifier(fields[0]) || !isTypeLiteral(fields[1]) {
+		return computedHeader{}, false
+	}
+	return computedHeader{Name: fields[0], Type: fields[1]}, true
+}
+
+func parseEffectHeader(line string) (string, bool) {
+	body, ok := parseKeywordBlock(line, "effect")
+	if !ok {
+		return "", false
+	}
+	if !strings.HasPrefix(body, "when ") {
+		return "", false
+	}
+	field := strings.TrimSpace(strings.TrimPrefix(body, "when "))
+	if !isIdentifier(field) {
+		return "", false
+	}
+	return field, true
+}
+
+func parseRefDeclaration(line string) (Ref, bool) {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if len(fields) != 3 || fields[0] != "ref" || !isIdentifier(fields[1]) || !isIdentifier(fields[2]) {
+		return Ref{}, false
+	}
+	return Ref{Name: fields[1], Kind: fields[2]}, true
+}
+
+func parseUseDeclaration(line string) (string, bool) {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if len(fields) != 2 || fields[0] != "use" || !isQualifiedIdentifier(fields[1]) {
+		return "", false
+	}
+	return fields[1], true
+}
+
+func parseComputedIfHeader(line string) (string, bool) {
+	body, ok := parseKeywordBlock(line, "if")
+	if !ok || strings.TrimSpace(body) == "" {
+		return "", false
+	}
+	return strings.TrimSpace(body), true
+}
+
+func parseComputedIfReturn(line string) (string, string, bool) {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "if ") || !strings.HasSuffix(line, "}") {
+		return "", "", false
+	}
+	body := strings.TrimSpace(strings.TrimPrefix(line, "if "))
+	open := strings.Index(body, "{")
+	if open < 0 {
+		return "", "", false
+	}
+	cond := strings.TrimSpace(body[:open])
+	inside := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(body[open+1:]), "}"))
+	if cond == "" || !strings.HasPrefix(inside, "return ") {
+		return "", "", false
+	}
+	thenExpr := strings.TrimSpace(strings.TrimPrefix(inside, "return "))
+	if thenExpr == "" {
+		return "", "", false
+	}
+	return cond, thenExpr, true
+}
+
+func parseLetStatement(statement string) (letStatement, bool) {
+	statement = strings.TrimSpace(statement)
+	if !strings.HasPrefix(statement, "let ") {
+		return letStatement{}, false
+	}
+	left, expr, ok := strings.Cut(strings.TrimSpace(strings.TrimPrefix(statement, "let ")), "=")
+	if !ok {
+		return letStatement{}, false
+	}
+	fields := strings.Fields(left)
+	if len(fields) != 2 || !isIdentifier(fields[0]) || !isIdentifier(fields[1]) {
+		return letStatement{}, false
+	}
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return letStatement{}, false
+	}
+	return letStatement{Name: fields[0], Type: fields[1], Expr: expr}, true
+}
+
+func parseIncDecStatement(statement string) (string, string, bool) {
+	statement = strings.TrimSpace(statement)
+	for _, op := range []string{"++", "--"} {
+		if strings.HasSuffix(statement, op) {
+			target := strings.TrimSpace(strings.TrimSuffix(statement, op))
+			return target, op, isStatementTarget(target)
+		}
+	}
+	return "", "", false
+}
+
+func parseAssignStatement(statement string) (string, string, bool) {
+	target, expr, ok := strings.Cut(strings.TrimSpace(statement), "=")
+	if !ok || strings.Contains(target, ":") {
+		return "", "", false
+	}
+	target = strings.TrimSpace(target)
+	expr = strings.TrimSpace(expr)
+	if target == "" || expr == "" || !isStatementTarget(target) {
+		return "", "", false
+	}
+	return target, expr, true
+}
+
+func parseKeywordBlock(line string, keyword string) (string, bool) {
+	line = strings.TrimSpace(line)
+	if !strings.HasSuffix(line, "{") || !strings.HasPrefix(line, keyword) {
+		return "", false
+	}
+	if len(line) > len(keyword) && !isSpace(line[len(keyword)]) {
+		return "", false
+	}
+	body := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.TrimPrefix(line, keyword)), "{"))
+	return body, true
+}
+
+func isIdentifier(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		if index == 0 {
+			if !isIdentStart(r) {
+				return false
+			}
+			continue
+		}
+		if !isIdentPart(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isQualifiedIdentifier(value string) bool {
+	parts := strings.Split(value, ".")
+	if len(parts) == 0 || len(parts) > 2 {
+		return false
+	}
+	for _, part := range parts {
+		if !isIdentifier(part) {
+			return false
+		}
+	}
+	return true
+}
+
+func isTypeLiteral(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if isIdentPart(r) || r == '.' || r == '[' || r == ']' || r == '*' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isStatementTarget(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if isIdentPart(r) || r == '.' || r == '[' || r == ']' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isIdentStart(r rune) bool {
+	return r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')
+}
+
+func isIdentPart(r rune) bool {
+	return isIdentStart(r) || (r >= '0' && r <= '9')
+}
+
+func isSpace(ch byte) bool {
+	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
 }
 
 // Param describes one typed function parameter.
@@ -176,21 +412,20 @@ func Parse(source string) (Program, error) {
 		}
 
 		if current == nil && lifecycle == nil {
-			match := functionHeaderPattern.FindStringSubmatch(line)
-			if match != nil {
-				async := strings.TrimSpace(match[1]) != ""
-				name := match[2]
+			if header, ok := parseFunctionHeader(line); ok {
+				async := header.Async
+				name := header.Name
 				if isReservedFunctionName(name) {
 					return Program{}, fmt.Errorf("client function %q uses a reserved built-in name", name)
 				}
 				if seen[name] {
 					return Program{}, fmt.Errorf("client function %q is declared more than once", name)
 				}
-				params, err := parseParams(match[3])
+				params, err := parseParams(header.Params)
 				if err != nil {
 					return Program{}, parseErrorf(index+1, "client function %s params: %w", name, err)
 				}
-				returnType := strings.TrimSpace(match[4])
+				returnType := strings.TrimSpace(header.ReturnType)
 				if returnType != "" && !isSupportedReturnType(returnType) {
 					return Program{}, parseErrorf(index+1, "client function %s uses unsupported return type %q", name, returnType)
 				}
@@ -209,30 +444,29 @@ func Parse(source string) (Program, error) {
 				lifecycle = &lifecycleBlock{Kind: "destroy", Span: Span{StartLine: index + 1, EndLine: index + 1}}
 				continue
 			}
-			if match := effectHeaderPattern.FindStringSubmatch(line); match != nil {
-				lifecycle = &lifecycleBlock{Kind: "effect", Field: match[1], Span: Span{StartLine: index + 1, EndLine: index + 1}}
+			if field, ok := parseEffectHeader(line); ok {
+				lifecycle = &lifecycleBlock{Kind: "effect", Field: field, Span: Span{StartLine: index + 1, EndLine: index + 1}}
 				continue
 			}
-			if match := computedHeaderPattern.FindStringSubmatch(line); match != nil {
-				name := match[1]
+			if computed, ok := parseComputedHeader(line); ok {
+				name := computed.Name
 				if seen[name] {
 					return Program{}, fmt.Errorf("client computed %q conflicts with a function", name)
 				}
 				seen[name] = true
-				lifecycle = &lifecycleBlock{Kind: "computed", Field: name, Type: match[2], Span: Span{StartLine: index + 1, EndLine: index + 1}}
+				lifecycle = &lifecycleBlock{Kind: "computed", Field: name, Type: computed.Type, Span: Span{StartLine: index + 1, EndLine: index + 1}}
 				continue
 			}
-			if match := refPattern.FindStringSubmatch(line); match != nil {
-				name := match[1]
+			if ref, ok := parseRefDeclaration(line); ok {
+				name := ref.Name
 				if seenRefs[name] {
 					return Program{}, fmt.Errorf("client ref %q is declared more than once", name)
 				}
 				seenRefs[name] = true
-				program.Refs = append(program.Refs, Ref{Name: name, Kind: match[2]})
+				program.Refs = append(program.Refs, ref)
 				continue
 			}
-			if match := usePattern.FindStringSubmatch(line); match != nil {
-				name := match[1]
+			if name, ok := parseUseDeclaration(line); ok {
 				if seenUses[name] {
 					return Program{}, fmt.Errorf("client store %q is used more than once", name)
 				}
@@ -339,8 +573,7 @@ func Parse(source string) (Program, error) {
 			return Program{}, parseErrorf(index+1, "client %s block line %d cannot declare nested functions", lifecycle.Description(), index+1)
 		}
 		if lifecycle != nil && lifecycle.Kind == "computed" {
-			if match := computedIfPattern.FindStringSubmatch(line); match != nil {
-				cond := strings.TrimSpace(match[1])
+			if cond, ok := parseComputedIfHeader(line); ok {
 				if cond == "" {
 					return Program{}, parseErrorf(index+1, "client computed %s if block requires a condition", lifecycle.Field)
 				}
@@ -440,11 +673,9 @@ func computedReturnExpr(block *lifecycleBlock) (string, Span, error) {
 		return expr, exprSpan, nil
 	}
 	if len(block.Statements) == 2 {
-		match := computedIfReturnPattern.FindStringSubmatch(strings.TrimSpace(block.Statements[0]))
+		cond, thenExpr, ok := parseComputedIfReturn(strings.TrimSpace(block.Statements[0]))
 		fallback := strings.TrimSpace(block.Statements[1])
-		if match != nil && strings.HasPrefix(fallback, "return ") {
-			cond := strings.TrimSpace(match[1])
-			thenExpr := strings.TrimSpace(match[2])
+		if ok && strings.HasPrefix(fallback, "return ") {
 			elseExpr := strings.TrimSpace(strings.TrimPrefix(fallback, "return "))
 			if elseExpr == "" {
 				return "", Span{}, parseErrorf(lifecycleStatementLine(block, 1), "client computed %s must return an expression", block.Field)
@@ -751,26 +982,26 @@ func CanonicalStatement(statement string) string {
 		}
 		return "return " + strings.Join(strings.Fields(strings.TrimSpace(expr)), " ")
 	}
-	if match := statementLetPattern.FindStringSubmatch(statement); match != nil {
-		expr := strings.TrimSpace(match[3])
+	if let, ok := parseLetStatement(statement); ok {
+		expr := strings.TrimSpace(let.Expr)
 		if canonical, err := CanonicalExpr(expr); err == nil {
 			expr = canonical
 		} else {
 			expr = strings.Join(strings.Fields(expr), " ")
 		}
-		return "let " + match[1] + " " + match[2] + " = " + expr
+		return "let " + let.Name + " " + let.Type + " = " + expr
 	}
-	if match := statementIncDecPattern.FindStringSubmatch(statement); match != nil {
-		return match[1] + match[2]
+	if target, op, ok := parseIncDecStatement(statement); ok {
+		return target + op
 	}
-	if match := statementAssignPattern.FindStringSubmatch(statement); match != nil {
-		expr := strings.TrimSpace(match[2])
+	if target, expr, ok := parseAssignStatement(statement); ok {
+		expr = strings.TrimSpace(expr)
 		if canonical, err := CanonicalExpr(expr); err == nil {
 			expr = canonical
 		} else {
 			expr = strings.Join(strings.Fields(expr), " ")
 		}
-		return match[1] + " = " + expr
+		return target + " = " + expr
 	}
 	if call, ok := ParseCall(statement); ok {
 		args := make([]string, 0, len(call.Args))
@@ -803,7 +1034,7 @@ func ParseCall(expr string) (Call, bool) {
 		return Call{}, false
 	}
 	name := strings.TrimSpace(expr[:open])
-	if !identifierPattern.MatchString(name) {
+	if !isIdentifier(name) {
 		return Call{}, false
 	}
 	args, err := splitCommaList(expr[open+1 : len(expr)-1])
@@ -842,7 +1073,7 @@ func parseParams(source string) ([]Param, error) {
 			return nil, fmt.Errorf("parameter %q must use `name type`", item)
 		}
 		name, typ := fields[0], fields[1]
-		if !identifierPattern.MatchString(name) {
+		if !isIdentifier(name) {
 			return nil, fmt.Errorf("invalid parameter name %q", name)
 		}
 		if !isSupportedParamType(typ) {

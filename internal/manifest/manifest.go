@@ -3,14 +3,11 @@ package manifest
 import (
 	"fmt"
 	"path"
-	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
 )
-
-var routeParamPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)(?::([A-Za-z_][A-Za-z0-9_]*))?\}`)
 
 // Manifest is the compiler's normalized view of discovered .gwdk files.
 type Manifest struct {
@@ -496,22 +493,21 @@ func (page Page) DynamicParams() []string {
 		sort.Strings(params)
 		return params
 	}
-	matches := routeParamPattern.FindAllStringSubmatch(page.Route, -1)
-	if len(matches) == 0 {
+	params := RouteParamsFromPath(page.Route)
+	if len(params) == 0 {
 		return nil
 	}
 
-	params := make([]string, 0, len(matches))
+	names := make([]string, 0, len(params))
 	seen := map[string]bool{}
-	for _, match := range matches {
-		param := match[1]
-		if !seen[param] {
-			seen[param] = true
-			params = append(params, param)
+	for _, param := range params {
+		if !seen[param.Name] {
+			seen[param.Name] = true
+			names = append(names, param.Name)
 		}
 	}
-	sort.Strings(params)
-	return params
+	sort.Strings(names)
+	return names
 }
 
 // TypedRouteParams returns route params with explicit type metadata. Untyped
@@ -530,23 +526,73 @@ func (page Page) TypedRouteParams() []RouteParam {
 		}
 		return out
 	}
-	matches := routeParamPattern.FindAllStringSubmatch(page.Route, -1)
-	if len(matches) == 0 {
+	params := RouteParamsFromPath(page.Route)
+	if len(params) == 0 {
 		return nil
 	}
-	out := make([]RouteParam, 0, len(matches))
+	out := make([]RouteParam, 0, len(params))
 	seen := map[string]bool{}
-	for _, match := range matches {
-		name := match[1]
-		if seen[name] {
+	for _, param := range params {
+		if seen[param.Name] {
 			continue
 		}
-		seen[name] = true
-		paramType := match[2]
-		if paramType == "" {
-			paramType = "string"
-		}
-		out = append(out, RouteParam{Name: name, Type: paramType})
+		seen[param.Name] = true
+		out = append(out, param)
 	}
 	return out
+}
+
+// RouteParamsFromPath scans a route path for `{name}` and `{name:type}`
+// segments. Invalid brace contents are ignored here; route validation owns
+// reporting malformed route syntax.
+func RouteParamsFromPath(route string) []RouteParam {
+	var params []RouteParam
+	for index := 0; index < len(route); index++ {
+		if route[index] != '{' {
+			continue
+		}
+		end := strings.IndexByte(route[index:], '}')
+		if end < 0 {
+			continue
+		}
+		end += index
+		body := route[index+1 : end]
+		name, paramType, ok := splitRouteParamBody(body)
+		if ok {
+			params = append(params, RouteParam{Name: name, Type: paramType})
+		}
+		index = end
+	}
+	return params
+}
+
+func splitRouteParamBody(body string) (string, string, bool) {
+	name := body
+	paramType := "string"
+	if before, after, ok := strings.Cut(body, ":"); ok {
+		name = before
+		paramType = after
+	}
+	if !isRouteIdent(name) || !isRouteIdent(paramType) {
+		return "", "", false
+	}
+	return name, paramType, true
+}
+
+func isRouteIdent(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		if index == 0 {
+			if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+				return false
+			}
+			continue
+		}
+		if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
 }

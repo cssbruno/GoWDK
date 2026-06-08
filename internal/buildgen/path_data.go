@@ -13,11 +13,11 @@ func parseLiteralDeclarations(body, blockName, itemName string) ([]map[string]st
 		if line == "" || strings.HasPrefix(line, "//") {
 			continue
 		}
-		match := literalDeclarationPattern.FindStringSubmatch(line)
-		if match == nil {
+		literal, ok := parseLiteralDeclaration(line)
+		if !ok {
 			return nil, fmt.Errorf("%s line %d must use `=> { name: \"value\" }`", blockName, index+1)
 		}
-		params, err := parseLiteralStringMap(match[1], itemName)
+		params, err := parseLiteralStringMap(literal, itemName)
 		if err != nil {
 			return nil, fmt.Errorf("%s line %d: %w", blockName, index+1, err)
 		}
@@ -42,7 +42,7 @@ func parseLiteralStringMap(source, itemName string) (map[string]string, error) {
 			return nil, fmt.Errorf("%s %q must use name: \"value\"", itemName, strings.TrimSpace(assignment))
 		}
 		name = strings.TrimSpace(name)
-		if !literalNamePattern.MatchString(name) {
+		if !isLiteralName(name) {
 			return nil, fmt.Errorf("invalid %s name %q", itemName, name)
 		}
 		if _, exists := params[name]; exists {

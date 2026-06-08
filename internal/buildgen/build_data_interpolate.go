@@ -53,7 +53,7 @@ func buildFieldExpression(value string) (string, bool) {
 		return "", false
 	}
 	name := strings.TrimPrefix(strings.TrimSuffix(value, `")`), `field("`)
-	if !literalNamePattern.MatchString(name) {
+	if !isLiteralName(name) {
 		return "", false
 	}
 	return name, true
@@ -64,7 +64,7 @@ func buildRouteParamExpression(value string) (string, bool) {
 		return "", false
 	}
 	name := strings.TrimPrefix(strings.TrimSuffix(value, `")`), `param("`)
-	if !literalNamePattern.MatchString(name) {
+	if !isLiteralName(name) {
 		return "", false
 	}
 	return name, true

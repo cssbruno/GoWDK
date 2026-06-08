@@ -2,14 +2,11 @@ package compiler
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/view"
 )
-
-var componentSimpleInterpolationPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 type reactiveAttrExpr struct {
 	Name       string
@@ -277,7 +274,39 @@ func literalAttrValue(attrs []view.Attr, name string) string {
 }
 
 func collectSimpleInterpolations(value string, fields map[string]bool) {
-	for _, match := range componentSimpleInterpolationPattern.FindAllStringSubmatch(value, -1) {
-		fields[match[1]] = true
+	for index := 0; index < len(value); index++ {
+		if value[index] != '{' {
+			continue
+		}
+		end := strings.IndexByte(value[index+1:], '}')
+		if end < 0 {
+			return
+		}
+		end += index + 1
+		name := value[index+1 : end]
+		if isSimpleInterpolationName(name) {
+			fields[name] = true
+		}
+		index = end
 	}
+}
+
+func isSimpleInterpolationName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index := 0; index < len(value); index++ {
+		char := value[index]
+		if index == 0 {
+			if char != '_' && (char < 'A' || char > 'Z') && (char < 'a' || char > 'z') {
+				return false
+			}
+			continue
+		}
+		if char == '_' || (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }

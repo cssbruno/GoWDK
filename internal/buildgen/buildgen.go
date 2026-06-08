@@ -2,7 +2,7 @@
 package buildgen
 
 import (
-	"regexp"
+	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientrt"
 )
@@ -32,13 +32,80 @@ const storeRuntimeAssetPath = islandRuntimeDir + "/stores.js"
 const storeRuntimeHref = "/" + storeRuntimeAssetPath
 
 var (
-	literalDeclarationPattern = regexp.MustCompile(`^=>\s*\{(.*)\}$`)
-	literalNamePattern        = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	cssInputNamePattern       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
-	layoutSlotPattern         = regexp.MustCompile(`<slot\s*/>`)
-)
-
-var (
 	defaultCSSIncludes = []string{"**/*.css"}
 	defaultCSSExcludes = []string{".git/**", "**/.git/**", "vendor/**", "**/vendor/**", "node_modules/**", "**/node_modules/**", ".gowdk/**", "**/.gowdk/**", "dist/**", "**/dist/**"}
 )
+
+func parseLiteralDeclaration(line string) (string, bool) {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "=>") {
+		return "", false
+	}
+	body := strings.TrimSpace(strings.TrimPrefix(line, "=>"))
+	if !strings.HasPrefix(body, "{") || !strings.HasSuffix(body, "}") {
+		return "", false
+	}
+	return strings.TrimSpace(body[1 : len(body)-1]), true
+}
+
+func isLiteralName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		if index == 0 {
+			if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+				return false
+			}
+			continue
+		}
+		if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func isCSSInputName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		if index == 0 {
+			if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+				return false
+			}
+			continue
+		}
+		if r != '_' && r != '.' && r != '-' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func layoutSlotIndexes(source string) [][2]int {
+	var matches [][2]int
+	for index := 0; index < len(source); index++ {
+		if source[index] != '<' || !strings.HasPrefix(source[index:], "<slot") {
+			continue
+		}
+		cursor := index + len("<slot")
+		for cursor < len(source) && (source[cursor] == ' ' || source[cursor] == '\t' || source[cursor] == '\n' || source[cursor] == '\r') {
+			cursor++
+		}
+		if cursor >= len(source) || source[cursor] != '/' {
+			continue
+		}
+		cursor++
+		for cursor < len(source) && (source[cursor] == ' ' || source[cursor] == '\t' || source[cursor] == '\n' || source[cursor] == '\r') {
+			cursor++
+		}
+		if cursor >= len(source) || source[cursor] != '>' {
+			continue
+		}
+		matches = append(matches, [2]int{index, cursor + 1})
+		index = cursor
+	}
+	return matches
+}

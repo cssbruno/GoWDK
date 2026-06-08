@@ -7,14 +7,11 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
-
-var goEndpointCommentPattern = regexp.MustCompile(`^gowdk:(act|api)\s+([A-Za-z]+)\s+(\S+)\s*$`)
 
 // DiscoverGoEndpointComments merges optional //gowdk:act and //gowdk:api
 // comments from selected feature-package Go files into the manifest.
@@ -127,13 +124,12 @@ func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageNam
 		text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
 		text = strings.TrimSpace(strings.TrimPrefix(text, "/*"))
 		text = strings.TrimSpace(strings.TrimSuffix(text, "*/"))
-		match := goEndpointCommentPattern.FindStringSubmatch(text)
-		if match == nil {
+		kind, methodText, routeText, ok := parseGoEndpointComment(text)
+		if !ok {
 			continue
 		}
-		method := strings.ToUpper(match[2])
-		route := strings.Trim(match[3], `"`)
-		kind := match[1]
+		method := strings.ToUpper(methodText)
+		route := strings.Trim(routeText, `"`)
 		span := goTokenSpan(fileSet, comment.Pos(), comment.End())
 		endpoints = append(endpoints, manifest.EndpointDeclaration{
 			Kind:        kind,
@@ -149,6 +145,39 @@ func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageNam
 		})
 	}
 	return endpoints
+}
+
+func parseGoEndpointComment(text string) (string, string, string, bool) {
+	rest, ok := strings.CutPrefix(text, "gowdk:")
+	if !ok {
+		return "", "", "", false
+	}
+	fields := strings.Fields(rest)
+	if len(fields) != 3 {
+		return "", "", "", false
+	}
+	kind := fields[0]
+	if kind != "act" && kind != "api" {
+		return "", "", "", false
+	}
+	if !isASCIILetters(fields[1]) {
+		return "", "", "", false
+	}
+	return kind, fields[1], fields[2], true
+}
+
+func isASCIILetters(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index := 0; index < len(value); index++ {
+		char := value[index]
+		if (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func goEndpointDiagnostic(fileSet *token.FileSet, path string, node ast.Node, code string, message string) ValidationError {

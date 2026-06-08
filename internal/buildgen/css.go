@@ -141,7 +141,7 @@ func discoverCSSInputs(config gowdk.Config, outputDir string) (map[string]cssInp
 	var failures []string
 	for _, filePath := range paths {
 		name := cssInputName(filePath)
-		if !cssInputNamePattern.MatchString(name) {
+		if !isCSSInputName(name) {
 			failures = append(failures, fmt.Sprintf("css file %q exports invalid name %q", filePath, name))
 			continue
 		}

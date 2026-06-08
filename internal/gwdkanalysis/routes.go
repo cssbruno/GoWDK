@@ -1,23 +1,19 @@
 package gwdkanalysis
 
 import (
-	"regexp"
 	"sort"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-var routeParamPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)(?::([A-Za-z_][A-Za-z0-9_]*))?\}`)
-
 func routeParams(route string) []string {
-	matches := routeParamPattern.FindAllStringSubmatch(route, -1)
-	out := make([]string, 0, len(matches))
+	params := manifest.RouteParamsFromPath(route)
+	out := make([]string, 0, len(params))
 	seen := map[string]bool{}
-	for _, match := range matches {
-		name := match[1]
-		if !seen[name] {
-			seen[name] = true
-			out = append(out, name)
+	for _, param := range params {
+		if !seen[param.Name] {
+			seen[param.Name] = true
+			out = append(out, param.Name)
 		}
 	}
 	sort.Strings(out)
@@ -25,20 +21,15 @@ func routeParams(route string) []string {
 }
 
 func typedRouteParams(route string) []manifest.RouteParam {
-	matches := routeParamPattern.FindAllStringSubmatch(route, -1)
-	out := make([]manifest.RouteParam, 0, len(matches))
+	params := manifest.RouteParamsFromPath(route)
+	out := make([]manifest.RouteParam, 0, len(params))
 	seen := map[string]bool{}
-	for _, match := range matches {
-		name := match[1]
-		if seen[name] {
+	for _, param := range params {
+		if seen[param.Name] {
 			continue
 		}
-		seen[name] = true
-		paramType := match[2]
-		if paramType == "" {
-			paramType = "string"
-		}
-		out = append(out, manifest.RouteParam{Name: name, Type: paramType})
+		seen[param.Name] = true
+		out = append(out, param)
 	}
 	return out
 }

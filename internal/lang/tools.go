@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -16,8 +15,6 @@ import (
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/parser"
 )
-
-var parserLinePattern = regexp.MustCompile(`^line ([0-9]+): `)
 
 // FileKind identifies the current source file category.
 type FileKind string
@@ -85,11 +82,15 @@ func parserErrorCode(message string) string {
 }
 
 func parserErrorPosition(message string) Position {
-	match := parserLinePattern.FindStringSubmatch(message)
-	if match == nil {
+	lineText, ok := strings.CutPrefix(message, "line ")
+	if !ok {
 		return Position{}
 	}
-	line, err := strconv.Atoi(match[1])
+	lineText, _, ok = strings.Cut(lineText, ": ")
+	if !ok {
+		return Position{}
+	}
+	line, err := strconv.Atoi(lineText)
 	if err != nil {
 		return Position{}
 	}

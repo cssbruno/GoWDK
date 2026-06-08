@@ -6,11 +6,8 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/manifest"
-	"regexp"
 	"strings"
 )
-
-var cssReferencePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
 
 func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	mode := page.RenderMode(config.Render.DefaultMode())
@@ -282,7 +279,7 @@ func validatePageCSS(page manifest.Page) []ValidationError {
 	seen := map[string]bool{}
 	var diagnostics []ValidationError
 	for _, name := range page.CSS {
-		if !cssReferencePattern.MatchString(name) {
+		if !isCSSReferenceName(name) {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:   "invalid_css_selection",
 				PageID: page.ID,
@@ -309,6 +306,26 @@ func validatePageCSS(page manifest.Page) []ValidationError {
 		seen[name] = true
 	}
 	return diagnostics
+}
+
+func isCSSReferenceName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for index := 0; index < len(name); index++ {
+		char := name[index]
+		if index == 0 {
+			if char != '_' && (char < 'A' || char > 'Z') && (char < 'a' || char > 'z') {
+				return false
+			}
+			continue
+		}
+		if char == '_' || char == '.' || char == '-' || (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func containsCSSReference(values []string, target string) bool {

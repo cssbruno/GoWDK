@@ -212,13 +212,13 @@ func parseLoadLiteralLine(line string) (*ast.CompositeLit, bool, error) {
 func loadFieldPath(expression ast.Expr) (string, bool) {
 	switch expr := expression.(type) {
 	case *ast.Ident:
-		if !literalNamePattern.MatchString(expr.Name) {
+		if !isLiteralName(expr.Name) {
 			return "", false
 		}
 		return expr.Name, true
 	case *ast.SelectorExpr:
 		base, ok := loadFieldPath(expr.X)
-		if !ok || !literalNamePattern.MatchString(expr.Sel.Name) {
+		if !ok || !isLiteralName(expr.Sel.Name) {
 			return "", false
 		}
 		return base + "." + expr.Sel.Name, true

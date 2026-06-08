@@ -95,7 +95,7 @@ func resolvePageLayout(page manifest.Page, layouts map[string]manifest.Layout, l
 }
 
 func composeLayoutSource(layout manifest.Layout, child string) (string, error) {
-	matches := layoutSlotPattern.FindAllStringIndex(layout.Blocks.ViewBody, -1)
+	matches := layoutSlotIndexes(layout.Blocks.ViewBody)
 	if len(matches) != 1 {
 		return "", fmt.Errorf("layout %s must contain exactly one <slot /> placeholder", layout.ID)
 	}

@@ -92,7 +92,7 @@ func runInlineBuildDataCall(script manifest.GoBlock, imports []manifest.Import, 
 }
 
 func inlineBuildDataRunnerSource(script manifest.GoBlock, imports []manifest.Import, source string, function string) (string, error) {
-	if !literalNamePattern.MatchString(function) {
+	if !isLiteralName(function) {
 		return "", fmt.Errorf("invalid build function name %q", function)
 	}
 	file, err := parseInlineGoBlockFile(script, packageNameForInlineScript(source))
@@ -136,7 +136,7 @@ func parseInlineGoBlockFile(script manifest.GoBlock, packageName string) (*ast.F
 
 func packageNameForInlineScript(source string) string {
 	base := filepath.Base(sourceDir(source))
-	if literalNamePattern.MatchString(base) {
+	if isLiteralName(base) {
 		return base
 	}
 	return "gowdkinline"
@@ -306,10 +306,10 @@ func findBuildImport(alias string, imports []manifest.Import) (manifest.Import, 
 }
 
 func buildDataRunnerSource(alias, importPath, function string) (string, error) {
-	if !literalNamePattern.MatchString(alias) {
+	if !isLiteralName(alias) {
 		return "", fmt.Errorf("invalid build import alias %q", alias)
 	}
-	if !literalNamePattern.MatchString(function) {
+	if !isLiteralName(function) {
 		return "", fmt.Errorf("invalid build function name %q", function)
 	}
 	if strings.TrimSpace(importPath) == "" {
@@ -386,7 +386,7 @@ func parseBuildFunctionOutput(output []byte) (map[string]string, error) {
 	}
 	data := map[string]string{}
 	for key, value := range raw {
-		if !literalNamePattern.MatchString(key) {
+		if !isLiteralName(key) {
 			return nil, fmt.Errorf("invalid build field name %q", key)
 		}
 		scalar, ok := buildScalarString(value)

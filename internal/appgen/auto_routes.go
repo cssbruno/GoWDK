@@ -147,18 +147,18 @@ func assignBackendAliases(options *Options) {
 }
 
 func safeImportAlias(value string) string {
-	var builder strings.Builder
+	out := make([]rune, 0, len(value))
 	for index, char := range strings.TrimSpace(value) {
 		valid := char == '_' || unicode.IsLetter(char) || unicode.IsDigit(char)
 		if !valid {
 			continue
 		}
 		if index == 0 && unicode.IsDigit(char) {
-			builder.WriteByte('p')
+			out = append(out, 'p')
 		}
-		builder.WriteRune(char)
+		out = append(out, char)
 	}
-	return builder.String()
+	return string(out)
 }
 
 func ssrRoutes(artifacts []buildgen.SSRArtifact) []SSRRoute {

@@ -73,8 +73,7 @@ func matchesAny(matchers []*regexp.Regexp, value string) bool {
 }
 
 func globToRegex(pattern string) string {
-	var out strings.Builder
-	out.WriteString("^")
+	parts := []string{"^"}
 	for i := 0; i < len(pattern); i++ {
 		switch pattern[i] {
 		case '*':
@@ -82,22 +81,21 @@ func globToRegex(pattern string) string {
 				i++
 				if i+1 < len(pattern) && pattern[i+1] == '/' {
 					i++
-					out.WriteString("(?:.*/)?")
+					parts = append(parts, "(?:.*/)?")
 				} else {
-					out.WriteString(".*")
+					parts = append(parts, ".*")
 				}
 			} else {
-				out.WriteString("[^/]*")
+				parts = append(parts, "[^/]*")
 			}
 		case '?':
-			out.WriteString("[^/]")
+			parts = append(parts, "[^/]")
 		case '.', '+', '(', ')', '|', '{', '}', '[', ']', '^', '$', '\\':
-			out.WriteByte('\\')
-			out.WriteByte(pattern[i])
+			parts = append(parts, `\`+string(pattern[i]))
 		default:
-			out.WriteByte(pattern[i])
+			parts = append(parts, string(pattern[i]))
 		}
 	}
-	out.WriteString("$")
-	return out.String()
+	parts = append(parts, "$")
+	return strings.Join(parts, "")
 }

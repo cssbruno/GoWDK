@@ -146,25 +146,21 @@ func ValidationFragment(target string, result validation.Result) Response {
 
 // ValidationHTML renders a small escaped validation message block.
 func ValidationHTML(result validation.Result) string {
-	var out strings.Builder
-	out.WriteString(`<div data-gowdk-validation role="alert" aria-live="polite">`)
+	parts := []string{`<div data-gowdk-validation role="alert" aria-live="polite">`}
 	if len(result.Errors) > 0 {
-		out.WriteString(`<ul>`)
+		parts = append(parts, `<ul>`)
 		for _, validationErr := range result.Errors {
-			out.WriteString(`<li`)
+			item := `<li`
 			if validationErr.Field != "" {
-				out.WriteString(` data-gowdk-field="`)
-				out.WriteString(html.EscapeString(validationErr.Field))
-				out.WriteString(`"`)
+				item += ` data-gowdk-field="` + html.EscapeString(validationErr.Field) + `"`
 			}
-			out.WriteString(`>`)
-			out.WriteString(html.EscapeString(validationErr.Message))
-			out.WriteString(`</li>`)
+			item += `>` + html.EscapeString(validationErr.Message) + `</li>`
+			parts = append(parts, item)
 		}
-		out.WriteString(`</ul>`)
+		parts = append(parts, `</ul>`)
 	}
-	out.WriteString(`</div>`)
-	return out.String()
+	parts = append(parts, `</div>`)
+	return strings.Join(parts, "")
 }
 
 // WriteHTTP writes a runtime response envelope to net/http.

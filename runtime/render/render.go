@@ -15,33 +15,33 @@ type Renderer struct{}
 // Builder is the low-level generated render target. Markup writes are trusted
 // compiler output; expression writes escape by default.
 type Builder struct {
-	out strings.Builder
+	parts []string
 }
 
 // Markup writes compiler-owned markup.
 func (builder *Builder) Markup(value string) {
-	builder.out.WriteString(value)
+	builder.parts = append(builder.parts, value)
 }
 
 // Text writes expression output escaped for HTML text context.
 func (builder *Builder) Text(value string) {
-	builder.out.WriteString(gowdkhtml.Escape(value))
+	builder.parts = append(builder.parts, gowdkhtml.Escape(value))
 }
 
 // String returns the rendered HTML.
 func (builder *Builder) String() string {
-	return builder.out.String()
+	return strings.Join(builder.parts, "")
 }
 
 // Render joins generated component output into one HTML response body.
 func (renderer Renderer) Render(ctx context.Context, components ...component.Component) (string, error) {
-	var out strings.Builder
+	htmlParts := make([]string, 0, len(components))
 	for _, cmp := range components {
 		html, err := cmp.Render(ctx)
 		if err != nil {
 			return "", err
 		}
-		out.WriteString(html)
+		htmlParts = append(htmlParts, html)
 	}
-	return out.String(), nil
+	return strings.Join(htmlParts, ""), nil
 }

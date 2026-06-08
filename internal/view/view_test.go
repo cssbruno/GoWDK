@@ -18,6 +18,19 @@ func TestRenderSPAEscapesTextAndAttributes(t *testing.T) {
 	}
 }
 
+func TestRenderSPADecodesSourceTextEntitiesBeforeEscaping(t *testing.T) {
+	got, err := RenderSPA(`<pre><code>expected=&#34;$(awk &#39;$2 == &#34;gowdk-darwin-amd64&#34; &#123; print $1 &#125;&#39;)&#34;
+Project &lt;file&gt; stays literal.</code></pre>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<pre><code>expected=&#34;$(awk &#39;$2 == &#34;gowdk-darwin-amd64&#34; { print $1 }&#39;)&#34;
+Project &lt;file&gt; stays literal.</code></pre>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
 func TestRenderSPAExpandsClassAndIDShorthand(t *testing.T) {
 	got, err := RenderSPA(`<main #hero .text-4xl .font-bold class="lead">Title</main>`)
 	if err != nil {

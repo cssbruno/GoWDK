@@ -10,7 +10,7 @@ import (
 )
 
 type Node interface {
-	render(*renderContext, *strings.Builder) error
+	render(*renderContext, *renderOutput) error
 }
 
 // Text is escaped text content.
@@ -18,20 +18,20 @@ type Text struct {
 	Value string
 }
 
-func (node Text) render(ctx *renderContext, out *strings.Builder) error {
+func (node Text) render(ctx *renderContext, out *renderOutput) error {
 	if ctx.templateLoop == nil {
 		if field, ok := islandTextBinding(node.Value); ok && ctx.bindFields[field] {
 			value, _, err := interpolateValue(ctx, node.Value)
 			if err != nil {
 				return err
 			}
-			out.WriteString(`<span data-gowdk-bind="`)
-			out.WriteString(gowhtml.Escape(field))
-			out.WriteString(`" data-gowdk-binding-text="`)
-			out.WriteString(ctx.nextBindingID())
-			out.WriteString(`">`)
-			out.WriteString(gowhtml.Escape(value))
-			out.WriteString(`</span>`)
+			out.write(`<span data-gowdk-bind="`)
+			out.write(gowhtml.Escape(field))
+			out.write(`" data-gowdk-binding-text="`)
+			out.write(ctx.nextBindingID())
+			out.write(`">`)
+			out.write(gowhtml.Escape(value))
+			out.write(`</span>`)
 			return nil
 		}
 	}
@@ -72,7 +72,7 @@ func ParseForDirective(source string) (ForDirective, error) {
 	return ForDirective{Var: item, IndexVar: index, Collection: collection}, nil
 }
 
-func (node Element) renderFor(ctx *renderContext, out *strings.Builder, loop ForDirective, keyExpr string) error {
+func (node Element) renderFor(ctx *renderContext, out *renderOutput, loop ForDirective, keyExpr string) error {
 	items, err := loopItems(loop.Collection, ctx.values)
 	if err != nil {
 		return fmt.Errorf("g:for: %w", err)
@@ -83,27 +83,27 @@ func (node Element) renderFor(ctx *renderContext, out *strings.Builder, loop For
 	templateCtx.templateLoop = &templateLoopRender{}
 	templateCtx.loopItem = &loopItemRender{Group: group, KeyExpr: keyExpr}
 	templateCtx.readFields = boolSet(keysFromTypes(ctx.loopSymbols(loop)))
-	var template strings.Builder
+	var template renderOutput
 	if err := templateNode.render(&templateCtx, &template); err != nil {
 		return err
 	}
-	out.WriteString(`<template data-gowdk-for="`)
-	out.WriteString(gowhtml.Escape(group))
-	out.WriteString(`" data-gowdk-binding-list="`)
-	out.WriteString(ctx.nextBindingID())
-	out.WriteString(`" data-gowdk-for-var="`)
-	out.WriteString(gowhtml.Escape(loop.Var))
-	out.WriteString(`" data-gowdk-for-source="`)
-	out.WriteString(gowhtml.Escape(loop.Collection))
-	out.WriteString(`" data-gowdk-for-key="`)
-	out.WriteString(gowhtml.Escape(keyExpr))
+	out.write(`<template data-gowdk-for="`)
+	out.write(gowhtml.Escape(group))
+	out.write(`" data-gowdk-binding-list="`)
+	out.write(ctx.nextBindingID())
+	out.write(`" data-gowdk-for-var="`)
+	out.write(gowhtml.Escape(loop.Var))
+	out.write(`" data-gowdk-for-source="`)
+	out.write(gowhtml.Escape(loop.Collection))
+	out.write(`" data-gowdk-for-key="`)
+	out.write(gowhtml.Escape(keyExpr))
 	if loop.IndexVar != "" {
-		out.WriteString(`" data-gowdk-for-index-var="`)
-		out.WriteString(gowhtml.Escape(loop.IndexVar))
+		out.write(`" data-gowdk-for-index-var="`)
+		out.write(gowhtml.Escape(loop.IndexVar))
 	}
-	out.WriteString(`" data-gowdk-for-template="`)
-	out.WriteString(gowhtml.Escape(template.String()))
-	out.WriteString(`"></template>`)
+	out.write(`" data-gowdk-for-template="`)
+	out.write(gowhtml.Escape(template.string()))
+	out.write(`"></template>`)
 	seenKeys := map[string]bool{}
 	for index, item := range items {
 		itemCtx, err := ctx.loopContext(loop, keyExpr, group, item, index)

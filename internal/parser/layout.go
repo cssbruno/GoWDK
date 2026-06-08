@@ -1,0 +1,190 @@
+package parser
+
+import (
+	"bufio"
+	"bytes"
+	"fmt"
+	"strings"
+
+	"github.com/cssbruno/gowdk/internal/manifest"
+)
+
+// ParseLayout extracts layout metadata and top-level block declarations.
+func ParseLayout(source []byte) (manifest.Layout, error) {
+	var layout manifest.Layout
+	var viewBody []string
+	inView := false
+	var styleBody []string
+	inStyle := false
+	styleDepth := 0
+	var goBlockBody []string
+	inGoBlock := false
+	goBlockDepth := 0
+	goBlockTarget := ""
+	seenGoBlocks := map[string]manifest.SourceSpan{}
+	seenDeclaration := false
+
+	scanner := bufio.NewScanner(bytes.NewReader(source))
+	for lineNumber := 1; scanner.Scan(); lineNumber++ {
+		rawLine := scanner.Text()
+		line := strings.TrimSpace(rawLine)
+		if inGoBlock {
+			if line == "}" {
+				goBlockDepth--
+				if goBlockDepth == 0 {
+					layout.Blocks.GoBlocks = append(layout.Blocks.GoBlocks, manifest.GoBlock{
+						Target: goBlockTarget,
+						Body:   strings.TrimSpace(strings.Join(goBlockBody, "\n")),
+						Span:   seenGoBlocks[goBlockTarget],
+					})
+					layout.Blocks.Spans.GoBlocks = append(layout.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: goBlockTarget, Span: seenGoBlocks[goBlockTarget]})
+					inGoBlock = false
+					goBlockBody = nil
+					goBlockDepth = 0
+					goBlockTarget = ""
+					continue
+				}
+				goBlockBody = append(goBlockBody, rawLine)
+				continue
+			}
+			goBlockDepth += braceDelta(rawLine)
+			if goBlockDepth < 1 {
+				return manifest.Layout{}, fmt.Errorf("line %d: go block closed unexpectedly", lineNumber)
+			}
+			goBlockBody = append(goBlockBody, rawLine)
+			continue
+		}
+		if inStyle {
+			styleDepth += braceDelta(rawLine)
+			if styleDepth < 0 {
+				return manifest.Layout{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+			}
+			if styleDepth == 0 {
+				layout.Blocks.StyleBody = strings.TrimSpace(strings.Join(styleBody, "\n"))
+				layout.Blocks.Style = layout.Blocks.StyleBody != ""
+				inStyle = false
+				styleBody = nil
+				styleDepth = 0
+				continue
+			}
+			styleBody = append(styleBody, rawLine)
+			continue
+		}
+		if inView {
+			if line == "style {" {
+				return manifest.Layout{}, fmt.Errorf("line %d: style block must be outside view {}", lineNumber)
+			}
+			if line == "}" {
+				layout.Blocks.View = true
+				layout.Blocks.ViewBody = strings.TrimSpace(strings.Join(viewBody, "\n"))
+				inView = false
+				viewBody = nil
+				continue
+			}
+			viewBody = append(viewBody, rawLine)
+			continue
+		}
+
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+
+		if match := packagePattern.FindStringSubmatch(line); match != nil {
+			if seenDeclaration {
+				return manifest.Layout{}, fmt.Errorf("line %d: package declaration must be the first non-comment declaration", lineNumber)
+			}
+			layout.Package = match[1]
+			layout.PackageSpan = sourceLineSpan(lineNumber, rawLine)
+			seenDeclaration = true
+			continue
+		}
+		if strings.HasPrefix(line, "package ") {
+			return manifest.Layout{}, fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line)
+		}
+		seenDeclaration = true
+
+		if strings.HasPrefix(line, "@") {
+			match := annotationPattern.FindStringSubmatch(line)
+			if match == nil {
+				return manifest.Layout{}, fmt.Errorf("line %d: malformed annotation %q", lineNumber, line)
+			}
+			if err := applyLayoutAnnotation(&layout, match[1], match[2], lineNumber, rawLine); err != nil {
+				return manifest.Layout{}, fmt.Errorf("line %d: %w", lineNumber, err)
+			}
+			continue
+		}
+
+		if match := usePattern.FindStringSubmatch(line); match != nil {
+			layout.Uses = append(layout.Uses, manifest.Use{
+				Alias:   match[1],
+				Package: match[2],
+				Span:    sourceLineSpan(lineNumber, rawLine),
+			})
+			continue
+		}
+		if isMalformedUse(line) {
+			return manifest.Layout{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
+		}
+
+		switch line {
+		case "view {":
+			layout.Blocks.Spans.View = sourceLineSpan(lineNumber, rawLine)
+			inView = true
+			continue
+		case "style {":
+			if layout.Blocks.Style {
+				return manifest.Layout{}, fmt.Errorf("line %d: layout declares multiple style blocks", lineNumber)
+			}
+			layout.Blocks.Style = true
+			inStyle = true
+			styleDepth = 1
+			continue
+		case "go {":
+			span := sourceLineSpan(lineNumber, rawLine)
+			if first, exists := seenGoBlocks[""]; exists {
+				return manifest.Layout{}, fmt.Errorf("line %d: duplicate go block; first declared on line %d", lineNumber, first.Start.Line)
+			}
+			seenGoBlocks[""] = span
+			inGoBlock = true
+			goBlockDepth = 1
+			goBlockTarget = ""
+			continue
+		}
+		if match := goBlockPattern.FindStringSubmatch(line); match != nil {
+			target := strings.TrimSpace(match[1])
+			span := sourceLineSpan(lineNumber, rawLine)
+			if first, exists := seenGoBlocks[target]; exists {
+				label := "go"
+				if target != "" {
+					label = "go " + target
+				}
+				return manifest.Layout{}, fmt.Errorf("line %d: duplicate %s block; first declared on line %d", lineNumber, label, first.Start.Line)
+			}
+			seenGoBlocks[target] = span
+			inGoBlock = true
+			goBlockDepth = 1
+			goBlockTarget = target
+			continue
+		}
+
+		if name := unsupportedTopLevelBlockName(line); name != "" {
+			return manifest.Layout{}, fmt.Errorf("line %d: unsupported top-level block %q", lineNumber, name)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return manifest.Layout{}, err
+	}
+	if inView {
+		return manifest.Layout{}, fmt.Errorf("view block missing closing }")
+	}
+	if inStyle {
+		return manifest.Layout{}, fmt.Errorf("style block missing closing }")
+	}
+	if inGoBlock {
+		return manifest.Layout{}, fmt.Errorf("go block missing closing }")
+	}
+	if layout.ID == "" {
+		return manifest.Layout{}, fmt.Errorf("missing @layout")
+	}
+	return layout, nil
+}

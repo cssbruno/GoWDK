@@ -303,21 +303,21 @@ func randomToken() string {
 
 func identityPart(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
-	var out strings.Builder
+	out := make([]rune, 0, len(value))
 	lastDash := false
 	for _, char := range value {
 		valid := char >= 'a' && char <= 'z' || char >= '0' && char <= '9'
 		if valid {
-			out.WriteRune(char)
+			out = append(out, char)
 			lastDash = false
 			continue
 		}
 		if !lastDash {
-			out.WriteByte('-')
+			out = append(out, '-')
 			lastDash = true
 		}
 	}
-	part := strings.Trim(out.String(), "-")
+	part := strings.Trim(string(out), "-")
 	if part == "" {
 		return "instance"
 	}

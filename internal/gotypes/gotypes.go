@@ -215,11 +215,10 @@ func RunStateInitJSON(imports []manifest.Import, state manifest.StateContract) (
 	}
 	path := file.Name()
 	defer os.Remove(path)
-	if _, err := file.WriteString(source); err != nil {
-		file.Close()
+	if err := file.Close(); err != nil {
 		return nil, err
 	}
-	if err := file.Close(); err != nil {
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
 		return nil, err
 	}
 	command := exec.Command("go", "run", path)
@@ -237,50 +236,28 @@ func RunStateInitJSON(imports []manifest.Import, state manifest.StateContract) (
 	return append([]byte(nil), output...), nil
 }
 
-const stateInitImportPlaceholder = "gowdk.local/state-init-placeholder"
-
 func stateInitRunnerSource(importAlias string, importPath string, functionName string) (string, error) {
+	if !goNamePattern.MatchString(importAlias) {
+		return "", fmt.Errorf("invalid state init import alias %q", importAlias)
+	}
+	if !goNamePattern.MatchString(functionName) {
+		return "", fmt.Errorf("invalid state init function name %q", functionName)
+	}
+	if strings.TrimSpace(importPath) == "" {
+		return "", fmt.Errorf("state init import %q has an empty path", importAlias)
+	}
 	fileSet := token.NewFileSet()
-	file, err := parser.ParseFile(fileSet, "gowdk-state-init.go", stateInitRunnerSourceTemplate, parser.ParseComments|parser.AllErrors)
-	if err != nil {
-		return "", fmt.Errorf("parse state init runner source: %w", err)
-	}
-	replacedImport := false
-	for _, item := range file.Imports {
-		if item.Name == nil || item.Name.Name != "gowdkstateinit" {
-			continue
-		}
-		currentPath, err := strconv.Unquote(item.Path.Value)
-		if err != nil {
-			return "", fmt.Errorf("parse state init runner import path: %w", err)
-		}
-		if currentPath != stateInitImportPlaceholder {
-			continue
-		}
-		item.Name.Name = importAlias
-		item.Path.Value = strconv.Quote(importPath)
-		replacedImport = true
-	}
-	if !replacedImport {
-		return "", fmt.Errorf("state init runner source is missing state package import placeholder")
-	}
-	replacedCall := false
-	ast.Inspect(file, func(node ast.Node) bool {
-		selector, ok := node.(*ast.SelectorExpr)
-		if !ok || selector.Sel == nil || selector.Sel.Name != "GOWDKStateInit" {
-			return true
-		}
-		receiver, ok := selector.X.(*ast.Ident)
-		if !ok || receiver.Name != "gowdkstateinit" {
-			return true
-		}
-		receiver.Name = importAlias
-		selector.Sel.Name = functionName
-		replacedCall = true
-		return true
-	})
-	if !replacedCall {
-		return "", fmt.Errorf("state init runner source is missing state init call placeholder")
+	file := &ast.File{
+		Name: ast.NewIdent("main"),
+		Decls: []ast.Decl{
+			&ast.GenDecl{Tok: token.IMPORT, Specs: []ast.Spec{
+				&ast.ImportSpec{Path: stateInitStringLit("encoding/json")},
+				&ast.ImportSpec{Path: stateInitStringLit("os")},
+				&ast.ImportSpec{Path: stateInitStringLit("reflect")},
+				&ast.ImportSpec{Name: ast.NewIdent(importAlias), Path: stateInitStringLit(importPath)},
+			}},
+			stateInitMainDecl(importAlias, functionName),
+		},
 	}
 	var buffer bytes.Buffer
 	if err := format.Node(&buffer, fileSet, file); err != nil {
@@ -289,36 +266,150 @@ func stateInitRunnerSource(importAlias string, importPath string, functionName s
 	return buffer.String(), nil
 }
 
-const stateInitRunnerSourceTemplate = `package main
+func stateInitStringLit(value string) *ast.BasicLit {
+	return &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value)}
+}
 
-import (
-	"encoding/json"
-	"os"
-	"reflect"
-
-	gowdkstateinit "gowdk.local/state-init-placeholder"
-)
-
-func main() {
-	value := gowdkstateinit.GOWDKStateInit()
-	reflected := reflect.ValueOf(value)
-	if reflected.Kind() == reflect.Pointer {
-		reflected = reflected.Elem()
-	}
-	typed := reflected.Type()
-	fields := map[string]any{}
-	for index := 0; index < reflected.NumField(); index++ {
-		field := typed.Field(index)
-		if field.PkgPath != "" {
-			continue
-		}
-		fields[field.Name] = reflected.Field(index).Interface()
-	}
-	if err := json.NewEncoder(os.Stdout).Encode(fields); err != nil {
-		panic(err)
+func stateInitMainDecl(importAlias string, functionName string) ast.Decl {
+	return &ast.FuncDecl{
+		Name: ast.NewIdent("main"),
+		Type: &ast.FuncType{Params: &ast.FieldList{}},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			defineStateInitValueStmt(importAlias, functionName),
+			defineStateInitReflectedStmt(),
+			stateInitPointerGuardStmt(),
+			defineStateInitTypedStmt(),
+			defineStateInitFieldsStmt(),
+			stateInitFieldsLoopStmt(),
+			stateInitEncodeGuardStmt(),
+		}},
 	}
 }
-`
+
+func defineStateInitValueStmt(importAlias string, functionName string) ast.Stmt {
+	return &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent("value")},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(importAlias), Sel: ast.NewIdent(functionName)}}},
+	}
+}
+
+func defineStateInitReflectedStmt() ast.Stmt {
+	return &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent("reflected")},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{&ast.CallExpr{
+			Fun:  &ast.SelectorExpr{X: ast.NewIdent("reflect"), Sel: ast.NewIdent("ValueOf")},
+			Args: []ast.Expr{ast.NewIdent("value")},
+		}},
+	}
+}
+
+func stateInitPointerGuardStmt() ast.Stmt {
+	return &ast.IfStmt{
+		Cond: &ast.BinaryExpr{
+			X:  &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent("reflected"), Sel: ast.NewIdent("Kind")}},
+			Op: token.EQL,
+			Y:  &ast.SelectorExpr{X: ast.NewIdent("reflect"), Sel: ast.NewIdent("Pointer")},
+		},
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent("reflected")},
+			Tok: token.ASSIGN,
+			Rhs: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent("reflected"), Sel: ast.NewIdent("Elem")}}},
+		}}},
+	}
+}
+
+func defineStateInitTypedStmt() ast.Stmt {
+	return &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent("typed")},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent("reflected"), Sel: ast.NewIdent("Type")}}},
+	}
+}
+
+func defineStateInitFieldsStmt() ast.Stmt {
+	return &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent("fields")},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{&ast.CompositeLit{Type: &ast.MapType{
+			Key:   ast.NewIdent("string"),
+			Value: ast.NewIdent("any"),
+		}}},
+	}
+}
+
+func stateInitFieldsLoopStmt() ast.Stmt {
+	return &ast.ForStmt{
+		Init: &ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent("index")},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{&ast.BasicLit{Kind: token.INT, Value: "0"}},
+		},
+		Cond: &ast.BinaryExpr{
+			X:  ast.NewIdent("index"),
+			Op: token.LSS,
+			Y:  &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent("reflected"), Sel: ast.NewIdent("NumField")}},
+		},
+		Post: &ast.IncDecStmt{X: ast.NewIdent("index"), Tok: token.INC},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent("field")},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{&ast.CallExpr{
+					Fun:  &ast.SelectorExpr{X: ast.NewIdent("typed"), Sel: ast.NewIdent("Field")},
+					Args: []ast.Expr{ast.NewIdent("index")},
+				}},
+			},
+			&ast.IfStmt{
+				Cond: &ast.BinaryExpr{
+					X:  &ast.SelectorExpr{X: ast.NewIdent("field"), Sel: ast.NewIdent("PkgPath")},
+					Op: token.NEQ,
+					Y:  &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("")},
+				},
+				Body: &ast.BlockStmt{List: []ast.Stmt{&ast.BranchStmt{Tok: token.CONTINUE}}},
+			},
+			&ast.AssignStmt{
+				Lhs: []ast.Expr{&ast.IndexExpr{
+					X:     ast.NewIdent("fields"),
+					Index: &ast.SelectorExpr{X: ast.NewIdent("field"), Sel: ast.NewIdent("Name")},
+				}},
+				Tok: token.ASSIGN,
+				Rhs: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{
+					X: &ast.CallExpr{
+						Fun:  &ast.SelectorExpr{X: ast.NewIdent("reflected"), Sel: ast.NewIdent("Field")},
+						Args: []ast.Expr{ast.NewIdent("index")},
+					},
+					Sel: ast.NewIdent("Interface"),
+				}}},
+			},
+		}},
+	}
+}
+
+func stateInitEncodeGuardStmt() ast.Stmt {
+	return &ast.IfStmt{
+		Init: &ast.AssignStmt{
+			Lhs: []ast.Expr{ast.NewIdent("err")},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{&ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X: &ast.CallExpr{
+						Fun:  &ast.SelectorExpr{X: ast.NewIdent("json"), Sel: ast.NewIdent("NewEncoder")},
+						Args: []ast.Expr{&ast.SelectorExpr{X: ast.NewIdent("os"), Sel: ast.NewIdent("Stdout")}},
+					},
+					Sel: ast.NewIdent("Encode"),
+				},
+				Args: []ast.Expr{ast.NewIdent("fields")},
+			}},
+		},
+		Cond: &ast.BinaryExpr{X: ast.NewIdent("err"), Op: token.NEQ, Y: ast.NewIdent("nil")},
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: &ast.CallExpr{
+			Fun:  ast.NewIdent("panic"),
+			Args: []ast.Expr{ast.NewIdent("err")},
+		}}}},
+	}
+}
 
 // ImportPathForAlias returns the concrete Go import path for a .gwdk import
 // alias and rejects relative import paths.

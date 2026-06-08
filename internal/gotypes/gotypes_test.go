@@ -25,7 +25,6 @@ func TestStateInitRunnerSourceRewritesImportAndFunctionWithAST(t *testing.T) {
 	}
 	for _, placeholder := range []string{
 		"gowdkstateinit",
-		stateInitImportPlaceholder,
 		"GOWDKStateInit",
 	} {
 		if strings.Contains(source, placeholder) {

@@ -39,22 +39,22 @@ func SafePackageName(packageName string) string {
 	if name == "" {
 		return "goblocks"
 	}
-	var builder strings.Builder
+	out := make([]rune, 0, len(name))
 	for index, char := range name {
 		if char == '_' || unicode.IsLetter(char) || unicode.IsDigit(char) {
 			if index == 0 && unicode.IsDigit(char) {
-				builder.WriteByte('p')
+				out = append(out, 'p')
 			}
-			builder.WriteRune(char)
+			out = append(out, char)
 			continue
 		}
-		builder.WriteByte('_')
+		out = append(out, '_')
 	}
-	out := strings.Trim(builder.String(), "_")
-	if out == "" {
+	result := strings.Trim(string(out), "_")
+	if result == "" {
 		return "goblocks"
 	}
-	return out
+	return result
 }
 
 // SafePackageDir returns a stable generated directory name for a GOWDK package.

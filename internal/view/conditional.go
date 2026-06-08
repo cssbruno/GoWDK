@@ -11,7 +11,7 @@ func renderNodes(nodes []Node, ctx *renderContext) (string, error) {
 	if len(nodes) == 0 {
 		return "", nil
 	}
-	var out strings.Builder
+	var out renderOutput
 	groupSeq := 0
 	inChain := false
 	chainMatched := false
@@ -83,7 +83,7 @@ func renderNodes(nodes []Node, ctx *renderContext) (string, error) {
 			return "", err
 		}
 	}
-	return out.String(), nil
+	return out.string(), nil
 }
 
 type conditionalRender struct {

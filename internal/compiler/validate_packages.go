@@ -1,11 +1,13 @@
 package compiler
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/importer"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"go/types"
 	"io"
@@ -258,7 +260,7 @@ func parseGoBlockPackageFileForValidation(fileSet *token.FileSet, declaration pa
 	if err != nil {
 		return nil, nil
 	}
-	file, parseErr := parser.ParseFile(fileSet, declaration.Source, source, parser.AllErrors)
+	file, parseErr := parser.ParseFile(fileSet, declaration.Source, source, parser.AllErrors|parser.ParseComments)
 	if parseErr != nil {
 		diagnostic := ValidationError{
 			Code:          "invalid_go_block",
@@ -282,35 +284,40 @@ func goBlockPackageSourceForValidation(declaration packageDeclaration, block man
 	if body == "" {
 		return "package " + packageName + "\n", nil
 	}
-	bodyFile, err := parser.ParseFile(token.NewFileSet(), declaration.Source, "package "+packageName+"\n"+block.Body, parser.AllErrors)
+	bodyFileSet := token.NewFileSet()
+	bodyFile, err := parser.ParseFile(bodyFileSet, declaration.Source, "package "+packageName+"\n\n"+block.Body, parser.AllErrors)
 	if err != nil {
 		return "", err
 	}
-	var builder strings.Builder
-	builder.WriteString("package ")
-	builder.WriteString(packageName)
-	builder.WriteString("\n")
-	writeGoBlockGOWDKImportsForValidation(&builder, declaration.Imports, bodyFile)
+
+	file := &ast.File{
+		Package: bodyFile.Package,
+		Name:    bodyFile.Name,
+	}
+	if specs := goBlockGOWDKImportSpecsForValidation(declaration.Imports, bodyFile); len(specs) > 0 {
+		file.Decls = append(file.Decls, &ast.GenDecl{Tok: token.IMPORT, Specs: specs})
+	}
 	line := block.Span.Start.Line
 	if line <= 0 {
 		line = 1
 	}
-	builder.WriteString("//line ")
-	builder.WriteString(filepath.ToSlash(declaration.Source))
-	builder.WriteString(":")
-	builder.WriteString(strconv.Itoa(line))
-	builder.WriteString("\n")
-	builder.WriteString(block.Body)
-	if !strings.HasSuffix(block.Body, "\n") {
-		builder.WriteString("\n")
+	if directive := addGoBlockLineDirectiveForValidation(bodyFileSet, bodyFile, filepath.ToSlash(declaration.Source), line); directive != nil {
+		file.Comments = append(file.Comments, directive)
 	}
-	return builder.String(), nil
+	file.Decls = append(file.Decls, bodyFile.Decls...)
+	file.Comments = append(file.Comments, bodyFile.Comments...)
+
+	var buffer bytes.Buffer
+	if err := printer.Fprint(&buffer, bodyFileSet, file); err != nil {
+		return "", fmt.Errorf("print go block package source: %w", err)
+	}
+	return buffer.String(), nil
 }
 
-func writeGoBlockGOWDKImportsForValidation(builder *strings.Builder, imports []manifest.Import, bodyFile *ast.File) {
+func goBlockGOWDKImportSpecsForValidation(imports []manifest.Import, bodyFile *ast.File) []ast.Spec {
 	used := usedScriptIdentifiersForValidation(bodyFile)
 	localImports := goBlockImportAliasesForValidation(bodyFile)
-	var specs []string
+	var specs []ast.Spec
 	for _, item := range imports {
 		importPath := strings.TrimSpace(item.Path)
 		if importPath == "" {
@@ -320,23 +327,72 @@ func writeGoBlockGOWDKImportsForValidation(builder *strings.Builder, imports []m
 		if !used[alias] || localImports[alias] {
 			continue
 		}
-		if strings.TrimSpace(item.Alias) == "" {
-			specs = append(specs, strconv.Quote(importPath))
-			continue
+		spec := &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(importPath)}}
+		if strings.TrimSpace(item.Alias) != "" {
+			spec.Name = ast.NewIdent(item.Alias)
 		}
-		specs = append(specs, item.Alias+" "+strconv.Quote(importPath))
+		specs = append(specs, spec)
 	}
-	if len(specs) == 0 {
-		return
+	sort.Slice(specs, func(left, right int) bool {
+		return goBlockImportSpecSortKey(specs[left]) < goBlockImportSpecSortKey(specs[right])
+	})
+	return specs
+}
+
+func goBlockImportSpecSortKey(spec ast.Spec) string {
+	importSpec, ok := spec.(*ast.ImportSpec)
+	if !ok {
+		return ""
 	}
-	sort.Strings(specs)
-	builder.WriteString("import (\n")
-	for _, spec := range specs {
-		builder.WriteString("\t")
-		builder.WriteString(spec)
-		builder.WriteString("\n")
+	alias := ""
+	if importSpec.Name != nil {
+		alias = importSpec.Name.Name
 	}
-	builder.WriteString(")\n")
+	path := ""
+	if importSpec.Path != nil {
+		path = importSpec.Path.Value
+	}
+	return alias + "\x00" + path
+}
+
+func addGoBlockLineDirectiveForValidation(fileSet *token.FileSet, file *ast.File, source string, line int) *ast.CommentGroup {
+	if len(file.Decls) == 0 {
+		return nil
+	}
+	directive := &ast.Comment{
+		Slash: goBlockLineDirectivePosition(fileSet, file.Decls[0].Pos()),
+		Text:  "//line " + source + ":" + strconv.Itoa(line),
+	}
+	group := &ast.CommentGroup{List: []*ast.Comment{directive}}
+	switch decl := file.Decls[0].(type) {
+	case *ast.GenDecl:
+		if decl.Doc == nil {
+			decl.Doc = group
+			return group
+		}
+		decl.Doc.List = append(group.List, decl.Doc.List...)
+	case *ast.FuncDecl:
+		if decl.Doc == nil {
+			decl.Doc = group
+			return group
+		}
+		decl.Doc.List = append(group.List, decl.Doc.List...)
+	default:
+		file.Comments = append([]*ast.CommentGroup{group}, file.Comments...)
+	}
+	return group
+}
+
+func goBlockLineDirectivePosition(fileSet *token.FileSet, declaration token.Pos) token.Pos {
+	tokenFile := fileSet.File(declaration)
+	if tokenFile == nil {
+		return declaration
+	}
+	position := fileSet.Position(declaration)
+	if position.Line > 1 {
+		return tokenFile.LineStart(position.Line) - 1
+	}
+	return declaration
 }
 
 func usedScriptIdentifiersForValidation(file *ast.File) map[string]bool {
@@ -496,7 +552,7 @@ func goTypeCheckDiagnostic(fileSet *token.FileSet, err error) ValidationError {
 	default:
 		return diagnostic
 	}
-	position := fileSet.Position(typeError.Pos)
+	position := fileSet.PositionFor(typeError.Pos, true)
 	if position.IsValid() {
 		diagnostic.Source = position.Filename
 		diagnostic.Span = manifest.SourceSpan{

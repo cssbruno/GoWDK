@@ -253,74 +253,73 @@ func document(config gowdk.Config, page manifest.Page, body string, stylesheets 
 	if image == "" {
 		image = config.Build.Head.Image
 	}
-	var head strings.Builder
-	head.WriteString("<head>\n")
-	head.WriteString(`  <meta charset="utf-8">` + "\n")
-	head.WriteString(`  <meta name="viewport" content="width=device-width, initial-scale=1">` + "\n")
-	head.WriteString("  <title>" + gowhtml.Escape(title) + "</title>\n")
+	head := []string{
+		"<head>",
+		`  <meta charset="utf-8">`,
+		`  <meta name="viewport" content="width=device-width, initial-scale=1">`,
+		"  <title>" + gowhtml.Escape(title) + "</title>",
+	}
 	if page.Metadata.Description != "" {
-		head.WriteString("  <meta name=\"description\"" + gowhtml.Attr("content", page.Metadata.Description) + ">\n")
+		head = append(head, "  <meta name=\"description\""+gowhtml.Attr("content", page.Metadata.Description)+">")
 	}
 	if page.Metadata.Canonical != "" {
-		head.WriteString("  <link rel=\"canonical\"" + gowhtml.Attr("href", page.Metadata.Canonical) + ">\n")
+		head = append(head, "  <link rel=\"canonical\""+gowhtml.Attr("href", page.Metadata.Canonical)+">")
 	}
 	if config.Build.Head.Favicon != "" {
-		head.WriteString("  <link rel=\"icon\"" + gowhtml.Attr("href", config.Build.Head.Favicon) + ">\n")
+		head = append(head, "  <link rel=\"icon\""+gowhtml.Attr("href", config.Build.Head.Favicon)+">")
 	}
 	if socialHeadEnabled(config.Build.Head, page.Metadata) {
 		if config.Build.Head.SiteName != "" {
-			head.WriteString("  <meta property=\"og:site_name\"" + gowhtml.Attr("content", config.Build.Head.SiteName) + ">\n")
+			head = append(head, "  <meta property=\"og:site_name\""+gowhtml.Attr("content", config.Build.Head.SiteName)+">")
 		}
-		head.WriteString("  <meta property=\"og:type\" content=\"website\">\n")
+		head = append(head, "  <meta property=\"og:type\" content=\"website\">")
 		if page.Metadata.Canonical != "" {
-			head.WriteString("  <meta property=\"og:url\"" + gowhtml.Attr("content", page.Metadata.Canonical) + ">\n")
+			head = append(head, "  <meta property=\"og:url\""+gowhtml.Attr("content", page.Metadata.Canonical)+">")
 		}
 		if title != "" {
-			head.WriteString("  <meta property=\"og:title\"" + gowhtml.Attr("content", title) + ">\n")
+			head = append(head, "  <meta property=\"og:title\""+gowhtml.Attr("content", title)+">")
 		}
 		if page.Metadata.Description != "" {
-			head.WriteString("  <meta property=\"og:description\"" + gowhtml.Attr("content", page.Metadata.Description) + ">\n")
+			head = append(head, "  <meta property=\"og:description\""+gowhtml.Attr("content", page.Metadata.Description)+">")
 		}
 		if image != "" {
-			head.WriteString("  <meta property=\"og:image\"" + gowhtml.Attr("content", image) + ">\n")
+			head = append(head, "  <meta property=\"og:image\""+gowhtml.Attr("content", image)+">")
 		}
 		card := config.Build.Head.TwitterCard
 		if card == "" {
 			card = "summary"
 		}
-		head.WriteString("  <meta name=\"twitter:card\"" + gowhtml.Attr("content", card) + ">\n")
+		head = append(head, "  <meta name=\"twitter:card\""+gowhtml.Attr("content", card)+">")
 		if title != "" {
-			head.WriteString("  <meta name=\"twitter:title\"" + gowhtml.Attr("content", title) + ">\n")
+			head = append(head, "  <meta name=\"twitter:title\""+gowhtml.Attr("content", title)+">")
 		}
 		if page.Metadata.Description != "" {
-			head.WriteString("  <meta name=\"twitter:description\"" + gowhtml.Attr("content", page.Metadata.Description) + ">\n")
+			head = append(head, "  <meta name=\"twitter:description\""+gowhtml.Attr("content", page.Metadata.Description)+">")
 		}
 		if image != "" {
-			head.WriteString("  <meta name=\"twitter:image\"" + gowhtml.Attr("content", image) + ">\n")
+			head = append(head, "  <meta name=\"twitter:image\""+gowhtml.Attr("content", image)+">")
 		}
 	}
 	for _, stylesheet := range nonEmptyStylesheets(stylesheets) {
-		head.WriteString("  <link rel=\"stylesheet\"" + gowhtml.Attr("href", stylesheet.Href) + ">\n")
+		head = append(head, "  <link rel=\"stylesheet\""+gowhtml.Attr("href", stylesheet.Href)+">")
 	}
 	for _, seed := range storeSeeds {
 		if strings.TrimSpace(seed.Name) == "" {
 			continue
 		}
-		head.WriteString("  <script type=\"application/json\"" + gowhtml.Attr("data-gowdk-store", seed.Name) + ">")
-		head.WriteString(escapeScriptJSON(seed.JSON))
-		head.WriteString("</script>\n")
+		head = append(head, "  <script type=\"application/json\""+gowhtml.Attr("data-gowdk-store", seed.Name)+">"+escapeScriptJSON(seed.JSON)+"</script>")
 	}
 	for _, script := range scripts {
 		if strings.TrimSpace(script) == "" {
 			continue
 		}
-		head.WriteString("  <script" + gowhtml.Attr("src", script) + " defer></script>\n")
+		head = append(head, "  <script"+gowhtml.Attr("src", script)+" defer></script>")
 	}
-	head.WriteString("</head>\n")
+	head = append(head, "</head>")
 
 	return "<!doctype html>\n" +
 		"<html>\n" +
-		head.String() +
+		strings.Join(head, "\n") + "\n" +
 		"<body>\n" +
 		body + "\n" +
 		"</body>\n" +

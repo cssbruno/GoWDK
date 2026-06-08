@@ -288,7 +288,7 @@ func routeAssetName(pageID string) string {
 }
 
 func exportedRouteName(value string) string {
-	var out strings.Builder
+	out := make([]rune, 0, len(value))
 	upperNext := true
 	for _, r := range value {
 		if r == '.' || r == '-' || r == '_' || r == '/' || r == '{' || r == '}' {
@@ -296,11 +296,11 @@ func exportedRouteName(value string) string {
 			continue
 		}
 		if upperNext {
-			out.WriteRune(unicode.ToUpper(r))
+			out = append(out, unicode.ToUpper(r))
 			upperNext = false
 			continue
 		}
-		out.WriteRune(r)
+		out = append(out, r)
 	}
-	return out.String()
+	return string(out)
 }

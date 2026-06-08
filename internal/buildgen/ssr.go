@@ -228,19 +228,19 @@ func loadFieldPath(expression ast.Expr) (string, bool) {
 }
 
 func exportedSafe(value string) string {
-	var builder strings.Builder
+	out := make([]rune, 0, len(value))
 	for _, char := range value {
 		valid := char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9'
 		if valid {
-			builder.WriteRune(char)
+			out = append(out, char)
 			continue
 		}
-		builder.WriteByte('_')
+		out = append(out, '_')
 	}
-	if builder.Len() == 0 {
+	if len(out) == 0 {
 		return "page"
 	}
-	return builder.String()
+	return string(out)
 }
 
 func isRequestTimePage(config gowdk.Config, page manifest.Page) bool {

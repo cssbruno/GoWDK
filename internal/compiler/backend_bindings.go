@@ -790,31 +790,31 @@ func loadFunctionName(pageID string) string {
 }
 
 func exportedIdentifier(value string) string {
-	var builder strings.Builder
+	out := make([]rune, 0, len(value))
 	uppercaseNext := true
 	for _, char := range strings.TrimSpace(value) {
 		if char >= 'a' && char <= 'z' {
 			if uppercaseNext {
 				char = char - 'a' + 'A'
 			}
-			builder.WriteRune(char)
+			out = append(out, char)
 			uppercaseNext = false
 			continue
 		}
 		if char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' {
-			if builder.Len() == 0 && char >= '0' && char <= '9' {
-				builder.WriteByte('P')
+			if len(out) == 0 && char >= '0' && char <= '9' {
+				out = append(out, 'P')
 			}
-			builder.WriteRune(char)
+			out = append(out, char)
 			uppercaseNext = false
 			continue
 		}
 		uppercaseNext = true
 	}
-	if builder.Len() == 0 {
+	if len(out) == 0 {
 		return "Page"
 	}
-	return builder.String()
+	return string(out)
 }
 
 func isSelector(expression ast.Expr, imports map[string]string, importPath, name string) bool {

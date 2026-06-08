@@ -2,6 +2,9 @@ package compiler
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -276,6 +279,35 @@ func TestValidateManifestReportsDefaultScriptTypeErrors(t *testing.T) {
 	}
 	if diagnostic.Span.Start.Line < 8 {
 		t.Fatalf("expected diagnostic to map to go block source line, got %#v", diagnostic.Span)
+	}
+}
+
+func TestGoBlockPackageSourceForValidationPreservesLineDirective(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "home.page.gwdk")
+	payload, err := goBlockPackageSourceForValidation(packageDeclaration{
+		Source:  source,
+		Package: "app",
+	}, manifest.GoBlock{
+		Span: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 8, Column: 1}},
+		Body: `func BrokenCopy() string {
+	return MissingTitle
+}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(payload, "//line "+filepath.ToSlash(source)+":8") {
+		t.Fatalf("missing line directive in validation source:\n%s", payload)
+	}
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, source, payload, parser.ParseComments|parser.AllErrors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	function := file.Decls[0].(*ast.FuncDecl)
+	position := fileSet.PositionFor(function.Body.List[0].(*ast.ReturnStmt).Results[0].Pos(), true)
+	if position.Line < 8 {
+		t.Fatalf("line directive did not adjust parsed position to source line: %s:%d:%d\n%s", position.Filename, position.Line, position.Column, payload)
 	}
 }
 

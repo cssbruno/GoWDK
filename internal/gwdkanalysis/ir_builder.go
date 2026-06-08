@@ -1,0 +1,327 @@
+package gwdkanalysis
+
+import (
+	"path/filepath"
+	"sort"
+
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/cssscope"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
+)
+
+// BuildIR converts a normalized manifest into the stable compiler IR.
+func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
+	builder := irBuilder{
+		config:   config,
+		program:  gwdkir.Program{Version: gwdkir.Version},
+		packages: map[string]*gwdkir.Package{},
+	}
+
+	for _, page := range app.Pages {
+		builder.addPage(page)
+	}
+	for _, component := range app.Components {
+		builder.addComponent(component)
+	}
+	for _, layout := range app.Layouts {
+		builder.addLayout(layout)
+	}
+	for _, endpoint := range app.Endpoints {
+		builder.addStandaloneEndpoint(endpoint)
+	}
+
+	builder.finishPackages()
+	builder.sortOutput()
+	attachBackendBindings(&builder.program, app.BackendBindings)
+	return builder.program
+}
+
+type irBuilder struct {
+	config   gowdk.Config
+	program  gwdkir.Program
+	packages map[string]*gwdkir.Package
+}
+
+func (builder *irBuilder) ensurePackage(name string, source string) *gwdkir.Package {
+	pkg := builder.packages[name]
+	if pkg == nil {
+		pkg = &gwdkir.Package{Name: name}
+		builder.packages[name] = pkg
+	}
+	dir := filepath.Dir(source)
+	if source != "" && !contains(pkg.SourceDirs, dir) {
+		pkg.SourceDirs = append(pkg.SourceDirs, dir)
+	}
+	return pkg
+}
+
+func (builder *irBuilder) addPage(page manifest.Page) {
+	builder.program.Pages = append(builder.program.Pages, lowerIRPage(page))
+	pkg := builder.ensurePackage(page.Package, page.Source)
+	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: page.Source, Kind: gwdkir.SourcePage, Package: page.Package, Name: page.ID, Span: page.Spans.Page})
+	appendPackageImports(pkg, page.Imports)
+	appendPackageUses(pkg, page.Uses)
+	appendPackageStores(pkg, page.Stores)
+
+	mode := page.RenderMode(builder.config.Render.DefaultMode())
+	builder.program.Routes = append(builder.program.Routes, gwdkir.Route{
+		Kind:          routeKind(mode, page),
+		Method:        "GET",
+		Path:          page.Route,
+		PageID:        page.ID,
+		Package:       page.Package,
+		Render:        mode,
+		Cache:         page.CachePolicy(),
+		DynamicParams: page.DynamicParams(),
+		RouteParams:   copyRouteParams(page.TypedRouteParams()),
+		Layouts:       append([]string(nil), page.Layouts...),
+		Guards:        append([]string(nil), page.Guard...),
+		Source:        page.Source,
+		Span:          page.Spans.Route,
+	})
+	builder.addPageTemplate(page)
+	builder.addPageAssets(page)
+	builder.addPageEndpoints(page)
+}
+
+func (builder *irBuilder) addPageTemplate(page manifest.Page) {
+	if !page.Blocks.View {
+		return
+	}
+	template := gwdkir.Template{
+		OwnerKind: gwdkir.SourcePage,
+		OwnerID:   page.ID,
+		Package:   page.Package,
+		Source:    page.Source,
+		Route:     page.Route,
+		Guards:    append([]string(nil), page.Guard...),
+		Imports:   lowerIRImports(page.Imports),
+		Body:      page.Blocks.ViewBody,
+		Span:      page.Blocks.Spans.View,
+		BodyStart: page.Blocks.Spans.ViewBodyStart,
+	}
+	builder.addTemplate(template)
+}
+
+func (builder *irBuilder) addPageAssets(page manifest.Page) {
+	for _, css := range page.CSS {
+		name, useAlias, usePackage := assetUse(page.Uses, css)
+		builder.program.Assets = append(builder.program.Assets, gwdkir.Asset{
+			Kind:       gwdkir.AssetCSS,
+			OwnerID:    page.ID,
+			Package:    page.Package,
+			Source:     page.Source,
+			Path:       css,
+			Name:       name,
+			UseAlias:   useAlias,
+			UsePackage: usePackage,
+			Span:       spanForName(page.Spans.CSS, css, page.Spans.Page),
+		})
+	}
+}
+
+func (builder *irBuilder) addPageEndpoints(page manifest.Page) {
+	for _, action := range page.Blocks.Actions {
+		path := endpointPath(action.Route, page.Route)
+		builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
+			Kind:          gwdkir.EndpointAction,
+			Source:        gwdkir.EndpointSourceGOWDK,
+			Package:       page.Package,
+			PageID:        page.ID,
+			Symbol:        action.Name,
+			Method:        endpointMethod(action.Method, "POST"),
+			Path:          path,
+			ErrorPage:     action.ErrorPage,
+			DynamicParams: routeParams(path),
+			SourceFile:    page.Source,
+			Span:          action.Span,
+		})
+	}
+	for _, api := range page.Blocks.APIs {
+		path := endpointPath(api.Route, page.Route)
+		builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
+			Kind:          gwdkir.EndpointAPI,
+			Source:        gwdkir.EndpointSourceGOWDK,
+			Package:       page.Package,
+			PageID:        page.ID,
+			Symbol:        api.Name,
+			Method:        endpointMethod(api.Method, "GET"),
+			Path:          path,
+			ErrorPage:     api.ErrorPage,
+			DynamicParams: routeParams(path),
+			SourceFile:    page.Source,
+			Span:          api.Span,
+		})
+	}
+	for _, fragment := range page.Blocks.Fragments {
+		builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
+			Kind:          gwdkir.EndpointFragment,
+			Source:        gwdkir.EndpointSourceGOWDK,
+			Package:       page.Package,
+			PageID:        page.ID,
+			Symbol:        fragment.Name,
+			Method:        endpointMethod(fragment.Method, "GET"),
+			Path:          fragment.Route,
+			DynamicParams: routeParams(fragment.Route),
+			SourceFile:    page.Source,
+			Span:          fragment.Span,
+		})
+	}
+}
+
+func (builder *irBuilder) addComponent(component manifest.Component) {
+	builder.program.Components = append(builder.program.Components, lowerIRComponent(component))
+	pkg := builder.ensurePackage(component.Package, component.Source)
+	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: component.Source, Kind: gwdkir.SourceComponent, Package: component.Package, Name: component.Name, Span: component.Span})
+	appendPackageImports(pkg, component.Imports)
+	appendPackageUses(pkg, component.Uses)
+	builder.addComponentAssets(component)
+	builder.addComponentTemplate(component)
+	if component.Blocks.Client {
+		builder.program.ClientBehaviors = append(builder.program.ClientBehaviors, gwdkir.ClientBehavior{
+			Component: component.Name,
+			Package:   component.Package,
+			Source:    component.Source,
+			Body:      component.Blocks.ClientBody,
+			Span:      component.Blocks.Spans.Client,
+		})
+	}
+	if component.WASM.Package != "" {
+		builder.program.Assets = append(builder.program.Assets, gwdkir.Asset{
+			Kind:    gwdkir.AssetWASM,
+			OwnerID: component.Name,
+			Package: component.Package,
+			Source:  component.Source,
+			Path:    component.WASM.Package,
+			Span:    component.WASM.Span,
+		})
+	}
+}
+
+func (builder *irBuilder) addComponentAssets(component manifest.Component) {
+	for _, css := range component.CSS {
+		hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, css)
+		builder.program.Assets = append(builder.program.Assets, gwdkir.Asset{
+			Kind:    gwdkir.AssetCSS,
+			OwnerID: component.Name,
+			Package: component.Package,
+			Source:  component.Source,
+			Path:    css,
+			ScopeID: cssscope.ScopeID(hashKey),
+			HashKey: hashKey,
+			Span:    spanForName(component.Spans.CSS, css, component.Span),
+		})
+	}
+	for _, asset := range component.Assets {
+		builder.program.Assets = append(builder.program.Assets, gwdkir.Asset{
+			Kind:    gwdkir.AssetFile,
+			OwnerID: component.Name,
+			Package: component.Package,
+			Source:  component.Source,
+			Path:    asset,
+			Span:    spanForName(component.Spans.Assets, asset, component.Span),
+		})
+	}
+}
+
+func (builder *irBuilder) addComponentTemplate(component manifest.Component) {
+	if !component.Blocks.View {
+		return
+	}
+	builder.addTemplate(gwdkir.Template{
+		OwnerKind: gwdkir.SourceComponent,
+		OwnerID:   component.Name,
+		Package:   component.Package,
+		Source:    component.Source,
+		Imports:   lowerIRImports(component.Imports),
+		Body:      component.Blocks.ViewBody,
+		Span:      component.Blocks.Spans.View,
+		BodyStart: component.Blocks.Spans.ViewBodyStart,
+	})
+}
+
+func (builder *irBuilder) addLayout(layout manifest.Layout) {
+	builder.program.Layouts = append(builder.program.Layouts, lowerIRLayout(layout))
+	pkg := builder.ensurePackage(layout.Package, layout.Source)
+	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: layout.Source, Kind: gwdkir.SourceLayout, Package: layout.Package, Name: layout.ID, Span: layout.Span})
+	appendPackageUses(pkg, layout.Uses)
+	if !layout.Blocks.View {
+		return
+	}
+	builder.addTemplate(gwdkir.Template{
+		OwnerKind: gwdkir.SourceLayout,
+		OwnerID:   layout.ID,
+		Package:   layout.Package,
+		Source:    layout.Source,
+		Body:      layout.Blocks.ViewBody,
+		Span:      layout.Blocks.Spans.View,
+		BodyStart: layout.Blocks.Spans.ViewBodyStart,
+	})
+}
+
+func (builder *irBuilder) addStandaloneEndpoint(endpoint manifest.EndpointDeclaration) {
+	kind := gwdkir.EndpointAPI
+	if endpoint.Kind == "act" || endpoint.Kind == "action" {
+		kind = gwdkir.EndpointAction
+	}
+	defaultMethod := "GET"
+	if kind == gwdkir.EndpointAction {
+		defaultMethod = "POST"
+	}
+	builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
+		Kind:          kind,
+		Source:        endpointSource(endpoint.SourceKind),
+		Package:       endpoint.Package,
+		PageID:        standaloneEndpointPageID(endpoint),
+		Symbol:        endpoint.Name,
+		Method:        endpointMethod(endpoint.Method, defaultMethod),
+		Path:          endpoint.Route,
+		DynamicParams: routeParams(endpoint.Route),
+		SourceFile:    endpoint.Source,
+		Span:          endpoint.Span,
+	})
+}
+
+func (builder *irBuilder) addTemplate(template gwdkir.Template) {
+	builder.program.Templates = append(builder.program.Templates, template)
+	appendContractReferences(&builder.program, template)
+}
+
+func (builder *irBuilder) finishPackages() {
+	names := make([]string, 0, len(builder.packages))
+	for name := range builder.packages {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		pkg := builder.packages[name]
+		sort.Strings(pkg.SourceDirs)
+		sort.Slice(pkg.Files, func(i, j int) bool { return pkg.Files[i].Path < pkg.Files[j].Path })
+		builder.program.Packages = append(builder.program.Packages, *pkg)
+	}
+}
+
+func (builder *irBuilder) sortOutput() {
+	sort.Slice(builder.program.Routes, func(i, j int) bool { return builder.program.Routes[i].Path < builder.program.Routes[j].Path })
+	sort.Slice(builder.program.Endpoints, func(i, j int) bool {
+		if builder.program.Endpoints[i].Path == builder.program.Endpoints[j].Path {
+			return builder.program.Endpoints[i].Method < builder.program.Endpoints[j].Method
+		}
+		return builder.program.Endpoints[i].Path < builder.program.Endpoints[j].Path
+	})
+}
+
+func endpointMethod(method string, defaultMethod string) string {
+	if method != "" {
+		return method
+	}
+	return defaultMethod
+}
+
+func endpointPath(path string, defaultPath string) string {
+	if path != "" {
+		return path
+	}
+	return defaultPath
+}

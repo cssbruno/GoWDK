@@ -14,7 +14,7 @@ type Element struct {
 	Children []Node
 }
 
-func (node Element) render(ctx *renderContext, out *strings.Builder) error {
+func (node Element) render(ctx *renderContext, out *renderOutput) error {
 	if node.Name == "slot" {
 		return node.renderSlot(ctx, out)
 	}
@@ -24,12 +24,12 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		return node.renderFor(ctx, out, loop, keyExpr)
 	}
 	if ctx.conditional != nil {
-		out.WriteString(`<!--gowdk-if:`)
-		out.WriteString(gowhtml.Escape(ctx.conditional.Marker()))
-		out.WriteString(`:start-->`)
+		out.write(`<!--gowdk-if:`)
+		out.write(gowhtml.Escape(ctx.conditional.Marker()))
+		out.write(`:start-->`)
 	}
-	out.WriteByte('<')
-	out.WriteString(node.Name)
+	out.writeByte('<')
+	out.write(node.Name)
 	directives, err := node.postDirectives(ctx)
 	if err != nil {
 		return err
@@ -51,59 +51,59 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		return err
 	}
 	for _, binding := range styleBindings {
-		out.WriteString(` data-gowdk-style-`)
-		out.WriteString(binding.Property)
-		out.WriteString(`="`)
-		out.WriteString(gowhtml.Escape(binding.Expression))
-		out.WriteString(`" data-gowdk-binding-style-`)
-		out.WriteString(binding.Property)
-		out.WriteString(`="`)
-		out.WriteString(ctx.nextBindingID())
-		out.WriteByte('"')
+		out.write(` data-gowdk-style-`)
+		out.write(binding.Property)
+		out.write(`="`)
+		out.write(gowhtml.Escape(binding.Expression))
+		out.write(`" data-gowdk-binding-style-`)
+		out.write(binding.Property)
+		out.write(`="`)
+		out.write(ctx.nextBindingID())
+		out.writeByte('"')
 		if binding.Unit != "" {
-			out.WriteString(` data-gowdk-style-unit-`)
-			out.WriteString(binding.Property)
-			out.WriteString(`="`)
-			out.WriteString(gowhtml.Escape(binding.Unit))
-			out.WriteByte('"')
+			out.write(` data-gowdk-style-unit-`)
+			out.write(binding.Property)
+			out.write(`="`)
+			out.write(gowhtml.Escape(binding.Unit))
+			out.writeByte('"')
 		}
 	}
 	for _, toggle := range classToggles {
-		out.WriteString(` data-gowdk-class-`)
-		out.WriteString(toggle.Name)
-		out.WriteString(`="`)
-		out.WriteString(gowhtml.Escape(toggle.Expression))
-		out.WriteString(`" data-gowdk-binding-class-`)
-		out.WriteString(toggle.Name)
-		out.WriteString(`="`)
-		out.WriteString(ctx.nextBindingID())
-		out.WriteByte('"')
+		out.write(` data-gowdk-class-`)
+		out.write(toggle.Name)
+		out.write(`="`)
+		out.write(gowhtml.Escape(toggle.Expression))
+		out.write(`" data-gowdk-binding-class-`)
+		out.write(toggle.Name)
+		out.write(`="`)
+		out.write(ctx.nextBindingID())
+		out.writeByte('"')
 	}
 	if classValue := node.initialClassValue(ctx, classToggles); classValue != "" {
-		out.WriteString(` class="`)
-		out.WriteString(gowhtml.Escape(classValue))
-		out.WriteByte('"')
+		out.write(` class="`)
+		out.write(gowhtml.Escape(classValue))
+		out.writeByte('"')
 	}
 	styleValue, err := node.initialStyleValue(ctx, styleBindings)
 	if err != nil {
 		return err
 	}
 	if styleValue != "" {
-		out.WriteString(` style="`)
-		out.WriteString(gowhtml.Escape(styleValue))
-		out.WriteByte('"')
+		out.write(` style="`)
+		out.write(gowhtml.Escape(styleValue))
+		out.writeByte('"')
 	}
 	if ctx.loopItem != nil {
-		out.WriteString(` data-gowdk-for-item="`)
-		out.WriteString(gowhtml.Escape(ctx.loopItem.Group))
-		out.WriteString(`" data-gowdk-key-value="`)
-		out.WriteString(gowhtml.Escape(ctx.loopKeyValue(ctx.loopItem.KeyExpr)))
-		out.WriteByte('"')
+		out.write(` data-gowdk-for-item="`)
+		out.write(gowhtml.Escape(ctx.loopItem.Group))
+		out.write(`" data-gowdk-key-value="`)
+		out.write(gowhtml.Escape(ctx.loopKeyValue(ctx.loopItem.KeyExpr)))
+		out.writeByte('"')
 	}
 	if len(ctx.scopeIDs) > 0 {
-		out.WriteString(` data-gowdk-scope="`)
-		out.WriteString(gowhtml.Escape(strings.Join(ctx.scopeIDs, " ")))
-		out.WriteByte('"')
+		out.write(` data-gowdk-scope="`)
+		out.write(gowhtml.Escape(strings.Join(ctx.scopeIDs, " ")))
+		out.writeByte('"')
 	}
 	for _, attr := range node.Attrs {
 		if strings.HasPrefix(attr.Name, "g:on:") {
@@ -118,21 +118,21 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			if err := ValidateIslandEventExpressionTypedWithEvents(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil, ctx.emits); err != nil {
 				return fmt.Errorf("%s: %w", attr.Name, err)
 			}
-			out.WriteString(` data-gowdk-on-`)
-			out.WriteString(eventDirective.Event)
-			out.WriteString(`="`)
-			out.WriteString(gowhtml.Escape(attr.Value))
-			out.WriteString(`" data-gowdk-binding-on-`)
-			out.WriteString(eventDirective.Event)
-			out.WriteString(`="`)
-			out.WriteString(ctx.nextBindingID())
-			out.WriteByte('"')
+			out.write(` data-gowdk-on-`)
+			out.write(eventDirective.Event)
+			out.write(`="`)
+			out.write(gowhtml.Escape(attr.Value))
+			out.write(`" data-gowdk-binding-on-`)
+			out.write(eventDirective.Event)
+			out.write(`="`)
+			out.write(ctx.nextBindingID())
+			out.writeByte('"')
 			if options := eventDirective.RuntimeOptions(); options != "" {
-				out.WriteString(` data-gowdk-event-`)
-				out.WriteString(eventDirective.Event)
-				out.WriteString(`="`)
-				out.WriteString(gowhtml.Escape(options))
-				out.WriteByte('"')
+				out.write(` data-gowdk-event-`)
+				out.write(eventDirective.Event)
+				out.write(`="`)
+				out.write(gowhtml.Escape(options))
+				out.writeByte('"')
 			}
 			continue
 		}
@@ -146,13 +146,13 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			if err := ValidateIslandBoolExpression(attr.Value, ctx.readFields); err != nil {
 				return fmt.Errorf("g:if: %w", err)
 			}
-			out.WriteString(` data-gowdk-if="`)
-			out.WriteString(gowhtml.Escape(attr.Value))
-			out.WriteString(`" data-gowdk-binding-if="`)
-			out.WriteString(ctx.nextBindingID())
-			out.WriteByte('"')
+			out.write(` data-gowdk-if="`)
+			out.write(gowhtml.Escape(attr.Value))
+			out.write(`" data-gowdk-binding-if="`)
+			out.write(ctx.nextBindingID())
+			out.writeByte('"')
 			if visible, err := clientlang.EvalBool(attr.Value, ctx.values); err == nil && !visible {
-				out.WriteString(` hidden`)
+				out.write(` hidden`)
 			}
 			continue
 		}
@@ -166,31 +166,31 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			continue
 		}
 		if attr.Name == "g:bind:value" {
-			out.WriteString(` data-gowdk-bind-value="`)
-			out.WriteString(gowhtml.Escape(valueBinding))
-			out.WriteString(`" data-gowdk-binding-value="`)
-			out.WriteString(ctx.nextBindingID())
-			out.WriteByte('"')
+			out.write(` data-gowdk-bind-value="`)
+			out.write(gowhtml.Escape(valueBinding))
+			out.write(`" data-gowdk-binding-value="`)
+			out.write(ctx.nextBindingID())
+			out.writeByte('"')
 			if bindingType := valueBindingRuntimeType(valueBinding, ctx.stateTypes); bindingType != "" {
-				out.WriteString(` data-gowdk-bind-type="`)
-				out.WriteString(gowhtml.Escape(bindingType))
-				out.WriteByte('"')
+				out.write(` data-gowdk-bind-type="`)
+				out.write(gowhtml.Escape(bindingType))
+				out.writeByte('"')
 			}
 			if node.Name == "input" {
-				out.WriteString(` value="`)
-				out.WriteString(gowhtml.Escape(ctx.values[valueBinding]))
-				out.WriteByte('"')
+				out.write(` value="`)
+				out.write(gowhtml.Escape(ctx.values[valueBinding]))
+				out.writeByte('"')
 			}
 			continue
 		}
 		if attr.Name == "g:bind:checked" {
-			out.WriteString(` data-gowdk-bind-checked="`)
-			out.WriteString(gowhtml.Escape(checkedBinding))
-			out.WriteString(`" data-gowdk-binding-checked="`)
-			out.WriteString(ctx.nextBindingID())
-			out.WriteByte('"')
+			out.write(` data-gowdk-bind-checked="`)
+			out.write(gowhtml.Escape(checkedBinding))
+			out.write(`" data-gowdk-binding-checked="`)
+			out.write(ctx.nextBindingID())
+			out.writeByte('"')
 			if ctx.values[checkedBinding] == "true" {
-				out.WriteString(` checked`)
+				out.write(` checked`)
 			}
 			continue
 		}
@@ -202,11 +202,11 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			if err := validateDOMRef(refName, ctx.refs); err != nil {
 				return fmt.Errorf("g:ref: %w", err)
 			}
-			out.WriteString(` data-gowdk-ref="`)
-			out.WriteString(gowhtml.Escape(refName))
-			out.WriteString(`" data-gowdk-binding-ref="`)
-			out.WriteString(ctx.nextBindingID())
-			out.WriteByte('"')
+			out.write(` data-gowdk-ref="`)
+			out.write(gowhtml.Escape(refName))
+			out.write(`" data-gowdk-binding-ref="`)
+			out.write(ctx.nextBindingID())
+			out.writeByte('"')
 			continue
 		}
 		if strings.HasPrefix(attr.Name, "g:") {
@@ -241,15 +241,15 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			if err := validateReactiveAttr(attr.Name, expr, ctx.readFields); err != nil {
 				return err
 			}
-			out.WriteString(` data-gowdk-attr-`)
-			out.WriteString(attr.Name)
-			out.WriteString(`="`)
-			out.WriteString(gowhtml.Escape(expr))
-			out.WriteString(`" data-gowdk-binding-attr-`)
-			out.WriteString(attr.Name)
-			out.WriteString(`="`)
-			out.WriteString(ctx.nextBindingID())
-			out.WriteByte('"')
+			out.write(` data-gowdk-attr-`)
+			out.write(attr.Name)
+			out.write(`="`)
+			out.write(gowhtml.Escape(expr))
+			out.write(`" data-gowdk-binding-attr-`)
+			out.write(attr.Name)
+			out.write(`="`)
+			out.write(ctx.nextBindingID())
+			out.writeByte('"')
 			value, ok, err := reactiveAttrValue(attr.Name, expr, ctx.values)
 			if err != nil {
 				return err
@@ -257,12 +257,12 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			if !ok {
 				continue
 			}
-			out.WriteByte(' ')
-			out.WriteString(attr.Name)
+			out.writeByte(' ')
+			out.write(attr.Name)
 			if !isBooleanHTMLAttr(attr.Name) {
-				out.WriteString(`="`)
-				out.WriteString(gowhtml.Escape(value))
-				out.WriteByte('"')
+				out.write(`="`)
+				out.write(gowhtml.Escape(value))
+				out.writeByte('"')
 			}
 			continue
 		}
@@ -276,69 +276,69 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		if tainted && unsafeRouteParamAttr(attr.Name) {
 			return fmt.Errorf("route param interpolation is not allowed in %q attributes", attr.Name)
 		}
-		out.WriteByte(' ')
-		out.WriteString(attr.Name)
+		out.writeByte(' ')
+		out.write(attr.Name)
 		if attr.Value != "" || !attr.Boolean {
-			out.WriteString(`="`)
-			out.WriteString(gowhtml.Escape(value))
-			out.WriteByte('"')
+			out.write(`="`)
+			out.write(gowhtml.Escape(value))
+			out.writeByte('"')
 		}
 	}
 	if selected, err := node.optionSelected(ctx); err != nil {
 		return err
 	} else if selected {
-		out.WriteString(` selected`)
+		out.write(` selected`)
 	}
 	if checked, err := node.radioChecked(ctx, valueBinding); err != nil {
 		return err
 	} else if checked {
-		out.WriteString(` checked`)
+		out.write(` checked`)
 	}
 	if directives.Route != "" {
-		out.WriteString(` method="post" action="`)
-		out.WriteString(gowhtml.Escape(directives.Route))
-		out.WriteByte('"')
+		out.write(` method="post" action="`)
+		out.write(gowhtml.Escape(directives.Route))
+		out.writeByte('"')
 	}
 	if directives.Command != "" {
-		out.WriteString(` data-gowdk-command="`)
-		out.WriteString(gowhtml.Escape(directives.Command))
-		out.WriteByte('"')
+		out.write(` data-gowdk-command="`)
+		out.write(gowhtml.Escape(directives.Command))
+		out.writeByte('"')
 	}
 	if directives.Query != "" {
-		out.WriteString(` data-gowdk-query="`)
-		out.WriteString(gowhtml.Escape(directives.Query))
-		out.WriteByte('"')
+		out.write(` data-gowdk-query="`)
+		out.write(gowhtml.Escape(directives.Query))
+		out.writeByte('"')
 	}
 	if directives.Target != "" {
-		out.WriteString(` data-gowdk-target="`)
-		out.WriteString(gowhtml.Escape(directives.Target))
-		out.WriteByte('"')
+		out.write(` data-gowdk-target="`)
+		out.write(gowhtml.Escape(directives.Target))
+		out.writeByte('"')
 	}
 	if directives.Swap != "" {
-		out.WriteString(` data-gowdk-swap="`)
-		out.WriteString(gowhtml.Escape(directives.Swap))
-		out.WriteByte('"')
+		out.write(` data-gowdk-swap="`)
+		out.write(gowhtml.Escape(directives.Swap))
+		out.writeByte('"')
 	}
 	if ctx.conditional != nil {
-		out.WriteString(` data-gowdk-if-group="`)
-		out.WriteString(gowhtml.Escape(ctx.conditional.Group))
-		out.WriteString(`" data-gowdk-if-index="`)
-		out.WriteString(strconv.Itoa(ctx.conditional.Index))
-		out.WriteString(`" data-gowdk-binding-if="`)
-		out.WriteString(ctx.nextBindingID())
-		out.WriteByte('"')
+		out.write(` data-gowdk-if-group="`)
+		out.write(gowhtml.Escape(ctx.conditional.Group))
+		out.write(`" data-gowdk-if-index="`)
+		out.write(strconv.Itoa(ctx.conditional.Index))
+		out.write(`" data-gowdk-binding-if="`)
+		out.write(ctx.nextBindingID())
+		out.writeByte('"')
 		if ctx.conditional.Condition != "" {
-			out.WriteString(` data-gowdk-if="`)
-			out.WriteString(gowhtml.Escape(ctx.conditional.Condition))
-			out.WriteByte('"')
+			out.write(` data-gowdk-if="`)
+			out.write(gowhtml.Escape(ctx.conditional.Condition))
+			out.writeByte('"')
 		} else {
-			out.WriteString(` data-gowdk-else`)
+			out.write(` data-gowdk-else`)
 		}
 		if !ctx.conditional.Visible {
-			out.WriteString(` hidden`)
+			out.write(` hidden`)
 		}
 	}
-	out.WriteByte('>')
+	out.writeByte('>')
 	childCtx := ctx
 	if ctx.conditional != nil {
 		next := *ctx
@@ -357,7 +357,7 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 		childCtx = &next
 	}
 	if node.Name == "textarea" && valueBinding != "" {
-		out.WriteString(gowhtml.Escape(ctx.values[valueBinding]))
+		out.write(gowhtml.Escape(ctx.values[valueBinding]))
 	} else {
 		for _, child := range node.Children {
 			if err := child.render(childCtx, out); err != nil {
@@ -365,13 +365,13 @@ func (node Element) render(ctx *renderContext, out *strings.Builder) error {
 			}
 		}
 	}
-	out.WriteString("</")
-	out.WriteString(node.Name)
-	out.WriteByte('>')
+	out.write("</")
+	out.write(node.Name)
+	out.writeByte('>')
 	if ctx.conditional != nil {
-		out.WriteString(`<!--gowdk-if:`)
-		out.WriteString(gowhtml.Escape(ctx.conditional.Marker()))
-		out.WriteString(`:end-->`)
+		out.write(`<!--gowdk-if:`)
+		out.write(gowhtml.Escape(ctx.conditional.Marker()))
+		out.write(`:end-->`)
 	}
 	return nil
 }
@@ -394,7 +394,7 @@ func domEventSymbols() map[string]clientlang.ValueType {
 	return DOMEventSymbols()
 }
 
-func (node Element) renderSlot(ctx *renderContext, out *strings.Builder) error {
+func (node Element) renderSlot(ctx *renderContext, out *renderOutput) error {
 	name := ""
 	scopedValues := map[string]string{}
 	for _, attr := range node.Attrs {
@@ -431,11 +431,11 @@ func (node Element) renderSlot(ctx *renderContext, out *strings.Builder) error {
 		if err != nil {
 			return err
 		}
-		out.WriteString(html)
+		out.write(html)
 		return nil
 	}
 	if name == "" && ctx.slotHTML != "" {
-		out.WriteString(ctx.slotHTML)
+		out.write(ctx.slotHTML)
 		return nil
 	}
 	for _, child := range node.Children {
@@ -468,7 +468,7 @@ func (node Element) optionValue(ctx *renderContext) (string, error) {
 		}
 		return value, nil
 	}
-	var text strings.Builder
+	var text renderOutput
 	for _, child := range node.Children {
 		typed, ok := child.(Text)
 		if !ok {
@@ -478,9 +478,9 @@ func (node Element) optionValue(ctx *renderContext) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		text.WriteString(value)
+		text.write(value)
 	}
-	return strings.TrimSpace(text.String()), nil
+	return strings.TrimSpace(text.string()), nil
 }
 
 func (node Element) radioChecked(ctx *renderContext, field string) (bool, error) {

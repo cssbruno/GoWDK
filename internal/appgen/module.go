@@ -24,40 +24,30 @@ func moduleSource(options Options) (string, error) {
 		version = "v0.0.0"
 	}
 
-	var builder strings.Builder
-	builder.WriteString("module gowdk-generated-app\n\n")
-	builder.WriteString("go 1.26.4\n\n")
-	builder.WriteString("require ")
-	builder.WriteString(gowdkRuntimeModulePath)
-	builder.WriteByte(' ')
-	builder.WriteString(version)
-	builder.WriteByte('\n')
+	lines := []string{
+		"module gowdk-generated-app",
+		"",
+		"go 1.26.4",
+		"",
+		"require " + gowdkRuntimeModulePath + " " + version,
+	}
 
 	if version == "v0.0.0" {
 		root, ok := gowdkRuntimeModuleRoot()
 		if !ok {
 			return "", fmt.Errorf("cannot locate %s module root for generated app runtime imports", gowdkRuntimeModulePath)
 		}
-		builder.WriteByte('\n')
-		builder.WriteString("replace ")
-		builder.WriteString(gowdkRuntimeModulePath)
-		builder.WriteString(" => ")
-		builder.WriteString(filepath.ToSlash(root))
-		builder.WriteByte('\n')
+		lines = append(lines, "", "replace "+gowdkRuntimeModulePath+" => "+filepath.ToSlash(root))
 	}
 	if appModule, ok := currentAppModule(); ok && appModule.Path != gowdkRuntimeModulePath && optionsUsesModuleImports(options, appModule.Path) {
-		builder.WriteByte('\n')
-		builder.WriteString("require ")
-		builder.WriteString(appModule.Path)
-		builder.WriteString(" v0.0.0\n")
-		builder.WriteString("replace ")
-		builder.WriteString(appModule.Path)
-		builder.WriteString(" => ")
-		builder.WriteString(filepath.ToSlash(appModule.Dir))
-		builder.WriteByte('\n')
+		lines = append(lines,
+			"",
+			"require "+appModule.Path+" v0.0.0",
+			"replace "+appModule.Path+" => "+filepath.ToSlash(appModule.Dir),
+		)
 	}
 
-	return builder.String(), nil
+	return strings.Join(lines, "\n") + "\n", nil
 }
 
 type appModuleInfo struct {

@@ -449,17 +449,17 @@ func componentCSSScopeSelector(scopeID string) string {
 }
 
 func scopeCSSRules(contents string, scopeSelector string) string {
-	var out strings.Builder
+	parts := make([]string, 0, 8)
 	for cursor := 0; cursor < len(contents); {
 		open := strings.IndexByte(contents[cursor:], '{')
 		if open < 0 {
-			out.WriteString(contents[cursor:])
+			parts = append(parts, contents[cursor:])
 			break
 		}
 		open += cursor
 		close := matchingCSSBrace(contents, open)
 		if close < 0 {
-			out.WriteString(contents[cursor:])
+			parts = append(parts, contents[cursor:])
 			break
 		}
 		prefix := contents[cursor:open]
@@ -467,32 +467,23 @@ func scopeCSSRules(contents string, scopeSelector string) string {
 		selector := strings.TrimSpace(prefix)
 		switch {
 		case selector == "":
-			out.WriteString(prefix)
-			out.WriteByte('{')
-			out.WriteString(body)
-			out.WriteByte('}')
+			parts = append(parts, prefix, "{", body, "}")
 		case strings.HasPrefix(selector, "@"):
-			out.WriteString(prefix)
-			out.WriteByte('{')
+			parts = append(parts, prefix, "{")
 			if cssAtRuleHasNestedRules(selector) {
-				out.WriteString(scopeCSSRules(body, scopeSelector))
+				parts = append(parts, scopeCSSRules(body, scopeSelector))
 			} else {
-				out.WriteString(body)
+				parts = append(parts, body)
 			}
-			out.WriteByte('}')
+			parts = append(parts, "}")
 		default:
 			leading := prefix[:len(prefix)-len(strings.TrimLeft(prefix, " \n\r\t\f"))]
 			trailing := prefix[len(strings.TrimRight(prefix, " \n\r\t\f")):]
-			out.WriteString(leading)
-			out.WriteString(scopeCSSSelectorList(selector, scopeSelector))
-			out.WriteString(trailing)
-			out.WriteByte('{')
-			out.WriteString(body)
-			out.WriteByte('}')
+			parts = append(parts, leading, scopeCSSSelectorList(selector, scopeSelector), trailing, "{", body, "}")
 		}
 		cursor = close + 1
 	}
-	return out.String()
+	return strings.Join(parts, "")
 }
 
 func cssAtRuleHasNestedRules(selector string) bool {
@@ -629,7 +620,7 @@ func rewriteStylesheets(stylesheets []gowdk.Stylesheet, hrefs map[string]string)
 }
 
 func minifyCSS(contents []byte) []byte {
-	var builder strings.Builder
+	out := make([]rune, 0, len(contents))
 	inString := rune(0)
 	escaped := false
 	pendingSpace := false
@@ -638,7 +629,7 @@ func minifyCSS(contents []byte) []byte {
 	for index := 0; index < len(runes); index++ {
 		current := runes[index]
 		if inString != 0 {
-			builder.WriteRune(current)
+			out = append(out, current)
 			if escaped {
 				escaped = false
 				continue
@@ -665,10 +656,10 @@ func minifyCSS(contents []byte) []byte {
 		}
 		if current == '"' || current == '\'' {
 			if pendingSpace && cssNeedsSpaceBefore(last, current) {
-				builder.WriteByte(' ')
+				out = append(out, ' ')
 			}
 			pendingSpace = false
-			builder.WriteRune(current)
+			out = append(out, current)
 			inString = current
 			last = current
 			continue
@@ -678,20 +669,20 @@ func minifyCSS(contents []byte) []byte {
 			continue
 		}
 		if isCSSPunctuation(current) {
-			trimTrailingSpace(&builder)
+			out = trimTrailingCSSSpace(out)
 			pendingSpace = false
-			builder.WriteRune(current)
+			out = append(out, current)
 			last = current
 			continue
 		}
 		if pendingSpace && cssNeedsSpaceBefore(last, current) {
-			builder.WriteByte(' ')
+			out = append(out, ' ')
 		}
 		pendingSpace = false
-		builder.WriteRune(current)
+		out = append(out, current)
 		last = current
 	}
-	return []byte(strings.TrimSpace(builder.String()))
+	return []byte(strings.TrimSpace(string(out)))
 }
 
 func isCSSWhitespace(value rune) bool {
@@ -717,14 +708,11 @@ func cssNeedsSpaceBefore(previous rune, current rune) bool {
 	return !isCSSPunctuation(current)
 }
 
-func trimTrailingSpace(builder *strings.Builder) {
-	value := builder.String()
-	trimmed := strings.TrimRight(value, " \n\r\t\f")
-	if len(trimmed) == len(value) {
-		return
+func trimTrailingCSSSpace(values []rune) []rune {
+	for len(values) > 0 && isCSSWhitespace(values[len(values)-1]) {
+		values = values[:len(values)-1]
 	}
-	builder.Reset()
-	builder.WriteString(trimmed)
+	return values
 }
 
 func pageCSSInputNames(config gowdk.Config, page manifest.Page, inputs map[string]cssInput) ([]string, error) {
@@ -795,23 +783,23 @@ func defaultCSSInputs(config gowdk.Config, inputs map[string]cssInput) ([]string
 }
 
 func pageCSSContents(names []string, inputs map[string]cssInput, inlineStyle string) []byte {
-	var builder strings.Builder
+	var out []byte
 	for _, name := range names {
 		input := inputs[name]
-		builder.WriteString("/* gowdk css: ")
-		builder.WriteString(name)
-		builder.WriteString(" */\n")
-		builder.Write(input.contents)
+		out = append(out, "/* gowdk css: "...)
+		out = append(out, name...)
+		out = append(out, " */\n"...)
+		out = append(out, input.contents...)
 		if len(input.contents) == 0 || input.contents[len(input.contents)-1] != '\n' {
-			builder.WriteString("\n")
+			out = append(out, '\n')
 		}
 	}
 	if strings.TrimSpace(inlineStyle) != "" {
-		builder.WriteString("/* gowdk inline style */\n")
-		builder.WriteString(strings.TrimSpace(inlineStyle))
-		builder.WriteString("\n")
+		out = append(out, "/* gowdk inline style */\n"...)
+		out = append(out, strings.TrimSpace(inlineStyle)...)
+		out = append(out, '\n')
 	}
-	return []byte(builder.String())
+	return out
 }
 
 func pageCSSOutputPath(output gowdk.CSSOutputConfig, outputDir string, pageID string) (string, error) {

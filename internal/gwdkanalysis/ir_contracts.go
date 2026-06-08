@@ -1,0 +1,106 @@
+package gwdkanalysis
+
+import (
+	"strings"
+
+	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/view"
+)
+
+func appendContractReferences(program *gwdkir.Program, template gwdkir.Template) {
+	refs, err := view.ContractReferences(template.Body)
+	if err != nil {
+		return
+	}
+	for _, ref := range refs {
+		method := ref.Method
+		path := ref.Path
+		if ref.Kind == view.ContractReferenceQuery && path == "" && template.Route != "" {
+			method = "GET"
+			path = template.Route
+		}
+		importAlias, contractType := splitContractReferenceName(ref.Name)
+		importPath := contractReferenceImportPath(template.Imports, importAlias)
+		program.ContractRefs = append(program.ContractRefs, gwdkir.ContractReference{
+			Kind:        irContractReferenceKind(ref.Kind),
+			Name:        ref.Name,
+			ImportAlias: importAlias,
+			ImportPath:  importPath,
+			Type:        contractType,
+			Guards:      append([]string(nil), template.Guards...),
+			Method:      method,
+			Path:        path,
+			OwnerKind:   template.OwnerKind,
+			OwnerID:     template.OwnerID,
+			Package:     template.Package,
+			Source:      template.Source,
+			Span:        templateOffsetSpan(template, ref.Start, ref.End),
+		})
+	}
+}
+
+func splitContractReferenceName(name string) (string, string) {
+	before, after, ok := strings.Cut(name, ".")
+	if !ok {
+		return "", name
+	}
+	return before, after
+}
+
+func contractReferenceImportPath(imports []gwdkir.Import, alias string) string {
+	if alias == "" {
+		return ""
+	}
+	for _, item := range imports {
+		if item.Alias == alias {
+			return item.Path
+		}
+	}
+	return ""
+}
+
+func irContractReferenceKind(kind view.ContractReferenceKind) gwdkir.ContractKind {
+	switch kind {
+	case view.ContractReferenceQuery:
+		return gwdkir.ContractQuery
+	default:
+		return gwdkir.ContractCommand
+	}
+}
+
+func templateOffsetSpan(template gwdkir.Template, start int, end int) manifest.SourceSpan {
+	if start < 0 || end <= start || start >= len([]rune(template.Body)) {
+		return template.Span
+	}
+	startPos := templateOffsetPosition(template, start)
+	endPos := templateOffsetPosition(template, end)
+	if startPos.Line == 0 || endPos.Line == 0 {
+		return template.Span
+	}
+	return manifest.SourceSpan{Start: startPos, End: endPos}
+}
+
+func templateOffsetPosition(template gwdkir.Template, offset int) manifest.SourcePosition {
+	line := template.BodyStart.Line
+	column := template.BodyStart.Column
+	if line == 0 {
+		line = template.Span.Start.Line + 1
+		column = 1
+	}
+	for index, char := range []rune(template.Body) {
+		if index == offset {
+			return manifest.SourcePosition{Line: line, Column: column}
+		}
+		if char == '\n' {
+			line++
+			column = 1
+			continue
+		}
+		column++
+	}
+	if offset == len([]rune(template.Body)) {
+		return manifest.SourcePosition{Line: line, Column: column}
+	}
+	return manifest.SourcePosition{}
+}

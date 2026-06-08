@@ -3,9 +3,10 @@ package view
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
-	"strings"
 )
 
 // ComponentCall invokes a parsed component with literal string props.
@@ -66,7 +67,7 @@ func (ctx *renderContext) lookupComponent(name string) (Component, bool) {
 	return component, ok
 }
 
-func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error {
+func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 	component, ok := ctx.lookupComponent(node.Name)
 	if !ok {
 		return fmt.Errorf("missing component %q", node.Name)
@@ -183,55 +184,72 @@ func (node ComponentCall) render(ctx *renderContext, out *strings.Builder) error
 		if mode == "" {
 			mode = "js"
 		}
-		stateJSON := componentStateJSON(component.StateJSON, props, computedValues)
-		if stateJSON == "" {
-			stateJSON = "{}"
-		}
-		islandID := ctx.nextIslandID()
-		out.WriteString(`<gowdk-island data-gowdk-component="`)
-		out.WriteString(gowhtml.Escape(component.Name))
-		out.WriteString(`" data-gowdk-island="`)
-		out.WriteString(gowhtml.Escape(islandID))
-		out.WriteString(`" data-gowdk-runtime="`)
-		out.WriteString(gowhtml.Escape(mode))
-		out.WriteString(`" data-gowdk-state="`)
-		out.WriteString(gowhtml.Escape(stateJSON))
-		out.WriteByte('"')
-		if component.HandlersJSON != "" {
-			out.WriteString(` data-gowdk-client="`)
-			out.WriteString(gowhtml.Escape(component.HandlersJSON))
-			out.WriteByte('"')
-		}
-		if len(propExpressions) > 0 {
-			propsJSON, err := json.Marshal(propExpressions)
-			if err != nil {
-				return err
-			}
-			out.WriteString(` data-gowdk-props="`)
-			out.WriteString(gowhtml.Escape(string(propsJSON)))
-			out.WriteByte('"')
-		}
-		for _, listener := range parentListeners {
-			out.WriteString(` data-gowdk-parent-on-`)
-			out.WriteString(listener.Event)
-			out.WriteString(`="`)
-			out.WriteString(gowhtml.Escape(listener.Expression))
-			out.WriteByte('"')
-			if listener.Modifiers != "" {
-				out.WriteString(` data-gowdk-parent-event-`)
-				out.WriteString(listener.Event)
-				out.WriteString(`="`)
-				out.WriteString(gowhtml.Escape(listener.Modifiers))
-				out.WriteByte('"')
-			}
-		}
-		out.WriteByte('>')
-		out.WriteString(body)
-		out.WriteString(`</gowdk-island>`)
-		return nil
+		return renderComponentIsland(out, componentIslandRender{
+			Component:       component,
+			IslandID:        ctx.nextIslandID(),
+			Mode:            mode,
+			Body:            body,
+			Props:           props,
+			PropExpressions: propExpressions,
+			ComputedValues:  computedValues,
+			ParentListeners: parentListeners,
+		})
 	}
-	out.WriteString(body)
+	out.write(body)
 	return nil
+}
+
+type componentIslandRender struct {
+	Component       Component
+	IslandID        string
+	Mode            string
+	Body            string
+	Props           map[string]string
+	PropExpressions map[string]string
+	ComputedValues  map[string]any
+	ParentListeners []parentComponentListener
+}
+
+func renderComponentIsland(out *renderOutput, island componentIslandRender) error {
+	propsJSON, err := componentPropExpressionsJSON(island.PropExpressions)
+	if err != nil {
+		return err
+	}
+	stateJSON := componentStateJSON(island.Component.StateJSON, island.Props, island.ComputedValues)
+	if stateJSON == "" {
+		stateJSON = "{}"
+	}
+
+	out.write("<gowdk-island")
+	out.write(gowhtml.Attr("data-gowdk-component", island.Component.Name))
+	out.write(gowhtml.Attr("data-gowdk-island", island.IslandID))
+	out.write(gowhtml.Attr("data-gowdk-runtime", island.Mode))
+	out.write(gowhtml.Attr("data-gowdk-state", stateJSON))
+	out.write(gowhtml.Attr("data-gowdk-client", island.Component.HandlersJSON))
+	out.write(gowhtml.Attr("data-gowdk-props", propsJSON))
+	for _, listener := range island.ParentListeners {
+		writeParentComponentListenerAttrs(out, listener)
+	}
+	out.write(">")
+	out.write(island.Body)
+	out.write("</gowdk-island>")
+	return nil
+}
+
+func componentPropExpressionsJSON(propExpressions map[string]string) (string, error) {
+	if len(propExpressions) == 0 {
+		return "", nil
+	}
+	payload, err := json.Marshal(propExpressions)
+	if err != nil {
+		return "", err
+	}
+	return string(payload), nil
+}
+
+func writeParentComponentListenerAttrs(out *renderOutput, listener parentComponentListener) {
+	out.write(gowhtml.Attr("data-gowdk-parent-on-"+listener.Event, listener.Expression))
+	out.write(gowhtml.Attr("data-gowdk-parent-event-"+listener.Event, listener.Modifiers))
 }
 
 type parentComponentListener struct {

@@ -121,10 +121,7 @@ func writeInputWithSources(tempDir string, input string, sources []gowdk.CSSSour
 		return "", err
 	}
 
-	var builder strings.Builder
-	builder.WriteString(`@import "`)
-	builder.WriteString(cssPath(relInput))
-	builder.WriteString("\";\n")
+	lines := []string{`@import "` + cssPath(relInput) + `";`}
 
 	seen := map[string]bool{}
 	for _, source := range sources {
@@ -141,13 +138,11 @@ func writeInputWithSources(tempDir string, input string, sources []gowdk.CSSSour
 		if err != nil {
 			return "", err
 		}
-		builder.WriteString(`@source "`)
-		builder.WriteString(cssPath(relativeSource))
-		builder.WriteString("\";\n")
+		lines = append(lines, `@source "`+cssPath(relativeSource)+`";`)
 	}
 
 	generatedInput := filepath.Join(tempDir, "input.css")
-	if err := os.WriteFile(generatedInput, []byte(builder.String()), 0o644); err != nil {
+	if err := os.WriteFile(generatedInput, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
 		return "", err
 	}
 	return generatedInput, nil

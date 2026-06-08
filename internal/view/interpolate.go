@@ -2,16 +2,20 @@ package view
 
 import (
 	"fmt"
-	gowhtml "github.com/cssbruno/gowdk/runtime/html"
+	stdhtml "html"
 	"strings"
+
+	gowhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 
-func renderText(ctx *renderContext, out *strings.Builder, value string) error {
+func renderText(ctx *renderContext, out *renderOutput, value string) error {
+	value = decodeSourceTextEntities(value)
 	text, _, err := interpolateValue(ctx, value)
 	if err != nil {
 		return err
 	}
-	out.WriteString(gowhtml.Escape(text))
+	text = restoreSourceTextBraces(text)
+	out.write(gowhtml.Escape(text))
 	return nil
 }
 
@@ -24,26 +28,26 @@ func interpolateValue(ctx *renderContext, value string) (string, bool, error) {
 	if !strings.Contains(value, "{") {
 		return value, false, nil
 	}
-	var out strings.Builder
+	var out renderOutput
 	tainted := false
 	for {
 		start := strings.Index(value, "{")
 		if start < 0 {
-			out.WriteString(value)
-			return out.String(), tainted, nil
+			out.write(value)
+			return out.string(), tainted, nil
 		}
 		end := strings.Index(value[start:], "}")
 		if end < 0 {
 			return "", false, fmt.Errorf("unterminated interpolation")
 		}
 		end += start
-		out.WriteString(value[:start])
+		out.write(value[:start])
 		name := strings.TrimSpace(value[start+1 : end])
 		if name == "" {
 			return "", false, fmt.Errorf("empty interpolation")
 		}
 		if ctx.templateLoop != nil {
-			out.WriteString(loopTemplateValue(name))
+			out.write(loopTemplateValue(name))
 			value = value[end+1:]
 			continue
 		}
@@ -53,7 +57,7 @@ func interpolateValue(ctx *renderContext, value string) (string, bool, error) {
 				return "", false, fmt.Errorf("unknown route param %q", param)
 			}
 			tainted = true
-			out.WriteString(resolved)
+			out.write(resolved)
 			value = value[end+1:]
 			continue
 		}
@@ -64,7 +68,7 @@ func interpolateValue(ctx *renderContext, value string) (string, bool, error) {
 		if ctx.tainted[name] {
 			tainted = true
 		}
-		out.WriteString(resolved)
+		out.write(resolved)
 		value = value[end+1:]
 	}
 }
@@ -93,4 +97,28 @@ func routeParamExpression(value string) (string, bool) {
 		return "", false
 	}
 	return name, true
+}
+
+const (
+	escapedOpenBrace  = "\x00GOWDK_OPEN_BRACE\x00"
+	escapedCloseBrace = "\x00GOWDK_CLOSE_BRACE\x00"
+)
+
+func decodeSourceTextEntities(value string) string {
+	if !strings.Contains(value, "&") {
+		return value
+	}
+	value = strings.ReplaceAll(value, "&#123;", escapedOpenBrace)
+	value = strings.ReplaceAll(value, "&#x7b;", escapedOpenBrace)
+	value = strings.ReplaceAll(value, "&#X7B;", escapedOpenBrace)
+	value = strings.ReplaceAll(value, "&#125;", escapedCloseBrace)
+	value = strings.ReplaceAll(value, "&#x7d;", escapedCloseBrace)
+	value = strings.ReplaceAll(value, "&#X7D;", escapedCloseBrace)
+	return stdhtml.UnescapeString(value)
+}
+
+func restoreSourceTextBraces(value string) string {
+	value = strings.ReplaceAll(value, escapedOpenBrace, "{")
+	value = strings.ReplaceAll(value, escapedCloseBrace, "}")
+	return value
 }

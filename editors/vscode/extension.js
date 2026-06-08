@@ -190,6 +190,12 @@ function activate(context) {
     }
   }, semanticLegend));
 
+  context.subscriptions.push(vscode.languages.registerDocumentSymbolProvider(LANGUAGE_ID, {
+    provideDocumentSymbols(document) {
+      return core.documentOutlineItems(document.getText()).map(documentSymbol);
+    }
+  }));
+
   context.subscriptions.push(vscode.commands.registerCommand('gowdk.checkCurrentFile', async () => {
     const document = activeGWDKDocument();
     if (document) {
@@ -844,6 +850,40 @@ function completionItems(entries) {
     item.detail = detail;
     return item;
   });
+}
+
+function documentSymbol(item) {
+  const symbol = new vscode.DocumentSymbol(
+    item.name,
+    item.detail || '',
+    documentSymbolKind(item.kind),
+    documentRange(item.range),
+    documentRange(item.selectionRange)
+  );
+  symbol.children = (item.children || []).map(documentSymbol);
+  return symbol;
+}
+
+function documentRange(range) {
+  return new vscode.Range(
+    range.start.line,
+    range.start.column,
+    range.end.line,
+    range.end.column
+  );
+}
+
+function documentSymbolKind(kind) {
+  const kinds = {
+    class: vscode.SymbolKind.Class,
+    function: vscode.SymbolKind.Function,
+    module: vscode.SymbolKind.Module,
+    namespace: vscode.SymbolKind.Namespace,
+    object: vscode.SymbolKind.Object,
+    property: vscode.SymbolKind.Property,
+    struct: vscode.SymbolKind.Struct
+  };
+  return kinds[kind] || vscode.SymbolKind.Property;
 }
 
 function config() {

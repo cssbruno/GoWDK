@@ -24,7 +24,7 @@
   ],
   "folding": {
     "markers": {
-      "start": "^\\s*(view|build|load|paths|props|client|emits|fragment|state\\s+[^{}]+|act\\s+\\w+|api(?:\\s+\\w+)?|(?:async\\s+)?fn\\s+\\w+\\([^)]*\\)(?:\\s+\\w+)?|computed\\s+\\w+\\s+\\w+|on\\s+(?:mount|destroy)|effect\\s+when\\s+\\w+)\\s*\\{",
+      "start": "^\\s*(view|script|go(?:\\s+[A-Za-z0-9_.-]+)?|style|build|load|paths|props|client|emits|exports|fragment|state\\s+[^{}]+|act\\s+\\w+|api(?:\\s+\\w+)?|(?:async\\s+)?fn\\s+\\w+\\([^)]*\\)(?:\\s+\\w+)?|computed\\s+\\w+\\s+\\w+|on\\s+(?:mount|destroy)|effect\\s+when\\s+\\w+)\\s*\\{",
       "end": "^\\s*\\}"
     }
   }

@@ -539,6 +539,7 @@ function completionEntries() {
     ['state', 'Component state contract declaration.'],
     ['client', 'Component browser island behavior block.'],
     ['emits', 'Component event declarations block.'],
+    ['script', 'Inline script block.'],
     ['view', 'Markup render block.'],
     ['fn', 'Declare a component client function.'],
     ['async fn', 'Declare an async component client function.'],
@@ -1133,7 +1134,7 @@ function semanticTokens(source) {
   for (let line = 0; line < lines.length; line++) {
     const text = lines[line];
     collectPatternTokens(tokens, line, text, /@[A-Za-z_][A-Za-z0-9_]*/g, 'namespace');
-    collectPatternTokens(tokens, line, text, /\b(package|import|use|paths|build|load|act|api|fragment|view|props|state|client|emits)\b/g, 'keyword');
+    collectPatternTokens(tokens, line, text, /\b(package|import|use|paths|build|load|act|api|fragment|view|script|go|style|props|state|exports|client|emits)\b/g, 'keyword');
     collectPatternTokens(tokens, line, text, /\b(async|fn|computed|on|mount|destroy|effect|when|ref|let|return|await|if|else|in|emit)\b/g, 'keyword');
     collectPatternTokens(tokens, line, text, /\b(GET|POST|PUT|PATCH|DELETE)\b/g, 'enumMember');
     collectPatternTokens(tokens, line, text, /\b(spa|action|hybrid|ssr)\b/g, 'enumMember');
@@ -1152,6 +1153,189 @@ function semanticTokens(source) {
     collectCSSReferenceTokens(tokens, line, text);
   }
   return withoutOverlaps(tokens).sort((a, b) => a.line - b.line || a.column - b.column || a.length - b.length);
+}
+
+function documentOutlineItems(source) {
+  const lines = String(source || '').split(/\r?\n/);
+  const items = [];
+  for (let line = 0; line < lines.length; line++) {
+    const text = lines[line];
+    const trimmed = text.trim();
+    if (!trimmed || trimmed.startsWith('//')) {
+      continue;
+    }
+    const annotation = outlineAnnotation(text, line);
+    if (annotation) {
+      items.push(annotation);
+      continue;
+    }
+    const block = outlineBlock(text, line, lines);
+    if (block) {
+      items.push(block);
+      line = Math.max(line, block.range.end.line);
+      continue;
+    }
+    const endpoint = outlineEndpoint(text, line);
+    if (endpoint) {
+      items.push(endpoint);
+    }
+  }
+  return items;
+}
+
+function outlineAnnotation(text, line) {
+  const match = text.match(/^(\s*)@(page|component|layout|route|title|description|canonical|image|guard|css|render)\b\s*(.*)$/);
+  if (!match) {
+    return undefined;
+  }
+  const name = `@${match[2]}`;
+  const detail = match[3].trim();
+  return outlineItem({
+    name: detail ? `${name} ${detail}` : name,
+    detail,
+    kind: annotationOutlineKind(match[2]),
+    line,
+    column: match[1].length,
+    length: text.trimEnd().length - match[1].length
+  });
+}
+
+function outlineBlock(text, line, lines) {
+  const match = text.match(/^(\s*)((?:go(?:\s+[A-Za-z0-9_.-]+)?)|paths|build|load|view|script|style|props|client|emits|exports|fragment|state\s+[^{}]+|act\s+\w+(?:\s+\w+)?(?:\s+"[^"]*")?|api(?:\s+\w+)?(?:\s+\w+)?(?:\s+"[^"]*")?|(?:async\s+)?fn\s+\w+\([^)]*\)(?:\s+\w+)?|computed\s+\w+\s+\w+|on\s+(?:mount|destroy)|effect\s+when\s+\w+)\s*\{/);
+  if (!match) {
+    return undefined;
+  }
+  const label = match[2].trim();
+  const range = outlineBlockRange(lines, line, match[0].length);
+  return {
+    name: label,
+    detail: blockOutlineDetail(label),
+    kind: blockOutlineKind(label),
+    range,
+    selectionRange: {
+      start: { line, column: match[1].length },
+      end: { line, column: match[1].length + label.length }
+    },
+    children: nestedOutlineItems(lines, line + 1, range.end.line)
+  };
+}
+
+function nestedOutlineItems(lines, startLine, endLine) {
+  const items = [];
+  for (let line = startLine; line < endLine; line++) {
+    const text = lines[line];
+    const item = outlineBlock(text, line, lines) || outlineEndpoint(text, line);
+    if (!item) {
+      continue;
+    }
+    items.push(item);
+    if (item.range) {
+      line = Math.max(line, item.range.end.line);
+    }
+  }
+  return items;
+}
+
+function outlineEndpoint(text, line) {
+  const match = text.match(/^(\s*)(act\s+\w+\s+\w+\s+"[^"]*"|api(?:\s+\w+)?\s+\w+\s+"[^"]*")\b/);
+  if (!match) {
+    return undefined;
+  }
+  return outlineItem({
+    name: match[2],
+    detail: match[2].startsWith('act ') ? 'action endpoint' : 'api endpoint',
+    kind: 'function',
+    line,
+    column: match[1].length,
+    length: match[2].length
+  });
+}
+
+function outlineBlockRange(lines, startLine, headerLength) {
+  let depth = 0;
+  for (let line = startLine; line < lines.length; line++) {
+    const text = lines[line];
+    const startColumn = line === startLine ? Math.max(0, headerLength - 1) : 0;
+    for (let column = startColumn; column < text.length; column++) {
+      const char = text[column];
+      if (char === '{') {
+        depth++;
+      }
+      if (char === '}') {
+        depth--;
+        if (depth <= 0) {
+          return {
+            start: { line: startLine, column: 0 },
+            end: { line, column: column + 1 }
+          };
+        }
+      }
+    }
+  }
+  const lastLine = Math.max(startLine, lines.length - 1);
+  return {
+    start: { line: startLine, column: 0 },
+    end: { line: lastLine, column: (lines[lastLine] || '').length }
+  };
+}
+
+function outlineItem({ name, detail, kind, line, column, length }) {
+  return {
+    name,
+    detail,
+    kind,
+    range: {
+      start: { line, column },
+      end: { line, column: column + Math.max(length, 1) }
+    },
+    selectionRange: {
+      start: { line, column },
+      end: { line, column: column + Math.max(String(name || '').split(/\s+/)[0].length, 1) }
+    },
+    children: []
+  };
+}
+
+function annotationOutlineKind(name) {
+  if (name === 'page' || name === 'layout') {
+    return 'namespace';
+  }
+  if (name === 'component') {
+    return 'class';
+  }
+  return 'property';
+}
+
+function blockOutlineKind(label) {
+  if (label === 'view') {
+    return 'object';
+  }
+  if (label === 'script' || label === 'client' || label.startsWith('go')) {
+    return 'module';
+  }
+  if (label.startsWith('act ') || label.startsWith('api ') || label.includes('fn ')) {
+    return 'function';
+  }
+  if (label.startsWith('state ') || label.startsWith('props')) {
+    return 'struct';
+  }
+  return 'property';
+}
+
+function blockOutlineDetail(label) {
+  if (label === 'view') {
+    return 'markup block';
+  }
+  if (label === 'script') {
+    return 'script block';
+  }
+  if (label.startsWith('go')) {
+    return 'inline Go block';
+  }
+  if (label === 'client') {
+    return 'client island block';
+  }
+  return 'block';
 }
 
 function componentEvent(name, metadata = {}, context = {}) {
@@ -1573,6 +1757,7 @@ module.exports = {
   diagnosticRange,
   diagnosticSeverity,
   documentDataFields,
+  documentOutlineItems,
   escapeHTML,
   goModModulePath,
   goModRequiresGOWDK,

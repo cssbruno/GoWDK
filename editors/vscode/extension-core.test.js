@@ -760,6 +760,9 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
     '@css default page forms',
     'act Submit POST "/submit"',
     'api Status GET "/api/status"',
+    'script {',
+    '  console.log("ready")',
+    '}',
     'emits {',
     '  select(id string)',
     '}',
@@ -830,6 +833,9 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
   assert.deepEqual(simplified.filter((token) => token.text === 'GET'), [
     { line: 11, text: 'GET', tokenType: 'enumMember' }
   ]);
+  assert.deepEqual(simplified.filter((token) => token.text === 'script'), [
+    { line: 12, text: 'script', tokenType: 'keyword' }
+  ]);
   assert.ok(simplified.some((token) => token.text === 'emits' && token.tokenType === 'keyword'));
   assert.ok(simplified.some((token) => token.text === 'client' && token.tokenType === 'keyword'));
   assert.ok(simplified.some((token) => token.text === 'computed' && token.tokenType === 'keyword'));
@@ -848,6 +854,41 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
   assert.ok(simplified.some((token) => token.text === 'class:active' && token.tokenType === 'property'));
   assert.ok(simplified.some((token) => token.text === 'style:height.px' && token.tokenType === 'property'));
   assert.ok(simplified.some((token) => token.text === 'Hero' && token.tokenType === 'class'));
+});
+
+test('documentOutlineItems indexes annotations and major blocks', () => {
+  const outline = core.documentOutlineItems([
+    'package app',
+    '',
+    '@page home',
+    '@layout root',
+    '',
+    'build {',
+    '  => { title: "Home" }',
+    '}',
+    '',
+    'script {',
+    '  console.log("ready")',
+    '}',
+    '',
+    'view {',
+    '  <main><Hero /></main>',
+    '}'
+  ].join('\n'));
+
+  assert.deepEqual(outline.map((item) => ({
+    name: item.name,
+    detail: item.detail,
+    kind: item.kind,
+    startLine: item.range.start.line,
+    endLine: item.range.end.line
+  })), [
+    { name: '@page home', detail: 'home', kind: 'namespace', startLine: 2, endLine: 2 },
+    { name: '@layout root', detail: 'root', kind: 'namespace', startLine: 3, endLine: 3 },
+    { name: 'build', detail: 'block', kind: 'property', startLine: 5, endLine: 7 },
+    { name: 'script', detail: 'script block', kind: 'module', startLine: 9, endLine: 11 },
+    { name: 'view', detail: 'markup block', kind: 'object', startLine: 13, endLine: 15 }
+  ]);
 });
 
 function symbolMetadata() {

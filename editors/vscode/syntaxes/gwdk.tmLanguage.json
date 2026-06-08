@@ -45,7 +45,7 @@
       "patterns": [
         {
           "name": "keyword.control.block.gwdk",
-          "match": "\\b(?:package|import|use|paths|build|load|view|act|api|fragment|props|state|client|emits)\\b"
+          "match": "\\b(?:package|import|use|paths|build|load|view|script|go|style|act|api|fragment|props|state|exports|client|emits)\\b"
         },
         {
           "name": "support.type.render-mode.gwdk",

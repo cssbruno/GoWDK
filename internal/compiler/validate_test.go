@@ -13,16 +13,17 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestValidateManifestRejectsMissingPackageDeclaration(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "home.page.gwdk")
-	if err := os.WriteFile(source, []byte(""), 0o644); err != nil {
+	sourcePath := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte(""), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
-		Source: source,
+		Source: sourcePath,
 		ID:     "home",
 		Route:  "/",
 		Blocks: manifest.Blocks{View: true},
@@ -40,8 +41,8 @@ func TestValidateManifestRejectsMissingPackageDeclaration(t *testing.T) {
 
 func TestValidateManifestRejectsPackageMismatchWithSiblingGoFile(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "home.page.gwdk")
-	if err := os.WriteFile(source, []byte("package views\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package views\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	goFile := filepath.Join(root, "handlers.go")
@@ -49,7 +50,7 @@ func TestValidateManifestRejectsPackageMismatchWithSiblingGoFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
-		Source:  source,
+		Source:  sourcePath,
 		Package: "views",
 		ID:      "home",
 		Route:   "/",
@@ -68,8 +69,8 @@ func TestValidateManifestRejectsPackageMismatchWithSiblingGoFile(t *testing.T) {
 
 func TestValidateManifestAcceptsPackageMatchingSiblingGoFile(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "home.page.gwdk")
-	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	goFile := filepath.Join(root, "handlers.go")
@@ -77,7 +78,7 @@ func TestValidateManifestAcceptsPackageMatchingSiblingGoFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
-		Source:  source,
+		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
@@ -92,8 +93,8 @@ func TestValidateManifestAcceptsPackageMatchingSiblingGoFile(t *testing.T) {
 
 func TestValidateManifestIgnoresProjectConfigGoPackage(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "styled.page.gwdk")
-	if err := os.WriteFile(source, []byte("package css\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(root, "styled.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package css\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	configFile := filepath.Join(root, "gowdk.config.go")
@@ -101,7 +102,7 @@ func TestValidateManifestIgnoresProjectConfigGoPackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
-		Source:  source,
+		Source:  sourcePath,
 		Package: "css",
 		ID:      "styled",
 		Route:   "/styled",
@@ -116,8 +117,8 @@ func TestValidateManifestIgnoresProjectConfigGoPackage(t *testing.T) {
 
 func TestValidateManifestReportsGoPackageParseErrors(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "home.page.gwdk")
-	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	goFile := filepath.Join(root, "handlers.go")
@@ -125,7 +126,7 @@ func TestValidateManifestReportsGoPackageParseErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
-		Source:  source,
+		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
@@ -144,8 +145,8 @@ func TestValidateManifestReportsGoPackageParseErrors(t *testing.T) {
 
 func TestValidateManifestReportsGoPackageTypeErrors(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "home.page.gwdk")
-	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	goFile := filepath.Join(root, "handlers.go")
@@ -153,7 +154,7 @@ func TestValidateManifestReportsGoPackageTypeErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
-		Source:  source,
+		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
@@ -182,8 +183,8 @@ func TestValidateManifestReportsGoPackageTypeErrors(t *testing.T) {
 
 func TestValidateManifestTypeChecksDefaultScriptWithSiblingGoFiles(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "home.page.gwdk")
-	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	goFile := filepath.Join(root, "copy.go")
@@ -196,7 +197,7 @@ type PageCopy struct {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
-		Source:  source,
+		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
@@ -218,12 +219,12 @@ type PageCopy struct {
 
 func TestValidateManifestTypeChecksDefaultScriptWithGOWDKImports(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "home.page.gwdk")
-	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
-		Source:  source,
+		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
@@ -246,19 +247,19 @@ func TestValidateManifestTypeChecksDefaultScriptWithGOWDKImports(t *testing.T) {
 
 func TestValidateManifestReportsDefaultScriptTypeErrors(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "home.page.gwdk")
-	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
-		Source:  source,
+		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
 		Blocks: manifest.Blocks{
 			View: true,
 			GoBlocks: []manifest.GoBlock{{
-				Span: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 8, Column: 1}},
+				Span: source.SourceSpan{Start: source.SourcePosition{Line: 8, Column: 1}},
 				Body: `func BrokenCopy() string {
 	return MissingTitle
 }`,
@@ -275,8 +276,8 @@ func TestValidateManifestReportsDefaultScriptTypeErrors(t *testing.T) {
 	if diagnostic == nil {
 		t.Fatalf("missing Go package error diagnostic: %#v", diagnostics)
 	}
-	if diagnostic.Source != source {
-		t.Fatalf("expected diagnostic source %s, got %#v", source, diagnostic)
+	if diagnostic.Source != sourcePath {
+		t.Fatalf("expected diagnostic source %s, got %#v", sourcePath, diagnostic)
 	}
 	if !strings.Contains(diagnostic.Message, "undefined: MissingTitle") {
 		t.Fatalf("expected undefined inline go block symbol in diagnostic, got %q", diagnostic.Message)
@@ -287,12 +288,12 @@ func TestValidateManifestReportsDefaultScriptTypeErrors(t *testing.T) {
 }
 
 func TestGoBlockPackageSourceForValidationPreservesLineDirective(t *testing.T) {
-	source := filepath.Join(t.TempDir(), "home.page.gwdk")
+	sourcePath := filepath.Join(t.TempDir(), "home.page.gwdk")
 	payload, err := goBlockPackageSourceForValidation(packageDeclaration{
-		Source:  source,
+		Source:  sourcePath,
 		Package: "app",
 	}, manifest.GoBlock{
-		Span: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 8, Column: 1}},
+		Span: source.SourceSpan{Start: source.SourcePosition{Line: 8, Column: 1}},
 		Body: `func BrokenCopy() string {
 	return MissingTitle
 }`,
@@ -300,11 +301,11 @@ func TestGoBlockPackageSourceForValidationPreservesLineDirective(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(payload, "//line "+filepath.ToSlash(source)+":8") {
+	if !strings.Contains(payload, "//line "+filepath.ToSlash(sourcePath)+":8") {
 		t.Fatalf("missing line directive in validation source:\n%s", payload)
 	}
 	fileSet := token.NewFileSet()
-	file, err := parser.ParseFile(fileSet, source, payload, parser.ParseComments|parser.AllErrors)
+	file, err := parser.ParseFile(fileSet, sourcePath, payload, parser.ParseComments|parser.AllErrors)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,12 +318,12 @@ func TestGoBlockPackageSourceForValidationPreservesLineDirective(t *testing.T) {
 
 func TestValidateManifestTypeChecksDefaultGoBlockAsStaticPackageGo(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "home.page.gwdk")
-	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
-		Source:  source,
+		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
@@ -633,14 +634,14 @@ func TestValidatePageRejectsSSRWithoutAddon(t *testing.T) {
 }
 
 func TestValidatePageRequiresExplicitGuard(t *testing.T) {
-	source := filepath.Join(t.TempDir(), "home.page.gwdk")
-	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(t.TempDir(), "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
 		ID:     "home",
 		Route:  "/",
-		Source: source,
+		Source: sourcePath,
 		Blocks: manifest.Blocks{View: true},
 	}
 
@@ -651,14 +652,14 @@ func TestValidatePageRequiresExplicitGuard(t *testing.T) {
 }
 
 func TestValidatePageRequiresPublicGuardToBeExclusive(t *testing.T) {
-	source := filepath.Join(t.TempDir(), "home.page.gwdk")
-	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(t.TempDir(), "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
 		ID:     "home",
 		Route:  "/",
-		Source: source,
+		Source: sourcePath,
 		Guard:  []string{"public", "auth.required"},
 		Blocks: manifest.Blocks{View: true},
 	}
@@ -670,14 +671,14 @@ func TestValidatePageRequiresPublicGuardToBeExclusive(t *testing.T) {
 }
 
 func TestValidatePageRejectsProtectedGuardOnBuildTimePage(t *testing.T) {
-	source := filepath.Join(t.TempDir(), "dashboard.page.gwdk")
-	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(t.TempDir(), "dashboard.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard",
-		Source: source,
+		Source: sourcePath,
 		Guard:  []string{"auth.required"},
 		Render: gowdk.SPA,
 		Blocks: manifest.Blocks{View: true},
@@ -690,14 +691,14 @@ func TestValidatePageRejectsProtectedGuardOnBuildTimePage(t *testing.T) {
 }
 
 func TestValidatePageAllowsProtectedGuardOnRequestTimePage(t *testing.T) {
-	source := filepath.Join(t.TempDir(), "dashboard.page.gwdk")
-	if err := os.WriteFile(source, []byte("package app\n"), 0o644); err != nil {
+	sourcePath := filepath.Join(t.TempDir(), "dashboard.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	page := manifest.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard",
-		Source: source,
+		Source: sourcePath,
 		Guard:  []string{"auth.required"},
 		Render: gowdk.SSR,
 		Blocks: manifest.Blocks{View: true},
@@ -793,11 +794,11 @@ func TestValidateManifestRejectsDuplicatePageStore(t *testing.T) {
 		Stores: []manifest.Store{
 			{
 				Name: "cart",
-				Span: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 5, Column: 1}, End: manifest.SourcePosition{Line: 5, Column: 40}},
+				Span: source.SourceSpan{Start: source.SourcePosition{Line: 5, Column: 1}, End: source.SourcePosition{Line: 5, Column: 40}},
 			},
 			{
 				Name: "cart",
-				Span: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 6, Column: 1}, End: manifest.SourcePosition{Line: 6, Column: 40}},
+				Span: source.SourceSpan{Start: source.SourcePosition{Line: 6, Column: 1}, End: source.SourcePosition{Line: 6, Column: 40}},
 			},
 		},
 		Blocks: manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
@@ -828,7 +829,7 @@ func TestValidateManifestRejectsUnknownComponentStoreUse(t *testing.T) {
 				Client:     true,
 				ClientBody: "use cart",
 				Spans: manifest.BlockSpans{
-					Client: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 4, Column: 1}, End: manifest.SourcePosition{Line: 4, Column: 9}},
+					Client: source.SourceSpan{Start: source.SourcePosition{Line: 4, Column: 1}, End: source.SourcePosition{Line: 4, Column: 9}},
 				},
 				View:     true,
 				ViewBody: `<button>Cart</button>`,
@@ -1372,16 +1373,16 @@ func TestValidateManifestRejectsDuplicateComponentEmitNames(t *testing.T) {
 		Emits: []manifest.Emit{
 			{
 				Name: "select",
-				Span: manifest.SourceSpan{
-					Start: manifest.SourcePosition{Line: 4, Column: 3},
-					End:   manifest.SourcePosition{Line: 4, Column: 16},
+				Span: source.SourceSpan{
+					Start: source.SourcePosition{Line: 4, Column: 3},
+					End:   source.SourcePosition{Line: 4, Column: 16},
 				},
 			},
 			{
 				Name: "select",
-				Span: manifest.SourceSpan{
-					Start: manifest.SourcePosition{Line: 5, Column: 3},
-					End:   manifest.SourcePosition{Line: 5, Column: 20},
+				Span: source.SourceSpan{
+					Start: source.SourcePosition{Line: 5, Column: 3},
+					End:   source.SourcePosition{Line: 5, Column: 20},
 				},
 			},
 		},
@@ -1438,9 +1439,9 @@ func TestValidateManifestClientParseErrorPointsToClientLine(t *testing.T) {
 			Client:     true,
 			ClientBody: "fn Bad() {\n  if Count {\n  }\n}",
 			Spans: manifest.BlockSpans{
-				Client: manifest.SourceSpan{
-					Start: manifest.SourcePosition{Line: 10, Column: 1},
-					End:   manifest.SourcePosition{Line: 14, Column: 1},
+				Client: source.SourceSpan{
+					Start: source.SourcePosition{Line: 10, Column: 1},
+					End:   source.SourcePosition{Line: 14, Column: 1},
 				},
 			},
 			View:     true,
@@ -2383,7 +2384,7 @@ func TestValidateManifestViewEventDiagnosticPointsToExpression(t *testing.T) {
 			View:     true,
 			ViewBody: `<button g:on:click={Missing()}>{Count}</button>`,
 			Spans: manifest.BlockSpans{
-				View: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 9, Column: 1}, End: manifest.SourcePosition{Line: 9, Column: 7}},
+				View: source.SourceSpan{Start: source.SourcePosition{Line: 9, Column: 1}, End: source.SourcePosition{Line: 9, Column: 7}},
 			},
 		},
 	}}}
@@ -2407,7 +2408,7 @@ func TestValidateManifestUnknownViewFieldDiagnosticPointsToIdentifier(t *testing
 			View:     true,
 			ViewBody: `<button>{Missing}</button>`,
 			Spans: manifest.BlockSpans{
-				View: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 4, Column: 1}, End: manifest.SourcePosition{Line: 4, Column: 7}},
+				View: source.SourceSpan{Start: source.SourcePosition{Line: 4, Column: 1}, End: source.SourcePosition{Line: 4, Column: 7}},
 			},
 		},
 	}}}
@@ -2431,7 +2432,7 @@ func TestValidateManifestBadGForDiagnosticPointsToDirectiveValue(t *testing.T) {
 			View:     true,
 			ViewBody: `<ul><li g:for={item of Items}>{item.Name}</li></ul>`,
 			Spans: manifest.BlockSpans{
-				View: manifest.SourceSpan{Start: manifest.SourcePosition{Line: 12, Column: 1}, End: manifest.SourcePosition{Line: 12, Column: 7}},
+				View: source.SourceSpan{Start: source.SourcePosition{Line: 12, Column: 1}, End: source.SourcePosition{Line: 12, Column: 7}},
 			},
 		},
 	}}}
@@ -3431,7 +3432,7 @@ func TestValidatePageRejectsDuplicateRouteParams(t *testing.T) {
 		Blocks: manifest.Blocks{View: true},
 		Spans: manifest.PageSpans{
 			Route: testSourceSpan(3, 8, 3, 28),
-			RouteParams: []manifest.NamedSpan{
+			RouteParams: []source.NamedSpan{
 				{Name: "slug", Span: testSourceSpan(3, 14, 3, 20)},
 				{Name: "slug", Span: testSourceSpan(3, 21, 3, 27)},
 			},
@@ -3461,7 +3462,7 @@ func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
 			Route:       "/save/{id:uuid}",
 			Span:        testSourceSpan(6, 1, 6, 32),
 			RouteSpan:   testSourceSpan(6, 17, 6, 34),
-			RouteParams: []manifest.NamedSpan{{Name: "id", Span: testSourceSpan(6, 24, 6, 33)}},
+			RouteParams: []source.NamedSpan{{Name: "id", Span: testSourceSpan(6, 24, 6, 33)}},
 		}}
 
 		diagnostics := ValidatePage(gowdk.Config{}, page)
@@ -3480,7 +3481,7 @@ func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
 			Route:       "/api/{id:uuid}",
 			Span:        testSourceSpan(9, 1, 9, 31),
 			RouteSpan:   testSourceSpan(9, 16, 9, 31),
-			RouteParams: []manifest.NamedSpan{{Name: "id", Span: testSourceSpan(9, 21, 9, 30)}},
+			RouteParams: []source.NamedSpan{{Name: "id", Span: testSourceSpan(9, 21, 9, 30)}},
 		}}
 
 		diagnostics := ValidatePage(gowdk.Config{}, page)
@@ -3499,7 +3500,7 @@ func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
 			Route:       "/preview/{id}",
 			Span:        testSourceSpan(12, 1, 12, 34),
 			RouteSpan:   testSourceSpan(12, 20, 12, 35),
-			RouteParams: []manifest.NamedSpan{{Name: "id", Span: testSourceSpan(12, 29, 12, 33)}},
+			RouteParams: []source.NamedSpan{{Name: "id", Span: testSourceSpan(12, 29, 12, 33)}},
 		}}
 
 		diagnostics := ValidatePage(gowdk.Config{}, page)
@@ -3904,17 +3905,17 @@ func firstDiagnostic(diagnostics []ValidationError, code string) *ValidationErro
 	return nil
 }
 
-func assertSourceSpan(t *testing.T, span manifest.SourceSpan, startLine, startColumn, endLine, endColumn int) {
+func assertSourceSpan(t *testing.T, span source.SourceSpan, startLine, startColumn, endLine, endColumn int) {
 	t.Helper()
 	if span.Start.Line != startLine || span.Start.Column != startColumn || span.End.Line != endLine || span.End.Column != endColumn {
 		t.Fatalf("unexpected source span: got %#v, want %d:%d-%d:%d", span, startLine, startColumn, endLine, endColumn)
 	}
 }
 
-func testSourceSpan(startLine, startColumn, endLine, endColumn int) manifest.SourceSpan {
-	return manifest.SourceSpan{
-		Start: manifest.SourcePosition{Line: startLine, Column: startColumn},
-		End:   manifest.SourcePosition{Line: endLine, Column: endColumn},
+func testSourceSpan(startLine, startColumn, endLine, endColumn int) source.SourceSpan {
+	return source.SourceSpan{
+		Start: source.SourcePosition{Line: startLine, Column: startColumn},
+		End:   source.SourcePosition{Line: endLine, Column: endColumn},
 	}
 }
 

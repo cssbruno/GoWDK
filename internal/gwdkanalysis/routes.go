@@ -4,6 +4,7 @@ import (
 	"sort"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func routeParams(route string) []string {
@@ -20,9 +21,9 @@ func routeParams(route string) []string {
 	return out
 }
 
-func typedRouteParams(route string) []manifest.RouteParam {
+func typedRouteParams(route string) []source.RouteParam {
 	params := manifest.RouteParamsFromPath(route)
-	out := make([]manifest.RouteParam, 0, len(params))
+	out := make([]source.RouteParam, 0, len(params))
 	seen := map[string]bool{}
 	for _, param := range params {
 		if seen[param.Name] {
@@ -34,19 +35,19 @@ func typedRouteParams(route string) []manifest.RouteParam {
 	return out
 }
 
-func routeParamSpans(route string, fallback manifest.SourceSpan) []manifest.NamedSpan {
+func routeParamSpans(route string, fallback source.SourceSpan) []source.NamedSpan {
 	params := routeParams(route)
-	out := make([]manifest.NamedSpan, 0, len(params))
+	out := make([]source.NamedSpan, 0, len(params))
 	for _, param := range params {
-		out = append(out, manifest.NamedSpan{Name: param, Span: fallback})
+		out = append(out, source.NamedSpan{Name: param, Span: fallback})
 	}
 	return out
 }
 
-func namedSpans(values []string, fallback manifest.SourceSpan) []manifest.NamedSpan {
-	out := make([]manifest.NamedSpan, 0, len(values))
+func namedSpans(values []string, fallback source.SourceSpan) []source.NamedSpan {
+	out := make([]source.NamedSpan, 0, len(values))
 	for _, value := range values {
-		out = append(out, manifest.NamedSpan{Name: value, Span: fallback})
+		out = append(out, source.NamedSpan{Name: value, Span: fallback})
 	}
 	return out
 }

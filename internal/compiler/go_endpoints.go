@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // DiscoverGoEndpointComments merges optional //gowdk:act and //gowdk:api
@@ -43,11 +44,11 @@ func DiscoverGoEndpointComments(app manifest.Manifest) (manifest.Manifest, error
 func endpointSourceDirs(app manifest.Manifest) []string {
 	seen := map[string]bool{}
 	var dirs []string
-	add := func(source string) {
-		if strings.TrimSpace(source) == "" {
+	add := func(sourcePath string) {
+		if strings.TrimSpace(sourcePath) == "" {
 			return
 		}
-		dir := sourceDir(source)
+		dir := sourceDir(sourcePath)
 		abs, err := filepath.Abs(dir)
 		if err == nil {
 			dir = abs
@@ -181,30 +182,30 @@ func isASCIILetters(value string) bool {
 }
 
 func goEndpointDiagnostic(fileSet *token.FileSet, path string, node ast.Node, code string, message string) ValidationError {
-	var span manifest.SourceSpan
+	var span source.SourceSpan
 	if node != nil {
 		span = goTokenSpan(fileSet, node.Pos(), node.End())
 	}
 	return ValidationError{Code: code, Source: path, Span: span, Message: message}
 }
 
-func goTokenSpan(fileSet *token.FileSet, start token.Pos, end token.Pos) manifest.SourceSpan {
+func goTokenSpan(fileSet *token.FileSet, start token.Pos, end token.Pos) source.SourceSpan {
 	startPos := fileSet.Position(start)
 	endPos := fileSet.Position(end)
-	return manifest.SourceSpan{
-		Start: manifest.SourcePosition{Line: startPos.Line, Column: startPos.Column},
-		End:   manifest.SourcePosition{Line: endPos.Line, Column: endPos.Column},
+	return source.SourceSpan{
+		Start: source.SourcePosition{Line: startPos.Line, Column: startPos.Column},
+		End:   source.SourcePosition{Line: endPos.Line, Column: endPos.Column},
 	}
 }
 
-func routeParamSpansFallback(route string, fallback manifest.SourceSpan) []manifest.NamedSpan {
+func routeParamSpansFallback(route string, fallback source.SourceSpan) []source.NamedSpan {
 	info, issues := parseRoute(route)
 	if len(issues) > 0 {
 		return nil
 	}
-	out := make([]manifest.NamedSpan, 0, len(info.Params))
+	out := make([]source.NamedSpan, 0, len(info.Params))
 	for _, param := range info.Params {
-		out = append(out, manifest.NamedSpan{Name: param, Span: fallback})
+		out = append(out, source.NamedSpan{Name: param, Span: fallback})
 	}
 	return out
 }

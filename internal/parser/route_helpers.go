@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func splitList(value string) []string {
@@ -32,7 +32,7 @@ func splitCSSList(value string) []string {
 	return out
 }
 
-func sourceLineSpan(lineNumber int, rawLine string) manifest.SourceSpan {
+func sourceLineSpan(lineNumber int, rawLine string) source.SourceSpan {
 	startColumn := 1
 	for _, r := range rawLine {
 		if r != ' ' && r != '\t' {
@@ -44,29 +44,29 @@ func sourceLineSpan(lineNumber int, rawLine string) manifest.SourceSpan {
 	if endColumn <= startColumn {
 		endColumn = startColumn + 1
 	}
-	return manifest.SourceSpan{
-		Start: manifest.SourcePosition{Line: lineNumber, Column: startColumn},
-		End:   manifest.SourcePosition{Line: lineNumber, Column: endColumn},
+	return source.SourceSpan{
+		Start: source.SourcePosition{Line: lineNumber, Column: startColumn},
+		End:   source.SourcePosition{Line: lineNumber, Column: endColumn},
 	}
 }
 
-func sourceBodyStart(lines []string, firstLineNumber int) manifest.SourcePosition {
+func sourceBodyStart(lines []string, firstLineNumber int) source.SourcePosition {
 	for offset, rawLine := range lines {
 		for index, char := range []rune(rawLine) {
 			if strings.TrimSpace(string(char)) == "" {
 				continue
 			}
-			return manifest.SourcePosition{Line: firstLineNumber + offset, Column: index + 1}
+			return source.SourcePosition{Line: firstLineNumber + offset, Column: index + 1}
 		}
 	}
-	return manifest.SourcePosition{}
+	return source.SourcePosition{}
 }
 
-func namedValueSpans(values []string, lineNumber int, rawLine string) []manifest.NamedSpan {
+func namedValueSpans(values []string, lineNumber int, rawLine string) []source.NamedSpan {
 	if len(values) == 0 {
 		return nil
 	}
-	spans := make([]manifest.NamedSpan, 0, len(values))
+	spans := make([]source.NamedSpan, 0, len(values))
 	searchStart := 0
 	for _, value := range values {
 		if value == "" {
@@ -74,16 +74,16 @@ func namedValueSpans(values []string, lineNumber int, rawLine string) []manifest
 		}
 		index := strings.Index(rawLine[searchStart:], value)
 		if index < 0 {
-			spans = append(spans, manifest.NamedSpan{Name: value, Span: sourceLineSpan(lineNumber, rawLine)})
+			spans = append(spans, source.NamedSpan{Name: value, Span: sourceLineSpan(lineNumber, rawLine)})
 			continue
 		}
 		start := searchStart + index
 		end := start + len([]rune(value))
-		spans = append(spans, manifest.NamedSpan{
+		spans = append(spans, source.NamedSpan{
 			Name: value,
-			Span: manifest.SourceSpan{
-				Start: manifest.SourcePosition{Line: lineNumber, Column: start + 1},
-				End:   manifest.SourcePosition{Line: lineNumber, Column: end + 1},
+			Span: source.SourceSpan{
+				Start: source.SourcePosition{Line: lineNumber, Column: start + 1},
+				End:   source.SourcePosition{Line: lineNumber, Column: end + 1},
 			},
 		})
 		searchStart = end
@@ -91,7 +91,7 @@ func namedValueSpans(values []string, lineNumber int, rawLine string) []manifest
 	return spans
 }
 
-func parseRouteDeclaration(route string, lineNumber int, rawLine string) (string, []manifest.RouteParam, []manifest.NamedSpan, error) {
+func parseRouteDeclaration(route string, lineNumber int, rawLine string) (string, []source.RouteParam, []source.NamedSpan, error) {
 	matches := routeParamPattern.FindAllStringSubmatchIndex(route, -1)
 	if len(matches) == 0 {
 		return route, nil, nil, nil
@@ -102,8 +102,8 @@ func parseRouteDeclaration(route string, lineNumber int, rawLine string) (string
 	}
 	normalizedParts := make([]string, 0, len(matches)*3+1)
 	last := 0
-	params := make([]manifest.RouteParam, 0, len(matches))
-	spans := make([]manifest.NamedSpan, 0, len(matches))
+	params := make([]source.RouteParam, 0, len(matches))
+	spans := make([]source.NamedSpan, 0, len(matches))
 	for _, match := range matches {
 		name := route[match[2]:match[3]]
 		paramType := "string"
@@ -115,12 +115,12 @@ func parseRouteDeclaration(route string, lineNumber int, rawLine string) (string
 		}
 		start := routeStart + match[0]
 		end := routeStart + match[1]
-		span := manifest.SourceSpan{
-			Start: manifest.SourcePosition{Line: lineNumber, Column: start + 1},
-			End:   manifest.SourcePosition{Line: lineNumber, Column: end + 1},
+		span := source.SourceSpan{
+			Start: source.SourcePosition{Line: lineNumber, Column: start + 1},
+			End:   source.SourcePosition{Line: lineNumber, Column: end + 1},
 		}
-		params = append(params, manifest.RouteParam{Name: name, Type: paramType, Span: span})
-		spans = append(spans, manifest.NamedSpan{
+		params = append(params, source.RouteParam{Name: name, Type: paramType, Span: span})
+		spans = append(spans, source.NamedSpan{
 			Name: name,
 			Span: span,
 		})
@@ -131,7 +131,7 @@ func parseRouteDeclaration(route string, lineNumber int, rawLine string) (string
 	return strings.Join(normalizedParts, ""), params, spans, nil
 }
 
-func routeParamSpans(route string, lineNumber int, rawLine string) []manifest.NamedSpan {
+func routeParamSpans(route string, lineNumber int, rawLine string) []source.NamedSpan {
 	_, _, spans, _ := parseRouteDeclaration(route, lineNumber, rawLine)
 	return spans
 }

@@ -5,6 +5,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 type ValidationError struct {
@@ -12,7 +13,7 @@ type ValidationError struct {
 	PageID        string
 	ComponentName string
 	Source        string
-	Span          manifest.SourceSpan
+	Span          source.SourceSpan
 	Message       string
 }
 

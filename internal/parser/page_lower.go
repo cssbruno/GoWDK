@@ -6,9 +6,10 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/gwdkast"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func lowerPageSyntax(source []byte, ast gwdkast.File, defaultID string) (manifest.Page, error) {
+func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (manifest.Page, error) {
 	var page manifest.Page
 	if ast.Package != nil {
 		page.Package = ast.Package.Name
@@ -17,14 +18,14 @@ func lowerPageSyntax(source []byte, ast gwdkast.File, defaultID string) (manifes
 	page.Imports = lowerSyntaxImports(ast.Imports)
 	page.Uses = lowerSyntaxUses(ast.Uses)
 	page.Stores = lowerSyntaxStores(ast.Stores)
-	if err := lowerPageSyntaxAnnotations(source, ast, &page); err != nil {
+	if err := lowerPageSyntaxAnnotations(src, ast, &page); err != nil {
 		return manifest.Page{}, err
 	}
 	for _, block := range ast.Blocks {
 		applyPageSyntaxBlock(&page, block)
 	}
 	for _, endpoint := range ast.Actions {
-		rawLine := sourceLineText(source, endpoint.Span.Start.Line)
+		rawLine := sourceLineText(src, endpoint.Span.Start.Line)
 		page.Blocks.Actions = append(page.Blocks.Actions, manifest.Action{
 			Name:          endpoint.Name,
 			Method:        endpoint.Method,
@@ -35,10 +36,10 @@ func lowerPageSyntax(source []byte, ast gwdkast.File, defaultID string) (manifes
 			RouteParams:   routeParamSpans(endpoint.Route, endpoint.Span.Start.Line, rawLine),
 			ErrorPageSpan: endpoint.ErrorPageSpan,
 		})
-		page.Blocks.Spans.Actions = append(page.Blocks.Spans.Actions, manifest.NamedSpan{Name: endpoint.Name, Span: endpoint.Span})
+		page.Blocks.Spans.Actions = append(page.Blocks.Spans.Actions, source.NamedSpan{Name: endpoint.Name, Span: endpoint.Span})
 	}
 	for _, endpoint := range ast.APIs {
-		rawLine := sourceLineText(source, endpoint.Span.Start.Line)
+		rawLine := sourceLineText(src, endpoint.Span.Start.Line)
 		page.Blocks.APIs = append(page.Blocks.APIs, manifest.API{
 			Name:          endpoint.Name,
 			Method:        endpoint.Method,
@@ -49,10 +50,10 @@ func lowerPageSyntax(source []byte, ast gwdkast.File, defaultID string) (manifes
 			RouteParams:   routeParamSpans(endpoint.Route, endpoint.Span.Start.Line, rawLine),
 			ErrorPageSpan: endpoint.ErrorPageSpan,
 		})
-		page.Blocks.Spans.APIs = append(page.Blocks.Spans.APIs, manifest.NamedSpan{Name: endpoint.Name, Span: endpoint.Span})
+		page.Blocks.Spans.APIs = append(page.Blocks.Spans.APIs, source.NamedSpan{Name: endpoint.Name, Span: endpoint.Span})
 	}
 	for _, fragment := range ast.Fragments {
-		rawLine := sourceLineText(source, fragment.RouteSpan.Start.Line)
+		rawLine := sourceLineText(src, fragment.RouteSpan.Start.Line)
 		page.Blocks.Fragments = append(page.Blocks.Fragments, manifest.FragmentEndpoint{
 			Name:        fragment.Name,
 			Method:      fragment.Method,
@@ -64,7 +65,7 @@ func lowerPageSyntax(source []byte, ast gwdkast.File, defaultID string) (manifes
 			TargetSpan:  fragment.TargetSpan,
 			RouteParams: routeParamSpans(fragment.Route, fragment.RouteSpan.Start.Line, rawLine),
 		})
-		page.Blocks.Spans.Fragments = append(page.Blocks.Spans.Fragments, manifest.NamedSpan{Name: fragment.Name, Span: fragment.Span})
+		page.Blocks.Spans.Fragments = append(page.Blocks.Spans.Fragments, source.NamedSpan{Name: fragment.Name, Span: fragment.Span})
 	}
 
 	if page.ID == "" {
@@ -79,7 +80,7 @@ func lowerPageSyntax(source []byte, ast gwdkast.File, defaultID string) (manifes
 	return page, nil
 }
 
-func lowerPageSyntaxAnnotations(source []byte, ast gwdkast.File, page *manifest.Page) error {
+func lowerPageSyntaxAnnotations(src []byte, ast gwdkast.File, page *manifest.Page) error {
 	if ast.Page != nil {
 		if ast.Page.ID == "" {
 			return fmt.Errorf("line %d: @page requires a value", ast.Page.Span.Start.Line)
@@ -110,32 +111,32 @@ func lowerPageSyntaxAnnotations(source []byte, ast gwdkast.File, page *manifest.
 	}
 	for _, layout := range ast.Layouts {
 		page.Layouts = append(page.Layouts, layout.ID)
-		page.Spans.Layouts = append(page.Spans.Layouts, manifest.NamedSpan{Name: layout.ID, Span: layout.Span})
+		page.Spans.Layouts = append(page.Spans.Layouts, source.NamedSpan{Name: layout.ID, Span: layout.Span})
 	}
 	for _, guard := range ast.Guards {
 		page.Guard = append(page.Guard, guard.Name)
-		page.Spans.Guard = append(page.Spans.Guard, manifest.NamedSpan{Name: guard.Name, Span: guard.Span})
+		page.Spans.Guard = append(page.Spans.Guard, source.NamedSpan{Name: guard.Name, Span: guard.Span})
 	}
 	for _, css := range ast.CSS {
 		page.CSS = append(page.CSS, css.Path)
-		page.Spans.CSS = append(page.Spans.CSS, manifest.NamedSpan{Name: css.Path, Span: css.Span})
+		page.Spans.CSS = append(page.Spans.CSS, source.NamedSpan{Name: css.Path, Span: css.Span})
 	}
 	for _, script := range ast.JS {
 		if strings.TrimSpace(script.Path) != "" {
 			page.JS = append(page.JS, script.Path)
-			page.Spans.JS = append(page.Spans.JS, manifest.NamedSpan{Name: script.Path, Span: script.Span})
+			page.Spans.JS = append(page.Spans.JS, source.NamedSpan{Name: script.Path, Span: script.Span})
 			continue
 		}
-		name := manifest.InlineScriptName(len(page.InlineJS))
-		page.InlineJS = append(page.InlineJS, manifest.InlineScript{Name: name, Body: script.Inline, Span: script.Span})
-		page.Spans.InlineJS = append(page.Spans.InlineJS, manifest.NamedSpan{Name: name, Span: script.Span})
+		name := source.InlineScriptName(len(page.InlineJS))
+		page.InlineJS = append(page.InlineJS, source.InlineScript{Name: name, Body: script.Inline, Span: script.Span})
+		page.Spans.InlineJS = append(page.Spans.InlineJS, source.NamedSpan{Name: name, Span: script.Span})
 	}
 	for _, annotation := range ast.Annotations {
 		if pageAnnotationLoweredFromAST(ast, annotation.Name) {
 			continue
 		}
 		lineNumber := annotation.Span.Start.Line
-		rawLine := sourceLineText(source, lineNumber)
+		rawLine := sourceLineText(src, lineNumber)
 		if err := applyAnnotation(page, annotation.Name, annotation.Value, lineNumber, rawLine); err != nil {
 			return fmt.Errorf("line %d: %w", lineNumber, err)
 		}
@@ -195,22 +196,22 @@ func lowerSyntaxStores(in []gwdkast.Store) []manifest.Store {
 	return out
 }
 
-func lowerSyntaxRouteParams(in []gwdkast.RouteParam) []manifest.RouteParam {
-	out := make([]manifest.RouteParam, 0, len(in))
+func lowerSyntaxRouteParams(in []gwdkast.RouteParam) []source.RouteParam {
+	out := make([]source.RouteParam, 0, len(in))
 	for _, param := range in {
 		paramType := param.Type
 		if paramType == "" {
 			paramType = "string"
 		}
-		out = append(out, manifest.RouteParam{Name: param.Name, Type: paramType, Span: param.Span})
+		out = append(out, source.RouteParam{Name: param.Name, Type: paramType, Span: param.Span})
 	}
 	return out
 }
 
-func lowerSyntaxRouteParamSpans(in []gwdkast.RouteParam) []manifest.NamedSpan {
-	out := make([]manifest.NamedSpan, 0, len(in))
+func lowerSyntaxRouteParamSpans(in []gwdkast.RouteParam) []source.NamedSpan {
+	out := make([]source.NamedSpan, 0, len(in))
 	for _, param := range in {
-		out = append(out, manifest.NamedSpan{Name: param.Name, Span: param.Span})
+		out = append(out, source.NamedSpan{Name: param.Name, Span: param.Span})
 	}
 	return out
 }
@@ -239,7 +240,7 @@ func applyPageSyntaxBlock(page *manifest.Page, block gwdkast.Block) {
 			Body:   block.Body,
 			Span:   block.Span,
 		})
-		page.Blocks.Spans.GoBlocks = append(page.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: block.Name, Span: block.Span})
+		page.Blocks.Spans.GoBlocks = append(page.Blocks.Spans.GoBlocks, source.NamedSpan{Name: block.Name, Span: block.Span})
 	case "view":
 		page.Blocks.View = true
 		page.Blocks.ViewBody = block.Body
@@ -251,11 +252,11 @@ func applyPageSyntaxBlock(page *manifest.Page, block gwdkast.Block) {
 	}
 }
 
-func sourceLineText(source []byte, lineNumber int) string {
+func sourceLineText(src []byte, lineNumber int) string {
 	if lineNumber <= 0 {
 		return ""
 	}
-	lines := strings.Split(string(source), "\n")
+	lines := strings.Split(string(src), "\n")
 	if lineNumber > len(lines) {
 		return ""
 	}

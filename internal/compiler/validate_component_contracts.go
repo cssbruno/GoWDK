@@ -6,6 +6,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	"strings"
 )
 
@@ -166,7 +167,7 @@ func validateComponentImports(component manifest.Component) []ValidationError {
 	return diagnostics
 }
 
-func componentContractDiagnostic(component manifest.Component, code string, span manifest.SourceSpan, err error) ValidationError {
+func componentContractDiagnostic(component manifest.Component, code string, span source.SourceSpan, err error) ValidationError {
 	return ValidationError{
 		Code:          code,
 		ComponentName: component.Name,
@@ -176,13 +177,13 @@ func componentContractDiagnostic(component manifest.Component, code string, span
 	}
 }
 
-func importSource(source string, item manifest.Import) string {
-	if source == "" {
+func importSource(sourcePath string, item manifest.Import) string {
+	if sourcePath == "" {
 		return ""
 	}
 	name := item.Alias
 	if strings.TrimSpace(name) == "" {
 		name = item.Path
 	}
-	return fmt.Sprintf("%s import %s", source, name)
+	return fmt.Sprintf("%s import %s", sourcePath, name)
 }

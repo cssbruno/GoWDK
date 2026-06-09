@@ -9,6 +9,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 type componentDefinition struct {
@@ -16,7 +17,7 @@ type componentDefinition struct {
 	Text    string
 	Package string
 	Name    string
-	Span    manifest.SourceSpan
+	Span    source.SourceSpan
 }
 
 func (server *Server) resolveComponentDefinition(doc document, name string) (componentDefinition, bool) {

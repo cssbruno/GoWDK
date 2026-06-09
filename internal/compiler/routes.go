@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func validateUniquePageRoutes(pages []manifest.Page) []ValidationError {
@@ -162,7 +163,7 @@ type routeRegistration struct {
 	Pattern string
 	PageID  string
 	Source  string
-	Span    manifest.SourceSpan
+	Span    source.SourceSpan
 }
 
 func routeRegistrations(pages []manifest.Page, endpoints []manifest.EndpointDeclaration) []routeRegistration {
@@ -325,7 +326,7 @@ func standaloneEndpointPageID(endpoint manifest.EndpointDeclaration) string {
 	return endpoint.Package + "." + endpoint.Name
 }
 
-func routeDiagnostics(page manifest.Page, label string, issues []routeIssue, routeSpan manifest.SourceSpan, paramSpans []manifest.NamedSpan) []ValidationError {
+func routeDiagnostics(page manifest.Page, label string, issues []routeIssue, routeSpan source.SourceSpan, paramSpans []source.NamedSpan) []ValidationError {
 	if len(issues) == 0 {
 		return nil
 	}
@@ -359,7 +360,7 @@ type routeIssue struct {
 	ParamOccurrence int
 }
 
-func routeIssueSpan(issue routeIssue, routeSpan manifest.SourceSpan, paramSpans []manifest.NamedSpan) manifest.SourceSpan {
+func routeIssueSpan(issue routeIssue, routeSpan source.SourceSpan, paramSpans []source.NamedSpan) source.SourceSpan {
 	if issue.Param != "" {
 		if issue.ParamOccurrence > 1 {
 			return spanForNameOccurrence(paramSpans, issue.Param, issue.ParamOccurrence, routeSpan)

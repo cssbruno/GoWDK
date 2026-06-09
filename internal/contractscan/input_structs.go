@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func contractInputStruct(typeName string, structType *ast.StructType) inputStruct {
@@ -14,7 +14,7 @@ func contractInputStruct(typeName string, structType *ast.StructType) inputStruc
 		return inputStruct{}
 	}
 	seen := map[string]bool{}
-	var fields []manifest.BackendInputField
+	var fields []source.BackendInputField
 	for _, field := range structType.Fields.List {
 		if len(field.Names) == 0 {
 			return inputStruct{Message: fmt.Sprintf("contract input %s cannot use embedded fields", typeName)}
@@ -48,7 +48,7 @@ func contractInputStruct(typeName string, structType *ast.StructType) inputStruc
 				return inputStruct{Message: fmt.Sprintf("contract input %s maps multiple fields to form field %q", typeName, nameFormName)}
 			}
 			seen[nameFormName] = true
-			fields = append(fields, manifest.BackendInputField{
+			fields = append(fields, source.BackendInputField{
 				FieldName: name.Name,
 				FormName:  nameFormName,
 				Type:      fieldType,

@@ -5,7 +5,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // sampleProgram returns an IR program that exercises the converter across pages,
@@ -34,7 +34,7 @@ func sampleProgram() gwdkir.Program {
 					Body:   "<section>List</section>",
 				}},
 				Spans: gwdkir.BlockSpans{
-					Fragments: []manifest.NamedSpan{{Name: "List"}},
+					Fragments: []source.NamedSpan{{Name: "List"}},
 				},
 			},
 		}},
@@ -64,7 +64,7 @@ func sampleProgram() gwdkir.Program {
 				ImportPath:   "example.com/app/handlers",
 				PackageName:  "handlers",
 				FunctionName: "Subscribe",
-				Status:       manifest.BackendBindingBound,
+				Status:       source.BackendBindingBound,
 			},
 		}},
 	}
@@ -90,7 +90,7 @@ func TestManifestFromIRReconstructsCoreRecords(t *testing.T) {
 	if len(app.BackendBindings) != 1 || app.BackendBindings[0].FunctionName != "Subscribe" {
 		t.Fatalf("unexpected backend bindings: %#v", app.BackendBindings)
 	}
-	if app.BackendBindings[0].Kind != "action" || app.BackendBindings[0].Status != manifest.BackendBindingBound {
+	if app.BackendBindings[0].Kind != "action" || app.BackendBindings[0].Status != source.BackendBindingBound {
 		t.Fatalf("unexpected binding kind/status: %#v", app.BackendBindings[0])
 	}
 }
@@ -134,7 +134,7 @@ func TestValidateBackendBindingPolicyIRMatchesManifest(t *testing.T) {
 	config := gowdk.Config{Build: gowdk.BuildConfig{Mode: gowdk.Production}}
 	ir := sampleProgram()
 	// Force an unbound endpoint so the production policy has something to reject.
-	ir.Endpoints[0].Binding.Status = manifest.BackendBindingMissing
+	ir.Endpoints[0].Binding.Status = source.BackendBindingMissing
 
 	viaIR := ValidateBackendBindingPolicyIR(config, ir)
 	viaManifest := ValidateBackendBindingPolicy(config, ManifestFromIR(ir))

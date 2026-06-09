@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
@@ -69,7 +69,7 @@ func irContractReferenceKind(kind view.ContractReferenceKind) gwdkir.ContractKin
 	}
 }
 
-func templateOffsetSpan(template gwdkir.Template, start int, end int) manifest.SourceSpan {
+func templateOffsetSpan(template gwdkir.Template, start int, end int) source.SourceSpan {
 	if start < 0 || end <= start || start >= len([]rune(template.Body)) {
 		return template.Span
 	}
@@ -78,10 +78,10 @@ func templateOffsetSpan(template gwdkir.Template, start int, end int) manifest.S
 	if startPos.Line == 0 || endPos.Line == 0 {
 		return template.Span
 	}
-	return manifest.SourceSpan{Start: startPos, End: endPos}
+	return source.SourceSpan{Start: startPos, End: endPos}
 }
 
-func templateOffsetPosition(template gwdkir.Template, offset int) manifest.SourcePosition {
+func templateOffsetPosition(template gwdkir.Template, offset int) source.SourcePosition {
 	line := template.BodyStart.Line
 	column := template.BodyStart.Column
 	if line == 0 {
@@ -90,7 +90,7 @@ func templateOffsetPosition(template gwdkir.Template, offset int) manifest.Sourc
 	}
 	for index, char := range []rune(template.Body) {
 		if index == offset {
-			return manifest.SourcePosition{Line: line, Column: column}
+			return source.SourcePosition{Line: line, Column: column}
 		}
 		if char == '\n' {
 			line++
@@ -100,7 +100,7 @@ func templateOffsetPosition(template gwdkir.Template, offset int) manifest.Sourc
 		column++
 	}
 	if offset == len([]rune(template.Body)) {
-		return manifest.SourcePosition{Line: line, Column: column}
+		return source.SourcePosition{Line: line, Column: column}
 	}
-	return manifest.SourcePosition{}
+	return source.SourcePosition{}
 }

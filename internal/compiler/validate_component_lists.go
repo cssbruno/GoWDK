@@ -6,6 +6,7 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
@@ -34,7 +35,7 @@ func validateComponentListDirectives(component manifest.Component, symbols map[s
 
 type spannedMessage struct {
 	Message string
-	Span    manifest.SourceSpan
+	Span    source.SourceSpan
 }
 
 func validateListNodes(nodes []view.Node, component manifest.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {

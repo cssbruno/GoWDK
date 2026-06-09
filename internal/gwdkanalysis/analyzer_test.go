@@ -8,6 +8,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/parser"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestAnalyzeLowersASTIntoManifestAndIR(t *testing.T) {
@@ -217,7 +218,7 @@ view {
 }
 
 func TestAnalyzeAddsCommandReferencesToIR(t *testing.T) {
-	source := `package pages
+	src := `package pages
 @page patients
 @route "/patients"
 @guard auth.required
@@ -230,7 +231,7 @@ view {
   </form>
 }
 `
-	pageAST := mustParse(t, source)
+	pageAST := mustParse(t, src)
 	result, err := Analyze(gowdk.Config{}, []SourceFile{{Path: "pages/patients.page.gwdk", Kind: SourcePage, AST: pageAST}})
 	if err != nil {
 		t.Fatal(err)
@@ -251,14 +252,14 @@ view {
 	if ref.ImportAlias != "patients" || ref.ImportPath != "example.com/app/patients" || ref.Type != "CreatePatient" {
 		t.Fatalf("unexpected command import/type metadata: %#v", ref)
 	}
-	wantColumn := strings.Index(sourceLine(source, 9), "g:command") + 1
+	wantColumn := strings.Index(sourceLine(src, 9), "g:command") + 1
 	if ref.Span.Start.Line != 9 || ref.Span.Start.Column != wantColumn {
 		t.Fatalf("expected g:command span at 9:%d, got %#v", wantColumn, ref.Span)
 	}
 }
 
 func TestAnalyzeAddsQueryReferencesToIR(t *testing.T) {
-	source := `package pages
+	src := `package pages
 @page patients
 @route "/patients"
 
@@ -270,7 +271,7 @@ view {
   </section>
 }
 `
-	pageAST := mustParse(t, source)
+	pageAST := mustParse(t, src)
 	result, err := Analyze(gowdk.Config{}, []SourceFile{{Path: "pages/patients.page.gwdk", Kind: SourcePage, AST: pageAST}})
 	if err != nil {
 		t.Fatal(err)
@@ -288,7 +289,7 @@ view {
 	if ref.ImportAlias != "patients" || ref.ImportPath != "example.com/app/patients" || ref.Type != "GetPatientPage" {
 		t.Fatalf("unexpected query import/type metadata: %#v", ref)
 	}
-	wantColumn := strings.Index(sourceLine(source, 8), "g:query") + 1
+	wantColumn := strings.Index(sourceLine(src, 8), "g:query") + 1
 	if ref.Span.Start.Line != 8 || ref.Span.Start.Column != wantColumn {
 		t.Fatalf("expected g:query span at 8:%d, got %#v", wantColumn, ref.Span)
 	}
@@ -310,11 +311,11 @@ func TestBuildIRAttachesBackendBindings(t *testing.T) {
 			BlockName:    "Subscribe",
 			Method:       "POST",
 			Route:        "/newsletter",
-			Status:       manifest.BackendBindingBound,
+			Status:       source.BackendBindingBound,
 			ImportPath:   "example.com/app/newsletter",
 			PackageName:  "newsletter",
 			FunctionName: "Subscribe",
-			Signature:    manifest.BackendSignatureAction0,
+			Signature:    source.BackendSignatureAction0,
 		}},
 	})
 
@@ -322,7 +323,7 @@ func TestBuildIRAttachesBackendBindings(t *testing.T) {
 		t.Fatalf("expected one endpoint, got %#v", ir.Endpoints)
 	}
 	binding := ir.Endpoints[0].Binding
-	if binding.Status != manifest.BackendBindingBound || binding.FunctionName != "Subscribe" {
+	if binding.Status != source.BackendBindingBound || binding.FunctionName != "Subscribe" {
 		t.Fatalf("expected backend binding on IR endpoint, got %#v", binding)
 	}
 }
@@ -344,18 +345,18 @@ func TestBuildIRIncludesStandaloneGoEndpointSource(t *testing.T) {
 			BlockName:    "Session",
 			Method:       "GET",
 			Route:        "/api/session",
-			Status:       manifest.BackendBindingBound,
+			Status:       source.BackendBindingBound,
 			ImportPath:   "example.com/app/api",
 			PackageName:  "api",
 			FunctionName: "Session",
-			Signature:    manifest.BackendSignatureAPI,
+			Signature:    source.BackendSignatureAPI,
 		}},
 	})
 	if len(ir.Endpoints) != 1 {
 		t.Fatalf("expected one endpoint, got %#v", ir.Endpoints)
 	}
 	endpoint := ir.Endpoints[0]
-	if endpoint.Source != gwdkir.EndpointSourceGo || endpoint.PageID != "api.Session" || endpoint.Binding.Signature != manifest.BackendSignatureAPI {
+	if endpoint.Source != gwdkir.EndpointSourceGo || endpoint.PageID != "api.Session" || endpoint.Binding.Signature != source.BackendSignatureAPI {
 		t.Fatalf("unexpected endpoint IR: %#v", endpoint)
 	}
 }
@@ -423,17 +424,17 @@ view {
 	}
 }
 
-func mustParse(t *testing.T, source string) parser.SyntaxFile {
+func mustParse(t *testing.T, src string) parser.SyntaxFile {
 	t.Helper()
-	file, err := parser.ParseSyntax([]byte(source))
+	file, err := parser.ParseSyntax([]byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return file
 }
 
-func sourceLine(source string, line int) string {
-	lines := strings.Split(source, "\n")
+func sourceLine(src string, line int) string {
+	lines := strings.Split(src, "\n")
 	if line <= 0 || line > len(lines) {
 		return ""
 	}

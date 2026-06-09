@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	runtimecontracts "github.com/cssbruno/gowdk/runtime/contracts"
 )
 
@@ -22,7 +22,7 @@ type fileScan struct {
 }
 
 type inputStruct struct {
-	Fields  []manifest.BackendInputField
+	Fields  []source.BackendInputField
 	Message string
 }
 
@@ -63,11 +63,11 @@ func parseScanPackages(fset *token.FileSet, root string, files []string) ([][]pa
 }
 
 func parseScanFile(fset *token.FileSet, root string, path string) (parsedGoFile, error) {
-	source, err := os.ReadFile(path)
+	src, err := os.ReadFile(path)
 	if err != nil {
 		return parsedGoFile{}, err
 	}
-	file, err := parser.ParseFile(fset, path, source, 0)
+	file, err := parser.ParseFile(fset, path, src, 0)
 	if err != nil {
 		return parsedGoFile{}, err
 	}
@@ -183,7 +183,7 @@ func applyContractInputFields(contracts []Contract, structs map[string]inputStru
 		if !ok || inputStruct.Message != "" {
 			continue
 		}
-		contracts[index].InputFields = append([]manifest.BackendInputField(nil), inputStruct.Fields...)
+		contracts[index].InputFields = append([]source.BackendInputField(nil), inputStruct.Fields...)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/goblockgen"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestBindBackendHandlersClassifiesSupportedActionSignatures(t *testing.T) {
@@ -103,26 +104,26 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 	}}})
 
 	bindings := compilerBindingsByBlock(app.BackendBindings)
-	assertBinding(t, bindings["Ping"], manifest.BackendBindingBound, manifest.BackendSignatureAction0, "", false)
-	assertBinding(t, bindings["Login"], manifest.BackendBindingBound, manifest.BackendSignatureActionForm, "LoginInput", false)
-	assertBinding(t, bindings["LoginPtr"], manifest.BackendBindingBound, manifest.BackendSignatureActionFormPtr, "LoginInput", true)
-	assertBinding(t, bindings["Raw"], manifest.BackendBindingBound, manifest.BackendSignatureActionValues, "", false)
-	assertBinding(t, bindings["Session"], manifest.BackendBindingBound, manifest.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["Ping"], source.BackendBindingBound, source.BackendSignatureAction0, "", false)
+	assertBinding(t, bindings["Login"], source.BackendBindingBound, source.BackendSignatureActionForm, "LoginInput", false)
+	assertBinding(t, bindings["LoginPtr"], source.BackendBindingBound, source.BackendSignatureActionFormPtr, "LoginInput", true)
+	assertBinding(t, bindings["Raw"], source.BackendBindingBound, source.BackendSignatureActionValues, "", false)
+	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
 	assertInputFields(t, bindings["Login"].InputFields, "Email:email:string,Tags:tag:[]string,Remember:remember:bool,Age:age:int,Score:score:uint64")
-	if got := bindings["Broken"]; got.Status != manifest.BackendBindingUnsupportedSignature {
+	if got := bindings["Broken"]; got.Status != source.BackendBindingUnsupportedSignature {
 		t.Fatalf("expected Broken unsupported signature, got %#v", got)
 	}
 	if !strings.Contains(bindings["Broken"].Message, "unsupported field type") {
 		t.Fatalf("expected Broken message to explain unsupported field type, got %q", bindings["Broken"].Message)
 	}
-	if got := bindings["Bad"]; got.Status != manifest.BackendBindingUnsupportedSignature {
+	if got := bindings["Bad"]; got.Status != source.BackendBindingUnsupportedSignature {
 		t.Fatalf("expected Bad unsupported signature, got %#v", got)
 	}
-	if got := bindings["Missing"]; got.Status != manifest.BackendBindingMissing {
+	if got := bindings["Missing"]; got.Status != source.BackendBindingMissing {
 		t.Fatalf("expected Missing binding, got %#v", got)
 	}
-	assertBinding(t, bindings["List"], manifest.BackendBindingBound, manifest.BackendSignatureFragment, "", false)
-	if got := bindings["BrokenFragment"]; got.Status != manifest.BackendBindingUnsupportedSignature {
+	assertBinding(t, bindings["List"], source.BackendBindingBound, source.BackendSignatureFragment, "", false)
+	if got := bindings["BrokenFragment"]; got.Status != source.BackendBindingUnsupportedSignature {
 		t.Fatalf("expected BrokenFragment unsupported signature, got %#v", got)
 	}
 	if _, ok := bindings["MissingFragment"]; ok {
@@ -190,15 +191,15 @@ func LoadBroken() map[string]any {
 	}})
 
 	bindings := compilerBindingsByBlock(app.BackendBindings)
-	assertBinding(t, bindings["LoadDashboard"], manifest.BackendBindingBound, manifest.BackendSignatureLoadError, "", false)
-	assertBinding(t, bindings["LoadProfile"], manifest.BackendBindingBound, manifest.BackendSignatureLoad, "", false)
-	if got := bindings["LoadBroken"]; got.Status != manifest.BackendBindingUnsupportedSignature {
+	assertBinding(t, bindings["LoadDashboard"], source.BackendBindingBound, source.BackendSignatureLoadError, "", false)
+	assertBinding(t, bindings["LoadProfile"], source.BackendBindingBound, source.BackendSignatureLoad, "", false)
+	if got := bindings["LoadBroken"]; got.Status != source.BackendBindingUnsupportedSignature {
 		t.Fatalf("expected LoadBroken unsupported signature, got %#v", got)
 	}
-	if got := bindings["LoadMissing"]; got.Status != manifest.BackendBindingMissing {
+	if got := bindings["LoadMissing"]; got.Status != source.BackendBindingMissing {
 		t.Fatalf("expected LoadMissing missing binding, got %#v", got)
 	}
-	if app.Pages[0].LoadBinding.FunctionName != "LoadDashboard" || app.Pages[0].LoadBinding.Status != manifest.BackendBindingBound {
+	if app.Pages[0].LoadBinding.FunctionName != "LoadDashboard" || app.Pages[0].LoadBinding.Status != source.BackendBindingBound {
 		t.Fatalf("expected page load binding to be attached, got %#v", app.Pages[0].LoadBinding)
 	}
 }
@@ -229,7 +230,7 @@ func TestBindBackendHandlersBindsInlineSSRScriptLoad(t *testing.T) {
 	app := BindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{page}})
 	bindings := compilerBindingsByBlock(app.BackendBindings)
 	binding := bindings["LoadDashboard"]
-	if binding.Status != manifest.BackendBindingBound || binding.Signature != manifest.BackendSignatureLoadError {
+	if binding.Status != source.BackendBindingBound || binding.Signature != source.BackendSignatureLoadError {
 		t.Fatalf("expected inline SSR load binding, got %#v", binding)
 	}
 	if binding.ImportPath != goblockgen.GeneratedImportPath("pages") || binding.PackageName != "pages" {
@@ -294,9 +295,9 @@ func List(context.Context) (response.Response, error) {
 			t.Fatalf("expected %s to bind generated inline go package, got %#v", name, bindings[name])
 		}
 	}
-	assertBinding(t, bindings["Subscribe"], manifest.BackendBindingBound, manifest.BackendSignatureAction0, "", false)
-	assertBinding(t, bindings["Session"], manifest.BackendBindingBound, manifest.BackendSignatureAPI, "", false)
-	assertBinding(t, bindings["List"], manifest.BackendBindingBound, manifest.BackendSignatureFragment, "", false)
+	assertBinding(t, bindings["Subscribe"], source.BackendBindingBound, source.BackendSignatureAction0, "", false)
+	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["List"], source.BackendBindingBound, source.BackendSignatureFragment, "", false)
 }
 
 func TestDiscoverGoEndpointCommentsBindsStandaloneEndpoints(t *testing.T) {
@@ -341,17 +342,17 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 	}
 	app = BindBackendHandlers(app)
 	bindings := compilerBindingsByBlock(app.BackendBindings)
-	assertBinding(t, bindings["Login"], manifest.BackendBindingBound, manifest.BackendSignatureAction0, "", false)
-	assertBinding(t, bindings["Session"], manifest.BackendBindingBound, manifest.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["Login"], source.BackendBindingBound, source.BackendSignatureAction0, "", false)
+	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
 }
 
 func TestValidateManifestRejectsGoEndpointConflictWithGOWDKEndpoint(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "home.page.gwdk")
+	sourcePath := filepath.Join(root, "home.page.gwdk")
 	app := manifest.Manifest{
 		Pages: []manifest.Page{{
 			ID:     "home",
-			Source: source,
+			Source: sourcePath,
 			Route:  "/",
 			Blocks: manifest.Blocks{
 				View:     true,
@@ -410,7 +411,7 @@ func TestValidateBackendBindingPolicyAllowsDevelopmentMissingHandler(t *testing.
 		Method:       "POST",
 		Route:        "/login",
 		FunctionName: "Login",
-		Status:       manifest.BackendBindingMissing,
+		Status:       source.BackendBindingMissing,
 	}}}
 
 	if err := ValidateBackendBindingPolicy(gowdk.Config{}, app); err != nil {
@@ -426,7 +427,7 @@ func TestValidateBackendBindingPolicyAllowsExplicitProductionStubMode(t *testing
 		Method:       "GET",
 		Route:        "/api/session",
 		FunctionName: "Session",
-		Status:       manifest.BackendBindingUnsupportedSignature,
+		Status:       source.BackendBindingUnsupportedSignature,
 	}}}
 
 	config := gowdk.Config{Build: gowdk.BuildConfig{
@@ -438,14 +439,14 @@ func TestValidateBackendBindingPolicyAllowsExplicitProductionStubMode(t *testing
 	}
 }
 
-func assertBinding(t *testing.T, binding manifest.BackendBinding, status manifest.BackendBindingStatus, signature manifest.BackendSignatureKind, inputType string, inputPointer bool) {
+func assertBinding(t *testing.T, binding manifest.BackendBinding, status source.BackendBindingStatus, signature source.BackendSignatureKind, inputType string, inputPointer bool) {
 	t.Helper()
 	if binding.Status != status || binding.Signature != signature || binding.InputType != inputType || binding.InputPointer != inputPointer {
 		t.Fatalf("unexpected binding: %#v", binding)
 	}
 }
 
-func assertInputFields(t *testing.T, fields []manifest.BackendInputField, expected string) {
+func assertInputFields(t *testing.T, fields []source.BackendInputField, expected string) {
 	t.Helper()
 	parts := make([]string, 0, len(fields))
 	for _, field := range fields {

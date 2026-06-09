@@ -8,6 +8,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/runtime/auth"
 )
 
@@ -240,13 +241,13 @@ func hasProtectedPageGuard(page manifest.Page) bool {
 	return false
 }
 
-func firstGoBlockSpan(page manifest.Page, target string) manifest.SourceSpan {
+func firstGoBlockSpan(page manifest.Page, target string) source.SourceSpan {
 	for _, block := range page.Blocks.GoBlocks {
 		if block.Target == target {
 			return block.Span
 		}
 	}
-	return manifest.SourceSpan{}
+	return source.SourceSpan{}
 }
 
 func requiresSSRFeature(mode gowdk.RenderMode, page manifest.Page) bool {

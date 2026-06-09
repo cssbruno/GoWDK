@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 	"strings"
 )
@@ -246,7 +247,7 @@ func componentEmitMap(component manifest.Component) map[string]clientlang.Emit {
 	return out
 }
 
-func clientStatementErrorSpan(component manifest.Component, statements []string, spans []clientlang.Span, err error) manifest.SourceSpan {
+func clientStatementErrorSpan(component manifest.Component, statements []string, spans []clientlang.Span, err error) source.SourceSpan {
 	var statementErr view.StatementValidationError
 	if errors.As(err, &statementErr) && statementErr.Index >= 0 && statementErr.Index < len(spans) {
 		if statementErr.Index < len(statements) {
@@ -257,7 +258,7 @@ func clientStatementErrorSpan(component manifest.Component, statements []string,
 	return firstSpan(component.Blocks.Spans.Client, component.Span)
 }
 
-func clientParseErrorSpan(component manifest.Component, err error) manifest.SourceSpan {
+func clientParseErrorSpan(component manifest.Component, err error) source.SourceSpan {
 	var parseErr *clientlang.ParseError
 	if errors.As(err, &parseErr) && parseErr.Line > 0 {
 		return clientSpan(component, clientlang.Span{StartLine: parseErr.Line, EndLine: parseErr.Line})
@@ -265,7 +266,7 @@ func clientParseErrorSpan(component manifest.Component, err error) manifest.Sour
 	return firstSpan(component.Blocks.Spans.Client, component.Span)
 }
 
-func clientExpressionErrorSpan(component manifest.Component, statement string, span clientlang.Span, err error) manifest.SourceSpan {
+func clientExpressionErrorSpan(component manifest.Component, statement string, span clientlang.Span, err error) source.SourceSpan {
 	var exprErr clientlang.ExprValidationError
 	if !errors.As(err, &exprErr) || exprErr.Span.StartColumn <= 0 {
 		return clientSpan(component, span)
@@ -299,11 +300,11 @@ func functionReturnSpan(function clientlang.Function) clientlang.Span {
 	return function.StatementSpans[len(function.StatementSpans)-1]
 }
 
-func clientSpan(component manifest.Component, span clientlang.Span) manifest.SourceSpan {
+func clientSpan(component manifest.Component, span clientlang.Span) source.SourceSpan {
 	return clientSpanColumns(component, span, 1, 2)
 }
 
-func clientSpanColumns(component manifest.Component, span clientlang.Span, startColumn, endColumn int) manifest.SourceSpan {
+func clientSpanColumns(component manifest.Component, span clientlang.Span, startColumn, endColumn int) source.SourceSpan {
 	if span.StartLine <= 0 {
 		return firstSpan(component.Blocks.Spans.Client, component.Span)
 	}
@@ -322,9 +323,9 @@ func clientSpanColumns(component manifest.Component, span clientlang.Span, start
 	if endColumn <= startColumn {
 		endColumn = startColumn + 1
 	}
-	return manifest.SourceSpan{
-		Start: manifest.SourcePosition{Line: startLine, Column: startColumn},
-		End:   manifest.SourcePosition{Line: endLine, Column: endColumn},
+	return source.SourceSpan{
+		Start: source.SourcePosition{Line: startLine, Column: startColumn},
+		End:   source.SourcePosition{Line: endLine, Column: endColumn},
 	}
 }
 

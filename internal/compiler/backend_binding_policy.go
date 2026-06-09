@@ -6,6 +6,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // ValidateBackendBindingPolicyIR enforces the same build-mode rules as
@@ -29,7 +30,7 @@ func ValidateBackendBindingPolicy(config gowdk.Config, app manifest.Manifest) er
 	var diagnostics []ValidationError
 	for _, binding := range app.BackendBindings {
 		switch binding.Status {
-		case manifest.BackendBindingMissing, manifest.BackendBindingUnsupportedSignature:
+		case source.BackendBindingMissing, source.BackendBindingUnsupportedSignature:
 			diagnostics = append(diagnostics, backendBindingRequiredDiagnostic(binding))
 		}
 	}

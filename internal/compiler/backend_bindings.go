@@ -16,6 +16,7 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/goblockgen"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 const (
@@ -62,9 +63,9 @@ func BindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 		}
 		for _, action := range page.Blocks.Actions {
 			binding := bindAction(page, action, pkg)
-			if binding.Status == manifest.BackendBindingMissing {
+			if binding.Status == source.BackendBindingMissing {
 				inlineBinding := bindAction(page, action, defaultInlinePkg())
-				if inlineBinding.Status != manifest.BackendBindingMissing {
+				if inlineBinding.Status != source.BackendBindingMissing {
 					binding = inlineBinding
 				}
 			}
@@ -72,9 +73,9 @@ func BindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 		}
 		for _, api := range page.Blocks.APIs {
 			binding := bindAPI(page, api, pkg)
-			if binding.Status == manifest.BackendBindingMissing {
+			if binding.Status == source.BackendBindingMissing {
 				inlineBinding := bindAPI(page, api, defaultInlinePkg())
-				if inlineBinding.Status != manifest.BackendBindingMissing {
+				if inlineBinding.Status != source.BackendBindingMissing {
 					binding = inlineBinding
 				}
 			}
@@ -131,28 +132,28 @@ func bindLoad(page manifest.Page, pkg featurePackage) manifest.BackendBinding {
 	if function, ok := pkg.Functions[functionName]; ok {
 		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
 		if !function.Load() {
-			binding.Status = manifest.BackendBindingUnsupportedSignature
+			binding.Status = source.BackendBindingUnsupportedSignature
 			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", packageLabel(pkg), functionName)
 			return binding
 		}
 		binding.Signature = function.Signature
-		binding.Status = manifest.BackendBindingBound
+		binding.Status = source.BackendBindingBound
 		return binding
 	}
 	inlinePkg := inspectInlineScriptFeaturePackage(page, "ssr")
 	if function, ok := inlinePkg.Functions[functionName]; ok {
 		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, inlinePkg)
 		if !function.Load() {
-			binding.Status = manifest.BackendBindingUnsupportedSignature
+			binding.Status = source.BackendBindingUnsupportedSignature
 			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", packageLabel(inlinePkg), functionName)
 			return binding
 		}
 		binding.Signature = function.Signature
-		binding.Status = manifest.BackendBindingBound
+		binding.Status = source.BackendBindingBound
 		return binding
 	}
 	binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
-	binding.Status = manifest.BackendBindingMissing
+	binding.Status = source.BackendBindingMissing
 	binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", packageLabel(pkg), functionName)
 	return binding
 }
@@ -165,12 +166,12 @@ func bindStandaloneAction(endpoint manifest.EndpointDeclaration, pkg featurePack
 	binding := baseStandaloneBackendBinding(endpoint, actionHandlerKind, method, pkg)
 	function, ok := pkg.Functions[binding.FunctionName]
 	if !ok {
-		binding.Status = manifest.BackendBindingMissing
+		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is not implemented", packageLabel(pkg), binding.FunctionName)
 		return binding
 	}
 	if !function.Action() {
-		binding.Status = manifest.BackendBindingUnsupportedSignature
+		binding.Status = source.BackendBindingUnsupportedSignature
 		if function.SupportMessage != "" {
 			binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is unsupported: %s", packageLabel(pkg), binding.FunctionName, function.SupportMessage)
 		} else {
@@ -182,7 +183,7 @@ func bindStandaloneAction(endpoint manifest.EndpointDeclaration, pkg featurePack
 	binding.InputType = function.InputType
 	binding.InputPointer = function.InputPointer
 	binding.InputFields = function.InputFields
-	binding.Status = manifest.BackendBindingBound
+	binding.Status = source.BackendBindingBound
 	return binding
 }
 
@@ -194,17 +195,17 @@ func bindStandaloneAPI(endpoint manifest.EndpointDeclaration, pkg featurePackage
 	binding := baseStandaloneBackendBinding(endpoint, apiHandlerKind, method, pkg)
 	function, ok := pkg.Functions[binding.FunctionName]
 	if !ok {
-		binding.Status = manifest.BackendBindingMissing
+		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s is not implemented", packageLabel(pkg), binding.FunctionName)
 		return binding
 	}
 	if !function.API() {
-		binding.Status = manifest.BackendBindingUnsupportedSignature
+		binding.Status = source.BackendBindingUnsupportedSignature
 		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s must have signature func(context.Context, *http.Request) (response.Response, error)", packageLabel(pkg), binding.FunctionName)
 		return binding
 	}
 	binding.Signature = function.Signature
-	binding.Status = manifest.BackendBindingBound
+	binding.Status = source.BackendBindingBound
 	return binding
 }
 
@@ -220,12 +221,12 @@ func bindAction(page manifest.Page, action manifest.Action, pkg featurePackage) 
 	binding := baseBackendBinding(page, actionHandlerKind, action.Name, method, route, pkg)
 	function, ok := pkg.Functions[binding.FunctionName]
 	if !ok {
-		binding.Status = manifest.BackendBindingMissing
+		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is not implemented", packageLabel(pkg), binding.FunctionName)
 		return binding
 	}
 	if !function.Action() {
-		binding.Status = manifest.BackendBindingUnsupportedSignature
+		binding.Status = source.BackendBindingUnsupportedSignature
 		if function.SupportMessage != "" {
 			binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is unsupported: %s", packageLabel(pkg), binding.FunctionName, function.SupportMessage)
 		} else {
@@ -237,7 +238,7 @@ func bindAction(page manifest.Page, action manifest.Action, pkg featurePackage) 
 	binding.InputType = function.InputType
 	binding.InputPointer = function.InputPointer
 	binding.InputFields = function.InputFields
-	binding.Status = manifest.BackendBindingBound
+	binding.Status = source.BackendBindingBound
 	return binding
 }
 
@@ -253,17 +254,17 @@ func bindAPI(page manifest.Page, api manifest.API, pkg featurePackage) manifest.
 	binding := baseBackendBinding(page, apiHandlerKind, api.Name, method, route, pkg)
 	function, ok := pkg.Functions[binding.FunctionName]
 	if !ok {
-		binding.Status = manifest.BackendBindingMissing
+		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s is not implemented", packageLabel(pkg), binding.FunctionName)
 		return binding
 	}
 	if !function.API() {
-		binding.Status = manifest.BackendBindingUnsupportedSignature
+		binding.Status = source.BackendBindingUnsupportedSignature
 		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s must have signature func(context.Context, *http.Request) (response.Response, error)", packageLabel(pkg), binding.FunctionName)
 		return binding
 	}
 	binding.Signature = function.Signature
-	binding.Status = manifest.BackendBindingBound
+	binding.Status = source.BackendBindingBound
 	return binding
 }
 
@@ -278,12 +279,12 @@ func bindFragment(page manifest.Page, fragment manifest.FragmentEndpoint, pkg fe
 		return manifest.BackendBinding{}, false
 	}
 	if !function.Fragment() {
-		binding.Status = manifest.BackendBindingUnsupportedSignature
+		binding.Status = source.BackendBindingUnsupportedSignature
 		binding.Message = fmt.Sprintf("GOWDK fragment handler %s.%s must have signature func(context.Context) (response.Response, error)", packageLabel(pkg), binding.FunctionName)
 		return binding, true
 	}
-	binding.Signature = manifest.BackendSignatureFragment
-	binding.Status = manifest.BackendBindingBound
+	binding.Signature = source.BackendSignatureFragment
+	binding.Status = source.BackendBindingBound
 	return binding, true
 }
 
@@ -298,7 +299,7 @@ func baseBackendBinding(page manifest.Page, kind, blockName, method, route strin
 		ImportPath:   pkg.ImportPath,
 		PackageName:  pkg.Name,
 		FunctionName: blockName,
-		Status:       manifest.BackendBindingMissing,
+		Status:       source.BackendBindingMissing,
 	}
 }
 
@@ -313,7 +314,7 @@ func baseStandaloneBackendBinding(endpoint manifest.EndpointDeclaration, kind, m
 		ImportPath:   pkg.ImportPath,
 		PackageName:  pkg.Name,
 		FunctionName: endpoint.Name,
-		Status:       manifest.BackendBindingMissing,
+		Status:       source.BackendBindingMissing,
 	}
 }
 
@@ -327,11 +328,11 @@ func packageLabel(pkg featurePackage) string {
 	return "feature"
 }
 
-func sourceDir(source string) string {
-	if strings.TrimSpace(source) == "" {
+func sourceDir(sourcePath string) string {
+	if strings.TrimSpace(sourcePath) == "" {
 		return "."
 	}
-	return filepath.Dir(source)
+	return filepath.Dir(sourcePath)
 }
 
 type featurePackage struct {
@@ -342,22 +343,22 @@ type featurePackage struct {
 }
 
 type inputStruct struct {
-	Fields  []manifest.BackendInputField
+	Fields  []source.BackendInputField
 	Message string
 }
 
 type featureFunction struct {
 	Name           string
-	Signature      manifest.BackendSignatureKind
+	Signature      source.BackendSignatureKind
 	InputType      string
 	InputPointer   bool
-	InputFields    []manifest.BackendInputField
+	InputFields    []source.BackendInputField
 	SupportMessage string
 }
 
 func (function featureFunction) Action() bool {
 	switch function.Signature {
-	case manifest.BackendSignatureAction0, manifest.BackendSignatureActionValues, manifest.BackendSignatureActionForm, manifest.BackendSignatureActionFormPtr:
+	case source.BackendSignatureAction0, source.BackendSignatureActionValues, source.BackendSignatureActionForm, source.BackendSignatureActionFormPtr:
 		return true
 	default:
 		return false
@@ -365,15 +366,15 @@ func (function featureFunction) Action() bool {
 }
 
 func (function featureFunction) API() bool {
-	return function.Signature == manifest.BackendSignatureAPI
+	return function.Signature == source.BackendSignatureAPI
 }
 
 func (function featureFunction) Fragment() bool {
-	return function.Signature == manifest.BackendSignatureAction0 || function.Signature == manifest.BackendSignatureFragment
+	return function.Signature == source.BackendSignatureAction0 || function.Signature == source.BackendSignatureFragment
 }
 
 func (function featureFunction) Load() bool {
-	return function.Signature == manifest.BackendSignatureLoad || function.Signature == manifest.BackendSignatureLoadError
+	return function.Signature == source.BackendSignatureLoad || function.Signature == source.BackendSignatureLoadError
 }
 
 func inspectFeaturePackage(dir string) featurePackage {
@@ -416,9 +417,9 @@ func inspectFeaturePackage(dir string) featurePackage {
 				continue
 			}
 			signature, inputType, inputPointer := backendSignature(fn.Type, imports)
-			var inputFields []manifest.BackendInputField
+			var inputFields []source.BackendInputField
 			var supportMessage string
-			if signature == manifest.BackendSignatureActionForm || signature == manifest.BackendSignatureActionFormPtr {
+			if signature == source.BackendSignatureActionForm || signature == source.BackendSignatureActionFormPtr {
 				inputStruct, ok := inputStructs[inputType]
 				if !ok {
 					supportMessage = fmt.Sprintf("typed action input %s must be an exported struct in the same package", inputType)
@@ -427,7 +428,7 @@ func inspectFeaturePackage(dir string) featurePackage {
 					supportMessage = inputStruct.Message
 					signature = ""
 				} else {
-					inputFields = append([]manifest.BackendInputField(nil), inputStruct.Fields...)
+					inputFields = append([]source.BackendInputField(nil), inputStruct.Fields...)
 				}
 			}
 			pkg.Functions[fn.Name.Name] = featureFunction{
@@ -474,9 +475,9 @@ func inspectInlineScriptFeaturePackage(page manifest.Page, target string) featur
 				continue
 			}
 			signature, inputType, inputPointer := backendSignature(fn.Type, imports)
-			var inputFields []manifest.BackendInputField
+			var inputFields []source.BackendInputField
 			var supportMessage string
-			if signature == manifest.BackendSignatureActionForm || signature == manifest.BackendSignatureActionFormPtr {
+			if signature == source.BackendSignatureActionForm || signature == source.BackendSignatureActionFormPtr {
 				inputStruct, ok := inputStructs[inputType]
 				if !ok {
 					supportMessage = fmt.Sprintf("typed action input %s must be an exported struct in the same package", inputType)
@@ -485,7 +486,7 @@ func inspectInlineScriptFeaturePackage(page manifest.Page, target string) featur
 					supportMessage = inputStruct.Message
 					signature = ""
 				} else {
-					inputFields = append([]manifest.BackendInputField(nil), inputStruct.Fields...)
+					inputFields = append([]source.BackendInputField(nil), inputStruct.Fields...)
 				}
 			}
 			pkg.Functions[fn.Name.Name] = featureFunction{
@@ -530,7 +531,7 @@ func backendInputStruct(typeName string, structType *ast.StructType) inputStruct
 		return inputStruct{}
 	}
 	seen := map[string]bool{}
-	var fields []manifest.BackendInputField
+	var fields []source.BackendInputField
 	for _, field := range structType.Fields.List {
 		if len(field.Names) == 0 {
 			return inputStruct{Message: fmt.Sprintf("typed action input %s cannot use embedded fields", typeName)}
@@ -564,7 +565,7 @@ func backendInputStruct(typeName string, structType *ast.StructType) inputStruct
 				return inputStruct{Message: fmt.Sprintf("typed action input %s maps multiple fields to form field %q", typeName, nameFormName)}
 			}
 			seen[nameFormName] = true
-			fields = append(fields, manifest.BackendInputField{
+			fields = append(fields, source.BackendInputField{
 				FieldName: name.Name,
 				FormName:  nameFormName,
 				Type:      fieldType,
@@ -690,12 +691,12 @@ func astImportAliases(file *ast.File) map[string]string {
 	return imports
 }
 
-func backendSignature(function *ast.FuncType, imports map[string]string) (manifest.BackendSignatureKind, string, bool) {
+func backendSignature(function *ast.FuncType, imports map[string]string) (source.BackendSignatureKind, string, bool) {
 	if kind, inputType, inputPointer, ok := actionSignature(function, imports); ok {
 		return kind, inputType, inputPointer
 	}
 	if isAPISignature(function, imports) {
-		return manifest.BackendSignatureAPI, "", false
+		return source.BackendSignatureAPI, "", false
 	}
 	if signature, ok := loadSignature(function, imports); ok {
 		return signature, "", false
@@ -703,7 +704,7 @@ func backendSignature(function *ast.FuncType, imports map[string]string) (manife
 	return "", "", false
 }
 
-func actionSignature(function *ast.FuncType, imports map[string]string) (manifest.BackendSignatureKind, string, bool, bool) {
+func actionSignature(function *ast.FuncType, imports map[string]string) (source.BackendSignatureKind, string, bool, bool) {
 	if function == nil || function.Params == nil || function.Results == nil {
 		return "", "", false, false
 	}
@@ -721,18 +722,18 @@ func actionSignature(function *ast.FuncType, imports map[string]string) (manifes
 		return "", "", false, false
 	}
 	if len(function.Params.List) == 1 {
-		return manifest.BackendSignatureAction0, "", false, true
+		return source.BackendSignatureAction0, "", false, true
 	}
 	second := function.Params.List[1].Type
 	if isSelector(second, imports, formImportPath, "Values") {
-		return manifest.BackendSignatureActionValues, "", false, true
+		return source.BackendSignatureActionValues, "", false, true
 	}
 	if ident, ok := second.(*ast.Ident); ok && ident.IsExported() {
-		return manifest.BackendSignatureActionForm, ident.Name, false, true
+		return source.BackendSignatureActionForm, ident.Name, false, true
 	}
 	if pointer, ok := second.(*ast.StarExpr); ok {
 		if ident, ok := pointer.X.(*ast.Ident); ok && ident.IsExported() {
-			return manifest.BackendSignatureActionFormPtr, ident.Name, true, true
+			return source.BackendSignatureActionFormPtr, ident.Name, true, true
 		}
 	}
 	return "", "", false, false
@@ -753,7 +754,7 @@ func isAPISignature(function *ast.FuncType, imports map[string]string) bool {
 		isError(function.Results.List[1].Type)
 }
 
-func loadSignature(function *ast.FuncType, imports map[string]string) (manifest.BackendSignatureKind, bool) {
+func loadSignature(function *ast.FuncType, imports map[string]string) (source.BackendSignatureKind, bool) {
 	if function == nil || function.Params == nil || function.Results == nil {
 		return "", false
 	}
@@ -761,10 +762,10 @@ func loadSignature(function *ast.FuncType, imports map[string]string) (manifest.
 		return "", false
 	}
 	if len(function.Results.List) == 1 && isMapStringAny(function.Results.List[0].Type) {
-		return manifest.BackendSignatureLoad, true
+		return source.BackendSignatureLoad, true
 	}
 	if len(function.Results.List) == 2 && isMapStringAny(function.Results.List[0].Type) && isError(function.Results.List[1].Type) {
-		return manifest.BackendSignatureLoadError, true
+		return source.BackendSignatureLoadError, true
 	}
 	return "", false
 }

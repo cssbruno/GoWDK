@@ -9,6 +9,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkast"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
@@ -35,16 +36,16 @@ type APIStatement = gwdkast.APIStatement
 
 // ParseSyntax parses a .gwdk source file into a typed syntax AST for the
 // current compiler subset.
-func ParseSyntax(source []byte) (SyntaxFile, error) {
+func ParseSyntax(src []byte) (SyntaxFile, error) {
 	var file SyntaxFile
 	var body []syntaxBodyLine
 	var captured SyntaxBlock
 	var capturedFragment *SyntaxFragmentEndpoint
 	depth := 0
 	seenDeclaration := false
-	seenGoBlocks := map[string]manifest.SourceSpan{}
+	seenGoBlocks := map[string]source.SourceSpan{}
 
-	scanner := bufio.NewScanner(bytes.NewReader(source))
+	scanner := bufio.NewScanner(bytes.NewReader(src))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
@@ -478,16 +479,16 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 	return block, nil
 }
 
-func syntaxBodyStart(body []syntaxBodyLine) manifest.SourcePosition {
+func syntaxBodyStart(body []syntaxBodyLine) source.SourcePosition {
 	for _, raw := range body {
 		for index, char := range []rune(raw.Text) {
 			if strings.TrimSpace(string(char)) == "" {
 				continue
 			}
-			return manifest.SourcePosition{Line: raw.Line, Column: index + 1}
+			return source.SourcePosition{Line: raw.Line, Column: index + 1}
 		}
 	}
-	return manifest.SourcePosition{}
+	return source.SourcePosition{}
 }
 
 func parseBuildCall(body []syntaxBodyLine) (BuildCall, bool, error) {

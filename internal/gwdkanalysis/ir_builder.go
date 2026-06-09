@@ -8,6 +8,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // BuildIR converts a normalized manifest into the stable compiler IR.
@@ -43,14 +44,14 @@ type irBuilder struct {
 	packages map[string]*gwdkir.Package
 }
 
-func (builder *irBuilder) ensurePackage(name string, source string) *gwdkir.Package {
+func (builder *irBuilder) ensurePackage(name string, src string) *gwdkir.Package {
 	pkg := builder.packages[name]
 	if pkg == nil {
 		pkg = &gwdkir.Package{Name: name}
 		builder.packages[name] = pkg
 	}
-	dir := filepath.Dir(source)
-	if source != "" && !contains(pkg.SourceDirs, dir) {
+	dir := filepath.Dir(src)
+	if src != "" && !contains(pkg.SourceDirs, dir) {
 		pkg.SourceDirs = append(pkg.SourceDirs, dir)
 	}
 	return pkg
@@ -132,7 +133,7 @@ func (builder *irBuilder) addPageAssets(page manifest.Page) {
 	for index, script := range page.InlineJS {
 		name := script.Name
 		if name == "" {
-			name = manifest.InlineScriptName(index)
+			name = source.InlineScriptName(index)
 		}
 		builder.program.Assets = append(builder.program.Assets, gwdkir.Asset{
 			Kind:    gwdkir.AssetJS,
@@ -262,7 +263,7 @@ func (builder *irBuilder) addComponentAssets(component manifest.Component) {
 	for index, script := range component.InlineJS {
 		name := script.Name
 		if name == "" {
-			name = manifest.InlineScriptName(index)
+			name = source.InlineScriptName(index)
 		}
 		builder.program.Assets = append(builder.program.Assets, gwdkir.Asset{
 			Kind:    gwdkir.AssetJS,

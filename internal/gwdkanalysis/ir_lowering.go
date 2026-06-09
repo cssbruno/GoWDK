@@ -4,6 +4,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func routeKind(mode gowdk.RenderMode, page manifest.Page) gwdkir.RouteKind {
@@ -50,21 +51,21 @@ func lowerIRPage(page manifest.Page) gwdkir.Page {
 			Description: page.Spans.Description,
 			Canonical:   page.Spans.Canonical,
 			Image:       page.Spans.Image,
-			Layouts:     append([]manifest.NamedSpan(nil), page.Spans.Layouts...),
-			Guard:       append([]manifest.NamedSpan(nil), page.Spans.Guard...),
-			CSS:         append([]manifest.NamedSpan(nil), page.Spans.CSS...),
-			JS:          append([]manifest.NamedSpan(nil), page.Spans.JS...),
-			InlineJS:    append([]manifest.NamedSpan(nil), page.Spans.InlineJS...),
-			RouteParams: append([]manifest.NamedSpan(nil), page.Spans.RouteParams...),
+			Layouts:     append([]source.NamedSpan(nil), page.Spans.Layouts...),
+			Guard:       append([]source.NamedSpan(nil), page.Spans.Guard...),
+			CSS:         append([]source.NamedSpan(nil), page.Spans.CSS...),
+			JS:          append([]source.NamedSpan(nil), page.Spans.JS...),
+			InlineJS:    append([]source.NamedSpan(nil), page.Spans.InlineJS...),
+			RouteParams: append([]source.NamedSpan(nil), page.Spans.RouteParams...),
 		},
 	}
 }
 
-func copyRouteParams(params []manifest.RouteParam) []manifest.RouteParam {
+func copyRouteParams(params []source.RouteParam) []source.RouteParam {
 	if len(params) == 0 {
 		return nil
 	}
-	out := make([]manifest.RouteParam, len(params))
+	out := make([]source.RouteParam, len(params))
 	copy(out, params)
 	return out
 }
@@ -90,19 +91,19 @@ func lowerIRComponent(component manifest.Component) gwdkir.Component {
 		Span:        component.Span,
 		PackageSpan: component.PackageSpan,
 		Spans: gwdkir.ComponentSpans{
-			CSS:      append([]manifest.NamedSpan(nil), component.Spans.CSS...),
-			JS:       append([]manifest.NamedSpan(nil), component.Spans.JS...),
-			InlineJS: append([]manifest.NamedSpan(nil), component.Spans.InlineJS...),
-			Assets:   append([]manifest.NamedSpan(nil), component.Spans.Assets...),
+			CSS:      append([]source.NamedSpan(nil), component.Spans.CSS...),
+			JS:       append([]source.NamedSpan(nil), component.Spans.JS...),
+			InlineJS: append([]source.NamedSpan(nil), component.Spans.InlineJS...),
+			Assets:   append([]source.NamedSpan(nil), component.Spans.Assets...),
 		},
 	}
 }
 
-func copyInlineScripts(scripts []manifest.InlineScript) []manifest.InlineScript {
+func copyInlineScripts(scripts []source.InlineScript) []source.InlineScript {
 	if len(scripts) == 0 {
 		return nil
 	}
-	out := make([]manifest.InlineScript, len(scripts))
+	out := make([]source.InlineScript, len(scripts))
 	copy(out, scripts)
 	return out
 }
@@ -141,12 +142,12 @@ func lowerIRBlocks(blocks manifest.Blocks) gwdkir.Blocks {
 			Build:         blocks.Spans.Build,
 			Load:          blocks.Spans.Load,
 			Client:        blocks.Spans.Client,
-			GoBlocks:      append([]manifest.NamedSpan(nil), blocks.Spans.GoBlocks...),
+			GoBlocks:      append([]source.NamedSpan(nil), blocks.Spans.GoBlocks...),
 			View:          blocks.Spans.View,
 			ViewBodyStart: blocks.Spans.ViewBodyStart,
-			Actions:       append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
-			APIs:          append([]manifest.NamedSpan(nil), blocks.Spans.APIs...),
-			Fragments:     append([]manifest.NamedSpan(nil), blocks.Spans.Fragments...),
+			Actions:       append([]source.NamedSpan(nil), blocks.Spans.Actions...),
+			APIs:          append([]source.NamedSpan(nil), blocks.Spans.APIs...),
+			Fragments:     append([]source.NamedSpan(nil), blocks.Spans.Fragments...),
 			Exports:       blocks.Spans.Exports,
 			Emits:         blocks.Spans.Emits,
 		},
@@ -169,7 +170,7 @@ func lowerIRActions(actions []manifest.Action) []gwdkir.Action {
 			ErrorPage:      action.ErrorPage,
 			Span:           action.Span,
 			RouteSpan:      action.RouteSpan,
-			RouteParams:    append([]manifest.NamedSpan(nil), action.RouteParams...),
+			RouteParams:    append([]source.NamedSpan(nil), action.RouteParams...),
 			InputSpan:      action.InputSpan,
 			ValidationSpan: action.ValidationSpan,
 			RedirectSpan:   action.RedirectSpan,
@@ -189,7 +190,7 @@ func lowerIRAPIs(apis []manifest.API) []gwdkir.API {
 			ErrorPage:     api.ErrorPage,
 			Span:          api.Span,
 			RouteSpan:     api.RouteSpan,
-			RouteParams:   append([]manifest.NamedSpan(nil), api.RouteParams...),
+			RouteParams:   append([]source.NamedSpan(nil), api.RouteParams...),
 			ErrorPageSpan: api.ErrorPageSpan,
 		})
 	}
@@ -228,7 +229,7 @@ func lowerIRFragmentEndpoints(fragments []manifest.FragmentEndpoint) []gwdkir.Fr
 			Span:        fragment.Span,
 			RouteSpan:   fragment.RouteSpan,
 			TargetSpan:  fragment.TargetSpan,
-			RouteParams: append([]manifest.NamedSpan(nil), fragment.RouteParams...),
+			RouteParams: append([]source.NamedSpan(nil), fragment.RouteParams...),
 		})
 	}
 	return out

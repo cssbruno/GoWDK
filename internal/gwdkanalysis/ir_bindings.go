@@ -5,6 +5,7 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func attachBackendBindings(program *gwdkir.Program, bindings []manifest.BackendBinding) {
@@ -35,7 +36,7 @@ func attachBackendBindings(program *gwdkir.Program, bindings []manifest.BackendB
 			Signature:    binding.Signature,
 			InputType:    binding.InputType,
 			InputPointer: binding.InputPointer,
-			InputFields:  append([]manifest.BackendInputField(nil), binding.InputFields...),
+			InputFields:  append([]source.BackendInputField(nil), binding.InputFields...),
 		}
 	}
 	for index := range program.Pages {

@@ -9,6 +9,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // RouteKind describes route behavior in the CLI routes report.
@@ -57,7 +58,7 @@ type EndpointBinding struct {
 	Kind              EndpointKind
 	EndpointSource    string
 	Source            string
-	SourceSpan        manifest.SourceSpan
+	SourceSpan        source.SourceSpan
 	Package           string
 	PackagePath       string
 	PackageName       string
@@ -66,12 +67,12 @@ type EndpointBinding struct {
 	Route             string
 	PageID            string
 	Handler           string
-	BindingStatus     manifest.BackendBindingStatus
+	BindingStatus     source.BackendBindingStatus
 	BindingMessage    string
 	BindingImportPath string
 	BindingPackage    string
 	BindingFunction   string
-	BindingSignature  manifest.BackendSignatureKind
+	BindingSignature  source.BackendSignatureKind
 	BindingInputType  string
 	Contract          ContractEndpointBinding
 }

@@ -15,6 +15,7 @@ gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
+gowdk inspect ir [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
@@ -37,7 +38,7 @@ gowdk lsp [--ssr]
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available.
 - `--write`: supported by `fmt`; overwrites formatted files.
-- `--config`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; loads a literal config subset from the given path instead of the required default `gowdk.config.go`.
+- `--config`: supported by `check`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; loads a literal config subset from the given path instead of the required default `gowdk.config.go`.
 - `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
 - `gowdk build` writes `contract_reference` build-report events for
   `g:command` forms and `g:query` elements with `unknown`, `bound`, `missing`,
@@ -47,7 +48,7 @@ gowdk lsp [--ssr]
   command owners.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
-- `--module`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
+- `--module`: supported by `check`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
 - `--out`: supported by `build`; selects the output directory and overrides `Build.Output`.
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
@@ -74,6 +75,7 @@ go run ./cmd/gowdk manifest --module frontend --ssr
 go run ./cmd/gowdk sitemap --module frontend --ssr
 go run ./cmd/gowdk trace patients.CreatePatient
 go run ./cmd/gowdk routes --module frontend --ssr
+go run ./cmd/gowdk inspect ir --module frontend --ssr
 go run ./cmd/gowdk contracts --json .
 go run ./cmd/gowdk graph .
 go run ./cmd/gowdk list commands .
@@ -196,6 +198,11 @@ symbol, signature/input metadata when bound, status, and binding message.
 Non-fatal route-mode notes, such as request-time page rendering disabled on a
 SPA route or static SPA output disabled on an SSR route, appear in `info` and
 are also mirrored to stderr as `info:` console lines.
+
+`gowdk inspect ir` prints the validated `internal/gwdkir.Program` compiler IR as
+JSON. This is an M2 compiler-spine debugging and snapshot surface, not a stable
+public schema yet. It uses the same project config, discovery, validation,
+backend binding, and contract-reference checks as the other compile commands.
 
 `gowdk explain <diagnostic-code>` prints the registry metadata, stability,
 summary, next steps, and examples when available for a diagnostic code. It does

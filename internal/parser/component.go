@@ -125,6 +125,7 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			}
 			if line == "}" {
 				component.Blocks.ViewBody = strings.TrimSpace(strings.Join(viewBody, "\n"))
+				component.Blocks.Spans.ViewBodyStart = sourceBodyStart(viewBody, lineNumber-len(viewBody))
 				inView = false
 				viewBody = nil
 				continue

@@ -84,6 +84,7 @@ func unsupportedTemplateSyntax(text string) (int, string, bool) {
 }
 
 func (parser *parser) element() (Node, error) {
+	start := parser.index
 	if !parser.consume("<") {
 		return nil, parser.errorf("expected element")
 	}
@@ -107,7 +108,7 @@ func (parser *parser) element() (Node, error) {
 			if err != nil {
 				return nil, err
 			}
-			return Element{Name: name, Attrs: attrs}, nil
+			return Element{Name: name, Attrs: attrs, Start: start, End: parser.index}, nil
 		case parser.consume(">"):
 			attrs, err := normalizeHTMLAttrs(attrs)
 			if err != nil {
@@ -117,7 +118,7 @@ func (parser *parser) element() (Node, error) {
 			if err != nil {
 				return nil, err
 			}
-			return Element{Name: name, Attrs: attrs, Children: children}, nil
+			return Element{Name: name, Attrs: attrs, Children: children, Start: start, End: parser.index}, nil
 		case parser.done():
 			return nil, parser.errorf("unterminated <%s> tag", name)
 		default:

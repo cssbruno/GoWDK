@@ -33,6 +33,9 @@ The optional `suggestion` field carries a short structured fix hint for common
 mistakes such as missing `paths {}` on dynamic spa routes, unknown client or
 view fields, missing `g:key`, and malformed `g:for` syntax.
 
+Warnings are non-fatal. The first accessibility warning is `missing_img_alt`,
+emitted for literal `<img>` elements without an explicit `alt` attribute.
+
 ## Current Code Registry
 
 The diagnostic-code registry, stability policy, naming rules, and

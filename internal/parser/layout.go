@@ -77,6 +77,7 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 			if line == "}" {
 				layout.Blocks.View = true
 				layout.Blocks.ViewBody = strings.TrimSpace(strings.Join(viewBody, "\n"))
+				layout.Blocks.Spans.ViewBodyStart = sourceBodyStart(viewBody, lineNumber-len(viewBody))
 				inView = false
 				viewBody = nil
 				continue

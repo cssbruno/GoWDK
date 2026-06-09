@@ -234,6 +234,140 @@ func TestCheckJSONGoldenDiagnosticsFixture(t *testing.T) {
 	}
 }
 
+func TestCheckFilesWarnsForImageWithoutAlt(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "gallery.page.gwdk")
+	writeGWDK(t, path, `package app
+
+@page gallery
+@route "/gallery"
+@guard public
+
+view {
+  <main>
+    <img src="/hero.png" />
+  </main>
+}
+`)
+
+	_, diagnostics := CheckFiles(gowdk.Config{}, []string{path})
+	if diagnostics.HasErrors() {
+		t.Fatalf("expected warning-only diagnostics, got %v", diagnostics)
+	}
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %#v", diagnostics)
+	}
+	diagnostic := diagnostics[0]
+	if diagnostic.Code != "missing_img_alt" || diagnostic.Severity != "warning" {
+		t.Fatalf("expected missing_img_alt warning, got %#v", diagnostic)
+	}
+	if diagnostic.File != path {
+		t.Fatalf("expected diagnostic file %q, got %#v", path, diagnostic)
+	}
+	if diagnostic.Pos.Line != 9 || diagnostic.Pos.Column != 5 {
+		t.Fatalf("expected diagnostic at img tag, got %#v", diagnostic.Pos)
+	}
+	if diagnostic.Range == nil ||
+		diagnostic.Range.Start.Line != 9 || diagnostic.Range.Start.Column != 5 ||
+		diagnostic.Range.End.Line != 9 || diagnostic.Range.End.Column <= diagnostic.Range.Start.Column {
+		t.Fatalf("expected diagnostic range on img tag, got %#v", diagnostic.Range)
+	}
+	if !strings.Contains(diagnostic.Suggestion, `alt=""`) {
+		t.Fatalf("expected alt suggestion, got %#v", diagnostic)
+	}
+}
+
+func TestCheckFilesAcceptsImagesWithAlt(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "gallery.page.gwdk")
+	writeGWDK(t, path, `package app
+
+@page gallery
+@route "/gallery"
+@guard public
+
+view {
+  <main>
+    <img src="/hero.png" alt="Hero" />
+    <img src="/decorative.png" alt="" />
+  </main>
+}
+`)
+
+	_, diagnostics := CheckFiles(gowdk.Config{}, []string{path})
+	if len(diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
+	}
+}
+
+func TestCheckJSONIncludesAccessibilityWarning(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "gallery.page.gwdk")
+	writeGWDK(t, path, `package app
+
+@page gallery
+@route "/gallery"
+@guard public
+
+view {
+  <img src="/hero.png" />
+}
+`)
+
+	payload, diagnostics := CheckJSON(gowdk.Config{}, []string{path})
+	if diagnostics.HasErrors() {
+		t.Fatalf("expected warning-only diagnostics, got %v", diagnostics)
+	}
+	output := string(payload)
+	if !strings.Contains(output, `"code": "missing_img_alt"`) ||
+		!strings.Contains(output, `"severity": "warning"`) {
+		t.Fatalf("expected accessibility warning in JSON: %s", output)
+	}
+}
+
+func TestCheckFilesWarnsForImageWithoutAltInComponentsAndLayouts(t *testing.T) {
+	root := t.TempDir()
+	componentPath := filepath.Join(root, "hero.cmp.gwdk")
+	layoutPath := filepath.Join(root, "root.layout.gwdk")
+	writeGWDK(t, componentPath, `package app
+
+@component Hero
+
+view {
+  <section>
+    <img src="/hero.png" />
+  </section>
+}
+`)
+	writeGWDK(t, layoutPath, `package app
+
+@layout root
+
+view {
+  <main>
+    <img src="/logo.png" />
+    <slot />
+  </main>
+}
+`)
+
+	_, diagnostics := CheckFiles(gowdk.Config{}, []string{componentPath, layoutPath})
+	if diagnostics.HasErrors() {
+		t.Fatalf("expected warning-only diagnostics, got %v", diagnostics)
+	}
+	if len(diagnostics) != 2 {
+		t.Fatalf("expected two accessibility warnings, got %#v", diagnostics)
+	}
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code != "missing_img_alt" || diagnostic.Severity != "warning" {
+			t.Fatalf("expected missing_img_alt warning, got %#v", diagnostic)
+		}
+		if diagnostic.Pos.Line != 7 || diagnostic.Pos.Column != 5 {
+			t.Fatalf("expected diagnostic at img tag, got %#v", diagnostic)
+		}
+	}
+}
+
 func TestClassifySourceUsesCurrentFileKindRules(t *testing.T) {
 	cases := []struct {
 		path   string

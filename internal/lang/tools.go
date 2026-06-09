@@ -288,6 +288,7 @@ func CheckFiles(config gowdk.Config, paths []string) (manifest.Manifest, Diagnos
 	if err := compiler.ValidateManifest(config, app); err != nil {
 		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 	}
+	diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)
 	if !diagnostics.HasErrors() {
 		app = compiler.BindBackendHandlers(app)
 		diagnostics = append(diagnostics, validateContractReferences(config, app)...)
@@ -338,9 +339,14 @@ func CheckSource(config gowdk.Config, path string, source []byte) (manifest.Page
 		if err := compiler.ValidateManifest(config, app); err != nil {
 			diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 		}
+		diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)
 		return manifest.Page{}, diagnostics
 	case FileKindLayout:
-		_, diagnostics := ParseLayoutSource(path, source)
+		layout, diagnostics := ParseLayoutSource(path, source)
+		if diagnostics.HasErrors() {
+			return manifest.Page{}, diagnostics
+		}
+		diagnostics = append(diagnostics, accessibilityDiagnostics(manifest.Manifest{Layouts: []manifest.Layout{layout}})...)
 		return manifest.Page{}, diagnostics
 	case FileKindAsset, FileKindPlugin:
 		_, diagnostics := Lex(string(source))
@@ -358,6 +364,7 @@ func CheckSource(config gowdk.Config, path string, source []byte) (manifest.Page
 	if err := compiler.ValidateManifest(config, app); err != nil {
 		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 	}
+	diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)
 	return page, diagnostics
 }
 

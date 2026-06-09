@@ -65,8 +65,9 @@ registry.
   feature hardens.
 - `addon`: emitted by addon-owned validation or fallback addon diagnostics.
 
-All current diagnostics use severity `error`. Future warning/info diagnostics
-must extend the registry and JSON schema docs before shipping.
+Most diagnostics use severity `error`. Accessibility diagnostics can use
+severity `warning`; warnings are reported by `gowdk check` but do not make the
+command fail.
 
 ## Naming
 
@@ -109,6 +110,7 @@ gets more specific stable codes.
   `component_field_error`, `component_client_error`,
   `duplicate_component_emit`, `duplicate_page_store`, `page_store_error`,
   `unknown_component_store`, `view_parse_error`.
+- Accessibility: `missing_img_alt`.
 - Go blocks and generated app wiring: `invalid_go_block`,
   `go_client_requires_page`, `go_ssr_requires_request_render`,
   `unknown_go_block_target`, `unknown_addon_go_block_target`,

@@ -44,6 +44,12 @@ var addonRegistry = map[string]addonSpec{
 		Package:    "api",
 		Summary:    "request-time API endpoints",
 	},
+	"auth": {
+		Name:       "auth",
+		ImportPath: "github.com/cssbruno/gowdk/addons/auth",
+		Package:    "auth",
+		Summary:    "batteries-included auth: PBKDF2, signed sessions, RBAC guards (no external deps)",
+	},
 	"contracts": {
 		Name:       "contracts",
 		ImportPath: "github.com/cssbruno/gowdk/addons/contracts",
@@ -55,6 +61,12 @@ var addonRegistry = map[string]addonSpec{
 		ImportPath: "github.com/cssbruno/gowdk/addons/css",
 		Package:    "css",
 		Summary:    "build-time CSS processing",
+	},
+	"db": {
+		Name:       "db",
+		ImportPath: "github.com/cssbruno/gowdk/addons/db",
+		Package:    "db",
+		Summary:    "sqlc + database/sql plumbing helper (no domain, no driver dep)",
 	},
 	"embed": {
 		Name:       "embed",

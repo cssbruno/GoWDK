@@ -19,6 +19,7 @@ gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk inspect ir [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
+gowdk doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...]
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
@@ -37,11 +38,13 @@ gowdk lsp [--ssr]
 - `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
 - `--list`: supported by `add`; prints built-in addon names the command can wire.
-- `--json`: supported by `check`, `explain`, `contracts`, `graph`, `trace`, and `list`; prints
+- `--json`: supported by `check`, `doctor`, `explain`, `contracts`, `graph`, `trace`, and `list`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available.
+- `gowdk doctor --json`: prints a versioned health report with overall status,
+  summary counts, environment metadata, and check records.
 - `--write`: supported by `fmt`; overwrites formatted files.
-- `--config`: supported by `add`, `check`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; selects the config file. Compile commands load a literal config subset from the given path instead of the required default `gowdk.config.go`.
+- `--config`: supported by `add`, `check`, `doctor`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; selects the config file. Compile commands load a literal config subset from the given path instead of the required default `gowdk.config.go`.
 - `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
 - `gowdk build` writes `contract_reference` build-report events for
   `g:command` forms and `g:query` elements with `unknown`, `bound`, `missing`,
@@ -51,7 +54,7 @@ gowdk lsp [--ssr]
   command owners.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
-- `--module`: supported by `check`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
+- `--module`: supported by `check`, `doctor`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
 - `--out`: supported by `build`; selects the output directory and overrides `Build.Output`.
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
@@ -76,6 +79,9 @@ go run ./cmd/gowdk check --config gowdk.config.go
 go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk
 go run ./cmd/gowdk explain missing_ssr_addon
 go run ./cmd/gowdk explain --json spa_dynamic_route_missing_paths
+go run ./cmd/gowdk doctor
+go run ./cmd/gowdk doctor --json
+go run ./cmd/gowdk doctor --module frontend --ssr
 go run ./cmd/gowdk manifest --module frontend --ssr
 go run ./cmd/gowdk sitemap --module frontend --ssr
 go run ./cmd/gowdk trace patients.CreatePatient
@@ -167,6 +173,13 @@ module, app, binary, or explicit file arguments are passed; `gowdk build
 --target <name>` runs selected targets. `--target` cannot be combined with
 `--module`, `--out`, `--app`, `--bin`, `--wasm`, or explicit files. The ad hoc
 flags remain useful for one-off builds.
+
+`doctor` checks the local GOWDK environment and current project without writing
+files. It verifies the Go toolchain, CLI version, config loading, source
+discovery, language validation, route metadata construction, and relevant
+optional tools such as Tailwind or Node. Missing config and language failures
+are errors. Missing optional tools are warnings when the project appears to use
+them. The command exits non-zero only when at least one check is an error.
 
 `--wasm` produces a Go `js/wasm` compile artifact from the generated app. This
 is a deploy artifact for hosts that can run Go WebAssembly; it is separate from

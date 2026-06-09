@@ -528,7 +528,7 @@ Every 0.x minor release must have:
 - [ ] Add Linux, macOS Intel, macOS ARM, and Windows install examples.
 - [ ] Add checksum and attestation verification examples.
 - [ ] Add `gowdk version` verification.
-- [ ] Add `gowdk doctor` verification once implemented.
+- [x] Add `gowdk doctor` verification once implemented.
 - [ ] Add troubleshooting for missing `gowdk.config.go`, missing Tailwind
   binary, unsupported Go handler signatures, missing SSR feature, and generated
   binary build failures.
@@ -565,7 +565,7 @@ Every 0.x minor release must have:
 ## Toolchain And Dependency Policy
 
 - [ ] Add `toolchain go1.26.4` if stronger local toolchain behavior is desired.
-- [ ] Add `gowdk doctor` checks for Go version and required local tools.
+- [x] Add `gowdk doctor` checks for Go version and required local tools.
 - [x] Add CI and release checks that print `go version` and `go env GOVERSION`.
 - [x] Document exact Go version requirements and future patch compatibility.
 - [x] Explain `govulncheck` in release docs.
@@ -871,7 +871,7 @@ Every 0.x minor release must have:
 
 ## CLI, Dev Server, LSP, Docs, And Examples
 
-- [ ] Add `gowdk doctor`.
+- [x] Add `gowdk doctor`.
 - [ ] Add `gowdk explain <diagnostic-code>`.
 - [ ] Add `gowdk inspect ir`, `gowdk inspect endpoints`, `gowdk inspect assets`,
   `gowdk inspect go-bindings`, `gowdk inspect generated`, and

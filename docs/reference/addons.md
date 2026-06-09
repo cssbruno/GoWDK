@@ -33,6 +33,19 @@ Current packages:
 - `addons/ratelimit`
 - `addons/contracts`
 
+Use `gowdk add --list` to print the built-in names the CLI can wire into
+`gowdk.config.go`:
+
+```sh
+gowdk add --list
+gowdk add ssr actions partial
+```
+
+`gowdk add <name>` inserts the canonical addon import and appends
+`<name>.Addon()` to a literal `Config.Addons` list. It skips constructors that
+are already present, including aliased imports. It does not install external Go
+modules or discover third-party addons.
+
 The current compiler validator checks whether SSR is enabled when a page uses
 `load {}` or `go ssr {}`. SPA builds invoke addons that implement
 `gowdk.CSSProcessor`. Generated app builds invoke configured addons that

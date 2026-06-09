@@ -1,5 +1,30 @@
 # Implementation Plan: Manifest → IR Migration
 
+## Status (progress)
+
+Done:
+
+- Centralized the IR→manifest converter as `compiler.ManifestFromIR` and added
+  IR-first validation entrypoints `compiler.ValidateProgram` /
+  `compiler.ValidateBackendBindingPolicyIR`.
+- Extracted shared leaf value types into the neutral `internal/source` package
+  (manifest re-exports them as aliases). `internal/gwdkir`, `internal/gwdkast`,
+  and `internal/contractscan` are now manifest-free (verified via
+  `go list -deps`).
+- Added IR-native `Page` behavior methods (`CachePolicy`, `RenderMode`,
+  `HasGoBlock`, `DynamicParams`, `TypedRouteParams`) so render helpers consume IR.
+- Migrated `internal/buildgen` render helpers to consume `gwdkir` models; only a
+  `gotypes` bridge and public-API compat types remain.
+- Swapped leaf-type references to `internal/source` across `appgen`, `compiler`,
+  `parser`, `gwdkanalysis`, `lsp`.
+
+Pending (largest remaining work):
+
+- Make `internal/compiler` validation/binding IR-native (it still validates the
+  manifest model — ~980 references).
+- Collapse the `AST → manifest → IR` path to `AST → IR` in `gwdkanalysis`.
+- Keep public manifest JSON until a release plan deprecates it.
+
 ## Context
 
 `docs/engineering/architecture.md` ("Compatibility Records" section) tracks

@@ -87,11 +87,14 @@ tooling contracts may change before a stable release.
   password hashing, and SQLC-style database wiring helpers.
 - Runtime request boundaries now include a default per-request deadline, API
   request-body caps, recovered panic logging, and secret redaction.
+- `gowdk doctor` checks the local Go/GOWDK toolchain, project config, source
+  discovery, language validation, route metadata, and relevant optional tools
+  without writing generated output.
 
 ## Partial
 
-- `gowdk doctor` is referenced as planned install verification but is not
-  implemented yet.
+- Generated app HTTP smoke coverage remains narrower than the full runtime
+  surface.
 
 ## Planned
 

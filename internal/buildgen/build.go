@@ -19,7 +19,7 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 
 // BuildFromIR writes SPA build artifacts from normalized compiler IR.
 func BuildFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (Result, error) {
-	return buildFromIR(config, ir, compiler.ManifestFromIR(ir).BackendBindings, outputDir)
+	return buildFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir)
 }
 
 func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manifest.BackendBinding, outputDir string) (Result, error) {
@@ -125,7 +125,7 @@ func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (
 // BuildMemoryFromIR plans SPA build artifacts from normalized compiler IR
 // without writing them to disk.
 func BuildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (MemoryResult, error) {
-	return buildMemoryFromIR(config, ir, compiler.ManifestFromIR(ir).BackendBindings, outputDir)
+	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir)
 }
 
 func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manifest.BackendBinding, outputDir string) (MemoryResult, error) {

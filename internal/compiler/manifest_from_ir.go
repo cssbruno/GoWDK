@@ -20,7 +20,7 @@ func ManifestFromIR(ir gwdkir.Program) manifest.Manifest {
 		Pages:           make([]manifest.Page, 0, len(ir.Pages)),
 		Components:      make([]manifest.Component, 0, len(ir.Components)),
 		Layouts:         make([]manifest.Layout, 0, len(ir.Layouts)),
-		BackendBindings: make([]manifest.BackendBinding, 0, len(ir.Endpoints)),
+		BackendBindings: BackendBindingsFromIR(ir),
 	}
 	for _, page := range ir.Pages {
 		app.Pages = append(app.Pages, pageFromIR(page))
@@ -31,13 +31,22 @@ func ManifestFromIR(ir gwdkir.Program) manifest.Manifest {
 	for _, layout := range ir.Layouts {
 		app.Layouts = append(app.Layouts, layoutFromIR(layout))
 	}
+	return app
+}
+
+// BackendBindingsFromIR derives just the backend binding records from IR
+// endpoints, without reconstructing the full page/component/layout manifest.
+// Callers that only need bindings (e.g. build reporting) should use this instead
+// of ManifestFromIR(ir).BackendBindings, which would allocate the whole model.
+func BackendBindingsFromIR(ir gwdkir.Program) []manifest.BackendBinding {
+	out := make([]manifest.BackendBinding, 0, len(ir.Endpoints))
 	for _, endpoint := range ir.Endpoints {
 		binding := backendBindingFromIR(endpoint)
 		if binding.Status != "" || binding.ImportPath != "" || binding.FunctionName != "" {
-			app.BackendBindings = append(app.BackendBindings, binding)
+			out = append(out, binding)
 		}
 	}
-	return app
+	return out
 }
 
 func backendBindingFromIR(endpoint gwdkir.Endpoint) manifest.BackendBinding {

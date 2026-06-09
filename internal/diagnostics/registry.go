@@ -71,6 +71,7 @@ var Registry = []Code{
 	{Code: "load_requires_request_render", Area: "rendering", Stability: StabilityStable, Summary: "load block requires request-time page rendering"},
 	{Code: "malformed_gowdk_use", Area: "source-imports", Stability: StabilityStable, Summary: "GOWDK use declaration is malformed"},
 	{Code: "malformed_route", Area: "routing", Stability: StabilityStable, Summary: "route path violates GOWDK route syntax"},
+	{Code: "missing_img_alt", Area: "accessibility", Stability: StabilityStable, Summary: "image element is missing explicit alt text"},
 	{Code: "missing_package_declaration", Area: "packages", Stability: StabilityStable, Summary: "GOWDK source is missing a package declaration"},
 	{Code: "missing_page_guard", Area: "pages", Stability: StabilityStable, Summary: "page source is missing explicit access guard metadata"},
 	{Code: "missing_required_env", Area: "config", Stability: StabilityStable, Summary: "required environment variable is not set"},

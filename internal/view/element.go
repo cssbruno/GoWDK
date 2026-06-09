@@ -12,6 +12,8 @@ type Element struct {
 	Name     string
 	Attrs    []Attr
 	Children []Node
+	Start    int
+	End      int
 }
 
 func (node Element) render(ctx *renderContext, out *renderOutput) error {

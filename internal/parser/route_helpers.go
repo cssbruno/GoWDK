@@ -50,6 +50,18 @@ func sourceLineSpan(lineNumber int, rawLine string) manifest.SourceSpan {
 	}
 }
 
+func sourceBodyStart(lines []string, firstLineNumber int) manifest.SourcePosition {
+	for offset, rawLine := range lines {
+		for index, char := range []rune(rawLine) {
+			if strings.TrimSpace(string(char)) == "" {
+				continue
+			}
+			return manifest.SourcePosition{Line: firstLineNumber + offset, Column: index + 1}
+		}
+	}
+	return manifest.SourcePosition{}
+}
+
 func namedValueSpans(values []string, lineNumber int, rawLine string) []manifest.NamedSpan {
 	if len(values) == 0 {
 		return nil

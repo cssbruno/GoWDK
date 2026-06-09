@@ -16,11 +16,14 @@ func Attr(name, value string) string {
 	if value == "" || !validAttrName(name) {
 		return ""
 	}
-	return " " + name + `="` + escapeAttrValue(value) + `"`
-}
 
-func escapeAttrValue(value string) string {
-	return htmltemplate.HTMLEscapeString(value)
+	var out strings.Builder
+	out.WriteByte(' ')
+	out.WriteString(name)
+	out.WriteString(`="`)
+	htmltemplate.HTMLEscape(&out, []byte(value))
+	out.WriteByte('"')
+	return out.String()
 }
 
 func validAttrName(name string) bool {

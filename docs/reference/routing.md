@@ -318,3 +318,7 @@ handler is bound. Contract binding details include the contract kind, reference
 name, binding status, local input type, result type, roles, handler, register
 function, and message when known. The `info` list reports disabled route-mode
 lanes, for example SSR disabled on a SPA route.
+
+Use `gowdk inspect ir` when route debugging needs the full typed compiler IR
+instead of the route-report schema. The IR output is for M2 compiler debugging
+and snapshots; keep `gowdk routes` for route and endpoint report integrations.

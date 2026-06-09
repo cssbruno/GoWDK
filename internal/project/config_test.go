@@ -92,6 +92,15 @@ var Config = gowdk.Config{
 	Render: gowdk.RenderConfig{
 		Default: gowdk.Action,
 	},
+	Env: gowdk.EnvConfig{
+		Vars: []gowdk.EnvVar{
+			{Name: "GOWDK_TEST_BACKEND_ORIGIN", Required: true},
+			{Name: "GOWDK_TEST_ADDR", Default: "127.0.0.1:8080"},
+		},
+		Secrets: []gowdk.SecretEnv{
+			{Name: "GOWDK_TEST_DATABASE_URL", Required: true},
+		},
+	},
 	CSS: gowdk.CSSConfig{
 		Include: []string{"styles/**/*.css"},
 		Exclude: []string{"styles/old.css"},
@@ -105,6 +114,8 @@ var Config = gowdk.Config{
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("GOWDK_TEST_BACKEND_ORIGIN", "https://backend.example.com")
+	t.Setenv("GOWDK_TEST_DATABASE_URL", "postgres://example")
 
 	config, err := LoadConfigFile(path)
 	if err != nil {
@@ -173,6 +184,12 @@ var Config = gowdk.Config{
 	if config.Render.Default != gowdk.Action {
 		t.Fatalf("unexpected render default: %q", config.Render.Default)
 	}
+	if len(config.Env.Vars) != 2 || config.Env.Vars[0].Name != "GOWDK_TEST_BACKEND_ORIGIN" || !config.Env.Vars[0].Required || config.Env.Vars[1].Name != "GOWDK_TEST_ADDR" || config.Env.Vars[1].Default != "127.0.0.1:8080" {
+		t.Fatalf("unexpected env vars: %#v", config.Env.Vars)
+	}
+	if len(config.Env.Secrets) != 1 || config.Env.Secrets[0].Name != "GOWDK_TEST_DATABASE_URL" || !config.Env.Secrets[0].Required {
+		t.Fatalf("unexpected env secrets: %#v", config.Env.Secrets)
+	}
 	if len(config.CSS.Include) != 1 || config.CSS.Include[0] != "styles/**/*.css" {
 		t.Fatalf("unexpected css includes: %#v", config.CSS.Include)
 	}
@@ -184,6 +201,101 @@ var Config = gowdk.Config{
 	}
 	if config.CSS.Output.Dir != "/assets/pages/" || config.CSS.Output.HrefPrefix != "/app/pages" {
 		t.Fatalf("unexpected css output: %#v", config.CSS.Output)
+	}
+}
+
+func TestLoadConfigFileValidatesEnvContract(t *testing.T) {
+	missingName := "GOWDK_TEST_MISSING_DATABASE_URL"
+	unsetEnvForTest(t, missingName)
+
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Env: gowdk.EnvConfig{
+		Secrets: []gowdk.SecretEnv{
+			{Name: "GOWDK_TEST_MISSING_DATABASE_URL", Required: true},
+		},
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadConfigFile(path)
+	if err == nil || !strings.Contains(err.Error(), "GOWDK_TEST_MISSING_DATABASE_URL is required but is not set") {
+		t.Fatalf("expected missing env validation error, got %v", err)
+	}
+}
+
+func TestLoadConfigFileRejectsSecretEnvMisuse(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Env: gowdk.EnvConfig{
+		Vars: []gowdk.EnvVar{
+			{},
+			{Name: "GOWDK_TEST_API_TOKEN"},
+		},
+		Secrets: []gowdk.SecretEnv{
+			{},
+			{Name: "GOWDK_TEST_API_TOKEN"},
+		},
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadConfigFile(path)
+	if err == nil {
+		t.Fatal("expected env validation error")
+	}
+	if !strings.Contains(err.Error(), "GOWDK_TEST_API_TOKEN looks like a secret") {
+		t.Fatalf("expected secret-looking var error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "GOWDK_TEST_API_TOKEN is declared more than once") {
+		t.Fatalf("expected duplicate env error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "environment variable name is required") {
+		t.Fatalf("expected empty env var error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "secret environment variable name is required") {
+		t.Fatalf("expected empty secret env error, got %v", err)
+	}
+}
+
+func TestLoadConfigFileRejectsSecretEnvInlineValues(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Env: gowdk.EnvConfig{
+		Secrets: []gowdk.SecretEnv{
+			{Name: "GOWDK_TEST_DATABASE_URL", Default: "postgres://secret"},
+		},
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadConfigFile(path)
+	if err == nil || !strings.Contains(err.Error(), "Env.Secrets entries cannot declare Default") {
+		t.Fatalf("expected secret default rejection, got %v", err)
+	}
+	if strings.Contains(err.Error(), "postgres://secret") {
+		t.Fatalf("expected secret value to stay out of diagnostics, got %v", err)
 	}
 }
 
@@ -392,6 +504,11 @@ import (
 
 var Config = gowdk.Config{
 	AppName: "External Addon",
+	Env: gowdk.EnvConfig{
+		Vars: []gowdk.EnvVar{
+			{Name: "GOWDK_TEST_EXTERNAL_ADDR", Default: "127.0.0.1:9000"},
+		},
+	},
 	Addons: []gowdk.Addon{
 		brand.Addon(),
 		marker.Addon(),
@@ -409,6 +526,9 @@ var Config = gowdk.Config{
 	}
 	if len(config.Addons) != 2 || config.Addons[0].Name() != "brand" || config.Addons[1].Name() != "marker" {
 		t.Fatalf("unexpected addons: %#v", config.Addons)
+	}
+	if len(config.Env.Vars) != 1 || config.Env.Vars[0].Name != "GOWDK_TEST_EXTERNAL_ADDR" || config.Env.Vars[0].Default != "127.0.0.1:9000" {
+		t.Fatalf("unexpected executable env config: %#v", config.Env)
 	}
 	if !config.HasFeature(gowdk.FeatureCSS) || !config.HasFeature(gowdk.Feature("brand")) || !config.HasFeature(gowdk.Feature("marker")) {
 		t.Fatalf("expected external addon features, got %#v", config.Addons[0].Features())
@@ -575,6 +695,25 @@ func writeTestFile(t *testing.T, path string, contents string) {
 	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func unsetEnvForTest(t *testing.T, name string) {
+	t.Helper()
+	value, ok := os.LookupEnv(name)
+	if err := os.Unsetenv(name); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if !ok {
+			if err := os.Unsetenv(name); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+		if err := os.Setenv(name, value); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
 
 func repositoryRoot(t *testing.T) string {

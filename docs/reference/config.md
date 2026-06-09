@@ -8,6 +8,7 @@ type Config struct {
 	Source  SourceConfig
 	Modules []ModuleConfig
 	Render  RenderConfig
+	Env     EnvConfig
 	Build   BuildConfig
 	CSS     CSSConfig
 	Addons  []Addon
@@ -92,6 +93,16 @@ var Config = gowdk.Config{
 				App: ".gowdk/public-admin",
 				Binary: "bin/public-admin",
 			},
+		},
+	},
+	Env: gowdk.EnvConfig{
+		Vars: []gowdk.EnvVar{
+			{Name: "GOWDK_BACKEND_ORIGIN", Required: true},
+			{Name: "GOWDK_ADDR", Default: "127.0.0.1:8080"},
+		},
+		Secrets: []gowdk.SecretEnv{
+			{Name: "DATABASE_URL", Required: true},
+			{Name: "GOWDK_CSRF_SECRET", Required: true},
 		},
 	},
 	CSS: gowdk.CSSConfig{
@@ -216,6 +227,61 @@ artifacts from another module selection cannot be copied into the next binary.
 ## Render
 
 `RenderConfig.Default` controls the default render mode. When omitted, default mode is `spa`.
+
+## Env
+
+`EnvConfig` declares the runtime environment contract. Config owns the names,
+required flags, and safe non-secret defaults. Deployment owns all values.
+
+```go
+type EnvConfig struct {
+	Vars    []gowdk.EnvVar
+	Secrets []gowdk.SecretEnv
+}
+
+type EnvVar struct {
+	Name     string
+	Required bool
+	Default  string
+}
+
+type SecretEnv struct {
+	Name     string
+	Required bool
+}
+```
+
+Use `Vars` for normal runtime settings:
+
+```go
+Env: gowdk.EnvConfig{
+	Vars: []gowdk.EnvVar{
+		{Name: "GOWDK_ADDR", Default: "127.0.0.1:8080"},
+		{Name: "GOWDK_BACKEND_ORIGIN", Required: true},
+	},
+}
+```
+
+Use `Secrets` for secret names:
+
+```go
+Env: gowdk.EnvConfig{
+	Secrets: []gowdk.SecretEnv{
+		{Name: "DATABASE_URL", Required: true},
+		{Name: "GOWDK_CSRF_SECRET", Required: true},
+	},
+}
+```
+
+Validation runs when `gowdk.config.go` is loaded. Required names that are not
+present in the host environment fail with a direct diagnostic such as
+`DATABASE_URL is required but is not set`. Required vars with `Default` are
+treated as satisfied by the default. Secrets have no `Default` or value field by
+type; `Default` and `Value` are rejected in literal config parsing too.
+
+The same name cannot appear in both `Vars` and `Secrets`. Secret-looking var
+names ending in `_SECRET`, `_TOKEN`, `_PASSWORD`, or `_KEY` are rejected and
+must move to `Secrets`. Diagnostics print names only and never print values.
 
 ## Build
 

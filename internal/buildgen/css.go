@@ -10,7 +10,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/discover"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
@@ -26,13 +26,13 @@ type cssInput struct {
 	contents []byte
 }
 
-func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssPlan, []string) {
+func planCSS(config gowdk.Config, ir gwdkir.Program, outputDir string) (cssPlan, []string) {
 	planned := cssPlan{pageStylesheets: map[string][]gowdk.Stylesheet{}}
 	var failures []string
 	seen := map[string]bool{}
-	pageIDs := pageIDSet(app.Pages)
+	pageIDs := pageIDSet(ir.Pages)
 	context := gowdk.CSSContext{
-		Sources:   cssSources(app),
+		Sources:   cssSources(ir),
 		OutputDir: outputDir,
 		Build:     config.Build,
 		CSS:       config.CSS,
@@ -80,20 +80,20 @@ func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssP
 	inputs, inputFailures := discoverCSSInputs(config, outputDir)
 	failures = append(failures, inputFailures...)
 	if len(inputFailures) == 0 {
-		pageCSS, pageStylesheets, pageFailures := planPageCSS(config, app.Pages, outputDir, inputs, seen)
+		pageCSS, pageStylesheets, pageFailures := planPageCSS(config, ir.Pages, outputDir, inputs, seen)
 		failures = append(failures, pageFailures...)
 		planned.assets = append(planned.assets, pageCSS...)
 		for pageID, stylesheets := range pageStylesheets {
 			planned.pageStylesheets[pageID] = append(planned.pageStylesheets[pageID], stylesheets...)
 		}
 	}
-	layoutCSS, layoutStylesheets, layoutFailures := planLayoutStyleCSS(app.Pages, app.Layouts, outputDir, seen)
+	layoutCSS, layoutStylesheets, layoutFailures := planLayoutStyleCSS(ir.Pages, ir.Layouts, outputDir, seen)
 	failures = append(failures, layoutFailures...)
 	planned.assets = append(planned.assets, layoutCSS...)
 	for pageID, stylesheets := range layoutStylesheets {
 		planned.pageStylesheets[pageID] = append(planned.pageStylesheets[pageID], stylesheets...)
 	}
-	componentCSS, componentStylesheets, componentFailures := planComponentCSS(app.Components, outputDir, seen)
+	componentCSS, componentStylesheets, componentFailures := planComponentCSS(ir.Components, outputDir, seen)
 	failures = append(failures, componentFailures...)
 	planned.assets = append(planned.assets, componentCSS...)
 	planned.stylesheets = append(planned.stylesheets, componentStylesheets...)
@@ -101,7 +101,7 @@ func planCSS(config gowdk.Config, app manifest.Manifest, outputDir string) (cssP
 	return planned, failures
 }
 
-func pageIDSet(pages []manifest.Page) map[string]bool {
+func pageIDSet(pages []gwdkir.Page) map[string]bool {
 	out := map[string]bool{}
 	for _, page := range pages {
 		out[page.ID] = true
@@ -160,7 +160,7 @@ func cssInputName(filePath string) string {
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
-func planPageCSS(config gowdk.Config, pages []manifest.Page, outputDir string, inputs map[string]cssInput, seenAssets map[string]bool) ([]plannedCSSArtifact, map[string][]gowdk.Stylesheet, []string) {
+func planPageCSS(config gowdk.Config, pages []gwdkir.Page, outputDir string, inputs map[string]cssInput, seenAssets map[string]bool) ([]plannedCSSArtifact, map[string][]gowdk.Stylesheet, []string) {
 	var assets []plannedCSSArtifact
 	stylesheets := map[string][]gowdk.Stylesheet{}
 	var failures []string
@@ -199,11 +199,11 @@ func planPageCSS(config gowdk.Config, pages []manifest.Page, outputDir string, i
 	return assets, stylesheets, failures
 }
 
-func planLayoutStyleCSS(pages []manifest.Page, layouts []manifest.Layout, outputDir string, seenAssets map[string]bool) ([]plannedCSSArtifact, map[string][]gowdk.Stylesheet, []string) {
+func planLayoutStyleCSS(pages []gwdkir.Page, layouts []gwdkir.Layout, outputDir string, seenAssets map[string]bool) ([]plannedCSSArtifact, map[string][]gowdk.Stylesheet, []string) {
 	var assets []plannedCSSArtifact
 	stylesheets := map[string][]gowdk.Stylesheet{}
 	var failures []string
-	layoutRegistry := map[string]manifest.Layout{}
+	layoutRegistry := map[string]gwdkir.Layout{}
 	for _, layout := range layouts {
 		layoutRegistry[layoutRegistryKey(layout.Package, layout.ID)] = layout
 	}
@@ -249,7 +249,7 @@ func planLayoutStyleCSS(pages []manifest.Page, layouts []manifest.Layout, output
 	return assets, stylesheets, failures
 }
 
-func planComponentCSS(components []manifest.Component, outputDir string, seenAssets map[string]bool) ([]plannedCSSArtifact, []gowdk.Stylesheet, []string) {
+func planComponentCSS(components []gwdkir.Component, outputDir string, seenAssets map[string]bool) ([]plannedCSSArtifact, []gowdk.Stylesheet, []string) {
 	var assets []plannedCSSArtifact
 	var stylesheets []gowdk.Stylesheet
 	var failures []string
@@ -326,7 +326,7 @@ func componentCSSSourcePath(componentSource string, cssPath string) (string, err
 	return filepath.Clean(filepath.Join(baseDir, filepath.FromSlash(cssPath))), nil
 }
 
-func componentCSSLogicalPath(component manifest.Component, scopeID string) string {
+func componentCSSLogicalPath(component gwdkir.Component, scopeID string) string {
 	packagePart := safeCSSPathPart(component.Package)
 	if packagePart == "" {
 		packagePart = "_"
@@ -338,7 +338,7 @@ func componentCSSLogicalPath(component manifest.Component, scopeID string) strin
 	return path.Join(defaultPageCSSDir, "components", packagePart, componentPart, scopeID+".css")
 }
 
-func layoutStyleLogicalPath(layout manifest.Layout, scopeID string) string {
+func layoutStyleLogicalPath(layout gwdkir.Layout, scopeID string) string {
 	packagePart := safeCSSPathPart(layout.Package)
 	if packagePart == "" {
 		packagePart = "_"
@@ -441,7 +441,7 @@ func rewriteStylesheets(stylesheets []gowdk.Stylesheet, hrefs map[string]string)
 	return out
 }
 
-func pageCSSInputNames(config gowdk.Config, page manifest.Page, inputs map[string]cssInput) ([]string, error) {
+func pageCSSInputNames(config gowdk.Config, page gwdkir.Page, inputs map[string]cssInput) ([]string, error) {
 	references := page.CSS
 	if len(references) == 0 {
 		references = []string{"default", "page"}
@@ -578,9 +578,9 @@ func appendNonEmpty(values []string, patterns []string) []string {
 	return values
 }
 
-func cssSources(app manifest.Manifest) []gowdk.CSSSource {
-	sources := make([]gowdk.CSSSource, 0, len(app.Pages)+len(app.Components))
-	for _, page := range app.Pages {
+func cssSources(ir gwdkir.Program) []gowdk.CSSSource {
+	sources := make([]gowdk.CSSSource, 0, len(ir.Pages)+len(ir.Components))
+	for _, page := range ir.Pages {
 		sources = append(sources, gowdk.CSSSource{
 			Path:       page.Source,
 			Kind:       "page",
@@ -588,7 +588,7 @@ func cssSources(app manifest.Manifest) []gowdk.CSSSource {
 			CSSClasses: cssClassesFromViewBody(page.Blocks.ViewBody),
 		})
 	}
-	for _, component := range app.Components {
+	for _, component := range ir.Components {
 		sources = append(sources, gowdk.CSSSource{
 			Path:       component.Source,
 			Kind:       "component",

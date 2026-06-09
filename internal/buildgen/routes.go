@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
@@ -16,7 +16,7 @@ type pageOutput struct {
 	data  map[string]string
 }
 
-func pageRouteArtifacts(outputDir string, page manifest.Page) ([]Artifact, error) {
+func pageRouteArtifacts(outputDir string, page gwdkir.Page) ([]Artifact, error) {
 	outputs, err := pageOutputs(page)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", page.ID, err)
@@ -32,7 +32,7 @@ func pageRouteArtifacts(outputDir string, page manifest.Page) ([]Artifact, error
 	return artifacts, nil
 }
 
-func pageOutputArtifacts(config gowdk.Config, outputDir string, page manifest.Page, components map[string]view.Component, layouts map[string]manifest.Layout, stylesheets []gowdk.Stylesheet) ([]plannedArtifact, error) {
+func pageOutputArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet) ([]plannedArtifact, error) {
 	outputs, err := pageOutputs(page)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", page.ID, err)
@@ -63,7 +63,7 @@ func pageOutputArtifacts(config gowdk.Config, outputDir string, page manifest.Pa
 	return artifacts, nil
 }
 
-func pageOutputs(page manifest.Page) ([]pageOutput, error) {
+func pageOutputs(page gwdkir.Page) ([]pageOutput, error) {
 	params := page.DynamicParams()
 	if len(params) == 0 {
 		return []pageOutput{{route: page.Route}}, nil

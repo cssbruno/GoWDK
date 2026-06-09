@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
-func clientGoBlockWASMLoaderSource(page manifest.Page) string {
+func clientGoBlockWASMLoaderSource(page gwdkir.Page) string {
 	pageID := strconv.Quote(page.ID)
 	loaderPath := strconv.Quote("/" + clientGoBlockWASMLoaderAssetPath(page))
 	wasmPath := strconv.Quote("/" + clientGoBlockWASMAssetPath(page))

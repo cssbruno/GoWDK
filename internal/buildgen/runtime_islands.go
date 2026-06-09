@@ -6,15 +6,15 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-func islandRuntimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout) ([]plannedAssetArtifact, error) {
-	components := componentsByName(app.Components)
+func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allComponents []gwdkir.Component, outputDir string, layouts map[string]gwdkir.Layout) ([]plannedAssetArtifact, error) {
+	components := componentsByName(allComponents)
 	includeSourceMaps := config.Build.DebugAssets()
 	planned := map[string]plannedAssetArtifact{}
-	for _, page := range app.Pages {
+	for _, page := range pages {
 		source, err := composePageViewSource(page, layouts)
 		if err != nil {
 			source = page.Blocks.ViewBody
@@ -95,7 +95,7 @@ func islandScriptHrefs(source string, components map[string]view.Component, owne
 	return scripts
 }
 
-func manifestComponentRuntimeMode(explicit string, component manifest.Component) string {
+func manifestComponentRuntimeMode(explicit string, component gwdkir.Component) string {
 	if explicit != "" {
 		return explicit
 	}
@@ -173,10 +173,10 @@ func lookupViewComponent(components map[string]view.Component, name string, owne
 
 type resolvedManifestComponentCallUsage struct {
 	call      view.ComponentCallUsage
-	component manifest.Component
+	component gwdkir.Component
 }
 
-func recursiveManifestComponentCallUsages(source string, components map[string]manifest.Component, ownerPackage string, uses map[string]string) ([]resolvedManifestComponentCallUsage, error) {
+func recursiveManifestComponentCallUsages(source string, components map[string]gwdkir.Component, ownerPackage string, uses map[string]string) ([]resolvedManifestComponentCallUsage, error) {
 	var usages []resolvedManifestComponentCallUsage
 	visiting := map[string]bool{}
 	var walk func(string, string, map[string]string) error
@@ -209,7 +209,7 @@ func recursiveManifestComponentCallUsages(source string, components map[string]m
 	return usages, nil
 }
 
-func lookupManifestComponent(components map[string]manifest.Component, name string, ownerPackage string, uses map[string]string) (manifest.Component, bool) {
+func lookupManifestComponent(components map[string]gwdkir.Component, name string, ownerPackage string, uses map[string]string) (gwdkir.Component, bool) {
 	if strings.Contains(name, ".") {
 		if component, ok := components[name]; ok {
 			return component, true
@@ -217,7 +217,7 @@ func lookupManifestComponent(components map[string]manifest.Component, name stri
 		alias, componentName, _ := strings.Cut(name, ".")
 		packageName := uses[alias]
 		if packageName == "" {
-			return manifest.Component{}, false
+			return gwdkir.Component{}, false
 		}
 		component, ok := components[componentRegistryKey(packageName, componentName)]
 		return component, ok
@@ -230,7 +230,7 @@ func lookupManifestComponent(components map[string]manifest.Component, name stri
 	return component, ok
 }
 
-func statefulComponentNames(components []manifest.Component) map[string]bool {
+func statefulComponentNames(components []gwdkir.Component) map[string]bool {
 	out := map[string]bool{}
 	for _, component := range components {
 		if componentNeedsJSIsland(component) {
@@ -243,12 +243,12 @@ func statefulComponentNames(components []manifest.Component) map[string]bool {
 	return out
 }
 
-func componentNeedsJSIsland(component manifest.Component) bool {
+func componentNeedsJSIsland(component gwdkir.Component) bool {
 	return component.State.Type.Name != "" || component.Blocks.Client || len(component.Emits) > 0
 }
 
-func componentsByName(components []manifest.Component) map[string]manifest.Component {
-	out := map[string]manifest.Component{}
+func componentsByName(components []gwdkir.Component) map[string]gwdkir.Component {
+	out := map[string]gwdkir.Component{}
 	for _, component := range components {
 		key := componentRegistryKey(component.Package, component.Name)
 		out[key] = component
@@ -307,7 +307,7 @@ func compactGeneratedJSSource(source string) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-func islandJSSourceMapArtifact(outputDir string, component manifest.Component) plannedAssetArtifact {
+func islandJSSourceMapArtifact(outputDir string, component gwdkir.Component) plannedAssetArtifact {
 	assetPath := islandJSSourceMapAssetPath(component.Name)
 	source := islandJSSource(component.Name, true)
 	return plannedAssetArtifact{

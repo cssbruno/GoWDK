@@ -5,11 +5,11 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/clientrt"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-func clientRuntimeArtifacts(config gowdk.Config, pages []manifest.Page, outputDir string, layouts map[string]manifest.Layout, components map[string]view.Component) []plannedAssetArtifact {
+func clientRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, outputDir string, layouts map[string]gwdkir.Layout, components map[string]view.Component) []plannedAssetArtifact {
 	for _, page := range pages {
 		viewSource := page.Blocks.ViewBody
 		if source, err := composePageViewSource(page, layouts); err == nil {
@@ -24,16 +24,16 @@ func clientRuntimeArtifacts(config gowdk.Config, pages []manifest.Page, outputDi
 	}
 	return nil
 }
-func runtimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string, layouts map[string]manifest.Layout, components map[string]view.Component) ([]plannedAssetArtifact, error) {
+func runtimeArtifacts(config gowdk.Config, ir gwdkir.Program, outputDir string, layouts map[string]gwdkir.Layout, components map[string]view.Component) ([]plannedAssetArtifact, error) {
 	var artifacts []plannedAssetArtifact
-	artifacts = append(artifacts, clientRuntimeArtifacts(config, app.Pages, outputDir, layouts, components)...)
-	artifacts = append(artifacts, storeRuntimeArtifacts(app.Pages, outputDir)...)
-	islands, err := islandRuntimeArtifacts(config, app, outputDir, layouts)
+	artifacts = append(artifacts, clientRuntimeArtifacts(config, ir.Pages, outputDir, layouts, components)...)
+	artifacts = append(artifacts, storeRuntimeArtifacts(ir.Pages, outputDir)...)
+	islands, err := islandRuntimeArtifacts(config, ir.Pages, ir.Components, outputDir, layouts)
 	if err != nil {
 		return nil, err
 	}
 	artifacts = append(artifacts, islands...)
-	clientGoBlocks, err := clientGoBlockRuntimeArtifacts(app.Pages, outputDir)
+	clientGoBlocks, err := clientGoBlockRuntimeArtifacts(ir.Pages, outputDir)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func runtimeArtifacts(config gowdk.Config, app manifest.Manifest, outputDir stri
 	return dedupeAssetArtifacts(artifacts), nil
 }
 
-func storeRuntimeArtifacts(pages []manifest.Page, outputDir string) []plannedAssetArtifact {
+func storeRuntimeArtifacts(pages []gwdkir.Page, outputDir string) []plannedAssetArtifact {
 	for _, page := range pages {
 		if len(page.Stores) > 0 {
 			return []plannedAssetArtifact{{

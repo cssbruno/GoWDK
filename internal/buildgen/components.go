@@ -9,11 +9,12 @@ import (
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gotypes"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-func buildComponents(components []manifest.Component) (map[string]view.Component, []string) {
+func buildComponents(components []gwdkir.Component) (map[string]view.Component, []string) {
 	registry := map[string]view.Component{}
 	var failures []string
 	for _, component := range components {
@@ -96,7 +97,7 @@ func buildComponents(components []manifest.Component) (map[string]view.Component
 	return registry, failures
 }
 
-func viewInlineScripts(scripts []manifest.InlineScript) []view.InlineScript {
+func viewInlineScripts(scripts []source.InlineScript) []view.InlineScript {
 	if len(scripts) == 0 {
 		return nil
 	}
@@ -107,14 +108,14 @@ func viewInlineScripts(scripts []manifest.InlineScript) []view.InlineScript {
 	return out
 }
 
-func componentDefaultIsland(component manifest.Component) string {
+func componentDefaultIsland(component gwdkir.Component) string {
 	if strings.TrimSpace(component.WASM.Package) != "" {
 		return "wasm"
 	}
 	return ""
 }
 
-func componentScopeIDs(component manifest.Component) []string {
+func componentScopeIDs(component gwdkir.Component) []string {
 	if len(component.CSS) == 0 && strings.TrimSpace(component.Blocks.StyleBody) == "" {
 		return nil
 	}
@@ -130,7 +131,7 @@ func componentScopeIDs(component manifest.Component) []string {
 	return scopeIDs
 }
 
-func componentUses(uses []manifest.Use) map[string]string {
+func componentUses(uses []gwdkir.Use) map[string]string {
 	if len(uses) == 0 {
 		return nil
 	}
@@ -141,7 +142,7 @@ func componentUses(uses []manifest.Use) map[string]string {
 	return out
 }
 
-func componentClientComputeds(component manifest.Component) ([]clientlang.Computed, []string) {
+func componentClientComputeds(component gwdkir.Component) ([]clientlang.Computed, []string) {
 	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
 		return nil, nil
 	}
@@ -156,7 +157,7 @@ func componentClientComputeds(component manifest.Component) ([]clientlang.Comput
 	return computeds, nil
 }
 
-func componentClientRefs(component manifest.Component) (map[string]clientlang.Ref, []string) {
+func componentClientRefs(component gwdkir.Component) (map[string]clientlang.Ref, []string) {
 	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
 		return nil, nil
 	}
@@ -167,7 +168,7 @@ func componentClientRefs(component manifest.Component) (map[string]clientlang.Re
 	return program.RefMap(), nil
 }
 
-func componentClientHandlers(component manifest.Component) (map[string]clientlang.Handler, string, error) {
+func componentClientHandlers(component gwdkir.Component) (map[string]clientlang.Handler, string, error) {
 	emits := componentEmits(component)
 	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" && len(emits) == 0 {
 		return nil, "", nil
@@ -213,7 +214,7 @@ func componentClientHandlers(component manifest.Component) (map[string]clientlan
 	return handlers, string(payload), nil
 }
 
-func componentEmits(component manifest.Component) map[string]clientlang.Emit {
+func componentEmits(component gwdkir.Component) map[string]clientlang.Emit {
 	if len(component.Emits) == 0 {
 		return nil
 	}
@@ -230,9 +231,9 @@ func componentEmits(component manifest.Component) map[string]clientlang.Emit {
 	return out
 }
 
-func componentPropNames(component manifest.Component) ([]string, []string) {
+func componentPropNames(component gwdkir.Component) ([]string, []string) {
 	if component.PropsType.Name != "" {
-		resolved, err := gotypes.ResolveStruct(component.Imports, component.PropsType)
+		resolved, err := gotypes.ResolveStruct(manifestImports(component.Imports), manifestGoTypeRef(component.PropsType))
 		if err != nil {
 			return nil, []string{fmt.Sprintf("component %s props: %v", component.Name, err)}
 		}
@@ -256,15 +257,15 @@ func componentPropNames(component manifest.Component) ([]string, []string) {
 	return props, failures
 }
 
-func componentInitialState(component manifest.Component) (map[string]string, map[string]clientlang.ValueType, string, error) {
+func componentInitialState(component gwdkir.Component) (map[string]string, map[string]clientlang.ValueType, string, error) {
 	if component.State.Type.Name == "" {
 		return nil, nil, "", nil
 	}
-	resolved, err := gotypes.ResolveStruct(component.Imports, component.State.Type)
+	resolved, err := gotypes.ResolveStruct(manifestImports(component.Imports), manifestGoTypeRef(component.State.Type))
 	if err != nil {
 		return nil, nil, "", err
 	}
-	rawJSON, err := gotypes.RunStateInitJSON(component.Imports, component.State)
+	rawJSON, err := gotypes.RunStateInitJSON(manifestImports(component.Imports), manifestStateContract(component.State))
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -313,8 +314,8 @@ func stateValueString(value any) (string, bool) {
 	}
 }
 
-func buildLayouts(layouts []manifest.Layout) (map[string]manifest.Layout, []string) {
-	registry := map[string]manifest.Layout{}
+func buildLayouts(layouts []gwdkir.Layout) (map[string]gwdkir.Layout, []string) {
+	registry := map[string]gwdkir.Layout{}
 	var failures []string
 	for _, layout := range layouts {
 		if layout.ID == "" {

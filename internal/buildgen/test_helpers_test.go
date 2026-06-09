@@ -6,8 +6,22 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
+
+// irComponent converts a manifest.Component fixture into the IR component the
+// migrated render helpers now consume. It routes through the production
+// IR builder so the test exercises the same conversion as the real pipeline.
+func irComponent(component manifest.Component) gwdkir.Component {
+	ir := gwdkanalysis.BuildIR(gowdk.Config{}, manifest.Manifest{Components: []manifest.Component{component}})
+	if len(ir.Components) == 0 {
+		return gwdkir.Component{}
+	}
+	return ir.Components[0]
+}
 
 type testRouteManifest struct {
 	Version int `json:"version"`

@@ -3,7 +3,7 @@ package buildgen
 import (
 	"sort"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
@@ -16,7 +16,7 @@ func componentRegistryKey(packageName, componentName string) string {
 	return internalComponentKeyPrefix + packageName + "." + componentName
 }
 
-func componentRegistryForPage(page manifest.Page, registry map[string]view.Component) map[string]view.Component {
+func componentRegistryForPage(page gwdkir.Page, registry map[string]view.Component) map[string]view.Component {
 	if page.Package == "" && len(page.Uses) == 0 {
 		return registry
 	}
@@ -68,7 +68,7 @@ func sortedViewComponents(registry map[string]view.Component) []view.Component {
 	return out
 }
 
-func manifestComponentIdentity(component manifest.Component) string {
+func manifestComponentIdentity(component gwdkir.Component) string {
 	if component.Package == "" {
 		return component.Name
 	}

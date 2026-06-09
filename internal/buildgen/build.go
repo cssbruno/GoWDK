@@ -14,15 +14,15 @@ import (
 )
 
 func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result, error) {
-	return buildFromIR(config, app, gwdkanalysis.BuildIR(config, app), outputDir)
+	return buildFromIR(config, gwdkanalysis.BuildIR(config, app), app.BackendBindings, outputDir)
 }
 
 // BuildFromIR writes SPA build artifacts from normalized compiler IR.
 func BuildFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (Result, error) {
-	return buildFromIR(config, compiler.ManifestFromIR(ir), ir, outputDir)
+	return buildFromIR(config, ir, compiler.ManifestFromIR(ir).BackendBindings, outputDir)
 }
 
-func buildFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, outputDir string) (Result, error) {
+func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manifest.BackendBinding, outputDir string) (Result, error) {
 	reporter := newBuildReporter("build", outputDir)
 	reporter.info("start", "build_started", "SPA build started", BuildEvent{
 		Data: map[string]string{
@@ -34,13 +34,13 @@ func buildFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, 
 	if strings.TrimSpace(outputDir) == "" {
 		return Result{}, reporter.fail("validate", fmt.Errorf("build output directory is required"))
 	}
-	if err := compiler.ValidateManifest(config, app); err != nil {
+	if err := compiler.ValidateProgram(config, ir); err != nil {
 		return Result{}, reporter.fail("validate", err)
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
-	reportBackendBindings(reporter, app.BackendBindings)
+	reportBackendBindings(reporter, backendBindings)
 	reportContractReferences(reporter, ir.ContractRefs)
-	if err := compiler.ValidateBackendBindingPolicy(config, app); err != nil {
+	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
 		return Result{}, reporter.fail("bind", err)
 	}
 
@@ -119,16 +119,16 @@ func buildFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, 
 }
 
 func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (MemoryResult, error) {
-	return buildMemoryFromIR(config, app, gwdkanalysis.BuildIR(config, app), outputDir)
+	return buildMemoryFromIR(config, gwdkanalysis.BuildIR(config, app), app.BackendBindings, outputDir)
 }
 
 // BuildMemoryFromIR plans SPA build artifacts from normalized compiler IR
 // without writing them to disk.
 func BuildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (MemoryResult, error) {
-	return buildMemoryFromIR(config, compiler.ManifestFromIR(ir), ir, outputDir)
+	return buildMemoryFromIR(config, ir, compiler.ManifestFromIR(ir).BackendBindings, outputDir)
 }
 
-func buildMemoryFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, outputDir string) (MemoryResult, error) {
+func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manifest.BackendBinding, outputDir string) (MemoryResult, error) {
 	reporter := newBuildReporter("memory", outputDir)
 	reporter.info("start", "build_started", "in-memory SPA build started", BuildEvent{
 		Data: map[string]string{
@@ -140,13 +140,13 @@ func buildMemoryFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Pro
 	if strings.TrimSpace(outputDir) == "" {
 		return MemoryResult{}, reporter.fail("validate", fmt.Errorf("build output directory is required"))
 	}
-	if err := compiler.ValidateManifest(config, app); err != nil {
+	if err := compiler.ValidateProgram(config, ir); err != nil {
 		return MemoryResult{}, reporter.fail("validate", err)
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
-	reportBackendBindings(reporter, app.BackendBindings)
+	reportBackendBindings(reporter, backendBindings)
 	reportContractReferences(reporter, ir.ContractRefs)
-	if err := compiler.ValidateBackendBindingPolicy(config, app); err != nil {
+	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
 		return MemoryResult{}, reporter.fail("bind", err)
 	}
 
@@ -336,16 +336,16 @@ func reportContractReferences(reporter *buildReporter, refs []gwdkir.ContractRef
 }
 
 func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir string, changedPageSources []string) (Result, error) {
-	return buildIncrementalFromIR(config, app, gwdkanalysis.BuildIR(config, app), outputDir, changedPageSources)
+	return buildIncrementalFromIR(config, gwdkanalysis.BuildIR(config, app), outputDir, changedPageSources)
 }
 
 // BuildIncrementalFromIR incrementally renders changed SPA page outputs from
 // normalized compiler IR.
 func BuildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
-	return buildIncrementalFromIR(config, compiler.ManifestFromIR(ir), ir, outputDir, changedPageSources)
+	return buildIncrementalFromIR(config, ir, outputDir, changedPageSources)
 }
 
-func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
+func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
 	reporter := newBuildReporter("incremental", outputDir)
 	reporter.info("start", "build_started", "incremental SPA build started", BuildEvent{
 		Data: map[string]string{
@@ -356,19 +356,19 @@ func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdki
 	if strings.TrimSpace(outputDir) == "" {
 		return Result{}, reporter.fail("validate", fmt.Errorf("build output directory is required"))
 	}
-	if err := compiler.ValidateManifest(config, app); err != nil {
+	if err := compiler.ValidateProgram(config, ir); err != nil {
 		return Result{}, reporter.fail("validate", err)
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
 	reportContractReferences(reporter, ir.ContractRefs)
-	if err := compiler.ValidateBackendBindingPolicy(config, app); err != nil {
+	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
 		return Result{}, reporter.fail("bind", err)
 	}
 
 	changedPages := sourcePathSet(changedPageSources)
-	components, componentFailures := buildComponents(app.Components)
-	layouts, layoutFailures := buildLayouts(app.Layouts)
-	css, cssFailures := planCSS(config, app, outputDir)
+	components, componentFailures := buildComponents(ir.Components)
+	layouts, layoutFailures := buildLayouts(ir.Layouts)
+	css, cssFailures := planCSS(config, ir, outputDir)
 	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
@@ -381,7 +381,7 @@ func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdki
 	if len(failures) > 0 {
 		return Result{}, reporter.fail("plan", errors.New(strings.Join(failures, "\n")))
 	}
-	runtime, err := runtimeArtifacts(config, app, outputDir, layouts, components)
+	runtime, err := runtimeArtifacts(config, ir, outputDir, layouts, components)
 	if err != nil {
 		return Result{}, reporter.fail("plan", err)
 	}
@@ -394,7 +394,7 @@ func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdki
 	})
 
 	result := Result{
-		Artifacts:      make([]Artifact, 0, len(app.Pages)),
+		Artifacts:      make([]Artifact, 0, len(ir.Pages)),
 		CSSArtifacts:   make([]CSSArtifact, 0, len(css.assets)),
 		AssetArtifacts: make([]AssetArtifact, 0, 1),
 	}
@@ -422,7 +422,7 @@ func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdki
 	}
 
 	seenOutputPaths := map[string]string{}
-	for _, page := range app.Pages {
+	for _, page := range ir.Pages {
 		if isRequestTimePage(config, page) {
 			continue
 		}
@@ -511,10 +511,9 @@ func plan(config gowdk.Config, app manifest.Manifest, outputDir string) (buildPl
 }
 
 func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (buildPlan, error) {
-	app := compiler.ManifestFromIR(ir)
-	components, componentFailures := buildComponents(app.Components)
-	layouts, layoutFailures := buildLayouts(app.Layouts)
-	css, cssFailures := planCSS(config, app, outputDir)
+	components, componentFailures := buildComponents(ir.Components)
+	layouts, layoutFailures := buildLayouts(ir.Layouts)
+	css, cssFailures := planCSS(config, ir, outputDir)
 	componentAssets, componentAssetFailures := planComponentFileAssets(ir.Assets, outputDir)
 	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
@@ -527,7 +526,7 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	failures = append(failures, cssFailures...)
 	failures = append(failures, componentAssetFailures...)
 	failures = append(failures, scopedJSFailures...)
-	for _, page := range app.Pages {
+	for _, page := range ir.Pages {
 		if isRequestTimePage(config, page) {
 			continue
 		}
@@ -555,7 +554,7 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	if len(failures) > 0 {
 		return buildPlan{}, errors.New(strings.Join(failures, "\n"))
 	}
-	runtime, err := runtimeArtifacts(config, app, outputDir, layouts, components)
+	runtime, err := runtimeArtifacts(config, ir, outputDir, layouts, components)
 	if err != nil {
 		return buildPlan{}, err
 	}

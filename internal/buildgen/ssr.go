@@ -12,6 +12,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
@@ -22,7 +23,7 @@ type SSRArtifact struct {
 	Cache            string
 	ErrorPage        string
 	DynamicParams    []string
-	RouteParams      []manifest.RouteParam
+	RouteParams      []source.RouteParam
 	Guards           []string
 	HasLoad          bool
 	LoadBinding      manifest.BackendBinding
@@ -48,14 +49,13 @@ func SSRArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string) 
 // SSRArtifactsFromIR renders request-time page artifacts from normalized
 // compiler IR.
 func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) ([]SSRArtifact, error) {
-	app := compiler.ManifestFromIR(ir)
-	if err := compiler.ValidateManifest(config, app); err != nil {
+	if err := compiler.ValidateProgram(config, ir); err != nil {
 		return nil, err
 	}
 
-	components, componentFailures := buildComponents(app.Components)
-	layouts, layoutFailures := buildLayouts(app.Layouts)
-	css, cssFailures := planCSS(config, app, outputDir)
+	components, componentFailures := buildComponents(ir.Components)
+	layouts, layoutFailures := buildLayouts(ir.Layouts)
+	css, cssFailures := planCSS(config, ir, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
 
@@ -64,7 +64,7 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 	failures = append(failures, componentFailures...)
 	failures = append(failures, layoutFailures...)
 	failures = append(failures, cssFailures...)
-	for _, page := range app.Pages {
+	for _, page := range ir.Pages {
 		if !isRequestTimePage(config, page) {
 			continue
 		}
@@ -81,7 +81,7 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 	return artifacts, nil
 }
 
-func ssrArtifact(config gowdk.Config, page manifest.Page, components map[string]view.Component, layouts map[string]manifest.Layout, stylesheets []gowdk.Stylesheet) (SSRArtifact, error) {
+func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet) (SSRArtifact, error) {
 	routeData, replacements := ssrRouteData(page)
 	buildData, err := parseBuildData(page.Blocks.BuildBody, routeData, page.Imports, page.Blocks.GoBlocks, page.Source)
 	if err != nil {
@@ -109,17 +109,17 @@ func ssrArtifact(config gowdk.Config, page manifest.Page, components map[string]
 		Cache:            page.CachePolicy(),
 		ErrorPage:        page.ErrorPage,
 		DynamicParams:    page.DynamicParams(),
-		RouteParams:      append([]manifest.RouteParam(nil), page.TypedRouteParams()...),
-		Guards:           append([]string(nil), page.Guard...),
+		RouteParams:      append([]source.RouteParam(nil), page.TypedRouteParams()...),
+		Guards:           append([]string(nil), page.Guards...),
 		HasLoad:          page.Blocks.Load,
-		LoadBinding:      page.LoadBinding,
+		LoadBinding:      manifestBackendBinding(page.LoadBinding),
 		HTML:             html,
 		Replacements:     replacements,
 		LoadReplacements: loadReplacements,
 	}, nil
 }
 
-func ssrRouteData(page manifest.Page) (map[string]string, []SSRReplacement) {
+func ssrRouteData(page gwdkir.Page) (map[string]string, []SSRReplacement) {
 	params := page.DynamicParams()
 	if len(params) == 0 {
 		return nil, nil
@@ -134,7 +134,7 @@ func ssrRouteData(page manifest.Page) (map[string]string, []SSRReplacement) {
 	return data, replacements
 }
 
-func ssrLoadData(page manifest.Page, existing map[string]string) (map[string]string, []SSRLoadReplacement, error) {
+func ssrLoadData(page gwdkir.Page, existing map[string]string) (map[string]string, []SSRLoadReplacement, error) {
 	if !page.Blocks.Load {
 		return nil, nil, nil
 	}
@@ -243,7 +243,7 @@ func exportedSafe(value string) string {
 	return string(out)
 }
 
-func isRequestTimePage(config gowdk.Config, page manifest.Page) bool {
+func isRequestTimePage(config gowdk.Config, page gwdkir.Page) bool {
 	switch page.RenderMode(config.Render.DefaultMode()) {
 	case gowdk.SSR:
 		return true

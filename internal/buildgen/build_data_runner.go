@@ -15,10 +15,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
-func runBuildDataCallRef(ref buildCallRef, imports []manifest.Import, scripts []manifest.GoBlock, source string) (map[string]string, error) {
+func runBuildDataCallRef(ref buildCallRef, imports []gwdkir.Import, scripts []gwdkir.GoBlock, source string) (map[string]string, error) {
 	if ref.Alias == "" {
 		if script, ok := packageScriptWithFunction(scripts, ref.Function); ok {
 			return runInlineBuildDataCall(script, imports, source, ref.Function)
@@ -36,14 +36,14 @@ func runBuildDataCallRef(ref buildCallRef, imports []manifest.Import, scripts []
 	return runBuildDataCall(ref.Alias, item.Path, ref.Function)
 }
 
-func packageScriptWithFunction(scripts []manifest.GoBlock, function string) (manifest.GoBlock, bool) {
+func packageScriptWithFunction(scripts []gwdkir.GoBlock, function string) (gwdkir.GoBlock, bool) {
 	for _, script := range scripts {
 		if !isStaticPackageGoBlockTarget(script.Target) {
 			continue
 		}
 		file, err := parseInlineGoBlockFile(script, "gowdkinline")
 		if err != nil {
-			return manifest.GoBlock{}, false
+			return gwdkir.GoBlock{}, false
 		}
 		for _, declaration := range file.Decls {
 			functionDeclaration, ok := declaration.(*ast.FuncDecl)
@@ -52,7 +52,7 @@ func packageScriptWithFunction(scripts []manifest.GoBlock, function string) (man
 			}
 		}
 	}
-	return manifest.GoBlock{}, false
+	return gwdkir.GoBlock{}, false
 }
 
 func isStaticPackageGoBlockTarget(target string) bool {
@@ -64,7 +64,7 @@ func isStaticPackageGoBlockTarget(target string) bool {
 	}
 }
 
-func runInlineBuildDataCall(script manifest.GoBlock, imports []manifest.Import, source string, function string) (map[string]string, error) {
+func runInlineBuildDataCall(script gwdkir.GoBlock, imports []gwdkir.Import, source string, function string) (map[string]string, error) {
 	runnerSource, err := inlineBuildDataRunnerSource(script, imports, source, function)
 	if err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func runInlineBuildDataCall(script manifest.GoBlock, imports []manifest.Import, 
 	return parseBuildFunctionOutput(output)
 }
 
-func inlineBuildDataRunnerSource(script manifest.GoBlock, imports []manifest.Import, source string, function string) (string, error) {
+func inlineBuildDataRunnerSource(script gwdkir.GoBlock, imports []gwdkir.Import, source string, function string) (string, error) {
 	if !isLiteralName(function) {
 		return "", fmt.Errorf("invalid build function name %q", function)
 	}
@@ -121,7 +121,7 @@ func inlineBuildDataRunnerSource(script manifest.GoBlock, imports []manifest.Imp
 	return string(formatted), nil
 }
 
-func parseInlineGoBlockFile(script manifest.GoBlock, packageName string) (*ast.File, error) {
+func parseInlineGoBlockFile(script gwdkir.GoBlock, packageName string) (*ast.File, error) {
 	source := "package " + packageName + "\n" + script.Body
 	file, err := parser.ParseFile(token.NewFileSet(), "inline-script.gwdk.go", source, parser.AllErrors)
 	if err != nil {
@@ -142,7 +142,7 @@ func packageNameForInlineScript(source string) string {
 	return "gowdkinline"
 }
 
-func inlineBuildDataImportDecl(imports []manifest.Import, scriptFile *ast.File) ast.Decl {
+func inlineBuildDataImportDecl(imports []gwdkir.Import, scriptFile *ast.File) ast.Decl {
 	specs := []ast.Spec{
 		&ast.ImportSpec{Name: ast.NewIdent("gowdkjson"), Path: buildDataStringLit("encoding/json")},
 		&ast.ImportSpec{Name: ast.NewIdent("gowdkos"), Path: buildDataStringLit("os")},
@@ -296,13 +296,13 @@ func runBuildDataCall(alias, importPath, function string) (map[string]string, er
 	return parseBuildFunctionOutput(output)
 }
 
-func findBuildImport(alias string, imports []manifest.Import) (manifest.Import, bool) {
+func findBuildImport(alias string, imports []gwdkir.Import) (gwdkir.Import, bool) {
 	for _, item := range imports {
 		if item.Alias == alias {
 			return item, true
 		}
 	}
-	return manifest.Import{}, false
+	return gwdkir.Import{}, false
 }
 
 func buildDataRunnerSource(alias, importPath, function string) (string, error) {

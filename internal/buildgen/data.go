@@ -3,7 +3,7 @@ package buildgen
 import (
 	"fmt"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 func parsePathDeclarations(body string) ([]map[string]string, error) {
@@ -14,7 +14,7 @@ func parsePathParams(source string) (map[string]string, error) {
 	return parseLiteralStringMap(source, "path param")
 }
 
-func parseBuildData(body string, routeParams map[string]string, imports []manifest.Import, scripts []manifest.GoBlock, source string) (map[string]string, error) {
+func parseBuildData(body string, routeParams map[string]string, imports []gwdkir.Import, scripts []gwdkir.GoBlock, source string) (map[string]string, error) {
 	lines := significantBuildLines(body)
 	if len(lines) == 1 {
 		call, ok, err := parseBuildDataCallLine(lines[0])

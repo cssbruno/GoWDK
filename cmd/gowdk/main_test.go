@@ -3301,6 +3301,33 @@ view {
 	}
 }
 
+func TestInspectIRCommandMatchesGoldenFixture(t *testing.T) {
+	fixture := filepath.FromSlash("testdata/inspect_ir_golden")
+	var output string
+	withWorkingDir(t, fixture, func() {
+		stdout, stderr, err := captureCLIOutput(t, func() error {
+			return run([]string{"inspect", "ir", "--config", "gowdk.config.go", "newsletter.page.gwdk"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stderr != "" {
+			t.Fatalf("expected no inspect diagnostics on stderr, got:\n%s", stderr)
+		}
+		output = stdout
+	})
+
+	expected, err := os.ReadFile(filepath.Join(fixture, "inspect-ir.golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedJSON := canonicalInspectIRGolden(t, expected)
+	actualJSON := canonicalInspectIRGolden(t, []byte(output))
+	if actualJSON != expectedJSON {
+		t.Fatalf("inspect ir golden mismatch\nexpected:\n%s\nactual:\n%s", expectedJSON, actualJSON)
+	}
+}
+
 func TestInspectIRCommandDiscoversSelectedModuleOnly(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
@@ -4312,6 +4339,74 @@ import "github.com/cssbruno/gowdk"
 var Config = gowdk.Config{}
 `)
 	return path
+}
+
+type inspectIRGolden struct {
+	Version  int `json:"Version"`
+	Packages []struct {
+		Name       string   `json:"Name"`
+		SourceDirs []string `json:"SourceDirs"`
+		Files      []struct {
+			Path    string `json:"Path"`
+			Kind    string `json:"Kind"`
+			Package string `json:"Package"`
+			Name    string `json:"Name"`
+		} `json:"Files"`
+	} `json:"Packages"`
+	Pages []struct {
+		Source  string   `json:"Source"`
+		Package string   `json:"Package"`
+		ID      string   `json:"ID"`
+		Route   string   `json:"Route"`
+		Guards  []string `json:"Guards"`
+	} `json:"Pages"`
+	Routes []struct {
+		Kind    string   `json:"Kind"`
+		Method  string   `json:"Method"`
+		Path    string   `json:"Path"`
+		PageID  string   `json:"PageID"`
+		Package string   `json:"Package"`
+		Render  string   `json:"Render"`
+		Guards  []string `json:"Guards"`
+		Source  string   `json:"Source"`
+	} `json:"Routes"`
+	Endpoints []struct {
+		Kind       string `json:"Kind"`
+		Source     string `json:"Source"`
+		Package    string `json:"Package"`
+		PageID     string `json:"PageID"`
+		Symbol     string `json:"Symbol"`
+		Method     string `json:"Method"`
+		Path       string `json:"Path"`
+		SourceFile string `json:"SourceFile"`
+		Binding    struct {
+			Status       string `json:"Status"`
+			PackageName  string `json:"PackageName"`
+			FunctionName string `json:"FunctionName"`
+		} `json:"Binding"`
+	} `json:"Endpoints"`
+	Templates []struct {
+		OwnerKind string   `json:"OwnerKind"`
+		OwnerID   string   `json:"OwnerID"`
+		Package   string   `json:"Package"`
+		Source    string   `json:"Source"`
+		Route     string   `json:"Route"`
+		Guards    []string `json:"Guards"`
+		Body      string   `json:"Body"`
+	} `json:"Templates"`
+}
+
+func canonicalInspectIRGolden(t *testing.T, payload []byte) string {
+	t.Helper()
+	var report inspectIRGolden
+	if err := json.Unmarshal(payload, &report); err != nil {
+		t.Fatalf("invalid inspect ir golden JSON: %v\n%s", err, payload)
+	}
+	canonical, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(canonical)
 }
 
 func withWorkingDir(t *testing.T, dir string, fn func()) {

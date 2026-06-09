@@ -1,0 +1,14 @@
+package app
+
+@page newsletter
+@route "/newsletter"
+@guard public
+
+act Subscribe POST "/newsletter"
+
+view {
+  <form g:post={Subscribe}>
+    <input name="email" required />
+    <button type="submit">Subscribe</button>
+  </form>
+}

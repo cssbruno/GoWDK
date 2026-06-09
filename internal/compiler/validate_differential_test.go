@@ -57,6 +57,13 @@ func TestValidateProgramMatchesValidateManifestDifferential(t *testing.T) {
 			},
 		},
 		{
+			name: "dynamic spa page with empty paths block",
+			app: manifest.Manifest{Pages: []manifest.Page{{
+				ID: "blog.post", Route: "/blog/{slug}", Package: "pages",
+				Source: "blog.post.page.gwdk", Paths: true, Blocks: view("<main/>"),
+			}}},
+		},
+		{
 			name: "standalone action with unsupported method",
 			app: manifest.Manifest{
 				Endpoints: []manifest.EndpointDeclaration{{

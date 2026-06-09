@@ -122,7 +122,7 @@ func pageFromIR(page gwdkir.Page) manifest.Page {
 		Imports:     importsFromIR(page.Imports),
 		Uses:        usesFromIR(page.Uses),
 		Stores:      storesFromIR(page.Stores),
-		Paths:       page.Blocks.PathsBody != "",
+		Paths:       page.Blocks.Paths,
 		Blocks:      blocksFromIR(page.Blocks),
 		LoadBinding: loadBindingFromIR(page),
 		Spans: manifest.PageSpans{

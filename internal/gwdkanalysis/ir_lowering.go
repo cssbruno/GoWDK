@@ -19,6 +19,8 @@ func routeKind(mode gowdk.RenderMode, page manifest.Page) gwdkir.RouteKind {
 }
 
 func lowerIRPage(page manifest.Page) gwdkir.Page {
+	blocks := lowerIRBlocks(page.Blocks)
+	blocks.Paths = page.Paths
 	return gwdkir.Page{
 		Source:      page.Source,
 		Package:     page.Package,
@@ -38,7 +40,7 @@ func lowerIRPage(page manifest.Page) gwdkir.Page {
 		Imports:     lowerIRImports(page.Imports),
 		Uses:        lowerIRUses(page.Uses),
 		Stores:      lowerIRStores(page.Stores),
-		Blocks:      lowerIRBlocks(page.Blocks),
+		Blocks:      blocks,
 		Spans: gwdkir.PageSpans{
 			Package:     page.Spans.Package,
 			Page:        page.Spans.Page,

@@ -2,6 +2,7 @@ package html
 
 import (
 	stdhtml "html"
+	htmltemplate "html/template"
 	"strings"
 )
 
@@ -12,10 +13,31 @@ func Escape(value string) string {
 
 // Attr renders an escaped HTML attribute when value is non-empty.
 func Attr(name, value string) string {
-	if value == "" {
+	if value == "" || !validAttrName(name) {
 		return ""
 	}
-	return " " + name + `="` + stdhtml.EscapeString(value) + `"`
+	return " " + name + `="` + escapeAttrValue(value) + `"`
+}
+
+func escapeAttrValue(value string) string {
+	return htmltemplate.HTMLEscaper(value)
+}
+
+func validAttrName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, char := range name {
+		switch {
+		case char >= 'a' && char <= 'z':
+		case char >= 'A' && char <= 'Z':
+		case char >= '0' && char <= '9':
+		case char == '-' || char == '_' || char == ':' || char == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // Classes joins generated class tokens.

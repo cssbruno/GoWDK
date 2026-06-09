@@ -48,7 +48,7 @@ func SSRArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string) 
 // SSRArtifactsFromIR renders request-time page artifacts from normalized
 // compiler IR.
 func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) ([]SSRArtifact, error) {
-	app := buildModelFromIR(ir)
+	app := compiler.ManifestFromIR(ir)
 	if err := compiler.ValidateManifest(config, app); err != nil {
 		return nil, err
 	}

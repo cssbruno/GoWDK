@@ -4,8 +4,17 @@ import (
 	"fmt"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
+
+// ValidateBackendBindingPolicyIR enforces the same build-mode rules as
+// ValidateBackendBindingPolicy against an IR-first build path. IR already
+// carries per-endpoint binding metadata, so the reconstructed manifest has its
+// BackendBindings populated and the on-disk rebinding branch does not refire.
+func ValidateBackendBindingPolicyIR(config gowdk.Config, ir gwdkir.Program) error {
+	return ValidateBackendBindingPolicy(config, ManifestFromIR(ir))
+}
 
 // ValidateBackendBindingPolicy enforces build-mode rules for declared backend
 // endpoints after same-package Go handler binding metadata has been produced.

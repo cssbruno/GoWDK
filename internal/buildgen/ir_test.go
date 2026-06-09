@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
@@ -105,7 +106,7 @@ func TestBuildMemoryFromIRCollectsArtifacts(t *testing.T) {
 }
 
 func TestBuildModelFromIRPreservesFragmentEndpoints(t *testing.T) {
-	app := buildModelFromIR(gwdkir.Program{
+	app := compiler.ManifestFromIR(gwdkir.Program{
 		Version: gwdkir.Version,
 		Pages: []gwdkir.Page{{
 			ID:      "patients",

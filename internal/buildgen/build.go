@@ -19,7 +19,7 @@ func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result
 
 // BuildFromIR writes SPA build artifacts from normalized compiler IR.
 func BuildFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (Result, error) {
-	return buildFromIR(config, buildModelFromIR(ir), ir, outputDir)
+	return buildFromIR(config, compiler.ManifestFromIR(ir), ir, outputDir)
 }
 
 func buildFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, outputDir string) (Result, error) {
@@ -125,7 +125,7 @@ func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (
 // BuildMemoryFromIR plans SPA build artifacts from normalized compiler IR
 // without writing them to disk.
 func BuildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (MemoryResult, error) {
-	return buildMemoryFromIR(config, buildModelFromIR(ir), ir, outputDir)
+	return buildMemoryFromIR(config, compiler.ManifestFromIR(ir), ir, outputDir)
 }
 
 func buildMemoryFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, outputDir string) (MemoryResult, error) {
@@ -342,7 +342,7 @@ func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir stri
 // BuildIncrementalFromIR incrementally renders changed SPA page outputs from
 // normalized compiler IR.
 func BuildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
-	return buildIncrementalFromIR(config, buildModelFromIR(ir), ir, outputDir, changedPageSources)
+	return buildIncrementalFromIR(config, compiler.ManifestFromIR(ir), ir, outputDir, changedPageSources)
 }
 
 func buildIncrementalFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
@@ -511,7 +511,7 @@ func plan(config gowdk.Config, app manifest.Manifest, outputDir string) (buildPl
 }
 
 func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (buildPlan, error) {
-	app := buildModelFromIR(ir)
+	app := compiler.ManifestFromIR(ir)
 	components, componentFailures := buildComponents(app.Components)
 	layouts, layoutFailures := buildLayouts(app.Layouts)
 	css, cssFailures := planCSS(config, app, outputDir)

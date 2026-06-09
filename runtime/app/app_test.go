@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/cssbruno/gowdk/runtime/asset"
 	"github.com/cssbruno/gowdk/runtime/form"
@@ -645,6 +646,57 @@ func TestBackendRouterRecoversAPIPanic(t *testing.T) {
 	}
 }
 
+func TestBoundaryLogsRecoveredPanicWithRedactedSecret(t *testing.T) {
+	previous := BoundaryLogger
+	t.Cleanup(func() { BoundaryLogger = previous })
+	var logged string
+	BoundaryLogger = func(message string) { logged = message }
+
+	handler := Boundary("action", func(http.ResponseWriter, *http.Request) bool {
+		panic("connect failed: password=hunter2")
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/login", nil)
+
+	if !handler(recorder, request) {
+		t.Fatal("expected boundary to handle panic")
+	}
+	if logged == "" {
+		t.Fatal("expected recovered panic to be logged")
+	}
+	if !strings.Contains(logged, "recovered panic in action handler") {
+		t.Fatalf("log missing panic context: %q", logged)
+	}
+	if strings.Contains(logged, "hunter2") {
+		t.Fatalf("secret leaked into log: %q", logged)
+	}
+	if !strings.Contains(logged, "password=[REDACTED]") {
+		t.Fatalf("expected redacted secret in log: %q", logged)
+	}
+	if strings.Contains(recorder.Body.String(), "hunter2") {
+		t.Fatalf("secret leaked into response: %q", recorder.Body.String())
+	}
+}
+
+func TestBoundaryLoggerNilSilencesPanicLog(t *testing.T) {
+	previous := BoundaryLogger
+	t.Cleanup(func() { BoundaryLogger = previous })
+	BoundaryLogger = nil
+
+	handler := Boundary("api", func(http.ResponseWriter, *http.Request) bool {
+		panic("boom")
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+
+	if !handler(recorder, request) {
+		t.Fatal("expected boundary to handle panic")
+	}
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+}
+
 func TestActionFormDecodesStructAndWritesResponse(t *testing.T) {
 	type loginInput struct {
 		Email string `form:"email"`
@@ -735,6 +787,107 @@ func TestActionValuesRejectsTooLargeBody(t *testing.T) {
 
 	if recorder.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+}
+
+func TestAPIHandlerCapsRequestBody(t *testing.T) {
+	var readErr error
+	handler := APIHandler(func(_ context.Context, request *http.Request) (response.Response, error) {
+		_, readErr = io.ReadAll(request.Body)
+		if readErr != nil {
+			return response.Response{}, readErr
+		}
+		return response.JSONBody(http.StatusOK, `{"ok":true}`), nil
+	})
+	recorder := httptest.NewRecorder()
+	oversized := strings.Repeat("a", int(DefaultAPIBodyLimit)+1)
+	request := httptest.NewRequest(http.MethodPost, "/api/echo", strings.NewReader(oversized))
+
+	handler(recorder, request)
+
+	if readErr == nil {
+		t.Fatal("expected oversized API body read to fail")
+	}
+	if !strings.Contains(readErr.Error(), "request body too large") {
+		t.Fatalf("expected body-too-large read error, got %v", readErr)
+	}
+}
+
+func TestAPIHandlerAllowsBodyWithinLimit(t *testing.T) {
+	handler := APIHandler(func(_ context.Context, request *http.Request) (response.Response, error) {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			return response.Response{}, err
+		}
+		return response.JSONBody(http.StatusOK, string(body)), nil
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/echo", strings.NewReader(`{"ok":true}`))
+
+	handler(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), `"ok":true`) {
+		t.Fatalf("unexpected body: %s", recorder.Body.String())
+	}
+}
+
+func TestHandlerAppliesRequestTimeoutDeadline(t *testing.T) {
+	var hadDeadline bool
+	handler := Handler{
+		RequestTimeout: 50 * time.Millisecond,
+		Backend: func(_ http.ResponseWriter, request *http.Request) bool {
+			_, hadDeadline = request.Context().Deadline()
+			return true
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/thing", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if !hadDeadline {
+		t.Fatal("expected request context to carry a deadline when RequestTimeout is set")
+	}
+}
+
+func TestHandlerWithoutRequestTimeoutHasNoDeadline(t *testing.T) {
+	var hadDeadline bool
+	handler := Handler{
+		Backend: func(_ http.ResponseWriter, request *http.Request) bool {
+			_, hadDeadline = request.Context().Deadline()
+			return true
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/thing", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if hadDeadline {
+		t.Fatal("expected no deadline when RequestTimeout is zero")
+	}
+}
+
+func TestHandlerRequestTimeoutCancelsSlowHandler(t *testing.T) {
+	var ctxErr error
+	handler := Handler{
+		RequestTimeout: 20 * time.Millisecond,
+		Backend: func(_ http.ResponseWriter, request *http.Request) bool {
+			<-request.Context().Done()
+			ctxErr = request.Context().Err()
+			return true
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/slow", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if !errors.Is(ctxErr, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded, got %v", ctxErr)
 	}
 }
 

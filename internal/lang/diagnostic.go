@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -39,10 +40,22 @@ func (diagnostic Diagnostic) String() string {
 		}
 		location += fmt.Sprintf("%d:%d", diagnostic.Pos.Line, diagnostic.Pos.Column)
 	}
+	message := RedactMessage(diagnostic.Message)
 	if location != "" {
-		return fmt.Sprintf("%s: %s: %s", location, diagnostic.Severity, diagnostic.Message)
+		return fmt.Sprintf("%s: %s: %s", location, diagnostic.Severity, message)
 	}
-	return fmt.Sprintf("%s: %s", diagnostic.Severity, diagnostic.Message)
+	return fmt.Sprintf("%s: %s", diagnostic.Severity, message)
+}
+
+// MarshalJSON redacts secret-bearing source content from the message and
+// suggestion before serialization so check --json and other JSON sinks never
+// emit a hardcoded secret quoted from .gwdk source.
+func (diagnostic Diagnostic) MarshalJSON() ([]byte, error) {
+	type alias Diagnostic
+	redacted := alias(diagnostic)
+	redacted.Message = RedactMessage(redacted.Message)
+	redacted.Suggestion = RedactMessage(redacted.Suggestion)
+	return json.Marshal(redacted)
 }
 
 // Diagnostics is a collection that implements error.

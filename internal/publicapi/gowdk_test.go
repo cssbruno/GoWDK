@@ -45,6 +45,61 @@ func TestRenderConfigDefaultMode(t *testing.T) {
 	}
 }
 
+func TestEnvConfigValidateRejectsMisuse(t *testing.T) {
+	err := gowdk.EnvConfig{
+		Vars: []gowdk.EnvVar{
+			{},
+			{Name: "GOWDK_TEST_API_TOKEN"},
+			{Name: "GOWDK_TEST_DATABASE_URL"},
+		},
+		Secrets: []gowdk.SecretEnv{
+			{},
+			{Name: "GOWDK_TEST_DATABASE_URL"},
+		},
+	}.Validate(nil)
+	if err == nil {
+		t.Fatal("expected env validation error")
+	}
+	if !strings.Contains(err.Error(), "GOWDK_TEST_API_TOKEN looks like a secret") {
+		t.Fatalf("expected secret-looking var error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "GOWDK_TEST_DATABASE_URL is declared more than once in Env.Vars and Env.Secrets") {
+		t.Fatalf("expected duplicate env error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "environment variable name is required") {
+		t.Fatalf("expected empty env var error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "secret environment variable name is required") {
+		t.Fatalf("expected empty secret env error, got %v", err)
+	}
+}
+
+func TestEnvConfigValidateReportsMissingRequiredNames(t *testing.T) {
+	err := gowdk.EnvConfig{
+		Vars: []gowdk.EnvVar{
+			{Name: "GOWDK_TEST_BACKEND_ORIGIN", Required: true},
+			{Name: "GOWDK_TEST_ADDR", Required: true, Default: "127.0.0.1:8080"},
+		},
+		Secrets: []gowdk.SecretEnv{
+			{Name: "GOWDK_TEST_DATABASE_URL", Required: true},
+		},
+	}.Validate(func(name string) (string, bool) {
+		return "   ", true
+	})
+	if err == nil {
+		t.Fatal("expected missing env validation error")
+	}
+	if !strings.Contains(err.Error(), "GOWDK_TEST_BACKEND_ORIGIN is required but is not set") {
+		t.Fatalf("expected missing var error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "GOWDK_TEST_DATABASE_URL is required but is not set") {
+		t.Fatalf("expected missing secret error, got %v", err)
+	}
+	if strings.Contains(err.Error(), "GOWDK_TEST_ADDR is required but is not set") {
+		t.Fatalf("var with default should not be reported missing, got %v", err)
+	}
+}
+
 func TestBuildConfigDebugAssets(t *testing.T) {
 	if !(gowdk.BuildConfig{}).DebugAssets() {
 		t.Fatal("expected omitted build mode to include debug assets")

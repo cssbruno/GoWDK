@@ -1,6 +1,9 @@
 package gowdk
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Config describes how a GOWDK application should be discovered, compiled,
 // and packaged.
@@ -9,6 +12,7 @@ type Config struct {
 	Source  SourceConfig
 	Modules []ModuleConfig
 	Render  RenderConfig
+	Env     EnvConfig
 	Build   BuildConfig
 	CSS     CSSConfig
 	Addons  []Addon
@@ -41,6 +45,115 @@ func (config RenderConfig) DefaultMode() RenderMode {
 		return SPA
 	}
 	return config.Default
+}
+
+// EnvConfig declares the runtime environment contract for generated apps.
+// It names expected variables and secrets, but never stores secret values.
+type EnvConfig struct {
+	Vars    []EnvVar
+	Secrets []SecretEnv
+}
+
+// EnvVar declares a normal non-secret environment variable. Defaults must only
+// be used for safe non-secret local or runtime values.
+type EnvVar struct {
+	Name     string
+	Required bool
+	Default  string
+}
+
+// SecretEnv declares a secret environment variable. Secret values intentionally
+// have no config field and must come from the runtime environment.
+type SecretEnv struct {
+	Name     string
+	Required bool
+}
+
+// EnvValidationError describes one invalid or missing env contract entry.
+type EnvValidationError struct {
+	Code    string
+	Name    string
+	Message string
+}
+
+func (err EnvValidationError) Error() string {
+	return err.Message
+}
+
+// EnvValidationErrors is a list of env contract validation failures.
+type EnvValidationErrors []EnvValidationError
+
+func (errs EnvValidationErrors) Error() string {
+	messages := make([]string, 0, len(errs))
+	for _, err := range errs {
+		messages = append(messages, err.Error())
+	}
+	return strings.Join(messages, "\n")
+}
+
+// Validate checks the env contract. If lookup is nil, only structural rules are
+// checked. If lookup is provided, required missing names are reported too.
+func (config EnvConfig) Validate(lookup func(string) (string, bool)) error {
+	var diagnostics EnvValidationErrors
+	seen := map[string]string{}
+	for _, variable := range config.Vars {
+		name := strings.TrimSpace(variable.Name)
+		if name == "" {
+			diagnostics = append(diagnostics, EnvValidationError{Code: "env_name_required", Message: "environment variable name is required"})
+			continue
+		}
+		diagnostics = append(diagnostics, validateEnvDuplicate(seen, name, "Vars")...)
+		if secretLikeEnvName(name) {
+			diagnostics = append(diagnostics, EnvValidationError{
+				Code:    "secret_env_in_vars",
+				Name:    name,
+				Message: fmt.Sprintf("%s looks like a secret and must be declared in Env.Secrets", name),
+			})
+		}
+		if lookup != nil && variable.Required && variable.Default == "" {
+			if value, ok := lookup(name); !ok || strings.TrimSpace(value) == "" {
+				diagnostics = append(diagnostics, EnvValidationError{Code: "missing_required_env", Name: name, Message: fmt.Sprintf("%s is required but is not set", name)})
+			}
+		}
+	}
+	for _, secret := range config.Secrets {
+		name := strings.TrimSpace(secret.Name)
+		if name == "" {
+			diagnostics = append(diagnostics, EnvValidationError{Code: "secret_env_name_required", Message: "secret environment variable name is required"})
+			continue
+		}
+		diagnostics = append(diagnostics, validateEnvDuplicate(seen, name, "Secrets")...)
+		if lookup != nil && secret.Required {
+			if value, ok := lookup(name); !ok || strings.TrimSpace(value) == "" {
+				diagnostics = append(diagnostics, EnvValidationError{Code: "missing_required_secret", Name: name, Message: fmt.Sprintf("%s is required but is not set", name)})
+			}
+		}
+	}
+	if len(diagnostics) > 0 {
+		return diagnostics
+	}
+	return nil
+}
+
+func validateEnvDuplicate(seen map[string]string, name string, section string) EnvValidationErrors {
+	if previous := seen[name]; previous != "" {
+		return EnvValidationErrors{{
+			Code:    "duplicate_env_name",
+			Name:    name,
+			Message: fmt.Sprintf("%s is declared more than once in Env.%s and Env.%s", name, previous, section),
+		}}
+	}
+	seen[name] = section
+	return nil
+}
+
+func secretLikeEnvName(name string) bool {
+	for _, suffix := range []string{"_SECRET", "_TOKEN", "_PASSWORD", "_KEY"} {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // BuildConfig controls output artifacts and frontend asset packaging.

@@ -67,11 +67,12 @@ without ever storing secret values in `gowdk.config.go`.
 
 ## Acceptance Criteria
 
-- [ ] `gowdk.Config` has an env contract with separate vars and secrets.
-- [ ] Duplicate names across vars/secrets fail validation.
-- [ ] Secret-looking names in vars fail validation or emit stable diagnostics.
-- [ ] Required missing vars/secrets produce clear missing-env diagnostics.
-- [ ] Docs show that config owns the contract, while deployment owns values.
+- [x] `gowdk.Config` has an env contract with separate vars and secrets.
+- [x] Duplicate names across vars/secrets fail validation.
+- [x] Secret-looking names in vars fail validation or emit stable diagnostics.
+- [x] Required missing vars/secrets produce clear missing-env diagnostics.
+- [x] Generated apps repeat required env checks before serving requests.
+- [x] Docs show that config owns the contract, while deployment owns values.
 
 ## Edge Cases
 

@@ -21,6 +21,7 @@ type executableConfig struct {
 	Source  gowdk.SourceConfig       `json:"source"`
 	Modules []gowdk.ModuleConfig     `json:"modules"`
 	Render  gowdk.RenderConfig       `json:"render"`
+	Env     gowdk.EnvConfig          `json:"env"`
 	Build   gowdk.BuildConfig        `json:"build"`
 	CSS     gowdk.CSSConfig          `json:"css"`
 	Addons  []executableAddonDetails `json:"addons"`
@@ -73,6 +74,7 @@ func loadExecutableConfig(configPath string) (gowdk.Config, error) {
 		Source:  wire.Source,
 		Modules: wire.Modules,
 		Render:  wire.Render,
+		Env:     wire.Env,
 		Build:   wire.Build,
 		CSS:     wire.CSS,
 	}
@@ -246,6 +248,7 @@ type executableConfig struct {
 	Source  gowdk.SourceConfig       ` + "`json:\"source\"`" + `
 	Modules []gowdk.ModuleConfig     ` + "`json:\"modules\"`" + `
 	Render  gowdk.RenderConfig       ` + "`json:\"render\"`" + `
+	Env     gowdk.EnvConfig          ` + "`json:\"env\"`" + `
 	Build   gowdk.BuildConfig        ` + "`json:\"build\"`" + `
 	CSS     gowdk.CSSConfig          ` + "`json:\"css\"`" + `
 	Addons  []executableAddonDetails ` + "`json:\"addons\"`" + `
@@ -291,6 +294,7 @@ func writeConfig() {
 		Source:  config.Source,
 		Modules: config.Modules,
 		Render:  config.Render,
+		Env:     config.Env,
 		Build:   config.Build,
 		CSS:     config.CSS,
 	}

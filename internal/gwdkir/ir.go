@@ -18,6 +18,7 @@ type Program struct {
 	Layouts         []Layout
 	Routes          []Route
 	Endpoints       []Endpoint
+	GoEndpoints     []GoEndpoint
 	Templates       []Template
 	ContractRefs    []ContractReference
 	ClientBehaviors []ClientBehavior
@@ -341,6 +342,28 @@ type Endpoint struct {
 	SourceFile    string
 	Span          source.SourceSpan
 	Binding       Binding
+}
+
+// GoEndpoint preserves a standalone Go endpoint declaration (discovered from
+// `//gowdk:` comments) in its raw source-level form. Program.Endpoints holds the
+// normalized, codegen-ready endpoints with bindings attached, which is lossy for
+// validation (it collapses the raw kind, normalizes the method, and drops the
+// route/error-page spans). Keeping the raw declaration here lets validation read
+// the exact kind, method, and spans the author wrote with no information loss.
+// Fields mirror the parser/discovery output one-to-one.
+type GoEndpoint struct {
+	Kind          string
+	SourceKind    EndpointSource
+	Package       string
+	Source        string
+	Name          string
+	Method        string
+	Route         string
+	ErrorPage     string
+	Span          source.SourceSpan
+	RouteSpan     source.SourceSpan
+	RouteParams   []source.NamedSpan
+	ErrorPageSpan source.SourceSpan
 }
 
 type EndpointKind string

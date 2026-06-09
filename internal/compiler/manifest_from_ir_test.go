@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
@@ -152,4 +153,78 @@ func errString(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// TestValidateProgramRunsStandaloneEndpointChecks guards the regression that
+// motivated issue #145: standalone Go endpoints are lowered into IR losslessly
+// via Program.GoEndpoints, and ManifestFromIR reconstructs manifest.Endpoints
+// from them, so validateStandaloneEndpoints actually runs on the IR path. Before
+// GoEndpoints existed, ManifestFromIR left Endpoints nil and this check was
+// silently skipped.
+func TestValidateProgramRunsStandaloneEndpointChecks(t *testing.T) {
+	ir := gwdkir.Program{
+		Version: gwdkir.Version,
+		GoEndpoints: []gwdkir.GoEndpoint{{
+			Kind:       "action",
+			SourceKind: gwdkir.EndpointSourceGo,
+			Package:    "handlers",
+			Source:     "handlers/subscribe.go",
+			Name:       "subscribe", // not an exported Go identifier -> invalid
+			Method:     "POST",
+			Route:      "/subscribe",
+		}},
+	}
+
+	err := ValidateProgram(gowdk.Config{}, ir)
+	if err == nil {
+		t.Fatal("expected non-exported standalone endpoint handler to fail IR validation")
+	}
+	if !strings.Contains(err.Error(), "must be an exported Go identifier") {
+		t.Fatalf("unexpected diagnostic: %v", err)
+	}
+
+	// The same IR lowered to a manifest must produce the identical diagnostic —
+	// proving ValidateProgram and ValidateManifest agree on endpoint checks.
+	if got := errString(ValidateProgram(gowdk.Config{}, ir)); got != errString(ValidateManifest(gowdk.Config{}, ManifestFromIR(ir))) {
+		t.Fatalf("IR and manifest endpoint validation diverged: %q", got)
+	}
+}
+
+// TestGoEndpointsReconstructFaithfully checks that ManifestFromIR rebuilds the
+// standalone endpoint declarations field-for-field from the IR mirror.
+func TestGoEndpointsReconstructFaithfully(t *testing.T) {
+	ir := gwdkir.Program{
+		Version: gwdkir.Version,
+		GoEndpoints: []gwdkir.GoEndpoint{{
+			Kind:          "api",
+			SourceKind:    gwdkir.EndpointSourceGo,
+			Package:       "handlers",
+			Source:        "handlers/list.go",
+			Name:          "List",
+			Method:        "GET",
+			Route:         "/api/list/{id:int}",
+			ErrorPage:     "500.html",
+			RouteParams:   []source.NamedSpan{{Name: "id"}},
+			RouteSpan:     source.SourceSpan{Start: source.SourcePosition{Line: 3, Column: 1}},
+			ErrorPageSpan: source.SourceSpan{Start: source.SourcePosition{Line: 4, Column: 1}},
+		}},
+	}
+
+	app := ManifestFromIR(ir)
+	if len(app.Endpoints) != 1 {
+		t.Fatalf("expected 1 reconstructed endpoint, got %d", len(app.Endpoints))
+	}
+	got := app.Endpoints[0]
+	if got.Kind != "api" || got.Name != "List" || got.Method != "GET" || got.Route != "/api/list/{id:int}" {
+		t.Fatalf("endpoint core fields not preserved: %#v", got)
+	}
+	if got.ErrorPage != "500.html" || got.SourceKind != "go" || got.Source != "handlers/list.go" {
+		t.Fatalf("endpoint metadata not preserved: %#v", got)
+	}
+	if len(got.RouteParams) != 1 || got.RouteParams[0].Name != "id" {
+		t.Fatalf("route params not preserved: %#v", got.RouteParams)
+	}
+	if got.RouteSpan.Start.Line != 3 || got.ErrorPageSpan.Start.Line != 4 {
+		t.Fatalf("spans not preserved: %#v", got)
+	}
 }

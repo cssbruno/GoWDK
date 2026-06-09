@@ -5,16 +5,16 @@ import (
 	"unicode/utf16"
 
 	"github.com/cssbruno/gowdk/internal/lang"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func diagnosticFromLang(item lang.Diagnostic, source string) diagnostic {
+func diagnosticFromLang(item lang.Diagnostic, body string) diagnostic {
 	severity := diagnosticSeverityError
 	if item.Severity == "warning" {
 		severity = diagnosticSeverityWarning
 	}
 	return diagnostic{
-		Range:    rangeFromLangDiagnostic(item, source),
+		Range:    rangeFromLangDiagnostic(item, body),
 		Severity: severity,
 		Code:     item.Code,
 		Source:   "gowdk",
@@ -22,30 +22,30 @@ func diagnosticFromLang(item lang.Diagnostic, source string) diagnostic {
 	}
 }
 
-func rangeFromLangDiagnostic(item lang.Diagnostic, source string) lspRange {
+func rangeFromLangDiagnostic(item lang.Diagnostic, body string) lspRange {
 	if item.Range != nil {
-		return rangeFromLangRange(*item.Range, source)
+		return rangeFromLangRange(*item.Range, body)
 	}
-	return rangeFromPosition(item.Pos, source)
+	return rangeFromPosition(item.Pos, body)
 }
 
-func rangeFromLangRange(item lang.Range, source string) lspRange {
-	start := positionFromLangPosition(item.Start, source)
-	end := positionFromLangPosition(item.End, source)
+func rangeFromLangRange(item lang.Range, body string) lspRange {
+	start := positionFromLangPosition(item.Start, body)
+	end := positionFromLangPosition(item.End, body)
 	if end.Line < start.Line || (end.Line == start.Line && end.Character <= start.Character) {
 		end = position{Line: start.Line, Character: start.Character + 1}
 	}
 	return lspRange{Start: start, End: end}
 }
 
-func lspRangeFromSourceSpan(span manifest.SourceSpan, source string) lspRange {
+func lspRangeFromSourceSpan(span source.SourceSpan, body string) lspRange {
 	return rangeFromLangRange(lang.Range{
 		Start: lang.Position{Line: span.Start.Line, Column: span.Start.Column},
 		End:   lang.Position{Line: span.End.Line, Column: span.End.Column},
-	}, source)
+	}, body)
 }
 
-func rangeFromPosition(pos lang.Position, source string) lspRange {
+func rangeFromPosition(pos lang.Position, body string) lspRange {
 	if pos.Line <= 0 {
 		return lspRange{
 			Start: position{Line: 0, Character: 0},
@@ -53,7 +53,7 @@ func rangeFromPosition(pos lang.Position, source string) lspRange {
 		}
 	}
 
-	lines := strings.Split(source, "\n")
+	lines := strings.Split(body, "\n")
 	lineIndex := clamp(pos.Line-1, 0, len(lines)-1)
 	character := 0
 	if pos.Column > 1 && len(lines) > 0 {
@@ -73,11 +73,11 @@ func rangeFromPosition(pos lang.Position, source string) lspRange {
 	}
 }
 
-func positionFromLangPosition(pos lang.Position, source string) position {
+func positionFromLangPosition(pos lang.Position, body string) position {
 	if pos.Line <= 0 {
 		return position{Line: 0, Character: 0}
 	}
-	lines := strings.Split(source, "\n")
+	lines := strings.Split(body, "\n")
 	lineIndex := clamp(pos.Line-1, 0, len(lines)-1)
 	character := 0
 	if pos.Column > 1 && len(lines) > 0 {

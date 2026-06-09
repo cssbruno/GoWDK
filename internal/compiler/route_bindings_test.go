@@ -7,6 +7,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestBuildRouteMetadataSeparatesRoutesFromEndpoints(t *testing.T) {
@@ -143,11 +144,11 @@ func TestBuildRouteMetadataFromIR(t *testing.T) {
 				Path:       "/newsletter",
 				SourceFile: "newsletter.page.gwdk",
 				Binding: gwdkir.Binding{
-					Status:       manifest.BackendBindingBound,
+					Status:       source.BackendBindingBound,
 					ImportPath:   "example.com/app/newsletter",
 					PackageName:  "newsletter",
 					FunctionName: "Subscribe",
-					Signature:    manifest.BackendSignatureAction0,
+					Signature:    source.BackendSignatureAction0,
 				},
 			},
 			{
@@ -184,7 +185,7 @@ func TestBuildRouteMetadataFromIR(t *testing.T) {
 	assertEndpoint(t, metadata.Endpoints, EndpointAction, "POST", "/newsletter", "actions.NewsletterSubscribe")
 	assertEndpoint(t, metadata.Endpoints, EndpointFragment, "GET", "/newsletter/list", "fragments.NewsletterList")
 	assertEndpoint(t, metadata.Endpoints, EndpointCommand, "POST", "/patients", "contracts.command.patients.CreatePatient")
-	if metadata.Endpoints[0].BindingStatus != manifest.BackendBindingBound {
+	if metadata.Endpoints[0].BindingStatus != source.BackendBindingBound {
 		t.Fatalf("expected binding status from IR, got %#v", metadata.Endpoints[0])
 	}
 	command := findEndpoint(t, metadata.Endpoints, EndpointCommand, "POST", "/patients")

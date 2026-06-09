@@ -7,10 +7,11 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // ParseComponent extracts component metadata and top-level block declarations.
-func ParseComponent(source []byte) (manifest.Component, error) {
+func ParseComponent(src []byte) (manifest.Component, error) {
 	var component manifest.Component
 	var viewBody []string
 	inView := false
@@ -30,10 +31,10 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 	inGoBlock := false
 	goBlockDepth := 0
 	goBlockTarget := ""
-	seenGoBlocks := map[string]manifest.SourceSpan{}
+	seenGoBlocks := map[string]source.SourceSpan{}
 	seenDeclaration := false
 
-	scanner := bufio.NewScanner(bytes.NewReader(source))
+	scanner := bufio.NewScanner(bytes.NewReader(src))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
@@ -46,7 +47,7 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 						Body:   strings.TrimSpace(strings.Join(goBlockBody, "\n")),
 						Span:   seenGoBlocks[goBlockTarget],
 					})
-					component.Blocks.Spans.GoBlocks = append(component.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: goBlockTarget, Span: seenGoBlocks[goBlockTarget]})
+					component.Blocks.Spans.GoBlocks = append(component.Blocks.Spans.GoBlocks, source.NamedSpan{Name: goBlockTarget, Span: seenGoBlocks[goBlockTarget]})
 					inGoBlock = false
 					goBlockBody = nil
 					goBlockDepth = 0
@@ -98,8 +99,8 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 			if line == "}" {
 				jsDepth--
 				if jsDepth == 0 {
-					name := manifest.InlineScriptName(len(component.InlineJS))
-					component.InlineJS = append(component.InlineJS, manifest.InlineScript{
+					name := source.InlineScriptName(len(component.InlineJS))
+					component.InlineJS = append(component.InlineJS, source.InlineScript{
 						Name: name,
 						Body: strings.TrimSpace(strings.Join(jsBody, "\n")),
 						Span: component.Spans.InlineJS[len(component.Spans.InlineJS)-1].Span,
@@ -227,13 +228,13 @@ func ParseComponent(source []byte) (manifest.Component, error) {
 		}
 		if match := jsPattern.FindStringSubmatch(line); match != nil {
 			component.JS = append(component.JS, match[1])
-			component.Spans.JS = append(component.Spans.JS, manifest.NamedSpan{Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)})
+			component.Spans.JS = append(component.Spans.JS, source.NamedSpan{Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)})
 			continue
 		}
 		if jsBlockPattern.MatchString(line) {
 			span := sourceLineSpan(lineNumber, rawLine)
-			name := manifest.InlineScriptName(len(component.InlineJS))
-			component.Spans.InlineJS = append(component.Spans.InlineJS, manifest.NamedSpan{Name: name, Span: span})
+			name := source.InlineScriptName(len(component.InlineJS))
+			component.Spans.InlineJS = append(component.Spans.InlineJS, source.NamedSpan{Name: name, Span: span})
 			inJS = true
 			jsDepth = 1
 			continue
@@ -403,12 +404,12 @@ func parseEmitDeclaration(line string, lineNumber int, rawLine string) (manifest
 	return manifest.Emit{Name: match[1], Params: params, Span: sourceLineSpan(lineNumber, rawLine)}, nil
 }
 
-func parseEmitParams(source string, lineNumber int, rawLine string) ([]manifest.EmitParam, error) {
-	source = strings.TrimSpace(source)
-	if source == "" {
+func parseEmitParams(src string, lineNumber int, rawLine string) ([]manifest.EmitParam, error) {
+	src = strings.TrimSpace(src)
+	if src == "" {
 		return nil, nil
 	}
-	parts := strings.Split(source, ",")
+	parts := strings.Split(src, ",")
 	params := make([]manifest.EmitParam, 0, len(parts))
 	seen := map[string]bool{}
 	for _, part := range parts {

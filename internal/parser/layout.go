@@ -7,10 +7,11 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // ParseLayout extracts layout metadata and top-level block declarations.
-func ParseLayout(source []byte) (manifest.Layout, error) {
+func ParseLayout(src []byte) (manifest.Layout, error) {
 	var layout manifest.Layout
 	var viewBody []string
 	inView := false
@@ -21,10 +22,10 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 	inGoBlock := false
 	goBlockDepth := 0
 	goBlockTarget := ""
-	seenGoBlocks := map[string]manifest.SourceSpan{}
+	seenGoBlocks := map[string]source.SourceSpan{}
 	seenDeclaration := false
 
-	scanner := bufio.NewScanner(bytes.NewReader(source))
+	scanner := bufio.NewScanner(bytes.NewReader(src))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
@@ -37,7 +38,7 @@ func ParseLayout(source []byte) (manifest.Layout, error) {
 						Body:   strings.TrimSpace(strings.Join(goBlockBody, "\n")),
 						Span:   seenGoBlocks[goBlockTarget],
 					})
-					layout.Blocks.Spans.GoBlocks = append(layout.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: goBlockTarget, Span: seenGoBlocks[goBlockTarget]})
+					layout.Blocks.Spans.GoBlocks = append(layout.Blocks.Spans.GoBlocks, source.NamedSpan{Name: goBlockTarget, Span: seenGoBlocks[goBlockTarget]})
 					inGoBlock = false
 					goBlockBody = nil
 					goBlockDepth = 0

@@ -8,6 +8,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func validateGoBlocks(config gowdk.Config, app manifest.Manifest) []ValidationError {
@@ -35,7 +36,7 @@ func validateGoBlocks(config gowdk.Config, app manifest.Manifest) []ValidationEr
 	return diagnostics
 }
 
-func validateGoBlockSyntax(packageName string, source string, pageID string, componentName string, block manifest.GoBlock) []ValidationError {
+func validateGoBlockSyntax(packageName string, sourcePath string, pageID string, componentName string, block manifest.GoBlock) []ValidationError {
 	if strings.TrimSpace(block.Body) == "" {
 		return nil
 	}
@@ -50,13 +51,13 @@ func validateGoBlockSyntax(packageName string, source string, pageID string, com
 		Code:          "invalid_go_block",
 		PageID:        pageID,
 		ComponentName: componentName,
-		Source:        source,
+		Source:        sourcePath,
 		Span:          block.Span,
 		Message:       fmt.Sprintf("go %s contains invalid Go: %v", goBlockLabel(block.Target), err),
 	}}
 }
 
-func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, source string, packageName string, mode gowdk.RenderMode, hasLoad bool, block manifest.GoBlock) []ValidationError {
+func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, mode gowdk.RenderMode, hasLoad bool, block manifest.GoBlock) []ValidationError {
 	target := strings.TrimSpace(block.Target)
 	switch {
 	case target == "" || target == "client":
@@ -69,25 +70,25 @@ func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.A
 			Code:          "go_ssr_requires_request_render",
 			PageID:        pageID,
 			ComponentName: componentName,
-			Source:        source,
+			Source:        sourcePath,
 			Span:          block.Span,
 			Message:       fmt.Sprintf("%s declares go ssr {}, but ssr Go code is request-time behavior and requires the SSR addon", pageID),
 		}}
 	case strings.HasPrefix(target, "addon."):
-		return validateAddonGoBlockTarget(enabledAddons, pageID, componentName, source, packageName, mode, block)
+		return validateAddonGoBlockTarget(enabledAddons, pageID, componentName, sourcePath, packageName, mode, block)
 	default:
 		return []ValidationError{{
 			Code:          "unknown_go_block_target",
 			PageID:        pageID,
 			ComponentName: componentName,
-			Source:        source,
+			Source:        sourcePath,
 			Span:          block.Span,
 			Message:       fmt.Sprintf("unknown go block target %q; use go {}, go client {}, go ssr {}, or go addon.<name> {}", target),
 		}}
 	}
 }
 
-func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, source string, packageName string, block manifest.GoBlock) []ValidationError {
+func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, block manifest.GoBlock) []ValidationError {
 	target := strings.TrimSpace(block.Target)
 	switch {
 	case target == "":
@@ -97,7 +98,7 @@ func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]
 			Code:          "go_client_requires_page",
 			PageID:        pageID,
 			ComponentName: componentName,
-			Source:        source,
+			Source:        sourcePath,
 			Span:          block.Span,
 			Message:       "go client {} is page-level client-side behavior; use a page go client {} block or a component @wasm package",
 		}}
@@ -109,25 +110,25 @@ func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]
 			Code:          "missing_ssr_addon",
 			PageID:        pageID,
 			ComponentName: componentName,
-			Source:        source,
+			Source:        sourcePath,
 			Span:          block.Span,
 			Message:       "go ssr {} requires the SSR addon before request-time Go code can be validated or generated",
 		}}
 	case strings.HasPrefix(target, "addon."):
-		return validateAddonGoBlockTarget(enabledAddons, pageID, componentName, source, packageName, gowdk.SPA, block)
+		return validateAddonGoBlockTarget(enabledAddons, pageID, componentName, sourcePath, packageName, gowdk.SPA, block)
 	default:
 		return []ValidationError{{
 			Code:          "unknown_go_block_target",
 			PageID:        pageID,
 			ComponentName: componentName,
-			Source:        source,
+			Source:        sourcePath,
 			Span:          block.Span,
 			Message:       fmt.Sprintf("unknown go block target %q; use go {}, go client {}, go ssr {}, or go addon.<name> {}", target),
 		}}
 	}
 }
 
-func validateAddonGoBlockTarget(enabledAddons map[string]gowdk.Addon, pageID string, componentName string, source string, packageName string, render gowdk.RenderMode, block manifest.GoBlock) []ValidationError {
+func validateAddonGoBlockTarget(enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, render gowdk.RenderMode, block manifest.GoBlock) []ValidationError {
 	name := strings.TrimPrefix(strings.TrimSpace(block.Target), "addon.")
 	addon, ok := enabledAddons[name]
 	if name != "" && ok {
@@ -140,18 +141,18 @@ func validateAddonGoBlockTarget(enabledAddons map[string]gowdk.Addon, pageID str
 				Code:          "unsupported_addon_go_block_target",
 				PageID:        pageID,
 				ComponentName: componentName,
-				Source:        source,
+				Source:        sourcePath,
 				Span:          block.Span,
 				Message:       fmt.Sprintf("addon %q does not consume go block target %q", name, block.Target),
 			}}
 		}
-		return addonGoBlockDiagnostics(consumer, pageID, componentName, source, packageName, render, block)
+		return addonGoBlockDiagnostics(consumer, pageID, componentName, sourcePath, packageName, render, block)
 	}
 	return []ValidationError{{
 		Code:          "unknown_addon_go_block_target",
 		PageID:        pageID,
 		ComponentName: componentName,
-		Source:        source,
+		Source:        sourcePath,
 		Span:          block.Span,
 		Message:       fmt.Sprintf("go addon.%s {} requires an enabled addon named %q", name, name),
 	}}
@@ -166,8 +167,8 @@ func goBlockConsumerSupportsTarget(consumer gowdk.GoBlockConsumer, target string
 	return false
 }
 
-func addonGoBlockDiagnostics(consumer gowdk.GoBlockConsumer, pageID string, componentName string, source string, packageName string, render gowdk.RenderMode, block manifest.GoBlock) []ValidationError {
-	target := gowdkGoBlockTarget(pageID, componentName, source, packageName, block)
+func addonGoBlockDiagnostics(consumer gowdk.GoBlockConsumer, pageID string, componentName string, sourcePath string, packageName string, render gowdk.RenderMode, block manifest.GoBlock) []ValidationError {
+	target := gowdkGoBlockTarget(pageID, componentName, sourcePath, packageName, block)
 	context := gowdk.GoBlockContext{Render: render}
 	var diagnostics []ValidationError
 	for _, diagnostic := range consumer.ValidateGoBlock(target, context) {
@@ -183,7 +184,7 @@ func addonGoBlockDiagnostics(consumer gowdk.GoBlockConsumer, pageID string, comp
 			Code:          code,
 			PageID:        pageID,
 			ComponentName: componentName,
-			Source:        source,
+			Source:        sourcePath,
 			Span:          span,
 			Message:       diagnostic.Message,
 		})
@@ -199,7 +200,7 @@ func addonsByName(config gowdk.Config) map[string]gowdk.Addon {
 	return names
 }
 
-func gowdkGoBlockTarget(pageID string, componentName string, source string, packageName string, block manifest.GoBlock) gowdk.GoBlockTarget {
+func gowdkGoBlockTarget(pageID string, componentName string, sourcePath string, packageName string, block manifest.GoBlock) gowdk.GoBlockTarget {
 	ownerKind := "layout"
 	ownerID := ""
 	if pageID != "" {
@@ -214,23 +215,23 @@ func gowdkGoBlockTarget(pageID string, componentName string, source string, pack
 		OwnerKind:    ownerKind,
 		OwnerID:      ownerID,
 		OwnerPackage: packageName,
-		SourcePath:   source,
+		SourcePath:   sourcePath,
 		Body:         block.Body,
 		Span:         gowdkSpan(block.Span),
 	}
 }
 
-func gowdkSpan(span manifest.SourceSpan) gowdk.SourceSpan {
+func gowdkSpan(span source.SourceSpan) gowdk.SourceSpan {
 	return gowdk.SourceSpan{
 		Start: gowdk.SourcePosition{Line: span.Start.Line, Column: span.Start.Column},
 		End:   gowdk.SourcePosition{Line: span.End.Line, Column: span.End.Column},
 	}
 }
 
-func manifestSpan(span gowdk.SourceSpan) manifest.SourceSpan {
-	return manifest.SourceSpan{
-		Start: manifest.SourcePosition{Line: span.Start.Line, Column: span.Start.Column},
-		End:   manifest.SourcePosition{Line: span.End.Line, Column: span.End.Column},
+func manifestSpan(span gowdk.SourceSpan) source.SourceSpan {
+	return source.SourceSpan{
+		Start: source.SourcePosition{Line: span.Start.Line, Column: span.Start.Column},
+		End:   source.SourcePosition{Line: span.End.Line, Column: span.End.Column},
 	}
 }
 

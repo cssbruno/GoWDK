@@ -467,7 +467,7 @@ func TestBuildEmitsScopedComponentCSSWithManifestAndCacheHeaders(t *testing.T) {
 	}
 	hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, "./hero.css")
 	scopeID := cssscope.ScopeID(hashKey)
-	logicalPath := componentCSSLogicalPath(component, scopeID)
+	logicalPath := componentCSSLogicalPath(irComponent(component), scopeID)
 	artifact := cssArtifactByLogicalPath(t, result.CSSArtifacts, logicalPath)
 	emittedRel := filepath.ToSlash(mustRelativePath(t, outputDir, artifact.Path))
 	if !strings.Contains(emittedRel, "/"+scopeID+".") || !strings.HasSuffix(emittedRel, ".css") {
@@ -656,7 +656,7 @@ func TestBuildEmitsScopedComponentStyleBlock(t *testing.T) {
 	}
 	hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, inlineStyleAssetPath)
 	scopeID := cssscope.ScopeID(hashKey)
-	artifact := cssArtifactByLogicalPath(t, result.CSSArtifacts, componentCSSLogicalPath(component, scopeID))
+	artifact := cssArtifactByLogicalPath(t, result.CSSArtifacts, componentCSSLogicalPath(irComponent(component), scopeID))
 	html := readFile(t, filepath.Join(outputDir, "index.html"))
 	emittedRel := filepath.ToSlash(mustRelativePath(t, outputDir, artifact.Path))
 	if !strings.Contains(html, `<link rel="stylesheet" href="/`+emittedRel+`">`) {

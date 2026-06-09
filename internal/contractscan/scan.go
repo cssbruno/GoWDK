@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	runtimecontracts "github.com/cssbruno/gowdk/runtime/contracts"
 )
 
@@ -28,7 +28,7 @@ type Contract struct {
 	ResultImportPath string                         `json:"resultImportPath,omitempty"`
 	Handler          string                         `json:"handler,omitempty"`
 	Register         string                         `json:"register,omitempty"`
-	InputFields      []manifest.BackendInputField   `json:"inputFields,omitempty"`
+	InputFields      []source.BackendInputField     `json:"inputFields,omitempty"`
 	Emits            []EventRef                     `json:"emits,omitempty"`
 	Roles            []string                       `json:"roles,omitempty"`
 	Source           string                         `json:"source"`

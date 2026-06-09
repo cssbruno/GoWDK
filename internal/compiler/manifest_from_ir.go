@@ -1,36 +1,55 @@
-package buildgen
+package compiler
 
 import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func buildModelFromIR(ir gwdkir.Program) manifest.Manifest {
+// ManifestFromIR reconstructs a manifest.Manifest from compiler IR so the
+// existing manifest-typed validators can run against an IR-first build path.
+//
+// This is the single IR->manifest conversion seam in the codebase. It lives in
+// compiler (the package that owns validation) rather than being duplicated in
+// each generated-output package. As individual validators move to read IR
+// directly, this converter shrinks and is eventually removed; until then it
+// keeps the build path validating identical data whether it starts from a
+// parsed manifest or from IR.
+func ManifestFromIR(ir gwdkir.Program) manifest.Manifest {
 	app := manifest.Manifest{
 		Pages:           make([]manifest.Page, 0, len(ir.Pages)),
 		Components:      make([]manifest.Component, 0, len(ir.Components)),
 		Layouts:         make([]manifest.Layout, 0, len(ir.Layouts)),
-		BackendBindings: make([]manifest.BackendBinding, 0, len(ir.Endpoints)),
+		BackendBindings: BackendBindingsFromIR(ir),
 	}
 	for _, page := range ir.Pages {
-		app.Pages = append(app.Pages, buildPageFromIR(page))
+		app.Pages = append(app.Pages, pageFromIR(page))
 	}
 	for _, component := range ir.Components {
-		app.Components = append(app.Components, buildComponentFromIR(component))
+		app.Components = append(app.Components, componentFromIR(component))
 	}
 	for _, layout := range ir.Layouts {
-		app.Layouts = append(app.Layouts, buildLayoutFromIR(layout))
-	}
-	for _, endpoint := range ir.Endpoints {
-		binding := buildBackendBindingFromIR(endpoint)
-		if binding.Status != "" || binding.ImportPath != "" || binding.FunctionName != "" {
-			app.BackendBindings = append(app.BackendBindings, binding)
-		}
+		app.Layouts = append(app.Layouts, layoutFromIR(layout))
 	}
 	return app
 }
 
-func buildBackendBindingFromIR(endpoint gwdkir.Endpoint) manifest.BackendBinding {
+// BackendBindingsFromIR derives just the backend binding records from IR
+// endpoints, without reconstructing the full page/component/layout manifest.
+// Callers that only need bindings (e.g. build reporting) should use this instead
+// of ManifestFromIR(ir).BackendBindings, which would allocate the whole model.
+func BackendBindingsFromIR(ir gwdkir.Program) []manifest.BackendBinding {
+	out := make([]manifest.BackendBinding, 0, len(ir.Endpoints))
+	for _, endpoint := range ir.Endpoints {
+		binding := backendBindingFromIR(endpoint)
+		if binding.Status != "" || binding.ImportPath != "" || binding.FunctionName != "" {
+			out = append(out, binding)
+		}
+	}
+	return out
+}
+
+func backendBindingFromIR(endpoint gwdkir.Endpoint) manifest.BackendBinding {
 	kind := "action"
 	if endpoint.Kind == gwdkir.EndpointAPI {
 		kind = "api"
@@ -48,19 +67,19 @@ func buildBackendBindingFromIR(endpoint gwdkir.Endpoint) manifest.BackendBinding
 		Signature:    endpoint.Binding.Signature,
 		InputType:    endpoint.Binding.InputType,
 		InputPointer: endpoint.Binding.InputPointer,
-		InputFields:  append([]manifest.BackendInputField(nil), endpoint.Binding.InputFields...),
+		InputFields:  append([]source.BackendInputField(nil), endpoint.Binding.InputFields...),
 		Status:       endpoint.Binding.Status,
 		Message:      endpoint.Binding.Message,
 	}
 }
 
-func buildPageFromIR(page gwdkir.Page) manifest.Page {
+func pageFromIR(page gwdkir.Page) manifest.Page {
 	return manifest.Page{
 		Source:      page.Source,
 		Package:     page.Package,
 		ID:          page.ID,
 		Route:       page.Route,
-		RouteParams: append([]manifest.RouteParam(nil), page.RouteParams...),
+		RouteParams: append([]source.RouteParam(nil), page.RouteParams...),
 		Render:      page.Render,
 		Cache:       page.Cache,
 		Revalidate:  page.Revalidate,
@@ -70,13 +89,13 @@ func buildPageFromIR(page gwdkir.Page) manifest.Page {
 		Guard:       append([]string(nil), page.Guards...),
 		CSS:         append([]string(nil), page.CSS...),
 		JS:          append([]string(nil), page.JS...),
-		InlineJS:    copyInlineScripts(page.InlineJS),
-		Imports:     buildImportsFromIR(page.Imports),
-		Uses:        buildUsesFromIR(page.Uses),
-		Stores:      buildStoresFromIR(page.Stores),
+		InlineJS:    copyInlineScriptsFromIR(page.InlineJS),
+		Imports:     importsFromIR(page.Imports),
+		Uses:        usesFromIR(page.Uses),
+		Stores:      storesFromIR(page.Stores),
 		Paths:       page.Blocks.PathsBody != "",
-		Blocks:      buildBlocksFromIR(page.Blocks),
-		LoadBinding: buildLoadBindingFromIR(page),
+		Blocks:      blocksFromIR(page.Blocks),
+		LoadBinding: loadBindingFromIR(page),
 		Spans: manifest.PageSpans{
 			Package:     page.Spans.Package,
 			Page:        page.Spans.Page,
@@ -89,17 +108,17 @@ func buildPageFromIR(page gwdkir.Page) manifest.Page {
 			Description: page.Spans.Description,
 			Canonical:   page.Spans.Canonical,
 			Image:       page.Spans.Image,
-			Layouts:     append([]manifest.NamedSpan(nil), page.Spans.Layouts...),
-			Guard:       append([]manifest.NamedSpan(nil), page.Spans.Guard...),
-			CSS:         append([]manifest.NamedSpan(nil), page.Spans.CSS...),
-			JS:          append([]manifest.NamedSpan(nil), page.Spans.JS...),
-			InlineJS:    append([]manifest.NamedSpan(nil), page.Spans.InlineJS...),
-			RouteParams: append([]manifest.NamedSpan(nil), page.Spans.RouteParams...),
+			Layouts:     append([]source.NamedSpan(nil), page.Spans.Layouts...),
+			Guard:       append([]source.NamedSpan(nil), page.Spans.Guard...),
+			CSS:         append([]source.NamedSpan(nil), page.Spans.CSS...),
+			JS:          append([]source.NamedSpan(nil), page.Spans.JS...),
+			InlineJS:    append([]source.NamedSpan(nil), page.Spans.InlineJS...),
+			RouteParams: append([]source.NamedSpan(nil), page.Spans.RouteParams...),
 		},
 	}
 }
 
-func buildLoadBindingFromIR(page gwdkir.Page) manifest.BackendBinding {
+func loadBindingFromIR(page gwdkir.Page) manifest.BackendBinding {
 	binding := page.LoadBinding
 	if binding.Status == "" && binding.ImportPath == "" && binding.FunctionName == "" {
 		return manifest.BackendBinding{}
@@ -120,57 +139,57 @@ func buildLoadBindingFromIR(page gwdkir.Page) manifest.BackendBinding {
 	}
 }
 
-func buildComponentFromIR(component gwdkir.Component) manifest.Component {
+func componentFromIR(component gwdkir.Component) manifest.Component {
 	return manifest.Component{
 		Source:      component.Source,
 		Package:     component.Package,
 		Name:        component.Name,
-		Imports:     buildImportsFromIR(component.Imports),
-		Uses:        buildUsesFromIR(component.Uses),
+		Imports:     importsFromIR(component.Imports),
+		Uses:        usesFromIR(component.Uses),
 		CSS:         append([]string(nil), component.CSS...),
 		JS:          append([]string(nil), component.JS...),
-		InlineJS:    copyInlineScripts(component.InlineJS),
+		InlineJS:    copyInlineScriptsFromIR(component.InlineJS),
 		Assets:      append([]string(nil), component.Assets...),
-		Props:       buildPropsFromIR(component.Props),
-		PropsType:   buildGoTypeRefFromIR(component.PropsType),
-		State:       buildStateContractFromIR(component.State),
+		Props:       propsFromIR(component.Props),
+		PropsType:   goTypeRefFromIR(component.PropsType),
+		State:       stateContractFromIR(component.State),
 		WASM:        manifest.WASMContract(component.WASM),
-		Exports:     buildExportsFromIR(component.Exports),
-		Emits:       buildEmitsFromIR(component.Emits),
-		Blocks:      buildBlocksFromIR(component.Blocks),
+		Exports:     exportsFromIR(component.Exports),
+		Emits:       emitsFromIR(component.Emits),
+		Blocks:      blocksFromIR(component.Blocks),
 		Span:        component.Span,
 		PackageSpan: component.PackageSpan,
 		Spans: manifest.ComponentSpans{
-			CSS:      append([]manifest.NamedSpan(nil), component.Spans.CSS...),
-			JS:       append([]manifest.NamedSpan(nil), component.Spans.JS...),
-			InlineJS: append([]manifest.NamedSpan(nil), component.Spans.InlineJS...),
-			Assets:   append([]manifest.NamedSpan(nil), component.Spans.Assets...),
+			CSS:      append([]source.NamedSpan(nil), component.Spans.CSS...),
+			JS:       append([]source.NamedSpan(nil), component.Spans.JS...),
+			InlineJS: append([]source.NamedSpan(nil), component.Spans.InlineJS...),
+			Assets:   append([]source.NamedSpan(nil), component.Spans.Assets...),
 		},
 	}
 }
 
-func copyInlineScripts(scripts []manifest.InlineScript) []manifest.InlineScript {
+func copyInlineScriptsFromIR(scripts []source.InlineScript) []source.InlineScript {
 	if len(scripts) == 0 {
 		return nil
 	}
-	out := make([]manifest.InlineScript, len(scripts))
+	out := make([]source.InlineScript, len(scripts))
 	copy(out, scripts)
 	return out
 }
 
-func buildLayoutFromIR(layout gwdkir.Layout) manifest.Layout {
+func layoutFromIR(layout gwdkir.Layout) manifest.Layout {
 	return manifest.Layout{
 		Source:      layout.Source,
 		Package:     layout.Package,
 		ID:          layout.ID,
-		Uses:        buildUsesFromIR(layout.Uses),
-		Blocks:      buildBlocksFromIR(layout.Blocks),
+		Uses:        usesFromIR(layout.Uses),
+		Blocks:      blocksFromIR(layout.Blocks),
 		Span:        layout.Span,
 		PackageSpan: layout.PackageSpan,
 	}
 }
 
-func buildBlocksFromIR(blocks gwdkir.Blocks) manifest.Blocks {
+func blocksFromIR(blocks gwdkir.Blocks) manifest.Blocks {
 	return manifest.Blocks{
 		PathsBody:  blocks.PathsBody,
 		Build:      blocks.Build,
@@ -179,32 +198,32 @@ func buildBlocksFromIR(blocks gwdkir.Blocks) manifest.Blocks {
 		LoadBody:   blocks.LoadBody,
 		Client:     blocks.Client,
 		ClientBody: blocks.ClientBody,
-		GoBlocks:   buildScriptsFromIR(blocks.GoBlocks),
+		GoBlocks:   scriptsFromIR(blocks.GoBlocks),
 		View:       blocks.View,
 		ViewBody:   blocks.ViewBody,
 		Style:      blocks.Style,
 		StyleBody:  blocks.StyleBody,
-		Actions:    buildActionsFromIR(blocks.Actions),
-		APIs:       buildAPIsFromIR(blocks.APIs),
-		Fragments:  buildFragmentEndpointsFromIR(blocks.Fragments),
+		Actions:    actionsFromIR(blocks.Actions),
+		APIs:       apisFromIR(blocks.APIs),
+		Fragments:  fragmentEndpointsFromIR(blocks.Fragments),
 		Spans: manifest.BlockSpans{
 			Paths:         blocks.Spans.Paths,
 			Build:         blocks.Spans.Build,
 			Load:          blocks.Spans.Load,
 			Client:        blocks.Spans.Client,
-			GoBlocks:      append([]manifest.NamedSpan(nil), blocks.Spans.GoBlocks...),
+			GoBlocks:      append([]source.NamedSpan(nil), blocks.Spans.GoBlocks...),
 			View:          blocks.Spans.View,
 			ViewBodyStart: blocks.Spans.ViewBodyStart,
-			Actions:       append([]manifest.NamedSpan(nil), blocks.Spans.Actions...),
-			APIs:          append([]manifest.NamedSpan(nil), blocks.Spans.APIs...),
-			Fragments:     append([]manifest.NamedSpan(nil), blocks.Spans.Fragments...),
+			Actions:       append([]source.NamedSpan(nil), blocks.Spans.Actions...),
+			APIs:          append([]source.NamedSpan(nil), blocks.Spans.APIs...),
+			Fragments:     append([]source.NamedSpan(nil), blocks.Spans.Fragments...),
 			Exports:       blocks.Spans.Exports,
 			Emits:         blocks.Spans.Emits,
 		},
 	}
 }
 
-func buildScriptsFromIR(scripts []gwdkir.GoBlock) []manifest.GoBlock {
+func scriptsFromIR(scripts []gwdkir.GoBlock) []manifest.GoBlock {
 	out := make([]manifest.GoBlock, 0, len(scripts))
 	for _, script := range scripts {
 		out = append(out, manifest.GoBlock{
@@ -216,7 +235,7 @@ func buildScriptsFromIR(scripts []gwdkir.GoBlock) []manifest.GoBlock {
 	return out
 }
 
-func buildActionsFromIR(actions []gwdkir.Action) []manifest.Action {
+func actionsFromIR(actions []gwdkir.Action) []manifest.Action {
 	out := make([]manifest.Action, 0, len(actions))
 	for _, action := range actions {
 		out = append(out, manifest.Action{
@@ -228,11 +247,11 @@ func buildActionsFromIR(actions []gwdkir.Action) []manifest.Action {
 			InputType:      action.InputType,
 			ValidatesInput: action.ValidatesInput,
 			Redirect:       action.Redirect,
-			Fragments:      buildFragmentsFromIR(action.Fragments),
+			Fragments:      fragmentsFromIR(action.Fragments),
 			ErrorPage:      action.ErrorPage,
 			Span:           action.Span,
 			RouteSpan:      action.RouteSpan,
-			RouteParams:    append([]manifest.NamedSpan(nil), action.RouteParams...),
+			RouteParams:    append([]source.NamedSpan(nil), action.RouteParams...),
 			InputSpan:      action.InputSpan,
 			ValidationSpan: action.ValidationSpan,
 			RedirectSpan:   action.RedirectSpan,
@@ -242,7 +261,7 @@ func buildActionsFromIR(actions []gwdkir.Action) []manifest.Action {
 	return out
 }
 
-func buildAPIsFromIR(apis []gwdkir.API) []manifest.API {
+func apisFromIR(apis []gwdkir.API) []manifest.API {
 	out := make([]manifest.API, 0, len(apis))
 	for _, api := range apis {
 		out = append(out, manifest.API{
@@ -252,14 +271,14 @@ func buildAPIsFromIR(apis []gwdkir.API) []manifest.API {
 			ErrorPage:     api.ErrorPage,
 			Span:          api.Span,
 			RouteSpan:     api.RouteSpan,
-			RouteParams:   append([]manifest.NamedSpan(nil), api.RouteParams...),
+			RouteParams:   append([]source.NamedSpan(nil), api.RouteParams...),
 			ErrorPageSpan: api.ErrorPageSpan,
 		})
 	}
 	return out
 }
 
-func buildFragmentsFromIR(fragments []gwdkir.Fragment) []manifest.Fragment {
+func fragmentsFromIR(fragments []gwdkir.Fragment) []manifest.Fragment {
 	out := make([]manifest.Fragment, 0, len(fragments))
 	for _, fragment := range fragments {
 		out = append(out, manifest.Fragment{Target: fragment.Target, Body: fragment.Body, Span: fragment.Span})
@@ -267,7 +286,7 @@ func buildFragmentsFromIR(fragments []gwdkir.Fragment) []manifest.Fragment {
 	return out
 }
 
-func buildFragmentEndpointsFromIR(fragments []gwdkir.FragmentEndpoint) []manifest.FragmentEndpoint {
+func fragmentEndpointsFromIR(fragments []gwdkir.FragmentEndpoint) []manifest.FragmentEndpoint {
 	out := make([]manifest.FragmentEndpoint, 0, len(fragments))
 	for _, fragment := range fragments {
 		out = append(out, manifest.FragmentEndpoint{
@@ -279,13 +298,13 @@ func buildFragmentEndpointsFromIR(fragments []gwdkir.FragmentEndpoint) []manifes
 			Span:        fragment.Span,
 			RouteSpan:   fragment.RouteSpan,
 			TargetSpan:  fragment.TargetSpan,
-			RouteParams: append([]manifest.NamedSpan(nil), fragment.RouteParams...),
+			RouteParams: append([]source.NamedSpan(nil), fragment.RouteParams...),
 		})
 	}
 	return out
 }
 
-func buildImportsFromIR(imports []gwdkir.Import) []manifest.Import {
+func importsFromIR(imports []gwdkir.Import) []manifest.Import {
 	out := make([]manifest.Import, 0, len(imports))
 	for _, item := range imports {
 		out = append(out, manifest.Import{Alias: item.Alias, Path: item.Path, Span: item.Span})
@@ -293,7 +312,7 @@ func buildImportsFromIR(imports []gwdkir.Import) []manifest.Import {
 	return out
 }
 
-func buildUsesFromIR(uses []gwdkir.Use) []manifest.Use {
+func usesFromIR(uses []gwdkir.Use) []manifest.Use {
 	out := make([]manifest.Use, 0, len(uses))
 	for _, item := range uses {
 		out = append(out, manifest.Use{Alias: item.Alias, Package: item.Package, Span: item.Span})
@@ -301,20 +320,20 @@ func buildUsesFromIR(uses []gwdkir.Use) []manifest.Use {
 	return out
 }
 
-func buildStoresFromIR(stores []gwdkir.Store) []manifest.Store {
+func storesFromIR(stores []gwdkir.Store) []manifest.Store {
 	out := make([]manifest.Store, 0, len(stores))
 	for _, store := range stores {
 		out = append(out, manifest.Store{
 			Name: store.Name,
-			Type: buildGoTypeRefFromIR(store.Type),
-			Init: buildGoFuncRefFromIR(store.Init),
+			Type: goTypeRefFromIR(store.Type),
+			Init: goFuncRefFromIR(store.Init),
 			Span: store.Span,
 		})
 	}
 	return out
 }
 
-func buildPropsFromIR(props []gwdkir.Prop) []manifest.Prop {
+func propsFromIR(props []gwdkir.Prop) []manifest.Prop {
 	out := make([]manifest.Prop, 0, len(props))
 	for _, prop := range props {
 		out = append(out, manifest.Prop{Name: prop.Name, Type: prop.Type, Span: prop.Span})
@@ -322,7 +341,7 @@ func buildPropsFromIR(props []gwdkir.Prop) []manifest.Prop {
 	return out
 }
 
-func buildExportsFromIR(exports []gwdkir.Export) []manifest.Export {
+func exportsFromIR(exports []gwdkir.Export) []manifest.Export {
 	out := make([]manifest.Export, 0, len(exports))
 	for _, export := range exports {
 		out = append(out, manifest.Export{Name: export.Name, Type: export.Type, Span: export.Span})
@@ -330,7 +349,7 @@ func buildExportsFromIR(exports []gwdkir.Export) []manifest.Export {
 	return out
 }
 
-func buildEmitsFromIR(emits []gwdkir.Emit) []manifest.Emit {
+func emitsFromIR(emits []gwdkir.Emit) []manifest.Emit {
 	out := make([]manifest.Emit, 0, len(emits))
 	for _, emit := range emits {
 		params := make([]manifest.EmitParam, 0, len(emit.Params))
@@ -342,18 +361,18 @@ func buildEmitsFromIR(emits []gwdkir.Emit) []manifest.Emit {
 	return out
 }
 
-func buildStateContractFromIR(state gwdkir.StateContract) manifest.StateContract {
+func stateContractFromIR(state gwdkir.StateContract) manifest.StateContract {
 	return manifest.StateContract{
-		Type: buildGoTypeRefFromIR(state.Type),
-		Init: buildGoFuncRefFromIR(state.Init),
+		Type: goTypeRefFromIR(state.Type),
+		Init: goFuncRefFromIR(state.Init),
 		Span: state.Span,
 	}
 }
 
-func buildGoTypeRefFromIR(ref gwdkir.GoRef) manifest.GoTypeRef {
+func goTypeRefFromIR(ref gwdkir.GoRef) manifest.GoTypeRef {
 	return manifest.GoTypeRef{Alias: ref.Alias, Name: ref.Name, Span: ref.Span}
 }
 
-func buildGoFuncRefFromIR(ref gwdkir.GoRef) manifest.GoFuncRef {
+func goFuncRefFromIR(ref gwdkir.GoRef) manifest.GoFuncRef {
 	return manifest.GoFuncRef{Alias: ref.Alias, Name: ref.Name, Span: ref.Span}
 }

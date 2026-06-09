@@ -15,12 +15,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 var wasmMagic = []byte{0x00, 0x61, 0x73, 0x6d}
 
-func clientGoBlockRuntimeArtifacts(pages []manifest.Page, outputDir string) ([]plannedAssetArtifact, error) {
+func clientGoBlockRuntimeArtifacts(pages []gwdkir.Page, outputDir string) ([]plannedAssetArtifact, error) {
 	planned := map[string]plannedAssetArtifact{}
 	for _, page := range pages {
 		script, ok := clientGoBlock(page)
@@ -54,14 +55,14 @@ func clientGoBlockRuntimeArtifacts(pages []manifest.Page, outputDir string) ([]p
 	return artifacts, nil
 }
 
-func clientGoBlockHrefs(page manifest.Page) []string {
+func clientGoBlockHrefs(page gwdkir.Page) []string {
 	if _, ok := clientGoBlock(page); !ok {
 		return nil
 	}
 	return []string{"/" + clientGoBlockWASMLoaderAssetPath(page)}
 }
 
-func clientGoBlock(page manifest.Page) (manifest.GoBlock, bool) {
+func clientGoBlock(page gwdkir.Page) (gwdkir.GoBlock, bool) {
 	required := clientGoBlockMountExportName(page)
 	for _, script := range page.Blocks.GoBlocks {
 		if script.Target != "client" {
@@ -71,10 +72,10 @@ func clientGoBlock(page manifest.Page) (manifest.GoBlock, bool) {
 			return script, true
 		}
 	}
-	return manifest.GoBlock{}, false
+	return gwdkir.GoBlock{}, false
 }
 
-func islandWASMArtifact(outputDir string, component manifest.Component) (plannedAssetArtifact, error) {
+func islandWASMArtifact(outputDir string, component gwdkir.Component) (plannedAssetArtifact, error) {
 	assetPath := islandWASMAssetPath(component.Name)
 	contents := []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}
 	if strings.TrimSpace(component.WASM.Package) != "" {
@@ -90,7 +91,7 @@ func islandWASMArtifact(outputDir string, component manifest.Component) (planned
 	}, nil
 }
 
-func buildWASMIslandPackage(component manifest.Component) ([]byte, error) {
+func buildWASMIslandPackage(component gwdkir.Component) ([]byte, error) {
 	packagePath := strings.TrimSpace(component.WASM.Package)
 	temp, err := os.CreateTemp("", "gowdk-"+componentAssetName(component.Name)+"-*.wasm")
 	if err != nil {
@@ -132,7 +133,7 @@ func buildWASMIslandPackage(component manifest.Component) ([]byte, error) {
 	return contents, nil
 }
 
-func clientGoBlockWASMArtifact(outputDir string, page manifest.Page, script manifest.GoBlock) (plannedAssetArtifact, error) {
+func clientGoBlockWASMArtifact(outputDir string, page gwdkir.Page, script gwdkir.GoBlock) (plannedAssetArtifact, error) {
 	assetPath := clientGoBlockWASMAssetPath(page)
 	contents, err := buildClientGoBlockWASM(page, script)
 	if err != nil {
@@ -144,7 +145,7 @@ func clientGoBlockWASMArtifact(outputDir string, page manifest.Page, script mani
 	}, nil
 }
 
-func buildClientGoBlockWASM(page manifest.Page, script manifest.GoBlock) ([]byte, error) {
+func buildClientGoBlockWASM(page gwdkir.Page, script gwdkir.GoBlock) ([]byte, error) {
 	temp, err := os.CreateTemp(sourceDir(page.Source), ".gowdk-"+clientGoBlockAssetName(page)+"-*.wasm")
 	if err != nil {
 		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_build_error", fmt.Errorf("create temp output: %w", err))
@@ -198,7 +199,7 @@ func buildClientGoBlockWASM(page manifest.Page, script manifest.GoBlock) ([]byte
 	return contents, nil
 }
 
-func clientGoBlockWASMSource(page manifest.Page, script manifest.GoBlock) (string, error) {
+func clientGoBlockWASMSource(page gwdkir.Page, script gwdkir.GoBlock) (string, error) {
 	body := strings.TrimSpace(script.Body)
 	sourceWithoutImports := "package main\n" + body + "\n"
 	fileSet := token.NewFileSet()
@@ -232,7 +233,7 @@ func clientGoBlockWASMSource(page manifest.Page, script manifest.GoBlock) (strin
 	return buffer.String(), nil
 }
 
-func clientGoBlockGOWDKImportDecl(imports []manifest.Import, file *ast.File) ast.Decl {
+func clientGoBlockGOWDKImportDecl(imports []gwdkir.Import, file *ast.File) ast.Decl {
 	used := usedIdentifiers(file)
 	localImports := map[string]bool{}
 	for _, spec := range importSpecs(file) {
@@ -280,7 +281,7 @@ func importSpec(alias string, importPath string) ast.Spec {
 	return spec
 }
 
-func validateClientGoBlockWASMImports(page manifest.Page, sourcePath string) error {
+func validateClientGoBlockWASMImports(page gwdkir.Page, sourcePath string) error {
 	file, err := parser.ParseFile(token.NewFileSet(), sourcePath, nil, parser.ImportsOnly)
 	if err != nil {
 		return clientGoBlockDiagnosticError(page, "client_go_block_wasm_import_error", fmt.Errorf("parse imports: %w", err))
@@ -299,7 +300,7 @@ func validateClientGoBlockWASMImports(page manifest.Page, sourcePath string) err
 	return nil
 }
 
-func validateClientGoBlockWASMExports(page manifest.Page, contents []byte) error {
+func validateClientGoBlockWASMExports(page gwdkir.Page, contents []byte) error {
 	exports, err := wasmExportNames(contents)
 	if err != nil {
 		return clientGoBlockDiagnosticError(page, "client_go_block_wasm_export_error", err)
@@ -311,7 +312,7 @@ func validateClientGoBlockWASMExports(page manifest.Page, contents []byte) error
 	return nil
 }
 
-func validateWASMIslandExports(component manifest.Component, packagePath string, contents []byte) error {
+func validateWASMIslandExports(component gwdkir.Component, packagePath string, contents []byte) error {
 	exports, err := wasmExportNames(contents)
 	if err != nil {
 		return wasmIslandDiagnosticError(component, "wasm_package_export_error", packagePath, err)
@@ -428,7 +429,7 @@ func (err *wasmIslandBuildDiagnosticError) BuildDiagnostics() []BuildDiagnostic 
 	return []BuildDiagnostic{err.diagnostic}
 }
 
-func wasmIslandDiagnosticError(component manifest.Component, code, packagePath string, cause error) error {
+func wasmIslandDiagnosticError(component gwdkir.Component, code, packagePath string, cause error) error {
 	message := fmt.Sprintf("component %s wasm package %q %v", component.Name, packagePath, cause)
 	return &wasmIslandBuildDiagnosticError{
 		err: fmt.Errorf("%s", message),
@@ -468,7 +469,7 @@ func (err *clientGoBlockBuildDiagnosticError) BuildDiagnostics() []BuildDiagnost
 	return []BuildDiagnostic{err.diagnostic}
 }
 
-func clientGoBlockDiagnosticError(page manifest.Page, code string, cause error) error {
+func clientGoBlockDiagnosticError(page gwdkir.Page, code string, cause error) error {
 	message := fmt.Sprintf("page %s go client WASM: %v", page.ID, cause)
 	return &clientGoBlockBuildDiagnosticError{
 		err: fmt.Errorf("%s", message),
@@ -481,13 +482,13 @@ func clientGoBlockDiagnosticError(page manifest.Page, code string, cause error) 
 	}
 }
 
-func goBlockTargetSpan(spans []manifest.NamedSpan, target string) manifest.SourceSpan {
+func goBlockTargetSpan(spans []source.NamedSpan, target string) source.SourceSpan {
 	for _, span := range spans {
 		if span.Name == target {
 			return span.Span
 		}
 	}
-	return manifest.SourceSpan{}
+	return source.SourceSpan{}
 }
 
 var forbiddenWASMIslandImports = map[string]string{
@@ -558,7 +559,7 @@ func fileDeclaresMain(file *ast.File) bool {
 	return false
 }
 
-func clientGoBlockImportAlias(item manifest.Import) string {
+func clientGoBlockImportAlias(item gwdkir.Import) string {
 	if strings.TrimSpace(item.Alias) != "" {
 		return item.Alias
 	}
@@ -569,7 +570,7 @@ func clientGoBlockImportAlias(item manifest.Import) string {
 	return path.Base(importPath)
 }
 
-func validateWASMIslandPackageImports(component manifest.Component, dir, buildPackage, packagePath string) error {
+func validateWASMIslandPackageImports(component gwdkir.Component, dir, buildPackage, packagePath string) error {
 	sourceDir, ok := wasmIslandLocalSourceDir(dir, buildPackage, packagePath)
 	if !ok {
 		return nil

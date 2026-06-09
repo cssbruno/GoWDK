@@ -2,7 +2,7 @@
 package gwdkast
 
 import (
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
@@ -37,76 +37,76 @@ type File struct {
 // Package is the top-level Go package declaration.
 type Package struct {
 	Name string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // Annotation is one top-level @annotation.
 type Annotation struct {
 	Name  string
 	Value string
-	Span  manifest.SourceSpan
+	Span  source.SourceSpan
 }
 
 // PageDecl is an @page declaration.
 type PageDecl struct {
 	ID   string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // ComponentDecl is an @component declaration.
 type ComponentDecl struct {
 	Name string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // LayoutDecl is an @layout declaration in a layout file.
 type LayoutDecl struct {
 	ID   string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // RouteDecl is an @route declaration.
 type RouteDecl struct {
 	Path   string
 	Params []RouteParam
-	Span   manifest.SourceSpan
+	Span   source.SourceSpan
 }
 
 // RouteParam is one dynamic route segment declared by @route.
 type RouteParam struct {
 	Name string
 	Type string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // CacheDecl is an @cache route response policy declaration.
 type CacheDecl struct {
 	Policy string
-	Span   manifest.SourceSpan
+	Span   source.SourceSpan
 }
 
 // RevalidateDecl is an @revalidate stale-while-revalidate declaration.
 type RevalidateDecl struct {
 	Seconds string
-	Span    manifest.SourceSpan
+	Span    source.SourceSpan
 }
 
 // ErrorPageDecl is a route-local generated error page path.
 type ErrorPageDecl struct {
 	Path string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // LayoutRef is one @layout reference on a page.
 type LayoutRef struct {
 	ID   string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // GuardRef is one @guard reference on a page.
 type GuardRef struct {
 	Name string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // AssetRef is one source-selected asset reference.
@@ -115,7 +115,7 @@ type AssetRef struct {
 	Path   string
 	Inline string
 	Scope  AssetScope
-	Span   manifest.SourceSpan
+	Span   source.SourceSpan
 }
 
 // AssetScope records deterministic owner metadata for scoped CSS and future
@@ -132,28 +132,28 @@ type AssetScope struct {
 type Import struct {
 	Alias string
 	Path  string
-	Span  manifest.SourceSpan
+	Span  source.SourceSpan
 }
 
 // Use is one top-level GOWDK package import declaration.
 type Use struct {
 	Alias   string
 	Package string
-	Span    manifest.SourceSpan
+	Span    source.SourceSpan
 }
 
 // GoTypeRef references a Go type through a .gwdk import alias.
 type GoTypeRef struct {
 	Alias string
 	Name  string
-	Span  manifest.SourceSpan
+	Span  source.SourceSpan
 }
 
 // GoFuncRef references a Go function through a .gwdk import alias.
 type GoFuncRef struct {
 	Alias string
 	Name  string
-	Span  manifest.SourceSpan
+	Span  source.SourceSpan
 }
 
 // Store is one top-level page-scoped store declaration.
@@ -161,20 +161,20 @@ type Store struct {
 	Name string
 	Type GoTypeRef
 	Init GoFuncRef
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // StateContract describes a component state type and initializer.
 type StateContract struct {
 	Type GoTypeRef
 	Init GoFuncRef
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // WASMContract points an explicit browser-side Go package at a component.
 type WASMContract struct {
 	Package string
-	Span    manifest.SourceSpan
+	Span    source.SourceSpan
 }
 
 // Block is one parsed top-level block.
@@ -182,8 +182,8 @@ type Block struct {
 	Kind      string
 	Name      string
 	Body      string
-	Span      manifest.SourceSpan
-	BodyStart manifest.SourcePosition
+	Span      source.SourceSpan
+	BodyStart source.SourcePosition
 	View      []view.Node
 	StyleBody string
 	Records   []LiteralRecord
@@ -202,8 +202,8 @@ type Endpoint struct {
 	Method        string
 	Route         string
 	ErrorPage     string
-	Span          manifest.SourceSpan
-	ErrorPageSpan manifest.SourceSpan
+	Span          source.SourceSpan
+	ErrorPageSpan source.SourceSpan
 }
 
 // FragmentEndpoint is one generated server fragment route declaration.
@@ -213,50 +213,50 @@ type FragmentEndpoint struct {
 	Route      string
 	Target     string
 	Body       string
-	Span       manifest.SourceSpan
-	RouteSpan  manifest.SourceSpan
-	TargetSpan manifest.SourceSpan
+	Span       source.SourceSpan
+	RouteSpan  source.SourceSpan
+	TargetSpan source.SourceSpan
 }
 
 // LiteralRecord is a first-slice paths/build return record.
 type LiteralRecord struct {
 	Fields map[string]string
-	Span   manifest.SourceSpan
+	Span   source.SourceSpan
 }
 
 // BuildCall is a first-slice imported build data function call.
 type BuildCall struct {
 	Alias    string
 	Function string
-	Span     manifest.SourceSpan
+	Span     source.SourceSpan
 }
 
 // Prop is one scalar prop declaration inside props {}.
 type Prop struct {
 	Name string
 	Type string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // Export is one typed public component export inside exports {}.
 type Export struct {
 	Name string
 	Type string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // Emit is one component event declaration inside emits {}.
 type Emit struct {
 	Name   string
 	Params []EmitParam
-	Span   manifest.SourceSpan
+	Span   source.SourceSpan
 }
 
 // EmitParam is one typed event payload field.
 type EmitParam struct {
 	Name string
 	Type string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // ActionStatement is one supported statement inside legacy act {} parsing.
@@ -268,12 +268,12 @@ type ActionStatement struct {
 	Target    string
 	Redirect  string
 	Body      string
-	Span      manifest.SourceSpan
+	Span      source.SourceSpan
 }
 
 // APIStatement is one supported statement inside legacy api {} parsing.
 type APIStatement struct {
 	Method string
 	Route  string
-	Span   manifest.SourceSpan
+	Span   source.SourceSpan
 }

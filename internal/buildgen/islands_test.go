@@ -358,7 +358,7 @@ func TestIslandJSSourceMapMappingsUseComponentSpans(t *testing.T) {
 	var sourceMap struct {
 		Mappings string `json:"mappings"`
 	}
-	if err := json.Unmarshal(islandJSSourceMap(component, source), &sourceMap); err != nil {
+	if err := json.Unmarshal(islandJSSourceMap(irComponent(component), source), &sourceMap); err != nil {
 		t.Fatal(err)
 	}
 	if sourceMap.Mappings == "" {

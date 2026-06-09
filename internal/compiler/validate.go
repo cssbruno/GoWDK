@@ -3,7 +3,9 @@ package compiler
 import (
 	"fmt"
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 type ValidationError struct {
@@ -11,7 +13,7 @@ type ValidationError struct {
 	PageID        string
 	ComponentName string
 	Source        string
-	Span          manifest.SourceSpan
+	Span          source.SourceSpan
 	Message       string
 }
 
@@ -51,4 +53,13 @@ func ValidateManifest(config gowdk.Config, app manifest.Manifest) error {
 		return nil
 	}
 	return ValidationErrors(diagnostics)
+}
+
+// ValidateProgram checks the same render-mode invariants as ValidateManifest
+// against an IR-first build path. It reconstructs the manifest from IR via
+// ManifestFromIR so generated-output packages no longer need to carry their own
+// IR->manifest converter. As validators move to read IR directly, the converter
+// shrinks until this entrypoint reads IR with no manifest intermediary.
+func ValidateProgram(config gowdk.Config, ir gwdkir.Program) error {
+	return ValidateManifest(config, ManifestFromIR(ir))
 }

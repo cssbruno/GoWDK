@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 type BuildEventLevel string
@@ -37,11 +37,11 @@ type BuildReport struct {
 // BuildDiagnostic is a structured diagnostic produced during SPA planning
 // or output generation after parser/compiler validation has already completed.
 type BuildDiagnostic struct {
-	Code          string              `json:"code"`
-	ComponentName string              `json:"componentName,omitempty"`
-	Source        string              `json:"source,omitempty"`
-	Span          manifest.SourceSpan `json:"span,omitempty"`
-	Message       string              `json:"message"`
+	Code          string            `json:"code"`
+	ComponentName string            `json:"componentName,omitempty"`
+	Source        string            `json:"source,omitempty"`
+	Span          source.SourceSpan `json:"span,omitempty"`
+	Message       string            `json:"message"`
 }
 
 type BuildError struct {

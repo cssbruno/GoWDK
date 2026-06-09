@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 	"github.com/evanw/esbuild/pkg/api"
 )
@@ -186,7 +186,7 @@ func safeScriptAssetName(scriptPath string) string {
 	return name
 }
 
-func scopedScriptHrefs(page manifest.Page, viewSource string, components map[string]view.Component) []string {
+func scopedScriptHrefs(page gwdkir.Page, viewSource string, components map[string]view.Component) []string {
 	seen := map[string]bool{}
 	var scripts []string
 	add := func(href string) {
@@ -202,7 +202,7 @@ func scopedScriptHrefs(page manifest.Page, viewSource string, components map[str
 	for index, script := range page.InlineJS {
 		name := script.Name
 		if name == "" {
-			name = manifest.InlineScriptName(index)
+			name = source.InlineScriptName(index)
 		}
 		add("/" + pageScopedJSLogicalPath(page.ID, name))
 	}
@@ -213,7 +213,7 @@ func scopedScriptHrefs(page manifest.Page, viewSource string, components map[str
 	return scripts
 }
 
-func scopedComponentScriptHrefs(page manifest.Page, viewSource string, components map[string]view.Component) []string {
+func scopedComponentScriptHrefs(page gwdkir.Page, viewSource string, components map[string]view.Component) []string {
 	usages, err := recursiveViewComponentCallUsages(viewSource, components, page.Package, componentUses(page.Uses))
 	if err != nil {
 		return nil
@@ -233,7 +233,7 @@ func scopedComponentScriptHrefs(page manifest.Page, viewSource string, component
 		for index, script := range component.InlineJS {
 			name := script.Name
 			if name == "" {
-				name = manifest.InlineScriptName(index)
+				name = source.InlineScriptName(index)
 			}
 			href := "/" + componentScopedJSLogicalPath(component.Package, component.Name, name)
 			if seen[href] {

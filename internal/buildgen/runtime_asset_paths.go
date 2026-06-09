@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 func islandWASMLoaderArtifact(outputDir, componentName string) plannedAssetArtifact {
@@ -18,7 +18,7 @@ func islandWASMLoaderArtifact(outputDir, componentName string) plannedAssetArtif
 	}
 }
 
-func clientGoBlockWASMLoaderArtifact(outputDir string, page manifest.Page) plannedAssetArtifact {
+func clientGoBlockWASMLoaderArtifact(outputDir string, page gwdkir.Page) plannedAssetArtifact {
 	assetPath := clientGoBlockWASMLoaderAssetPath(page)
 	return plannedAssetArtifact{
 		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
@@ -50,11 +50,11 @@ func islandWASMLoaderAssetPath(componentName string) string {
 	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".wasm.js")
 }
 
-func clientGoBlockWASMAssetPath(page manifest.Page) string {
+func clientGoBlockWASMAssetPath(page gwdkir.Page) string {
 	return path.Join(islandRuntimeDir, "pages", clientGoBlockAssetName(page)+".wasm")
 }
 
-func clientGoBlockWASMLoaderAssetPath(page manifest.Page) string {
+func clientGoBlockWASMLoaderAssetPath(page gwdkir.Page) string {
 	return path.Join(islandRuntimeDir, "pages", clientGoBlockAssetName(page)+".wasm.js")
 }
 
@@ -74,7 +74,7 @@ func componentAssetName(componentName string) string {
 	return name
 }
 
-func clientGoBlockAssetName(page manifest.Page) string {
+func clientGoBlockAssetName(page gwdkir.Page) string {
 	name := exportedPascalSafe(page.ID)
 	if name == "" {
 		return "Page"
@@ -82,7 +82,7 @@ func clientGoBlockAssetName(page manifest.Page) string {
 	return name
 }
 
-func clientGoBlockMountExportName(page manifest.Page) string {
+func clientGoBlockMountExportName(page gwdkir.Page) string {
 	return "GOWDKMount" + clientGoBlockAssetName(page)
 }
 

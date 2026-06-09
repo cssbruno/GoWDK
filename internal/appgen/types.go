@@ -4,6 +4,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // Result describes generated app artifacts.
@@ -102,7 +103,7 @@ type SSRRoute struct {
 	Cache            string
 	ErrorPage        string
 	DynamicParams    []string
-	RouteParams      []manifest.RouteParam
+	RouteParams      []source.RouteParam
 	Guards           []string
 	HasLoad          bool
 	LoadBinding      manifest.BackendBinding

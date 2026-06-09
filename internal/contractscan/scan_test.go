@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	runtimecontracts "github.com/cssbruno/gowdk/runtime/contracts"
 )
 
@@ -766,7 +766,7 @@ func findDiagnostic(t *testing.T, diagnostics []Diagnostic, code string) Diagnos
 	return Diagnostic{}
 }
 
-func inputFieldsString(fields []manifest.BackendInputField) string {
+func inputFieldsString(fields []source.BackendInputField) string {
 	parts := make([]string, 0, len(fields))
 	for _, field := range fields {
 		parts = append(parts, field.FieldName+":"+field.FormName+":"+field.Type)

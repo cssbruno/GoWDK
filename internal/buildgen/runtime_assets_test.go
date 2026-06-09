@@ -6,19 +6,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 func TestClientGoBlockWASMSourceMergesImportsWithAST(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID: "counter",
-		Imports: []manifest.Import{
+		Imports: []gwdkir.Import{
 			{Alias: "dom", Path: "syscall/js"},
 			{Path: "fmt"},
 			{Path: "example.com/unused"},
 		},
 	}
-	block := manifest.GoBlock{Body: `import "strings"
+	block := gwdkir.GoBlock{Body: `import "strings"
 
 func GOWDKMountCounter(value string) {
 	_ = dom.Global()

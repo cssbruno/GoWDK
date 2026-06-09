@@ -6,6 +6,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gotypes"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
@@ -18,7 +19,7 @@ const (
 	renderModeRequestTime renderModePolicy = "request-time"
 )
 
-func renderPage(config gowdk.Config, page manifest.Page, components map[string]view.Component, layouts map[string]manifest.Layout, stylesheets []gowdk.Stylesheet, data map[string]string, policy renderModePolicy) (string, error) {
+func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, data map[string]string, policy renderModePolicy) (string, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if policy == renderModeSPA && mode != gowdk.SPA && mode != gowdk.Action {
 		return "", fmt.Errorf("%s: SPA build cannot emit request-time %s pages yet", page.ID, mode)
@@ -55,7 +56,7 @@ func renderPage(config gowdk.Config, page manifest.Page, components map[string]v
 	return document(config, page, body, stylesheets, storeSeeds, pageScripts(config, page, viewSource, pageComponents, policy)), nil
 }
 
-func composePageViewSource(page manifest.Page, layouts map[string]manifest.Layout) (string, error) {
+func composePageViewSource(page gwdkir.Page, layouts map[string]gwdkir.Layout) (string, error) {
 	source := page.Blocks.ViewBody
 	if len(layouts) == 0 {
 		return source, nil
@@ -75,7 +76,7 @@ func composePageViewSource(page manifest.Page, layouts map[string]manifest.Layou
 	return source, nil
 }
 
-func resolvePageLayout(page manifest.Page, layouts map[string]manifest.Layout, layoutRef string) (manifest.Layout, bool) {
+func resolvePageLayout(page gwdkir.Page, layouts map[string]gwdkir.Layout, layoutRef string) (gwdkir.Layout, bool) {
 	if alias, layoutID, ok := strings.Cut(layoutRef, "."); ok {
 		for _, use := range page.Uses {
 			if use.Alias == alias {
@@ -83,7 +84,7 @@ func resolvePageLayout(page manifest.Page, layouts map[string]manifest.Layout, l
 				return layout, exists
 			}
 		}
-		return manifest.Layout{}, false
+		return gwdkir.Layout{}, false
 	}
 	if page.Package != "" {
 		if layout, ok := layouts[layoutRegistryKey(page.Package, layoutRef)]; ok {
@@ -94,7 +95,7 @@ func resolvePageLayout(page manifest.Page, layouts map[string]manifest.Layout, l
 	return layout, ok
 }
 
-func composeLayoutSource(layout manifest.Layout, child string) (string, error) {
+func composeLayoutSource(layout gwdkir.Layout, child string) (string, error) {
 	matches := layoutSlotIndexes(layout.Blocks.ViewBody)
 	if len(matches) != 1 {
 		return "", fmt.Errorf("layout %s must contain exactly one <slot /> placeholder", layout.ID)
@@ -103,7 +104,7 @@ func composeLayoutSource(layout manifest.Layout, child string) (string, error) {
 	return layout.Blocks.ViewBody[:match[0]] + child + layout.Blocks.ViewBody[match[1]:], nil
 }
 
-func validateViewParamReferences(page manifest.Page, source string) error {
+func validateViewParamReferences(page gwdkir.Page, source string) error {
 	refs, err := view.ParamReferences(source)
 	if err != nil {
 		return err
@@ -123,7 +124,7 @@ func validateViewParamReferences(page manifest.Page, source string) error {
 	return nil
 }
 
-func actionRoutes(page manifest.Page, data map[string]string) map[string]string {
+func actionRoutes(page gwdkir.Page, data map[string]string) map[string]string {
 	routes := map[string]string{}
 	for _, action := range page.Blocks.Actions {
 		route := action.Route
@@ -138,7 +139,7 @@ func actionRoutes(page manifest.Page, data map[string]string) map[string]string 
 	return routes
 }
 
-func pageScripts(config gowdk.Config, page manifest.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) []gowdk.Script {
+func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) []gowdk.Script {
 	scripts := append([]gowdk.Script{}, nonEmptyScripts(config.Build.Scripts)...)
 	for _, href := range scopedScriptHrefs(page, viewSource, components) {
 		scripts = append(scripts, gowdk.Script{Src: href, Type: "module"})
@@ -161,14 +162,14 @@ func pageScripts(config gowdk.Config, page manifest.Page, viewSource string, com
 	return scripts
 }
 
-func pageUsesPartialRuntime(page manifest.Page, viewSource string) bool {
+func pageUsesPartialRuntime(page gwdkir.Page, viewSource string) bool {
 	if !strings.Contains(viewSource, "g:target") {
 		return false
 	}
 	return len(page.Blocks.Actions) > 0
 }
 
-func pageUsesSPANavigationRuntime(config gowdk.Config, page manifest.Page, viewSource string, components map[string]view.Component) bool {
+func pageUsesSPANavigationRuntime(config gowdk.Config, page gwdkir.Page, viewSource string, components map[string]view.Component) bool {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if mode != gowdk.SPA && mode != gowdk.Action {
 		return false
@@ -232,15 +233,15 @@ type pageStoreSeed struct {
 	JSON string
 }
 
-func pageStoreSeeds(page manifest.Page) ([]pageStoreSeed, error) {
+func pageStoreSeeds(page gwdkir.Page) ([]pageStoreSeed, error) {
 	if len(page.Stores) == 0 {
 		return nil, nil
 	}
 	seeds := make([]pageStoreSeed, 0, len(page.Stores))
 	for _, store := range page.Stores {
-		payload, err := gotypes.RunStateInitJSON(page.Imports, manifest.StateContract{
-			Type: store.Type,
-			Init: store.Init,
+		payload, err := gotypes.RunStateInitJSON(manifestImports(page.Imports), manifest.StateContract{
+			Type: manifestGoTypeRef(store.Type),
+			Init: manifestGoFuncRef(store.Init),
 			Span: store.Span,
 		})
 		if err != nil {
@@ -251,7 +252,7 @@ func pageStoreSeeds(page manifest.Page) ([]pageStoreSeed, error) {
 	return seeds, nil
 }
 
-func document(config gowdk.Config, page manifest.Page, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []gowdk.Script) string {
+func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []gowdk.Script) string {
 	title := page.ID
 	if page.Metadata.Title != "" {
 		title = page.Metadata.Title
@@ -346,7 +347,7 @@ func nonEmptyScripts(scripts []gowdk.Script) []gowdk.Script {
 	return out
 }
 
-func socialHeadEnabled(head gowdk.HeadConfig, metadata manifest.PageMetadata) bool {
+func socialHeadEnabled(head gowdk.HeadConfig, metadata gwdkir.PageMetadata) bool {
 	return head.SiteName != "" || head.Image != "" || head.TwitterCard != "" || metadata.Image != ""
 }
 

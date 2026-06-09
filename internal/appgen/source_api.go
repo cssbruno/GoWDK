@@ -4,7 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func apiHandlerSource(apis []APIEndpoint) string {
@@ -62,7 +62,7 @@ func apiCaseStmts(api APIEndpoint, rateLimit bool) []ast.Stmt {
 	}
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(api.Guards)...)
-	if api.Binding.Status != manifest.BackendBindingBound {
+	if api.Binding.Status != source.BackendBindingBound {
 		stmts = append(stmts, backendNotImplementedStmts(api.Binding, "API")...)
 		stmts = append(stmts, returnBool(true))
 		return stmts

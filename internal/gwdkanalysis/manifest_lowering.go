@@ -7,11 +7,12 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/gwdkast"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // LowerPage lowers one page AST into manifest compatibility records.
-func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
-	page := manifest.Page{Source: source}
+func LowerPage(src string, ast gwdkast.File) (manifest.Page, error) {
+	page := manifest.Page{Source: src}
 	if ast.Package != nil {
 		page.Package = ast.Package.Name
 		page.Spans.Package = ast.Package.Span
@@ -43,25 +44,25 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 	}
 	for _, layout := range ast.Layouts {
 		page.Layouts = append(page.Layouts, layout.ID)
-		page.Spans.Layouts = append(page.Spans.Layouts, manifest.NamedSpan{Name: layout.ID, Span: layout.Span})
+		page.Spans.Layouts = append(page.Spans.Layouts, source.NamedSpan{Name: layout.ID, Span: layout.Span})
 	}
 	for _, guard := range ast.Guards {
 		page.Guard = append(page.Guard, guard.Name)
-		page.Spans.Guard = append(page.Spans.Guard, manifest.NamedSpan{Name: guard.Name, Span: guard.Span})
+		page.Spans.Guard = append(page.Spans.Guard, source.NamedSpan{Name: guard.Name, Span: guard.Span})
 	}
 	for _, asset := range ast.CSS {
 		page.CSS = append(page.CSS, asset.Path)
-		page.Spans.CSS = append(page.Spans.CSS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+		page.Spans.CSS = append(page.Spans.CSS, source.NamedSpan{Name: asset.Path, Span: asset.Span})
 	}
 	for _, asset := range ast.JS {
 		if strings.TrimSpace(asset.Path) != "" {
 			page.JS = append(page.JS, asset.Path)
-			page.Spans.JS = append(page.Spans.JS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+			page.Spans.JS = append(page.Spans.JS, source.NamedSpan{Name: asset.Path, Span: asset.Span})
 			continue
 		}
-		name := manifest.InlineScriptName(len(page.InlineJS))
-		page.InlineJS = append(page.InlineJS, manifest.InlineScript{Name: name, Body: asset.Inline, Span: asset.Span})
-		page.Spans.InlineJS = append(page.Spans.InlineJS, manifest.NamedSpan{Name: name, Span: asset.Span})
+		name := source.InlineScriptName(len(page.InlineJS))
+		page.InlineJS = append(page.InlineJS, source.InlineScript{Name: name, Body: asset.Inline, Span: asset.Span})
+		page.Spans.InlineJS = append(page.Spans.InlineJS, source.NamedSpan{Name: name, Span: asset.Span})
 	}
 
 	for _, annotation := range ast.Annotations {
@@ -86,7 +87,7 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 			RouteParams:   routeParamSpans(endpoint.Route, endpoint.Span),
 			ErrorPageSpan: endpoint.ErrorPageSpan,
 		})
-		page.Blocks.Spans.Actions = append(page.Blocks.Spans.Actions, manifest.NamedSpan{Name: endpoint.Name, Span: endpoint.Span})
+		page.Blocks.Spans.Actions = append(page.Blocks.Spans.Actions, source.NamedSpan{Name: endpoint.Name, Span: endpoint.Span})
 	}
 	for _, endpoint := range ast.APIs {
 		page.Blocks.APIs = append(page.Blocks.APIs, manifest.API{
@@ -99,7 +100,7 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 			RouteParams:   routeParamSpans(endpoint.Route, endpoint.Span),
 			ErrorPageSpan: endpoint.ErrorPageSpan,
 		})
-		page.Blocks.Spans.APIs = append(page.Blocks.Spans.APIs, manifest.NamedSpan{Name: endpoint.Name, Span: endpoint.Span})
+		page.Blocks.Spans.APIs = append(page.Blocks.Spans.APIs, source.NamedSpan{Name: endpoint.Name, Span: endpoint.Span})
 	}
 	for _, fragment := range ast.Fragments {
 		page.Blocks.Fragments = append(page.Blocks.Fragments, manifest.FragmentEndpoint{
@@ -113,25 +114,25 @@ func LowerPage(source string, ast gwdkast.File) (manifest.Page, error) {
 			TargetSpan:  fragment.TargetSpan,
 			RouteParams: routeParamSpans(fragment.Route, fragment.RouteSpan),
 		})
-		page.Blocks.Spans.Fragments = append(page.Blocks.Spans.Fragments, manifest.NamedSpan{Name: fragment.Name, Span: fragment.Span})
+		page.Blocks.Spans.Fragments = append(page.Blocks.Spans.Fragments, source.NamedSpan{Name: fragment.Name, Span: fragment.Span})
 	}
 	if page.ID == "" {
-		page.ID = derivedPageID(source)
+		page.ID = derivedPageID(src)
 	}
 	if page.ID == "" {
-		return manifest.Page{}, fmt.Errorf("%s: missing @page", source)
+		return manifest.Page{}, fmt.Errorf("%s: missing @page", src)
 	}
 	if page.Route == "" {
-		return manifest.Page{}, fmt.Errorf("%s: missing @route", source)
+		return manifest.Page{}, fmt.Errorf("%s: missing @route", src)
 	}
 	return page, nil
 }
 
-func derivedPageID(source string) string {
-	if strings.TrimSpace(source) == "" {
+func derivedPageID(src string) string {
+	if strings.TrimSpace(src) == "" {
 		return ""
 	}
-	base := filepath.Base(source)
+	base := filepath.Base(src)
 	if base == "." || base == string(filepath.Separator) {
 		return ""
 	}
@@ -145,8 +146,8 @@ func derivedPageID(source string) string {
 }
 
 // LowerComponent lowers one component AST into manifest compatibility records.
-func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error) {
-	component := manifest.Component{Source: source}
+func LowerComponent(src string, ast gwdkast.File) (manifest.Component, error) {
+	component := manifest.Component{Source: src}
 	if ast.Package != nil {
 		component.Package = ast.Package.Name
 		component.PackageSpan = ast.Package.Span
@@ -155,21 +156,21 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 	component.Uses = lowerUses(ast.Uses)
 	for _, asset := range ast.CSS {
 		component.CSS = append(component.CSS, asset.Path)
-		component.Spans.CSS = append(component.Spans.CSS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+		component.Spans.CSS = append(component.Spans.CSS, source.NamedSpan{Name: asset.Path, Span: asset.Span})
 	}
 	for _, asset := range ast.JS {
 		if strings.TrimSpace(asset.Path) != "" {
 			component.JS = append(component.JS, asset.Path)
-			component.Spans.JS = append(component.Spans.JS, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+			component.Spans.JS = append(component.Spans.JS, source.NamedSpan{Name: asset.Path, Span: asset.Span})
 			continue
 		}
-		name := manifest.InlineScriptName(len(component.InlineJS))
-		component.InlineJS = append(component.InlineJS, manifest.InlineScript{Name: name, Body: asset.Inline, Span: asset.Span})
-		component.Spans.InlineJS = append(component.Spans.InlineJS, manifest.NamedSpan{Name: name, Span: asset.Span})
+		name := source.InlineScriptName(len(component.InlineJS))
+		component.InlineJS = append(component.InlineJS, source.InlineScript{Name: name, Body: asset.Inline, Span: asset.Span})
+		component.Spans.InlineJS = append(component.Spans.InlineJS, source.NamedSpan{Name: name, Span: asset.Span})
 	}
 	for _, asset := range ast.Assets {
 		component.Assets = append(component.Assets, asset.Path)
-		component.Spans.Assets = append(component.Spans.Assets, manifest.NamedSpan{Name: asset.Path, Span: asset.Span})
+		component.Spans.Assets = append(component.Spans.Assets, source.NamedSpan{Name: asset.Path, Span: asset.Span})
 	}
 	if ast.PropsType != nil {
 		component.PropsType = lowerGoTypeRef(*ast.PropsType)
@@ -217,7 +218,7 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 				component.Spans.Assets = namedSpans(component.Assets, annotation.Span)
 			}
 		default:
-			return manifest.Component{}, fmt.Errorf("%s: unsupported component annotation @%s", source, annotation.Name)
+			return manifest.Component{}, fmt.Errorf("%s: unsupported component annotation @%s", src, annotation.Name)
 		}
 	}
 	for _, block := range ast.Blocks {
@@ -240,7 +241,7 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 				Body:   block.Body,
 				Span:   block.Span,
 			})
-			component.Blocks.Spans.GoBlocks = append(component.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: block.Name, Span: block.Span})
+			component.Blocks.Spans.GoBlocks = append(component.Blocks.Spans.GoBlocks, source.NamedSpan{Name: block.Name, Span: block.Span})
 		case "view":
 			component.Blocks.View = true
 			component.Blocks.ViewBody = block.Body
@@ -250,18 +251,18 @@ func LowerComponent(source string, ast gwdkast.File) (manifest.Component, error)
 			component.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
 			component.Blocks.StyleBody = block.StyleBody
 		default:
-			return manifest.Component{}, fmt.Errorf("%s: unsupported component block %q", source, block.Kind)
+			return manifest.Component{}, fmt.Errorf("%s: unsupported component block %q", src, block.Kind)
 		}
 	}
 	if component.Name == "" {
-		return manifest.Component{}, fmt.Errorf("%s: missing @component", source)
+		return manifest.Component{}, fmt.Errorf("%s: missing @component", src)
 	}
 	return component, nil
 }
 
 // LowerLayout lowers one layout AST into manifest compatibility records.
-func LowerLayout(source string, ast gwdkast.File) (manifest.Layout, error) {
-	layout := manifest.Layout{Source: source}
+func LowerLayout(src string, ast gwdkast.File) (manifest.Layout, error) {
+	layout := manifest.Layout{Source: src}
 	if ast.Package != nil {
 		layout.Package = ast.Package.Name
 		layout.PackageSpan = ast.Package.Span
@@ -280,7 +281,7 @@ func LowerLayout(source string, ast gwdkast.File) (manifest.Layout, error) {
 			layout.ID = trimQuotes(annotation.Value)
 			layout.Span = annotation.Span
 		default:
-			return manifest.Layout{}, fmt.Errorf("%s: unsupported layout annotation @%s", source, annotation.Name)
+			return manifest.Layout{}, fmt.Errorf("%s: unsupported layout annotation @%s", src, annotation.Name)
 		}
 	}
 	for _, block := range ast.Blocks {
@@ -290,7 +291,7 @@ func LowerLayout(source string, ast gwdkast.File) (manifest.Layout, error) {
 				Body:   block.Body,
 				Span:   block.Span,
 			})
-			layout.Blocks.Spans.GoBlocks = append(layout.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: block.Name, Span: block.Span})
+			layout.Blocks.Spans.GoBlocks = append(layout.Blocks.Spans.GoBlocks, source.NamedSpan{Name: block.Name, Span: block.Span})
 			continue
 		}
 		if block.Kind == "style" {
@@ -299,7 +300,7 @@ func LowerLayout(source string, ast gwdkast.File) (manifest.Layout, error) {
 			continue
 		}
 		if block.Kind != "view" {
-			return manifest.Layout{}, fmt.Errorf("%s: unsupported layout block %q", source, block.Kind)
+			return manifest.Layout{}, fmt.Errorf("%s: unsupported layout block %q", src, block.Kind)
 		}
 		layout.Blocks.View = true
 		layout.Blocks.ViewBody = block.Body
@@ -307,7 +308,7 @@ func LowerLayout(source string, ast gwdkast.File) (manifest.Layout, error) {
 		layout.Blocks.Spans.ViewBodyStart = block.BodyStart
 	}
 	if layout.ID == "" {
-		return manifest.Layout{}, fmt.Errorf("%s: missing @layout", source)
+		return manifest.Layout{}, fmt.Errorf("%s: missing @layout", src)
 	}
 	return layout, nil
 }
@@ -413,7 +414,7 @@ func applyPageBlock(page *manifest.Page, block gwdkast.Block) {
 			Body:   block.Body,
 			Span:   block.Span,
 		})
-		page.Blocks.Spans.GoBlocks = append(page.Blocks.Spans.GoBlocks, manifest.NamedSpan{Name: block.Name, Span: block.Span})
+		page.Blocks.Spans.GoBlocks = append(page.Blocks.Spans.GoBlocks, source.NamedSpan{Name: block.Name, Span: block.Span})
 	case "view":
 		page.Blocks.View = true
 		page.Blocks.ViewBody = block.Body
@@ -454,22 +455,22 @@ func lowerStores(in []gwdkast.Store) []manifest.Store {
 	return out
 }
 
-func lowerRouteParamSpans(in []gwdkast.RouteParam) []manifest.NamedSpan {
-	out := make([]manifest.NamedSpan, 0, len(in))
+func lowerRouteParamSpans(in []gwdkast.RouteParam) []source.NamedSpan {
+	out := make([]source.NamedSpan, 0, len(in))
 	for _, param := range in {
-		out = append(out, manifest.NamedSpan{Name: param.Name, Span: param.Span})
+		out = append(out, source.NamedSpan{Name: param.Name, Span: param.Span})
 	}
 	return out
 }
 
-func lowerRouteParams(in []gwdkast.RouteParam) []manifest.RouteParam {
-	out := make([]manifest.RouteParam, 0, len(in))
+func lowerRouteParams(in []gwdkast.RouteParam) []source.RouteParam {
+	out := make([]source.RouteParam, 0, len(in))
 	for _, param := range in {
 		paramType := param.Type
 		if paramType == "" {
 			paramType = "string"
 		}
-		out = append(out, manifest.RouteParam{Name: param.Name, Type: paramType, Span: param.Span})
+		out = append(out, source.RouteParam{Name: param.Name, Type: paramType, Span: param.Span})
 	}
 	return out
 }

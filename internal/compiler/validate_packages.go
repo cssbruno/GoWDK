@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 type packageDeclaration struct {
@@ -29,7 +30,7 @@ type packageDeclaration struct {
 	Package       string
 	Imports       []manifest.Import
 	GoBlocks      []manifest.GoBlock
-	Span          manifest.SourceSpan
+	Span          source.SourceSpan
 }
 
 type goPackageInfo struct {
@@ -91,12 +92,12 @@ func validatePackages(app manifest.Manifest) []ValidationError {
 	return diagnostics
 }
 
-func shouldValidatePackageSource(source string) bool {
-	source = strings.TrimSpace(source)
-	if source == "" {
+func shouldValidatePackageSource(sourcePath string) bool {
+	sourcePath = strings.TrimSpace(sourcePath)
+	if sourcePath == "" {
 		return false
 	}
-	if _, err := os.Stat(source); err == nil {
+	if _, err := os.Stat(sourcePath); err == nil {
 		return true
 	}
 	return false
@@ -256,11 +257,11 @@ func inspectGoPackageForValidation(dir string, group []packageDeclaration) goPac
 }
 
 func parseGoBlockPackageFileForValidation(fileSet *token.FileSet, declaration packageDeclaration, block manifest.GoBlock) (*ast.File, *ValidationError) {
-	source, err := goBlockPackageSourceForValidation(declaration, block)
+	src, err := goBlockPackageSourceForValidation(declaration, block)
 	if err != nil {
 		return nil, nil
 	}
-	file, parseErr := parser.ParseFile(fileSet, declaration.Source, source, parser.AllErrors|parser.ParseComments)
+	file, parseErr := parser.ParseFile(fileSet, declaration.Source, src, parser.AllErrors|parser.ParseComments)
 	if parseErr != nil {
 		diagnostic := ValidationError{
 			Code:          "invalid_go_block",
@@ -355,13 +356,13 @@ func goBlockImportSpecSortKey(spec ast.Spec) string {
 	return alias + "\x00" + path
 }
 
-func addGoBlockLineDirectiveForValidation(fileSet *token.FileSet, file *ast.File, source string, line int) *ast.CommentGroup {
+func addGoBlockLineDirectiveForValidation(fileSet *token.FileSet, file *ast.File, sourcePath string, line int) *ast.CommentGroup {
 	if len(file.Decls) == 0 {
 		return nil
 	}
 	directive := &ast.Comment{
 		Slash: goBlockLineDirectivePosition(fileSet, file.Decls[0].Pos()),
-		Text:  "//line " + source + ":" + strconv.Itoa(line),
+		Text:  "//line " + sourcePath + ":" + strconv.Itoa(line),
 	}
 	group := &ast.CommentGroup{List: []*ast.Comment{directive}}
 	switch decl := file.Decls[0].(type) {
@@ -555,9 +556,9 @@ func goTypeCheckDiagnostic(fileSet *token.FileSet, err error) ValidationError {
 	position := fileSet.PositionFor(typeError.Pos, true)
 	if position.IsValid() {
 		diagnostic.Source = position.Filename
-		diagnostic.Span = manifest.SourceSpan{
-			Start: manifest.SourcePosition{Line: position.Line, Column: position.Column},
-			End:   manifest.SourcePosition{Line: position.Line, Column: position.Column + 1},
+		diagnostic.Span = source.SourceSpan{
+			Start: source.SourcePosition{Line: position.Line, Column: position.Column},
+			End:   source.SourcePosition{Line: position.Line, Column: position.Column + 1},
 		}
 	}
 	return diagnostic
@@ -570,8 +571,8 @@ func isGoPackageSource(name string) bool {
 	return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
 }
 
-func packageSourceDir(source string) string {
-	dir := filepath.Dir(source)
+func packageSourceDir(sourcePath string) string {
+	dir := filepath.Dir(sourcePath)
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return dir
@@ -579,9 +580,9 @@ func packageSourceDir(source string) string {
 	return abs
 }
 
-func sourceLabel(source string, fallback string) string {
-	if strings.TrimSpace(source) == "" {
+func sourceLabel(sourcePath string, fallback string) string {
+	if strings.TrimSpace(sourcePath) == "" {
 		return fallback
 	}
-	return filepath.Base(source)
+	return filepath.Base(sourcePath)
 }

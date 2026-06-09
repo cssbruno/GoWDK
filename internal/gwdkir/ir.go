@@ -4,7 +4,7 @@ package gwdkir
 
 import (
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 const Version = 1
@@ -41,7 +41,7 @@ type SourceFile struct {
 	Kind    SourceKind
 	Package string
 	Name    string
-	Span    manifest.SourceSpan
+	Span    source.SourceSpan
 }
 
 type SourceKind string
@@ -56,14 +56,14 @@ const (
 type Import struct {
 	Alias string
 	Path  string
-	Span  manifest.SourceSpan
+	Span  source.SourceSpan
 }
 
 // Use records an explicit GOWDK package import.
 type Use struct {
 	Alias   string
 	Package string
-	Span    manifest.SourceSpan
+	Span    source.SourceSpan
 }
 
 // Store records one shared state declaration.
@@ -71,7 +71,7 @@ type Store struct {
 	Name string
 	Type GoRef
 	Init GoRef
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // Page is the normalized IR for one page source.
@@ -80,7 +80,7 @@ type Page struct {
 	Package     string
 	ID          string
 	Route       string
-	RouteParams []manifest.RouteParam
+	RouteParams []source.RouteParam
 	Render      gowdk.RenderMode
 	Cache       string
 	Revalidate  string
@@ -90,7 +90,7 @@ type Page struct {
 	Guards      []string
 	CSS         []string
 	JS          []string
-	InlineJS    []manifest.InlineScript
+	InlineJS    []source.InlineScript
 	Imports     []Import
 	Uses        []Use
 	Stores      []Store
@@ -130,42 +130,42 @@ type Blocks struct {
 type GoBlock struct {
 	Target string
 	Body   string
-	Span   manifest.SourceSpan
+	Span   source.SourceSpan
 }
 
 type PageSpans struct {
-	Package     manifest.SourceSpan
-	Page        manifest.SourceSpan
-	Route       manifest.SourceSpan
-	Render      manifest.SourceSpan
-	Cache       manifest.SourceSpan
-	Revalidate  manifest.SourceSpan
-	ErrorPage   manifest.SourceSpan
-	Title       manifest.SourceSpan
-	Description manifest.SourceSpan
-	Canonical   manifest.SourceSpan
-	Image       manifest.SourceSpan
-	Layouts     []manifest.NamedSpan
-	Guard       []manifest.NamedSpan
-	CSS         []manifest.NamedSpan
-	JS          []manifest.NamedSpan
-	InlineJS    []manifest.NamedSpan
-	RouteParams []manifest.NamedSpan
+	Package     source.SourceSpan
+	Page        source.SourceSpan
+	Route       source.SourceSpan
+	Render      source.SourceSpan
+	Cache       source.SourceSpan
+	Revalidate  source.SourceSpan
+	ErrorPage   source.SourceSpan
+	Title       source.SourceSpan
+	Description source.SourceSpan
+	Canonical   source.SourceSpan
+	Image       source.SourceSpan
+	Layouts     []source.NamedSpan
+	Guard       []source.NamedSpan
+	CSS         []source.NamedSpan
+	JS          []source.NamedSpan
+	InlineJS    []source.NamedSpan
+	RouteParams []source.NamedSpan
 }
 
 type BlockSpans struct {
-	Paths         manifest.SourceSpan
-	Build         manifest.SourceSpan
-	Load          manifest.SourceSpan
-	Client        manifest.SourceSpan
-	GoBlocks      []manifest.NamedSpan
-	View          manifest.SourceSpan
-	ViewBodyStart manifest.SourcePosition
-	Actions       []manifest.NamedSpan
-	APIs          []manifest.NamedSpan
-	Fragments     []manifest.NamedSpan
-	Exports       manifest.SourceSpan
-	Emits         manifest.SourceSpan
+	Paths         source.SourceSpan
+	Build         source.SourceSpan
+	Load          source.SourceSpan
+	Client        source.SourceSpan
+	GoBlocks      []source.NamedSpan
+	View          source.SourceSpan
+	ViewBodyStart source.SourcePosition
+	Actions       []source.NamedSpan
+	APIs          []source.NamedSpan
+	Fragments     []source.NamedSpan
+	Exports       source.SourceSpan
+	Emits         source.SourceSpan
 }
 
 type Action struct {
@@ -179,19 +179,19 @@ type Action struct {
 	Redirect       string
 	Fragments      []Fragment
 	ErrorPage      string
-	Span           manifest.SourceSpan
-	RouteSpan      manifest.SourceSpan
-	RouteParams    []manifest.NamedSpan
-	InputSpan      manifest.SourceSpan
-	ValidationSpan manifest.SourceSpan
-	RedirectSpan   manifest.SourceSpan
-	ErrorPageSpan  manifest.SourceSpan
+	Span           source.SourceSpan
+	RouteSpan      source.SourceSpan
+	RouteParams    []source.NamedSpan
+	InputSpan      source.SourceSpan
+	ValidationSpan source.SourceSpan
+	RedirectSpan   source.SourceSpan
+	ErrorPageSpan  source.SourceSpan
 }
 
 type Fragment struct {
 	Target string
 	Body   string
-	Span   manifest.SourceSpan
+	Span   source.SourceSpan
 }
 
 type FragmentEndpoint struct {
@@ -200,10 +200,10 @@ type FragmentEndpoint struct {
 	Route       string
 	Target      string
 	Body        string
-	Span        manifest.SourceSpan
-	RouteSpan   manifest.SourceSpan
-	TargetSpan  manifest.SourceSpan
-	RouteParams []manifest.NamedSpan
+	Span        source.SourceSpan
+	RouteSpan   source.SourceSpan
+	TargetSpan  source.SourceSpan
+	RouteParams []source.NamedSpan
 }
 
 type API struct {
@@ -211,10 +211,10 @@ type API struct {
 	Method        string
 	Route         string
 	ErrorPage     string
-	Span          manifest.SourceSpan
-	RouteSpan     manifest.SourceSpan
-	RouteParams   []manifest.NamedSpan
-	ErrorPageSpan manifest.SourceSpan
+	Span          source.SourceSpan
+	RouteSpan     source.SourceSpan
+	RouteParams   []source.NamedSpan
+	ErrorPageSpan source.SourceSpan
 }
 
 // Component is the normalized IR for one component source.
@@ -226,7 +226,7 @@ type Component struct {
 	Uses        []Use
 	CSS         []string
 	JS          []string
-	InlineJS    []manifest.InlineScript
+	InlineJS    []source.InlineScript
 	Assets      []string
 	Props       []Prop
 	PropsType   GoRef
@@ -235,51 +235,51 @@ type Component struct {
 	Exports     []Export
 	Emits       []Emit
 	Blocks      Blocks
-	Span        manifest.SourceSpan
-	PackageSpan manifest.SourceSpan
+	Span        source.SourceSpan
+	PackageSpan source.SourceSpan
 	Spans       ComponentSpans
 }
 
 type ComponentSpans struct {
-	CSS      []manifest.NamedSpan
-	JS       []manifest.NamedSpan
-	InlineJS []manifest.NamedSpan
-	Assets   []manifest.NamedSpan
+	CSS      []source.NamedSpan
+	JS       []source.NamedSpan
+	InlineJS []source.NamedSpan
+	Assets   []source.NamedSpan
 }
 
 type StateContract struct {
 	Type GoRef
 	Init GoRef
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 type WASMContract struct {
 	Package string
-	Span    manifest.SourceSpan
+	Span    source.SourceSpan
 }
 
 type Prop struct {
 	Name string
 	Type string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 type Export struct {
 	Name string
 	Type string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 type Emit struct {
 	Name   string
 	Params []EmitParam
-	Span   manifest.SourceSpan
+	Span   source.SourceSpan
 }
 
 type EmitParam struct {
 	Name string
 	Type string
-	Span manifest.SourceSpan
+	Span source.SourceSpan
 }
 
 // Layout is the normalized IR for one layout source.
@@ -289,15 +289,15 @@ type Layout struct {
 	ID          string
 	Uses        []Use
 	Blocks      Blocks
-	Span        manifest.SourceSpan
-	PackageSpan manifest.SourceSpan
+	Span        source.SourceSpan
+	PackageSpan source.SourceSpan
 }
 
 // GoRef points at an imported Go package symbol.
 type GoRef struct {
 	Alias string
 	Name  string
-	Span  manifest.SourceSpan
+	Span  source.SourceSpan
 }
 
 // Route is page/file route metadata. Endpoint behavior is represented by
@@ -311,11 +311,11 @@ type Route struct {
 	Render        gowdk.RenderMode
 	Cache         string
 	DynamicParams []string
-	RouteParams   []manifest.RouteParam
+	RouteParams   []source.RouteParam
 	Layouts       []string
 	Guards        []string
 	Source        string
-	Span          manifest.SourceSpan
+	Span          source.SourceSpan
 }
 
 type RouteKind string
@@ -339,7 +339,7 @@ type Endpoint struct {
 	ErrorPage     string
 	DynamicParams []string
 	SourceFile    string
-	Span          manifest.SourceSpan
+	Span          source.SourceSpan
 	Binding       Binding
 }
 
@@ -360,15 +360,15 @@ const (
 
 // Binding describes the selected Go backend handler when one is known.
 type Binding struct {
-	Status       manifest.BackendBindingStatus
+	Status       source.BackendBindingStatus
 	Message      string
 	ImportPath   string
 	PackageName  string
 	FunctionName string
-	Signature    manifest.BackendSignatureKind
+	Signature    source.BackendSignatureKind
 	InputType    string
 	InputPointer bool
-	InputFields  []manifest.BackendInputField
+	InputFields  []source.BackendInputField
 }
 
 // Template records a renderable view block.
@@ -381,8 +381,8 @@ type Template struct {
 	Guards    []string
 	Imports   []Import
 	Body      string
-	Span      manifest.SourceSpan
-	BodyStart manifest.SourcePosition
+	Span      source.SourceSpan
+	BodyStart source.SourcePosition
 }
 
 // ContractReference records a source-level reference to a backend contract.
@@ -396,7 +396,7 @@ type ContractReference struct {
 	Result      string
 	Roles       []string
 	Guards      []string
-	InputFields []manifest.BackendInputField
+	InputFields []source.BackendInputField
 	Method      string
 	Path        string
 	Status      ContractBindingStatus
@@ -407,7 +407,7 @@ type ContractReference struct {
 	OwnerID     string
 	Package     string
 	Source      string
-	Span        manifest.SourceSpan
+	Span        source.SourceSpan
 }
 
 type ContractKind string
@@ -433,7 +433,7 @@ type ClientBehavior struct {
 	Package   string
 	Source    string
 	Body      string
-	Span      manifest.SourceSpan
+	Span      source.SourceSpan
 }
 
 // Asset records source-selected assets and future generated assets.
@@ -449,7 +449,7 @@ type Asset struct {
 	UsePackage string
 	ScopeID    string
 	HashKey    string
-	Span       manifest.SourceSpan
+	Span       source.SourceSpan
 }
 
 type AssetKind string

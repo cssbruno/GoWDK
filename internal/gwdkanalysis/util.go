@@ -8,10 +8,11 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func endpointSource(source manifest.EndpointSource) gwdkir.EndpointSource {
-	if source == manifest.EndpointSourceGo {
+func endpointSource(src manifest.EndpointSource) gwdkir.EndpointSource {
+	if src == manifest.EndpointSourceGo {
 		return gwdkir.EndpointSourceGo
 	}
 	return gwdkir.EndpointSourceGOWDK
@@ -97,7 +98,7 @@ func revalidateSecondsValue(value string) (string, error) {
 	return strconv.FormatInt(int64(duration/time.Second), 10), nil
 }
 
-func spanForName(spans []manifest.NamedSpan, name string, fallback manifest.SourceSpan) manifest.SourceSpan {
+func spanForName(spans []source.NamedSpan, name string, fallback source.SourceSpan) source.SourceSpan {
 	for _, span := range spans {
 		if span.Name == name {
 			return span.Span

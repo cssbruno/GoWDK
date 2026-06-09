@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	runtimecontracts "github.com/cssbruno/gowdk/runtime/contracts"
 )
 
@@ -62,7 +62,7 @@ func LinkReferences(refs []gwdkir.ContractReference, report Report) []gwdkir.Con
 		}
 		linked[index].Result = contract.Result
 		linked[index].Roles = append([]string(nil), contract.Roles...)
-		linked[index].InputFields = append([]manifest.BackendInputField(nil), contract.InputFields...)
+		linked[index].InputFields = append([]source.BackendInputField(nil), contract.InputFields...)
 		if diagnostic, bad := lookupContractDiagnostic(invalid[ref.Kind], ref); bad {
 			linked[index].Status = gwdkir.ContractBindingInvalid
 			linked[index].Message = diagnostic.Message

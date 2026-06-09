@@ -107,6 +107,17 @@ code still carries manifest compatibility records while migration continues:
   compatibility records for older compiler entrypoints.
 - `internal/manifest` remains the public manifest/site-map compatibility model.
 
+Shared leaf value types (source spans, route params, inline scripts, backend
+binding/signature enums) now live in the neutral `internal/source` package.
+`internal/manifest` re-exports them as type aliases for backward compatibility.
+Because of this, `internal/gwdkir`, `internal/gwdkast`, and `internal/contractscan`
+no longer depend on `internal/manifest` at all — the IR is a manifest-independent
+handoff. `internal/buildgen` render helpers consume IR page/component/layout
+models directly (validating through `compiler.ValidateProgram`), and
+`internal/appgen` references shared leaf types from `internal/source`. The
+remaining manifest coupling is concentrated in `internal/compiler` (which
+validates the manifest model) and the public `manifest.Manifest` entrypoints.
+
 New generated-output work should consume `internal/gwdkir.Program` or add fields
 there first. Removing the remaining compatibility records is planned after the
 parser, public manifest JSON, and legacy compiler entrypoints stop depending on
@@ -119,8 +130,8 @@ Current manifest compatibility users:
 | `internal/parser` | Produces `manifest.Page`, `manifest.Component`, and `manifest.Layout` records for existing CLI and compiler entrypoints. | Keep typed AST as the parser source of truth; remove direct manifest output after all callers lower through analyzer/IR. |
 | `internal/gwdkanalysis` | Lowers typed AST into manifest records, then builds `gwdkir.Program` from those records. | Lower typed AST directly into IR and keep manifest output as a separate compatibility adapter. |
 | `internal/compiler` | Validators, backend binding discovery, route conflict checks, and policy checks still consume `manifest.Manifest`. | Move validation and binding metadata to IR models; keep adapters only for public manifest and legacy entrypoints. |
-| `internal/buildgen` | Public `Build`/`BuildMemory` entrypoints accept `manifest.Manifest`; supported generation paths derive or consume IR but still convert IR back to manifest models for older render helpers. | Make render helpers consume IR-native page/component/layout models, then keep manifest entrypoints as thin adapters. |
-| `internal/appgen` | Public route helpers and some backend adapter types still use manifest page, endpoint, and backend-binding records. | Keep app route planning and backend adapter planning IR-first; replace manifest-only helper entrypoints with IR helpers before removing compatibility constructors. |
+| `internal/buildgen` | Render helpers now consume IR-native page/component/layout/blocks models directly. Public `Build`/`BuildMemory` entrypoints still accept `manifest.Manifest` for compatibility, and a small `gotypes` bridge plus the public `SSRArtifact.LoadBinding` output type keep manifest references at the package edges. | Keep manifest entrypoints as thin adapters; remove the `gotypes` bridge once `internal/gotypes` accepts IR types. |
+| `internal/appgen` | Shared leaf types come from `internal/source`. The `manifest.BackendBinding` struct currency (carrying Kind/PageID/Method/Route) and public `manifest.Manifest` route-helper entrypoints remain. | Keep app route planning and backend adapter planning IR-first; replace manifest-only helper entrypoints with IR helpers before removing compatibility constructors. |
 | `internal/lang` and `cmd/gowdk` | CLI `check`, `manifest`, `sitemap`, `routes`, and build setup still pass manifest records between parse, validate, report, and generation steps. | Parse/analyze into IR once per command, then derive public JSON and reports from IR adapters. |
 | `internal/lsp` | Open-document completions and hover build an IR snapshot before indexing page, component, layout, and endpoint symbols; workspace component definition lookup indexes IR components; diagnostics and open-buffer owner context still use language tooling and parser compatibility records. | Keep open-document source spans, but drive remaining project-wide symbols and diagnostics from analyzer/IR snapshots. |
 | Tests | Many generator and validator tests construct manifest records directly. | Keep fixture-style manifest construction until the tested package exposes IR-native helpers; update tests alongside each migrated package. |
@@ -129,12 +140,19 @@ Migration order:
 
 1. Keep `gwdkir.Program` as the only source of truth for new generated-output
    fields.
-2. Move compiler validation and backend binding records to IR or IR-adjacent
-   structs.
-3. Replace buildgen/appgen manifest render helpers with IR-native helpers.
-4. Convert CLI reports, sitemap output, and LSP project metadata to IR-derived
+2. (done) Extract shared leaf value types into `internal/source` so the IR and
+   manifest both reference them from a neutral home; `gwdkir` no longer depends
+   on `manifest`.
+3. (done) Replace buildgen render helpers with IR-native helpers and route
+   buildgen validation through `compiler.ValidateProgram`.
+4. Move compiler validation and backend binding records to IR or IR-adjacent
+   structs (compiler still validates the manifest model today). This is a
+   redesign — IR lowering is currently lossy for standalone-endpoint validation,
+   so the IR must be enriched and the flip guarded against diagnostic drift.
+   Tracked in issue #145.
+5. Convert CLI reports, sitemap output, and LSP project metadata to IR-derived
    adapters.
-5. Keep public manifest JSON compatibility until a release plan explicitly
+6. Keep public manifest JSON compatibility until a release plan explicitly
    deprecates or replaces it.
 
 ## Components

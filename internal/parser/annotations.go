@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func applyAnnotation(page *manifest.Page, name, rawValue string, lineNumber int, rawLine string) error {
@@ -126,9 +127,9 @@ func endpointErrorPage(match []string, lineNumber int) (string, error) {
 	return errorPage, nil
 }
 
-func endpointErrorPageSpan(match []string, fallback manifest.SourceSpan) manifest.SourceSpan {
+func endpointErrorPageSpan(match []string, fallback source.SourceSpan) source.SourceSpan {
 	if len(match) < 5 || strings.TrimSpace(match[4]) == "" {
-		return manifest.SourceSpan{}
+		return source.SourceSpan{}
 	}
 	return fallback
 }

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestValidateContractReferencesRejectsBoundNonWebRole(t *testing.T) {
@@ -17,8 +17,8 @@ func TestValidateContractReferencesRejectsBoundNonWebRole(t *testing.T) {
 		OwnerKind: gwdkir.SourcePage,
 		OwnerID:   "patients",
 		Source:    "patients.page.gwdk",
-		Span: manifest.SourceSpan{
-			Start: manifest.SourcePosition{Line: 8, Column: 42},
+		Span: source.SourceSpan{
+			Start: source.SourcePosition{Line: 8, Column: 42},
 		},
 	}})
 	if err == nil {

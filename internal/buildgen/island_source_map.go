@@ -5,7 +5,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 type jsSourceMap struct {
@@ -17,7 +18,7 @@ type jsSourceMap struct {
 	Mappings       string   `json:"mappings"`
 }
 
-func islandJSSourceMap(component manifest.Component, generatedSource string) []byte {
+func islandJSSourceMap(component gwdkir.Component, generatedSource string) []byte {
 	source := component.Source
 	if source == "" {
 		source = "components/" + component.Name + ".cmp.gwdk"
@@ -43,7 +44,7 @@ type sourceMapAnchor struct {
 	sourceColumn  int
 }
 
-func sourceMapMappings(component manifest.Component, generatedSource string) string {
+func sourceMapMappings(component gwdkir.Component, generatedSource string) string {
 	anchors := sourceMapAnchors(component, generatedSource)
 	if len(anchors) == 0 {
 		return ""
@@ -94,7 +95,7 @@ func sourceMapMappings(component manifest.Component, generatedSource string) str
 	return strings.Join(mappings, ";")
 }
 
-func sourceMapAnchors(component manifest.Component, generatedSource string) []sourceMapAnchor {
+func sourceMapAnchors(component gwdkir.Component, generatedSource string) []sourceMapAnchor {
 	name := componentAssetName(component.Name)
 	componentSpan := firstSourceSpan(component.Span, component.Blocks.Spans.Client, component.Blocks.Spans.View)
 	clientSpan := firstSourceSpan(component.Blocks.Spans.Client, componentSpan)
@@ -136,7 +137,7 @@ func sourceMapLineBelongsToView(line string) bool {
 		strings.Contains(line, "function render(root, state, helpers, bindings)")
 }
 
-func appendSourceMapAnchor(anchors []sourceMapAnchor, generatedLine int, span manifest.SourceSpan) []sourceMapAnchor {
+func appendSourceMapAnchor(anchors []sourceMapAnchor, generatedLine int, span source.SourceSpan) []sourceMapAnchor {
 	if span.Start.Line <= 0 || span.Start.Column <= 0 {
 		return anchors
 	}
@@ -147,13 +148,13 @@ func appendSourceMapAnchor(anchors []sourceMapAnchor, generatedLine int, span ma
 	})
 }
 
-func firstSourceSpan(spans ...manifest.SourceSpan) manifest.SourceSpan {
+func firstSourceSpan(spans ...source.SourceSpan) source.SourceSpan {
 	for _, span := range spans {
 		if span.Start.Line > 0 && span.Start.Column > 0 {
 			return span
 		}
 	}
-	return manifest.SourceSpan{}
+	return source.SourceSpan{}
 }
 
 const sourceMapBase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -178,7 +179,7 @@ func sourceMapVLQ(value int) string {
 	return string(out)
 }
 
-func componentSourceMapContent(component manifest.Component) string {
+func componentSourceMapContent(component gwdkir.Component) string {
 	if component.Blocks.ClientBody == "" {
 		return "view {\n" + component.Blocks.ViewBody + "\n}\n"
 	}

@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 type BackendAdapterIR struct {
@@ -46,7 +46,7 @@ type BackendHandlerCall struct {
 	Endpoint  BackendEndpointRegistration
 	Alias     string
 	Function  string
-	Signature manifest.BackendSignatureKind
+	Signature source.BackendSignatureKind
 	InputType string
 }
 
@@ -59,7 +59,7 @@ type BackendResponse struct {
 
 type BackendFallback struct {
 	Endpoint BackendEndpointRegistration
-	Status   manifest.BackendBindingStatus
+	Status   source.BackendBindingStatus
 	Message  string
 }
 
@@ -72,7 +72,7 @@ type BackendContractExposure struct {
 	Result      string
 	Roles       []string
 	Guards      []string
-	InputFields []manifest.BackendInputField
+	InputFields []source.BackendInputField
 	Status      gwdkir.ContractBindingStatus
 	Handler     string
 	Register    string
@@ -101,7 +101,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				Input:    action.InputType,
 				Fields:   append([]string(nil), action.InputFields...),
 			}
-			if action.Binding.Status == manifest.BackendBindingBound && action.Binding.InputType != "" {
+			if action.Binding.Status == source.BackendBindingBound && action.Binding.InputType != "" {
 				decoder.Function = boundActionDecoderName(action)
 				decoder.Input = action.Binding.InputType
 			} else if action.InputType != "" {
@@ -109,7 +109,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			}
 			ir.Decoders = append(ir.Decoders, decoder)
 		}
-		if action.Binding.Status == manifest.BackendBindingBound {
+		if action.Binding.Status == source.BackendBindingBound {
 			ir.Calls = append(ir.Calls, BackendHandlerCall{
 				Endpoint:  endpoint,
 				Alias:     action.BackendAlias,
@@ -118,7 +118,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				InputType: action.Binding.InputType,
 			})
 		}
-		if action.Binding.Status != "" && action.Binding.Status != manifest.BackendBindingBound {
+		if action.Binding.Status != "" && action.Binding.Status != source.BackendBindingBound {
 			ir.Fallbacks = append(ir.Fallbacks, BackendFallback{
 				Endpoint: endpoint,
 				Status:   action.Binding.Status,
@@ -142,7 +142,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			Name:    api.APIName,
 		}
 		ir.Registrations = append(ir.Registrations, endpoint)
-		if api.Binding.Status == manifest.BackendBindingBound {
+		if api.Binding.Status == source.BackendBindingBound {
 			ir.Calls = append(ir.Calls, BackendHandlerCall{
 				Endpoint:  endpoint,
 				Alias:     api.BackendAlias,
@@ -150,7 +150,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				Signature: api.Binding.Signature,
 			})
 		}
-		if api.Binding.Status != "" && api.Binding.Status != manifest.BackendBindingBound {
+		if api.Binding.Status != "" && api.Binding.Status != source.BackendBindingBound {
 			ir.Fallbacks = append(ir.Fallbacks, BackendFallback{
 				Endpoint: endpoint,
 				Status:   api.Binding.Status,
@@ -194,7 +194,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				Result:      ref.Result,
 				Roles:       append([]string(nil), ref.Roles...),
 				Guards:      append([]string(nil), ref.Guards...),
-				InputFields: append([]manifest.BackendInputField(nil), ref.InputFields...),
+				InputFields: append([]source.BackendInputField(nil), ref.InputFields...),
 				Status:      ref.Status,
 				Handler:     ref.Handler,
 				Register:    ref.Register,

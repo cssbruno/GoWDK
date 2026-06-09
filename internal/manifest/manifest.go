@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // Manifest is the compiler's normalized view of discovered .gwdk files.
@@ -18,23 +19,17 @@ type Manifest struct {
 	BackendBindings []BackendBinding
 }
 
+// The shared leaf value types now live in internal/source. These aliases keep
+// existing manifest.* references compiling while packages migrate to source.*.
+
 // SourcePosition is a 1-based source location in a parsed .gwdk file.
-type SourcePosition struct {
-	Line   int
-	Column int
-}
+type SourcePosition = source.SourcePosition
 
 // SourceSpan is a 1-based source range. End is exclusive.
-type SourceSpan struct {
-	Start SourcePosition
-	End   SourcePosition
-}
+type SourceSpan = source.SourceSpan
 
 // NamedSpan records the source range for a named declaration or reference.
-type NamedSpan struct {
-	Name string
-	Span SourceSpan
-}
+type NamedSpan = source.NamedSpan
 
 // Import records a Go import declared by a .gwdk page.
 type Import struct {
@@ -163,19 +158,12 @@ type Page struct {
 
 // InlineScript records browser module code declared directly inside a .gwdk
 // source file. Path-based script declarations should remain preferred.
-type InlineScript struct {
-	Name string
-	Body string
-	Span SourceSpan
-}
+type InlineScript = source.InlineScript
 
 // InlineScriptName returns the deterministic generated filename for the
 // zero-based inline browser script declaration index in one source owner.
 func InlineScriptName(index int) string {
-	if index <= 0 {
-		return "inline-gowdk.js"
-	}
-	return fmt.Sprintf("inline-%d-gowdk.js", index+1)
+	return source.InlineScriptName(index)
 }
 
 // CachePolicy returns the concrete Cache-Control policy generated for the page.
@@ -219,11 +207,7 @@ func ErrorPagePath(value string) (string, error) {
 
 // RouteParam describes one dynamic route parameter and its declared scalar
 // type. Empty Type means string for compatibility with legacy {name} syntax.
-type RouteParam struct {
-	Name string
-	Type string
-	Span SourceSpan
-}
+type RouteParam = source.RouteParam
 
 // PageMetadata describes HTML document metadata declared by a page.
 type PageMetadata struct {
@@ -405,35 +389,31 @@ type EndpointDeclaration struct {
 
 // BackendBindingStatus describes whether a .gwdk backend block has a matching
 // same-package Go handler.
-type BackendBindingStatus string
+type BackendBindingStatus = source.BackendBindingStatus
 
 const (
-	BackendBindingBound                BackendBindingStatus = "bound"
-	BackendBindingMissing              BackendBindingStatus = "missing"
-	BackendBindingUnsupportedSignature BackendBindingStatus = "unsupported_signature"
+	BackendBindingBound                = source.BackendBindingBound
+	BackendBindingMissing              = source.BackendBindingMissing
+	BackendBindingUnsupportedSignature = source.BackendBindingUnsupportedSignature
 )
 
 // BackendSignatureKind describes the supported Go handler shape.
-type BackendSignatureKind string
+type BackendSignatureKind = source.BackendSignatureKind
 
 const (
-	BackendSignatureAction0       BackendSignatureKind = "action0"
-	BackendSignatureActionValues  BackendSignatureKind = "action_values"
-	BackendSignatureActionForm    BackendSignatureKind = "action_form"
-	BackendSignatureActionFormPtr BackendSignatureKind = "action_form_ptr"
-	BackendSignatureAPI           BackendSignatureKind = "api"
-	BackendSignatureFragment      BackendSignatureKind = "fragment"
-	BackendSignatureLoad          BackendSignatureKind = "load"
-	BackendSignatureLoadError     BackendSignatureKind = "load_error"
+	BackendSignatureAction0       = source.BackendSignatureAction0
+	BackendSignatureActionValues  = source.BackendSignatureActionValues
+	BackendSignatureActionForm    = source.BackendSignatureActionForm
+	BackendSignatureActionFormPtr = source.BackendSignatureActionFormPtr
+	BackendSignatureAPI           = source.BackendSignatureAPI
+	BackendSignatureFragment      = source.BackendSignatureFragment
+	BackendSignatureLoad          = source.BackendSignatureLoad
+	BackendSignatureLoadError     = source.BackendSignatureLoadError
 )
 
 // BackendInputField describes one form field decoded into a Go action input
 // struct from compile-time Go AST metadata.
-type BackendInputField struct {
-	FieldName string
-	FormName  string
-	Type      string
-}
+type BackendInputField = source.BackendInputField
 
 // BackendBinding describes the Go handler selected for an act or api block.
 type BackendBinding struct {

@@ -49,7 +49,10 @@ func LoadConfigFile(path string) (gowdk.Config, error) {
 				if name.Name != "Config" || index >= len(valueSpec.Values) {
 					continue
 				}
-				config, needsExecutableLoad, ok := parseConfigLiteral(valueSpec.Values[index], importNames(file))
+				config, needsExecutableLoad, ok, err := parseConfigLiteral(valueSpec.Values[index], importNames(file))
+				if err != nil {
+					return gowdk.Config{}, err
+				}
 				if !ok {
 					return gowdk.Config{}, fmt.Errorf("%s must assign Config to a gowdk.Config literal", path)
 				}
@@ -58,7 +61,13 @@ func LoadConfigFile(path string) (gowdk.Config, error) {
 					if err != nil {
 						return gowdk.Config{}, fmt.Errorf("%s contains addon constructors outside the AST-only config subset: %w", path, err)
 					}
+					if err := config.Env.Validate(os.LookupEnv); err != nil {
+						return gowdk.Config{}, fmt.Errorf("%s env contract: %w", path, err)
+					}
 					return config, nil
+				}
+				if err := config.Env.Validate(os.LookupEnv); err != nil {
+					return gowdk.Config{}, fmt.Errorf("%s env contract: %w", path, err)
 				}
 				return config, nil
 			}
@@ -82,10 +91,10 @@ func LoadConfig(path string) (gowdk.Config, error) {
 	return LoadConfigFile(DefaultConfigFile)
 }
 
-func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.Config, bool, bool) {
+func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.Config, bool, bool, error) {
 	literal, ok := expression.(*ast.CompositeLit)
 	if !ok || !isConfigType(literal.Type) {
-		return gowdk.Config{}, false, false
+		return gowdk.Config{}, false, false, nil
 	}
 
 	var config gowdk.Config
@@ -112,11 +121,17 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 			config.CSS = parseCSSConfig(keyValue.Value)
 		case "Render":
 			config.Render = parseRenderConfig(keyValue.Value)
+		case "Env":
+			var err error
+			config.Env, err = parseEnvConfig(keyValue.Value)
+			if err != nil {
+				return gowdk.Config{}, false, false, err
+			}
 		case "Addons":
 			config.Addons, needsExecutableLoad = parseAddons(keyValue.Value, imports)
 		}
 	}
-	return config, needsExecutableLoad, true
+	return config, needsExecutableLoad, true, nil
 }
 
 func importNames(file *ast.File) map[string]string {
@@ -258,6 +273,129 @@ func renderModeByName(name string) gowdk.RenderMode {
 	default:
 		return ""
 	}
+}
+
+func parseEnvConfig(expression ast.Expr) (gowdk.EnvConfig, error) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.EnvConfig{}, nil
+	}
+
+	var env gowdk.EnvConfig
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "Vars":
+			env.Vars = parseEnvVars(keyValue.Value)
+		case "Secrets":
+			secrets, err := parseSecretEnvs(keyValue.Value)
+			if err != nil {
+				return gowdk.EnvConfig{}, err
+			}
+			env.Secrets = secrets
+		}
+	}
+	return env, nil
+}
+
+func parseEnvVars(expression ast.Expr) []gowdk.EnvVar {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil
+	}
+
+	var variables []gowdk.EnvVar
+	for _, element := range literal.Elts {
+		variable, ok := parseEnvVar(element)
+		if !ok {
+			continue
+		}
+		variables = append(variables, variable)
+	}
+	return variables
+}
+
+func parseEnvVar(expression ast.Expr) (gowdk.EnvVar, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.EnvVar{}, false
+	}
+
+	var variable gowdk.EnvVar
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "Name":
+			variable.Name = parseString(keyValue.Value)
+		case "Required":
+			variable.Required = parseBool(keyValue.Value)
+		case "Default":
+			variable.Default = parseString(keyValue.Value)
+		}
+	}
+	return variable, true
+}
+
+func parseSecretEnvs(expression ast.Expr) ([]gowdk.SecretEnv, error) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil, nil
+	}
+
+	var secrets []gowdk.SecretEnv
+	for _, element := range literal.Elts {
+		secret, ok, err := parseSecretEnv(element)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		secrets = append(secrets, secret)
+	}
+	return secrets, nil
+}
+
+func parseSecretEnv(expression ast.Expr) (gowdk.SecretEnv, bool, error) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.SecretEnv{}, false, nil
+	}
+
+	var secret gowdk.SecretEnv
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "Name":
+			secret.Name = parseString(keyValue.Value)
+		case "Required":
+			secret.Required = parseBool(keyValue.Value)
+		case "Default", "Value":
+			return gowdk.SecretEnv{}, false, fmt.Errorf("Env.Secrets entries cannot declare %s; secret values must come from the runtime environment", key.Name)
+		}
+	}
+	return secret, true, nil
 }
 
 func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {

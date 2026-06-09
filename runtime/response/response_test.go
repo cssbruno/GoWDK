@@ -141,6 +141,35 @@ func TestWriteHTTPWritesRedirect(t *testing.T) {
 	}
 }
 
+func TestWriteHTTPForcesSecureCookies(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	result := WithCookie(HTMLBody(http.StatusOK, "ok"), http.Cookie{
+		Name:     "session",
+		Value:    "abc",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	if err := WriteHTTP(recorder, result); err != nil {
+		t.Fatal(err)
+	}
+
+	cookies := recorder.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected one cookie, got %#v", cookies)
+	}
+	if !cookies[0].Secure {
+		t.Fatalf("expected secure cookie, got %#v", cookies[0])
+	}
+	if !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode || cookies[0].Path != "/" {
+		t.Fatalf("expected existing cookie attributes to be preserved, got %#v", cookies[0])
+	}
+	if result.Cookies[0].Secure {
+		t.Fatalf("WriteHTTP should not mutate response cookie input: %#v", result.Cookies[0])
+	}
+}
+
 func TestWriteNoStoreHTTP(t *testing.T) {
 	recorder := httptest.NewRecorder()
 

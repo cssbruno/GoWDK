@@ -167,6 +167,7 @@ func ValidationHTML(result validation.Result) string {
 func WriteHTTP(writer http.ResponseWriter, result Response) error {
 	status := statusOrDefault(result)
 	for _, cookie := range result.Cookies {
+		cookie.Secure = true
 		http.SetCookie(writer, &cookie)
 	}
 	switch result.Kind {

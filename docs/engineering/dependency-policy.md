@@ -19,7 +19,6 @@ Document major dependency decisions in `docs/engineering/decisions/`.
 Run these gates before release packaging.
 
 ```sh
-scripts/check-release-policy.sh
 go list -m all
 go list -m -json all
 scripts/test-go-modules.sh
@@ -63,8 +62,3 @@ used by nested modules.
 - Optional CSS/tool adapters: `addons/tailwind`; it shells out to a user-owned
   Tailwind executable and does not download Tailwind during normal builds.
 - Test/dev only: workflow Node checks and VS Code packaging scripts.
-
-`scripts/check-release-policy.sh` is the current CI guard for the strongest
-policy invariants: no production-ready claim, no required npm install in CI or
-release packaging, visible pre-release metadata, and no hidden optional tool
-download in normal gates.

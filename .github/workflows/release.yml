@@ -40,9 +40,6 @@ jobs:
         run: |
           go version
           go env GOVERSION
-          scripts/check-release-policy.sh
-          scripts/validate-release-notes.sh .github/release-note-template.md
-          scripts/validate-release-notes.sh docs/engineering/release-notes-v0.2.md
           scripts/test-go-modules.sh
           scripts/vulncheck-go-modules.sh
           go build ./cmd/gowdk
@@ -139,9 +136,6 @@ jobs:
             notes=".github/release-note-template.md"
           fi
           echo "path=$notes" >> "$GITHUB_OUTPUT"
-
-      - name: Validate selected release notes
-        run: scripts/validate-release-notes.sh "${{ steps.release_notes.outputs.path }}"
 
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v3

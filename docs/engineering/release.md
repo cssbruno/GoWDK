@@ -67,9 +67,6 @@ below still have to pass before publishing.
 
 ```sh
 scripts/test-go-modules.sh
-scripts/check-release-policy.sh
-scripts/validate-release-notes.sh .github/release-note-template.md
-scripts/validate-release-notes.sh docs/engineering/release-notes-v0.2.md
 scripts/vulncheck-go-modules.sh
 go build ./cmd/gowdk
 ./gowdk version --json

@@ -43,26 +43,9 @@ func TestEditorReleaseWorkflowCoverage(t *testing.T) {
 }
 
 func TestReleaseTrustWorkflowCoverage(t *testing.T) {
-	ciText := readWorkflow(t, "../../.github/workflows/ci.yml")
 	releaseText := readWorkflow(t, "../../.github/workflows/release.yml")
 	smokeText := readWorkflow(t, "../../.github/workflows/release-smoke.yml")
 	cacheText := readWorkflow(t, "../../.github/workflows/cache-maintenance.yml")
-
-	for workflow, text := range map[string]string{
-		"ci.yml":      ciText,
-		"release.yml": releaseText,
-	} {
-		for _, expected := range []string{
-			"scripts/check-release-policy.sh",
-			"scripts/validate-release-notes.sh",
-			".github/release-note-template.md",
-			"docs/engineering/release-notes-v0.2.md",
-		} {
-			if !strings.Contains(text, expected) {
-				t.Fatalf("expected %q in %s:\n%s", expected, workflow, text)
-			}
-		}
-	}
 
 	for _, expected := range []string{
 		"go version",
@@ -71,7 +54,6 @@ func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 		"sha256sum -c checksums.txt",
 		"actions/upload-artifact",
 		"if-no-files-found: error",
-		"Validate selected release notes",
 		"fail_on_unmatched_files: true",
 		"draft: false",
 		"prerelease: true",

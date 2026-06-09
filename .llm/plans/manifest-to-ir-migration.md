@@ -21,7 +21,12 @@ Done:
 Pending (largest remaining work):
 
 - Make `internal/compiler` validation/binding IR-native (it still validates the
-  manifest model — ~980 references).
+  manifest model — ~980 references). Tracked in **issue #145**. This is a
+  redesign, not a mechanical swap: a naive flip to `ValidateProgram(ir)` would
+  silently drop `validateStandaloneEndpoints` / `validateRouteMethodConflicts`
+  because IR lowering is lossy for endpoint spans, route params, and the raw
+  kind/method those validators check. The IR must be enriched first and the flip
+  guarded by a zero-diagnostic-drift differential corpus.
 - Collapse the `AST → manifest → IR` path to `AST → IR` in `gwdkanalysis`.
 - Keep public manifest JSON until a release plan deprecates it.
 

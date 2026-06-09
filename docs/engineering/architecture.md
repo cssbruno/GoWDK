@@ -146,7 +146,10 @@ Migration order:
 3. (done) Replace buildgen render helpers with IR-native helpers and route
    buildgen validation through `compiler.ValidateProgram`.
 4. Move compiler validation and backend binding records to IR or IR-adjacent
-   structs (compiler still validates the manifest model today).
+   structs (compiler still validates the manifest model today). This is a
+   redesign — IR lowering is currently lossy for standalone-endpoint validation,
+   so the IR must be enriched and the flip guarded against diagnostic drift.
+   Tracked in issue #145.
 5. Convert CLI reports, sitemap output, and LSP project metadata to IR-derived
    adapters.
 6. Keep public manifest JSON compatibility until a release plan explicitly

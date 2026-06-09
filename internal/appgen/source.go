@@ -381,6 +381,7 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 	fields = append(fields,
 		keyValue("SSRExact", id("ssrExact")),
 		keyValue("SSRDynamic", id("ssrDynamic")),
+		keyValue("RequestTimeout", sel("gowdkruntime", "DefaultRequestTimeout")),
 	)
 	return fields
 }

@@ -14,6 +14,11 @@ import (
 // DefaultActionBodyLimit is the generated action request body limit.
 const DefaultActionBodyLimit int64 = 1 << 20
 
+// DefaultAPIBodyLimit is the generated API request body limit. API handlers
+// receive the raw *http.Request and decode the body themselves, so the limit
+// is enforced by capping request.Body before the handler runs.
+const DefaultAPIBodyLimit int64 = 1 << 20
+
 // BackendHandler handles one generated backend route and reports whether it
 // wrote a response.
 type BackendHandler func(http.ResponseWriter, *http.Request) bool
@@ -227,6 +232,7 @@ func APIHandler(handler func(context.Context, *http.Request) (response.Response,
 		return NotImplemented("GOWDK API handler is not implemented")
 	}
 	return func(writer http.ResponseWriter, request *http.Request) bool {
+		request.Body = http.MaxBytesReader(writer, request.Body, DefaultAPIBodyLimit)
 		ctx := WithRequest(request.Context(), request)
 		result, err := handler(ctx, request)
 		writeBackendResult(writer, result, err)

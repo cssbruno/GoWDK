@@ -309,7 +309,7 @@ Implemented today:
   paths, plus concrete or dynamic hybrid request-time pages with or without
   declared `load {}` data, in generated binaries.
 - CLI tooling for tokens, formatting, validation, manifest, sitemap, routes,
-  dev, serve, and LSP.
+  compiler IR inspection, dev, serve, and LSP.
 
 Planned or partial:
 

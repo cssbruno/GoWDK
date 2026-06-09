@@ -644,6 +644,163 @@ func TestInitCommandRejectsExistingFilesUnlessForced(t *testing.T) {
 	}
 }
 
+func TestAddCommandListsKnownAddons(t *testing.T) {
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "--list"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	for _, expected := range []string{
+		"Available addons:",
+		"actions",
+		"api",
+		"contracts",
+		"css",
+		"embed",
+		"partial",
+		"ratelimit",
+		"ssr",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("expected %q in addon list:\n%s", expected, stdout)
+		}
+	}
+}
+
+func TestAddCommandWiresAddonIntoConfig(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "ssr", "--config", config})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `added addon "ssr"`) {
+		t.Fatalf("expected add confirmation, got:\n%s", stdout)
+	}
+	payload, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`"github.com/cssbruno/gowdk/addons/ssr"`,
+		"Addons: []gowdk.Addon{ssr.Addon()}",
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected updated config to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestAddCommandSkipsExistingAliasedAddon(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		gowdkssr.Addon(),
+	},
+}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "ssr", "--config", config})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `addon "ssr" already present`) {
+		t.Fatalf("expected already-present message, got:\n%s", stdout)
+	}
+	payload, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	if strings.Count(source, "github.com/cssbruno/gowdk/addons/ssr") != 1 {
+		t.Fatalf("expected one ssr import after idempotent add:\n%s", source)
+	}
+	if strings.Count(source, ".Addon()") != 1 {
+		t.Fatalf("expected one addon constructor after idempotent add:\n%s", source)
+	}
+}
+
+func TestAddCommandRejectsNonLiteralAddonsField(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var existingAddons []gowdk.Addon
+
+var Config = gowdk.Config{
+	Addons: existingAddons,
+}
+`)
+
+	_, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "ssr", "--config", config})
+	})
+	if err == nil || !strings.Contains(err.Error(), "Config.Addons must be a []gowdk.Addon literal") {
+		t.Fatalf("expected non-literal Addons error, got %v", err)
+	}
+}
+
+func TestAddCommandSupportsConfigEqualsFlag(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "custom.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+
+	if err := run([]string{"add", "partial", "--config=" + config}); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), "partial.Addon()") {
+		t.Fatalf("expected partial addon in config:\n%s", payload)
+	}
+}
+
+func TestAddCommandRejectsUnknownFlag(t *testing.T) {
+	err := run([]string{"add", "--unknown"})
+	if err == nil || !strings.Contains(err.Error(), `unknown add flag "--unknown"`) {
+		t.Fatalf("expected unknown flag error, got %v", err)
+	}
+}
+
 func TestDevRejectsInvalidInterval(t *testing.T) {
 	err := run([]string{"dev", "--interval", "0s", "--out", t.TempDir()})
 	if err == nil || !strings.Contains(err.Error(), "dev interval must be positive") {
@@ -2822,6 +2979,170 @@ view {
 	})
 	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 7 {
 		t.Fatalf("expected endpoint source span for API declaration, got %#v", report.Endpoints[0].SourceSpan)
+	}
+}
+
+func TestInspectIRCommandPrintsCompilerIR(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "newsletter.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+@page newsletter
+@route "/newsletter"
+
+act Subscribe POST "/newsletter"
+
+view {
+  <form g:post={Subscribe}>
+    <input name="email" required />
+    <button type="submit">Subscribe</button>
+  </form>
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"inspect", "ir", "--config", config, page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected no inspect diagnostics on stderr, got:\n%s", stderr)
+	}
+
+	var report struct {
+		Version  int `json:"Version"`
+		Packages []struct {
+			Name  string `json:"Name"`
+			Files []struct {
+				Path string `json:"Path"`
+				Kind string `json:"Kind"`
+				Name string `json:"Name"`
+			} `json:"Files"`
+		} `json:"Packages"`
+		Pages []struct {
+			ID     string   `json:"ID"`
+			Route  string   `json:"Route"`
+			Guards []string `json:"Guards"`
+		} `json:"Pages"`
+		Routes []struct {
+			Kind   string `json:"Kind"`
+			Method string `json:"Method"`
+			Path   string `json:"Path"`
+			PageID string `json:"PageID"`
+		} `json:"Routes"`
+		Endpoints []struct {
+			Kind    string `json:"Kind"`
+			Symbol  string `json:"Symbol"`
+			Method  string `json:"Method"`
+			Path    string `json:"Path"`
+			PageID  string `json:"PageID"`
+			Binding struct {
+				Status       string `json:"Status"`
+				FunctionName string `json:"FunctionName"`
+			} `json:"Binding"`
+		} `json:"Endpoints"`
+		Templates []struct {
+			OwnerKind string `json:"OwnerKind"`
+			OwnerID   string `json:"OwnerID"`
+			Body      string `json:"Body"`
+		} `json:"Templates"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid inspect ir JSON: %v\n%s", err, output)
+	}
+	if report.Version != 1 {
+		t.Fatalf("unexpected IR version: %d", report.Version)
+	}
+	if len(report.Pages) != 1 || report.Pages[0].ID != "newsletter" || report.Pages[0].Route != "/newsletter" {
+		t.Fatalf("unexpected page IR: %#v", report.Pages)
+	}
+	if len(report.Pages[0].Guards) != 1 || report.Pages[0].Guards[0] != "public" {
+		t.Fatalf("expected public guard in page IR: %#v", report.Pages[0].Guards)
+	}
+	if len(report.Routes) != 1 || report.Routes[0].Kind != "spa" || report.Routes[0].Path != "/newsletter" {
+		t.Fatalf("unexpected route IR: %#v", report.Routes)
+	}
+	if len(report.Endpoints) != 1 || report.Endpoints[0].Kind != "action" || report.Endpoints[0].Symbol != "Subscribe" {
+		t.Fatalf("unexpected endpoint IR: %#v", report.Endpoints)
+	}
+	if report.Endpoints[0].Binding.Status != "missing" || report.Endpoints[0].Binding.FunctionName != "Subscribe" {
+		t.Fatalf("expected backend binding metadata in endpoint IR: %#v", report.Endpoints[0].Binding)
+	}
+	if len(report.Templates) != 1 || report.Templates[0].OwnerID != "newsletter" || !strings.Contains(report.Templates[0].Body, "g:post") {
+		t.Fatalf("unexpected template IR: %#v", report.Templates)
+	}
+	if len(report.Packages) != 1 || report.Packages[0].Name != "app" || len(report.Packages[0].Files) != 1 || report.Packages[0].Files[0].Path != page {
+		t.Fatalf("unexpected package IR: %#v", report.Packages)
+	}
+}
+
+func TestInspectIRCommandDiscoversSelectedModuleOnly(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Modules: []gowdk.ModuleConfig{
+		{Name: "frontend"},
+		{Name: "backend"},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
+
+@page home
+@route "/"
+
+view {
+  <main>Frontend</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `package app
+
+@page admin
+@route "/admin"
+
+view {
+  <main>Backend</main>
+}
+`)
+
+	var output string
+	withWorkingDir(t, root, func() {
+		captured, err := captureCLIStdout(t, func() error {
+			return run([]string{"inspect", "ir", "--module", "backend"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		output = captured
+	})
+
+	var report struct {
+		Pages []struct {
+			ID string `json:"ID"`
+		} `json:"Pages"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid inspect ir JSON: %v\n%s", err, output)
+	}
+	if len(report.Pages) != 1 || report.Pages[0].ID != "admin" {
+		t.Fatalf("expected selected backend page only, got %#v", report.Pages)
+	}
+}
+
+func TestInspectCommandRejectsUnknownTarget(t *testing.T) {
+	_, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"inspect", "assets"})
+	})
+	if err == nil {
+		t.Fatal("expected unknown inspect target error")
+	}
+	if !strings.Contains(err.Error(), `unknown inspect target "assets"`) {
+		t.Fatalf("unexpected inspect error: %v", err)
 	}
 }
 

@@ -83,7 +83,8 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 		`ErrorPages: gowdkruntime.LoadErrorPages(root),`,
 		`Backend: backend,`,
 		`SSRExact: ssrExact,`,
-		`SSRDynamic: ssrDynamic}`,
+		`SSRDynamic: ssrDynamic,`,
+		`RequestTimeout: gowdkruntime.DefaultRequestTimeout}`,
 	} {
 		if !strings.Contains(string(packagePayload), expected) {
 			t.Fatalf("expected generated gowdkapp/app.go to contain %q:\n%s", expected, packagePayload)
@@ -1192,7 +1193,8 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`SSRExact: ssrExact,`,
-		`SSRDynamic: ssrDynamic}`,
+		`SSRDynamic: ssrDynamic,`,
+		`RequestTimeout: gowdkruntime.DefaultRequestTimeout}`,
 		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`func ssrExact(response http.ResponseWriter, request *http.Request) (handled bool)`,
 		`func ssrDynamic(response http.ResponseWriter, request *http.Request) (handled bool)`,

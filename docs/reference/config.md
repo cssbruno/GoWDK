@@ -18,8 +18,9 @@ type Config struct {
 
 `gowdk.config.go` is required for CLI commands that compile, validate, inspect,
 or serve a development loop for `.gwdk` code: `check`, `manifest`, `sitemap`,
-`routes`, `build`, and `dev`. Those commands load `gowdk.config.go` from the
-current directory by default, or the file passed with `--config <file>`.
+`routes`, `inspect ir`, `build`, and `dev`. Those commands load
+`gowdk.config.go` from the current directory by default, or the file passed
+with `--config <file>`.
 
 `SourceConfig` has include and exclude patterns. Discovery support exists in
 `internal/discover`, and `gowdk build` reads literal `Source.Include` and
@@ -357,6 +358,11 @@ under `/assets/gowdk/`.
 embed, CSS, and rate limiting. Current validation uses SSR feature registration
 for render-mode checks, and SPA builds invoke addons that implement
 `gowdk.CSSProcessor`.
+
+Use `gowdk add --list` to print built-in addon names, and `gowdk add <name>` to
+insert the canonical import and `<name>.Addon()` constructor into
+`gowdk.config.go`. The command rewrites literal `Config.Addons` lists only; if
+`Addons` is computed by Go code, edit the config manually.
 
 The literal config loader recognizes built-in no-argument addon constructors
 when they are imported from their canonical package paths:

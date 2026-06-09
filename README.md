@@ -20,8 +20,8 @@ Project shape:
   browser behavior hooks, and endpoint metadata.
 - Normal Go packages own handlers, domain logic, auth, persistence, contracts,
   jobs, integration events, and production validation.
-- The compiler parses `.gwdk`, validates contracts, lowers to IR, and emits
-  HTML, assets, manifests, build reports, and generated Go adapters.
+- The compiler parses `.gwdk`, validates contracts, lowers to inspectable IR,
+  and emits HTML, assets, manifests, build reports, and generated Go adapters.
 - Generated Go is runtime wiring: `net/http` routes, form decoders, response
   envelopes, CSRF checks, fragments, SSR/load calls, guards, rate limits, and
   contract web adapters.
@@ -83,11 +83,15 @@ still tracked in the hardening backlog.
 | Dev server | Partial | `gowdk dev` polls inputs, skips no-op rebuilds, serves or runs generated output, live-reloads browsers, shows a browser overlay for rebuild failures, and keeps serving the last successful output. | Overlay diagnostics need codes, source spans, changed-file context, and better generated-app runtime attribution. Component HMR is intentionally deferred. | [Dev](docs/reference/dev.md) | [Getting started](docs/getting-started.md) |
 | Editor/LSP | Implemented | The VS Code extension and dependency-free LSP provide diagnostics, formatting, completions, hover, outline, semantic tokens, definitions, references, site-map visualization, and project-aware navigation for supported paths. | Exact source ranges, richer quick fixes, route/endpoint/contract maps, and `g:command`/`g:query` status in the editor are planned. | [Language server](docs/product/language-server.md) | [VS Code](editors/vscode) |
 
-Security note: request-time features are demoable, not production-ready. Current
-security hardening includes first slices of typed decoding, request-shape
-validation, opt-in CSRF, guards, panic boundaries, and no-store request-time
-responses, but full auth/session, redirect, timeout, upload, logging, and
-operations policy are still hardening work.
+Security note: request-time features are still 0.x, but the core request-time
+hardening is now in place. Generated handlers apply body-size limits (actions
+and APIs), server read/header/write/idle timeouts, and a per-request handler
+deadline; recovered panics return a generic no-store 500 and are logged
+server-side with secret redaction; CSRF is opt-in with a 403 invalid-token
+contract; redirects are validated against a safe allowlist (local paths only,
+no protocol-relative or CRLF, same-origin referer); and diagnostics redact
+secrets quoted from source. Still hardening: full auth/session, multipart
+uploads, and the broader operations policy.
 
 Known gaps and release hardening work live in
 [the 0.x improvement checklist](docs/engineering/release-plan.md), with public

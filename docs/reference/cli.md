@@ -9,12 +9,15 @@ development.
 ```sh
 gowdk version
 gowdk init [--force] [--tests] [--template <site|minimal>] [dir]
+gowdk add <addon> [--config <file>]
+gowdk add --list
 gowdk tokens <file.gwdk>
 gowdk fmt [--write] <files>
 gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
+gowdk inspect ir [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
@@ -33,11 +36,12 @@ gowdk lsp [--ssr]
 - `--force`: supported by `init`; overwrites starter files that already exist.
 - `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
+- `--list`: supported by `add`; prints built-in addon names the command can wire.
 - `--json`: supported by `check`, `explain`, `contracts`, `graph`, `trace`, and `list`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available.
 - `--write`: supported by `fmt`; overwrites formatted files.
-- `--config`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; loads a literal config subset from the given path instead of the required default `gowdk.config.go`.
+- `--config`: supported by `add`, `check`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; selects the config file. Compile commands load a literal config subset from the given path instead of the required default `gowdk.config.go`.
 - `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
 - `gowdk build` writes `contract_reference` build-report events for
   `g:command` forms and `g:query` elements with `unknown`, `bound`, `missing`,
@@ -47,7 +51,7 @@ gowdk lsp [--ssr]
   command owners.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
-- `--module`: supported by `check`, `manifest`, `sitemap`, `routes`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
+- `--module`: supported by `check`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
 - `--out`: supported by `build`; selects the output directory and overrides `Build.Output`.
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
@@ -65,6 +69,8 @@ gowdk lsp [--ssr]
 go run ./cmd/gowdk init --template site my-site
 go run ./cmd/gowdk init --tests --template site my-tested-site
 go run ./cmd/gowdk init --template minimal my-minimal-site
+go run ./cmd/gowdk add --list
+go run ./cmd/gowdk add ssr actions partial
 go run ./cmd/gowdk check examples/pages/home.page.gwdk
 go run ./cmd/gowdk check --config gowdk.config.go
 go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk
@@ -74,6 +80,7 @@ go run ./cmd/gowdk manifest --module frontend --ssr
 go run ./cmd/gowdk sitemap --module frontend --ssr
 go run ./cmd/gowdk trace patients.CreatePatient
 go run ./cmd/gowdk routes --module frontend --ssr
+go run ./cmd/gowdk inspect ir --module frontend --ssr
 go run ./cmd/gowdk contracts --json .
 go run ./cmd/gowdk graph .
 go run ./cmd/gowdk list commands .
@@ -115,6 +122,12 @@ tests/gowdk_smoke_test.go
 The smoke test skips by default. Set `GOWDK_BIN=/path/to/gowdk` to make it run
 `gowdk build` from the scaffolded project root and assert that `index.html` and
 `bin/site` were generated.
+
+`add` rewrites `gowdk.config.go` through the Go AST and `go/format`. It knows
+the built-in addon packages listed in [addons.md](addons.md), inserts missing
+imports, appends `<addon>.Addon()` to `Config.Addons`, and skips constructors
+that are already present. It does not install third-party modules or rewrite
+non-literal config expressions.
 
 The generated config discovers `src/**/*.gwdk`, discovers CSS under
 `styles/**/*.css`, declares a `site` build target, generates app source in
@@ -196,6 +209,11 @@ symbol, signature/input metadata when bound, status, and binding message.
 Non-fatal route-mode notes, such as request-time page rendering disabled on a
 SPA route or static SPA output disabled on an SSR route, appear in `info` and
 are also mirrored to stderr as `info:` console lines.
+
+`gowdk inspect ir` prints the validated `internal/gwdkir.Program` compiler IR as
+JSON. This is an M2 compiler-spine debugging and snapshot surface, not a stable
+public schema yet. It uses the same project config, discovery, validation,
+backend binding, and contract-reference checks as the other compile commands.
 
 `gowdk explain <diagnostic-code>` prints the registry metadata, stability,
 summary, next steps, and examples when available for a diagnostic code. It does

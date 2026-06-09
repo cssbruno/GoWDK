@@ -5,7 +5,7 @@ import (
 	"go/token"
 	"sort"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func ssrHandlerSource(routes []SSRRoute) string {
@@ -106,7 +106,7 @@ func ssrLoadStmts(route SSRRoute) []ast.Stmt {
 	if !route.HasLoad {
 		return nil
 	}
-	if route.LoadBinding.Status != manifest.BackendBindingBound {
+	if route.LoadBinding.Status != source.BackendBindingBound {
 		stmts := backendNotImplementedStmts(route.LoadBinding, "SSR load")
 		stmts = append(stmts, returnBool(true))
 		return stmts
@@ -116,7 +116,7 @@ func ssrLoadStmts(route SSRRoute) []ast.Stmt {
 	}
 	loadCall := call(sel(route.LoadBackendAlias, route.LoadBinding.FunctionName), id("loadContext"))
 	switch route.LoadBinding.Signature {
-	case manifest.BackendSignatureLoadError:
+	case source.BackendSignatureLoadError:
 		stmts = append(stmts,
 			define([]ast.Expr{id("loadData"), id("err")}, loadCall),
 			&ast.IfStmt{
@@ -220,7 +220,7 @@ func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
 	return stmts
 }
 
-func typedRouteParamStmts(params []manifest.RouteParam) []ast.Stmt {
+func typedRouteParamStmts(params []source.RouteParam) []ast.Stmt {
 	if len(params) == 0 {
 		return nil
 	}
@@ -301,7 +301,7 @@ func routeParamDecodeFunc(paramType string) string {
 	}
 }
 
-func routeParamMetadataExpr(params []manifest.RouteParam) ast.Expr {
+func routeParamMetadataExpr(params []source.RouteParam) ast.Expr {
 	elts := make([]ast.Expr, 0, len(params))
 	for _, param := range params {
 		paramType := param.Type

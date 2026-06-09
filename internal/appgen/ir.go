@@ -6,6 +6,7 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
@@ -149,8 +150,8 @@ func fragmentEndpointsFromIR(ir gwdkir.Program) ([]FragmentEndpoint, error) {
 	return endpoints, nil
 }
 
-func renderFragmentHTML(source string, packageName string, uses map[string]string, components map[string]view.Component) (string, error) {
-	return view.RenderWithOptions(source, componentRegistryForFragment(packageName, uses, components), nil, view.Options{
+func renderFragmentHTML(body string, packageName string, uses map[string]string, components map[string]view.Component) (string, error) {
+	return view.RenderWithOptions(body, componentRegistryForFragment(packageName, uses, components), nil, view.Options{
 		Package: packageName,
 		Uses:    uses,
 	})
@@ -285,7 +286,7 @@ func irBindingsByEndpoint(endpoints []gwdkir.Endpoint) map[string]manifest.Backe
 			Signature:    endpoint.Binding.Signature,
 			InputType:    endpoint.Binding.InputType,
 			InputPointer: endpoint.Binding.InputPointer,
-			InputFields:  append([]manifest.BackendInputField(nil), endpoint.Binding.InputFields...),
+			InputFields:  append([]source.BackendInputField(nil), endpoint.Binding.InputFields...),
 			Status:       endpoint.Binding.Status,
 			Message:      endpoint.Binding.Message,
 		}
@@ -312,7 +313,7 @@ func actionFragmentsFromIR(action gwdkir.Action) ([]ActionFragment, error) {
 	return fragments, nil
 }
 
-func bindingInputFieldNames(fields []manifest.BackendInputField) []string {
+func bindingInputFieldNames(fields []source.BackendInputField) []string {
 	out := make([]string, 0, len(fields))
 	for _, field := range fields {
 		out = append(out, field.FormName)

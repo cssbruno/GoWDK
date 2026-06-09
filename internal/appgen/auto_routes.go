@@ -9,7 +9,7 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func resolveOptions(outputDir string, options Options) (Options, error) {
@@ -88,22 +88,22 @@ func optionsIR(options Options) (gwdkir.Program, error) {
 func assignBackendAliases(options *Options) {
 	paths := map[string]string{}
 	for _, action := range options.Actions {
-		if action.Binding.Status == manifest.BackendBindingBound && action.Binding.ImportPath != "" {
+		if action.Binding.Status == source.BackendBindingBound && action.Binding.ImportPath != "" {
 			paths[action.Binding.ImportPath] = action.Binding.PackageName
 		}
 	}
 	for _, api := range options.APIs {
-		if api.Binding.Status == manifest.BackendBindingBound && api.Binding.ImportPath != "" {
+		if api.Binding.Status == source.BackendBindingBound && api.Binding.ImportPath != "" {
 			paths[api.Binding.ImportPath] = api.Binding.PackageName
 		}
 	}
 	for _, fragment := range options.Fragments {
-		if fragment.Binding.Status == manifest.BackendBindingBound && fragment.Binding.ImportPath != "" {
+		if fragment.Binding.Status == source.BackendBindingBound && fragment.Binding.ImportPath != "" {
 			paths[fragment.Binding.ImportPath] = fragment.Binding.PackageName
 		}
 	}
 	for _, route := range options.SSR {
-		if route.LoadBinding.Status == manifest.BackendBindingBound && route.LoadBinding.ImportPath != "" {
+		if route.LoadBinding.Status == source.BackendBindingBound && route.LoadBinding.ImportPath != "" {
 			paths[route.LoadBinding.ImportPath] = route.LoadBinding.PackageName
 		}
 	}
@@ -171,7 +171,7 @@ func ssrRoutes(artifacts []buildgen.SSRArtifact) []SSRRoute {
 			Cache:            artifact.Cache,
 			ErrorPage:        artifact.ErrorPage,
 			DynamicParams:    append([]string(nil), artifact.DynamicParams...),
-			RouteParams:      append([]manifest.RouteParam(nil), artifact.RouteParams...),
+			RouteParams:      append([]source.RouteParam(nil), artifact.RouteParams...),
 			Guards:           append([]string(nil), artifact.Guards...),
 			HasLoad:          artifact.HasLoad,
 			LoadBinding:      artifact.LoadBinding,

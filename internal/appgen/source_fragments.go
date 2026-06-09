@@ -5,7 +5,7 @@ import (
 	"go/token"
 	"sort"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func fragmentFuncDecl(fragments []FragmentEndpoint, rateLimit bool) *ast.FuncDecl {
@@ -50,12 +50,12 @@ func fragmentCaseStmts(fragment FragmentEndpoint, rateLimit bool) []ast.Stmt {
 	stmts := endpointContextStmts("fragment", fragment.PageID, fragment.FragmentName, fragment.Method, fragment.Route, "")
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(fragment.Guards)...)
-	if fragment.Binding.Status == manifest.BackendBindingUnsupportedSignature {
+	if fragment.Binding.Status == source.BackendBindingUnsupportedSignature {
 		stmts = append(stmts, backendNotImplementedStmts(fragment.Binding, "fragment")...)
 		stmts = append(stmts, returnBool(true))
 		return stmts
 	}
-	if fragment.Binding.Status == manifest.BackendBindingBound {
+	if fragment.Binding.Status == source.BackendBindingBound {
 		stmts = append(stmts,
 			define([]ast.Expr{id("result"), id("err")}, call(sel(fragment.BackendAlias, fragment.Binding.FunctionName), id("ctx"))),
 			&ast.IfStmt{

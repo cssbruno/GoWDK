@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func contractHandlerDecls(exposures []BackendContractExposure, csrf bool, rateLimit bool) []ast.Decl {
@@ -187,7 +187,7 @@ func contractDecoderDecl(exposure BackendContractExposure) *ast.FuncDecl {
 	}, []*ast.Field{{Type: inputType}, {Type: id("error")}}, stmts)
 }
 
-func contractFormSchemaExpr(fields []manifest.BackendInputField) ast.Expr {
+func contractFormSchemaExpr(fields []source.BackendInputField) ast.Expr {
 	names := make([]string, 0, len(fields))
 	for _, field := range fields {
 		names = append(names, field.FormName)

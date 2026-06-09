@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func actionHandlerSource(actions []ActionEndpoint, csrf bool) string {
@@ -59,12 +60,12 @@ func actionsUseLengthValidation(actions []ActionEndpoint) bool {
 }
 
 func actionsUseActionValidation(action ActionEndpoint) bool {
-	return action.Binding.Status != manifest.BackendBindingMissing && action.Binding.Status != manifest.BackendBindingUnsupportedSignature && action.ValidatesInput
+	return action.Binding.Status != source.BackendBindingMissing && action.Binding.Status != source.BackendBindingUnsupportedSignature && action.ValidatesInput
 }
 
 func actionsUseForm(actions []ActionEndpoint) bool {
 	for _, action := range actions {
-		if action.Binding.Status != manifest.BackendBindingMissing && action.Binding.Status != manifest.BackendBindingUnsupportedSignature && actionNeedsValues(action) {
+		if action.Binding.Status != source.BackendBindingMissing && action.Binding.Status != source.BackendBindingUnsupportedSignature && actionNeedsValues(action) {
 			return true
 		}
 	}
@@ -73,7 +74,7 @@ func actionsUseForm(actions []ActionEndpoint) bool {
 
 func actionsParseForm(actions []ActionEndpoint) bool {
 	for _, action := range actions {
-		if action.Binding.Status != manifest.BackendBindingMissing && action.Binding.Status != manifest.BackendBindingUnsupportedSignature {
+		if action.Binding.Status != source.BackendBindingMissing && action.Binding.Status != source.BackendBindingUnsupportedSignature {
 			return true
 		}
 	}
@@ -92,13 +93,13 @@ func sortedActionEndpoints(actions []ActionEndpoint) []ActionEndpoint {
 }
 
 func actionNeedsValues(action ActionEndpoint) bool {
-	if action.Binding.Status != manifest.BackendBindingBound {
+	if action.Binding.Status != source.BackendBindingBound {
 		return true
 	}
 	if action.ValidatesInput {
 		return true
 	}
-	return action.Binding.Signature != manifest.BackendSignatureAction0
+	return action.Binding.Signature != source.BackendSignatureAction0
 }
 
 func actionFuncDecl(actions []ActionEndpoint, csrf bool, rateLimit bool) *ast.FuncDecl {
@@ -143,7 +144,7 @@ func actionCaseStmts(action ActionEndpoint, csrf bool, rateLimit bool) []ast.Stm
 	}
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(action.Guards)...)
-	if action.Binding.Status != "" && action.Binding.Status != manifest.BackendBindingBound {
+	if action.Binding.Status != "" && action.Binding.Status != source.BackendBindingBound {
 		stmts = append(stmts, backendNotImplementedStmts(action.Binding, "action")...)
 		stmts = append(stmts, returnBool(true))
 		return stmts
@@ -153,7 +154,7 @@ func actionCaseStmts(action ActionEndpoint, csrf bool, rateLimit bool) []ast.Stm
 		stmts = append(stmts, define([]ast.Expr{id("values")}, call(sel("gowdkform", "FromURLValues"), selExpr(id("request"), "PostForm"))))
 	}
 	stmts = append(stmts, actionInputDecodeStmts(action)...)
-	if action.Binding.Status == manifest.BackendBindingBound {
+	if action.Binding.Status == source.BackendBindingBound {
 		stmts = append(stmts, boundActionResultStmts(action)...)
 	} else {
 		stmts = append(stmts, actionPartialBranchStmts(action)...)
@@ -199,7 +200,7 @@ func actionParseFormStmts(csrf bool) []ast.Stmt {
 }
 
 func actionInputDecodeStmts(action ActionEndpoint) []ast.Stmt {
-	if action.Binding.Status == manifest.BackendBindingBound {
+	if action.Binding.Status == source.BackendBindingBound {
 		return boundActionInputDecodeStmts(action)
 	}
 	if action.InputType == "" {
@@ -219,18 +220,18 @@ func actionInputDecodeStmts(action ActionEndpoint) []ast.Stmt {
 
 func boundActionInputDecodeStmts(action ActionEndpoint) []ast.Stmt {
 	switch action.Binding.Signature {
-	case manifest.BackendSignatureAction0:
+	case source.BackendSignatureAction0:
 		if action.ValidatesInput {
 			return actionRequiredValidationStmts(action)
 		}
 		return nil
-	case manifest.BackendSignatureActionValues:
+	case source.BackendSignatureActionValues:
 		stmts := expectedValuesStmts(action)
 		if action.ValidatesInput {
 			stmts = append(stmts, actionRequiredValidationStmts(action)...)
 		}
 		return stmts
-	case manifest.BackendSignatureActionForm, manifest.BackendSignatureActionFormPtr:
+	case source.BackendSignatureActionForm, source.BackendSignatureActionFormPtr:
 		stmts := expectedValuesStmts(action)
 		stmts = append(stmts,
 			define([]ast.Expr{id("input"), id("err")}, call(sel(boundActionDecoderName(action)), id("values"))),
@@ -364,10 +365,10 @@ func actionValidationMessage(custom string, fallback string) string {
 func boundActionResultStmts(action ActionEndpoint) []ast.Stmt {
 	args := []ast.Expr{id("ctx")}
 	switch action.Binding.Signature {
-	case manifest.BackendSignatureAction0:
-	case manifest.BackendSignatureActionForm:
+	case source.BackendSignatureAction0:
+	case source.BackendSignatureActionForm:
 		args = append(args, id("input"))
-	case manifest.BackendSignatureActionFormPtr:
+	case source.BackendSignatureActionFormPtr:
 		args = append(args, &ast.UnaryExpr{Op: token.AND, X: id("input")})
 	default:
 		args = append(args, id("values"))
@@ -550,7 +551,7 @@ func actionDecoderDecls(actions []ActionEndpoint) []ast.Decl {
 		})
 	}
 	for _, action := range actions {
-		if action.Binding.Status == manifest.BackendBindingBound || action.Binding.Status == manifest.BackendBindingMissing || action.Binding.Status == manifest.BackendBindingUnsupportedSignature || action.InputType == "" {
+		if action.Binding.Status == source.BackendBindingBound || action.Binding.Status == source.BackendBindingMissing || action.Binding.Status == source.BackendBindingUnsupportedSignature || action.InputType == "" {
 			continue
 		}
 		decls = append(decls, valuesActionDecoderDecl(action))
@@ -591,7 +592,7 @@ func uniqueInputTypes(actions []ActionEndpoint) []string {
 	seen := map[string]bool{}
 	var types []string
 	for _, action := range actions {
-		if action.Binding.Status == manifest.BackendBindingBound || action.Binding.Status == manifest.BackendBindingMissing || action.Binding.Status == manifest.BackendBindingUnsupportedSignature || action.InputType == "" || seen[action.InputType] {
+		if action.Binding.Status == source.BackendBindingBound || action.Binding.Status == source.BackendBindingMissing || action.Binding.Status == source.BackendBindingUnsupportedSignature || action.InputType == "" || seen[action.InputType] {
 			continue
 		}
 		seen[action.InputType] = true
@@ -602,10 +603,10 @@ func uniqueInputTypes(actions []ActionEndpoint) []string {
 }
 
 func actionUsesBoundInputDecoder(action ActionEndpoint) bool {
-	if action.Binding.Status != manifest.BackendBindingBound {
+	if action.Binding.Status != source.BackendBindingBound {
 		return false
 	}
-	return action.Binding.Signature == manifest.BackendSignatureActionForm || action.Binding.Signature == manifest.BackendSignatureActionFormPtr
+	return action.Binding.Signature == source.BackendSignatureActionForm || action.Binding.Signature == source.BackendSignatureActionFormPtr
 }
 
 func boundActionDecoderDecl(action ActionEndpoint) *ast.FuncDecl {
@@ -622,7 +623,7 @@ func boundActionDecoderDecl(action ActionEndpoint) *ast.FuncDecl {
 	}, []*ast.Field{{Type: inputType}, {Type: id("error")}}, stmts)
 }
 
-func boundActionFieldDecodeStmts(index int, field manifest.BackendInputField) []ast.Stmt {
+func boundActionFieldDecodeStmts(index int, field source.BackendInputField) []ast.Stmt {
 	value := id(fmtFieldValueName(index))
 	switch field.Type {
 	case "string":
@@ -646,7 +647,7 @@ func boundActionFieldDecodeStmts(index int, field manifest.BackendInputField) []
 	}
 }
 
-func boundActionScalarFieldDecodeStmts(value *ast.Ident, field manifest.BackendInputField, decode ast.Expr, assignment ast.Expr) []ast.Stmt {
+func boundActionScalarFieldDecodeStmts(value *ast.Ident, field source.BackendInputField, decode ast.Expr, assignment ast.Expr) []ast.Stmt {
 	return []ast.Stmt{
 		define([]ast.Expr{value, id("ok"), id("err")}, decode),
 		&ast.IfStmt{

@@ -10,6 +10,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/goblockgen"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 type inlineGoBlockGroup struct {
@@ -32,15 +33,15 @@ func writeInlineGoBlockFiles(appDir string, options Options) ([]string, error) {
 	}
 	var files []string
 	for packageName, group := range groups {
-		source, err := goblockgen.Source(packageName, group.imports, group.goBlocks)
+		generated, err := goblockgen.Source(packageName, group.imports, group.goBlocks)
 		if err != nil {
 			return nil, fmt.Errorf("generate inline go block package %s: %w", packageName, err)
 		}
-		if len(source) == 0 {
+		if len(generated) == 0 {
 			continue
 		}
 		relPath := goblockgen.GeneratedRelPath(packageName)
-		if err := writeFileIfChanged(filepath.Join(appDir, relPath), source); err != nil {
+		if err := writeFileIfChanged(filepath.Join(appDir, relPath), generated); err != nil {
 			return nil, err
 		}
 		files = append(files, relPath)
@@ -162,15 +163,15 @@ func writeAddonGoBlockFiles(appDir string, options Options) ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			source := []byte(file.Source)
+			contents := []byte(file.Source)
 			if strings.HasSuffix(relPath, ".go") {
-				formatted, err := format.Source(source)
+				formatted, err := format.Source(contents)
 				if err != nil {
 					return nil, fmt.Errorf("format addon go block file %s: %w", relPath, err)
 				}
-				source = formatted
+				contents = formatted
 			}
-			if err := writeFileIfChanged(filepath.Join(appDir, relPath), source); err != nil {
+			if err := writeFileIfChanged(filepath.Join(appDir, relPath), contents); err != nil {
 				return nil, err
 			}
 			files = append(files, relPath)
@@ -240,13 +241,13 @@ func addonGoBlockTargets(ir gwdkir.Program, config gowdk.Config) []addonGoBlockT
 	return targets
 }
 
-func gowdkGoBlockTarget(ownerKind string, ownerID string, packageName string, source string, target string, body string, span manifest.SourceSpan) gowdk.GoBlockTarget {
+func gowdkGoBlockTarget(ownerKind string, ownerID string, packageName string, sourcePath string, target string, body string, span source.SourceSpan) gowdk.GoBlockTarget {
 	return gowdk.GoBlockTarget{
 		Target:       target,
 		OwnerKind:    ownerKind,
 		OwnerID:      ownerID,
 		OwnerPackage: packageName,
-		SourcePath:   source,
+		SourcePath:   sourcePath,
 		Body:         body,
 		Span: gowdk.SourceSpan{
 			Start: gowdk.SourcePosition{Line: span.Start.Line, Column: span.Start.Column},

@@ -35,6 +35,11 @@ func runtimeImportMap(options Options) map[string]string {
 	imports := map[string]string{
 		"gowdkruntime": "github.com/cssbruno/gowdk/runtime/app",
 	}
+	if envRuntimeValidationRequired(options.Config.Env) {
+		imports["errors"] = "errors"
+		imports["os"] = "os"
+		imports["strings"] = "strings"
+	}
 	actions := options.Actions
 	apis := options.APIs
 	fragments := options.Fragments
@@ -203,15 +208,18 @@ func appShellDecls(options Options) []ast.Decl {
 		handlerDecl(),
 		serveMuxDecl(options, true),
 	}
+	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
 	return decls
 }
 
 func backendShellDecls(options Options) []ast.Decl {
-	return []ast.Decl{
+	decls := []ast.Decl{
 		maxActionBodyBytesDecl(),
 		handlerDecl(),
 		serveMuxDecl(options, false),
 	}
+	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
+	return decls
 }
 
 func appGeneratedDecls(direct Options, full Options) []ast.Decl {
@@ -307,6 +315,7 @@ func handlerDecl() ast.Decl {
 
 func serveMuxDecl(options Options, embedded bool) ast.Decl {
 	stmts := []ast.Stmt{}
+	stmts = append(stmts, validateEnvContractStmt(options.Config.Env)...)
 	if embedded {
 		stmts = append(stmts,
 			define([]ast.Expr{id("root"), id("err")}, call(sel("fs", "Sub"), id("embeddedFiles"), stringLit("app"))),

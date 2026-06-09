@@ -24,6 +24,7 @@ Relevant spec, issue, ADR, or discussion:
 - Validate duplicate names, empty names, defaults on secrets, and secret-looking
   names in normal vars.
 - Add missing-env diagnostics when project config is loaded.
+- Generate startup required-env checks for generated apps and backend apps.
 - Update config docs with contract examples and deployment responsibility.
 
 ## Files Expected To Change
@@ -31,6 +32,9 @@ Relevant spec, issue, ADR, or discussion:
 - `gowdk.go`
 - `internal/project/config.go`
 - `internal/project/config_test.go`
+- `internal/appgen/source_env.go`
+- `internal/appgen/source.go`
+- `internal/appgen/appgen_test.go`
 - `docs/reference/config.md`
 - `.llm/features/env-secret-contract.md`
 - `.llm/plans/env-secret-contract.md`
@@ -47,7 +51,8 @@ Relevant spec, issue, ADR, or discussion:
 - Unit: config literal parsing, duplicate detection, missing-env diagnostics,
   secret inline value rejection, and secret-looking var rejection.
 - Integration: executable config helper preserves env contract.
-- End-to-end: generated app startup check remains a later runtime slice.
+- End-to-end: generated app binary exits before serving when required envs are
+  unset or blank.
 - Manual: inspect diagnostics and docs for redaction.
 
 ## Verification Commands

@@ -273,8 +273,8 @@ Env: gowdk.EnvConfig{
 }
 ```
 
-Validation runs when `gowdk.config.go` is loaded. Required names that are not
-present in the host environment fail with a direct diagnostic such as
+Validation runs when `gowdk.config.go` is loaded. Required names that are unset
+or blank in the host environment fail with a direct diagnostic such as
 `DATABASE_URL is required but is not set`. Required vars with `Default` are
 treated as satisfied by the default. Secrets have no `Default` or value field by
 type; `Default` and `Value` are rejected in literal config parsing too.
@@ -282,6 +282,11 @@ type; `Default` and `Value` are rejected in literal config parsing too.
 The same name cannot appear in both `Vars` and `Secrets`. Secret-looking var
 names ending in `_SECRET`, `_TOKEN`, `_PASSWORD`, or `_KEY` are rejected and
 must move to `Secrets`. Diagnostics print names only and never print values.
+
+Generated app binaries repeat the required env check before serving requests.
+This is a startup redundancy layer only. It does not replace backend
+authorization, handler validation, database checks, deployment secrets, or
+runtime-specific security controls.
 
 ## Build
 

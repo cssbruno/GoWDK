@@ -36,6 +36,8 @@ func run(args []string) error {
 		return printVersion(args[1:])
 	case "init":
 		return initProject(args[1:])
+	case "add":
+		return addAddon(args[1:])
 	case "tokens":
 		return tokens(args[1:])
 	case "fmt":
@@ -101,6 +103,7 @@ func usage() {
 	fmt.Println("Commands:")
 	fmt.Println("  version [--json]         print CLI version")
 	fmt.Println("  init [--force] [--tests] [--template <site|minimal>] [dir] scaffold a starter GOWDK project")
+	fmt.Println("  add <addon> [--config <file>] | add --list  wire an addon into gowdk.config.go")
 	fmt.Println("  tokens <file.gwdk>       print language tokens")
 	fmt.Println("  fmt [--write] <files>    format .gwdk files")
 	fmt.Println("  check [--config <file>] [--module <name>] [--json] [--ssr] [files...] parse and validate .gwdk files")

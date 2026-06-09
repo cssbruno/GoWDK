@@ -334,6 +334,22 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint manifest.EndpointDeclar
 		SourceFile:    endpoint.Source,
 		Span:          endpoint.Span,
 	})
+	// Preserve the raw declaration losslessly for validation, which needs the
+	// exact kind, method, and spans before normalization.
+	builder.program.GoEndpoints = append(builder.program.GoEndpoints, gwdkir.GoEndpoint{
+		Kind:          endpoint.Kind,
+		SourceKind:    endpointSource(endpoint.SourceKind),
+		Package:       endpoint.Package,
+		Source:        endpoint.Source,
+		Name:          endpoint.Name,
+		Method:        endpoint.Method,
+		Route:         endpoint.Route,
+		ErrorPage:     endpoint.ErrorPage,
+		Span:          endpoint.Span,
+		RouteSpan:     endpoint.RouteSpan,
+		RouteParams:   append([]source.NamedSpan(nil), endpoint.RouteParams...),
+		ErrorPageSpan: endpoint.ErrorPageSpan,
+	})
 }
 
 func (builder *irBuilder) addTemplate(template gwdkir.Template) {

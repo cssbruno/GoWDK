@@ -20,6 +20,7 @@ func ManifestFromIR(ir gwdkir.Program) manifest.Manifest {
 		Pages:           make([]manifest.Page, 0, len(ir.Pages)),
 		Components:      make([]manifest.Component, 0, len(ir.Components)),
 		Layouts:         make([]manifest.Layout, 0, len(ir.Layouts)),
+		Endpoints:       goEndpointsFromIR(ir.GoEndpoints),
 		BackendBindings: BackendBindingsFromIR(ir),
 	}
 	for _, page := range ir.Pages {
@@ -45,6 +46,34 @@ func BackendBindingsFromIR(ir gwdkir.Program) []manifest.BackendBinding {
 		if binding.Status != "" || binding.ImportPath != "" || binding.FunctionName != "" {
 			out = append(out, binding)
 		}
+	}
+	return out
+}
+
+// goEndpointsFromIR reconstructs the standalone Go endpoint declarations from
+// their lossless IR mirror. This is a one-to-one field copy, so validation that
+// reads manifest.Endpoints (route conflicts, standalone-endpoint shape) runs
+// identically whether it starts from a parsed manifest or from IR.
+func goEndpointsFromIR(endpoints []gwdkir.GoEndpoint) []manifest.EndpointDeclaration {
+	if len(endpoints) == 0 {
+		return nil
+	}
+	out := make([]manifest.EndpointDeclaration, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		out = append(out, manifest.EndpointDeclaration{
+			Kind:          endpoint.Kind,
+			SourceKind:    manifest.EndpointSource(endpoint.SourceKind),
+			Package:       endpoint.Package,
+			Source:        endpoint.Source,
+			Name:          endpoint.Name,
+			Method:        endpoint.Method,
+			Route:         endpoint.Route,
+			ErrorPage:     endpoint.ErrorPage,
+			Span:          endpoint.Span,
+			RouteSpan:     endpoint.RouteSpan,
+			RouteParams:   append([]source.NamedSpan(nil), endpoint.RouteParams...),
+			ErrorPageSpan: endpoint.ErrorPageSpan,
+		})
 	}
 	return out
 }
@@ -93,7 +122,7 @@ func pageFromIR(page gwdkir.Page) manifest.Page {
 		Imports:     importsFromIR(page.Imports),
 		Uses:        usesFromIR(page.Uses),
 		Stores:      storesFromIR(page.Stores),
-		Paths:       page.Blocks.PathsBody != "",
+		Paths:       page.Blocks.Paths,
 		Blocks:      blocksFromIR(page.Blocks),
 		LoadBinding: loadBindingFromIR(page),
 		Spans: manifest.PageSpans{

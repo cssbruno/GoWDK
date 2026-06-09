@@ -98,12 +98,12 @@ func buildOnce(options cliOptions, request buildRequest) error {
 		fmt.Fprintln(os.Stderr, err)
 		return fmt.Errorf("build failed")
 	}
-	if err := compiler.ValidateManifest(options.Config, app); err != nil {
+	app = compiler.BindBackendHandlers(app)
+	ir := gwdkanalysis.BuildIR(options.Config, app)
+	if err := compiler.ValidateProgram(options.Config, ir); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return fmt.Errorf("build failed")
 	}
-	app = compiler.BindBackendHandlers(app)
-	ir := gwdkanalysis.BuildIR(options.Config, app)
 	if err := linkIRContractReferences(&ir, "."); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return fmt.Errorf("build failed")

@@ -18,15 +18,28 @@ Done:
 - Swapped leaf-type references to `internal/source` across `appgen`, `compiler`,
   `parser`, `gwdkanalysis`, `lsp`.
 
+Issue #145 progress (compiler IR-native validation):
+
+- (done) Enriched the IR so it is no longer lossy for standalone Go endpoints:
+  `gwdkir.GoEndpoint` preserves the raw declaration (kind/method/spans), and
+  `ManifestFromIR` reconstructs `manifest.Endpoints` from it. This closes the
+  silent-skip gap — `validateStandaloneEndpoints` / `validateRouteMethodConflicts`
+  now run on the IR path.
+- (done) Differential proof: `ValidateProgram(BuildIR(app))` is byte-identical to
+  `ValidateManifest(app)` across a valid/invalid corpus (kept as a regression
+  guard in `validate_differential_test.go`).
+- (done) The CLI build path validates the IR directly via `ValidateProgram(ir)`,
+  no longer threading a manifest into validation.
+
 Pending (largest remaining work):
 
-- Make `internal/compiler` validation/binding IR-native (it still validates the
-  manifest model — ~980 references). Tracked in **issue #145**. This is a
-  redesign, not a mechanical swap: a naive flip to `ValidateProgram(ir)` would
-  silently drop `validateStandaloneEndpoints` / `validateRouteMethodConflicts`
-  because IR lowering is lossy for endpoint spans, route params, and the raw
-  kind/method those validators check. The IR must be enriched first and the flip
-  guarded by a zero-diagnostic-drift differential corpus.
+- The validator bodies still read manifest model types internally (via the
+  `ManifestFromIR` adapter), so `internal/compiler` still imports `manifest` for
+  the model (~980 references). Rewriting the ~30 validators to read `gwdkir`
+  types directly — and dropping the adapter — is the remaining bulk of #145.
+- Remove the residual double validation in the build path (CLI validates the IR,
+  buildgen re-validates defensively for its other callers).
+- Flip the `lang` report commands (`check`/`sitemap`/`manifest`) to IR validation.
 - Collapse the `AST → manifest → IR` path to `AST → IR` in `gwdkanalysis`.
 - Keep public manifest JSON until a release plan deprecates it.
 

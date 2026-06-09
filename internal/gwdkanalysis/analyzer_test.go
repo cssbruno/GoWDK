@@ -359,6 +359,14 @@ func TestBuildIRIncludesStandaloneGoEndpointSource(t *testing.T) {
 	if endpoint.Source != gwdkir.EndpointSourceGo || endpoint.PageID != "api.Session" || endpoint.Binding.Signature != source.BackendSignatureAPI {
 		t.Fatalf("unexpected endpoint IR: %#v", endpoint)
 	}
+	// The raw declaration must also be preserved losslessly for validation.
+	if len(ir.GoEndpoints) != 1 {
+		t.Fatalf("expected one raw Go endpoint, got %#v", ir.GoEndpoints)
+	}
+	raw := ir.GoEndpoints[0]
+	if raw.Kind != "api" || raw.Name != "Session" || raw.Method != "GET" || raw.Route != "/api/session" || raw.SourceKind != gwdkir.EndpointSourceGo {
+		t.Fatalf("raw Go endpoint not preserved: %#v", raw)
+	}
 }
 
 func TestBuildIRResolvesQualifiedCSSAssetUse(t *testing.T) {

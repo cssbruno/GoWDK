@@ -74,6 +74,19 @@ tooling contracts may change before a stable release.
   public pages explicit through `@guard public`.
 - Release packaging uploads `dist/*` as a GitHub Actions workflow artifact and
   verifies the selected tag release contains the expected download assets.
+- `v0.2.7` release metadata: CLI/editor versions, optional module root-version
+  requirements, root changelog, and release-doc current-version examples.
+- `gowdk.Config.Env` declares normal env vars and secrets separately, validates
+  empty names, duplicate names, secret-looking normal vars, and required names
+  that are unset or blank.
+- Generated embedded apps and backend-only apps repeat required env checks
+  before serving requests.
+- `gowdk inspect ir` prints the validated compiler IR for M2 debugging.
+- `gowdk add` wires built-in addons into `gowdk.config.go`.
+- Batteries-included auth and database addons provide common auth/session,
+  password hashing, and SQLC-style database wiring helpers.
+- Runtime request boundaries now include a default per-request deadline, API
+  request-body caps, recovered panic logging, and secret redaction.
 
 ## Partial
 
@@ -102,6 +115,9 @@ tooling contracts may change before a stable release.
   surface stable.
 - Guard metadata is a generated access redundancy layer and does not replace
   authorization in normal Go backend handlers and services.
+- Env/secret metadata is a startup and config-load redundancy layer. Cloud
+  platforms, containers, process managers, and secret managers still inject
+  values, and backend authorization remains application-owned.
 
 ## Breaking Or Unstable Generated Output
 

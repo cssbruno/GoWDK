@@ -3,6 +3,44 @@
 GOWDK is experimental 0.x software. Public syntax, generated output, runtime
 packages, and tooling contracts may change before a stable release.
 
+## v0.2.7 - 2026-06-09
+
+### Implemented
+
+- Added `gowdk.Config.Env` with separate `Vars` and `Secrets` runtime
+  environment contract declarations.
+- Required env vars and secrets now fail config loading when unset or blank,
+  while secret values stay out of config, diagnostics, generated code, and
+  build artifacts.
+- Generated embedded apps and backend-only apps repeat required env checks at
+  startup before serving requests.
+- Added stable env contract diagnostics for empty names, duplicate names,
+  missing required names, and secret-looking names declared as normal vars.
+- Added `gowdk inspect ir` as an M2 compiler IR inspection command.
+- Added `gowdk add` for wiring built-in addons into `gowdk.config.go`.
+- Added batteries-included `addons/auth` and `addons/db` packages for common
+  auth/session/password and SQLC-style database wiring.
+
+### Changed
+
+- `gowdk version` and the VS Code extension metadata now report `0.2.7`.
+- Optional contract adapter modules require `github.com/cssbruno/gowdk v0.2.7`.
+- Generated request boundaries now apply the default per-request deadline, cap
+  API request bodies, log recovered panics, and redact secret-looking values in
+  diagnostics and runtime panic logs.
+- CLI command code was split into per-command files without changing the public
+  command surface.
+- Release CI prunes high-churn CodeQL caches and keeps visible release asset
+  checks aligned with the artifact list.
+
+### Known Gaps
+
+- GOWDK remains not production-ready.
+- The env/secret contract is a fail-fast redundancy layer. Cloud providers,
+  containers, process managers, or secret managers still own value injection.
+- Env checks do not replace backend authorization, handler validation,
+  database permissions, deployment secrets, CSRF, or guard backing code.
+
 ## v0.2.6 - 2026-06-08
 
 ### Changed

@@ -644,6 +644,163 @@ func TestInitCommandRejectsExistingFilesUnlessForced(t *testing.T) {
 	}
 }
 
+func TestAddCommandListsKnownAddons(t *testing.T) {
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "--list"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	for _, expected := range []string{
+		"Available addons:",
+		"actions",
+		"api",
+		"contracts",
+		"css",
+		"embed",
+		"partial",
+		"ratelimit",
+		"ssr",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("expected %q in addon list:\n%s", expected, stdout)
+		}
+	}
+}
+
+func TestAddCommandWiresAddonIntoConfig(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "ssr", "--config", config})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `added addon "ssr"`) {
+		t.Fatalf("expected add confirmation, got:\n%s", stdout)
+	}
+	payload, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`"github.com/cssbruno/gowdk/addons/ssr"`,
+		"Addons: []gowdk.Addon{ssr.Addon()}",
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected updated config to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestAddCommandSkipsExistingAliasedAddon(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		gowdkssr.Addon(),
+	},
+}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "ssr", "--config", config})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `addon "ssr" already present`) {
+		t.Fatalf("expected already-present message, got:\n%s", stdout)
+	}
+	payload, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	if strings.Count(source, "github.com/cssbruno/gowdk/addons/ssr") != 1 {
+		t.Fatalf("expected one ssr import after idempotent add:\n%s", source)
+	}
+	if strings.Count(source, ".Addon()") != 1 {
+		t.Fatalf("expected one addon constructor after idempotent add:\n%s", source)
+	}
+}
+
+func TestAddCommandRejectsNonLiteralAddonsField(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var existingAddons []gowdk.Addon
+
+var Config = gowdk.Config{
+	Addons: existingAddons,
+}
+`)
+
+	_, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "ssr", "--config", config})
+	})
+	if err == nil || !strings.Contains(err.Error(), "Config.Addons must be a []gowdk.Addon literal") {
+		t.Fatalf("expected non-literal Addons error, got %v", err)
+	}
+}
+
+func TestAddCommandSupportsConfigEqualsFlag(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "custom.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+
+	if err := run([]string{"add", "partial", "--config=" + config}); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), "partial.Addon()") {
+		t.Fatalf("expected partial addon in config:\n%s", payload)
+	}
+}
+
+func TestAddCommandRejectsUnknownFlag(t *testing.T) {
+	err := run([]string{"add", "--unknown"})
+	if err == nil || !strings.Contains(err.Error(), `unknown add flag "--unknown"`) {
+		t.Fatalf("expected unknown flag error, got %v", err)
+	}
+}
+
 func TestDevRejectsInvalidInterval(t *testing.T) {
 	err := run([]string{"dev", "--interval", "0s", "--out", t.TempDir()})
 	if err == nil || !strings.Contains(err.Error(), "dev interval must be positive") {

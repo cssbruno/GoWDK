@@ -20,7 +20,7 @@ func Attr(name, value string) string {
 }
 
 func escapeAttrValue(value string) string {
-	return htmltemplate.HTMLEscaper(value)
+	return htmltemplate.HTMLEscapeString(value)
 }
 
 func validAttrName(name string) bool {

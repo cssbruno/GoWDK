@@ -14,6 +14,10 @@ pages, compile frontend output, and package it into one binary.
 **Status:** experimental 0.x pre-release. Public contracts can still change.
 Not production-ready.
 
+**Website warning:** the public project page is not updated yet and is
+currently only a placeholder. Treat this README and the docs in this repository
+as the current source of truth.
+
 Project shape:
 
 - `.gwdk` files declare pages, components, layouts, routes, views, build data,

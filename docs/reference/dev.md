@@ -67,5 +67,7 @@ runtime assumptions.
 
 ## Doctor
 
-There is no `gowdk doctor` command today. Add it only when repeated setup
-failures show a stable diagnostic flow worth automating.
+Use `gowdk doctor` for setup and project-health checks that do not write build
+output. It verifies the local Go/GOWDK toolchain, config loading, source
+discovery, language validation, route metadata construction, and relevant
+optional tools. Use `gowdk doctor --json` for CI or editor integrations.

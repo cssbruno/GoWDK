@@ -1,0 +1,74 @@
+{
+  "Version": 1,
+  "Packages": [
+    {
+      "Name": "app",
+      "SourceDirs": [
+        "."
+      ],
+      "Files": [
+        {
+          "Path": "newsletter.page.gwdk",
+          "Kind": "page",
+          "Package": "app",
+          "Name": "newsletter"
+        }
+      ]
+    }
+  ],
+  "Pages": [
+    {
+      "Source": "newsletter.page.gwdk",
+      "Package": "app",
+      "ID": "newsletter",
+      "Route": "/newsletter",
+      "Guards": [
+        "public"
+      ]
+    }
+  ],
+  "Routes": [
+    {
+      "Kind": "spa",
+      "Method": "GET",
+      "Path": "/newsletter",
+      "PageID": "newsletter",
+      "Package": "app",
+      "Render": "spa",
+      "Guards": [
+        "public"
+      ],
+      "Source": "newsletter.page.gwdk"
+    }
+  ],
+  "Endpoints": [
+    {
+      "Kind": "action",
+      "Source": "gwdk",
+      "Package": "app",
+      "PageID": "newsletter",
+      "Symbol": "Subscribe",
+      "Method": "POST",
+      "Path": "/newsletter",
+      "SourceFile": "newsletter.page.gwdk",
+      "Binding": {
+        "Status": "missing",
+        "PackageName": "app",
+        "FunctionName": "Subscribe"
+      }
+    }
+  ],
+  "Templates": [
+    {
+      "OwnerKind": "page",
+      "OwnerID": "newsletter",
+      "Package": "app",
+      "Source": "newsletter.page.gwdk",
+      "Route": "/newsletter",
+      "Guards": [
+        "public"
+      ],
+      "Body": "<form g:post={Subscribe}>\n    <input name=\"email\" required />\n    <button type=\"submit\">Subscribe</button>\n  </form>"
+    }
+  ]
+}

@@ -84,7 +84,7 @@ func TestEnvConfigValidateReportsMissingRequiredNames(t *testing.T) {
 			{Name: "GOWDK_TEST_DATABASE_URL", Required: true},
 		},
 	}.Validate(func(name string) (string, bool) {
-		return "", false
+		return "   ", true
 	})
 	if err == nil {
 		t.Fatal("expected missing env validation error")

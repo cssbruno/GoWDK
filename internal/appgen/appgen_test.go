@@ -1,6 +1,7 @@
 package appgen
 
 import (
+	"context"
 	"go/format"
 	"io"
 	"net"
@@ -378,6 +379,11 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 	appDir := filepath.Join(t.TempDir(), "generated-backend")
 
 	result, err := GenerateBackendWithOptions(appDir, Options{
+		Config: gowdk.Config{Env: gowdk.EnvConfig{
+			Secrets: []gowdk.SecretEnv{
+				{Name: "GOWDK_TEST_DATABASE_URL", Required: true},
+			},
+		}},
 		Actions: []ActionEndpoint{{
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
@@ -402,9 +408,16 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
+		`errors`,
 		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
+		`os`,
+		`strings`,
+		`if err := validateEnvContract(); err != nil {`,
 		`backendRouter, err := newBackendRouter()`,
 		`mux.Handle("/", backendRouter)`,
+		`func validateEnvContract() error`,
+		`value := os.Getenv("GOWDK_TEST_DATABASE_URL")`,
+		`missing = append(missing, "GOWDK_TEST_DATABASE_URL is required but is not set")`,
 		`func newBackendRouter() (*gowdkruntime.BackendRouter, error)`,
 		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}`,
 		`gowdkruntime.BackendRoute{Method: http.MethodGet, Path: "/patients/list", Kind: "fragment", Handler: fragment}`,
@@ -551,6 +564,52 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 		`gowdkcontracts.CaptureCommandEventsForRole[patients.CreatePatient, patients.CreatePatientResult]`,
 		`gowdkcontracts.DispatchCommandEvents(ctx, currentContractEventSink(), contractRegistry, gowdkcontracts.RoleWeb, events)`,
 	)
+}
+
+func TestGenerateWiresEnvContractValidation(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Env: gowdk.EnvConfig{
+			Vars: []gowdk.EnvVar{
+				{Name: "GOWDK_TEST_BACKEND_ORIGIN", Required: true},
+				{Name: "GOWDK_TEST_ADDR", Required: true, Default: "127.0.0.1:8080"},
+			},
+			Secrets: []gowdk.SecretEnv{
+				{Name: "GOWDK_TEST_DATABASE_URL", Required: true},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`errors`,
+		`os`,
+		`strings`,
+		`if err := validateEnvContract(); err != nil {`,
+		`func validateEnvContract() error`,
+		`value := os.Getenv("GOWDK_TEST_BACKEND_ORIGIN")`,
+		`missing = append(missing, "GOWDK_TEST_BACKEND_ORIGIN is required but is not set")`,
+		`value := os.Getenv("GOWDK_TEST_DATABASE_URL")`,
+		`missing = append(missing, "GOWDK_TEST_DATABASE_URL is required but is not set")`,
+		`return errors.New(strings.Join(missing, "\n"))`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, `GOWDK_TEST_ADDR is required but is not set`) {
+		t.Fatalf("required env var with a default should not need runtime validation:\n%s", source)
+	}
 }
 
 func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
@@ -2066,6 +2125,54 @@ func TestBuildBinaryCompilesGeneratedApp(t *testing.T) {
 	}
 	if _, err := os.Stat(binaryPath); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestGeneratedBinaryFailsFastWhenRequiredEnvIsMissing(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Env: gowdk.EnvConfig{
+			Vars: []gowdk.EnvVar{
+				{Name: "GOWDK_TEST_BACKEND_ORIGIN", Required: true},
+			},
+			Secrets: []gowdk.SecretEnv{
+				{Name: "GOWDK_TEST_DATABASE_URL", Required: true},
+			},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, binaryPath)
+	command.Env = append(
+		withoutEnv(os.Environ(), "GOWDK_TEST_BACKEND_ORIGIN", "GOWDK_TEST_DATABASE_URL"),
+		"GOWDK_ADDR="+freeAddr(t),
+		"GOWDK_TEST_BACKEND_ORIGIN=   ",
+	)
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("expected generated binary to fail before listening, got timeout with output:\n%s", output)
+	}
+	if err == nil {
+		t.Fatalf("expected generated binary to fail for missing env, got output:\n%s", output)
+	}
+	for _, expected := range []string{
+		"GOWDK_TEST_BACKEND_ORIGIN is required but is not set",
+		"GOWDK_TEST_DATABASE_URL is required but is not set",
+	} {
+		if !strings.Contains(string(output), expected) {
+			t.Fatalf("expected generated binary output to contain %q:\n%s", expected, output)
+		}
 	}
 }
 

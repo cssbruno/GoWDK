@@ -111,7 +111,7 @@ func (config EnvConfig) Validate(lookup func(string) (string, bool)) error {
 			})
 		}
 		if lookup != nil && variable.Required && variable.Default == "" {
-			if _, ok := lookup(name); !ok {
+			if value, ok := lookup(name); !ok || strings.TrimSpace(value) == "" {
 				diagnostics = append(diagnostics, EnvValidationError{Code: "missing_required_env", Name: name, Message: fmt.Sprintf("%s is required but is not set", name)})
 			}
 		}
@@ -124,7 +124,7 @@ func (config EnvConfig) Validate(lookup func(string) (string, bool)) error {
 		}
 		diagnostics = append(diagnostics, validateEnvDuplicate(seen, name, "Secrets")...)
 		if lookup != nil && secret.Required {
-			if _, ok := lookup(name); !ok {
+			if value, ok := lookup(name); !ok || strings.TrimSpace(value) == "" {
 				diagnostics = append(diagnostics, EnvValidationError{Code: "missing_required_secret", Name: name, Message: fmt.Sprintf("%s is required but is not set", name)})
 			}
 		}

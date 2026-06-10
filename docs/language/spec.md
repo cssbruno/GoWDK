@@ -71,12 +71,12 @@ Implemented or partial annotations:
 Unknown annotations are errors. Malformed `@` lines are errors.
 
 `@guard` is optional on page sources, but a page is not public by default. A
-page that declares no `@guard` builds with a `missing_page_guard` warning and
-its route is denied (403) at request time until access is stated; the build
-still succeeds. Use `@guard public` to serve a page on purpose. Use custom guard
-IDs or native RBAC IDs such as `role:admin` and `permission:posts.write` when the
-page is protected. `@guard public` must stand alone. Access is never granted by
-omission.
+guardless page builds with a `missing_page_guard` warning and its route is
+denied (403) at request time until access is stated. Use `@guard public` to
+serve a page on purpose, or custom/RBAC guard IDs such as `role:admin` when the
+page is protected. The full access contract — default-deny enforcement,
+`paths {}` and SSR coverage, and the backend-endpoint rule — lives in
+[guards.md](guards.md).
 
 `@page` is optional for file-backed page sources. When omitted, the compiler
 derives the page ID from the source filename by removing `.page.gwdk` or

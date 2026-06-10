@@ -95,9 +95,12 @@ RBAC guard behavior:
   route/page access. They must never replace backend authorization around
   protected resources, data access, or service methods.
 
-Guard behavior:
+Guard behavior (see [guards.md](../language/guards.md) for the full access
+contract):
 
-- Missing `@guard` fails source validation for real page files.
+- Missing `@guard` is a `missing_page_guard` warning and the route is denied
+  (403) at request time — except on a page that also declares `act`/`api`/
+  `fragment` endpoints, where it is a build error.
 - `@guard public` marks intentional public access and cannot be combined with
   protected guard IDs.
 - Non-public page guards on build-time SPA/action page routes fail validation;

@@ -8,7 +8,8 @@ identity.
 Every current page file must declare a route. `@guard` is optional, but a page
 is not public by default: a guardless page warns (`missing_page_guard`) and its
 route is denied (403) until `@guard public` (or a protective guard) is added.
-Page ID derives from the filename unless `@page` is present:
+See [guards.md](../language/guards.md) for the full access contract. Page ID
+derives from the filename unless `@page` is present:
 
 ```gwdk
 @route "/"

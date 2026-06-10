@@ -1,0 +1,202 @@
+package gwdkir
+
+import (
+	"strings"
+	"testing"
+)
+
+func validProgram() Program {
+	return Program{
+		Version:    Version,
+		Packages:   []Package{{Name: "main"}, {Name: "shop"}},
+		Pages:      []Page{{ID: "home", Package: "main", Route: "/"}},
+		Components: []Component{{Name: "ProductCard", Package: "shop"}},
+		Layouts:    []Layout{{ID: "base", Package: "main"}},
+		Routes: []Route{
+			{Kind: RouteSPA, Method: "GET", Path: "/", PageID: "home"},
+		},
+		Endpoints: []Endpoint{
+			{Kind: EndpointAction, Source: EndpointSourceGOWDK, PageID: "home", Method: "POST", Path: "/actions/save"},
+			{Kind: EndpointAPI, Source: EndpointSourceGo, Method: "GET", Path: "/api/items"},
+		},
+		GoEndpoints: []GoEndpoint{
+			{Kind: "api", SourceKind: EndpointSourceGo, Name: "ListItems", Route: "/api/items"},
+		},
+		Templates: []Template{
+			{OwnerKind: SourcePage, OwnerID: "home"},
+			{OwnerKind: SourceComponent, OwnerID: "ProductCard"},
+			{OwnerKind: SourceLayout, OwnerID: "base"},
+		},
+		ContractRefs: []ContractReference{
+			{Kind: ContractQuery, Name: "shop.ListProducts", OwnerKind: SourcePage, OwnerID: "home"},
+			{Kind: ContractCommand, Name: "shop.AddToCart", Status: ContractBindingBound, OwnerKind: SourceComponent, OwnerID: "ProductCard"},
+		},
+		ClientBehaviors: []ClientBehavior{{Component: "ProductCard"}},
+		Assets: []Asset{
+			{Kind: AssetCSS, OwnerID: "home", Path: "home.css"},
+			{Kind: AssetWASM, OwnerID: "ProductCard", Path: "cart"},
+		},
+	}
+}
+
+func TestCheckInvariantsAcceptsValidProgram(t *testing.T) {
+	if err := CheckInvariants(validProgram()); err != nil {
+		t.Fatalf("CheckInvariants() = %v, want nil", err)
+	}
+}
+
+func TestCheckInvariantsAcceptsEmptyProgram(t *testing.T) {
+	if err := CheckInvariants(Program{Version: Version}); err != nil {
+		t.Fatalf("CheckInvariants() = %v, want nil", err)
+	}
+}
+
+func TestCheckInvariantsReportsViolations(t *testing.T) {
+	tests := []struct {
+		name    string
+		corrupt func(*Program)
+		want    string
+	}{
+		{
+			name:    "wrong version",
+			corrupt: func(p *Program) { p.Version = 0 },
+			want:    "program version is 0",
+		},
+		{
+			name:    "duplicate package",
+			corrupt: func(p *Program) { p.Packages = []Package{{Name: "main"}, {Name: "main"}} },
+			want:    `duplicate package "main"`,
+		},
+		{
+			name:    "unsorted packages",
+			corrupt: func(p *Program) { p.Packages = []Package{{Name: "shop"}, {Name: "main"}} },
+			want:    "packages are not sorted",
+		},
+		{
+			name:    "unknown route kind",
+			corrupt: func(p *Program) { p.Routes[0].Kind = "island" },
+			want:    `unknown kind "island"`,
+		},
+		{
+			name:    "route to missing page",
+			corrupt: func(p *Program) { p.Routes[0].PageID = "ghost" },
+			want:    `route "/" references unknown page "ghost"`,
+		},
+		{
+			name: "unsorted routes",
+			corrupt: func(p *Program) {
+				p.Pages = append(p.Pages, Page{ID: "about", Route: "/about"})
+				p.Routes = []Route{
+					{Kind: RouteSPA, Path: "/about", PageID: "about"},
+					{Kind: RouteSPA, Path: "/", PageID: "home"},
+				}
+			},
+			want: "routes are not sorted",
+		},
+		{
+			name:    "unknown endpoint kind",
+			corrupt: func(p *Program) { p.Endpoints[0].Kind = "stream" },
+			want:    `unknown kind "stream"`,
+		},
+		{
+			name:    "unknown endpoint source",
+			corrupt: func(p *Program) { p.Endpoints[0].Source = "yaml" },
+			want:    `unknown source "yaml"`,
+		},
+		{
+			name:    "endpoint without method",
+			corrupt: func(p *Program) { p.Endpoints[0].Method = "" },
+			want:    "has no method",
+		},
+		{
+			name: "unsorted endpoints",
+			corrupt: func(p *Program) {
+				p.Endpoints[0], p.Endpoints[1] = p.Endpoints[1], p.Endpoints[0]
+			},
+			want: "endpoints are not sorted",
+		},
+		{
+			name:    "unknown go endpoint source",
+			corrupt: func(p *Program) { p.GoEndpoints[0].SourceKind = "yaml" },
+			want:    `go endpoint "ListItems" has unknown source "yaml"`,
+		},
+		{
+			name:    "template with unknown owner kind",
+			corrupt: func(p *Program) { p.Templates[0].OwnerKind = "partial" },
+			want:    `template has unknown owner kind "partial"`,
+		},
+		{
+			name:    "template to missing page",
+			corrupt: func(p *Program) { p.Templates[0].OwnerID = "ghost" },
+			want:    `template references unknown page "ghost"`,
+		},
+		{
+			name:    "template to missing component",
+			corrupt: func(p *Program) { p.Templates[1].OwnerID = "Ghost" },
+			want:    `template references unknown component "Ghost"`,
+		},
+		{
+			name:    "template to missing layout",
+			corrupt: func(p *Program) { p.Templates[2].OwnerID = "ghost" },
+			want:    `template references unknown layout "ghost"`,
+		},
+		{
+			name:    "unknown asset kind",
+			corrupt: func(p *Program) { p.Assets[0].Kind = "font" },
+			want:    `asset "home.css" has unknown kind "font"`,
+		},
+		{
+			name:    "asset to missing owner",
+			corrupt: func(p *Program) { p.Assets[0].OwnerID = "ghost" },
+			want:    `asset "home.css" references unknown owner "ghost"`,
+		},
+		{
+			name:    "client behavior to missing component",
+			corrupt: func(p *Program) { p.ClientBehaviors[0].Component = "Ghost" },
+			want:    `client behavior references unknown component "Ghost"`,
+		},
+		{
+			name:    "unknown contract reference kind",
+			corrupt: func(p *Program) { p.ContractRefs[0].Kind = "event" },
+			want:    `contract reference "shop.ListProducts" has unknown kind "event"`,
+		},
+		{
+			name:    "unknown contract binding status",
+			corrupt: func(p *Program) { p.ContractRefs[0].Status = "maybe" },
+			want:    `unknown binding status "maybe"`,
+		},
+		{
+			name:    "contract reference to missing owner",
+			corrupt: func(p *Program) { p.ContractRefs[0].OwnerID = "ghost" },
+			want:    `contract reference references unknown page "ghost"`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			program := validProgram()
+			test.corrupt(&program)
+			err := CheckInvariants(program)
+			if err == nil {
+				t.Fatalf("CheckInvariants() = nil, want error containing %q", test.want)
+			}
+			if !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("CheckInvariants() = %q, want error containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestCheckInvariantsJoinsAllViolations(t *testing.T) {
+	program := validProgram()
+	program.Version = 0
+	program.Routes[0].PageID = "ghost"
+	err := CheckInvariants(program)
+	if err == nil {
+		t.Fatal("CheckInvariants() = nil, want error")
+	}
+	for _, want := range []string{"program version is 0", `unknown page "ghost"`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("CheckInvariants() = %q, want error containing %q", err, want)
+		}
+	}
+}

@@ -25,7 +25,7 @@ type HandlerFunc func(http.ResponseWriter, *http.Request) bool
 
 // CSRFTokenSource generates tokens for generated action forms.
 type CSRFTokenSource interface {
-	Token(http.ResponseWriter) (string, error)
+	Token(http.ResponseWriter, *http.Request) (string, error)
 	FieldName() string
 }
 
@@ -241,7 +241,7 @@ func (handler Handler) csrfAwarePayload(response http.ResponseWriter, request *h
 			continue
 		}
 		if token == "" {
-			generated, err := handler.CSRF.Token(response)
+			generated, err := handler.CSRF.Token(response, request)
 			if err != nil {
 				response.Header().Set("Cache-Control", "no-store")
 				http.Error(response, "csrf token unavailable", http.StatusInternalServerError)

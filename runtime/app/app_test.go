@@ -286,14 +286,21 @@ func TestRecoverSSRRoutePanicUsesRouteErrorPage(t *testing.T) {
 	}
 }
 
-func TestRecoverSSRRoutePanicDoesNotWriteAfterHeaders(t *testing.T) {
+func TestRecoverSSRRoutePanicAbortsAfterHeaders(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	writer := &boundaryResponseWriter{ResponseWriter: recorder}
 	writer.WriteHeader(http.StatusAccepted)
 
 	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
-	RecoverSSRRoutePanic(writer, request, "secret panic detail")
+	recovered := func() (value any) {
+		defer func() { value = recover() }()
+		RecoverSSRRoutePanic(writer, request, "secret panic detail")
+		return nil
+	}()
 
+	if recovered != http.ErrAbortHandler {
+		t.Fatalf("expected started response to abort the connection, got %v", recovered)
+	}
 	if recorder.Code != http.StatusAccepted {
 		t.Fatalf("unexpected status: %d", recorder.Code)
 	}
@@ -407,7 +414,7 @@ type fakeCSRFTokenSource struct {
 	calls int
 }
 
-func (source *fakeCSRFTokenSource) Token(http.ResponseWriter) (string, error) {
+func (source *fakeCSRFTokenSource) Token(http.ResponseWriter, *http.Request) (string, error) {
 	source.calls++
 	return source.token, source.err
 }
@@ -1009,5 +1016,61 @@ func TestRecoverEndpointPanicUsesEndpointErrorPage(t *testing.T) {
 	}
 	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
 		t.Fatalf("expected no-store boundary response, got %q", cache)
+	}
+}
+
+func TestBoundaryRepanicsErrAbortHandler(t *testing.T) {
+	previous := BoundaryLogger
+	t.Cleanup(func() { BoundaryLogger = previous })
+	var logged string
+	BoundaryLogger = func(message string) { logged = message }
+
+	handler := Boundary("api", func(http.ResponseWriter, *http.Request) bool {
+		panic(http.ErrAbortHandler)
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+
+	recovered := func() (value any) {
+		defer func() { value = recover() }()
+		handler(recorder, request)
+		return nil
+	}()
+	if recovered != http.ErrAbortHandler {
+		t.Fatalf("expected http.ErrAbortHandler to propagate, got %v", recovered)
+	}
+	if logged != "" {
+		t.Fatalf("deliberate abort should not be logged as a failure: %q", logged)
+	}
+}
+
+func TestBoundaryAbortsConnectionAfterResponseStarted(t *testing.T) {
+	previous := BoundaryLogger
+	t.Cleanup(func() { BoundaryLogger = previous })
+	var logged string
+	BoundaryLogger = func(message string) { logged = message }
+
+	handler := Boundary("api", func(writer http.ResponseWriter, _ *http.Request) bool {
+		if _, err := writer.Write([]byte("partial")); err != nil {
+			t.Fatal(err)
+		}
+		panic("boom mid-stream")
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+
+	recovered := func() (value any) {
+		defer func() { value = recover() }()
+		handler(recorder, request)
+		return nil
+	}()
+	if recovered != http.ErrAbortHandler {
+		t.Fatalf("expected started response to abort the connection, got %v", recovered)
+	}
+	if logged == "" {
+		t.Fatal("expected mid-stream panic to be logged")
+	}
+	if body := recorder.Body.String(); body != "partial" {
+		t.Fatalf("expected truncated body to stay as written, got %q", body)
 	}
 }

@@ -3,6 +3,7 @@ package contracts
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -72,12 +73,18 @@ func TestRunEventWorkerDispatchesAndAcks(t *testing.T) {
 	}
 }
 
-func TestRunEventWorkerNacksSubscriberFailure(t *testing.T) {
+func TestRunEventWorkerNacksSubscriberFailureAndContinues(t *testing.T) {
 	registry := NewRegistry()
 	subscriberErr := errors.New("subscriber unavailable")
 	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
 		return subscriberErr
 	}, RoleWorker))
+	var logged []string
+	previousLogger := WorkerLogger
+	WorkerLogger = func(message string) {
+		logged = append(logged, message)
+	}
+	defer func() { WorkerLogger = previousLogger }()
 	var acked int
 	var nackCause error
 	source := &scriptedEventSource{
@@ -96,6 +103,40 @@ func TestRunEventWorkerNacksSubscriberFailure(t *testing.T) {
 				return nil
 			},
 		}},
+		err: ErrEventSourceClosed,
+	}
+
+	if err := RunEventWorker(context.Background(), registry, source); err != nil {
+		t.Fatalf("run event worker error = %v, want nil after successful nack", err)
+	}
+	if source.received != 2 {
+		t.Fatalf("source.received = %d, want worker to keep consuming after nack", source.received)
+	}
+	if acked != 0 {
+		t.Fatalf("acked = %d, want 0", acked)
+	}
+	if !Is(nackCause, ErrSubscriberFailed) {
+		t.Fatalf("nack cause = %v, want subscriber failure", nackCause)
+	}
+	if len(logged) != 1 || !strings.Contains(logged[0], subscriberErr.Error()) {
+		t.Fatalf("logged = %#v, want one recovered dispatch failure", logged)
+	}
+}
+
+func TestRunEventWorkerReturnsSubscriberFailureWithoutNack(t *testing.T) {
+	registry := NewRegistry()
+	subscriberErr := errors.New("subscriber unavailable")
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		return subscriberErr
+	}, RoleWorker))
+	source := &scriptedEventSource{
+		batches: []EventBatch{{
+			Events: []EventEnvelope{{
+				Category: DomainEvent,
+				Type:     typeName[patientCreated](),
+				Value:    patientCreated{ID: "patient-1"},
+			}},
+		}},
 	}
 
 	err := RunEventWorker(context.Background(), registry, source)
@@ -104,12 +145,6 @@ func TestRunEventWorkerNacksSubscriberFailure(t *testing.T) {
 	}
 	if !errors.Is(err, subscriberErr) {
 		t.Fatalf("run event worker error = %v, want subscriber cause", err)
-	}
-	if acked != 0 {
-		t.Fatalf("acked = %d, want 0", acked)
-	}
-	if !Is(nackCause, ErrSubscriberFailed) {
-		t.Fatalf("nack cause = %v, want subscriber failure", nackCause)
 	}
 }
 

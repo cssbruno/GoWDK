@@ -131,13 +131,30 @@ func TestRedirectToContract(t *testing.T) {
 }
 
 func TestRedirectRejectsUnsafeURL(t *testing.T) {
-	for _, url := range []string{"https://example.com", "//example.com", "/login\nSet-Cookie: bad=true"} {
-		if err := Redirect(url, http.StatusSeeOther); err == nil {
+	// "/\evil.com" and "\\evil.com" are rejected because browsers normalize
+	// "\" to "/" before navigating, turning them into protocol-relative
+	// "//evil.com" redirects.
+	for _, url := range []string{
+		"https://example.com",
+		"//example.com",
+		"/login\nSet-Cookie: bad=true",
+		`/\evil.com`,
+		`\\evil.com`,
+		`/foo\..\\evil.com`,
+	} {
+		if _, _, ok := RedirectTarget(Redirect(url, http.StatusSeeOther)); ok {
 			t.Fatalf("expected unsafe redirect URL %q to fail", url)
 		}
 	}
-	if err := Redirect("/login", http.StatusOK); err == nil {
+	if _, _, ok := RedirectTarget(Redirect("/login", http.StatusOK)); ok {
 		t.Fatal("expected non-3xx redirect status to fail")
+	}
+	// "/%5C" stays accepted: browsers do not percent-decode the Location
+	// path before resolving it, so an encoded backslash never becomes a
+	// host separator and is safe to pass through as an opaque path byte.
+	url, _, ok := RedirectTarget(Redirect("/%5Cevil.com", http.StatusSeeOther))
+	if !ok || url != "/%5Cevil.com" {
+		t.Fatalf("expected percent-encoded backslash path to stay valid, got ok=%v url=%q", ok, url)
 	}
 }
 

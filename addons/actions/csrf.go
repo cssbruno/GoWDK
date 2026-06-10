@@ -25,7 +25,7 @@ type CSRFValidator interface {
 
 // CSRFTokenSource generates tokens for generated forms.
 type CSRFTokenSource interface {
-	Token(http.ResponseWriter) (string, error)
+	Token(http.ResponseWriter, *http.Request) (string, error)
 	FieldName() string
 }
 
@@ -80,9 +80,16 @@ func NewCSRF(options CSRFOptions) (*CSRF, error) {
 	}, nil
 }
 
-// Token generates a CSRF token, stores it in a cookie, and returns the value for
-// a generated hidden form field.
-func (csrf *CSRF) Token(response http.ResponseWriter) (string, error) {
+// Token returns the CSRF token for a generated hidden form field. It reuses
+// the request's valid CSRF cookie when present so concurrently open tabs keep
+// working, and only mints and stores a new token when the cookie is absent or
+// invalid.
+func (csrf *CSRF) Token(response http.ResponseWriter, request *http.Request) (string, error) {
+	if request != nil {
+		if cookie, err := request.Cookie(csrf.cookieName); err == nil && csrf.valid(cookie.Value) {
+			return cookie.Value, nil
+		}
+	}
 	var nonce [csrfNonceBytes]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return "", fmt.Errorf("generate csrf token: %w", err)

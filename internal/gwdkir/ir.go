@@ -289,9 +289,11 @@ type Layout struct {
 	Source      string
 	Package     string
 	ID          string
+	Layouts     []string
 	Uses        []Use
 	Blocks      Blocks
 	Span        source.SourceSpan
+	LayoutSpans []source.NamedSpan
 	PackageSpan source.SourceSpan
 }
 

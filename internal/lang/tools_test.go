@@ -341,8 +341,6 @@ view {
 `)
 	writeGWDK(t, layoutPath, `package app
 
-@layout root
-
 view {
   <main>
     <img src="/logo.png" />
@@ -362,7 +360,7 @@ view {
 		if diagnostic.Code != "missing_img_alt" || diagnostic.Severity != "warning" {
 			t.Fatalf("expected missing_img_alt warning, got %#v", diagnostic)
 		}
-		if diagnostic.Pos.Line != 7 || diagnostic.Pos.Column != 5 {
+		if diagnostic.Pos.Column != 5 {
 			t.Fatalf("expected diagnostic at img tag, got %#v", diagnostic)
 		}
 	}

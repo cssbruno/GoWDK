@@ -77,7 +77,7 @@ must pass `--config <file>`.
   route output paths, and no partial output on unsupported pages.
 - `internal/lang` tests cover lexical tokenization, diagnostics, formatting, file checks, and manifest JSON from parsed source files.
 - `internal/lang` tests cover site-map JSON for movable page files.
-- `internal/manifest` tests cover route manifest JSON render/path/guard/action output.
+- `internal/lang` golden tests cover the IR-derived manifest JSON render/path/guard/action output.
 - `internal/compiler` tests cover route metadata for SPA/SSR routes, endpoint
   metadata for actions/APIs, and missing SSR addon rejection.
 - `internal/clientrt` tests cover the emitted partial-update runtime source and

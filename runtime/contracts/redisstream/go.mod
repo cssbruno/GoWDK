@@ -3,7 +3,7 @@ module github.com/cssbruno/gowdk/runtime/contracts/redisstream
 go 1.26.4
 
 require (
-	github.com/cssbruno/gowdk v0.2.7
+	github.com/cssbruno/gowdk v0.2.8
 	github.com/redis/go-redis/v9 v9.20.0
 )
 

@@ -31,6 +31,18 @@ func (err ValidationError) Error() string {
 // The validators read the compiler IR directly; there is no manifest
 // intermediary on this path.
 func ValidateProgram(config gowdk.Config, ir gwdkir.Program) error {
+	return validateProgram(config, ir, true)
+}
+
+// ValidateSourceProgram checks a program built from a single in-memory source
+// buffer. Cross-file checks (use packages and component references resolved
+// against the discovered project) are skipped because sibling files are not
+// present in the program.
+func ValidateSourceProgram(config gowdk.Config, ir gwdkir.Program) error {
+	return validateProgram(config, ir, false)
+}
+
+func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) error {
 	var diagnostics []ValidationError
 	diagnostics = append(diagnostics, validatePackages(ir)...)
 	diagnostics = append(diagnostics, validateUniquePages(ir.Pages)...)
@@ -39,7 +51,7 @@ func ValidateProgram(config gowdk.Config, ir gwdkir.Program) error {
 	diagnostics = append(diagnostics, validateComponentGoContracts(ir.Components)...)
 	diagnostics = append(diagnostics, validateComponentStoreUses(ir.Pages, ir.Components)...)
 	diagnostics = append(diagnostics, validateRedundantComponents(ir.Components)...)
-	diagnostics = append(diagnostics, validateGOWDKUses(ir)...)
+	diagnostics = append(diagnostics, validateGOWDKUses(ir, crossFile)...)
 	diagnostics = append(diagnostics, validatePageAssetUses(ir)...)
 	diagnostics = append(diagnostics, validateUniqueLayouts(ir.Layouts)...)
 	diagnostics = append(diagnostics, validatePageLayoutReferences(ir.Pages, ir.Layouts)...)

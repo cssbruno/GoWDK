@@ -9,6 +9,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/goblockgen"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -498,4 +499,50 @@ func bindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 
 func validateBackendBindingPolicy(config gowdk.Config, app manifest.Manifest) error {
 	return ValidateBackendBindingPolicyIR(config, gwdkanalysis.BuildIR(config, app))
+}
+
+func TestValidateBackendBindingPolicyIRSeesMissingLoadBinding(t *testing.T) {
+	ir := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			ID:          "dashboard",
+			Source:      "dashboard.page.gwdk",
+			Route:       "/dashboard",
+			Blocks:      gwdkir.Blocks{Load: true},
+			LoadBinding: gwdkir.Binding{Status: source.BackendBindingMissing},
+		}},
+		Endpoints: []gwdkir.Endpoint{{
+			Kind:    gwdkir.EndpointAction,
+			PageID:  "dashboard",
+			Symbol:  "Save",
+			Method:  "POST",
+			Path:    "/dashboard",
+			Binding: gwdkir.Binding{Status: source.BackendBindingBound, FunctionName: "HandleSave"},
+		}},
+	}
+
+	err := ValidateBackendBindingPolicyIR(gowdk.Config{Build: gowdk.BuildConfig{Mode: gowdk.Production}}, ir)
+	if err == nil {
+		t.Fatal("expected missing load binding to fail the production policy even when endpoint bindings exist")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "backend_binding_required") {
+		t.Fatalf("missing backend_binding_required diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(err.Error(), "load") {
+		t.Fatalf("expected diagnostic to identify the load binding, got %v", err)
+	}
+}
+
+func TestBackendBindingFromIRKeepsFragmentKind(t *testing.T) {
+	binding := backendBindingFromIR(gwdkir.Endpoint{
+		Kind:    gwdkir.EndpointFragment,
+		PageID:  "dashboard",
+		Symbol:  "Stats",
+		Method:  "GET",
+		Path:    "/fragments/stats",
+		Binding: gwdkir.Binding{Status: source.BackendBindingBound, FunctionName: "RenderStats"},
+	})
+	if binding.Kind != "fragment" {
+		t.Fatalf("expected fragment binding kind to survive IR conversion, got %q", binding.Kind)
+	}
 }

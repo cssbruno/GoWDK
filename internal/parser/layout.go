@@ -24,13 +24,14 @@ func ParseLayout(src []byte) (gwdkir.Layout, error) {
 	goBlockTarget := ""
 	seenGoBlocks := map[string]source.SourceSpan{}
 	seenDeclaration := false
+	var blockScanner braceScanner
 
 	scanner := bufio.NewScanner(bytes.NewReader(src))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
 		if inGoBlock {
-			if line == "}" {
+			if line == "}" && !blockScanner.inMultiline() {
 				goBlockDepth--
 				if goBlockDepth == 0 {
 					layout.Blocks.GoBlocks = append(layout.Blocks.GoBlocks, gwdkir.GoBlock{
@@ -48,7 +49,7 @@ func ParseLayout(src []byte) (gwdkir.Layout, error) {
 				goBlockBody = append(goBlockBody, rawLine)
 				continue
 			}
-			goBlockDepth += braceDelta(rawLine)
+			goBlockDepth += blockScanner.delta(rawLine)
 			if goBlockDepth < 1 {
 				return gwdkir.Layout{}, fmt.Errorf("line %d: go block closed unexpectedly", lineNumber)
 			}
@@ -56,7 +57,7 @@ func ParseLayout(src []byte) (gwdkir.Layout, error) {
 			continue
 		}
 		if inStyle {
-			styleDepth += braceDelta(rawLine)
+			styleDepth += blockScanner.delta(rawLine)
 			if styleDepth < 0 {
 				return gwdkir.Layout{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
 			}
@@ -140,6 +141,7 @@ func ParseLayout(src []byte) (gwdkir.Layout, error) {
 			layout.Blocks.Style = true
 			inStyle = true
 			styleDepth = 1
+			blockScanner = braceScanner{lang: braceLangCSS}
 			continue
 		case "go {":
 			span := sourceLineSpan(lineNumber, rawLine)
@@ -150,6 +152,7 @@ func ParseLayout(src []byte) (gwdkir.Layout, error) {
 			inGoBlock = true
 			goBlockDepth = 1
 			goBlockTarget = ""
+			blockScanner = braceScanner{lang: braceLangGo}
 			continue
 		}
 		if match := goBlockPattern.FindStringSubmatch(line); match != nil {
@@ -166,6 +169,7 @@ func ParseLayout(src []byte) (gwdkir.Layout, error) {
 			inGoBlock = true
 			goBlockDepth = 1
 			goBlockTarget = target
+			blockScanner = braceScanner{lang: braceLangGo}
 			continue
 		}
 

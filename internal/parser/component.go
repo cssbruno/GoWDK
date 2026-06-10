@@ -33,13 +33,14 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 	goBlockTarget := ""
 	seenGoBlocks := map[string]source.SourceSpan{}
 	seenDeclaration := false
+	var blockScanner braceScanner
 
 	scanner := bufio.NewScanner(bytes.NewReader(src))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
 		if inGoBlock {
-			if line == "}" {
+			if line == "}" && !blockScanner.inMultiline() {
 				goBlockDepth--
 				if goBlockDepth == 0 {
 					component.Blocks.GoBlocks = append(component.Blocks.GoBlocks, gwdkir.GoBlock{
@@ -57,7 +58,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 				goBlockBody = append(goBlockBody, rawLine)
 				continue
 			}
-			goBlockDepth += braceDelta(rawLine)
+			goBlockDepth += blockScanner.delta(rawLine)
 			if goBlockDepth < 1 {
 				return gwdkir.Component{}, fmt.Errorf("line %d: go block closed unexpectedly", lineNumber)
 			}
@@ -65,7 +66,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 			continue
 		}
 		if inStyle {
-			styleDepth += braceDelta(rawLine)
+			styleDepth += blockScanner.delta(rawLine)
 			if styleDepth < 0 {
 				return gwdkir.Component{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
 			}
@@ -81,7 +82,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 			continue
 		}
 		if inClient {
-			if line == "}" && clientDepth == 1 {
+			if line == "}" && clientDepth == 1 && !blockScanner.inMultiline() {
 				component.Blocks.ClientBody = strings.TrimSpace(strings.Join(clientBody, "\n"))
 				inClient = false
 				clientBody = nil
@@ -89,14 +90,14 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 				continue
 			}
 			clientBody = append(clientBody, rawLine)
-			clientDepth += braceDelta(rawLine)
+			clientDepth += blockScanner.delta(rawLine)
 			if clientDepth < 1 {
 				return gwdkir.Component{}, fmt.Errorf("line %d: client block closed unexpectedly", lineNumber)
 			}
 			continue
 		}
 		if inJS {
-			if line == "}" {
+			if line == "}" && !blockScanner.inMultiline() {
 				jsDepth--
 				if jsDepth == 0 {
 					name := source.InlineScriptName(len(component.InlineJS))
@@ -113,7 +114,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 				jsBody = append(jsBody, rawLine)
 				continue
 			}
-			jsDepth += braceDelta(rawLine)
+			jsDepth += blockScanner.delta(rawLine)
 			if jsDepth < 1 {
 				return gwdkir.Component{}, fmt.Errorf("line %d: js block closed unexpectedly", lineNumber)
 			}
@@ -237,6 +238,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 			component.Spans.InlineJS = append(component.Spans.InlineJS, source.NamedSpan{Name: name, Span: span})
 			inJS = true
 			jsDepth = 1
+			blockScanner = braceScanner{lang: braceLangJS}
 			continue
 		}
 		if isMalformedJS(line) {
@@ -302,6 +304,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 			component.Blocks.Spans.Client = sourceLineSpan(lineNumber, rawLine)
 			inClient = true
 			clientDepth = 1
+			blockScanner = braceScanner{lang: braceLangJS}
 			continue
 		case "go {":
 			span := sourceLineSpan(lineNumber, rawLine)
@@ -312,6 +315,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 			inGoBlock = true
 			goBlockDepth = 1
 			goBlockTarget = ""
+			blockScanner = braceScanner{lang: braceLangGo}
 			continue
 		case "emits {":
 			if len(component.Emits) > 0 {
@@ -332,6 +336,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 			component.Blocks.Style = true
 			inStyle = true
 			styleDepth = 1
+			blockScanner = braceScanner{lang: braceLangCSS}
 			continue
 		}
 		if match := goBlockPattern.FindStringSubmatch(line); match != nil {
@@ -348,6 +353,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 			inGoBlock = true
 			goBlockDepth = 1
 			goBlockTarget = target
+			blockScanner = braceScanner{lang: braceLangGo}
 			continue
 		}
 

@@ -40,6 +40,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 	var body []syntaxBodyLine
 	var captured SyntaxBlock
 	var capturedFragment *SyntaxFragmentEndpoint
+	var blockScanner braceScanner
 	depth := 0
 	seenDeclaration := false
 	seenGoBlocks := map[string]source.SourceSpan{}
@@ -63,7 +64,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			if captured.Kind == "view" && line == "style {" {
 				return SyntaxFile{}, fmt.Errorf("line %d: style block must be outside view {}", lineNumber)
 			}
-			if line == "}" {
+			if line == "}" && !blockScanner.inMultiline() {
 				depth--
 				if depth == 0 {
 					if captured.Kind == "js" {
@@ -91,23 +92,26 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			if captured.Kind == "act" && actionFragmentPattern.FindStringSubmatch(line) != nil {
 				depth++
 			}
-			if captured.Kind == "client" && strings.Contains(line, "{") {
-				depth += strings.Count(line, "{")
+			if captured.Kind == "client" {
+				depth += blockScanner.delta(rawLine)
+				if depth < 1 {
+					return SyntaxFile{}, fmt.Errorf("line %d: client block closed unexpectedly", lineNumber)
+				}
 			}
 			if captured.Kind == "go" {
-				depth += braceDelta(rawLine)
+				depth += blockScanner.delta(rawLine)
 				if depth < 1 {
 					return SyntaxFile{}, fmt.Errorf("line %d: go block closed unexpectedly", lineNumber)
 				}
 			}
 			if captured.Kind == "style" {
-				depth += braceDelta(rawLine)
+				depth += blockScanner.delta(rawLine)
 				if depth < 1 {
 					return SyntaxFile{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
 				}
 			}
 			if captured.Kind == "js" {
-				depth += braceDelta(rawLine)
+				depth += blockScanner.delta(rawLine)
 				if depth < 1 {
 					return SyntaxFile{}, fmt.Errorf("line %d: js block closed unexpectedly", lineNumber)
 				}
@@ -186,6 +190,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 		}
 		if jsBlockPattern.MatchString(line) {
 			captured = SyntaxBlock{Kind: "js", Span: sourceLineSpan(lineNumber, rawLine)}
+			blockScanner = braceScanner{lang: braceLangJS}
 			depth = 1
 			continue
 		}
@@ -225,6 +230,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 		}
 		if match := syntaxBlockPattern.FindStringSubmatch(line); match != nil {
 			captured = SyntaxBlock{Kind: match[1], Span: sourceLineSpan(lineNumber, rawLine)}
+			blockScanner = braceScanner{lang: blockScanLang(match[1])}
 			depth = 1
 			continue
 		}
@@ -240,6 +246,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			span := sourceLineSpan(lineNumber, rawLine)
 			seenGoBlocks[target] = span
 			captured = SyntaxBlock{Kind: "go", Name: target, Span: span}
+			blockScanner = braceScanner{lang: braceLangGo}
 			depth = 1
 			continue
 		}

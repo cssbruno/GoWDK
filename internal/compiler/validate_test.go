@@ -3181,6 +3181,7 @@ func TestValidateManifestAcceptsQualifiedLayoutUse(t *testing.T) {
 			Package: "layouts",
 			ID:      "root",
 			Source:  "layouts/root.layout.gwdk",
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: "<slot />"},
 		}},
 	}
 
@@ -3236,8 +3237,8 @@ func TestValidateManifestRejectsDuplicateLayoutIDs(t *testing.T) {
 func TestValidateManifestAllowsDuplicateLayoutIDsAcrossPackages(t *testing.T) {
 	app := appFixture{
 		Layouts: []gwdkir.Layout{
-			{Package: "pages", ID: "root", Source: "pages/root.layout.gwdk"},
-			{Package: "admin", ID: "root", Source: "admin/root.layout.gwdk"},
+			{Package: "pages", ID: "root", Source: "pages/root.layout.gwdk", Blocks: gwdkir.Blocks{View: true, ViewBody: "<slot />"}},
+			{Package: "admin", ID: "root", Source: "admin/root.layout.gwdk", Blocks: gwdkir.Blocks{View: true, ViewBody: "<slot />"}},
 		},
 	}
 
@@ -3302,8 +3303,8 @@ func TestValidateManifestRejectsCyclicLayoutInheritance(t *testing.T) {
 func TestValidateManifestAcceptsLayoutInheritanceChain(t *testing.T) {
 	app := appFixture{
 		Layouts: []gwdkir.Layout{
-			{Package: "app", ID: "root", Source: "app/root.layout.gwdk"},
-			{Package: "app", ID: "docs", Layouts: []string{"root"}, Source: "app/docs.layout.gwdk"},
+			{Package: "app", ID: "root", Source: "app/root.layout.gwdk", Blocks: gwdkir.Blocks{View: true, ViewBody: "<slot />"}},
+			{Package: "app", ID: "docs", Layouts: []string{"root"}, Source: "app/docs.layout.gwdk", Blocks: gwdkir.Blocks{View: true, ViewBody: "<slot />"}},
 		},
 	}
 
@@ -3326,6 +3327,40 @@ func TestValidateManifestRejectsUnknownLayoutParent(t *testing.T) {
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "unknown_layout_id") {
 		t.Fatalf("Missing unknown_layout_id diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsLayoutWithoutSlot(t *testing.T) {
+	app := appFixture{
+		Layouts: []gwdkir.Layout{
+			{Package: "app", ID: "root", Source: "app/root.layout.gwdk", Blocks: gwdkir.Blocks{View: true, ViewBody: "<main></main>"}},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected layout slot diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "layout_slot_count") {
+		t.Fatalf("Missing layout_slot_count diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsLayoutWithMultipleSlots(t *testing.T) {
+	app := appFixture{
+		Layouts: []gwdkir.Layout{
+			{Package: "app", ID: "root", Source: "app/root.layout.gwdk", Blocks: gwdkir.Blocks{View: true, ViewBody: "<slot />\n<slot />"}},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected layout slot diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "layout_slot_count") {
+		t.Fatalf("Missing layout_slot_count diagnostic: %#v", diagnostics)
 	}
 }
 

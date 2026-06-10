@@ -262,6 +262,62 @@ func detectLayoutCycles(layouts []gwdkir.Layout, edges map[string][]string) []Va
 	return diagnostics
 }
 
+// validateLayoutSlots enforces that every layout contains exactly one
+// `<slot />` placeholder, the spot where the page or inner layout is injected.
+// This runs at validation time, so a slot-less layout is a hard error even if
+// no page references it yet (composition would otherwise only catch it on use).
+func validateLayoutSlots(layouts []gwdkir.Layout) []ValidationError {
+	var diagnostics []ValidationError
+	for _, layout := range layouts {
+		count := countLayoutSlots(layout.Blocks.ViewBody)
+		if count == 1 {
+			continue
+		}
+		span := layout.Blocks.Spans.View
+		if (span == source.SourceSpan{}) {
+			span = layout.PackageSpan
+		}
+		diagnostics = append(diagnostics, ValidationError{
+			Code:   "layout_slot_count",
+			Source: layout.Source,
+			Span:   span,
+			Message: fmt.Sprintf(
+				"layout %s must contain exactly one <slot /> placeholder for the page or inner layout, found %d",
+				layoutDisplayName(layout.Package, layout.ID),
+				count,
+			),
+		})
+	}
+	return diagnostics
+}
+
+// countLayoutSlots counts self-closing `<slot />` placeholders, mirroring the
+// app-shell composition slot scan (whitespace tolerated, named slots ignored).
+func countLayoutSlots(body string) int {
+	isSpace := func(b byte) bool { return b == ' ' || b == '\t' || b == '\n' || b == '\r' }
+	count := 0
+	for index := 0; index < len(body); index++ {
+		if body[index] != '<' || !strings.HasPrefix(body[index:], "<slot") {
+			continue
+		}
+		cursor := index + len("<slot")
+		for cursor < len(body) && isSpace(body[cursor]) {
+			cursor++
+		}
+		if cursor >= len(body) || body[cursor] != '/' {
+			continue
+		}
+		cursor++
+		for cursor < len(body) && isSpace(body[cursor]) {
+			cursor++
+		}
+		if cursor < len(body) && body[cursor] == '>' {
+			count++
+		}
+	}
+	return count
+}
+
 func layoutUsesByAlias(layout gwdkir.Layout) map[string]gwdkir.Use {
 	usesByAlias := map[string]gwdkir.Use{}
 	for _, use := range layout.Uses {

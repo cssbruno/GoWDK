@@ -3958,3 +3958,39 @@ func irPage(page manifest.Page) gwdkir.Page {
 	}
 	return program.Pages[0]
 }
+
+func TestValidateSourceProgramSkipsCrossFileUseChecks(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		Package: "pages",
+		ID:      "home",
+		Route:   "/",
+		Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
+		Blocks:  manifest.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
+	}}}
+
+	if err := ValidateSourceProgram(gowdk.Config{}, gwdkanalysis.BuildIR(gowdk.Config{}, app)); err != nil {
+		t.Fatalf("expected single-file program to skip cross-file use checks, got %v", err)
+	}
+}
+
+func TestValidateSourceProgramKeepsSingleFileUseChecks(t *testing.T) {
+	app := manifest.Manifest{Pages: []manifest.Page{{
+		Package: "pages",
+		ID:      "home",
+		Route:   "/",
+		Uses: []manifest.Use{
+			{Alias: "ui", Package: "components"},
+			{Alias: "ui", Package: "widgets"},
+		},
+		Blocks: manifest.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
+	}}}
+
+	err := ValidateSourceProgram(gowdk.Config{}, gwdkanalysis.BuildIR(gowdk.Config{}, app))
+	if err == nil {
+		t.Fatal("expected duplicate alias diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "duplicate_gowdk_use_alias") {
+		t.Fatalf("missing duplicate alias diagnostic: %#v", diagnostics)
+	}
+}

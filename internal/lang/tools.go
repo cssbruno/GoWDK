@@ -289,7 +289,14 @@ func CheckFiles(config gowdk.Config, paths []string) (manifest.Manifest, Diagnos
 		return app, diagnostics
 	}
 	app.Endpoints = append(app.Endpoints, manifestEndpointsFromIR(ir.GoEndpoints[len(app.Endpoints):])...)
-	if err := compiler.ValidateProgram(config, ir); err != nil {
+	validate := compiler.ValidateProgram
+	if len(paths) == 1 {
+		// A single file can never satisfy cross-file checks (use packages,
+		// component references), so validate it in source mode to avoid
+		// false project-level errors.
+		validate = compiler.ValidateSourceProgram
+	}
+	if err := validate(config, ir); err != nil {
 		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 	}
 	diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)
@@ -384,7 +391,7 @@ func CheckSource(config gowdk.Config, path string, source []byte) (manifest.Page
 			return manifest.Page{}, diagnostics
 		}
 		app := manifest.Manifest{Components: []manifest.Component{component}}
-		if err := compiler.ValidateProgram(config, gwdkanalysis.BuildIR(config, app)); err != nil {
+		if err := compiler.ValidateSourceProgram(config, gwdkanalysis.BuildIR(config, app)); err != nil {
 			diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 		}
 		diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)
@@ -409,7 +416,7 @@ func CheckSource(config gowdk.Config, path string, source []byte) (manifest.Page
 		return page, diagnostics
 	}
 	app := manifest.Manifest{Pages: []manifest.Page{page}}
-	if err := compiler.ValidateProgram(config, gwdkanalysis.BuildIR(config, app)); err != nil {
+	if err := compiler.ValidateSourceProgram(config, gwdkanalysis.BuildIR(config, app)); err != nil {
 		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 	}
 	diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)

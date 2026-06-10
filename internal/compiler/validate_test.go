@@ -634,7 +634,7 @@ func TestValidatePageRejectsSSRWithoutAddon(t *testing.T) {
 	}
 }
 
-func TestValidatePageRequiresExplicitGuard(t *testing.T) {
+func TestValidatePageWarnsOnMissingGuard(t *testing.T) {
 	sourcePath := filepath.Join(t.TempDir(), "home.page.gwdk")
 	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -647,8 +647,21 @@ func TestValidatePageRequiresExplicitGuard(t *testing.T) {
 	}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
-	if !hasDiagnosticCode(diagnostics, "missing_page_guard") {
+	var guard *ValidationError
+	for i := range diagnostics {
+		if diagnostics[i].Code == "missing_page_guard" {
+			guard = &diagnostics[i]
+		}
+	}
+	if guard == nil {
 		t.Fatalf("missing missing_page_guard diagnostic: %#v", diagnostics)
+	}
+	if guard.Severity != SeverityWarning {
+		t.Fatalf("missing_page_guard should be a warning, got severity %v", guard.Severity)
+	}
+	// A guardless page must not fail the build; the runtime denies the route.
+	if ValidationErrors(diagnostics).HasErrors() {
+		t.Fatalf("guardless page should not produce build errors: %#v", diagnostics)
 	}
 }
 

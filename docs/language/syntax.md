@@ -58,10 +58,11 @@ Supported annotations:
 - `@error "<path.html>"`: optional route-local generated HTML error page for
   SSR load, generated render, and panic failures. The path is output-relative
   after normalization and must stay inside generated output.
-- `@guard <id>[, <id>...]`: required page access metadata. Use
-  `@guard public` for intentionally public pages. Use custom guard IDs or
-  native RBAC IDs such as `role:admin` and `permission:posts.write` for
-  protected pages.
+- `@guard <id>[, <id>...]`: page access metadata. Optional, but a page is not
+  public by default: omitting `@guard` warns (`missing_page_guard`) and the
+  route is denied (403) until stated. Use `@guard public` for intentionally
+  public pages. Use custom guard IDs or native RBAC IDs such as `role:admin` and
+  `permission:posts.write` for protected pages.
 - `@component <Name>`: component ID for `.cmp.gwdk` build inputs.
 
 Unknown annotations are rejected. Lines starting with `@` that do not match

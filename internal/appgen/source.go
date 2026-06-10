@@ -402,7 +402,52 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 		keyValue("SSRDynamic", id("ssrDynamic")),
 		keyValue("RequestTimeout", sel("gowdkruntime", "DefaultRequestTimeout")),
 	)
+	if denied := deniedRoutesExpr(options); denied != nil {
+		fields = append(fields, keyValue("Denied", denied))
+	}
 	return fields
+}
+
+// deniedPageRoutes returns the static page routes that declared no @guard. Such
+// pages are denied (403) at request time until the author adds @guard public.
+// Request-time (SSR) pages enforce the same default in their own handler, so
+// they are excluded here.
+func deniedPageRoutes(options Options) []string {
+	if options.IR == nil {
+		return nil
+	}
+	ssrRoutes := map[string]bool{}
+	for _, route := range options.SSR {
+		ssrRoutes[route.Route] = true
+	}
+	var denied []string
+	seen := map[string]bool{}
+	for _, page := range options.IR.Pages {
+		if len(page.Guards) != 0 || page.Route == "" {
+			continue
+		}
+		if ssrRoutes[page.Route] || seen[page.Route] {
+			continue
+		}
+		seen[page.Route] = true
+		denied = append(denied, page.Route)
+	}
+	return denied
+}
+
+func deniedRoutesExpr(options Options) ast.Expr {
+	routes := deniedPageRoutes(options)
+	if len(routes) == 0 {
+		return nil
+	}
+	elts := make([]ast.Expr, 0, len(routes))
+	for _, route := range routes {
+		elts = append(elts, &ast.KeyValueExpr{Key: stringLit(route), Value: id("true")})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.MapType{Key: id("string"), Value: id("bool")},
+		Elts: elts,
+	}
 }
 
 func errorPagesExpr(options Options) ast.Expr {

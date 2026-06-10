@@ -17,10 +17,13 @@
 
 ## Current Metadata Semantics
 
-- `@route` and `@guard` are required for page sources. Public pages must
-  declare `@guard public`; protected pages must declare custom guard IDs or
-  native RBAC IDs such as `role:admin` and `permission:posts.write`.
-  `@guard public` must stand alone.
+- `@route` is required for page sources. `@guard` is optional but a page is not
+  public by default: a page that declares no `@guard` builds with a
+  `missing_page_guard` warning and its route is denied (403) at request time
+  until access is stated. Declare `@guard public` to serve a page on purpose;
+  declare custom guard IDs or native RBAC IDs such as `role:admin` and
+  `permission:posts.write` for protected pages. `@guard public` must stand
+  alone. Access is never granted by omission.
 - `@page` is optional for file-backed page sources. When omitted, page ID
   derives from the source filename by removing `.page.gwdk` or `.gwdk`.
   Explicit `@page` keeps page identity stable across file renames.

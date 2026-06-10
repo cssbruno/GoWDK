@@ -44,6 +44,31 @@ func TestHandlerServesAppIndexAndIdentityHeaders(t *testing.T) {
 	}
 }
 
+func TestHandlerDeniesGuardlessRouteWith403(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html":           {Data: []byte("<main>Home</main>")},
+			"dashboard/index.html": {Data: []byte("<main>Secret</main>")},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+		Denied:   map[string]bool{"/dashboard": true},
+	}
+
+	denied := httptest.NewRecorder()
+	handler.ServeHTTP(denied, httptest.NewRequest(http.MethodGet, "/dashboard", nil))
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("guardless route should be denied, got status %d", denied.Code)
+	}
+
+	// A route absent from Denied (intentionally public) still serves.
+	served := httptest.NewRecorder()
+	handler.ServeHTTP(served, httptest.NewRequest(http.MethodGet, "/", nil))
+	if served.Code != http.StatusOK {
+		t.Fatalf("public route should serve, got status %d", served.Code)
+	}
+}
+
 func TestHandlerAppliesPageHTMLCachePolicy(t *testing.T) {
 	handler := Handler{
 		Root: fstest.MapFS{

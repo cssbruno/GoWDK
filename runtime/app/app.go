@@ -50,6 +50,12 @@ type Handler struct {
 	SSRExact   HandlerFunc
 	SSRDynamic HandlerFunc
 
+	// Denied holds page routes that declared no @guard. Such a page is not
+	// public by default: its GET/HEAD route returns 403 until the author opts
+	// in with @guard public (or a protective guard for request-time pages).
+	// Keyed by exact route path.
+	Denied map[string]bool
+
 	// RequestTimeout bounds how long a single request's handler context lives.
 	// When > 0, the request context is cancelled after the deadline so slow
 	// user Go (actions, contracts, SSR) sees ctx.Done() instead of running
@@ -142,6 +148,11 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 		metrics.recordMethodNotAllowed()
 		response.Header().Set("Allow", "GET, HEAD")
 		http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if len(handler.Denied) > 0 && handler.Denied[request.URL.Path] {
+		metrics.recordForbidden()
+		WriteErrorPage(response, request, http.StatusForbidden, "403 forbidden")
 		return
 	}
 	if handler.SSRExact != nil && Boundary("ssr", handler.SSRExact)(response, request) {

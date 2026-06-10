@@ -222,12 +222,13 @@ func validatePageGuards(page gwdkir.Page) []ValidationError {
 	}
 	if len(page.Guards) == 0 {
 		return []ValidationError{{
-			Code:   "missing_page_guard",
-			PageID: page.ID,
-			Source: page.Source,
-			Span:   firstSpan(page.Spans.Page, page.Spans.Route),
+			Code:     "missing_page_guard",
+			PageID:   page.ID,
+			Source:   page.Source,
+			Span:     firstSpan(page.Spans.Page, page.Spans.Route),
+			Severity: SeverityWarning,
 			Message: fmt.Sprintf(
-				"%s is missing @guard. Add @guard public for an intentionally public page, or add protected guard IDs such as @guard auth.required",
+				"%s declares no @guard; its route is denied (403) at request time. Add @guard public to serve it, or a protective guard such as @guard auth.required",
 				page.ID,
 			),
 		}}

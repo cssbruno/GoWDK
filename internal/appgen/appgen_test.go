@@ -1246,6 +1246,7 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "dashboard",
 		Route:  "/dashboard",
+		Guards: []string{"public"},
 		HTML:   "<main><h1>Dashboard</h1></main>",
 	}}})
 	if err != nil {
@@ -1264,7 +1265,7 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 		`func ssrExact(response http.ResponseWriter, request *http.Request) (handled bool)`,
 		`func ssrDynamic(response http.ResponseWriter, request *http.Request) (handled bool)`,
 		`case "/dashboard":`,
-		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr"})`,
+		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr", Guards: []string{"public"}})`,
 		`request = request.WithContext(ctx)`,
 		`if recovered := recover(); recovered != nil {`,
 		`handled = true`,
@@ -1287,6 +1288,7 @@ func TestGenerateWritesSSRCachePolicy(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "docs",
 		Route:  "/docs",
+		Guards: []string{"public"},
 		Cache:  "public, max-age=60",
 		HTML:   "<main><h1>Docs</h1></main>",
 	}}})
@@ -1318,6 +1320,7 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID:    "dashboard",
 		Route:     "/dashboard",
+		Guards:    []string{"public"},
 		ErrorPage: "/errors/dashboard.html",
 		HasLoad:   true,
 		LoadBinding: source.BackendBinding{
@@ -1346,7 +1349,7 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 		`gowdkssr "github.com/cssbruno/gowdk/addons/ssr"`,
 		`"fmt"`,
 		`ErrorPages: gowdkruntime.LoadErrorPagesWith(root, gowdkruntime.ErrorPage{Path: "errors/dashboard.html"})`,
-		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr", ErrorPage: "errors/dashboard.html", HasLoad: true})`,
+		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr", ErrorPage: "errors/dashboard.html", Guards: []string{"public"}, HasLoad: true})`,
 		`gowdkruntime.RecoverSSRRoutePanic(response, request, recovered)`,
 		`loadContext := gowdkssr.NewLoadContext(request, nil)`,
 		`loadData, err := dashboard.LoadDashboard(loadContext)`,
@@ -1373,6 +1376,7 @@ func TestGenerateKeepsActionHandlersIndependentFromSSRLoad(t *testing.T) {
 		SSR: []SSRRoute{{
 			PageID:  "dashboard",
 			Route:   "/dashboard",
+			Guards:  []string{"public"},
 			HasLoad: true,
 			LoadBinding: source.BackendBinding{
 				Status:       source.BackendBindingBound,
@@ -1432,6 +1436,7 @@ func TestGenerateWritesDynamicSSRHandler(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "blog.post",
 		Route:  "/blog/{slug}",
+		Guards: []string{"public"},
 		HTML:   `<main data-slug="__SLUG__">__SLUG__</main>`,
 		Replacements: []SSRReplacement{{
 			Param:       "slug",
@@ -1451,7 +1456,7 @@ func TestGenerateWritesDynamicSSRHandler(t *testing.T) {
 		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`gowdkroute "github.com/cssbruno/gowdk/runtime/route"`,
 		`gowdkroute.Match("/blog/{slug}", request.URL.Path)`,
-		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "blog.post", Method: "GET", Path: "/blog/{slug}", Render: "ssr", DynamicParams: []string{"slug"}})`,
+		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "blog.post", Method: "GET", Path: "/blog/{slug}", Render: "ssr", DynamicParams: []string{"slug"}, Guards: []string{"public"}})`,
 		`ctx = gowdkruntime.WithParams(ctx, params)`,
 		`request = request.WithContext(ctx)`,
 		`strings.ReplaceAll(html, "__SLUG__", gowdkhtml.Escape(params["slug"]))`,
@@ -1472,6 +1477,7 @@ func TestGenerateWritesDynamicSSRHandlerWithoutReplacements(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "blog.post",
 		Route:  "/blog/{slug}",
+		Guards: []string{"public"},
 		HTML:   `<main>Post</main>`,
 	}}})
 	if err != nil {
@@ -1505,6 +1511,7 @@ func TestGenerateWritesRestParamSSRHandler(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID:        "docs.page",
 		Route:         "/docs/{path...}",
+		Guards:        []string{"public"},
 		DynamicParams: []string{"path"},
 		RouteParams:   []source.RouteParam{{Name: "path", Type: "string"}},
 		HTML:          `<main>__PATH__</main>`,
@@ -1544,6 +1551,7 @@ func TestGenerateWritesTypedSSRRouteParamBindings(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID:        "patients.show",
 		Route:         "/patients/{id}",
+		Guards:        []string{"public"},
 		DynamicParams: []string{"id"},
 		RouteParams:   []source.RouteParam{{Name: "id", Type: "int"}},
 		HTML:          `<main>Patient</main>`,
@@ -2351,6 +2359,7 @@ func TestGeneratedBinaryServesSSRRouteBeforeSPAFallback(t *testing.T) {
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "dashboard",
 		Route:  "/dashboard",
+		Guards: []string{"public"},
 		HTML:   "<main><h1>Request Dashboard</h1></main>",
 	}}}); err != nil {
 		t.Fatal(err)
@@ -2398,6 +2407,7 @@ func TestGeneratedBinaryAppliesSSRCachePolicy(t *testing.T) {
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "docs",
 		Route:  "/docs",
+		Guards: []string{"public"},
 		Cache:  "public, max-age=60",
 		HTML:   "<main><h1>Request Docs</h1></main>",
 	}}}); err != nil {
@@ -2485,6 +2495,7 @@ func TestGeneratedBinaryExecutesSSRLoadUserLogic(t *testing.T) {
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID:  "dashboard",
 		Route:   "/dashboard",
+		Guards:  []string{"public"},
 		HasLoad: true,
 		LoadBinding: source.BackendBinding{
 			Status:       source.BackendBindingBound,
@@ -2562,6 +2573,7 @@ func TestGeneratedBinaryExecutesInlineSSRScriptLoad(t *testing.T) {
 		Source:  filepath.Join(sourceDir, "dashboard.page.gwdk"),
 		Route:   "/dashboard",
 		Render:  gowdk.SSR,
+		Guards:  []string{"public"},
 		Imports: []gwdkir.Import{{
 			Alias: "ssr",
 			Path:  "github.com/cssbruno/gowdk/addons/ssr",
@@ -2808,6 +2820,7 @@ func TestGeneratedBinaryUsesCustomSSRLoadErrorPage(t *testing.T) {
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID:    "dashboard",
 		Route:     "/dashboard",
+		Guards:    []string{"public"},
 		ErrorPage: "errors/dashboard.html",
 		HasLoad:   true,
 		LoadBinding: source.BackendBinding{
@@ -2886,6 +2899,7 @@ func TestGeneratedBinaryUsesCustomSSRPanicErrorPage(t *testing.T) {
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID:    "dashboard",
 		Route:     "/dashboard",
+		Guards:    []string{"public"},
 		ErrorPage: "errors/dashboard.html",
 		HasLoad:   true,
 		LoadBinding: source.BackendBinding{
@@ -3779,6 +3793,7 @@ func TestGeneratedBinaryServesDynamicSSRRoute(t *testing.T) {
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID: "blog.post",
 		Route:  "/blog/{slug}",
+		Guards: []string{"public"},
 		HTML:   `<main data-slug="__SLUG__"><h1>__SLUG__</h1></main>`,
 		Replacements: []SSRReplacement{{
 			Param:       "slug",
@@ -4700,4 +4715,20 @@ func apiEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]APIEndpoint, e
 
 func fragmentEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]FragmentEndpoint, error) {
 	return fragmentEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
+}
+
+func TestDeniedPageRoutesSelectsGuardlessStaticPages(t *testing.T) {
+	options := Options{
+		IR: &gwdkir.Program{Pages: []gwdkir.Page{
+			{ID: "home", Route: "/"},                                   // guardless static -> denied
+			{ID: "about", Route: "/about", Guards: []string{"public"}}, // public -> served
+			{ID: "dashboard", Route: "/dashboard"},                     // guardless, but request-time below
+		}},
+		SSR: []SSRRoute{{PageID: "dashboard", Route: "/dashboard"}}, // SSR handler denies this one
+	}
+
+	denied := deniedPageRoutes(options)
+	if len(denied) != 1 || denied[0] != "/" {
+		t.Fatalf("expected only the guardless static route /, got %#v", denied)
+	}
 }

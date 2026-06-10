@@ -15,6 +15,7 @@ type Metrics struct {
 	static          atomic.Uint64
 	methodNotAllow  atomic.Uint64
 	notFound        atomic.Uint64
+	forbidden       atomic.Uint64
 	csrfUnavailable atomic.Uint64
 }
 
@@ -31,6 +32,7 @@ type MetricsSnapshot struct {
 	Static          uint64 `json:"static"`
 	MethodNotAllow  uint64 `json:"methodNotAllow"`
 	NotFound        uint64 `json:"notFound"`
+	Forbidden       uint64 `json:"forbidden"`
 	CSRFUnavailable uint64 `json:"csrfUnavailable"`
 }
 
@@ -51,6 +53,7 @@ func (metrics *Metrics) Snapshot() MetricsSnapshot {
 		Static:          metrics.static.Load(),
 		MethodNotAllow:  metrics.methodNotAllow.Load(),
 		NotFound:        metrics.notFound.Load(),
+		Forbidden:       metrics.forbidden.Load(),
 		CSRFUnavailable: metrics.csrfUnavailable.Load(),
 	}
 }
@@ -118,6 +121,12 @@ func (metrics *Metrics) recordMethodNotAllowed() {
 func (metrics *Metrics) recordNotFound() {
 	if metrics != nil {
 		metrics.notFound.Add(1)
+	}
+}
+
+func (metrics *Metrics) recordForbidden() {
+	if metrics != nil {
+		metrics.forbidden.Add(1)
 	}
 }
 

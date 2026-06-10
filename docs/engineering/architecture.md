@@ -108,15 +108,20 @@ code still carries manifest compatibility records while migration continues:
 - `internal/manifest` remains the public manifest/site-map compatibility model.
 
 Shared leaf value types (source spans, route params, inline scripts, backend
-binding/signature enums) now live in the neutral `internal/source` package.
-`internal/manifest` re-exports them as type aliases for backward compatibility.
-Because of this, `internal/gwdkir`, `internal/gwdkast`, and `internal/contractscan`
-no longer depend on `internal/manifest` at all — the IR is a manifest-independent
-handoff. `internal/buildgen` render helpers consume IR page/component/layout
-models directly (validating through `compiler.ValidateProgram`), and
-`internal/appgen` references shared leaf types from `internal/source`. The
-remaining manifest coupling is concentrated in `internal/compiler` (which
-validates the manifest model) and the public `manifest.Manifest` entrypoints.
+binding records and signature enums) now live in the neutral `internal/source`
+package. `internal/manifest` re-exports them as type aliases for backward
+compatibility. Because of this, `internal/gwdkir`, `internal/gwdkast`, and
+`internal/contractscan` no longer depend on `internal/manifest` at all — the IR
+is a manifest-independent handoff. `internal/compiler` is now fully IR-native:
+validation (`ValidateProgram`), standalone Go endpoint discovery
+(`DiscoverGoEndpoints`), and backend handler binding (`BindBackendHandlers`)
+all read and enrich `gwdkir.Program` directly, and the package no longer
+imports the manifest model. `internal/gotypes` and `internal/goblockgen` take
+IR types. `internal/buildgen` render helpers consume IR page/component/layout
+models directly, and `internal/appgen` references shared leaf types from
+`internal/source`. The remaining manifest coupling is the AST→manifest→IR
+backbone in `internal/parser`/`internal/gwdkanalysis` and the public
+`manifest.Manifest` JSON reports in `internal/lang`.
 
 New generated-output work should consume `internal/gwdkir.Program` or add fields
 there first. Removing the remaining compatibility records is planned after the

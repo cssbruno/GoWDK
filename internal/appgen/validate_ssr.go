@@ -62,7 +62,8 @@ func validateSSRRoutePattern(value string) error {
 		return fmt.Errorf("route %q must be a concrete path without query or fragment", value)
 	}
 	params := map[string]bool{}
-	for _, segment := range strings.Split(strings.Trim(value, "/"), "/") {
+	segments := strings.Split(strings.Trim(value, "/"), "/")
+	for index, segment := range segments {
 		if segment == "" {
 			continue
 		}
@@ -71,6 +72,20 @@ func validateSSRRoutePattern(value string) error {
 				return fmt.Errorf("route %q has invalid route parameter segment %q", value, segment)
 			}
 			name := strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}")
+			if strings.HasSuffix(name, "...") {
+				name = strings.TrimSuffix(name, "...")
+				if index != len(segments)-1 {
+					return fmt.Errorf("route %q declares rest route parameter segment %q before the end of the route", value, segment)
+				}
+				// The generated matcher keys rest captures by the full name
+				// before the dots, so a colon-typed rest segment would
+				// register under "name:type" and never line up with the
+				// declared replacements. Rest route parameters are always
+				// strings.
+				if strings.Contains(name, ":") {
+					return fmt.Errorf("route %q declares typed rest route parameter segment %q; rest route parameters are always strings", value, segment)
+				}
+			}
 			if before, _, found := strings.Cut(name, ":"); found {
 				name = before
 			}
@@ -112,6 +127,7 @@ func ssrRoutePatternParams(route string) []string {
 	for _, segment := range strings.Split(strings.Trim(route, "/"), "/") {
 		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
 			name := strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}")
+			name = strings.TrimSuffix(name, "...")
 			if before, _, found := strings.Cut(name, ":"); found {
 				name = before
 			}
@@ -128,6 +144,10 @@ func ssrRoutePattern(route string) string {
 	}
 	for index, segment := range segments {
 		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
+			if strings.HasSuffix(segment, "...}") {
+				segments[index] = "{**}"
+				continue
+			}
 			segments[index] = "{}"
 		}
 	}
@@ -137,11 +157,33 @@ func ssrRoutePattern(route string) string {
 func ssrRoutePatternsOverlap(left, right string) bool {
 	leftSegments := ssrRoutePatternSegments(left)
 	rightSegments := ssrRoutePatternSegments(right)
-	if len(leftSegments) != len(rightSegments) {
-		return false
+	leftRest := ssrPatternSegmentsHaveRest(leftSegments)
+	rightRest := ssrPatternSegmentsHaveRest(rightSegments)
+	switch {
+	case leftRest && rightRest:
+		prefix := len(leftSegments) - 1
+		if len(rightSegments)-1 < prefix {
+			prefix = len(rightSegments) - 1
+		}
+		return ssrSegmentsCompatible(leftSegments[:prefix], rightSegments[:prefix])
+	case leftRest:
+		if len(rightSegments) < len(leftSegments) {
+			return false
+		}
+		return ssrSegmentsCompatible(leftSegments[:len(leftSegments)-1], rightSegments[:len(leftSegments)-1])
+	case rightRest:
+		return ssrRoutePatternsOverlap(right, left)
+	default:
+		if len(leftSegments) != len(rightSegments) {
+			return false
+		}
+		return ssrSegmentsCompatible(leftSegments, rightSegments)
 	}
-	for index, leftSegment := range leftSegments {
-		rightSegment := rightSegments[index]
+}
+
+func ssrSegmentsCompatible(left, right []string) bool {
+	for index, leftSegment := range left {
+		rightSegment := right[index]
 		if leftSegment == "{}" || rightSegment == "{}" {
 			continue
 		}
@@ -150,6 +192,10 @@ func ssrRoutePatternsOverlap(left, right string) bool {
 		}
 	}
 	return true
+}
+
+func ssrPatternSegmentsHaveRest(segments []string) bool {
+	return len(segments) > 0 && segments[len(segments)-1] == "{**}"
 }
 
 func ssrRoutePatternSegments(route string) []string {

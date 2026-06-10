@@ -73,7 +73,7 @@ func unsupportedTemplateSyntax(text string) (int, string, bool) {
 		case strings.HasPrefix(fragment, "{#snippet"), strings.HasPrefix(fragment, "{/snippet"):
 			return offset, "unsupported template snippet syntax; use GOWDK component slots for supported reusable markup", true
 		case strings.HasPrefix(fragment, "{@html"):
-			return offset, "unsupported raw HTML syntax; GOWDK escapes rendered text by default and has no raw HTML escape hatch in this slice", true
+			return offset, "unsupported raw HTML syntax; GOWDK escapes rendered text by default — use the explicit g:html={Expr} directive on an element to opt into trusted raw HTML", true
 		case strings.HasPrefix(fragment, "{@const"), strings.HasPrefix(fragment, "{@debug"):
 			return offset, "unsupported template tag syntax; declare data in build/load blocks or component client code", true
 		default:
@@ -108,6 +108,9 @@ func (parser *parser) element() (Node, error) {
 			if err != nil {
 				return nil, err
 			}
+			if err := validateRawHTMLDirective(name, attrs, nil); err != nil {
+				return nil, parser.errorf("%s", err)
+			}
 			return Element{Name: name, Attrs: attrs, Start: start, End: parser.index}, nil
 		case parser.consume(">"):
 			attrs, err := normalizeHTMLAttrs(attrs)
@@ -117,6 +120,9 @@ func (parser *parser) element() (Node, error) {
 			children, err := parser.nodes(name)
 			if err != nil {
 				return nil, err
+			}
+			if err := validateRawHTMLDirective(name, attrs, children); err != nil {
+				return nil, parser.errorf("%s", err)
 			}
 			return Element{Name: name, Attrs: attrs, Children: children, Start: start, End: parser.index}, nil
 		case parser.done():
@@ -167,6 +173,9 @@ func (parser *parser) attr() (Attr, error) {
 	}
 	if !isAttrName(name) {
 		return Attr{}, parser.errorf("unsupported attribute name %q", name)
+	}
+	if strings.HasPrefix(name, "g:") && !isSupportedDirectiveName(name) {
+		return Attr{}, parser.errorf("%s", unsupportedDirectiveMessage(name))
 	}
 
 	parser.skipSpace()
@@ -285,9 +294,12 @@ func (parser *parser) directiveAttr(name string) (Attr, error) {
 		if err != nil {
 			return Attr{}, err
 		}
-		return Attr{Name: name, Value: value}, nil
+		return Attr{Name: name, Value: value, Expression: name == "g:html"}, nil
 	}
 	if parser.startsWith(`"`) {
+		if name == "g:html" {
+			return Attr{}, parser.errorf("g:html must use an expression value such as g:html={Body}, not a string literal")
+		}
 		value, err := parser.quotedAttrValue(name)
 		if err != nil {
 			return Attr{}, err

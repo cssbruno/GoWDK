@@ -45,6 +45,79 @@ func TestMatchRejectsDifferentShape(t *testing.T) {
 	}
 }
 
+func TestMatchRestRouteMultipleSegments(t *testing.T) {
+	params, ok := Match("/docs/{path...}", "/docs/guides/routing/rest")
+	if !ok {
+		t.Fatal("expected rest route to match multiple segments")
+	}
+	if params["path"] != "guides/routing/rest" {
+		t.Fatalf("unexpected path: %#v", params)
+	}
+}
+
+func TestMatchRestRouteSingleSegment(t *testing.T) {
+	params, ok := Match("/docs/{path...}", "/docs/intro")
+	if !ok {
+		t.Fatal("expected rest route to match a single segment")
+	}
+	if params["path"] != "intro" {
+		t.Fatalf("unexpected path: %#v", params)
+	}
+}
+
+func TestMatchRestRouteRejectsZeroSegments(t *testing.T) {
+	if _, ok := Match("/docs/{path...}", "/docs"); ok {
+		t.Fatal("expected rest route to require at least one segment")
+	}
+	if _, ok := Match("/docs/{path...}", "/docs/"); ok {
+		t.Fatal("expected rest route to require at least one segment after cleaning")
+	}
+}
+
+func TestMatchRestRouteRejectsOtherPrefix(t *testing.T) {
+	if _, ok := Match("/docs/{path...}", "/blog/guides/routing"); ok {
+		t.Fatal("expected rest route to require its fixed prefix")
+	}
+}
+
+func TestMatchRestRouteWithFixedAndDynamicPrefix(t *testing.T) {
+	params, ok := Match("/docs/{lang}/{path...}", "/docs/en/guides/routing")
+	if !ok {
+		t.Fatal("expected mixed dynamic and rest route to match")
+	}
+	if params["lang"] != "en" || params["path"] != "guides/routing" {
+		t.Fatalf("unexpected params: %#v", params)
+	}
+}
+
+func TestMatchRestRouteRejectsNonCanonicalPaths(t *testing.T) {
+	for _, requestPath := range []string{
+		"/docs/a/../admin",
+		"/docs/../docs/a",
+		"/docs//a",
+		"/docs/./a",
+		"/docs/a/..",
+	} {
+		if _, ok := Match("/docs/{path...}", requestPath); ok {
+			t.Fatalf("expected non-canonical rest path %q not to match", requestPath)
+		}
+	}
+}
+
+func TestMatchRestRouteTypedHelpers(t *testing.T) {
+	params, ok := Match("/docs/{path...}", "/docs/guides/routing")
+	if !ok {
+		t.Fatal("expected rest route to match")
+	}
+	value, err := Required(params, "path")
+	if err != nil {
+		t.Fatalf("unexpected Required error: %v", err)
+	}
+	if value != "guides/routing" {
+		t.Fatalf("unexpected Required value: %q", value)
+	}
+}
+
 func TestMatchRejectsUnsafeParamValues(t *testing.T) {
 	if _, ok := Match("/blog/{slug}", "/blog/."); ok {
 		t.Fatal("expected dot param not to match")

@@ -3545,6 +3545,259 @@ func TestValidatePageAllowsTypedRouteParams(t *testing.T) {
 	}
 }
 
+func TestValidatePageAllowsRestRouteParamOnSSRPage(t *testing.T) {
+	page := gwdkir.Page{
+		ID:     "docs.page",
+		Route:  "/docs/{path...}",
+		Render: gowdk.SSR,
+		Blocks: gwdkir.Blocks{View: true, Load: true},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, irPage(page))
+	if len(diagnostics) != 0 {
+		t.Fatalf("expected rest route param on SSR page to be valid, got %#v", diagnostics)
+	}
+}
+
+func TestValidatePageRejectsRestRouteParamBeforeLastSegment(t *testing.T) {
+	page := gwdkir.Page{ID: "docs.page", Route: "/docs/{path...}/edit", Blocks: gwdkir.Blocks{Paths: true, View: true}}
+
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	diagnostic := firstDiagnostic(diagnostics, "malformed_route")
+	if diagnostic == nil {
+		t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(diagnostic.Message, "rest parameters must be the last segment") {
+		t.Fatalf("diagnostic should explain rest params must be last: %s", diagnostic.Message)
+	}
+}
+
+func TestValidatePageRejectsTypedRestRouteParam(t *testing.T) {
+	page := gwdkir.Page{ID: "docs.page", Route: "/docs/{path...:int}", Blocks: gwdkir.Blocks{Paths: true, View: true}}
+
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	diagnostic := firstDiagnostic(diagnostics, "malformed_route")
+	if diagnostic == nil {
+		t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(diagnostic.Message, "rest route parameters are always strings") {
+		t.Fatalf("diagnostic should explain rest params are strings: %s", diagnostic.Message)
+	}
+}
+
+func TestValidatePageRejectsMalformedRestRouteParamVariants(t *testing.T) {
+	tests := []struct {
+		name    string
+		route   string
+		message string
+	}{
+		{name: "missing name", route: "/docs/{...}", message: "declare it as {name...}"},
+		{name: "two dots", route: "/docs/{path..}", message: "rest route parameters use exactly three dots"},
+		{name: "four dots", route: "/docs/{path....}", message: "invalid route parameter name"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			page := gwdkir.Page{ID: "docs.page", Route: test.route, Blocks: gwdkir.Blocks{Paths: true, View: true}}
+
+			diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+			diagnostic := firstDiagnostic(diagnostics, "malformed_route")
+			if diagnostic == nil {
+				t.Fatalf("Missing malformed_route diagnostic for %q: %#v", test.route, diagnostics)
+			}
+			if !strings.Contains(diagnostic.Message, test.message) {
+				t.Fatalf("diagnostic for %q should contain %q: %s", test.route, test.message, diagnostic.Message)
+			}
+		})
+	}
+}
+
+func TestValidatePageRejectsOptionalRouteParams(t *testing.T) {
+	page := gwdkir.Page{ID: "docs.page", Route: "/docs/{slug?}", Blocks: gwdkir.Blocks{Paths: true, View: true}}
+
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	diagnostic := firstDiagnostic(diagnostics, "malformed_route")
+	if diagnostic == nil {
+		t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(diagnostic.Message, "optional route parameters are not supported; declare explicit routes for each shape (rest parameters {name...} are supported as the final segment)") {
+		t.Fatalf("diagnostic should explain optional params are unsupported: %s", diagnostic.Message)
+	}
+	if hasDiagnosticCode(diagnostics, "spa_dynamic_route_missing_paths") {
+		t.Fatalf("optional param should not cascade into missing paths: %#v", diagnostics)
+	}
+}
+
+func TestValidatePageRejectsRestRouteParamOnSPAPage(t *testing.T) {
+	page := gwdkir.Page{ID: "docs.page", Route: "/docs/{path...}", Render: gowdk.SPA, Blocks: gwdkir.Blocks{Paths: true, View: true}}
+
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	diagnostic := firstDiagnostic(diagnostics, "malformed_route")
+	if diagnostic == nil {
+		t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(diagnostic.Message, "require SSR rendering") {
+		t.Fatalf("diagnostic should explain rest params require SSR: %s", diagnostic.Message)
+	}
+}
+
+func TestValidateManifestRejectsDuplicateRestRoutes(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{ID: "docs.copy", Route: "/docs/{rest...}", Render: gowdk.SSR, Source: "pages/docs-copy.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
+	if err == nil {
+		t.Fatal("expected duplicate route diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "duplicate_route") {
+		t.Fatalf("Missing duplicate_route diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsAmbiguousRestRoutes(t *testing.T) {
+	tests := []struct {
+		name  string
+		other string
+	}{
+		{name: "single param route", other: "/docs/{slug}"},
+		{name: "longer concrete route", other: "/docs/guides/intro"},
+		{name: "longer dynamic route", other: "/docs/{section}/{slug}"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			app := appFixture{
+				Pages: []gwdkir.Page{
+					{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+					{ID: "docs.other", Route: test.other, Render: gowdk.SSR, Source: "pages/docs-other.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+				},
+			}
+
+			err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
+			if err == nil {
+				t.Fatal("expected ambiguous dynamic route diagnostic")
+			}
+			diagnostics := err.(ValidationErrors)
+			if !hasDiagnosticCode(diagnostics, "ambiguous_dynamic_route") {
+				t.Fatalf("Missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
+			}
+		})
+	}
+}
+
+func TestValidateManifestAllowsRestRouteBesideShorterRoutes(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{ID: "docs.index", Route: "/docs", Render: gowdk.SSR, Source: "pages/docs-index.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{ID: "blog.post", Route: "/blog/{slug}", Render: gowdk.SSR, Source: "pages/blog-post.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+		},
+	}
+
+	if err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app); err != nil {
+		t.Fatalf("expected rest route beside non-overlapping routes to be valid, got %v", err)
+	}
+}
+
+func TestValidatePageRejectsRestRouteParamOnActionAndAPIEndpoints(t *testing.T) {
+	page := gwdkir.Page{
+		ID:    "docs.page",
+		Route: "/docs",
+		Blocks: gwdkir.Blocks{
+			View:    true,
+			Actions: []gwdkir.Action{{Name: "Save", Method: "POST", Route: "/docs/{path...}"}},
+			APIs:    []gwdkir.API{{Name: "Lookup", Method: "PUT", Route: "/api/docs/{path...}"}},
+		},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	diagnostic := firstDiagnostic(diagnostics, "malformed_route")
+	if diagnostic == nil {
+		t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
+	}
+	count := 0
+	for _, item := range diagnostics {
+		if item.Code == "malformed_route" && strings.Contains(item.Message, "only supported on page routes") {
+			count++
+		}
+	}
+	if count != 2 {
+		t.Fatalf("expected rest param rejection for action and api endpoints, got %#v", diagnostics)
+	}
+}
+
+func TestValidatePageRejectsInheritedRestRouteOnAPIEndpoints(t *testing.T) {
+	page := gwdkir.Page{
+		ID:     "docs.page",
+		Route:  "/docs/{path...}",
+		Render: gowdk.SSR,
+		Blocks: gwdkir.Blocks{
+			View: true,
+			Load: true,
+			APIs: []gwdkir.API{{Name: "Save", Method: "POST"}},
+		},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, irPage(page))
+	diagnostic := firstDiagnostic(diagnostics, "malformed_route")
+	if diagnostic == nil {
+		t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(diagnostic.Message, "inherits page route") || !strings.Contains(diagnostic.Message, "only supported on page routes") {
+		t.Fatalf("diagnostic should explain the API inherits the rest page route: %s", diagnostic.Message)
+	}
+}
+
+func TestValidateManifestRejectsEndpointInsideRestRouteNamespace(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{
+				ID: "docs.lookup", Route: "/lookup", Render: gowdk.SSR, Source: "pages/docs-lookup.page.gwdk",
+				Blocks: gwdkir.Blocks{
+					View: true,
+					Load: true,
+					APIs: []gwdkir.API{{Name: "Lookup", Method: "GET", Route: "/docs/guides/intro"}},
+				},
+			},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
+	if err == nil {
+		t.Fatal("expected ambiguous dynamic route diagnostic for endpoint inside rest namespace")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "ambiguous_dynamic_route") {
+		t.Fatalf("Missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsDifferentMethodEndpointBesideRestRoute(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{
+				ID: "docs.save", Route: "/save", Render: gowdk.SSR, Source: "pages/docs-save.page.gwdk",
+				Blocks: gwdkir.Blocks{
+					View: true,
+					Load: true,
+					APIs: []gwdkir.API{{Name: "Save", Method: "POST", Route: "/docs/guides/intro"}},
+				},
+			},
+		},
+	}
+
+	if err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app); err != nil {
+		t.Fatalf("expected different-method endpoint beside rest route to be valid, got %v", err)
+	}
+}
+
 func TestValidatePageRequiresPathsForSPADynamicRoutes(t *testing.T) {
 	page := gwdkir.Page{ID: "patients.show", Route: "/patients/{id}", Render: gowdk.SPA, Blocks: gwdkir.Blocks{View: true}}
 

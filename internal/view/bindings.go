@@ -373,6 +373,12 @@ func (node Element) directiveValues() (postDirectives, error) {
 			}
 			continue
 		}
+		if attr.Name == "g:html" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return postDirectives{}, fmt.Errorf("g:html requires an expression value")
+			}
+			continue
+		}
 		if attr.Name == "g:event" {
 			return postDirectives{}, fmt.Errorf("frontend templates must not declare g:event; domain and integration events are backend-owned facts, use g:command for backend intent or g:on:* for local UI events")
 		}

@@ -94,6 +94,85 @@ func TestHandlerAppliesAssetManifestCachePolicy(t *testing.T) {
 	}
 }
 
+func TestHandlerRedirectsTrailingSlashGETToCanonicalPath(t *testing.T) {
+	handler := Handler{
+		Root:     fstest.MapFS{"blog/hello/index.html": {Data: []byte("<main>Hello</main>")}},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/blog/hello/", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusPermanentRedirect {
+		t.Fatalf("expected 308 redirect, got %d", recorder.Code)
+	}
+	if location := recorder.Header().Get("Location"); location != "/blog/hello" {
+		t.Fatalf("unexpected redirect location: %q", location)
+	}
+}
+
+func TestHandlerRedirectsTrailingSlashPreservingQuery(t *testing.T) {
+	handler := Handler{
+		Root:     fstest.MapFS{},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/blog/hello/?page=2&sort=asc", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusPermanentRedirect {
+		t.Fatalf("expected 308 redirect, got %d", recorder.Code)
+	}
+	if location := recorder.Header().Get("Location"); location != "/blog/hello?page=2&sort=asc" {
+		t.Fatalf("unexpected redirect location: %q", location)
+	}
+}
+
+func TestHandlerDoesNotRedirectRootPath(t *testing.T) {
+	handler := Handler{
+		Root:     fstest.MapFS{"index.html": {Data: []byte("<main>Home</main>")}},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected root path to serve directly, got %d", recorder.Code)
+	}
+}
+
+func TestHandlerDoesNotRedirectTrailingSlashPOST(t *testing.T) {
+	called := false
+	handler := Handler{
+		Root:     fstest.MapFS{},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+		Action: func(response http.ResponseWriter, request *http.Request) bool {
+			called = true
+			response.WriteHeader(http.StatusNoContent)
+			return true
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/subscribe/", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if !called {
+		t.Fatal("expected POST with trailing slash to reach the action hook")
+	}
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+}
+
 func TestHandlerHealth(t *testing.T) {
 	metrics := &Metrics{}
 	handler := Handler{

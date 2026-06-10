@@ -50,48 +50,57 @@ func duplicateRouteMessage(route, firstID, firstSource, duplicateID, duplicateSo
 	return message
 }
 
-func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page) []ValidationError {
-	var dynamicRoutes []routeRegistration
+func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint) []ValidationError {
+	var registered []routeRegistration
 	var diagnostics []ValidationError
-	for _, page := range pages {
-		info, issues := parseRoute(page.Route)
-		if len(issues) > 0 || len(info.Params) == 0 {
-			continue
-		}
-		current := routeRegistration{
-			Kind:    "page",
-			Owner:   "page " + page.ID,
-			Method:  "GET",
-			Route:   page.Route,
-			Pattern: info.Pattern,
-			PageID:  page.ID,
-			Source:  page.Source,
-			Span:    page.Spans.Route,
-		}
-		for _, previous := range dynamicRoutes {
+	for _, current := range routeRegistrations(pages, endpoints) {
+		for _, previous := range registered {
 			if current.Pattern == previous.Pattern {
+				// Exact duplicates are reported by the duplicate-route and
+				// route-method-conflict checks.
 				continue
+			}
+			bothPages := current.Kind == "page" && previous.Kind == "page"
+			if bothPages {
+				// Dynamic routes are compared against other dynamic routes.
+				// Rest routes match one or more trailing segments, so they
+				// are also compared against concrete routes that share their
+				// fixed prefix.
+				bothDynamic := patternIsDynamic(current.Pattern) && patternIsDynamic(previous.Pattern)
+				restInvolved := patternHasRest(current.Pattern) || patternHasRest(previous.Pattern)
+				if !bothDynamic && !restInvolved {
+					continue
+				}
+			} else {
+				// Endpoints cannot declare rest routes themselves, but a
+				// same-method endpoint inside a rest page's namespace would
+				// shadow part of it at request time, so flag that overlap.
+				restPage := (current.Kind == "page" && patternHasRest(current.Pattern)) ||
+					(previous.Kind == "page" && patternHasRest(previous.Pattern))
+				if !restPage || current.Method != previous.Method {
+					continue
+				}
 			}
 			if !routePatternsOverlap(current.Pattern, previous.Pattern) {
 				continue
 			}
 			diagnostics = append(diagnostics, ValidationError{
 				Code:    "ambiguous_dynamic_route",
-				PageID:  page.ID,
-				Source:  page.Source,
-				Span:    page.Spans.Route,
+				PageID:  current.PageID,
+				Source:  current.Source,
+				Span:    current.Span,
 				Message: ambiguousDynamicRouteMessage(current, previous),
 			})
 		}
-		dynamicRoutes = append(dynamicRoutes, current)
+		registered = append(registered, current)
 	}
 	return diagnostics
 }
 
 func ambiguousDynamicRouteMessage(current, previous routeRegistration) string {
 	message := fmt.Sprintf("ambiguous dynamic page route %q overlaps %q", current.Route, previous.Route)
-	if current.PageID != "" && previous.PageID != "" {
-		message = fmt.Sprintf("%s; page %s could match the same request path as page %s", message, current.PageID, previous.PageID)
+	if current.Owner != "" && previous.Owner != "" {
+		message = fmt.Sprintf("%s; %s could match the same request path as %s", message, current.Owner, previous.Owner)
 	}
 	if current.Source != "" && previous.Source != "" {
 		return fmt.Sprintf("%s (%s and %s)", message, current.Source, previous.Source)
@@ -102,11 +111,36 @@ func ambiguousDynamicRouteMessage(current, previous routeRegistration) string {
 func routePatternsOverlap(left, right string) bool {
 	leftSegments := routePatternSegments(left)
 	rightSegments := routePatternSegments(right)
-	if len(leftSegments) != len(rightSegments) {
-		return false
+	leftRest := patternSegmentsHaveRest(leftSegments)
+	rightRest := patternSegmentsHaveRest(rightSegments)
+	switch {
+	case leftRest && rightRest:
+		prefix := len(leftSegments) - 1
+		if len(rightSegments)-1 < prefix {
+			prefix = len(rightSegments) - 1
+		}
+		return routeSegmentsCompatible(leftSegments[:prefix], rightSegments[:prefix])
+	case leftRest:
+		// A rest pattern matches one or more remaining segments, so any route
+		// at least as long as the rest pattern with a compatible fixed prefix
+		// overlaps it.
+		if len(rightSegments) < len(leftSegments) {
+			return false
+		}
+		return routeSegmentsCompatible(leftSegments[:len(leftSegments)-1], rightSegments[:len(leftSegments)-1])
+	case rightRest:
+		return routePatternsOverlap(right, left)
+	default:
+		if len(leftSegments) != len(rightSegments) {
+			return false
+		}
+		return routeSegmentsCompatible(leftSegments, rightSegments)
 	}
-	for index, leftSegment := range leftSegments {
-		rightSegment := rightSegments[index]
+}
+
+func routeSegmentsCompatible(left, right []string) bool {
+	for index, leftSegment := range left {
+		rightSegment := right[index]
 		if leftSegment == "{}" || rightSegment == "{}" {
 			continue
 		}
@@ -115,6 +149,18 @@ func routePatternsOverlap(left, right string) bool {
 		}
 	}
 	return true
+}
+
+func patternSegmentsHaveRest(segments []string) bool {
+	return len(segments) > 0 && segments[len(segments)-1] == restPatternPlaceholder
+}
+
+func patternHasRest(pattern string) bool {
+	return patternSegmentsHaveRest(routePatternSegments(pattern))
+}
+
+func patternIsDynamic(pattern string) bool {
+	return strings.Contains(pattern, "{}") || patternHasRest(pattern)
 }
 
 func routePatternSegments(pattern string) []string {
@@ -312,9 +358,18 @@ func validateStandaloneEndpoints(endpoints []gwdkir.GoEndpoint) []ValidationErro
 				})
 			}
 		}
-		_, issues := parseRoute(endpoint.Route)
+		info, issues := parseRoute(endpoint.Route)
 		label := fmt.Sprintf("Go %s endpoint path", endpoint.Kind)
 		diagnostics = append(diagnostics, routeDiagnostics(page, label, issues, firstSpan(endpoint.RouteSpan, endpoint.Span), endpoint.RouteParams)...)
+		if len(issues) == 0 && info.RestParam != "" {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "malformed_route",
+				PageID:  page.ID,
+				Source:  endpoint.Source,
+				Span:    firstSpan(endpoint.RouteSpan, endpoint.Span),
+				Message: fmt.Sprintf("%s declares invalid %s: route %q uses rest route parameter {%s...}; rest parameters are only supported on page routes", page.ID, label, endpoint.Route, info.RestParam),
+			})
+		}
 	}
 	return diagnostics
 }
@@ -348,9 +403,17 @@ func routeDiagnostics(page gwdkir.Page, label string, issues []routeIssue, route
 	return diagnostics
 }
 
+// restPatternPlaceholder is the normalized pattern segment for a trailing rest
+// parameter such as {path...}. It differs from the single-segment placeholder
+// "{}" so /a/{x...} and /a/{y...} normalize to the same pattern while staying
+// distinct from /a/{x}.
+const restPatternPlaceholder = "{**}"
+
 type routeInfo struct {
 	Pattern string
 	Params  []string
+	// RestParam names the trailing {name...} parameter, when declared.
+	RestParam string
 }
 
 type routeIssue struct {
@@ -390,7 +453,7 @@ func parseRoute(route string) (routeInfo, []routeIssue) {
 			Message: fmt.Sprintf("route %q must start with /", route),
 		})
 	}
-	if strings.ContainsAny(route, "?#") {
+	if strings.Contains(route, "#") || routeContainsQueryOutsideParams(route) {
 		issues = append(issues, routeIssue{
 			Code:    "malformed_route",
 			Message: fmt.Sprintf("route %q must not contain query strings or fragments", route),
@@ -418,8 +481,9 @@ func parseRoute(route string) (routeInfo, []routeIssue) {
 	rawSegments := strings.Split(strings.TrimPrefix(route, "/"), "/")
 	segments := make([]string, 0, len(rawSegments))
 	params := make([]string, 0, len(rawSegments))
+	restParam := ""
 	paramCounts := map[string]int{}
-	for _, segment := range rawSegments {
+	for index, segment := range rawSegments {
 		switch {
 		case segment == "":
 			issues = append(issues, routeIssue{
@@ -432,7 +496,7 @@ func parseRoute(route string) (routeInfo, []routeIssue) {
 				Message: fmt.Sprintf("route %q contains unsafe path segment %q", route, segment),
 			})
 		case strings.ContainsAny(segment, "{}"):
-			param, paramType, ok := routeParamSegment(segment)
+			param, ok := routeParamSegment(segment)
 			if !ok {
 				issues = append(issues, routeIssue{
 					Code:    "malformed_route",
@@ -440,32 +504,74 @@ func parseRoute(route string) (routeInfo, []routeIssue) {
 				})
 				continue
 			}
-			if !isRouteParamName(param) {
+			if strings.HasSuffix(param.Name, "?") {
 				issues = append(issues, routeIssue{
 					Code:    "malformed_route",
-					Message: fmt.Sprintf("route %q has invalid route parameter name %q", route, param),
+					Message: fmt.Sprintf("route %q uses optional route parameter %q; optional route parameters are not supported; declare explicit routes for each shape (rest parameters {name...} are supported as the final segment)", route, segment),
 				})
 				continue
 			}
-			if !isRouteParamType(paramType) {
+			if param.Rest && param.Name == "" {
 				issues = append(issues, routeIssue{
 					Code:    "malformed_route",
-					Message: fmt.Sprintf("route %q has invalid route parameter type %q for %q; supported types are string, int, int64, uint, uint64, bool, float64", route, paramType, param),
-					Param:   param,
+					Message: fmt.Sprintf("route %q has rest route parameter segment %q without a name; declare it as {name...}", route, segment),
 				})
 				continue
 			}
-			paramCounts[param]++
-			if paramCounts[param] > 1 {
+			if !param.Rest && strings.Contains(param.Name, ".") {
+				issues = append(issues, routeIssue{
+					Code:    "malformed_route",
+					Message: fmt.Sprintf("route %q has invalid route parameter segment %q; rest route parameters use exactly three dots, such as {name...}", route, segment),
+				})
+				continue
+			}
+			if !isRouteParamName(param.Name) {
+				issues = append(issues, routeIssue{
+					Code:    "malformed_route",
+					Message: fmt.Sprintf("route %q has invalid route parameter name %q", route, param.Name),
+				})
+				continue
+			}
+			if param.Rest && param.HasType {
+				issues = append(issues, routeIssue{
+					Code:    "malformed_route",
+					Message: fmt.Sprintf("route %q declares typed rest route parameter %q; rest route parameters are always strings, declare it as {%s...}", route, segment, param.Name),
+					Param:   param.Name,
+				})
+				continue
+			}
+			if !isRouteParamType(param.Type) {
+				issues = append(issues, routeIssue{
+					Code:    "malformed_route",
+					Message: fmt.Sprintf("route %q has invalid route parameter type %q for %q; supported types are string, int, int64, uint, uint64, bool, float64", route, param.Type, param.Name),
+					Param:   param.Name,
+				})
+				continue
+			}
+			if param.Rest && index != len(rawSegments)-1 {
+				issues = append(issues, routeIssue{
+					Code:    "malformed_route",
+					Message: fmt.Sprintf("route %q declares rest route parameter {%s...} before the end of the route; rest parameters must be the last segment", route, param.Name),
+					Param:   param.Name,
+				})
+				continue
+			}
+			paramCounts[param.Name]++
+			if paramCounts[param.Name] > 1 {
 				issues = append(issues, routeIssue{
 					Code:            "duplicate_route_param",
-					Message:         fmt.Sprintf("route %q repeats route parameter %q", route, param),
-					Param:           param,
-					ParamOccurrence: paramCounts[param],
+					Message:         fmt.Sprintf("route %q repeats route parameter %q", route, param.Name),
+					Param:           param.Name,
+					ParamOccurrence: paramCounts[param.Name],
 				})
 				continue
 			}
-			params = append(params, param)
+			params = append(params, param.Name)
+			if param.Rest {
+				restParam = param.Name
+				segments = append(segments, restPatternPlaceholder)
+				continue
+			}
 			segments = append(segments, "{}")
 		default:
 			segments = append(segments, segment)
@@ -476,22 +582,55 @@ func parseRoute(route string) (routeInfo, []routeIssue) {
 	if len(segments) == 0 {
 		pattern = "/"
 	}
-	return routeInfo{Pattern: pattern, Params: params}, issues
+	return routeInfo{Pattern: pattern, Params: params, RestParam: restParam}, issues
 }
 
-func routeParamSegment(segment string) (string, string, bool) {
+type routeParamSegmentInfo struct {
+	Name    string
+	Type    string
+	Rest    bool
+	HasType bool
+}
+
+func routeParamSegment(segment string) (routeParamSegmentInfo, bool) {
 	if !strings.HasPrefix(segment, "{") || !strings.HasSuffix(segment, "}") {
-		return "", "", false
+		return routeParamSegmentInfo{}, false
 	}
 	if strings.Count(segment, "{") != 1 || strings.Count(segment, "}") != 1 {
-		return "", "", false
+		return routeParamSegmentInfo{}, false
 	}
 	value := strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}")
 	name, paramType, found := strings.Cut(value, ":")
 	if !found {
 		paramType = "string"
 	}
-	return name, paramType, true
+	rest := strings.HasSuffix(name, "...")
+	if rest {
+		name = strings.TrimSuffix(name, "...")
+	}
+	return routeParamSegmentInfo{Name: name, Type: paramType, Rest: rest, HasType: found}, true
+}
+
+// routeContainsQueryOutsideParams reports whether route contains a "?" that is
+// not inside a {param} segment, so optional-param forms such as {slug?} get a
+// dedicated diagnostic instead of the query-string one.
+func routeContainsQueryOutsideParams(route string) bool {
+	depth := 0
+	for _, r := range route {
+		switch r {
+		case '{':
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+			}
+		case '?':
+			if depth == 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func isRouteParamType(value string) bool {

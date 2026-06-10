@@ -145,6 +145,20 @@ view {
 @guard public
 `,
 	},
+	"unsupported_markup_syntax": {
+		Details: "view {} markup expands only through GOWDK-owned AST nodes and g: directives. Foreign template blocks such as {#if}, {#each}, {#await}, {#snippet}, {@html}, {@const}, and {@debug} are rejected with guidance instead of being translated implicitly. These rejections currently surface through the view_parse_error carrier code with this canonical message text.",
+		NextSteps: []string{
+			"Use g:if/g:else-if/g:else, g:for with g:key, component slots, or build/load data instead of foreign template blocks.",
+			"Use the explicit g:html={Expr} directive when trusted raw HTML output is intentional.",
+		},
+	},
+	"unsupported_markup_directive": {
+		Details: "view {} markup accepts only the documented g: directive set. Unknown g: attributes, and deferred families such as transitions (g:transition), DOM/document/window/body targets, async placeholders, and DOM actions, are rejected at parse time. These rejections currently surface through the view_parse_error carrier code with this canonical message text.",
+		NextSteps: []string{
+			"Use a supported directive from docs/language/markup.md.",
+			"Deferred behavior (transitions, document targets, DOM actions) belongs to CSS, page metadata, or future addon contracts.",
+		},
+	},
 	"public_guard_exclusive": {
 		Details: "The public guard means no protected guard should run for that page, so it cannot be mixed with other guard IDs.",
 		NextSteps: []string{

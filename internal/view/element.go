@@ -40,6 +40,10 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 	if err != nil {
 		return err
 	}
+	rawHTML, hasRawHTML, err := node.rawHTMLContent(ctx)
+	if err != nil {
+		return err
+	}
 	checkedBinding, err := node.checkedBinding(ctx)
 	if err != nil {
 		return err
@@ -358,7 +362,9 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 		next.selectValue = ctx.values[valueBinding]
 		childCtx = &next
 	}
-	if node.Name == "textarea" && valueBinding != "" {
+	if hasRawHTML {
+		out.write(rawHTML)
+	} else if node.Name == "textarea" && valueBinding != "" {
 		out.write(gowhtml.Escape(ctx.values[valueBinding]))
 	} else {
 		for _, child := range node.Children {
@@ -378,6 +384,41 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 		out.write(`:end-->`)
 	}
 	return nil
+}
+
+// rawHTMLContent evaluates the explicit g:html raw HTML escape hatch for one
+// element. The expression resolves through the same render-data lookup as text
+// interpolation, and the resulting string is written without escaping. Raw
+// HTML is rejected inside stateful component views and g:for loops because the
+// island runtime re-renders bound content as escaped text and cannot honor
+// raw HTML.
+func (node Element) rawHTMLContent(ctx *renderContext) (string, bool, error) {
+	expr := ""
+	for _, attr := range node.Attrs {
+		if attr.Name == "g:html" {
+			expr = strings.TrimSpace(attr.Value)
+		}
+	}
+	if expr == "" {
+		return "", false, nil
+	}
+	if ctx.templateLoop != nil || ctx.loopItem != nil {
+		return "", false, fmt.Errorf("g:html is not supported inside g:for loops; the island loop runtime re-renders rows as escaped text")
+	}
+	if len(ctx.stateFields) > 0 || len(ctx.stateTypes) > 0 || len(ctx.handlers) > 0 || len(ctx.emits) > 0 {
+		return "", false, fmt.Errorf("g:html is not supported inside stateful component views; the island runtime re-renders bound content as escaped text and cannot honor raw HTML")
+	}
+	if ctx.bindFields[expr] {
+		return "", false, fmt.Errorf("g:html cannot reference reactive field %q; the island runtime re-renders bound content as escaped text", expr)
+	}
+	value, tainted, err := interpolateValue(ctx, "{"+expr+"}")
+	if err != nil {
+		return "", false, fmt.Errorf("g:html: %w", err)
+	}
+	if tainted {
+		return "", false, fmt.Errorf("route param interpolation is not allowed in g:html")
+	}
+	return value, true, nil
 }
 
 // voidElements are HTML elements that have no end tag; emitting one (for

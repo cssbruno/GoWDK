@@ -1490,6 +1490,45 @@ func TestGenerateWritesDynamicSSRHandlerWithoutReplacements(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesRestParamSSRHandler(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:        "docs.page",
+		Route:         "/docs/{path...}",
+		DynamicParams: []string{"path"},
+		RouteParams:   []source.RouteParam{{Name: "path", Type: "string"}},
+		HTML:          `<main>__PATH__</main>`,
+		Replacements: []SSRReplacement{{
+			Param:       "path",
+			Placeholder: "__PATH__",
+		}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkroute.Match("/docs/{path...}", request.URL.Path)`,
+		`paramValue0, paramOK0, paramErr0 := gowdkroute.String(params, "path")`,
+		`strings.ReplaceAll(html, "__PATH__", gowdkhtml.Escape(params["path"]))`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, `case "/docs/{path...}":`) {
+		t.Fatalf("expected generated main.go not to use exact literal match for rest route:\n%s", source)
+	}
+}
+
 func TestGenerateWritesTypedSSRRouteParamBindings(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -2052,6 +2091,25 @@ func TestGenerateRejectsSSRReplacementForUndeclaredParam(t *testing.T) {
 		t.Fatal("expected undeclared replacement error")
 	}
 	if !strings.Contains(err.Error(), `replacement param "missing" is not declared by route "/blog/{slug}"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGenerateRejectsTypedRestSSRRouteParam(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	_, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "docs.page",
+		Route:  "/docs/{path:int...}",
+		HTML:   "<main>Docs</main>",
+	}}})
+	if err == nil {
+		t.Fatal("expected typed rest route parameter error")
+	}
+	if !strings.Contains(err.Error(), "rest route parameters are always strings") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

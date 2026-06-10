@@ -53,6 +53,34 @@ func TestPageTypedRouteParamsDefaultsToString(t *testing.T) {
 	}
 }
 
+func TestPageRouteParamsIncludeRestParams(t *testing.T) {
+	// Lowering extracts {lang} but not {path...}; the rest param must still be
+	// reported from the route path.
+	page := Page{
+		Route:       "/docs/{lang}/{path...}",
+		RouteParams: []source.RouteParam{{Name: "lang", Type: "string"}},
+	}
+	got := page.TypedRouteParams()
+	want := []source.RouteParam{{Name: "lang", Type: "string"}, {Name: "path", Type: "string"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("TypedRouteParams = %#v, want %#v", got, want)
+	}
+	if names := page.DynamicParams(); !reflect.DeepEqual(names, []string{"lang", "path"}) {
+		t.Fatalf("DynamicParams = %v, want [lang path]", names)
+	}
+
+	restOnly := Page{Route: "/docs/{path...}"}
+	if got := restOnly.TypedRouteParams(); !reflect.DeepEqual(got, []source.RouteParam{{Name: "path", Type: "string"}}) {
+		t.Fatalf("rest-only TypedRouteParams = %#v", got)
+	}
+}
+
+func TestRouteParamsFromPathRejectsTypedRestParams(t *testing.T) {
+	if got := RouteParamsFromPath("/docs/{path...:int}"); got != nil {
+		t.Fatalf("typed rest param should not parse, got %#v", got)
+	}
+}
+
 func TestPageCachePolicy(t *testing.T) {
 	if got := (Page{Cache: "public"}).CachePolicy(); got != "public" {
 		t.Fatalf("CachePolicy = %q", got)

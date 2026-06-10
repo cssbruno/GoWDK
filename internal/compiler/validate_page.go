@@ -48,8 +48,17 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 		if route == "" {
 			route = page.Route
 		}
-		_, issues := parseRoute(route)
+		actionRoute, issues := parseRoute(route)
 		diagnostics = append(diagnostics, routeDiagnostics(page, fmt.Sprintf("action %s endpoint path", action.Name), issues, firstSpan(action.RouteSpan, action.Span, page.Spans.Route), action.RouteParams)...)
+		if len(issues) == 0 && actionRoute.RestParam != "" {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "malformed_route",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    firstSpan(action.RouteSpan, action.Span, page.Spans.Route),
+				Message: fmt.Sprintf("%s action %s endpoint path %q uses rest route parameter {%s...}; rest parameters are only supported on page routes", page.ID, action.Name, route, actionRoute.RestParam),
+			})
+		}
 	}
 	for _, api := range page.Blocks.APIs {
 		if !isExportedHandlerName(api.Name) {
@@ -61,15 +70,36 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 				Message: fmt.Sprintf("%s API handler %q must be an exported Go identifier", page.ID, api.Name),
 			})
 		}
-		if api.Route == "" {
-			continue
-		}
 		label := "api endpoint path"
 		if api.Name != "" {
 			label = fmt.Sprintf("api %s endpoint path", api.Name)
 		}
-		_, issues := parseRoute(api.Route)
+		if api.Route == "" {
+			// An API without an explicit path inherits the page route, so a
+			// rest page route flows into the endpoint and must be rejected
+			// the same way an explicit rest endpoint path is.
+			if len(pageRouteIssues) == 0 && pageRoute.RestParam != "" {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:    "malformed_route",
+					PageID:  page.ID,
+					Source:  page.Source,
+					Span:    firstSpan(api.Span, page.Spans.Route),
+					Message: fmt.Sprintf("%s %s inherits page route %q which uses rest route parameter {%s...}; rest parameters are only supported on page routes", page.ID, label, page.Route, pageRoute.RestParam),
+				})
+			}
+			continue
+		}
+		apiRoute, issues := parseRoute(api.Route)
 		diagnostics = append(diagnostics, routeDiagnostics(page, label, issues, api.RouteSpan, api.RouteParams)...)
+		if len(issues) == 0 && apiRoute.RestParam != "" {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "malformed_route",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    firstSpan(api.RouteSpan, api.Span, page.Spans.Route),
+				Message: fmt.Sprintf("%s %s %q uses rest route parameter {%s...}; rest parameters are only supported on page routes", page.ID, label, api.Route, apiRoute.RestParam),
+			})
+		}
 	}
 	for _, fragment := range page.Blocks.Fragments {
 		if !isExportedHandlerName(fragment.Name) {
@@ -141,7 +171,20 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 	if len(pageRouteIssues) == 0 {
 		params = pageRoute.Params
 	}
-	if isBuildTimeRoute(mode, page) && len(params) > 0 && !page.Blocks.Paths {
+	if isBuildTimeRoute(mode, page) && len(pageRouteIssues) == 0 && pageRoute.RestParam != "" {
+		diagnostics = append(diagnostics, ValidationError{
+			Code:   "malformed_route",
+			PageID: page.ID,
+			Source: page.Source,
+			Span:   firstNamedSpan(page.Spans.RouteParams, page.Spans.Route),
+			Message: fmt.Sprintf(
+				"%s declares rest route parameter {%s...}, but render mode is %s; rest parameters match request paths at request time and require SSR rendering. Fix: declare request-time page behavior with load {} or go ssr {}",
+				page.ID,
+				pageRoute.RestParam,
+				mode,
+			),
+		})
+	} else if isBuildTimeRoute(mode, page) && len(params) > 0 && !page.Blocks.Paths {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:   "spa_dynamic_route_missing_paths",
 			PageID: page.ID,

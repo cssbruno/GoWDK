@@ -7,16 +7,43 @@ import (
 )
 
 // Match compares a concrete request path to a simple generated route pattern.
-// Parameter segments use "{name}" and reject empty, ".", and ".." values.
+// Parameter segments use "{name}" and reject empty, ".", and ".." values. A
+// final "{name...}" rest segment matches one or more remaining request
+// segments; the captured value is those segments joined with "/".
 func Match(pattern, requestPath string) (map[string]string, bool) {
 	patternParts := splitPath(pattern)
 	requestParts := splitPath(requestPath)
-	if len(patternParts) != len(requestParts) {
+	rest := len(patternParts) > 0 && isRestSegment(patternParts[len(patternParts)-1])
+	if rest {
+		if len(requestParts) < len(patternParts) {
+			return nil, false
+		}
+		// splitPath cleans the request path, which silently rewrites empty,
+		// "." and ".." segments. Rest captures span multiple segments, so a
+		// cleaned match could serve a non-canonical path under a different
+		// captured value. Reject those requests outright from the raw path.
+		for _, value := range strings.Split(strings.Trim(requestPath, "/"), "/") {
+			if value == "" || value == "." || value == ".." {
+				return nil, false
+			}
+		}
+	} else if len(patternParts) != len(requestParts) {
 		return nil, false
 	}
 
 	params := map[string]string{}
 	for index, part := range patternParts {
+		if rest && index == len(patternParts)-1 {
+			name := strings.TrimSuffix(strings.TrimSuffix(strings.TrimPrefix(part, "{"), "}"), "...")
+			remaining := requestParts[index:]
+			for _, value := range remaining {
+				if value == "" || value == "." || value == ".." {
+					return nil, false
+				}
+			}
+			params[name] = strings.Join(remaining, "/")
+			return params, true
+		}
 		if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
 			name := strings.TrimSuffix(strings.TrimPrefix(part, "{"), "}")
 			if before, _, found := strings.Cut(name, ":"); found {
@@ -34,6 +61,10 @@ func Match(pattern, requestPath string) (map[string]string, bool) {
 		}
 	}
 	return params, true
+}
+
+func isRestSegment(part string) bool {
+	return strings.HasPrefix(part, "{") && strings.HasSuffix(part, "...}") && len(part) > len("{...}")
 }
 
 func splitPath(value string) []string {

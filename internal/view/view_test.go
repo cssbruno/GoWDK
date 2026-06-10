@@ -1619,3 +1619,239 @@ func TestRenderSPAOmitsVoidElementEndTags(t *testing.T) {
 		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }
+
+func TestRenderWithDataRendersRawHTMLDirectiveUnescaped(t *testing.T) {
+	got, err := RenderWithData(
+		`<main><div title="a & b" g:html={body}></div><p>{plain}</p></main>`,
+		nil,
+		map[string]string{
+			"body":  `<strong>Hi & bye</strong>`,
+			"plain": `a & b`,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<main><div title="a &amp; b"><strong>Hi & bye</strong></div><p>a &amp; b</p></main>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderWithDataRawHTMLDirectiveOnSelfClosingElement(t *testing.T) {
+	got, err := RenderWithData(`<section g:html={body} />`, nil, map[string]string{
+		"body": `<p class="x">raw</p>`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<section><p class="x">raw</p></section>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRawHTMLDirectiveFailsLikeTextInterpolationForUnknownFields(t *testing.T) {
+	_, err := RenderWithData(`<div g:html={missing}></div>`, nil, map[string]string{"body": "x"})
+	if err == nil {
+		t.Fatal("expected unknown interpolation error")
+	}
+	if !strings.Contains(err.Error(), `unknown interpolation "missing"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseRejectsRawHTMLDirectiveContractViolations(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		message string
+	}{
+		{
+			name:    "children",
+			source:  `<div g:html={body}><p>child</p></div>`,
+			message: "element with g:html must not declare children",
+		},
+		{
+			name:    "void element",
+			source:  `<br g:html={body} />`,
+			message: "g:html is not supported on void element <br>",
+		},
+		{
+			name:    "string literal",
+			source:  `<div g:html="<p>raw</p>"></div>`,
+			message: "not a string literal",
+		},
+		{
+			name:    "boolean attribute",
+			source:  `<div g:html></div>`,
+			message: "g:html requires an expression value",
+		},
+		{
+			name:    "empty expression",
+			source:  `<div g:html={}></div>`,
+			message: "g:html requires an expression value",
+		},
+		{
+			name:    "duplicate",
+			source:  `<div g:html={a} g:html={b}></div>`,
+			message: "multiple g:html directives",
+		},
+		{
+			name:    "g:for combination",
+			source:  `<li g:for={item in Items} g:key={item.ID} g:html={item.Body}></li>`,
+			message: "g:html cannot combine with g:for",
+		},
+		{
+			name:    "g:bind combination",
+			source:  `<textarea g:bind:value={Field} g:html={body}></textarea>`,
+			message: "g:html cannot combine with g:bind:value",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Parse(test.source)
+			if err == nil {
+				t.Fatal("expected g:html contract error")
+			}
+			if !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected error containing %q, got %v", test.message, err)
+			}
+		})
+	}
+}
+
+func TestRenderWithComponentsRendersRawHTMLDirectiveInsideStatelessComponent(t *testing.T) {
+	got, err := RenderWithComponents(`<main><Prose content="<em>hand & written</em>" /></main>`, map[string]Component{
+		"Prose": {
+			Name:  "Prose",
+			Props: []string{"content"},
+			Body:  `<article g:html={content}></article>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<main><article><em>hand & written</em></article></main>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRawHTMLDirectiveIsRejectedInsideStatefulComponentViews(t *testing.T) {
+	_, err := RenderWithComponents(`<main><Widget /></main>`, map[string]Component{
+		"Widget": {
+			Name:       "Widget",
+			State:      map[string]string{"Body": "<p>hi</p>"},
+			StateTypes: map[string]clientlang.ValueType{"Body": clientlang.TypeString},
+			StateJSON:  `{"Body":"<p>hi</p>"}`,
+			Body:       `<div g:html={Body}></div>`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected stateful g:html rejection")
+	}
+	if !strings.Contains(err.Error(), "g:html is not supported inside stateful component views") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRawHTMLDirectiveRejectsRouteParamInterpolation(t *testing.T) {
+	_, err := RenderWithData(`<div g:html={param("slug")}></div>`, nil, map[string]string{"slug": "<p>x</p>"})
+	if err == nil {
+		t.Fatal("expected route param rejection")
+	}
+	if !strings.Contains(err.Error(), "route param interpolation is not allowed in g:html") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseRejectsUnknownAndDeferredDirectives(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		message string
+	}{
+		{
+			name:    "unknown directive",
+			source:  `<div g:foo="x"></div>`,
+			message: `unsupported g: directive "g:foo"; supported g: directives are listed in docs/language/markup.md`,
+		},
+		{
+			name:    "boolean unknown directive",
+			source:  `<div g:fancy></div>`,
+			message: `unsupported g: directive "g:fancy"`,
+		},
+		{
+			name:    "transition",
+			source:  `<div g:transition="fade"></div>`,
+			message: "transitions and animations are deferred from the view {} contract",
+		},
+		{
+			name:    "animate",
+			source:  `<div g:animate="flip"></div>`,
+			message: "transitions and animations are deferred",
+		},
+		{
+			name:    "window target",
+			source:  `<div g:window="scroll"></div>`,
+			message: "document, window, body, and head targets are deferred",
+		},
+		{
+			name:    "document target",
+			source:  `<div g:document="title"></div>`,
+			message: "document, window, body, and head targets are deferred",
+		},
+		{
+			name:    "async placeholder",
+			source:  `<div g:await={Promise}></div>`,
+			message: "async placeholders are deferred from the view {} contract",
+		},
+		{
+			name:    "dom action",
+			source:  `<div g:use="tooltip"></div>`,
+			message: "DOM actions and attachments are deferred from the view {} contract",
+		},
+		{
+			name:    "unknown bind target",
+			source:  `<input g:bind:group={Field} />`,
+			message: "supported g:bind targets are g:bind:value and g:bind:checked",
+		},
+		{
+			name:    "unknown message rule",
+			source:  `<input g:message:length="too long" />`,
+			message: "supported g:message rules are required, minlength, maxlength, and pattern",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Parse(test.source)
+			if err == nil {
+				t.Fatal("expected unsupported directive error")
+			}
+			if !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected error containing %q, got %v", test.message, err)
+			}
+		})
+	}
+}
+
+func TestParseRejectsRawHTMLTemplateTagWithEscapeHatchGuidance(t *testing.T) {
+	_, err := Parse(`<main>{@html body}</main>`)
+	if err == nil {
+		t.Fatal("expected raw HTML syntax rejection")
+	}
+	if !strings.Contains(err.Error(), "use the explicit g:html={Expr} directive") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseKeepsAwaitBlockRejectionMessage(t *testing.T) {
+	_, err := Parse(`<main>{#await load()}<p>loading</p>{/await}</main>`)
+	if err == nil {
+		t.Fatal("expected await syntax rejection")
+	}
+	if !strings.Contains(err.Error(), "use build/load data, actions, APIs, or fragments for asynchronous data") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 func TestParsePageReadsSPADynamicRouteWithPathsAndBuild(t *testing.T) {
@@ -52,7 +52,7 @@ view {
 	if page.RenderMode(gowdk.SPA) != gowdk.SPA {
 		t.Fatalf("expected effective spa render, got %q", page.RenderMode(gowdk.SPA))
 	}
-	if !page.Paths || !page.Blocks.Build || !page.Blocks.View {
+	if !page.Blocks.Paths || !page.Blocks.Build || !page.Blocks.View {
 		t.Fatalf("expected paths/build/view blocks, got %#v", page)
 	}
 	if page.Blocks.PathsBody != `=> { slug: "hello-gowdk" }
@@ -367,8 +367,8 @@ view {
 	if page.Blocks.LoadBody != "user := session.User()\n  => { user }" {
 		t.Fatalf("unexpected load body: %q", page.Blocks.LoadBody)
 	}
-	if page.Guard[0] != "auth.required" {
-		t.Fatalf("expected auth guard, got %#v", page.Guard)
+	if page.Guards[0] != "auth.required" {
+		t.Fatalf("expected auth guard, got %#v", page.Guards)
 	}
 	action := page.Blocks.Actions[0]
 	if action.Name != "Refresh" || action.Method != "POST" || action.Route != "/dashboard" {
@@ -640,7 +640,7 @@ type parserGoldenProp struct {
 	Type string `json:"type"`
 }
 
-func parserGoldenSummary(page manifest.Page, component manifest.Component) parserGolden {
+func parserGoldenSummary(page gwdkir.Page, component gwdkir.Component) parserGolden {
 	return parserGolden{
 		Page: parserGoldenPage{
 			Package:       page.Package,
@@ -648,8 +648,8 @@ func parserGoldenSummary(page manifest.Page, component manifest.Component) parse
 			Route:         page.Route,
 			Render:        page.Render,
 			Layouts:       page.Layouts,
-			Guard:         page.Guard,
-			Paths:         page.Paths,
+			Guard:         page.Guards,
+			Paths:         page.Blocks.Paths,
 			DynamicParams: page.DynamicParams(),
 			Blocks: parserGoldenBlocks{
 				PathsBody: page.Blocks.PathsBody,
@@ -672,7 +672,7 @@ func parserGoldenSummary(page manifest.Page, component manifest.Component) parse
 	}
 }
 
-func parserGoldenActions(actions []manifest.Action) []parserGoldenAction {
+func parserGoldenActions(actions []gwdkir.Action) []parserGoldenAction {
 	if len(actions) == 0 {
 		return nil
 	}
@@ -692,7 +692,7 @@ func parserGoldenActions(actions []manifest.Action) []parserGoldenAction {
 	return out
 }
 
-func parserGoldenFragments(fragments []manifest.Fragment) []string {
+func parserGoldenFragments(fragments []gwdkir.Fragment) []string {
 	if len(fragments) == 0 {
 		return nil
 	}
@@ -703,7 +703,7 @@ func parserGoldenFragments(fragments []manifest.Fragment) []string {
 	return out
 }
 
-func parserGoldenAPIs(apis []manifest.API) []string {
+func parserGoldenAPIs(apis []gwdkir.API) []string {
 	if len(apis) == 0 {
 		return nil
 	}
@@ -714,7 +714,7 @@ func parserGoldenAPIs(apis []manifest.API) []string {
 	return out
 }
 
-func parserGoldenProps(props []manifest.Prop) []parserGoldenProp {
+func parserGoldenProps(props []gwdkir.Prop) []parserGoldenProp {
 	if len(props) == 0 {
 		return nil
 	}

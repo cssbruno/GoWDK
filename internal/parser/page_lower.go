@@ -5,12 +5,12 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkast"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (manifest.Page, error) {
-	var page manifest.Page
+func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (gwdkir.Page, error) {
+	var page gwdkir.Page
 	if ast.Package != nil {
 		page.Package = ast.Package.Name
 		page.Spans.Package = ast.Package.Span
@@ -19,14 +19,14 @@ func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (manifest.P
 	page.Uses = lowerSyntaxUses(ast.Uses)
 	page.Stores = lowerSyntaxStores(ast.Stores)
 	if err := lowerPageSyntaxAnnotations(src, ast, &page); err != nil {
-		return manifest.Page{}, err
+		return gwdkir.Page{}, err
 	}
 	for _, block := range ast.Blocks {
 		applyPageSyntaxBlock(&page, block)
 	}
 	for _, endpoint := range ast.Actions {
 		rawLine := sourceLineText(src, endpoint.Span.Start.Line)
-		page.Blocks.Actions = append(page.Blocks.Actions, manifest.Action{
+		page.Blocks.Actions = append(page.Blocks.Actions, gwdkir.Action{
 			Name:          endpoint.Name,
 			Method:        endpoint.Method,
 			Route:         endpoint.Route,
@@ -40,7 +40,7 @@ func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (manifest.P
 	}
 	for _, endpoint := range ast.APIs {
 		rawLine := sourceLineText(src, endpoint.Span.Start.Line)
-		page.Blocks.APIs = append(page.Blocks.APIs, manifest.API{
+		page.Blocks.APIs = append(page.Blocks.APIs, gwdkir.API{
 			Name:          endpoint.Name,
 			Method:        endpoint.Method,
 			Route:         endpoint.Route,
@@ -54,7 +54,7 @@ func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (manifest.P
 	}
 	for _, fragment := range ast.Fragments {
 		rawLine := sourceLineText(src, fragment.RouteSpan.Start.Line)
-		page.Blocks.Fragments = append(page.Blocks.Fragments, manifest.FragmentEndpoint{
+		page.Blocks.Fragments = append(page.Blocks.Fragments, gwdkir.FragmentEndpoint{
 			Name:        fragment.Name,
 			Method:      fragment.Method,
 			Route:       fragment.Route,
@@ -72,15 +72,15 @@ func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (manifest.P
 		page.ID = strings.TrimSpace(defaultID)
 	}
 	if page.ID == "" {
-		return manifest.Page{}, fmt.Errorf("missing @page")
+		return gwdkir.Page{}, fmt.Errorf("missing @page")
 	}
 	if page.Route == "" {
-		return manifest.Page{}, fmt.Errorf("%s missing @route", page.ID)
+		return gwdkir.Page{}, fmt.Errorf("%s missing @route", page.ID)
 	}
 	return page, nil
 }
 
-func lowerPageSyntaxAnnotations(src []byte, ast gwdkast.File, page *manifest.Page) error {
+func lowerPageSyntaxAnnotations(src []byte, ast gwdkast.File, page *gwdkir.Page) error {
 	if ast.Page != nil {
 		if ast.Page.ID == "" {
 			return fmt.Errorf("line %d: @page requires a value", ast.Page.Span.Start.Line)
@@ -114,7 +114,7 @@ func lowerPageSyntaxAnnotations(src []byte, ast gwdkast.File, page *manifest.Pag
 		page.Spans.Layouts = append(page.Spans.Layouts, source.NamedSpan{Name: layout.ID, Span: layout.Span})
 	}
 	for _, guard := range ast.Guards {
-		page.Guard = append(page.Guard, guard.Name)
+		page.Guards = append(page.Guards, guard.Name)
 		page.Spans.Guard = append(page.Spans.Guard, source.NamedSpan{Name: guard.Name, Span: guard.Span})
 	}
 	for _, css := range ast.CSS {
@@ -167,29 +167,29 @@ func pageAnnotationLoweredFromAST(ast gwdkast.File, name string) bool {
 	}
 }
 
-func lowerSyntaxImports(in []gwdkast.Import) []manifest.Import {
-	out := make([]manifest.Import, 0, len(in))
+func lowerSyntaxImports(in []gwdkast.Import) []gwdkir.Import {
+	out := make([]gwdkir.Import, 0, len(in))
 	for _, item := range in {
-		out = append(out, manifest.Import{Alias: item.Alias, Path: item.Path, Span: item.Span})
+		out = append(out, gwdkir.Import{Alias: item.Alias, Path: item.Path, Span: item.Span})
 	}
 	return out
 }
 
-func lowerSyntaxUses(in []gwdkast.Use) []manifest.Use {
-	out := make([]manifest.Use, 0, len(in))
+func lowerSyntaxUses(in []gwdkast.Use) []gwdkir.Use {
+	out := make([]gwdkir.Use, 0, len(in))
 	for _, item := range in {
-		out = append(out, manifest.Use{Alias: item.Alias, Package: item.Package, Span: item.Span})
+		out = append(out, gwdkir.Use{Alias: item.Alias, Package: item.Package, Span: item.Span})
 	}
 	return out
 }
 
-func lowerSyntaxStores(in []gwdkast.Store) []manifest.Store {
-	out := make([]manifest.Store, 0, len(in))
+func lowerSyntaxStores(in []gwdkast.Store) []gwdkir.Store {
+	out := make([]gwdkir.Store, 0, len(in))
 	for _, item := range in {
-		out = append(out, manifest.Store{
+		out = append(out, gwdkir.Store{
 			Name: item.Name,
-			Type: manifest.GoTypeRef{Alias: item.Type.Alias, Name: item.Type.Name, Span: item.Type.Span},
-			Init: manifest.GoFuncRef{Alias: item.Init.Alias, Name: item.Init.Name, Span: item.Init.Span},
+			Type: gwdkir.GoRef{Alias: item.Type.Alias, Name: item.Type.Name, Span: item.Type.Span},
+			Init: gwdkir.GoRef{Alias: item.Init.Alias, Name: item.Init.Name, Span: item.Init.Span},
 			Span: item.Span,
 		})
 	}
@@ -216,10 +216,10 @@ func lowerSyntaxRouteParamSpans(in []gwdkast.RouteParam) []source.NamedSpan {
 	return out
 }
 
-func applyPageSyntaxBlock(page *manifest.Page, block gwdkast.Block) {
+func applyPageSyntaxBlock(page *gwdkir.Page, block gwdkast.Block) {
 	switch block.Kind {
 	case "paths":
-		page.Paths = true
+		page.Blocks.Paths = true
 		page.Blocks.PathsBody = block.Body
 		page.Blocks.Spans.Paths = block.Span
 	case "build":
@@ -235,7 +235,7 @@ func applyPageSyntaxBlock(page *manifest.Page, block gwdkast.Block) {
 		page.Blocks.ClientBody = block.Body
 		page.Blocks.Spans.Client = block.Span
 	case "go":
-		page.Blocks.GoBlocks = append(page.Blocks.GoBlocks, manifest.GoBlock{
+		page.Blocks.GoBlocks = append(page.Blocks.GoBlocks, gwdkir.GoBlock{
 			Target: block.Name,
 			Body:   block.Body,
 			Span:   block.Span,

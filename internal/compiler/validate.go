@@ -43,6 +43,9 @@ func ValidateSourceProgram(config gowdk.Config, ir gwdkir.Program) error {
 }
 
 func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) error {
+	if err := gwdkir.CheckInvariants(ir); err != nil {
+		return fmt.Errorf("internal compiler error: %w", err)
+	}
 	var diagnostics []ValidationError
 	diagnostics = append(diagnostics, validatePackages(ir)...)
 	diagnostics = append(diagnostics, validateUniquePages(ir.Pages)...)

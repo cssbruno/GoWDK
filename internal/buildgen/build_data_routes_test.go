@@ -8,28 +8,29 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 func TestBuildRendersLiteralBuildData(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "home",
 			Route: "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Build:     true,
 				BuildBody: `=> { title: "Portable Go web compiler", slug: "home" }`,
 				View:      true,
 				ViewBody:  `<main data-page="{slug}"><Hero title="{title}" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Name: "Hero",
-			Props: []manifest.Prop{
+			Props: []gwdkir.Prop{
 				{Name: "title", Type: "string"},
 			},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<section><h1>{title}</h1></section>`,
 			},
@@ -87,10 +88,10 @@ func TestBuildRejectsInvalidBuildDataBeforeWriting(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			outputDir := t.TempDir()
-			app := manifest.Manifest{Pages: []manifest.Page{{
+			app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 				ID:    "home",
 				Route: "/",
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					Build:     true,
 					BuildBody: tt.body,
 					View:      true,
@@ -116,10 +117,10 @@ func TestBuildRejectsInvalidBuildDataBeforeWriting(t *testing.T) {
 
 func TestBuildMergesMultipleLiteralBuildDataDeclarations(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "home",
 		Route: "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Build: true,
 			BuildBody: `=> { title: "Home" }
 => { tagline: "Second declaration" }`,
@@ -143,11 +144,11 @@ func TestBuildMergesMultipleLiteralBuildDataDeclarations(t *testing.T) {
 
 func TestBuildRendersExpandedBuildDataScalarsAndReferences(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "blog.post",
 		Route: "/blog/{slug}",
-		Paths: true,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
 			PathsBody: `=> { slug: "hello" }`,
 			Build:     true,
 			BuildBody: `=> { title: "Hello", count: 2, live: true }
@@ -173,11 +174,11 @@ func TestBuildRendersExpandedBuildDataScalarsAndReferences(t *testing.T) {
 
 func TestBuildRejectsBuildDataRouteParamConflictBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "blog.post",
 		Route: "/blog/{slug}",
-		Paths: true,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
 			PathsBody: `=> { slug: "hello-gowdk" }`,
 			Build:     true,
 			BuildBody: `=> { slug: "conflict" }`,
@@ -202,11 +203,11 @@ func TestBuildRejectsBuildDataRouteParamConflictBeforeWriting(t *testing.T) {
 
 func TestBuildMergesBuildDataWithDynamicRouteParams(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "blog.post",
 		Route: "/blog/{slug}",
-		Paths: true,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
 			PathsBody: `=> { slug: "hello-gowdk" }`,
 			Build:     true,
 			BuildBody: `=> { title: "Post" }`,
@@ -230,11 +231,11 @@ func TestBuildMergesBuildDataWithDynamicRouteParams(t *testing.T) {
 
 func TestBuildBindsRouteParamsIntoBuildDataValues(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "blog.post",
 		Route: "/blog/{slug}",
-		Paths: true,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
 			PathsBody: `=> { slug: "hello-gowdk" }`,
 			Build:     true,
 			BuildBody: `=> { title: "Post {slug}", canonical: "/blog/{param(\"slug\")}" }`,
@@ -258,14 +259,14 @@ func TestBuildBindsRouteParamsIntoBuildDataValues(t *testing.T) {
 
 func TestBuildUsesImportedGoBuildData(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "go.imported",
 		Route: "/go-imported",
-		Imports: []manifest.Import{{
+		Imports: []gwdkir.Import{{
 			Alias: "interop",
 			Path:  "github.com/cssbruno/gowdk/examples/go-interop",
 		}},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Build:     true,
 			BuildBody: `=> interop.FeaturedCopyForBuild()`,
 			View:      true,
@@ -296,19 +297,19 @@ func TestBuildUsesInlineGoBlockGoBuildData(t *testing.T) {
 	outputDir := t.TempDir()
 	sourceDir := t.TempDir()
 	source := filepath.Join(sourceDir, "home.page.gwdk")
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:      "go.inline",
 		Package: "pages",
 		Source:  source,
 		Route:   "/go-inline",
-		Imports: []manifest.Import{{
+		Imports: []gwdkir.Import{{
 			Alias: "strings",
 			Path:  "strings",
 		}},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Build:     true,
 			BuildBody: `=> HomePageForBuild()`,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Body: `type PageCopy struct {
 	Title string ` + "`json:\"title\"`" + `
 	Slug string ` + "`json:\"slug\"`" + `
@@ -345,15 +346,15 @@ func TestBuildUsesDefaultGoBlockGoBuildData(t *testing.T) {
 	outputDir := t.TempDir()
 	sourceDir := t.TempDir()
 	source := filepath.Join(sourceDir, "home.page.gwdk")
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:      "go.default",
 		Package: "pages",
 		Source:  source,
 		Route:   "/go-default",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Build:     true,
 			BuildBody: `=> StaticPageForBuild()`,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Body: `type PageCopy struct {
 	Title string ` + "`json:\"title\"`" + `
 	Slug string ` + "`json:\"slug\"`" + `
@@ -387,10 +388,10 @@ func StaticPageForBuild() PageCopy {
 
 func TestBuildRejectsMissingGoBuildDataImport(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "go.interop",
 		Route: "/go-interop",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Build:     true,
 			BuildBody: `=> interop.FeaturedCopyForBuild()`,
 			View:      true,
@@ -409,11 +410,11 @@ func TestBuildRejectsMissingGoBuildDataImport(t *testing.T) {
 
 func TestBuildRejectsUnknownRouteParamInBuildDataValue(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "blog.post",
 		Route: "/blog/{slug}",
-		Paths: true,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
 			PathsBody: `=> { slug: "hello-gowdk" }`,
 			Build:     true,
 			BuildBody: `=> { title: "Post {missing}" }`,
@@ -433,11 +434,11 @@ func TestBuildRejectsUnknownRouteParamInBuildDataValue(t *testing.T) {
 
 func TestBuildRendersExplicitRouteParamReferences(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "blog.post",
 		Route: "/blog/{slug}",
-		Paths: true,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
 			PathsBody: `=> { slug: "hello-gowdk" }`,
 			View:      true,
 			ViewBody:  `<main data-slug="{param(\"slug\")}"><h1>{param("slug")}</h1></main>`,
@@ -459,11 +460,11 @@ func TestBuildRendersExplicitRouteParamReferences(t *testing.T) {
 
 func TestBuildRejectsUndeclaredRouteParamReferenceBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "blog.post",
 		Route: "/blog/{slug}",
-		Paths: true,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
 			PathsBody: `=> { slug: "hello-gowdk" }`,
 			View:      true,
 			ViewBody:  `<main>{param("missing")}</main>`,
@@ -486,11 +487,11 @@ func TestBuildRejectsUndeclaredRouteParamReferenceBeforeWriting(t *testing.T) {
 
 func TestBuildRejectsRouteParamInDangerousAttributeBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "blog.post",
 		Route: "/blog/{slug}",
-		Paths: true,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
 			PathsBody: `=> { slug: "alert(1)" }`,
 			View:      true,
 			ViewBody:  `<img src="x" onerror="{param(\"slug\")}" />`,
@@ -513,10 +514,10 @@ func TestBuildRejectsRouteParamInDangerousAttributeBeforeWriting(t *testing.T) {
 
 func TestBuildWritesNestedRouteIndex(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "patients",
 		Route: "/patients",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Patients</main>`,
 		},
@@ -537,24 +538,24 @@ func TestBuildWritesNestedRouteIndex(t *testing.T) {
 
 func TestBuildExpandsDynamicSPAPaths(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "blog.post",
 			Route: "/blog/{slug}",
-			Paths: true,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
+				Paths: true,
 				PathsBody: `=> { slug: "hello-gowdk" }
 => { slug: "compile-first" }`,
 				View:     true,
 				ViewBody: `<main data-slug="{slug}"><h1>{slug}</h1><PostTitle title="{slug}" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Name: "PostTitle",
-			Props: []manifest.Prop{
+			Props: []gwdkir.Prop{
 				{Name: "title", Type: "string"},
 			},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<p>{title}</p>`,
 			},
@@ -598,11 +599,11 @@ func TestBuildExpandsDynamicSPAPaths(t *testing.T) {
 
 func TestBuildRejectsUnknownDynamicInterpolationBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "blog.post",
 		Route: "/blog/{slug}",
-		Paths: true,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
 			PathsBody: `=> { slug: "hello-gowdk" }`,
 			View:      true,
 			ViewBody:  `<main>{missing}</main>`,
@@ -660,11 +661,11 @@ func TestBuildRejectsInvalidDynamicPathsBeforeWriting(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			outputDir := t.TempDir()
-			app := manifest.Manifest{Pages: []manifest.Page{{
+			app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 				ID:    "blog.post",
 				Route: "/blog/{slug}",
-				Paths: true,
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
+					Paths:     true,
 					PathsBody: tt.body,
 					View:      true,
 					ViewBody:  `<main>Post</main>`,

@@ -7,34 +7,40 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-// BuildIR converts a normalized manifest into the stable compiler IR.
-func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
+// Sources are the parsed IR records one program is assembled from.
+type Sources struct {
+	Pages      []gwdkir.Page
+	Components []gwdkir.Component
+	Layouts    []gwdkir.Layout
+}
+
+// BuildProgram assembles the stable compiler IR from parsed IR records:
+// routes, templates, assets, endpoints, and package groupings are derived
+// here. Standalone Go endpoint discovery and backend handler binding enrich
+// the returned program afterwards (compiler.DiscoverGoEndpoints /
+// compiler.BindBackendHandlers).
+func BuildProgram(config gowdk.Config, sources Sources) gwdkir.Program {
 	builder := irBuilder{
 		config:   config,
 		program:  gwdkir.Program{Version: gwdkir.Version},
 		packages: map[string]*gwdkir.Package{},
 	}
 
-	for _, page := range app.Pages {
+	for _, page := range sources.Pages {
 		builder.addPage(page)
 	}
-	for _, component := range app.Components {
+	for _, component := range sources.Components {
 		builder.addComponent(component)
 	}
-	for _, layout := range app.Layouts {
+	for _, layout := range sources.Layouts {
 		builder.addLayout(layout)
-	}
-	for _, endpoint := range app.Endpoints {
-		builder.addStandaloneEndpoint(lowerIRGoEndpoint(endpoint))
 	}
 
 	builder.finishPackages()
 	builder.sortOutput()
-	AttachBackendBindings(&builder.program, app.BackendBindings)
 	return builder.program
 }
 
@@ -57,8 +63,12 @@ func (builder *irBuilder) ensurePackage(name string, src string) *gwdkir.Package
 	return pkg
 }
 
-func (builder *irBuilder) addPage(page manifest.Page) {
-	builder.program.Pages = append(builder.program.Pages, lowerIRPage(page))
+func (builder *irBuilder) addPage(page gwdkir.Page) {
+	// Normalize route params once at program assembly: explicit declarations
+	// win, otherwise they are derived from the route pattern, and untyped
+	// params default to string.
+	page.RouteParams = copyRouteParams(page.TypedRouteParams())
+	builder.program.Pages = append(builder.program.Pages, page)
 	pkg := builder.ensurePackage(page.Package, page.Source)
 	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: page.Source, Kind: gwdkir.SourcePage, Package: page.Package, Name: page.ID, Span: page.Spans.Page})
 	appendPackageImports(pkg, page.Imports)
@@ -67,7 +77,7 @@ func (builder *irBuilder) addPage(page manifest.Page) {
 
 	mode := page.RenderMode(builder.config.Render.DefaultMode())
 	builder.program.Routes = append(builder.program.Routes, gwdkir.Route{
-		Kind:          routeKind(mode, page),
+		Kind:          routeKind(mode),
 		Method:        "GET",
 		Path:          page.Route,
 		PageID:        page.ID,
@@ -77,7 +87,7 @@ func (builder *irBuilder) addPage(page manifest.Page) {
 		DynamicParams: page.DynamicParams(),
 		RouteParams:   copyRouteParams(page.TypedRouteParams()),
 		Layouts:       append([]string(nil), page.Layouts...),
-		Guards:        append([]string(nil), page.Guard...),
+		Guards:        append([]string(nil), page.Guards...),
 		Source:        page.Source,
 		Span:          page.Spans.Route,
 	})
@@ -86,7 +96,7 @@ func (builder *irBuilder) addPage(page manifest.Page) {
 	builder.addPageEndpoints(page)
 }
 
-func (builder *irBuilder) addPageTemplate(page manifest.Page) {
+func (builder *irBuilder) addPageTemplate(page gwdkir.Page) {
 	if !page.Blocks.View {
 		return
 	}
@@ -96,8 +106,8 @@ func (builder *irBuilder) addPageTemplate(page manifest.Page) {
 		Package:   page.Package,
 		Source:    page.Source,
 		Route:     page.Route,
-		Guards:    append([]string(nil), page.Guard...),
-		Imports:   lowerIRImports(page.Imports),
+		Guards:    append([]string(nil), page.Guards...),
+		Imports:   append([]gwdkir.Import(nil), page.Imports...),
 		Body:      page.Blocks.ViewBody,
 		Span:      page.Blocks.Spans.View,
 		BodyStart: page.Blocks.Spans.ViewBodyStart,
@@ -105,7 +115,7 @@ func (builder *irBuilder) addPageTemplate(page manifest.Page) {
 	builder.addTemplate(template)
 }
 
-func (builder *irBuilder) addPageAssets(page manifest.Page) {
+func (builder *irBuilder) addPageAssets(page gwdkir.Page) {
 	for _, css := range page.CSS {
 		name, useAlias, usePackage := assetUse(page.Uses, css)
 		builder.program.Assets = append(builder.program.Assets, gwdkir.Asset{
@@ -148,7 +158,7 @@ func (builder *irBuilder) addPageAssets(page manifest.Page) {
 	}
 }
 
-func (builder *irBuilder) addPageEndpoints(page manifest.Page) {
+func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 	for _, action := range page.Blocks.Actions {
 		path := endpointPath(action.Route, page.Route)
 		builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
@@ -197,8 +207,8 @@ func (builder *irBuilder) addPageEndpoints(page manifest.Page) {
 	}
 }
 
-func (builder *irBuilder) addComponent(component manifest.Component) {
-	builder.program.Components = append(builder.program.Components, lowerIRComponent(component))
+func (builder *irBuilder) addComponent(component gwdkir.Component) {
+	builder.program.Components = append(builder.program.Components, component)
 	pkg := builder.ensurePackage(component.Package, component.Source)
 	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: component.Source, Kind: gwdkir.SourceComponent, Package: component.Package, Name: component.Name, Span: component.Span})
 	appendPackageImports(pkg, component.Imports)
@@ -226,7 +236,7 @@ func (builder *irBuilder) addComponent(component manifest.Component) {
 	}
 }
 
-func (builder *irBuilder) addComponentAssets(component manifest.Component) {
+func (builder *irBuilder) addComponentAssets(component gwdkir.Component) {
 	for _, css := range component.CSS {
 		hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, css)
 		builder.program.Assets = append(builder.program.Assets, gwdkir.Asset{
@@ -278,7 +288,7 @@ func (builder *irBuilder) addComponentAssets(component manifest.Component) {
 	}
 }
 
-func (builder *irBuilder) addComponentTemplate(component manifest.Component) {
+func (builder *irBuilder) addComponentTemplate(component gwdkir.Component) {
 	if !component.Blocks.View {
 		return
 	}
@@ -287,15 +297,15 @@ func (builder *irBuilder) addComponentTemplate(component manifest.Component) {
 		OwnerID:   component.Name,
 		Package:   component.Package,
 		Source:    component.Source,
-		Imports:   lowerIRImports(component.Imports),
+		Imports:   append([]gwdkir.Import(nil), component.Imports...),
 		Body:      component.Blocks.ViewBody,
 		Span:      component.Blocks.Spans.View,
 		BodyStart: component.Blocks.Spans.ViewBodyStart,
 	})
 }
 
-func (builder *irBuilder) addLayout(layout manifest.Layout) {
-	builder.program.Layouts = append(builder.program.Layouts, lowerIRLayout(layout))
+func (builder *irBuilder) addLayout(layout gwdkir.Layout) {
+	builder.program.Layouts = append(builder.program.Layouts, layout)
 	pkg := builder.ensurePackage(layout.Package, layout.Source)
 	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: layout.Source, Kind: gwdkir.SourceLayout, Package: layout.Package, Name: layout.ID, Span: layout.Span})
 	appendPackageUses(pkg, layout.Uses)
@@ -337,25 +347,6 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
 	// Preserve the raw declaration losslessly for validation, which needs the
 	// exact kind, method, and spans before normalization.
 	builder.program.GoEndpoints = append(builder.program.GoEndpoints, endpoint)
-}
-
-// lowerIRGoEndpoint mirrors a manifest standalone endpoint declaration into its
-// lossless IR form. The copy is one-to-one.
-func lowerIRGoEndpoint(endpoint manifest.EndpointDeclaration) gwdkir.GoEndpoint {
-	return gwdkir.GoEndpoint{
-		Kind:          endpoint.Kind,
-		SourceKind:    endpointSource(endpoint.SourceKind),
-		Package:       endpoint.Package,
-		Source:        endpoint.Source,
-		Name:          endpoint.Name,
-		Method:        endpoint.Method,
-		Route:         endpoint.Route,
-		ErrorPage:     endpoint.ErrorPage,
-		Span:          endpoint.Span,
-		RouteSpan:     endpoint.RouteSpan,
-		RouteParams:   append([]source.NamedSpan(nil), endpoint.RouteParams...),
-		ErrorPageSpan: endpoint.ErrorPageSpan,
-	}
 }
 
 // AddStandaloneEndpoints appends discovered standalone Go endpoint declarations

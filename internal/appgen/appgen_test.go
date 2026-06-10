@@ -18,7 +18,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
@@ -288,7 +288,7 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 			ImportPath:  "example.com/app/contracts/patients",
 			Type:        "CreatePatient",
 			Result:      "CreatePatientResult",
-			InputFields: []manifest.BackendInputField{
+			InputFields: []source.BackendInputField{
 				{FieldName: "Name", FormName: "name", Type: "string"},
 				{FieldName: "Tags", FormName: "tag", Type: "[]string"},
 				{FieldName: "Age", FormName: "age", Type: "int"},
@@ -309,7 +309,7 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 			ImportPath:  "example.com/app/contracts/patients",
 			Type:        "GetPatientPage",
 			Result:      "PatientPageData",
-			InputFields: []manifest.BackendInputField{
+			InputFields: []source.BackendInputField{
 				{FieldName: "Filter", FormName: "filter", Type: "string"},
 			},
 			Method:    "GET",
@@ -627,7 +627,7 @@ func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
 			Type:        "CreatePatient",
 			Result:      "CreatePatientResult",
 			Guards:      []string{"auth.required"},
-			InputFields: []manifest.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
+			InputFields: []source.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
 			Method:      "POST",
 			Path:        "/patients",
 			Status:      gwdkir.ContractBindingBound,
@@ -644,7 +644,7 @@ func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
 			Type:        "GetPatientPage",
 			Result:      "PatientPageData",
 			Guards:      []string{"auth.required"},
-			InputFields: []manifest.BackendInputField{{FieldName: "Filter", FormName: "filter", Type: "string"}},
+			InputFields: []source.BackendInputField{{FieldName: "Filter", FormName: "filter", Type: "string"}},
 			Method:      "GET",
 			Path:        "/patients",
 			Status:      gwdkir.ContractBindingBound,
@@ -721,14 +721,14 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 			Redirect:    "/dashboard",
 			Fragments:   []ActionFragment{{Target: "#login", HTML: "<p>ignored</p>"}},
 			InputFields: []string{"email"},
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/auth",
 				PackageName:  "auth",
 				FunctionName: "Login",
-				Signature:    manifest.BackendSignatureActionForm,
+				Signature:    source.BackendSignatureActionForm,
 				InputType:    "LoginInput",
-				InputFields: []manifest.BackendInputField{
+				InputFields: []source.BackendInputField{
 					{FieldName: "Email", FormName: "email", Type: "string"},
 					{FieldName: "Tags", FormName: "tag", Type: "[]string"},
 					{FieldName: "Age", FormName: "age", Type: "int"},
@@ -741,15 +741,15 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 			ActionName:  "save",
 			Route:       "/Login/save",
 			InputFields: []string{"email"},
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/auth",
 				PackageName:  "auth",
 				FunctionName: "Save",
-				Signature:    manifest.BackendSignatureActionFormPtr,
+				Signature:    source.BackendSignatureActionFormPtr,
 				InputType:    "LoginInput",
 				InputPointer: true,
-				InputFields: []manifest.BackendInputField{
+				InputFields: []source.BackendInputField{
 					{FieldName: "Email", FormName: "email", Type: "string"},
 				},
 			},
@@ -758,12 +758,12 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 			PageID:     "Login",
 			ActionName: "Ping",
 			Route:      "/Login/Ping",
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/auth",
 				PackageName:  "auth",
 				FunctionName: "Ping",
-				Signature:    manifest.BackendSignatureAction0,
+				Signature:    source.BackendSignatureAction0,
 			},
 		},
 	}})
@@ -819,8 +819,8 @@ func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) 
 			PageID:     "home",
 			ActionName: "Submit",
 			Route:      "/",
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingMissing,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingMissing,
 				ImportPath:   "example.com/app/missing",
 				PackageName:  "missing",
 				FunctionName: "Submit",
@@ -832,8 +832,8 @@ func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) 
 			APIName: "Status",
 			Method:  "GET",
 			Route:   "/api/status",
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingUnsupportedSignature,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingUnsupportedSignature,
 				ImportPath:   "example.com/app/status",
 				PackageName:  "status",
 				FunctionName: "Status",
@@ -881,24 +881,24 @@ func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
 				PageID:     "z",
 				ActionName: "Zed",
 				Route:      "/z",
-				Binding: manifest.BackendBinding{
-					Status:       manifest.BackendBindingBound,
+				Binding: source.BackendBinding{
+					Status:       source.BackendBindingBound,
 					ImportPath:   "example.com/app/beta",
 					PackageName:  "beta",
 					FunctionName: "Zed",
-					Signature:    manifest.BackendSignatureAction0,
+					Signature:    source.BackendSignatureAction0,
 				},
 			},
 			{
 				PageID:     "a",
 				ActionName: "Alpha",
 				Route:      "/a",
-				Binding: manifest.BackendBinding{
-					Status:       manifest.BackendBindingBound,
+				Binding: source.BackendBinding{
+					Status:       source.BackendBindingBound,
 					ImportPath:   "example.com/app/alpha",
 					PackageName:  "alpha",
 					FunctionName: "Alpha",
-					Signature:    manifest.BackendSignatureAction0,
+					Signature:    source.BackendSignatureAction0,
 				},
 			},
 		},
@@ -908,12 +908,12 @@ func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
 				APIName: "ZedAPI",
 				Method:  http.MethodGet,
 				Route:   "/api/z",
-				Binding: manifest.BackendBinding{
-					Status:       manifest.BackendBindingBound,
+				Binding: source.BackendBinding{
+					Status:       source.BackendBindingBound,
 					ImportPath:   "example.com/app/beta",
 					PackageName:  "beta",
 					FunctionName: "ZedAPI",
-					Signature:    manifest.BackendSignatureAPI,
+					Signature:    source.BackendSignatureAPI,
 				},
 			},
 			{
@@ -921,12 +921,12 @@ func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
 				APIName: "AlphaAPI",
 				Method:  http.MethodGet,
 				Route:   "/api/a",
-				Binding: manifest.BackendBinding{
-					Status:       manifest.BackendBindingBound,
+				Binding: source.BackendBinding{
+					Status:       source.BackendBindingBound,
 					ImportPath:   "example.com/app/alpha",
 					PackageName:  "alpha",
 					FunctionName: "AlphaAPI",
-					Signature:    manifest.BackendSignatureAPI,
+					Signature:    source.BackendSignatureAPI,
 				},
 			},
 		},
@@ -1104,12 +1104,12 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 		APIName: "Health",
 		Method:  http.MethodGet,
 		Route:   "/api/health",
-		Binding: manifest.BackendBinding{
-			Status:       manifest.BackendBindingBound,
+		Binding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
 			ImportPath:   "example.com/app/status",
 			PackageName:  "status",
 			FunctionName: "Health",
-			Signature:    manifest.BackendSignatureAPI,
+			Signature:    source.BackendSignatureAPI,
 		},
 	}}})
 	if err != nil {
@@ -1157,12 +1157,12 @@ func TestGenerateWritesEndpointErrorPages(t *testing.T) {
 			Method:    http.MethodGet,
 			Route:     "/api/health",
 			ErrorPage: "/errors/health.html",
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/status",
 				PackageName:  "status",
 				FunctionName: "Health",
-				Signature:    manifest.BackendSignatureAPI,
+				Signature:    source.BackendSignatureAPI,
 			},
 		}},
 	})
@@ -1314,12 +1314,12 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 		Route:     "/dashboard",
 		ErrorPage: "/errors/dashboard.html",
 		HasLoad:   true,
-		LoadBinding: manifest.BackendBinding{
-			Status:       manifest.BackendBindingBound,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
 			ImportPath:   "example.com/app/dashboard",
 			PackageName:  "dashboard",
 			FunctionName: "LoadDashboard",
-			Signature:    manifest.BackendSignatureLoadError,
+			Signature:    source.BackendSignatureLoadError,
 		},
 		HTML: `<main><h1>__USER__</h1></main>`,
 		LoadReplacements: []SSRLoadReplacement{{
@@ -1368,12 +1368,12 @@ func TestGenerateKeepsActionHandlersIndependentFromSSRLoad(t *testing.T) {
 			PageID:  "dashboard",
 			Route:   "/dashboard",
 			HasLoad: true,
-			LoadBinding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			LoadBinding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/dashboard",
 				PackageName:  "dashboard",
 				FunctionName: "LoadDashboard",
-				Signature:    manifest.BackendSignatureLoadError,
+				Signature:    source.BackendSignatureLoadError,
 			},
 			HTML: `<main><h1>__USER__</h1></main>`,
 			LoadReplacements: []SSRLoadReplacement{{
@@ -1386,12 +1386,12 @@ func TestGenerateKeepsActionHandlersIndependentFromSSRLoad(t *testing.T) {
 			ActionName: "Save",
 			Method:     http.MethodPost,
 			Route:      "/dashboard",
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/dashboard",
 				PackageName:  "dashboard",
 				FunctionName: "Save",
-				Signature:    manifest.BackendSignatureAction0,
+				Signature:    source.BackendSignatureAction0,
 			},
 		}},
 	})
@@ -1539,7 +1539,7 @@ func TestGenerateWritesTypedSSRRouteParamBindings(t *testing.T) {
 		PageID:        "patients.show",
 		Route:         "/patients/{id}",
 		DynamicParams: []string{"id"},
-		RouteParams:   []manifest.RouteParam{{Name: "id", Type: "int"}},
+		RouteParams:   []source.RouteParam{{Name: "id", Type: "int"}},
 		HTML:          `<main>Patient</main>`,
 	}}})
 	if err != nil {
@@ -1571,21 +1571,21 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 	appDir := filepath.Join(root, "generated-app")
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
-	app := manifest.Manifest{Pages: []manifest.Page{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{
 		{
 			ID:    "newsletter",
 			Route: "/newsletter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<form g:post={Subscribe}><input name="email" required /></form>`,
-				Actions: []manifest.Action{{
+				Actions: []gwdkir.Action{{
 					Name:           "Subscribe",
 					InputName:      "input",
 					InputType:      "SubscribeInput",
 					ValidatesInput: true,
 					Redirect:       "/newsletter?ok=1",
 				}},
-				Fragments: []manifest.FragmentEndpoint{{
+				Fragments: []gwdkir.FragmentEndpoint{{
 					Name:   "List",
 					Method: "GET",
 					Route:  "/newsletter/list",
@@ -1598,8 +1598,8 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 			ID:     "dashboard",
 			Route:  "/dashboard",
 			Render: gowdk.SSR,
-			Guard:  []string{"auth.required"},
-			Blocks: manifest.Blocks{
+			Guards: []string{"auth.required"},
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><h1>Dashboard</h1></main>`,
 			},
@@ -1609,7 +1609,7 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 	config := gowdk.Config{
 		Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)},
 	}
-	ir := gwdkanalysis.BuildIR(config, app)
+	ir := gwdkanalysis.BuildProgram(config, app)
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		AutoRoutes: true,
 		Config:     config,
@@ -1717,12 +1717,12 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 			Route:     "/api/session",
 			Guards:    []string{"auth.required"},
 			ErrorPage: "/errors/api.html",
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/session",
 				PackageName:  "session",
 				FunctionName: "Session",
-				Signature:    manifest.BackendSignatureAPI,
+				Signature:    source.BackendSignatureAPI,
 			},
 		}},
 		Fragments: []FragmentEndpoint{{
@@ -1740,12 +1740,12 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 			Guards:    []string{"auth.required"},
 			HasLoad:   true,
 			ErrorPage: "/errors/dashboard.html",
-			LoadBinding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			LoadBinding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/dashboard",
 				PackageName:  "dashboard",
 				FunctionName: "LoadDashboard",
-				Signature:    manifest.BackendSignatureLoadError,
+				Signature:    source.BackendSignatureLoadError,
 			},
 			HTML: "<main>Dashboard</main>",
 		}},
@@ -1822,12 +1822,12 @@ func TestGenerateAutoRoutesRequiresIR(t *testing.T) {
 }
 
 func TestActionEndpointsInfersInputFieldsFromGPostForm(t *testing.T) {
-	routes, err := actionEndpointsFromManifestFixture(manifest.Manifest{Pages: []manifest.Page{{
+	routes, err := actionEndpointsFromManifestFixture(gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "newsletter",
 		Route: "/newsletter",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			ViewBody: `<form g:post={Subscribe}><input name="email" required minlength="5" maxlength="80" pattern="[a-z]+@[a-z]+[.][a-z]{2,4}" g:message:required="Email is required" g:message:pattern="Use a real email" /><textarea name="note"></textarea></form>`,
-			Actions: []manifest.Action{{
+			Actions: []gwdkir.Action{{
 				Name:           "Subscribe",
 				InputName:      "input",
 				InputType:      "SubscribeInput",
@@ -1865,12 +1865,12 @@ func TestActionEndpointsInfersInputFieldsFromGPostForm(t *testing.T) {
 }
 
 func TestActionEndpointsInfersSubmitIntentFieldsFromGPostForm(t *testing.T) {
-	routes, err := actionEndpointsFromManifestFixture(manifest.Manifest{Pages: []manifest.Page{{
+	routes, err := actionEndpointsFromManifestFixture(gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "newsletter",
 		Route: "/newsletter",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			ViewBody: `<form g:post={Subscribe}><input name="email" /><button name="intent" value="save">Save</button><button type="button" name="local">Local</button></form>`,
-			Actions: []manifest.Action{{
+			Actions: []gwdkir.Action{{
 				Name:   "Subscribe",
 				Method: "POST",
 				Route:  "/newsletter",
@@ -1889,16 +1889,16 @@ func TestActionEndpointsInfersSubmitIntentFieldsFromGPostForm(t *testing.T) {
 }
 
 func TestActionEndpointsRendersActionFragments(t *testing.T) {
-	routes, err := actionEndpointsFromManifestFixture(manifest.Manifest{Pages: []manifest.Page{{
+	routes, err := actionEndpointsFromManifestFixture(gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "patients",
 		Route: "/patients",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			ViewBody: `<form g:post={Refresh} g:target="#patients"><input name="query" /></form><section id="patients"></section>`,
-			Actions: []manifest.Action{{
+			Actions: []gwdkir.Action{{
 				Name:      "Refresh",
 				InputName: "input",
 				InputType: "PatientFilter",
-				Fragments: []manifest.Fragment{{
+				Fragments: []gwdkir.Fragment{{
 					Target: "#patients",
 					Body:   `<p>Updated & safe</p>`,
 				}},
@@ -1923,14 +1923,14 @@ func TestActionEndpointsRendersActionFragments(t *testing.T) {
 }
 
 func TestFragmentEndpointsRenderComponents(t *testing.T) {
-	routes, err := fragmentEndpointsFromManifestFixture(manifest.Manifest{
-		Pages: []manifest.Page{{
+	routes, err := fragmentEndpointsFromManifestFixture(gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:      "patients",
 			Route:   "/patients",
 			Package: "pages",
-			Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
-			Blocks: manifest.Blocks{
-				Fragments: []manifest.FragmentEndpoint{{
+			Uses:    []gwdkir.Use{{Alias: "ui", Package: "components"}},
+			Blocks: gwdkir.Blocks{
+				Fragments: []gwdkir.FragmentEndpoint{{
 					Name:   "List",
 					Method: "GET",
 					Route:  "/patients/list",
@@ -1939,11 +1939,11 @@ func TestFragmentEndpointsRenderComponents(t *testing.T) {
 				}},
 			},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Name:    "PatientCard",
 			Package: "components",
-			Props:   []manifest.Prop{{Name: "name", Type: "string"}},
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<article>{name}</article>`},
+			Props:   []gwdkir.Prop{{Name: "name", Type: "string"}},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<article>{name}</article>`},
 		}},
 	})
 	if err != nil {
@@ -1961,12 +1961,12 @@ func TestFragmentEndpointsRenderComponents(t *testing.T) {
 }
 
 func TestActionEndpointsRejectsFileInputsWithPageContext(t *testing.T) {
-	_, err := actionEndpointsFromManifestFixture(manifest.Manifest{Pages: []manifest.Page{{
+	_, err := actionEndpointsFromManifestFixture(gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "profile",
 		Route: "/profile",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			ViewBody: `<form g:post={save}><input name="avatar" type="file" /></form>`,
-			Actions: []manifest.Action{{
+			Actions: []gwdkir.Action{{
 				Name:     "save",
 				Redirect: "/profile?ok=1",
 			}},
@@ -2461,12 +2461,12 @@ func TestGeneratedBinaryExecutesSSRLoadUserLogic(t *testing.T) {
 		PageID:  "dashboard",
 		Route:   "/dashboard",
 		HasLoad: true,
-		LoadBinding: manifest.BackendBinding{
-			Status:       manifest.BackendBindingBound,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
 			ImportPath:   "gowdk-generated-app/dashboard",
 			PackageName:  "dashboard",
 			FunctionName: "LoadDashboard",
-			Signature:    manifest.BackendSignatureLoadError,
+			Signature:    source.BackendSignatureLoadError,
 		},
 		HTML: `<main><h1>__USER__</h1><p>__PATH__</p></main>`,
 		LoadReplacements: []SSRLoadReplacement{
@@ -2531,22 +2531,22 @@ func TestGeneratedBinaryExecutesInlineSSRScriptLoad(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
 	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:      "dashboard",
 		Package: "pages",
 		Source:  filepath.Join(sourceDir, "dashboard.page.gwdk"),
 		Route:   "/dashboard",
 		Render:  gowdk.SSR,
-		Imports: []manifest.Import{{
+		Imports: []gwdkir.Import{{
 			Alias: "ssr",
 			Path:  "github.com/cssbruno/gowdk/addons/ssr",
 		}},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Load:     true,
 			LoadBody: `=> { user.name, request.path }`,
 			View:     true,
 			ViewBody: `<main><h1>{user.name}</h1><p>{request.path}</p></main>`,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Target: "ssr",
 				Body: `func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	return map[string]any{
@@ -2557,7 +2557,7 @@ func TestGeneratedBinaryExecutesInlineSSRScriptLoad(t *testing.T) {
 			}},
 		},
 	}}}
-	ir := gwdkanalysis.BuildIR(config, app)
+	ir := gwdkanalysis.BuildProgram(config, app)
 	compiler.BindBackendHandlers(&ir)
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{AutoRoutes: true, Config: config, IR: &ir}); err != nil {
@@ -2785,12 +2785,12 @@ func TestGeneratedBinaryUsesCustomSSRLoadErrorPage(t *testing.T) {
 		Route:     "/dashboard",
 		ErrorPage: "errors/dashboard.html",
 		HasLoad:   true,
-		LoadBinding: manifest.BackendBinding{
-			Status:       manifest.BackendBindingBound,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
 			ImportPath:   "gowdk-generated-app/dashboard",
 			PackageName:  "dashboard",
 			FunctionName: "LoadDashboard",
-			Signature:    manifest.BackendSignatureLoadError,
+			Signature:    source.BackendSignatureLoadError,
 		},
 		HTML: `<main><h1>__USER__</h1></main>`,
 		LoadReplacements: []SSRLoadReplacement{
@@ -2863,12 +2863,12 @@ func TestGeneratedBinaryUsesCustomSSRPanicErrorPage(t *testing.T) {
 		Route:     "/dashboard",
 		ErrorPage: "errors/dashboard.html",
 		HasLoad:   true,
-		LoadBinding: manifest.BackendBinding{
-			Status:       manifest.BackendBindingBound,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
 			ImportPath:   "gowdk-generated-app/dashboard",
 			PackageName:  "dashboard",
 			FunctionName: "LoadDashboard",
-			Signature:    manifest.BackendSignatureLoad,
+			Signature:    source.BackendSignatureLoad,
 		},
 		HTML: `<main><h1>__USER__</h1></main>`,
 		LoadReplacements: []SSRLoadReplacement{
@@ -2938,12 +2938,12 @@ func TestGeneratedBinaryUsesCustomAPIErrorPage(t *testing.T) {
 		Method:    http.MethodGet,
 		Route:     "/api/health",
 		ErrorPage: "errors/health.html",
-		Binding: manifest.BackendBinding{
-			Status:       manifest.BackendBindingBound,
+		Binding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
 			ImportPath:   "gowdk-generated-app/status",
 			PackageName:  "status",
 			FunctionName: "Health",
-			Signature:    manifest.BackendSignatureAPI,
+			Signature:    source.BackendSignatureAPI,
 		},
 	}}}); err != nil {
 		t.Fatal(err)
@@ -3014,12 +3014,12 @@ func TestGeneratedBinaryHandlesEndpointErrorsAndMissingErrorPage(t *testing.T) {
 			ActionName: "Subscribe",
 			Method:     http.MethodPost,
 			Route:      "/newsletter",
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "gowdk-generated-app/backend",
 				PackageName:  "backend",
 				FunctionName: "Subscribe",
-				Signature:    manifest.BackendSignatureAction0,
+				Signature:    source.BackendSignatureAction0,
 			},
 		}, {
 			PageID:     "newsletter",
@@ -3027,12 +3027,12 @@ func TestGeneratedBinaryHandlesEndpointErrorsAndMissingErrorPage(t *testing.T) {
 			Method:     http.MethodPost,
 			Route:      "/explode",
 			ErrorPage:  "errors/missing.html",
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "gowdk-generated-app/backend",
 				PackageName:  "backend",
 				FunctionName: "Explode",
-				Signature:    manifest.BackendSignatureAction0,
+				Signature:    source.BackendSignatureAction0,
 			},
 		}},
 		APIs: []APIEndpoint{{
@@ -3040,12 +3040,12 @@ func TestGeneratedBinaryHandlesEndpointErrorsAndMissingErrorPage(t *testing.T) {
 			APIName: "Session",
 			Method:  http.MethodGet,
 			Route:   "/api/session",
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "gowdk-generated-app/backend",
 				PackageName:  "backend",
 				FunctionName: "Session",
-				Signature:    manifest.BackendSignatureAPI,
+				Signature:    source.BackendSignatureAPI,
 			},
 		}},
 	}); err != nil {
@@ -3270,7 +3270,7 @@ func TestGeneratedBinaryServesPageAndExecutesContractQuery(t *testing.T) {
 		ImportPath:  "gowdk-generated-app/patients",
 		Type:        "GetPatientPage",
 		Result:      "PatientPageData",
-		InputFields: []manifest.BackendInputField{{FieldName: "Filter", FormName: "filter", Type: "string"}},
+		InputFields: []source.BackendInputField{{FieldName: "Filter", FormName: "filter", Type: "string"}},
 		Method:      http.MethodGet,
 		Path:        "/patients",
 		Status:      gwdkir.ContractBindingBound,
@@ -3372,7 +3372,7 @@ func TestGeneratedBinaryCommandContractUsesRegisteredEventSink(t *testing.T) {
 		ImportPath:  "gowdk-generated-app/patients",
 		Type:        "CreatePatient",
 		Result:      "CreatePatientResult",
-		InputFields: []manifest.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
+		InputFields: []source.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
 		Method:      http.MethodPost,
 		Path:        "/patients",
 		Status:      gwdkir.ContractBindingBound,
@@ -3494,12 +3494,12 @@ func TestGeneratedBinaryRegisteredGuardsAllowRequestTimeRoutes(t *testing.T) {
 			Method:     "POST",
 			Route:      "/newsletter",
 			Guards:     []string{"auth.required"},
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "gowdk-generated-app/backend",
 				PackageName:  "backend",
 				FunctionName: "Subscribe",
-				Signature:    manifest.BackendSignatureAction0,
+				Signature:    source.BackendSignatureAction0,
 			},
 		}},
 		APIs: []APIEndpoint{{
@@ -3508,12 +3508,12 @@ func TestGeneratedBinaryRegisteredGuardsAllowRequestTimeRoutes(t *testing.T) {
 			Method:  "GET",
 			Route:   "/api/session",
 			Guards:  []string{"auth.required"},
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				ImportPath:   "gowdk-generated-app/backend",
 				PackageName:  "backend",
 				FunctionName: "Session",
-				Signature:    manifest.BackendSignatureAPI,
+				Signature:    source.BackendSignatureAPI,
 			},
 		}},
 		SSR: []SSRRoute{{
@@ -4326,12 +4326,12 @@ func TestGeneratedBinaryExecutesFragmentUserHook(t *testing.T) {
 		Route:        "/patients/list",
 		Target:       "#patients",
 		HTML:         "<section><p>Static fallback</p></section>",
-		Binding: manifest.BackendBinding{
-			Status:       manifest.BackendBindingBound,
+		Binding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
 			ImportPath:   "gowdk-generated-app/patients",
 			PackageName:  "patients",
 			FunctionName: "List",
-			Signature:    manifest.BackendSignatureFragment,
+			Signature:    source.BackendSignatureFragment,
 		},
 	}}}); err != nil {
 		t.Fatal(err)
@@ -4665,14 +4665,14 @@ func waitForHTTPStatusWithHeaders(url, method, body string, headers map[string]s
 // The endpoint derivation tests keep their manifest fixtures and lower them
 // through the production manifest->IR path, asserting against exactly what the
 // generated-app pipeline derives.
-func actionEndpointsFromManifestFixture(app manifest.Manifest) ([]ActionEndpoint, error) {
-	return actionEndpointsFromIR(gwdkanalysis.BuildIR(gowdk.Config{}, app))
+func actionEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]ActionEndpoint, error) {
+	return actionEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
 }
 
-func apiEndpointsFromManifestFixture(app manifest.Manifest) ([]APIEndpoint, error) {
-	return apiEndpointsFromIR(gwdkanalysis.BuildIR(gowdk.Config{}, app))
+func apiEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]APIEndpoint, error) {
+	return apiEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
 }
 
-func fragmentEndpointsFromManifestFixture(app manifest.Manifest) ([]FragmentEndpoint, error) {
-	return fragmentEndpointsFromIR(gwdkanalysis.BuildIR(gowdk.Config{}, app))
+func fragmentEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]FragmentEndpoint, error) {
+	return fragmentEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
 }

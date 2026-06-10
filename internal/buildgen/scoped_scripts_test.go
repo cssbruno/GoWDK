@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestBuildEmitsScopedJSOnlyForPagesThatUseIt(t *testing.T) {
@@ -24,45 +26,45 @@ func TestBuildEmitsScopedJSOnlyForPagesThatUseIt(t *testing.T) {
 	writeFile(t, filepath.Join(root, "components", "chart.js"), "document.documentElement.dataset.chart = 'ready';\n")
 	writeFile(t, filepath.Join(root, "components", "panel.ts"), "type Mode = 'ready'; const mode: Mode = 'ready'; document.body.dataset.panel = mode;\n")
 
-	app := manifest.Manifest{
-		Pages: []manifest.Page{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{
 			{
 				Source:  "pages/dashboard.page.gwdk",
 				Package: "pages",
 				ID:      "dashboard",
 				Route:   "/dashboard",
 				JS:      []string{"./dashboard.js", "./metrics.ts"},
-				InlineJS: []manifest.InlineScript{{
+				InlineJS: []source.InlineScript{{
 					Name: "inline-gowdk.js",
 					Body: "document.documentElement.dataset.inlineDashboard = 'ready';",
 				}},
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<main><charts.SignupsChart /></main>`,
 				},
-				Uses: []manifest.Use{{Alias: "charts", Package: "components"}},
+				Uses: []gwdkir.Use{{Alias: "charts", Package: "components"}},
 			},
 			{
 				Source:  "pages/about.page.gwdk",
 				Package: "pages",
 				ID:      "about",
 				Route:   "/about",
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<main>About</main>`,
 				},
 			},
 		},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Source:  "components/signups-chart.cmp.gwdk",
 			Package: "components",
 			Name:    "SignupsChart",
 			JS:      []string{"./chart.js", "./panel.ts"},
-			InlineJS: []manifest.InlineScript{{
+			InlineJS: []source.InlineScript{{
 				Name: "inline-gowdk.js",
 				Body: "document.documentElement.dataset.inlineChart = 'ready';",
 			}},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<section data-signups-chart></section>`,
 			},
@@ -118,12 +120,12 @@ func TestBuildEmitsScopedJSOnlyForPagesThatUseIt(t *testing.T) {
 func TestBuildRejectsInvalidScopedJSPath(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		Source: "pages/home.page.gwdk",
 		ID:     "home",
 		Route:  "/",
 		JS:     []string{"/absolute.js"},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 		},

@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // ParseLayout extracts layout metadata and top-level block declarations.
-func ParseLayout(src []byte) (manifest.Layout, error) {
-	var layout manifest.Layout
+func ParseLayout(src []byte) (gwdkir.Layout, error) {
+	var layout gwdkir.Layout
 	var viewBody []string
 	inView := false
 	var styleBody []string
@@ -33,7 +33,7 @@ func ParseLayout(src []byte) (manifest.Layout, error) {
 			if line == "}" {
 				goBlockDepth--
 				if goBlockDepth == 0 {
-					layout.Blocks.GoBlocks = append(layout.Blocks.GoBlocks, manifest.GoBlock{
+					layout.Blocks.GoBlocks = append(layout.Blocks.GoBlocks, gwdkir.GoBlock{
 						Target: goBlockTarget,
 						Body:   strings.TrimSpace(strings.Join(goBlockBody, "\n")),
 						Span:   seenGoBlocks[goBlockTarget],
@@ -50,7 +50,7 @@ func ParseLayout(src []byte) (manifest.Layout, error) {
 			}
 			goBlockDepth += braceDelta(rawLine)
 			if goBlockDepth < 1 {
-				return manifest.Layout{}, fmt.Errorf("line %d: go block closed unexpectedly", lineNumber)
+				return gwdkir.Layout{}, fmt.Errorf("line %d: go block closed unexpectedly", lineNumber)
 			}
 			goBlockBody = append(goBlockBody, rawLine)
 			continue
@@ -58,7 +58,7 @@ func ParseLayout(src []byte) (manifest.Layout, error) {
 		if inStyle {
 			styleDepth += braceDelta(rawLine)
 			if styleDepth < 0 {
-				return manifest.Layout{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+				return gwdkir.Layout{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
 			}
 			if styleDepth == 0 {
 				layout.Blocks.StyleBody = strings.TrimSpace(strings.Join(styleBody, "\n"))
@@ -73,7 +73,7 @@ func ParseLayout(src []byte) (manifest.Layout, error) {
 		}
 		if inView {
 			if line == "style {" {
-				return manifest.Layout{}, fmt.Errorf("line %d: style block must be outside view {}", lineNumber)
+				return gwdkir.Layout{}, fmt.Errorf("line %d: style block must be outside view {}", lineNumber)
 			}
 			if line == "}" {
 				layout.Blocks.View = true
@@ -93,7 +93,7 @@ func ParseLayout(src []byte) (manifest.Layout, error) {
 
 		if match := packagePattern.FindStringSubmatch(line); match != nil {
 			if seenDeclaration {
-				return manifest.Layout{}, fmt.Errorf("line %d: package declaration must be the first non-comment declaration", lineNumber)
+				return gwdkir.Layout{}, fmt.Errorf("line %d: package declaration must be the first non-comment declaration", lineNumber)
 			}
 			layout.Package = match[1]
 			layout.PackageSpan = sourceLineSpan(lineNumber, rawLine)
@@ -101,23 +101,23 @@ func ParseLayout(src []byte) (manifest.Layout, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "package ") {
-			return manifest.Layout{}, fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line)
+			return gwdkir.Layout{}, fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line)
 		}
 		seenDeclaration = true
 
 		if strings.HasPrefix(line, "@") {
 			match := annotationPattern.FindStringSubmatch(line)
 			if match == nil {
-				return manifest.Layout{}, fmt.Errorf("line %d: malformed annotation %q", lineNumber, line)
+				return gwdkir.Layout{}, fmt.Errorf("line %d: malformed annotation %q", lineNumber, line)
 			}
 			if err := applyLayoutAnnotation(&layout, match[1], match[2], lineNumber, rawLine); err != nil {
-				return manifest.Layout{}, fmt.Errorf("line %d: %w", lineNumber, err)
+				return gwdkir.Layout{}, fmt.Errorf("line %d: %w", lineNumber, err)
 			}
 			continue
 		}
 
 		if match := usePattern.FindStringSubmatch(line); match != nil {
-			layout.Uses = append(layout.Uses, manifest.Use{
+			layout.Uses = append(layout.Uses, gwdkir.Use{
 				Alias:   match[1],
 				Package: match[2],
 				Span:    sourceLineSpan(lineNumber, rawLine),
@@ -125,7 +125,7 @@ func ParseLayout(src []byte) (manifest.Layout, error) {
 			continue
 		}
 		if isMalformedUse(line) {
-			return manifest.Layout{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
+			return gwdkir.Layout{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
 		}
 
 		switch line {
@@ -135,7 +135,7 @@ func ParseLayout(src []byte) (manifest.Layout, error) {
 			continue
 		case "style {":
 			if layout.Blocks.Style {
-				return manifest.Layout{}, fmt.Errorf("line %d: layout declares multiple style blocks", lineNumber)
+				return gwdkir.Layout{}, fmt.Errorf("line %d: layout declares multiple style blocks", lineNumber)
 			}
 			layout.Blocks.Style = true
 			inStyle = true
@@ -144,7 +144,7 @@ func ParseLayout(src []byte) (manifest.Layout, error) {
 		case "go {":
 			span := sourceLineSpan(lineNumber, rawLine)
 			if first, exists := seenGoBlocks[""]; exists {
-				return manifest.Layout{}, fmt.Errorf("line %d: duplicate go block; first declared on line %d", lineNumber, first.Start.Line)
+				return gwdkir.Layout{}, fmt.Errorf("line %d: duplicate go block; first declared on line %d", lineNumber, first.Start.Line)
 			}
 			seenGoBlocks[""] = span
 			inGoBlock = true
@@ -160,7 +160,7 @@ func ParseLayout(src []byte) (manifest.Layout, error) {
 				if target != "" {
 					label = "go " + target
 				}
-				return manifest.Layout{}, fmt.Errorf("line %d: duplicate %s block; first declared on line %d", lineNumber, label, first.Start.Line)
+				return gwdkir.Layout{}, fmt.Errorf("line %d: duplicate %s block; first declared on line %d", lineNumber, label, first.Start.Line)
 			}
 			seenGoBlocks[target] = span
 			inGoBlock = true
@@ -170,23 +170,23 @@ func ParseLayout(src []byte) (manifest.Layout, error) {
 		}
 
 		if name := unsupportedTopLevelBlockName(line); name != "" {
-			return manifest.Layout{}, fmt.Errorf("line %d: unsupported top-level block %q", lineNumber, name)
+			return gwdkir.Layout{}, fmt.Errorf("line %d: unsupported top-level block %q", lineNumber, name)
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return manifest.Layout{}, err
+		return gwdkir.Layout{}, err
 	}
 	if inView {
-		return manifest.Layout{}, fmt.Errorf("view block missing closing }")
+		return gwdkir.Layout{}, fmt.Errorf("view block missing closing }")
 	}
 	if inStyle {
-		return manifest.Layout{}, fmt.Errorf("style block missing closing }")
+		return gwdkir.Layout{}, fmt.Errorf("style block missing closing }")
 	}
 	if inGoBlock {
-		return manifest.Layout{}, fmt.Errorf("go block missing closing }")
+		return gwdkir.Layout{}, fmt.Errorf("go block missing closing }")
 	}
 	if layout.ID == "" {
-		return manifest.Layout{}, fmt.Errorf("missing @layout")
+		return gwdkir.Layout{}, fmt.Errorf("missing @layout")
 	}
 	return layout, nil
 }

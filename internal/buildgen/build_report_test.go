@@ -9,17 +9,18 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
 func TestBuildWritesSPAHTMLForSimpleRoute(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "home",
 		Route: "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main><h1>GOWDK & friends</h1></main>`,
 		},
@@ -110,12 +111,12 @@ func TestBuildWritesSPAHTMLForSimpleRoute(t *testing.T) {
 
 func TestBuildEmitsSPANavigationRuntimeForInternalLinks(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{
 			{
 				ID:    "home",
 				Route: "/",
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<main><Nav /></main>`,
 				},
@@ -123,15 +124,15 @@ func TestBuildEmitsSPANavigationRuntimeForInternalLinks(t *testing.T) {
 			{
 				ID:    "docs",
 				Route: "/docs",
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<main><h1>Docs</h1></main>`,
 				},
 			},
 		},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Name: "Nav",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<nav><a href="/docs">Docs</a><a href="https://example.com">External</a></nav>`,
 			},
@@ -164,16 +165,16 @@ func TestBuildEmitsSPANavigationRuntimeForInternalLinks(t *testing.T) {
 
 func TestBuildWritesPageMetadataToSPAHTMLHead(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "home",
 		Route: "/",
-		Metadata: manifest.PageMetadata{
+		Metadata: gwdkir.PageMetadata{
 			Title:       "GOWDK - Go-native web apps",
 			Description: "Portable .gwdk pages compiled into Go web output.",
 			Canonical:   "https://gowdk.com/",
 			Image:       "https://gowdk.com/assets/social.png",
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main><h1>GOWDK</h1></main>`,
 		},
@@ -231,10 +232,10 @@ func TestBuildWritesPageMetadataToSPAHTMLHead(t *testing.T) {
 
 func TestBuildMemoryReturnsSPAArtifactsWithoutWriting(t *testing.T) {
 	outputDir := filepath.Join(t.TempDir(), "dist")
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "home",
 		Route: "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main><h1>Browser compiler</h1></main>`,
 		},
@@ -280,12 +281,12 @@ func TestBuildMemoryReturnsSPAArtifactsWithoutWriting(t *testing.T) {
 
 func TestBuildReportIncludesContractReferences(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		Source:  "pages/patients.page.gwdk",
 		Package: "pages",
 		ID:      "patients",
 		Route:   "/patients",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main><form method="post" action="/patients" g:command="patients.CreatePatient"><input name="name" /></form></main>`,
 		},
@@ -315,12 +316,12 @@ func TestBuildReportIncludesContractReferences(t *testing.T) {
 
 func TestBuildReportIncludesQueryContractReferences(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		Source:  "pages/patients.page.gwdk",
 		Package: "pages",
 		ID:      "patients",
 		Route:   "/patients",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main><section g:query="patients.GetPatientPage"><h1>Patients</h1></section></main>`,
 		},
@@ -390,33 +391,33 @@ func TestBuildReportIncludesBoundContractReferenceRoles(t *testing.T) {
 func TestBuildReportIncludesBackendBindingEndpointMetadata(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
-	source := filepath.Join(root, "features", "auth", "login.page.gwdk")
-	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+	sourcePath := filepath.Join(root, "features", "auth", "login.page.gwdk")
+	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
-			Source:  source,
+	ir := gwdkanalysis.BuildProgram(gowdk.Config{}, gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			Source:  sourcePath,
 			Package: "auth",
 			ID:      "login",
 			Route:   "/login",
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Login</main>`},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main>Login</main>`},
 		}},
-		BackendBindings: []manifest.BackendBinding{{
-			Kind:         "action",
-			PageID:       "login",
-			Source:       source,
-			BlockName:    "Login",
-			Method:       "POST",
-			Route:        "/login",
-			PackageName:  "auth",
-			FunctionName: "Login",
-			Status:       manifest.BackendBindingMissing,
-			Message:      "GOWDK action handler auth.Login is not implemented",
-		}},
-	}
+	})
+	bindings := []source.BackendBinding{{
+		Kind:         "action",
+		PageID:       "login",
+		Source:       sourcePath,
+		BlockName:    "Login",
+		Method:       "POST",
+		Route:        "/login",
+		PackageName:  "auth",
+		FunctionName: "Login",
+		Status:       source.BackendBindingMissing,
+		Message:      "GOWDK action handler auth.Login is not implemented",
+	}}
 
-	result, err := Build(gowdk.Config{}, app, outputDir)
+	result, err := buildFromIR(gowdk.Config{}, ir, bindings, outputDir, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,7 +444,7 @@ func TestBuildReportIncludesBackendBindingEndpointMetadata(t *testing.T) {
 }
 
 func TestBuildReturnsReportOnValidationError(t *testing.T) {
-	_, err := Build(gowdk.Config{}, manifest.Manifest{}, "")
+	_, err := Build(gowdk.Config{}, gwdkanalysis.Sources{}, "")
 	if err == nil {
 		t.Fatal("expected build error")
 	}

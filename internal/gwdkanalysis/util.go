@@ -1,22 +1,12 @@
 package gwdkanalysis
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
-	"time"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
-
-func endpointSource(src manifest.EndpointSource) gwdkir.EndpointSource {
-	if src == manifest.EndpointSourceGo {
-		return gwdkir.EndpointSourceGo
-	}
-	return gwdkir.EndpointSourceGOWDK
-}
 
 func standaloneEndpointPageID(endpoint gwdkir.GoEndpoint) string {
 	if endpoint.Package == "" {
@@ -25,7 +15,7 @@ func standaloneEndpointPageID(endpoint gwdkir.GoEndpoint) string {
 	return endpoint.Package + "." + endpoint.Name
 }
 
-func assetUse(uses []manifest.Use, path string) (name string, useAlias string, usePackage string) {
+func assetUse(uses []gwdkir.Use, path string) (name string, useAlias string, usePackage string) {
 	alias, assetName, ok := strings.Cut(path, ".")
 	if !ok {
 		return path, "", ""
@@ -36,66 +26,6 @@ func assetUse(uses []manifest.Use, path string) (name string, useAlias string, u
 		}
 	}
 	return assetName, alias, ""
-}
-
-func splitCommaList(value string) []string {
-	parts := strings.Split(value, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		item := strings.TrimSpace(trimQuotes(part))
-		if item != "" {
-			out = append(out, item)
-		}
-	}
-	return out
-}
-
-func splitCSSList(value string) []string {
-	value = strings.ReplaceAll(value, ",", " ")
-	parts := strings.Fields(value)
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		item := strings.TrimSpace(trimQuotes(part))
-		if item != "" {
-			out = append(out, item)
-		}
-	}
-	return out
-}
-
-func cachePolicyValue(value string) (string, error) {
-	policy := strings.TrimSpace(trimQuotes(value))
-	if policy == "" {
-		return "", fmt.Errorf("@cache requires a value")
-	}
-	if strings.ContainsAny(policy, "\r\n") {
-		return "", fmt.Errorf("@cache must stay on one line")
-	}
-	return policy, nil
-}
-
-func revalidateSecondsValue(value string) (string, error) {
-	raw := strings.TrimSpace(trimQuotes(value))
-	if raw == "" {
-		return "", fmt.Errorf("@revalidate requires a value")
-	}
-	if strings.ContainsAny(raw, "\r\n") {
-		return "", fmt.Errorf("@revalidate must stay on one line")
-	}
-	if seconds, err := strconv.Atoi(raw); err == nil {
-		if seconds <= 0 {
-			return "", fmt.Errorf("@revalidate requires a positive duration")
-		}
-		return strconv.Itoa(seconds), nil
-	}
-	duration, err := time.ParseDuration(raw)
-	if err != nil || duration <= 0 {
-		return "", fmt.Errorf("@revalidate requires a positive duration such as 60s, 5m, or 1h")
-	}
-	if duration%time.Second != 0 {
-		return "", fmt.Errorf("@revalidate must resolve to whole seconds")
-	}
-	return strconv.FormatInt(int64(duration/time.Second), 10), nil
 }
 
 func spanForName(spans []source.NamedSpan, name string, fallback source.SourceSpan) source.SourceSpan {
@@ -134,6 +64,42 @@ func hasUse(values []gwdkir.Use, value gwdkir.Use) bool {
 	return false
 }
 
-func trimQuotes(value string) string {
-	return strings.Trim(strings.TrimSpace(value), `"`)
+func routeKind(mode gowdk.RenderMode) gwdkir.RouteKind {
+	switch mode {
+	case gowdk.SSR:
+		return gwdkir.RouteSSR
+	case gowdk.Hybrid:
+		return gwdkir.RouteHybrid
+	default:
+		return gwdkir.RouteSPA
+	}
+}
+
+func copyRouteParams(params []source.RouteParam) []source.RouteParam {
+	if len(params) == 0 {
+		return nil
+	}
+	out := make([]source.RouteParam, len(params))
+	copy(out, params)
+	return out
+}
+
+func appendPackageImports(pkg *gwdkir.Package, imports []gwdkir.Import) {
+	for _, item := range imports {
+		if !hasImport(pkg.Imports, item) {
+			pkg.Imports = append(pkg.Imports, item)
+		}
+	}
+}
+
+func appendPackageUses(pkg *gwdkir.Package, uses []gwdkir.Use) {
+	for _, item := range uses {
+		if !hasUse(pkg.Uses, item) {
+			pkg.Uses = append(pkg.Uses, item)
+		}
+	}
+}
+
+func appendPackageStores(pkg *gwdkir.Package, stores []gwdkir.Store) {
+	pkg.Stores = append(pkg.Stores, stores...)
 }

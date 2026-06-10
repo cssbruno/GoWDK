@@ -98,68 +98,29 @@ the lanes through package, route, type, component, and handler binding metadata.
 
 ## Compatibility Records
 
-`internal/gwdkir.Program` is the stable compiler handoff for build output,
-generated app route planning, and CLI route/endpoint reports. Some downstream
-code still carries manifest compatibility records while migration continues:
+`internal/gwdkir.Program` is the single compiler handoff. The pipeline is
+`source -> GOWDK AST (gwdkast) -> IR records (gwdkir) -> program assembly
+(gwdkanalysis.BuildProgram) -> validation/discovery/binding (compiler) ->
+generated output (buildgen/appgen)`. The former `internal/manifest`
+compatibility model has been removed entirely:
 
-- `internal/parser` still emits manifest-facing records beside typed AST nodes.
-- `internal/gwdkanalysis` still lowers typed AST files into manifest
-  compatibility records for older compiler entrypoints.
-- `internal/manifest` remains the public manifest/site-map compatibility model.
+- `internal/parser` lowers the typed AST directly into `gwdkir` page,
+  component, and layout records.
+- `internal/gwdkanalysis.BuildProgram` assembles `gwdkir.Program` from those
+  records (routes, templates, assets, endpoints, packages) and exposes
+  `AddStandaloneEndpoints`/`AttachBackendBindings` for the post-assembly
+  enrichment phases.
+- `internal/compiler` validates, discovers standalone Go endpoints, and binds
+  backend handlers against the IR.
+- The `gowdk manifest` JSON report keeps its historical field names but is
+  derived from the IR (`internal/lang/manifest_json.go`); a golden test pins
+  the output.
+- Shared leaf value types (source spans, route params, inline scripts, backend
+  binding records and signature enums, error-page path validation) live in the
+  neutral `internal/source` package.
 
-Shared leaf value types (source spans, route params, inline scripts, backend
-binding records and signature enums) now live in the neutral `internal/source`
-package. `internal/manifest` re-exports them as type aliases for backward
-compatibility. Because of this, `internal/gwdkir`, `internal/gwdkast`, and
-`internal/contractscan` no longer depend on `internal/manifest` at all — the IR
-is a manifest-independent handoff. `internal/compiler` is now fully IR-native:
-validation (`ValidateProgram`), standalone Go endpoint discovery
-(`DiscoverGoEndpoints`), and backend handler binding (`BindBackendHandlers`)
-all read and enrich `gwdkir.Program` directly, and the package no longer
-imports the manifest model. `internal/gotypes` and `internal/goblockgen` take
-IR types. `internal/buildgen` render helpers consume IR page/component/layout
-models directly, and `internal/appgen` is manifest-free — its endpoint
-derivations and binding records read `gwdkir`/`internal/source` types only.
-The remaining manifest coupling is the AST→manifest→IR backbone in
-`internal/parser`/`internal/gwdkanalysis` and the public `manifest.Manifest`
-JSON reports in `internal/lang`.
-
-New generated-output work should consume `internal/gwdkir.Program` or add fields
-there first. Removing the remaining compatibility records is planned after the
-parser, public manifest JSON, and legacy compiler entrypoints stop depending on
-them.
-
-Current manifest compatibility users:
-
-| User | Current manifest use | Migration direction |
-| --- | --- | --- |
-| `internal/parser` | Produces `manifest.Page`, `manifest.Component`, and `manifest.Layout` records for existing CLI and compiler entrypoints. | Keep typed AST as the parser source of truth; remove direct manifest output after all callers lower through analyzer/IR. |
-| `internal/gwdkanalysis` | Lowers typed AST into manifest records, then builds `gwdkir.Program` from those records. | Lower typed AST directly into IR and keep manifest output as a separate compatibility adapter. |
-| `internal/compiler` | None (non-test). Validation, endpoint discovery, backend binding, and route metadata read and enrich `gwdkir.Program` directly. | Done. |
-| `internal/buildgen` | Render helpers consume IR-native models directly; `internal/gotypes` accepts IR types so the conversion bridge is gone. Public `Build`/`BuildMemory` entrypoints still accept `manifest.Manifest` for compatibility, and `SSRArtifact.LoadBinding` exposes the aliased `manifest.BackendBinding` output type. | Keep manifest entrypoints as thin adapters until the parser seam (Step 5) removes the manifest input. |
-| `internal/appgen` | None (non-test). Endpoint derivations and binding records read `gwdkir` and `internal/source` types only; the manifest-typed route-helper entrypoints were removed. | Done. |
-| `internal/lang` and `cmd/gowdk` | CLI `check`, `manifest`, `sitemap`, `routes`, and build setup still pass manifest records between parse, validate, report, and generation steps. | Parse/analyze into IR once per command, then derive public JSON and reports from IR adapters. |
-| `internal/lsp` | Open-document completions and hover build an IR snapshot before indexing page, component, layout, and endpoint symbols; workspace component definition lookup indexes IR components; diagnostics and open-buffer owner context still use language tooling and parser compatibility records. | Keep open-document source spans, but drive remaining project-wide symbols and diagnostics from analyzer/IR snapshots. |
-| Tests | Many generator and validator tests construct manifest records directly. | Keep fixture-style manifest construction until the tested package exposes IR-native helpers; update tests alongside each migrated package. |
-
-Migration order:
-
-1. Keep `gwdkir.Program` as the only source of truth for new generated-output
-   fields.
-2. (done) Extract shared leaf value types into `internal/source` so the IR and
-   manifest both reference them from a neutral home; `gwdkir` no longer depends
-   on `manifest`.
-3. (done) Replace buildgen render helpers with IR-native helpers and route
-   buildgen validation through `compiler.ValidateProgram`.
-4. Move compiler validation and backend binding records to IR or IR-adjacent
-   structs (compiler still validates the manifest model today). This is a
-   redesign — IR lowering is currently lossy for standalone-endpoint validation,
-   so the IR must be enriched and the flip guarded against diagnostic drift.
-   Tracked in issue #145.
-5. Convert CLI reports, sitemap output, and LSP project metadata to IR-derived
-   adapters.
-6. Keep public manifest JSON compatibility until a release plan explicitly
-   deprecates or replaces it.
+New generated-output work should consume `internal/gwdkir.Program` or add
+fields there first.
 
 ## Components
 
@@ -170,13 +131,12 @@ Migration order:
 | `internal/discover` | Find portable `.gwdk` files from include/exclude patterns. | Compiler | Recursive glob discovery implemented. |
 | `internal/gwdkast` | Define the typed GOWDK source AST. | Compiler | Package declarations, typed page/component/layout/route/render/layout/guard/CSS declarations, component CSS scope/hash metadata, annotations, Go imports, GOWDK uses, stores, typed component contracts, blocks, endpoint declarations, parsed view nodes, literal records, and source spans implemented. |
 | `internal/parser` | Parse `.gwdk` files into AST and manifest structs. | Compiler | First-slice parser for pages, components, layouts, route params, imported Go build functions, action/API metadata, component CSS scope/hash metadata, GOWDK `use` declarations, package declarations, package spans, and source spans implemented. `ParseSyntax` returns `internal/gwdkast.File`; manifest records remain for compatibility while compiler entrypoints move to analyzer IR. |
-| `internal/gwdkanalysis` | Lower GOWDK AST into normalized compiler metadata. | Compiler | Lowers typed AST files into manifest compatibility records and `internal/gwdkir.Program`, including packages, routes, endpoints, templates, client behavior, source-selected assets with component CSS scope/hash metadata, stores, imports, uses, and source spans. |
+| `internal/gwdkanalysis` | Assemble `internal/gwdkir.Program` from parsed IR records. | Compiler | `BuildProgram` derives packages, routes, endpoints, templates, client behavior, source-selected assets with component CSS scope/hash metadata, stores, imports, uses, and source spans from parsed records; exposes standalone-endpoint and backend-binding attachment for post-assembly enrichment. |
 | `internal/gwdkir` | Stable internal compiler IR shared by generated-output passes. | Compiler | Versioned IR for packages, source files, page routes, backend endpoints, templates, client behavior, asset scope/hash metadata, and generated output plans implemented. |
 | `internal/view` | Parse and render the first spa `view {}` markup subset. | Compiler | Lowercase HTML elements, spa/boolean/expression attributes, shorthand class/id normalization, escaped text/attribute interpolation, self-closing component calls, prop/state interpolation, `g:on:*`, and `g:island` handling implemented. |
 | `internal/gotypes` | Resolve Go props/state contracts for components. | Compiler | Uses `go list`, `go/parser`, and `go/types` to resolve imported structs and state init signatures. |
-| `internal/lang` | Language tooling for lexing, diagnostics, formatting, checking, and manifest output. | Tools | Initial CLI-backed tools implemented. |
+| `internal/lang` | Language tooling for lexing, diagnostics, formatting, checking, and the IR-derived manifest JSON report. | Tools | Initial CLI-backed tools implemented. |
 | `internal/lsp` | Language Server Protocol bridge for diagnostics, formatting, completions, and hover. | Tools | Dependency-free stdio server implemented with baseline and open-project completions plus hover for known language tokens and open-project symbols. |
-| `internal/manifest` | Normalize discovered pages, routes, blocks, layouts, render modes, paths, and guards. | Compiler | Initial page model implemented. Public manifest JSON is currently narrower than the internal model. |
 | `internal/project` | Load project-level config, module source groups, build targets, and future source roots. | Compiler | SPA `gowdk.config.go` subset implemented for build discovery, output, and `Build.Targets`; project-level CLI commands require this config or an explicit `--config` file before compiling `.gwdk` code. |
 | `internal/compiler` | Validate manifests and coordinate compilation metadata. | Compiler | Render-mode, duplicate identity, redundant component implementation, component Go contract, saved default `go {}` package type-checking with sibling Go files, route shape, duplicate route param, duplicate route pattern, route-method, required page-view validation, default `go {}` backend endpoint binding fallback, and backend binding implemented. CLI route/endpoint reports now convert through `internal/gwdkir.Program`. |
 | `internal/buildgen` | Emit route-derived spa HTML files for build-time pages and SSR render artifacts. | Compiler | Disk builds, memory builds, incremental SPA builds, and SSR artifact planning consume `internal/gwdkir.Program`. Initial simple page, literal build data, imported Go build data calls, literal dynamic path expansion, component expansion, partial runtime asset emission, default JS island asset emission, component-level non-CSS asset emission, component-level WASM island asset emission, page-level `go client {}` WASM mount asset emission, concrete and dynamic SSR page rendering with declared `load {}` placeholders, route manifest emission, asset manifest emission, mandatory build report emission, identical-output write skipping, and incremental changed-page spa rendering implemented. |
@@ -362,8 +322,9 @@ same parser and compiler rules as `gowdk check`.
 flowchart LR
   Source[.gwdk files] --> Discover[internal/discover]
   Discover --> Parser[internal/parser]
-  Parser --> Manifest[internal/manifest]
-  Manifest --> Compiler[internal/compiler]
+  Parser --> IR[internal/gwdkir records]
+  IR --> Assembly[internal/gwdkanalysis]
+  Assembly --> Compiler[internal/compiler]
   Compiler --> Buildgen[internal/buildgen]
   Compiler --> Appgen[internal/appgen]
   Buildgen --> SPA[SPA pages/assets]

@@ -70,6 +70,7 @@ var Registry = []Code{
 	{Code: "invalid_go_endpoint_handler", Area: "backend", Stability: StabilityStable, Summary: "Go endpoint comment is not attached to an exported package-level function"},
 	{Code: "invalid_go_import", Area: "packages", Stability: StabilityStable, Summary: "GOWDK source Go import declaration is invalid"},
 	{Code: "layout_self_reference", Area: "layouts", Stability: StabilityStable, Summary: "layout lists itself in @layout; a layout cannot inherit from itself"},
+	{Code: "layout_slot_count", Area: "layouts", Stability: StabilityStable, Summary: "layout must contain exactly one <slot /> placeholder"},
 	{Code: "load_requires_request_render", Area: "rendering", Stability: StabilityStable, Summary: "load block requires request-time page rendering"},
 	{Code: "malformed_gowdk_use", Area: "source-imports", Stability: StabilityStable, Summary: "GOWDK use declaration is malformed"},
 	{Code: "malformed_route", Area: "routing", Stability: StabilityStable, Summary: "route path violates GOWDK route syntax"},

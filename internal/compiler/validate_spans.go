@@ -1,7 +1,7 @@
 package compiler
 
 import (
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 	"strings"
 )
@@ -15,7 +15,7 @@ func firstSpan(spans ...source.SourceSpan) source.SourceSpan {
 	return source.SourceSpan{}
 }
 
-func viewBodyNeedleSpan(component manifest.Component, needle string) source.SourceSpan {
+func viewBodyNeedleSpan(component gwdkir.Component, needle string) source.SourceSpan {
 	needle = strings.TrimSpace(needle)
 	if needle == "" || component.Blocks.ViewBody == "" || !hasSpan(component.Blocks.Spans.View) {
 		return firstSpan(component.Blocks.Spans.View, component.Span)

@@ -306,7 +306,7 @@ func baseBackendBinding(page manifest.Page, kind, blockName, method, route strin
 func baseStandaloneBackendBinding(endpoint manifest.EndpointDeclaration, kind, method string, pkg featurePackage) manifest.BackendBinding {
 	return manifest.BackendBinding{
 		Kind:         kind,
-		PageID:       standaloneEndpointPageID(endpoint),
+		PageID:       standaloneEndpointPageID(endpoint.Package, endpoint.Name),
 		Source:       endpoint.Source,
 		BlockName:    endpoint.Name,
 		Method:       method,

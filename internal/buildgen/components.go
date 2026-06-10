@@ -233,7 +233,7 @@ func componentEmits(component gwdkir.Component) map[string]clientlang.Emit {
 
 func componentPropNames(component gwdkir.Component) ([]string, []string) {
 	if component.PropsType.Name != "" {
-		resolved, err := gotypes.ResolveStruct(manifestImports(component.Imports), manifestGoTypeRef(component.PropsType))
+		resolved, err := gotypes.ResolveStruct(component.Imports, component.PropsType)
 		if err != nil {
 			return nil, []string{fmt.Sprintf("component %s props: %v", component.Name, err)}
 		}
@@ -261,11 +261,11 @@ func componentInitialState(component gwdkir.Component) (map[string]string, map[s
 	if component.State.Type.Name == "" {
 		return nil, nil, "", nil
 	}
-	resolved, err := gotypes.ResolveStruct(manifestImports(component.Imports), manifestGoTypeRef(component.State.Type))
+	resolved, err := gotypes.ResolveStruct(component.Imports, component.State.Type)
 	if err != nil {
 		return nil, nil, "", err
 	}
-	rawJSON, err := gotypes.RunStateInitJSON(manifestImports(component.Imports), manifestStateContract(component.State))
+	rawJSON, err := gotypes.RunStateInitJSON(component.Imports, component.State)
 	if err != nil {
 		return nil, nil, "", err
 	}

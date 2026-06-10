@@ -12,6 +12,8 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -292,7 +294,7 @@ func TestGoBlockPackageSourceForValidationPreservesLineDirective(t *testing.T) {
 	payload, err := goBlockPackageSourceForValidation(packageDeclaration{
 		Source:  sourcePath,
 		Package: "app",
-	}, manifest.GoBlock{
+	}, gwdkir.GoBlock{
 		Span: source.SourceSpan{Start: source.SourcePosition{Line: 8, Column: 1}},
 		Body: `func BrokenCopy() string {
 	return MissingTitle
@@ -621,7 +623,7 @@ func TestValidatePageRejectsSSRWithoutAddon(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %d", len(diagnostics))
 	}
@@ -645,7 +647,7 @@ func TestValidatePageRequiresExplicitGuard(t *testing.T) {
 		Blocks: manifest.Blocks{View: true},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if !hasDiagnosticCode(diagnostics, "missing_page_guard") {
 		t.Fatalf("missing missing_page_guard diagnostic: %#v", diagnostics)
 	}
@@ -664,7 +666,7 @@ func TestValidatePageRequiresPublicGuardToBeExclusive(t *testing.T) {
 		Blocks: manifest.Blocks{View: true},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if !hasDiagnosticCode(diagnostics, "public_guard_exclusive") {
 		t.Fatalf("missing public_guard_exclusive diagnostic: %#v", diagnostics)
 	}
@@ -684,7 +686,7 @@ func TestValidatePageRejectsProtectedGuardOnBuildTimePage(t *testing.T) {
 		Blocks: manifest.Blocks{View: true},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if !hasDiagnosticCode(diagnostics, "guard_requires_request_render") {
 		t.Fatalf("missing guard_requires_request_render diagnostic: %#v", diagnostics)
 	}
@@ -704,7 +706,7 @@ func TestValidatePageAllowsProtectedGuardOnRequestTimePage(t *testing.T) {
 		Blocks: manifest.Blocks{View: true},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, page)
+	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, irPage(page))
 	if hasDiagnosticCode(diagnostics, "guard_requires_request_render") {
 		t.Fatalf("unexpected guard_requires_request_render diagnostic: %#v", diagnostics)
 	}
@@ -721,7 +723,7 @@ func TestValidatePageAllowsSSRWithAddon(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, page)
+	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, irPage(page))
 	if len(diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
 	}
@@ -3413,7 +3415,7 @@ func TestValidatePageRejectsMalformedRoutes(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			page := manifest.Page{ID: "patients", Route: test.route, Paths: true, Blocks: manifest.Blocks{View: true}}
 
-			diagnostics := ValidatePage(gowdk.Config{}, page)
+			diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 			if !hasDiagnosticCode(diagnostics, "malformed_route") {
 				t.Fatalf("Missing malformed_route diagnostic for %q: %#v", test.route, diagnostics)
 			}
@@ -3439,7 +3441,7 @@ func TestValidatePageRejectsDuplicateRouteParams(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	diagnostic := firstDiagnostic(diagnostics, "duplicate_route_param")
 	if diagnostic == nil {
 		t.Fatalf("Missing duplicate_route_param diagnostic: %#v", diagnostics)
@@ -3465,7 +3467,7 @@ func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
 			RouteParams: []source.NamedSpan{{Name: "id", Span: testSourceSpan(6, 24, 6, 33)}},
 		}}
 
-		diagnostics := ValidatePage(gowdk.Config{}, page)
+		diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 		diagnostic := firstDiagnostic(diagnostics, "malformed_route")
 		if diagnostic == nil {
 			t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
@@ -3484,7 +3486,7 @@ func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
 			RouteParams: []source.NamedSpan{{Name: "id", Span: testSourceSpan(9, 21, 9, 30)}},
 		}}
 
-		diagnostics := ValidatePage(gowdk.Config{}, page)
+		diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 		diagnostic := firstDiagnostic(diagnostics, "malformed_route")
 		if diagnostic == nil {
 			t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
@@ -3503,7 +3505,7 @@ func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
 			RouteParams: []source.NamedSpan{{Name: "id", Span: testSourceSpan(12, 29, 12, 33)}},
 		}}
 
-		diagnostics := ValidatePage(gowdk.Config{}, page)
+		diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 		diagnostic := firstDiagnostic(diagnostics, "fragment_dynamic_route")
 		if diagnostic == nil {
 			t.Fatalf("Missing fragment_dynamic_route diagnostic: %#v", diagnostics)
@@ -3515,7 +3517,7 @@ func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
 func TestValidatePageRejectsRevalidateWithoutCache(t *testing.T) {
 	page := manifest.Page{ID: "home", Route: "/", Revalidate: "60", Blocks: manifest.Blocks{View: true}}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if !hasDiagnosticCode(diagnostics, "revalidate_requires_cache") {
 		t.Fatalf("Missing revalidate_requires_cache diagnostic: %#v", diagnostics)
 	}
@@ -3530,7 +3532,7 @@ func TestValidatePageRejectsDuplicateRevalidatePolicy(t *testing.T) {
 		Blocks:     manifest.Blocks{View: true},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if !hasDiagnosticCode(diagnostics, "duplicate_revalidate_policy") {
 		t.Fatalf("Missing duplicate_revalidate_policy diagnostic: %#v", diagnostics)
 	}
@@ -3539,7 +3541,7 @@ func TestValidatePageRejectsDuplicateRevalidatePolicy(t *testing.T) {
 func TestValidatePageAllowsTypedRouteParams(t *testing.T) {
 	page := manifest.Page{ID: "patients.show", Route: "/patients/{id:int}", Paths: true, Blocks: manifest.Blocks{View: true}}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if hasDiagnosticCode(diagnostics, "malformed_route") {
 		t.Fatalf("typed route params should be valid: %#v", diagnostics)
 	}
@@ -3548,7 +3550,7 @@ func TestValidatePageAllowsTypedRouteParams(t *testing.T) {
 func TestValidatePageRequiresPathsForSPADynamicRoutes(t *testing.T) {
 	page := manifest.Page{ID: "patients.show", Route: "/patients/{id}", Render: gowdk.SPA, Blocks: manifest.Blocks{View: true}}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %d", len(diagnostics))
 	}
@@ -3563,7 +3565,7 @@ func TestValidatePageRequiresPathsForSPADynamicRoutes(t *testing.T) {
 func TestValidatePageAllowsSPADynamicRoutesWithPaths(t *testing.T) {
 	page := manifest.Page{ID: "blog.post", Route: "/blog/{slug}", Render: gowdk.SPA, Paths: true, Blocks: manifest.Blocks{View: true}}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if len(diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
 	}
@@ -3580,7 +3582,7 @@ func TestValidatePageAllowsSPAActionsWithoutSSR(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if len(diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
 	}
@@ -3597,7 +3599,7 @@ func TestValidatePageRejectsLoadOnSPAPage(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %d", len(diagnostics))
 	}
@@ -3616,7 +3618,7 @@ func TestValidatePageRequiresSSRAddonForHybridWithoutLoad(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %#v", diagnostics)
 	}
@@ -3635,7 +3637,7 @@ func TestValidatePageAllowsDynamicHybridWithoutLoadAsRequestTime(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, page)
+	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, irPage(page))
 	if len(diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
 	}
@@ -3652,7 +3654,7 @@ func TestValidatePageAllowsHybridWithExplicitLoadAndSSRAddon(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, page)
+	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, irPage(page))
 	if len(diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
 	}
@@ -3661,7 +3663,7 @@ func TestValidatePageAllowsHybridWithExplicitLoadAndSSRAddon(t *testing.T) {
 func TestValidatePageRejectsMissingViewBlock(t *testing.T) {
 	page := manifest.Page{ID: "home", Route: "/", Render: gowdk.SPA}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %#v", diagnostics)
 	}
@@ -3865,7 +3867,7 @@ func TestValidatePageRejectsInvalidCSSSelection(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if !hasDiagnosticCode(diagnostics, "invalid_css_selection") {
 		t.Fatalf("Missing invalid_css_selection diagnostic: %#v", diagnostics)
 	}
@@ -3881,7 +3883,7 @@ func TestValidatePageRejectsDuplicateCSSSelection(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, page)
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if !hasDiagnosticCode(diagnostics, "duplicate_css_selection") {
 		t.Fatalf("Missing duplicate_css_selection diagnostic: %#v", diagnostics)
 	}
@@ -3936,4 +3938,15 @@ func hasDiagnosticMessage(diagnostics []ValidationError, code string, parts ...s
 		}
 	}
 	return false
+}
+
+// irPage lowers a manifest page fixture through the production manifest->IR
+// path so page-level validator tests assert against exactly what the build
+// pipeline validates.
+func irPage(page manifest.Page) gwdkir.Page {
+	program := gwdkanalysis.BuildIR(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	if len(program.Pages) != 1 {
+		panic(fmt.Sprintf("irPage: expected 1 IR page, got %d", len(program.Pages)))
+	}
+	return program.Pages[0]
 }

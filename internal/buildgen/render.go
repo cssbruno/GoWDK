@@ -7,7 +7,6 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
 )
@@ -239,9 +238,9 @@ func pageStoreSeeds(page gwdkir.Page) ([]pageStoreSeed, error) {
 	}
 	seeds := make([]pageStoreSeed, 0, len(page.Stores))
 	for _, store := range page.Stores {
-		payload, err := gotypes.RunStateInitJSON(manifestImports(page.Imports), manifest.StateContract{
-			Type: manifestGoTypeRef(store.Type),
-			Init: manifestGoFuncRef(store.Init),
+		payload, err := gotypes.RunStateInitJSON(page.Imports, gwdkir.StateContract{
+			Type: store.Type,
+			Init: store.Init,
 			Span: store.Span,
 		})
 		if err != nil {

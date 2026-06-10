@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install
 Pin the current CLI release:
 
 ```sh
-GOWDK_VERSION=v0.2.7 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+GOWDK_VERSION=v0.2.8 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
 ```
 

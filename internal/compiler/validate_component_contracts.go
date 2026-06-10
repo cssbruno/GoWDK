@@ -5,12 +5,12 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gotypes"
-	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 	"strings"
 )
 
-func validateComponentGoContracts(components []gwdkir.Component) []ValidationError {
+func validateComponentGoContracts(components []manifest.Component) []ValidationError {
 	var diagnostics []ValidationError
 	for _, component := range components {
 		diagnostics = append(diagnostics, validateComponentGoContract(component)...)
@@ -37,7 +37,7 @@ type componentValidationContext struct {
 	UsedRefs      map[string]bool
 }
 
-func validateComponentGoContract(component gwdkir.Component) []ValidationError {
+func validateComponentGoContract(component manifest.Component) []ValidationError {
 	var diagnostics []ValidationError
 	diagnostics = append(diagnostics, validateComponentImports(component)...)
 	if component.PropsType.Name != "" && len(component.Props) > 0 {
@@ -73,7 +73,7 @@ func validateComponentGoContract(component gwdkir.Component) []ValidationError {
 	return diagnostics
 }
 
-func resolveComponentContracts(component gwdkir.Component) (componentContracts, []ValidationError) {
+func resolveComponentContracts(component manifest.Component) (componentContracts, []ValidationError) {
 	contracts := componentContracts{
 		Props:      map[string]bool{},
 		PropTypes:  map[string]clientlang.ValueType{},
@@ -122,7 +122,7 @@ func addResolvedFields(names map[string]bool, types map[string]clientlang.ValueT
 	}
 }
 
-func validateComponentContractOverlap(component gwdkir.Component, contracts componentContracts) []ValidationError {
+func validateComponentContractOverlap(component manifest.Component, contracts componentContracts) []ValidationError {
 	var diagnostics []ValidationError
 	for name := range contracts.Props {
 		if !contracts.State[name] {
@@ -139,9 +139,9 @@ func validateComponentContractOverlap(component gwdkir.Component, contracts comp
 	return diagnostics
 }
 
-func validateComponentImports(component gwdkir.Component) []ValidationError {
+func validateComponentImports(component manifest.Component) []ValidationError {
 	var diagnostics []ValidationError
-	seen := map[string]gwdkir.Import{}
+	seen := map[string]manifest.Import{}
 	for _, item := range component.Imports {
 		if err := gotypes.ValidateImportPath(item.Path); err != nil {
 			diagnostics = append(diagnostics, componentContractDiagnostic(component, "invalid_go_import", item.Span, err))
@@ -167,7 +167,7 @@ func validateComponentImports(component gwdkir.Component) []ValidationError {
 	return diagnostics
 }
 
-func componentContractDiagnostic(component gwdkir.Component, code string, span source.SourceSpan, err error) ValidationError {
+func componentContractDiagnostic(component manifest.Component, code string, span source.SourceSpan, err error) ValidationError {
 	return ValidationError{
 		Code:          code,
 		ComponentName: component.Name,
@@ -177,7 +177,7 @@ func componentContractDiagnostic(component gwdkir.Component, code string, span s
 	}
 }
 
-func importSource(sourcePath string, item gwdkir.Import) string {
+func importSource(sourcePath string, item manifest.Import) string {
 	if sourcePath == "" {
 		return ""
 	}

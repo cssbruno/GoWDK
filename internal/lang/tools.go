@@ -12,10 +12,8 @@ import (
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/contractscan"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
-	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/parser"
-	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // FileKind identifies the current source file category.
@@ -275,77 +273,38 @@ func isAnnotation(text, annotation string) bool {
 	return next == ' ' || next == '\t'
 }
 
-// CheckFiles parses and validates .gwdk files. The returned manifest carries
-// the discovered standalone Go endpoints and backend handler bindings so the
-// public manifest JSON report stays complete.
+// CheckFiles parses and validates .gwdk files.
 func CheckFiles(config gowdk.Config, paths []string) (manifest.Manifest, Diagnostics) {
 	app, diagnostics := ParseFiles(paths)
 	if diagnostics.HasErrors() {
 		return app, diagnostics
 	}
-	ir := gwdkanalysis.BuildIR(config, app)
-	if err := compiler.DiscoverGoEndpoints(&ir); err != nil {
+	var err error
+	app, err = compiler.DiscoverGoEndpointComments(app)
+	if err != nil {
 		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 		return app, diagnostics
 	}
-	app.Endpoints = append(app.Endpoints, manifestEndpointsFromIR(ir.GoEndpoints[len(app.Endpoints):])...)
-	if err := compiler.ValidateProgram(config, ir); err != nil {
+	validate := compiler.ValidateManifest
+	if len(paths) == 1 {
+		// A single file can never satisfy cross-file checks (use packages,
+		// component references), so validate it in source mode to avoid
+		// false project-level errors.
+		validate = compiler.ValidateSourceManifest
+	}
+	if err := validate(config, app); err != nil {
 		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 	}
 	diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)
 	if !diagnostics.HasErrors() {
-		applyBackendBindings(&app, compiler.BindBackendHandlers(&ir))
-		diagnostics = append(diagnostics, validateContractReferences(config, ir, app)...)
+		app = compiler.BindBackendHandlers(app)
+		diagnostics = append(diagnostics, validateContractReferences(config, app)...)
 	}
 	return app, diagnostics
 }
 
-// manifestEndpointsFromIR mirrors discovered standalone Go endpoints back into
-// their manifest declaration form for the public manifest JSON report. The copy
-// is one-to-one.
-func manifestEndpointsFromIR(endpoints []gwdkir.GoEndpoint) []manifest.EndpointDeclaration {
-	if len(endpoints) == 0 {
-		return nil
-	}
-	out := make([]manifest.EndpointDeclaration, 0, len(endpoints))
-	for _, endpoint := range endpoints {
-		out = append(out, manifest.EndpointDeclaration{
-			Kind:          endpoint.Kind,
-			SourceKind:    manifest.EndpointSource(endpoint.SourceKind),
-			Package:       endpoint.Package,
-			Source:        endpoint.Source,
-			Name:          endpoint.Name,
-			Method:        endpoint.Method,
-			Route:         endpoint.Route,
-			ErrorPage:     endpoint.ErrorPage,
-			Span:          endpoint.Span,
-			RouteSpan:     endpoint.RouteSpan,
-			RouteParams:   append([]source.NamedSpan(nil), endpoint.RouteParams...),
-			ErrorPageSpan: endpoint.ErrorPageSpan,
-		})
-	}
-	return out
-}
-
-// applyBackendBindings mirrors backend handler binding records onto the
-// manifest for the public manifest JSON report, matching what handler binding
-// attached to the IR.
-func applyBackendBindings(app *manifest.Manifest, bindings []manifest.BackendBinding) {
-	app.BackendBindings = bindings
-	loadBindings := map[string]manifest.BackendBinding{}
-	for _, binding := range bindings {
-		if binding.Kind == "load" {
-			loadBindings[binding.PageID] = binding
-		}
-	}
-	for index := range app.Pages {
-		if binding, ok := loadBindings[app.Pages[index].ID]; ok {
-			app.Pages[index].LoadBinding = binding
-		}
-	}
-}
-
-func validateContractReferences(config gowdk.Config, ir gwdkir.Program, app manifest.Manifest) Diagnostics {
+func validateContractReferences(config gowdk.Config, app manifest.Manifest) Diagnostics {
+	ir := gwdkanalysis.BuildIR(config, app)
 	report, err := contractscan.Scan(".")
 	if err != nil {
 		return Diagnostics{{Severity: "error", Message: fmt.Sprintf("scan Go contracts: %v", err)}}
@@ -384,7 +343,7 @@ func CheckSource(config gowdk.Config, path string, source []byte) (manifest.Page
 			return manifest.Page{}, diagnostics
 		}
 		app := manifest.Manifest{Components: []manifest.Component{component}}
-		if err := compiler.ValidateProgram(config, gwdkanalysis.BuildIR(config, app)); err != nil {
+		if err := compiler.ValidateSourceManifest(config, app); err != nil {
 			diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 		}
 		diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)
@@ -409,7 +368,7 @@ func CheckSource(config gowdk.Config, path string, source []byte) (manifest.Page
 		return page, diagnostics
 	}
 	app := manifest.Manifest{Pages: []manifest.Page{page}}
-	if err := compiler.ValidateProgram(config, gwdkanalysis.BuildIR(config, app)); err != nil {
+	if err := compiler.ValidateSourceManifest(config, app); err != nil {
 		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
 	}
 	diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)

@@ -5,25 +5,30 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-// ValidateBackendBindingPolicyIR enforces build-mode rules for declared backend
-// endpoints after same-package Go handler binding metadata has been produced.
-// When the program carries no binding metadata but declares backend endpoints
-// (callers that build straight from an unbound program), handlers are
-// re-discovered from disk before the policy check.
+// ValidateBackendBindingPolicyIR enforces the same build-mode rules as
+// ValidateBackendBindingPolicy against an IR-first build path. IR already
+// carries per-endpoint binding metadata, so the reconstructed manifest has its
+// BackendBindings populated and the on-disk rebinding branch does not refire.
 func ValidateBackendBindingPolicyIR(config gowdk.Config, ir gwdkir.Program) error {
+	return ValidateBackendBindingPolicy(config, ManifestFromIR(ir))
+}
+
+// ValidateBackendBindingPolicy enforces build-mode rules for declared backend
+// endpoints after same-package Go handler binding metadata has been produced.
+func ValidateBackendBindingPolicy(config gowdk.Config, app manifest.Manifest) error {
 	if config.Build.Mode != gowdk.Production || config.Build.AllowMissingBackend {
 		return nil
 	}
-	bindings := BackendBindingsFromIR(ir)
-	if len(bindings) == 0 && programDeclaresBackendEndpoints(ir) {
-		bindings = computeBackendBindings(ir)
+	if len(app.BackendBindings) == 0 && manifestDeclaresBackendEndpoints(app) {
+		app = BindBackendHandlers(app)
 	}
 
 	var diagnostics []ValidationError
-	for _, binding := range bindings {
+	for _, binding := range app.BackendBindings {
 		switch binding.Status {
 		case source.BackendBindingMissing, source.BackendBindingUnsupportedSignature:
 			diagnostics = append(diagnostics, backendBindingRequiredDiagnostic(binding))
@@ -35,8 +40,8 @@ func ValidateBackendBindingPolicyIR(config gowdk.Config, ir gwdkir.Program) erro
 	return ValidationErrors(diagnostics)
 }
 
-func programDeclaresBackendEndpoints(ir gwdkir.Program) bool {
-	for _, page := range ir.Pages {
+func manifestDeclaresBackendEndpoints(app manifest.Manifest) bool {
+	for _, page := range app.Pages {
 		if len(page.Blocks.Actions) > 0 || len(page.Blocks.APIs) > 0 || page.Blocks.Load {
 			return true
 		}
@@ -44,7 +49,7 @@ func programDeclaresBackendEndpoints(ir gwdkir.Program) bool {
 	return false
 }
 
-func backendBindingRequiredDiagnostic(binding source.BackendBinding) ValidationError {
+func backendBindingRequiredDiagnostic(binding manifest.BackendBinding) ValidationError {
 	kind := binding.Kind
 	if kind == "" {
 		kind = "backend"

@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-func validatePageAssetUses(app gwdkir.Program) []ValidationError {
+func validatePageAssetUses(app manifest.Manifest) []ValidationError {
 	sourcePackages := gowdkSourcePackages(app)
 	var diagnostics []ValidationError
 	for _, page := range app.Pages {
-		usesByAlias := map[string]gwdkir.Use{}
+		usesByAlias := map[string]manifest.Use{}
 		for _, use := range page.Uses {
 			if _, exists := usesByAlias[use.Alias]; !exists {
 				usesByAlias[use.Alias] = use
@@ -59,7 +59,7 @@ func validatePageAssetUses(app gwdkir.Program) []ValidationError {
 	return diagnostics
 }
 
-func gowdkSourcePackages(app gwdkir.Program) map[string]bool {
+func gowdkSourcePackages(app manifest.Manifest) map[string]bool {
 	sourcePackages := map[string]bool{}
 	for _, page := range app.Pages {
 		if page.Package != "" {

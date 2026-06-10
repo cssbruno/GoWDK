@@ -10,20 +10,18 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
-	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-// DiscoverGoEndpoints merges optional //gowdk:act and //gowdk:api comments
-// from selected feature-package Go files into the program as standalone Go
-// endpoints.
-func DiscoverGoEndpoints(ir *gwdkir.Program) error {
-	dirs := endpointSourceDirs(*ir)
+// DiscoverGoEndpointComments merges optional //gowdk:act and //gowdk:api
+// comments from selected feature-package Go files into the manifest.
+func DiscoverGoEndpointComments(app manifest.Manifest) (manifest.Manifest, error) {
+	dirs := endpointSourceDirs(app)
 	if len(dirs) == 0 {
-		return nil
+		return app, nil
 	}
-	var endpoints []gwdkir.GoEndpoint
+	var endpoints []manifest.EndpointDeclaration
 	var diagnostics []ValidationError
 	for _, dir := range dirs {
 		discovered, found := discoverGoEndpointsInDir(dir)
@@ -31,7 +29,7 @@ func DiscoverGoEndpoints(ir *gwdkir.Program) error {
 		diagnostics = append(diagnostics, found...)
 	}
 	if len(diagnostics) > 0 {
-		return ValidationErrors(diagnostics)
+		return app, ValidationErrors(diagnostics)
 	}
 	sort.Slice(endpoints, func(i, j int) bool {
 		if endpoints[i].Source == endpoints[j].Source {
@@ -39,11 +37,11 @@ func DiscoverGoEndpoints(ir *gwdkir.Program) error {
 		}
 		return endpoints[i].Source < endpoints[j].Source
 	})
-	gwdkanalysis.AddStandaloneEndpoints(ir, endpoints)
-	return nil
+	app.Endpoints = append(app.Endpoints, endpoints...)
+	return app, nil
 }
 
-func endpointSourceDirs(ir gwdkir.Program) []string {
+func endpointSourceDirs(app manifest.Manifest) []string {
 	seen := map[string]bool{}
 	var dirs []string
 	add := func(sourcePath string) {
@@ -61,26 +59,26 @@ func endpointSourceDirs(ir gwdkir.Program) []string {
 		seen[dir] = true
 		dirs = append(dirs, dir)
 	}
-	for _, page := range ir.Pages {
+	for _, page := range app.Pages {
 		add(page.Source)
 	}
-	for _, component := range ir.Components {
+	for _, component := range app.Components {
 		add(component.Source)
 	}
-	for _, layout := range ir.Layouts {
+	for _, layout := range app.Layouts {
 		add(layout.Source)
 	}
 	sort.Strings(dirs)
 	return dirs
 }
 
-func discoverGoEndpointsInDir(dir string) ([]gwdkir.GoEndpoint, []ValidationError) {
+func discoverGoEndpointsInDir(dir string) ([]manifest.EndpointDeclaration, []ValidationError) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil
 	}
 	fileSet := token.NewFileSet()
-	var endpoints []gwdkir.GoEndpoint
+	var endpoints []manifest.EndpointDeclaration
 	var diagnostics []ValidationError
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
@@ -121,8 +119,8 @@ func discoverGoEndpointsInDir(dir string) ([]gwdkir.GoEndpoint, []ValidationErro
 	return endpoints, diagnostics
 }
 
-func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageName string, function *ast.FuncDecl) []gwdkir.GoEndpoint {
-	var endpoints []gwdkir.GoEndpoint
+func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageName string, function *ast.FuncDecl) []manifest.EndpointDeclaration {
+	var endpoints []manifest.EndpointDeclaration
 	for _, comment := range function.Doc.List {
 		text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
 		text = strings.TrimSpace(strings.TrimPrefix(text, "/*"))
@@ -134,9 +132,9 @@ func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageNam
 		method := strings.ToUpper(methodText)
 		route := strings.Trim(routeText, `"`)
 		span := goTokenSpan(fileSet, comment.Pos(), comment.End())
-		endpoints = append(endpoints, gwdkir.GoEndpoint{
+		endpoints = append(endpoints, manifest.EndpointDeclaration{
 			Kind:        kind,
-			SourceKind:  gwdkir.EndpointSourceGo,
+			SourceKind:  manifest.EndpointSourceGo,
 			Package:     packageName,
 			Source:      path,
 			Name:        function.Name.Name,

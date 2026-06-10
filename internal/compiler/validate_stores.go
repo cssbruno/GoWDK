@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
-	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-func validateComponentStoreUses(pages []gwdkir.Page, components []gwdkir.Component) []ValidationError {
+func validateComponentStoreUses(pages []manifest.Page, components []manifest.Component) []ValidationError {
 	declared := declaredStoreNamesByPackage(pages)
 	if len(declared) == 0 {
 		return validateStoreUsesAgainst(nil, components)
@@ -16,7 +16,7 @@ func validateComponentStoreUses(pages []gwdkir.Page, components []gwdkir.Compone
 	return validateStoreUsesAgainst(declared, components)
 }
 
-func declaredStoreNamesByPackage(pages []gwdkir.Page) map[string]map[string]bool {
+func declaredStoreNamesByPackage(pages []manifest.Page) map[string]map[string]bool {
 	declared := map[string]map[string]bool{}
 	for _, page := range pages {
 		for _, store := range page.Stores {
@@ -32,7 +32,7 @@ func declaredStoreNamesByPackage(pages []gwdkir.Page) map[string]map[string]bool
 	return declared
 }
 
-func validateStoreUsesAgainst(declared map[string]map[string]bool, components []gwdkir.Component) []ValidationError {
+func validateStoreUsesAgainst(declared map[string]map[string]bool, components []manifest.Component) []ValidationError {
 	var diagnostics []ValidationError
 	for _, component := range components {
 		if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
@@ -102,8 +102,8 @@ func validateStoreUsesAgainst(declared map[string]map[string]bool, components []
 	return diagnostics
 }
 
-func componentUsesByAlias(component gwdkir.Component) map[string]gwdkir.Use {
-	usesByAlias := map[string]gwdkir.Use{}
+func componentUsesByAlias(component manifest.Component) map[string]manifest.Use {
+	usesByAlias := map[string]manifest.Use{}
 	for _, use := range component.Uses {
 		if _, exists := usesByAlias[use.Alias]; !exists {
 			usesByAlias[use.Alias] = use

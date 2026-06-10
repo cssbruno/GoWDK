@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -28,8 +28,8 @@ type packageDeclaration struct {
 	PageID        string
 	ComponentName string
 	Package       string
-	Imports       []gwdkir.Import
-	GoBlocks      []gwdkir.GoBlock
+	Imports       []manifest.Import
+	GoBlocks      []manifest.GoBlock
 	Span          source.SourceSpan
 }
 
@@ -39,7 +39,7 @@ type goPackageInfo struct {
 	Diagnostics []ValidationError
 }
 
-func validatePackages(app gwdkir.Program) []ValidationError {
+func validatePackages(app manifest.Manifest) []ValidationError {
 	declarations := packageDeclarations(app)
 	var diagnostics []ValidationError
 	byDir := map[string][]packageDeclaration{}
@@ -103,7 +103,7 @@ func shouldValidatePackageSource(sourcePath string) bool {
 	return false
 }
 
-func packageDeclarations(app gwdkir.Program) []packageDeclaration {
+func packageDeclarations(app manifest.Manifest) []packageDeclaration {
 	var declarations []packageDeclaration
 	for _, page := range app.Pages {
 		declarations = append(declarations, packageDeclaration{
@@ -256,7 +256,7 @@ func inspectGoPackageForValidation(dir string, group []packageDeclaration) goPac
 	return info
 }
 
-func parseGoBlockPackageFileForValidation(fileSet *token.FileSet, declaration packageDeclaration, block gwdkir.GoBlock) (*ast.File, *ValidationError) {
+func parseGoBlockPackageFileForValidation(fileSet *token.FileSet, declaration packageDeclaration, block manifest.GoBlock) (*ast.File, *ValidationError) {
 	src, err := goBlockPackageSourceForValidation(declaration, block)
 	if err != nil {
 		return nil, nil
@@ -276,7 +276,7 @@ func parseGoBlockPackageFileForValidation(fileSet *token.FileSet, declaration pa
 	return file, nil
 }
 
-func goBlockPackageSourceForValidation(declaration packageDeclaration, block gwdkir.GoBlock) (string, error) {
+func goBlockPackageSourceForValidation(declaration packageDeclaration, block manifest.GoBlock) (string, error) {
 	packageName := strings.TrimSpace(declaration.Package)
 	if packageName == "" {
 		return "", fmt.Errorf("go block package is missing")
@@ -315,7 +315,7 @@ func goBlockPackageSourceForValidation(declaration packageDeclaration, block gwd
 	return buffer.String(), nil
 }
 
-func goBlockGOWDKImportSpecsForValidation(imports []gwdkir.Import, bodyFile *ast.File) []ast.Spec {
+func goBlockGOWDKImportSpecsForValidation(imports []manifest.Import, bodyFile *ast.File) []ast.Spec {
 	used := usedScriptIdentifiersForValidation(bodyFile)
 	localImports := goBlockImportAliasesForValidation(bodyFile)
 	var specs []ast.Spec
@@ -431,7 +431,7 @@ func goBlockImportAliasesForValidation(file *ast.File) map[string]bool {
 	return aliases
 }
 
-func goBlockImportAliasForValidation(item gwdkir.Import) string {
+func goBlockImportAliasForValidation(item manifest.Import) string {
 	if strings.TrimSpace(item.Alias) != "" {
 		return item.Alias
 	}

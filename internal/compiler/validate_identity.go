@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-func validateUniquePages(pages []gwdkir.Page) []ValidationError {
-	seen := map[string]gwdkir.Page{}
+func validateUniquePages(pages []manifest.Page) []ValidationError {
+	seen := map[string]manifest.Page{}
 	var diagnostics []ValidationError
 	for _, page := range pages {
 		if page.ID == "" {
@@ -35,8 +35,8 @@ func validateUniquePages(pages []gwdkir.Page) []ValidationError {
 	return diagnostics
 }
 
-func validateUniqueLayouts(layouts []gwdkir.Layout) []ValidationError {
-	seen := map[string]gwdkir.Layout{}
+func validateUniqueLayouts(layouts []manifest.Layout) []ValidationError {
+	seen := map[string]manifest.Layout{}
 	var diagnostics []ValidationError
 	for _, layout := range layouts {
 		if layout.ID == "" {
@@ -63,11 +63,11 @@ func validateUniqueLayouts(layouts []gwdkir.Layout) []ValidationError {
 	return diagnostics
 }
 
-func validatePageLayoutReferences(pages []gwdkir.Page, layouts []gwdkir.Layout) []ValidationError {
+func validatePageLayoutReferences(pages []manifest.Page, layouts []manifest.Layout) []ValidationError {
 	if len(layouts) == 0 {
 		return nil
 	}
-	declared := map[string]gwdkir.Layout{}
+	declared := map[string]manifest.Layout{}
 	for _, layout := range layouts {
 		if layout.ID != "" {
 			declared[layoutIdentityKey(layout.Package, layout.ID)] = layout
@@ -140,8 +140,8 @@ func validatePageLayoutReferences(pages []gwdkir.Page, layouts []gwdkir.Layout) 
 	return diagnostics
 }
 
-func pageUsesByAlias(page gwdkir.Page) map[string]gwdkir.Use {
-	usesByAlias := map[string]gwdkir.Use{}
+func pageUsesByAlias(page manifest.Page) map[string]manifest.Use {
+	usesByAlias := map[string]manifest.Use{}
 	for _, use := range page.Uses {
 		if _, exists := usesByAlias[use.Alias]; !exists {
 			usesByAlias[use.Alias] = use
@@ -164,8 +164,8 @@ func layoutDisplayName(packageName, layoutID string) string {
 	return packageName + "." + layoutID
 }
 
-func validateUniqueComponents(components []gwdkir.Component) []ValidationError {
-	seen := map[string]gwdkir.Component{}
+func validateUniqueComponents(components []manifest.Component) []ValidationError {
+	seen := map[string]manifest.Component{}
 	var diagnostics []ValidationError
 	for _, component := range components {
 		if component.Name == "" {
@@ -192,10 +192,10 @@ func validateUniqueComponents(components []gwdkir.Component) []ValidationError {
 	return diagnostics
 }
 
-func validateComponentEmits(components []gwdkir.Component) []ValidationError {
+func validateComponentEmits(components []manifest.Component) []ValidationError {
 	var diagnostics []ValidationError
 	for _, component := range components {
-		seen := map[string]gwdkir.Emit{}
+		seen := map[string]manifest.Emit{}
 		for _, event := range component.Emits {
 			if event.Name == "" {
 				continue

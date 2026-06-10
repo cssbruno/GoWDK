@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-func validateGOWDKUses(app gwdkir.Program) []ValidationError {
+func validateGOWDKUses(app manifest.Manifest, crossFile bool) []ValidationError {
 	componentPackages := map[string]bool{}
 	componentByPackageName := map[string]bool{}
 	sourcePackages := map[string]bool{}
@@ -35,9 +35,9 @@ func validateGOWDKUses(app gwdkir.Program) []ValidationError {
 
 	var diagnostics []ValidationError
 	for _, component := range app.Components {
-		usesByAlias := map[string]gwdkir.Use{}
-		diagnostics = append(diagnostics, validateComponentUses(component, usesByAlias, sourcePackages)...)
-		diagnostics = append(diagnostics, validateComponentQualifiedComponentRefs(component, usesByAlias, componentPackages, componentByPackageName, sourcePackages)...)
+		usesByAlias := map[string]manifest.Use{}
+		diagnostics = append(diagnostics, validateComponentUses(component, usesByAlias, sourcePackages, crossFile)...)
+		diagnostics = append(diagnostics, validateComponentQualifiedComponentRefs(component, usesByAlias, componentPackages, componentByPackageName, sourcePackages, crossFile)...)
 	}
 	for _, layout := range app.Layouts {
 		for _, use := range layout.Uses {
@@ -54,7 +54,7 @@ func validateGOWDKUses(app gwdkir.Program) []ValidationError {
 		}
 	}
 	for _, page := range app.Pages {
-		usesByAlias := map[string]gwdkir.Use{}
+		usesByAlias := map[string]manifest.Use{}
 		for _, use := range page.Uses {
 			if first, exists := usesByAlias[use.Alias]; exists {
 				diagnostics = append(diagnostics, ValidationError{
@@ -72,7 +72,7 @@ func validateGOWDKUses(app gwdkir.Program) []ValidationError {
 				continue
 			}
 			usesByAlias[use.Alias] = use
-			if !sourcePackages[use.Package] {
+			if crossFile && !sourcePackages[use.Package] {
 				diagnostics = append(diagnostics, ValidationError{
 					Code:   "unknown_gowdk_use_package",
 					PageID: page.ID,
@@ -88,12 +88,12 @@ func validateGOWDKUses(app gwdkir.Program) []ValidationError {
 				})
 			}
 		}
-		diagnostics = append(diagnostics, validatePageQualifiedComponentRefs(page, usesByAlias, componentPackages, componentByPackageName, sourcePackages)...)
+		diagnostics = append(diagnostics, validatePageQualifiedComponentRefs(page, usesByAlias, componentPackages, componentByPackageName, sourcePackages, crossFile)...)
 	}
 	return diagnostics
 }
 
-func validateComponentUses(component gwdkir.Component, usesByAlias map[string]gwdkir.Use, sourcePackages map[string]bool) []ValidationError {
+func validateComponentUses(component manifest.Component, usesByAlias map[string]manifest.Use, sourcePackages map[string]bool, crossFile bool) []ValidationError {
 	var diagnostics []ValidationError
 	for _, use := range component.Uses {
 		if first, exists := usesByAlias[use.Alias]; exists {
@@ -112,7 +112,7 @@ func validateComponentUses(component gwdkir.Component, usesByAlias map[string]gw
 			continue
 		}
 		usesByAlias[use.Alias] = use
-		if !sourcePackages[use.Package] {
+		if crossFile && !sourcePackages[use.Package] {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "unknown_gowdk_use_package",
 				ComponentName: component.Name,
@@ -131,7 +131,7 @@ func validateComponentUses(component gwdkir.Component, usesByAlias map[string]gw
 	return diagnostics
 }
 
-func validatePageQualifiedComponentRefs(page gwdkir.Page, usesByAlias map[string]gwdkir.Use, componentPackages map[string]bool, componentByPackageName map[string]bool, sourcePackages map[string]bool) []ValidationError {
+func validatePageQualifiedComponentRefs(page manifest.Page, usesByAlias map[string]manifest.Use, componentPackages map[string]bool, componentByPackageName map[string]bool, sourcePackages map[string]bool, crossFile bool) []ValidationError {
 	if !page.Blocks.View || strings.TrimSpace(page.Blocks.ViewBody) == "" {
 		return nil
 	}
@@ -166,6 +166,9 @@ func validatePageQualifiedComponentRefs(page gwdkir.Page, usesByAlias map[string
 					alias,
 				),
 			})
+			continue
+		}
+		if !crossFile {
 			continue
 		}
 		if !componentPackages[use.Package] {
@@ -205,7 +208,7 @@ func validatePageQualifiedComponentRefs(page gwdkir.Page, usesByAlias map[string
 	return diagnostics
 }
 
-func validateComponentQualifiedComponentRefs(component gwdkir.Component, usesByAlias map[string]gwdkir.Use, componentPackages map[string]bool, componentByPackageName map[string]bool, sourcePackages map[string]bool) []ValidationError {
+func validateComponentQualifiedComponentRefs(component manifest.Component, usesByAlias map[string]manifest.Use, componentPackages map[string]bool, componentByPackageName map[string]bool, sourcePackages map[string]bool, crossFile bool) []ValidationError {
 	if !component.Blocks.View || strings.TrimSpace(component.Blocks.ViewBody) == "" {
 		return nil
 	}
@@ -240,6 +243,9 @@ func validateComponentQualifiedComponentRefs(component gwdkir.Component, usesByA
 					alias,
 				),
 			})
+			continue
+		}
+		if !crossFile {
 			continue
 		}
 		if !componentPackages[use.Package] {

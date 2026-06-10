@@ -5,12 +5,12 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func validateUniquePageRoutes(pages []gwdkir.Page) []ValidationError {
-	seen := map[string]gwdkir.Page{}
+func validateUniquePageRoutes(pages []manifest.Page) []ValidationError {
+	seen := map[string]manifest.Page{}
 	var diagnostics []ValidationError
 	for _, page := range pages {
 		info, issues := parseRoute(page.Route)
@@ -50,7 +50,7 @@ func duplicateRouteMessage(route, firstID, firstSource, duplicateID, duplicateSo
 	return message
 }
 
-func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page) []ValidationError {
+func validateAmbiguousDynamicPageRoutes(pages []manifest.Page) []ValidationError {
 	var dynamicRoutes []routeRegistration
 	var diagnostics []ValidationError
 	for _, page := range pages {
@@ -125,7 +125,7 @@ func routePatternSegments(pattern string) []string {
 	return strings.Split(trimmed, "/")
 }
 
-func validateRouteMethodConflicts(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint) []ValidationError {
+func validateRouteMethodConflicts(pages []manifest.Page, endpoints []manifest.EndpointDeclaration) []ValidationError {
 	seen := map[string]routeRegistration{}
 	var diagnostics []ValidationError
 	for _, registration := range routeRegistrations(pages, endpoints) {
@@ -166,7 +166,7 @@ type routeRegistration struct {
 	Span    source.SourceSpan
 }
 
-func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint) []routeRegistration {
+func routeRegistrations(pages []manifest.Page, endpoints []manifest.EndpointDeclaration) []routeRegistration {
 	var registrations []routeRegistration
 	for _, page := range pages {
 		pageInfo, pageIssues := parseRoute(page.Route)
@@ -272,7 +272,7 @@ func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint) []ro
 			Method:  method,
 			Route:   endpoint.Route,
 			Pattern: info.Pattern,
-			PageID:  standaloneEndpointPageID(endpoint.Package, endpoint.Name),
+			PageID:  standaloneEndpointPageID(endpoint),
 			Source:  endpoint.Source,
 			Span:    firstSpan(endpoint.RouteSpan, endpoint.Span),
 		})
@@ -280,10 +280,10 @@ func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint) []ro
 	return registrations
 }
 
-func validateStandaloneEndpoints(endpoints []gwdkir.GoEndpoint) []ValidationError {
+func validateStandaloneEndpoints(endpoints []manifest.EndpointDeclaration) []ValidationError {
 	var diagnostics []ValidationError
 	for _, endpoint := range endpoints {
-		page := gwdkir.Page{ID: standaloneEndpointPageID(endpoint.Package, endpoint.Name), Source: endpoint.Source}
+		page := manifest.Page{ID: standaloneEndpointPageID(endpoint), Source: endpoint.Source}
 		if !isExportedHandlerName(endpoint.Name) {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:    "invalid_backend_handler_name",
@@ -319,14 +319,14 @@ func validateStandaloneEndpoints(endpoints []gwdkir.GoEndpoint) []ValidationErro
 	return diagnostics
 }
 
-func standaloneEndpointPageID(packageName, name string) string {
-	if packageName == "" {
-		return name
+func standaloneEndpointPageID(endpoint manifest.EndpointDeclaration) string {
+	if endpoint.Package == "" {
+		return endpoint.Name
 	}
-	return packageName + "." + name
+	return endpoint.Package + "." + endpoint.Name
 }
 
-func routeDiagnostics(page gwdkir.Page, label string, issues []routeIssue, routeSpan source.SourceSpan, paramSpans []source.NamedSpan) []ValidationError {
+func routeDiagnostics(page manifest.Page, label string, issues []routeIssue, routeSpan source.SourceSpan, paramSpans []source.NamedSpan) []ValidationError {
 	if len(issues) == 0 {
 		return nil
 	}

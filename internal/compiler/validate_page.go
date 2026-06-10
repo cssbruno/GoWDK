@@ -7,12 +7,12 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gotypes"
-	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/runtime/auth"
 )
 
-func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
+func ValidatePage(config gowdk.Config, page manifest.Page) []ValidationError {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	var diagnostics []ValidationError
 	pageRoute, pageRouteIssues := parseRoute(page.Route)
@@ -141,7 +141,7 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 	if len(pageRouteIssues) == 0 {
 		params = pageRoute.Params
 	}
-	if isBuildTimeRoute(mode, page) && len(params) > 0 && !page.Blocks.Paths {
+	if isBuildTimeRoute(mode, page) && len(params) > 0 && !page.Paths {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:   "spa_dynamic_route_missing_paths",
 			PageID: page.ID,
@@ -173,11 +173,11 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 	return diagnostics
 }
 
-func validatePageGuards(page gwdkir.Page) []ValidationError {
+func validatePageGuards(page manifest.Page) []ValidationError {
 	if !validateSourceBackedPageGuards(page) {
 		return nil
 	}
-	if len(page.Guards) == 0 {
+	if len(page.Guard) == 0 {
 		return []ValidationError{{
 			Code:   "missing_page_guard",
 			PageID: page.ID,
@@ -191,13 +191,13 @@ func validatePageGuards(page gwdkir.Page) []ValidationError {
 	}
 
 	public := false
-	for _, guard := range page.Guards {
+	for _, guard := range page.Guard {
 		if auth.IsPublicGuard(guard) {
 			public = true
 			break
 		}
 	}
-	if public && len(page.Guards) > 1 {
+	if public && len(page.Guard) > 1 {
 		return []ValidationError{{
 			Code:    "public_guard_exclusive",
 			PageID:  page.ID,
@@ -209,7 +209,7 @@ func validatePageGuards(page gwdkir.Page) []ValidationError {
 	return nil
 }
 
-func validateProtectedPageGuardRender(page gwdkir.Page, mode gowdk.RenderMode) []ValidationError {
+func validateProtectedPageGuardRender(page manifest.Page, mode gowdk.RenderMode) []ValidationError {
 	if !validateSourceBackedPageGuards(page) || !isBuildTimeRoute(mode, page) || !hasProtectedPageGuard(page) {
 		return nil
 	}
@@ -222,7 +222,7 @@ func validateProtectedPageGuardRender(page gwdkir.Page, mode gowdk.RenderMode) [
 	}}
 }
 
-func validateSourceBackedPageGuards(page gwdkir.Page) bool {
+func validateSourceBackedPageGuards(page manifest.Page) bool {
 	if strings.TrimSpace(page.Source) == "" {
 		return false
 	}
@@ -232,8 +232,8 @@ func validateSourceBackedPageGuards(page gwdkir.Page) bool {
 	return true
 }
 
-func hasProtectedPageGuard(page gwdkir.Page) bool {
-	for _, guard := range page.Guards {
+func hasProtectedPageGuard(page manifest.Page) bool {
+	for _, guard := range page.Guard {
 		if !auth.IsPublicGuard(guard) {
 			return true
 		}
@@ -241,7 +241,7 @@ func hasProtectedPageGuard(page gwdkir.Page) bool {
 	return false
 }
 
-func firstGoBlockSpan(page gwdkir.Page, target string) source.SourceSpan {
+func firstGoBlockSpan(page manifest.Page, target string) source.SourceSpan {
 	for _, block := range page.Blocks.GoBlocks {
 		if block.Target == target {
 			return block.Span
@@ -250,11 +250,11 @@ func firstGoBlockSpan(page gwdkir.Page, target string) source.SourceSpan {
 	return source.SourceSpan{}
 }
 
-func requiresSSRFeature(mode gowdk.RenderMode, page gwdkir.Page) bool {
+func requiresSSRFeature(mode gowdk.RenderMode, page manifest.Page) bool {
 	return mode == gowdk.SSR || mode == gowdk.Hybrid
 }
 
-func isBuildTimeRoute(mode gowdk.RenderMode, page gwdkir.Page) bool {
+func isBuildTimeRoute(mode gowdk.RenderMode, page manifest.Page) bool {
 	switch mode {
 	case gowdk.SPA, gowdk.Action:
 		return true
@@ -263,7 +263,7 @@ func isBuildTimeRoute(mode gowdk.RenderMode, page gwdkir.Page) bool {
 	}
 }
 
-func validatePageCachePolicy(page gwdkir.Page) []ValidationError {
+func validatePageCachePolicy(page manifest.Page) []ValidationError {
 	if page.Revalidate == "" {
 		return nil
 	}
@@ -288,8 +288,8 @@ func validatePageCachePolicy(page gwdkir.Page) []ValidationError {
 	return nil
 }
 
-func validatePageStores(page gwdkir.Page) []ValidationError {
-	seen := map[string]gwdkir.Store{}
+func validatePageStores(page manifest.Page) []ValidationError {
+	seen := map[string]manifest.Store{}
 	var diagnostics []ValidationError
 	for _, store := range page.Stores {
 		if first, exists := seen[store.Name]; exists {
@@ -319,7 +319,7 @@ func validatePageStores(page gwdkir.Page) []ValidationError {
 			})
 			continue
 		}
-		if err := gotypes.ValidateStateInit(page.Imports, gwdkir.StateContract{Type: store.Type, Init: store.Init, Span: store.Span}); err != nil {
+		if err := gotypes.ValidateStateInit(page.Imports, manifest.StateContract{Type: store.Type, Init: store.Init, Span: store.Span}); err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:    "page_store_error",
 				PageID:  page.ID,
@@ -332,7 +332,7 @@ func validatePageStores(page gwdkir.Page) []ValidationError {
 	return diagnostics
 }
 
-func validatePageCSS(page gwdkir.Page) []ValidationError {
+func validatePageCSS(page manifest.Page) []ValidationError {
 	if len(page.CSS) == 0 {
 		return nil
 	}

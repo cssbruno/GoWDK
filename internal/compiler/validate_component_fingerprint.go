@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gotypes"
-	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/view"
 	"sort"
 	"strings"
 )
 
-func validateRedundantComponents(components []gwdkir.Component) []ValidationError {
+func validateRedundantComponents(components []manifest.Component) []ValidationError {
 	seenNames := map[string]bool{}
-	seen := map[string]gwdkir.Component{}
+	seen := map[string]manifest.Component{}
 	var diagnostics []ValidationError
 	for _, component := range components {
 		if component.Name == "" || seenNames[component.Name] {
@@ -45,7 +45,7 @@ func validateRedundantComponents(components []gwdkir.Component) []ValidationErro
 	return diagnostics
 }
 
-func componentFingerprint(component gwdkir.Component) string {
+func componentFingerprint(component manifest.Component) string {
 	parts := []string{
 		"props=" + componentPropsFingerprint(component),
 		"state=" + componentStateFingerprint(component),
@@ -55,7 +55,7 @@ func componentFingerprint(component gwdkir.Component) string {
 	return strings.Join(parts, "\n")
 }
 
-func componentPropsFingerprint(component gwdkir.Component) string {
+func componentPropsFingerprint(component manifest.Component) string {
 	if component.PropsType.Name != "" {
 		return "type:" + canonicalGoType(component.Imports, component.PropsType)
 	}
@@ -70,14 +70,14 @@ func componentPropsFingerprint(component gwdkir.Component) string {
 	return "inline:" + strings.Join(props, ",")
 }
 
-func componentStateFingerprint(component gwdkir.Component) string {
+func componentStateFingerprint(component manifest.Component) string {
 	if component.State.Type.Name == "" {
 		return ""
 	}
 	return canonicalGoType(component.Imports, component.State.Type) + "=init:" + canonicalGoFunc(component.Imports, component.State.Init)
 }
 
-func componentViewFingerprint(component gwdkir.Component) string {
+func componentViewFingerprint(component manifest.Component) string {
 	canonical, err := view.Canonical(component.Blocks.ViewBody)
 	if err == nil {
 		return canonical
@@ -85,7 +85,7 @@ func componentViewFingerprint(component gwdkir.Component) string {
 	return strings.Join(strings.Fields(component.Blocks.ViewBody), " ")
 }
 
-func componentClientFingerprint(component gwdkir.Component) string {
+func componentClientFingerprint(component manifest.Component) string {
 	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
 		return ""
 	}
@@ -96,7 +96,7 @@ func componentClientFingerprint(component gwdkir.Component) string {
 	return strings.Join(strings.Fields(component.Blocks.ClientBody), " ")
 }
 
-func canonicalGoType(imports []gwdkir.Import, ref gwdkir.GoRef) string {
+func canonicalGoType(imports []manifest.Import, ref manifest.GoTypeRef) string {
 	path, err := gotypes.ImportPathForAlias(imports, ref.Alias)
 	if err != nil {
 		return ref.Alias + "." + ref.Name
@@ -104,7 +104,7 @@ func canonicalGoType(imports []gwdkir.Import, ref gwdkir.GoRef) string {
 	return path + "." + ref.Name
 }
 
-func canonicalGoFunc(imports []gwdkir.Import, ref gwdkir.GoRef) string {
+func canonicalGoFunc(imports []manifest.Import, ref manifest.GoFuncRef) string {
 	path, err := gotypes.ImportPathForAlias(imports, ref.Alias)
 	if err != nil {
 		return ref.Alias + "." + ref.Name

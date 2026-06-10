@@ -17,7 +17,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 // Field describes one resolved Go struct field.
@@ -54,7 +54,7 @@ func (item Struct) FieldNames() []string {
 }
 
 // ResolveStruct resolves a Go struct type referenced by a component contract.
-func ResolveStruct(imports []gwdkir.Import, ref gwdkir.GoRef) (Struct, error) {
+func ResolveStruct(imports []manifest.Import, ref manifest.GoTypeRef) (Struct, error) {
 	importPath, err := ImportPathForAlias(imports, ref.Alias)
 	if err != nil {
 		return Struct{}, err
@@ -136,7 +136,7 @@ func collectFieldTypes(prefix string, typ types.Type, output map[string]string, 
 
 // ValidateStateInit verifies that the state init function can initialize the
 // declared state type.
-func ValidateStateInit(imports []gwdkir.Import, state gwdkir.StateContract) error {
+func ValidateStateInit(imports []manifest.Import, state manifest.StateContract) error {
 	statePath, err := ImportPathForAlias(imports, state.Type.Alias)
 	if err != nil {
 		return err
@@ -191,7 +191,7 @@ func ValidateStateInit(imports []gwdkir.Import, state gwdkir.StateContract) erro
 
 // RunStateInitJSON runs a declared state init function and returns its JSON
 // encoding.
-func RunStateInitJSON(imports []gwdkir.Import, state gwdkir.StateContract) ([]byte, error) {
+func RunStateInitJSON(imports []manifest.Import, state manifest.StateContract) ([]byte, error) {
 	importPath, err := ImportPathForAlias(imports, state.Init.Alias)
 	if err != nil {
 		return nil, err
@@ -219,9 +219,11 @@ func RunStateInitJSON(imports []gwdkir.Import, state gwdkir.StateContract) ([]by
 		return nil, err
 	}
 	command := exec.Command("go", "run", path)
-	output, err := command.CombinedOutput()
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	output, err := command.Output()
 	if err != nil {
-		return nil, fmt.Errorf("run state init function %s.%s: %w\n%s", state.Init.Alias, state.Init.Name, err, strings.TrimSpace(string(output)))
+		return nil, fmt.Errorf("run state init function %s.%s: %w\n%s", state.Init.Alias, state.Init.Name, err, strings.TrimSpace(stderr.String()))
 	}
 	output = bytes.TrimSpace(output)
 	if len(output) == 0 {
@@ -410,7 +412,7 @@ func stateInitEncodeGuardStmt() ast.Stmt {
 
 // ImportPathForAlias returns the concrete Go import path for a .gwdk import
 // alias and rejects relative import paths.
-func ImportPathForAlias(imports []gwdkir.Import, alias string) (string, error) {
+func ImportPathForAlias(imports []manifest.Import, alias string) (string, error) {
 	if strings.TrimSpace(alias) == "" {
 		return "", fmt.Errorf("Go import alias is required")
 	}
@@ -428,7 +430,7 @@ func ImportPathForAlias(imports []gwdkir.Import, alias string) (string, error) {
 
 // EffectiveImportAlias returns the explicit import alias or the package name
 // used by Go for an unaliased import.
-func EffectiveImportAlias(item gwdkir.Import) (string, error) {
+func EffectiveImportAlias(item manifest.Import) (string, error) {
 	if strings.TrimSpace(item.Alias) != "" {
 		return item.Alias, nil
 	}

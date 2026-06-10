@@ -5,9 +5,8 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/compiler"
-	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // SiteMap is an editor-facing route and file map.
@@ -50,38 +49,38 @@ type SiteMapRoute struct {
 
 // SiteMapEndpoint describes one generated action/API endpoint graph entry.
 type SiteMapEndpoint struct {
-	Kind          compiler.EndpointKind         `json:"kind"`
-	Method        string                        `json:"method"`
-	Route         string                        `json:"route"`
-	PageID        string                        `json:"pageId"`
-	Symbol        string                        `json:"symbol,omitempty"`
-	Package       string                        `json:"package,omitempty"`
-	BindingStatus manifest.BackendBindingStatus `json:"bindingStatus,omitempty"`
-	Signature     manifest.BackendSignatureKind `json:"signature,omitempty"`
-	InputType     string                        `json:"inputType,omitempty"`
+	Kind          compiler.EndpointKind       `json:"kind"`
+	Method        string                      `json:"method"`
+	Route         string                      `json:"route"`
+	PageID        string                      `json:"pageId"`
+	Symbol        string                      `json:"symbol,omitempty"`
+	Package       string                      `json:"package,omitempty"`
+	BindingStatus source.BackendBindingStatus `json:"bindingStatus,omitempty"`
+	Signature     source.BackendSignatureKind `json:"signature,omitempty"`
+	InputType     string                      `json:"inputType,omitempty"`
 }
 
 // BuildSiteMapFromIR converts stable compiler IR into the editor-facing site
-// map while preserving manifest-backed public page fields.
-func BuildSiteMapFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program) SiteMap {
-	pages := siteMapPages(config, app)
+// map.
+func BuildSiteMapFromIR(config gowdk.Config, ir gwdkir.Program) SiteMap {
+	pages := siteMapPages(config, ir)
 	metadata := compiler.BuildRouteMetadataFromIR(config, ir)
 	return siteMapFromMetadata(pages, metadata)
 }
 
-func siteMapPages(config gowdk.Config, app manifest.Manifest) []SiteMapPage {
-	pages := make([]SiteMapPage, 0, len(app.Pages))
-	for _, page := range app.Pages {
+func siteMapPages(config gowdk.Config, ir gwdkir.Program) []SiteMapPage {
+	pages := make([]SiteMapPage, 0, len(ir.Pages))
+	for _, page := range ir.Pages {
 		pages = append(pages, SiteMapPage{
 			ID:            page.ID,
 			Route:         page.Route,
 			Source:        page.Source,
 			Render:        page.RenderMode(config.Render.DefaultMode()),
 			Layouts:       page.Layouts,
-			Guard:         page.Guard,
+			Guard:         page.Guards,
 			DynamicParams: page.DynamicParams(),
 			Blocks: SiteMapBlocks{
-				Paths:   page.Paths,
+				Paths:   page.Blocks.Paths,
 				Build:   page.Blocks.Build,
 				Load:    page.Blocks.Load,
 				View:    page.Blocks.View,
@@ -103,19 +102,18 @@ func siteMapFromMetadata(pages []SiteMapPage, metadata compiler.RouteMetadata) S
 
 // SiteMapJSON returns the JSON site map for parsed and validated files.
 func SiteMapJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
-	app, diagnostics := CheckFiles(config, paths)
+	result, diagnostics := CheckFiles(config, paths)
 	if diagnostics.HasErrors() {
 		return nil, diagnostics
 	}
-	ir := gwdkanalysis.BuildIR(config, app)
-	payload, err := json.MarshalIndent(BuildSiteMapFromIR(config, app, ir), "", "  ")
+	payload, err := json.MarshalIndent(BuildSiteMapFromIR(config, result.IR), "", "  ")
 	if err != nil {
 		return nil, Diagnostics{{Severity: "error", Message: err.Error()}}
 	}
 	return append(payload, '\n'), diagnostics
 }
 
-func actionNames(actions []manifest.Action) []string {
+func actionNames(actions []gwdkir.Action) []string {
 	if len(actions) == 0 {
 		return nil
 	}
@@ -126,7 +124,7 @@ func actionNames(actions []manifest.Action) []string {
 	return names
 }
 
-func apiNames(apis []manifest.API) []string {
+func apiNames(apis []gwdkir.API) []string {
 	if len(apis) == 0 {
 		return nil
 	}

@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/cssbruno/gowdk/internal/compiler"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 type routeMetadataReport struct {
@@ -156,7 +156,7 @@ func routeMetadataJSON(metadata compiler.RouteMetadata) routeMetadataReport {
 	}
 }
 
-func endpointSourceSpanJSON(span manifest.SourceSpan) *sourceSpanJSON {
+func endpointSourceSpanJSON(span source.SourceSpan) *sourceSpanJSON {
 	if span.Start.Line <= 0 || span.Start.Column <= 0 || span.End.Line <= 0 || span.End.Column <= 0 {
 		return nil
 	}

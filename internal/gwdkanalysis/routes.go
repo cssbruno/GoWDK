@@ -3,12 +3,12 @@ package gwdkanalysis
 import (
 	"sort"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func routeParams(route string) []string {
-	params := manifest.RouteParamsFromPath(route)
+	params := gwdkir.RouteParamsFromPath(route)
 	out := make([]string, 0, len(params))
 	seen := map[string]bool{}
 	for _, param := range params {
@@ -22,7 +22,7 @@ func routeParams(route string) []string {
 }
 
 func typedRouteParams(route string) []source.RouteParam {
-	params := manifest.RouteParamsFromPath(route)
+	params := gwdkir.RouteParamsFromPath(route)
 	out := make([]source.RouteParam, 0, len(params))
 	seen := map[string]bool{}
 	for _, param := range params {

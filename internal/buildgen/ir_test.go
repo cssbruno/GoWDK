@@ -8,18 +8,18 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 func TestPlanFromIRMatchesManifestPlan(t *testing.T) {
 	config := gowdk.Config{}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			Source:  "pages/home.page.gwdk",
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Build:     true,
 				BuildBody: `=> { title: "Home" }`,
 				View:      true,
@@ -32,7 +32,7 @@ func TestPlanFromIRMatchesManifestPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fromIR, err := planFromIR(config, gwdkanalysis.BuildIR(config, app), t.TempDir())
+	fromIR, err := planFromIR(config, gwdkanalysis.BuildProgram(config, app), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,19 +50,19 @@ func TestPlanFromIRMatchesManifestPlan(t *testing.T) {
 
 func TestBuildFromIRWritesArtifacts(t *testing.T) {
 	config := gowdk.Config{}
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		Source:  "pages/home.page.gwdk",
 		Package: "pages",
 		ID:      "home",
 		Route:   "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 		},
 	}}}
 	outputDir := t.TempDir()
 
-	result, err := BuildFromIR(config, gwdkanalysis.BuildIR(config, app), outputDir)
+	result, err := BuildFromIR(config, gwdkanalysis.BuildProgram(config, app), outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,18 +80,18 @@ func TestBuildFromIRWritesArtifacts(t *testing.T) {
 
 func TestBuildMemoryFromIRCollectsArtifacts(t *testing.T) {
 	config := gowdk.Config{}
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		Source:  "pages/home.page.gwdk",
 		Package: "pages",
 		ID:      "home",
 		Route:   "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 		},
 	}}}
 
-	result, err := BuildMemoryFromIR(config, gwdkanalysis.BuildIR(config, app), t.TempDir())
+	result, err := BuildMemoryFromIR(config, gwdkanalysis.BuildProgram(config, app), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

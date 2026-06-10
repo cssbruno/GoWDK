@@ -9,15 +9,15 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 func TestBuildPreservesUnchangedArtifactModTimes(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "home",
 		Route: "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main><h1>Home</h1></main>`,
 		},
@@ -59,13 +59,13 @@ func TestBuildIncrementalRendersOnlyChangedPageSources(t *testing.T) {
 	outputDir := t.TempDir()
 	homeSource := filepath.Join(t.TempDir(), "home.page.gwdk")
 	aboutSource := filepath.Join(t.TempDir(), "about.page.gwdk")
-	initial := manifest.Manifest{Pages: []manifest.Page{
+	initial := gwdkanalysis.Sources{Pages: []gwdkir.Page{
 		{
 			Source:  homeSource,
 			Package: "app",
 			ID:      "home",
 			Route:   "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>Home before</main>`,
 			},
@@ -75,7 +75,7 @@ func TestBuildIncrementalRendersOnlyChangedPageSources(t *testing.T) {
 			Package: "app",
 			ID:      "about",
 			Route:   "/about",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>About stable</main>`,
 			},
@@ -91,13 +91,13 @@ func TestBuildIncrementalRendersOnlyChangedPageSources(t *testing.T) {
 	}
 
 	time.Sleep(20 * time.Millisecond)
-	changed := manifest.Manifest{Pages: []manifest.Page{
+	changed := gwdkanalysis.Sources{Pages: []gwdkir.Page{
 		{
 			Source:  homeSource,
 			Package: "app",
 			ID:      "home",
 			Route:   "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>Home after</main>`,
 			},
@@ -107,7 +107,7 @@ func TestBuildIncrementalRendersOnlyChangedPageSources(t *testing.T) {
 			Package: "app",
 			ID:      "about",
 			Route:   "/about",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Build:     true,
 				BuildBody: `=> missing.BuildData()`,
 				View:      true,
@@ -141,12 +141,12 @@ func TestBuildIncrementalRendersOnlyChangedPageSources(t *testing.T) {
 func TestBuildIncrementalFromIRRendersChangedPageSources(t *testing.T) {
 	outputDir := t.TempDir()
 	source := filepath.Join(t.TempDir(), "home.page.gwdk")
-	initial := manifest.Manifest{Pages: []manifest.Page{{
+	initial := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		Source:  source,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home before</main>`,
 		},
@@ -155,17 +155,17 @@ func TestBuildIncrementalFromIRRendersChangedPageSources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	changed := manifest.Manifest{Pages: []manifest.Page{{
+	changed := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		Source:  source,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home after</main>`,
 		},
 	}}}
-	result, err := BuildIncrementalFromIR(gowdk.Config{}, gwdkanalysis.BuildIR(gowdk.Config{}, changed), outputDir, []string{source})
+	result, err := BuildIncrementalFromIR(gowdk.Config{}, gwdkanalysis.BuildProgram(gowdk.Config{}, changed), outputDir, []string{source})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,12 +180,12 @@ func TestBuildIncrementalFromIRRendersChangedPageSources(t *testing.T) {
 func TestBuildIncrementalRemovesStaleChangedPageRouteOutput(t *testing.T) {
 	outputDir := t.TempDir()
 	source := filepath.Join(t.TempDir(), "home.page.gwdk")
-	initial := manifest.Manifest{Pages: []manifest.Page{{
+	initial := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		Source:  source,
 		Package: "app",
 		ID:      "home",
 		Route:   "/old",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Old route</main>`,
 		},
@@ -198,12 +198,12 @@ func TestBuildIncrementalRemovesStaleChangedPageRouteOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	changed := manifest.Manifest{Pages: []manifest.Page{{
+	changed := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		Source:  source,
 		Package: "app",
 		ID:      "home",
 		Route:   "/new",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>New route</main>`,
 		},

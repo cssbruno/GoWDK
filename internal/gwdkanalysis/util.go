@@ -6,17 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
-
-func endpointSource(src manifest.EndpointSource) gwdkir.EndpointSource {
-	if src == manifest.EndpointSourceGo {
-		return gwdkir.EndpointSourceGo
-	}
-	return gwdkir.EndpointSourceGOWDK
-}
 
 func standaloneEndpointPageID(endpoint gwdkir.GoEndpoint) string {
 	if endpoint.Package == "" {
@@ -25,7 +18,7 @@ func standaloneEndpointPageID(endpoint gwdkir.GoEndpoint) string {
 	return endpoint.Package + "." + endpoint.Name
 }
 
-func assetUse(uses []manifest.Use, path string) (name string, useAlias string, usePackage string) {
+func assetUse(uses []gwdkir.Use, path string) (name string, useAlias string, usePackage string) {
 	alias, assetName, ok := strings.Cut(path, ".")
 	if !ok {
 		return path, "", ""
@@ -136,4 +129,44 @@ func hasUse(values []gwdkir.Use, value gwdkir.Use) bool {
 
 func trimQuotes(value string) string {
 	return strings.Trim(strings.TrimSpace(value), `"`)
+}
+
+func routeKind(mode gowdk.RenderMode) gwdkir.RouteKind {
+	switch mode {
+	case gowdk.SSR:
+		return gwdkir.RouteSSR
+	case gowdk.Hybrid:
+		return gwdkir.RouteHybrid
+	default:
+		return gwdkir.RouteSPA
+	}
+}
+
+func copyRouteParams(params []source.RouteParam) []source.RouteParam {
+	if len(params) == 0 {
+		return nil
+	}
+	out := make([]source.RouteParam, len(params))
+	copy(out, params)
+	return out
+}
+
+func appendPackageImports(pkg *gwdkir.Package, imports []gwdkir.Import) {
+	for _, item := range imports {
+		if !hasImport(pkg.Imports, item) {
+			pkg.Imports = append(pkg.Imports, item)
+		}
+	}
+}
+
+func appendPackageUses(pkg *gwdkir.Package, uses []gwdkir.Use) {
+	for _, item := range uses {
+		if !hasUse(pkg.Uses, item) {
+			pkg.Uses = append(pkg.Uses, item)
+		}
+	}
+}
+
+func appendPackageStores(pkg *gwdkir.Package, stores []gwdkir.Store) {
+	pkg.Stores = append(pkg.Stores, stores...)
 }

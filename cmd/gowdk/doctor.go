@@ -12,9 +12,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/compiler"
-	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/lang"
-	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 const doctorUsage = "usage: gowdk doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...]"
@@ -271,7 +269,7 @@ func (report *doctorReport) runSourcesCheck(config gowdk.Config, moduleNames, pa
 	return paths, true
 }
 
-func (report *doctorReport) runLanguageCheck(config gowdk.Config, paths []string) (manifest.Manifest, bool) {
+func (report *doctorReport) runLanguageCheck(config gowdk.Config, paths []string) (lang.CheckResult, bool) {
 	app, diagnostics := lang.CheckFiles(config, paths)
 	if diagnostics.HasErrors() {
 		report.addCheck(doctorCheck{
@@ -306,8 +304,8 @@ func (report *doctorReport) runLanguageCheck(config gowdk.Config, paths []string
 	return app, true
 }
 
-func (report *doctorReport) runRoutesCheck(config gowdk.Config, app manifest.Manifest) {
-	ir := gwdkanalysis.BuildIR(config, app)
+func (report *doctorReport) runRoutesCheck(config gowdk.Config, checked lang.CheckResult) {
+	ir := checked.IR
 	if err := linkIRContractReferences(&ir, "."); err != nil {
 		report.addCheck(doctorCheck{
 			ID:       "routes",

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestActionEndpointsFromIR(t *testing.T) {
@@ -31,11 +31,11 @@ func TestActionEndpointsFromIR(t *testing.T) {
 			Method: "POST",
 			Path:   "/newsletter",
 			Binding: gwdkir.Binding{
-				Status:       manifest.BackendBindingBound,
+				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/newsletter",
 				PackageName:  "newsletter",
 				FunctionName: "Subscribe",
-				Signature:    manifest.BackendSignatureAction0,
+				Signature:    source.BackendSignatureAction0,
 			},
 		}},
 	}
@@ -54,7 +54,7 @@ func TestActionEndpointsFromIR(t *testing.T) {
 	if len(endpoint.InputFields) != 1 || endpoint.InputFields[0] != "email" {
 		t.Fatalf("expected form schema from IR page view, got %#v", endpoint.InputFields)
 	}
-	if endpoint.Binding.Status != manifest.BackendBindingBound || endpoint.Binding.FunctionName != "Subscribe" {
+	if endpoint.Binding.Status != source.BackendBindingBound || endpoint.Binding.FunctionName != "Subscribe" {
 		t.Fatalf("expected backend binding from IR endpoint, got %#v", endpoint.Binding)
 	}
 }
@@ -134,11 +134,11 @@ func TestStandaloneGoEndpointsFromIR(t *testing.T) {
 				Method: "POST",
 				Path:   "/login",
 				Binding: gwdkir.Binding{
-					Status:       manifest.BackendBindingBound,
+					Status:       source.BackendBindingBound,
 					ImportPath:   "example.com/app/auth",
 					PackageName:  "auth",
 					FunctionName: "Login",
-					Signature:    manifest.BackendSignatureAction0,
+					Signature:    source.BackendSignatureAction0,
 				},
 			},
 			{

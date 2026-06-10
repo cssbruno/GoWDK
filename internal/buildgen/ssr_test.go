@@ -8,17 +8,17 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 func TestBuildSkipsRequestTimePagesAndKeepsSPAArtifacts(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{
 		{
 			ID:     "dashboard",
 			Route:  "/dashboard",
 			Render: gowdk.SSR,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>Dashboard</main>`,
 			},
@@ -26,8 +26,8 @@ func TestBuildSkipsRequestTimePagesAndKeepsSPAArtifacts(t *testing.T) {
 		{
 			ID:    "blog.post",
 			Route: "/blog/{slug}",
-			Paths: true,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
+				Paths:     true,
 				PathsBody: `=> { slug: "hello-gowdk" }`,
 				View:      true,
 				ViewBody:  `<main>Post</main>`,
@@ -52,15 +52,15 @@ func TestBuildSkipsRequestTimePagesAndKeepsSPAArtifacts(t *testing.T) {
 
 func TestSSRArtifactsRenderConcreteSSRPage(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:         "dashboard",
 			Route:      "/dashboard",
 			Render:     gowdk.SSR,
 			Cache:      "public, max-age=45",
 			Revalidate: "15",
 			ErrorPage:  "errors/dashboard.html",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				BuildBody: `=> { title: "Dashboard" }`,
 				View:      true,
 				ViewBody:  `<main><h1>{title}</h1><p>Live</p></main>`,
@@ -99,26 +99,26 @@ func TestSSRArtifactsRenderConcreteSSRPage(t *testing.T) {
 
 func TestSSRArtifactsIncludeScopedJSScripts(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			Source:  "pages/dashboard.page.gwdk",
 			Package: "pages",
 			ID:      "dashboard",
 			Route:   "/dashboard",
 			Render:  gowdk.SSR,
 			JS:      []string{"./dashboard.js"},
-			Uses:    []manifest.Use{{Alias: "charts", Package: "components"}},
-			Blocks: manifest.Blocks{
+			Uses:    []gwdkir.Use{{Alias: "charts", Package: "components"}},
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><charts.SignupsChart /></main>`,
 			},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Source:  "components/signups-chart.cmp.gwdk",
 			Package: "components",
 			Name:    "SignupsChart",
 			JS:      []string{"./chart.js"},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<section></section>`,
 			},
@@ -143,12 +143,12 @@ func TestSSRArtifactsIncludeScopedJSScripts(t *testing.T) {
 
 func TestSSRArtifactsRenderHybridPageWithoutLoad(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:     "marketing",
 			Route:  "/marketing",
 			Render: gowdk.Hybrid,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				BuildBody: `=> { title: "Marketing" }`,
 				View:      true,
 				ViewBody:  `<main><h1>{title}</h1></main>`,
@@ -178,12 +178,12 @@ func TestSSRArtifactsRenderHybridPageWithoutLoad(t *testing.T) {
 func TestSSRArtifactsFromIRRenderConcreteSSRPage(t *testing.T) {
 	outputDir := t.TempDir()
 	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:     "dashboard",
 			Route:  "/dashboard",
 			Render: gowdk.SSR,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				BuildBody: `=> { title: "Dashboard" }`,
 				View:      true,
 				ViewBody:  `<main><h1>{title}</h1><p>Live</p></main>`,
@@ -191,7 +191,7 @@ func TestSSRArtifactsFromIRRenderConcreteSSRPage(t *testing.T) {
 		}},
 	}
 
-	artifacts, err := SSRArtifactsFromIR(config, gwdkanalysis.BuildIR(config, app), outputDir)
+	artifacts, err := SSRArtifactsFromIR(config, gwdkanalysis.BuildProgram(config, app), outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,13 +205,13 @@ func TestSSRArtifactsFromIRRenderConcreteSSRPage(t *testing.T) {
 
 func TestSSRArtifactsRenderDynamicSSRPageWithPlaceholders(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:     "blog.post",
 			Route:  "/blog/{slug}",
 			Render: gowdk.SSR,
-			Guard:  []string{"auth.required"},
-			Blocks: manifest.Blocks{
+			Guards: []string{"auth.required"},
+			Blocks: gwdkir.Blocks{
 				BuildBody: `=> { title: "Post {slug}" }`,
 				View:      true,
 				ViewBody:  `<main data-slug="{param(\"slug\")}"><h1>{title}</h1><p>{param("slug")}</p></main>`,
@@ -243,12 +243,12 @@ func TestSSRArtifactsRenderDynamicSSRPageWithPlaceholders(t *testing.T) {
 
 func TestSSRArtifactsRejectRouteParamInDangerousAttribute(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:     "blog.post",
 			Route:  "/blog/{slug}",
 			Render: gowdk.SSR,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<img src="x" onerror="{param(\"slug\")}" />`,
 			},
@@ -266,11 +266,11 @@ func TestSSRArtifactsRejectRouteParamInDangerousAttribute(t *testing.T) {
 
 func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Render: gowdk.SSR,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Load:     true,
 			LoadBody: `=> { user.name, account.plan }`,
 			View:     true,
@@ -306,22 +306,22 @@ func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 
 func TestSSRArtifactsComposePageLoadThroughLayouts(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:      "dashboard",
 			Route:   "/dashboard",
 			Render:  gowdk.SSR,
 			Layouts: []string{"shell"},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Load:     true,
 				LoadBody: `=> { user.name }`,
 				View:     true,
 				ViewBody: `<main>{user.name}</main>`,
 			},
 		}},
-		Layouts: []manifest.Layout{{
+		Layouts: []gwdkir.Layout{{
 			ID: "shell",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<section><header>{user.name}</header><slot /></section>`,
 			},

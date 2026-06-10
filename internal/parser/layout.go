@@ -4,15 +4,25 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
+// layoutIDFromPath derives a layout's identity from its file name:
+// `layouts/root.layout.gwdk` -> `root`.
+func layoutIDFromPath(path string) string {
+	return strings.TrimSuffix(filepath.Base(path), ".layout.gwdk")
+}
+
 // ParseLayout extracts layout metadata and top-level block declarations.
-func ParseLayout(src []byte) (gwdkir.Layout, error) {
+// Layout identity is derived from the file name (`root.layout.gwdk` -> `root`);
+// any `@layout` annotation declares parent layouts this layout nests within.
+func ParseLayout(path string, src []byte) (gwdkir.Layout, error) {
 	var layout gwdkir.Layout
+	layout.ID = layoutIDFromPath(path)
 	var viewBody []string
 	inView := false
 	var styleBody []string
@@ -190,7 +200,7 @@ func ParseLayout(src []byte) (gwdkir.Layout, error) {
 		return gwdkir.Layout{}, fmt.Errorf("go block missing closing }")
 	}
 	if layout.ID == "" {
-		return gwdkir.Layout{}, fmt.Errorf("missing @layout")
+		return gwdkir.Layout{}, fmt.Errorf("layout file name must be <name>.layout.gwdk")
 	}
 	return layout, nil
 }

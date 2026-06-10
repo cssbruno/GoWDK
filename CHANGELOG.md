@@ -18,6 +18,41 @@ packages, and tooling contracts may change before a stable release.
 - Compiler validation diagnostics now carry a severity. Warning-severity
   diagnostics surface to authors and editors but do not fail the build.
 
+### Implemented
+
+- The default-deny contract now covers every way a guardless page could leak:
+  dynamic build-time pages (`paths {}`) are denied by route pattern so each
+  concrete artifact returns 403, direct index artifact paths
+  (`/dashboard/index.html`) are normalized to their route before the deny check,
+  and a guardless page that declares `act`/`api`/`fragment` endpoints is a build
+  **error** (`missing_page_guard`) because those endpoints would otherwise be
+  publicly callable.
+
+## v0.2.8 - 2026-06-10
+
+### Changed
+
+- Layout identity is now derived from the `.layout.gwdk` file name. An
+  `@layout` annotation inside a layout file no longer declares identity; it
+  declares the parent layout(s) the layout inherits from and is optional.
+- `gowdk version` and the VS Code extension metadata now report `0.2.8`.
+- Optional contract adapter modules require `github.com/cssbruno/gowdk v0.2.8`.
+
+### Implemented
+
+- A layout that references itself through `@layout` is now a compile error
+  (`layout_self_reference`), as is a cyclic layout inheritance chain
+  (`cyclic_layout_reference`).
+- A layout whose `@layout` parent does not resolve to a declared layout now
+  reports `unknown_layout_id` at validation time.
+- A layout must contain exactly one `<slot />` placeholder. Layouts with zero
+  or multiple slots now hard-error at validation time (`layout_slot_count`)
+  instead of failing later during composition.
+
+### Known Gaps
+
+- GOWDK remains not production-ready.
+
 ## v0.2.7 - 2026-06-09
 
 ### Implemented

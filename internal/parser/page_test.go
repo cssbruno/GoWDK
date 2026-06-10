@@ -1192,7 +1192,7 @@ view {
 }
 
 func TestParseLayoutReadsGoBlock(t *testing.T) {
-	layout, err := ParseLayout([]byte(`
+	layout, err := ParseLayout("root.layout.gwdk", []byte(`
 @layout root
 
 go ssr {
@@ -1281,9 +1281,7 @@ view {
 }
 
 func TestParseLayoutReadsIDAndViewBody(t *testing.T) {
-	layout, err := ParseLayout([]byte(`
-@layout root
-
+	layout, err := ParseLayout("layouts/root.layout.gwdk", []byte(`
 view {
   <slot />
 }
@@ -1292,7 +1290,10 @@ view {
 		t.Fatal(err)
 	}
 	if layout.ID != "root" {
-		t.Fatalf("expected root layout, got %q", layout.ID)
+		t.Fatalf("expected identity from file name, got %q", layout.ID)
+	}
+	if len(layout.Layouts) != 0 {
+		t.Fatalf("expected no parent layouts, got %#v", layout.Layouts)
 	}
 	if !layout.Blocks.View {
 		t.Fatal("expected layout view block")
@@ -1302,8 +1303,27 @@ view {
 	}
 }
 
+func TestParseLayoutTreatsLayoutAnnotationAsParent(t *testing.T) {
+	layout, err := ParseLayout("layouts/docs.layout.gwdk", []byte(`
+@layout root
+
+view {
+  <slot />
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if layout.ID != "docs" {
+		t.Fatalf("expected identity from file name, got %q", layout.ID)
+	}
+	if len(layout.Layouts) != 1 || layout.Layouts[0] != "root" {
+		t.Fatalf("expected @layout to declare parent layout root, got %#v", layout.Layouts)
+	}
+}
+
 func TestParseLayoutRejectsPageAnnotation(t *testing.T) {
-	_, err := ParseLayout([]byte(`
+	_, err := ParseLayout("root.layout.gwdk", []byte(`
 @layout root
 @page home
 

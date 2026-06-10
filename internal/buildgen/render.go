@@ -67,13 +67,60 @@ func composePageViewSource(page gwdkir.Page, layouts map[string]gwdkir.Layout) (
 		if !ok {
 			return "", fmt.Errorf("layout %q is not available for app-shell composition", layoutRef)
 		}
-		next, err := composeLayoutSource(layout, source)
+		next, err := composeLayoutWithParents(layout, source, layouts, map[string]bool{})
 		if err != nil {
 			return "", err
 		}
 		source = next
 	}
 	return source, nil
+}
+
+// composeLayoutWithParents wraps child in layout's slot, then wraps the result
+// in layout's own @layout parent chain (outermost last). The visiting set
+// guards against cyclic inheritance, which validation also rejects.
+func composeLayoutWithParents(layout gwdkir.Layout, child string, layouts map[string]gwdkir.Layout, visiting map[string]bool) (string, error) {
+	key := layoutRegistryKey(layout.Package, layout.ID)
+	if visiting[key] {
+		return "", fmt.Errorf("cyclic layout reference at %q", layout.ID)
+	}
+	visiting[key] = true
+	defer delete(visiting, key)
+
+	source, err := composeLayoutSource(layout, child)
+	if err != nil {
+		return "", err
+	}
+	for index := len(layout.Layouts) - 1; index >= 0; index-- {
+		parent, ok := resolveLayoutParent(layout, layouts, layout.Layouts[index])
+		if !ok {
+			return "", fmt.Errorf("parent layout %q is not available for app-shell composition", layout.Layouts[index])
+		}
+		source, err = composeLayoutWithParents(parent, source, layouts, visiting)
+		if err != nil {
+			return "", err
+		}
+	}
+	return source, nil
+}
+
+func resolveLayoutParent(layout gwdkir.Layout, layouts map[string]gwdkir.Layout, ref string) (gwdkir.Layout, bool) {
+	if alias, layoutID, ok := strings.Cut(ref, "."); ok {
+		for _, use := range layout.Uses {
+			if use.Alias == alias {
+				parent, exists := layouts[layoutRegistryKey(use.Package, layoutID)]
+				return parent, exists
+			}
+		}
+		return gwdkir.Layout{}, false
+	}
+	if layout.Package != "" {
+		if parent, ok := layouts[layoutRegistryKey(layout.Package, ref)]; ok {
+			return parent, true
+		}
+	}
+	parent, ok := layouts[layoutRegistryKey("", ref)]
+	return parent, ok
 }
 
 func resolvePageLayout(page gwdkir.Page, layouts map[string]gwdkir.Layout, layoutRef string) (gwdkir.Layout, bool) {

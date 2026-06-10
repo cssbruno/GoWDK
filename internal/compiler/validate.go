@@ -88,6 +88,8 @@ func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) Val
 	diagnostics = append(diagnostics, validateGOWDKUses(ir, crossFile)...)
 	diagnostics = append(diagnostics, validatePageAssetUses(ir)...)
 	diagnostics = append(diagnostics, validateUniqueLayouts(ir.Layouts)...)
+	diagnostics = append(diagnostics, validateLayoutSlots(ir.Layouts)...)
+	diagnostics = append(diagnostics, validateLayoutReferences(ir.Layouts)...)
 	diagnostics = append(diagnostics, validatePageLayoutReferences(ir.Pages, ir.Layouts)...)
 	diagnostics = append(diagnostics, validateGoBlocks(config, ir)...)
 	diagnostics = append(diagnostics, validateUniquePageRoutes(ir.Pages)...)

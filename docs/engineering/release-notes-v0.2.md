@@ -90,6 +90,16 @@ tooling contracts may change before a stable release.
 - `gowdk doctor` checks the local Go/GOWDK toolchain, project config, source
   discovery, language validation, route metadata, and relevant optional tools
   without writing generated output.
+- `v0.2.8` release metadata: CLI/editor versions, optional module root-version
+  requirements, root changelog, and release-doc current-version examples.
+- Layout identity now comes from the `.layout.gwdk` file name. `@layout` inside
+  a layout is optional and declares the parent layout(s) the layout inherits
+  from instead of its own identity.
+- Self-referential and cyclic layout inheritance are compile errors
+  (`layout_self_reference`, `cyclic_layout_reference`), and an `@layout` parent
+  that does not resolve reports `unknown_layout_id`.
+- A layout must contain exactly one `<slot />` placeholder; zero or multiple
+  slots hard-error at validation time (`layout_slot_count`).
 
 ## Partial
 

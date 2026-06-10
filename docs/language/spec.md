@@ -34,7 +34,9 @@ Current file kinds:
   not public by default (see below). They may declare `@page` when they need an
   explicit stable page ID.
 - Component files declare `@component` and usually `view {}`.
-- Layout files declare `@layout` and `view {}` with a `<slot />`.
+- Layout files take their identity from the file name (`root.layout.gwdk`
+  declares the layout `root`) and declare `view {}` with exactly one `<slot />`.
+  They may declare `@layout` to name the parent layout(s) they nest within.
 
 Planned or partial file kinds:
 

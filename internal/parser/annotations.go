@@ -176,8 +176,12 @@ func applyLayoutAnnotation(layout *gwdkir.Layout, name, rawValue string, lineNum
 		if value == "" {
 			return fmt.Errorf("@layout requires a value")
 		}
-		layout.ID = trimQuotes(value)
-		layout.Span = sourceLineSpan(lineNumber, rawLine)
+		refs := splitList(value)
+		layout.Layouts = append(layout.Layouts, refs...)
+		layout.LayoutSpans = append(layout.LayoutSpans, namedValueSpans(refs, lineNumber, rawLine)...)
+		if (layout.Span == source.SourceSpan{}) {
+			layout.Span = sourceLineSpan(lineNumber, rawLine)
+		}
 	default:
 		return fmt.Errorf("unsupported annotation @%s", name)
 	}

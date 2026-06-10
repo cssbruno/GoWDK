@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func validateUniquePages(pages []gwdkir.Page) []ValidationError {
@@ -138,6 +139,144 @@ func validatePageLayoutReferences(pages []gwdkir.Page, layouts []gwdkir.Layout) 
 		}
 	}
 	return diagnostics
+}
+
+// validateLayoutReferences checks a layout's own @layout parent declarations:
+// a layout may not inherit from itself (layout_self_reference), may not form a
+// cyclic inheritance chain (cyclic_layout_reference), and must reference
+// layouts that exist (unknown_layout_id).
+func validateLayoutReferences(layouts []gwdkir.Layout) []ValidationError {
+	if len(layouts) == 0 {
+		return nil
+	}
+	declared := map[string]gwdkir.Layout{}
+	for _, layout := range layouts {
+		if layout.ID != "" {
+			declared[layoutIdentityKey(layout.Package, layout.ID)] = layout
+		}
+	}
+
+	resolve := func(layout gwdkir.Layout, usesByAlias map[string]gwdkir.Use, ref string) (key string, known bool) {
+		if alias, layoutID, ok := strings.Cut(ref, "."); ok {
+			use, exists := usesByAlias[alias]
+			if !exists {
+				return ref, false
+			}
+			key = layoutIdentityKey(use.Package, layoutID)
+			_, known = declared[key]
+			return key, known
+		}
+		if layout.Package != "" {
+			key = layoutIdentityKey(layout.Package, ref)
+			if _, ok := declared[key]; ok {
+				return key, true
+			}
+		}
+		key = layoutIdentityKey("", ref)
+		_, known = declared[key]
+		return key, known
+	}
+
+	var diagnostics []ValidationError
+	edges := map[string][]string{}
+	for _, layout := range layouts {
+		selfKey := layoutIdentityKey(layout.Package, layout.ID)
+		usesByAlias := layoutUsesByAlias(layout)
+		for index, ref := range layout.Layouts {
+			key, known := resolve(layout, usesByAlias, ref)
+			span := layoutRefSpan(layout, index)
+			if key == selfKey {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:   "layout_self_reference",
+					Source: layout.Source,
+					Span:   span,
+					Message: fmt.Sprintf(
+						"layout %s lists itself in @layout; a layout cannot inherit from itself (layout identity comes from the file name, not @layout)",
+						layoutDisplayName(layout.Package, layout.ID),
+					),
+				})
+				continue
+			}
+			if !known {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:   "unknown_layout_id",
+					Source: layout.Source,
+					Span:   span,
+					Message: fmt.Sprintf(
+						"layout %s references parent layout %q, but no matching .layout.gwdk file declares it",
+						layoutDisplayName(layout.Package, layout.ID),
+						ref,
+					),
+				})
+				continue
+			}
+			edges[selfKey] = append(edges[selfKey], key)
+		}
+	}
+	return append(diagnostics, detectLayoutCycles(layouts, edges)...)
+}
+
+func detectLayoutCycles(layouts []gwdkir.Layout, edges map[string][]string) []ValidationError {
+	bySelf := map[string]gwdkir.Layout{}
+	for _, layout := range layouts {
+		bySelf[layoutIdentityKey(layout.Package, layout.ID)] = layout
+	}
+	const (
+		unvisited = 0
+		active    = 1
+		done      = 2
+	)
+	color := map[string]int{}
+	reported := map[string]bool{}
+	var diagnostics []ValidationError
+	var dfs func(node string)
+	dfs = func(node string) {
+		color[node] = active
+		for _, next := range edges[node] {
+			switch color[next] {
+			case active:
+				if layout, ok := bySelf[next]; ok && !reported[next] {
+					reported[next] = true
+					diagnostics = append(diagnostics, ValidationError{
+						Code:   "cyclic_layout_reference",
+						Source: layout.Source,
+						Span:   layout.Span,
+						Message: fmt.Sprintf(
+							"layout %s is part of a cyclic @layout inheritance chain",
+							layoutDisplayName(layout.Package, layout.ID),
+						),
+					})
+				}
+			case unvisited:
+				dfs(next)
+			}
+		}
+		color[node] = done
+	}
+	for _, layout := range layouts {
+		key := layoutIdentityKey(layout.Package, layout.ID)
+		if color[key] == unvisited {
+			dfs(key)
+		}
+	}
+	return diagnostics
+}
+
+func layoutUsesByAlias(layout gwdkir.Layout) map[string]gwdkir.Use {
+	usesByAlias := map[string]gwdkir.Use{}
+	for _, use := range layout.Uses {
+		if _, exists := usesByAlias[use.Alias]; !exists {
+			usesByAlias[use.Alias] = use
+		}
+	}
+	return usesByAlias
+}
+
+func layoutRefSpan(layout gwdkir.Layout, index int) source.SourceSpan {
+	if index >= 0 && index < len(layout.LayoutSpans) {
+		return layout.LayoutSpans[index].Span
+	}
+	return layout.Span
 }
 
 func pageUsesByAlias(page gwdkir.Page) map[string]gwdkir.Use {

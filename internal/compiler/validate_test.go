@@ -3264,6 +3264,71 @@ func TestValidateManifestRejectsDuplicateLayoutIDsInSamePackage(t *testing.T) {
 	}
 }
 
+func TestValidateManifestRejectsLayoutSelfReference(t *testing.T) {
+	app := appFixture{
+		Layouts: []gwdkir.Layout{
+			{Package: "app", ID: "root", Layouts: []string{"root"}, Source: "app/root.layout.gwdk"},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected layout self-reference diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "layout_self_reference") {
+		t.Fatalf("Missing layout_self_reference diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsCyclicLayoutInheritance(t *testing.T) {
+	app := appFixture{
+		Layouts: []gwdkir.Layout{
+			{Package: "app", ID: "a", Layouts: []string{"b"}, Source: "app/a.layout.gwdk"},
+			{Package: "app", ID: "b", Layouts: []string{"a"}, Source: "app/b.layout.gwdk"},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected cyclic layout diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "cyclic_layout_reference") {
+		t.Fatalf("Missing cyclic_layout_reference diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAcceptsLayoutInheritanceChain(t *testing.T) {
+	app := appFixture{
+		Layouts: []gwdkir.Layout{
+			{Package: "app", ID: "root", Source: "app/root.layout.gwdk"},
+			{Package: "app", ID: "docs", Layouts: []string{"root"}, Source: "app/docs.layout.gwdk"},
+		},
+	}
+
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected a valid layout inheritance chain to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsUnknownLayoutParent(t *testing.T) {
+	app := appFixture{
+		Layouts: []gwdkir.Layout{
+			{Package: "app", ID: "docs", Layouts: []string{"missing"}, Source: "app/docs.layout.gwdk"},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown layout parent diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unknown_layout_id") {
+		t.Fatalf("Missing unknown_layout_id diagnostic: %#v", diagnostics)
+	}
+}
+
 func TestValidateManifestRejectsDuplicatePageRoutes(t *testing.T) {
 	app := appFixture{
 		Pages: []gwdkir.Page{

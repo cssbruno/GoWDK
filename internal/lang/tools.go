@@ -187,7 +187,7 @@ func ParseLayoutSource(path string, source []byte) (gwdkir.Layout, Diagnostics) 
 		return gwdkir.Layout{}, diagnostics
 	}
 
-	layout, err := parser.ParseLayout(source)
+	layout, err := parser.ParseLayout(path, source)
 	layout.Source = path
 	if err != nil {
 		diagnostics = append(diagnostics, Diagnostic{

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -38,6 +39,10 @@ type Record struct {
 // Store appends event envelopes to a JSON Lines file and can replay them as an
 // EventSource. Ack removes delivered records; Nack records retry metadata and
 // leaves records for later delivery.
+//
+// Store synchronizes access within a single process only. Pointing multiple
+// processes at the same outbox file is not supported and can lose or
+// double-deliver records.
 type Store struct {
 	mu             sync.Mutex
 	path           string
@@ -201,16 +206,18 @@ func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch
 		limit = len(records)
 	}
 	selected := append([]Record(nil), records[:limit]...)
-	events, err := store.decodeRecordsLocked(selected)
+	events, acked, failed, decodeErr := store.decodeRecordsLocked(selected)
+	if len(failed) > 0 {
+		if err := store.markRecordsFailedLocked(failed, decodeErr); err != nil {
+			store.mu.Unlock()
+			return contracts.EventBatch{}, err
+		}
+	}
 	store.mu.Unlock()
-	if err != nil {
-		return contracts.EventBatch{}, err
+	if len(events) == 0 {
+		return contracts.EventBatch{}, decodeErr
 	}
 
-	acked := map[string]bool{}
-	for _, record := range selected {
-		acked[record.ID] = true
-	}
 	return contracts.EventBatch{
 		Events: events,
 		Ack: func(ctx context.Context) error {
@@ -245,24 +252,36 @@ func typeName[T any]() string {
 	return t.PkgPath() + "." + t.Name()
 }
 
-func (store *Store) decodeRecordsLocked(records []Record) ([]contracts.EventEnvelope, error) {
+// decodeRecordsLocked decodes records into typed envelopes. Records that have
+// no decoder or fail to decode are reported as failed instead of failing the
+// whole batch so one poison record cannot wedge delivery of the rest; failed
+// records flow through the regular Nack retry and dead-letter machinery.
+func (store *Store) decodeRecordsLocked(records []Record) ([]contracts.EventEnvelope, map[string]bool, map[string]bool, error) {
 	events := make([]contracts.EventEnvelope, 0, len(records))
+	decoded := map[string]bool{}
+	failed := map[string]bool{}
+	var failure error
 	for _, record := range records {
 		decoder := store.decoders[record.Type]
 		if decoder == nil {
-			return nil, fmt.Errorf("file outbox event %s has no decoder", record.Type)
+			failed[record.ID] = true
+			failure = errors.Join(failure, fmt.Errorf("file outbox event %s has no decoder", record.Type))
+			continue
 		}
 		value, err := decoder(record.Value)
 		if err != nil {
-			return nil, fmt.Errorf("file outbox event %s cannot be decoded: %w", record.Type, err)
+			failed[record.ID] = true
+			failure = errors.Join(failure, fmt.Errorf("file outbox event %s cannot be decoded: %w", record.Type, err))
+			continue
 		}
+		decoded[record.ID] = true
 		events = append(events, contracts.EventEnvelope{
 			Category: record.Category,
 			Type:     record.Type,
 			Value:    value,
 		})
 	}
-	return events, nil
+	return events, decoded, failed, failure
 }
 
 func (store *Store) readRecordsLocked() ([]Record, error) {

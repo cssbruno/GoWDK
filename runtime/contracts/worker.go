@@ -3,10 +3,26 @@ package contracts
 import (
 	"context"
 	"errors"
+	"log"
 )
 
 // ErrEventSourceClosed tells RunEventWorker that the source drained cleanly.
 var ErrEventSourceClosed = errors.New("event source closed")
+
+// WorkerLogger receives dispatch failures that RunEventWorker recovered from
+// by nacking the batch. Set it to nil to silence recovered-dispatch logging.
+// It defaults to the standard log package.
+var WorkerLogger func(message string) = func(message string) {
+	log.Print(message)
+}
+
+func logWorkerDispatchFailure(err error) {
+	logger := WorkerLogger
+	if logger == nil {
+		return
+	}
+	logger("gowdk: event worker nacked batch after dispatch failure: " + err.Error())
+}
 
 // EventBatch is one ordered delivery batch from an outbox, queue, or broker
 // adapter. Ack and Nack are optional adapter hooks.
@@ -28,7 +44,9 @@ func RunEventWorker(ctx context.Context, registry *Registry, source EventSource)
 }
 
 // RunEventWorkerForRole reads batches from source and dispatches them to
-// subscribers available to role.
+// subscribers available to role. Dispatch failures that the source accepts
+// through Nack are logged via WorkerLogger and the worker keeps consuming;
+// it only stops when ctx ends, the source closes, or Ack/Nack fail.
 func RunEventWorkerForRole(ctx context.Context, registry *Registry, role Role, source EventSource) error {
 	if source == nil {
 		return Error{Kind: ErrNilHandler, Message: "event source cannot be nil"}
@@ -58,12 +76,16 @@ func dispatchEventBatch(ctx context.Context, registry *Registry, role Role, batc
 		return ackEventBatch(ctx, batch)
 	}
 	if err := PublishEnvelopesForRole(ctx, registry, role, batch.Events); err != nil {
-		if batch.Nack != nil {
-			if nackErr := batch.Nack(ctx, err); nackErr != nil {
-				return errors.Join(err, nackErr)
-			}
+		if batch.Nack == nil {
+			return err
 		}
-		return err
+		if nackErr := batch.Nack(ctx, err); nackErr != nil {
+			return errors.Join(err, nackErr)
+		}
+		// The source accepted the Nack and owns redelivery, so the worker
+		// records the failure and keeps consuming instead of exiting.
+		logWorkerDispatchFailure(err)
+		return nil
 	}
 	return ackEventBatch(ctx, batch)
 }

@@ -60,3 +60,18 @@ func TestValidateRequiresClientAndNames(t *testing.T) {
 		t.Fatalf("validate error = %v, want client required", err)
 	}
 }
+
+func TestNewStartsByDrainingPendingEntries(t *testing.T) {
+	store := New(nil, "events", "workers", "worker-1")
+	if !store.pendingFirst() {
+		t.Fatal("expected a new store to drain pending entries before new messages")
+	}
+	store.setPendingFirst(false)
+	if store.pendingFirst() {
+		t.Fatal("expected pending drain to be cleared")
+	}
+	store.setPendingFirst(true)
+	if !store.pendingFirst() {
+		t.Fatal("expected Nack rewind to re-enable the pending drain")
+	}
+}

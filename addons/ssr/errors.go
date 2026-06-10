@@ -71,6 +71,11 @@ func validateRedirectURL(url string) error {
 	if strings.HasPrefix(url, "//") {
 		return fmt.Errorf("SSR redirect %q must not be protocol-relative", url)
 	}
+	// Browsers normalize "\" to "/" before navigating, so "/\evil.com" is
+	// treated like the protocol-relative "//evil.com".
+	if strings.Contains(url, "\\") {
+		return fmt.Errorf("SSR redirect %q must not contain backslashes", url)
+	}
 	if strings.ContainsAny(url, "\r\n") {
 		return fmt.Errorf("SSR redirect %q must not contain newlines", url)
 	}

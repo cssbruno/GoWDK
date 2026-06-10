@@ -75,7 +75,7 @@ func TestCSRFGeneratesSecureCookieAndValidatesFormToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	token, err := csrf.Token(response)
+	token, err := csrf.Token(response, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestCSRFValidatesHeaderToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	token, err := csrf.Token(response)
+	token, err := csrf.Token(response, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestCSRFRejectsMissingMismatchAndInvalidTokens(t *testing.T) {
 	}
 
 	response := httptest.NewRecorder()
-	token, err := csrf.Token(response)
+	token, err := csrf.Token(response, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

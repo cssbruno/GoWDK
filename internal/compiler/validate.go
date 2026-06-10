@@ -31,6 +31,9 @@ func (err ValidationError) Error() string {
 // The validators read the compiler IR directly; there is no manifest
 // intermediary on this path.
 func ValidateProgram(config gowdk.Config, ir gwdkir.Program) error {
+	if err := gwdkir.CheckInvariants(ir); err != nil {
+		return fmt.Errorf("internal compiler error: %w", err)
+	}
 	var diagnostics []ValidationError
 	diagnostics = append(diagnostics, validatePackages(ir)...)
 	diagnostics = append(diagnostics, validateUniquePages(ir.Pages)...)

@@ -8,7 +8,7 @@ Implemented today:
 
 - Recursive `.gwdk` discovery through `internal/discover`.
 - Page and component metadata parsing through `internal/parser`.
-- Manifest and site-map models through `internal/manifest` and `internal/lang`.
+- IR-derived manifest JSON and site-map reports through `internal/lang`.
 - Render-rule, duplicate identity, redundant component, and component contract
   validation through `internal/compiler`.
 - SPA `view {}` markup and component invocation parsing through `internal/view`.

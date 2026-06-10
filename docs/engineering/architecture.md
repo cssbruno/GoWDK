@@ -131,13 +131,12 @@ fields there first.
 | `internal/discover` | Find portable `.gwdk` files from include/exclude patterns. | Compiler | Recursive glob discovery implemented. |
 | `internal/gwdkast` | Define the typed GOWDK source AST. | Compiler | Package declarations, typed page/component/layout/route/render/layout/guard/CSS declarations, component CSS scope/hash metadata, annotations, Go imports, GOWDK uses, stores, typed component contracts, blocks, endpoint declarations, parsed view nodes, literal records, and source spans implemented. |
 | `internal/parser` | Parse `.gwdk` files into AST and manifest structs. | Compiler | First-slice parser for pages, components, layouts, route params, imported Go build functions, action/API metadata, component CSS scope/hash metadata, GOWDK `use` declarations, package declarations, package spans, and source spans implemented. `ParseSyntax` returns `internal/gwdkast.File`; manifest records remain for compatibility while compiler entrypoints move to analyzer IR. |
-| `internal/gwdkanalysis` | Lower GOWDK AST into normalized compiler metadata. | Compiler | Lowers typed AST files into manifest compatibility records and `internal/gwdkir.Program`, including packages, routes, endpoints, templates, client behavior, source-selected assets with component CSS scope/hash metadata, stores, imports, uses, and source spans. |
+| `internal/gwdkanalysis` | Assemble `internal/gwdkir.Program` from parsed IR records. | Compiler | `BuildProgram` derives packages, routes, endpoints, templates, client behavior, source-selected assets with component CSS scope/hash metadata, stores, imports, uses, and source spans from parsed records; exposes standalone-endpoint and backend-binding attachment for post-assembly enrichment. |
 | `internal/gwdkir` | Stable internal compiler IR shared by generated-output passes. | Compiler | Versioned IR for packages, source files, page routes, backend endpoints, templates, client behavior, asset scope/hash metadata, and generated output plans implemented. |
 | `internal/view` | Parse and render the first spa `view {}` markup subset. | Compiler | Lowercase HTML elements, spa/boolean/expression attributes, shorthand class/id normalization, escaped text/attribute interpolation, self-closing component calls, prop/state interpolation, `g:on:*`, and `g:island` handling implemented. |
 | `internal/gotypes` | Resolve Go props/state contracts for components. | Compiler | Uses `go list`, `go/parser`, and `go/types` to resolve imported structs and state init signatures. |
-| `internal/lang` | Language tooling for lexing, diagnostics, formatting, checking, and manifest output. | Tools | Initial CLI-backed tools implemented. |
+| `internal/lang` | Language tooling for lexing, diagnostics, formatting, checking, and the IR-derived manifest JSON report. | Tools | Initial CLI-backed tools implemented. |
 | `internal/lsp` | Language Server Protocol bridge for diagnostics, formatting, completions, and hover. | Tools | Dependency-free stdio server implemented with baseline and open-project completions plus hover for known language tokens and open-project symbols. |
-| `internal/manifest` | Normalize discovered pages, routes, blocks, layouts, render modes, paths, and guards. | Compiler | Initial page model implemented. Public manifest JSON is currently narrower than the internal model. |
 | `internal/project` | Load project-level config, module source groups, build targets, and future source roots. | Compiler | SPA `gowdk.config.go` subset implemented for build discovery, output, and `Build.Targets`; project-level CLI commands require this config or an explicit `--config` file before compiling `.gwdk` code. |
 | `internal/compiler` | Validate manifests and coordinate compilation metadata. | Compiler | Render-mode, duplicate identity, redundant component implementation, component Go contract, saved default `go {}` package type-checking with sibling Go files, route shape, duplicate route param, duplicate route pattern, route-method, required page-view validation, default `go {}` backend endpoint binding fallback, and backend binding implemented. CLI route/endpoint reports now convert through `internal/gwdkir.Program`. |
 | `internal/buildgen` | Emit route-derived spa HTML files for build-time pages and SSR render artifacts. | Compiler | Disk builds, memory builds, incremental SPA builds, and SSR artifact planning consume `internal/gwdkir.Program`. Initial simple page, literal build data, imported Go build data calls, literal dynamic path expansion, component expansion, partial runtime asset emission, default JS island asset emission, component-level non-CSS asset emission, component-level WASM island asset emission, page-level `go client {}` WASM mount asset emission, concrete and dynamic SSR page rendering with declared `load {}` placeholders, route manifest emission, asset manifest emission, mandatory build report emission, identical-output write skipping, and incremental changed-page spa rendering implemented. |
@@ -323,8 +322,9 @@ same parser and compiler rules as `gowdk check`.
 flowchart LR
   Source[.gwdk files] --> Discover[internal/discover]
   Discover --> Parser[internal/parser]
-  Parser --> Manifest[internal/manifest]
-  Manifest --> Compiler[internal/compiler]
+  Parser --> IR[internal/gwdkir records]
+  IR --> Assembly[internal/gwdkanalysis]
+  Assembly --> Compiler[internal/compiler]
   Compiler --> Buildgen[internal/buildgen]
   Compiler --> Appgen[internal/appgen]
   Buildgen --> SPA[SPA pages/assets]

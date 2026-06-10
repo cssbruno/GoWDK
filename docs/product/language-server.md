@@ -90,7 +90,7 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 
 ## Dependencies
 
-- Internal: `internal/lang`, `internal/parser`, `internal/compiler`, `internal/manifest`.
+- Internal: `internal/lang`, `internal/parser`, `internal/compiler`, `internal/gwdkir`.
 - External: none.
 
 ## Open Questions

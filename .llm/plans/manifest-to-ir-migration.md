@@ -53,14 +53,30 @@ Issue #145 progress (compiler IR-native validation):
 - (done) `internal/compiler` no longer imports `internal/manifest` (non-test),
   verified via `go list` (Step 3 exit criterion).
 
+- (done, Step 4) `internal/appgen` is manifest-free: the caller-less
+  manifest-typed `ActionEndpoints`/`APIEndpoints`/`FragmentEndpoints` and their
+  manifest twins were deleted (the IR derivations are the only path; their
+  tests lower manifest fixtures through `BuildIR`), binding fields use
+  `source.BackendBinding`, and `ErrorPagePath` moved to `internal/source`
+  (manifest delegates; parser/gwdkanalysis still call the manifest wrapper
+  until Step 5). The remaining `lang`/`lsp` manifest references are the parse
+  seam itself, deferred to Step 5 by design.
+
 Pending (largest remaining work):
 
-- Step 4 residue: `internal/appgen` and `internal/lang`/`internal/lsp` still
-  carry manifest-typed helpers around parsing and reports.
 - Step 5: collapse the `AST → manifest → IR` path to `AST → IR` in
-  `gwdkanalysis`; the parser seam and `BuildIR(manifest)` remain manifest-typed
-  until then.
-- Keep public manifest JSON until a release plan deprecates it.
+  `gwdkanalysis`. Everything manifest-typed that remains is this one seam: the
+  parser's AST→manifest lowering (`parser/page_lower.go`, `component.go`,
+  `layout.go`), `BuildIR(manifest)`, and the `lang`/`lsp` plumbing that passes
+  parsed `manifest.Page/Component/Layout` around. Note `gwdkanalysis.Analyze` +
+  `manifest_lowering.go` are a second, currently caller-less AST→manifest
+  lowering (tests only) — Step 5 should either build `BuildIRFromAST` on that
+  analyzer entry and repoint `lang.ParseBuildFiles`, or delete it and lower
+  from the parser's AST records; today the production pipeline only uses the
+  parser-side lowering.
+- Keep public manifest JSON until a release plan deprecates it (the manifest
+  model then survives only as the JSON report shape fed by an explicit
+  IR→manifest or AST→manifest adapter).
 
 ## Context
 

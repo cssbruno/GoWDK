@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func validateSSRRoutes(routes []SSRRoute) error {
@@ -21,7 +21,7 @@ func validateSSRRoutes(routes []SSRRoute) error {
 			return fmt.Errorf("generated SSR %s has empty HTML", route.PageID)
 		}
 		if route.ErrorPage != "" {
-			errorPage, err := manifest.ErrorPagePath(route.ErrorPage)
+			errorPage, err := source.ErrorPagePath(route.ErrorPage)
 			if err != nil {
 				return fmt.Errorf("generated SSR %s: %w", route.PageID, err)
 			}

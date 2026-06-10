@@ -46,3 +46,4 @@ coverage/
 .next/
 .nuxt/
 target/
+.claude/

@@ -1783,7 +1783,7 @@ func TestGenerateAutoRoutesRequiresIR(t *testing.T) {
 }
 
 func TestActionEndpointsInfersInputFieldsFromGPostForm(t *testing.T) {
-	routes, err := ActionEndpoints(manifest.Manifest{Pages: []manifest.Page{{
+	routes, err := actionEndpointsFromManifestFixture(manifest.Manifest{Pages: []manifest.Page{{
 		ID:    "newsletter",
 		Route: "/newsletter",
 		Blocks: manifest.Blocks{
@@ -1826,7 +1826,7 @@ func TestActionEndpointsInfersInputFieldsFromGPostForm(t *testing.T) {
 }
 
 func TestActionEndpointsInfersSubmitIntentFieldsFromGPostForm(t *testing.T) {
-	routes, err := ActionEndpoints(manifest.Manifest{Pages: []manifest.Page{{
+	routes, err := actionEndpointsFromManifestFixture(manifest.Manifest{Pages: []manifest.Page{{
 		ID:    "newsletter",
 		Route: "/newsletter",
 		Blocks: manifest.Blocks{
@@ -1850,7 +1850,7 @@ func TestActionEndpointsInfersSubmitIntentFieldsFromGPostForm(t *testing.T) {
 }
 
 func TestActionEndpointsRendersActionFragments(t *testing.T) {
-	routes, err := ActionEndpoints(manifest.Manifest{Pages: []manifest.Page{{
+	routes, err := actionEndpointsFromManifestFixture(manifest.Manifest{Pages: []manifest.Page{{
 		ID:    "patients",
 		Route: "/patients",
 		Blocks: manifest.Blocks{
@@ -1884,7 +1884,7 @@ func TestActionEndpointsRendersActionFragments(t *testing.T) {
 }
 
 func TestFragmentEndpointsRenderComponents(t *testing.T) {
-	routes, err := FragmentEndpoints(manifest.Manifest{
+	routes, err := fragmentEndpointsFromManifestFixture(manifest.Manifest{
 		Pages: []manifest.Page{{
 			ID:      "patients",
 			Route:   "/patients",
@@ -1922,7 +1922,7 @@ func TestFragmentEndpointsRenderComponents(t *testing.T) {
 }
 
 func TestActionEndpointsRejectsFileInputsWithPageContext(t *testing.T) {
-	_, err := ActionEndpoints(manifest.Manifest{Pages: []manifest.Page{{
+	_, err := actionEndpointsFromManifestFixture(manifest.Manifest{Pages: []manifest.Page{{
 		ID:    "profile",
 		Route: "/profile",
 		Blocks: manifest.Blocks{
@@ -4621,4 +4621,19 @@ func waitForHTTPStatusWithHeaders(url, method, body string, headers map[string]s
 		return nil, lastErr
 	}
 	return nil, os.ErrDeadlineExceeded
+}
+
+// The endpoint derivation tests keep their manifest fixtures and lower them
+// through the production manifest->IR path, asserting against exactly what the
+// generated-app pipeline derives.
+func actionEndpointsFromManifestFixture(app manifest.Manifest) ([]ActionEndpoint, error) {
+	return actionEndpointsFromIR(gwdkanalysis.BuildIR(gowdk.Config{}, app))
+}
+
+func apiEndpointsFromManifestFixture(app manifest.Manifest) ([]APIEndpoint, error) {
+	return apiEndpointsFromIR(gwdkanalysis.BuildIR(gowdk.Config{}, app))
+}
+
+func fragmentEndpointsFromManifestFixture(app manifest.Manifest) ([]FragmentEndpoint, error) {
+	return fragmentEndpointsFromIR(gwdkanalysis.BuildIR(gowdk.Config{}, app))
 }

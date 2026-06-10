@@ -122,6 +122,20 @@ compatibility model has been removed entirely:
 New generated-output work should consume `internal/gwdkir.Program` or add
 fields there first.
 
+No generation path depends on a manifest compatibility record. The remaining
+`manifest` references in the tree are not compatibility models: the build-time
+`routeManifest`/`assetManifest` JSON *output* artifacts (`internal/buildgen`),
+the IR-derived public `gowdk manifest` report (`internal/lang/manifest_json.go`),
+the runtime `LoadAssetManifest` asset lookup, the `<… manifest>` HTML attribute
+allow-list (`internal/view`), and historical-context code comments.
+
+Golden tests pin each handoff stage end to end: AST
+(`internal/parser/testdata/golden`), IR (`cmd/gowdk/testdata/inspect_ir_golden`),
+routes and endpoints (`cmd/gowdk/testdata/routes_golden`), generated Go
+(`internal/appgen/testdata/generated_go_golden`), generated HTML and route/asset
+output manifests (`internal/buildgen/testdata/full_fixture`), and the public
+manifest report (`internal/lang/testdata/manifest_golden`).
+
 ## Components
 
 | Component | Responsibility | Owner | Notes |
@@ -130,7 +144,7 @@ fields there first.
 | `gowdk` root package | Public config, render modes, addon registration, and extension contracts. | Core | Includes `Config`, `RenderMode`, `Addon`, `CSSConfig`, `CSSProcessor`, and `GoBlockConsumer`. |
 | `internal/discover` | Find portable `.gwdk` files from include/exclude patterns. | Compiler | Recursive glob discovery implemented. |
 | `internal/gwdkast` | Define the typed GOWDK source AST. | Compiler | Package declarations, typed page/component/layout/route/render/layout/guard/CSS declarations, component CSS scope/hash metadata, annotations, Go imports, GOWDK uses, stores, typed component contracts, blocks, endpoint declarations, parsed view nodes, literal records, and source spans implemented. |
-| `internal/parser` | Parse `.gwdk` files into AST and manifest structs. | Compiler | First-slice parser for pages, components, layouts, route params, imported Go build functions, action/API metadata, component CSS scope/hash metadata, GOWDK `use` declarations, package declarations, package spans, and source spans implemented. `ParseSyntax` returns `internal/gwdkast.File`; manifest records remain for compatibility while compiler entrypoints move to analyzer IR. |
+| `internal/parser` | Parse `.gwdk` files into typed AST and `internal/gwdkir` records. | Compiler | First-slice parser for pages, components, layouts, route params, imported Go build functions, action/API metadata, component CSS scope/hash metadata, GOWDK `use` declarations, package declarations, package spans, and source spans implemented. `ParseSyntax` returns `internal/gwdkast.File`; `ParsePage`/`ParseLayout`/`ParseComponent` lower the AST directly into `gwdkir` records. The former manifest compatibility model has been removed. |
 | `internal/gwdkanalysis` | Assemble `internal/gwdkir.Program` from parsed IR records. | Compiler | `BuildProgram` derives packages, routes, endpoints, templates, client behavior, source-selected assets with component CSS scope/hash metadata, stores, imports, uses, and source spans from parsed records; exposes standalone-endpoint and backend-binding attachment for post-assembly enrichment. |
 | `internal/gwdkir` | Stable internal compiler IR shared by generated-output passes. | Compiler | Versioned IR for packages, source files, page routes, backend endpoints, templates, client behavior, asset scope/hash metadata, and generated output plans implemented. |
 | `internal/view` | Parse and render the first spa `view {}` markup subset. | Compiler | Lowercase HTML elements, spa/boolean/expression attributes, shorthand class/id normalization, escaped text/attribute interpolation, self-closing component calls, prop/state interpolation, `g:on:*`, and `g:island` handling implemented. |

@@ -3328,6 +3328,43 @@ func TestInspectIRCommandMatchesGoldenFixture(t *testing.T) {
 	}
 }
 
+func TestRoutesCommandMatchesGoldenFixture(t *testing.T) {
+	fixture := filepath.FromSlash("testdata/routes_golden")
+	var output string
+	withWorkingDir(t, fixture, func() {
+		stdout, _, err := captureCLIOutput(t, func() error {
+			return run([]string{"routes", "--config", "gowdk.config.go", "newsletter.page.gwdk"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		output = stdout
+	})
+
+	expected, err := os.ReadFile(filepath.Join(fixture, "routes.golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedJSON := canonicalRoutesGolden(t, expected)
+	actualJSON := canonicalRoutesGolden(t, []byte(output))
+	if actualJSON != expectedJSON {
+		t.Fatalf("routes golden mismatch\nexpected:\n%s\nactual:\n%s", expectedJSON, actualJSON)
+	}
+}
+
+func canonicalRoutesGolden(t *testing.T, payload []byte) string {
+	t.Helper()
+	var report routeMetadataReport
+	if err := json.Unmarshal(payload, &report); err != nil {
+		t.Fatalf("invalid routes golden JSON: %v\n%s", err, payload)
+	}
+	canonical, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(canonical)
+}
+
 func TestInspectIRCommandDiscoversSelectedModuleOnly(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app

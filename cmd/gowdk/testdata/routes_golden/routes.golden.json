@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "routes": [
+    {
+      "kind": "spa",
+      "method": "GET",
+      "route": "/newsletter",
+      "pageId": "newsletter",
+      "handler": "embedded.SPA(\"pages/newsletter.html\")"
+    }
+  ],
+  "endpoints": [
+    {
+      "kind": "action",
+      "endpointSource": "gwdk",
+      "source": "newsletter.page.gwdk",
+      "sourceSpan": {
+        "start": {
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "line": 7,
+          "column": 33
+        }
+      },
+      "package": "app",
+      "packagePath": "github.com/cssbruno/gowdk/cmd/gowdk/testdata/routes_golden",
+      "packageName": "app",
+      "symbol": "Subscribe",
+      "method": "POST",
+      "route": "/newsletter",
+      "pageId": "newsletter",
+      "handler": "actions.NewsletterSubscribe",
+      "bindingStatus": "missing",
+      "backendBinding": {
+        "status": "missing",
+        "packageName": "app",
+        "importPath": "github.com/cssbruno/gowdk/cmd/gowdk/testdata/routes_golden",
+        "functionName": "Subscribe",
+        "message": "GOWDK action handler github.com/cssbruno/gowdk/cmd/gowdk/testdata/routes_golden.Subscribe is not implemented"
+      }
+    }
+  ],
+  "info": [
+    {
+      "code": "ssr_disabled",
+      "pageId": "newsletter",
+      "route": "/newsletter",
+      "message": "newsletter uses build-time page output; request-time page rendering is disabled for this route"
+    }
+  ]
+}

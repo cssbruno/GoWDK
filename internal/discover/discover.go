@@ -23,9 +23,16 @@ func Files(root string, includes, excludes []string) ([]string, error) {
 
 	if err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
+			// A failure to read root is fatal; there is nothing to discover.
+			// Errors deeper in the tree (e.g. an unreadable directory, possibly
+			// inside an excluded subtree) must not abort the whole walk - skip
+			// the offending entry and keep going.
+			if path == root {
+				return err
+			}
+			if entry != nil && entry.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
@@ -34,6 +41,16 @@ func Files(root string, includes, excludes []string) ([]string, error) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
+
+		if entry.IsDir() {
+			// Prune excluded directories so we never descend into large trees
+			// like .git, node_modules, or vendor.
+			if rel != "." && matchesExcludedDir(excludeMatchers, rel) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
 		if !matchesAny(includeMatchers, rel) || matchesAny(excludeMatchers, rel) {
 			return nil
 		}
@@ -58,6 +75,15 @@ func compileGlobs(patterns []string) ([]globPattern, error) {
 		matchers = append(matchers, globPattern(filepath.ToSlash(pattern)))
 	}
 	return matchers, nil
+}
+
+// matchesExcludedDir reports whether a directory (given by its slash-separated
+// relative path) is fully covered by an exclude pattern and can be pruned. A
+// directory matches either directly (a pattern naming the directory itself) or
+// when a `dir/**`-style pattern covers everything beneath it, tested by
+// appending a trailing slash so the pattern's `**` matches the empty remainder.
+func matchesExcludedDir(matchers []globPattern, dir string) bool {
+	return matchesAny(matchers, dir) || matchesAny(matchers, dir+"/")
 }
 
 func matchesAny(matchers []globPattern, value string) bool {

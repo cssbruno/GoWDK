@@ -101,7 +101,9 @@ func runDoctor(args []string) (doctorReport, bool) {
 			},
 		})
 		report.finalize()
-		return report, options.JSON
+		// parseProjectOptions stops at the first bad argument, so honor a
+		// requested --json output format regardless of flag order.
+		return report, options.JSON || argsRequestJSON(args)
 	}
 
 	report.Environment.ConfigPath = doctorConfigDisplayPath(configPath)
@@ -143,6 +145,17 @@ func runDoctor(args []string) (doctorReport, bool) {
 	report.runOptionalToolsCheck(options.Config)
 	report.finalize()
 	return report, options.JSON
+}
+
+// argsRequestJSON reports whether the raw arguments include --json, so error
+// reports can honor the requested format even when parsing stops early.
+func argsRequestJSON(args []string) bool {
+	for _, arg := range args {
+		if arg == "--json" {
+			return true
+		}
+	}
+	return false
 }
 
 func (report *doctorReport) runGOWDKCLICheck() {

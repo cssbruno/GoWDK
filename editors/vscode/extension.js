@@ -9,6 +9,8 @@ const core = require('./extension-core');
 const LANGUAGE_ID = 'gwdk';
 const semanticLegend = new vscode.SemanticTokensLegend(core.SEMANTIC_TOKEN_TYPES, []);
 const missingExecutableNotifications = new Set();
+const projectMetadataCache = new Map();
+const projectDiagnosticUris = new Set();
 const treeIconColors = {
   page: new vscode.ThemeColor('charts.blue'),
   layout: new vscode.ThemeColor('charts.purple'),
@@ -26,6 +28,7 @@ function activate(context) {
   const siteMapTree = new SiteMapTreeProvider();
   const directoryOutline = new DirectoryOutlineTreeProvider();
   const refreshProjectViews = () => {
+    invalidateProjectMetadata();
     siteMapTree.refresh();
     directoryOutline.refresh();
   };
@@ -37,13 +40,13 @@ function activate(context) {
 
   context.subscriptions.push(vscode.workspace.onDidOpenTextDocument((doc) => validateSoon(doc, diagnostics, pending)));
   context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((event) => validateSoon(event.document, diagnostics, pending)));
-  context.subscriptions.push(vscode.workspace.onDidSaveTextDocument((doc) => validateNow(doc, diagnostics)));
-  context.subscriptions.push(vscode.workspace.onDidCloseTextDocument((doc) => diagnostics.delete(doc.uri)));
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument((doc) => {
+    validateNow(doc, diagnostics);
     if (doc.languageId === LANGUAGE_ID) {
       refreshProjectViews();
     }
   }));
+  context.subscriptions.push(vscode.workspace.onDidCloseTextDocument((doc) => diagnostics.delete(doc.uri)));
 
   const watcher = vscode.workspace.createFileSystemWatcher('**/*.gwdk');
   context.subscriptions.push(watcher);
@@ -284,6 +287,8 @@ async function validateNow(document, diagnostics) {
   if (document.languageId !== LANGUAGE_ID || !config().get('enableDiagnostics')) {
     return;
   }
+  const startVersion = document.version;
+  const isStale = () => document.version !== startVersion;
   const root = projectRoot(document);
   const configPath = workspaceConfigPath(root);
   if (!configPath) {
@@ -299,6 +304,9 @@ async function validateNow(document, diagnostics) {
   try {
     if (document.uri.scheme === 'file' && !document.isDirty) {
       const projectReport = await loadProjectDiagnostics(document, configPath);
+      if (isStale()) {
+        return;
+      }
       if (projectReport) {
         setProjectDiagnostics(diagnostics, projectReport, document);
         return;
@@ -314,8 +322,14 @@ async function validateNow(document, diagnostics) {
       });
       return runGowdk(args, document).then(({ stdout }) => core.parseDiagnostics(stdout));
     });
+    if (isStale()) {
+      return;
+    }
     diagnostics.set(document.uri, report.map(toVSCodeDiagnostic));
   } catch (error) {
+    if (isStale()) {
+      return;
+    }
     const diagnostic = new vscode.Diagnostic(new vscode.Range(0, 0, 0, 1), error.message, vscode.DiagnosticSeverity.Error);
     diagnostic.source = 'gowdk';
     diagnostics.set(document.uri, [diagnostic]);
@@ -334,13 +348,28 @@ async function loadProjectDiagnostics(document, configPath) {
 }
 
 function setProjectDiagnostics(diagnostics, report, fallbackDocument) {
-  diagnostics.clear();
   const grouped = core.groupDiagnosticsByFile(report);
+  const nextUris = new Set();
   for (const [file, items] of Object.entries(grouped.files)) {
-    diagnostics.set(vscode.Uri.file(file), items.map(toVSCodeDiagnostic));
+    const uri = vscode.Uri.file(file);
+    diagnostics.set(uri, items.map(toVSCodeDiagnostic));
+    nextUris.add(uri.toString());
   }
   if (grouped.global.length > 0) {
     diagnostics.set(fallbackDocument.uri, grouped.global.map(toVSCodeDiagnostic));
+    nextUris.add(fallbackDocument.uri.toString());
+  }
+  if (!nextUris.has(fallbackDocument.uri.toString())) {
+    diagnostics.delete(fallbackDocument.uri);
+  }
+  for (const previous of projectDiagnosticUris) {
+    if (!nextUris.has(previous)) {
+      diagnostics.delete(vscode.Uri.parse(previous));
+    }
+  }
+  projectDiagnosticUris.clear();
+  for (const uri of nextUris) {
+    projectDiagnosticUris.add(uri);
   }
 }
 
@@ -368,13 +397,24 @@ async function withDocumentFile(document, callback) {
   }
 }
 
+function cliExecutionLimits() {
+  const settings = config();
+  const timeoutSeconds = Number(settings.get('cliTimeoutSeconds'));
+  const maxBufferMB = Number(settings.get('cliMaxBufferMB'));
+  return {
+    timeout: (Number.isFinite(timeoutSeconds) && timeoutSeconds > 0 ? timeoutSeconds : 60) * 1000,
+    maxBuffer: (Number.isFinite(maxBufferMB) && maxBufferMB > 0 ? maxBufferMB : 16) * 1024 * 1024
+  };
+}
+
 function runGowdk(args, document) {
   const invocation = toolInvocation(args, document);
+  const limits = cliExecutionLimits();
   return new Promise((resolve, reject) => {
     childProcess.execFile(invocation.command, invocation.args, {
       cwd: invocation.cwd,
-      timeout: 10000,
-      maxBuffer: 1024 * 1024
+      timeout: limits.timeout,
+      maxBuffer: limits.maxBuffer
     }, (error, stdout, stderr) => {
       if (error) {
         notifyMissingExecutable(invocation, error);
@@ -480,12 +520,36 @@ async function loadManifest(document) {
   return JSON.parse(stdout);
 }
 
-async function loadCompletionMetadata(document) {
-  const [siteMap, manifest, cssFiles] = await Promise.all([
+function invalidateProjectMetadata() {
+  projectMetadataCache.clear();
+}
+
+// loadSharedProjectMetadata memoizes the expensive project-wide metadata
+// (sitemap/manifest CLI runs plus CSS discovery) per project root, sharing one
+// in-flight promise across concurrent callers. The cache is invalidated by the
+// .gwdk/.css file watchers and save events through refreshProjectViews.
+function loadSharedProjectMetadata(document) {
+  const root = projectRoot(document) || '';
+  const cached = projectMetadataCache.get(root);
+  if (cached) {
+    return cached;
+  }
+  const promise = Promise.all([
     loadSiteMap(document),
     loadManifest(document),
     loadCSSFiles(document)
-  ]);
+  ]).then(([siteMap, manifest, cssFiles]) => ({ siteMap, manifest, cssFiles })).catch((error) => {
+    if (projectMetadataCache.get(root) === promise) {
+      projectMetadataCache.delete(root);
+    }
+    throw error;
+  });
+  projectMetadataCache.set(root, promise);
+  return promise;
+}
+
+async function loadCompletionMetadata(document) {
+  const { siteMap, manifest, cssFiles } = await loadSharedProjectMetadata(document);
   return {
     siteMap,
     manifest,
@@ -498,7 +562,7 @@ async function loadCompletionMetadata(document) {
 }
 
 async function loadProjectMetadata(document) {
-  return loadCompletionMetadata(document);
+  return loadSharedProjectMetadata(document);
 }
 
 function symbolContextForDocument(document, position) {

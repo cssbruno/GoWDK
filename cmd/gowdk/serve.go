@@ -182,7 +182,12 @@ func (broker *liveReloadBroker) notify(event string) {
 	broker.notifyData(event, fmt.Sprint(time.Now().UnixMilli()))
 }
 
+// notifyData is a no-op on a nil broker so callers without live reload
+// (for example dev runtime mode) can skip wiring a broker entirely.
 func (broker *liveReloadBroker) notifyData(event string, data string) {
+	if broker == nil {
+		return
+	}
 	broker.mu.Lock()
 	defer broker.mu.Unlock()
 	for client := range broker.clients {

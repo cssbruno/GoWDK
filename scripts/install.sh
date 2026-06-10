@@ -28,17 +28,33 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-if [ "$version" = "latest" ]; then
-	api_url="https://api.github.com/repos/cssbruno/GoWDK/releases"
+fetch_release_json() {
 	if command -v curl >/dev/null 2>&1; then
-		curl -fsSL "$api_url" -o "$tmp_dir/releases.json"
-	elif command -v wget >/dev/null 2>&1; then
-		wget -qO "$tmp_dir/releases.json" "$api_url"
+		curl -fsSL "$1" -o "$2"
 	else
+		wget -qO "$2" "$1"
+	fi
+}
+
+release_tag_name() {
+	sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -n 1
+}
+
+if [ "$version" = "latest" ]; then
+	api_base="https://api.github.com/repos/cssbruno/GoWDK/releases"
+	if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
 		echo "curl or wget is required to download GOWDK" >&2
 		exit 1
 	fi
-	version="$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$tmp_dir/releases.json" | head -n 1)"
+	version=""
+	# /releases/latest excludes prereleases and drafts; the releases list is
+	# only a fallback because its first entry is order-sensitive.
+	if fetch_release_json "$api_base/latest" "$tmp_dir/latest.json"; then
+		version="$(release_tag_name "$tmp_dir/latest.json")"
+	fi
+	if [ -z "$version" ] && fetch_release_json "$api_base" "$tmp_dir/releases.json"; then
+		version="$(release_tag_name "$tmp_dir/releases.json")"
+	fi
 	if [ -z "$version" ]; then
 		echo "could not determine latest GOWDK release" >&2
 		exit 1

@@ -54,10 +54,11 @@ func dev(args []string) error {
 		fmt.Printf("Dev cache hit: inputs unchanged for %s\n", absDir)
 	}
 
-	reload := newLiveReloadBroker()
+	var reload *liveReloadBroker
 	var server *http.Server
 	var process *devRuntimeProcess
 	if runtime.Enabled {
+		fmt.Println("Live reload is not available for app targets; reload the browser manually after each rebuild.")
 		if _, err := appgen.BuildBinary(runtime.AppDir, runtime.BinaryPath); err != nil {
 			return err
 		}
@@ -67,6 +68,7 @@ func dev(args []string) error {
 		}
 		defer process.stop()
 	} else {
+		reload = newLiveReloadBroker()
 		server = &http.Server{
 			Addr:              options.Addr,
 			Handler:           liveReloadFileHandler(absDir, reload),

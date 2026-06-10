@@ -125,7 +125,7 @@ func usage() {
 	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload")
 	fmt.Println("  preview [--addr <addr>] [--hot] [build flags...] build and serve a local deploy preview")
 	fmt.Println("  serve --dir <dir> [--addr <addr>] serve generated build output locally")
-	fmt.Println("  lsp [--ssr]              start the language server over stdio")
+	fmt.Println("  lsp [--config <file>] [--ssr] start the language server over stdio")
 }
 
 type cliOptions struct {

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
@@ -172,21 +171,6 @@ func fragmentComponentsFromIR(components []gwdkir.Component) map[string]view.Com
 	return out
 }
 
-func fragmentComponentsFromManifest(components []manifest.Component) map[string]view.Component {
-	out := map[string]view.Component{}
-	for _, component := range components {
-		compiled := view.Component{
-			Name:    component.Name,
-			Package: component.Package,
-			Uses:    manifestUsesMap(component.Uses),
-			Props:   manifestPropNames(component.Props),
-			Body:    component.Blocks.ViewBody,
-		}
-		addFragmentComponent(out, compiled)
-	}
-	return out
-}
-
 func addFragmentComponent(registry map[string]view.Component, component view.Component) {
 	if component.Name == "" || component.Body == "" {
 		return
@@ -236,17 +220,6 @@ func irUsesMap(uses []gwdkir.Use) map[string]string {
 	return out
 }
 
-func manifestUsesMap(uses []manifest.Use) map[string]string {
-	if len(uses) == 0 {
-		return nil
-	}
-	out := map[string]string{}
-	for _, use := range uses {
-		out[use.Alias] = use.Package
-	}
-	return out
-}
-
 func irPropNames(props []gwdkir.Prop) []string {
 	out := make([]string, 0, len(props))
 	for _, prop := range props {
@@ -255,16 +228,8 @@ func irPropNames(props []gwdkir.Prop) []string {
 	return out
 }
 
-func manifestPropNames(props []manifest.Prop) []string {
-	out := make([]string, 0, len(props))
-	for _, prop := range props {
-		out = append(out, prop.Name)
-	}
-	return out
-}
-
-func irBindingsByEndpoint(endpoints []gwdkir.Endpoint) map[string]manifest.BackendBinding {
-	out := map[string]manifest.BackendBinding{}
+func irBindingsByEndpoint(endpoints []gwdkir.Endpoint) map[string]source.BackendBinding {
+	out := map[string]source.BackendBinding{}
 	for _, endpoint := range endpoints {
 		if endpoint.Binding.Status == "" && endpoint.Binding.ImportPath == "" && endpoint.Binding.FunctionName == "" {
 			continue
@@ -273,7 +238,7 @@ func irBindingsByEndpoint(endpoints []gwdkir.Endpoint) map[string]manifest.Backe
 		if endpoint.Kind == gwdkir.EndpointAPI {
 			kind = "api"
 		}
-		out[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)] = manifest.BackendBinding{
+		out[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)] = source.BackendBinding{
 			Kind:         kind,
 			PageID:       endpoint.PageID,
 			Source:       endpoint.SourceFile,

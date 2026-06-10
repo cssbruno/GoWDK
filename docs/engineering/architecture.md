@@ -118,10 +118,11 @@ validation (`ValidateProgram`), standalone Go endpoint discovery
 all read and enrich `gwdkir.Program` directly, and the package no longer
 imports the manifest model. `internal/gotypes` and `internal/goblockgen` take
 IR types. `internal/buildgen` render helpers consume IR page/component/layout
-models directly, and `internal/appgen` references shared leaf types from
-`internal/source`. The remaining manifest coupling is the AST→manifest→IR
-backbone in `internal/parser`/`internal/gwdkanalysis` and the public
-`manifest.Manifest` JSON reports in `internal/lang`.
+models directly, and `internal/appgen` is manifest-free — its endpoint
+derivations and binding records read `gwdkir`/`internal/source` types only.
+The remaining manifest coupling is the AST→manifest→IR backbone in
+`internal/parser`/`internal/gwdkanalysis` and the public `manifest.Manifest`
+JSON reports in `internal/lang`.
 
 New generated-output work should consume `internal/gwdkir.Program` or add fields
 there first. Removing the remaining compatibility records is planned after the
@@ -134,9 +135,9 @@ Current manifest compatibility users:
 | --- | --- | --- |
 | `internal/parser` | Produces `manifest.Page`, `manifest.Component`, and `manifest.Layout` records for existing CLI and compiler entrypoints. | Keep typed AST as the parser source of truth; remove direct manifest output after all callers lower through analyzer/IR. |
 | `internal/gwdkanalysis` | Lowers typed AST into manifest records, then builds `gwdkir.Program` from those records. | Lower typed AST directly into IR and keep manifest output as a separate compatibility adapter. |
-| `internal/compiler` | Validators, backend binding discovery, route conflict checks, and policy checks still consume `manifest.Manifest`. | Move validation and binding metadata to IR models; keep adapters only for public manifest and legacy entrypoints. |
-| `internal/buildgen` | Render helpers now consume IR-native page/component/layout/blocks models directly. Public `Build`/`BuildMemory` entrypoints still accept `manifest.Manifest` for compatibility, and a small `gotypes` bridge plus the public `SSRArtifact.LoadBinding` output type keep manifest references at the package edges. | Keep manifest entrypoints as thin adapters; remove the `gotypes` bridge once `internal/gotypes` accepts IR types. |
-| `internal/appgen` | Shared leaf types come from `internal/source`. The `manifest.BackendBinding` struct currency (carrying Kind/PageID/Method/Route) and public `manifest.Manifest` route-helper entrypoints remain. | Keep app route planning and backend adapter planning IR-first; replace manifest-only helper entrypoints with IR helpers before removing compatibility constructors. |
+| `internal/compiler` | None (non-test). Validation, endpoint discovery, backend binding, and route metadata read and enrich `gwdkir.Program` directly. | Done. |
+| `internal/buildgen` | Render helpers consume IR-native models directly; `internal/gotypes` accepts IR types so the conversion bridge is gone. Public `Build`/`BuildMemory` entrypoints still accept `manifest.Manifest` for compatibility, and `SSRArtifact.LoadBinding` exposes the aliased `manifest.BackendBinding` output type. | Keep manifest entrypoints as thin adapters until the parser seam (Step 5) removes the manifest input. |
+| `internal/appgen` | None (non-test). Endpoint derivations and binding records read `gwdkir` and `internal/source` types only; the manifest-typed route-helper entrypoints were removed. | Done. |
 | `internal/lang` and `cmd/gowdk` | CLI `check`, `manifest`, `sitemap`, `routes`, and build setup still pass manifest records between parse, validate, report, and generation steps. | Parse/analyze into IR once per command, then derive public JSON and reports from IR adapters. |
 | `internal/lsp` | Open-document completions and hover build an IR snapshot before indexing page, component, layout, and endpoint symbols; workspace component definition lookup indexes IR components; diagnostics and open-buffer owner context still use language tooling and parser compatibility records. | Keep open-document source spans, but drive remaining project-wide symbols and diagnostics from analyzer/IR snapshots. |
 | Tests | Many generator and validator tests construct manifest records directly. | Keep fixture-style manifest construction until the tested package exposes IR-native helpers; update tests alongside each migrated package. |

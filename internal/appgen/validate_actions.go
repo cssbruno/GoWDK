@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/runtime/validation"
 )
 
@@ -23,7 +23,7 @@ func validateActionEndpoints(endpoints []ActionEndpoint) error {
 			}
 		}
 		if endpoint.ErrorPage != "" {
-			errorPage, err := manifest.ErrorPagePath(endpoint.ErrorPage)
+			errorPage, err := source.ErrorPagePath(endpoint.ErrorPage)
 			if err != nil {
 				return fmt.Errorf("generated action %s.%s: %w", endpoint.PageID, endpoint.ActionName, err)
 			}
@@ -58,7 +58,7 @@ func validateAPIEndpoints(endpoints []APIEndpoint) error {
 			return fmt.Errorf("generated API endpoint for page %q is missing API name", endpoint.PageID)
 		}
 		if endpoint.ErrorPage != "" {
-			errorPage, err := manifest.ErrorPagePath(endpoint.ErrorPage)
+			errorPage, err := source.ErrorPagePath(endpoint.ErrorPage)
 			if err != nil {
 				return fmt.Errorf("generated API %s.%s: %w", endpoint.PageID, endpoint.APIName, err)
 			}

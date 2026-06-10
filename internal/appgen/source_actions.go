@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -719,7 +718,7 @@ func exportedIdentifier(value string) string {
 	return string(out)
 }
 
-func backendNotImplementedStmts(binding manifest.BackendBinding, kind string) []ast.Stmt {
+func backendNotImplementedStmts(binding source.BackendBinding, kind string) []ast.Stmt {
 	message := strings.TrimSpace(binding.Message)
 	if message == "" {
 		message = "GOWDK " + kind + " handler is not implemented"

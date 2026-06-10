@@ -3,7 +3,6 @@ package appgen
 import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -47,7 +46,7 @@ type ActionEndpoint struct {
 	Redirect         string
 	Fragments        []ActionFragment
 	ErrorPage        string
-	Binding          manifest.BackendBinding
+	Binding          source.BackendBinding
 	BackendAlias     string
 }
 
@@ -70,7 +69,7 @@ type APIEndpoint struct {
 	Route        string
 	Guards       []string
 	ErrorPage    string
-	Binding      manifest.BackendBinding
+	Binding      source.BackendBinding
 	BackendAlias string
 }
 
@@ -85,7 +84,7 @@ type FragmentEndpoint struct {
 	Package      string
 	Uses         map[string]string
 	Guards       []string
-	Binding      manifest.BackendBinding
+	Binding      source.BackendBinding
 	BackendAlias string
 }
 
@@ -106,7 +105,7 @@ type SSRRoute struct {
 	RouteParams      []source.RouteParam
 	Guards           []string
 	HasLoad          bool
-	LoadBinding      manifest.BackendBinding
+	LoadBinding      source.BackendBinding
 	LoadBackendAlias string
 	HTML             string
 	Replacements     []SSRReplacement

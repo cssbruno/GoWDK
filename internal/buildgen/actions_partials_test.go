@@ -7,19 +7,20 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 func TestBuildLowersGPostDirectiveForActionPage(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:     "signup",
 		Route:  "/signup",
 		Render: gowdk.Action,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<form g:post={Submit}><input name="email" /></form>`,
-			Actions: []manifest.Action{{
+			Actions: []gwdkir.Action{{
 				Name:     "Submit",
 				Redirect: "/signup?ok=1",
 			}},
@@ -35,23 +36,23 @@ func TestBuildLowersGPostDirectiveForActionPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	output := string(payload)
-	if !strings.Contains(output, `<form method="post" action="/signup"><input name="email"></input></form>`) {
+	if !strings.Contains(output, `<form method="post" action="/signup"><input name="email"></form>`) {
 		t.Fatalf("expected lowered g:post form in output:\n%s", output)
 	}
 }
 
 func TestBuildProductionRequiresBoundBackendHandlers(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:      "signup",
 		Package: "app",
 		Source:  filepath.Join(t.TempDir(), "signup.page.gwdk"),
 		Route:   "/signup",
 		Render:  gowdk.Action,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<form g:post={Submit}><input name="email" /></form>`,
-			Actions:  []manifest.Action{{Name: "Submit"}},
+			Actions:  []gwdkir.Action{{Name: "Submit"}},
 		},
 	}}}
 
@@ -66,16 +67,16 @@ func TestBuildProductionRequiresBoundBackendHandlers(t *testing.T) {
 
 func TestBuildProductionAllowsExplicitMissingBackendStubs(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:      "signup",
 		Package: "app",
 		Source:  filepath.Join(t.TempDir(), "signup.page.gwdk"),
 		Route:   "/signup",
 		Render:  gowdk.Action,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<form g:post={Submit}><input name="email" /></form>`,
-			Actions:  []manifest.Action{{Name: "Submit"}},
+			Actions:  []gwdkir.Action{{Name: "Submit"}},
 		},
 	}}}
 
@@ -92,21 +93,21 @@ func TestBuildAllowsGPostWithLocalValueBinding(t *testing.T) {
 	outputDir := t.TempDir()
 	component := textComponent()
 	component.Blocks.ViewBody = `<form g:post={Submit}><input name="query" g:bind:value={Query} /></form>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:     "search",
 			Route:  "/search",
 			Render: gowdk.Action,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Search /></main>`,
-				Actions: []manifest.Action{{
+				Actions: []gwdkir.Action{{
 					Name:     "Submit",
 					Redirect: "/search",
 				}},
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	result, err := Build(gowdk.Config{}, app, outputDir)
@@ -136,18 +137,18 @@ func TestBuildAllowsGPostWithLocalValueBinding(t *testing.T) {
 
 func TestBuildEmitsPartialRuntimeForFragmentForms(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "patients",
 		Route: "/patients",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
 			ViewBody: `<main>
   <form g:post={Refresh} g:target="#patients" g:swap="innerHTML"><input name="query" /></form>
   <section id="patients">Initial</section>
 </main>`,
-			Actions: []manifest.Action{{
+			Actions: []gwdkir.Action{{
 				Name: "Refresh",
-				Fragments: []manifest.Fragment{{
+				Fragments: []gwdkir.Fragment{{
 					Target: "#patients",
 					Body:   `<p>Updated</p>`,
 				}},
@@ -161,6 +162,9 @@ func TestBuildEmitsPartialRuntimeForFragmentForms(t *testing.T) {
 	}
 	if len(result.AssetArtifacts) != 1 || result.AssetArtifacts[0].Path != filepath.Join(outputDir, "assets", "gowdk", "gowdk.js") {
 		t.Fatalf("unexpected runtime assets: %#v", result.AssetArtifacts)
+	}
+	if result.AssetArtifacts[0].CachePolicy != noCacheAssetCachePolicy {
+		t.Fatalf("expected no-cache policy for unhashed runtime asset, got %q", result.AssetArtifacts[0].CachePolicy)
 	}
 	html := readFile(t, filepath.Join(outputDir, "patients", "index.html"))
 	for _, expected := range []string{
@@ -184,13 +188,13 @@ func TestBuildEmitsPartialRuntimeForFragmentForms(t *testing.T) {
 
 func TestBuildRejectsUnknownGPostActionBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "signup",
 		Route: "/signup",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<form g:post={Missing}></form>`,
-			Actions: []manifest.Action{{
+			Actions: []gwdkir.Action{{
 				Name:     "Submit",
 				Redirect: "/signup?ok=1",
 			}},

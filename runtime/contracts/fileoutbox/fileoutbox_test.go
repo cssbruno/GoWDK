@@ -241,6 +241,99 @@ func TestRunEventWorkerConsumesFileOutbox(t *testing.T) {
 	}
 }
 
+func TestReceiveEventBatchDeliversDecodableRecordsAroundPoisonRecord(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "outbox.jsonl")
+	store := New(path, WithJSONTypeDecoder[patientCreated]())
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{
+		{Category: contracts.DomainEvent, Type: patientCreatedType, Value: 42},
+		{Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-1"}},
+	}); err != nil {
+		t.Fatalf("store events: %v", err)
+	}
+
+	batch, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive batch: %v", err)
+	}
+	if len(batch.Events) != 1 {
+		t.Fatalf("len(batch.Events) = %d, want 1", len(batch.Events))
+	}
+	if value, ok := batch.Events[0].Value.(patientCreated); !ok || value.ID != "patient-1" {
+		t.Fatalf("event value = %#v, want patientCreated patient-1", batch.Events[0].Value)
+	}
+	if err := batch.Ack(context.Background()); err != nil {
+		t.Fatalf("ack batch: %v", err)
+	}
+
+	records, err := store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("len(records) = %d, want 1 pending poison record", len(records))
+	}
+	if records[0].Attempts != 1 || !strings.Contains(records[0].LastError, "cannot be decoded") || records[0].LastAttemptAt == nil {
+		t.Fatalf("unexpected poison record retry metadata: %#v", records[0])
+	}
+}
+
+func TestReceiveEventBatchDeadLettersPoisonRecordAfterMaxAttempts(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "outbox.jsonl")
+	deadLetterPath := filepath.Join(root, "dead-letter.jsonl")
+	store := New(path, WithJSONTypeDecoder[patientCreated](), WithDeadLetter(deadLetterPath, 2))
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{
+		{Category: contracts.DomainEvent, Type: patientCreatedType, Value: 42},
+		{Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-1"}},
+	}); err != nil {
+		t.Fatalf("store events: %v", err)
+	}
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		batch, err := store.ReceiveEventBatch(context.Background())
+		if err != nil {
+			t.Fatalf("receive batch attempt %d: %v", attempt, err)
+		}
+		if len(batch.Events) != 1 {
+			t.Fatalf("len(batch.Events) attempt %d = %d, want 1", attempt, len(batch.Events))
+		}
+	}
+
+	records, err := store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records: %v", err)
+	}
+	for _, record := range records {
+		if record.LastError != "" {
+			t.Fatalf("expected poison record to leave pending outbox, still have %#v", record)
+		}
+	}
+	dead, err := store.DeadLetterRecords(context.Background())
+	if err != nil {
+		t.Fatalf("dead letter records: %v", err)
+	}
+	if len(dead) != 1 {
+		t.Fatalf("len(dead) = %d, want 1: %#v", len(dead), dead)
+	}
+	if dead[0].Attempts != 2 || !strings.Contains(dead[0].LastError, "cannot be decoded") {
+		t.Fatalf("unexpected dead letter metadata: %#v", dead[0])
+	}
+
+	batch, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive after dead-letter: %v", err)
+	}
+	if len(batch.Events) != 1 {
+		t.Fatalf("len(batch.Events) after dead-letter = %d, want 1", len(batch.Events))
+	}
+	if err := batch.Ack(context.Background()); err != nil {
+		t.Fatalf("ack after dead-letter: %v", err)
+	}
+	if _, err := store.ReceiveEventBatch(context.Background()); !errors.Is(err, contracts.ErrEventSourceClosed) {
+		t.Fatalf("receive after drain error = %v, want closed source", err)
+	}
+}
+
 func TestReceiveEventBatchRequiresDecoder(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "outbox.jsonl")
 	store := New(path)

@@ -9,7 +9,8 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/buildgen"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
@@ -126,11 +127,11 @@ func TestSPABuildWritesTailwindAssetAndStylesheet(t *testing.T) {
 	t.Setenv("TAILWIND_ARGS_FILE", filepath.Join(root, "args.txt"))
 
 	outputDir := filepath.Join(root, "dist")
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:     "site",
 		Route:  "/",
 		Source: "site.page.gwdk",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main class="font-bold">Site</main>`,
 		},

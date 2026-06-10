@@ -1774,7 +1774,7 @@ func TestBuildCommandBuildsActionExampleWithImportedComponents(t *testing.T) {
 	}
 	output := string(payload)
 	for _, expected := range []string{
-		`<label class="gowdk-field"><span>Email</span><input name="email" type="email"></input></label>`,
+		`<label class="gowdk-field"><span>Email</span><input name="email" type="email"></label>`,
 		`<button class="gowdk-button" type="submit">Subscribe</button>`,
 	} {
 		if !strings.Contains(output, expected) {
@@ -4668,4 +4668,116 @@ func waitForCLIStatus(url, method, body string) (*http.Response, error) {
 		return nil, lastErr
 	}
 	return nil, os.ErrDeadlineExceeded
+}
+
+func TestLanguageServerConfigLoadsProjectConfigAddons(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/ssr"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		ssr.Addon(),
+	},
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		config, err := languageServerConfig(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(config.Addons) != 1 || config.Addons[0].Name() != "ssr" {
+			t.Fatalf("expected config-declared ssr addon, got %#v", config.Addons)
+		}
+	})
+}
+
+func TestLanguageServerConfigSupportsConfigFlag(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "custom.config.go")
+	writeCLIFile(t, configPath, `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/ssr"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		ssr.Addon(),
+	},
+}
+`)
+
+	for _, args := range [][]string{
+		{"--config", configPath},
+		{"--config=" + configPath},
+	} {
+		config, err := languageServerConfig(args)
+		if err != nil {
+			t.Fatalf("languageServerConfig(%v): %v", args, err)
+		}
+		if len(config.Addons) != 1 || config.Addons[0].Name() != "ssr" {
+			t.Fatalf("languageServerConfig(%v): expected ssr addon, got %#v", args, config.Addons)
+		}
+	}
+}
+
+func TestLanguageServerConfigFallsBackWithoutConfigFile(t *testing.T) {
+	root := t.TempDir()
+	withWorkingDir(t, root, func() {
+		config, err := languageServerConfig(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(config.Addons) != 0 {
+			t.Fatalf("expected zero config without gowdk.config.go, got %#v", config.Addons)
+		}
+
+		config, err = languageServerConfig([]string{"--ssr"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(config.Addons) != 1 || config.Addons[0].Name() != "ssr" {
+			t.Fatalf("expected --ssr addon without gowdk.config.go, got %#v", config.Addons)
+		}
+	})
+}
+
+func TestLanguageServerConfigRejectsUnknownArguments(t *testing.T) {
+	for _, args := range [][]string{
+		{"extra.gwdk"},
+		{"--unknown"},
+		{"--config"},
+	} {
+		if _, err := languageServerConfig(args); err == nil || !strings.Contains(err.Error(), "usage: gowdk lsp") {
+			t.Fatalf("languageServerConfig(%v): expected usage error, got %v", args, err)
+		}
+	}
+}
+
+func TestDoctorHonorsJSONFlagRegardlessOfOrderOnArgumentErrors(t *testing.T) {
+	for _, args := range [][]string{
+		{"--bad-flag", "--json"},
+		{"--json", "--bad-flag"},
+	} {
+		report, jsonOutput := runDoctor(args)
+		if !jsonOutput {
+			t.Fatalf("runDoctor(%v): expected JSON output to be requested", args)
+		}
+		if report.Status != "error" || !doctorReportHasCheck(report.Checks, "arguments", "error") {
+			t.Fatalf("runDoctor(%v): unexpected report %#v", args, report)
+		}
+	}
+}
+
+func TestLiveReloadBrokerNotifyIsNoOpOnNilBroker(t *testing.T) {
+	var broker *liveReloadBroker
+	broker.notify("reload")
+	broker.notifyData("build-error", "boom")
 }

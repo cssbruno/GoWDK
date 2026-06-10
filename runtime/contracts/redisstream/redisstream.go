@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cssbruno/gowdk/runtime/contracts"
@@ -28,6 +29,13 @@ type Store struct {
 	batchSize int64
 	block     time.Duration
 	decoders  map[string]Decoder
+
+	mu sync.Mutex
+	// readPending makes the next receive re-read this consumer's pending
+	// entries (read but never acked) before consuming new messages. It starts
+	// true so entries stranded by a crash or restart are redelivered, and it
+	// is set again by Nack so failed batches are retried.
+	readPending bool
 }
 
 // Decoder converts one JSON event value into the typed value expected by
@@ -78,12 +86,13 @@ func WithJSONDecoder[T any](eventType string) Option {
 // New creates a Redis Streams store.
 func New(client *redis.Client, stream, group, consumer string, options ...Option) *Store {
 	store := &Store{
-		client:    client,
-		stream:    stream,
-		group:     group,
-		consumer:  consumer,
-		batchSize: defaultBatchSize,
-		decoders:  map[string]Decoder{},
+		client:      client,
+		stream:      stream,
+		group:       group,
+		consumer:    consumer,
+		batchSize:   defaultBatchSize,
+		decoders:    map[string]Decoder{},
+		readPending: true,
 	}
 	for _, option := range options {
 		if option != nil {
@@ -128,7 +137,9 @@ func (store *Store) PublishEvents(ctx context.Context, events []contracts.EventE
 	return nil
 }
 
-// ReceiveEventBatch reads the next stream batch for this consumer.
+// ReceiveEventBatch reads the next stream batch for this consumer. It first
+// drains this consumer's pending entries (read earlier but never acked, for
+// example before a crash or after a Nack) and only then consumes new messages.
 func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch, error) {
 	if err := store.validate(); err != nil {
 		return contracts.EventBatch{}, err
@@ -136,18 +147,51 @@ func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch
 	if err := ctx.Err(); err != nil {
 		return contracts.EventBatch{}, err
 	}
+	if store.pendingFirst() {
+		batch, ok, err := store.readBatch(ctx, "0")
+		if err != nil {
+			return contracts.EventBatch{}, err
+		}
+		if ok {
+			return batch, nil
+		}
+		store.setPendingFirst(false)
+	}
+	batch, ok, err := store.readBatch(ctx, ">")
+	if err != nil {
+		return contracts.EventBatch{}, err
+	}
+	if !ok {
+		return contracts.EventBatch{}, contracts.ErrEventSourceClosed
+	}
+	return batch, nil
+}
+
+func (store *Store) pendingFirst() bool {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.readPending
+}
+
+func (store *Store) setPendingFirst(pending bool) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	store.readPending = pending
+}
+
+func (store *Store) readBatch(ctx context.Context, start string) (contracts.EventBatch, bool, error) {
 	streams, err := store.client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    store.group,
 		Consumer: store.consumer,
-		Streams:  []string{store.stream, ">"},
+		Streams:  []string{store.stream, start},
 		Count:    store.batchSize,
 		Block:    store.block,
 	}).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return contracts.EventBatch{}, contracts.ErrEventSourceClosed
+			return contracts.EventBatch{}, false, nil
 		}
-		return contracts.EventBatch{}, err
+		return contracts.EventBatch{}, false, err
 	}
 	var ids []string
 	var events []contracts.EventEnvelope
@@ -155,14 +199,14 @@ func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch
 		for _, message := range stream.Messages {
 			event, err := store.decodeMessage(message)
 			if err != nil {
-				return contracts.EventBatch{}, err
+				return contracts.EventBatch{}, false, err
 			}
 			ids = append(ids, message.ID)
 			events = append(events, event)
 		}
 	}
 	if len(events) == 0 {
-		return contracts.EventBatch{}, contracts.ErrEventSourceClosed
+		return contracts.EventBatch{}, false, nil
 	}
 	return contracts.EventBatch{
 		Events: events,
@@ -175,7 +219,18 @@ func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch
 			}
 			return store.client.XDel(ctx, store.stream, ids...).Err()
 		},
-	}, nil
+		Nack: func(ctx context.Context, cause error) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			// The messages stay in this consumer's pending entries list;
+			// rewind the next read so they are redelivered. Redis tracks the
+			// delivery count for observability via XPENDING.
+			_ = cause
+			store.setPendingFirst(true)
+			return nil
+		},
+	}, true, nil
 }
 
 func (store *Store) validate() error {

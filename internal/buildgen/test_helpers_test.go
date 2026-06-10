@@ -9,14 +9,13 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
-// irComponent converts a manifest.Component fixture into the IR component the
+// irComponent converts a gwdkir.Component fixture into the IR component the
 // migrated render helpers now consume. It routes through the production
 // IR builder so the test exercises the same conversion as the real pipeline.
-func irComponent(component manifest.Component) gwdkir.Component {
-	ir := gwdkanalysis.BuildIR(gowdk.Config{}, manifest.Manifest{Components: []manifest.Component{component}})
+func irComponent(component gwdkir.Component) gwdkir.Component {
+	ir := gwdkanalysis.BuildProgram(gowdk.Config{}, gwdkanalysis.Sources{Components: []gwdkir.Component{component}})
 	if len(ir.Components) == 0 {
 		return gwdkir.Component{}
 	}
@@ -110,80 +109,80 @@ func mustRelativePath(t *testing.T, base string, path string) string {
 	return rel
 }
 
-func counterComponent() manifest.Component {
-	return manifest.Component{
+func counterComponent() gwdkir.Component {
+	return gwdkir.Component{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button g:on:click={Count++}>{Count}</button>`,
 		},
 	}
 }
 
-func taggedCounterComponent() manifest.Component {
-	return manifest.Component{
+func taggedCounterComponent() gwdkir.Component {
+	return gwdkir.Component{
 		Name:    "TaggedCounter",
 		Source:  "components/tagged-counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "TaggedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTaggedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "TaggedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewTaggedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<span>{Count}</span>`,
 		},
 	}
 }
 
-func textComponent() manifest.Component {
-	return manifest.Component{
+func textComponent() gwdkir.Component {
+	return gwdkir.Component{
 		Name:    "Search",
 		Source:  "components/search.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "TextState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewTextState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<input g:bind:value={Query} />`,
 		},
 	}
 }
 
-func nestedComponent() manifest.Component {
-	return manifest.Component{
+func nestedComponent() gwdkir.Component {
+	return gwdkir.Component{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<section g:if={User.Open}>{Count}</section>`,
 		},
 	}
 }
 
-func filterComponent() manifest.Component {
-	return manifest.Component{
+func filterComponent() gwdkir.Component {
+	return gwdkir.Component{
 		Name:    "Filter",
 		Source:  "components/filter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "FilterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewFilterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "FilterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewFilterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
 		},
 	}

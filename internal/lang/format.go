@@ -1,20 +1,16 @@
 package lang
 
 import (
-	"bufio"
-	"bytes"
 	"strings"
 )
 
 // Format normalizes whitespace for top-level .gwdk annotations and blocks.
 func Format(source []byte) []byte {
-	scanner := bufio.NewScanner(bytes.NewReader(source))
 	var out []string
 	blankPending := false
 	depth := 0
 
-	for scanner.Scan() {
-		raw := strings.TrimRight(scanner.Text(), " \t")
+	for _, raw := range strings.Split(string(source), "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" {
 			blankPending = true
@@ -26,10 +22,11 @@ func Format(source []byte) []byte {
 		}
 		blankPending = false
 
-		if strings.HasPrefix(line, "}") && depth > 0 {
-			depth--
+		indent := depth
+		if strings.HasPrefix(line, "}") && indent > 0 {
+			indent--
 		}
-		out = append(out, strings.Repeat("  ", depth)+line)
+		out = append(out, strings.Repeat("  ", indent)+line)
 		depth += strings.Count(line, "{") - strings.Count(line, "}")
 		if depth < 0 {
 			depth = 0

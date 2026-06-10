@@ -138,9 +138,15 @@ func ParseExprWithSpans(source string) (Expr, error) {
 	parser := exprParser{lexer: newExprLexer(source)}
 	expr, err := parser.parseConditional()
 	if err != nil {
+		if parser.err != nil {
+			return nil, parser.err
+		}
 		return nil, err
 	}
 	if parser.peek().kind != tokenEOF {
+		if parser.err != nil {
+			return nil, parser.err
+		}
 		return nil, fmt.Errorf("unexpected token %q", parser.peek().value)
 	}
 	return expr, nil

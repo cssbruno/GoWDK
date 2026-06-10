@@ -2,6 +2,7 @@ package buildgen
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -131,7 +132,7 @@ func actionRoutes(page gwdkir.Page, data map[string]string) map[string]string {
 			route = page.Route
 		}
 		for name, value := range data {
-			route = strings.ReplaceAll(route, "{"+name+"}", value)
+			route = strings.ReplaceAll(route, "{"+name+"}", url.PathEscape(value))
 		}
 		routes[action.Name] = route
 	}

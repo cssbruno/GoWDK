@@ -62,7 +62,9 @@ func planScopedJSAssets(assets []gwdkir.Asset, outputDir string) ([]plannedAsset
 				Path:        outputPath,
 				LogicalPath: logicalPath,
 				Hash:        contentHash(contents),
-				CachePolicy: immutableAssetCachePolicy,
+				// Scoped scripts are emitted at stable, unhashed paths, so
+				// returning browsers must revalidate them after a deploy.
+				CachePolicy: noCacheAssetCachePolicy,
 			},
 			contents: contents,
 		})

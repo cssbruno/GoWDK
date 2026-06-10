@@ -38,11 +38,20 @@ func Boundary(kind string, handler HandlerFunc) HandlerFunc {
 		boundaryWriter := &boundaryResponseWriter{ResponseWriter: writer}
 		defer func() {
 			if value := recover(); value != nil {
+				if value == http.ErrAbortHandler {
+					// Deliberate abort signal: let net/http kill the
+					// connection without logging it as a failure.
+					panic(value)
+				}
 				handled = true
 				logBoundaryPanic(kind, value)
-				if !boundaryWriter.wrote {
-					writeBoundaryError(boundaryWriter, request, kind, value)
+				if boundaryWriter.wrote {
+					// The response already started; aborting the connection
+					// is the only way to keep the client from treating the
+					// truncated body as complete.
+					panic(http.ErrAbortHandler)
 				}
+				writeBoundaryError(boundaryWriter, request, kind, value)
 			}
 		}()
 		return handler(boundaryWriter, request)
@@ -110,9 +119,12 @@ func RecoverSSRRoutePanic(writer http.ResponseWriter, request *http.Request, val
 	if value == nil {
 		return
 	}
+	if value == http.ErrAbortHandler {
+		panic(value)
+	}
 	logBoundaryPanic("ssr", value)
 	if written, ok := writer.(interface{ Written() bool }); ok && written.Written() {
-		return
+		panic(http.ErrAbortHandler)
 	}
 	WriteErrorPage(writer, request, http.StatusInternalServerError, "GOWDK SSR handler failed")
 }
@@ -123,9 +135,12 @@ func RecoverEndpointPanic(writer http.ResponseWriter, request *http.Request, val
 	if value == nil {
 		return
 	}
+	if value == http.ErrAbortHandler {
+		panic(value)
+	}
 	logBoundaryPanic("endpoint", value)
 	if written, ok := writer.(interface{ Written() bool }); ok && written.Written() {
-		return
+		panic(http.ErrAbortHandler)
 	}
 	WriteErrorPage(writer, request, http.StatusInternalServerError, "GOWDK endpoint handler failed")
 }

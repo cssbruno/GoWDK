@@ -31,6 +31,34 @@ func TestFormatGoldenPreservesCommentsAndNestedMarkup(t *testing.T) {
 	}
 }
 
+func TestFormatPreservesLinesLongerThanScannerLimit(t *testing.T) {
+	longLine := "<p>" + strings.Repeat("x", 70_000) + "</p>"
+	source := []byte("@page home\n@route \"/\"\n\nview {\n" + longLine + "\n}\n")
+	got := string(Format(source))
+	want := "@page home\n@route \"/\"\n\nview {\n  " + longLine + "\n}\n"
+	if got != want {
+		t.Fatalf("long line was truncated or reformatted (got %d bytes, want %d bytes)", len(got), len(want))
+	}
+}
+
+func TestFormatIndentsSiblingsAfterNestedClose(t *testing.T) {
+	source := []byte("go {\nfunc Handler() {\nif ok {\nreturn\n}\nlog()\n}\n}\n")
+	got := string(Format(source))
+	want := "go {\n  func Handler() {\n    if ok {\n      return\n    }\n    log()\n  }\n}\n"
+	if got != want {
+		t.Fatalf("unexpected format:\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+}
+
+func TestFormatKeepsElseBranchesAligned(t *testing.T) {
+	source := []byte("go {\nif ok {\na()\n} else {\nb()\n}\n}\n")
+	got := string(Format(source))
+	want := "go {\n  if ok {\n    a()\n  } else {\n    b()\n  }\n}\n"
+	if got != want {
+		t.Fatalf("unexpected format:\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+}
+
 func TestFormatIsIdempotentForSupportedShapes(t *testing.T) {
 	tests := map[string]string{
 		"page": `package app

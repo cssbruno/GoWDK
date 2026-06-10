@@ -15,6 +15,10 @@ const buildReportFile = "gowdk-build-report.json"
 
 const immutableAssetCachePolicy = "public, max-age=31536000, immutable"
 
+// noCacheAssetCachePolicy forces revalidation (via ETag/ModTime) for assets
+// served at stable, unhashed paths whose contents change between deploys.
+const noCacheAssetCachePolicy = "no-cache"
+
 const defaultPageCSSDir = "assets/gowdk"
 
 const inlineStyleAssetPath = "<inline-style>"

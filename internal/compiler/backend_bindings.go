@@ -842,6 +842,15 @@ func isError(expression ast.Expr) bool {
 // instead of re-running handler discovery.
 func BackendBindingsFromIR(ir gwdkir.Program) []source.BackendBinding {
 	out := make([]source.BackendBinding, 0, len(ir.Endpoints))
+	for _, page := range ir.Pages {
+		if !page.Blocks.Load {
+			continue
+		}
+		binding := loadBindingFromIR(page)
+		if binding.Status != "" || binding.ImportPath != "" || binding.FunctionName != "" {
+			out = append(out, binding)
+		}
+	}
 	for _, endpoint := range ir.Endpoints {
 		binding := backendBindingFromIR(endpoint)
 		if binding.Status != "" || binding.ImportPath != "" || binding.FunctionName != "" {
@@ -851,10 +860,32 @@ func BackendBindingsFromIR(ir gwdkir.Program) []source.BackendBinding {
 	return out
 }
 
+func loadBindingFromIR(page gwdkir.Page) source.BackendBinding {
+	return source.BackendBinding{
+		Kind:         loadHandlerKind,
+		PageID:       page.ID,
+		Source:       page.Source,
+		Method:       "GET",
+		Route:        page.Route,
+		ImportPath:   page.LoadBinding.ImportPath,
+		PackageName:  page.LoadBinding.PackageName,
+		FunctionName: page.LoadBinding.FunctionName,
+		Signature:    page.LoadBinding.Signature,
+		InputType:    page.LoadBinding.InputType,
+		InputPointer: page.LoadBinding.InputPointer,
+		InputFields:  append([]source.BackendInputField(nil), page.LoadBinding.InputFields...),
+		Status:       page.LoadBinding.Status,
+		Message:      page.LoadBinding.Message,
+	}
+}
+
 func backendBindingFromIR(endpoint gwdkir.Endpoint) source.BackendBinding {
 	kind := "action"
-	if endpoint.Kind == gwdkir.EndpointAPI {
+	switch endpoint.Kind {
+	case gwdkir.EndpointAPI:
 		kind = "api"
+	case gwdkir.EndpointFragment:
+		kind = "fragment"
 	}
 	return source.BackendBinding{
 		Kind:         kind,

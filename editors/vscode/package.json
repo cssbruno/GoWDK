@@ -186,6 +186,18 @@
           "type": "boolean",
           "default": false,
           "description": "Pass --ssr to check/manifest commands so SSR pages validate as if the SSR addon is enabled."
+        },
+        "gowdk.cliTimeoutSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 1,
+          "description": "Timeout in seconds for gowdk CLI invocations. Raise this if `go run ./cmd/gowdk` builds are slow in source workspaces."
+        },
+        "gowdk.cliMaxBufferMB": {
+          "type": "number",
+          "default": 16,
+          "minimum": 1,
+          "description": "Maximum stdout/stderr buffer in megabytes for gowdk CLI invocations."
         }
       }
     }

@@ -14,8 +14,8 @@ import (
 	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/discover"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
-	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func buildDevChange(args []string, change inputChange, allowIncremental bool) (bool, error) {
@@ -82,7 +82,7 @@ func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 	if !incremental {
 		return false, nil
 	}
-	ir := gwdkanalysis.BuildIR(options.Config, app)
+	ir := gwdkanalysis.BuildProgram(options.Config, app)
 	result, err := buildgen.BuildIncrementalFromIR(options.Config, ir, outputDir, pageSources)
 	if err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)
@@ -137,7 +137,7 @@ func devConfigPath(configPath string) (string, bool) {
 	return filepath.Clean(abs), err == nil
 }
 
-func changedPageSources(app manifest.Manifest, changedPaths []string) ([]string, bool) {
+func changedPageSources(app gwdkanalysis.Sources, changedPaths []string) ([]string, bool) {
 	pageSources := map[string]string{}
 	for _, page := range app.Pages {
 		abs, ok := cleanAbs(page.Source)
@@ -161,7 +161,7 @@ func changedPageSources(app manifest.Manifest, changedPaths []string) ([]string,
 	return changedPages, len(changedPages) > 0
 }
 
-func pageIDChanged(pageID string, changedSources []string, pages []manifest.Page) bool {
+func pageIDChanged(pageID string, changedSources []string, pages []gwdkir.Page) bool {
 	changed := map[string]bool{}
 	for _, source := range changedSources {
 		abs, ok := cleanAbs(source)

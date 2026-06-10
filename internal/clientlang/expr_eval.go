@@ -209,12 +209,15 @@ func evalBinary(op string, left, right any) (any, error) {
 		case "/":
 			return leftNumber / rightNumber, nil
 		default:
+			if int(rightNumber) == 0 {
+				return nil, fmt.Errorf("operator %% requires a non-zero divisor")
+			}
 			return float64(int(leftNumber) % int(rightNumber)), nil
 		}
 	case "==":
-		return reflect.DeepEqual(left, right), nil
+		return valuesEqual(left, right), nil
 	case "!=":
-		return !reflect.DeepEqual(left, right), nil
+		return !valuesEqual(left, right), nil
 	case "<", "<=", ">", ">=":
 		if leftString, ok := left.(string); ok {
 			rightString, ok := right.(string)
@@ -260,6 +263,18 @@ func evalBinary(op string, left, right any) (any, error) {
 	default:
 		return nil, fmt.Errorf("unsupported binary operator %q", op)
 	}
+}
+
+// valuesEqual compares operands of == and != with numeric normalization so
+// values decoded from JSON (json.Number) compare equal to int and float64
+// literals, matching the strict numeric equality of the browser evaluator.
+func valuesEqual(left, right any) bool {
+	leftNumber, leftOK := numericFloat(left)
+	rightNumber, rightOK := numericFloat(right)
+	if leftOK && rightOK {
+		return leftNumber == rightNumber
+	}
+	return reflect.DeepEqual(left, right)
 }
 
 func parseRuntimeScalar(value string) any {

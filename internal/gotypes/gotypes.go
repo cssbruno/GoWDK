@@ -219,9 +219,11 @@ func RunStateInitJSON(imports []gwdkir.Import, state gwdkir.StateContract) ([]by
 		return nil, err
 	}
 	command := exec.Command("go", "run", path)
-	output, err := command.CombinedOutput()
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	output, err := command.Output()
 	if err != nil {
-		return nil, fmt.Errorf("run state init function %s.%s: %w\n%s", state.Init.Alias, state.Init.Name, err, strings.TrimSpace(string(output)))
+		return nil, fmt.Errorf("run state init function %s.%s: %w\n%s", state.Init.Alias, state.Init.Name, err, strings.TrimSpace(stderr.String()))
 	}
 	output = bytes.TrimSpace(output)
 	if len(output) == 0 {

@@ -13,6 +13,7 @@ func minifyCSS(contents []byte) []byte {
 	escaped := false
 	pendingSpace := false
 	last := rune(0)
+	parenDepth := 0
 	runes := []rune(string(contents))
 	for index := 0; index < len(runes); index++ {
 		current := runes[index]
@@ -43,7 +44,7 @@ func minifyCSS(contents []byte) []byte {
 			continue
 		}
 		if current == '"' || current == '\'' {
-			if pendingSpace && cssNeedsSpaceBefore(last, current) {
+			if pendingSpace && cssNeedsSpaceBefore(last, current, parenDepth) {
 				out = append(out, ' ')
 			}
 			pendingSpace = false
@@ -56,14 +57,24 @@ func minifyCSS(contents []byte) []byte {
 			pendingSpace = true
 			continue
 		}
-		if isCSSPunctuation(current) {
-			out = trimTrailingCSSSpace(out)
+		if isCSSPunctuation(current) && !(parenDepth > 0 && current == '+') {
+			if current == '(' {
+				parenDepth++
+			}
+			if current == ')' && parenDepth > 0 {
+				parenDepth--
+			}
+			if current == '(' && pendingSpace && isCSSIdentRune(last) {
+				out = append(out, ' ')
+			} else {
+				out = trimTrailingCSSSpace(out)
+			}
 			pendingSpace = false
 			out = append(out, current)
 			last = current
 			continue
 		}
-		if pendingSpace && cssNeedsSpaceBefore(last, current) {
+		if pendingSpace && cssNeedsSpaceBefore(last, current, parenDepth) {
 			out = append(out, ' ')
 		}
 		pendingSpace = false
@@ -86,7 +97,23 @@ func isCSSPunctuation(value rune) bool {
 	}
 }
 
-func cssNeedsSpaceBefore(previous rune, current rune) bool {
+func isCSSIdentRune(value rune) bool {
+	if value == '-' || value == '_' {
+		return true
+	}
+	if value >= 'a' && value <= 'z' {
+		return true
+	}
+	if value >= 'A' && value <= 'Z' {
+		return true
+	}
+	return value >= '0' && value <= '9'
+}
+
+func cssNeedsSpaceBefore(previous rune, current rune, parenDepth int) bool {
+	if parenDepth > 0 && (previous == '+' || current == '+') {
+		return true
+	}
 	if previous == ')' && !isCSSPunctuation(current) {
 		return true
 	}

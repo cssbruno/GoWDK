@@ -13,17 +13,18 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/cssscope"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	runtimeapp "github.com/cssbruno/gowdk/runtime/app"
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
 func TestBuildEmitsConfiguredStylesheetLinks(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "home",
 		Route: "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 		},
@@ -71,6 +72,44 @@ func TestMinifyCSSPreservesRequiredValueSpacing(t *testing.T) {
 	}
 }
 
+func TestMinifyCSSPreservesCalcOperatorSpacing(t *testing.T) {
+	input := []byte(`
+.a {
+  width: calc(100% + 1rem);
+  height: calc(100% - 2px);
+  margin: min(1rem + 2px, 3rem);
+}
+.b + .c {
+  color: red;
+}
+`)
+	got := string(minifyCSS(input))
+	expected := `.a{width:calc(100% + 1rem);height:calc(100% - 2px);margin:min(1rem + 2px,3rem);}.b+.c{color:red;}`
+	if got != expected {
+		t.Fatalf("unexpected minified css:\nwant %q\n got %q", expected, got)
+	}
+}
+
+func TestMinifyCSSPreservesMediaQueryParenSpacing(t *testing.T) {
+	input := []byte(`
+@media screen and (min-width: 600px) {
+  .a {
+    color: red;
+  }
+}
+@supports (display: grid) and (gap: 1rem) {
+  .b {
+    display: grid;
+  }
+}
+`)
+	got := string(minifyCSS(input))
+	expected := `@media screen and (min-width:600px){.a{color:red;}}@supports (display:grid) and (gap:1rem){.b{display:grid;}}`
+	if got != expected {
+		t.Fatalf("unexpected minified css:\nwant %q\n got %q", expected, got)
+	}
+}
+
 func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
@@ -84,11 +123,11 @@ func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 	writeFile(t, filepath.Join(root, "styles", "forms.css"), "input { font: inherit; }\n")
 
 	outputDir := filepath.Join(root, "dist")
-	app := manifest.Manifest{Pages: []manifest.Page{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{
 		{
 			ID:    "home",
 			Route: "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>Home</main>`,
 			},
@@ -97,7 +136,7 @@ func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 			ID:    "dashboard",
 			Route: "/dashboard",
 			CSS:   []string{"reset", "tokens", "forms"},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>Dashboard</main>`,
 			},
@@ -106,7 +145,7 @@ func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 			ID:    "embed",
 			Route: "/embed",
 			CSS:   []string{"none"},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>Embed</main>`,
 			},
@@ -182,11 +221,11 @@ func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 
 func TestBuildEmitsPageStyleBlock(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "styled",
 		Route: "/styled",
 		CSS:   []string{"none"},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:      true,
 			ViewBody:  `<main class="hero">Styled</main>`,
 			Style:     true,
@@ -215,12 +254,12 @@ func TestBuildEmitsPageStyleBlock(t *testing.T) {
 
 func TestBuildRecordsPageCachePolicyInAssetManifest(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:         "home",
 		Route:      "/",
 		Cache:      "public, max-age=120",
 		Revalidate: "30",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 		},
@@ -265,10 +304,10 @@ func TestBuildDefaultCSSDiscoveryExcludesGeneratedOutputDirs(t *testing.T) {
 	}
 
 	outputDir := filepath.Join(root, "build")
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "home",
 		Route: "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 		},
@@ -297,11 +336,11 @@ func TestBuildRejectsUnknownPageCSSReferenceBeforeWriting(t *testing.T) {
 	writeFile(t, filepath.Join(root, "styles", "global.css"), "body {}\n")
 
 	outputDir := filepath.Join(root, "dist")
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "home",
 		Route: "/",
 		CSS:   []string{"missing"},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 		},
@@ -328,20 +367,20 @@ func TestBuildRejectsUnknownPageCSSReferenceBeforeWriting(t *testing.T) {
 func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 	outputDir := t.TempDir()
 	processor := &recordingCSSProcessor{}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			Source: "pages/home.page.gwdk",
 			ID:     "home",
 			Route:  "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main .home-shell>Home</main>`,
 			},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Source: "components/hero.cmp.gwdk",
 			Name:   "Hero",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<section class="hero-card">Hero</section>`,
 			},
@@ -437,28 +476,28 @@ func TestBuildEmitsScopedComponentCSSWithManifestAndCacheHeaders(t *testing.T) {
 }
 `)
 	outputDir := filepath.Join(root, "dist")
-	component := manifest.Component{
+	component := gwdkir.Component{
 		Package: "components",
 		Source:  "components/hero.cmp.gwdk",
 		Name:    "Hero",
 		CSS:     []string{"./hero.css"},
-		Props:   []manifest.Prop{{Name: "title", Type: "string"}},
-		Blocks: manifest.Blocks{
+		Props:   []gwdkir.Prop{{Name: "title", Type: "string"}},
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<section .hero><h1>{title}</h1></section>`,
 		},
 	}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			Package: "components",
 			ID:      "home",
 			Route:   "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Hero title="GOWDK" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	result, err := Build(gowdk.Config{CSS: gowdk.CSSConfig{Include: []string{DisableCSSDiscovery}}}, app, outputDir)
@@ -489,7 +528,7 @@ func TestBuildEmitsScopedComponentCSSWithManifestAndCacheHeaders(t *testing.T) {
 		`.hero` + scopeSelector + `{animation:fade-` + scopeID + ` 1s ease;color:red;}`,
 		`.hero h1` + scopeSelector + `,.hero>p` + scopeSelector + `{color:blue;}`,
 		`@keyframes fade-` + scopeID + `{from{opacity:0;}to{opacity:1;}}`,
-		`@media(min-width:40rem){.hero` + scopeSelector + `{padding:1rem;}}`,
+		`@media (min-width:40rem){.hero` + scopeSelector + `{padding:1rem;}}`,
 	} {
 		if !strings.Contains(css, expected) {
 			t.Fatalf("expected %q in scoped css:\n%s", expected, css)
@@ -555,27 +594,27 @@ func TestBuildEmitsComponentFileAssetsWithManifestAndCacheHeaders(t *testing.T) 
 	}
 	writeFile(t, filepath.Join(root, "components", "hero.png"), "fake image\n")
 	outputDir := filepath.Join(root, "dist")
-	component := manifest.Component{
+	component := gwdkir.Component{
 		Package: "components",
 		Source:  "components/hero.cmp.gwdk",
 		Name:    "Hero",
 		Assets:  []string{"./hero.png"},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<section>Hero</section>`,
 		},
 	}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			Package: "components",
 			ID:      "home",
 			Route:   "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Hero /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	result, err := Build(gowdk.Config{CSS: gowdk.CSSConfig{Include: []string{DisableCSSDiscovery}}}, app, outputDir)
@@ -626,28 +665,28 @@ func TestBuildEmitsComponentFileAssetsWithManifestAndCacheHeaders(t *testing.T) 
 
 func TestBuildEmitsScopedComponentStyleBlock(t *testing.T) {
 	outputDir := t.TempDir()
-	component := manifest.Component{
+	component := gwdkir.Component{
 		Package: "components",
 		Source:  "components/card.cmp.gwdk",
 		Name:    "Card",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:      true,
 			ViewBody:  `<section class="card">Card</section>`,
 			Style:     true,
 			StyleBody: `.card { color: red; }`,
 		},
 	}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			Package: "components",
 			ID:      "home",
 			Route:   "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Card /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	result, err := Build(gowdk.Config{CSS: gowdk.CSSConfig{Include: []string{DisableCSSDiscovery}}}, app, outputDir)
@@ -674,23 +713,23 @@ func TestBuildEmitsScopedComponentStyleBlock(t *testing.T) {
 
 func TestBuildLinksLayoutStyleBlockToUsingPages(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{
 			{
 				ID:      "home",
 				Route:   "/",
 				Layouts: []string{"root"},
-				Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Home</main>`},
+				Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main>Home</main>`},
 			},
 			{
 				ID:     "plain",
 				Route:  "/plain",
-				Blocks: manifest.Blocks{View: true, ViewBody: `<main>Plain</main>`},
+				Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Plain</main>`},
 			},
 		},
-		Layouts: []manifest.Layout{{
+		Layouts: []gwdkir.Layout{{
 			ID: "root",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:      true,
 				ViewBody:  `<section class="shell"><slot /></section>`,
 				Style:     true,
@@ -719,11 +758,11 @@ func TestBuildLinksLayoutStyleBlockToUsingPages(t *testing.T) {
 
 func TestBuildAppliesPageAwareCSSProcessorStylesheets(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{
 		{
 			ID:    "home",
 			Route: "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>Home</main>`,
 			},
@@ -731,7 +770,7 @@ func TestBuildAppliesPageAwareCSSProcessorStylesheets(t *testing.T) {
 		{
 			ID:    "dashboard",
 			Route: "/dashboard",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>Dashboard</main>`,
 			},
@@ -767,10 +806,10 @@ func TestBuildAppliesPageAwareCSSProcessorStylesheets(t *testing.T) {
 
 func TestBuildRejectsUnknownPageAwareCSSProcessorSelection(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "home",
 		Route: "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 		},
@@ -799,10 +838,10 @@ func TestBuildRejectsUnknownPageAwareCSSProcessorSelection(t *testing.T) {
 
 func TestBuildRejectsUnsafeCSSAssetsBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "home",
 		Route: "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 		},
@@ -824,10 +863,10 @@ func TestBuildRejectsUnsafeCSSAssetsBeforeWriting(t *testing.T) {
 
 func TestBuildRejectsDuplicateCSSAssetsBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "home",
 		Route: "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 		},

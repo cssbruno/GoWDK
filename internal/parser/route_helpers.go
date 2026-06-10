@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -78,17 +79,27 @@ func namedValueSpans(values []string, lineNumber int, rawLine string) []source.N
 			continue
 		}
 		start := searchStart + index
-		end := start + len([]rune(value))
+		end := start + len(value)
 		spans = append(spans, source.NamedSpan{
 			Name: value,
 			Span: source.SourceSpan{
-				Start: source.SourcePosition{Line: lineNumber, Column: start + 1},
-				End:   source.SourcePosition{Line: lineNumber, Column: end + 1},
+				Start: source.SourcePosition{Line: lineNumber, Column: runeColumn(rawLine, start)},
+				End:   source.SourcePosition{Line: lineNumber, Column: runeColumn(rawLine, end)},
 			},
 		})
 		searchStart = end
 	}
 	return spans
+}
+
+// runeColumn converts a byte offset within line to the 1-based rune column the
+// lexer reports. Offsets past the end of the line are clamped so callers with a
+// fallback offset cannot slice out of range.
+func runeColumn(line string, byteOffset int) int {
+	if byteOffset > len(line) {
+		byteOffset = len(line)
+	}
+	return utf8.RuneCountInString(line[:byteOffset]) + 1
 }
 
 func parseRouteDeclaration(route string, lineNumber int, rawLine string) (string, []source.RouteParam, []source.NamedSpan, error) {
@@ -116,8 +127,8 @@ func parseRouteDeclaration(route string, lineNumber int, rawLine string) (string
 		start := routeStart + match[0]
 		end := routeStart + match[1]
 		span := source.SourceSpan{
-			Start: source.SourcePosition{Line: lineNumber, Column: start + 1},
-			End:   source.SourcePosition{Line: lineNumber, Column: end + 1},
+			Start: source.SourcePosition{Line: lineNumber, Column: runeColumn(rawLine, start)},
+			End:   source.SourcePosition{Line: lineNumber, Column: runeColumn(rawLine, end)},
 		}
 		params = append(params, source.RouteParam{Name: name, Type: paramType, Span: span})
 		spans = append(spans, source.NamedSpan{

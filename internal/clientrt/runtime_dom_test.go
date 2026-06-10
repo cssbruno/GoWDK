@@ -83,6 +83,9 @@ class Element extends EventTarget {
   setAttribute(name, value) {
     this.attributes[name] = String(value);
   }
+  getAttribute(name) {
+    return Object.prototype.hasOwnProperty.call(this.attributes, name) ? this.attributes[name] : null;
+  }
   removeAttribute(name) {
     delete this.attributes[name];
   }
@@ -149,6 +152,8 @@ global.FormData = class {
 const form = new Element('form');
 form.method = 'post';
 form.action = '/newsletter';
+form.setAttribute('method', 'post');
+form.setAttribute('action', '/newsletter');
 form.dataset.gowdkTarget = '#newsletter';
 form.dataset.gowdkSwap = 'innerHTML';
 const target = new Element('section');

@@ -7,28 +7,29 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
-	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func TestBuildExpandsExplicitComponents(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "home",
 			Route: "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Hero title="GOWDK" tagline="Portable & app-first" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Name: "Hero",
-			Props: []manifest.Prop{
+			Props: []gwdkir.Prop{
 				{Name: "title", Type: "string"},
 				{Name: "tagline", Type: "string"},
 			},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<section><h1>{title}</h1><p>{tagline}</p></section>`,
 			},
@@ -51,23 +52,23 @@ func TestBuildExpandsExplicitComponents(t *testing.T) {
 
 func TestBuildExpandsImportedGOWDKPackageComponent(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
-			Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
-			Blocks: manifest.Blocks{
+			Uses:    []gwdkir.Use{{Alias: "ui", Package: "components"}},
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><ui.Hero title="GOWDK" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{
+		Components: []gwdkir.Component{
 			{
 				Package: "components",
 				Name:    "Hero",
-				Props:   []manifest.Prop{{Name: "title", Type: "string"}},
-				Blocks: manifest.Blocks{
+				Props:   []gwdkir.Prop{{Name: "title", Type: "string"}},
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<section><Badge label={title} /></section>`,
 				},
@@ -75,8 +76,8 @@ func TestBuildExpandsImportedGOWDKPackageComponent(t *testing.T) {
 			{
 				Package: "components",
 				Name:    "Badge",
-				Props:   []manifest.Prop{{Name: "label", Type: "string"}},
-				Blocks: manifest.Blocks{
+				Props:   []gwdkir.Prop{{Name: "label", Type: "string"}},
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<strong>{label}</strong>`,
 				},
@@ -115,23 +116,23 @@ func TestBuildExpandsImportedGOWDKPackageComponent(t *testing.T) {
 
 func TestBuildExpandsComponentScopedGOWDKPackageUse(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Marketing title="GOWDK" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{
+		Components: []gwdkir.Component{
 			{
 				Package: "pages",
 				Name:    "Marketing",
-				Uses:    []manifest.Use{{Alias: "icons", Package: "icons"}},
-				Props:   []manifest.Prop{{Name: "title", Type: "string"}},
-				Blocks: manifest.Blocks{
+				Uses:    []gwdkir.Use{{Alias: "icons", Package: "icons"}},
+				Props:   []gwdkir.Prop{{Name: "title", Type: "string"}},
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<section><icons.Badge label={title} /></section>`,
 				},
@@ -139,9 +140,9 @@ func TestBuildExpandsComponentScopedGOWDKPackageUse(t *testing.T) {
 			{
 				Package: "icons",
 				Name:    "Badge",
-				Props:   []manifest.Prop{{Name: "label", Type: "string"}},
-				Emits:   []manifest.Emit{{Name: "select"}},
-				Blocks: manifest.Blocks{
+				Props:   []gwdkir.Prop{{Name: "label", Type: "string"}},
+				Emits:   []gwdkir.Emit{{Name: "select"}},
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<strong>{label}</strong>`,
 				},
@@ -173,22 +174,22 @@ func TestBuildExpandsComponentScopedGOWDKPackageUse(t *testing.T) {
 
 func TestBuildRejectsImportedPackageComponentByBarePageName(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
-			Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
-			Blocks: manifest.Blocks{
+			Uses:    []gwdkir.Use{{Alias: "ui", Package: "components"}},
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Hero title="GOWDK" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Package: "components",
 			Name:    "Hero",
-			Props:   []manifest.Prop{{Name: "title", Type: "string"}},
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<section>{title}</section>`},
+			Props:   []gwdkir.Prop{{Name: "title", Type: "string"}},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<section>{title}</section>`},
 		}},
 	}
 
@@ -203,21 +204,21 @@ func TestBuildRejectsImportedPackageComponentByBarePageName(t *testing.T) {
 
 func TestBuildExpandsWrapperComponentSlots(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "home",
 			Route: "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Build:     true,
 				BuildBody: `=> { title: "Hello <slots>" }`,
 				View:      true,
 				ViewBody:  `<main><Panel title="Featured"><h1>{title}</h1></Panel></main>`,
 			},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Name:  "Panel",
-			Props: []manifest.Prop{{Name: "title", Type: "string"}},
-			Blocks: manifest.Blocks{
+			Props: []gwdkir.Prop{{Name: "title", Type: "string"}},
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<section .panel><h2>{title}</h2><slot /></section>`,
 			},
@@ -272,29 +273,29 @@ func TestBuildCompilesRealisticFixtureProjectEndToEnd(t *testing.T) {
 
 func TestBuildComposesPageLayouts(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:      "home",
 			Route:   "/",
 			Layouts: []string{"root", "marketing"},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Build:     true,
 				BuildBody: `=> { title: "GOWDK & layouts" }`,
 				View:      true,
 				ViewBody:  `<main>{title}</main>`,
 			},
 		}},
-		Layouts: []manifest.Layout{
+		Layouts: []gwdkir.Layout{
 			{
 				ID: "root",
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<div .root><slot /></div>`,
 				},
 			},
 			{
 				ID: "marketing",
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<section .marketing><slot /></section>`,
 				},
@@ -315,23 +316,23 @@ func TestBuildComposesPageLayouts(t *testing.T) {
 
 func TestBuildComposesQualifiedPageLayouts(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
-			Uses:    []manifest.Use{{Alias: "chrome", Package: "layouts"}},
+			Uses:    []gwdkir.Use{{Alias: "chrome", Package: "layouts"}},
 			Layouts: []string{"chrome.root", "local"},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>Home</main>`,
 			},
 		}},
-		Layouts: []manifest.Layout{
+		Layouts: []gwdkir.Layout{
 			{
 				Package: "layouts",
 				ID:      "root",
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<div .root><slot /></div>`,
 				},
@@ -339,7 +340,7 @@ func TestBuildComposesQualifiedPageLayouts(t *testing.T) {
 			{
 				Package: "pages",
 				ID:      "local",
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View:     true,
 					ViewBody: `<section .local><slot /></section>`,
 				},
@@ -360,19 +361,19 @@ func TestBuildComposesQualifiedPageLayouts(t *testing.T) {
 
 func TestBuildRejectsLayoutWithoutOneSlot(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:      "home",
 			Route:   "/",
 			Layouts: []string{"root"},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>Home</main>`,
 			},
 		}},
-		Layouts: []manifest.Layout{{
+		Layouts: []gwdkir.Layout{{
 			ID: "root",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<div><slot /><slot /></div>`,
 			},
@@ -390,21 +391,21 @@ func TestBuildRejectsLayoutWithoutOneSlot(t *testing.T) {
 
 func TestBuildRejectsMissingComponentBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "home",
 			Route: "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Hero title="GOWDK" /><Missing /></main>`,
 			},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Name: "Hero",
-			Props: []manifest.Prop{
+			Props: []gwdkir.Prop{
 				{Name: "title", Type: "string"},
 			},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<section>{title}</section>`},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<section>{title}</section>`},
 		}},
 	}
 
@@ -425,26 +426,26 @@ func TestBuildRejectsMissingComponentBeforeWriting(t *testing.T) {
 
 func TestBuildRejectsDuplicateComponentsBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "home",
 			Route: "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Hero title="GOWDK" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{
+		Components: []gwdkir.Component{
 			{
 				Name: "Hero",
-				Props: []manifest.Prop{
+				Props: []gwdkir.Prop{
 					{Name: "title", Type: "string"},
 				},
-				Blocks: manifest.Blocks{View: true, ViewBody: `<section>{title}</section>`},
+				Blocks: gwdkir.Blocks{View: true, ViewBody: `<section>{title}</section>`},
 			},
 			{
 				Name:   "Hero",
-				Blocks: manifest.Blocks{View: true, ViewBody: `<section>Duplicate</section>`},
+				Blocks: gwdkir.Blocks{View: true, ViewBody: `<section>Duplicate</section>`},
 			},
 		},
 	}

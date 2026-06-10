@@ -10,11 +10,12 @@ import (
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result, error) {
-	return buildFromIR(config, gwdkanalysis.BuildIR(config, app), app.BackendBindings, outputDir, true)
+func Build(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (Result, error) {
+	ir := gwdkanalysis.BuildProgram(config, sources)
+	return buildFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, true)
 }
 
 // BuildFromIR writes SPA build artifacts from normalized compiler IR.
@@ -30,7 +31,7 @@ func BuildFromValidatedIR(config gowdk.Config, ir gwdkir.Program, outputDir stri
 	return buildFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, false)
 }
 
-func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manifest.BackendBinding, outputDir string, validate bool) (Result, error) {
+func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, outputDir string, validate bool) (Result, error) {
 	reporter := newBuildReporter("build", outputDir)
 	reporter.info("start", "build_started", "SPA build started", BuildEvent{
 		Data: map[string]string{
@@ -86,7 +87,9 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manif
 		}
 		reporter.debug("write", "asset_written", "runtime asset written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
 		artifact.AssetArtifact.Hash = contentHash(artifact.contents)
-		artifact.AssetArtifact.CachePolicy = immutableAssetCachePolicy
+		if artifact.AssetArtifact.CachePolicy == "" {
+			artifact.AssetArtifact.CachePolicy = noCacheAssetCachePolicy
+		}
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 	}
 	for _, artifact := range planned.pages {
@@ -128,8 +131,9 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manif
 	return result, nil
 }
 
-func BuildMemory(config gowdk.Config, app manifest.Manifest, outputDir string) (MemoryResult, error) {
-	return buildMemoryFromIR(config, gwdkanalysis.BuildIR(config, app), app.BackendBindings, outputDir)
+func BuildMemory(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (MemoryResult, error) {
+	ir := gwdkanalysis.BuildProgram(config, sources)
+	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir)
 }
 
 // BuildMemoryFromIR plans SPA build artifacts from normalized compiler IR
@@ -138,7 +142,7 @@ func BuildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string)
 	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir)
 }
 
-func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manifest.BackendBinding, outputDir string) (MemoryResult, error) {
+func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, outputDir string) (MemoryResult, error) {
 	reporter := newBuildReporter("memory", outputDir)
 	reporter.info("start", "build_started", "in-memory SPA build started", BuildEvent{
 		Data: map[string]string{
@@ -200,7 +204,9 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 			return MemoryResult{}, reporter.fail("memory", err)
 		}
 		artifact.AssetArtifact.Hash = contentHash(artifact.contents)
-		artifact.AssetArtifact.CachePolicy = immutableAssetCachePolicy
+		if artifact.AssetArtifact.CachePolicy == "" {
+			artifact.AssetArtifact.CachePolicy = noCacheAssetCachePolicy
+		}
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 		result.Files[rel] = append([]byte(nil), artifact.contents...)
 		reporter.debug("memory", "asset_collected", "runtime asset collected", BuildEvent{Path: rel})
@@ -248,7 +254,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	return result, nil
 }
 
-func reportBackendBindings(reporter *buildReporter, bindings []manifest.BackendBinding) {
+func reportBackendBindings(reporter *buildReporter, bindings []source.BackendBinding) {
 	for _, binding := range bindings {
 		data := map[string]string{
 			"kind":     binding.Kind,
@@ -345,8 +351,8 @@ func reportContractReferences(reporter *buildReporter, refs []gwdkir.ContractRef
 	}
 }
 
-func BuildIncremental(config gowdk.Config, app manifest.Manifest, outputDir string, changedPageSources []string) (Result, error) {
-	return buildIncrementalFromIR(config, gwdkanalysis.BuildIR(config, app), outputDir, changedPageSources)
+func BuildIncremental(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string, changedPageSources []string) (Result, error) {
+	return buildIncrementalFromIR(config, gwdkanalysis.BuildProgram(config, sources), outputDir, changedPageSources)
 }
 
 // BuildIncrementalFromIR incrementally renders changed SPA page outputs from
@@ -516,8 +522,8 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	return result, nil
 }
 
-func plan(config gowdk.Config, app manifest.Manifest, outputDir string) (buildPlan, error) {
-	return planFromIR(config, gwdkanalysis.BuildIR(config, app), outputDir)
+func plan(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (buildPlan, error) {
+	return planFromIR(config, gwdkanalysis.BuildProgram(config, sources), outputDir)
 }
 
 func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (buildPlan, error) {

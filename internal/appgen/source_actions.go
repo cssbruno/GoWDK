@@ -2,6 +2,7 @@ package appgen
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"go/printer"
 	"go/token"
@@ -13,7 +14,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func actionHandlerSource(actions []ActionEndpoint, csrf bool) string {
+func actionHandlerSource(actions []ActionEndpoint, csrf bool) (string, error) {
 	sorted := sortedActionEndpoints(actions)
 	decls := []ast.Decl{actionFuncDecl(sorted, csrf, false)}
 	if len(sorted) > 0 {
@@ -23,14 +24,16 @@ func actionHandlerSource(actions []ActionEndpoint, csrf bool) string {
 	return printActionDecls(decls)
 }
 
-func printActionDecls(decls []ast.Decl) string {
+func printActionDecls(decls []ast.Decl) (string, error) {
 	var buffer bytes.Buffer
 	fileSet := token.NewFileSet()
 	for index, decl := range decls {
 		if index > 0 {
 			_, _ = buffer.Write([]byte("\n\n"))
 		}
-		_ = printer.Fprint(&buffer, fileSet, decl)
+		if err := printer.Fprint(&buffer, fileSet, decl); err != nil {
+			return "", fmt.Errorf("print generated declaration: %w", err)
+		}
 	}
 	return formatGoDeclSnippet(buffer.String())
 }

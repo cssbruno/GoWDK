@@ -85,7 +85,11 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (Result, err
 	if err := writeFileIfChanged(filepath.Join(absApp, modFileName), []byte(modulePayload)); err != nil {
 		return Result{}, err
 	}
-	appSource, err := formatGeneratedGo(appFileName, []byte(appPackageSource(options)))
+	packageSource, err := appPackageSource(options)
+	if err != nil {
+		return Result{}, err
+	}
+	appSource, err := formatGeneratedGo(appFileName, []byte(packageSource))
 	if err != nil {
 		return Result{}, err
 	}
@@ -102,7 +106,11 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (Result, err
 	}
 	files = append(files, scriptFiles...)
 	files = append(files, addonGoBlockFiles...)
-	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(serverMainSource())); err != nil {
+	mainSource, err := serverMainSource()
+	if err != nil {
+		return Result{}, err
+	}
+	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(mainSource)); err != nil {
 		return Result{}, err
 	}
 
@@ -149,7 +157,11 @@ func GenerateBackendWithOptions(appDir string, options Options) (Result, error) 
 	if err := writeFileIfChanged(filepath.Join(absApp, modFileName), []byte(modulePayload)); err != nil {
 		return Result{}, err
 	}
-	appSource, err := formatGeneratedGo(appFileName, []byte(backendAppPackageSource(options)))
+	packageSource, err := backendAppPackageSource(options)
+	if err != nil {
+		return Result{}, err
+	}
+	appSource, err := formatGeneratedGo(appFileName, []byte(packageSource))
 	if err != nil {
 		return Result{}, err
 	}
@@ -162,7 +174,11 @@ func GenerateBackendWithOptions(appDir string, options Options) (Result, error) 
 	if _, err := writeAddonGoBlockFiles(absApp, options); err != nil {
 		return Result{}, err
 	}
-	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(serverMainSource())); err != nil {
+	mainSource, err := serverMainSource()
+	if err != nil {
+		return Result{}, err
+	}
+	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(mainSource)); err != nil {
 		return Result{}, err
 	}
 	return Result{

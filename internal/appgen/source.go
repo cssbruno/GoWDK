@@ -2,6 +2,7 @@ package appgen
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/printer"
@@ -13,7 +14,7 @@ import (
 	"github.com/cssbruno/gowdk"
 )
 
-func appPackageSource(options Options) string {
+func appPackageSource(options Options) (string, error) {
 	direct := options
 	if options.ProxyBackend {
 		direct.Actions = nil
@@ -139,7 +140,7 @@ func runtimeImportMap(options Options) map[string]string {
 	return imports
 }
 
-func printGoFile(packageName string, imports map[string]string, decls []ast.Decl) string {
+func printGoFile(packageName string, imports map[string]string, decls []ast.Decl) (string, error) {
 	file := &ast.File{Name: id(packageName)}
 	if len(imports) > 0 {
 		file.Decls = append(file.Decls, importDecl(imports))
@@ -147,25 +148,34 @@ func printGoFile(packageName string, imports map[string]string, decls []ast.Decl
 	file.Decls = append(file.Decls, decls...)
 
 	var buffer bytes.Buffer
-	_ = printer.Fprint(&buffer, token.NewFileSet(), file)
+	if err := printer.Fprint(&buffer, token.NewFileSet(), file); err != nil {
+		return "", fmt.Errorf("print generated %s package: %w", packageName, err)
+	}
 	return formatGoSource(buffer.Bytes())
 }
 
-func formatGoSource(source []byte) string {
+// formatGoSource gofmt-formats generated Go source. A formatting failure means
+// the generator emitted syntactically invalid code; it is returned rather than
+// silently writing the broken source, which would otherwise surface much later
+// as a confusing `go build` error in the generated app.
+func formatGoSource(source []byte) (string, error) {
 	formatted, err := format.Source(source)
 	if err != nil {
-		return string(source)
+		return "", fmt.Errorf("format generated Go source: %w", err)
 	}
-	return string(formatted)
+	return string(formatted), nil
 }
 
-func formatGoDeclSnippet(source string) string {
+func formatGoDeclSnippet(source string) (string, error) {
 	const packagePrefix = "package gowdkapp\n\n"
-	formatted := formatGoSource([]byte(packagePrefix + source))
-	if strings.HasPrefix(formatted, packagePrefix) {
-		return strings.TrimSuffix(strings.TrimPrefix(formatted, packagePrefix), "\n")
+	formatted, err := formatGoSource([]byte(packagePrefix + source))
+	if err != nil {
+		return "", err
 	}
-	return source
+	if strings.HasPrefix(formatted, packagePrefix) {
+		return strings.TrimSuffix(strings.TrimPrefix(formatted, packagePrefix), "\n"), nil
+	}
+	return source, nil
 }
 
 func importDecl(imports map[string]string) ast.Decl {
@@ -485,9 +495,9 @@ func csrfEnabled(options Options) bool {
 	return options.Config.Build.CSRF.Enabled && (len(options.Actions) > 0 || contractExposuresParseForm(executableContractExposures(backendAdapterIR(options).ContractExposures)))
 }
 
-func csrfHelperSource(options Options) string {
+func csrfHelperSource(options Options) (string, error) {
 	if !csrfEnabled(options) {
-		return ""
+		return "", nil
 	}
 	return printActionDecls([]ast.Decl{
 		csrfValidatorVarDecl(),

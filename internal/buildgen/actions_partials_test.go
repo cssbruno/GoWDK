@@ -35,7 +35,7 @@ func TestBuildLowersGPostDirectiveForActionPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	output := string(payload)
-	if !strings.Contains(output, `<form method="post" action="/signup"><input name="email"></input></form>`) {
+	if !strings.Contains(output, `<form method="post" action="/signup"><input name="email"></form>`) {
 		t.Fatalf("expected lowered g:post form in output:\n%s", output)
 	}
 }
@@ -161,6 +161,9 @@ func TestBuildEmitsPartialRuntimeForFragmentForms(t *testing.T) {
 	}
 	if len(result.AssetArtifacts) != 1 || result.AssetArtifacts[0].Path != filepath.Join(outputDir, "assets", "gowdk", "gowdk.js") {
 		t.Fatalf("unexpected runtime assets: %#v", result.AssetArtifacts)
+	}
+	if result.AssetArtifacts[0].CachePolicy != noCacheAssetCachePolicy {
+		t.Fatalf("expected no-cache policy for unhashed runtime asset, got %q", result.AssetArtifacts[0].CachePolicy)
 	}
 	html := readFile(t, filepath.Join(outputDir, "patients", "index.html"))
 	for _, expected := range []string{

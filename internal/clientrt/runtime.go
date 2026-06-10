@@ -34,8 +34,8 @@ const runtimeSource = `(function () {
     form.setAttribute('aria-busy', 'true');
     var focused = focusTarget(document.activeElement);
     try {
-      var response = await fetch(form.action, {
-        method: (form.method || 'POST').toUpperCase(),
+      var response = await fetch(form.getAttribute('action') || window.location.href, {
+        method: (form.getAttribute('method') || 'POST').toUpperCase(),
         body: new FormData(form),
         headers: {
           'X-GOWDK-Partial': '1',

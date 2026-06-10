@@ -86,7 +86,9 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manif
 		}
 		reporter.debug("write", "asset_written", "runtime asset written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
 		artifact.AssetArtifact.Hash = contentHash(artifact.contents)
-		artifact.AssetArtifact.CachePolicy = immutableAssetCachePolicy
+		if artifact.AssetArtifact.CachePolicy == "" {
+			artifact.AssetArtifact.CachePolicy = noCacheAssetCachePolicy
+		}
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 	}
 	for _, artifact := range planned.pages {
@@ -200,7 +202,9 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 			return MemoryResult{}, reporter.fail("memory", err)
 		}
 		artifact.AssetArtifact.Hash = contentHash(artifact.contents)
-		artifact.AssetArtifact.CachePolicy = immutableAssetCachePolicy
+		if artifact.AssetArtifact.CachePolicy == "" {
+			artifact.AssetArtifact.CachePolicy = noCacheAssetCachePolicy
+		}
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 		result.Files[rel] = append([]byte(nil), artifact.contents...)
 		reporter.debug("memory", "asset_collected", "runtime asset collected", BuildEvent{Path: rel})

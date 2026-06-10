@@ -367,15 +367,35 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 			}
 		}
 	}
-	out.write("</")
-	out.write(node.Name)
-	out.writeByte('>')
+	if !voidElements[node.Name] {
+		out.write("</")
+		out.write(node.Name)
+		out.writeByte('>')
+	}
 	if ctx.conditional != nil {
 		out.write(`<!--gowdk-if:`)
 		out.write(gowhtml.Escape(ctx.conditional.Marker()))
 		out.write(`:end-->`)
 	}
 	return nil
+}
+
+// voidElements are HTML elements that have no end tag; emitting one (for
+// example </br>) makes browsers treat it as a second start tag.
+var voidElements = map[string]bool{
+	"area":   true,
+	"base":   true,
+	"br":     true,
+	"col":    true,
+	"embed":  true,
+	"hr":     true,
+	"img":    true,
+	"input":  true,
+	"link":   true,
+	"meta":   true,
+	"source": true,
+	"track":  true,
+	"wbr":    true,
 }
 
 // DOMEventSymbols returns the compiler-owned scalar DOM event scope exposed to

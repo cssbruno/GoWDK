@@ -1774,7 +1774,7 @@ func TestBuildCommandBuildsActionExampleWithImportedComponents(t *testing.T) {
 	}
 	output := string(payload)
 	for _, expected := range []string{
-		`<label class="gowdk-field"><span>Email</span><input name="email" type="email"></input></label>`,
+		`<label class="gowdk-field"><span>Email</span><input name="email" type="email"></label>`,
 		`<button class="gowdk-button" type="submit">Subscribe</button>`,
 	} {
 		if !strings.Contains(output, expected) {

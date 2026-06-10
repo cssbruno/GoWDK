@@ -71,6 +71,44 @@ func TestMinifyCSSPreservesRequiredValueSpacing(t *testing.T) {
 	}
 }
 
+func TestMinifyCSSPreservesCalcOperatorSpacing(t *testing.T) {
+	input := []byte(`
+.a {
+  width: calc(100% + 1rem);
+  height: calc(100% - 2px);
+  margin: min(1rem + 2px, 3rem);
+}
+.b + .c {
+  color: red;
+}
+`)
+	got := string(minifyCSS(input))
+	expected := `.a{width:calc(100% + 1rem);height:calc(100% - 2px);margin:min(1rem + 2px,3rem);}.b+.c{color:red;}`
+	if got != expected {
+		t.Fatalf("unexpected minified css:\nwant %q\n got %q", expected, got)
+	}
+}
+
+func TestMinifyCSSPreservesMediaQueryParenSpacing(t *testing.T) {
+	input := []byte(`
+@media screen and (min-width: 600px) {
+  .a {
+    color: red;
+  }
+}
+@supports (display: grid) and (gap: 1rem) {
+  .b {
+    display: grid;
+  }
+}
+`)
+	got := string(minifyCSS(input))
+	expected := `@media screen and (min-width:600px){.a{color:red;}}@supports (display:grid) and (gap:1rem){.b{display:grid;}}`
+	if got != expected {
+		t.Fatalf("unexpected minified css:\nwant %q\n got %q", expected, got)
+	}
+}
+
 func TestBuildDiscoversAndLinksPageCSS(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
@@ -489,7 +527,7 @@ func TestBuildEmitsScopedComponentCSSWithManifestAndCacheHeaders(t *testing.T) {
 		`.hero` + scopeSelector + `{animation:fade-` + scopeID + ` 1s ease;color:red;}`,
 		`.hero h1` + scopeSelector + `,.hero>p` + scopeSelector + `{color:blue;}`,
 		`@keyframes fade-` + scopeID + `{from{opacity:0;}to{opacity:1;}}`,
-		`@media(min-width:40rem){.hero` + scopeSelector + `{padding:1rem;}}`,
+		`@media (min-width:40rem){.hero` + scopeSelector + `{padding:1rem;}}`,
 	} {
 		if !strings.Contains(css, expected) {
 			t.Fatalf("expected %q in scoped css:\n%s", expected, css)

@@ -375,6 +375,50 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 	}
 }
 
+func TestGeneratedGoMatchesGoldenFixture(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
+
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
+		Kind:        gwdkir.ContractCommand,
+		Name:        "patients.CreatePatient",
+		ImportAlias: "patients",
+		ImportPath:  "example.com/app/contracts/patients",
+		Type:        "CreatePatient",
+		Result:      "CreatePatientResult",
+		InputFields: []source.BackendInputField{
+			{FieldName: "Name", FormName: "name", Type: "string"},
+		},
+		Method:    "POST",
+		Path:      "/patients",
+		Status:    gwdkir.ContractBindingBound,
+		Handler:   "HandleCreatePatient",
+		Register:  "Register",
+		OwnerKind: gwdkir.SourcePage,
+		OwnerID:   "patients",
+	}}}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{IR: program})
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	goldenPath := filepath.FromSlash("testdata/generated_go_golden/app.go.golden")
+	expected, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(actual) != string(expected) {
+		t.Fatalf("generated Go golden mismatch (update %s if intentional)\nexpected:\n%s\nactual:\n%s", goldenPath, expected, actual)
+	}
+}
+
 func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 	appDir := filepath.Join(t.TempDir(), "generated-backend")
 

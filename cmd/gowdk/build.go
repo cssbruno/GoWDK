@@ -112,7 +112,7 @@ func buildOnce(options cliOptions, request buildRequest) error {
 		return fmt.Errorf("build failed")
 	}
 
-	result, err := buildgen.BuildFromIR(options.Config, ir, outputDir)
+	result, err := buildgen.BuildFromValidatedIR(options.Config, ir, outputDir)
 	if err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)
 		return err

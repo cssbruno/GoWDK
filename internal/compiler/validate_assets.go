@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
-func validatePageAssetUses(app manifest.Manifest) []ValidationError {
-	sourcePackages := gowdkSourcePackages(app)
+func validatePageAssetUses(ir gwdkir.Program) []ValidationError {
+	sourcePackages := gowdkSourcePackages(ir)
 	var diagnostics []ValidationError
-	for _, page := range app.Pages {
-		usesByAlias := map[string]manifest.Use{}
+	for _, page := range ir.Pages {
+		usesByAlias := map[string]gwdkir.Use{}
 		for _, use := range page.Uses {
 			if _, exists := usesByAlias[use.Alias]; !exists {
 				usesByAlias[use.Alias] = use
@@ -59,19 +59,19 @@ func validatePageAssetUses(app manifest.Manifest) []ValidationError {
 	return diagnostics
 }
 
-func gowdkSourcePackages(app manifest.Manifest) map[string]bool {
+func gowdkSourcePackages(ir gwdkir.Program) map[string]bool {
 	sourcePackages := map[string]bool{}
-	for _, page := range app.Pages {
+	for _, page := range ir.Pages {
 		if page.Package != "" {
 			sourcePackages[page.Package] = true
 		}
 	}
-	for _, component := range app.Components {
+	for _, component := range ir.Components {
 		if component.Package != "" {
 			sourcePackages[component.Package] = true
 		}
 	}
-	for _, layout := range app.Layouts {
+	for _, layout := range ir.Layouts {
 		if layout.Package != "" {
 			sourcePackages[layout.Package] = true
 		}

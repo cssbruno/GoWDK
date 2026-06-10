@@ -108,6 +108,7 @@ type PageMetadata struct {
 }
 
 type Blocks struct {
+	Paths      bool
 	PathsBody  string
 	Build      bool
 	BuildBody  string

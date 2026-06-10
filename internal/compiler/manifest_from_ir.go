@@ -122,7 +122,7 @@ func pageFromIR(page gwdkir.Page) manifest.Page {
 		Imports:     importsFromIR(page.Imports),
 		Uses:        usesFromIR(page.Uses),
 		Stores:      storesFromIR(page.Stores),
-		Paths:       page.Blocks.PathsBody != "",
+		Paths:       page.Blocks.Paths,
 		Blocks:      blocksFromIR(page.Blocks),
 		LoadBinding: loadBindingFromIR(page),
 		Spans: manifest.PageSpans{
@@ -333,10 +333,14 @@ func fragmentEndpointsFromIR(fragments []gwdkir.FragmentEndpoint) []manifest.Fra
 	return out
 }
 
+func importFromIR(item gwdkir.Import) manifest.Import {
+	return manifest.Import{Alias: item.Alias, Path: item.Path, Span: item.Span}
+}
+
 func importsFromIR(imports []gwdkir.Import) []manifest.Import {
 	out := make([]manifest.Import, 0, len(imports))
 	for _, item := range imports {
-		out = append(out, manifest.Import{Alias: item.Alias, Path: item.Path, Span: item.Span})
+		out = append(out, importFromIR(item))
 	}
 	return out
 }

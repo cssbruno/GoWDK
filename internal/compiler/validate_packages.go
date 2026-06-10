@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -28,8 +28,8 @@ type packageDeclaration struct {
 	PageID        string
 	ComponentName string
 	Package       string
-	Imports       []manifest.Import
-	GoBlocks      []manifest.GoBlock
+	Imports       []gwdkir.Import
+	GoBlocks      []gwdkir.GoBlock
 	Span          source.SourceSpan
 }
 
@@ -39,8 +39,8 @@ type goPackageInfo struct {
 	Diagnostics []ValidationError
 }
 
-func validatePackages(app manifest.Manifest) []ValidationError {
-	declarations := packageDeclarations(app)
+func validatePackages(ir gwdkir.Program) []ValidationError {
+	declarations := packageDeclarations(ir)
 	var diagnostics []ValidationError
 	byDir := map[string][]packageDeclaration{}
 	for _, declaration := range declarations {
@@ -103,9 +103,9 @@ func shouldValidatePackageSource(sourcePath string) bool {
 	return false
 }
 
-func packageDeclarations(app manifest.Manifest) []packageDeclaration {
+func packageDeclarations(ir gwdkir.Program) []packageDeclaration {
 	var declarations []packageDeclaration
-	for _, page := range app.Pages {
+	for _, page := range ir.Pages {
 		declarations = append(declarations, packageDeclaration{
 			Source:   page.Source,
 			Label:    sourceLabel(page.Source, page.ID+".page.gwdk"),
@@ -116,7 +116,7 @@ func packageDeclarations(app manifest.Manifest) []packageDeclaration {
 			Span:     firstSpan(page.Spans.Package, page.Spans.Page, page.Spans.Route),
 		})
 	}
-	for _, component := range app.Components {
+	for _, component := range ir.Components {
 		declarations = append(declarations, packageDeclaration{
 			Source:        component.Source,
 			Label:         sourceLabel(component.Source, component.Name+".cmp.gwdk"),
@@ -127,7 +127,7 @@ func packageDeclarations(app manifest.Manifest) []packageDeclaration {
 			Span:          firstSpan(component.PackageSpan, component.Span),
 		})
 	}
-	for _, layout := range app.Layouts {
+	for _, layout := range ir.Layouts {
 		declarations = append(declarations, packageDeclaration{
 			Source:   layout.Source,
 			Label:    sourceLabel(layout.Source, layout.ID+".layout.gwdk"),
@@ -256,7 +256,7 @@ func inspectGoPackageForValidation(dir string, group []packageDeclaration) goPac
 	return info
 }
 
-func parseGoBlockPackageFileForValidation(fileSet *token.FileSet, declaration packageDeclaration, block manifest.GoBlock) (*ast.File, *ValidationError) {
+func parseGoBlockPackageFileForValidation(fileSet *token.FileSet, declaration packageDeclaration, block gwdkir.GoBlock) (*ast.File, *ValidationError) {
 	src, err := goBlockPackageSourceForValidation(declaration, block)
 	if err != nil {
 		return nil, nil
@@ -276,7 +276,7 @@ func parseGoBlockPackageFileForValidation(fileSet *token.FileSet, declaration pa
 	return file, nil
 }
 
-func goBlockPackageSourceForValidation(declaration packageDeclaration, block manifest.GoBlock) (string, error) {
+func goBlockPackageSourceForValidation(declaration packageDeclaration, block gwdkir.GoBlock) (string, error) {
 	packageName := strings.TrimSpace(declaration.Package)
 	if packageName == "" {
 		return "", fmt.Errorf("go block package is missing")
@@ -315,7 +315,7 @@ func goBlockPackageSourceForValidation(declaration packageDeclaration, block man
 	return buffer.String(), nil
 }
 
-func goBlockGOWDKImportSpecsForValidation(imports []manifest.Import, bodyFile *ast.File) []ast.Spec {
+func goBlockGOWDKImportSpecsForValidation(imports []gwdkir.Import, bodyFile *ast.File) []ast.Spec {
 	used := usedScriptIdentifiersForValidation(bodyFile)
 	localImports := goBlockImportAliasesForValidation(bodyFile)
 	var specs []ast.Spec
@@ -431,7 +431,7 @@ func goBlockImportAliasesForValidation(file *ast.File) map[string]bool {
 	return aliases
 }
 
-func goBlockImportAliasForValidation(item manifest.Import) string {
+func goBlockImportAliasForValidation(item gwdkir.Import) string {
 	if strings.TrimSpace(item.Alias) != "" {
 		return item.Alias
 	}

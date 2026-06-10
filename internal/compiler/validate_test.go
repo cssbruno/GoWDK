@@ -12,6 +12,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -292,7 +293,7 @@ func TestGoBlockPackageSourceForValidationPreservesLineDirective(t *testing.T) {
 	payload, err := goBlockPackageSourceForValidation(packageDeclaration{
 		Source:  sourcePath,
 		Package: "app",
-	}, manifest.GoBlock{
+	}, gwdkir.GoBlock{
 		Span: source.SourceSpan{Start: source.SourcePosition{Line: 8, Column: 1}},
 		Body: `func BrokenCopy() string {
 	return MissingTitle
@@ -3324,7 +3325,7 @@ func TestValidateManifestAllowsConcreteRouteBesideDynamicPageRoute(t *testing.T)
 	app := manifest.Manifest{
 		Pages: []manifest.Page{
 			{ID: "blog.about", Route: "/blog/about", Blocks: manifest.Blocks{View: true}},
-			{ID: "blog.post", Route: "/blog/{slug}", Paths: true, Blocks: manifest.Blocks{View: true}},
+			{ID: "blog.post", Route: "/blog/{slug}", Paths: true, Blocks: manifest.Blocks{PathsBody: "return nil", View: true}},
 		},
 	}
 

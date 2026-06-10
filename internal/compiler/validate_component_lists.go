@@ -5,12 +5,12 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-func validateComponentListDirectives(component manifest.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction) []ValidationError {
+func validateComponentListDirectives(component gwdkir.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction) []ValidationError {
 	nodes, err := view.Parse(component.Blocks.ViewBody)
 	if err != nil {
 		return nil
@@ -38,7 +38,7 @@ type spannedMessage struct {
 	Span    source.SourceSpan
 }
 
-func validateListNodes(nodes []view.Node, component manifest.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
+func validateListNodes(nodes []view.Node, component gwdkir.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
 	for _, node := range nodes {
 		switch typed := node.(type) {
 		case view.Element:
@@ -53,7 +53,7 @@ func validateListNodes(nodes []view.Node, component manifest.Component, symbols 
 	}
 }
 
-func validateListElement(element view.Element, loopAttr view.Attr, component manifest.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
+func validateListElement(element view.Element, loopAttr view.Attr, component gwdkir.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
 	loopSpan := viewBodyNeedleSpan(component, loopAttr.Value)
 	loop, err := view.ParseForDirective(loopAttr.Value)
 	if err != nil {
@@ -93,7 +93,7 @@ func validateLoopSubtree(node view.Node, readSymbols map[string]clientlang.Value
 		validateInterpolations(typed.Value, readSymbols, messages)
 	case view.Element:
 		if loopAttr, hasLoop := elementForDirective(typed); hasLoop {
-			validateListElement(typed, loopAttr, manifest.Component{}, readSymbols, writeSymbols, handlers, helpers, messages)
+			validateListElement(typed, loopAttr, gwdkir.Component{}, readSymbols, writeSymbols, handlers, helpers, messages)
 			return
 		}
 		validateLoopElementBody(typed, readSymbols, writeSymbols, handlers, helpers, messages)

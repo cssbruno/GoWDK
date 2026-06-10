@@ -306,7 +306,7 @@ func baseBackendBinding(page manifest.Page, kind, blockName, method, route strin
 func baseStandaloneBackendBinding(endpoint manifest.EndpointDeclaration, kind, method string, pkg featurePackage) manifest.BackendBinding {
 	return manifest.BackendBinding{
 		Kind:         kind,
-		PageID:       standaloneEndpointPageID(endpoint),
+		PageID:       standaloneEndpointDeclarationPageID(endpoint),
 		Source:       endpoint.Source,
 		BlockName:    endpoint.Name,
 		Method:       method,
@@ -316,6 +316,16 @@ func baseStandaloneBackendBinding(endpoint manifest.EndpointDeclaration, kind, m
 		FunctionName: endpoint.Name,
 		Status:       source.BackendBindingMissing,
 	}
+}
+
+// standaloneEndpointDeclarationPageID mirrors standaloneEndpointPageID for the
+// manifest-typed backend-binding discovery path, which is not part of the
+// IR-native structural validators.
+func standaloneEndpointDeclarationPageID(endpoint manifest.EndpointDeclaration) string {
+	if endpoint.Package == "" {
+		return endpoint.Name
+	}
+	return endpoint.Package + "." + endpoint.Name
 }
 
 func packageLabel(pkg featurePackage) string {

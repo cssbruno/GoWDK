@@ -23,6 +23,7 @@ func sampleProgram() gwdkir.Program {
 			Layouts: []string{"root"},
 			Guards:  []string{"public"},
 			Blocks: gwdkir.Blocks{
+				Paths:     true,
 				Build:     true,
 				BuildBody: `=> { title: "Home" }`,
 				View:      true,
@@ -81,6 +82,9 @@ func TestManifestFromIRReconstructsCoreRecords(t *testing.T) {
 	}
 	if len(app.Pages[0].Blocks.Fragments) != 1 || app.Pages[0].Blocks.Fragments[0].Name != "List" {
 		t.Fatalf("fragment endpoints not preserved: %#v", app.Pages[0].Blocks.Fragments)
+	}
+	if !app.Pages[0].Paths {
+		t.Fatalf("paths block presence not preserved: %#v", app.Pages[0])
 	}
 	if len(app.Components) != 1 || app.Components[0].Name != "Counter" {
 		t.Fatalf("unexpected components: %#v", app.Components)

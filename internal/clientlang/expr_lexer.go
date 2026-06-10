@@ -11,6 +11,7 @@ type tokenKind int
 
 const (
 	tokenEOF tokenKind = iota
+	tokenError
 	tokenIdent
 	tokenString
 	tokenNumber

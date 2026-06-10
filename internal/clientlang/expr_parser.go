@@ -8,6 +8,7 @@ import (
 type exprParser struct {
 	lexer  *exprLexer
 	buffer *exprToken
+	err    error
 }
 
 func (parser *exprParser) peek() exprToken {
@@ -16,7 +17,10 @@ func (parser *exprParser) peek() exprToken {
 	}
 	token, err := parser.lexer.next()
 	if err != nil {
-		token = exprToken{kind: tokenEOF, value: err.Error()}
+		if parser.err == nil {
+			parser.err = err
+		}
+		token = exprToken{kind: tokenError}
 	}
 	parser.buffer = &token
 	return token

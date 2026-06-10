@@ -109,6 +109,9 @@ func TestBuildEmitsScopedJSOnlyForPagesThatUseIt(t *testing.T) {
 		if !strings.Contains(readFile(t, artifact.Path), expectedContent) {
 			t.Fatalf("expected copied JS asset %s to contain %q", logicalPath, expectedContent)
 		}
+		if artifact.CachePolicy != noCacheAssetCachePolicy {
+			t.Fatalf("expected no-cache policy for unhashed scoped script %s, got %q", logicalPath, artifact.CachePolicy)
+		}
 	}
 }
 

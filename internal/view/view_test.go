@@ -12,7 +12,7 @@ func TestRenderSPAEscapesTextAndAttributes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `<main class="hero &amp; lead"><h1>GOWDK &amp; friends</h1><input disabled></input></main>`
+	want := `<main class="hero &amp; lead"><h1>GOWDK &amp; friends</h1><input disabled></main>`
 	if got != want {
 		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
@@ -1127,7 +1127,7 @@ func TestRenderWithOptionsLowersGPostDirective(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `<form class="signup" method="post" action="/signup"><input name="email"></input></form>`
+	want := `<form class="signup" method="post" action="/signup"><input name="email"></form>`
 	if got != want {
 		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
@@ -1138,7 +1138,7 @@ func TestRenderWithOptionsMarksGCommandForm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `<form method="post" action="/patients" data-gowdk-command="patients.CreatePatient"><input name="email"></input></form>`
+	want := `<form method="post" action="/patients" data-gowdk-command="patients.CreatePatient"><input name="email"></form>`
 	if got != want {
 		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
@@ -1606,5 +1606,16 @@ func TestRenderSPARejectsMismatchedTags(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "expected closing tag") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderSPAOmitsVoidElementEndTags(t *testing.T) {
+	got, err := RenderSPA(`<div>line one<br />line two<hr /><img src="/logo.png" alt="logo" /></div>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<div>line one<br>line two<hr><img src="/logo.png" alt="logo"></div>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }

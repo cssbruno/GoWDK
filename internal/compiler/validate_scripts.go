@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func validateGoBlocks(config gowdk.Config, app manifest.Manifest) []ValidationError {
+func validateGoBlocks(config gowdk.Config, app gwdkir.Program) []ValidationError {
 	var diagnostics []ValidationError
 	enabledAddons := addonsByName(config)
 	for _, page := range app.Pages {
@@ -36,7 +36,7 @@ func validateGoBlocks(config gowdk.Config, app manifest.Manifest) []ValidationEr
 	return diagnostics
 }
 
-func validateGoBlockSyntax(packageName string, sourcePath string, pageID string, componentName string, block manifest.GoBlock) []ValidationError {
+func validateGoBlockSyntax(packageName string, sourcePath string, pageID string, componentName string, block gwdkir.GoBlock) []ValidationError {
 	if strings.TrimSpace(block.Body) == "" {
 		return nil
 	}
@@ -57,7 +57,7 @@ func validateGoBlockSyntax(packageName string, sourcePath string, pageID string,
 	}}
 }
 
-func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, mode gowdk.RenderMode, hasLoad bool, block manifest.GoBlock) []ValidationError {
+func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, mode gowdk.RenderMode, hasLoad bool, block gwdkir.GoBlock) []ValidationError {
 	target := strings.TrimSpace(block.Target)
 	switch {
 	case target == "" || target == "client":
@@ -88,7 +88,7 @@ func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.A
 	}
 }
 
-func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, block manifest.GoBlock) []ValidationError {
+func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, block gwdkir.GoBlock) []ValidationError {
 	target := strings.TrimSpace(block.Target)
 	switch {
 	case target == "":
@@ -128,7 +128,7 @@ func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]
 	}
 }
 
-func validateAddonGoBlockTarget(enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, render gowdk.RenderMode, block manifest.GoBlock) []ValidationError {
+func validateAddonGoBlockTarget(enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, render gowdk.RenderMode, block gwdkir.GoBlock) []ValidationError {
 	name := strings.TrimPrefix(strings.TrimSpace(block.Target), "addon.")
 	addon, ok := enabledAddons[name]
 	if name != "" && ok {
@@ -167,7 +167,7 @@ func goBlockConsumerSupportsTarget(consumer gowdk.GoBlockConsumer, target string
 	return false
 }
 
-func addonGoBlockDiagnostics(consumer gowdk.GoBlockConsumer, pageID string, componentName string, sourcePath string, packageName string, render gowdk.RenderMode, block manifest.GoBlock) []ValidationError {
+func addonGoBlockDiagnostics(consumer gowdk.GoBlockConsumer, pageID string, componentName string, sourcePath string, packageName string, render gowdk.RenderMode, block gwdkir.GoBlock) []ValidationError {
 	target := gowdkGoBlockTarget(pageID, componentName, sourcePath, packageName, block)
 	context := gowdk.GoBlockContext{Render: render}
 	var diagnostics []ValidationError
@@ -200,7 +200,7 @@ func addonsByName(config gowdk.Config) map[string]gowdk.Addon {
 	return names
 }
 
-func gowdkGoBlockTarget(pageID string, componentName string, sourcePath string, packageName string, block manifest.GoBlock) gowdk.GoBlockTarget {
+func gowdkGoBlockTarget(pageID string, componentName string, sourcePath string, packageName string, block gwdkir.GoBlock) gowdk.GoBlockTarget {
 	ownerKind := "layout"
 	ownerID := ""
 	if pageID != "" {

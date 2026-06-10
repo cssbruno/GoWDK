@@ -30,17 +30,36 @@ Issue #145 progress (compiler IR-native validation):
   guard in `validate_differential_test.go`).
 - (done) The CLI build path validates the IR directly via `ValidateProgram(ir)`,
   no longer threading a manifest into validation.
+- (done) All validator bodies read `gwdkir` types directly; the `ManifestFromIR`
+  adapter and `ValidateManifest` are deleted. The exhaustive validator test
+  corpus kept its manifest fixtures and lowers them through the production
+  `BuildIR` path, so diagnostic expectations were pinned byte-for-byte across
+  the rewrite.
+- (done) Standalone Go endpoint discovery (`compiler.DiscoverGoEndpoints`) and
+  backend handler binding (`compiler.BindBackendHandlers`) are IR-native: they
+  enrich `*gwdkir.Program` after `BuildIR` (via
+  `gwdkanalysis.AddStandaloneEndpoints` / `AttachBackendBindings`). The binder
+  returns the binding record list (now `source.BackendBinding`; manifest
+  aliases it) so `lang` mirrors discovery/binding results back onto the parsed
+  manifest — public manifest JSON output verified byte-identical.
+- (done) `internal/gotypes` and `internal/goblockgen` take `gwdkir` types,
+  deleting the IR→manifest conversion glue in buildgen and appgen.
+- (done) The `lang` report commands (`check`/`sitemap`/`manifest`) validate the
+  IR; manifest-typed `ValidateManifest`/`BuildRouteMetadata`/
+  `ValidateBackendBindingPolicy` entrypoints are removed.
+- (done) Residual build-path double validation removed: the CLI calls
+  `buildgen.BuildFromValidatedIR`; `BuildFromIR` keeps the defensive validation
+  for other callers.
+- (done) `internal/compiler` no longer imports `internal/manifest` (non-test),
+  verified via `go list` (Step 3 exit criterion).
 
 Pending (largest remaining work):
 
-- The validator bodies still read manifest model types internally (via the
-  `ManifestFromIR` adapter), so `internal/compiler` still imports `manifest` for
-  the model (~980 references). Rewriting the ~30 validators to read `gwdkir`
-  types directly — and dropping the adapter — is the remaining bulk of #145.
-- Remove the residual double validation in the build path (CLI validates the IR,
-  buildgen re-validates defensively for its other callers).
-- Flip the `lang` report commands (`check`/`sitemap`/`manifest`) to IR validation.
-- Collapse the `AST → manifest → IR` path to `AST → IR` in `gwdkanalysis`.
+- Step 4 residue: `internal/appgen` and `internal/lang`/`internal/lsp` still
+  carry manifest-typed helpers around parsing and reports.
+- Step 5: collapse the `AST → manifest → IR` path to `AST → IR` in
+  `gwdkanalysis`; the parser seam and `BuildIR(manifest)` remain manifest-typed
+  until then.
 - Keep public manifest JSON until a release plan deprecates it.
 
 ## Context

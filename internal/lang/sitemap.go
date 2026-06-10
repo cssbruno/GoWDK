@@ -61,16 +61,6 @@ type SiteMapEndpoint struct {
 	InputType     string                        `json:"inputType,omitempty"`
 }
 
-// BuildSiteMap converts a manifest into the editor-facing site map.
-func BuildSiteMap(config gowdk.Config, app manifest.Manifest) SiteMap {
-	pages := siteMapPages(config, app)
-	metadata, err := compiler.BuildRouteMetadata(config, app)
-	if err != nil {
-		return SiteMap{Pages: pages}
-	}
-	return siteMapFromMetadata(pages, metadata)
-}
-
 // BuildSiteMapFromIR converts stable compiler IR into the editor-facing site
 // map while preserving manifest-backed public page fields.
 func BuildSiteMapFromIR(config gowdk.Config, app manifest.Manifest, ir gwdkir.Program) SiteMap {

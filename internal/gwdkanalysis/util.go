@@ -18,7 +18,7 @@ func endpointSource(src manifest.EndpointSource) gwdkir.EndpointSource {
 	return gwdkir.EndpointSourceGOWDK
 }
 
-func standaloneEndpointPageID(endpoint manifest.EndpointDeclaration) string {
+func standaloneEndpointPageID(endpoint gwdkir.GoEndpoint) string {
 	if endpoint.Package == "" {
 		return endpoint.Name
 	}

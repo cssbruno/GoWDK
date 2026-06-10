@@ -16,7 +16,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 const generatedImportBase = "gowdk-generated-app/gowdk_go"
@@ -63,7 +63,7 @@ func SafePackageDir(packageName string) string {
 }
 
 // ParseFile parses one go block as a normal Go file in packageName.
-func ParseFile(packageName string, block manifest.GoBlock) (*ast.File, error) {
+func ParseFile(packageName string, block gwdkir.GoBlock) (*ast.File, error) {
 	source := "package " + SafePackageName(packageName) + "\n" + block.Body
 	file, err := parser.ParseFile(token.NewFileSet(), "go-block.gwdk.go", source, parser.AllErrors)
 	if err != nil {
@@ -78,7 +78,7 @@ func ParseFile(packageName string, block manifest.GoBlock) (*ast.File, error) {
 
 // ImportAliases returns Go import aliases from block-local imports plus used
 // .gwdk imports.
-func ImportAliases(file *ast.File, imports []manifest.Import) map[string]string {
+func ImportAliases(file *ast.File, imports []gwdkir.Import) map[string]string {
 	aliases := astImportAliases(file)
 	used := usedIdentifiers(file)
 	for _, item := range imports {
@@ -96,7 +96,7 @@ func ImportAliases(file *ast.File, imports []manifest.Import) map[string]string 
 }
 
 // Source emits one formatted Go source file containing the selected go blocks.
-func Source(packageName string, imports []manifest.Import, blocks []manifest.GoBlock) ([]byte, error) {
+func Source(packageName string, imports []gwdkir.Import, blocks []gwdkir.GoBlock) ([]byte, error) {
 	var files []*ast.File
 	for _, block := range blocks {
 		file, err := ParseFile(packageName, block)
@@ -134,7 +134,7 @@ func Source(packageName string, imports []manifest.Import, blocks []manifest.GoB
 	return formatted, nil
 }
 
-func generatedImportDecl(imports []manifest.Import, files []*ast.File) ast.Decl {
+func generatedImportDecl(imports []gwdkir.Import, files []*ast.File) ast.Decl {
 	var specs []ast.Spec
 	seen := map[string]bool{}
 	used := map[string]bool{}
@@ -224,7 +224,7 @@ func importSpecAliasPath(spec *ast.ImportSpec) (string, string) {
 	return alias, importPath
 }
 
-func importAlias(item manifest.Import) string {
+func importAlias(item gwdkir.Import) string {
 	if strings.TrimSpace(item.Alias) != "" {
 		return item.Alias
 	}

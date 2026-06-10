@@ -9,13 +9,12 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/goblockgen"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
 type inlineGoBlockGroup struct {
-	imports  []manifest.Import
-	goBlocks []manifest.GoBlock
+	imports  []gwdkir.Import
+	goBlocks []gwdkir.GoBlock
 }
 
 type addonGoBlockTarget struct {
@@ -52,57 +51,27 @@ func writeInlineGoBlockFiles(appDir string, options Options) ([]string, error) {
 func inlineGoBlockGroups(ir gwdkir.Program) map[string]inlineGoBlockGroup {
 	groups := map[string]inlineGoBlockGroup{}
 	for _, page := range ir.Pages {
-		var goBlocks []manifest.GoBlock
-		for _, script := range page.Blocks.GoBlocks {
-			if !isGeneratedInlineGoBlockTarget(script.Target) {
-				continue
-			}
-			goBlocks = append(goBlocks, manifest.GoBlock{
-				Target: script.Target,
-				Body:   script.Body,
-				Span:   script.Span,
-			})
-		}
+		goBlocks := generatedInlineGoBlocks(page.Blocks.GoBlocks)
 		if len(goBlocks) == 0 {
 			continue
 		}
 		group := groups[page.Package]
-		group.imports = mergeGoBlockImports(group.imports, manifestImports(page.Imports))
+		group.imports = mergeGoBlockImports(group.imports, page.Imports)
 		group.goBlocks = append(group.goBlocks, goBlocks...)
 		groups[page.Package] = group
 	}
 	for _, component := range ir.Components {
-		var goBlocks []manifest.GoBlock
-		for _, script := range component.Blocks.GoBlocks {
-			if !isGeneratedInlineGoBlockTarget(script.Target) {
-				continue
-			}
-			goBlocks = append(goBlocks, manifest.GoBlock{
-				Target: script.Target,
-				Body:   script.Body,
-				Span:   script.Span,
-			})
-		}
+		goBlocks := generatedInlineGoBlocks(component.Blocks.GoBlocks)
 		if len(goBlocks) == 0 {
 			continue
 		}
 		group := groups[component.Package]
-		group.imports = mergeGoBlockImports(group.imports, manifestImports(component.Imports))
+		group.imports = mergeGoBlockImports(group.imports, component.Imports)
 		group.goBlocks = append(group.goBlocks, goBlocks...)
 		groups[component.Package] = group
 	}
 	for _, layout := range ir.Layouts {
-		var goBlocks []manifest.GoBlock
-		for _, script := range layout.Blocks.GoBlocks {
-			if !isGeneratedInlineGoBlockTarget(script.Target) {
-				continue
-			}
-			goBlocks = append(goBlocks, manifest.GoBlock{
-				Target: script.Target,
-				Body:   script.Body,
-				Span:   script.Span,
-			})
-		}
+		goBlocks := generatedInlineGoBlocks(layout.Blocks.GoBlocks)
 		if len(goBlocks) == 0 {
 			continue
 		}
@@ -122,18 +91,21 @@ func isGeneratedInlineGoBlockTarget(target string) bool {
 	}
 }
 
-func manifestImports(imports []gwdkir.Import) []manifest.Import {
-	out := make([]manifest.Import, 0, len(imports))
-	for _, item := range imports {
-		out = append(out, manifest.Import{Alias: item.Alias, Path: item.Path, Span: item.Span})
+func generatedInlineGoBlocks(blocks []gwdkir.GoBlock) []gwdkir.GoBlock {
+	var out []gwdkir.GoBlock
+	for _, script := range blocks {
+		if !isGeneratedInlineGoBlockTarget(script.Target) {
+			continue
+		}
+		out = append(out, script)
 	}
 	return out
 }
 
-func mergeGoBlockImports(left []manifest.Import, right []manifest.Import) []manifest.Import {
+func mergeGoBlockImports(left []gwdkir.Import, right []gwdkir.Import) []gwdkir.Import {
 	seen := map[string]bool{}
-	out := make([]manifest.Import, 0, len(left)+len(right))
-	for _, item := range append(append([]manifest.Import(nil), left...), right...) {
+	out := make([]gwdkir.Import, 0, len(left)+len(right))
+	for _, item := range append(append([]gwdkir.Import(nil), left...), right...) {
 		key := item.Alias + "\x00" + item.Path
 		if seen[key] {
 			continue

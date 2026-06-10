@@ -5,6 +5,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
@@ -44,7 +45,7 @@ func TestBuildRouteMetadataSeparatesRoutesFromEndpoints(t *testing.T) {
 		},
 	}
 
-	metadata, err := BuildRouteMetadata(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
+	metadata, err := buildRouteMetadata(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +71,7 @@ func TestBuildRouteMetadataRejectsSSRWithoutAddon(t *testing.T) {
 		}},
 	}
 
-	_, err := BuildRouteMetadata(gowdk.Config{}, app)
+	_, err := buildRouteMetadata(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected Missing SSR addon error")
 	}
@@ -86,7 +87,7 @@ func TestBuildRouteMetadataRejectsHybridWithoutAddon(t *testing.T) {
 		},
 	}}}
 
-	_, err := BuildRouteMetadata(gowdk.Config{}, app)
+	_, err := buildRouteMetadata(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected missing SSR addon error")
 	}
@@ -102,7 +103,7 @@ func TestBuildRouteMetadataMapsHybridWithoutExplicitLoadToHybridRoute(t *testing
 		},
 	}}}
 
-	metadata, err := BuildRouteMetadata(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
+	metadata, err := buildRouteMetadata(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +121,7 @@ func TestBuildRouteMetadataMapsHybridWithLoadToHybridRoute(t *testing.T) {
 		},
 	}}}
 
-	metadata, err := BuildRouteMetadata(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
+	metadata, err := buildRouteMetadata(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,4 +237,17 @@ func assertInfo(t *testing.T, infos []RouteInfo, code string, pageID string) {
 		}
 	}
 	t.Fatalf("Missing info code=%s page=%s in %#v", code, pageID, infos)
+}
+
+// buildRouteMetadata validates and binds a manifest fixture through the
+// production IR path before deriving route metadata, mirroring the deleted
+// manifest-typed BuildRouteMetadata entrypoint these tests were written
+// against.
+func buildRouteMetadata(config gowdk.Config, app manifest.Manifest) (RouteMetadata, error) {
+	ir := gwdkanalysis.BuildIR(config, app)
+	if err := ValidateProgram(config, ir); err != nil {
+		return RouteMetadata{}, err
+	}
+	BindBackendHandlers(&ir)
+	return BuildRouteMetadataFromIR(config, ir), nil
 }

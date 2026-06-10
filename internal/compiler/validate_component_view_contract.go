@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-func validateComponentViewContract(component manifest.Component, ctx componentValidationContext) []ValidationError {
+func validateComponentViewContract(component gwdkir.Component, ctx componentValidationContext) []ValidationError {
 	viewRefs, err := componentViewReferences(component.Blocks.ViewBody)
 	if err != nil {
 		return []ValidationError{{
@@ -35,7 +35,7 @@ func validateComponentViewContract(component manifest.Component, ctx componentVa
 	return diagnostics
 }
 
-func validateUnknownViewFields(component manifest.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
+func validateUnknownViewFields(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
 	var diagnostics []ValidationError
 	for field := range viewRefs.Fields {
 		if ctx.Props[field] || ctx.State[field] {
@@ -55,7 +55,7 @@ func validateUnknownViewFields(component manifest.Component, ctx componentValida
 	return diagnostics
 }
 
-func validateViewEventExpressions(component manifest.Component, ctx componentValidationContext, viewRefs componentViewRefs, helperFuncs map[string]clientlang.ExprFunction, emits map[string]clientlang.Emit) []ValidationError {
+func validateViewEventExpressions(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs, helperFuncs map[string]clientlang.ExprFunction, emits map[string]clientlang.Emit) []ValidationError {
 	var diagnostics []ValidationError
 	for _, eventExpr := range viewRefs.Events {
 		if _, err := view.ParseEventDirective(eventExpr.Name); err != nil {
@@ -93,7 +93,7 @@ func mergeClientSymbols(left, right map[string]clientlang.ValueType) map[string]
 	return out
 }
 
-func validateViewBooleanExpressions(component manifest.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
+func validateViewBooleanExpressions(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
 	var diagnostics []ValidationError
 	for _, expr := range viewRefs.Bools {
 		if err := view.ValidateIslandBoolExpressionTyped(expr, ctx.SymbolTypes); err != nil {
@@ -109,7 +109,7 @@ func validateViewBooleanExpressions(component manifest.Component, ctx componentV
 	return diagnostics
 }
 
-func validateViewAttributeExpressions(component manifest.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
+func validateViewAttributeExpressions(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
 	var diagnostics []ValidationError
 	for _, attrExpr := range viewRefs.Attrs {
 		if err := view.ValidateReactiveAttrExpressionTyped(attrExpr.Name, attrExpr.Expression, ctx.SymbolTypes); err != nil {
@@ -147,7 +147,7 @@ func validateViewAttributeExpressions(component manifest.Component, ctx componen
 	return diagnostics
 }
 
-func validateViewValueBinds(component manifest.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
+func validateViewValueBinds(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
 	var diagnostics []ValidationError
 	for _, field := range viewRefs.ValueBinds {
 		diagnostics = append(diagnostics, validateViewValueBind(component, ctx, field)...)
@@ -155,7 +155,7 @@ func validateViewValueBinds(component manifest.Component, ctx componentValidatio
 	return diagnostics
 }
 
-func validateViewValueBind(component manifest.Component, ctx componentValidationContext, field valueBindExpr) []ValidationError {
+func validateViewValueBind(component gwdkir.Component, ctx componentValidationContext, field valueBindExpr) []ValidationError {
 	typ, ok := ctx.StateTypes[field.Field]
 	if !ok {
 		return []ValidationError{componentFieldError(component, fmt.Sprintf("component %s g:bind:value target %q must be a state field", component.Name, field.Field))}
@@ -178,7 +178,7 @@ func validateViewValueBind(component manifest.Component, ctx componentValidation
 	return []ValidationError{componentFieldError(component, fmt.Sprintf("component %s g:bind:value target %q must be string or numeric, got %s", component.Name, field.Field, typ))}
 }
 
-func validateViewCheckedBinds(component manifest.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
+func validateViewCheckedBinds(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
 	var diagnostics []ValidationError
 	for _, field := range viewRefs.CheckedBinds {
 		typ, ok := ctx.StateTypes[field]
@@ -193,7 +193,7 @@ func validateViewCheckedBinds(component manifest.Component, ctx componentValidat
 	return diagnostics
 }
 
-func validateViewRefBinds(component manifest.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
+func validateViewRefBinds(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
 	boundRefs := map[string]bool{}
 	var diagnostics []ValidationError
 	for _, refName := range viewRefs.RefBinds {
@@ -225,7 +225,7 @@ func validateViewRefBinds(component manifest.Component, ctx componentValidationC
 	return diagnostics
 }
 
-func componentFieldError(component manifest.Component, message string) ValidationError {
+func componentFieldError(component gwdkir.Component, message string) ValidationError {
 	return ValidationError{
 		Code:          "component_field_error",
 		ComponentName: component.Name,

@@ -2,9 +2,9 @@ package compiler
 
 import (
 	"fmt"
+
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -27,39 +27,32 @@ func (err ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s", err.PageID, err.Message)
 }
 
-// ValidateManifest checks render-mode invariants that must hold before codegen.
-func ValidateManifest(config gowdk.Config, app manifest.Manifest) error {
+// ValidateProgram checks render-mode invariants that must hold before codegen.
+// The validators read the compiler IR directly; there is no manifest
+// intermediary on this path.
+func ValidateProgram(config gowdk.Config, ir gwdkir.Program) error {
 	var diagnostics []ValidationError
-	diagnostics = append(diagnostics, validatePackages(app)...)
-	diagnostics = append(diagnostics, validateUniquePages(app.Pages)...)
-	diagnostics = append(diagnostics, validateUniqueComponents(app.Components)...)
-	diagnostics = append(diagnostics, validateComponentEmits(app.Components)...)
-	diagnostics = append(diagnostics, validateComponentGoContracts(app.Components)...)
-	diagnostics = append(diagnostics, validateComponentStoreUses(app.Pages, app.Components)...)
-	diagnostics = append(diagnostics, validateRedundantComponents(app.Components)...)
-	diagnostics = append(diagnostics, validateGOWDKUses(app)...)
-	diagnostics = append(diagnostics, validatePageAssetUses(app)...)
-	diagnostics = append(diagnostics, validateUniqueLayouts(app.Layouts)...)
-	diagnostics = append(diagnostics, validatePageLayoutReferences(app.Pages, app.Layouts)...)
-	diagnostics = append(diagnostics, validateGoBlocks(config, app)...)
-	diagnostics = append(diagnostics, validateUniquePageRoutes(app.Pages)...)
-	diagnostics = append(diagnostics, validateAmbiguousDynamicPageRoutes(app.Pages)...)
-	diagnostics = append(diagnostics, validateRouteMethodConflicts(app.Pages, app.Endpoints)...)
-	diagnostics = append(diagnostics, validateStandaloneEndpoints(app.Endpoints)...)
-	for _, page := range app.Pages {
+	diagnostics = append(diagnostics, validatePackages(ir)...)
+	diagnostics = append(diagnostics, validateUniquePages(ir.Pages)...)
+	diagnostics = append(diagnostics, validateUniqueComponents(ir.Components)...)
+	diagnostics = append(diagnostics, validateComponentEmits(ir.Components)...)
+	diagnostics = append(diagnostics, validateComponentGoContracts(ir.Components)...)
+	diagnostics = append(diagnostics, validateComponentStoreUses(ir.Pages, ir.Components)...)
+	diagnostics = append(diagnostics, validateRedundantComponents(ir.Components)...)
+	diagnostics = append(diagnostics, validateGOWDKUses(ir)...)
+	diagnostics = append(diagnostics, validatePageAssetUses(ir)...)
+	diagnostics = append(diagnostics, validateUniqueLayouts(ir.Layouts)...)
+	diagnostics = append(diagnostics, validatePageLayoutReferences(ir.Pages, ir.Layouts)...)
+	diagnostics = append(diagnostics, validateGoBlocks(config, ir)...)
+	diagnostics = append(diagnostics, validateUniquePageRoutes(ir.Pages)...)
+	diagnostics = append(diagnostics, validateAmbiguousDynamicPageRoutes(ir.Pages)...)
+	diagnostics = append(diagnostics, validateRouteMethodConflicts(ir.Pages, ir.GoEndpoints)...)
+	diagnostics = append(diagnostics, validateStandaloneEndpoints(ir.GoEndpoints)...)
+	for _, page := range ir.Pages {
 		diagnostics = append(diagnostics, ValidatePage(config, page)...)
 	}
 	if len(diagnostics) == 0 {
 		return nil
 	}
 	return ValidationErrors(diagnostics)
-}
-
-// ValidateProgram checks the same render-mode invariants as ValidateManifest
-// against an IR-first build path. It reconstructs the manifest from IR via
-// ManifestFromIR so generated-output packages no longer need to carry their own
-// IR->manifest converter. As validators move to read IR directly, the converter
-// shrinks until this entrypoint reads IR with no manifest intermediary.
-func ValidateProgram(config gowdk.Config, ir gwdkir.Program) error {
-	return ValidateManifest(config, ManifestFromIR(ir))
 }

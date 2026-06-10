@@ -14,15 +14,23 @@ import (
 )
 
 func Build(config gowdk.Config, app manifest.Manifest, outputDir string) (Result, error) {
-	return buildFromIR(config, gwdkanalysis.BuildIR(config, app), app.BackendBindings, outputDir)
+	return buildFromIR(config, gwdkanalysis.BuildIR(config, app), app.BackendBindings, outputDir, true)
 }
 
 // BuildFromIR writes SPA build artifacts from normalized compiler IR.
 func BuildFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (Result, error) {
-	return buildFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir)
+	return buildFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, true)
 }
 
-func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manifest.BackendBinding, outputDir string) (Result, error) {
+// BuildFromValidatedIR is BuildFromIR for orchestrators that already ran
+// compiler.ValidateProgram on the IR (the CLI build path). It skips the
+// defensive re-validation, which type-checks feature Go packages on disk and
+// is too expensive to run twice per build.
+func BuildFromValidatedIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (Result, error) {
+	return buildFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, false)
+}
+
+func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manifest.BackendBinding, outputDir string, validate bool) (Result, error) {
 	reporter := newBuildReporter("build", outputDir)
 	reporter.info("start", "build_started", "SPA build started", BuildEvent{
 		Data: map[string]string{
@@ -34,8 +42,10 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []manif
 	if strings.TrimSpace(outputDir) == "" {
 		return Result{}, reporter.fail("validate", fmt.Errorf("build output directory is required"))
 	}
-	if err := compiler.ValidateProgram(config, ir); err != nil {
-		return Result{}, reporter.fail("validate", err)
+	if validate {
+		if err := compiler.ValidateProgram(config, ir); err != nil {
+			return Result{}, reporter.fail("validate", err)
+		}
 	}
 	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
 	reportBackendBindings(reporter, backendBindings)

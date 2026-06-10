@@ -90,6 +90,20 @@ func TestMatchRestRouteWithFixedAndDynamicPrefix(t *testing.T) {
 	}
 }
 
+func TestMatchRestRouteRejectsNonCanonicalPaths(t *testing.T) {
+	for _, requestPath := range []string{
+		"/docs/a/../admin",
+		"/docs/../docs/a",
+		"/docs//a",
+		"/docs/./a",
+		"/docs/a/..",
+	} {
+		if _, ok := Match("/docs/{path...}", requestPath); ok {
+			t.Fatalf("expected non-canonical rest path %q not to match", requestPath)
+		}
+	}
+}
+
 func TestMatchRestRouteTypedHelpers(t *testing.T) {
 	params, ok := Match("/docs/{path...}", "/docs/guides/routing")
 	if !ok {

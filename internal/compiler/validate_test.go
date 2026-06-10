@@ -3546,11 +3546,11 @@ func TestValidatePageAllowsTypedRouteParams(t *testing.T) {
 }
 
 func TestValidatePageAllowsRestRouteParamOnSSRPage(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "docs.page",
 		Route:  "/docs/{path...}",
 		Render: gowdk.SSR,
-		Blocks: manifest.Blocks{View: true, Load: true},
+		Blocks: gwdkir.Blocks{View: true, Load: true},
 	}
 
 	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, irPage(page))
@@ -3560,7 +3560,7 @@ func TestValidatePageAllowsRestRouteParamOnSSRPage(t *testing.T) {
 }
 
 func TestValidatePageRejectsRestRouteParamBeforeLastSegment(t *testing.T) {
-	page := manifest.Page{ID: "docs.page", Route: "/docs/{path...}/edit", Paths: true, Blocks: manifest.Blocks{View: true}}
+	page := gwdkir.Page{ID: "docs.page", Route: "/docs/{path...}/edit", Blocks: gwdkir.Blocks{Paths: true, View: true}}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	diagnostic := firstDiagnostic(diagnostics, "malformed_route")
@@ -3573,7 +3573,7 @@ func TestValidatePageRejectsRestRouteParamBeforeLastSegment(t *testing.T) {
 }
 
 func TestValidatePageRejectsTypedRestRouteParam(t *testing.T) {
-	page := manifest.Page{ID: "docs.page", Route: "/docs/{path...:int}", Paths: true, Blocks: manifest.Blocks{View: true}}
+	page := gwdkir.Page{ID: "docs.page", Route: "/docs/{path...:int}", Blocks: gwdkir.Blocks{Paths: true, View: true}}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	diagnostic := firstDiagnostic(diagnostics, "malformed_route")
@@ -3598,7 +3598,7 @@ func TestValidatePageRejectsMalformedRestRouteParamVariants(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			page := manifest.Page{ID: "docs.page", Route: test.route, Paths: true, Blocks: manifest.Blocks{View: true}}
+			page := gwdkir.Page{ID: "docs.page", Route: test.route, Blocks: gwdkir.Blocks{Paths: true, View: true}}
 
 			diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 			diagnostic := firstDiagnostic(diagnostics, "malformed_route")
@@ -3613,7 +3613,7 @@ func TestValidatePageRejectsMalformedRestRouteParamVariants(t *testing.T) {
 }
 
 func TestValidatePageRejectsOptionalRouteParams(t *testing.T) {
-	page := manifest.Page{ID: "docs.page", Route: "/docs/{slug?}", Paths: true, Blocks: manifest.Blocks{View: true}}
+	page := gwdkir.Page{ID: "docs.page", Route: "/docs/{slug?}", Blocks: gwdkir.Blocks{Paths: true, View: true}}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	diagnostic := firstDiagnostic(diagnostics, "malformed_route")
@@ -3629,7 +3629,7 @@ func TestValidatePageRejectsOptionalRouteParams(t *testing.T) {
 }
 
 func TestValidatePageRejectsRestRouteParamOnSPAPage(t *testing.T) {
-	page := manifest.Page{ID: "docs.page", Route: "/docs/{path...}", Render: gowdk.SPA, Paths: true, Blocks: manifest.Blocks{View: true}}
+	page := gwdkir.Page{ID: "docs.page", Route: "/docs/{path...}", Render: gowdk.SPA, Blocks: gwdkir.Blocks{Paths: true, View: true}}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	diagnostic := firstDiagnostic(diagnostics, "malformed_route")
@@ -3642,10 +3642,10 @@ func TestValidatePageRejectsRestRouteParamOnSPAPage(t *testing.T) {
 }
 
 func TestValidateManifestRejectsDuplicateRestRoutes(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{
-			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: manifest.Blocks{View: true, Load: true}},
-			{ID: "docs.copy", Route: "/docs/{rest...}", Render: gowdk.SSR, Source: "pages/docs-copy.page.gwdk", Blocks: manifest.Blocks{View: true, Load: true}},
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{ID: "docs.copy", Route: "/docs/{rest...}", Render: gowdk.SSR, Source: "pages/docs-copy.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
 		},
 	}
 
@@ -3671,10 +3671,10 @@ func TestValidateManifestRejectsAmbiguousRestRoutes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			app := manifest.Manifest{
-				Pages: []manifest.Page{
-					{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: manifest.Blocks{View: true, Load: true}},
-					{ID: "docs.other", Route: test.other, Render: gowdk.SSR, Source: "pages/docs-other.page.gwdk", Blocks: manifest.Blocks{View: true, Load: true}},
+			app := appFixture{
+				Pages: []gwdkir.Page{
+					{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+					{ID: "docs.other", Route: test.other, Render: gowdk.SSR, Source: "pages/docs-other.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
 				},
 			}
 
@@ -3691,11 +3691,11 @@ func TestValidateManifestRejectsAmbiguousRestRoutes(t *testing.T) {
 }
 
 func TestValidateManifestAllowsRestRouteBesideShorterRoutes(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{
-			{ID: "docs.index", Route: "/docs", Render: gowdk.SSR, Source: "pages/docs-index.page.gwdk", Blocks: manifest.Blocks{View: true, Load: true}},
-			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: manifest.Blocks{View: true, Load: true}},
-			{ID: "blog.post", Route: "/blog/{slug}", Render: gowdk.SSR, Source: "pages/blog-post.page.gwdk", Blocks: manifest.Blocks{View: true, Load: true}},
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{ID: "docs.index", Route: "/docs", Render: gowdk.SSR, Source: "pages/docs-index.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{ID: "blog.post", Route: "/blog/{slug}", Render: gowdk.SSR, Source: "pages/blog-post.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
 		},
 	}
 
@@ -3705,13 +3705,13 @@ func TestValidateManifestAllowsRestRouteBesideShorterRoutes(t *testing.T) {
 }
 
 func TestValidatePageRejectsRestRouteParamOnActionAndAPIEndpoints(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:    "docs.page",
 		Route: "/docs",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:    true,
-			Actions: []manifest.Action{{Name: "Save", Method: "POST", Route: "/docs/{path...}"}},
-			APIs:    []manifest.API{{Name: "Lookup", Method: "PUT", Route: "/api/docs/{path...}"}},
+			Actions: []gwdkir.Action{{Name: "Save", Method: "POST", Route: "/docs/{path...}"}},
+			APIs:    []gwdkir.API{{Name: "Lookup", Method: "PUT", Route: "/api/docs/{path...}"}},
 		},
 	}
 
@@ -3728,6 +3728,73 @@ func TestValidatePageRejectsRestRouteParamOnActionAndAPIEndpoints(t *testing.T) 
 	}
 	if count != 2 {
 		t.Fatalf("expected rest param rejection for action and api endpoints, got %#v", diagnostics)
+	}
+}
+
+func TestValidatePageRejectsInheritedRestRouteOnAPIEndpoints(t *testing.T) {
+	page := gwdkir.Page{
+		ID:     "docs.page",
+		Route:  "/docs/{path...}",
+		Render: gowdk.SSR,
+		Blocks: gwdkir.Blocks{
+			View: true,
+			Load: true,
+			APIs: []gwdkir.API{{Name: "Save", Method: "POST"}},
+		},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, irPage(page))
+	diagnostic := firstDiagnostic(diagnostics, "malformed_route")
+	if diagnostic == nil {
+		t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(diagnostic.Message, "inherits page route") || !strings.Contains(diagnostic.Message, "only supported on page routes") {
+		t.Fatalf("diagnostic should explain the API inherits the rest page route: %s", diagnostic.Message)
+	}
+}
+
+func TestValidateManifestRejectsEndpointInsideRestRouteNamespace(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{
+				ID: "docs.lookup", Route: "/lookup", Render: gowdk.SSR, Source: "pages/docs-lookup.page.gwdk",
+				Blocks: gwdkir.Blocks{
+					View: true,
+					Load: true,
+					APIs: []gwdkir.API{{Name: "Lookup", Method: "GET", Route: "/docs/guides/intro"}},
+				},
+			},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app)
+	if err == nil {
+		t.Fatal("expected ambiguous dynamic route diagnostic for endpoint inside rest namespace")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "ambiguous_dynamic_route") {
+		t.Fatalf("Missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsDifferentMethodEndpointBesideRestRoute(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{
+				ID: "docs.save", Route: "/save", Render: gowdk.SSR, Source: "pages/docs-save.page.gwdk",
+				Blocks: gwdkir.Blocks{
+					View: true,
+					Load: true,
+					APIs: []gwdkir.API{{Name: "Save", Method: "POST", Route: "/docs/guides/intro"}},
+				},
+			},
+		},
+	}
+
+	if err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, app); err != nil {
+		t.Fatalf("expected different-method endpoint beside rest route to be valid, got %v", err)
 	}
 }
 

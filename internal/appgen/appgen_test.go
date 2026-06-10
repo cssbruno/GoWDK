@@ -1500,7 +1500,7 @@ func TestGenerateWritesRestParamSSRHandler(t *testing.T) {
 		PageID:        "docs.page",
 		Route:         "/docs/{path...}",
 		DynamicParams: []string{"path"},
-		RouteParams:   []manifest.RouteParam{{Name: "path", Type: "string"}},
+		RouteParams:   []source.RouteParam{{Name: "path", Type: "string"}},
 		HTML:          `<main>__PATH__</main>`,
 		Replacements: []SSRReplacement{{
 			Param:       "path",
@@ -2091,6 +2091,25 @@ func TestGenerateRejectsSSRReplacementForUndeclaredParam(t *testing.T) {
 		t.Fatal("expected undeclared replacement error")
 	}
 	if !strings.Contains(err.Error(), `replacement param "missing" is not declared by route "/blog/{slug}"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGenerateRejectsTypedRestSSRRouteParam(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	_, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "docs.page",
+		Route:  "/docs/{path:int...}",
+		HTML:   "<main>Docs</main>",
+	}}})
+	if err == nil {
+		t.Fatal("expected typed rest route parameter error")
+	}
+	if !strings.Contains(err.Error(), "rest route parameters are always strings") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -18,6 +18,15 @@ func Match(pattern, requestPath string) (map[string]string, bool) {
 		if len(requestParts) < len(patternParts) {
 			return nil, false
 		}
+		// splitPath cleans the request path, which silently rewrites empty,
+		// "." and ".." segments. Rest captures span multiple segments, so a
+		// cleaned match could serve a non-canonical path under a different
+		// captured value. Reject those requests outright from the raw path.
+		for _, value := range strings.Split(strings.Trim(requestPath, "/"), "/") {
+			if value == "" || value == "." || value == ".." {
+				return nil, false
+			}
+		}
 	} else if len(patternParts) != len(requestParts) {
 		return nil, false
 	}

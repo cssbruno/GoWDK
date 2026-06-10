@@ -70,12 +70,24 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 				Message: fmt.Sprintf("%s API handler %q must be an exported Go identifier", page.ID, api.Name),
 			})
 		}
-		if api.Route == "" {
-			continue
-		}
 		label := "api endpoint path"
 		if api.Name != "" {
 			label = fmt.Sprintf("api %s endpoint path", api.Name)
+		}
+		if api.Route == "" {
+			// An API without an explicit path inherits the page route, so a
+			// rest page route flows into the endpoint and must be rejected
+			// the same way an explicit rest endpoint path is.
+			if len(pageRouteIssues) == 0 && pageRoute.RestParam != "" {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:    "malformed_route",
+					PageID:  page.ID,
+					Source:  page.Source,
+					Span:    firstSpan(api.Span, page.Spans.Route),
+					Message: fmt.Sprintf("%s %s inherits page route %q which uses rest route parameter {%s...}; rest parameters are only supported on page routes", page.ID, label, page.Route, pageRoute.RestParam),
+				})
+			}
+			continue
 		}
 		apiRoute, issues := parseRoute(api.Route)
 		diagnostics = append(diagnostics, routeDiagnostics(page, label, issues, api.RouteSpan, api.RouteParams)...)

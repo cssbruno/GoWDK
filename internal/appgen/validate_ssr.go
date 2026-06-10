@@ -77,6 +77,14 @@ func validateSSRRoutePattern(value string) error {
 				if index != len(segments)-1 {
 					return fmt.Errorf("route %q declares rest route parameter segment %q before the end of the route", value, segment)
 				}
+				// The generated matcher keys rest captures by the full name
+				// before the dots, so a colon-typed rest segment would
+				// register under "name:type" and never line up with the
+				// declared replacements. Rest route parameters are always
+				// strings.
+				if strings.Contains(name, ":") {
+					return fmt.Errorf("route %q declares typed rest route parameter segment %q; rest route parameters are always strings", value, segment)
+				}
 			}
 			if before, _, found := strings.Cut(name, ":"); found {
 				name = before

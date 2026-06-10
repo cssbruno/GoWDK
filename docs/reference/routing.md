@@ -67,11 +67,15 @@ Rest param contract:
   paths cannot enumerate and escape multi-segment values. Declare `load {}` or
   `go ssr {}` on the page.
 - Rest params are only supported on page routes; action, API, fragment, and Go
-  comment endpoint paths reject them.
+  comment endpoint paths reject them. An action or API that omits its path
+  inherits the page route, so inline endpoints on a rest page are rejected the
+  same way unless they declare their own concrete path.
 - Rest routes participate in ambiguity validation: `/docs/{path...}` overlaps
   `/docs/{slug}`, `/docs/{section}/{slug}`, and concrete routes such as
   `/docs/guides/intro`, so those combinations are rejected as
-  `ambiguous_dynamic_route`.
+  `ambiguous_dynamic_route`. The same applies to a same-method endpoint inside
+  a rest route's namespace (for example a `GET` API at `/docs/guides/intro`
+  beside `/docs/{path...}`), which would otherwise shadow part of the page.
 
 Unsupported route forms today:
 

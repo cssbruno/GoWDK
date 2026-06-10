@@ -50,44 +50,45 @@ func duplicateRouteMessage(route, firstID, firstSource, duplicateID, duplicateSo
 	return message
 }
 
-func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page) []ValidationError {
+func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint) []ValidationError {
 	var registered []routeRegistration
 	var diagnostics []ValidationError
-	for _, page := range pages {
-		info, issues := parseRoute(page.Route)
-		if len(issues) > 0 {
-			continue
-		}
-		current := routeRegistration{
-			Kind:    "page",
-			Owner:   "page " + page.ID,
-			Method:  "GET",
-			Route:   page.Route,
-			Pattern: info.Pattern,
-			PageID:  page.ID,
-			Source:  page.Source,
-			Span:    page.Spans.Route,
-		}
+	for _, current := range routeRegistrations(pages, endpoints) {
 		for _, previous := range registered {
 			if current.Pattern == previous.Pattern {
+				// Exact duplicates are reported by the duplicate-route and
+				// route-method-conflict checks.
 				continue
 			}
-			// Dynamic routes are compared against other dynamic routes. Rest
-			// routes match one or more trailing segments, so they are also
-			// compared against concrete routes that share their fixed prefix.
-			bothDynamic := patternIsDynamic(current.Pattern) && patternIsDynamic(previous.Pattern)
-			restInvolved := patternHasRest(current.Pattern) || patternHasRest(previous.Pattern)
-			if !bothDynamic && !restInvolved {
-				continue
+			bothPages := current.Kind == "page" && previous.Kind == "page"
+			if bothPages {
+				// Dynamic routes are compared against other dynamic routes.
+				// Rest routes match one or more trailing segments, so they
+				// are also compared against concrete routes that share their
+				// fixed prefix.
+				bothDynamic := patternIsDynamic(current.Pattern) && patternIsDynamic(previous.Pattern)
+				restInvolved := patternHasRest(current.Pattern) || patternHasRest(previous.Pattern)
+				if !bothDynamic && !restInvolved {
+					continue
+				}
+			} else {
+				// Endpoints cannot declare rest routes themselves, but a
+				// same-method endpoint inside a rest page's namespace would
+				// shadow part of it at request time, so flag that overlap.
+				restPage := (current.Kind == "page" && patternHasRest(current.Pattern)) ||
+					(previous.Kind == "page" && patternHasRest(previous.Pattern))
+				if !restPage || current.Method != previous.Method {
+					continue
+				}
 			}
 			if !routePatternsOverlap(current.Pattern, previous.Pattern) {
 				continue
 			}
 			diagnostics = append(diagnostics, ValidationError{
 				Code:    "ambiguous_dynamic_route",
-				PageID:  page.ID,
-				Source:  page.Source,
-				Span:    page.Spans.Route,
+				PageID:  current.PageID,
+				Source:  current.Source,
+				Span:    current.Span,
 				Message: ambiguousDynamicRouteMessage(current, previous),
 			})
 		}
@@ -98,8 +99,8 @@ func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page) []ValidationError {
 
 func ambiguousDynamicRouteMessage(current, previous routeRegistration) string {
 	message := fmt.Sprintf("ambiguous dynamic page route %q overlaps %q", current.Route, previous.Route)
-	if current.PageID != "" && previous.PageID != "" {
-		message = fmt.Sprintf("%s; page %s could match the same request path as page %s", message, current.PageID, previous.PageID)
+	if current.Owner != "" && previous.Owner != "" {
+		message = fmt.Sprintf("%s; %s could match the same request path as %s", message, current.Owner, previous.Owner)
 	}
 	if current.Source != "" && previous.Source != "" {
 		return fmt.Sprintf("%s (%s and %s)", message, current.Source, previous.Source)

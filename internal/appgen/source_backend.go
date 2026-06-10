@@ -87,9 +87,9 @@ func sortAPIEndpoints(apis []APIEndpoint) {
 	})
 }
 
-func backendProxySource(options Options) string {
+func backendProxySource(options Options) (string, error) {
 	if !options.ProxyBackend || !hasBackendRoutes(options) {
-		return ""
+		return "", nil
 	}
 	return printActionDecls([]ast.Decl{
 		backendProxyDecl(false),

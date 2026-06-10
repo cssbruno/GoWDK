@@ -172,13 +172,15 @@ func evalComputedValues(computeds []clientlang.Computed, values map[string]strin
 	return stringsOut, valuesOut, nil
 }
 
-func componentStateJSON(stateJSON string, props map[string]string, computed map[string]any) string {
+func componentStateJSON(stateJSON string, props map[string]string, computed map[string]any) (string, error) {
 	if stateJSON == "" && len(props) == 0 && len(computed) == 0 {
-		return ""
+		return "", nil
 	}
 	values := map[string]any{}
 	if stateJSON != "" {
-		_ = json.Unmarshal([]byte(stateJSON), &values)
+		if err := json.Unmarshal([]byte(stateJSON), &values); err != nil {
+			return "", fmt.Errorf("decode component state JSON: %w", err)
+		}
 	}
 	for key, value := range props {
 		values[key] = value
@@ -188,9 +190,9 @@ func componentStateJSON(stateJSON string, props map[string]string, computed map[
 	}
 	payload, err := json.Marshal(values)
 	if err != nil {
-		return stateJSON
+		return "", fmt.Errorf("encode component state JSON: %w", err)
 	}
-	return string(payload)
+	return string(payload), nil
 }
 
 func scalarString(value any) (string, bool) {

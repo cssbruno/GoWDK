@@ -5,7 +5,7 @@ import (
 	"go/token"
 )
 
-func serverMainSource() string {
+func serverMainSource() (string, error) {
 	return printGoFile("main", map[string]string{
 		"gowdkapp": "gowdk-generated-app/gowdkapp",
 		"log":      "log",

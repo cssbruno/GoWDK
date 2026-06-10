@@ -61,6 +61,7 @@ var Registry = []Code{
 	{Code: "generated_app_import_cycle", Area: "generated-go", Stability: StabilityStable, Summary: "generated app would import itself through user code"},
 	{Code: "go_client_requires_page", Area: "go-block", Stability: StabilityExperimental, Summary: "go client block was declared outside a page"},
 	{Code: "go_endpoint_parse_error", Area: "backend", Stability: StabilityStable, Summary: "Go endpoint comment scan failed to parse a Go file"},
+	{Code: "go_endpoint_read_error", Area: "backend", Stability: StabilityStable, Summary: "Go endpoint scan failed to read a source directory"},
 	{Code: "go_package_error", Area: "packages", Stability: StabilityStable, Summary: "sibling Go package parse, package, or type-check validation failed"},
 	{Code: "go_ssr_requires_request_render", Area: "go-block", Stability: StabilityExperimental, Summary: "go ssr block requires request-time page rendering"},
 	{Code: "guard_requires_request_render", Area: "pages", Stability: StabilityStable, Summary: "protected page guard metadata requires request-time page rendering"},

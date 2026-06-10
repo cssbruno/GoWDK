@@ -21,19 +21,6 @@ func unsupportedTopLevelBlockName(line string) string {
 	return name
 }
 
-func braceDelta(line string) int {
-	delta := 0
-	for _, r := range line {
-		switch r {
-		case '{':
-			delta++
-		case '}':
-			delta--
-		}
-	}
-	return delta
-}
-
 func isMalformedImport(line string) bool {
 	fields := strings.Fields(line)
 	return len(fields) > 0 && fields[0] == "import"

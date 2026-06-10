@@ -7,7 +7,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func apiHandlerSource(apis []APIEndpoint) string {
+func apiHandlerSource(apis []APIEndpoint) (string, error) {
 	return printActionDecls([]ast.Decl{apiFuncDecl(sortedAPIEndpoints(apis), false)})
 }
 

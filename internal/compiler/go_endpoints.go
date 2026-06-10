@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -77,7 +78,14 @@ func endpointSourceDirs(ir gwdkir.Program) []string {
 func discoverGoEndpointsInDir(dir string) ([]gwdkir.GoEndpoint, []ValidationError) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, nil
+		// A source directory that simply does not exist is not an error - the
+		// program may declare no Go endpoints there. Any other read failure
+		// (permissions, I/O) is surfaced so it is not mistaken for "no
+		// endpoints found".
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, []ValidationError{goEndpointDiagnostic(token.NewFileSet(), dir, nil, "go_endpoint_read_error", fmt.Sprintf("read Go endpoint directory: %v", err))}
 	}
 	fileSet := token.NewFileSet()
 	var endpoints []gwdkir.GoEndpoint

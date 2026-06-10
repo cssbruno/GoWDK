@@ -215,7 +215,10 @@ func renderComponentIsland(out *renderOutput, island componentIslandRender) erro
 	if err != nil {
 		return err
 	}
-	stateJSON := componentStateJSON(island.Component.StateJSON, island.Props, island.ComputedValues)
+	stateJSON, err := componentStateJSON(island.Component.StateJSON, island.Props, island.ComputedValues)
+	if err != nil {
+		return err
+	}
 	if stateJSON == "" {
 		stateJSON = "{}"
 	}

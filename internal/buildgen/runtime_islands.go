@@ -1,6 +1,7 @@
 package buildgen
 
 import (
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -21,7 +22,7 @@ func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allCompone
 		}
 		usages, err := recursiveManifestComponentCallUsages(source, components, page.Package, componentUses(page.Uses))
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("resolve island components for page %q: %w", page.ID, err)
 		}
 		for _, usage := range usages {
 			component := usage.component

@@ -1049,7 +1049,7 @@ func TestAppShellSourceEmitterDoesNotUseRawTemplates(t *testing.T) {
 }
 
 func TestGeneratedPackageSourceIsGoFormatted(t *testing.T) {
-	source := appPackageSource(Options{IR: &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
+	source, err := appPackageSource(Options{IR: &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
 		Kind:        gwdkir.ContractCommand,
 		Name:        "patients.CreatePatient",
 		ImportAlias: "patients",
@@ -1064,6 +1064,9 @@ func TestGeneratedPackageSourceIsGoFormatted(t *testing.T) {
 		OwnerKind:   gwdkir.SourcePage,
 		OwnerID:     "patients",
 	}}}})
+	if err != nil {
+		t.Fatalf("appPackageSource: %v", err)
+	}
 	formatted, err := format.Source([]byte(source))
 	if err != nil {
 		t.Fatalf("generated package source is not valid Go: %v\n%s", err, source)
@@ -1074,7 +1077,7 @@ func TestGeneratedPackageSourceIsGoFormatted(t *testing.T) {
 }
 
 func TestGeneratedDeclarationSnippetIsGoFormatted(t *testing.T) {
-	source := actionHandlerSource([]ActionEndpoint{{
+	source, err := actionHandlerSource([]ActionEndpoint{{
 		PageID:      "newsletter",
 		ActionName:  "Subscribe",
 		Method:      http.MethodPost,
@@ -1082,6 +1085,9 @@ func TestGeneratedDeclarationSnippetIsGoFormatted(t *testing.T) {
 		InputFields: []string{"email"},
 		Redirect:    "/newsletter?ok=1",
 	}}, false)
+	if err != nil {
+		t.Fatalf("actionHandlerSource: %v", err)
+	}
 	wrapped := []byte("package gowdkapp\n\n" + source)
 	formatted, err := format.Source(wrapped)
 	if err != nil {

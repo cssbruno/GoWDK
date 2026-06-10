@@ -1,6 +1,6 @@
 package appgen
 
-func backendAppPackageSource(options Options) string {
+func backendAppPackageSource(options Options) (string, error) {
 	imports := backendRuntimeImportMap(options)
 	imports["http"] = "net/http"
 	return printGoFile("gowdkapp", imports, append(backendShellDecls(options), backendGeneratedDecls(options)...))

@@ -665,6 +665,40 @@ func TestValidatePageWarnsOnMissingGuard(t *testing.T) {
 	}
 }
 
+func TestValidatePageErrorsOnGuardlessBackendEndpoints(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "signup.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := gwdkir.Page{
+		ID:     "signup",
+		Route:  "/signup",
+		Source: sourcePath,
+		Blocks: gwdkir.Blocks{
+			View:    true,
+			Actions: []gwdkir.Action{{Name: "Submit"}},
+		},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	var guard *ValidationError
+	for i := range diagnostics {
+		if diagnostics[i].Code == "missing_page_guard" {
+			guard = &diagnostics[i]
+		}
+	}
+	if guard == nil {
+		t.Fatalf("missing missing_page_guard diagnostic: %#v", diagnostics)
+	}
+	if guard.Severity != SeverityError {
+		t.Fatalf("guardless page with endpoints should be an error, got severity %v", guard.Severity)
+	}
+	// The derived act/api/fragment endpoints would be public, so the build fails.
+	if !ValidationErrors(diagnostics).HasErrors() {
+		t.Fatalf("guardless page with endpoints should fail the build: %#v", diagnostics)
+	}
+}
+
 func TestValidatePageRequiresPublicGuardToBeExclusive(t *testing.T) {
 	sourcePath := filepath.Join(t.TempDir(), "home.page.gwdk")
 	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {

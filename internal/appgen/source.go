@@ -405,14 +405,30 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 	if denied := deniedRoutesExpr(options); denied != nil {
 		fields = append(fields, keyValue("Denied", denied))
 	}
+	if patterns := deniedRoutePatternsExpr(options); patterns != nil {
+		fields = append(fields, keyValue("DeniedPatterns", patterns))
+	}
 	return fields
 }
 
-// deniedPageRoutes returns the static page routes that declared no @guard. Such
-// pages are denied (403) at request time until the author adds @guard public.
-// Request-time (SSR) pages enforce the same default in their own handler, so
-// they are excluded here.
+// deniedPageRoutes returns the concrete (non-dynamic) page routes that declared
+// no @guard. Such pages are denied (403) at request time until the author adds
+// @guard public. Request-time (SSR) pages enforce the same default in their own
+// handler, so they are excluded here. Dynamic build-time pages expand to many
+// concrete artifacts and are denied by pattern instead; see
+// deniedPageRoutePatterns.
 func deniedPageRoutes(options Options) []string {
+	return guardlessBuildTimeRoutes(options, false)
+}
+
+// deniedPageRoutePatterns returns the dynamic page route patterns (e.g.
+// /blog/{slug}) for guardless build-time pages. The pattern denies every
+// concrete paths {} artifact, which the exact Denied map cannot enumerate.
+func deniedPageRoutePatterns(options Options) []string {
+	return guardlessBuildTimeRoutes(options, true)
+}
+
+func guardlessBuildTimeRoutes(options Options, dynamic bool) []string {
 	if options.IR == nil {
 		return nil
 	}
@@ -420,7 +436,7 @@ func deniedPageRoutes(options Options) []string {
 	for _, route := range options.SSR {
 		ssrRoutes[route.Route] = true
 	}
-	var denied []string
+	var routes []string
 	seen := map[string]bool{}
 	for _, page := range options.IR.Pages {
 		if len(page.Guards) != 0 || page.Route == "" {
@@ -429,10 +445,13 @@ func deniedPageRoutes(options Options) []string {
 		if ssrRoutes[page.Route] || seen[page.Route] {
 			continue
 		}
+		if strings.Contains(page.Route, "{") != dynamic {
+			continue
+		}
 		seen[page.Route] = true
-		denied = append(denied, page.Route)
+		routes = append(routes, page.Route)
 	}
-	return denied
+	return routes
 }
 
 func deniedRoutesExpr(options Options) ast.Expr {
@@ -446,6 +465,21 @@ func deniedRoutesExpr(options Options) ast.Expr {
 	}
 	return &ast.CompositeLit{
 		Type: &ast.MapType{Key: id("string"), Value: id("bool")},
+		Elts: elts,
+	}
+}
+
+func deniedRoutePatternsExpr(options Options) ast.Expr {
+	patterns := deniedPageRoutePatterns(options)
+	if len(patterns) == 0 {
+		return nil
+	}
+	elts := make([]ast.Expr, 0, len(patterns))
+	for _, pattern := range patterns {
+		elts = append(elts, stringLit(pattern))
+	}
+	return &ast.CompositeLit{
+		Type: &ast.ArrayType{Elt: id("string")},
 		Elts: elts,
 	}
 }
@@ -623,6 +657,12 @@ func backendImports(actions []ActionEndpoint, apis []APIEndpoint, fragments []Fr
 		}
 	}
 	for _, route := range ssr {
+		// Guardless routes are denied before rendering, so their load handler is
+		// never called and contributes no import. Importing it anyway leaves an
+		// unused import that fails the generated app build.
+		if len(route.Guards) == 0 {
+			continue
+		}
 		if route.LoadBinding.ImportPath != "" && route.LoadBackendAlias != "" {
 			imports[route.LoadBinding.ImportPath] = route.LoadBackendAlias
 		}

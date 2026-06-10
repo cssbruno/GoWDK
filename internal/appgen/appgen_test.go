@@ -4732,3 +4732,24 @@ func TestDeniedPageRoutesSelectsGuardlessStaticPages(t *testing.T) {
 		t.Fatalf("expected only the guardless static route /, got %#v", denied)
 	}
 }
+
+func TestDeniedPageRoutePatternsSelectsGuardlessDynamicPages(t *testing.T) {
+	options := Options{
+		IR: &gwdkir.Program{Pages: []gwdkir.Page{
+			{ID: "home", Route: "/"},                                        // static -> exact deny
+			{ID: "blog", Route: "/blog/{slug}"},                             // guardless dynamic -> pattern deny
+			{ID: "docs", Route: "/docs/{slug}", Guards: []string{"public"}}, // public -> served
+			{ID: "feed", Route: "/feed/{slug}"},                             // request-time below -> excluded
+		}},
+		SSR: []SSRRoute{{PageID: "feed", Route: "/feed/{slug}"}},
+	}
+
+	patterns := deniedPageRoutePatterns(options)
+	if len(patterns) != 1 || patterns[0] != "/blog/{slug}" {
+		t.Fatalf("expected only the guardless dynamic pattern /blog/{slug}, got %#v", patterns)
+	}
+	// Dynamic routes must not leak into the exact deny set.
+	if denied := deniedPageRoutes(options); len(denied) != 1 || denied[0] != "/" {
+		t.Fatalf("expected only the static route / in exact deny set, got %#v", denied)
+	}
+}

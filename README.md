@@ -12,8 +12,7 @@
 GoWDK compiles `.gwdk` pages ahead of time into plain, inspectable Go —
 `net/http` routes, form decoders, guards — and packages the whole app into one
 binary. Build-time rendering is the default; request-time SSR is opt-in per
-page. No reflection, no request-time magic: unsupported source fails with
-diagnostics instead of generated output getting clever.
+page. No reflection, no request-time magic.
 
 <!-- TODO: short GIF of `gowdk dev` rebuilding + live-reloading goes here. -->
 

@@ -31,7 +31,7 @@ func TestValidateManifestRejectsMissingPackageDeclaration(t *testing.T) {
 		Blocks: manifest.Blocks{View: true},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
 	if err == nil {
 		t.Fatal("expected missing package diagnostic")
 	}
@@ -59,7 +59,7 @@ func TestValidateManifestRejectsPackageMismatchWithSiblingGoFile(t *testing.T) {
 		Blocks:  manifest.Blocks{View: true},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
 	if err == nil {
 		t.Fatal("expected package mismatch diagnostic")
 	}
@@ -88,7 +88,7 @@ func TestValidateManifestAcceptsPackageMatchingSiblingGoFile(t *testing.T) {
 		Blocks:  manifest.Blocks{View: true},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
 		t.Fatalf("expected matching package to validate, got %v", err)
 	}
 }
@@ -112,7 +112,7 @@ func TestValidateManifestIgnoresProjectConfigGoPackage(t *testing.T) {
 		Blocks:  manifest.Blocks{View: true},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
 		t.Fatalf("expected project config package to be ignored, got %v", err)
 	}
 }
@@ -135,7 +135,7 @@ func TestValidateManifestReportsGoPackageParseErrors(t *testing.T) {
 		Blocks:  manifest.Blocks{View: true},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
 	if err == nil {
 		t.Fatal("expected Go package error diagnostic")
 	}
@@ -163,7 +163,7 @@ func TestValidateManifestReportsGoPackageTypeErrors(t *testing.T) {
 		Blocks:  manifest.Blocks{View: true},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
 	if err == nil {
 		t.Fatal("expected Go package type-check diagnostic")
 	}
@@ -214,7 +214,7 @@ type PageCopy struct {
 		},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
 		t.Fatalf("expected inline go block to type-check with sibling Go files, got %v", err)
 	}
 }
@@ -242,7 +242,7 @@ func TestValidateManifestTypeChecksDefaultScriptWithGOWDKImports(t *testing.T) {
 		},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
 		t.Fatalf("expected inline go block to type-check with GOWDK imports, got %v", err)
 	}
 }
@@ -269,7 +269,7 @@ func TestValidateManifestReportsDefaultScriptTypeErrors(t *testing.T) {
 		},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
 	if err == nil {
 		t.Fatal("expected inline go block type-check diagnostic")
 	}
@@ -339,7 +339,7 @@ func TestValidateManifestTypeChecksDefaultGoBlockAsStaticPackageGo(t *testing.T)
 		},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
 	if err == nil {
 		t.Fatal("expected default go block type-check diagnostic")
 	}
@@ -365,7 +365,7 @@ func TestValidateManifestSkipsSiblingGoPackageForUnsavedAbsoluteSource(t *testin
 		Blocks:  manifest.Blocks{View: true},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
 		t.Fatalf("expected unsaved absolute source to skip sibling Go package validation, got %v", err)
 	}
 }
@@ -409,7 +409,7 @@ func Email(values form.Values) string {
 		Blocks:  manifest.Blocks{View: true},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
 		t.Fatalf("expected module imports to type-check, got %v", err)
 	}
 }
@@ -433,7 +433,7 @@ func TestValidateManifestAcceptsQualifiedComponentUse(t *testing.T) {
 		}},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected qualified component use to validate, got %v", err)
 	}
 }
@@ -447,7 +447,7 @@ func TestValidateManifestRejectsUnknownGOWDKUsePackage(t *testing.T) {
 		Blocks:  manifest.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown use package diagnostic")
 	}
@@ -468,7 +468,7 @@ func TestValidateManifestRejectsUnknownGOWDKUseAlias(t *testing.T) {
 		Components: []manifest.Component{{Package: "components", Name: "Hero"}},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown use alias diagnostic")
 	}
@@ -490,7 +490,7 @@ func TestValidateManifestRejectsUnknownQualifiedComponent(t *testing.T) {
 		Components: []manifest.Component{{Package: "components", Name: "Hero"}},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown component diagnostic")
 	}
@@ -512,7 +512,7 @@ func TestValidateManifestRejectsComponentRefToLayoutOnlyUsePackage(t *testing.T)
 		Layouts: []manifest.Layout{{Package: "layouts", ID: "root"}},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown component diagnostic")
 	}
@@ -547,7 +547,7 @@ func TestValidateManifestRejectsComponentScopedComponentRefToStoreOnlyUsePackage
 		}},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown component diagnostic")
 	}
@@ -572,7 +572,7 @@ func TestValidateManifestAcceptsComponentScopedGOWDKUse(t *testing.T) {
 		},
 	}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected component-scoped use to validate, got %v", err)
 	}
 }
@@ -584,7 +584,7 @@ func TestValidateManifestRejectsUnknownComponentScopedGOWDKUseAlias(t *testing.T
 		Blocks:  manifest.Blocks{View: true, ViewBody: `<section><icons.Badge /></section>`},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown component use alias diagnostic")
 	}
@@ -602,7 +602,7 @@ func TestValidateManifestRejectsUnknownComponentScopedGOWDKUsePackage(t *testing
 		Blocks:  manifest.Blocks{View: true, ViewBody: `<section><icons.Badge /></section>`},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown component use package diagnostic")
 	}
@@ -741,7 +741,7 @@ func TestValidateManifestRejectsDuplicatePageIDsAndComponentNames(t *testing.T) 
 		},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected duplicate identity diagnostics")
 	}
@@ -783,7 +783,7 @@ func TestValidateManifestAllowsPageStoreDeclaration(t *testing.T) {
 		Blocks: manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected valid store declaration, got %v", err)
 	}
 }
@@ -806,7 +806,7 @@ func TestValidateManifestRejectsDuplicatePageStore(t *testing.T) {
 		Blocks: manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected duplicate store diagnostic")
 	}
@@ -839,7 +839,7 @@ func TestValidateManifestRejectsUnknownComponentStoreUse(t *testing.T) {
 		}},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown store diagnostic")
 	}
@@ -880,7 +880,7 @@ func TestValidateManifestAcceptsQualifiedComponentStoreUse(t *testing.T) {
 		}},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected qualified store use to validate, got %v", err)
 	}
 }
@@ -906,7 +906,7 @@ func TestValidateManifestRejectsUnknownQualifiedComponentStoreUseAlias(t *testin
 		}},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown store alias diagnostic")
 	}
@@ -938,7 +938,7 @@ func TestValidateManifestRejectsUnknownQualifiedComponentStoreName(t *testing.T)
 		}},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown store diagnostic")
 	}
@@ -967,7 +967,7 @@ func TestValidateManifestRejectsRedundantComponentImplementations(t *testing.T) 
 		},
 	}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected redundant component diagnostic")
 	}
@@ -993,7 +993,7 @@ func TestValidateManifestRejectsRedundantComponentImplementationsWithNormalizedA
 		},
 	}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected redundant component diagnostic")
 	}
@@ -1035,7 +1035,7 @@ func TestValidateManifestRejectsRedundantTypedComponentsWithCanonicalImportsAndE
 		},
 	}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected redundant component diagnostic")
 	}
@@ -1064,7 +1064,7 @@ func TestValidateManifestAllowsSameViewWithDifferentContracts(t *testing.T) {
 		},
 	}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected different contracts to be allowed, got %v", err)
 	}
 }
@@ -1093,7 +1093,7 @@ func TestValidateManifestAllowsSameViewWithDifferentTypedContracts(t *testing.T)
 		},
 	}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected different typed contracts to be allowed, got %v", err)
 	}
 }
@@ -1117,7 +1117,7 @@ func TestValidateManifestResolvesGoTypedComponentContracts(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected typed component contracts to validate, got %v", err)
 	}
 }
@@ -1137,7 +1137,7 @@ func TestValidateManifestAllowsEventModifiers(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected event modifiers to validate, got %v", err)
 	}
 }
@@ -1157,7 +1157,7 @@ func TestValidateManifestRejectsBadEventModifier(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unsupported event modifier diagnostic")
 	}
@@ -1182,7 +1182,7 @@ func TestValidateManifestRejectsBadDebounceDuration(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected invalid debounce duration diagnostic")
 	}
@@ -1207,7 +1207,7 @@ func TestValidateManifestRejectsDebounceThrottleCombination(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected debounce/throttle compatibility diagnostic")
 	}
@@ -1236,7 +1236,7 @@ func TestValidateManifestResolvesUnaliasedGoTypedComponentImports(t *testing.T) 
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected unaliased Go imports to validate, got %v", err)
 	}
 }
@@ -1256,7 +1256,7 @@ func TestValidateManifestRejectsMissingGoTypedComponentField(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected Missing field diagnostic")
 	}
@@ -1281,7 +1281,7 @@ func TestValidateManifestRejectsMissingGoTypedComponentPackage(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected Missing package diagnostic")
 	}
@@ -1306,7 +1306,7 @@ func TestValidateManifestRejectsMissingGoTypedComponentType(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected Missing type diagnostic")
 	}
@@ -1335,7 +1335,7 @@ func TestValidateManifestAllowsClientFunctionEventCall(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected client function event call to validate, got %v", err)
 	}
 }
@@ -1363,7 +1363,7 @@ func TestValidateManifestAllowsDeclaredComponentEmit(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected declared component emit to validate, got %v", err)
 	}
 }
@@ -1390,7 +1390,7 @@ func TestValidateManifestRejectsDuplicateComponentEmitNames(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected duplicate component emit diagnostic")
 	}
@@ -1423,7 +1423,7 @@ func TestValidateManifestRejectsUnknownComponentEmit(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown component emit diagnostic")
 	}
@@ -1451,7 +1451,7 @@ func TestValidateManifestClientParseErrorPointsToClientLine(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected client parse diagnostic")
 	}
@@ -1488,7 +1488,7 @@ func TestValidateManifestRejectsComponentEmitPayloadTypeMismatch(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected component emit payload type diagnostic")
 	}
@@ -1517,7 +1517,7 @@ func TestValidateManifestAllowsClientFunctionParams(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected client function params to validate, got %v", err)
 	}
 }
@@ -1545,7 +1545,7 @@ fn Add() {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected client helper function to validate, got %v", err)
 	}
 }
@@ -1573,7 +1573,7 @@ fn SetCount() {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected client built-ins to validate, got %v", err)
 	}
 }
@@ -1597,7 +1597,7 @@ func TestValidateManifestAllowsAsyncFetchJSONClientFunction(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected async fetchJSON function to validate, got %v", err)
 	}
 }
@@ -1621,7 +1621,7 @@ func TestValidateManifestRejectsAwaitOutsideAsyncClientFunction(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected await outside async diagnostic")
 	}
@@ -1650,7 +1650,7 @@ func TestValidateManifestRejectsAsyncFetchJSONNonStringURL(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected fetchJSON URL diagnostic")
 	}
@@ -1679,7 +1679,7 @@ func TestValidateManifestRejectsBadClientBuiltinArg(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected Bad built-in argument diagnostic")
 	}
@@ -1708,7 +1708,7 @@ func TestValidateManifestRejectsHelperAsEventHandler(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected helper event handler diagnostic")
 	}
@@ -1741,7 +1741,7 @@ fn Add() {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected helper return mismatch diagnostic")
 	}
@@ -1778,7 +1778,7 @@ fn Add() {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected helper call cycle diagnostic")
 	}
@@ -1807,7 +1807,7 @@ func TestValidateManifestRejectsClientExpressionTypeMismatch(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected expression type mismatch diagnostic")
 	}
@@ -1836,7 +1836,7 @@ func TestValidateManifestRejectsClientFunctionArgumentMismatch(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected argument mismatch diagnostic")
 	}
@@ -1865,7 +1865,7 @@ func TestValidateManifestRejectsUnknownClientFunctionEventCall(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown client function diagnostic")
 	}
@@ -1894,7 +1894,7 @@ func TestValidateManifestRejectsClientFunctionUnknownStateField(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected client function field diagnostic")
 	}
@@ -1927,7 +1927,7 @@ func TestValidateManifestRejectsClientFunctionMutatingProp(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected prop mutation diagnostic")
 	}
@@ -1967,7 +1967,7 @@ on destroy {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected lifecycle/effects to validate, got %v", err)
 	}
 }
@@ -1991,7 +1991,7 @@ func TestValidateManifestRejectsEffectUnknownDependency(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown effect dependency diagnostic")
 	}
@@ -2022,7 +2022,7 @@ fn FocusSearch() {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected DOM ref focus call to validate, got %v", err)
 	}
 }
@@ -2044,7 +2044,7 @@ func TestValidateManifestRejectsUnknownDOMRefBinding(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown DOM ref binding diagnostic")
 	}
@@ -2071,7 +2071,7 @@ func TestValidateManifestRejectsDuplicateDOMRefBinding(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected duplicate DOM ref binding diagnostic")
 	}
@@ -2102,7 +2102,7 @@ fn FocusSearch() {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unbound DOM ref diagnostic")
 	}
@@ -2127,7 +2127,7 @@ func TestValidateManifestAllowsGIfBoolExpression(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected g:if bool expression to validate, got %v", err)
 	}
 }
@@ -2147,7 +2147,7 @@ func TestValidateManifestAllowsGElseIfExpression(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected g:else-if expression to validate, got %v", err)
 	}
 }
@@ -2167,7 +2167,7 @@ func TestValidateManifestRejectsGElseIfNonBoolExpression(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected g:else-if non-bool diagnostic")
 	}
@@ -2192,7 +2192,7 @@ func TestValidateManifestRejectsGIfNonBoolExpression(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected g:if non-bool diagnostic")
 	}
@@ -2217,7 +2217,7 @@ func TestValidateManifestAllowsNestedAndIndexExpressions(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected nested/index expressions to validate, got %v", err)
 	}
 }
@@ -2237,7 +2237,7 @@ func TestValidateManifestAllowsGForListRendering(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected g:for list rendering to validate, got %v", err)
 	}
 }
@@ -2257,7 +2257,7 @@ func TestValidateManifestAllowsGForIndexVariable(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected g:for index variable to validate, got %v", err)
 	}
 }
@@ -2289,7 +2289,7 @@ fn SwapFirstTwo() {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected list mutation built-ins to validate, got %v", err)
 	}
 }
@@ -2313,7 +2313,7 @@ func TestValidateManifestRejectsBadAppendItemField(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected Bad append item diagnostic")
 	}
@@ -2338,7 +2338,7 @@ func TestValidateManifestRejectsGForWithoutKey(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected Missing g:key diagnostic")
 	}
@@ -2363,7 +2363,7 @@ func TestValidateManifestRejectsUnknownGForItemField(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown item field diagnostic")
 	}
@@ -2391,7 +2391,7 @@ func TestValidateManifestViewEventDiagnosticPointsToExpression(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected invalid event expression diagnostic")
 	}
@@ -2415,7 +2415,7 @@ func TestValidateManifestUnknownViewFieldDiagnosticPointsToIdentifier(t *testing
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown field diagnostic")
 	}
@@ -2439,7 +2439,7 @@ func TestValidateManifestBadGForDiagnosticPointsToDirectiveValue(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected Bad g:for diagnostic")
 	}
@@ -2469,7 +2469,7 @@ func TestValidateManifestAllowsGoishConditionalExpressions(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected Go-ish conditional expressions to validate, got %v", err)
 	}
 }
@@ -2494,7 +2494,7 @@ func TestValidateManifestAllowsClientLocalVariables(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected local variables to validate, got %v", err)
 	}
 }
@@ -2519,7 +2519,7 @@ func TestValidateManifestRejectsLocalVariableBeforeDeclaration(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected local-before-declaration diagnostic")
 	}
@@ -2548,7 +2548,7 @@ func TestValidateManifestRejectsGoishConditionalTypeMismatch(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected conditional branch mismatch diagnostic")
 	}
@@ -2581,7 +2581,7 @@ computed Visible bool {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected computed state to validate, got %v", err)
 	}
 }
@@ -2612,7 +2612,7 @@ func Increment() {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected Go-style computed state to validate, got %v", err)
 	}
 }
@@ -2640,7 +2640,7 @@ computed Label string {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected out-of-order computed state to validate, got %v", err)
 	}
 }
@@ -2668,7 +2668,7 @@ computed Second string {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected computed cycle diagnostic")
 	}
@@ -2697,7 +2697,7 @@ func TestValidateManifestRejectsComputedMutation(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected computed mutation diagnostic")
 	}
@@ -2722,7 +2722,7 @@ func TestValidateManifestRejectsUnknownNestedField(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown nested field diagnostic")
 	}
@@ -2747,7 +2747,7 @@ func TestValidateManifestAllowsValueBindingToStringState(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected string state value binding to validate, got %v", err)
 	}
 }
@@ -2767,7 +2767,7 @@ func TestValidateManifestRejectsValueBindingToNonStringState(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected non-string value binding diagnostic")
 	}
@@ -2792,7 +2792,7 @@ func TestValidateManifestAllowsNumberInputValueBindingToNumericState(t *testing.
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected numeric value binding to validate, got %v", err)
 	}
 }
@@ -2812,7 +2812,7 @@ func TestValidateManifestRejectsNumericValueBindingOutsideNumberInput(t *testing
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected numeric value binding target diagnostic")
 	}
@@ -2837,7 +2837,7 @@ func TestValidateManifestAllowsRadioValueBindingToStringState(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected radio value binding to validate, got %v", err)
 	}
 }
@@ -2857,7 +2857,7 @@ func TestValidateManifestRejectsRadioValueBindingWithoutValue(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected radio Missing value diagnostic")
 	}
@@ -2882,7 +2882,7 @@ func TestValidateManifestRejectsValueBindingToProp(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected prop value binding diagnostic")
 	}
@@ -2907,7 +2907,7 @@ func TestValidateManifestAllowsCheckedBindingToBoolState(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected bool state checked binding to validate, got %v", err)
 	}
 }
@@ -2927,7 +2927,7 @@ func TestValidateManifestRejectsCheckedBindingToNonBoolState(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected non-bool checked binding diagnostic")
 	}
@@ -2952,7 +2952,7 @@ func TestValidateManifestAllowsReactiveAttributes(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected reactive attributes to validate, got %v", err)
 	}
 }
@@ -2972,7 +2972,7 @@ func TestValidateManifestRejectsNonBoolReactiveBooleanAttribute(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected non-bool boolean attr diagnostic")
 	}
@@ -2997,7 +2997,7 @@ func TestValidateManifestRejectsUnsafeReactiveURLAttribute(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unsafe reactive URL attr diagnostic")
 	}
@@ -3022,7 +3022,7 @@ func TestValidateManifestAllowsClassToggle(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected class toggle to validate, got %v", err)
 	}
 }
@@ -3042,7 +3042,7 @@ func TestValidateManifestRejectsNonBoolClassToggle(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected non-bool class toggle diagnostic")
 	}
@@ -3067,7 +3067,7 @@ func TestValidateManifestAllowsStyleBinding(t *testing.T) {
 		},
 	}}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected style binding to validate, got %v", err)
 	}
 }
@@ -3087,7 +3087,7 @@ func TestValidateManifestRejectsBoolStyleBinding(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected bool style binding diagnostic")
 	}
@@ -3108,7 +3108,7 @@ func TestValidateManifestRejectsRelativeGoTypedImportPath(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected invalid import diagnostic")
 	}
@@ -3133,7 +3133,7 @@ func TestValidateManifestRejectsStateInitReturnMismatch(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected state init mismatch diagnostic")
 	}
@@ -3158,7 +3158,7 @@ func TestValidateManifestResolvesLayoutsByID(t *testing.T) {
 		}},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown layout diagnostic")
 	}
@@ -3185,7 +3185,7 @@ func TestValidateManifestAcceptsQualifiedLayoutUse(t *testing.T) {
 		}},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected qualified layout reference to validate, got %v", err)
 	}
 }
@@ -3206,7 +3206,7 @@ func TestValidateManifestRejectsUnqualifiedCrossPackageLayout(t *testing.T) {
 		}},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown layout diagnostic")
 	}
@@ -3224,7 +3224,7 @@ func TestValidateManifestRejectsDuplicateLayoutIDs(t *testing.T) {
 		},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected duplicate layout diagnostic")
 	}
@@ -3242,7 +3242,7 @@ func TestValidateManifestAllowsDuplicateLayoutIDsAcrossPackages(t *testing.T) {
 		},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected package-qualified layout IDs to be unique, got %v", err)
 	}
 }
@@ -3255,7 +3255,7 @@ func TestValidateManifestRejectsDuplicateLayoutIDsInSamePackage(t *testing.T) {
 		},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected duplicate layout diagnostic")
 	}
@@ -3273,7 +3273,7 @@ func TestValidateManifestRejectsDuplicatePageRoutes(t *testing.T) {
 		},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected duplicate route diagnostic")
 	}
@@ -3310,7 +3310,7 @@ func TestValidateManifestRejectsAmbiguousDynamicPageRoutes(t *testing.T) {
 				},
 			}
 
-			err := ValidateManifest(gowdk.Config{}, app)
+			err := validateManifest(gowdk.Config{}, app)
 			if err == nil {
 				t.Fatal("expected ambiguous dynamic route diagnostic")
 			}
@@ -3330,7 +3330,7 @@ func TestValidateManifestAllowsConcreteRouteBesideDynamicPageRoute(t *testing.T)
 		},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected concrete and dynamic routes to be valid, got %v", err)
 	}
 }
@@ -3348,7 +3348,7 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 			}},
 		}
 
-		err := ValidateManifest(gowdk.Config{}, app)
+		err := validateManifest(gowdk.Config{}, app)
 		if err == nil {
 			t.Fatal("expected route method conflict")
 		}
@@ -3370,7 +3370,7 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 			}},
 		}
 
-		err := ValidateManifest(gowdk.Config{}, app)
+		err := validateManifest(gowdk.Config{}, app)
 		if err == nil {
 			t.Fatal("expected route method conflict")
 		}
@@ -3393,7 +3393,7 @@ func TestValidateManifestAllowsSameRouteWithDifferentMethods(t *testing.T) {
 		}},
 	}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected GET page plus POST action to be valid, got %v", err)
 	}
 }
@@ -3686,7 +3686,7 @@ func TestValidateManifestRejectsInvalidScriptGo(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected invalid go block error")
 	}
@@ -3710,7 +3710,7 @@ func TestValidateManifestRejectsSSRScriptWithoutAddon(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected ssr addon error")
 	}
@@ -3734,7 +3734,7 @@ func TestValidateManifestRejectsUnknownAddonGoBlockTarget(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown addon go block target error")
 	}
@@ -3758,7 +3758,7 @@ func TestValidateManifestAllowsKnownAddonGoBlockTarget(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("contracts", gowdk.FeatureContracts)}}, app)
+	err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("contracts", gowdk.FeatureContracts)}}, app)
 	if err != nil {
 		t.Fatalf("expected known addon target to validate, got %v", err)
 	}
@@ -3779,7 +3779,7 @@ func TestValidateManifestUsesAddonGoBlockConsumerDiagnostics(t *testing.T) {
 		},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{Addons: []gowdk.Addon{compilerGoBlockAddon{diagnostic: "contract go block rejected"}}}, app)
+	err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{compilerGoBlockAddon{diagnostic: "contract go block rejected"}}}, app)
 	if err == nil {
 		t.Fatal("expected addon go block diagnostic")
 	}
@@ -3833,7 +3833,7 @@ func TestValidateManifestAcceptsQualifiedCSSAssetUse(t *testing.T) {
 		},
 	}}
 
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected qualified CSS asset use to validate, got %v", err)
 	}
 }
@@ -3847,7 +3847,7 @@ func TestValidateManifestRejectsUnknownQualifiedCSSAssetUseAlias(t *testing.T) {
 		Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Home</main>`},
 	}}}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected unknown CSS asset alias diagnostic")
 	}
@@ -3938,6 +3938,14 @@ func hasDiagnosticMessage(diagnostics []ValidationError, code string, parts ...s
 		}
 	}
 	return false
+}
+
+// validateManifest lowers a manifest fixture through the production
+// manifest->IR path and validates the IR, mirroring what the build pipeline
+// does. Keeping the fixtures manifest-typed pins the IR-native validators to
+// the diagnostics the manifest validators produced.
+func validateManifest(config gowdk.Config, app manifest.Manifest) error {
+	return ValidateProgram(config, gwdkanalysis.BuildIR(config, app))
 }
 
 // irPage lowers a manifest page fixture through the production manifest->IR

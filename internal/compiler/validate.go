@@ -4,9 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -57,11 +55,4 @@ func ValidateProgram(config gowdk.Config, ir gwdkir.Program) error {
 		return nil
 	}
 	return ValidationErrors(diagnostics)
-}
-
-// ValidateManifest checks the same invariants as ValidateProgram for callers
-// that still hold a parsed manifest. It lowers the manifest to IR and runs the
-// IR-native validators, so both entrypoints validate identical data.
-func ValidateManifest(config gowdk.Config, app manifest.Manifest) error {
-	return ValidateProgram(config, gwdkanalysis.BuildIR(config, app))
 }

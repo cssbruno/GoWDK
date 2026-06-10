@@ -88,3 +88,23 @@ type BackendInputField struct {
 	FormName  string
 	Type      string
 }
+
+// BackendBinding describes the Go handler selected for a backend block (a page
+// load, act, api, or fragment block, or a standalone Go endpoint).
+type BackendBinding struct {
+	Kind         string
+	PageID       string
+	Source       string
+	BlockName    string
+	Method       string
+	Route        string
+	ImportPath   string
+	PackageName  string
+	FunctionName string
+	Signature    BackendSignatureKind
+	InputType    string
+	InputPointer bool
+	InputFields  []BackendInputField
+	Status       BackendBindingStatus
+	Message      string
+}

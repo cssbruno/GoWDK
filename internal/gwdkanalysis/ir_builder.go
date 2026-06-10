@@ -29,12 +29,12 @@ func BuildIR(config gowdk.Config, app manifest.Manifest) gwdkir.Program {
 		builder.addLayout(layout)
 	}
 	for _, endpoint := range app.Endpoints {
-		builder.addStandaloneEndpoint(endpoint)
+		builder.addStandaloneEndpoint(lowerIRGoEndpoint(endpoint))
 	}
 
 	builder.finishPackages()
 	builder.sortOutput()
-	attachBackendBindings(&builder.program, app.BackendBindings)
+	AttachBackendBindings(&builder.program, app.BackendBindings)
 	return builder.program
 }
 
@@ -313,7 +313,7 @@ func (builder *irBuilder) addLayout(layout manifest.Layout) {
 	})
 }
 
-func (builder *irBuilder) addStandaloneEndpoint(endpoint manifest.EndpointDeclaration) {
+func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
 	kind := gwdkir.EndpointAPI
 	if endpoint.Kind == "act" || endpoint.Kind == "action" {
 		kind = gwdkir.EndpointAction
@@ -324,7 +324,7 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint manifest.EndpointDeclar
 	}
 	builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
 		Kind:          kind,
-		Source:        endpointSource(endpoint.SourceKind),
+		Source:        endpoint.SourceKind,
 		Package:       endpoint.Package,
 		PageID:        standaloneEndpointPageID(endpoint),
 		Symbol:        endpoint.Name,
@@ -336,7 +336,13 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint manifest.EndpointDeclar
 	})
 	// Preserve the raw declaration losslessly for validation, which needs the
 	// exact kind, method, and spans before normalization.
-	builder.program.GoEndpoints = append(builder.program.GoEndpoints, gwdkir.GoEndpoint{
+	builder.program.GoEndpoints = append(builder.program.GoEndpoints, endpoint)
+}
+
+// lowerIRGoEndpoint mirrors a manifest standalone endpoint declaration into its
+// lossless IR form. The copy is one-to-one.
+func lowerIRGoEndpoint(endpoint manifest.EndpointDeclaration) gwdkir.GoEndpoint {
+	return gwdkir.GoEndpoint{
 		Kind:          endpoint.Kind,
 		SourceKind:    endpointSource(endpoint.SourceKind),
 		Package:       endpoint.Package,
@@ -349,7 +355,24 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint manifest.EndpointDeclar
 		RouteSpan:     endpoint.RouteSpan,
 		RouteParams:   append([]source.NamedSpan(nil), endpoint.RouteParams...),
 		ErrorPageSpan: endpoint.ErrorPageSpan,
-	})
+	}
+}
+
+// AddStandaloneEndpoints appends discovered standalone Go endpoint declarations
+// to an already-built program: each declaration is preserved losslessly in
+// Program.GoEndpoints and normalized into Program.Endpoints, which is then
+// re-sorted with the same ordering BuildIR produces so post-build discovery
+// yields the same program as build-time discovery.
+func AddStandaloneEndpoints(program *gwdkir.Program, endpoints []gwdkir.GoEndpoint) {
+	if len(endpoints) == 0 {
+		return
+	}
+	builder := irBuilder{program: *program}
+	for _, endpoint := range endpoints {
+		builder.addStandaloneEndpoint(endpoint)
+	}
+	builder.sortOutput()
+	*program = builder.program
 }
 
 func (builder *irBuilder) addTemplate(template gwdkir.Template) {

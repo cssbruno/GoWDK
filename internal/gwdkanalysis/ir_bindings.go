@@ -4,13 +4,16 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func attachBackendBindings(program *gwdkir.Program, bindings []manifest.BackendBinding) {
-	byEndpoint := map[string]manifest.BackendBinding{}
-	byLoadPage := map[string]manifest.BackendBinding{}
+// AttachBackendBindings copies backend handler binding records onto the
+// normalized IR endpoints and page load bindings they describe. Records are
+// matched by (kind, page, block, method, route); endpoints and pages without a
+// matching record get a zero binding.
+func AttachBackendBindings(program *gwdkir.Program, bindings []source.BackendBinding) {
+	byEndpoint := map[string]source.BackendBinding{}
+	byLoadPage := map[string]source.BackendBinding{}
 	for _, binding := range bindings {
 		if binding.Kind == "load" {
 			byLoadPage[binding.PageID] = binding

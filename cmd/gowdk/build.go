@@ -93,13 +93,12 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	if diagnostics.HasErrors() {
 		return fmt.Errorf("build failed")
 	}
-	app, err := compiler.DiscoverGoEndpointComments(app)
-	if err != nil {
+	ir := gwdkanalysis.BuildIR(options.Config, app)
+	if err := compiler.DiscoverGoEndpoints(&ir); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return fmt.Errorf("build failed")
 	}
-	app = compiler.BindBackendHandlers(app)
-	ir := gwdkanalysis.BuildIR(options.Config, app)
+	compiler.BindBackendHandlers(&ir)
 	if err := compiler.ValidateProgram(options.Config, ir); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return fmt.Errorf("build failed")

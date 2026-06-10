@@ -6,9 +6,7 @@ import (
 	"unicode"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -99,19 +97,6 @@ type RouteInfo struct {
 	PageID  string
 	Route   string
 	Message string
-}
-
-// BuildRouteMetadata converts a validated manifest into route and endpoint
-// metadata for CLI reporting.
-func BuildRouteMetadata(config gowdk.Config, app manifest.Manifest) (RouteMetadata, error) {
-	if err := ValidateManifest(config, app); err != nil {
-		return RouteMetadata{}, err
-	}
-	if len(app.BackendBindings) == 0 {
-		app = BindBackendHandlers(app)
-	}
-	ir := gwdkanalysis.BuildIR(config, app)
-	return BuildRouteMetadataFromIR(config, ir), nil
 }
 
 // BuildRouteMetadataFromIR converts stable compiler IR into CLI route and

@@ -8,6 +8,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/goblockgen"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -76,7 +77,7 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 }
 `)
 
-	app := BindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{{
+	app := bindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{{
 		ID:     "Login",
 		Source: filepath.Join(root, "Login.page.gwdk"),
 		Route:  "/Login",
@@ -151,7 +152,7 @@ func LoadBroken() map[string]any {
 }
 `)
 
-	app := BindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{
+	app := bindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{
 		{
 			ID:     "dashboard",
 			Source: filepath.Join(root, "dashboard.page.gwdk"),
@@ -227,7 +228,7 @@ func TestBindBackendHandlersBindsInlineSSRScriptLoad(t *testing.T) {
 		},
 	}
 
-	app := BindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{page}})
+	app := bindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{page}})
 	bindings := compilerBindingsByBlock(app.BackendBindings)
 	binding := bindings["LoadDashboard"]
 	if binding.Status != source.BackendBindingBound || binding.Signature != source.BackendSignatureLoadError {
@@ -288,7 +289,7 @@ func List(context.Context) (response.Response, error) {
 		},
 	}
 
-	app := BindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{page}})
+	app := bindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{page}})
 	bindings := compilerBindingsByBlock(app.BackendBindings)
 	for _, name := range []string{"Subscribe", "Session", "List"} {
 		if bindings[name].ImportPath != goblockgen.GeneratedImportPath("pages") || bindings[name].PackageName != "pages" {
@@ -330,18 +331,17 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 		Blocks: manifest.Blocks{View: true, ViewBody: "<main>Home</main>"},
 	}}}
 
-	app, err := DiscoverGoEndpointComments(app)
-	if err != nil {
+	ir := gwdkanalysis.BuildIR(gowdk.Config{}, app)
+	if err := DiscoverGoEndpoints(&ir); err != nil {
 		t.Fatal(err)
 	}
-	if len(app.Endpoints) != 2 {
-		t.Fatalf("expected two Go comment endpoints, got %#v", app.Endpoints)
+	if len(ir.GoEndpoints) != 2 {
+		t.Fatalf("expected two Go comment endpoints, got %#v", ir.GoEndpoints)
 	}
-	if err := ValidateManifest(gowdk.Config{}, app); err != nil {
+	if err := ValidateProgram(gowdk.Config{}, ir); err != nil {
 		t.Fatal(err)
 	}
-	app = BindBackendHandlers(app)
-	bindings := compilerBindingsByBlock(app.BackendBindings)
+	bindings := compilerBindingsByBlock(BindBackendHandlers(&ir))
 	assertBinding(t, bindings["Login"], source.BackendBindingBound, source.BackendSignatureAction0, "", false)
 	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
 }
@@ -371,7 +371,7 @@ func TestValidateManifestRejectsGoEndpointConflictWithGOWDKEndpoint(t *testing.T
 		}},
 	}
 
-	err := ValidateManifest(gowdk.Config{}, app)
+	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected route conflict diagnostic")
 	}
@@ -390,7 +390,7 @@ func TestValidateBackendBindingPolicyFailsProductionMissingHandler(t *testing.T)
 		},
 	}}}
 
-	err := ValidateBackendBindingPolicy(gowdk.Config{Build: gowdk.BuildConfig{Mode: gowdk.Production}}, app)
+	err := validateBackendBindingPolicy(gowdk.Config{Build: gowdk.BuildConfig{Mode: gowdk.Production}}, app)
 	if err == nil {
 		t.Fatal("expected production missing handler diagnostic")
 	}
@@ -414,7 +414,7 @@ func TestValidateBackendBindingPolicyAllowsDevelopmentMissingHandler(t *testing.
 		Status:       source.BackendBindingMissing,
 	}}}
 
-	if err := ValidateBackendBindingPolicy(gowdk.Config{}, app); err != nil {
+	if err := validateBackendBindingPolicy(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected development missing handler to remain non-fatal, got %v", err)
 	}
 }
@@ -434,7 +434,7 @@ func TestValidateBackendBindingPolicyAllowsExplicitProductionStubMode(t *testing
 		Mode:                gowdk.Production,
 		AllowMissingBackend: true,
 	}}
-	if err := ValidateBackendBindingPolicy(config, app); err != nil {
+	if err := validateBackendBindingPolicy(config, app); err != nil {
 		t.Fatalf("expected explicit production stub mode to allow missing backend, got %v", err)
 	}
 }
@@ -473,4 +473,29 @@ func writeCompilerTestFile(t *testing.T, path string, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// bindBackendHandlers routes a manifest fixture through the production IR
+// binding path and mirrors the records back onto the manifest shape these
+// tests assert against.
+func bindBackendHandlers(app manifest.Manifest) manifest.Manifest {
+	ir := gwdkanalysis.BuildIR(gowdk.Config{}, app)
+	bindings := BindBackendHandlers(&ir)
+	app.BackendBindings = bindings
+	loadBindings := map[string]manifest.BackendBinding{}
+	for _, binding := range bindings {
+		if binding.Kind == loadHandlerKind {
+			loadBindings[binding.PageID] = binding
+		}
+	}
+	for index := range app.Pages {
+		if binding, ok := loadBindings[app.Pages[index].ID]; ok {
+			app.Pages[index].LoadBinding = binding
+		}
+	}
+	return app
+}
+
+func validateBackendBindingPolicy(config gowdk.Config, app manifest.Manifest) error {
+	return ValidateBackendBindingPolicyIR(config, gwdkanalysis.BuildIR(config, app))
 }

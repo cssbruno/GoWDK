@@ -2518,8 +2518,8 @@ func TestGeneratedBinaryExecutesInlineSSRScriptLoad(t *testing.T) {
 			}},
 		},
 	}}}
-	app = compiler.BindBackendHandlers(app)
 	ir := gwdkanalysis.BuildIR(config, app)
+	compiler.BindBackendHandlers(&ir)
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{AutoRoutes: true, Config: config, IR: &ir}); err != nil {
 		t.Fatal(err)

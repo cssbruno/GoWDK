@@ -10,18 +10,20 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-// DiscoverGoEndpointComments merges optional //gowdk:act and //gowdk:api
-// comments from selected feature-package Go files into the manifest.
-func DiscoverGoEndpointComments(app manifest.Manifest) (manifest.Manifest, error) {
-	dirs := endpointSourceDirs(app)
+// DiscoverGoEndpoints merges optional //gowdk:act and //gowdk:api comments
+// from selected feature-package Go files into the program as standalone Go
+// endpoints.
+func DiscoverGoEndpoints(ir *gwdkir.Program) error {
+	dirs := endpointSourceDirs(*ir)
 	if len(dirs) == 0 {
-		return app, nil
+		return nil
 	}
-	var endpoints []manifest.EndpointDeclaration
+	var endpoints []gwdkir.GoEndpoint
 	var diagnostics []ValidationError
 	for _, dir := range dirs {
 		discovered, found := discoverGoEndpointsInDir(dir)
@@ -29,7 +31,7 @@ func DiscoverGoEndpointComments(app manifest.Manifest) (manifest.Manifest, error
 		diagnostics = append(diagnostics, found...)
 	}
 	if len(diagnostics) > 0 {
-		return app, ValidationErrors(diagnostics)
+		return ValidationErrors(diagnostics)
 	}
 	sort.Slice(endpoints, func(i, j int) bool {
 		if endpoints[i].Source == endpoints[j].Source {
@@ -37,11 +39,11 @@ func DiscoverGoEndpointComments(app manifest.Manifest) (manifest.Manifest, error
 		}
 		return endpoints[i].Source < endpoints[j].Source
 	})
-	app.Endpoints = append(app.Endpoints, endpoints...)
-	return app, nil
+	gwdkanalysis.AddStandaloneEndpoints(ir, endpoints)
+	return nil
 }
 
-func endpointSourceDirs(app manifest.Manifest) []string {
+func endpointSourceDirs(ir gwdkir.Program) []string {
 	seen := map[string]bool{}
 	var dirs []string
 	add := func(sourcePath string) {
@@ -59,26 +61,26 @@ func endpointSourceDirs(app manifest.Manifest) []string {
 		seen[dir] = true
 		dirs = append(dirs, dir)
 	}
-	for _, page := range app.Pages {
+	for _, page := range ir.Pages {
 		add(page.Source)
 	}
-	for _, component := range app.Components {
+	for _, component := range ir.Components {
 		add(component.Source)
 	}
-	for _, layout := range app.Layouts {
+	for _, layout := range ir.Layouts {
 		add(layout.Source)
 	}
 	sort.Strings(dirs)
 	return dirs
 }
 
-func discoverGoEndpointsInDir(dir string) ([]manifest.EndpointDeclaration, []ValidationError) {
+func discoverGoEndpointsInDir(dir string) ([]gwdkir.GoEndpoint, []ValidationError) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil
 	}
 	fileSet := token.NewFileSet()
-	var endpoints []manifest.EndpointDeclaration
+	var endpoints []gwdkir.GoEndpoint
 	var diagnostics []ValidationError
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
@@ -119,8 +121,8 @@ func discoverGoEndpointsInDir(dir string) ([]manifest.EndpointDeclaration, []Val
 	return endpoints, diagnostics
 }
 
-func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageName string, function *ast.FuncDecl) []manifest.EndpointDeclaration {
-	var endpoints []manifest.EndpointDeclaration
+func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageName string, function *ast.FuncDecl) []gwdkir.GoEndpoint {
+	var endpoints []gwdkir.GoEndpoint
 	for _, comment := range function.Doc.List {
 		text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
 		text = strings.TrimSpace(strings.TrimPrefix(text, "/*"))
@@ -132,9 +134,9 @@ func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageNam
 		method := strings.ToUpper(methodText)
 		route := strings.Trim(routeText, `"`)
 		span := goTokenSpan(fileSet, comment.Pos(), comment.End())
-		endpoints = append(endpoints, manifest.EndpointDeclaration{
+		endpoints = append(endpoints, gwdkir.GoEndpoint{
 			Kind:        kind,
-			SourceKind:  manifest.EndpointSourceGo,
+			SourceKind:  gwdkir.EndpointSourceGo,
 			Package:     packageName,
 			Source:      path,
 			Name:        function.Name.Name,

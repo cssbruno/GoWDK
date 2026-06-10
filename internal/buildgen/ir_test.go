@@ -7,9 +7,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
-	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
@@ -102,39 +100,5 @@ func TestBuildMemoryFromIRCollectsArtifacts(t *testing.T) {
 	}
 	if !strings.Contains(string(result.Files["index.html"]), "<main>Home</main>") {
 		t.Fatalf("expected generated page content, got:\n%s", result.Files["index.html"])
-	}
-}
-
-func TestBuildModelFromIRPreservesFragmentEndpoints(t *testing.T) {
-	app := compiler.ManifestFromIR(gwdkir.Program{
-		Version: gwdkir.Version,
-		Pages: []gwdkir.Page{{
-			ID:      "patients",
-			Route:   "/patients",
-			Package: "pages",
-			Blocks: gwdkir.Blocks{
-				Fragments: []gwdkir.FragmentEndpoint{{
-					Name:   "List",
-					Method: "GET",
-					Route:  "/patients/list",
-					Target: "#patients",
-					Body:   "<section>Patients</section>",
-				}},
-				Spans: gwdkir.BlockSpans{
-					Fragments: []manifest.NamedSpan{{Name: "List"}},
-				},
-			},
-		}},
-	})
-
-	if len(app.Pages) != 1 || len(app.Pages[0].Blocks.Fragments) != 1 {
-		t.Fatalf("expected fragment endpoint in manifest model, got %#v", app.Pages)
-	}
-	fragment := app.Pages[0].Blocks.Fragments[0]
-	if fragment.Name != "List" || fragment.Route != "/patients/list" || fragment.Target != "#patients" || fragment.Body != "<section>Patients</section>" {
-		t.Fatalf("unexpected fragment endpoint: %#v", fragment)
-	}
-	if len(app.Pages[0].Blocks.Spans.Fragments) != 1 || app.Pages[0].Blocks.Spans.Fragments[0].Name != "List" {
-		t.Fatalf("expected fragment spans, got %#v", app.Pages[0].Blocks.Spans.Fragments)
 	}
 }

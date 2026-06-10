@@ -416,23 +416,7 @@ const (
 type BackendInputField = source.BackendInputField
 
 // BackendBinding describes the Go handler selected for an act or api block.
-type BackendBinding struct {
-	Kind         string
-	PageID       string
-	Source       string
-	BlockName    string
-	Method       string
-	Route        string
-	ImportPath   string
-	PackageName  string
-	FunctionName string
-	Signature    BackendSignatureKind
-	InputType    string
-	InputPointer bool
-	InputFields  []BackendInputField
-	Status       BackendBindingStatus
-	Message      string
-}
+type BackendBinding = source.BackendBinding
 
 // RenderMode returns the effective render mode for a page.
 func (page Page) RenderMode(defaultMode gowdk.RenderMode) gowdk.RenderMode {

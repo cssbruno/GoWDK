@@ -221,13 +221,32 @@ func validatePageGuards(page gwdkir.Page) []ValidationError {
 		return nil
 	}
 	if len(page.Guards) == 0 {
+		// A guardless page route is denied (403) at request time, so warning is
+		// enough. But act/api/fragment endpoints derived from the page inherit
+		// the page guards: with none declared they would be publicly callable
+		// even though the page route is denied. That contradicts the
+		// not-public-by-default contract, so it is a hard error.
+		if pageDeclaresBackendEndpoints(page) {
+			return []ValidationError{{
+				Code:     "missing_page_guard",
+				PageID:   page.ID,
+				Source:   page.Source,
+				Span:     firstSpan(page.Spans.Page, page.Spans.Route),
+				Severity: SeverityError,
+				Message: fmt.Sprintf(
+					"%s declares no @guard but defines act/api/fragment endpoints, which would be publicly callable. Add @guard public to make them public, or a protective guard such as @guard auth.required",
+					page.ID,
+				),
+			}}
+		}
 		return []ValidationError{{
-			Code:   "missing_page_guard",
-			PageID: page.ID,
-			Source: page.Source,
-			Span:   firstSpan(page.Spans.Page, page.Spans.Route),
+			Code:     "missing_page_guard",
+			PageID:   page.ID,
+			Source:   page.Source,
+			Span:     firstSpan(page.Spans.Page, page.Spans.Route),
+			Severity: SeverityWarning,
 			Message: fmt.Sprintf(
-				"%s is missing @guard. Add @guard public for an intentionally public page, or add protected guard IDs such as @guard auth.required",
+				"%s declares no @guard; its route is denied (403) at request time. Add @guard public to serve it, or a protective guard such as @guard auth.required",
 				page.ID,
 			),
 		}}
@@ -273,6 +292,10 @@ func validateSourceBackedPageGuards(page gwdkir.Page) bool {
 		return false
 	}
 	return true
+}
+
+func pageDeclaresBackendEndpoints(page gwdkir.Page) bool {
+	return len(page.Blocks.Actions) > 0 || len(page.Blocks.APIs) > 0 || len(page.Blocks.Fragments) > 0
 }
 
 func hasProtectedPageGuard(page gwdkir.Page) bool {

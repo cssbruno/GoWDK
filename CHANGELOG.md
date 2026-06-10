@@ -3,6 +3,31 @@
 GOWDK is experimental 0.x software. Public syntax, generated output, runtime
 packages, and tooling contracts may change before a stable release.
 
+## Unreleased
+
+### Changed
+
+- A page that declares no `@guard` is no longer a build error. `@guard` is now
+  optional, but a page is not public by default: `missing_page_guard` is now a
+  **warning** and the page's route is denied (403) at request time until the
+  author adds `@guard public` (or a protective guard). Static pages are denied
+  through the generated app's deny registry; request-time (SSR) pages are denied
+  in their own handler. Access is never granted by omission. A pure static
+  export served without the generated Go server cannot enforce the 403 — the
+  build warning is the backstop.
+- Compiler validation diagnostics now carry a severity. Warning-severity
+  diagnostics surface to authors and editors but do not fail the build.
+
+### Implemented
+
+- The default-deny contract now covers every way a guardless page could leak:
+  dynamic build-time pages (`paths {}`) are denied by route pattern so each
+  concrete artifact returns 403, direct index artifact paths
+  (`/dashboard/index.html`) are normalized to their route before the deny check,
+  and a guardless page that declares `act`/`api`/`fragment` endpoints is a build
+  **error** (`missing_page_guard`) because those endpoints would otherwise be
+  publicly callable.
+
 ## v0.2.8 - 2026-06-10
 
 ### Changed

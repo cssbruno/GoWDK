@@ -99,8 +99,15 @@ func buildOnce(options cliOptions, request buildRequest) error {
 		return fmt.Errorf("build failed")
 	}
 	compiler.BindBackendHandlers(&ir)
-	if err := compiler.ValidateProgram(options.Config, ir); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	report := compiler.ValidateProgramReport(options.Config, ir)
+	for _, diagnostic := range report {
+		prefix := ""
+		if diagnostic.Severity == compiler.SeverityWarning {
+			prefix = "warning: "
+		}
+		fmt.Fprintln(os.Stderr, prefix+diagnostic.Error())
+	}
+	if report.HasErrors() {
 		return fmt.Errorf("build failed")
 	}
 	if err := linkIRContractReferences(&ir, "."); err != nil {

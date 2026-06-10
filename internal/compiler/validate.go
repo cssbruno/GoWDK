@@ -8,6 +8,16 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
+// Severity classifies a diagnostic as a hard error or a non-fatal warning.
+type Severity int
+
+const (
+	// SeverityError is the default: it fails the build.
+	SeverityError Severity = iota
+	// SeverityWarning is surfaced to the author but does not fail the build.
+	SeverityWarning
+)
+
 type ValidationError struct {
 	Code          string
 	PageID        string
@@ -15,6 +25,7 @@ type ValidationError struct {
 	Source        string
 	Span          source.SourceSpan
 	Message       string
+	Severity      Severity
 }
 
 func (err ValidationError) Error() string {
@@ -29,9 +40,10 @@ func (err ValidationError) Error() string {
 
 // ValidateProgram checks render-mode invariants that must hold before codegen.
 // The validators read the compiler IR directly; there is no manifest
-// intermediary on this path.
+// intermediary on this path. It returns a non-nil error only when at least one
+// error-severity diagnostic is present; warning-only programs return nil.
 func ValidateProgram(config gowdk.Config, ir gwdkir.Program) error {
-	return validateProgram(config, ir, true)
+	return asError(validateProgram(config, ir, true))
 }
 
 // ValidateSourceProgram checks a program built from a single in-memory source
@@ -39,14 +51,33 @@ func ValidateProgram(config gowdk.Config, ir gwdkir.Program) error {
 // against the discovered project) are skipped because sibling files are not
 // present in the program.
 func ValidateSourceProgram(config gowdk.Config, ir gwdkir.Program) error {
+	return asError(validateProgram(config, ir, false))
+}
+
+// ValidateProgramReport returns every diagnostic, including warnings, so the
+// caller can surface warnings while still gating the build on HasErrors.
+func ValidateProgramReport(config gowdk.Config, ir gwdkir.Program) ValidationErrors {
+	return validateProgram(config, ir, true)
+}
+
+// ValidateSourceProgramReport is the single-source counterpart to
+// ValidateProgramReport.
+func ValidateSourceProgramReport(config gowdk.Config, ir gwdkir.Program) ValidationErrors {
 	return validateProgram(config, ir, false)
 }
 
-func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) error {
-	if err := gwdkir.CheckInvariants(ir); err != nil {
-		return fmt.Errorf("internal compiler error: %w", err)
+func asError(report ValidationErrors) error {
+	if report.HasErrors() {
+		return report
 	}
-	var diagnostics []ValidationError
+	return nil
+}
+
+func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) ValidationErrors {
+	if err := gwdkir.CheckInvariants(ir); err != nil {
+		return ValidationErrors{{Message: fmt.Sprintf("internal compiler error: %v", err)}}
+	}
+	var diagnostics ValidationErrors
 	diagnostics = append(diagnostics, validatePackages(ir)...)
 	diagnostics = append(diagnostics, validateUniquePages(ir.Pages)...)
 	diagnostics = append(diagnostics, validateUniqueComponents(ir.Components)...)
@@ -68,8 +99,5 @@ func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) err
 	for _, page := range ir.Pages {
 		diagnostics = append(diagnostics, ValidatePage(config, page)...)
 	}
-	if len(diagnostics) == 0 {
-		return nil
-	}
-	return ValidationErrors(diagnostics)
+	return diagnostics
 }

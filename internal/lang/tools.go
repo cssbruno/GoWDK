@@ -293,16 +293,14 @@ func CheckFiles(config gowdk.Config, paths []string) (CheckResult, Diagnostics) 
 		diagnostics = append(diagnostics, compilerDiagnostics(err, result.IR)...)
 		return result, diagnostics
 	}
-	validate := compiler.ValidateProgram
+	validate := compiler.ValidateProgramReport
 	if len(paths) == 1 {
 		// A single file can never satisfy cross-file checks (use packages,
 		// component references), so validate it in source mode to avoid
 		// false project-level errors.
-		validate = compiler.ValidateSourceProgram
+		validate = compiler.ValidateSourceProgramReport
 	}
-	if err := validate(config, result.IR); err != nil {
-		diagnostics = append(diagnostics, compilerDiagnostics(err, result.IR)...)
-	}
+	diagnostics = append(diagnostics, compilerDiagnostics(validate(config, result.IR), result.IR)...)
 	diagnostics = append(diagnostics, accessibilityDiagnostics(result.IR)...)
 	if !diagnostics.HasErrors() {
 		result.Bindings = compiler.BindBackendHandlers(&result.IR)
@@ -350,9 +348,7 @@ func CheckSource(config gowdk.Config, path string, source []byte) (gwdkir.Page, 
 			return gwdkir.Page{}, diagnostics
 		}
 		ir := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{Components: []gwdkir.Component{component}})
-		if err := compiler.ValidateSourceProgram(config, ir); err != nil {
-			diagnostics = append(diagnostics, compilerDiagnostics(err, ir)...)
-		}
+		diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidateSourceProgramReport(config, ir), ir)...)
 		diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
 		return gwdkir.Page{}, diagnostics
 	case FileKindLayout:
@@ -376,9 +372,7 @@ func CheckSource(config gowdk.Config, path string, source []byte) (gwdkir.Page, 
 		return page, diagnostics
 	}
 	ir := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{Pages: []gwdkir.Page{page}})
-	if err := compiler.ValidateSourceProgram(config, ir); err != nil {
-		diagnostics = append(diagnostics, compilerDiagnostics(err, ir)...)
-	}
+	diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidateSourceProgramReport(config, ir), ir)...)
 	diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
 	return page, diagnostics
 }
@@ -431,12 +425,16 @@ func compilerDiagnostics(err error, ir gwdkir.Program) Diagnostics {
 	case compiler.ValidationErrors:
 		diagnostics := make(Diagnostics, 0, len(typed))
 		for _, validation := range typed {
+			severity := "error"
+			if validation.Severity == compiler.SeverityWarning {
+				severity = "warning"
+			}
 			diagnostics = append(diagnostics, Diagnostic{
 				File:       diagnosticSource(validation, sources),
 				Code:       validation.Code,
 				Pos:        sourcePosition(validation.Span.Start),
 				Range:      sourceSpanRange(validation.Span),
-				Severity:   "error",
+				Severity:   severity,
 				Message:    validation.Error(),
 				Suggestion: diagnosticSuggestion(validation),
 			})

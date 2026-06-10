@@ -33,6 +33,7 @@ component contract and inline package-go-block slices.
 - `syntax.md`: lexical tokens and accepted top-level forms.
 - `grammar.md`: current parser grammar and future grammar boundaries.
 - `semantics.md`: current render-mode and validation rules.
+- `guards.md`: `@guard` and the default-deny page access contract.
 - `blocks.md`: block meanings and current parser support.
 - `data.md`: build-time data, request-time load data, endpoint data, and
   invalidation boundaries.

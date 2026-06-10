@@ -77,7 +77,7 @@ var Registry = []Code{
 	{Code: "malformed_route", Area: "routing", Stability: StabilityStable, Summary: "route path violates GOWDK route syntax"},
 	{Code: "missing_img_alt", Area: "accessibility", Stability: StabilityStable, Summary: "image element is missing explicit alt text"},
 	{Code: "missing_package_declaration", Area: "packages", Stability: StabilityStable, Summary: "GOWDK source is missing a package declaration"},
-	{Code: "missing_page_guard", Area: "pages", Stability: StabilityStable, Summary: "page source is missing explicit access guard metadata"},
+	{Code: "missing_page_guard", Area: "pages", Stability: StabilityStable, Summary: "page declares no @guard; warning (route denied 403) or error when it defines act/api/fragment endpoints"},
 	{Code: "missing_required_env", Area: "config", Stability: StabilityStable, Summary: "required environment variable is not set"},
 	{Code: "missing_required_secret", Area: "config", Stability: StabilityStable, Summary: "required secret environment variable is not set"},
 	{Code: "missing_ssr_addon", Area: "rendering", Stability: StabilityStable, Summary: "request-time page behavior requires the SSR addon"},

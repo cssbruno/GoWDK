@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/cssbruno/gowdk/runtime/asset"
+	"github.com/cssbruno/gowdk/runtime/route"
 )
 
 // HandlerFunc handles a generated request-time route and reports whether it
@@ -49,6 +50,18 @@ type Handler struct {
 	Metrics    *Metrics
 	SSRExact   HandlerFunc
 	SSRDynamic HandlerFunc
+
+	// Denied holds concrete page routes that declared no @guard. Such a page is
+	// not public by default: its GET/HEAD route returns 403 until the author
+	// opts in with @guard public (or a protective guard for request-time pages).
+	// Keyed by exact route path.
+	Denied map[string]bool
+
+	// DeniedPatterns holds route patterns (e.g. /blog/{slug}) for guardless
+	// build-time pages whose paths {} block expands to many concrete artifacts.
+	// The exact Denied map cannot enumerate those concrete paths, so the request
+	// path is matched against each pattern to deny every expanded instance.
+	DeniedPatterns []string
 
 	// RequestTimeout bounds how long a single request's handler context lives.
 	// When > 0, the request context is cancelled after the deadline so slow
@@ -144,6 +157,11 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 		http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if handler.isDeniedPath(request.URL.Path) {
+		metrics.recordForbidden()
+		WriteErrorPage(response, request, http.StatusForbidden, "403 forbidden")
+		return
+	}
 	if handler.SSRExact != nil && Boundary("ssr", handler.SSRExact)(response, request) {
 		metrics.recordSSRExact()
 		return
@@ -169,6 +187,42 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 	metrics.recordStatic()
 	handler.setGeneratedStaticCache(response, assetName)
 	http.ServeContent(response, request, info.Name(), info.ModTime(), bytes.NewReader(payload))
+}
+
+// isDeniedPath reports whether requestPath resolves to a guardless page that is
+// denied by default. It normalizes the request to the page route it would serve
+// so that direct index artifact paths (/dashboard/index.html) and trailing-slash
+// directory forms are denied alongside the canonical route, and matches dynamic
+// page patterns so every concrete paths {} artifact is denied, not just the
+// pattern string.
+func (handler Handler) isDeniedPath(requestPath string) bool {
+	if len(handler.Denied) == 0 && len(handler.DeniedPatterns) == 0 {
+		return false
+	}
+	routePath := deniedRouteForPath(requestPath)
+	if handler.Denied[routePath] {
+		return true
+	}
+	for _, pattern := range handler.DeniedPatterns {
+		if _, ok := route.Match(pattern, routePath); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// deniedRouteForPath maps a request path to the page route that would serve it,
+// stripping a trailing index.html artifact segment so a page emitted as
+// "<route>/index.html" is denied when fetched directly by its file path.
+func deniedRouteForPath(requestPath string) string {
+	clean := path.Clean("/" + requestPath)
+	if clean == "/index.html" {
+		return "/"
+	}
+	if trimmed, ok := strings.CutSuffix(clean, "/index.html"); ok {
+		return trimmed
+	}
+	return clean
 }
 
 // canonicalTrailingSlashPath reports the canonical redirect target for a

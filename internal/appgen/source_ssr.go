@@ -60,7 +60,13 @@ func ssrDynamicDecl(routes []SSRRoute, rateLimit bool) *ast.FuncDecl {
 }
 
 func ssrDynamicIfStmt(route SSRRoute, rateLimit bool) ast.Stmt {
-	names := []ast.Expr{id("params"), id("ok")}
+	// A guardless route is denied before rendering, so its matched params are
+	// unused; bind them to _ to keep the generated code free of unused vars.
+	paramsName := ast.Expr(id("params"))
+	if len(route.Guards) == 0 {
+		paramsName = id("_")
+	}
+	names := []ast.Expr{paramsName, id("ok")}
 	body := ssrRouteBodyStmts(route, true, rateLimit)
 	return &ast.IfStmt{
 		Init: define(names, call(sel("gowdkroute", "Match"), stringLit(route.Route), selExpr(selExpr(id("request"), "URL"), "Path"))),
@@ -70,6 +76,14 @@ func ssrDynamicIfStmt(route SSRRoute, rateLimit bool) ast.Stmt {
 }
 
 func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool) []ast.Stmt {
+	if len(route.Guards) == 0 {
+		// No @guard declared: deny by default (403). There is nothing to render,
+		// so the route returns before any context, load, or HTML statements.
+		return []ast.Stmt{
+			writeNoStoreErrorStmt(sel("http", "StatusForbidden"), "403 forbidden"),
+			returnBool(true),
+		}
+	}
 	body := ssrRouteContextStmts(route, includeParams)
 	body = append(body, ssrRoutePanicBoundaryStmt())
 	body = append(body, rateLimitStmts(rateLimit)...)
@@ -353,6 +367,11 @@ func ssrUsesDynamicRoutes(routes []SSRRoute) bool {
 
 func ssrUsesReplacements(routes []SSRRoute) bool {
 	for _, route := range routes {
+		// Guardless routes are denied before rendering, so their replacements
+		// are never emitted and contribute no imports.
+		if len(route.Guards) == 0 {
+			continue
+		}
 		if len(route.Replacements) > 0 {
 			return true
 		}
@@ -362,6 +381,9 @@ func ssrUsesReplacements(routes []SSRRoute) bool {
 
 func ssrUsesLoad(routes []SSRRoute) bool {
 	for _, route := range routes {
+		if len(route.Guards) == 0 {
+			continue
+		}
 		if route.HasLoad {
 			return true
 		}

@@ -26,9 +26,11 @@ http.ListenAndServe(":8080", wrapped)
 
 ## Guards
 
-Every page source must declare `@guard`. Use `@guard public` when the page is
-intentionally public. `public` is a compile-time marker, must be the only guard
-on that page, and does not require runtime backing code.
+`@guard` is optional, but a page is not public by default: a page that declares
+no `@guard` warns (`missing_page_guard`) and its route is denied (403) at request
+time until access is stated. Use `@guard public` to serve the page on purpose.
+`public` is a compile-time marker, must be the only guard on that page, and does
+not require runtime backing code.
 
 Routes with non-public `@guard` IDs require backing code in the generated app
 package. A guarded generated app will not compile until the required hook
@@ -93,9 +95,12 @@ RBAC guard behavior:
   route/page access. They must never replace backend authorization around
   protected resources, data access, or service methods.
 
-Guard behavior:
+Guard behavior (see [guards.md](../language/guards.md) for the full access
+contract):
 
-- Missing `@guard` fails source validation for real page files.
+- Missing `@guard` is a `missing_page_guard` warning and the route is denied
+  (403) at request time — except on a page that also declares `act`/`api`/
+  `fragment` endpoints, where it is a build error.
 - `@guard public` marks intentional public access and cannot be combined with
   protected guard IDs.
 - Non-public page guards on build-time SPA/action page routes fail validation;

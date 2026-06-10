@@ -44,6 +44,90 @@ func TestHandlerServesAppIndexAndIdentityHeaders(t *testing.T) {
 	}
 }
 
+func TestHandlerDeniesGuardlessRouteWith403(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html":           {Data: []byte("<main>Home</main>")},
+			"dashboard/index.html": {Data: []byte("<main>Secret</main>")},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+		Denied:   map[string]bool{"/dashboard": true},
+	}
+
+	denied := httptest.NewRecorder()
+	handler.ServeHTTP(denied, httptest.NewRequest(http.MethodGet, "/dashboard", nil))
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("guardless route should be denied, got status %d", denied.Code)
+	}
+
+	// A route absent from Denied (intentionally public) still serves.
+	served := httptest.NewRecorder()
+	handler.ServeHTTP(served, httptest.NewRequest(http.MethodGet, "/", nil))
+	if served.Code != http.StatusOK {
+		t.Fatalf("public route should serve, got status %d", served.Code)
+	}
+}
+
+func TestHandlerDeniesIndexArtifactAndDirectoryForms(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html":           {Data: []byte("<main>Home</main>")},
+			"dashboard/index.html": {Data: []byte("<main>Secret</main>")},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+		Denied:   map[string]bool{"/dashboard": true},
+	}
+
+	// The index artifact path resolves to the same denied page file, so a direct
+	// fetch by file path must also be denied rather than served.
+	for _, requestPath := range []string{"/dashboard", "/dashboard/index.html"} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, requestPath, nil))
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("%s should be denied, got status %d", requestPath, recorder.Code)
+		}
+	}
+}
+
+func TestHandlerDeniesRootIndexArtifact(t *testing.T) {
+	handler := Handler{
+		Root:     fstest.MapFS{"index.html": {Data: []byte("<main>Home</main>")}},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+		Denied:   map[string]bool{"/": true},
+	}
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/index.html", nil))
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("/index.html should be denied for a guardless root, got status %d", recorder.Code)
+	}
+}
+
+func TestHandlerDeniesDynamicSPAPatternArtifacts(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"blog/hello/index.html": {Data: []byte("<main>Hello</main>")},
+			"blog/world/index.html": {Data: []byte("<main>World</main>")},
+		},
+		Identity:       Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:         asset.Manifest{Version: 1, Files: map[string]string{}},
+		DeniedPatterns: []string{"/blog/{slug}"},
+	}
+
+	// Every concrete artifact expanded from the guardless dynamic page must be
+	// denied, whether requested by canonical route or by index artifact path.
+	for _, requestPath := range []string{"/blog/hello", "/blog/world", "/blog/hello/index.html"} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, requestPath, nil))
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("%s should be denied by pattern, got status %d", requestPath, recorder.Code)
+		}
+	}
+}
+
 func TestHandlerAppliesPageHTMLCachePolicy(t *testing.T) {
 	handler := Handler{
 		Root: fstest.MapFS{

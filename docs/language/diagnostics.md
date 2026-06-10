@@ -15,8 +15,8 @@ CLI JSON diagnostics use:
         "start": {"line": 3, "column": 1},
         "end": {"line": 3, "column": 11}
       },
-      "severity": "error",
-      "message": "home is missing @guard. Add @guard public for an intentionally public page, or add protected guard IDs such as @guard auth.required"
+      "severity": "warning",
+      "message": "home declares no @guard; its route is denied (403) at request time. Add @guard public to serve it, or a protective guard such as @guard auth.required"
     }
   ]
 }
@@ -33,8 +33,12 @@ The optional `suggestion` field carries a short structured fix hint for common
 mistakes such as missing `paths {}` on dynamic spa routes, unknown client or
 view fields, missing `g:key`, and malformed `g:for` syntax.
 
-Warnings are non-fatal. The first accessibility warning is `missing_img_alt`,
-emitted for literal `<img>` elements without an explicit `alt` attribute.
+Warnings are non-fatal. `missing_img_alt` is emitted for literal `<img>`
+elements without an explicit `alt` attribute. `missing_page_guard` is emitted
+for a page that declares no `@guard`: the build still succeeds, but the page is
+not public by default — its route is denied (403) at request time until the
+author adds `@guard public` (or a protective guard). Access is never granted by
+omission.
 
 ## Current Code Registry
 

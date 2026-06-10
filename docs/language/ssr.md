@@ -43,7 +43,10 @@ SSR is optional and must not become the default framework identity.
   page handlers.
 - The SSR addon provides a default HTTP 500 error handler contract for
   request-time SSR failures.
-- Every page source must declare `@guard`. `@guard public` marks an
+- `@guard` is optional, but a page is not public by default: a page that
+  declares no `@guard` warns (`missing_page_guard`) and its route is denied
+  (403) at request time until access is stated (see
+  [guards.md](guards.md) for the full access contract). `@guard public` marks an
   intentionally public page and must stand alone. Non-public guards use
   comma-separated guard IDs such as `@guard auth.required, billing.active`.
   Protected page guards require request-time page rendering so the page GET

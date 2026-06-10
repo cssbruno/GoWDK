@@ -132,7 +132,7 @@ view {
 		},
 	},
 	"missing_page_guard": {
-		Details: "The current guard hardening slice requires page authors to state whether a page is intentionally public or protected by application-owned guard IDs.",
+		Details: "A page that declares no @guard is not public by default. This is a warning, not a build failure: the page's route is denied (403) at request time until the author states intent. A static page is denied through the generated app's deny registry; a request-time page is denied in its own handler. Add @guard public to expose the page on purpose so access is never granted by omission.",
 		NextSteps: []string{
 			"Add @guard public when the page is intentionally public.",
 			"Add protected guard IDs such as @guard auth.required for private pages.",

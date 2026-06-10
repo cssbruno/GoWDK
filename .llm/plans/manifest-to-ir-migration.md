@@ -62,21 +62,20 @@ Issue #145 progress (compiler IR-native validation):
   until Step 5). The remaining `lang`/`lsp` manifest references are the parse
   seam itself, deferred to Step 5 by design.
 
-Pending (largest remaining work):
+- (done, Step 5 + full drop) The `internal/manifest` model is deleted. The
+  parser lowers typed AST directly into `gwdkir` records, and
+  `gwdkanalysis.BuildProgram(config, Sources)` assembles the program (replacing
+  `BuildIR(manifest)`); the caller-less `gwdkanalysis.Analyze` +
+  `manifest_lowering.go` duplicate lowering was removed. `lang`, `lsp`,
+  `cmd/gowdk`, `buildgen`, and `addons/tailwind` flow `gwdkir`/`Sources`
+  end-to-end. The `gowdk manifest` JSON report keeps its historical field names
+  but is derived from the IR (`internal/lang/manifest_json.go`, pinned by the
+  golden test); CLI report output and build artifacts verified byte-identical
+  against the pre-drop pipeline across `examples/`. Test fixtures construct
+  `gwdkir` records (compiler corpus via the `appFixture` helper).
 
-- Step 5: collapse the `AST → manifest → IR` path to `AST → IR` in
-  `gwdkanalysis`. Everything manifest-typed that remains is this one seam: the
-  parser's AST→manifest lowering (`parser/page_lower.go`, `component.go`,
-  `layout.go`), `BuildIR(manifest)`, and the `lang`/`lsp` plumbing that passes
-  parsed `manifest.Page/Component/Layout` around. Note `gwdkanalysis.Analyze` +
-  `manifest_lowering.go` are a second, currently caller-less AST→manifest
-  lowering (tests only) — Step 5 should either build `BuildIRFromAST` on that
-  analyzer entry and repoint `lang.ParseBuildFiles`, or delete it and lower
-  from the parser's AST records; today the production pipeline only uses the
-  parser-side lowering.
-- Keep public manifest JSON until a release plan deprecates it (the manifest
-  model then survives only as the JSON report shape fed by an explicit
-  IR→manifest or AST→manifest adapter).
+The migration is complete: the module has no `internal/manifest` package and
+no manifest compatibility records.
 
 ## Context
 

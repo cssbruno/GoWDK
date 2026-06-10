@@ -5,29 +5,27 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
-	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestBuildRouteMetadataSeparatesRoutesFromEndpoints(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{
+	app := appFixture{
+		Pages: []gwdkir.Page{
 			{
 				ID:     "newsletter",
 				Route:  "/newsletter",
 				Render: gowdk.SPA,
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View:    true,
-					Actions: []manifest.Action{{Name: "Subscribe"}},
+					Actions: []gwdkir.Action{{Name: "Subscribe"}},
 				},
 			},
 			{
 				ID:     "dashboard",
 				Route:  "/dashboard",
 				Render: gowdk.SSR,
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					Load: true,
 					View: true,
 				},
@@ -36,10 +34,10 @@ func TestBuildRouteMetadataSeparatesRoutesFromEndpoints(t *testing.T) {
 				ID:     "patients.index",
 				Route:  "/patients",
 				Render: gowdk.SPA,
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View:      true,
-					APIs:      []manifest.API{{Name: "List", Method: "GET", Route: "/api/patients"}},
-					Fragments: []manifest.FragmentEndpoint{{Name: "Table", Method: "GET", Route: "/patients/table", Target: "#patients", Body: "<section>Patients</section>"}},
+					APIs:      []gwdkir.API{{Name: "List", Method: "GET", Route: "/api/patients"}},
+					Fragments: []gwdkir.FragmentEndpoint{{Name: "Table", Method: "GET", Route: "/patients/table", Target: "#patients", Body: "<section>Patients</section>"}},
 				},
 			},
 		},
@@ -60,12 +58,12 @@ func TestBuildRouteMetadataSeparatesRoutesFromEndpoints(t *testing.T) {
 }
 
 func TestBuildRouteMetadataRejectsSSRWithoutAddon(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			ID:     "dashboard",
 			Route:  "/dashboard",
 			Render: gowdk.SSR,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View: true,
 			},
 		}},
@@ -78,11 +76,11 @@ func TestBuildRouteMetadataRejectsSSRWithoutAddon(t *testing.T) {
 }
 
 func TestBuildRouteMetadataRejectsHybridWithoutAddon(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Render: gowdk.Hybrid,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
 		},
 	}}}
@@ -94,11 +92,11 @@ func TestBuildRouteMetadataRejectsHybridWithoutAddon(t *testing.T) {
 }
 
 func TestBuildRouteMetadataMapsHybridWithoutExplicitLoadToHybridRoute(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Render: gowdk.Hybrid,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
 		},
 	}}}
@@ -111,11 +109,11 @@ func TestBuildRouteMetadataMapsHybridWithoutExplicitLoadToHybridRoute(t *testing
 }
 
 func TestBuildRouteMetadataMapsHybridWithLoadToHybridRoute(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Render: gowdk.Hybrid,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Load: true,
 			View: true,
 		},
@@ -243,8 +241,8 @@ func assertInfo(t *testing.T, infos []RouteInfo, code string, pageID string) {
 // production IR path before deriving route metadata, mirroring the deleted
 // manifest-typed BuildRouteMetadata entrypoint these tests were written
 // against.
-func buildRouteMetadata(config gowdk.Config, app manifest.Manifest) (RouteMetadata, error) {
-	ir := gwdkanalysis.BuildIR(config, app)
+func buildRouteMetadata(config gowdk.Config, app appFixture) (RouteMetadata, error) {
+	ir := app.program(config)
 	if err := ValidateProgram(config, ir); err != nil {
 		return RouteMetadata{}, err
 	}

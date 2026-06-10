@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
@@ -17,10 +17,10 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 			InputType:   "SubscribeInput",
 			InputFields: []string{"email"},
 			Redirect:    "/newsletter?ok=1",
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				FunctionName: "Subscribe",
-				Signature:    manifest.BackendSignatureActionForm,
+				Signature:    source.BackendSignatureActionForm,
 				InputType:    "SubscribeInput",
 			},
 			BackendAlias: "newsletter",
@@ -30,10 +30,10 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 			APIName: "Health",
 			Method:  "GET",
 			Route:   "/api/health",
-			Binding: manifest.BackendBinding{
-				Status:       manifest.BackendBindingBound,
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
 				FunctionName: "Health",
-				Signature:    manifest.BackendSignatureAPI,
+				Signature:    source.BackendSignatureAPI,
 			},
 			BackendAlias: "status",
 		}},
@@ -76,8 +76,8 @@ func TestBackendAdapterIRCapturesFallbackMetadata(t *testing.T) {
 		ActionName: "Subscribe",
 		Method:     "POST",
 		Route:      "/newsletter",
-		Binding: manifest.BackendBinding{
-			Status:  manifest.BackendBindingMissing,
+		Binding: source.BackendBinding{
+			Status:  source.BackendBindingMissing,
 			Message: "missing Subscribe",
 		},
 	}}})
@@ -85,7 +85,7 @@ func TestBackendAdapterIRCapturesFallbackMetadata(t *testing.T) {
 	if len(ir.Fallbacks) != 1 {
 		t.Fatalf("expected one fallback, got %#v", ir.Fallbacks)
 	}
-	if ir.Fallbacks[0].Status != manifest.BackendBindingMissing || ir.Fallbacks[0].Endpoint.Path != "/newsletter" {
+	if ir.Fallbacks[0].Status != source.BackendBindingMissing || ir.Fallbacks[0].Endpoint.Path != "/newsletter" {
 		t.Fatalf("unexpected fallback metadata: %#v", ir.Fallbacks[0])
 	}
 }
@@ -99,7 +99,7 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 			ImportPath:  "example.com/app/contracts/patients",
 			Type:        "GetPatientPage",
 			Result:      "PatientPageData",
-			InputFields: []manifest.BackendInputField{{FieldName: "Filter", FormName: "filter", Type: "string"}},
+			InputFields: []source.BackendInputField{{FieldName: "Filter", FormName: "filter", Type: "string"}},
 			Method:      "GET",
 			Path:        "/patients",
 			Status:      gwdkir.ContractBindingMissing,
@@ -119,7 +119,7 @@ func TestBackendAdapterIRCapturesContractExposureMetadata(t *testing.T) {
 			Result:      "CreatePatientResult",
 			Roles:       []string{"web"},
 			Guards:      []string{"auth.required"},
-			InputFields: []manifest.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
+			InputFields: []source.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
 			Method:      "POST",
 			Path:        "/patients",
 			Status:      gwdkir.ContractBindingBound,

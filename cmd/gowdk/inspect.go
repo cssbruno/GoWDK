@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/lang"
 )
 
@@ -29,7 +28,7 @@ func inspectIR(args []string) error {
 		return err
 	}
 
-	app, diagnostics := lang.CheckFiles(options.Config, paths)
+	checked, diagnostics := lang.CheckFiles(options.Config, paths)
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
@@ -37,7 +36,7 @@ func inspectIR(args []string) error {
 		return fmt.Errorf("inspect ir failed")
 	}
 
-	ir := gwdkanalysis.BuildIR(options.Config, app)
+	ir := checked.IR
 	if err := linkIRContractReferences(&ir, "."); err != nil {
 		return err
 	}

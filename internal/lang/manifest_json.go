@@ -1,4 +1,4 @@
-package manifest
+package lang
 
 import (
 	"encoding/json"
@@ -6,11 +6,17 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-// PublicSchemaVersion is the current gowdk manifest JSON schema version.
-const PublicSchemaVersion = 1
+// ManifestSchemaVersion is the current gowdk manifest JSON schema version.
+const ManifestSchemaVersion = 1
+
+// The manifest JSON report keeps the historical field names of the public
+// manifest model but is derived from the compiler IR; the manifest model
+// itself no longer exists.
 
 type manifestJSON struct {
 	Version         int                      `json:"version"`
@@ -169,21 +175,21 @@ type artifactJSON struct {
 }
 
 type backendBindingJSON struct {
-	Kind         string               `json:"kind"`
-	PageID       string               `json:"pageId"`
-	Source       string               `json:"source,omitempty"`
-	BlockName    string               `json:"blockName"`
-	Method       string               `json:"method,omitempty"`
-	Route        string               `json:"route"`
-	ImportPath   string               `json:"importPath,omitempty"`
-	PackageName  string               `json:"packageName,omitempty"`
-	FunctionName string               `json:"functionName"`
-	Signature    BackendSignatureKind `json:"signature,omitempty"`
-	InputType    string               `json:"inputType,omitempty"`
-	InputPointer bool                 `json:"inputPointer,omitempty"`
-	InputFields  []backendInputJSON   `json:"inputFields,omitempty"`
-	Status       BackendBindingStatus `json:"status"`
-	Message      string               `json:"message,omitempty"`
+	Kind         string                      `json:"kind"`
+	PageID       string                      `json:"pageId"`
+	Source       string                      `json:"source,omitempty"`
+	BlockName    string                      `json:"blockName"`
+	Method       string                      `json:"method,omitempty"`
+	Route        string                      `json:"route"`
+	ImportPath   string                      `json:"importPath,omitempty"`
+	PackageName  string                      `json:"packageName,omitempty"`
+	FunctionName string                      `json:"functionName"`
+	Signature    source.BackendSignatureKind `json:"signature,omitempty"`
+	InputType    string                      `json:"inputType,omitempty"`
+	InputPointer bool                        `json:"inputPointer,omitempty"`
+	InputFields  []backendInputJSON          `json:"inputFields,omitempty"`
+	Status       source.BackendBindingStatus `json:"status"`
+	Message      string                      `json:"message,omitempty"`
 }
 
 type backendInputJSON struct {
@@ -192,22 +198,11 @@ type backendInputJSON struct {
 	Type      string `json:"type"`
 }
 
-func metadataJSONFor(metadata PageMetadata) *metadataJSON {
-	if metadata.Title == "" && metadata.Description == "" && metadata.Canonical == "" && metadata.Image == "" {
-		return nil
-	}
-	return &metadataJSON{
-		Title:       metadata.Title,
-		Description: metadata.Description,
-		Canonical:   metadata.Canonical,
-		Image:       metadata.Image,
-	}
-}
-
-// MarshalJSON emits the route manifest shape consumed by generated binaries.
-func (app Manifest) MarshalJSON() ([]byte, error) {
+// marshalManifestJSON emits the manifest JSON report from the validated IR
+// program and its backend handler binding records.
+func marshalManifestJSON(result CheckResult, defaultMode gowdk.RenderMode) ([]byte, error) {
 	pages := map[string]pageJSON{}
-	for _, page := range app.Pages {
+	for _, page := range applyDefaultRenderMode(result.IR.Pages, defaultMode) {
 		dependencies := pageDependencies(page)
 		pages[page.ID] = pageJSON{
 			Source:          page.Source,
@@ -222,8 +217,8 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 			Layouts:         page.Layouts,
 			DynamicParams:   page.DynamicParams(),
 			RouteParams:     routeParamsJSON(page.TypedRouteParams()),
-			Paths:           page.Paths,
-			Guard:           page.Guard,
+			Paths:           page.Blocks.Paths,
+			Guard:           page.Guards,
 			CSS:             page.CSS,
 			JS:              page.JS,
 			InlineJS:        inlineScriptNames(page.InlineJS),
@@ -238,16 +233,28 @@ func (app Manifest) MarshalJSON() ([]byte, error) {
 			Artifacts:       artifactsJSON(page),
 		}
 	}
-	return json.Marshal(manifestJSON{
-		Version:         PublicSchemaVersion,
+	return json.MarshalIndent(manifestJSON{
+		Version:         ManifestSchemaVersion,
 		Pages:           pages,
-		Components:      componentsJSON(app.Components),
-		Layouts:         layoutsJSON(app.Layouts),
-		BackendBindings: backendBindingsJSON(app.BackendBindings),
-	})
+		Components:      componentsJSON(result.IR.Components),
+		Layouts:         layoutsJSON(result.IR.Layouts),
+		BackendBindings: backendBindingsJSON(result.Bindings),
+	}, "", "  ")
 }
 
-func routeParamsJSON(params []RouteParam) []routeParamJSON {
+func metadataJSONFor(metadata gwdkir.PageMetadata) *metadataJSON {
+	if metadata.Title == "" && metadata.Description == "" && metadata.Canonical == "" && metadata.Image == "" {
+		return nil
+	}
+	return &metadataJSON{
+		Title:       metadata.Title,
+		Description: metadata.Description,
+		Canonical:   metadata.Canonical,
+		Image:       metadata.Image,
+	}
+}
+
+func routeParamsJSON(params []source.RouteParam) []routeParamJSON {
 	if len(params) == 0 {
 		return nil
 	}
@@ -262,7 +269,7 @@ func routeParamsJSON(params []RouteParam) []routeParamJSON {
 	return out
 }
 
-func backendBindingsJSON(bindings []BackendBinding) []backendBindingJSON {
+func backendBindingsJSON(bindings []source.BackendBinding) []backendBindingJSON {
 	if len(bindings) == 0 {
 		return nil
 	}
@@ -289,7 +296,7 @@ func backendBindingsJSON(bindings []BackendBinding) []backendBindingJSON {
 	return out
 }
 
-func backendInputFieldsJSON(fields []BackendInputField) []backendInputJSON {
+func backendInputFieldsJSON(fields []source.BackendInputField) []backendInputJSON {
 	if len(fields) == 0 {
 		return nil
 	}
@@ -304,7 +311,7 @@ func backendInputFieldsJSON(fields []BackendInputField) []backendInputJSON {
 	return out
 }
 
-func importsJSON(imports []Import) []importJSON {
+func importsJSON(imports []gwdkir.Import) []importJSON {
 	if len(imports) == 0 {
 		return nil
 	}
@@ -315,7 +322,7 @@ func importsJSON(imports []Import) []importJSON {
 	return out
 }
 
-func usesJSON(uses []Use) []useJSON {
+func usesJSON(uses []gwdkir.Use) []useJSON {
 	if len(uses) == 0 {
 		return nil
 	}
@@ -326,9 +333,9 @@ func usesJSON(uses []Use) []useJSON {
 	return out
 }
 
-func blocksJSONFor(page Page) blocksJSON {
+func blocksJSONFor(page gwdkir.Page) blocksJSON {
 	return blocksJSON{
-		Paths:     page.Paths,
+		Paths:     page.Blocks.Paths,
 		Build:     page.Blocks.Build,
 		Load:      page.Blocks.Load,
 		View:      page.Blocks.View,
@@ -338,18 +345,7 @@ func blocksJSONFor(page Page) blocksJSON {
 	}
 }
 
-func actionNames(actions []Action) []string {
-	if len(actions) == 0 {
-		return nil
-	}
-	names := make([]string, 0, len(actions))
-	for _, action := range actions {
-		names = append(names, action.Name)
-	}
-	return names
-}
-
-func actionsJSON(actions []Action) []actionJSON {
+func actionsJSON(actions []gwdkir.Action) []actionJSON {
 	if len(actions) == 0 {
 		return nil
 	}
@@ -369,7 +365,7 @@ func actionsJSON(actions []Action) []actionJSON {
 	return out
 }
 
-func fragmentsJSON(fragments []Fragment) []fragmentJSON {
+func fragmentsJSON(fragments []gwdkir.Fragment) []fragmentJSON {
 	if len(fragments) == 0 {
 		return nil
 	}
@@ -380,18 +376,7 @@ func fragmentsJSON(fragments []Fragment) []fragmentJSON {
 	return out
 }
 
-func apiNames(apis []API) []string {
-	if len(apis) == 0 {
-		return nil
-	}
-	names := make([]string, 0, len(apis))
-	for _, api := range apis {
-		names = append(names, api.Name)
-	}
-	return names
-}
-
-func apisJSON(apis []API) []apiJSON {
+func apisJSON(apis []gwdkir.API) []apiJSON {
 	if len(apis) == 0 {
 		return nil
 	}
@@ -402,7 +387,7 @@ func apisJSON(apis []API) []apiJSON {
 	return out
 }
 
-func fragmentEndpointNames(fragments []FragmentEndpoint) []string {
+func fragmentEndpointNames(fragments []gwdkir.FragmentEndpoint) []string {
 	if len(fragments) == 0 {
 		return nil
 	}
@@ -413,7 +398,7 @@ func fragmentEndpointNames(fragments []FragmentEndpoint) []string {
 	return names
 }
 
-func fragmentEndpointsJSON(fragments []FragmentEndpoint) []fragmentEndpointJSON {
+func fragmentEndpointsJSON(fragments []gwdkir.FragmentEndpoint) []fragmentEndpointJSON {
 	if len(fragments) == 0 {
 		return nil
 	}
@@ -429,7 +414,7 @@ func fragmentEndpointsJSON(fragments []FragmentEndpoint) []fragmentEndpointJSON 
 	return out
 }
 
-func artifactsJSON(page Page) []artifactJSON {
+func artifactsJSON(page gwdkir.Page) []artifactJSON {
 	switch page.RenderMode(gowdk.SPA) {
 	case gowdk.SPA, gowdk.Action:
 	default:
@@ -453,7 +438,7 @@ func htmlArtifactPath(route string) string {
 	return path.Join(path.Clean("/" + trimmed)[1:], "index.html")
 }
 
-func pageComponents(page Page) []string {
+func pageComponents(page gwdkir.Page) []string {
 	if !page.Blocks.View || page.Blocks.ViewBody == "" {
 		return nil
 	}
@@ -464,7 +449,7 @@ func pageComponents(page Page) []string {
 	return components
 }
 
-func pageDependencies(page Page) view.Dependencies {
+func pageDependencies(page gwdkir.Page) view.Dependencies {
 	if !page.Blocks.View || page.Blocks.ViewBody == "" {
 		return view.Dependencies{}
 	}
@@ -475,7 +460,7 @@ func pageDependencies(page Page) view.Dependencies {
 	return dependencies
 }
 
-func componentsJSON(components []Component) map[string]componentJSON {
+func componentsJSON(components []gwdkir.Component) map[string]componentJSON {
 	if len(components) == 0 {
 		return nil
 	}
@@ -492,7 +477,7 @@ func componentsJSON(components []Component) map[string]componentJSON {
 			InlineJS:  inlineScriptNames(component.InlineJS),
 			Assets:    append([]string(nil), component.Assets...),
 			Props:     propsJSON(component.Props),
-			PropsType: goTypeRefJSON(component.PropsType),
+			PropsType: goRefJSON(component.PropsType),
 			State:     stateContractJSON(component.State),
 			Exports:   exportsJSON(component.Exports),
 			Emits:     emitsJSON(component.Emits),
@@ -501,7 +486,7 @@ func componentsJSON(components []Component) map[string]componentJSON {
 	return out
 }
 
-func inlineScriptNames(scripts []InlineScript) []string {
+func inlineScriptNames(scripts []source.InlineScript) []string {
 	if len(scripts) == 0 {
 		return nil
 	}
@@ -509,14 +494,14 @@ func inlineScriptNames(scripts []InlineScript) []string {
 	for index, script := range scripts {
 		name := script.Name
 		if name == "" {
-			name = InlineScriptName(index)
+			name = source.InlineScriptName(index)
 		}
 		out = append(out, name)
 	}
 	return out
 }
 
-func layoutsJSON(layouts []Layout) map[string]layoutJSON {
+func layoutsJSON(layouts []gwdkir.Layout) map[string]layoutJSON {
 	if len(layouts) == 0 {
 		return nil
 	}
@@ -532,7 +517,7 @@ func layoutsJSON(layouts []Layout) map[string]layoutJSON {
 	return out
 }
 
-func propsJSON(props []Prop) []propJSON {
+func propsJSON(props []gwdkir.Prop) []propJSON {
 	if len(props) == 0 {
 		return nil
 	}
@@ -543,7 +528,7 @@ func propsJSON(props []Prop) []propJSON {
 	return out
 }
 
-func exportsJSON(exports []Export) []propJSON {
+func exportsJSON(exports []gwdkir.Export) []propJSON {
 	if len(exports) == 0 {
 		return nil
 	}
@@ -554,7 +539,7 @@ func exportsJSON(exports []Export) []propJSON {
 	return out
 }
 
-func emitsJSON(emits []Emit) []emitJSON {
+func emitsJSON(emits []gwdkir.Emit) []emitJSON {
 	if len(emits) == 0 {
 		return nil
 	}
@@ -565,7 +550,7 @@ func emitsJSON(emits []Emit) []emitJSON {
 	return out
 }
 
-func emitParamsJSON(params []EmitParam) []emitParamJSON {
+func emitParamsJSON(params []gwdkir.EmitParam) []emitParamJSON {
 	if len(params) == 0 {
 		return nil
 	}
@@ -576,14 +561,14 @@ func emitParamsJSON(params []EmitParam) []emitParamJSON {
 	return out
 }
 
-func goTypeRefJSON(ref GoTypeRef) *goTypeJSON {
+func goRefJSON(ref gwdkir.GoRef) *goTypeJSON {
 	if ref.Name == "" {
 		return nil
 	}
 	return &goTypeJSON{Alias: ref.Alias, Name: ref.Name}
 }
 
-func stateContractJSON(state StateContract) *stateJSON {
+func stateContractJSON(state gwdkir.StateContract) *stateJSON {
 	if state.Type.Name == "" {
 		return nil
 	}

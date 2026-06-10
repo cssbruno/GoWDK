@@ -8,9 +8,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/goblockgen"
-	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -78,12 +76,12 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 }
 `)
 
-	app := bindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{{
+	app := bindBackendHandlers(appFixture{Pages: []gwdkir.Page{{
 		ID:     "Login",
 		Source: filepath.Join(root, "Login.page.gwdk"),
 		Route:  "/Login",
-		Blocks: manifest.Blocks{
-			Actions: []manifest.Action{
+		Blocks: gwdkir.Blocks{
+			Actions: []gwdkir.Action{
 				{Name: "Ping"},
 				{Name: "Login"},
 				{Name: "LoginPtr"},
@@ -92,12 +90,12 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 				{Name: "Bad"},
 				{Name: "Missing"},
 			},
-			APIs: []manifest.API{{
+			APIs: []gwdkir.API{{
 				Name:   "Session",
 				Method: "GET",
 				Route:  "/api/Session",
 			}},
-			Fragments: []manifest.FragmentEndpoint{
+			Fragments: []gwdkir.FragmentEndpoint{
 				{Name: "List", Method: "GET", Route: "/patients/list", Target: "#patients"},
 				{Name: "BrokenFragment", Method: "GET", Route: "/patients/broken", Target: "#patients"},
 				{Name: "MissingFragment", Method: "GET", Route: "/patients/missing", Target: "#patients"},
@@ -153,13 +151,13 @@ func LoadBroken() map[string]any {
 }
 `)
 
-	app := bindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{
+	app := bindBackendHandlers(appFixture{Pages: []gwdkir.Page{
 		{
 			ID:     "dashboard",
 			Source: filepath.Join(root, "dashboard.page.gwdk"),
 			Route:  "/dashboard",
 			Render: gowdk.SSR,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Load: true,
 			},
 		},
@@ -168,7 +166,7 @@ func LoadBroken() map[string]any {
 			Source: filepath.Join(root, "profile.page.gwdk"),
 			Route:  "/profile",
 			Render: gowdk.SSR,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Load: true,
 			},
 		},
@@ -177,7 +175,7 @@ func LoadBroken() map[string]any {
 			Source: filepath.Join(root, "broken.page.gwdk"),
 			Route:  "/broken",
 			Render: gowdk.SSR,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Load: true,
 			},
 		},
@@ -186,7 +184,7 @@ func LoadBroken() map[string]any {
 			Source: filepath.Join(root, "missing.page.gwdk"),
 			Route:  "/missing",
 			Render: gowdk.SSR,
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Load: true,
 			},
 		},
@@ -208,19 +206,19 @@ func LoadBroken() map[string]any {
 
 func TestBindBackendHandlersBindsInlineSSRScriptLoad(t *testing.T) {
 	root := t.TempDir()
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:      "dashboard",
 		Package: "pages",
 		Source:  filepath.Join(root, "dashboard.page.gwdk"),
 		Route:   "/dashboard",
 		Render:  gowdk.SSR,
-		Imports: []manifest.Import{{
+		Imports: []gwdkir.Import{{
 			Alias: "ssr",
 			Path:  ssrImportPath,
 		}},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Load: true,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Target: "ssr",
 				Body: `func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	return map[string]any{"user": "Ada"}, nil
@@ -229,7 +227,7 @@ func TestBindBackendHandlersBindsInlineSSRScriptLoad(t *testing.T) {
 		},
 	}
 
-	app := bindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{page}})
+	app := bindBackendHandlers(appFixture{Pages: []gwdkir.Page{page}})
 	bindings := compilerBindingsByBlock(app.BackendBindings)
 	binding := bindings["LoadDashboard"]
 	if binding.Status != source.BackendBindingBound || binding.Signature != source.BackendSignatureLoadError {
@@ -245,29 +243,29 @@ func TestBindBackendHandlersBindsInlineSSRScriptLoad(t *testing.T) {
 
 func TestBindBackendHandlersBindsDefaultInlineGoBlockEndpoints(t *testing.T) {
 	root := t.TempDir()
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:      "home",
 		Package: "pages",
 		Source:  filepath.Join(root, "home.page.gwdk"),
 		Route:   "/",
-		Blocks: manifest.Blocks{
-			Actions: []manifest.Action{{
+		Blocks: gwdkir.Blocks{
+			Actions: []gwdkir.Action{{
 				Name:   "Subscribe",
 				Method: "POST",
 				Route:  "/newsletter",
 			}},
-			APIs: []manifest.API{{
+			APIs: []gwdkir.API{{
 				Name:   "Session",
 				Method: "GET",
 				Route:  "/api/session",
 			}},
-			Fragments: []manifest.FragmentEndpoint{{
+			Fragments: []gwdkir.FragmentEndpoint{{
 				Name:   "List",
 				Method: "GET",
 				Route:  "/items",
 				Target: "#items",
 			}},
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Body: `import (
 	"context"
 	"net/http"
@@ -290,7 +288,7 @@ func List(context.Context) (response.Response, error) {
 		},
 	}
 
-	app := bindBackendHandlers(manifest.Manifest{Pages: []manifest.Page{page}})
+	app := bindBackendHandlers(appFixture{Pages: []gwdkir.Page{page}})
 	bindings := compilerBindingsByBlock(app.BackendBindings)
 	for _, name := range []string{"Subscribe", "Session", "List"} {
 		if bindings[name].ImportPath != goblockgen.GeneratedImportPath("pages") || bindings[name].PackageName != "pages" {
@@ -324,15 +322,15 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 	return response.Response{}, nil
 }
 `)
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:     "home",
 		Source: filepath.Join(root, "home.page.gwdk"),
 		Route:  "/",
-		Guard:  []string{"public"},
-		Blocks: manifest.Blocks{View: true, ViewBody: "<main>Home</main>"},
+		Guards: []string{"public"},
+		Blocks: gwdkir.Blocks{View: true, ViewBody: "<main>Home</main>"},
 	}}}
 
-	ir := gwdkanalysis.BuildIR(gowdk.Config{}, app)
+	ir := app.program(gowdk.Config{})
 	if err := DiscoverGoEndpoints(&ir); err != nil {
 		t.Fatal(err)
 	}
@@ -350,20 +348,20 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 func TestValidateManifestRejectsGoEndpointConflictWithGOWDKEndpoint(t *testing.T) {
 	root := t.TempDir()
 	sourcePath := filepath.Join(root, "home.page.gwdk")
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			ID:     "home",
 			Source: sourcePath,
 			Route:  "/",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: "<main>Home</main>",
-				APIs:     []manifest.API{{Name: "Session", Method: "GET", Route: "/api/session"}},
+				APIs:     []gwdkir.API{{Name: "Session", Method: "GET", Route: "/api/session"}},
 			},
 		}},
-		Endpoints: []manifest.EndpointDeclaration{{
+		Endpoints: []gwdkir.GoEndpoint{{
 			Kind:       "api",
-			SourceKind: manifest.EndpointSourceGo,
+			SourceKind: gwdkir.EndpointSourceGo,
 			Package:    "api",
 			Source:     filepath.Join(root, "handlers.go"),
 			Name:       "Session",
@@ -382,12 +380,12 @@ func TestValidateManifestRejectsGoEndpointConflictWithGOWDKEndpoint(t *testing.T
 }
 
 func TestValidateBackendBindingPolicyFailsProductionMissingHandler(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:     "login",
 		Source: filepath.Join(t.TempDir(), "login.page.gwdk"),
 		Route:  "/login",
-		Blocks: manifest.Blocks{
-			Actions: []manifest.Action{{Name: "Login", Method: "POST"}},
+		Blocks: gwdkir.Blocks{
+			Actions: []gwdkir.Action{{Name: "Login", Method: "POST"}},
 		},
 	}}}
 
@@ -405,7 +403,7 @@ func TestValidateBackendBindingPolicyFailsProductionMissingHandler(t *testing.T)
 }
 
 func TestValidateBackendBindingPolicyAllowsDevelopmentMissingHandler(t *testing.T) {
-	app := manifest.Manifest{BackendBindings: []manifest.BackendBinding{{
+	app := appFixture{BackendBindings: []source.BackendBinding{{
 		Kind:         actionHandlerKind,
 		PageID:       "login",
 		BlockName:    "Login",
@@ -421,7 +419,7 @@ func TestValidateBackendBindingPolicyAllowsDevelopmentMissingHandler(t *testing.
 }
 
 func TestValidateBackendBindingPolicyAllowsExplicitProductionStubMode(t *testing.T) {
-	app := manifest.Manifest{BackendBindings: []manifest.BackendBinding{{
+	app := appFixture{BackendBindings: []source.BackendBinding{{
 		Kind:         apiHandlerKind,
 		PageID:       "session",
 		BlockName:    "Session",
@@ -440,7 +438,7 @@ func TestValidateBackendBindingPolicyAllowsExplicitProductionStubMode(t *testing
 	}
 }
 
-func assertBinding(t *testing.T, binding manifest.BackendBinding, status source.BackendBindingStatus, signature source.BackendSignatureKind, inputType string, inputPointer bool) {
+func assertBinding(t *testing.T, binding source.BackendBinding, status source.BackendBindingStatus, signature source.BackendSignatureKind, inputType string, inputPointer bool) {
 	t.Helper()
 	if binding.Status != status || binding.Signature != signature || binding.InputType != inputType || binding.InputPointer != inputPointer {
 		t.Fatalf("unexpected binding: %#v", binding)
@@ -458,8 +456,8 @@ func assertInputFields(t *testing.T, fields []source.BackendInputField, expected
 	}
 }
 
-func compilerBindingsByBlock(bindings []manifest.BackendBinding) map[string]manifest.BackendBinding {
-	out := map[string]manifest.BackendBinding{}
+func compilerBindingsByBlock(bindings []source.BackendBinding) map[string]source.BackendBinding {
+	out := map[string]source.BackendBinding{}
 	for _, binding := range bindings {
 		out[binding.BlockName] = binding
 	}
@@ -476,14 +474,14 @@ func writeCompilerTestFile(t *testing.T, path string, content string) {
 	}
 }
 
-// bindBackendHandlers routes a manifest fixture through the production IR
-// binding path and mirrors the records back onto the manifest shape these
-// tests assert against.
-func bindBackendHandlers(app manifest.Manifest) manifest.Manifest {
-	ir := gwdkanalysis.BuildIR(gowdk.Config{}, app)
+// bindBackendHandlers routes a fixture through the production IR binding path
+// and mirrors the records back onto the fixture shape these tests assert
+// against.
+func bindBackendHandlers(app appFixture) appFixture {
+	ir := app.program(gowdk.Config{})
 	bindings := BindBackendHandlers(&ir)
 	app.BackendBindings = bindings
-	loadBindings := map[string]manifest.BackendBinding{}
+	loadBindings := map[string]source.BackendBinding{}
 	for _, binding := range bindings {
 		if binding.Kind == loadHandlerKind {
 			loadBindings[binding.PageID] = binding
@@ -491,14 +489,21 @@ func bindBackendHandlers(app manifest.Manifest) manifest.Manifest {
 	}
 	for index := range app.Pages {
 		if binding, ok := loadBindings[app.Pages[index].ID]; ok {
-			app.Pages[index].LoadBinding = binding
+			app.Pages[index].LoadBinding = gwdkir.Binding{
+				Status:       binding.Status,
+				Message:      binding.Message,
+				ImportPath:   binding.ImportPath,
+				PackageName:  binding.PackageName,
+				FunctionName: binding.FunctionName,
+				Signature:    binding.Signature,
+			}
 		}
 	}
 	return app
 }
 
-func validateBackendBindingPolicy(config gowdk.Config, app manifest.Manifest) error {
-	return ValidateBackendBindingPolicyIR(config, gwdkanalysis.BuildIR(config, app))
+func validateBackendBindingPolicy(config gowdk.Config, app appFixture) error {
+	return ValidateBackendBindingPolicyIR(config, app.program(config))
 }
 
 func TestValidateBackendBindingPolicyIRSeesMissingLoadBinding(t *testing.T) {

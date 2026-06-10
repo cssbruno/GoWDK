@@ -4,7 +4,6 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
-	"github.com/cssbruno/gowdk/internal/manifest"
 )
 
 func (server *Server) hoverItems(currentURI string) []completionItem {
@@ -97,7 +96,7 @@ func (server *Server) projectHoverItems(currentURI string) []completionItem {
 }
 
 func (server *Server) openProjectIR() (gwdkir.Program, map[string]document) {
-	app := manifest.Manifest{}
+	var sources gwdkanalysis.Sources
 	docsBySource := map[string]document{}
 	for _, doc := range server.documents {
 		source := []byte(doc.Text)
@@ -107,23 +106,23 @@ func (server *Server) openProjectIR() (gwdkir.Program, map[string]document) {
 			if diagnostics.HasErrors() {
 				continue
 			}
-			app.Pages = append(app.Pages, page)
+			sources.Pages = append(sources.Pages, page)
 			docsBySource[page.Source] = doc
 		case lang.FileKindComponent:
 			component, diagnostics := lang.ParseComponentSource(doc.Path, source)
 			if diagnostics.HasErrors() {
 				continue
 			}
-			app.Components = append(app.Components, component)
+			sources.Components = append(sources.Components, component)
 			docsBySource[component.Source] = doc
 		case lang.FileKindLayout:
 			layout, diagnostics := lang.ParseLayoutSource(doc.Path, source)
 			if diagnostics.HasErrors() {
 				continue
 			}
-			app.Layouts = append(app.Layouts, layout)
+			sources.Layouts = append(sources.Layouts, layout)
 			docsBySource[layout.Source] = doc
 		}
 	}
-	return gwdkanalysis.BuildIR(server.config, app), docsBySource
+	return gwdkanalysis.BuildProgram(server.config, sources), docsBySource
 }

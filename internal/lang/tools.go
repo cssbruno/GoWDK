@@ -13,7 +13,6 @@ import (
 	"github.com/cssbruno/gowdk/internal/contractscan"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/parser"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -30,10 +29,10 @@ const (
 )
 
 // ParseFile reads and parses one .gwdk file.
-func ParseFile(path string) (manifest.Page, Diagnostics) {
+func ParseFile(path string) (gwdkir.Page, Diagnostics) {
 	source, err := os.ReadFile(path)
 	if err != nil {
-		return manifest.Page{}, Diagnostics{{
+		return gwdkir.Page{}, Diagnostics{{
 			File:     path,
 			Severity: "error",
 			Message:  err.Error(),
@@ -44,13 +43,13 @@ func ParseFile(path string) (manifest.Page, Diagnostics) {
 }
 
 // ParseSource parses one .gwdk source buffer.
-func ParseSource(path string, source []byte) (manifest.Page, Diagnostics) {
+func ParseSource(path string, source []byte) (gwdkir.Page, Diagnostics) {
 	_, diagnostics := Lex(string(source))
 	for i := range diagnostics {
 		diagnostics[i].File = path
 	}
 	if diagnostics.HasErrors() {
-		return manifest.Page{}, diagnostics
+		return gwdkir.Page{}, diagnostics
 	}
 
 	page, err := parser.ParsePageWithDefaultID(source, derivedPageID(path))
@@ -132,14 +131,14 @@ func derivedPageID(path string) string {
 	return strings.TrimSpace(base)
 }
 
-// ParseFiles parses multiple .gwdk files into a manifest.
-func ParseFiles(paths []string) (manifest.Manifest, Diagnostics) {
+// ParseFiles parses multiple .gwdk files into IR source records.
+func ParseFiles(paths []string) (gwdkanalysis.Sources, Diagnostics) {
 	return ParseBuildFiles(paths)
 }
 
 // ParseBuildFiles parses explicit page and component files for build commands.
-func ParseBuildFiles(paths []string) (manifest.Manifest, Diagnostics) {
-	var app manifest.Manifest
+func ParseBuildFiles(paths []string) (gwdkanalysis.Sources, Diagnostics) {
+	var app gwdkanalysis.Sources
 	var diagnostics Diagnostics
 	for _, path := range paths {
 		source, err := os.ReadFile(path)
@@ -179,13 +178,13 @@ func ParseBuildFiles(paths []string) (manifest.Manifest, Diagnostics) {
 }
 
 // ParseLayoutSource parses one in-memory .layout.gwdk source buffer.
-func ParseLayoutSource(path string, source []byte) (manifest.Layout, Diagnostics) {
+func ParseLayoutSource(path string, source []byte) (gwdkir.Layout, Diagnostics) {
 	_, diagnostics := Lex(string(source))
 	for i := range diagnostics {
 		diagnostics[i].File = path
 	}
 	if diagnostics.HasErrors() {
-		return manifest.Layout{}, diagnostics
+		return gwdkir.Layout{}, diagnostics
 	}
 
 	layout, err := parser.ParseLayout(source)
@@ -204,13 +203,13 @@ func ParseLayoutSource(path string, source []byte) (manifest.Layout, Diagnostics
 }
 
 // ParseComponentSource parses one in-memory .cmp.gwdk source buffer.
-func ParseComponentSource(path string, source []byte) (manifest.Component, Diagnostics) {
+func ParseComponentSource(path string, source []byte) (gwdkir.Component, Diagnostics) {
 	_, diagnostics := Lex(string(source))
 	for i := range diagnostics {
 		diagnostics[i].File = path
 	}
 	if diagnostics.HasErrors() {
-		return manifest.Component{}, diagnostics
+		return gwdkir.Component{}, diagnostics
 	}
 
 	component, err := parser.ParseComponent(source)
@@ -275,20 +274,25 @@ func isAnnotation(text, annotation string) bool {
 	return next == ' ' || next == '\t'
 }
 
-// CheckFiles parses and validates .gwdk files. The returned manifest carries
-// the discovered standalone Go endpoints and backend handler bindings so the
-// public manifest JSON report stays complete.
-func CheckFiles(config gowdk.Config, paths []string) (manifest.Manifest, Diagnostics) {
-	app, diagnostics := ParseFiles(paths)
+// CheckResult is the validated program produced by CheckFiles: the IR with
+// discovered standalone Go endpoints and backend handler bindings attached,
+// plus the flat binding record list for the manifest JSON report.
+type CheckResult struct {
+	IR       gwdkir.Program
+	Bindings []source.BackendBinding
+}
+
+// CheckFiles parses and validates .gwdk files.
+func CheckFiles(config gowdk.Config, paths []string) (CheckResult, Diagnostics) {
+	sources, diagnostics := ParseFiles(paths)
 	if diagnostics.HasErrors() {
-		return app, diagnostics
+		return CheckResult{}, diagnostics
 	}
-	ir := gwdkanalysis.BuildIR(config, app)
-	if err := compiler.DiscoverGoEndpoints(&ir); err != nil {
-		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
-		return app, diagnostics
+	result := CheckResult{IR: gwdkanalysis.BuildProgram(config, sources)}
+	if err := compiler.DiscoverGoEndpoints(&result.IR); err != nil {
+		diagnostics = append(diagnostics, compilerDiagnostics(err, result.IR)...)
+		return result, diagnostics
 	}
-	app.Endpoints = append(app.Endpoints, manifestEndpointsFromIR(ir.GoEndpoints[len(app.Endpoints):])...)
 	validate := compiler.ValidateProgram
 	if len(paths) == 1 {
 		// A single file can never satisfy cross-file checks (use packages,
@@ -296,63 +300,18 @@ func CheckFiles(config gowdk.Config, paths []string) (manifest.Manifest, Diagnos
 		// false project-level errors.
 		validate = compiler.ValidateSourceProgram
 	}
-	if err := validate(config, ir); err != nil {
-		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
+	if err := validate(config, result.IR); err != nil {
+		diagnostics = append(diagnostics, compilerDiagnostics(err, result.IR)...)
 	}
-	diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)
+	diagnostics = append(diagnostics, accessibilityDiagnostics(result.IR)...)
 	if !diagnostics.HasErrors() {
-		applyBackendBindings(&app, compiler.BindBackendHandlers(&ir))
-		diagnostics = append(diagnostics, validateContractReferences(config, ir, app)...)
+		result.Bindings = compiler.BindBackendHandlers(&result.IR)
+		diagnostics = append(diagnostics, validateContractReferences(config, result.IR)...)
 	}
-	return app, diagnostics
+	return result, diagnostics
 }
 
-// manifestEndpointsFromIR mirrors discovered standalone Go endpoints back into
-// their manifest declaration form for the public manifest JSON report. The copy
-// is one-to-one.
-func manifestEndpointsFromIR(endpoints []gwdkir.GoEndpoint) []manifest.EndpointDeclaration {
-	if len(endpoints) == 0 {
-		return nil
-	}
-	out := make([]manifest.EndpointDeclaration, 0, len(endpoints))
-	for _, endpoint := range endpoints {
-		out = append(out, manifest.EndpointDeclaration{
-			Kind:          endpoint.Kind,
-			SourceKind:    manifest.EndpointSource(endpoint.SourceKind),
-			Package:       endpoint.Package,
-			Source:        endpoint.Source,
-			Name:          endpoint.Name,
-			Method:        endpoint.Method,
-			Route:         endpoint.Route,
-			ErrorPage:     endpoint.ErrorPage,
-			Span:          endpoint.Span,
-			RouteSpan:     endpoint.RouteSpan,
-			RouteParams:   append([]source.NamedSpan(nil), endpoint.RouteParams...),
-			ErrorPageSpan: endpoint.ErrorPageSpan,
-		})
-	}
-	return out
-}
-
-// applyBackendBindings mirrors backend handler binding records onto the
-// manifest for the public manifest JSON report, matching what handler binding
-// attached to the IR.
-func applyBackendBindings(app *manifest.Manifest, bindings []manifest.BackendBinding) {
-	app.BackendBindings = bindings
-	loadBindings := map[string]manifest.BackendBinding{}
-	for _, binding := range bindings {
-		if binding.Kind == "load" {
-			loadBindings[binding.PageID] = binding
-		}
-	}
-	for index := range app.Pages {
-		if binding, ok := loadBindings[app.Pages[index].ID]; ok {
-			app.Pages[index].LoadBinding = binding
-		}
-	}
-}
-
-func validateContractReferences(config gowdk.Config, ir gwdkir.Program, app manifest.Manifest) Diagnostics {
+func validateContractReferences(config gowdk.Config, ir gwdkir.Program) Diagnostics {
 	report, err := contractscan.Scan(".")
 	if err != nil {
 		return Diagnostics{{Severity: "error", Message: fmt.Sprintf("scan Go contracts: %v", err)}}
@@ -363,7 +322,7 @@ func validateContractReferences(config gowdk.Config, ir gwdkir.Program, app mani
 	}
 	ir.ContractRefs = contractscan.LinkReferences(ir.ContractRefs, report)
 	if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
-		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
+		diagnostics = append(diagnostics, compilerDiagnostics(err, ir)...)
 	}
 	return diagnostics
 }
@@ -383,43 +342,44 @@ func contractScanDiagnostics(scanDiagnostics []contractscan.Diagnostic) Diagnost
 }
 
 // CheckSource parses and validates one in-memory .gwdk source buffer.
-func CheckSource(config gowdk.Config, path string, source []byte) (manifest.Page, Diagnostics) {
+func CheckSource(config gowdk.Config, path string, source []byte) (gwdkir.Page, Diagnostics) {
 	switch ClassifySource(path, source) {
 	case FileKindComponent:
 		component, diagnostics := ParseComponentSource(path, source)
 		if diagnostics.HasErrors() {
-			return manifest.Page{}, diagnostics
+			return gwdkir.Page{}, diagnostics
 		}
-		app := manifest.Manifest{Components: []manifest.Component{component}}
-		if err := compiler.ValidateSourceProgram(config, gwdkanalysis.BuildIR(config, app)); err != nil {
-			diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
+		ir := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{Components: []gwdkir.Component{component}})
+		if err := compiler.ValidateSourceProgram(config, ir); err != nil {
+			diagnostics = append(diagnostics, compilerDiagnostics(err, ir)...)
 		}
-		diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)
-		return manifest.Page{}, diagnostics
+		diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
+		return gwdkir.Page{}, diagnostics
 	case FileKindLayout:
 		layout, diagnostics := ParseLayoutSource(path, source)
 		if diagnostics.HasErrors() {
-			return manifest.Page{}, diagnostics
+			return gwdkir.Page{}, diagnostics
 		}
-		diagnostics = append(diagnostics, accessibilityDiagnostics(manifest.Manifest{Layouts: []manifest.Layout{layout}})...)
-		return manifest.Page{}, diagnostics
+		ir := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{Layouts: []gwdkir.Layout{layout}})
+		diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
+		return gwdkir.Page{}, diagnostics
 	case FileKindAsset, FileKindPlugin:
 		_, diagnostics := Lex(string(source))
 		for i := range diagnostics {
 			diagnostics[i].File = path
 		}
-		return manifest.Page{}, diagnostics
+		return gwdkir.Page{}, diagnostics
 	}
 
 	page, diagnostics := ParseSource(path, source)
 	if diagnostics.HasErrors() {
 		return page, diagnostics
 	}
-	app := manifest.Manifest{Pages: []manifest.Page{page}}
-	if err := compiler.ValidateSourceProgram(config, gwdkanalysis.BuildIR(config, app)); err != nil {
-		diagnostics = append(diagnostics, compilerDiagnostics(err, app)...)
+	ir := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{Pages: []gwdkir.Page{page}})
+	if err := compiler.ValidateSourceProgram(config, ir); err != nil {
+		diagnostics = append(diagnostics, compilerDiagnostics(err, ir)...)
 	}
-	diagnostics = append(diagnostics, accessibilityDiagnostics(app)...)
+	diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
 	return page, diagnostics
 }
 
@@ -438,36 +398,35 @@ func CheckJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
 	return append(payload, '\n'), diagnostics
 }
 
-// ManifestJSON returns the manifest JSON for parsed and validated files.
+// ManifestJSON returns the manifest JSON report for parsed and validated
+// files. The report shape is derived from the compiler IR.
 func ManifestJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
-	app, diagnostics := CheckFiles(config, paths)
+	result, diagnostics := CheckFiles(config, paths)
 	if diagnostics.HasErrors() {
 		return nil, diagnostics
 	}
-	app = applyDefaultRenderMode(app, config.Render.DefaultMode())
-	payload, err := json.MarshalIndent(app, "", "  ")
+	payload, err := marshalManifestJSON(result, config.Render.DefaultMode())
 	if err != nil {
 		return nil, Diagnostics{{Severity: "error", Message: err.Error()}}
 	}
 	return append(payload, '\n'), diagnostics
 }
 
-func applyDefaultRenderMode(app manifest.Manifest, defaultMode gowdk.RenderMode) manifest.Manifest {
+func applyDefaultRenderMode(pages []gwdkir.Page, defaultMode gowdk.RenderMode) []gwdkir.Page {
 	if defaultMode == "" || defaultMode == gowdk.SPA {
-		return app
+		return pages
 	}
-	pages := append([]manifest.Page(nil), app.Pages...)
-	for i := range pages {
-		if pages[i].Render == "" {
-			pages[i].Render = defaultMode
+	out := append([]gwdkir.Page(nil), pages...)
+	for i := range out {
+		if out[i].Render == "" {
+			out[i].Render = defaultMode
 		}
 	}
-	app.Pages = pages
-	return app
+	return out
 }
 
-func compilerDiagnostics(err error, app manifest.Manifest) Diagnostics {
-	sources := pageSources(app)
+func compilerDiagnostics(err error, ir gwdkir.Program) Diagnostics {
+	sources := pageSources(ir)
 	switch typed := err.(type) {
 	case compiler.ValidationErrors:
 		diagnostics := make(Diagnostics, 0, len(typed))
@@ -550,11 +509,11 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 	return ""
 }
 
-func sourcePosition(position manifest.SourcePosition) Position {
+func sourcePosition(position source.SourcePosition) Position {
 	return Position{Line: position.Line, Column: position.Column}
 }
 
-func sourceSpanRange(span manifest.SourceSpan) *Range {
+func sourceSpanRange(span source.SourceSpan) *Range {
 	if span.Start.Line <= 0 || span.Start.Column <= 0 || span.End.Line <= 0 || span.End.Column <= 0 {
 		return nil
 	}
@@ -571,14 +530,14 @@ func diagnosticSource(validation compiler.ValidationError, sources map[string]st
 	return ""
 }
 
-func pageSources(app manifest.Manifest) map[string]string {
+func pageSources(ir gwdkir.Program) map[string]string {
 	sources := map[string]string{}
-	for _, page := range app.Pages {
+	for _, page := range ir.Pages {
 		if page.Source != "" && sources[page.ID] == "" {
 			sources[page.ID] = page.Source
 		}
 	}
-	for _, component := range app.Components {
+	for _, component := range ir.Components {
 		if component.Source != "" && sources[component.Name] == "" {
 			sources[component.Name] = component.Source
 		}

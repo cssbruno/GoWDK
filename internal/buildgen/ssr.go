@@ -11,7 +11,6 @@ import (
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
@@ -26,7 +25,7 @@ type SSRArtifact struct {
 	RouteParams      []source.RouteParam
 	Guards           []string
 	HasLoad          bool
-	LoadBinding      manifest.BackendBinding
+	LoadBinding      source.BackendBinding
 	HTML             string
 	Replacements     []SSRReplacement
 	LoadReplacements []SSRLoadReplacement
@@ -42,8 +41,8 @@ type SSRLoadReplacement struct {
 	Placeholder string
 }
 
-func SSRArtifacts(config gowdk.Config, app manifest.Manifest, outputDir string) ([]SSRArtifact, error) {
-	return SSRArtifactsFromIR(config, gwdkanalysis.BuildIR(config, app), outputDir)
+func SSRArtifacts(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) ([]SSRArtifact, error) {
+	return SSRArtifactsFromIR(config, gwdkanalysis.BuildProgram(config, sources), outputDir)
 }
 
 // SSRArtifactsFromIR renders request-time page artifacts from normalized
@@ -112,7 +111,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 		RouteParams:      append([]source.RouteParam(nil), page.TypedRouteParams()...),
 		Guards:           append([]string(nil), page.Guards...),
 		HasLoad:          page.Blocks.Load,
-		LoadBinding:      manifestBackendBinding(page.LoadBinding),
+		LoadBinding:      sourceBackendBinding(page.LoadBinding),
 		HTML:             html,
 		Replacements:     replacements,
 		LoadReplacements: loadReplacements,

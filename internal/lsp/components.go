@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -130,8 +130,8 @@ func (server *Server) workspaceComponentDefinitions(doc document) map[string]com
 	if len(paths) == 0 {
 		return definitions
 	}
-	app, _ := lang.ParseBuildFiles(paths)
-	ir := gwdkanalysis.BuildIR(server.config, app)
+	sources, _ := lang.ParseBuildFiles(paths)
+	ir := gwdkanalysis.BuildProgram(server.config, sources)
 	for _, component := range ir.Components {
 		if component.Name == "" {
 			continue
@@ -193,7 +193,7 @@ func fileURI(filePath string) string {
 	return u.String()
 }
 
-func usePackagesByAlias(uses []manifest.Use) map[string]string {
+func usePackagesByAlias(uses []gwdkir.Use) map[string]string {
 	packages := map[string]string{}
 	for _, use := range uses {
 		if _, exists := packages[use.Alias]; !exists {

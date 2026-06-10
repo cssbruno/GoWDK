@@ -15,24 +15,26 @@ import (
 	"time"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 	outputDir := t.TempDir()
 	component := counterComponent()
-	component.Span = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 1, Column: 1}, End: manifest.SourcePosition{Line: 1, Column: 19}}
-	component.Blocks.Spans.View = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 3, Column: 1}, End: manifest.SourcePosition{Line: 3, Column: 7}}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	component.Span = source.SourceSpan{Start: source.SourcePosition{Line: 1, Column: 1}, End: source.SourcePosition{Line: 1, Column: 19}}
+	component.Blocks.Spans.View = source.SourceSpan{Start: source.SourcePosition{Line: 3, Column: 1}, End: source.SourcePosition{Line: 3, Column: 7}}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	result, err := Build(gowdk.Config{}, app, outputDir)
@@ -122,22 +124,22 @@ fn Add() {
   Count++
 }
 `
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:      "counter",
 			Route:   "/counter",
-			Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-			Stores: []manifest.Store{{
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []gwdkir.Store{{
 				Name: "cart",
-				Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-				Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 			}},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	result, err := Build(gowdk.Config{}, app, outputDir)
@@ -207,22 +209,22 @@ func TestJSIslandsSharePageStoreInBrowser(t *testing.T) {
 	component := counterComponent()
 	component.Blocks.Client = true
 	component.Blocks.ClientBody = `use cart`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:      "counter",
 			Route:   "/counter",
-			Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-			Stores: []manifest.Store{{
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []gwdkir.Store{{
 				Name: "cart",
-				Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-				Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 			}},
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
 		t.Fatal(err)
@@ -278,16 +280,16 @@ fn Flip() {
   Open = !Open
 }`
 	component.Blocks.ViewBody = `<section><button id="burst" g:on:click={Burst()}><span id="count">{Count}</span></button><button id="flip" g:on:click={Flip()}><span id="open">{Open}</span></button></section>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
 		t.Fatal(err)
@@ -324,16 +326,16 @@ func TestBuildRejectsComputedDependencyCycle(t *testing.T) {
 computed B string {
   return A
 }`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 	_, err := Build(gowdk.Config{}, app, outputDir)
 	if err == nil {
@@ -346,13 +348,13 @@ computed B string {
 
 func TestIslandJSSourceMapMappingsUseComponentSpans(t *testing.T) {
 	component := counterComponent()
-	component.Span = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 2, Column: 1}, End: manifest.SourcePosition{Line: 2, Column: 19}}
+	component.Span = source.SourceSpan{Start: source.SourcePosition{Line: 2, Column: 1}, End: source.SourcePosition{Line: 2, Column: 19}}
 	component.Blocks.Client = true
 	component.Blocks.ClientBody = `fn Add() {
   Count++
 }`
-	component.Blocks.Spans.Client = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 7, Column: 1}, End: manifest.SourcePosition{Line: 7, Column: 9}}
-	component.Blocks.Spans.View = manifest.SourceSpan{Start: manifest.SourcePosition{Line: 13, Column: 1}, End: manifest.SourcePosition{Line: 13, Column: 7}}
+	component.Blocks.Spans.Client = source.SourceSpan{Start: source.SourcePosition{Line: 7, Column: 1}, End: source.SourcePosition{Line: 7, Column: 9}}
+	component.Blocks.Spans.View = source.SourceSpan{Start: source.SourcePosition{Line: 13, Column: 1}, End: source.SourcePosition{Line: 13, Column: 7}}
 	source := islandJSSource(component.Name, true)
 
 	var sourceMap struct {
@@ -472,16 +474,16 @@ func generatedLineContaining(t *testing.T, source, needle string) int {
 
 func TestBuildProductionModeOmitsJSIslandSourceMaps(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{counterComponent()},
+		Components: []gwdkir.Component{counterComponent()},
 	}
 
 	result, err := Build(gowdk.Config{Build: gowdk.BuildConfig{Mode: gowdk.Production}}, app, outputDir)
@@ -524,16 +526,16 @@ func TestBuildEmitsClientFunctionHandlersForJSIsland(t *testing.T) {
   Count = next
 }`
 	component.Blocks.ViewBody = `<button g:on:click={Add(Count + 1)}>{Count}</button>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	result, err := Build(gowdk.Config{}, app, outputDir)
@@ -577,21 +579,21 @@ func TestBuildEmitsComponentEventRuntimeForJSIsland(t *testing.T) {
 	option := textComponent()
 	option.Name = "Option"
 	option.Source = "components/option.cmp.gwdk"
-	option.Emits = []manifest.Emit{{
+	option.Emits = []gwdkir.Emit{{
 		Name:   "select",
-		Params: []manifest.EmitParam{{Name: "id", Type: "string"}},
+		Params: []gwdkir.EmitParam{{Name: "id", Type: "string"}},
 	}}
 	option.Blocks.ViewBody = `<button g:on:click={emit select(Query)}>{Query}</button>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "picker",
 			Route: "/picker",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Parent /></main>`,
 			},
 		}},
-		Components: []manifest.Component{parent, option},
+		Components: []gwdkir.Component{parent, option},
 	}
 
 	result, err := Build(gowdk.Config{}, app, outputDir)
@@ -631,25 +633,25 @@ func TestBuildEmitsReactiveComponentPropRuntimeForJSIsland(t *testing.T) {
 	parent.Name = "Parent"
 	parent.Source = "components/parent.cmp.gwdk"
 	parent.Blocks.ViewBody = `<Preview label={Query} />`
-	preview := manifest.Component{
+	preview := gwdkir.Component{
 		Name:   "Preview",
 		Source: "components/preview.cmp.gwdk",
-		Props:  []manifest.Prop{{Name: "label", Type: "string"}},
-		Blocks: manifest.Blocks{
+		Props:  []gwdkir.Prop{{Name: "label", Type: "string"}},
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<p>{label}</p>`,
 		},
 	}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "preview",
 			Route: "/preview",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Parent /></main>`,
 			},
 		}},
-		Components: []manifest.Component{parent, preview},
+		Components: []gwdkir.Component{parent, preview},
 	}
 
 	result, err := Build(gowdk.Config{}, app, outputDir)
@@ -695,16 +697,16 @@ fn Add() {
   Count = Next(Count)
 }`
 	component.Blocks.ViewBody = `<button g:on:click={Add()}>{Count}</button>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	result, err := Build(gowdk.Config{}, app, outputDir)
@@ -741,16 +743,16 @@ func TestBuildEmitsEventModifierRuntimeForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
 	component := counterComponent()
 	component.Blocks.ViewBody = `<button g:on:click.prevent.stop.once.capture.debounce(250ms)={Count++}>{Count}</button><button g:on:input.throttle(1s)={Count++}>Throttle</button>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -801,16 +803,16 @@ on destroy {
   Open = false
 }`
 	component.Blocks.ViewBody = `<button g:on:click={Count++}>{Count}</button>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -860,16 +862,16 @@ fn FocusSearch() {
   searchInput.Focus()
 }`
 	component.Blocks.ViewBody = `<input g:ref={searchInput} /><button g:on:click={FocusSearch()}>Focus</button>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "search",
 			Route: "/search",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Search /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -903,16 +905,16 @@ func TestBuildEmitsGIfRuntimeUpdatesForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
 	component := counterComponent()
 	component.Blocks.ViewBody = `<section g:if={Open}><button g:on:click={Open = !Open}>{Count}</button></section><section g:else>Closed</section>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -953,16 +955,16 @@ func TestBuildEmitsNestedAndIndexExpressionsForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
 	component := nestedComponent()
 	component.Blocks.ViewBody = `<section g:if={User.Open && Items[0].Name == "first" && Flags[Count]}>{Count}</section>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "nested",
 			Route: "/nested",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Nested /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1015,16 +1017,16 @@ fn SwapFirstTwo() {
   move(Items, 1, 0)
 }`
 	component.Blocks.ViewBody = `<ul><li g:for={item, i in Items} g:key={item.ID}><button g:on:click={remove(Items, i)}>{i}: {item.Name}</button></li></ul><button g:on:click={AddItem()}>Add</button><button g:on:click={RemoveFirst()}>Remove</button><button g:on:click={SwapFirstTwo()}>Swap</button>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "list",
 			Route: "/list",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Nested /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1078,16 +1080,16 @@ func TestBuildEmitsFilterListBindingForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
 	component := filterComponent()
 	component.Blocks.ViewBody = `<label>Search <input g:bind:value={Query} /></label><ul><li g:for={item in Items} g:key={item.ID} g:if={Query == "" || contains(lower(item.Name), lower(Query))}>{item.Name}</li></ul>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "filter",
 			Route: "/filter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Filter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1131,16 +1133,16 @@ func TestBuildEmitsGoishConditionalExpressionsForJSIsland(t *testing.T) {
   Count = if Open { Count + 1 } else { 0 }
 }`
 	component.Blocks.ViewBody = `<section g:if={if Open { Count > 0 } else { false }}><button g:on:click={ToggleCount()}>{Count}</button></section>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1172,16 +1174,16 @@ func TestBuildEmitsDOMEventScopeForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
 	component := textComponent()
 	component.Blocks.ViewBody = `<input g:on:input={Query = event.value} value="" /><p>{Query}</p>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "event",
 			Route: "/event",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Search /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1216,16 +1218,16 @@ fn Toggle() {
   Open = !Open
 }`
 	component.Blocks.ViewBody = `<section g:if={Visible}>{Label}<button g:on:click={Toggle()}>{Count}</button></section>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1267,16 +1269,16 @@ computed Label string {
   return if Open { "open" } else { "closed" }
 }`
 	component.Blocks.ViewBody = `<section g:if={Visible}>{Label}</section>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1292,15 +1294,15 @@ computed Label string {
 
 func TestBuildEmitsClientBuiltinsForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
-	component := manifest.Component{
+	component := gwdkir.Component{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `computed ItemCount string {
   return string(len(Items))
@@ -1313,16 +1315,16 @@ fn SetCount() {
 			ViewBody: `<button g:on:click={SetCount()}>{ItemCount}:{Count}</button>`,
 		},
 	}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "nested",
 			Route: "/nested",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Nested /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1356,15 +1358,15 @@ fn SetCount() {
 
 func TestBuildEmitsAsyncFetchJSONRuntimeForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
-	component := manifest.Component{
+	component := gwdkir.Component{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `async fn Refresh() {
   Items = await fetchJSON[[]ui.Item]("/api/items")
@@ -1373,16 +1375,16 @@ func TestBuildEmitsAsyncFetchJSONRuntimeForJSIsland(t *testing.T) {
 			ViewBody: `<button g:on:click={Refresh()}>Refresh</button>`,
 		},
 	}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "nested",
 			Route: "/nested",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Nested /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1426,16 +1428,16 @@ func TestBuildEmitsAsyncFetchJSONRuntimeForJSIsland(t *testing.T) {
 
 func TestBuildEmitsValueBindingRuntimeForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "search",
 			Route: "/search",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Search /></main>`,
 			},
 		}},
-		Components: []manifest.Component{textComponent()},
+		Components: []gwdkir.Component{textComponent()},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1472,16 +1474,16 @@ func TestBuildEmitsTextareaAndSelectValueBindings(t *testing.T) {
 	outputDir := t.TempDir()
 	component := textComponent()
 	component.Blocks.ViewBody = `<textarea g:bind:value={Query}></textarea><select g:bind:value={Query}><option value="other">Other</option><option value="initial">Initial</option></select>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "controls",
 			Route: "/controls",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Search /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1503,16 +1505,16 @@ func TestBuildEmitsNumericValueBindingRuntimeForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
 	component := counterComponent()
 	component.Blocks.ViewBody = `<input type="number" g:bind:value={Count} />`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "number",
 			Route: "/number",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1546,16 +1548,16 @@ func TestBuildEmitsRadioValueBindingRuntimeForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
 	component := textComponent()
 	component.Blocks.ViewBody = `<input type="radio" name="choice" value="other" g:bind:value={Query} /><input type="radio" name="choice" value="initial" g:bind:value={Query} />`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "radios",
 			Route: "/radios",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Search /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1589,16 +1591,16 @@ func TestBuildEmitsCheckedBindingRuntimeForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
 	component := counterComponent()
 	component.Blocks.ViewBody = `<input type="checkbox" g:bind:checked={Open} />`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "toggle",
 			Route: "/toggle",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1631,16 +1633,16 @@ func TestBuildEmitsReactiveAttributeRuntimeForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
 	component := counterComponent()
 	component.Blocks.ViewBody = `<button disabled={Open} aria-expanded={Open} g:on:click={Open = !Open}>{Count}</button>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "attrs",
 			Route: "/attrs",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1673,16 +1675,16 @@ func TestBuildEmitsClassToggleRuntimeForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
 	component := counterComponent()
 	component.Blocks.ViewBody = `<button class="base" class:active={Open} g:on:click={Open = !Open}>{Count}</button>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "classes",
 			Route: "/classes",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1717,16 +1719,16 @@ func TestBuildEmitsStyleBindingRuntimeForJSIsland(t *testing.T) {
 	outputDir := t.TempDir()
 	component := counterComponent()
 	component.Blocks.ViewBody = `<div style="color: red" style:height.px={Count} g:on:click={Count++}>{Count}</div>`
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "styles",
 			Route: "/styles",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1758,16 +1760,16 @@ func TestBuildEmitsStyleBindingRuntimeForJSIsland(t *testing.T) {
 
 func TestBuildSerializesStateInitByGoFieldName(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "tagged",
 			Route: "/tagged",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><TaggedCounter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{taggedCounterComponent()},
+		Components: []gwdkir.Component{taggedCounterComponent()},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -1787,16 +1789,16 @@ func TestBuildSerializesStateInitByGoFieldName(t *testing.T) {
 
 func TestBuildEmitsWASMIslandAssetsOnlyWhenExplicit(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter g:island="wasm" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{counterComponent()},
+		Components: []gwdkir.Component{counterComponent()},
 	}
 
 	result, err := Build(gowdk.Config{}, app, outputDir)
@@ -1879,16 +1881,16 @@ func TestWASMIslandLoaderRunsInBrowser(t *testing.T) {
 	requireNodePlaywright(t, node)
 
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter g:island="wasm" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{counterComponent()},
+		Components: []gwdkir.Component{counterComponent()},
 	}
 	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
 		t.Fatal(err)
@@ -1918,17 +1920,17 @@ func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
 	packageDir := writeWASMIslandPackage(t, "main", requiredWASMExportsSource("Counter"))
 	outputDir := t.TempDir()
 	component := counterComponent()
-	component.WASM = manifest.WASMContract{Package: packageDir}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	component.WASM = gwdkir.WASMContract{Package: packageDir}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	result, err := Build(gowdk.Config{}, app, outputDir)
@@ -1968,13 +1970,13 @@ func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
 func TestBuildCompilesClientGoBlockMount(t *testing.T) {
 	sourceDir := t.TempDir()
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:     "home",
 			Route:  "/",
 			Source: filepath.Join(sourceDir, "home.gwdk"),
-			Blocks: manifest.Blocks{
-				GoBlocks: []manifest.GoBlock{{
+			Blocks: gwdkir.Blocks{
+				GoBlocks: []gwdkir.GoBlock{{
 					Target: "client",
 					Body: `//go:wasmexport GOWDKMountHome
 func GOWDKMountHome() uint32 { return 0 }
@@ -2032,12 +2034,12 @@ func GOWDKMountHome() uint32 { return 0 }
 
 func TestBuildKeepsDefaultGoBlockOutOfBrowser(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "home",
 			Route: "/",
-			Blocks: manifest.Blocks{
-				GoBlocks: []manifest.GoBlock{{
+			Blocks: gwdkir.Blocks{
+				GoBlocks: []gwdkir.GoBlock{{
 					Body: `func HomePageForBuild() map[string]string {
 	return map[string]string{"title": "GOWDK ships apps"}
 }
@@ -2072,17 +2074,17 @@ func TestBuildRejectsWASMIslandPackageMissingABIExports(t *testing.T) {
 	packageDir := writeWASMIslandPackage(t, "main", `func main() {}`)
 	outputDir := t.TempDir()
 	component := counterComponent()
-	component.WASM = manifest.WASMContract{Package: packageDir}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	component.WASM = gwdkir.WASMContract{Package: packageDir}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter g:island="wasm" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -2106,17 +2108,17 @@ func TestBuildRejectsWASMIslandPackageWithoutMainEntrypoint(t *testing.T) {
 	packageDir := writeWASMIslandPackage(t, "counter", `func NotMain() {}`)
 	outputDir := t.TempDir()
 	component := counterComponent()
-	component.WASM = manifest.WASMContract{Package: packageDir}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	component.WASM = gwdkir.WASMContract{Package: packageDir}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter g:island="wasm" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -2136,17 +2138,17 @@ func TestBuildSurfacesWASMIslandPackageImportErrors(t *testing.T) {
 func main() {}`)
 	outputDir := t.TempDir()
 	component := counterComponent()
-	component.WASM = manifest.WASMContract{Package: packageDir}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	component.WASM = gwdkir.WASMContract{Package: packageDir}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter g:island="wasm" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -2171,17 +2173,17 @@ func TestBuildRejectsUnsupportedWASMIslandPackageImports(t *testing.T) {
 func main() {}`)
 	outputDir := t.TempDir()
 	component := counterComponent()
-	component.WASM = manifest.WASMContract{Package: packageDir}
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	component.WASM = gwdkir.WASMContract{Package: packageDir}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "counter",
 			Route: "/counter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter g:island="wasm" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{component},
+		Components: []gwdkir.Component{component},
 	}
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
@@ -2476,16 +2478,16 @@ async function waitForCall(calls, kind) {
 
 func TestBuildAllowsJSAndWASMIslandsOnSamePage(t *testing.T) {
 	outputDir := t.TempDir()
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
 			ID:    "mixed",
 			Route: "/mixed",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Counter /><TaggedCounter g:island="wasm" /></main>`,
 			},
 		}},
-		Components: []manifest.Component{counterComponent(), taggedCounterComponent()},
+		Components: []gwdkir.Component{counterComponent(), taggedCounterComponent()},
 	}
 
 	result, err := Build(gowdk.Config{}, app, outputDir)

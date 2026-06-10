@@ -14,7 +14,6 @@ import (
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/manifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -24,14 +23,14 @@ func TestValidateManifestRejectsMissingPackageDeclaration(t *testing.T) {
 	if err := os.WriteFile(sourcePath, []byte(""), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source: sourcePath,
 		ID:     "home",
 		Route:  "/",
-		Blocks: manifest.Blocks{View: true},
+		Blocks: gwdkir.Blocks{View: true},
 	}
 
-	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}})
 	if err == nil {
 		t.Fatal("expected missing package diagnostic")
 	}
@@ -51,15 +50,15 @@ func TestValidateManifestRejectsPackageMismatchWithSiblingGoFile(t *testing.T) {
 	if err := os.WriteFile(goFile, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source:  sourcePath,
 		Package: "views",
 		ID:      "home",
 		Route:   "/",
-		Blocks:  manifest.Blocks{View: true},
+		Blocks:  gwdkir.Blocks{View: true},
 	}
 
-	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}})
 	if err == nil {
 		t.Fatal("expected package mismatch diagnostic")
 	}
@@ -79,16 +78,16 @@ func TestValidateManifestAcceptsPackageMatchingSiblingGoFile(t *testing.T) {
 	if err := os.WriteFile(goFile, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
-		Guard:   []string{"public"},
-		Blocks:  manifest.Blocks{View: true},
+		Guards:  []string{"public"},
+		Blocks:  gwdkir.Blocks{View: true},
 	}
 
-	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}}); err != nil {
 		t.Fatalf("expected matching package to validate, got %v", err)
 	}
 }
@@ -103,16 +102,16 @@ func TestValidateManifestIgnoresProjectConfigGoPackage(t *testing.T) {
 	if err := os.WriteFile(configFile, []byte("package main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source:  sourcePath,
 		Package: "css",
 		ID:      "styled",
 		Route:   "/styled",
-		Guard:   []string{"public"},
-		Blocks:  manifest.Blocks{View: true},
+		Guards:  []string{"public"},
+		Blocks:  gwdkir.Blocks{View: true},
 	}
 
-	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}}); err != nil {
 		t.Fatalf("expected project config package to be ignored, got %v", err)
 	}
 }
@@ -127,15 +126,15 @@ func TestValidateManifestReportsGoPackageParseErrors(t *testing.T) {
 	if err := os.WriteFile(goFile, []byte("package app\nfunc Bad("), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
-		Blocks:  manifest.Blocks{View: true},
+		Blocks:  gwdkir.Blocks{View: true},
 	}
 
-	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}})
 	if err == nil {
 		t.Fatal("expected Go package error diagnostic")
 	}
@@ -155,15 +154,15 @@ func TestValidateManifestReportsGoPackageTypeErrors(t *testing.T) {
 	if err := os.WriteFile(goFile, []byte("package app\n\nfunc Broken() int { return missing }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
-		Blocks:  manifest.Blocks{View: true},
+		Blocks:  gwdkir.Blocks{View: true},
 	}
 
-	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}})
 	if err == nil {
 		t.Fatal("expected Go package type-check diagnostic")
 	}
@@ -198,15 +197,15 @@ type PageCopy struct {
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
-		Guard:   []string{"public"},
-		Blocks: manifest.Blocks{
+		Guards:  []string{"public"},
+		Blocks: gwdkir.Blocks{
 			View: true,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Body: `func HomeCopy() PageCopy {
 	return PageCopy{Title: "GOWDK ships apps"}
 }`,
@@ -214,7 +213,7 @@ type PageCopy struct {
 		},
 	}
 
-	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}}); err != nil {
 		t.Fatalf("expected inline go block to type-check with sibling Go files, got %v", err)
 	}
 }
@@ -225,16 +224,16 @@ func TestValidateManifestTypeChecksDefaultScriptWithGOWDKImports(t *testing.T) {
 	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
-		Guard:   []string{"public"},
-		Imports: []manifest.Import{{Alias: "strings", Path: "strings"}},
-		Blocks: manifest.Blocks{
+		Guards:  []string{"public"},
+		Imports: []gwdkir.Import{{Alias: "strings", Path: "strings"}},
+		Blocks: gwdkir.Blocks{
 			View: true,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Body: `func HomeSlug() string {
 	return strings.ToLower("GOWDK Ships Apps")
 }`,
@@ -242,7 +241,7 @@ func TestValidateManifestTypeChecksDefaultScriptWithGOWDKImports(t *testing.T) {
 		},
 	}
 
-	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}}); err != nil {
 		t.Fatalf("expected inline go block to type-check with GOWDK imports, got %v", err)
 	}
 }
@@ -253,14 +252,14 @@ func TestValidateManifestReportsDefaultScriptTypeErrors(t *testing.T) {
 	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Span: source.SourceSpan{Start: source.SourcePosition{Line: 8, Column: 1}},
 				Body: `func BrokenCopy() string {
 	return MissingTitle
@@ -269,7 +268,7 @@ func TestValidateManifestReportsDefaultScriptTypeErrors(t *testing.T) {
 		},
 	}
 
-	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}})
 	if err == nil {
 		t.Fatal("expected inline go block type-check diagnostic")
 	}
@@ -324,14 +323,14 @@ func TestValidateManifestTypeChecksDefaultGoBlockAsStaticPackageGo(t *testing.T)
 	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source:  sourcePath,
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Body: `func StaticSeed() string {
 	return MissingSeed
 }`,
@@ -339,7 +338,7 @@ func TestValidateManifestTypeChecksDefaultGoBlockAsStaticPackageGo(t *testing.T)
 		},
 	}
 
-	err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+	err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}})
 	if err == nil {
 		t.Fatal("expected default go block type-check diagnostic")
 	}
@@ -356,16 +355,16 @@ func TestValidateManifestSkipsSiblingGoPackageForUnsavedAbsoluteSource(t *testin
 	if err := os.WriteFile(filepath.Join(root, "handlers.go"), []byte("package main\n\nfunc Broken() int { return missing }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source:  filepath.Join(root, "unsaved.page.gwdk"),
 		Package: "app",
 		ID:      "home",
 		Route:   "/",
-		Guard:   []string{"public"},
-		Blocks:  manifest.Blocks{View: true},
+		Guards:  []string{"public"},
+		Blocks:  gwdkir.Blocks{View: true},
 	}
 
-	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}}); err != nil {
 		t.Fatalf("expected unsaved absolute source to skip sibling Go package validation, got %v", err)
 	}
 }
@@ -400,36 +399,36 @@ func Email(values form.Values) string {
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		Source:  filepath.Join(sourceDir, "login.page.gwdk"),
 		Package: "auth",
 		ID:      "login",
 		Route:   "/login",
-		Guard:   []string{"public"},
-		Blocks:  manifest.Blocks{View: true},
+		Guards:  []string{"public"},
+		Blocks:  gwdkir.Blocks{View: true},
 	}
 
-	if err := validateManifest(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}}); err != nil {
+	if err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}}); err != nil {
 		t.Fatalf("expected module imports to type-check, got %v", err)
 	}
 }
 
 func TestValidateManifestAcceptsQualifiedComponentUse(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
-			Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
-			Blocks: manifest.Blocks{
+			Uses:    []gwdkir.Use{{Alias: "ui", Package: "components"}},
+			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><ui.Hero /></main>`,
 			},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Package: "components",
 			Name:    "Hero",
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<section>Hero</section>`},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<section>Hero</section>`},
 		}},
 	}
 
@@ -439,12 +438,12 @@ func TestValidateManifestAcceptsQualifiedComponentUse(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownGOWDKUsePackage(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		Package: "pages",
 		ID:      "home",
 		Route:   "/",
-		Uses:    []manifest.Use{{Alias: "ui", Package: "missing"}},
-		Blocks:  manifest.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
+		Uses:    []gwdkir.Use{{Alias: "ui", Package: "missing"}},
+		Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
 	}}}
 
 	err := validateManifest(gowdk.Config{}, app)
@@ -458,14 +457,14 @@ func TestValidateManifestRejectsUnknownGOWDKUsePackage(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownGOWDKUseAlias(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
 		}},
-		Components: []manifest.Component{{Package: "components", Name: "Hero"}},
+		Components: []gwdkir.Component{{Package: "components", Name: "Hero"}},
 	}
 
 	err := validateManifest(gowdk.Config{}, app)
@@ -479,15 +478,15 @@ func TestValidateManifestRejectsUnknownGOWDKUseAlias(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownQualifiedComponent(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
-			Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<main><ui.Missing /></main>`},
+			Uses:    []gwdkir.Use{{Alias: "ui", Package: "components"}},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main><ui.Missing /></main>`},
 		}},
-		Components: []manifest.Component{{Package: "components", Name: "Hero"}},
+		Components: []gwdkir.Component{{Package: "components", Name: "Hero"}},
 	}
 
 	err := validateManifest(gowdk.Config{}, app)
@@ -501,15 +500,15 @@ func TestValidateManifestRejectsUnknownQualifiedComponent(t *testing.T) {
 }
 
 func TestValidateManifestRejectsComponentRefToLayoutOnlyUsePackage(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
-			Uses:    []manifest.Use{{Alias: "chrome", Package: "layouts"}},
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<main><chrome.Root /></main>`},
+			Uses:    []gwdkir.Use{{Alias: "chrome", Package: "layouts"}},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main><chrome.Root /></main>`},
 		}},
-		Layouts: []manifest.Layout{{Package: "layouts", ID: "root"}},
+		Layouts: []gwdkir.Layout{{Package: "layouts", ID: "root"}},
 	}
 
 	err := validateManifest(gowdk.Config{}, app)
@@ -523,27 +522,27 @@ func TestValidateManifestRejectsComponentRefToLayoutOnlyUsePackage(t *testing.T)
 }
 
 func TestValidateManifestRejectsComponentScopedComponentRefToStoreOnlyUsePackage(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			Package: "stores",
 			ID:      "cart",
 			Route:   "/cart",
-			Imports: []manifest.Import{{
+			Imports: []gwdkir.Import{{
 				Alias: "ui",
 				Path:  "github.com/cssbruno/gowdk/testfixture/islands",
 			}},
-			Stores: []manifest.Store{{
+			Stores: []gwdkir.Store{{
 				Name: "cart",
-				Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-				Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 			}},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Cart</main>`},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Package: "marketing",
 			Name:    "Hero",
-			Uses:    []manifest.Use{{Alias: "stores", Package: "stores"}},
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<section><stores.Cart /></section>`},
+			Uses:    []gwdkir.Use{{Alias: "stores", Package: "stores"}},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<section><stores.Cart /></section>`},
 		}},
 	}
 
@@ -558,17 +557,17 @@ func TestValidateManifestRejectsComponentScopedComponentRefToStoreOnlyUsePackage
 }
 
 func TestValidateManifestAcceptsComponentScopedGOWDKUse(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{
+	app := appFixture{Components: []gwdkir.Component{
 		{
 			Package: "marketing",
 			Name:    "Hero",
-			Uses:    []manifest.Use{{Alias: "icons", Package: "icons"}},
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<section><icons.Badge /></section>`},
+			Uses:    []gwdkir.Use{{Alias: "icons", Package: "icons"}},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<section><icons.Badge /></section>`},
 		},
 		{
 			Package: "icons",
 			Name:    "Badge",
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<strong>GOWDK</strong>`},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<strong>GOWDK</strong>`},
 		},
 	}}
 
@@ -578,10 +577,10 @@ func TestValidateManifestAcceptsComponentScopedGOWDKUse(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownComponentScopedGOWDKUseAlias(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Package: "marketing",
 		Name:    "Hero",
-		Blocks:  manifest.Blocks{View: true, ViewBody: `<section><icons.Badge /></section>`},
+		Blocks:  gwdkir.Blocks{View: true, ViewBody: `<section><icons.Badge /></section>`},
 	}}}
 
 	err := validateManifest(gowdk.Config{}, app)
@@ -595,11 +594,11 @@ func TestValidateManifestRejectsUnknownComponentScopedGOWDKUseAlias(t *testing.T
 }
 
 func TestValidateManifestRejectsUnknownComponentScopedGOWDKUsePackage(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Package: "marketing",
 		Name:    "Hero",
-		Uses:    []manifest.Use{{Alias: "icons", Package: "icons"}},
-		Blocks:  manifest.Blocks{View: true, ViewBody: `<section><icons.Badge /></section>`},
+		Uses:    []gwdkir.Use{{Alias: "icons", Package: "icons"}},
+		Blocks:  gwdkir.Blocks{View: true, ViewBody: `<section><icons.Badge /></section>`},
 	}}}
 
 	err := validateManifest(gowdk.Config{}, app)
@@ -613,12 +612,12 @@ func TestValidateManifestRejectsUnknownComponentScopedGOWDKUsePackage(t *testing
 }
 
 func TestValidatePageRejectsSSRWithoutAddon(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard",
-		Guard:  []string{"auth.required"},
+		Guards: []string{"auth.required"},
 		Render: gowdk.SSR,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
 		},
 	}
@@ -640,11 +639,11 @@ func TestValidatePageRequiresExplicitGuard(t *testing.T) {
 	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "home",
 		Route:  "/",
 		Source: sourcePath,
-		Blocks: manifest.Blocks{View: true},
+		Blocks: gwdkir.Blocks{View: true},
 	}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
@@ -658,12 +657,12 @@ func TestValidatePageRequiresPublicGuardToBeExclusive(t *testing.T) {
 	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "home",
 		Route:  "/",
 		Source: sourcePath,
-		Guard:  []string{"public", "auth.required"},
-		Blocks: manifest.Blocks{View: true},
+		Guards: []string{"public", "auth.required"},
+		Blocks: gwdkir.Blocks{View: true},
 	}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
@@ -677,13 +676,13 @@ func TestValidatePageRejectsProtectedGuardOnBuildTimePage(t *testing.T) {
 	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Source: sourcePath,
-		Guard:  []string{"auth.required"},
+		Guards: []string{"auth.required"},
 		Render: gowdk.SPA,
-		Blocks: manifest.Blocks{View: true},
+		Blocks: gwdkir.Blocks{View: true},
 	}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
@@ -697,13 +696,13 @@ func TestValidatePageAllowsProtectedGuardOnRequestTimePage(t *testing.T) {
 	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Source: sourcePath,
-		Guard:  []string{"auth.required"},
+		Guards: []string{"auth.required"},
 		Render: gowdk.SSR,
-		Blocks: manifest.Blocks{View: true},
+		Blocks: gwdkir.Blocks{View: true},
 	}
 
 	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, irPage(page))
@@ -713,11 +712,11 @@ func TestValidatePageAllowsProtectedGuardOnRequestTimePage(t *testing.T) {
 }
 
 func TestValidatePageAllowsSSRWithAddon(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Render: gowdk.SSR,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Load: true,
 			View: true,
 		},
@@ -730,12 +729,12 @@ func TestValidatePageAllowsSSRWithAddon(t *testing.T) {
 }
 
 func TestValidateManifestRejectsDuplicatePageIDsAndComponentNames(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{
-			{ID: "home", Route: "/", Source: "pages/home.page.gwdk", Blocks: manifest.Blocks{View: true}},
-			{ID: "home", Route: "/again", Source: "pages/home-again.page.gwdk", Blocks: manifest.Blocks{View: true}},
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{ID: "home", Route: "/", Source: "pages/home.page.gwdk", Blocks: gwdkir.Blocks{View: true}},
+			{ID: "home", Route: "/again", Source: "pages/home-again.page.gwdk", Blocks: gwdkir.Blocks{View: true}},
 		},
-		Components: []manifest.Component{
+		Components: []gwdkir.Component{
 			{Name: "Hero", Source: "components/hero.cmp.gwdk"},
 			{Name: "Hero", Source: "components/hero-copy.cmp.gwdk"},
 		},
@@ -766,21 +765,21 @@ func TestValidateManifestRejectsDuplicatePageIDsAndComponentNames(t *testing.T) 
 }
 
 func TestValidateManifestAllowsPageStoreDeclaration(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:     "cart",
 		Route:  "/cart",
 		Source: "pages/cart.page.gwdk",
-		Guard:  []string{"public"},
-		Imports: []manifest.Import{{
+		Guards: []string{"public"},
+		Imports: []gwdkir.Import{{
 			Alias: "ui",
 			Path:  "github.com/cssbruno/gowdk/testfixture/islands",
 		}},
-		Stores: []manifest.Store{{
+		Stores: []gwdkir.Store{{
 			Name: "cart",
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		}},
-		Blocks: manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+		Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Cart</main>`},
 	}}}
 
 	if err := validateManifest(gowdk.Config{}, app); err != nil {
@@ -789,11 +788,11 @@ func TestValidateManifestAllowsPageStoreDeclaration(t *testing.T) {
 }
 
 func TestValidateManifestRejectsDuplicatePageStore(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:     "cart",
 		Route:  "/cart",
 		Source: "pages/cart.page.gwdk",
-		Stores: []manifest.Store{
+		Stores: []gwdkir.Store{
 			{
 				Name: "cart",
 				Span: source.SourceSpan{Start: source.SourcePosition{Line: 5, Column: 1}, End: source.SourcePosition{Line: 5, Column: 40}},
@@ -803,7 +802,7 @@ func TestValidateManifestRejectsDuplicatePageStore(t *testing.T) {
 				Span: source.SourceSpan{Start: source.SourcePosition{Line: 6, Column: 1}, End: source.SourcePosition{Line: 6, Column: 40}},
 			},
 		},
-		Blocks: manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+		Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Cart</main>`},
 	}}}
 
 	err := validateManifest(gowdk.Config{}, app)
@@ -818,19 +817,19 @@ func TestValidateManifestRejectsDuplicatePageStore(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownComponentStoreUse(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			ID:     "cart",
 			Route:  "/cart",
-			Blocks: manifest.Blocks{View: true, ViewBody: `<main><CartButton /></main>`},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<main><CartButton /></main>`},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Name:   "CartButton",
 			Source: "components/cart-button.cmp.gwdk",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Client:     true,
 				ClientBody: "use cart",
-				Spans: manifest.BlockSpans{
+				Spans: gwdkir.BlockSpans{
 					Client: source.SourceSpan{Start: source.SourcePosition{Line: 4, Column: 1}, End: source.SourcePosition{Line: 4, Column: 9}},
 				},
 				View:     true,
@@ -851,27 +850,27 @@ func TestValidateManifestRejectsUnknownComponentStoreUse(t *testing.T) {
 }
 
 func TestValidateManifestAcceptsQualifiedComponentStoreUse(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			Package: "stores",
 			ID:      "cart",
 			Route:   "/cart",
-			Imports: []manifest.Import{{
+			Imports: []gwdkir.Import{{
 				Alias: "ui",
 				Path:  "github.com/cssbruno/gowdk/testfixture/islands",
 			}},
-			Stores: []manifest.Store{{
+			Stores: []gwdkir.Store{{
 				Name: "cart",
-				Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-				Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 			}},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Cart</main>`},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Package: "components",
 			Name:    "CartButton",
-			Uses:    []manifest.Use{{Alias: "stores", Package: "stores"}},
-			Blocks: manifest.Blocks{
+			Uses:    []gwdkir.Use{{Alias: "stores", Package: "stores"}},
+			Blocks: gwdkir.Blocks{
 				Client:     true,
 				ClientBody: "use stores.cart",
 				View:       true,
@@ -886,18 +885,18 @@ func TestValidateManifestAcceptsQualifiedComponentStoreUse(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownQualifiedComponentStoreUseAlias(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			Package: "stores",
 			ID:      "cart",
 			Route:   "/cart",
-			Stores:  []manifest.Store{{Name: "cart"}},
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+			Stores:  []gwdkir.Store{{Name: "cart"}},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main>Cart</main>`},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Package: "components",
 			Name:    "CartButton",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				Client:     true,
 				ClientBody: "use stores.cart",
 				View:       true,
@@ -917,19 +916,19 @@ func TestValidateManifestRejectsUnknownQualifiedComponentStoreUseAlias(t *testin
 }
 
 func TestValidateManifestRejectsUnknownQualifiedComponentStoreName(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			Package: "stores",
 			ID:      "cart",
 			Route:   "/cart",
-			Stores:  []manifest.Store{{Name: "cart"}},
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Cart</main>`},
+			Stores:  []gwdkir.Store{{Name: "cart"}},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main>Cart</main>`},
 		}},
-		Components: []manifest.Component{{
+		Components: []gwdkir.Component{{
 			Package: "components",
 			Name:    "CartButton",
-			Uses:    []manifest.Use{{Alias: "stores", Package: "stores"}},
-			Blocks: manifest.Blocks{
+			Uses:    []gwdkir.Use{{Alias: "stores", Package: "stores"}},
+			Blocks: gwdkir.Blocks{
 				Client:     true,
 				ClientBody: "use stores.missing",
 				View:       true,
@@ -949,18 +948,18 @@ func TestValidateManifestRejectsUnknownQualifiedComponentStoreName(t *testing.T)
 }
 
 func TestValidateManifestRejectsRedundantComponentImplementations(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{
+	app := appFixture{Components: []gwdkir.Component{
 		{
 			Name:   "Hero",
 			Source: "components/hero.cmp.gwdk",
-			Props:  []manifest.Prop{{Name: "title", Type: "string"}},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<section><h1>{title}</h1></section>`},
+			Props:  []gwdkir.Prop{{Name: "title", Type: "string"}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<section><h1>{title}</h1></section>`},
 		},
 		{
 			Name:   "Feature",
 			Source: "components/feature.cmp.gwdk",
-			Props:  []manifest.Prop{{Name: "title", Type: "string"}},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<section>
+			Props:  []gwdkir.Prop{{Name: "title", Type: "string"}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<section>
   // ignored by fingerprint
   <h1>{title}</h1>
 </section>`},
@@ -978,18 +977,18 @@ func TestValidateManifestRejectsRedundantComponentImplementations(t *testing.T) 
 }
 
 func TestValidateManifestRejectsRedundantComponentImplementationsWithNormalizedAttrs(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{
+	app := appFixture{Components: []gwdkir.Component{
 		{
 			Name:   "PrimaryButton",
 			Source: "components/primary-button.cmp.gwdk",
-			Props:  []manifest.Prop{{Name: "label", Type: "string"}},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<button id="save" class="primary large">{label}</button>`},
+			Props:  []gwdkir.Prop{{Name: "label", Type: "string"}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<button id="save" class="primary large">{label}</button>`},
 		},
 		{
 			Name:   "SaveButton",
 			Source: "components/save-button.cmp.gwdk",
-			Props:  []manifest.Prop{{Name: "label", Type: "string"}},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<button class="large primary" id="save">{label}</button>`},
+			Props:  []gwdkir.Prop{{Name: "label", Type: "string"}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<button class="large primary" id="save">{label}</button>`},
 		},
 	}}
 
@@ -1004,34 +1003,34 @@ func TestValidateManifestRejectsRedundantComponentImplementationsWithNormalizedA
 }
 
 func TestValidateManifestRejectsRedundantTypedComponentsWithCanonicalImportsAndEvents(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{
+	app := appFixture{Components: []gwdkir.Component{
 		{
 			Name:    "Counter",
 			Source:  "components/counter.cmp.gwdk",
-			Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-			PropsType: manifest.GoTypeRef{
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			PropsType: gwdkir.GoRef{
 				Alias: "ui",
 				Name:  "CounterProps",
 			},
-			State: manifest.StateContract{
-				Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-				Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+			State: gwdkir.StateContract{
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 			},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<button g:on:click={Count=Count+1}>{Label}:{Count}</button>`},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<button g:on:click={Count=Count+1}>{Label}:{Count}</button>`},
 		},
 		{
 			Name:    "Stepper",
 			Source:  "components/stepper.cmp.gwdk",
-			Imports: []manifest.Import{{Alias: "widgets", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-			PropsType: manifest.GoTypeRef{
+			Imports: []gwdkir.Import{{Alias: "widgets", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			PropsType: gwdkir.GoRef{
 				Alias: "widgets",
 				Name:  "CounterProps",
 			},
-			State: manifest.StateContract{
-				Type: manifest.GoTypeRef{Alias: "widgets", Name: "CounterState"},
-				Init: manifest.GoFuncRef{Alias: "widgets", Name: "NewCounterState"},
+			State: gwdkir.StateContract{
+				Type: gwdkir.GoRef{Alias: "widgets", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "widgets", Name: "NewCounterState"},
 			},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<button g:on:click={Count = Count + 1}>{Label}:{Count}</button>`},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<button g:on:click={Count = Count + 1}>{Label}:{Count}</button>`},
 		},
 	}}
 
@@ -1049,18 +1048,18 @@ func TestValidateManifestRejectsRedundantTypedComponentsWithCanonicalImportsAndE
 }
 
 func TestValidateManifestAllowsSameViewWithDifferentContracts(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{
+	app := appFixture{Components: []gwdkir.Component{
 		{
 			Name:   "Hero",
 			Source: "components/hero.cmp.gwdk",
-			Props:  []manifest.Prop{{Name: "title", Type: "string"}},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<section>Same</section>`},
+			Props:  []gwdkir.Prop{{Name: "title", Type: "string"}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<section>Same</section>`},
 		},
 		{
 			Name:   "Feature",
 			Source: "components/feature.cmp.gwdk",
-			Props:  []manifest.Prop{{Name: "subtitle", Type: "string"}},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<section>Same</section>`},
+			Props:  []gwdkir.Prop{{Name: "subtitle", Type: "string"}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<section>Same</section>`},
 		},
 	}}
 
@@ -1070,26 +1069,26 @@ func TestValidateManifestAllowsSameViewWithDifferentContracts(t *testing.T) {
 }
 
 func TestValidateManifestAllowsSameViewWithDifferentTypedContracts(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{
+	app := appFixture{Components: []gwdkir.Component{
 		{
 			Name:    "CounterShell",
 			Source:  "components/counter-shell.cmp.gwdk",
-			Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-			State: manifest.StateContract{
-				Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-				Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			State: gwdkir.StateContract{
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 			},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<section>Same</section>`},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<section>Same</section>`},
 		},
 		{
 			Name:    "OtherShell",
 			Source:  "components/other-shell.cmp.gwdk",
-			Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-			State: manifest.StateContract{
-				Type: manifest.GoTypeRef{Alias: "ui", Name: "OtherState"},
-				Init: manifest.GoFuncRef{Alias: "ui", Name: "NewOtherState"},
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			State: gwdkir.StateContract{
+				Type: gwdkir.GoRef{Alias: "ui", Name: "OtherState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewOtherState"},
 			},
-			Blocks: manifest.Blocks{View: true, ViewBody: `<section>Same</section>`},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<section>Same</section>`},
 		},
 	}}
 
@@ -1099,19 +1098,19 @@ func TestValidateManifestAllowsSameViewWithDifferentTypedContracts(t *testing.T)
 }
 
 func TestValidateManifestResolvesGoTypedComponentContracts(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		PropsType: manifest.GoTypeRef{
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		PropsType: gwdkir.GoRef{
 			Alias: "ui",
 			Name:  "CounterProps",
 		},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button g:on:click={Count++}>{Label}: {Count}</button>`,
 		},
@@ -1123,15 +1122,15 @@ func TestValidateManifestResolvesGoTypedComponentContracts(t *testing.T) {
 }
 
 func TestValidateManifestAllowsEventModifiers(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button g:on:click.prevent.stop.once.capture.debounce(1s)={Count++}>{Count}</button><button g:on:input.throttle(250ms)={Count++}>{Count}</button>`,
 		},
@@ -1143,15 +1142,15 @@ func TestValidateManifestAllowsEventModifiers(t *testing.T) {
 }
 
 func TestValidateManifestRejectsBadEventModifier(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button g:on:click.passive={Count++}>{Count}</button>`,
 		},
@@ -1168,15 +1167,15 @@ func TestValidateManifestRejectsBadEventModifier(t *testing.T) {
 }
 
 func TestValidateManifestRejectsBadDebounceDuration(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button g:on:click.debounce(soon)={Count++}>{Count}</button>`,
 		},
@@ -1193,15 +1192,15 @@ func TestValidateManifestRejectsBadDebounceDuration(t *testing.T) {
 }
 
 func TestValidateManifestRejectsDebounceThrottleCombination(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button g:on:click.debounce(100ms).throttle(100ms)={Count++}>{Count}</button>`,
 		},
@@ -1218,19 +1217,19 @@ func TestValidateManifestRejectsDebounceThrottleCombination(t *testing.T) {
 }
 
 func TestValidateManifestResolvesUnaliasedGoTypedComponentImports(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		PropsType: manifest.GoTypeRef{
+		Imports: []gwdkir.Import{{Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		PropsType: gwdkir.GoRef{
 			Alias: "islands",
 			Name:  "CounterProps",
 		},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "islands", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "islands", Name: "NewCounterState"},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "islands", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "islands", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button g:on:click={Count++}>{Label}: {Count}</button>`,
 		},
@@ -1242,15 +1241,15 @@ func TestValidateManifestResolvesUnaliasedGoTypedComponentImports(t *testing.T) 
 }
 
 func TestValidateManifestRejectsMissingGoTypedComponentField(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button g:on:click={Missing++}>{Missing}</button>`,
 		},
@@ -1267,15 +1266,15 @@ func TestValidateManifestRejectsMissingGoTypedComponentField(t *testing.T) {
 }
 
 func TestValidateManifestRejectsMissingGoTypedComponentPackage(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/Missing"}},
-		PropsType: manifest.GoTypeRef{
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/Missing"}},
+		PropsType: gwdkir.GoRef{
 			Alias: "ui",
 			Name:  "CounterProps",
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<p>{Label}</p>`,
 		},
@@ -1292,15 +1291,15 @@ func TestValidateManifestRejectsMissingGoTypedComponentPackage(t *testing.T) {
 }
 
 func TestValidateManifestRejectsMissingGoTypedComponentType(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		PropsType: manifest.GoTypeRef{
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		PropsType: gwdkir.GoRef{
 			Alias: "ui",
 			Name:  "MissingProps",
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<p>{Label}</p>`,
 		},
@@ -1317,15 +1316,15 @@ func TestValidateManifestRejectsMissingGoTypedComponentType(t *testing.T) {
 }
 
 func TestValidateManifestAllowsClientFunctionEventCall(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Increment() {
   Count++
@@ -1341,19 +1340,19 @@ func TestValidateManifestAllowsClientFunctionEventCall(t *testing.T) {
 }
 
 func TestValidateManifestAllowsDeclaredComponentEmit(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Emits: []manifest.Emit{{
+		Emits: []gwdkir.Emit{{
 			Name:   "select",
-			Params: []manifest.EmitParam{{Name: "id", Type: "int"}},
+			Params: []gwdkir.EmitParam{{Name: "id", Type: "int"}},
 		}},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Select() {
   emit select(Count)
@@ -1369,10 +1368,10 @@ func TestValidateManifestAllowsDeclaredComponentEmit(t *testing.T) {
 }
 
 func TestValidateManifestRejectsDuplicateComponentEmitNames(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:   "Picker",
 		Source: "components/picker.cmp.gwdk",
-		Emits: []manifest.Emit{
+		Emits: []gwdkir.Emit{
 			{
 				Name: "select",
 				Span: source.SourceSpan{
@@ -1405,15 +1404,15 @@ func TestValidateManifestRejectsDuplicateComponentEmitNames(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownComponentEmit(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Select() {
   emit select(Count)
@@ -1434,13 +1433,13 @@ func TestValidateManifestRejectsUnknownComponentEmit(t *testing.T) {
 }
 
 func TestValidateManifestClientParseErrorPointsToClientLine(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:   "Counter",
 		Source: "components/counter.cmp.gwdk",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client:     true,
 			ClientBody: "fn Bad() {\n  if Count {\n  }\n}",
-			Spans: manifest.BlockSpans{
+			Spans: gwdkir.BlockSpans{
 				Client: source.SourceSpan{
 					Start: source.SourcePosition{Line: 10, Column: 1},
 					End:   source.SourcePosition{Line: 14, Column: 1},
@@ -1466,19 +1465,19 @@ func TestValidateManifestClientParseErrorPointsToClientLine(t *testing.T) {
 }
 
 func TestValidateManifestRejectsComponentEmitPayloadTypeMismatch(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Emits: []manifest.Emit{{
+		Emits: []gwdkir.Emit{{
 			Name:   "select",
-			Params: []manifest.EmitParam{{Name: "id", Type: "string"}},
+			Params: []gwdkir.EmitParam{{Name: "id", Type: "string"}},
 		}},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Select() {
   emit select(Count)
@@ -1499,15 +1498,15 @@ func TestValidateManifestRejectsComponentEmitPayloadTypeMismatch(t *testing.T) {
 }
 
 func TestValidateManifestAllowsClientFunctionParams(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Add(step int) {
   Count = Count + step
@@ -1523,15 +1522,15 @@ func TestValidateManifestAllowsClientFunctionParams(t *testing.T) {
 }
 
 func TestValidateManifestAllowsClientHelperFunctionReturns(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Next(value int) int {
   return value + 1
@@ -1551,15 +1550,15 @@ fn Add() {
 }
 
 func TestValidateManifestAllowsClientBuiltins(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `computed ItemCount string {
   return string(len(Items))
@@ -1579,15 +1578,15 @@ fn SetCount() {
 }
 
 func TestValidateManifestAllowsAsyncFetchJSONClientFunction(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `async fn Refresh() {
   Items = await fetchJSON[[]ui.Item]("/api/items")
@@ -1603,15 +1602,15 @@ func TestValidateManifestAllowsAsyncFetchJSONClientFunction(t *testing.T) {
 }
 
 func TestValidateManifestRejectsAwaitOutsideAsyncClientFunction(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Refresh() {
   Items = await fetchJSON[[]ui.Item]("/api/items")
@@ -1632,15 +1631,15 @@ func TestValidateManifestRejectsAwaitOutsideAsyncClientFunction(t *testing.T) {
 }
 
 func TestValidateManifestRejectsAsyncFetchJSONNonStringURL(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `async fn Refresh() {
   Items = await fetchJSON[[]ui.Item](Count)
@@ -1661,15 +1660,15 @@ func TestValidateManifestRejectsAsyncFetchJSONNonStringURL(t *testing.T) {
 }
 
 func TestValidateManifestRejectsBadClientBuiltinArg(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Bad() {
   Count = len(Count)
@@ -1690,15 +1689,15 @@ func TestValidateManifestRejectsBadClientBuiltinArg(t *testing.T) {
 }
 
 func TestValidateManifestRejectsHelperAsEventHandler(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Next(value int) int {
   return value + 1
@@ -1719,15 +1718,15 @@ func TestValidateManifestRejectsHelperAsEventHandler(t *testing.T) {
 }
 
 func TestValidateManifestRejectsHelperReturnMismatch(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Bad() int {
   return Open
@@ -1752,15 +1751,15 @@ fn Add() {
 }
 
 func TestValidateManifestRejectsHelperCallCycle(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn A() int {
   return B()
@@ -1789,15 +1788,15 @@ fn Add() {
 }
 
 func TestValidateManifestRejectsClientExpressionTypeMismatch(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Bad(step int) {
   Open = Count + step
@@ -1818,15 +1817,15 @@ func TestValidateManifestRejectsClientExpressionTypeMismatch(t *testing.T) {
 }
 
 func TestValidateManifestRejectsClientFunctionArgumentMismatch(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Add(step int) {
   Count = step
@@ -1847,15 +1846,15 @@ func TestValidateManifestRejectsClientFunctionArgumentMismatch(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownClientFunctionEventCall(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Increment() {
   Count++
@@ -1876,15 +1875,15 @@ func TestValidateManifestRejectsUnknownClientFunctionEventCall(t *testing.T) {
 }
 
 func TestValidateManifestRejectsClientFunctionUnknownStateField(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Increment() {
   Missing++
@@ -1905,19 +1904,19 @@ func TestValidateManifestRejectsClientFunctionUnknownStateField(t *testing.T) {
 }
 
 func TestValidateManifestRejectsClientFunctionMutatingProp(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		PropsType: manifest.GoTypeRef{
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		PropsType: gwdkir.GoRef{
 			Alias: "ui",
 			Name:  "CounterProps",
 		},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Rename() {
   Label = "changed"
@@ -1938,15 +1937,15 @@ func TestValidateManifestRejectsClientFunctionMutatingProp(t *testing.T) {
 }
 
 func TestValidateManifestAllowsLifecycleAndEffects(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `on mount {
   Open = true
@@ -1973,15 +1972,15 @@ on destroy {
 }
 
 func TestValidateManifestRejectsEffectUnknownDependency(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `effect when Missing {
   Open = true
@@ -2002,15 +2001,15 @@ func TestValidateManifestRejectsEffectUnknownDependency(t *testing.T) {
 }
 
 func TestValidateManifestAllowsDOMRefFocusCall(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Search",
 		Source:  "components/search.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "TextState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewTextState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `ref searchInput HTMLInputElement
 
@@ -2028,15 +2027,15 @@ fn FocusSearch() {
 }
 
 func TestValidateManifestRejectsUnknownDOMRefBinding(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Search",
 		Source:  "components/search.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "TextState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewTextState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client:     true,
 			ClientBody: `ref searchInput HTMLInputElement`,
 			View:       true,
@@ -2055,15 +2054,15 @@ func TestValidateManifestRejectsUnknownDOMRefBinding(t *testing.T) {
 }
 
 func TestValidateManifestRejectsDuplicateDOMRefBinding(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Search",
 		Source:  "components/search.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "TextState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewTextState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client:     true,
 			ClientBody: `ref searchInput HTMLInputElement`,
 			View:       true,
@@ -2082,15 +2081,15 @@ func TestValidateManifestRejectsDuplicateDOMRefBinding(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnboundUsedDOMRef(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Search",
 		Source:  "components/search.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "TextState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewTextState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `ref searchInput HTMLInputElement
 
@@ -2113,15 +2112,15 @@ fn FocusSearch() {
 }
 
 func TestValidateManifestAllowsGIfBoolExpression(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<p g:if={Count > 0 && !Open}>{Count}</p>`,
 		},
@@ -2133,15 +2132,15 @@ func TestValidateManifestAllowsGIfBoolExpression(t *testing.T) {
 }
 
 func TestValidateManifestAllowsGElseIfExpression(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<p g:if={Open}>{Count}</p><p g:else-if={Count > 0}>{Count}</p><p g:else>Closed</p>`,
 		},
@@ -2153,15 +2152,15 @@ func TestValidateManifestAllowsGElseIfExpression(t *testing.T) {
 }
 
 func TestValidateManifestRejectsGElseIfNonBoolExpression(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<p g:if={Open}>{Count}</p><p g:else-if={Count}>{Count}</p>`,
 		},
@@ -2178,15 +2177,15 @@ func TestValidateManifestRejectsGElseIfNonBoolExpression(t *testing.T) {
 }
 
 func TestValidateManifestRejectsGIfNonBoolExpression(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<p g:if={Count}>{Count}</p>`,
 		},
@@ -2203,15 +2202,15 @@ func TestValidateManifestRejectsGIfNonBoolExpression(t *testing.T) {
 }
 
 func TestValidateManifestAllowsNestedAndIndexExpressions(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<section g:if={User.Open && Items[0].Name == "first" && Flags[Count]}>{Count}</section>`,
 		},
@@ -2223,15 +2222,15 @@ func TestValidateManifestAllowsNestedAndIndexExpressions(t *testing.T) {
 }
 
 func TestValidateManifestAllowsGForListRendering(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<ul><li g:for={item in Items} g:key={item.ID}>{item.Name}</li></ul>`,
 		},
@@ -2243,15 +2242,15 @@ func TestValidateManifestAllowsGForListRendering(t *testing.T) {
 }
 
 func TestValidateManifestAllowsGForIndexVariable(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<ol><li aria-posinset={i} g:for={item, i in Items} g:key={item.ID}>{i}: {item.Name}</li></ol>`,
 		},
@@ -2263,15 +2262,15 @@ func TestValidateManifestAllowsGForIndexVariable(t *testing.T) {
 }
 
 func TestValidateManifestAllowsListMutationBuiltins(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn AddItem() {
   append(Items, { ID: "third", Name: "third", Done: false })
@@ -2295,15 +2294,15 @@ fn SwapFirstTwo() {
 }
 
 func TestValidateManifestRejectsBadAppendItemField(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn AddItem() {
   append(Items, { Missing: "third" })
@@ -2324,15 +2323,15 @@ func TestValidateManifestRejectsBadAppendItemField(t *testing.T) {
 }
 
 func TestValidateManifestRejectsGForWithoutKey(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<ul><li g:for={item in Items}>{item.Name}</li></ul>`,
 		},
@@ -2349,15 +2348,15 @@ func TestValidateManifestRejectsGForWithoutKey(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownGForItemField(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<ul><li g:for={item in Items} g:key={item.ID}>{item.Missing}</li></ul>`,
 		},
@@ -2374,18 +2373,18 @@ func TestValidateManifestRejectsUnknownGForItemField(t *testing.T) {
 }
 
 func TestValidateManifestViewEventDiagnosticPointsToExpression(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button g:on:click={Missing()}>{Count}</button>`,
-			Spans: manifest.BlockSpans{
+			Spans: gwdkir.BlockSpans{
 				View: source.SourceSpan{Start: source.SourcePosition{Line: 9, Column: 1}, End: source.SourcePosition{Line: 9, Column: 7}},
 			},
 		},
@@ -2403,13 +2402,13 @@ func TestValidateManifestViewEventDiagnosticPointsToExpression(t *testing.T) {
 }
 
 func TestValidateManifestUnknownViewFieldDiagnosticPointsToIdentifier(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:   "Counter",
 		Source: "components/counter.cmp.gwdk",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button>{Missing}</button>`,
-			Spans: manifest.BlockSpans{
+			Spans: gwdkir.BlockSpans{
 				View: source.SourceSpan{Start: source.SourcePosition{Line: 4, Column: 1}, End: source.SourcePosition{Line: 4, Column: 7}},
 			},
 		},
@@ -2427,13 +2426,13 @@ func TestValidateManifestUnknownViewFieldDiagnosticPointsToIdentifier(t *testing
 }
 
 func TestValidateManifestBadGForDiagnosticPointsToDirectiveValue(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:   "Nested",
 		Source: "components/nested.cmp.gwdk",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<ul><li g:for={item of Items}>{item.Name}</li></ul>`,
-			Spans: manifest.BlockSpans{
+			Spans: gwdkir.BlockSpans{
 				View: source.SourceSpan{Start: source.SourcePosition{Line: 12, Column: 1}, End: source.SourcePosition{Line: 12, Column: 7}},
 			},
 		},
@@ -2451,15 +2450,15 @@ func TestValidateManifestBadGForDiagnosticPointsToDirectiveValue(t *testing.T) {
 }
 
 func TestValidateManifestAllowsGoishConditionalExpressions(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn ToggleCount() {
   Count = if Open { Count + 1 } else { 0 }
@@ -2475,15 +2474,15 @@ func TestValidateManifestAllowsGoishConditionalExpressions(t *testing.T) {
 }
 
 func TestValidateManifestAllowsClientLocalVariables(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Add(step int) {
   let next int = Count + step
@@ -2500,15 +2499,15 @@ func TestValidateManifestAllowsClientLocalVariables(t *testing.T) {
 }
 
 func TestValidateManifestRejectsLocalVariableBeforeDeclaration(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Bad() {
   Count = next
@@ -2530,15 +2529,15 @@ func TestValidateManifestRejectsLocalVariableBeforeDeclaration(t *testing.T) {
 }
 
 func TestValidateManifestRejectsGoishConditionalTypeMismatch(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `fn Bad() {
   Count = if Open { Count + 1 } else { "closed" }
@@ -2559,15 +2558,15 @@ func TestValidateManifestRejectsGoishConditionalTypeMismatch(t *testing.T) {
 }
 
 func TestValidateManifestAllowsComputedState(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `computed Label string {
   return if Open { "open" } else { "closed" }
@@ -2587,15 +2586,15 @@ computed Visible bool {
 }
 
 func TestValidateManifestAllowsGoStyleComputedState(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `computed Label string {
   if Count == 0 {
@@ -2618,15 +2617,15 @@ func Increment() {
 }
 
 func TestValidateManifestAllowsComputedOutOfOrderDependencies(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `computed Visible bool {
   return Label == "open"
@@ -2646,15 +2645,15 @@ computed Label string {
 }
 
 func TestValidateManifestRejectsComputedCycle(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `computed First string {
   return Second
@@ -2679,15 +2678,15 @@ computed Second string {
 }
 
 func TestValidateManifestRejectsComputedMutation(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Client: true,
 			ClientBody: `computed Label string {
   Count = Count + 1
@@ -2708,15 +2707,15 @@ func TestValidateManifestRejectsComputedMutation(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownNestedField(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
 		Source:  "components/nested.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "NestedState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewNestedState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<section g:if={User.Missing}>{Count}</section>`,
 		},
@@ -2733,15 +2732,15 @@ func TestValidateManifestRejectsUnknownNestedField(t *testing.T) {
 }
 
 func TestValidateManifestAllowsValueBindingToStringState(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Search",
 		Source:  "components/search.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "TextState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewTextState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<input g:bind:value={Query} />`,
 		},
@@ -2753,15 +2752,15 @@ func TestValidateManifestAllowsValueBindingToStringState(t *testing.T) {
 }
 
 func TestValidateManifestRejectsValueBindingToNonStringState(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<input g:bind:value={Count} />`,
 		},
@@ -2778,15 +2777,15 @@ func TestValidateManifestRejectsValueBindingToNonStringState(t *testing.T) {
 }
 
 func TestValidateManifestAllowsNumberInputValueBindingToNumericState(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<input type="number" g:bind:value={Count} />`,
 		},
@@ -2798,15 +2797,15 @@ func TestValidateManifestAllowsNumberInputValueBindingToNumericState(t *testing.
 }
 
 func TestValidateManifestRejectsNumericValueBindingOutsideNumberInput(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<textarea g:bind:value={Count}></textarea>`,
 		},
@@ -2823,15 +2822,15 @@ func TestValidateManifestRejectsNumericValueBindingOutsideNumberInput(t *testing
 }
 
 func TestValidateManifestAllowsRadioValueBindingToStringState(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Search",
 		Source:  "components/search.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "TextState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewTextState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<input type="radio" value="initial" g:bind:value={Query} />`,
 		},
@@ -2843,15 +2842,15 @@ func TestValidateManifestAllowsRadioValueBindingToStringState(t *testing.T) {
 }
 
 func TestValidateManifestRejectsRadioValueBindingWithoutValue(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Search",
 		Source:  "components/search.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "TextState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewTextState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<input type="radio" g:bind:value={Query} />`,
 		},
@@ -2868,15 +2867,15 @@ func TestValidateManifestRejectsRadioValueBindingWithoutValue(t *testing.T) {
 }
 
 func TestValidateManifestRejectsValueBindingToProp(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Search",
 		Source:  "components/search.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		PropsType: manifest.GoTypeRef{
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		PropsType: gwdkir.GoRef{
 			Alias: "ui",
 			Name:  "CounterProps",
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<input g:bind:value={Label} />`,
 		},
@@ -2893,15 +2892,15 @@ func TestValidateManifestRejectsValueBindingToProp(t *testing.T) {
 }
 
 func TestValidateManifestAllowsCheckedBindingToBoolState(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<input type="checkbox" g:bind:checked={Open} />`,
 		},
@@ -2913,15 +2912,15 @@ func TestValidateManifestAllowsCheckedBindingToBoolState(t *testing.T) {
 }
 
 func TestValidateManifestRejectsCheckedBindingToNonBoolState(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Search",
 		Source:  "components/search.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "TextState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewTextState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<input type="checkbox" g:bind:checked={Query} />`,
 		},
@@ -2938,15 +2937,15 @@ func TestValidateManifestRejectsCheckedBindingToNonBoolState(t *testing.T) {
 }
 
 func TestValidateManifestAllowsReactiveAttributes(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button disabled={Open} aria-expanded={Open}>{Count}</button>`,
 		},
@@ -2958,15 +2957,15 @@ func TestValidateManifestAllowsReactiveAttributes(t *testing.T) {
 }
 
 func TestValidateManifestRejectsNonBoolReactiveBooleanAttribute(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button disabled={Count}>{Count}</button>`,
 		},
@@ -2983,15 +2982,15 @@ func TestValidateManifestRejectsNonBoolReactiveBooleanAttribute(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnsafeReactiveURLAttribute(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Link",
 		Source:  "components/link.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "TextState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewTextState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "TextState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewTextState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<a href={Query}>Link</a>`,
 		},
@@ -3008,15 +3007,15 @@ func TestValidateManifestRejectsUnsafeReactiveURLAttribute(t *testing.T) {
 }
 
 func TestValidateManifestAllowsClassToggle(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button class:active={Open}>{Count}</button>`,
 		},
@@ -3028,15 +3027,15 @@ func TestValidateManifestAllowsClassToggle(t *testing.T) {
 }
 
 func TestValidateManifestRejectsNonBoolClassToggle(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button class:active={Count}>{Count}</button>`,
 		},
@@ -3053,15 +3052,15 @@ func TestValidateManifestRejectsNonBoolClassToggle(t *testing.T) {
 }
 
 func TestValidateManifestAllowsStyleBinding(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<div style:height.px={Count}>{Count}</div>`,
 		},
@@ -3073,15 +3072,15 @@ func TestValidateManifestAllowsStyleBinding(t *testing.T) {
 }
 
 func TestValidateManifestRejectsBoolStyleBinding(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewCounterState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<div style:height.px={Open}>{Count}</div>`,
 		},
@@ -3098,11 +3097,11 @@ func TestValidateManifestRejectsBoolStyleBinding(t *testing.T) {
 }
 
 func TestValidateManifestRejectsRelativeGoTypedImportPath(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "./ui"}},
-		PropsType: manifest.GoTypeRef{
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "./ui"}},
+		PropsType: gwdkir.GoRef{
 			Alias: "ui",
 			Name:  "CounterProps",
 		},
@@ -3119,15 +3118,15 @@ func TestValidateManifestRejectsRelativeGoTypedImportPath(t *testing.T) {
 }
 
 func TestValidateManifestRejectsStateInitReturnMismatch(t *testing.T) {
-	app := manifest.Manifest{Components: []manifest.Component{{
+	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",
 		Source:  "components/counter.cmp.gwdk",
-		Imports: []manifest.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
-		State: manifest.StateContract{
-			Type: manifest.GoTypeRef{Alias: "ui", Name: "CounterState"},
-			Init: manifest.GoFuncRef{Alias: "ui", Name: "NewOtherState"},
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewOtherState"},
 		},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<p>{Count}</p>`,
 		},
@@ -3144,15 +3143,15 @@ func TestValidateManifestRejectsStateInitReturnMismatch(t *testing.T) {
 }
 
 func TestValidateManifestResolvesLayoutsByID(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			ID:      "dashboard",
 			Route:   "/dashboard",
 			Layouts: []string{"root", "Missing"},
 			Source:  "pages/dashboard.page.gwdk",
-			Blocks:  manifest.Blocks{View: true},
+			Blocks:  gwdkir.Blocks{View: true},
 		}},
-		Layouts: []manifest.Layout{{
+		Layouts: []gwdkir.Layout{{
 			ID:     "root",
 			Source: "layouts/root.layout.gwdk",
 		}},
@@ -3169,16 +3168,16 @@ func TestValidateManifestResolvesLayoutsByID(t *testing.T) {
 }
 
 func TestValidateManifestAcceptsQualifiedLayoutUse(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
-			Uses:    []manifest.Use{{Alias: "chrome", Package: "layouts"}},
+			Uses:    []gwdkir.Use{{Alias: "chrome", Package: "layouts"}},
 			Layouts: []string{"chrome.root"},
-			Blocks:  manifest.Blocks{View: true},
+			Blocks:  gwdkir.Blocks{View: true},
 		}},
-		Layouts: []manifest.Layout{{
+		Layouts: []gwdkir.Layout{{
 			Package: "layouts",
 			ID:      "root",
 			Source:  "layouts/root.layout.gwdk",
@@ -3191,15 +3190,15 @@ func TestValidateManifestAcceptsQualifiedLayoutUse(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnqualifiedCrossPackageLayout(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
 			Layouts: []string{"root"},
-			Blocks:  manifest.Blocks{View: true},
+			Blocks:  gwdkir.Blocks{View: true},
 		}},
-		Layouts: []manifest.Layout{{
+		Layouts: []gwdkir.Layout{{
 			Package: "layouts",
 			ID:      "root",
 			Source:  "layouts/root.layout.gwdk",
@@ -3217,8 +3216,8 @@ func TestValidateManifestRejectsUnqualifiedCrossPackageLayout(t *testing.T) {
 }
 
 func TestValidateManifestRejectsDuplicateLayoutIDs(t *testing.T) {
-	app := manifest.Manifest{
-		Layouts: []manifest.Layout{
+	app := appFixture{
+		Layouts: []gwdkir.Layout{
 			{ID: "root", Source: "layouts/root.layout.gwdk"},
 			{ID: "root", Source: "layouts/root-copy.layout.gwdk"},
 		},
@@ -3235,8 +3234,8 @@ func TestValidateManifestRejectsDuplicateLayoutIDs(t *testing.T) {
 }
 
 func TestValidateManifestAllowsDuplicateLayoutIDsAcrossPackages(t *testing.T) {
-	app := manifest.Manifest{
-		Layouts: []manifest.Layout{
+	app := appFixture{
+		Layouts: []gwdkir.Layout{
 			{Package: "pages", ID: "root", Source: "pages/root.layout.gwdk"},
 			{Package: "admin", ID: "root", Source: "admin/root.layout.gwdk"},
 		},
@@ -3248,8 +3247,8 @@ func TestValidateManifestAllowsDuplicateLayoutIDsAcrossPackages(t *testing.T) {
 }
 
 func TestValidateManifestRejectsDuplicateLayoutIDsInSamePackage(t *testing.T) {
-	app := manifest.Manifest{
-		Layouts: []manifest.Layout{
+	app := appFixture{
+		Layouts: []gwdkir.Layout{
 			{Package: "pages", ID: "root", Source: "pages/root.layout.gwdk"},
 			{Package: "pages", ID: "root", Source: "pages/root-copy.layout.gwdk"},
 		},
@@ -3266,10 +3265,10 @@ func TestValidateManifestRejectsDuplicateLayoutIDsInSamePackage(t *testing.T) {
 }
 
 func TestValidateManifestRejectsDuplicatePageRoutes(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{
-			{ID: "blog.post", Route: "/blog/{slug}", Paths: true, Source: "pages/blog-post.page.gwdk", Blocks: manifest.Blocks{View: true}},
-			{ID: "blog.entry", Route: "/blog/{id}", Paths: true, Source: "pages/blog-entry.page.gwdk", Blocks: manifest.Blocks{View: true}},
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{ID: "blog.post", Route: "/blog/{slug}", Source: "pages/blog-post.page.gwdk", Blocks: gwdkir.Blocks{Paths: true, View: true}},
+			{ID: "blog.entry", Route: "/blog/{id}", Source: "pages/blog-entry.page.gwdk", Blocks: gwdkir.Blocks{Paths: true, View: true}},
 		},
 	}
 
@@ -3303,10 +3302,10 @@ func TestValidateManifestRejectsAmbiguousDynamicPageRoutes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			app := manifest.Manifest{
-				Pages: []manifest.Page{
-					{ID: "left", Route: test.left, Paths: true, Blocks: manifest.Blocks{View: true}},
-					{ID: "right", Route: test.right, Paths: true, Blocks: manifest.Blocks{View: true}},
+			app := appFixture{
+				Pages: []gwdkir.Page{
+					{ID: "left", Route: test.left, Blocks: gwdkir.Blocks{Paths: true, View: true}},
+					{ID: "right", Route: test.right, Blocks: gwdkir.Blocks{Paths: true, View: true}},
 				},
 			}
 
@@ -3323,10 +3322,10 @@ func TestValidateManifestRejectsAmbiguousDynamicPageRoutes(t *testing.T) {
 }
 
 func TestValidateManifestAllowsConcreteRouteBesideDynamicPageRoute(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{
-			{ID: "blog.about", Route: "/blog/about", Blocks: manifest.Blocks{View: true}},
-			{ID: "blog.post", Route: "/blog/{slug}", Paths: true, Blocks: manifest.Blocks{View: true}},
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{ID: "blog.about", Route: "/blog/about", Blocks: gwdkir.Blocks{View: true}},
+			{ID: "blog.post", Route: "/blog/{slug}", Blocks: gwdkir.Blocks{Paths: true, View: true}},
 		},
 	}
 
@@ -3337,13 +3336,13 @@ func TestValidateManifestAllowsConcreteRouteBesideDynamicPageRoute(t *testing.T)
 
 func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 	t.Run("multiple actions on one route", func(t *testing.T) {
-		app := manifest.Manifest{
-			Pages: []manifest.Page{{
+		app := appFixture{
+			Pages: []gwdkir.Page{{
 				ID:    "profile",
 				Route: "/profile",
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View:    true,
-					Actions: []manifest.Action{{Name: "save"}, {Name: "updateAvatar"}},
+					Actions: []gwdkir.Action{{Name: "save"}, {Name: "updateAvatar"}},
 				},
 			}},
 		}
@@ -3359,13 +3358,13 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 	})
 
 	t.Run("api default route conflicts with page get", func(t *testing.T) {
-		app := manifest.Manifest{
-			Pages: []manifest.Page{{
+		app := appFixture{
+			Pages: []gwdkir.Page{{
 				ID:    "patients.index",
 				Route: "/patients",
-				Blocks: manifest.Blocks{
+				Blocks: gwdkir.Blocks{
 					View: true,
-					APIs: []manifest.API{{Name: "index"}},
+					APIs: []gwdkir.API{{Name: "index"}},
 				},
 			}},
 		}
@@ -3382,13 +3381,13 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 }
 
 func TestValidateManifestAllowsSameRouteWithDifferentMethods(t *testing.T) {
-	app := manifest.Manifest{
-		Pages: []manifest.Page{{
+	app := appFixture{
+		Pages: []gwdkir.Page{{
 			ID:    "newsletter",
 			Route: "/newsletter",
-			Blocks: manifest.Blocks{
+			Blocks: gwdkir.Blocks{
 				View:    true,
-				Actions: []manifest.Action{{Name: "Subscribe"}},
+				Actions: []gwdkir.Action{{Name: "Subscribe"}},
 			},
 		}},
 	}
@@ -3413,7 +3412,7 @@ func TestValidatePageRejectsMalformedRoutes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			page := manifest.Page{ID: "patients", Route: test.route, Paths: true, Blocks: manifest.Blocks{View: true}}
+			page := gwdkir.Page{ID: "patients", Route: test.route, Blocks: gwdkir.Blocks{Paths: true, View: true}}
 
 			diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 			if !hasDiagnosticCode(diagnostics, "malformed_route") {
@@ -3427,12 +3426,11 @@ func TestValidatePageRejectsMalformedRoutes(t *testing.T) {
 }
 
 func TestValidatePageRejectsDuplicateRouteParams(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "blog.post",
 		Route:  "/blog/{slug}/{slug}",
-		Paths:  true,
-		Blocks: manifest.Blocks{View: true},
-		Spans: manifest.PageSpans{
+		Blocks: gwdkir.Blocks{Paths: true, View: true},
+		Spans: gwdkir.PageSpans{
 			Route: testSourceSpan(3, 8, 3, 28),
 			RouteParams: []source.NamedSpan{
 				{Name: "slug", Span: testSourceSpan(3, 14, 3, 20)},
@@ -3450,15 +3448,15 @@ func TestValidatePageRejectsDuplicateRouteParams(t *testing.T) {
 }
 
 func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "settings",
 		Route:  "/settings",
-		Blocks: manifest.Blocks{View: true},
+		Blocks: gwdkir.Blocks{View: true},
 	}
 
 	t.Run("action malformed param type", func(t *testing.T) {
 		page := page
-		page.Blocks.Actions = []manifest.Action{{
+		page.Blocks.Actions = []gwdkir.Action{{
 			Name:        "Save",
 			Method:      "POST",
 			Route:       "/save/{id:uuid}",
@@ -3477,7 +3475,7 @@ func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
 
 	t.Run("api malformed param type", func(t *testing.T) {
 		page := page
-		page.Blocks.APIs = []manifest.API{{
+		page.Blocks.APIs = []gwdkir.API{{
 			Name:        "Lookup",
 			Method:      "GET",
 			Route:       "/api/{id:uuid}",
@@ -3496,7 +3494,7 @@ func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
 
 	t.Run("fragment dynamic route", func(t *testing.T) {
 		page := page
-		page.Blocks.Fragments = []manifest.FragmentEndpoint{{
+		page.Blocks.Fragments = []gwdkir.FragmentEndpoint{{
 			Name:        "Preview",
 			Method:      "GET",
 			Route:       "/preview/{id}",
@@ -3515,7 +3513,7 @@ func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
 }
 
 func TestValidatePageRejectsRevalidateWithoutCache(t *testing.T) {
-	page := manifest.Page{ID: "home", Route: "/", Revalidate: "60", Blocks: manifest.Blocks{View: true}}
+	page := gwdkir.Page{ID: "home", Route: "/", Revalidate: "60", Blocks: gwdkir.Blocks{View: true}}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if !hasDiagnosticCode(diagnostics, "revalidate_requires_cache") {
@@ -3524,12 +3522,12 @@ func TestValidatePageRejectsRevalidateWithoutCache(t *testing.T) {
 }
 
 func TestValidatePageRejectsDuplicateRevalidatePolicy(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:         "home",
 		Route:      "/",
 		Cache:      "public, max-age=60, stale-while-revalidate=30",
 		Revalidate: "60",
-		Blocks:     manifest.Blocks{View: true},
+		Blocks:     gwdkir.Blocks{View: true},
 	}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
@@ -3539,7 +3537,7 @@ func TestValidatePageRejectsDuplicateRevalidatePolicy(t *testing.T) {
 }
 
 func TestValidatePageAllowsTypedRouteParams(t *testing.T) {
-	page := manifest.Page{ID: "patients.show", Route: "/patients/{id:int}", Paths: true, Blocks: manifest.Blocks{View: true}}
+	page := gwdkir.Page{ID: "patients.show", Route: "/patients/{id:int}", Blocks: gwdkir.Blocks{Paths: true, View: true}}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if hasDiagnosticCode(diagnostics, "malformed_route") {
@@ -3548,7 +3546,7 @@ func TestValidatePageAllowsTypedRouteParams(t *testing.T) {
 }
 
 func TestValidatePageRequiresPathsForSPADynamicRoutes(t *testing.T) {
-	page := manifest.Page{ID: "patients.show", Route: "/patients/{id}", Render: gowdk.SPA, Blocks: manifest.Blocks{View: true}}
+	page := gwdkir.Page{ID: "patients.show", Route: "/patients/{id}", Render: gowdk.SPA, Blocks: gwdkir.Blocks{View: true}}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if len(diagnostics) != 1 {
@@ -3563,7 +3561,7 @@ func TestValidatePageRequiresPathsForSPADynamicRoutes(t *testing.T) {
 }
 
 func TestValidatePageAllowsSPADynamicRoutesWithPaths(t *testing.T) {
-	page := manifest.Page{ID: "blog.post", Route: "/blog/{slug}", Render: gowdk.SPA, Paths: true, Blocks: manifest.Blocks{View: true}}
+	page := gwdkir.Page{ID: "blog.post", Route: "/blog/{slug}", Render: gowdk.SPA, Blocks: gwdkir.Blocks{Paths: true, View: true}}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if len(diagnostics) != 0 {
@@ -3572,13 +3570,13 @@ func TestValidatePageAllowsSPADynamicRoutesWithPaths(t *testing.T) {
 }
 
 func TestValidatePageAllowsSPAActionsWithoutSSR(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "newsletter",
 		Route:  "/newsletter",
 		Render: gowdk.SPA,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:    true,
-			Actions: []manifest.Action{{Name: "Subscribe"}},
+			Actions: []gwdkir.Action{{Name: "Subscribe"}},
 		},
 	}
 
@@ -3589,11 +3587,11 @@ func TestValidatePageAllowsSPAActionsWithoutSSR(t *testing.T) {
 }
 
 func TestValidatePageRejectsLoadOnSPAPage(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "newsletter",
 		Route:  "/newsletter",
 		Render: gowdk.SPA,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
 			Load: true,
 		},
@@ -3609,11 +3607,11 @@ func TestValidatePageRejectsLoadOnSPAPage(t *testing.T) {
 }
 
 func TestValidatePageRequiresSSRAddonForHybridWithoutLoad(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Render: gowdk.Hybrid,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
 		},
 	}
@@ -3628,11 +3626,11 @@ func TestValidatePageRequiresSSRAddonForHybridWithoutLoad(t *testing.T) {
 }
 
 func TestValidatePageAllowsDynamicHybridWithoutLoadAsRequestTime(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard/{id}",
 		Render: gowdk.Hybrid,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
 		},
 	}
@@ -3644,11 +3642,11 @@ func TestValidatePageAllowsDynamicHybridWithoutLoadAsRequestTime(t *testing.T) {
 }
 
 func TestValidatePageAllowsHybridWithExplicitLoadAndSSRAddon(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Render: gowdk.Hybrid,
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			Load: true,
 			View: true,
 		},
@@ -3661,7 +3659,7 @@ func TestValidatePageAllowsHybridWithExplicitLoadAndSSRAddon(t *testing.T) {
 }
 
 func TestValidatePageRejectsMissingViewBlock(t *testing.T) {
-	page := manifest.Page{ID: "home", Route: "/", Render: gowdk.SPA}
+	page := gwdkir.Page{ID: "home", Route: "/", Render: gowdk.SPA}
 
 	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
 	if len(diagnostics) != 1 {
@@ -3673,14 +3671,14 @@ func TestValidatePageRejectsMissingViewBlock(t *testing.T) {
 }
 
 func TestValidateManifestRejectsInvalidScriptGo(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:      "home",
 		Package: "pages",
 		Route:   "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Body: `func Broken( {`,
 			}},
 		},
@@ -3696,14 +3694,14 @@ func TestValidateManifestRejectsInvalidScriptGo(t *testing.T) {
 }
 
 func TestValidateManifestRejectsSSRScriptWithoutAddon(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:      "home",
 		Package: "pages",
 		Route:   "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Target: "ssr",
 				Body:   `func LoadHome() map[string]any { return nil }`,
 			}},
@@ -3720,14 +3718,14 @@ func TestValidateManifestRejectsSSRScriptWithoutAddon(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownAddonGoBlockTarget(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:      "home",
 		Package: "pages",
 		Route:   "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Target: "addon.contracts",
 				Body:   `func RegisterContracts() {}`,
 			}},
@@ -3744,14 +3742,14 @@ func TestValidateManifestRejectsUnknownAddonGoBlockTarget(t *testing.T) {
 }
 
 func TestValidateManifestAllowsKnownAddonGoBlockTarget(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:      "home",
 		Package: "pages",
 		Route:   "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Target: "addon.contracts",
 				Body:   `func RegisterContracts() {}`,
 			}},
@@ -3765,14 +3763,14 @@ func TestValidateManifestAllowsKnownAddonGoBlockTarget(t *testing.T) {
 }
 
 func TestValidateManifestUsesAddonGoBlockConsumerDiagnostics(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		ID:      "home",
 		Package: "pages",
 		Route:   "/",
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,
-			GoBlocks: []manifest.GoBlock{{
+			GoBlocks: []gwdkir.GoBlock{{
 				Target: "addon.contracts",
 				Body:   `func RegisterContracts() {}`,
 			}},
@@ -3816,20 +3814,20 @@ func (addon compilerGoBlockAddon) GeneratedGo(target gowdk.GoBlockTarget, contex
 }
 
 func TestValidateManifestAcceptsQualifiedCSSAssetUse(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{
+	app := appFixture{Pages: []gwdkir.Page{
 		{
 			Package: "pages",
 			ID:      "home",
 			Route:   "/",
-			Uses:    []manifest.Use{{Alias: "theme", Package: "assets"}},
+			Uses:    []gwdkir.Use{{Alias: "theme", Package: "assets"}},
 			CSS:     []string{"theme.tokens"},
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Home</main>`},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main>Home</main>`},
 		},
 		{
 			Package: "assets",
 			ID:      "tokens",
 			Route:   "/tokens",
-			Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Tokens</main>`},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main>Tokens</main>`},
 		},
 	}}
 
@@ -3839,12 +3837,12 @@ func TestValidateManifestAcceptsQualifiedCSSAssetUse(t *testing.T) {
 }
 
 func TestValidateManifestRejectsUnknownQualifiedCSSAssetUseAlias(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		Package: "pages",
 		ID:      "home",
 		Route:   "/",
 		CSS:     []string{"theme.tokens"},
-		Blocks:  manifest.Blocks{View: true, ViewBody: `<main>Home</main>`},
+		Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main>Home</main>`},
 	}}}
 
 	err := validateManifest(gowdk.Config{}, app)
@@ -3858,11 +3856,11 @@ func TestValidateManifestRejectsUnknownQualifiedCSSAssetUseAlias(t *testing.T) {
 }
 
 func TestValidatePageRejectsInvalidCSSSelection(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:    "embed",
 		Route: "/embed",
 		CSS:   []string{"none", "forms"},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
 		},
 	}
@@ -3874,11 +3872,11 @@ func TestValidatePageRejectsInvalidCSSSelection(t *testing.T) {
 }
 
 func TestValidatePageRejectsDuplicateCSSSelection(t *testing.T) {
-	page := manifest.Page{
+	page := gwdkir.Page{
 		ID:    "home",
 		Route: "/",
 		CSS:   []string{"default", "forms", "forms"},
-		Blocks: manifest.Blocks{
+		Blocks: gwdkir.Blocks{
 			View: true,
 		},
 	}
@@ -3940,19 +3938,38 @@ func hasDiagnosticMessage(diagnostics []ValidationError, code string, parts ...s
 	return false
 }
 
-// validateManifest lowers a manifest fixture through the production
-// manifest->IR path and validates the IR, mirroring what the build pipeline
-// does. Keeping the fixtures manifest-typed pins the IR-native validators to
-// the diagnostics the manifest validators produced.
-func validateManifest(config gowdk.Config, app manifest.Manifest) error {
-	return ValidateProgram(config, gwdkanalysis.BuildIR(config, app))
+// appFixture mirrors the shape of the old manifest fixtures so the validator
+// corpus stays declarative: parsed source records plus optional standalone
+// endpoints and binding records, lowered through the production program
+// assembly before validation.
+type appFixture struct {
+	Pages           []gwdkir.Page
+	Components      []gwdkir.Component
+	Layouts         []gwdkir.Layout
+	Endpoints       []gwdkir.GoEndpoint
+	BackendBindings []source.BackendBinding
+}
+
+func (app appFixture) program(config gowdk.Config) gwdkir.Program {
+	ir := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{
+		Pages:      app.Pages,
+		Components: app.Components,
+		Layouts:    app.Layouts,
+	})
+	gwdkanalysis.AddStandaloneEndpoints(&ir, app.Endpoints)
+	gwdkanalysis.AttachBackendBindings(&ir, app.BackendBindings)
+	return ir
+}
+
+func validateManifest(config gowdk.Config, app appFixture) error {
+	return ValidateProgram(config, app.program(config))
 }
 
 // irPage lowers a manifest page fixture through the production manifest->IR
 // path so page-level validator tests assert against exactly what the build
 // pipeline validates.
-func irPage(page manifest.Page) gwdkir.Page {
-	program := gwdkanalysis.BuildIR(gowdk.Config{}, manifest.Manifest{Pages: []manifest.Page{page}})
+func irPage(page gwdkir.Page) gwdkir.Page {
+	program := appFixture{Pages: []gwdkir.Page{page}}.program(gowdk.Config{})
 	if len(program.Pages) != 1 {
 		panic(fmt.Sprintf("irPage: expected 1 IR page, got %d", len(program.Pages)))
 	}
@@ -3960,32 +3977,32 @@ func irPage(page manifest.Page) gwdkir.Page {
 }
 
 func TestValidateSourceProgramSkipsCrossFileUseChecks(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		Package: "pages",
 		ID:      "home",
 		Route:   "/",
-		Uses:    []manifest.Use{{Alias: "ui", Package: "components"}},
-		Blocks:  manifest.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
+		Uses:    []gwdkir.Use{{Alias: "ui", Package: "components"}},
+		Blocks:  gwdkir.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
 	}}}
 
-	if err := ValidateSourceProgram(gowdk.Config{}, gwdkanalysis.BuildIR(gowdk.Config{}, app)); err != nil {
+	if err := ValidateSourceProgram(gowdk.Config{}, app.program(gowdk.Config{})); err != nil {
 		t.Fatalf("expected single-file program to skip cross-file use checks, got %v", err)
 	}
 }
 
 func TestValidateSourceProgramKeepsSingleFileUseChecks(t *testing.T) {
-	app := manifest.Manifest{Pages: []manifest.Page{{
+	app := appFixture{Pages: []gwdkir.Page{{
 		Package: "pages",
 		ID:      "home",
 		Route:   "/",
-		Uses: []manifest.Use{
+		Uses: []gwdkir.Use{
 			{Alias: "ui", Package: "components"},
 			{Alias: "ui", Package: "widgets"},
 		},
-		Blocks: manifest.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
+		Blocks: gwdkir.Blocks{View: true, ViewBody: `<main><ui.Hero /></main>`},
 	}}}
 
-	err := ValidateSourceProgram(gowdk.Config{}, gwdkanalysis.BuildIR(gowdk.Config{}, app))
+	err := ValidateSourceProgram(gowdk.Config{}, app.program(gowdk.Config{}))
 	if err == nil {
 		t.Fatal("expected duplicate alias diagnostic")
 	}

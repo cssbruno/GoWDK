@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cssbruno/gowdk/internal/manifest"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func applyAnnotation(page *manifest.Page, name, rawValue string, lineNumber int, rawLine string) error {
+func applyAnnotation(page *gwdkir.Page, name, rawValue string, lineNumber int, rawLine string) error {
 	value := strings.TrimSpace(rawValue)
 	span := sourceLineSpan(lineNumber, rawLine)
 	switch name {
@@ -53,7 +53,7 @@ func applyAnnotation(page *manifest.Page, name, rawValue string, lineNumber int,
 		page.Revalidate = seconds
 		page.Spans.Revalidate = span
 	case "error":
-		errorPage, err := manifest.ErrorPagePath(trimQuotes(value))
+		errorPage, err := source.ErrorPagePath(trimQuotes(value))
 		if err != nil {
 			return err
 		}
@@ -91,8 +91,8 @@ func applyAnnotation(page *manifest.Page, name, rawValue string, lineNumber int,
 		if value == "" {
 			return fmt.Errorf("@guard requires a value")
 		}
-		page.Guard = splitList(value)
-		page.Spans.Guard = namedValueSpans(page.Guard, lineNumber, rawLine)
+		page.Guards = splitList(value)
+		page.Spans.Guard = namedValueSpans(page.Guards, lineNumber, rawLine)
 	case "css":
 		if value == "" {
 			return fmt.Errorf("@css requires a value")
@@ -120,7 +120,7 @@ func endpointErrorPage(match []string, lineNumber int) (string, error) {
 	if len(match) < 5 || strings.TrimSpace(match[4]) == "" {
 		return "", nil
 	}
-	errorPage, err := manifest.ErrorPagePath(match[4])
+	errorPage, err := source.ErrorPagePath(match[4])
 	if err != nil {
 		return "", fmt.Errorf("line %d: %w", lineNumber, err)
 	}
@@ -169,7 +169,7 @@ func revalidateSecondsValue(value string) (string, error) {
 	return strconv.FormatInt(int64(duration/time.Second), 10), nil
 }
 
-func applyLayoutAnnotation(layout *manifest.Layout, name, rawValue string, lineNumber int, rawLine string) error {
+func applyLayoutAnnotation(layout *gwdkir.Layout, name, rawValue string, lineNumber int, rawLine string) error {
 	value := strings.TrimSpace(rawValue)
 	switch name {
 	case "layout":
@@ -184,7 +184,7 @@ func applyLayoutAnnotation(layout *manifest.Layout, name, rawValue string, lineN
 	return nil
 }
 
-func applyComponentAnnotation(component *manifest.Component, name, rawValue string, lineNumber int, rawLine string) error {
+func applyComponentAnnotation(component *gwdkir.Component, name, rawValue string, lineNumber int, rawLine string) error {
 	value := strings.TrimSpace(rawValue)
 	switch name {
 	case "component":
@@ -197,7 +197,7 @@ func applyComponentAnnotation(component *manifest.Component, name, rawValue stri
 		if value == "" {
 			return fmt.Errorf("@wasm requires a package path")
 		}
-		component.WASM = manifest.WASMContract{
+		component.WASM = gwdkir.WASMContract{
 			Package: trimQuotes(value),
 			Span:    sourceLineSpan(lineNumber, rawLine),
 		}

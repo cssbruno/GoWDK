@@ -214,10 +214,13 @@ Current rules:
 - First-slice form enhancement directives such as `g:post`, `g:target`, and
   `g:swap`.
 - First-slice local island directives such as `g:on:*` and `g:island`.
+- The explicit `g:html={Expr}` raw HTML directive on non-void elements.
 
-The current parser does not implement arbitrary external template semantics.
-Unsupported template tags and directives must fail with diagnostics rather than
-being treated as raw HTML.
+`view {}` expands only through GOWDK-owned AST nodes and `g:` directives. The
+current parser does not implement arbitrary external template semantics.
+Unsupported template tags and unknown `g:` directives must fail with
+diagnostics (`unsupported_markup_syntax` and `unsupported_markup_directive`
+message families) rather than being treated as raw HTML or silently ignored.
 
 ## Components
 
@@ -255,9 +258,14 @@ trusted validation, server state, business rules, or cache policy.
 
 ## Raw HTML Policy
 
-Generated HTML escapes text and attributes by default. An explicit raw HTML
-escape hatch is not stable yet. Raw HTML syntax from other template languages is
-unsupported and should fail loudly.
+Generated HTML escapes text and attributes by default; that default is
+unchanged. The one explicit, stable escape hatch is the GOWDK-owned
+`g:html={Expr}` element directive: the element's attributes stay escaped and
+the expression's resolved string is written as the element content without
+escaping. Only trusted or sanitized HTML may be fed to `g:html`; see
+[markup.md](markup.md) for the full contract and restrictions. Raw HTML syntax
+from other template languages, such as `{@html ...}`, remains unsupported and
+fails loudly with guidance toward `g:html`.
 
 ## Diagnostics Policy
 

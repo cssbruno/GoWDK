@@ -6,18 +6,40 @@ unsupported unless another language reference explicitly says otherwise.
 
 ## Contract Decisions
 
-- Raw HTML escape hatches are not supported in the current language contract.
-  Rendered text and attributes are escaped by default.
+- `view {}` markup expands only through GOWDK-owned AST nodes and `g:`
+  directives. There is no implicit pass-through lane: foreign template syntax
+  and unknown `g:` attributes are rejected with explicit diagnostics instead
+  of being translated or silently ignored.
+- Rendered text and attributes are escaped by default. The one explicit raw
+  HTML opt-in is the `g:html={Expr}` directive documented below; all other raw
+  HTML syntax (including `{@html ...}`) is rejected.
 - Snippet/render blocks are not supported. Use GOWDK component slots for the
   supported reusable-markup model.
 - Head management is page metadata, not `view {}` markup. Use `@title`,
   `@description`, `@canonical`, and `@image`.
-- Document/window/body event targets are not core `view {}` features.
-- Transitions and animations are not core `view {}` features in this slice.
-  Use CSS or a future addon-specific contract.
-- DOM actions/attachments are not core `view {}` features in this slice.
-  Use explicit generated island behavior that is documented here.
 - External template syntax is rejected instead of translated implicitly.
+
+Deferred construct families each fail with a registered diagnostic (see
+[diagnostics.md](diagnostics.md)) rather than ad-hoc behavior:
+
+- Async placeholders (`{#await}` blocks, `g:await`/`g:async`) are deferred.
+  The diagnostic points at build/load data, actions, APIs, and fragments for
+  asynchronous data (`unsupported_markup_syntax` /
+  `unsupported_markup_directive`).
+- Transitions and animations (`g:transition`, `g:animate`) are deferred. The
+  diagnostic points at CSS transitions or a future addon-specific contract
+  (`unsupported_markup_directive`).
+- Document/window/body/head targets (`g:window`, `g:document`, `g:body`,
+  `g:head`) are deferred. The diagnostic points at page metadata and
+  element-level `g:on:*` (`unsupported_markup_directive`). `g:target` values
+  must be literal `#id` selectors, so DOM/document targets are also rejected
+  there by value validation.
+- DOM actions/attachments (`g:use`, `g:action`, `g:attach`) are deferred. The
+  diagnostic points at component `client {}` blocks with `g:ref`
+  (`unsupported_markup_directive`).
+- Raw HTML beyond the `g:html` hatch — `{@html ...}` and any other foreign
+  raw-HTML syntax — is rejected with guidance toward `g:html={Expr}`
+  (`unsupported_markup_syntax`).
 
 Implemented today:
 
@@ -131,11 +153,17 @@ Implemented today:
   WASM island assets. `g:island="wasm"` remains a call-site override. Unknown
   `g:island` values are compile/render errors. Without `@wasm` or `g:island`,
   stateful component calls use generated JavaScript by default.
+- The explicit raw HTML escape hatch `g:html={Expr}` on a non-void element
+  without markup children. See the "Raw HTML (`g:html`)" section below.
 - Familiar external-template block syntax such as `{#if}`, `{#each}`,
   `{#await}`, `{#snippet}`, `{@html}`, `{@const}`, and `{@debug}`
   is rejected with diagnostics that point to the current GOWDK-native
-  alternatives. These diagnostics are guidance only; they do not imply that
+  alternatives — `{@html body}` now points at the explicit `g:html={Expr}`
+  directive. These diagnostics are guidance only; they do not imply that
   GOWDK will implement those external constructs feature-for-feature.
+- Unknown `g:` attributes are rejected at parse time with a diagnostic that
+  lists where the supported directive set is documented. There is no silent
+  pass-through for unrecognized directives.
 
 ## Supported `g:` Directives
 
@@ -160,15 +188,61 @@ These are the supported `g:` directives in `view {}` markup:
 - `g:slot="name"` on caller-side `<template>` elements for named and scoped
   slots.
 - `g:island="wasm"` on component calls when a call-site WASM override is needed.
+- `g:html={Expr}` on non-void HTML elements without markup children, in pages
+  and stateless component views. See "Raw HTML (`g:html`)" below.
 
-All other `g:` directives are unsupported today. In particular, there is no
-`g:html`, `g:head`, `g:window`, `g:body`, `g:document`, `g:transition`,
-`g:animate`, or `g:action` directive in the compiler core.
+All other `g:` directives are unsupported today and rejected at parse time
+with the `unsupported_markup_directive` message. In particular, there is no
+`g:head`, `g:window`, `g:body`, `g:document`, `g:transition`, `g:animate`, or
+`g:action` directive in the compiler core.
+
+## Raw HTML (`g:html`)
+
+`g:html={Expr}` is the single explicit, GOWDK-owned opt-in for raw HTML
+output:
+
+```gwdk
+view {
+  <article class="prose" g:html={post.BodyHTML}></article>
+}
+```
+
+Contract:
+
+- The element renders its open and close tags normally; literal and
+  interpolated attributes on the element are still escaped.
+- The expression resolves through the same render-data lookup as `{Expr}` text
+  interpolation, including dotted names and component props. Unknown names
+  fail the same way text interpolation fails.
+- The resolved string is written as the element content **without escaping**.
+
+**Security warning:** content rendered through `g:html` bypasses GOWDK's
+escape-by-default output. Only feed trusted or server-side sanitized HTML to
+`g:html`. Never pass user-controlled input through it; route-param
+interpolation (`{param("...")}`) is rejected inside `g:html` for this reason.
+
+Restrictions (each is an explicit error):
+
+- The element must have no children in markup; the expression provides the
+  whole content.
+- `g:html` requires an expression value (`g:html={Body}`), not a string
+  literal or boolean attribute.
+- `g:html` is not allowed on void elements such as `<br>` or `<img>`.
+- `g:html` cannot combine with `g:for`/`g:key` or `g:bind:*` on the same
+  element.
+- `g:html` is rejected inside stateful component views, inside `g:for` loops,
+  and for island-bound reactive fields, because the island runtime re-renders
+  bound content as escaped text and cannot honor raw HTML there.
+
+Server-rendered fragment swaps (`g:post` + `g:target`/`g:swap`) inject
+server-rendered HTML via `innerHTML`/`outerHTML`, so raw HTML rendered with
+`g:html` flows through them unchanged.
 
 Not implemented yet:
 
 - Non-string component props in inline `props {}` blocks.
-- Raw HTML rendering escape hatches.
+- Raw HTML escape hatches beyond the `g:html` element directive, including
+  attribute-position or text-position raw output.
 - Snippet/render block syntax as a first-class reusable markup value.
 - Template-level await blocks, local const tags, debug tags, transitions,
   animations, DOM actions, and document/window/body/head special targets.
@@ -192,5 +266,5 @@ Future markup work must define:
 - Attribute escaping.
 - Boolean, string, and expression attributes.
 - `g:` directives.
-- Raw HTML escape hatches, if any.
+- Raw HTML escape hatches beyond the element-level `g:html` directive, if any.
 - Source spans and diagnostics for malformed markup.

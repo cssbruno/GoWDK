@@ -104,6 +104,8 @@ var Registry = []Code{
 	{Code: "unsupported_addon_go_block_target", Area: "go-block", Stability: StabilityExperimental, Summary: "enabled addon does not consume the requested go block target"},
 	{Code: "unsupported_fragment_method", Area: "partials", Stability: StabilityExperimental, Summary: "fragment endpoint uses an unsupported method"},
 	{Code: "unsupported_gowdk_use_scope", Area: "source-imports", Stability: StabilityStable, Summary: "use declaration appears in an unsupported source scope"},
+	{Code: "unsupported_markup_directive", Area: "markup", Stability: StabilityStable, Summary: "view markup uses a g: directive outside the GOWDK-owned directive contract"},
+	{Code: "unsupported_markup_syntax", Area: "markup", Stability: StabilityStable, Summary: "view markup uses foreign template syntax instead of GOWDK-owned AST nodes and directives"},
 	{Code: "unsupported_wasm_import", Area: "wasm", Stability: StabilityExperimental, Summary: "browser WASM package imports an unsupported Go package"},
 	{Code: "unterminated_string", Area: "lexer", Stability: StabilityStable, Summary: "lexer found a string literal without a closing quote"},
 	{Code: "view_parse_error", Area: "markup", Stability: StabilityStable, Summary: "view markup parser rejected source"},

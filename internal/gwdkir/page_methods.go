@@ -54,58 +54,36 @@ func (page Page) HasGoBlock(target string) bool {
 
 // DynamicParams returns route parameters declared with /path/{param} syntax.
 func (page Page) DynamicParams() []string {
-	if len(page.RouteParams) > 0 {
-		params := make([]string, 0, len(page.RouteParams))
-		seen := map[string]bool{}
-		for _, param := range page.RouteParams {
-			if param.Name == "" || seen[param.Name] {
-				continue
-			}
-			seen[param.Name] = true
-			params = append(params, param.Name)
-		}
-		sort.Strings(params)
-		return params
-	}
-	params := RouteParamsFromPath(page.Route)
+	params := page.TypedRouteParams()
 	if len(params) == 0 {
 		return nil
 	}
 	names := make([]string, 0, len(params))
-	seen := map[string]bool{}
 	for _, param := range params {
-		if !seen[param.Name] {
-			seen[param.Name] = true
-			names = append(names, param.Name)
-		}
+		names = append(names, param.Name)
 	}
 	sort.Strings(names)
 	return names
 }
 
 // TypedRouteParams returns route params with explicit type metadata. Untyped
-// params are reported as string.
+// params are reported as string. Declared params are merged with params parsed
+// from the route path so trailing rest params such as {path...}, which lowering
+// does not extract, are still reported.
 func (page Page) TypedRouteParams() []source.RouteParam {
-	if len(page.RouteParams) > 0 {
-		out := make([]source.RouteParam, 0, len(page.RouteParams))
-		for _, param := range page.RouteParams {
-			if param.Name == "" {
-				continue
-			}
-			if param.Type == "" {
-				param.Type = "string"
-			}
-			out = append(out, param)
-		}
-		return out
-	}
-	params := RouteParamsFromPath(page.Route)
-	if len(params) == 0 {
-		return nil
-	}
-	out := make([]source.RouteParam, 0, len(params))
+	out := make([]source.RouteParam, 0, len(page.RouteParams))
 	seen := map[string]bool{}
-	for _, param := range params {
+	for _, param := range page.RouteParams {
+		if param.Name == "" || seen[param.Name] {
+			continue
+		}
+		seen[param.Name] = true
+		if param.Type == "" {
+			param.Type = "string"
+		}
+		out = append(out, param)
+	}
+	for _, param := range RouteParamsFromPath(page.Route) {
 		if seen[param.Name] {
 			continue
 		}
@@ -115,11 +93,15 @@ func (page Page) TypedRouteParams() []source.RouteParam {
 		}
 		out = append(out, param)
 	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
 }
 
 // RouteParamsFromPath parses dynamic route parameters from a route pattern of
-// the form /path/{name} or /path/{name:type}.
+// the form /path/{name}, /path/{name:type}, or /path/{name...}. Rest params
+// are always string-typed.
 func RouteParamsFromPath(route string) []source.RouteParam {
 	var params []source.RouteParam
 	for index := 0; index < len(route); index++ {
@@ -144,9 +126,19 @@ func RouteParamsFromPath(route string) []source.RouteParam {
 func splitRouteParamBody(body string) (string, string, bool) {
 	name := body
 	paramType := "string"
+	hasType := false
 	if before, after, ok := strings.Cut(body, ":"); ok {
 		name = before
 		paramType = after
+		hasType = true
+	}
+	if rest := strings.HasSuffix(name, "..."); rest {
+		// Rest params are string-typed only; a typed rest param is invalid.
+		if hasType {
+			return "", "", false
+		}
+		name = strings.TrimSuffix(name, "...")
+		paramType = "string"
 	}
 	if !isRouteIdent(name) || !isRouteIdent(paramType) {
 		return "", "", false

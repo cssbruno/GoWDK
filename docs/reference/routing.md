@@ -31,21 +31,71 @@ Current route rules:
 - Param names use `[A-Za-z_][A-Za-z0-9_]*`.
 - A route cannot repeat the same param name.
 - Duplicate page route patterns are rejected. `/blog/{slug}` and `/blog/{id}`
-  are the same route pattern.
+  are the same route pattern, and `/docs/{path...}` and `/docs/{rest...}` are
+  the same route pattern.
+
+### Rest Params
+
+A page route may declare one rest (catch-all) param as its final segment:
+
+```gwdk
+@route "/docs/{path...}"
+@guard public
+
+go ssr {}
+
+view {
+  <main>
+    <h1>{param("path")}</h1>
+  </main>
+}
+```
+
+Rest param contract:
+
+- `{name...}` is allowed only as the final route segment. A rest param before
+  the end of the route is rejected with a `malformed_route` diagnostic.
+- A rest param matches one or more remaining request path segments. `/docs`
+  does not match `/docs/{path...}`; `/docs/intro` and `/docs/guides/routing`
+  do. Each matched segment still rejects empty, `.`, and `..` values.
+- The captured value is the remaining segments joined with `/`, for example
+  `guides/routing`. Read it with `param("name")` in the view, or in request-time
+  Go through `app.Params(ctx)` and `route.Required(params, "name")`.
+- Rest params are always strings. Typed rest params such as `{path...:int}` are
+  rejected.
+- Rest params require request-time (SSR) rendering, because build-time SPA
+  paths cannot enumerate and escape multi-segment values. Declare `load {}` or
+  `go ssr {}` on the page.
+- Rest params are only supported on page routes; action, API, fragment, and Go
+  comment endpoint paths reject them.
+- Rest routes participate in ambiguity validation: `/docs/{path...}` overlaps
+  `/docs/{slug}`, `/docs/{section}/{slug}`, and concrete routes such as
+  `/docs/guides/intro`, so those combinations are rejected as
+  `ambiguous_dynamic_route`.
 
 Unsupported route forms today:
 
-- Rest params such as `/docs/{path...}`.
-- Optional params such as `/docs/{slug?}`.
+- Optional params such as `/docs/{slug?}`. The diagnostic is explicit: optional
+  route parameters are not supported; declare explicit routes for each shape
+  (rest parameters `{name...}` are supported as the final segment).
 - Route groups that affect URL shape independently from explicit `@route`.
 - Page/API same-path content negotiation. A page route and endpoint may share a
   path only when their HTTP methods do not conflict, such as `GET /signup` page
   plus `POST /signup` action.
 
-Trailing slash policy is strict. Omit trailing slashes except for `/`. Generated
-action handlers tolerate a trailing slash on concrete POST routes as a
-compatibility fallback and redirect to the declared target when configured; page
-route declarations themselves still reject trailing slashes.
+### Trailing Slash Policy
+
+Routes are canonical without a trailing slash. The policy is explicit:
+
+- Declarations: omit trailing slashes except for `/`. `@route "/blog/hello/"`
+  is rejected with `malformed_route`.
+- Requests: generated servers respond to `GET` and `HEAD` requests whose path
+  carries a trailing slash (and is not `/`) with a `308 Permanent Redirect` to
+  the cleaned canonical path, preserving the query string. `GET /blog/hello/?page=2`
+  redirects to `/blog/hello?page=2` instead of serving duplicate content.
+- `POST` behavior is unchanged: generated action handlers tolerate a trailing
+  slash on concrete POST routes as a compatibility fallback and redirect to the
+  declared target when configured.
 
 Pages may declare response cache intent with `@cache`. The value is carried as
 route metadata and should be a literal HTTP `Cache-Control` value:
@@ -255,7 +305,8 @@ gowdk build --ssr --out /tmp/gowdk-ssr-build \
 ```
 
 Dynamic SSR route params render through generated placeholders and request-time
-HTML escaping. Params can be declared as `{name}` or `{name:type}`. Supported
+HTML escaping. Params can be declared as `{name}`, `{name:type}`, or — as the
+final segment only — `{name...}` (always a string). Supported
 types are `string`, `int`, `int64`, `uint`, `uint64`, `bool`, and `float64`.
 Generated SSR handlers attach route metadata through `runtime/app.Route(ctx)`,
 raw dynamic params through `runtime/app.Params(ctx)`, and decoded typed params

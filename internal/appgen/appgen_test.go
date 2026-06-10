@@ -1490,6 +1490,45 @@ func TestGenerateWritesDynamicSSRHandlerWithoutReplacements(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesRestParamSSRHandler(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:        "docs.page",
+		Route:         "/docs/{path...}",
+		DynamicParams: []string{"path"},
+		RouteParams:   []manifest.RouteParam{{Name: "path", Type: "string"}},
+		HTML:          `<main>__PATH__</main>`,
+		Replacements: []SSRReplacement{{
+			Param:       "path",
+			Placeholder: "__PATH__",
+		}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkroute.Match("/docs/{path...}", request.URL.Path)`,
+		`paramValue0, paramOK0, paramErr0 := gowdkroute.String(params, "path")`,
+		`strings.ReplaceAll(html, "__PATH__", gowdkhtml.Escape(params["path"]))`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, `case "/docs/{path...}":`) {
+		t.Fatalf("expected generated main.go not to use exact literal match for rest route:\n%s", source)
+	}
+}
+
 func TestGenerateWritesTypedSSRRouteParamBindings(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

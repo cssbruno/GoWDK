@@ -116,6 +116,16 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 		handler.health(response)
 		return
 	}
+	if request.Method == http.MethodGet || request.Method == http.MethodHead {
+		if canonical, ok := canonicalTrailingSlashPath(request.URL.Path); ok {
+			location := canonical
+			if request.URL.RawQuery != "" {
+				location += "?" + request.URL.RawQuery
+			}
+			http.Redirect(response, request, location, http.StatusPermanentRedirect)
+			return
+		}
+	}
 	if handler.Backend != nil && Boundary("backend", handler.Backend)(response, request) {
 		metrics.recordBackend()
 		return
@@ -159,6 +169,21 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 	metrics.recordStatic()
 	handler.setGeneratedStaticCache(response, assetName)
 	http.ServeContent(response, request, info.Name(), info.ModTime(), bytes.NewReader(payload))
+}
+
+// canonicalTrailingSlashPath reports the canonical redirect target for a
+// GET/HEAD request path that carries a trailing slash. Declared routes are
+// canonical without trailing slashes (except "/"), so /blog/hello/ permanently
+// redirects to /blog/hello instead of serving duplicate content.
+func canonicalTrailingSlashPath(requestPath string) (string, bool) {
+	if requestPath == "" || requestPath == "/" || !strings.HasSuffix(requestPath, "/") {
+		return "", false
+	}
+	canonical := path.Clean("/" + requestPath)
+	if canonical == requestPath {
+		return "", false
+	}
+	return canonical, true
 }
 
 const cookieAckName = "gowdk_cookie_ack"

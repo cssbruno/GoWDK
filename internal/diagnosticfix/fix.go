@@ -116,6 +116,7 @@ func pageRoute(source string) (string, bool) {
 		text := strings.TrimSpace(line)
 		routeText, ok := strings.CutPrefix(text, "route ")
 		if !ok {
+			// Keep safe fixes useful for files that still contain legacy metadata.
 			routeText, ok = strings.CutPrefix(text, "@route ")
 		}
 		if !ok {

@@ -51,6 +51,38 @@ func TestDuplicateRouteCarriesRelatedFirstDeclaration(t *testing.T) {
 	}
 }
 
+func TestDuplicatePageIDCarriesRelatedFirstDeclaration(t *testing.T) {
+	pages := []gwdkir.Page{
+		{ID: "home", Source: "a.page.gwdk", Spans: gwdkir.PageSpans{Page: span(1, 1, 9)}},
+		{ID: "home", Source: "b.page.gwdk", Spans: gwdkir.PageSpans{Page: span(1, 1, 9)}},
+	}
+	diagnostic, ok := findByCode(validateUniquePages(pages), "duplicate_page_id")
+	if !ok {
+		t.Fatal("expected a duplicate_page_id diagnostic")
+	}
+	if len(diagnostic.Related) != 1 || diagnostic.Related[0].Source != "a.page.gwdk" {
+		t.Fatalf("expected related location at first page; got %+v", diagnostic.Related)
+	}
+}
+
+func TestDuplicatePageStoreCarriesRelatedFirstDeclaration(t *testing.T) {
+	page := gwdkir.Page{
+		ID:     "home",
+		Source: "home.page.gwdk",
+		Stores: []gwdkir.Store{
+			{Name: "Counter", Span: span(3, 1, 8)},
+			{Name: "Counter", Span: span(6, 1, 8)},
+		},
+	}
+	diagnostic, ok := findByCode(validatePageStores(page), "duplicate_page_store")
+	if !ok {
+		t.Fatal("expected a duplicate_page_store diagnostic")
+	}
+	if len(diagnostic.Related) != 1 || diagnostic.Related[0].Span != span(3, 1, 8) {
+		t.Fatalf("expected related location at first store; got %+v", diagnostic.Related)
+	}
+}
+
 func TestContractRouteConflictCarriesRelatedFirstDeclaration(t *testing.T) {
 	// Two differently-named query contracts on the same GET route conflict
 	// through the shared route-registration path; the conflict must point back

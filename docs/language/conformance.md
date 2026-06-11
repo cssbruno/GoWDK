@@ -42,6 +42,21 @@ code appears among the diagnostics for that file. Diagnostic codes are the ones
 registered in `internal/diagnostics/registry.go` and documented in
 `docs/reference/diagnostic-codes.md`.
 
+## Coverage
+
+`TestConformanceCorpusCoversRejectionContracts` fails when a rejection contract
+that surfaces a specific stable code through the single-file check loses its
+reject case (`unsupported_top_level_block`, `old_action_block_syntax`,
+`old_api_block_syntax`, `malformed_legacy_metadata`, `malformed_gowdk_use`).
+
+Markup directive and foreign-syntax rejections currently surface as the generic
+`parse_error` through this path rather than `unsupported_markup_directive` /
+`unsupported_markup_syntax`. Their reject cases pin `parse_error` for now and
+will be updated to the specific code once markup rejections carry their own code
+(tracked alongside parser recovery in #250). The corpus ratchets that
+improvement: when the specific code lands, the `parse_error` expectation fails
+until the case is updated.
+
 ## Adding a corpus case
 
 New or changed `.gwdk` syntax must come with a corpus case. Adding accepted

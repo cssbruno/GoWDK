@@ -1,0 +1,11 @@
+// expect: parse_error
+// Foreign template syntax is rejected. It currently surfaces as the generic
+// parse_error through the single-file check; when markup carries its own code
+// this should become unsupported_markup_syntax and this case updates.
+package pages
+
+route "/"
+
+view {
+  {#if ok}<p>x</p>{/if}
+}

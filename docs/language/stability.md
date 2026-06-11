@@ -22,9 +22,12 @@ have an `accept/` case, and a `Planned`/`Deprecated` construct should have a
 - **Deprecated**: previously accepted spelling that is now rejected with a
   migration diagnostic.
 
-The canonical construct names below are the source of truth in code
-(`lang.MetadataKeywords` and `view.SupportedDirectiveNames()`) and are
-cross-checked against this page by `TestStabilityTableCoversConstructs`.
+The tiers below are the code-level registry `lang.ConstructStabilities()` (with
+metadata keywords derived from `lang.MetadataKeywords` and directives checked
+against `view.SupportedDirectiveNames()`). `TestStabilityRegistryCoversCodeConstructs`
+asserts the registry covers every keyword and directive in code, and
+`TestStabilityTableMatchesRegistry` asserts this page matches the registry, so
+neither the table nor the registry can drift without failing a test.
 
 ## Top-Level Blocks
 

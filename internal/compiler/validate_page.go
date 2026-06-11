@@ -360,10 +360,11 @@ func validatePageStores(page gwdkir.Page) []ValidationError {
 	for _, store := range page.Stores {
 		if first, exists := seen[store.Name]; exists {
 			diagnostics = append(diagnostics, ValidationError{
-				Code:   "duplicate_page_store",
-				PageID: page.ID,
-				Source: page.Source,
-				Span:   store.Span,
+				Code:    "duplicate_page_store",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    store.Span,
+				Related: relatedSpan(page.Source, first.Span, fmt.Sprintf("store %q first declared here", store.Name)),
 				Message: fmt.Sprintf(
 					"%s declares duplicate store %q; first declared at line %d and duplicated at line %d",
 					page.ID,

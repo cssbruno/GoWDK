@@ -55,6 +55,36 @@ func TestConformanceCorpusReject(t *testing.T) {
 	}
 }
 
+// TestConformanceCorpusCoversRejectionContracts fails when a rejection contract
+// that surfaces a specific stable code through the single-file check loses its
+// reject case. Markup directive/syntax rejections currently surface as
+// parse_error (a tracked limitation), so they are pinned by their own reject
+// cases rather than listed here.
+func TestConformanceCorpusCoversRejectionContracts(t *testing.T) {
+	required := []string{
+		"unsupported_top_level_block",
+		"old_action_block_syntax",
+		"old_api_block_syntax",
+		"malformed_legacy_metadata",
+		"malformed_gowdk_use",
+	}
+
+	covered := map[string]bool{}
+	dir := filepath.FromSlash("testdata/conformance/reject")
+	for _, name := range conformanceFiles(t, dir) {
+		source := readConformanceFile(t, filepath.Join(dir, name))
+		for _, code := range conformanceExpectedCodes(source) {
+			covered[code] = true
+		}
+	}
+
+	for _, code := range required {
+		if !covered[code] {
+			t.Errorf("no reject corpus case expects required rejection code %q", code)
+		}
+	}
+}
+
 func conformanceFiles(t *testing.T, dir string) []string {
 	t.Helper()
 	entries, err := os.ReadDir(dir)

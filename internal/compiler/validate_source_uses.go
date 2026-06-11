@@ -58,10 +58,11 @@ func validateGOWDKUses(app gwdkir.Program, crossFile bool) []ValidationError {
 		for _, use := range page.Uses {
 			if first, exists := usesByAlias[use.Alias]; exists {
 				diagnostics = append(diagnostics, ValidationError{
-					Code:   "duplicate_gowdk_use_alias",
-					PageID: page.ID,
-					Source: page.Source,
-					Span:   use.Span,
+					Code:    "duplicate_gowdk_use_alias",
+					PageID:  page.ID,
+					Source:  page.Source,
+					Span:    use.Span,
+					Related: relatedSpan(page.Source, first.Span, fmt.Sprintf("alias %q first declared here", use.Alias)),
 					Message: fmt.Sprintf(
 						"%s declares duplicate GOWDK use alias %q; first declared at line %d",
 						page.ID,
@@ -102,6 +103,7 @@ func validateComponentUses(component gwdkir.Component, usesByAlias map[string]gw
 				ComponentName: component.Name,
 				Source:        component.Source,
 				Span:          use.Span,
+				Related:       relatedSpan(component.Source, first.Span, fmt.Sprintf("alias %q first declared here", use.Alias)),
 				Message: fmt.Sprintf(
 					"component %s declares duplicate GOWDK use alias %q; first declared at line %d",
 					component.Name,

@@ -21,10 +21,11 @@ func validateUniquePages(pages []gwdkir.Page) []ValidationError {
 			continue
 		}
 		diagnostics = append(diagnostics, ValidationError{
-			Code:   "duplicate_page_id",
-			PageID: page.ID,
-			Source: page.Source,
-			Span:   page.Spans.Page,
+			Code:    "duplicate_page_id",
+			PageID:  page.ID,
+			Source:  page.Source,
+			Span:    page.Spans.Page,
+			Related: relatedSpan(first.Source, first.Spans.Page, fmt.Sprintf("page ID %q first declared here", page.ID)),
 			Message: duplicateIdentityMessage(
 				"page ID",
 				page.ID,
@@ -50,9 +51,10 @@ func validateUniqueLayouts(layouts []gwdkir.Layout) []ValidationError {
 			continue
 		}
 		diagnostics = append(diagnostics, ValidationError{
-			Code:   "duplicate_layout_id",
-			Source: layout.Source,
-			Span:   layout.Span,
+			Code:    "duplicate_layout_id",
+			Source:  layout.Source,
+			Span:    layout.Span,
+			Related: relatedSpan(first.Source, first.Span, fmt.Sprintf("layout %q first declared here", layoutDisplayName(layout.Package, layout.ID))),
 			Message: duplicateIdentityMessage(
 				"layout ID",
 				layoutDisplayName(layout.Package, layout.ID),
@@ -367,6 +369,7 @@ func validateUniqueComponents(components []gwdkir.Component) []ValidationError {
 			ComponentName: component.Name,
 			Source:        component.Source,
 			Span:          component.Span,
+			Related:       relatedSpan(first.Source, first.Span, fmt.Sprintf("component %q first declared here", component.Name)),
 			Message: duplicateIdentityMessage(
 				"component name",
 				component.Name,
@@ -396,6 +399,7 @@ func validateComponentEmits(components []gwdkir.Component) []ValidationError {
 				ComponentName: component.Name,
 				Source:        component.Source,
 				Span:          event.Span,
+				Related:       relatedSpan(component.Source, first.Span, fmt.Sprintf("emit %q first declared here", event.Name)),
 				Message: fmt.Sprintf(
 					"component %s declares duplicate emit %q; first declared at line %d and duplicated at line %d",
 					component.Name,

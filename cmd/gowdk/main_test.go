@@ -464,6 +464,128 @@ view {
 	}
 }
 
+func TestBuildCommandDoesNotWriteTimingsByDefault(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, source, `package app
+
+page home
+route "/"
+guard public
+
+view {
+  <main>No timings</main>
+}
+`)
+
+	if err := run([]string{"build", "--config", config, "--out", outputDir, source}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, buildTimingsFile)); !os.IsNotExist(err) {
+		t.Fatalf("expected timings sidecar to be disabled by default, stat err=%v", err)
+	}
+	reportPayload, err := os.ReadFile(filepath.Join(outputDir, "gowdk-build-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(reportPayload), "duration") || strings.Contains(string(reportPayload), "timing") {
+		t.Fatalf("expected deterministic build report without timing fields:\n%s", reportPayload)
+	}
+}
+
+func TestBuildCommandWritesTimingsSidecar(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, source, `package app
+
+page home
+route "/"
+guard public
+
+view {
+  <main>Timed</main>
+}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"build", "--config", config, "--timings", "--out", outputDir, source})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	timingsPath := filepath.Join(outputDir, buildTimingsFile)
+	if strings.Contains(stdout, timingsPath) || strings.Contains(stderr, timingsPath) {
+		t.Fatalf("expected timings path to stay out of CLI streams, stdout=%q stderr=%q", stdout, stderr)
+	}
+	payload, err := os.ReadFile(timingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report buildTimingReport
+	if err := json.Unmarshal(payload, &report); err != nil {
+		t.Fatalf("invalid timings JSON: %v\n%s", err, payload)
+	}
+	if report.Version != 1 || report.Mode != "build" || report.OutputDir != outputDir {
+		t.Fatalf("unexpected timings report: %#v", report)
+	}
+	for _, phase := range []string{"config_load", "parse_lower", "go_binding", "ir_validation", "output_plan_writes"} {
+		if !hasTimingPhase(report, phase) {
+			t.Fatalf("expected timing phase %q in %#v", phase, report.Phases)
+		}
+	}
+	if report.Counters["source_files"] != 1 || report.Counters["artifacts"] == 0 || report.Counters["files_written"] == 0 {
+		t.Fatalf("unexpected timing counters: %#v", report.Counters)
+	}
+	reportPayload, err := os.ReadFile(filepath.Join(outputDir, "gowdk-build-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(reportPayload), "durationMs") {
+		t.Fatalf("expected build report to stay duration-free:\n%s", reportPayload)
+	}
+}
+
+func TestBuildCommandWritesCustomTimingsPath(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	timingsPath := filepath.Join(root, "profiles", "build.json")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, source, `package app
+
+page home
+route "/"
+guard public
+
+view {
+  <main>Custom timings</main>
+}
+`)
+
+	if err := run([]string{"build", "--config", config, "--timings=" + timingsPath, "--out", outputDir, source}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(timingsPath); err != nil {
+		t.Fatalf("expected custom timings path: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, buildTimingsFile)); !os.IsNotExist(err) {
+		t.Fatalf("expected default timings path to be skipped when custom path is used, stat err=%v", err)
+	}
+}
+
+func hasTimingPhase(report buildTimingReport, name string) bool {
+	for _, phase := range report.Phases {
+		if phase.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func TestBuildCommandReportsBoundContractReference(t *testing.T) {
 	root := t.TempDir()
 	config := writeMinimalCLIConfig(t, root)

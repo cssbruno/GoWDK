@@ -30,6 +30,12 @@ type Result struct {
 	AssetManifestPath string
 	BuildReportPath   string
 	Report            BuildReport
+	WriteStats        WriteStats
+}
+
+type WriteStats struct {
+	FilesWritten           int
+	IdenticalWritesSkipped int
 }
 
 type MemoryResult struct {

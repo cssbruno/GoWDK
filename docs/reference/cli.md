@@ -25,7 +25,7 @@ gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
 gowdk list commands|queries|events|jobs [--json] [dir]
-gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
+gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk preview [--addr <addr>] [--hot] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
@@ -53,6 +53,10 @@ gowdk lsp [--ssr]
   a registered fix.
 - `--config`: supported by `add`, `check`, `doctor`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; selects the config file. Compile commands load a literal config subset from the given path instead of the required default `gowdk.config.go`.
 - `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
+- `--timings[=<file>]`: supported by `build`; writes a separate versioned JSON
+  timing report. Without an explicit file, the report is written to
+  `gowdk-build-timings.json` in the output root. Generated paths remain the
+  only stdout payload.
 - `gowdk build` writes `contract_reference` build-report events for
   `g:command` forms and `g:query` elements with `unknown`, `bound`, `missing`,
   or `invalid` status.
@@ -169,7 +173,11 @@ directory when one exists. `build --out` overrides `Build.Output`; one of them
 is required for `build`. Every successful disk build writes
 `gowdk-build-report.json` to the output root. Passing `--debug` prints the same
 build report to stderr for validation, planning, write, manifest, cleanup, and
-completion events without changing stdout artifact-path output. `gowdk dev`
+completion events without changing stdout artifact-path output. Passing
+`--timings` writes `gowdk-build-timings.json` next to the build report, or
+`--timings=<file>` writes the timing JSON to a custom path; timing data is kept
+out of `gowdk-build-report.json` so normal build reports stay deterministic.
+`gowdk dev`
 uses `gowdk_cache` as its default output directory unless `--out <dir>` or one
 selected build target supplies or infers an output directory.
 

@@ -19,9 +19,13 @@ const (
 	TokenText       TokenKind = "text"
 )
 
-// Token is a lexical token with source location.
+// Token is a lexical token with source location. Offset is the 0-based byte
+// offset of the token start in the source, the exact substrate the planned
+// recursive-descent parser (ADR 0010) uses to build spans without re-deriving
+// positions from line/column.
 type Token struct {
 	Kind   TokenKind
 	Lexeme string
 	Pos    Position
+	Offset int
 }

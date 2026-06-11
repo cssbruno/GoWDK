@@ -1,0 +1,15 @@
+package pages
+
+route "/styled"
+title "Styled"
+
+style {
+  main { padding: 1rem; }
+  h1 { color: #222; }
+}
+
+view {
+  <main>
+    <h1>Styled</h1>
+  </main>
+}

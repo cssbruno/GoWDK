@@ -1,0 +1,14 @@
+package components
+
+component Card
+
+props {
+  title string
+}
+
+view {
+  <section class="card">
+    <h2>{title}</h2>
+    <slot />
+  </section>
+}

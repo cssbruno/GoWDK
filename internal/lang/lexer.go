@@ -1,6 +1,9 @@
 package lang
 
-import "unicode"
+import (
+	"unicode"
+	"unicode/utf8"
+)
 
 // Lex tokenizes .gwdk source for editor and CLI tooling.
 func Lex(source string) ([]Token, Diagnostics) {
@@ -13,10 +16,11 @@ func Lex(source string) ([]Token, Diagnostics) {
 }
 
 type scanner struct {
-	source []rune
-	index  int
-	line   int
-	column int
+	source    []rune
+	index     int
+	byteIndex int
+	line      int
+	column    int
 }
 
 func (scanner *scanner) scan() ([]Token, Diagnostics) {
@@ -26,13 +30,14 @@ func (scanner *scanner) scan() ([]Token, Diagnostics) {
 	for !scanner.done() {
 		ch := scanner.peek()
 		pos := scanner.position()
+		offset := scanner.byteIndex
 
 		switch {
 		case ch == '\r':
 			scanner.advance()
 		case ch == '\n':
 			scanner.advance()
-			tokens = append(tokens, Token{Kind: TokenNewline, Lexeme: "\n", Pos: pos})
+			tokens = append(tokens, Token{Kind: TokenNewline, Lexeme: "\n", Pos: pos, Offset: offset})
 		case unicode.IsSpace(ch):
 			scanner.advance()
 		case ch == '/' && scanner.peekNext() == '/':
@@ -47,47 +52,49 @@ func (scanner *scanner) scan() ([]Token, Diagnostics) {
 			}
 		case ch == '{':
 			scanner.advance()
-			tokens = append(tokens, Token{Kind: TokenLBrace, Lexeme: "{", Pos: pos})
+			tokens = append(tokens, Token{Kind: TokenLBrace, Lexeme: "{", Pos: pos, Offset: offset})
 		case ch == '}':
 			scanner.advance()
-			tokens = append(tokens, Token{Kind: TokenRBrace, Lexeme: "}", Pos: pos})
+			tokens = append(tokens, Token{Kind: TokenRBrace, Lexeme: "}", Pos: pos, Offset: offset})
 		case ch == ',':
 			scanner.advance()
-			tokens = append(tokens, Token{Kind: TokenComma, Lexeme: ",", Pos: pos})
+			tokens = append(tokens, Token{Kind: TokenComma, Lexeme: ",", Pos: pos, Offset: offset})
 		case ch == ':':
 			scanner.advance()
-			tokens = append(tokens, Token{Kind: TokenColon, Lexeme: ":", Pos: pos})
+			tokens = append(tokens, Token{Kind: TokenColon, Lexeme: ":", Pos: pos, Offset: offset})
 		case ch == '?':
 			scanner.advance()
-			tokens = append(tokens, Token{Kind: TokenQuestion, Lexeme: "?", Pos: pos})
+			tokens = append(tokens, Token{Kind: TokenQuestion, Lexeme: "?", Pos: pos, Offset: offset})
 		case ch == '=' && scanner.peekNext() == '>':
 			scanner.advance()
 			scanner.advance()
-			tokens = append(tokens, Token{Kind: TokenArrow, Lexeme: "=>", Pos: pos})
+			tokens = append(tokens, Token{Kind: TokenArrow, Lexeme: "=>", Pos: pos, Offset: offset})
 		default:
 			tokens = append(tokens, scanner.text())
 		}
 	}
 
-	tokens = append(tokens, Token{Kind: TokenEOF, Pos: scanner.position()})
+	tokens = append(tokens, Token{Kind: TokenEOF, Pos: scanner.position(), Offset: scanner.byteIndex})
 	return tokens, diagnostics
 }
 
 func (scanner *scanner) identifier() Token {
 	pos := scanner.position()
+	offset := scanner.byteIndex
 	start := scanner.index
 	for !scanner.done() && (isIdentPart(scanner.peek()) || scanner.peek() == '.' || scanner.peek() == '-') {
 		scanner.advance()
 	}
 	lexeme := string(scanner.source[start:scanner.index])
 	if scanner.isLineLeading(start) && isMetadataLexeme(lexeme) {
-		return Token{Kind: TokenMetadata, Lexeme: lexeme, Pos: pos}
+		return Token{Kind: TokenMetadata, Lexeme: lexeme, Pos: pos, Offset: offset}
 	}
-	return Token{Kind: TokenIdentifier, Lexeme: lexeme, Pos: pos}
+	return Token{Kind: TokenIdentifier, Lexeme: lexeme, Pos: pos, Offset: offset}
 }
 
 func (scanner *scanner) quotedString() (Token, Diagnostic) {
 	pos := scanner.position()
+	offset := scanner.byteIndex
 	start := scanner.index
 	scanner.advance()
 	for !scanner.done() {
@@ -101,14 +108,14 @@ func (scanner *scanner) quotedString() (Token, Diagnostic) {
 		}
 		if ch == '"' {
 			scanner.advance()
-			return Token{Kind: TokenString, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos}, Diagnostic{}
+			return Token{Kind: TokenString, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos, Offset: offset}, Diagnostic{}
 		}
 		if ch == '\n' {
 			break
 		}
 		scanner.advance()
 	}
-	return Token{Kind: TokenIllegal, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos}, Diagnostic{
+	return Token{Kind: TokenIllegal, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos, Offset: offset}, Diagnostic{
 		Pos:      pos,
 		Range:    sourceRange(pos, scanner.position()),
 		Code:     "unterminated_string",
@@ -129,6 +136,7 @@ func sourceRange(start, end Position) *Range {
 
 func (scanner *scanner) text() Token {
 	pos := scanner.position()
+	offset := scanner.byteIndex
 	start := scanner.index
 	for !scanner.done() {
 		ch := scanner.peek()
@@ -140,7 +148,7 @@ func (scanner *scanner) text() Token {
 		}
 		scanner.advance()
 	}
-	return Token{Kind: TokenText, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos}
+	return Token{Kind: TokenText, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos, Offset: offset}
 }
 
 func (scanner *scanner) skipLineComment() {
@@ -170,6 +178,7 @@ func (scanner *scanner) peekNext() rune {
 func (scanner *scanner) advance() rune {
 	ch := scanner.source[scanner.index]
 	scanner.index++
+	scanner.byteIndex += utf8.RuneLen(ch)
 	if ch == '\n' {
 		scanner.line++
 		scanner.column = 1

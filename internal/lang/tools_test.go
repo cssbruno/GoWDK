@@ -395,7 +395,7 @@ func TestClassifySourceUsesCurrentFileKindRules(t *testing.T) {
 		{"hero.gwdk", "component Hero", FileKindComponent},
 		{"home.page.gwdk", "// Mention component in docs\npage home", FileKindPage},
 		{"root.gwdk", "layout root", FileKindLayout},
-		{"root.layout.gwdk", "layout root", FileKindLayout},
+		{"root.layout.gwdk", "view {\n  <slot />\n}", FileKindLayout},
 		{"images.asset.gwdk", "asset images", FileKindAsset},
 		{"tailwind.plugin.gwdk", "plugin tailwind", FileKindPlugin},
 	}
@@ -424,8 +424,6 @@ view {
 }
 `)
 	writeGWDK(t, layout, `package app
-
-layout root
 
 view {
   <slot />

@@ -165,7 +165,7 @@ func TestServerReturnsProjectAwareCompletions(t *testing.T) {
 	pageURI := "file:///tmp/home.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
 		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+componentURI+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent ProductCard\n\nprops {\n  title string\n}\n\nclient {\n  fn Increment() {\n    Count++\n  }\n}\n\nview {\n  <article>{title}{Count}</article>\n}\n"}}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+layoutURI+`","languageId":"gwdk","version":1,"text":"package app\n\nlayout root\n\nview {\n  <slot />\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+layoutURI+`","languageId":"gwdk","version":1,"text":"package app\n\nview {\n  <slot />\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\nimport ui \"github.com/cssbruno/gowdk/testfixture/islands\"\n\npage home\nroute \"/products\"\nlayout root\nguard RequireUser\n\nstore cart ui.CounterState = ui.NewCounterState()\n\nview {\n  <main></main>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/completion","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":6,"character":8}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/completion","params":{"textDocument":{"uri":"`+componentURI+`"},"position":{"line":8,"character":13}}}`) +

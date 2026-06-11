@@ -270,11 +270,10 @@ direct `view {}` markup subset. Current `g:swap` modes are `innerHTML` and
 `outerHTML`. SPA builds emit the partial client runtime only for pages that
 use partial form metadata with a fragment-producing action.
 
-Layout files can declare a layout ID and `view {}` body:
+Layout files take their ID from the `.layout.gwdk` file name and declare a
+`view {}` body:
 
 ```gwdk
-layout root
-
 view {
   <slot />
 }

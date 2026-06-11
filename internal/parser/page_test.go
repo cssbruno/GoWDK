@@ -1193,8 +1193,6 @@ view {
 
 func TestParseLayoutReadsGoBlock(t *testing.T) {
 	layout, err := ParseLayout("root.layout.gwdk", []byte(`
-layout root
-
 go ssr {
 func LayoutData() string {
 	return "root"
@@ -1324,7 +1322,6 @@ view {
 
 func TestParseLayoutRejectsPageMetadata(t *testing.T) {
 	_, err := ParseLayout("root.layout.gwdk", []byte(`
-layout root
 page home
 
 view {
@@ -1333,7 +1330,7 @@ view {
 	if err == nil {
 		t.Fatal("expected unsupported metadata error")
 	}
-	if err.Error() != `line 3: unsupported metadata page` {
+	if err.Error() != `line 2: unsupported metadata page` {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -562,7 +562,10 @@ Current behavior:
   `.gwdk import`, local command type, bound result type, binding status, and
   handler/register function names and runtime roles in IR/build-report
   metadata when known.
-- Records literal form `method` and `action` as command adapter IR method/path.
+- Records literal form `method` and `action` as command adapter IR
+  method/path. If a page-owned `g:command` form omits `action`, the command
+  adapter path is the owning page route, matching the browser's default form
+  submission target.
 - `gowdk build` links command references to scanned Go command registrations
   and adds `contract_reference` events with status and source line/column to
   `gowdk-build-report.json`. Command events include method/path when present.
@@ -723,7 +726,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   not use string line writing.
 - `gowdk routes` includes routable `g:command` and `g:query` references as
   backend endpoint metadata with contract binding details.
-- Command contract adapter IR includes literal form method/path.
+- Command contract adapter IR includes the form method and either the literal
+  form action or, for page-owned forms that omit `action`, the page route.
 - Page-owned query contract adapter IR includes `GET` plus the page route.
 - Page-owned generated query routes use JSON/query request negotiation so they
   do not replace normal static, SPA, or SSR page responses.

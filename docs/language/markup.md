@@ -13,6 +13,14 @@ unsupported unless another language reference explicitly says otherwise.
 - Rendered text and attributes are escaped by default. The one explicit raw
   HTML opt-in is the `g:html={Expr}` directive documented below; all other raw
   HTML syntax (including `{@html ...}`) is rejected.
+- URL-bearing attributes accept local, relative, fragment, query, `http`,
+  `https`, `mailto`, and `tel` values. Active-content schemes,
+  protocol-relative URLs, and control characters are rejected.
+- Raw inline event handler attributes such as `onclick` are rejected. Use
+  `g:on:*` inside stateful components for compiler-owned local behavior.
+- `<script>` tags and `srcdoc` are not part of `view {}`. Use configured or
+  scoped script assets for explicit scripts, and `g:html={Expr}` only for
+  trusted or sanitized HTML content.
 - Snippet/render blocks are not supported. Use GOWDK component slots for the
   supported reusable-markup model.
 - Head management is page metadata, not `view {}` markup. Use `title`,
@@ -48,6 +56,8 @@ Implemented today:
 - Boolean attributes.
 - Expression attributes such as `data-title={post.Title}` using the same
   interpolation scope as text.
+- Safe URL attributes such as `href`, `src`, `srcset`, `action`, and
+  `formaction`, with unsafe schemes and protocol-relative URLs rejected.
 - Class shorthand such as `.text-4xl` and `.font-bold`, normalized into
   ordinary `class` attributes.
 - ID shorthand such as `#hero`, normalized into an ordinary `id` attribute.
@@ -196,6 +206,40 @@ with the `unsupported_markup_directive` message. In particular, there is no
 `g:head`, `g:window`, `g:body`, `g:document`, `g:transition`, `g:animate`, or
 `g:action` directive in the compiler core.
 
+## URL, Event, And Script Safety
+
+GOWDK escapes attribute values before output, then applies extra checks for
+attributes that browsers treat as navigation or resource URLs.
+
+Allowed URL forms:
+
+- Local paths, such as `/docs`.
+- Relative paths, such as `../assets/logo.png`.
+- Fragment and query values, such as `#main` or `?tab=settings`.
+- `http`, `https`, `mailto`, and `tel` URLs.
+
+Rejected URL forms:
+
+- Active-content or ambiguous schemes such as `javascript:`, `vbscript:`, and
+  `data:`.
+- Protocol-relative URLs such as `//example.com/app.js`.
+- URL values containing control characters.
+
+The policy applies to literal URL attributes and to values resolved through
+build data interpolation. `srcset` is checked per URL candidate. Custom
+attributes such as `data-uri` are ordinary escaped attributes; the exact
+HTML `<object data="...">` attribute is URL-bearing and follows this policy.
+
+Raw inline event handler attributes (`onclick`, `onerror`, and other `on*`
+attributes) are rejected. The supported event model is `g:on:*` inside
+stateful components.
+
+Literal `<script>` tags in `view {}` are rejected. Compiler-owned generated
+scripts, configured scripts, scoped script assets, and island/WASM runtime
+assets are emitted by the build pipeline instead of handwritten script tags in
+markup. `srcdoc` is also rejected because it embeds raw HTML outside the
+`g:html` contract.
+
 ## Raw HTML (`g:html`)
 
 `g:html={Expr}` is the single explicit, GOWDK-owned opt-in for raw HTML
@@ -249,8 +293,8 @@ Not implemented yet:
 - Full client-side expressions beyond the first safe island subset, including
   broader date/time built-ins and JavaScript-style ternaries.
 - Other `g:` directives beyond the supported directive list above.
-- Reactive URL and event-handler attributes, plus raw `style={expr}`
-  attributes.
+- Reactive URL attributes and raw `style={expr}` attributes.
+- Raw inline event handler attributes.
 - Shorthand preservation in a full component AST.
 - Comment preservation.
 

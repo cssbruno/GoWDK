@@ -175,6 +175,39 @@ func TestSSRArtifactsRenderHybridPageWithoutLoad(t *testing.T) {
 	}
 }
 
+func TestSSRArtifactsStoreDefaultHybridRenderMode(t *testing.T) {
+	outputDir := t.TempDir()
+	config := gowdk.Config{
+		Render: gowdk.RenderConfig{Default: gowdk.Hybrid},
+		Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)},
+	}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "dashboard",
+			Route: "/dashboard",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><h1>Dashboard</h1></main>`,
+			},
+		}},
+	}
+
+	artifacts, err := SSRArtifacts(config, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one default-hybrid artifact, got %#v", artifacts)
+	}
+	artifact := artifacts[0]
+	if artifact.Render != gowdk.Hybrid {
+		t.Fatalf("expected effective hybrid render mode, got %#v", artifact)
+	}
+	if !strings.Contains(artifact.HTML, "<h1>Dashboard</h1>") {
+		t.Fatalf("expected rendered default-hybrid HTML, got %s", artifact.HTML)
+	}
+}
+
 func TestSSRArtifactsFromIRRenderConcreteSSRPage(t *testing.T) {
 	outputDir := t.TempDir()
 	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}

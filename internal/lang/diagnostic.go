@@ -20,16 +20,26 @@ type Range struct {
 	End   Position `json:"end"`
 }
 
+// RelatedLocation is a secondary source location attached to a diagnostic, such
+// as the first declaration that a conflict diagnostic also points at.
+type RelatedLocation struct {
+	File    string   `json:"file,omitempty"`
+	Pos     Position `json:"pos"`
+	Range   *Range   `json:"range,omitempty"`
+	Message string   `json:"message,omitempty"`
+}
+
 // Diagnostic describes a language-tool finding.
 type Diagnostic struct {
-	File       string           `json:"file"`
-	Code       string           `json:"code,omitempty"`
-	Pos        Position         `json:"pos"`
-	Range      *Range           `json:"range,omitempty"`
-	Severity   string           `json:"severity"`
-	Fix        *diagnostics.Fix `json:"fix,omitempty"`
-	Message    string           `json:"message"`
-	Suggestion string           `json:"suggestion,omitempty"`
+	File       string            `json:"file"`
+	Code       string            `json:"code,omitempty"`
+	Pos        Position          `json:"pos"`
+	Range      *Range            `json:"range,omitempty"`
+	Severity   string            `json:"severity"`
+	Fix        *diagnostics.Fix  `json:"fix,omitempty"`
+	Message    string            `json:"message"`
+	Suggestion string            `json:"suggestion,omitempty"`
+	Related    []RelatedLocation `json:"related,omitempty"`
 }
 
 func (diagnostic Diagnostic) String() string {

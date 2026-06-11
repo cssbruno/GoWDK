@@ -1,0 +1,12 @@
+// expect: old_action_block_syntax
+package pages
+
+route "/login"
+
+act Login {
+  method POST
+}
+
+view {
+  <main></main>
+}

@@ -27,6 +27,11 @@ func validateUniquePageRoutes(pages []gwdkir.Page) []ValidationError {
 			PageID: page.ID,
 			Source: page.Source,
 			Span:   page.Spans.Route,
+			Related: relatedSpan(
+				first.Source,
+				first.Spans.Route,
+				fmt.Sprintf("route %q first declared here", page.Route),
+			),
 			Message: duplicateRouteMessage(
 				page.Route,
 				first.ID,
@@ -37,6 +42,16 @@ func validateUniquePageRoutes(pages []gwdkir.Page) []ValidationError {
 		})
 	}
 	return diagnostics
+}
+
+// relatedSpan returns a single-element related-location slice for a conflict
+// diagnostic's earlier declaration, or nil when the earlier span is unset so a
+// missing location is never reported as a bogus 1:1 position.
+func relatedSpan(src string, span source.SourceSpan, message string) []source.RelatedSpan {
+	if !hasSpan(span) {
+		return nil
+	}
+	return []source.RelatedSpan{{Source: src, Span: span, Message: message}}
 }
 
 func duplicateRouteMessage(route, firstID, firstSource, duplicateID, duplicateSource string) string {
@@ -191,6 +206,11 @@ func validateRouteMethodConflicts(pages []gwdkir.Page, endpoints []gwdkir.GoEndp
 				PageID: registration.PageID,
 				Source: registration.Source,
 				Span:   registration.Span,
+				Related: relatedSpan(
+					previous.Source,
+					previous.Span,
+					fmt.Sprintf("%s first declared here", previous.Owner),
+				),
 				Message: fmt.Sprintf(
 					"%s %s for %s conflicts with %s",
 					registration.Method,

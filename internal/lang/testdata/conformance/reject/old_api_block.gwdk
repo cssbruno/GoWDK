@@ -1,0 +1,12 @@
+// expect: old_api_block_syntax
+package pages
+
+route "/data"
+
+api Items {
+  method GET
+}
+
+view {
+  <main></main>
+}

@@ -24,8 +24,11 @@ type ValidationError struct {
 	ComponentName string
 	Source        string
 	Span          source.SourceSpan
-	Message       string
-	Severity      Severity
+	// Related carries secondary source locations, such as the first declaration
+	// that a conflict diagnostic also points at. It is optional and additive.
+	Related  []source.RelatedSpan
+	Message  string
+	Severity Severity
 }
 
 func (err ValidationError) Error() string {

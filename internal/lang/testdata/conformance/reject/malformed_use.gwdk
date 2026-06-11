@@ -1,0 +1,10 @@
+// expect: malformed_gowdk_use
+package pages
+
+use widgets
+
+route "/"
+
+view {
+  <main></main>
+}

@@ -59,6 +59,37 @@ func TestFormatKeepsElseBranchesAligned(t *testing.T) {
 	}
 }
 
+func TestFormatIgnoresBracesInStrings(t *testing.T) {
+	// The brace inside the title string must not open a nesting level; the
+	// following route stays at top level. A naive brace count would indent it.
+	source := []byte("page home\ntitle \"a { b\"\nroute \"/\"\n")
+	got := string(Format(source))
+	want := "page home\ntitle \"a { b\"\nroute \"/\"\n"
+	if got != want {
+		t.Fatalf("brace in string changed indentation:\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+}
+
+func TestFormatIgnoresBracesInComments(t *testing.T) {
+	// The unbalanced brace in the comment must not change depth; the sibling
+	// statement stays indented inside the block.
+	source := []byte("go {\n// closes here }\na()\n}\n")
+	got := string(Format(source))
+	want := "go {\n  // closes here }\n  a()\n}\n"
+	if got != want {
+		t.Fatalf("brace in comment changed indentation:\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+}
+
+func TestFormatIgnoresBracesInTemplateLiterals(t *testing.T) {
+	source := []byte("client {\nconst t = `a ${x} }`\nrun()\n}\n")
+	got := string(Format(source))
+	want := "client {\n  const t = `a ${x} }`\n  run()\n}\n"
+	if got != want {
+		t.Fatalf("brace in template literal changed indentation:\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+}
+
 func TestFormatIsIdempotentForSupportedShapes(t *testing.T) {
 	tests := map[string]string{
 		"page": `package app

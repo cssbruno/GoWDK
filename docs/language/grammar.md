@@ -2,6 +2,10 @@
 
 This is the grammar accepted by the current metadata parser. It is intentionally line-oriented and incomplete.
 
+Accepted and rejected syntax is pinned by the machine-checked conformance corpus
+in [Conformance Corpus](conformance.md), which is the contract source of truth
+when this grammar drifts.
+
 ```text
 file        = line*
 line        = blank | comment | packageDecl | metadataDecl | importDecl | useDecl | blockDecl | goDecl | actionDecl | apiDecl | unsupportedBlock | other

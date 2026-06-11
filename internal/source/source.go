@@ -16,12 +16,73 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"unicode/utf8"
 )
 
 // SourcePosition is a 1-based source location in a parsed .gwdk file.
+//
+// Offset is the 0-based byte offset of the position into the source buffer. It
+// is the exact substrate for AST-backed formatting, precise LSP edits, and
+// exact diagnostic ranges, none of which should re-derive offsets from
+// line/column. Offset is best-effort: the current line-oriented parser does not
+// populate it, so a position produced by that parser leaves Offset at its zero
+// value while Line/Column are set. Use PositionAt/OffsetOf to convert against a
+// source buffer when an exact offset is required. Set-ness of a position is
+// determined by Line/Column being positive, not by Offset, because byte offset
+// 0 is a valid first-byte position.
 type SourcePosition struct {
 	Line   int
 	Column int
+	Offset int
+}
+
+// PositionAt returns the 1-based line/column (column counted in runes, matching
+// the parser's rune-column spans) for a 0-based byte offset into src, with
+// Offset set to that byte offset. The offset is clamped to the buffer bounds.
+func PositionAt(src []byte, offset int) SourcePosition {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(src) {
+		offset = len(src)
+	}
+	line, column := 1, 1
+	for index := 0; index < offset; {
+		r, size := utf8.DecodeRune(src[index:])
+		if r == '\n' {
+			line++
+			column = 1
+		} else {
+			column++
+		}
+		index += size
+	}
+	return SourcePosition{Line: line, Column: column, Offset: offset}
+}
+
+// OffsetOf returns the 0-based byte offset into src for a 1-based line/column
+// position (column counted in runes). An unset position (non-positive line or
+// column) maps to 0, and a position past the end of src is clamped to len(src).
+// It is the inverse of PositionAt for in-bounds, rune-aligned positions.
+func OffsetOf(src []byte, pos SourcePosition) int {
+	if pos.Line <= 0 || pos.Column <= 0 {
+		return 0
+	}
+	line, column := 1, 1
+	for index := 0; index < len(src); {
+		if line == pos.Line && column == pos.Column {
+			return index
+		}
+		r, size := utf8.DecodeRune(src[index:])
+		if r == '\n' {
+			line++
+			column = 1
+		} else {
+			column++
+		}
+		index += size
+	}
+	return len(src)
 }
 
 // SourceSpan is a 1-based source range. End is exclusive.
@@ -34,6 +95,17 @@ type SourceSpan struct {
 type NamedSpan struct {
 	Name string
 	Span SourceSpan
+}
+
+// RelatedSpan is a secondary source location attached to a diagnostic, such as
+// the first declaration that a conflict diagnostic also points at. Source is the
+// owning file label (matching a diagnostic's primary Source) and may be empty
+// for a same-file relation. Message is a short note shown alongside the location
+// (for example "first declared here").
+type RelatedSpan struct {
+	Source  string
+	Span    SourceSpan
+	Message string
 }
 
 // RouteParam describes one dynamic route parameter and its declared scalar

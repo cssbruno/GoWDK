@@ -2,13 +2,19 @@ package lang
 
 import (
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/parser"
 )
 
-// Format normalizes whitespace for top-level .gwdk metadata and blocks.
+// Format normalizes whitespace for top-level .gwdk metadata and blocks. Brace
+// depth is tracked with the parser's string/comment-aware scanner so braces
+// inside string literals, comments, and template literals do not skew
+// indentation (for example `title "a { b"` or `// note about }`).
 func Format(source []byte) []byte {
 	var out []string
 	blankPending := false
 	depth := 0
+	braces := parser.NewBraceDepth()
 
 	for _, raw := range strings.Split(string(source), "\n") {
 		line := strings.TrimSpace(raw)
@@ -22,12 +28,15 @@ func Format(source []byte) []byte {
 		}
 		blankPending = false
 
+		// A line that is textually a closing brace dedents itself, unless we are
+		// inside a multi-line literal/comment where that "}" is body content.
+		inMultiline := braces.InMultiline()
 		indent := depth
-		if strings.HasPrefix(line, "}") && indent > 0 {
+		if !inMultiline && strings.HasPrefix(line, "}") && indent > 0 {
 			indent--
 		}
 		out = append(out, strings.Repeat("  ", indent)+line)
-		depth += strings.Count(line, "{") - strings.Count(line, "}")
+		depth += braces.Delta(line)
 		if depth < 0 {
 			depth = 0
 		}
@@ -48,10 +57,5 @@ func isTopLevelMetadataLine(line string) bool {
 	if len(fields) == 0 {
 		return false
 	}
-	switch fields[0] {
-	case "page", "route", "title", "description", "canonical", "image", "layout", "cache", "revalidate", "error", "guard", "css", "component", "wasm", "asset":
-		return true
-	default:
-		return false
-	}
+	return IsMetadataKeyword(fields[0])
 }

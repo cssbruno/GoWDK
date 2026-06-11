@@ -8,6 +8,16 @@ instead of becoming accidental behavior.
 Detailed behavior stays in the feature pages linked from
 [GOWDK Language](README.md).
 
+This prose is pinned by the machine-checked conformance corpus described in
+[Conformance Corpus](conformance.md): accepted syntax has an `accept/` case that
+must check clean, and rejected syntax has a `reject/` case asserting its stable
+diagnostic code. When this spec and the corpus disagree, the corpus is the
+contract and one of them is a bug.
+
+Per-construct stability and deprecation tiers (which blocks, metadata keywords,
+and `g:` directives are stable, partial, planned, or deprecated) are published
+in [Language Construct Stability](stability.md).
+
 ## Status Terms
 
 - Implemented: accepted by the current compiler and covered by tests or a

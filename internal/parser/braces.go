@@ -88,6 +88,35 @@ func (s *braceScanner) delta(line string) int {
 	return delta
 }
 
+// BraceDepth tracks net brace depth across the lines of a .gwdk file for
+// tooling such as the formatter, skipping braces that appear inside string
+// literals, comments, Go raw strings, and JS template literals. It carries
+// multi-line state across Delta calls. It uses Go lexical rules, which cover the
+// top-level `.gwdk` surface and Go/JS block bodies; the one accepted edge is a
+// `//` sequence inside a CSS value (e.g. a `url(http://...)`), which truncates
+// brace counting for the rest of that line only.
+type BraceDepth struct {
+	scanner braceScanner
+}
+
+// NewBraceDepth returns a brace-depth tracker using Go lexical rules.
+func NewBraceDepth() *BraceDepth {
+	return &BraceDepth{scanner: braceScanner{lang: braceLangGo}}
+}
+
+// Delta scans one line and returns the net change in brace depth it
+// contributes, skipping braces inside strings and comments.
+func (b *BraceDepth) Delta(line string) int {
+	return b.scanner.delta(line)
+}
+
+// InMultiline reports whether the tracker is currently inside a multi-line
+// construct (block comment, Go raw string, or JS template literal). A line that
+// is textually "}" while InMultiline is body content, not a block terminator.
+func (b *BraceDepth) InMultiline() bool {
+	return b.scanner.inMultiline()
+}
+
 // blockScanLang maps a top-level block kind to the lexical rules used to scan
 // its body for brace depth. Kinds whose bodies are not brace-scanned default to
 // Go rules, which is harmless because their scanner is never fed.

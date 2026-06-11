@@ -51,6 +51,8 @@ component contract and inline package-go-block slices.
 - `hybrid.md`: hybrid request-time behavior and deferred hybrid capabilities.
 - `diagnostics.md`: current diagnostic shape and known codes.
 - `formatting.md`: current formatter behavior.
+- `stability.md`: per-construct stability and deprecation tiers.
+- `conformance.md`: machine-checked accept/reject corpus that pins the contract.
 
 ## File Kinds
 

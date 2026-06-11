@@ -1,0 +1,11 @@
+package pages
+
+route "/about"
+title "About"
+description "About this site"
+
+view {
+  <main>
+    <p>About us.</p>
+  </main>
+}

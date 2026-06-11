@@ -11,21 +11,29 @@ import (
 type reactiveAttrExpr struct {
 	Name       string
 	Expression string
+	Start      int
+	End        int
 }
 
 type eventExpr struct {
 	Name       string
 	Expression string
+	Start      int
+	End        int
 }
 
 type classToggleExpr struct {
 	Name       string
 	Expression string
+	Start      int
+	End        int
 }
 
 type styleBindingExpr struct {
 	Name       string
 	Expression string
+	Start      int
+	End        int
 }
 
 type valueBindExpr struct {
@@ -33,18 +41,33 @@ type valueBindExpr struct {
 	Element    string
 	InputType  string
 	InputValue string
+	Start      int
+	End        int
+}
+
+type fieldRef struct {
+	Name  string
+	Start int
+	End   int
+}
+
+type stringRef struct {
+	Value string
+	Start int
+	End   int
 }
 
 type componentViewRefs struct {
 	Fields        map[string]bool
+	FieldRefs     []fieldRef
 	Events        []eventExpr
-	Bools         []string
+	Bools         []stringRef
 	Attrs         []reactiveAttrExpr
 	ClassToggles  []classToggleExpr
 	StyleBindings []styleBindingExpr
 	ValueBinds    []valueBindExpr
-	CheckedBinds  []string
-	RefBinds      []string
+	CheckedBinds  []fieldRef
+	RefBinds      []fieldRef
 }
 
 func componentViewReferences(source string) (componentViewRefs, error) {
@@ -53,7 +76,7 @@ func componentViewReferences(source string) (componentViewRefs, error) {
 		return componentViewRefs{}, err
 	}
 	refs := componentViewRefs{Fields: map[string]bool{}}
-	collectComponentViewReferences(nodes, &refs)
+	collectComponentViewReferences(source, nodes, &refs)
 	return refs, nil
 }
 
@@ -131,66 +154,75 @@ func elementKeyExpression(element view.Element) (string, bool) {
 	return "", false
 }
 
-func collectComponentViewReferences(nodes []view.Node, refs *componentViewRefs) {
+func collectComponentViewReferences(source string, nodes []view.Node, refs *componentViewRefs) {
 	for _, node := range nodes {
 		switch typed := node.(type) {
 		case view.Text:
-			collectSimpleInterpolations(typed.Value, refs.Fields)
+			collectSimpleInterpolationRefs(typed.Value, typed.Start, refs)
 		case view.Element:
 			if loop, ok := elementForDirective(typed); ok {
 				if parsed, err := view.ParseForDirective(loop.Value); err == nil {
 					for _, field := range expressionFields(parsed.Collection) {
-						refs.Fields[field] = true
+						addFieldRef(refs, field, loop.Start, loop.End)
 					}
 				}
 				continue
 			}
 			for _, attr := range typed.Attrs {
 				if strings.HasPrefix(attr.Name, "g:on:") {
-					refs.Events = append(refs.Events, eventExpr{Name: attr.Name, Expression: strings.TrimSpace(attr.Value)})
+					exprStart, exprEnd := attrValueOffset(source, attr, strings.TrimSpace(attr.Value))
+					refs.Events = append(refs.Events, eventExpr{Name: attr.Name, Expression: strings.TrimSpace(attr.Value), Start: exprStart, End: exprEnd})
 					for _, field := range view.IslandExpressionFields(attr.Value) {
 						if isDOMEventScopeField(field) {
 							continue
 						}
-						refs.Fields[field] = true
+						addFieldRef(refs, field, exprStart, exprEnd)
 					}
 					continue
 				}
 				if attr.Name == "g:if" {
 					expr := strings.TrimSpace(attr.Value)
-					refs.Bools = append(refs.Bools, expr)
+					exprStart, exprEnd := attrValueOffset(source, attr, expr)
+					refs.Bools = append(refs.Bools, stringRef{Value: expr, Start: exprStart, End: exprEnd})
 					for _, field := range expressionFields(expr) {
-						refs.Fields[field] = true
+						addFieldRef(refs, field, exprStart, exprEnd)
 					}
 					continue
 				}
 				if attr.Name == "g:else-if" {
 					expr := strings.TrimSpace(attr.Value)
-					refs.Bools = append(refs.Bools, expr)
+					exprStart, exprEnd := attrValueOffset(source, attr, expr)
+					refs.Bools = append(refs.Bools, stringRef{Value: expr, Start: exprStart, End: exprEnd})
 					for _, field := range expressionFields(expr) {
-						refs.Fields[field] = true
+						addFieldRef(refs, field, exprStart, exprEnd)
 					}
 					continue
 				}
 				if attr.Name == "g:bind:value" {
 					field := strings.TrimSpace(attr.Value)
+					fieldStart, fieldEnd := attrValueOffset(source, attr, field)
 					refs.ValueBinds = append(refs.ValueBinds, valueBindExpr{
 						Field:      field,
 						Element:    typed.Name,
 						InputType:  literalAttrValue(typed.Attrs, "type"),
 						InputValue: literalAttrValue(typed.Attrs, "value"),
+						Start:      fieldStart,
+						End:        fieldEnd,
 					})
-					refs.Fields[field] = true
+					addFieldRef(refs, field, fieldStart, fieldEnd)
 					continue
 				}
 				if attr.Name == "g:bind:checked" {
 					field := strings.TrimSpace(attr.Value)
-					refs.CheckedBinds = append(refs.CheckedBinds, field)
-					refs.Fields[field] = true
+					fieldStart, fieldEnd := attrValueOffset(source, attr, field)
+					refs.CheckedBinds = append(refs.CheckedBinds, fieldRef{Name: field, Start: fieldStart, End: fieldEnd})
+					addFieldRef(refs, field, fieldStart, fieldEnd)
 					continue
 				}
 				if attr.Name == "g:ref" {
-					refs.RefBinds = append(refs.RefBinds, strings.TrimSpace(attr.Value))
+					refName := strings.TrimSpace(attr.Value)
+					refStart, refEnd := attrValueOffset(source, attr, refName)
+					refs.RefBinds = append(refs.RefBinds, fieldRef{Name: refName, Start: refStart, End: refEnd})
 					continue
 				}
 				if strings.HasPrefix(attr.Name, "g:") {
@@ -198,41 +230,71 @@ func collectComponentViewReferences(nodes []view.Node, refs *componentViewRefs) 
 				}
 				if strings.HasPrefix(attr.Name, "class:") {
 					expr := expressionAttrSource(attr.Value)
-					refs.ClassToggles = append(refs.ClassToggles, classToggleExpr{Name: attr.Name, Expression: expr})
+					exprStart, exprEnd := attrValueOffset(source, attr, expr)
+					refs.ClassToggles = append(refs.ClassToggles, classToggleExpr{Name: attr.Name, Expression: expr, Start: exprStart, End: exprEnd})
 					for _, field := range expressionFields(expr) {
-						refs.Fields[field] = true
+						addFieldRef(refs, field, exprStart, exprEnd)
 					}
 					continue
 				}
 				if strings.HasPrefix(attr.Name, "style:") {
 					expr := expressionAttrSource(attr.Value)
-					refs.StyleBindings = append(refs.StyleBindings, styleBindingExpr{Name: attr.Name, Expression: expr})
+					exprStart, exprEnd := attrValueOffset(source, attr, expr)
+					refs.StyleBindings = append(refs.StyleBindings, styleBindingExpr{Name: attr.Name, Expression: expr, Start: exprStart, End: exprEnd})
 					for _, field := range expressionFields(expr) {
-						refs.Fields[field] = true
+						addFieldRef(refs, field, exprStart, exprEnd)
 					}
 					continue
 				}
 				if attr.Expression {
 					expr := expressionAttrSource(attr.Value)
-					refs.Attrs = append(refs.Attrs, reactiveAttrExpr{Name: attr.Name, Expression: expr})
+					exprStart, exprEnd := attrValueOffset(source, attr, expr)
+					refs.Attrs = append(refs.Attrs, reactiveAttrExpr{Name: attr.Name, Expression: expr, Start: exprStart, End: exprEnd})
 					for _, field := range expressionFields(expr) {
-						refs.Fields[field] = true
+						addFieldRef(refs, field, exprStart, exprEnd)
 					}
 					continue
 				}
-				collectSimpleInterpolations(attr.Value, refs.Fields)
+				collectSimpleAttrInterpolationRefs(source, attr, refs)
 			}
-			collectComponentViewReferences(typed.Children, refs)
+			collectComponentViewReferences(source, typed.Children, refs)
 		case view.ComponentCall:
 			for _, attr := range typed.Attrs {
 				if strings.HasPrefix(attr.Name, "g:") {
 					continue
 				}
-				collectSimpleInterpolations(attr.Value, refs.Fields)
+				collectSimpleAttrInterpolationRefs(source, attr, refs)
 			}
-			collectComponentViewReferences(typed.Children, refs)
+			collectComponentViewReferences(source, typed.Children, refs)
 		}
 	}
+}
+
+func addFieldRef(refs *componentViewRefs, name string, start int, end int) {
+	refs.Fields[name] = true
+	refs.FieldRefs = append(refs.FieldRefs, fieldRef{Name: name, Start: start, End: end})
+}
+
+func attrValueOffset(source string, attr view.Attr, value string) (int, int) {
+	if value == "" {
+		return attr.Start, attr.End
+	}
+	runes := []rune(source)
+	if attr.Start < 0 || attr.End > len(runes) || attr.Start >= attr.End {
+		return attr.Start, attr.End
+	}
+	raw := string(runes[attr.Start:attr.End])
+	index := strings.Index(raw, value)
+	if index < 0 {
+		return attr.Start, attr.End
+	}
+	start := attr.Start + len([]rune(raw[:index]))
+	return start, start + len([]rune(value))
+}
+
+func collectSimpleAttrInterpolationRefs(source string, attr view.Attr, refs *componentViewRefs) {
+	start, _ := attrValueOffset(source, attr, attr.Value)
+	collectSimpleInterpolationRefs(attr.Value, start, refs)
 }
 
 func isDOMEventScopeField(field string) bool {
@@ -274,6 +336,11 @@ func literalAttrValue(attrs []view.Attr, name string) string {
 }
 
 func collectSimpleInterpolations(value string, fields map[string]bool) {
+	refs := componentViewRefs{Fields: fields}
+	collectSimpleInterpolationRefs(value, 0, &refs)
+}
+
+func collectSimpleInterpolationRefs(value string, base int, refs *componentViewRefs) {
 	for index := 0; index < len(value); index++ {
 		if value[index] != '{' {
 			continue
@@ -285,7 +352,7 @@ func collectSimpleInterpolations(value string, fields map[string]bool) {
 		end += index + 1
 		name := value[index+1 : end]
 		if isSimpleInterpolationName(name) {
-			fields[name] = true
+			addFieldRef(refs, name, base+index+1, base+end)
 		}
 		index = end
 	}

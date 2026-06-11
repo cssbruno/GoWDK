@@ -125,6 +125,13 @@ type ComponentCallUsage struct {
 	ReactiveProps bool
 }
 
+// ComponentReference records one component call with source offsets.
+type ComponentReference struct {
+	Name  string
+	Start int
+	End   int
+}
+
 // ContractReference records one template-local backend contract intent.
 type ContractReference struct {
 	Kind   ContractReferenceKind
@@ -242,20 +249,37 @@ func ActionFormSchema(source string) (map[string][]ActionFormField, error) {
 // ComponentReferences returns unique component names directly referenced by a
 // view markup fragment.
 func ComponentReferences(source string) ([]string, error) {
+	refs, err := ComponentReferenceSpans(source)
+	if err != nil {
+		return nil, err
+	}
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	names := map[string]bool{}
+	for _, ref := range refs {
+		names[ref.Name] = true
+	}
+	out := make([]string, 0, len(names))
+	for name := range names {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// ComponentReferenceSpans returns component calls directly referenced by a view
+// markup fragment, preserving source offsets for diagnostics.
+func ComponentReferenceSpans(source string) ([]ComponentReference, error) {
 	nodes, err := Parse(source)
 	if err != nil {
 		return nil, err
 	}
-	names := map[string]bool{}
-	collectComponentReferences(nodes, names)
-	if len(names) == 0 {
+	var refs []ComponentReference
+	collectComponentReferences(nodes, &refs)
+	if len(refs) == 0 {
 		return nil, nil
 	}
-	refs := make([]string, 0, len(names))
-	for name := range names {
-		refs = append(refs, name)
-	}
-	sort.Strings(refs)
 	return refs, nil
 }
 

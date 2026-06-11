@@ -1298,6 +1298,22 @@ func TestCommandReferencesFindsGCommandForms(t *testing.T) {
 	}
 }
 
+func TestComponentReferenceSpansPreservesCallOffsets(t *testing.T) {
+	refs, err := ComponentReferenceSpans(`<main><ui.Hero /><section><Card></Card></section></main>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 2 {
+		t.Fatalf("expected two component refs, got %#v", refs)
+	}
+	if refs[0].Name != "ui.Hero" || refs[0].Start != 6 || refs[0].End != 17 {
+		t.Fatalf("unexpected qualified component ref span: %#v", refs[0])
+	}
+	if refs[1].Name != "Card" || refs[1].Start != 26 || refs[1].End != 39 {
+		t.Fatalf("unexpected component ref span: %#v", refs[1])
+	}
+}
+
 func TestContractReferencesFindsCommandsAndQueries(t *testing.T) {
 	refs, err := ContractReferences(`<main><section g:query="patients.GetPatientPage"></section><form method="post" action="/patients" g:command={patients.CreatePatient}></form></main>`)
 	if err != nil {

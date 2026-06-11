@@ -48,7 +48,7 @@ func (parser *parser) nodes(until string) ([]Node, error) {
 				parser.index = start + offset
 				return nil, parser.errorf("%s", message)
 			}
-			nodes = append(nodes, Text{Value: text})
+			nodes = append(nodes, Text{Value: text, Start: start, End: parser.index})
 		}
 	}
 }
@@ -93,7 +93,7 @@ func (parser *parser) element() (Node, error) {
 		return nil, err
 	}
 	if isComponentName(name) {
-		return parser.componentCall(name)
+		return parser.componentCall(name, start)
 	}
 	if !isLowerHTMLName(name) {
 		return nil, parser.errorf("unsupported element <%s>; this build slice supports lowercase HTML tags only", name)
@@ -146,19 +146,19 @@ func (parser *parser) element() (Node, error) {
 	}
 }
 
-func (parser *parser) componentCall(name string) (ComponentCall, error) {
+func (parser *parser) componentCall(name string, start int) (ComponentCall, error) {
 	var attrs []Attr
 	for {
 		parser.skipSpace()
 		switch {
 		case parser.consume("/>"):
-			return ComponentCall{Name: name, Attrs: attrs}, nil
+			return ComponentCall{Name: name, Attrs: attrs, Start: start, End: parser.index}, nil
 		case parser.consume(">"):
 			children, err := parser.nodes(name)
 			if err != nil {
 				return ComponentCall{}, err
 			}
-			return ComponentCall{Name: name, Attrs: attrs, Children: children}, nil
+			return ComponentCall{Name: name, Attrs: attrs, Children: children, Start: start, End: parser.index}, nil
 		case parser.done():
 			return ComponentCall{}, parser.errorf("unterminated <%s> component tag", name)
 		default:

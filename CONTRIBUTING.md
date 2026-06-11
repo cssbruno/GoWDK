@@ -11,7 +11,7 @@ GOWDK is early-stage compiler infrastructure. Keep changes small, verified, and 
 ## Workflow
 
 1. Read `README.md`, `docs/product/vision.md`, `docs/product/requirements.md`, `docs/product/roadmap.md`, and `docs/engineering/architecture.md`.
-2. For features or broad changes, write or update a spec and implementation plan from `.llm/templates/`.
+2. For features or broad changes, write or update a spec and implementation plan from `.agents/templates/`.
 3. Make the smallest vertical slice that exercises the behavior.
 4. Update docs in the same change when commands, behavior, architecture, or status changes.
 5. Run the relevant verification commands before handoff.

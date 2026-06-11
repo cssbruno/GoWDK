@@ -24,7 +24,7 @@ temp/
 
 # LLM local/session files
 .codex-log/
-.llm/local/
+.agents/local/
 
 # Dependencies
 node_modules/

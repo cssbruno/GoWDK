@@ -2,7 +2,9 @@
 
 Date: 2026-06-04
 
-Status: Accepted
+Status: Accepted (amended 2026-06-11: `.llm/workflows/` was replaced by skills
+in `.agents/skills/`, and `.llm/templates/` moved to `.agents/templates/`;
+`AGENTS.md` is now the instruction file for any coding agent, not only Codex)
 
 ## Context
 
@@ -11,6 +13,8 @@ The repository started empty and needed a structure that helps LLM-assisted codi
 ## Decision
 
 Use `AGENTS.md` as the source of truth for Codex instructions. Keep reusable, tool-neutral LLM workflows in `.llm/workflows/`, templates in `.llm/templates/`, product docs in `docs/product/`, and engineering docs in `docs/engineering/`.
+
+**Amendment (2026-06-11):** `AGENTS.md` is the always-on instruction file for any coding agent, not only Codex. The `.llm/` directory was retired: recurring task workflows became skills under `.agents/skills/`, and reusable templates moved to `.agents/templates/`. Product and engineering doc locations are unchanged.
 
 The product-specific implementation is documented separately in ADR 0002.
 
@@ -29,7 +33,7 @@ The product-specific implementation is documented separately in ADR 0002.
 
 ### Neutral
 
-- Codex-specific instructions stay centralized in `AGENTS.md`, while reusable workflows and templates remain tool-neutral.
+- Agent instructions stay centralized in `AGENTS.md`, while reusable skills and templates remain tool-neutral (under `.agents/` since the 2026-06-11 amendment).
 
 ## Alternatives Considered
 
@@ -39,4 +43,4 @@ The product-specific implementation is documented separately in ADR 0002.
 ## Follow-Up
 
 - Keep `README.md`, `AGENTS.md`, and `docs/engineering/architecture.md` aligned when commands, package boundaries, or render rules change.
-- Add nested `AGENTS.md` files only when a future subtree needs more specific Codex instructions.
+- Add nested `AGENTS.md` files only when a future subtree needs more specific agent instructions.

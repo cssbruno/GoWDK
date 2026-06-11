@@ -47,3 +47,5 @@ Not implemented yet:
   component-level WASM island behavior.
 - `build-report.md`: generated build report schema and CLI debug output.
 - `manifest.md`: manifest and site-map JSON contracts.
+- `syntax-contributors.md`: checklist for parser, diagnostics, IR, generation,
+  docs, and fixture coverage when syntax changes.

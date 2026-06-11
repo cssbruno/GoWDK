@@ -1,6 +1,7 @@
 package buildgen
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
-func TestPlanFromIRMatchesManifestPlan(t *testing.T) {
+func TestPlanFromIRMatchesSourcePlan(t *testing.T) {
 	config := gowdk.Config{}
 	app := gwdkanalysis.Sources{
 		Pages: []gwdkir.Page{{
@@ -28,7 +29,7 @@ func TestPlanFromIRMatchesManifestPlan(t *testing.T) {
 		}},
 	}
 
-	fromManifest, err := plan(config, app, t.TempDir())
+	fromSources, err := plan(config, app, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,14 +38,14 @@ func TestPlanFromIRMatchesManifestPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(fromManifest.pages) != len(fromIR.pages) {
-		t.Fatalf("page plan count mismatch: %d != %d", len(fromManifest.pages), len(fromIR.pages))
+	if len(fromSources.pages) != len(fromIR.pages) {
+		t.Fatalf("page plan count mismatch: %d != %d", len(fromSources.pages), len(fromIR.pages))
 	}
 	if fromIR.pages[0].PageID != "home" || fromIR.pages[0].Route != "/" {
 		t.Fatalf("unexpected IR page plan: %#v", fromIR.pages[0])
 	}
-	if string(fromIR.pages[0].contents) != string(fromManifest.pages[0].contents) {
-		t.Fatalf("IR plan content differs:\n%s\n---\n%s", fromIR.pages[0].contents, fromManifest.pages[0].contents)
+	if string(fromIR.pages[0].contents) != string(fromSources.pages[0].contents) {
+		t.Fatalf("IR plan content differs:\n%s\n---\n%s", fromIR.pages[0].contents, fromSources.pages[0].contents)
 	}
 }
 
@@ -76,6 +77,21 @@ func TestBuildFromIRWritesArtifacts(t *testing.T) {
 	if !strings.Contains(string(payload), "<main>Home</main>") {
 		t.Fatalf("expected generated page content, got:\n%s", payload)
 	}
+}
+
+func TestBuildFromValidatedIRChecksInvariants(t *testing.T) {
+	_, err := BuildFromValidatedIR(gowdk.Config{}, gwdkir.Program{}, t.TempDir())
+	if err == nil {
+		t.Fatal("expected invalid IR error")
+	}
+	var buildErr *BuildError
+	if !errors.As(err, &buildErr) {
+		t.Fatalf("expected BuildError, got %T", err)
+	}
+	if !strings.Contains(err.Error(), "internal compiler error: invalid IR") {
+		t.Fatalf("expected invariant error, got %v", err)
+	}
+	requireBuildReportEvent(t, buildErr.Report, "validate", "failed")
 }
 
 func TestBuildMemoryFromIRCollectsArtifacts(t *testing.T) {

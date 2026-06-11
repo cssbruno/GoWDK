@@ -4,10 +4,11 @@
 
 ```text
 project config plus explicit file paths or configured discovery
-  -> parse source files
-  -> build manifest
-  -> validate render rules
-  -> emit diagnostics, manifest JSON, site-map JSON, route/endpoint metadata, simple app-shell HTML files, browser runtime assets, or generated app output
+  -> parse source files into typed GOWDK AST
+  -> lower parsed records into internal/gwdkir.Program
+  -> enrich IR with Go endpoint discovery and backend bindings
+  -> validate IR invariants, render rules, routes, endpoints, packages, and assets
+  -> emit diagnostics, public manifest JSON, site-map JSON, route/endpoint metadata, build-output artifacts, browser runtime assets, or generated app output
 ```
 
 Project-level compiler commands require `gowdk.config.go` or `--config <file>`.
@@ -37,14 +38,14 @@ Go imports, GOWDK uses, stores, typed component contracts, supported top-level
 blocks, parsed `view {}` markup nodes, literal `paths {}`/`build {}` records,
 action/API endpoint declarations, and source spans.
 
-`internal/gwdkanalysis` lowers parsed AST files into normalized manifest
-compatibility records and a versioned `internal/gwdkir.Program`. The IR models
-packages, source files, page routes, backend endpoints from `.gwdk`
-declarations or explicit Go comments, templates, client behavior,
-source-selected assets, and generated-output plans. Build, memory build,
-incremental SPA build, SSR artifact, and generated app planning now accept
-`internal/gwdkir.Program`; manifest records remain as a
-compatibility/public-report shape while older passes are retired.
+`internal/gwdkanalysis` assembles parsed page, component, and layout records
+into a versioned `internal/gwdkir.Program`. The IR models packages, source
+files, page routes, backend endpoints from `.gwdk` declarations or explicit Go
+comments, templates, client behavior, source-selected assets, and
+generated-output plans. Build, memory build, incremental SPA build, SSR
+artifact, generated app planning, route reports, LSP metadata, and the public
+`gowdk manifest` report consume `internal/gwdkir.Program`. Route and asset
+manifests are generated output artifacts, not compiler handoff records.
 Generated app Go, backend adapter Go, build-data helper Go, and starter config
 Go are constructed as Go ASTs, printed, and formatted before use or write.
 
@@ -67,4 +68,5 @@ project config
   -> optional embedded one-binary output
 ```
 
-Future build work should expand from the current simple app artifact to full component, asset, handler, and one-binary output.
+Future build work should expand from the current generated-output slice while
+keeping downstream passes on `internal/gwdkir.Program`.

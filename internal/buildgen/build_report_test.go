@@ -45,7 +45,7 @@ func TestBuildWritesSPAHTMLForSimpleRoute(t *testing.T) {
 	if result.Report.Version != 1 || result.Report.Mode != "build" {
 		t.Fatalf("unexpected build report: %#v", result.Report)
 	}
-	requireBuildReportEvent(t, result.Report, "validate", "manifest_valid")
+	requireBuildReportEvent(t, result.Report, "validate", "ir_valid")
 	requireBuildReportEvent(t, result.Report, "plan", "artifacts_planned")
 	requireBuildReportEvent(t, result.Report, "manifest", "route_manifest_written")
 	requireBuildReportEvent(t, result.Report, "complete", "build_complete")

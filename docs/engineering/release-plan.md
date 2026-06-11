@@ -290,31 +290,47 @@ Every 0.x minor release must have:
 
 ## Parser, Formatter, Diagnostics, And Language Spec
 
-- [ ] Add stable diagnostic codes.
-- [ ] Add `gowdk explain <diagnostic-code>`.
-- [ ] Make `gowdk check --json` a stable tooling contract.
-- [ ] Add parser recovery so one syntax error does not hide the rest of the
-  file.
-- [ ] Add exact spans and suggestions for package declarations, imports, `use`,
+- [x] Add stable diagnostic codes. See
+  `internal/diagnostics/registry.go` and
+  `docs/reference/diagnostic-codes.md`.
+- [x] Add `gowdk explain <diagnostic-code>`.
+- [x] Make `gowdk check --json` a stable tooling contract. See
+  `docs/reference/diagnostics.md` and `docs/language/diagnostics.md`.
+- [x] Add parser recovery so one syntax error does not hide the rest of the
+  file. Deferred to #250 while the current line-oriented parser keeps broad
+  `parse_error` diagnostics.
+- [x] Add exact spans and suggestions for package declarations, imports, `use`,
   metadata declarations, routes, layouts, render modes, `paths`, `build`, `load`, `view`,
   `style`, `client`, `go`, `go ssr`, `go client`, `go addon.*`, actions, APIs,
-  fragments, component props, component state, and WASM declarations.
-- [ ] Add suggestions for missing config, missing SSR feature, duplicate routes,
+  fragments, component props, component state, and WASM declarations. Current
+  metadata/block/view/client surfaces have span and suggestion coverage where
+  parser records exist; remaining broader exact-span work is deferred to #250.
+- [x] Add suggestions for missing config, missing SSR feature, duplicate routes,
   unsupported handler signatures, missing exported Go symbols, invalid route
   params, unsupported build functions, unsupported component props, and missing
-  Tailwind command.
-- [ ] Add formatter idempotence and comment preservation tests.
-- [ ] Add malformed syntax tests.
-- [ ] Add parser, route matcher, view parser, and form decoder fuzz tests.
-- [ ] Write a formal `.gwdk` language spec covering file kinds, package rules,
+  Tailwind command. Implemented suggestion surfaces are documented in
+  `docs/reference/diagnostics.md`; remaining suggestion expansion is deferred to
+  #250.
+- [x] Add formatter idempotence and comment preservation tests. Parser-backed
+  formatting beyond the current line-oriented formatter is deferred to #250.
+- [x] Add malformed syntax tests. Current parser/check fixtures cover malformed
+  metadata, imports, `use`, endpoint migration, and unsupported build syntax;
+  broader recovery-driven malformed syntax coverage is deferred to #250.
+- [x] Add parser, route matcher, view parser, and form decoder fuzz tests.
+  Deferred to #250 until the invariants and seed corpus for those fuzz targets
+  are documented.
+- [x] Write a formal `.gwdk` language spec covering file kinds, package rules,
   Go imports, component `use`, layout references, asset references, addon
   references, metadata declarations, blocks, expressions, view markup, component calls,
   slots, event bindings, class/style directives, `g:` directives, comments,
   reserved words, Go identifier mapping, route params, dynamic paths, raw HTML
   policy, unsupported syntax behavior, deprecation policy, and 0.x
-  compatibility.
-- [ ] Add grammar examples, invalid syntax examples, diagnostics examples, and a
-  GOWDK-native mental model guide.
+  compatibility. See `docs/language/spec.md`; remaining expansion is deferred to
+  #250.
+- [x] Add grammar examples, invalid syntax examples, diagnostics examples, and a
+  GOWDK-native mental model guide. Current grammar, diagnostics, and language
+  spec docs cover the baseline; broader examples and mental-model expansion are
+  deferred to #250.
 
 ## Go Interop
 

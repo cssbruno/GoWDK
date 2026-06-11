@@ -657,6 +657,42 @@ view {
 	}
 }
 
+func TestCheckJSONReportsInvalidContractRoute(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	pageSource := `package pages
+
+page patients
+route "/patients"
+
+view {
+  <main>
+    <form method="post" action="https://example.com/pay" g:command="patients.CreatePatient">
+      <input name="name" />
+    </form>
+  </main>
+}
+`
+	page := filepath.Join(root, "pages", "patients.page.gwdk")
+	writeCLIFile(t, page, pageSource)
+
+	var output string
+	var err error
+	withWorkingDir(t, root, func() {
+		output, err = captureCLIStdout(t, func() error {
+			return run([]string{"check", "--config", config, "--json", page})
+		})
+	})
+	if err == nil {
+		t.Fatal("expected invalid contract route to fail check")
+	}
+	if !strings.Contains(output, `"code": "contract_route_invalid"`) ||
+		!strings.Contains(output, `endpoint path \"https://example.com/pay\" must be a local absolute path`) ||
+		!strings.Contains(output, `"line": 9`) {
+		t.Fatalf("expected invalid contract route diagnostic with source span, got:\n%s", output)
+	}
+}
+
 func TestCheckJSONReportsInvalidGoContractRegistration(t *testing.T) {
 	root := t.TempDir()
 	config := writeMinimalCLIConfig(t, root)
@@ -703,6 +739,51 @@ func HandleCreatePatient(ctx context.Context, command string) (CreatePatientResu
 		!strings.Contains(output, "second parameter must be CreatePatient") ||
 		!strings.Contains(output, "contracts/patients.go") {
 		t.Fatalf("expected invalid contract handler diagnostic, got:\n%s", output)
+	}
+}
+
+func TestCheckJSONReportsMalformedGoEndpointComment(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	page := filepath.Join(root, "pages", "home.page.gwdk")
+	writeCLIFile(t, page, `package pages
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "pages", "handlers.go"), `package pages
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+//gowdk:route GET /api/health
+func Health(context.Context, *http.Request) (response.Response, error) {
+	return response.Response{}, nil
+}
+`)
+
+	var output string
+	var err error
+	withWorkingDir(t, root, func() {
+		output, err = captureCLIStdout(t, func() error {
+			return run([]string{"check", "--config", config, "--json", page})
+		})
+	})
+	if err == nil {
+		t.Fatal("expected malformed Go endpoint comment to fail check")
+	}
+	if !strings.Contains(output, `"code": "malformed_go_endpoint_comment"`) ||
+		!strings.Contains(output, "supported endpoint kinds are act and api") ||
+		!strings.Contains(output, `"line": 10`) {
+		t.Fatalf("expected malformed Go endpoint diagnostic with source span, got:\n%s", output)
 	}
 }
 
@@ -3252,6 +3333,51 @@ view {
 	})
 }
 
+func TestRoutesCommandPrintsDefaultHybridRouteKind(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "dashboard.page.gwdk")
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Render: gowdk.RenderConfig{Default: gowdk.Hybrid},
+}
+`)
+	writeCLIFile(t, page, `package app
+
+page dashboard
+route "/dashboard"
+
+view {
+  <main>Dashboard</main>
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"routes", "--ssr", "--config", config, page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(stderr, "spa_disabled") || strings.Contains(stderr, "ssr_disabled") {
+		t.Fatalf("expected no disabled route info for default hybrid route, got:\n%s", stderr)
+	}
+
+	var report routeMetadataReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
+	}
+	assertRouteBinding(t, report.Routes, routeBindingJSON{
+		Kind:    "hybrid",
+		Method:  "GET",
+		Route:   "/dashboard",
+		PageID:  "dashboard",
+		Handler: "hybrid.RenderDashboard",
+	})
+}
+
 func TestRoutesCommandDiscoversSelectedModuleOnly(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
@@ -3680,6 +3806,83 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 	if report.Endpoints[0].SourceSpan == nil || report.Endpoints[0].SourceSpan.Start.Line != 9 {
 		t.Fatalf("expected endpoint source span for contract reference, got %#v", report.Endpoints[0].SourceSpan)
 	}
+}
+
+func TestRoutesCommandUsesExplicitConfigProjectRootForDiscoveryAndContracts(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "pages", "patients.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package pages
+
+page patients
+route "/patients"
+
+view {
+  <main>
+    <form method="post" action="/patients" g:command="patients.CreatePatient">
+      <input name="name" />
+    </form>
+  </main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "contracts", "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct {
+	Name string `+"`json:\"name\" form:\"name\"`"+`
+}
+type CreatePatientResult struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, contracts.RoleWeb)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{}, nil
+}
+`)
+
+	var output string
+	withWorkingDir(t, t.TempDir(), func() {
+		captured, err := captureCLIStdout(t, func() error {
+			return run([]string{"routes", "--config", config})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		output = captured
+	})
+
+	var report routeMetadataReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
+	}
+	assertEndpointBinding(t, report.Endpoints, endpointBindingJSON{
+		Kind:           "command",
+		EndpointSource: "contract",
+		Source:         page,
+		Package:        "pages",
+		Symbol:         "patients.CreatePatient",
+		Method:         "POST",
+		Route:          "/patients",
+		PageID:         "patients",
+		Handler:        "contracts.command.patients.CreatePatient",
+		Contract: &contractBindingJSON{
+			Name:        "patients.CreatePatient",
+			Kind:        "command",
+			Status:      "bound",
+			ImportAlias: "patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Roles:       []string{"web"},
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+		},
+	})
 }
 
 func TestBuildCommandWritesGeneratedEmbeddedApp(t *testing.T) {

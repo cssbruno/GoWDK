@@ -246,7 +246,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 		}
 
 		if match := metadataPattern.FindStringSubmatch(line); match != nil {
-			if err := applyComponentAnnotation(&component, match[1], match[2], lineNumber, rawLine); err != nil {
+			if err := applyComponentMetadata(&component, match[1], match[2], lineNumber, rawLine); err != nil {
 				return gwdkir.Component{}, withLine(lineNumber, err)
 			}
 			continue

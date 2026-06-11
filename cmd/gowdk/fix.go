@@ -26,7 +26,7 @@ func fixCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	_, foundDiagnostics := lang.CheckFiles(options.Config, paths)
+	_, foundDiagnostics := lang.CheckFilesWithOptions(options.Config, paths, lang.CheckOptions{ProjectRoot: options.ProjectRoot})
 	summary, err := collectFixes(foundDiagnostics, fixOptions.Code)
 	if err != nil {
 		return err

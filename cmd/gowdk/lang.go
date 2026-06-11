@@ -72,7 +72,7 @@ func check(args []string) error {
 	}
 
 	if options.JSON {
-		payload, diagnostics := lang.CheckJSON(options.Config, paths)
+		payload, diagnostics := lang.CheckJSONWithOptions(options.Config, paths, lang.CheckOptions{ProjectRoot: options.ProjectRoot})
 		if len(payload) > 0 {
 			fmt.Print(string(payload))
 		}
@@ -82,7 +82,7 @@ func check(args []string) error {
 		return nil
 	}
 
-	_, diagnostics := lang.CheckFiles(options.Config, paths)
+	_, diagnostics := lang.CheckFilesWithOptions(options.Config, paths, lang.CheckOptions{ProjectRoot: options.ProjectRoot})
 	if len(diagnostics) == 0 {
 		fmt.Println("ok")
 		return nil
@@ -109,7 +109,7 @@ func manifestJSON(args []string) error {
 		return err
 	}
 
-	payload, diagnostics := lang.ManifestJSON(options.Config, paths)
+	payload, diagnostics := lang.ManifestJSONWithOptions(options.Config, paths, lang.CheckOptions{ProjectRoot: options.ProjectRoot})
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
@@ -126,7 +126,7 @@ func siteMapJSON(args []string) error {
 		return err
 	}
 
-	payload, diagnostics := lang.SiteMapJSON(options.Config, paths)
+	payload, diagnostics := lang.SiteMapJSONWithOptions(options.Config, paths, lang.CheckOptions{ProjectRoot: options.ProjectRoot})
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
@@ -143,7 +143,7 @@ func routesJSON(args []string) error {
 		return err
 	}
 
-	checked, diagnostics := lang.CheckFiles(options.Config, paths)
+	checked, diagnostics := lang.CheckFilesWithOptions(options.Config, paths, lang.CheckOptions{ProjectRoot: options.ProjectRoot})
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
@@ -152,7 +152,7 @@ func routesJSON(args []string) error {
 	}
 
 	ir := checked.IR
-	if err := linkIRContractReferences(&ir, "."); err != nil {
+	if err := linkIRContractReferences(&ir, options.ProjectRoot); err != nil {
 		return err
 	}
 	metadata := compiler.BuildRouteMetadataFromIR(options.Config, ir)

@@ -25,6 +25,9 @@ func contractsReport(args []string) error {
 }
 
 func linkIRContractReferences(ir *gwdkir.Program, root string) error {
+	if strings.TrimSpace(root) == "" {
+		root = "."
+	}
 	report, err := contractscan.Scan(root)
 	if err != nil {
 		return err

@@ -46,7 +46,7 @@ func validateGOWDKUses(app gwdkir.Program, crossFile bool) []ValidationError {
 				Source: layout.Source,
 				Span:   use.Span,
 				Message: fmt.Sprintf(
-					"layout %s declares GOWDK use alias %q, but layouts do not support GOWDK use yet; pages and components support qualified component calls",
+					"layout %s declares GOWDK use alias %q, but layout files do not support GOWDK use yet; pages support cross-package layout references with page-level use declarations",
 					layout.ID,
 					use.Alias,
 				),

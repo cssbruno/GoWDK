@@ -69,7 +69,7 @@ are still planned — see [docs/engineering/security.md](../engineering/security
 
 ## Related
 
-- [spec.md](spec.md) — full page annotation contract.
+- [spec.md](spec.md) — full page keyword and metadata declaration contract.
 - [docs/reference/routing.md](../reference/routing.md) — route validation and plans.
 - [ssr.md](ssr.md) — request-time render mode and `load {}`.
 - [diagnostics.md](diagnostics.md) — `missing_page_guard`, `public_guard_exclusive`.

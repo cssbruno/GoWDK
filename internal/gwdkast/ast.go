@@ -8,30 +8,30 @@ import (
 
 // File is the typed AST for the currently supported .gwdk syntax subset.
 type File struct {
-	Package     *Package
-	Annotations []Annotation
-	Page        *PageDecl
-	Route       *RouteDecl
-	Cache       *CacheDecl
-	Revalidate  *RevalidateDecl
-	ErrorPage   *ErrorPageDecl
-	Layouts     []LayoutRef
-	Guards      []GuardRef
-	CSS         []AssetRef
-	JS          []AssetRef
-	Assets      []AssetRef
-	Component   *ComponentDecl
-	Layout      *LayoutDecl
-	Imports     []Import
-	Uses        []Use
-	Stores      []Store
-	PropsType   *GoTypeRef
-	State       *StateContract
-	WASM        *WASMContract
-	Blocks      []Block
-	Actions     []Endpoint
-	APIs        []Endpoint
-	Fragments   []FragmentEndpoint
+	Package    *Package
+	Metadata   []MetadataDecl
+	Page       *PageDecl
+	Route      *RouteDecl
+	Cache      *CacheDecl
+	Revalidate *RevalidateDecl
+	ErrorPage  *ErrorPageDecl
+	Layouts    []LayoutRef
+	Guards     []GuardRef
+	CSS        []AssetRef
+	JS         []AssetRef
+	Assets     []AssetRef
+	Component  *ComponentDecl
+	Layout     *LayoutDecl
+	Imports    []Import
+	Uses       []Use
+	Stores     []Store
+	PropsType  *GoTypeRef
+	State      *StateContract
+	WASM       *WASMContract
+	Blocks     []Block
+	Actions    []Endpoint
+	APIs       []Endpoint
+	Fragments  []FragmentEndpoint
 }
 
 // Package is the top-level Go package declaration.
@@ -40,8 +40,8 @@ type Package struct {
 	Span source.SourceSpan
 }
 
-// Annotation is one top-level metadata declaration.
-type Annotation struct {
+// MetadataDecl is one top-level keyword metadata declaration.
+type MetadataDecl struct {
 	Name  string
 	Value string
 	Span  source.SourceSpan

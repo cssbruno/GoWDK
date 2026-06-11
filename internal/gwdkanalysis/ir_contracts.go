@@ -21,7 +21,7 @@ func appendContractReferences(program *gwdkir.Program, template gwdkir.Template)
 		return
 	}
 	for _, ref := range refs {
-		method := ref.Method
+		method := source.BackendRouteMethod(ref.Method)
 		path := ref.Path
 		if ref.Kind == view.ContractReferenceQuery && path == "" && template.Route != "" {
 			method = "GET"

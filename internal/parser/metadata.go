@@ -10,7 +10,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func applyAnnotation(page *gwdkir.Page, name, rawValue string, lineNumber int, rawLine string) error {
+func applyMetadata(page *gwdkir.Page, name, rawValue string, lineNumber int, rawLine string) error {
 	value := strings.TrimSpace(rawValue)
 	span := sourceLineSpan(lineNumber, rawLine)
 	switch name {
@@ -60,28 +60,28 @@ func applyAnnotation(page *gwdkir.Page, name, rawValue string, lineNumber int, r
 		page.ErrorPage = errorPage
 		page.Spans.ErrorPage = span
 	case "title":
-		title, err := annotationText(name, value)
+		title, err := metadataText(name, value)
 		if err != nil {
 			return err
 		}
 		page.Metadata.Title = title
 		page.Spans.Title = span
 	case "description":
-		description, err := annotationText(name, value)
+		description, err := metadataText(name, value)
 		if err != nil {
 			return err
 		}
 		page.Metadata.Description = description
 		page.Spans.Description = span
 	case "canonical":
-		canonical, err := annotationText(name, value)
+		canonical, err := metadataText(name, value)
 		if err != nil {
 			return err
 		}
 		page.Metadata.Canonical = canonical
 		page.Spans.Canonical = span
 	case "image":
-		image, err := annotationText(name, value)
+		image, err := metadataText(name, value)
 		if err != nil {
 			return err
 		}
@@ -105,7 +105,7 @@ func applyAnnotation(page *gwdkir.Page, name, rawValue string, lineNumber int, r
 	return nil
 }
 
-func annotationText(name, value string) (string, error) {
+func metadataText(name, value string) (string, error) {
 	if value == "" {
 		return "", fmt.Errorf("%s requires a value", name)
 	}
@@ -169,7 +169,7 @@ func revalidateSecondsValue(value string) (string, error) {
 	return strconv.FormatInt(int64(duration/time.Second), 10), nil
 }
 
-func applyLayoutAnnotation(layout *gwdkir.Layout, name, rawValue string, lineNumber int, rawLine string) error {
+func applyLayoutMetadata(layout *gwdkir.Layout, name, rawValue string, lineNumber int, rawLine string) error {
 	value := strings.TrimSpace(rawValue)
 	switch name {
 	case "layout":
@@ -188,7 +188,7 @@ func applyLayoutAnnotation(layout *gwdkir.Layout, name, rawValue string, lineNum
 	return nil
 }
 
-func applyComponentAnnotation(component *gwdkir.Component, name, rawValue string, lineNumber int, rawLine string) error {
+func applyComponentMetadata(component *gwdkir.Component, name, rawValue string, lineNumber int, rawLine string) error {
 	value := strings.TrimSpace(rawValue)
 	switch name {
 	case "component":

@@ -19,7 +19,7 @@ func layoutIDFromPath(path string) string {
 
 // ParseLayout extracts layout metadata and top-level block declarations.
 // Layout identity is derived from the file name (`root.layout.gwdk` -> `root`);
-// any `layout` annotation declares parent layouts this layout nests within.
+// any `layout` metadata declaration declares parent layouts this layout nests within.
 func ParseLayout(path string, src []byte) (gwdkir.Layout, error) {
 	var layout gwdkir.Layout
 	layout.ID = layoutIDFromPath(path)
@@ -117,7 +117,7 @@ func ParseLayout(path string, src []byte) (gwdkir.Layout, error) {
 		seenDeclaration = true
 
 		if match := metadataPattern.FindStringSubmatch(line); match != nil {
-			if err := applyLayoutAnnotation(&layout, match[1], match[2], lineNumber, rawLine); err != nil {
+			if err := applyLayoutMetadata(&layout, match[1], match[2], lineNumber, rawLine); err != nil {
 				return gwdkir.Layout{}, withLine(lineNumber, err)
 			}
 			continue

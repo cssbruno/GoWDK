@@ -110,7 +110,7 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	options.Config.Build.Output = outputDir
 	paths := append([]string(nil), request.Paths...)
 	if len(paths) == 0 {
-		discovered, err := discoverBuildFiles(options.Config, outputDir, request.Modules)
+		discovered, err := discoverBuildFiles(options.Config, outputDir, request.Modules, options.ProjectRoot)
 		if err != nil {
 			return err
 		}
@@ -144,7 +144,7 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	if report.HasErrors() {
 		return fmt.Errorf("build failed")
 	}
-	if err := linkIRContractReferences(&ir, "."); err != nil {
+	if err := linkIRContractReferences(&ir, options.ProjectRoot); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return fmt.Errorf("build failed")
 	}

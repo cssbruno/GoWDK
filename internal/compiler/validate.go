@@ -97,6 +97,7 @@ func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) Val
 	diagnostics = append(diagnostics, validateAmbiguousDynamicPageRoutes(ir.Pages, ir.GoEndpoints)...)
 	diagnostics = append(diagnostics, validateRouteMethodConflicts(ir.Pages, ir.GoEndpoints)...)
 	diagnostics = append(diagnostics, validateStandaloneEndpoints(ir.GoEndpoints)...)
+	diagnostics = append(diagnostics, validateContractReferenceRoutes(ir.ContractRefs)...)
 	for _, page := range ir.Pages {
 		diagnostics = append(diagnostics, ValidatePage(config, page)...)
 	}

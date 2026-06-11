@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/runtime/validation"
 )
@@ -57,6 +58,9 @@ func validateAPIEndpoints(endpoints []APIEndpoint) error {
 		if strings.TrimSpace(endpoint.APIName) == "" {
 			return fmt.Errorf("generated API endpoint for page %q is missing API name", endpoint.PageID)
 		}
+		if err := validateActionEndpointPath(endpoint.Route); err != nil {
+			return fmt.Errorf("generated API %s.%s: %w", endpoint.PageID, endpoint.APIName, err)
+		}
 		if endpoint.ErrorPage != "" {
 			errorPage, err := source.ErrorPagePath(endpoint.ErrorPage)
 			if err != nil {
@@ -106,6 +110,31 @@ func validateFragmentEndpoints(endpoints []FragmentEndpoint) error {
 		seen[key] = endpoint
 	}
 	return nil
+}
+
+func validateContractRoutes(ir *gwdkir.Program) error {
+	if ir == nil {
+		return nil
+	}
+	for _, ref := range ir.ContractRefs {
+		method := source.BackendRouteMethod(ref.Method)
+		if strings.TrimSpace(ref.Method) != "" && method != contractRouteMethod(ref.Kind) {
+			return fmt.Errorf("generated %s contract %s route method %q is invalid; %s contract routes require %s", ref.Kind, ref.Name, ref.Method, ref.Kind, contractRouteMethod(ref.Kind))
+		}
+		if strings.TrimSpace(ref.Path) != "" {
+			if err := source.ValidateBackendRoutePath(ref.Path); err != nil {
+				return fmt.Errorf("generated %s contract %s route path is invalid: %w", ref.Kind, ref.Name, err)
+			}
+		}
+	}
+	return nil
+}
+
+func contractRouteMethod(kind gwdkir.ContractKind) string {
+	if kind == gwdkir.ContractQuery {
+		return "GET"
+	}
+	return "POST"
 }
 
 func validateFragmentTargetValue(value string) error {
@@ -196,13 +225,7 @@ func validateValidationRules(endpoint ActionEndpoint) error {
 }
 
 func validateActionEndpointPath(value string) error {
-	if !strings.HasPrefix(value, "/") {
-		return fmt.Errorf("endpoint path %q must be an absolute path", value)
-	}
-	if strings.ContainsAny(value, "?#{}") {
-		return fmt.Errorf("endpoint path %q must be a concrete path without query, fragment, or params", value)
-	}
-	return nil
+	return source.ValidateBackendRoutePath(value)
 }
 
 func validateActionRedirect(value string) error {

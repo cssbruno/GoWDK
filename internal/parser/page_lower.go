@@ -138,7 +138,7 @@ func lowerPageSyntaxMetadata(src []byte, ast gwdkast.File, page *gwdkir.Page) er
 		lineNumber := metadata.Span.Start.Line
 		rawLine := sourceLineText(src, lineNumber)
 		if err := applyMetadata(page, metadata.Name, metadata.Value, lineNumber, rawLine); err != nil {
-			return fmt.Errorf("line %d: %w", lineNumber, err)
+			return withLine(lineNumber, err)
 		}
 	}
 	return nil

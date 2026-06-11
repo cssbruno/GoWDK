@@ -96,14 +96,17 @@ Code names use lower snake case. Prefer predictable forms:
   `invalid_<thing>`, and `unsupported_<thing>`.
 - `<feature>_requires_<dependency>`.
 
-Parser diagnostics can still emit broad `parse_error` while parser recovery
-gets more specific stable codes.
+Parser diagnostics emit stable codes for common unsupported syntax and keep
+`parse_error` as the fallback for unknown parser failures.
 
 ## Current Areas
 
 - Parser and lexer: `parse_error`, `package_must_be_first`,
-  `old_action_block_syntax`, `old_api_block_syntax`, `malformed_gowdk_use`,
-  `unterminated_string`.
+  `malformed_legacy_metadata`, `old_action_block_syntax`,
+  `old_api_block_syntax`, `malformed_gowdk_use`,
+  `unsupported_literal_record_syntax`, `unsupported_top_level_block`,
+  `unsupported_layout_metadata`, `invalid_component_prop`,
+  `unsupported_component_prop_type`, `unterminated_string`.
 - Packages and imports: `missing_package_declaration`, `package_mismatch`,
   `go_package_error`, `invalid_go_import`, `duplicate_go_import_alias`.
 - GOWDK source imports: `duplicate_gowdk_use_alias`,

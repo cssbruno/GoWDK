@@ -125,7 +125,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 		}
 		if match := packagePattern.FindStringSubmatch(line); match != nil {
 			if seenDeclaration {
-				return SyntaxFile{}, fmt.Errorf("line %d: package declaration must be the first non-comment declaration", lineNumber)
+				return SyntaxFile{}, lineDiagnosticError(DiagnosticPackageMustBeFirst, lineNumber, rawLine, "package declaration must be the first non-comment declaration")
 			}
 			pkg := SyntaxPackage{Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)}
 			file.Package = &pkg
@@ -143,7 +143,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 				Span:  sourceLineSpan(lineNumber, rawLine),
 			}
 			if err := applySyntaxMetadata(&file, metadata, lineNumber, rawLine); err != nil {
-				return SyntaxFile{}, fmt.Errorf("line %d: %w", lineNumber, err)
+				return SyntaxFile{}, withLine(lineNumber, err)
 			}
 			if match[1] == "wasm" {
 				file.WASM = &WASMContract{
@@ -155,7 +155,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "@") {
-			return SyntaxFile{}, fmt.Errorf("line %d: malformed legacy metadata %q", lineNumber, line)
+			return SyntaxFile{}, lineDiagnosticError(DiagnosticMalformedLegacyMetadata, lineNumber, rawLine, "malformed legacy metadata %q", line)
 		}
 		if match := importPattern.FindStringSubmatch(line); match != nil {
 			file.Imports = append(file.Imports, SyntaxImport{
@@ -177,7 +177,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if isMalformedUse(line) {
-			return SyntaxFile{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
+			return SyntaxFile{}, lineDiagnosticError(DiagnosticMalformedGOWDKUse, lineNumber, rawLine, "malformed use %q", line)
 		}
 		if match := jsPattern.FindStringSubmatch(line); match != nil {
 			file.JS = append(file.JS, gwdkast.AssetRef{
@@ -272,7 +272,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if match := actionPattern.FindStringSubmatch(line); match != nil {
-			return SyntaxFile{}, fmt.Errorf("line %d: old action block syntax is not supported; use `act %s POST \"<path>\"` and move behavior to Go", lineNumber, exportedIdentifierSuggestion(match[1]))
+			return SyntaxFile{}, lineDiagnosticError(DiagnosticOldActionBlockSyntax, lineNumber, rawLine, "old action block syntax is not supported; use `act %s POST \"<path>\"` and move behavior to Go", exportedIdentifierSuggestion(match[1]))
 		}
 		if match := apiEndpointPattern.FindStringSubmatch(line); match != nil {
 			if !isExportedIdentifier(match[1]) {
@@ -294,7 +294,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if match := apiPattern.FindStringSubmatch(line); match != nil {
-			return SyntaxFile{}, fmt.Errorf("line %d: old API block syntax is not supported; use `api %s GET \"<path>\"` and move behavior to Go", lineNumber, exportedIdentifierSuggestion(match[1]))
+			return SyntaxFile{}, lineDiagnosticError(DiagnosticOldAPIBlockSyntax, lineNumber, rawLine, "old API block syntax is not supported; use `api %s GET \"<path>\"` and move behavior to Go", exportedIdentifierSuggestion(match[1]))
 		}
 		if match := fragmentEndpointPattern.FindStringSubmatch(line); match != nil {
 			if match[2] != "GET" {
@@ -317,7 +317,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if name := unsupportedTopLevelBlockName(line); name != "" {
-			return SyntaxFile{}, fmt.Errorf("line %d: unsupported top-level block %q", lineNumber, name)
+			return SyntaxFile{}, lineDiagnosticError(DiagnosticUnsupportedTopLevelBlock, lineNumber, rawLine, "unsupported top-level block %q", name)
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -537,7 +537,7 @@ func parseLiteralRecords(body []syntaxBodyLine) ([]LiteralRecord, error) {
 		}
 		match := literalRecordPattern.FindStringSubmatch(line)
 		if match == nil {
-			return nil, fmt.Errorf("line %d: unsupported literal record syntax %q", raw.Line, line)
+			return nil, lineDiagnosticError(DiagnosticUnsupportedLiteralRecord, raw.Line, raw.Text, "unsupported literal record syntax %q", line)
 		}
 		fields, err := parseLiteralRecordFields(match[1])
 		if err != nil {

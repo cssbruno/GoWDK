@@ -104,7 +104,7 @@ func ParseLayout(path string, src []byte) (gwdkir.Layout, error) {
 
 		if match := packagePattern.FindStringSubmatch(line); match != nil {
 			if seenDeclaration {
-				return gwdkir.Layout{}, fmt.Errorf("line %d: package declaration must be the first non-comment declaration", lineNumber)
+				return gwdkir.Layout{}, lineDiagnosticError(DiagnosticPackageMustBeFirst, lineNumber, rawLine, "package declaration must be the first non-comment declaration")
 			}
 			layout.Package = match[1]
 			layout.PackageSpan = sourceLineSpan(lineNumber, rawLine)
@@ -118,12 +118,12 @@ func ParseLayout(path string, src []byte) (gwdkir.Layout, error) {
 
 		if match := metadataPattern.FindStringSubmatch(line); match != nil {
 			if err := applyLayoutMetadata(&layout, match[1], match[2], lineNumber, rawLine); err != nil {
-				return gwdkir.Layout{}, fmt.Errorf("line %d: %w", lineNumber, err)
+				return gwdkir.Layout{}, withLine(lineNumber, err)
 			}
 			continue
 		}
 		if strings.HasPrefix(line, "@") {
-			return gwdkir.Layout{}, fmt.Errorf("line %d: malformed legacy metadata %q", lineNumber, line)
+			return gwdkir.Layout{}, lineDiagnosticError(DiagnosticMalformedLegacyMetadata, lineNumber, rawLine, "malformed legacy metadata %q", line)
 		}
 
 		if match := usePattern.FindStringSubmatch(line); match != nil {
@@ -135,7 +135,7 @@ func ParseLayout(path string, src []byte) (gwdkir.Layout, error) {
 			continue
 		}
 		if isMalformedUse(line) {
-			return gwdkir.Layout{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
+			return gwdkir.Layout{}, lineDiagnosticError(DiagnosticMalformedGOWDKUse, lineNumber, rawLine, "malformed use %q", line)
 		}
 
 		switch line {
@@ -183,7 +183,7 @@ func ParseLayout(path string, src []byte) (gwdkir.Layout, error) {
 		}
 
 		if name := unsupportedTopLevelBlockName(line); name != "" {
-			return gwdkir.Layout{}, fmt.Errorf("line %d: unsupported top-level block %q", lineNumber, name)
+			return gwdkir.Layout{}, lineDiagnosticError(DiagnosticUnsupportedTopLevelBlock, lineNumber, rawLine, "unsupported top-level block %q", name)
 		}
 	}
 	if err := scanner.Err(); err != nil {

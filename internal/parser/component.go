@@ -145,10 +145,10 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 			}
 			match := propPattern.FindStringSubmatch(line)
 			if match == nil {
-				return gwdkir.Component{}, fmt.Errorf("line %d: invalid prop declaration %q", lineNumber, line)
+				return gwdkir.Component{}, lineDiagnosticError(DiagnosticInvalidComponentProp, lineNumber, rawLine, "invalid prop declaration %q", line)
 			}
 			if match[2] != "string" {
-				return gwdkir.Component{}, fmt.Errorf("line %d: prop %s uses unsupported type %q", lineNumber, match[1], match[2])
+				return gwdkir.Component{}, lineDiagnosticError(DiagnosticUnsupportedComponentPropType, lineNumber, rawLine, "prop %s uses unsupported type %q", match[1], match[2])
 			}
 			component.Props = append(component.Props, gwdkir.Prop{Name: match[1], Type: match[2], Span: sourceLineSpan(lineNumber, rawLine)})
 			continue
@@ -193,7 +193,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 
 		if match := packagePattern.FindStringSubmatch(line); match != nil {
 			if seenDeclaration {
-				return gwdkir.Component{}, fmt.Errorf("line %d: package declaration must be the first non-comment declaration", lineNumber)
+				return gwdkir.Component{}, lineDiagnosticError(DiagnosticPackageMustBeFirst, lineNumber, rawLine, "package declaration must be the first non-comment declaration")
 			}
 			component.Package = match[1]
 			component.PackageSpan = sourceLineSpan(lineNumber, rawLine)
@@ -225,7 +225,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 			continue
 		}
 		if isMalformedUse(line) {
-			return gwdkir.Component{}, fmt.Errorf("line %d: malformed use %q", lineNumber, line)
+			return gwdkir.Component{}, lineDiagnosticError(DiagnosticMalformedGOWDKUse, lineNumber, rawLine, "malformed use %q", line)
 		}
 		if match := jsPattern.FindStringSubmatch(line); match != nil {
 			component.JS = append(component.JS, match[1])
@@ -247,12 +247,12 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 
 		if match := metadataPattern.FindStringSubmatch(line); match != nil {
 			if err := applyComponentMetadata(&component, match[1], match[2], lineNumber, rawLine); err != nil {
-				return gwdkir.Component{}, fmt.Errorf("line %d: %w", lineNumber, err)
+				return gwdkir.Component{}, withLine(lineNumber, err)
 			}
 			continue
 		}
 		if strings.HasPrefix(line, "@") {
-			return gwdkir.Component{}, fmt.Errorf("line %d: malformed legacy metadata %q", lineNumber, line)
+			return gwdkir.Component{}, lineDiagnosticError(DiagnosticMalformedLegacyMetadata, lineNumber, rawLine, "malformed legacy metadata %q", line)
 		}
 
 		if match := componentTypePattern.FindStringSubmatch(line); match != nil {
@@ -357,7 +357,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 		}
 
 		if name := unsupportedTopLevelBlockName(line); name != "" {
-			return gwdkir.Component{}, fmt.Errorf("line %d: unsupported top-level block %q", lineNumber, name)
+			return gwdkir.Component{}, lineDiagnosticError(DiagnosticUnsupportedTopLevelBlock, lineNumber, rawLine, "unsupported top-level block %q", name)
 		}
 	}
 	if err := scanner.Err(); err != nil {

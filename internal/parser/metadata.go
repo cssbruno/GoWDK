@@ -183,7 +183,7 @@ func applyLayoutMetadata(layout *gwdkir.Layout, name, rawValue string, lineNumbe
 			layout.Span = sourceLineSpan(lineNumber, rawLine)
 		}
 	default:
-		return fmt.Errorf("unsupported metadata %s", name)
+		return lineDiagnosticError(DiagnosticUnsupportedLayoutMetadata, lineNumber, rawLine, "unsupported metadata %s", name)
 	}
 	return nil
 }

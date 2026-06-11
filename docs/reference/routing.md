@@ -248,6 +248,8 @@ Go comment action endpoints are standalone backend endpoints. They use the same
 binding and generated adapter pipeline as `.gwdk` action declarations, but they
 do not infer page-local form schemas, fragments, or guards from `.gwdk` page
 markup.
+Malformed `//gowdk:` comments, unknown endpoint kinds, and missing method or
+path fields fail with `malformed_go_endpoint_comment`.
 
 When `Build.CSRF.Enabled` is set, generated action handlers validate CSRF
 tokens before generated decoding or user handlers run. Missing or invalid

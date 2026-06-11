@@ -112,6 +112,7 @@ var Registry = []Code{
 	{Code: "layout_self_reference", Area: "layouts", Stability: StabilityStable, Severity: SeverityError, Summary: "layout lists itself in layout; a layout cannot inherit from itself"},
 	{Code: "layout_slot_count", Area: "layouts", Stability: StabilityStable, Severity: SeverityError, Summary: "layout must contain exactly one <slot /> placeholder"},
 	{Code: "load_requires_request_render", Area: "rendering", Stability: StabilityStable, Severity: SeverityError, Summary: "load block requires request-time page rendering"},
+	{Code: "malformed_go_endpoint_comment", Area: "backend", Stability: StabilityStable, Severity: SeverityError, Summary: "Go endpoint comment uses an unsupported //gowdk shape"},
 	{Code: "malformed_gowdk_use", Area: "source-imports", Stability: StabilityStable, Severity: SeverityError, Summary: "GOWDK use declaration is malformed"},
 	{Code: "malformed_route", Area: "routing", Stability: StabilityStable, Severity: SeverityError, Summary: "route path violates GOWDK route syntax"},
 	{Code: "missing_img_alt", Area: "accessibility", Stability: StabilityStable, Severity: SeverityWarning, Summary: "image element is missing explicit alt text"},

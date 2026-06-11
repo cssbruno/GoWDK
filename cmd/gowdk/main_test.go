@@ -742,6 +742,51 @@ func HandleCreatePatient(ctx context.Context, command string) (CreatePatientResu
 	}
 }
 
+func TestCheckJSONReportsMalformedGoEndpointComment(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	page := filepath.Join(root, "pages", "home.page.gwdk")
+	writeCLIFile(t, page, `package pages
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "pages", "handlers.go"), `package pages
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+//gowdk:route GET /api/health
+func Health(context.Context, *http.Request) (response.Response, error) {
+	return response.Response{}, nil
+}
+`)
+
+	var output string
+	var err error
+	withWorkingDir(t, root, func() {
+		output, err = captureCLIStdout(t, func() error {
+			return run([]string{"check", "--config", config, "--json", page})
+		})
+	})
+	if err == nil {
+		t.Fatal("expected malformed Go endpoint comment to fail check")
+	}
+	if !strings.Contains(output, `"code": "malformed_go_endpoint_comment"`) ||
+		!strings.Contains(output, "supported endpoint kinds are act and api") ||
+		!strings.Contains(output, `"line": 10`) {
+		t.Fatalf("expected malformed Go endpoint diagnostic with source span, got:\n%s", output)
+	}
+}
+
 func TestBuildFailsForMissingContractReference(t *testing.T) {
 	root := t.TempDir()
 	config := writeMinimalCLIConfig(t, root)

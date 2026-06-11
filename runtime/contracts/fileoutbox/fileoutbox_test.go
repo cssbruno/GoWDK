@@ -13,7 +13,7 @@ import (
 	"github.com/cssbruno/gowdk/runtime/contracts"
 )
 
-var patientCreatedType = typeName[patientCreated]()
+var patientCreatedType = contracts.ContractName[patientCreated]()
 
 type patientCreated struct {
 	ID string `json:"id"`

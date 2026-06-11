@@ -3,7 +3,6 @@ package redisstream
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -40,7 +39,7 @@ type Store struct {
 
 // Decoder converts one JSON event value into the typed value expected by
 // runtime/contracts subscribers.
-type Decoder func(json.RawMessage) (any, error)
+type Decoder = contracts.EventDecoder
 
 // Option configures a Store.
 type Option func(*Store)
@@ -74,13 +73,13 @@ func WithDecoder(eventType string, decoder Decoder) Option {
 
 // WithJSONDecoder registers a JSON decoder for one event type.
 func WithJSONDecoder[T any](eventType string) Option {
-	return WithDecoder(eventType, func(raw json.RawMessage) (any, error) {
-		var value T
-		if err := json.Unmarshal(raw, &value); err != nil {
-			return nil, err
-		}
-		return value, nil
-	})
+	return WithDecoder(eventType, contracts.JSONEventDecoder[T]())
+}
+
+// WithJSONTypeDecoder registers a JSON decoder using the same Go type name
+// stored by runtime/contracts when T is emitted.
+func WithJSONTypeDecoder[T any]() Option {
+	return WithJSONDecoder[T](contracts.ContractName[T]())
 }
 
 // New creates a Redis Streams store.
@@ -260,34 +259,12 @@ func (store *Store) decodeMessage(message redis.XMessage) (contracts.EventEnvelo
 	return store.decodeStored(message.ID, source)
 }
 
-func (store *Store) decodeStored(id string, source string) (contracts.EventEnvelope, error) {
-	var stored storedEnvelope
-	if err := json.Unmarshal([]byte(source), &stored); err != nil {
-		return contracts.EventEnvelope{}, err
-	}
-	value := any(stored.Value)
-	if decoder := store.decoders[stored.Type]; decoder != nil {
-		decoded, err := decoder(stored.Value)
-		if err != nil {
-			return contracts.EventEnvelope{}, err
-		}
-		value = decoded
-	}
-	return contracts.EventEnvelope{Category: stored.Category, Type: stored.Type, Value: value}, nil
-}
-
-type storedEnvelope struct {
-	Category contracts.EventCategory `json:"category"`
-	Type     string                  `json:"type"`
-	Value    json.RawMessage         `json:"value"`
+func (store *Store) decodeStored(_ string, source string) (contracts.EventEnvelope, error) {
+	return contracts.DecodeEventEnvelopeJSON([]byte(source), store.decoders)
 }
 
 func marshalEnvelope(event contracts.EventEnvelope) (string, error) {
-	value, err := json.Marshal(event.Value)
-	if err != nil {
-		return "", err
-	}
-	payload, err := json.Marshal(storedEnvelope{Category: event.Category, Type: event.Type, Value: value})
+	payload, err := contracts.MarshalEventEnvelopeJSON(event)
 	if err != nil {
 		return "", err
 	}

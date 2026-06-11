@@ -545,6 +545,33 @@ route "/bad"
 	}
 }
 
+func TestCheckJSONIncludesRegisteredFixMetadata(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "old.page.gwdk")
+	writeGWDK(t, path, `package app
+
+page old
+route "/old"
+
+act submit {
+}
+
+view {
+}
+`)
+
+	payload, diagnostics := CheckJSON(gowdk.Config{}, []string{path})
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected old endpoint syntax diagnostic")
+	}
+	output := string(payload)
+	if !strings.Contains(output, `"code": "old_action_block_syntax"`) ||
+		!strings.Contains(output, `"fix": {`) ||
+		!strings.Contains(output, `"rewriter": "endpoint_header_from_message"`) {
+		t.Fatalf("expected registered fix metadata in JSON: %s", output)
+	}
+}
+
 func TestCheckJSONReportsUnsupportedBuildStatementDiagnostic(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "bad-build.page.gwdk")

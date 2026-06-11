@@ -195,6 +195,11 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 			options.JSON = true
 		case arg == "--json":
 			return options, "", nil, nil, fmt.Errorf("unknown %s flag %q", command, arg)
+		case arg == "--warnings-as-errors":
+			if command != "check" {
+				return options, "", nil, nil, fmt.Errorf("unknown %s flag %q", command, arg)
+			}
+			options.WarningsAsErrors = true
 		case arg == "--config":
 			i++
 			if i >= len(args) {
@@ -222,7 +227,11 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 
 func projectCommandUsage(command string, allowJSON bool) string {
 	if allowJSON {
-		return fmt.Sprintf("usage: gowdk %s [--config <file>] [--module <name>] [--json] [--ssr] [files...]", command)
+		warningsFlag := ""
+		if command == "check" {
+			warningsFlag = " [--warnings-as-errors]"
+		}
+		return fmt.Sprintf("usage: gowdk %s [--config <file>] [--module <name>] [--json]%s [--ssr] [files...]", command, warningsFlag)
 	}
 	return fmt.Sprintf("usage: gowdk %s [--config <file>] [--module <name>] [--ssr] [files...]", command)
 }

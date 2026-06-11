@@ -6,16 +6,20 @@
 {
   "diagnostics": [
     {
-      "file": "examples/ssr/dashboard.page.gwdk",
-      "code": "missing_ssr_addon",
-      "pos": {"line": 5, "column": 1},
+      "file": "examples/actions/signup.page.gwdk",
+      "code": "old_action_block_syntax",
+      "pos": {"line": 6, "column": 1},
       "range": {
-        "start": {"line": 5, "column": 1},
-        "end": {"line": 5, "column": 7}
+        "start": {"line": 6, "column": 1},
+        "end": {"line": 8, "column": 2}
       },
       "severity": "error",
-      "message": "dashboard: dashboard.page.gwdk uses request-time page behavior, but the SSR addon is not enabled. Fix: enable ssr.Addon() in gowdk.config.go",
-      "suggestion": "Enable ssr.Addon() in gowdk.config.go or remove request-time page behavior."
+      "fix": {
+        "title": "Replace old endpoint block header",
+        "description": "Replace the removed endpoint block form with the current metadata declaration.",
+        "rewriter": "endpoint_header_from_message"
+      },
+      "message": "line 6: old action block syntax is not supported; use `act Submit POST \"<path>\"` and move behavior to Go"
     }
   ]
 }
@@ -28,9 +32,22 @@ Current diagnostic fields:
 - `pos.line`: 1-based line when known; zero means no exact position is available.
 - `pos.column`: 1-based column when known; zero means no exact position is available.
 - `range`: optional 1-based source range. End is exclusive.
-- `severity`: currently `error`.
+- `severity`: `error`, `warning`, or `info`.
+- `fix`: optional registry-backed machine-readable fix metadata. A fix includes
+  a title, description, and named rewriter used by `gowdk fix` and LSP code
+  actions.
 - `message`: user-facing diagnostic message.
 - `suggestion`: optional editor-facing fix hint for common mistakes.
+
+Run registered safe rewrites with:
+
+```sh
+gowdk fix --dry-run --code old_action_block_syntax
+gowdk fix --code old_api_block_syntax
+```
+
+`gowdk fix` applies single-file non-overlapping edits only. Old endpoint block
+fixes migrate empty blocks and refuse blocks that still contain behavior.
 
 ## Code Registry
 

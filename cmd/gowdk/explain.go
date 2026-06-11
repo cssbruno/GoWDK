@@ -50,7 +50,11 @@ func printDiagnosticExplanation(explanation diagnostics.Explanation) {
 	fmt.Println(explanation.Code)
 	fmt.Printf("Area: %s\n", explanation.Area)
 	fmt.Printf("Stability: %s\n", explanation.Stability)
+	fmt.Printf("Severity: %s\n", explanation.Severity)
 	fmt.Printf("Summary: %s\n", explanation.Summary)
+	if explanation.Fix != nil {
+		fmt.Printf("Fix: %s\n", explanation.Fix.Title)
+	}
 	if explanation.Details != "" {
 		fmt.Println()
 		fmt.Println(explanation.Details)

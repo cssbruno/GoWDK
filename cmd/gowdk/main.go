@@ -46,6 +46,8 @@ func run(args []string) error {
 		return format(args[1:])
 	case "check":
 		return check(args[1:])
+	case "fix":
+		return fixCommand(args[1:])
 	case "manifest":
 		return manifestJSON(args[1:])
 	case "sitemap":
@@ -110,7 +112,8 @@ func usage() {
 	fmt.Println("  add <addon> [--config <file>] | add --list  wire an addon into gowdk.config.go")
 	fmt.Println("  tokens <file.gwdk>       print language tokens")
 	fmt.Println("  fmt [--write] <files>    format .gwdk files")
-	fmt.Println("  check [--config <file>] [--module <name>] [--json] [--ssr] [files...] parse and validate .gwdk files")
+	fmt.Println("  check [--config <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...] parse and validate .gwdk files")
+	fmt.Println("  fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--module <name>] [--ssr] [files...] apply registered safe diagnostic fixes")
 	fmt.Println("  manifest [--config <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
 	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
@@ -133,6 +136,7 @@ type cliOptions struct {
 	JSON                bool
 	Debug               bool
 	AllowMissingBackend bool
+	WarningsAsErrors    bool
 }
 
 func appendModuleNames(moduleNames []string, value string) []string {

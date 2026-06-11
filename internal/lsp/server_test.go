@@ -412,9 +412,9 @@ func TestServerReturnsCodeActionsForMigrationsAndMissingUses(t *testing.T) {
 		t.Fatalf("expected code action provider capability, got %#v", capabilities)
 	}
 	assertResponseID(t, messages[3], float64(2))
-	assertCodeActionEdit(t, messages[3], oldURI, "Replace old endpoint block header", `act Refresh POST "<path>"`, 5)
+	assertCodeActionEdit(t, messages[3], oldURI, "Replace old endpoint block header", `act Refresh POST "/old"`, 5)
 	assertResponseID(t, messages[4], float64(3))
-	assertCodeActionEdit(t, messages[4], useURI, `Add use ui "<package>"`, "use ui \"<package>\"\n", 5)
+	assertCodeActionEdit(t, messages[4], useURI, "Add missing use declaration", "use ui \"package\"\n", 5)
 	assertResponseID(t, messages[5], float64(4))
 }
 

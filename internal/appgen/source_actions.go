@@ -690,35 +690,11 @@ func convertIfNeeded(goType string, value ast.Expr) ast.Expr {
 }
 
 func actionDecoderName(action ActionEndpoint) string {
-	return "decode" + exportedIdentifier(action.PageID) + exportedIdentifier(action.ActionName) + "Input"
+	return "decode" + source.ExportedIdentifier(action.PageID, "Action") + source.ExportedIdentifier(action.ActionName, "Action") + "Input"
 }
 
 func boundActionDecoderName(action ActionEndpoint) string {
-	return "decode" + exportedIdentifier(action.PageID) + exportedIdentifier(action.ActionName) + "BoundInput"
-}
-
-func exportedIdentifier(value string) string {
-	var out []rune
-	upperNext := true
-	for _, char := range strings.TrimSpace(value) {
-		valid := char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9'
-		if !valid {
-			upperNext = true
-			continue
-		}
-		if len(out) == 0 && char >= '0' && char <= '9' {
-			out = append(out, 'X')
-		}
-		if upperNext && char >= 'a' && char <= 'z' {
-			char -= 'a' - 'A'
-		}
-		out = append(out, char)
-		upperNext = false
-	}
-	if len(out) == 0 {
-		return "Action"
-	}
-	return string(out)
+	return "decode" + source.ExportedIdentifier(action.PageID, "Action") + source.ExportedIdentifier(action.ActionName, "Action") + "BoundInput"
 }
 
 func backendNotImplementedStmts(binding source.BackendBinding, kind string) []ast.Stmt {

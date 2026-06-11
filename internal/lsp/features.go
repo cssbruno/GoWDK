@@ -2,8 +2,9 @@ package lsp
 
 import (
 	"sort"
-	"strings"
 
+	"github.com/cssbruno/gowdk/internal/diagnosticfix"
+	"github.com/cssbruno/gowdk/internal/diagnostics"
 	"github.com/cssbruno/gowdk/internal/lang"
 )
 
@@ -102,15 +103,12 @@ func (server *Server) codeActions(params codeActionParams) []codeAction {
 	}
 	var actions []codeAction
 	for _, diagnostic := range params.Context.Diagnostics {
-		switch diagnostic.Code {
-		case "old_action_block_syntax", "old_api_block_syntax":
-			if action, ok := endpointMigrationCodeAction(params.TextDocument.URI, diagnostic); ok {
-				actions = append(actions, action)
-			}
-		case "unknown_gowdk_use_alias":
-			if action, ok := missingUseCodeAction(params.TextDocument.URI, doc.Text, diagnostic); ok {
-				actions = append(actions, action)
-			}
+		fix, ok := diagnostics.FixFor(diagnostic.Code)
+		if !ok {
+			continue
+		}
+		if action, ok := registryFixCodeAction(params.TextDocument.URI, doc.Text, diagnostic, fix); ok {
+			actions = append(actions, action)
 		}
 	}
 	if actions == nil {
@@ -119,87 +117,54 @@ func (server *Server) codeActions(params codeActionParams) []codeAction {
 	return actions
 }
 
-func endpointMigrationCodeAction(uri string, item diagnostic) (codeAction, bool) {
-	replacement, ok := endpointMigrationReplacement(item.Message)
-	if !ok {
+func registryFixCodeAction(uri string, sourceText string, item diagnostic, fix diagnostics.Fix) (codeAction, bool) {
+	edits, err := diagnosticfix.Edits(fix, sourceText, diagnosticfix.Diagnostic{
+		Code:    item.Code,
+		Message: item.Message,
+		Range:   fixRangeFromLSP(item.Range),
+	})
+	if err != nil || len(edits) == 0 {
 		return codeAction{}, false
 	}
+	textEdits := make([]textEdit, 0, len(edits))
+	for _, edit := range edits {
+		textEdits = append(textEdits, textEdit{
+			Range:   lspRangeFromFix(edit.Range),
+			NewText: edit.NewText,
+		})
+	}
 	return codeAction{
-		Title:       "Replace old endpoint block header",
+		Title:       fix.Title,
 		Kind:        "quickfix",
 		Diagnostics: []diagnostic{item},
-		Edit: workspaceEdit{Changes: map[string][]textEdit{
-			uri: {{
-				Range:   item.Range,
-				NewText: replacement,
-			}},
-		}},
+		Edit:        workspaceEdit{Changes: map[string][]textEdit{uri: textEdits}},
 	}, true
 }
 
-func missingUseCodeAction(uri string, source string, item diagnostic) (codeAction, bool) {
-	alias, ok := missingUseAlias(item.Message)
-	if !ok {
-		return codeAction{}, false
+func fixRangeFromLSP(item lspRange) diagnosticfix.Range {
+	return diagnosticfix.Range{
+		Start: diagnosticfix.Position{Line: item.Start.Line + 1, Column: item.Start.Character + 1},
+		End:   diagnosticfix.Position{Line: item.End.Line + 1, Column: item.End.Character + 1},
 	}
-	insert := useInsertionPosition(source, item.Range.Start)
-	return codeAction{
-		Title:       `Add use ` + alias + ` "<package>"`,
-		Kind:        "quickfix",
-		Diagnostics: []diagnostic{item},
-		Edit: workspaceEdit{Changes: map[string][]textEdit{
-			uri: {{
-				Range:   lspRange{Start: insert, End: insert},
-				NewText: `use ` + alias + ` "<package>"` + "\n",
-			}},
-		}},
-	}, true
 }
 
-func endpointMigrationReplacement(message string) (string, bool) {
-	start := strings.Index(message, "use `")
-	if start < 0 {
-		return "", false
+func lspRangeFromFix(item diagnosticfix.Range) lspRange {
+	return lspRange{
+		Start: positionFromFix(item.Start),
+		End:   positionFromFix(item.End),
 	}
-	start += len("use `")
-	end := strings.IndexByte(message[start:], '`')
-	if end < 0 {
-		return "", false
-	}
-	replacement := message[start : start+end]
-	if strings.HasPrefix(replacement, "act ") || strings.HasPrefix(replacement, "api ") {
-		if strings.Contains(message[start+end+1:], "and move behavior to Go") {
-			return replacement, true
-		}
-	}
-	return "", false
 }
 
-func missingUseAlias(message string) (string, bool) {
-	start := strings.Index(message, "Add `use ")
-	if start < 0 {
-		return "", false
+func positionFromFix(item diagnosticfix.Position) position {
+	line := item.Line - 1
+	if line < 0 {
+		line = 0
 	}
-	start += len("Add `use ")
-	end := strings.Index(message[start:], ` "<package>"`)
-	if end < 0 {
-		return "", false
+	character := item.Column - 1
+	if character < 0 {
+		character = 0
 	}
-	alias := message[start : start+end]
-	if !isLSPIdentifier(alias) {
-		return "", false
-	}
-	return alias, true
-}
-
-func useInsertionPosition(source string, fallback position) position {
-	lines := strings.Split(source, "\n")
-	for index, line := range lines {
-		if strings.TrimSpace(line) == "view {" {
-			return position{Line: index, Character: 0}
-		}
-	}
-	return fallback
+	return position{Line: line, Character: character}
 }
 
 func (server *Server) semanticTokens(params semanticTokensParams) semanticTokensResult {

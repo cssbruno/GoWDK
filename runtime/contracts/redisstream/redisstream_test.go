@@ -33,7 +33,7 @@ func TestDecodeMessageWithRegisteredDecoder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := json.Marshal(storedEnvelope{
+	payload, err := json.Marshal(contracts.StoredEventEnvelope{
 		Category: contracts.DomainEvent,
 		Type:     "PatientCreated",
 		Value:    value,

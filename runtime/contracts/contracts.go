@@ -4,6 +4,7 @@ package contracts
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -54,6 +55,58 @@ type EventEnvelope struct {
 	Category EventCategory
 	Type     string
 	Value    any
+}
+
+// EventDecoder converts a stored JSON event value back into the typed Go value
+// expected by subscribers.
+type EventDecoder func(json.RawMessage) (any, error)
+
+// StoredEventEnvelope is the JSON transport shape shared by contract outbox
+// and broker adapters.
+type StoredEventEnvelope struct {
+	Category EventCategory   `json:"category"`
+	Type     string          `json:"type"`
+	Value    json.RawMessage `json:"value"`
+}
+
+// JSONEventDecoder registers a generic JSON decoder for a contract event type.
+func JSONEventDecoder[T any]() EventDecoder {
+	return func(raw json.RawMessage) (any, error) {
+		var value T
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return nil, err
+		}
+		return value, nil
+	}
+}
+
+// MarshalEventEnvelopeJSON encodes an event envelope into the shared JSON
+// transport shape.
+func MarshalEventEnvelopeJSON(event EventEnvelope) ([]byte, error) {
+	value, err := json.Marshal(event.Value)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(StoredEventEnvelope{Category: event.Category, Type: event.Type, Value: value})
+}
+
+// DecodeEventEnvelopeJSON decodes the shared JSON transport shape and uses a
+// registered decoder when one exists for the event type. Without a decoder the
+// event value remains json.RawMessage.
+func DecodeEventEnvelopeJSON(payload []byte, decoders map[string]EventDecoder) (EventEnvelope, error) {
+	var stored StoredEventEnvelope
+	if err := json.Unmarshal(payload, &stored); err != nil {
+		return EventEnvelope{}, err
+	}
+	value := any(stored.Value)
+	if decoder := decoders[stored.Type]; decoder != nil {
+		decoded, err := decoder(stored.Value)
+		if err != nil {
+			return EventEnvelope{}, err
+		}
+		value = decoded
+	}
+	return EventEnvelope{Category: stored.Category, Type: stored.Type, Value: value}, nil
 }
 
 // Outbox stores command-emitted events for durable delivery. Implementations

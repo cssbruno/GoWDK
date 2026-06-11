@@ -401,12 +401,12 @@ func hasRoutableContractReferences(options Options) bool {
 
 func contractHandlerName(exposure BackendContractExposure) string {
 	return string(exposure.Endpoint.Kind) +
-		exportedIdentifier(exposure.OwnerID) +
-		exportedIdentifier(exposure.Type) +
-		exportedIdentifier(exposure.Endpoint.Method) +
-		exportedIdentifier(exposure.Endpoint.Path)
+		source.ExportedIdentifier(exposure.OwnerID, "Contract") +
+		source.ExportedIdentifier(exposure.Type, "Contract") +
+		source.ExportedIdentifier(exposure.Endpoint.Method, "Method") +
+		source.ExportedIdentifier(exposure.Endpoint.Path, "Path")
 }
 
 func contractDecoderName(exposure BackendContractExposure) string {
-	return "decodeContract" + exportedIdentifier(exposure.ImportAlias) + exportedIdentifier(exposure.Type) + "Input"
+	return "decodeContract" + source.ExportedIdentifier(exposure.ImportAlias, "Contract") + source.ExportedIdentifier(exposure.Type, "Contract") + "Input"
 }

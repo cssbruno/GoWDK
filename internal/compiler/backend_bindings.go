@@ -164,7 +164,10 @@ func bindStandaloneAction(endpoint gwdkir.GoEndpoint, pkg featurePackage) source
 	if method == "" {
 		method = "POST"
 	}
-	binding := baseStandaloneBackendBinding(endpoint, actionHandlerKind, method, pkg)
+	return bindActionEndpoint(baseStandaloneBackendBinding(endpoint, actionHandlerKind, method, pkg), pkg)
+}
+
+func bindActionEndpoint(binding source.BackendBinding, pkg featurePackage) source.BackendBinding {
 	function, ok := pkg.Functions[binding.FunctionName]
 	if !ok {
 		binding.Status = source.BackendBindingMissing
@@ -193,7 +196,10 @@ func bindStandaloneAPI(endpoint gwdkir.GoEndpoint, pkg featurePackage) source.Ba
 	if method == "" {
 		method = "GET"
 	}
-	binding := baseStandaloneBackendBinding(endpoint, apiHandlerKind, method, pkg)
+	return bindAPIEndpoint(baseStandaloneBackendBinding(endpoint, apiHandlerKind, method, pkg), pkg)
+}
+
+func bindAPIEndpoint(binding source.BackendBinding, pkg featurePackage) source.BackendBinding {
 	function, ok := pkg.Functions[binding.FunctionName]
 	if !ok {
 		binding.Status = source.BackendBindingMissing
@@ -219,28 +225,7 @@ func bindAction(page gwdkir.Page, action gwdkir.Action, pkg featurePackage) sour
 	if route == "" {
 		route = page.Route
 	}
-	binding := baseBackendBinding(page, actionHandlerKind, action.Name, method, route, pkg)
-	function, ok := pkg.Functions[binding.FunctionName]
-	if !ok {
-		binding.Status = source.BackendBindingMissing
-		binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is not implemented", packageLabel(pkg), binding.FunctionName)
-		return binding
-	}
-	if !function.Action() {
-		binding.Status = source.BackendBindingUnsupportedSignature
-		if function.SupportMessage != "" {
-			binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is unsupported: %s", packageLabel(pkg), binding.FunctionName, function.SupportMessage)
-		} else {
-			binding.Message = fmt.Sprintf("GOWDK action handler %s.%s must have signature func(context.Context) (response.Response, error), func(context.Context, Input) (response.Response, error), func(context.Context, *Input) (response.Response, error), or func(context.Context, form.Values) (response.Response, error)", packageLabel(pkg), binding.FunctionName)
-		}
-		return binding
-	}
-	binding.Signature = function.Signature
-	binding.InputType = function.InputType
-	binding.InputPointer = function.InputPointer
-	binding.InputFields = function.InputFields
-	binding.Status = source.BackendBindingBound
-	return binding
+	return bindActionEndpoint(baseBackendBinding(page, actionHandlerKind, action.Name, method, route, pkg), pkg)
 }
 
 func bindAPI(page gwdkir.Page, api gwdkir.API, pkg featurePackage) source.BackendBinding {
@@ -252,21 +237,7 @@ func bindAPI(page gwdkir.Page, api gwdkir.API, pkg featurePackage) source.Backen
 	if route == "" {
 		route = page.Route
 	}
-	binding := baseBackendBinding(page, apiHandlerKind, api.Name, method, route, pkg)
-	function, ok := pkg.Functions[binding.FunctionName]
-	if !ok {
-		binding.Status = source.BackendBindingMissing
-		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s is not implemented", packageLabel(pkg), binding.FunctionName)
-		return binding
-	}
-	if !function.API() {
-		binding.Status = source.BackendBindingUnsupportedSignature
-		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s must have signature func(context.Context, *http.Request) (response.Response, error)", packageLabel(pkg), binding.FunctionName)
-		return binding
-	}
-	binding.Signature = function.Signature
-	binding.Status = source.BackendBindingBound
-	return binding
+	return bindAPIEndpoint(baseBackendBinding(page, apiHandlerKind, api.Name, method, route, pkg), pkg)
 }
 
 func bindFragment(page gwdkir.Page, fragment gwdkir.FragmentEndpoint, pkg featurePackage) (source.BackendBinding, bool) {
@@ -788,35 +759,7 @@ func isMapStringAny(expression ast.Expr) bool {
 }
 
 func loadFunctionName(pageID string) string {
-	return "Load" + exportedIdentifier(pageID)
-}
-
-func exportedIdentifier(value string) string {
-	out := make([]rune, 0, len(value))
-	uppercaseNext := true
-	for _, char := range strings.TrimSpace(value) {
-		if char >= 'a' && char <= 'z' {
-			if uppercaseNext {
-				char = char - 'a' + 'A'
-			}
-			out = append(out, char)
-			uppercaseNext = false
-			continue
-		}
-		if char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' {
-			if len(out) == 0 && char >= '0' && char <= '9' {
-				out = append(out, 'P')
-			}
-			out = append(out, char)
-			uppercaseNext = false
-			continue
-		}
-		uppercaseNext = true
-	}
-	if len(out) == 0 {
-		return "Page"
-	}
-	return string(out)
+	return "Load" + source.ExportedIdentifier(pageID, "Page")
 }
 
 func isSelector(expression ast.Expr, imports map[string]string, importPath, name string) bool {

@@ -2671,6 +2671,74 @@ route "/bad"
 	}
 }
 
+func TestCheckCommandPromotesWarnings(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, source, `package app
+
+page home
+route "/"
+guard public
+
+view {
+  <img src="/hero.png" />
+}
+`)
+
+	_, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"check", "--config", config, source})
+	})
+	if err != nil {
+		t.Fatalf("check should allow warnings by default: %v", err)
+	}
+	_, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"check", "--warnings-as-errors", "--config", config, source})
+	})
+	if err == nil || !strings.Contains(stderr, "warning:") || !strings.Contains(stderr, "alt") {
+		t.Fatalf("expected warnings-as-errors failure with accessibility warning, stderr=%q err=%v", stderr, err)
+	}
+}
+
+func TestFixCommandMigratesOldActionSyntax(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "signup.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, source, `package app
+
+page signup
+route "/signup"
+guard public
+
+act submit {
+}
+
+view {
+  <main>Signup</main>
+}
+`)
+
+	output, err := captureCLIStdout(t, func() error {
+		return run([]string{"fix", "--config", config, source})
+	})
+	if err != nil {
+		t.Fatalf("fix failed: %v", err)
+	}
+	if !strings.Contains(output, "applied 1 fix") {
+		t.Fatalf("expected fix output, got %q", output)
+	}
+	fixed, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(fixed), "act submit {") || !strings.Contains(string(fixed), `act Submit POST "/signup"`) {
+		t.Fatalf("old action syntax was not migrated:\n%s", fixed)
+	}
+	if err := run([]string{"check", "--config", config, source}); err != nil {
+		t.Fatalf("fixed source should validate: %v\n%s", err, fixed)
+	}
+}
+
 func TestManifestCommandHandlesMultipleFiles(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home.page.gwdk")

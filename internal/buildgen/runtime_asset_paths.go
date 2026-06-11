@@ -8,6 +8,7 @@ import (
 	"runtime"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func islandWASMLoaderArtifact(outputDir, componentName string) plannedAssetArtifact {
@@ -67,44 +68,13 @@ func islandJSSourceMapAssetPath(componentName string) string {
 }
 
 func componentAssetName(componentName string) string {
-	name := exportedPascalSafe(componentName)
-	if name == "" {
-		return "Component"
-	}
-	return name
+	return source.ExportedIdentifier(componentName, "Component")
 }
 
 func clientGoBlockAssetName(page gwdkir.Page) string {
-	name := exportedPascalSafe(page.ID)
-	if name == "" {
-		return "Page"
-	}
-	return name
+	return source.ExportedIdentifier(page.ID, "Page")
 }
 
 func clientGoBlockMountExportName(page gwdkir.Page) string {
 	return "GOWDKMount" + clientGoBlockAssetName(page)
-}
-
-func exportedPascalSafe(value string) string {
-	out := make([]rune, 0, len(value))
-	upperNext := true
-	for _, char := range value {
-		validLower := char >= 'a' && char <= 'z'
-		validUpper := char >= 'A' && char <= 'Z'
-		validDigit := char >= '0' && char <= '9'
-		if !validLower && !validUpper && !validDigit {
-			upperNext = true
-			continue
-		}
-		if len(out) == 0 && validDigit {
-			out = append(out, 'P')
-		}
-		if upperNext && validLower {
-			char -= 'a' - 'A'
-		}
-		out = append(out, char)
-		upperNext = false
-	}
-	return string(out)
 }

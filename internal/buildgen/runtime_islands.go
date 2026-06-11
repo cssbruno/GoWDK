@@ -18,9 +18,9 @@ func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allCompone
 	for _, page := range pages {
 		source, err := composePageViewSource(page, layouts)
 		if err != nil {
-			source = page.Blocks.ViewBody
+			return nil, fmt.Errorf("compose island view source for page %q: %w", page.ID, err)
 		}
-		usages, err := recursiveManifestComponentCallUsages(source, components, page.Package, componentUses(page.Uses))
+		usages, err := recursiveComponentCallUsages(source, components, page.Package, componentUses(page.Uses), manifestComponentResolver)
 		if err != nil {
 			return nil, fmt.Errorf("resolve island components for page %q: %w", page.ID, err)
 		}
@@ -69,7 +69,7 @@ func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allCompone
 }
 
 func islandScriptHrefs(source string, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]string, error) {
-	usages, err := recursiveViewComponentCallUsages(source, components, ownerPackage, uses)
+	usages, err := recursiveComponentCallUsages(source, components, ownerPackage, uses, viewComponentResolver)
 	if err != nil {
 		return nil, err
 	}
@@ -113,13 +113,38 @@ func viewComponentRuntimeMode(explicit string, component view.Component) string 
 	return component.DefaultIsland
 }
 
-type resolvedViewComponentCallUsage struct {
-	call      view.ComponentCallUsage
-	component view.Component
+type componentResolver[T any] struct {
+	Body     func(T) string
+	Identity func(T) string
+	Package  func(T) string
+	Uses     func(T) map[string]string
 }
 
-func recursiveViewComponentCallUsages(source string, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]resolvedViewComponentCallUsage, error) {
-	var usages []resolvedViewComponentCallUsage
+type resolvedComponentCallUsage[T any] struct {
+	call      view.ComponentCallUsage
+	component T
+}
+
+var viewComponentResolver = componentResolver[view.Component]{
+	Body:     func(component view.Component) string { return component.Body },
+	Identity: func(component view.Component) string { return component.Identity() },
+	Package:  func(component view.Component) string { return component.Package },
+	Uses:     func(component view.Component) map[string]string { return component.Uses },
+}
+
+var manifestComponentResolver = componentResolver[gwdkir.Component]{
+	Body:     func(component gwdkir.Component) string { return component.Blocks.ViewBody },
+	Identity: manifestComponentIdentity,
+	Package:  func(component gwdkir.Component) string { return component.Package },
+	Uses:     func(component gwdkir.Component) map[string]string { return componentUses(component.Uses) },
+}
+
+func recursiveViewComponentCallUsages(source string, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]resolvedComponentCallUsage[view.Component], error) {
+	return recursiveComponentCallUsages(source, components, ownerPackage, uses, viewComponentResolver)
+}
+
+func recursiveComponentCallUsages[T any](source string, components map[string]T, ownerPackage string, uses map[string]string, resolver componentResolver[T]) ([]resolvedComponentCallUsage[T], error) {
+	var usages []resolvedComponentCallUsage[T]
 	visiting := map[string]bool{}
 	var walk func(string, string, map[string]string) error
 	walk = func(source string, ownerPackage string, uses map[string]string) error {
@@ -128,17 +153,17 @@ func recursiveViewComponentCallUsages(source string, components map[string]view.
 			return err
 		}
 		for _, usage := range direct {
-			component, ok := lookupViewComponent(components, usage.Component, ownerPackage, uses)
+			component, ok := lookupComponent(components, usage.Component, ownerPackage, uses)
 			if !ok {
 				continue
 			}
-			usages = append(usages, resolvedViewComponentCallUsage{call: usage, component: component})
-			identity := component.Identity()
+			usages = append(usages, resolvedComponentCallUsage[T]{call: usage, component: component})
+			identity := resolver.Identity(component)
 			if visiting[identity] {
 				continue
 			}
 			visiting[identity] = true
-			if err := walk(component.Body, component.Package, component.Uses); err != nil {
+			if err := walk(resolver.Body(component), resolver.Package(component), resolver.Uses(component)); err != nil {
 				return err
 			}
 			delete(visiting, identity)
@@ -151,7 +176,8 @@ func recursiveViewComponentCallUsages(source string, components map[string]view.
 	return usages, nil
 }
 
-func lookupViewComponent(components map[string]view.Component, name string, ownerPackage string, uses map[string]string) (view.Component, bool) {
+func lookupComponent[T any](components map[string]T, name string, ownerPackage string, uses map[string]string) (T, bool) {
+	var zero T
 	if strings.Contains(name, ".") {
 		if component, ok := components[name]; ok {
 			return component, true
@@ -159,66 +185,7 @@ func lookupViewComponent(components map[string]view.Component, name string, owne
 		alias, componentName, _ := strings.Cut(name, ".")
 		packageName := uses[alias]
 		if packageName == "" {
-			return view.Component{}, false
-		}
-		component, ok := components[componentRegistryKey(packageName, componentName)]
-		return component, ok
-	}
-	if ownerPackage != "" {
-		component, ok := components[componentRegistryKey(ownerPackage, name)]
-		return component, ok
-	}
-	component, ok := components[name]
-	return component, ok
-}
-
-type resolvedManifestComponentCallUsage struct {
-	call      view.ComponentCallUsage
-	component gwdkir.Component
-}
-
-func recursiveManifestComponentCallUsages(source string, components map[string]gwdkir.Component, ownerPackage string, uses map[string]string) ([]resolvedManifestComponentCallUsage, error) {
-	var usages []resolvedManifestComponentCallUsage
-	visiting := map[string]bool{}
-	var walk func(string, string, map[string]string) error
-	walk = func(source string, ownerPackage string, uses map[string]string) error {
-		direct, err := view.ComponentCallUsages(source)
-		if err != nil {
-			return err
-		}
-		for _, usage := range direct {
-			component, ok := lookupManifestComponent(components, usage.Component, ownerPackage, uses)
-			if !ok {
-				continue
-			}
-			usages = append(usages, resolvedManifestComponentCallUsage{call: usage, component: component})
-			identity := manifestComponentIdentity(component)
-			if visiting[identity] {
-				continue
-			}
-			visiting[identity] = true
-			if err := walk(component.Blocks.ViewBody, component.Package, componentUses(component.Uses)); err != nil {
-				return err
-			}
-			delete(visiting, identity)
-		}
-		return nil
-	}
-	if err := walk(source, ownerPackage, uses); err != nil {
-		return nil, err
-	}
-	return usages, nil
-}
-
-func lookupManifestComponent(components map[string]gwdkir.Component, name string, ownerPackage string, uses map[string]string) (gwdkir.Component, bool) {
-	if strings.Contains(name, ".") {
-		if component, ok := components[name]; ok {
-			return component, true
-		}
-		alias, componentName, _ := strings.Cut(name, ".")
-		packageName := uses[alias]
-		if packageName == "" {
-			return gwdkir.Component{}, false
+			return zero, false
 		}
 		component, ok := components[componentRegistryKey(packageName, componentName)]
 		return component, ok

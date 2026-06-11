@@ -3,7 +3,6 @@ package natsbroker
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -28,7 +27,7 @@ type Broker struct {
 
 // Decoder converts one JSON event value into the typed value expected by
 // runtime/contracts subscribers.
-type Decoder func(json.RawMessage) (any, error)
+type Decoder = contracts.EventDecoder
 
 // Option configures a Broker.
 type Option func(*Broker)
@@ -69,13 +68,13 @@ func WithDecoder(eventType string, decoder Decoder) Option {
 
 // WithJSONDecoder registers a JSON decoder for one event type.
 func WithJSONDecoder[T any](eventType string) Option {
-	return WithDecoder(eventType, func(raw json.RawMessage) (any, error) {
-		var value T
-		if err := json.Unmarshal(raw, &value); err != nil {
-			return nil, err
-		}
-		return value, nil
-	})
+	return WithDecoder(eventType, contracts.JSONEventDecoder[T]())
+}
+
+// WithJSONTypeDecoder registers a JSON decoder using the same Go type name
+// stored by runtime/contracts when T is emitted.
+func WithJSONTypeDecoder[T any]() Option {
+	return WithJSONDecoder[T](contracts.ContractName[T]())
 }
 
 // New creates a NATS broker adapter.
@@ -200,35 +199,9 @@ func (broker *Broker) decodeMessage(message *nats.Msg) (contracts.EventEnvelope,
 }
 
 func (broker *Broker) decodePayload(payload []byte) (contracts.EventEnvelope, error) {
-	var stored storedEnvelope
-	if err := json.Unmarshal(payload, &stored); err != nil {
-		return contracts.EventEnvelope{}, err
-	}
-	value := any(stored.Value)
-	if decoder := broker.decoders[stored.Type]; decoder != nil {
-		decoded, err := decoder(stored.Value)
-		if err != nil {
-			return contracts.EventEnvelope{}, err
-		}
-		value = decoded
-	}
-	return contracts.EventEnvelope{Category: stored.Category, Type: stored.Type, Value: value}, nil
-}
-
-type storedEnvelope struct {
-	Category contracts.EventCategory `json:"category"`
-	Type     string                  `json:"type"`
-	Value    json.RawMessage         `json:"value"`
+	return contracts.DecodeEventEnvelopeJSON(payload, broker.decoders)
 }
 
 func marshalEnvelope(event contracts.EventEnvelope) ([]byte, error) {
-	value, err := json.Marshal(event.Value)
-	if err != nil {
-		return nil, err
-	}
-	payload, err := json.Marshal(storedEnvelope{Category: event.Category, Type: event.Type, Value: value})
-	if err != nil {
-		return nil, err
-	}
-	return payload, nil
+	return contracts.MarshalEventEnvelopeJSON(event)
 }

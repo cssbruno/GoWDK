@@ -328,6 +328,12 @@ func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs
 		if strings.TrimSpace(ref.Method) == "" || strings.TrimSpace(ref.Path) == "" {
 			continue
 		}
+		if source.BackendRouteMethod(ref.Method) != contractReferenceRouteMethod(ref.Kind) {
+			continue
+		}
+		if err := source.ValidateBackendRoutePath(ref.Path); err != nil {
+			continue
+		}
 		info, issues := parseRoute(ref.Path)
 		if len(issues) > 0 {
 			continue

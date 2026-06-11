@@ -11,7 +11,7 @@ Runtime: full pages default to build-time output, backend endpoints are core
 request-time behavior, and `load {}` / `go ssr {}` select the integrated
 non-default request-time page lane.
 
-Use this file as the source of truth for Codex in this repository. Shared planning workflows and output templates live in `.llm/` so they can be reused by any capable coding LLM.
+Use this file as the always-on instruction file for any coding agent working in this repository (Codex, Claude Code, hosted agents, IDE assistants). Task-specific skills and reusable output templates live in `.agents/`.
 
 ## Startup Context
 
@@ -22,7 +22,7 @@ Before making non-trivial changes, read these files in order:
 3. `docs/product/requirements.md`
 4. `docs/product/roadmap.md`
 5. `docs/engineering/architecture.md`
-6. The relevant workflow under `.llm/workflows/`
+6. The relevant skill under `.agents/skills/`
 
 If a file still contains placeholders, treat that as unknown project context. Make the smallest reasonable assumption, state it, and update the relevant document when the decision becomes real.
 
@@ -37,20 +37,34 @@ If a file still contains placeholders, treat that as unknown project context. Ma
 - When a command fails, capture the command, failure, and next step in your response or the relevant docs.
 - Before handing off, run the most relevant available verification command. If no verification exists yet, say so plainly.
 
-## Planning Standard
+## Skills
 
-For recurring agent workflows, prefer the project-local skills under
-`.codex/skills/` over adding one-off feature or plan markdown files.
+Recurring task runbooks live in `.agents/skills/<name>/SKILL.md`. Each one
+carries the concrete baselines (files, contracts, gates) for its lane — start
+from the matching skill instead of improvising or adding one-off plan files:
+
+- `gowdk-feature`: new feature or capability, spec to verified vertical slice.
+- `gowdk-bug`: reproduce, diagnose, and fix a defect or regression.
+- `gowdk-refactor`: behavior-preserving simplification or reorganization.
+- `gowdk-review`: review a diff, PR, or subsystem against repo contracts.
+- `gowdk-language-change`: public `.gwdk` syntax or semantics changes.
+- `gowdk-compiler-internal`: AST/IR/analyzer/diagnostics internals.
+- `gowdk-generated-output`: build output, generated Go, runtime contracts.
+- `gowdk-docs`: documentation across all doc lanes.
+- `gowdk-pr-body`: pull request titles and bodies.
+- `gowdk-version-bump`: release version bumps across all surfaces.
+
+## Planning Standard
 
 For new features or large changes:
 
-1. Write or update a feature spec using `.llm/templates/feature-spec.md`.
-2. Write a short implementation plan using `.llm/templates/implementation-plan.md`.
+1. Write or update a feature spec using `.agents/templates/feature-spec.md`.
+2. Write a short implementation plan using `.agents/templates/implementation-plan.md`.
 3. Identify risks, tests, migration needs, and rollback strategy before editing core code.
 4. Implement in small, reviewable increments.
 5. Update the spec when implementation reality changes.
 
-For architectural decisions that are hard to reverse, add an ADR under `docs/engineering/decisions/` using `.llm/templates/adr.md`.
+For architectural decisions that are hard to reverse, add an ADR under `docs/engineering/decisions/` using `.agents/templates/adr.md`.
 
 ## Engineering Principles
 
@@ -90,19 +104,19 @@ Keep these commands current:
 
 If a future package adds a more specific validation command, document it in `README.md` and run it for relevant changes.
 
-## Codex Rules
+## Agent Rules
 
-- Treat `AGENTS.md` as the always-on project instruction file.
-- Keep this file under the default Codex project-doc size limit by moving long process details into `.llm/workflows/` and `.llm/templates/`.
+- Treat `AGENTS.md` as the always-on project instruction file for every coding agent.
+- Keep this file small by moving long process details into `.agents/skills/` and `.agents/templates/`.
 - If more specific rules are needed for a future subdirectory, add a nested `AGENTS.md` close to that code and keep it short.
-- When Codex discovers missing project facts, update the relevant docs instead of relying on chat history.
+- When an agent discovers missing project facts, update the relevant docs or the matching skill's baselines instead of relying on chat history.
 
 ## Documentation Rules
 
 - Product intent lives in `docs/product/`.
 - Engineering decisions and system design live in `docs/engineering/`.
-- Reusable LLM task workflows live in `.llm/workflows/`.
-- Reusable LLM output templates live in `.llm/templates/`.
+- Reusable agent task skills live in `.agents/skills/`.
+- Reusable agent output templates live in `.agents/templates/`.
 - Update documentation in the same change that makes it stale.
 - Documentation should be concise, direct, and functional. Prefer short
   sections, clear bullets, and concrete commands over narrative explanation.

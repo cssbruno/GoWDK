@@ -2,7 +2,9 @@
 
 Date: 2026-06-04
 
-Status: Accepted
+Status: Accepted (amended 2026-06-11: `.llm/workflows/` was replaced by skills
+in `.agents/skills/`, and `.llm/templates/` moved to `.agents/templates/`;
+`AGENTS.md` is now the instruction file for any coding agent, not only Codex)
 
 ## Context
 

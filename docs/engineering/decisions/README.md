@@ -2,7 +2,7 @@
 
 Use this directory for decisions that are expensive to reverse or that future agents and maintainers must understand.
 
-Create new records from `.llm/templates/adr.md`.
+Create new records from `.agents/templates/adr.md`.
 
 Recommended naming:
 

@@ -1,26 +1,47 @@
 package lang
 
-import (
-	"unicode"
-	"unicode/utf8"
-)
+import "unicode"
 
 // Lex tokenizes .gwdk source for editor and CLI tooling.
 func Lex(source string) ([]Token, Diagnostics) {
+	runes := []rune(source)
+	// byteOffsets[i] is the 0-based byte offset of rune i in the original
+	// source; the final entry is the total byte length. Offsets are taken from
+	// ranging the original string (which reports true byte positions) rather
+	// than summing utf8.RuneLen, so malformed UTF-8 — where []rune turns each
+	// bad byte into a 3-byte U+FFFD — does not drift token offsets.
+	byteOffsets := make([]int, len(runes)+1)
+	runeIndex := 0
+	for byteIndex := range source {
+		byteOffsets[runeIndex] = byteIndex
+		runeIndex++
+	}
+	byteOffsets[len(runes)] = len(source)
+
 	lexer := scanner{
-		source: []rune(source),
-		line:   1,
-		column: 1,
+		source:      runes,
+		byteOffsets: byteOffsets,
+		line:        1,
+		column:      1,
 	}
 	return lexer.scan()
 }
 
 type scanner struct {
-	source    []rune
-	index     int
-	byteIndex int
-	line      int
-	column    int
+	source      []rune
+	byteOffsets []int
+	index       int
+	line        int
+	column      int
+}
+
+// offset returns the 0-based byte offset of the current rune in the original
+// source.
+func (scanner *scanner) offset() int {
+	if scanner.index < len(scanner.byteOffsets) {
+		return scanner.byteOffsets[scanner.index]
+	}
+	return scanner.byteOffsets[len(scanner.byteOffsets)-1]
 }
 
 func (scanner *scanner) scan() ([]Token, Diagnostics) {
@@ -30,7 +51,7 @@ func (scanner *scanner) scan() ([]Token, Diagnostics) {
 	for !scanner.done() {
 		ch := scanner.peek()
 		pos := scanner.position()
-		offset := scanner.byteIndex
+		offset := scanner.offset()
 
 		switch {
 		case ch == '\r':
@@ -74,13 +95,13 @@ func (scanner *scanner) scan() ([]Token, Diagnostics) {
 		}
 	}
 
-	tokens = append(tokens, Token{Kind: TokenEOF, Pos: scanner.position(), Offset: scanner.byteIndex})
+	tokens = append(tokens, Token{Kind: TokenEOF, Pos: scanner.position(), Offset: scanner.offset()})
 	return tokens, diagnostics
 }
 
 func (scanner *scanner) identifier() Token {
 	pos := scanner.position()
-	offset := scanner.byteIndex
+	offset := scanner.offset()
 	start := scanner.index
 	for !scanner.done() && (isIdentPart(scanner.peek()) || scanner.peek() == '.' || scanner.peek() == '-') {
 		scanner.advance()
@@ -94,7 +115,7 @@ func (scanner *scanner) identifier() Token {
 
 func (scanner *scanner) quotedString() (Token, Diagnostic) {
 	pos := scanner.position()
-	offset := scanner.byteIndex
+	offset := scanner.offset()
 	start := scanner.index
 	scanner.advance()
 	for !scanner.done() {
@@ -136,7 +157,7 @@ func sourceRange(start, end Position) *Range {
 
 func (scanner *scanner) text() Token {
 	pos := scanner.position()
-	offset := scanner.byteIndex
+	offset := scanner.offset()
 	start := scanner.index
 	for !scanner.done() {
 		ch := scanner.peek()
@@ -178,7 +199,6 @@ func (scanner *scanner) peekNext() rune {
 func (scanner *scanner) advance() rune {
 	ch := scanner.source[scanner.index]
 	scanner.index++
-	scanner.byteIndex += utf8.RuneLen(ch)
 	if ch == '\n' {
 		scanner.line++
 		scanner.column = 1

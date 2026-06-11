@@ -519,16 +519,16 @@ function completionEntries() {
     ['package', 'Declare the GOWDK package name.'],
     ['import', 'Import a normal Go package for build functions or typed contracts.'],
     ['use', 'Import a discovered GOWDK source package with an alias.'],
-    ['@page', 'Declare the page id.'],
-    ['@route', 'Declare the route path.'],
-    ['@title', 'Declare the generated document title.'],
-    ['@description', 'Declare the generated document description.'],
-    ['@canonical', 'Declare the generated canonical URL.'],
-    ['@image', 'Declare the generated social preview image URL.'],
-    ['@layout', 'Declare one or more layout ids.'],
-    ['@guard', 'Declare route guards.'],
-    ['@component', 'Declare the component name.'],
-    ['@css', 'Select page CSS inputs: default, page, none, or discovered CSS names.'],
+    ['page', 'Declare the page id.'],
+    ['route', 'Declare the route path.'],
+    ['title', 'Declare the generated document title.'],
+    ['description', 'Declare the generated document description.'],
+    ['canonical', 'Declare the generated canonical URL.'],
+    ['image', 'Declare the generated social preview image URL.'],
+    ['layout', 'Declare one or more layout ids.'],
+    ['guard', 'Declare route guards.'],
+    ['component', 'Declare the component name.'],
+    ['css', 'Select page CSS inputs: default, page, none, or discovered CSS names.'],
     ['paths', 'Build-time dynamic route path block.'],
     ['build', 'Build-time data block.'],
     ['load', 'Request-time data block.'],
@@ -571,10 +571,10 @@ function completionContext(linePrefix) {
   if (/\{[A-Za-z0-9_.-]*$/.test(prefix)) {
     return 'dataField';
   }
-  if (/@layout\s+(?:[A-Za-z0-9_.-]+,\s*)*[A-Za-z0-9_.-]*$/.test(prefix)) {
+  if (/layout\s+(?:[A-Za-z0-9_.-]+,\s*)*[A-Za-z0-9_.-]*$/.test(prefix)) {
     return 'layout';
   }
-  if (/@css\s+(?:[A-Za-z0-9_.-]+(?:\s*,\s*|\s+))*[A-Za-z0-9_.-]*$/.test(prefix)) {
+  if (/css\s+(?:[A-Za-z0-9_.-]+(?:\s*,\s*|\s+))*[A-Za-z0-9_.-]*$/.test(prefix)) {
     return 'css';
   }
   if (/\bg:island\s*=\s*"?[A-Za-z]*$/.test(prefix)) {
@@ -586,7 +586,7 @@ function completionContext(linePrefix) {
   if (/<[A-Z][A-Za-z0-9_]*$/.test(prefix)) {
     return 'component';
   }
-  if (/(@route|->|GET|POST|PUT|PATCH|DELETE)\s+"[^"]*$/.test(prefix)) {
+  if (/(route|->|GET|POST|PUT|PATCH|DELETE)\s+"[^"]*$/.test(prefix)) {
     return 'route';
   }
   return 'keyword';
@@ -1133,7 +1133,7 @@ function semanticTokens(source) {
 	const lines = String(source || '').split(/\r?\n/);
   for (let line = 0; line < lines.length; line++) {
     const text = lines[line];
-    collectPatternTokens(tokens, line, text, /@[A-Za-z_][A-Za-z0-9_]*/g, 'namespace');
+    collectPatternTokens(tokens, line, text, /^(\s*)(page|route|title|description|canonical|image|layout|render|guard|component|css|cache|revalidate|error|wasm|asset)\b/g, 'namespace', 2);
     collectPatternTokens(tokens, line, text, /\b(package|import|use|paths|build|load|act|api|fragment|view|script|go|style|props|state|exports|client|emits)\b/g, 'keyword');
     collectPatternTokens(tokens, line, text, /\b(async|fn|computed|on|mount|destroy|effect|when|ref|let|return|await|if|else|in|emit)\b/g, 'keyword');
     collectPatternTokens(tokens, line, text, /\b(GET|POST|PUT|PATCH|DELETE)\b/g, 'enumMember');
@@ -1184,11 +1184,11 @@ function documentOutlineItems(source) {
 }
 
 function outlineAnnotation(text, line) {
-  const match = text.match(/^(\s*)@(page|component|layout|route|title|description|canonical|image|guard|css|render)\b\s*(.*)$/);
+  const match = text.match(/^(\s*)(page|component|layout|route|title|description|canonical|image|guard|css|render|cache|revalidate|error|wasm|asset)\b\s*(.*)$/);
   if (!match) {
     return undefined;
   }
-  const name = `@${match[2]}`;
+  const name = match[2];
   const detail = match[3].trim();
   return outlineItem({
     name: detail ? `${name} ${detail}` : name,
@@ -1644,7 +1644,7 @@ function formatState(state) {
 }
 
 function collectCSSReferenceTokens(tokens, line, text) {
-  const match = text.match(/@css\s+(.+)$/);
+  const match = text.match(/css\s+(.+)$/);
   if (!match) {
     return;
   }

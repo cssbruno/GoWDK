@@ -15,9 +15,9 @@ func TestCheckFilesValidatesRenderRules(t *testing.T) {
 	path := filepath.Join(root, "dashboard.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@page dashboard
-@route "/dashboard"
-@guard public
+page dashboard
+route "/dashboard"
+guard public
 
 load {
 }
@@ -40,8 +40,8 @@ view {
 func TestCheckSourceValidatesUnsavedBuffer(t *testing.T) {
 	_, diagnostics := CheckSource(gowdk.Config{}, "untitled.gwdk", []byte(`package app
 
-@page post
-@route "/blog/{slug}"
+page post
+route "/blog/{slug}"
 
 view {
 }
@@ -88,9 +88,9 @@ func TestCompletionsIncludeCoreLanguageKeywords(t *testing.T) {
 		labels[item.Label] = true
 	}
 	for _, expected := range []string{
-		"@page",
-		"@component",
-		"@layout",
+		"page",
+		"component",
+		"layout",
 		"package",
 		"use",
 		"store",
@@ -117,10 +117,10 @@ func TestManifestJSONEmitsParsedPage(t *testing.T) {
 	path := filepath.Join(root, "home.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@page home
-@route "/"
-@guard public
-@layout root
+page home
+route "/"
+guard public
+layout root
 
 view {
 }
@@ -140,8 +140,8 @@ func TestParseSourceDerivesPageIDFromFilename(t *testing.T) {
 	path := filepath.Join(root, "blog-post.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@route "/blog/{slug}"
-@guard public
+route "/blog/{slug}"
+guard public
 
 paths {
   => { slug: "hello" }
@@ -165,9 +165,9 @@ func TestParseSourceKeepsExplicitPageID(t *testing.T) {
 	path := filepath.Join(root, "blog-post.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@page blog.post
-@route "/blog/{slug}"
-@guard public
+page blog.post
+route "/blog/{slug}"
+guard public
 
 paths {
   => { slug: "hello" }
@@ -191,9 +191,9 @@ func TestManifestJSONUsesConfiguredDefaultRenderMode(t *testing.T) {
 	path := filepath.Join(root, "home.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@page home
-@route "/"
-@guard public
+page home
+route "/"
+guard public
 
 view {
 }
@@ -257,9 +257,9 @@ func TestCheckFilesWarnsForImageWithoutAlt(t *testing.T) {
 	path := filepath.Join(root, "gallery.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@page gallery
-@route "/gallery"
-@guard public
+page gallery
+route "/gallery"
+guard public
 
 view {
   <main>
@@ -300,9 +300,9 @@ func TestCheckFilesAcceptsImagesWithAlt(t *testing.T) {
 	path := filepath.Join(root, "gallery.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@page gallery
-@route "/gallery"
-@guard public
+page gallery
+route "/gallery"
+guard public
 
 view {
   <main>
@@ -323,9 +323,9 @@ func TestCheckJSONIncludesAccessibilityWarning(t *testing.T) {
 	path := filepath.Join(root, "gallery.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@page gallery
-@route "/gallery"
-@guard public
+page gallery
+route "/gallery"
+guard public
 
 view {
   <img src="/hero.png" />
@@ -349,7 +349,7 @@ func TestCheckFilesWarnsForImageWithoutAltInComponentsAndLayouts(t *testing.T) {
 	layoutPath := filepath.Join(root, "root.layout.gwdk")
 	writeGWDK(t, componentPath, `package app
 
-@component Hero
+component Hero
 
 view {
   <section>
@@ -390,14 +390,14 @@ func TestClassifySourceUsesCurrentFileKindRules(t *testing.T) {
 		source string
 		kind   FileKind
 	}{
-		{"home.page.gwdk", "@page home", FileKindPage},
-		{"hero.cmp.gwdk", "@component Hero", FileKindComponent},
-		{"hero.gwdk", "@component Hero", FileKindComponent},
-		{"home.page.gwdk", "// Mention @component in docs\n@page home", FileKindPage},
-		{"root.gwdk", "@layout root", FileKindLayout},
-		{"root.layout.gwdk", "@layout root", FileKindLayout},
-		{"images.asset.gwdk", "@asset images", FileKindAsset},
-		{"tailwind.plugin.gwdk", "@plugin tailwind", FileKindPlugin},
+		{"home.page.gwdk", "page home", FileKindPage},
+		{"hero.cmp.gwdk", "component Hero", FileKindComponent},
+		{"hero.gwdk", "component Hero", FileKindComponent},
+		{"home.page.gwdk", "// Mention component in docs\npage home", FileKindPage},
+		{"root.gwdk", "layout root", FileKindLayout},
+		{"root.layout.gwdk", "layout root", FileKindLayout},
+		{"images.asset.gwdk", "asset images", FileKindAsset},
+		{"tailwind.plugin.gwdk", "plugin tailwind", FileKindPlugin},
 	}
 
 	for _, tc := range cases {
@@ -415,25 +415,25 @@ func TestParseBuildFilesParsesLayoutFilesAndSkipsNonGWDKInputs(t *testing.T) {
 	plugin := filepath.Join(root, "tailwind.plugin.gwdk")
 	writeGWDK(t, page, `package app
 
-@page home
-@route "/"
-@guard public
-@layout root
+page home
+route "/"
+guard public
+layout root
 
 view {
 }
 `)
 	writeGWDK(t, layout, `package app
 
-@layout root
+layout root
 
 view {
   <slot />
 }
 `)
-	writeGWDK(t, asset, `@asset images
+	writeGWDK(t, asset, `asset images
 `)
-	writeGWDK(t, plugin, `@plugin tailwind
+	writeGWDK(t, plugin, `plugin tailwind
 `)
 
 	app, diagnostics := ParseBuildFiles([]string{page, layout, asset, plugin})
@@ -456,9 +456,9 @@ func TestCheckJSONReportsCompilerDiagnosticsWithFile(t *testing.T) {
 	path := filepath.Join(root, "dashboard.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@page dashboard
-@route "/dashboard"
-@guard public
+page dashboard
+route "/dashboard"
+guard public
 
 load {
 }
@@ -496,8 +496,8 @@ func TestParseFileReportsParserDiagnosticLine(t *testing.T) {
 	path := filepath.Join(root, "bad.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@page bad
-@route "/bad"
+page bad
+route "/bad"
 @unknown nope
 `)
 
@@ -525,8 +525,8 @@ func TestCheckJSONReportsParserDiagnosticRangeAndCode(t *testing.T) {
 	path := filepath.Join(root, "bad.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@page bad
-@route "/bad"
+page bad
+route "/bad"
 @unknown nope
 `)
 
@@ -550,8 +550,8 @@ func TestCheckJSONReportsUnsupportedBuildStatementDiagnostic(t *testing.T) {
 	path := filepath.Join(root, "bad-build.page.gwdk")
 	writeGWDK(t, path, `package app
 
-@page bad
-@route "/bad"
+page bad
+route "/bad"
 
 build {
   title := "Bad"
@@ -588,7 +588,7 @@ func TestCheckJSONReportsClientStatementDiagnosticRange(t *testing.T) {
 	path := filepath.Join(root, "counter.cmp.gwdk")
 	writeGWDK(t, path, `package app
 
-@component Counter
+component Counter
 
 client {
   fn Bad() {
@@ -636,7 +636,7 @@ func TestCheckJSONReportsBadGForSuggestion(t *testing.T) {
 
 import ui "github.com/cssbruno/gowdk/testfixture/islands"
 
-@component Nested
+component Nested
 
 state ui.NestedState = ui.NewNestedState()
 
@@ -668,7 +668,7 @@ func TestCheckJSONReportsClientExpressionDiagnosticRange(t *testing.T) {
 
 import ui "github.com/cssbruno/gowdk/testfixture/islands"
 
-@component Counter
+component Counter
 
 state ui.CounterState = ui.NewCounterState()
 

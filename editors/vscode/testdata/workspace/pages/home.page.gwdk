@@ -1,8 +1,8 @@
 package pages
 
-@page home
-@route "/"
-@layout root
+page home
+route "/"
+layout root
 
 act Subscribe POST "/"
 

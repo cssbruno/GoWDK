@@ -7,10 +7,10 @@ packages, and tooling contracts may change before a stable release.
 
 ### Changed
 
-- A page that declares no `@guard` is no longer a build error. `@guard` is now
+- A page that declares no `guard` is no longer a build error. `guard` is now
   optional, but a page is not public by default: `missing_page_guard` is now a
   **warning** and the page's route is denied (403) at request time until the
-  author adds `@guard public` (or a protective guard). Static pages are denied
+  author adds `guard public` (or a protective guard). Static pages are denied
   through the generated app's deny registry; request-time (SSR) pages are denied
   in their own handler. Access is never granted by omission. A pure static
   export served without the generated Go server cannot enforce the 403 — the
@@ -33,17 +33,17 @@ packages, and tooling contracts may change before a stable release.
 ### Changed
 
 - Layout identity is now derived from the `.layout.gwdk` file name. An
-  `@layout` annotation inside a layout file no longer declares identity; it
+  `layout` metadata declaration inside a layout file no longer declares identity; it
   declares the parent layout(s) the layout inherits from and is optional.
 - `gowdk version` and the VS Code extension metadata now report `0.2.8`.
 - Optional contract adapter modules require `github.com/cssbruno/gowdk v0.2.8`.
 
 ### Implemented
 
-- A layout that references itself through `@layout` is now a compile error
+- A layout that references itself through `layout` is now a compile error
   (`layout_self_reference`), as is a cyclic layout inheritance chain
   (`cyclic_layout_reference`).
-- A layout whose `@layout` parent does not resolve to a declared layout now
+- A layout whose `layout` parent does not resolve to a declared layout now
   reports `unknown_layout_id` at validation time.
 - A layout must contain exactly one `<slot />` placeholder. Layouts with zero
   or multiple slots now hard-error at validation time (`layout_slot_count`)
@@ -95,12 +95,12 @@ packages, and tooling contracts may change before a stable release.
 
 ### Changed
 
-- `@page` is now optional for page files. When omitted, GOWDK derives the page
+- `page` is now optional for page files. When omitted, GOWDK derives the page
   ID from the source filename, such as `blog-post.page.gwdk` -> `blog-post`.
-- `@route` and `@guard` remain explicit page metadata. Public pages must still
-  declare `@guard public`.
+- `route` and `guard` remain explicit page metadata. Public pages must still
+  declare `guard public`.
 - `gowdk init` now generates the thinner route-first page shape without an
-  explicit `@page` annotation.
+  explicit `page` metadata declaration.
 - Release packaging now uploads `dist/*` as a GitHub Actions workflow artifact
   and verifies the tag release has every expected download asset after upload.
 - `gowdk version` and the VS Code extension metadata now report `0.2.6`.
@@ -109,7 +109,7 @@ packages, and tooling contracts may change before a stable release.
 ### Known Gaps
 
 - GOWDK remains not production-ready.
-- Explicit `@page` is still supported when a stable page ID should not follow
+- Explicit `page` is still supported when a stable page ID should not follow
   the filename.
 
 ## v0.2.5 - 2026-06-08
@@ -117,7 +117,7 @@ packages, and tooling contracts may change before a stable release.
 ### Implemented
 
 - Added explicit page access validation: real page sources must declare
-  `@guard public` for public pages or protected guard IDs for guarded pages.
+  `guard public` for public pages or protected guard IDs for guarded pages.
 - Added thin native RBAC guard IDs with `role:<name>` and
   `permission:<name>` backed by application-owned `runtime/auth.Provider`
   implementations.
@@ -132,7 +132,7 @@ packages, and tooling contracts may change before a stable release.
 - `gowdk version` and the VS Code extension metadata now report `0.2.5`.
 - Optional contract adapter modules require `github.com/cssbruno/gowdk v0.2.5`.
 - Examples, scaffolds, and language/reference docs now use explicit
-  `@guard public` on intentionally public pages.
+  `guard public` on intentionally public pages.
 
 ### Known Gaps
 

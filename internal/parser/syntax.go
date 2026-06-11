@@ -136,11 +136,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			return SyntaxFile{}, fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line)
 		}
 		seenDeclaration = true
-		if strings.HasPrefix(line, "@") {
-			match := annotationPattern.FindStringSubmatch(line)
-			if match == nil {
-				return SyntaxFile{}, fmt.Errorf("line %d: malformed annotation %q", lineNumber, line)
-			}
+		if match := metadataPattern.FindStringSubmatch(line); match != nil {
 			annotation := SyntaxAnnotation{
 				Name:  match[1],
 				Value: strings.TrimSpace(match[2]),
@@ -157,6 +153,9 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			}
 			file.Annotations = append(file.Annotations, annotation)
 			continue
+		}
+		if strings.HasPrefix(line, "@") {
+			return SyntaxFile{}, fmt.Errorf("line %d: malformed legacy metadata %q", lineNumber, line)
 		}
 		if match := importPattern.FindStringSubmatch(line); match != nil {
 			file.Imports = append(file.Imports, SyntaxImport{

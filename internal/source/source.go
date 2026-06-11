@@ -117,23 +117,23 @@ type BackendBinding struct {
 func ErrorPagePath(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return "", fmt.Errorf("@error requires a value")
+		return "", fmt.Errorf("error requires a value")
 	}
 	if strings.ContainsAny(value, "\\?#") {
-		return "", fmt.Errorf("@error must be a local generated HTML path without query, fragment, or backslash")
+		return "", fmt.Errorf("error must be a local generated HTML path without query, fragment, or backslash")
 	}
 	for _, part := range strings.Split(strings.TrimPrefix(value, "/"), "/") {
 		if part == ".." {
-			return "", fmt.Errorf("@error path must stay inside generated output")
+			return "", fmt.Errorf("error path must stay inside generated output")
 		}
 	}
 	cleaned := path.Clean("/" + strings.TrimPrefix(value, "/"))
 	if cleaned == "/" || cleaned == "/." {
-		return "", fmt.Errorf("@error requires a generated HTML file path")
+		return "", fmt.Errorf("error requires a generated HTML file path")
 	}
 	cleaned = strings.TrimPrefix(cleaned, "/")
 	if !strings.HasSuffix(strings.ToLower(cleaned), ".html") {
-		return "", fmt.Errorf("@error path must end in .html")
+		return "", fmt.Errorf("error path must end in .html")
 	}
 	return cleaned, nil
 }

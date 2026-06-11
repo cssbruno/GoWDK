@@ -1,9 +1,9 @@
 package embed
 
-@page embed.example
-@route "/embed"
-@guard public
-@layout root
+page embed.example
+route "/embed"
+guard public
+layout root
 
 build {
   => { title: "Embedded GOWDK" }

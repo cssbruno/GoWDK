@@ -19,42 +19,42 @@ var Config = gowdk.Config{
 }
 ```
 
-When a page omits `@css`, GOWDK behaves as if the page declared:
+When a page omits `css`, GOWDK behaves as if the page declared:
 
 ```gwdk
-@css default page
+css default page
 ```
 
 Built-in CSS inputs:
 
 - `default`: `CSS.Default`, or `global` when `global.css` exists.
 - `page`: CSS matching the page ID, such as `blog.post.css` for
-  `@page blog.post`.
+  `page blog.post`.
 - `none`: no GOWDK-managed page CSS, and it must be used alone.
 
 Examples:
 
 ```gwdk
-@route "/blog/{slug}"
-@guard public
+route "/blog/{slug}"
+guard public
 ```
 
 Uses `global.css` plus page-ID CSS when those files exist. With a derived page
 ID from `blog-post.page.gwdk`, the page-specific file is `blog-post.css`; with
-explicit `@page blog.post`, it is `blog.post.css`.
+explicit `page blog.post`, it is `blog.post.css`.
 
 ```gwdk
-@route "/dashboard"
-@guard public
-@css reset tokens forms
+route "/dashboard"
+guard public
+css reset tokens forms
 ```
 
 Uses only `reset.css`, `tokens.css`, and `forms.css`.
 
 ```gwdk
-@route "/embed"
-@guard public
-@css none
+route "/embed"
+guard public
+css none
 ```
 
 Disables discovered page CSS inputs. A sibling `style {}` block still emits
@@ -105,7 +105,7 @@ The style block is parsed separately from the view body. GOWDK emits the CSS as
 generated CSS assets instead of inline `<style>` tags:
 
 - Page style blocks are appended to that page's generated CSS asset.
-- Component style blocks are scoped like component `@css` files.
+- Component style blocks are scoped like component `css` files.
 - Layout style blocks are linked by pages that declare that layout.
 
 ## Configured Stylesheets
@@ -133,20 +133,20 @@ Generated pages include:
 ## Component CSS And Assets
 
 Component CSS is explicit. A component declares stylesheet inputs with
-component-local `@css` annotations:
+component-local `css` metadata declarations:
 
 ```gwdk
 package components
 
-@component Hero
-@css "./hero.css"
+component Hero
+css "./hero.css"
 
 view {
   <section class="hero">...</section>
 }
 ```
 
-The path is relative to the component source file. GOWDK parses the annotation
+The path is relative to the component source file. GOWDK parses the metadata declaration
 and lowers it into the typed `.gwdk` AST and stable IR with owner metadata,
 source path, CSS path, deterministic hash key, and deterministic scope ID.
 See `examples/components/css/` for a component-local CSS metadata example.
@@ -156,11 +156,11 @@ Component assets use the same explicit model:
 ```gwdk
 package components
 
-@component Hero
-@asset "./hero.png"
+component Hero
+asset "./hero.png"
 ```
 
-`@asset` paths are also relative to the component source file. GOWDK emits
+`asset` paths are also relative to the component source file. GOWDK emits
 those files under `assets/gowdk/components/<package>/<component>/` with
 content-hashed filenames, records the logical-to-emitted mapping in
 `gowdk-assets.json`, and serves them from generated binaries with immutable
@@ -171,11 +171,11 @@ Current implementation status:
 - Page CSS discovery, page `style {}` CSS, configured stylesheets,
   processor-emitted CSS, minified hashed filenames, asset manifest mappings,
   and generated binary cache headers are implemented for build output.
-- Component `@css` annotations are parsed, analyzed, emitted as scoped CSS
+- Component `css` metadata declarations are parsed, analyzed, emitted as scoped CSS
   files, content-hashed, linked from generated pages, recorded in
   `gowdk-assets.json`, and served with immutable generated binary cache
   headers. Component `style {}` CSS uses the same scoped emission path.
-- Component `@asset` annotations are parsed, analyzed, emitted as
+- Component `asset` metadata declarations are parsed, analyzed, emitted as
   content-hashed files, recorded in `gowdk-assets.json`, and served with
   immutable generated binary cache headers.
 - Full component AST bodies are not yet passed to CSS processors. Processors
@@ -197,7 +197,7 @@ The component CSS scoping contract is:
   CSS for application-wide styles. A future explicit `:global(...)` escape can
   be added, but implicit global selectors in component CSS are not part of the
   contract.
-- Emitted component CSS and `@asset` files are content-hashed, recorded in
+- Emitted component CSS and `asset` files are content-hashed, recorded in
   `gowdk-assets.json`, and served with the same generated binary cache policy
   as other immutable emitted assets.
 
@@ -233,7 +233,7 @@ type CSSProcessor interface {
 - `Build`: the active build config.
 - `CSS`: the active CSS config.
 
-Component `@css` annotations are represented in the typed `.gwdk` AST and
+Component `css` metadata declarations are represented in the typed `.gwdk` AST and
 stable IR with deterministic owner, scope ID, and hash-key metadata for future
 scoping and emitted filename decisions. Full component AST bodies are not yet
 passed to CSS processors; processors should use source metadata and extracted

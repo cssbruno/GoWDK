@@ -1,6 +1,6 @@
 package components
 
-@component Button
+component Button
 
 view {
   <button type="submit" class="gowdk-button">

@@ -6,7 +6,7 @@ symbol, HTTP method, and endpoint path in `.gwdk`; normal Go owns the behavior.
 ```gowdk
 package api
 
-api Health GET "/api/health" @error "/errors/api-health.html"
+api Health GET "/api/health" error "/errors/api-health.html"
 ```
 
 Supported methods are `GET`, `POST`, `PUT`, `PATCH`, and `DELETE`.
@@ -42,7 +42,7 @@ Handlers can call `app.Endpoint(ctx)` from `runtime/app` to read the generated
 endpoint kind, page ID, symbol name, method, path, and optional generated error
 page.
 
-The optional endpoint-local `@error` suffix selects a generated HTML error page
+The optional endpoint-local `error` suffix selects a generated HTML error page
 for API panics before response headers are written. Returned handler errors
 still follow normal `runtime/response.Response` behavior.
 

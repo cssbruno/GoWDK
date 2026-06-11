@@ -29,15 +29,15 @@ var explanationDetails = map[string]explanationDetail{
 		Details: "Protected page guards must gate the page GET route at request time. A build-time SPA page emits plain static HTML, so it cannot enforce frontend page access.",
 		NextSteps: []string{
 			"Add load {} or go ssr {} and enable the SSR addon when the page should be protected.",
-			"Use @guard public when the page is intentionally public and keep backend authorization in Go handlers.",
+			"Use guard public when the page is intentionally public and keep backend authorization in Go handlers.",
 		},
-		Invalid: `@page dashboard
-@route "/dashboard"
-@guard auth.required
+		Invalid: `page dashboard
+route "/dashboard"
+guard auth.required
 `,
-		Fixed: `@page dashboard
-@route "/dashboard"
-@guard auth.required
+		Fixed: `page dashboard
+route "/dashboard"
+guard auth.required
 
 load {
 }
@@ -51,8 +51,8 @@ load {
 		},
 		Invalid: `package pages
 
-@page dashboard
-@route "/dashboard"
+page dashboard
+route "/dashboard"
 
 load {
 }
@@ -74,8 +74,8 @@ view {
 			"Add paths { ... } with concrete param values for every static output path.",
 			"Use load {} or go ssr {} with the SSR addon when the route should render per request.",
 		},
-		Invalid: `@page post
-@route "/blog/{slug}"
+		Invalid: `page post
+route "/blog/{slug}"
 
 view {
   <main>{param("slug")}</main>
@@ -92,8 +92,8 @@ view {
 			"Add view {} to page files.",
 			"Move API-only behavior into supported endpoint declarations on a page or normal Go handlers.",
 		},
-		Invalid: `@page home
-@route "/"
+		Invalid: `page home
+route "/"
 `,
 		Fixed: `view {
   <main>Home</main>
@@ -132,17 +132,17 @@ view {
 		},
 	},
 	"missing_page_guard": {
-		Details: "A page that declares no @guard is not public by default. This is a warning, not a build failure: the page's route is denied (403) at request time until the author states intent. A static page is denied through the generated app's deny registry; a request-time page is denied in its own handler. Add @guard public to expose the page on purpose so access is never granted by omission.",
+		Details: "A page that declares no guard is not public by default. This is a warning, not a build failure: the page's route is denied (403) at request time until the author states intent. A static page is denied through the generated app's deny registry; a request-time page is denied in its own handler. Add guard public to expose the page on purpose so access is never granted by omission.",
 		NextSteps: []string{
-			"Add @guard public when the page is intentionally public.",
-			"Add protected guard IDs such as @guard auth.required for private pages.",
+			"Add guard public when the page is intentionally public.",
+			"Add protected guard IDs such as guard auth.required for private pages.",
 		},
-		Invalid: `@page home
-@route "/"
+		Invalid: `page home
+route "/"
 `,
-		Fixed: `@page home
-@route "/"
-@guard public
+		Fixed: `page home
+route "/"
+guard public
 `,
 	},
 	"unsupported_markup_syntax": {
@@ -162,16 +162,16 @@ view {
 	"public_guard_exclusive": {
 		Details: "The public guard means no protected guard should run for that page, so it cannot be mixed with other guard IDs.",
 		NextSteps: []string{
-			"Keep @guard public by itself for public pages.",
+			"Keep guard public by itself for public pages.",
 			"Remove public and keep protected guard IDs for guarded pages.",
 		},
-		Invalid: `@page dashboard
-@route "/dashboard"
-@guard public auth.required
+		Invalid: `page dashboard
+route "/dashboard"
+guard public auth.required
 `,
-		Fixed: `@page dashboard
-@route "/dashboard"
-@guard auth.required
+		Fixed: `page dashboard
+route "/dashboard"
+guard auth.required
 `,
 	},
 }

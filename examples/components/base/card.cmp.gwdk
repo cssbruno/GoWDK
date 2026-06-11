@@ -1,6 +1,6 @@
 package components
 
-@component Card
+component Card
 
 props {
   title string

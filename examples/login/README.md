@@ -20,7 +20,7 @@ feature package.
 - `src/features/auth/auth.go`: same-package feature-bound handlers.
 - `src/features/auth/login-app.cmp.gwdk`: reusable login panel component.
 - `src/features/auth/login-error.page.gwdk`: failed-login route.
-- `styles/auth.css`: CSS input selected by pages with `@css auth`.
+- `styles/auth.css`: CSS input selected by pages with `css auth`.
 - `.gowdk/output/login`: inferred generated output for the one-binary target.
 - `.gowdk/output/split`: inferred generated output for the split target.
 - `.gowdk/login`: generated one-binary Go app source.

@@ -19,7 +19,7 @@ handlers, configured-addon
 `go addon.<name> {}` validation and generated app Go file emission through
 `gowdk.GoBlockConsumer`, route/build-data
 interpolation in views, Go-typed component props/state contracts, first-slice
-generated JavaScript islands for stateful components, component-level `@wasm`
+generated JavaScript islands for stateful components, component-level `wasm`
 island asset emission, formatting, diagnostics, manifest output, build output
 for simple SPA pages/components, generated partial fragment responses for
 embedded apps, and LSP/editor integration. It does not yet parse non-string
@@ -33,7 +33,7 @@ component contract and inline package-go-block slices.
 - `syntax.md`: lexical tokens and accepted top-level forms.
 - `grammar.md`: current parser grammar and future grammar boundaries.
 - `semantics.md`: current render-mode and validation rules.
-- `guards.md`: `@guard` and the default-deny page access contract.
+- `guards.md`: `guard` and the default-deny page access contract.
 - `blocks.md`: block meanings and current parser support.
 - `data.md`: build-time data, request-time load data, endpoint data, and
   invalidation boundaries.
@@ -58,12 +58,12 @@ The compiler currently treats every parsed file as a page file. A minimal page
 uses:
 
 ```gwdk
-@route "/"
-@guard public
+route "/"
+guard public
 ```
 
-The page ID derives from the filename unless `@page` is present.
+The page ID derives from the filename unless `page` is present.
 
 Component files are supported as explicit or discovered `gowdk build` inputs
-with `@component`. Layout files are also supported. Separate island and
+with `component`. Layout files are also supported. Separate island and
 plugin-adjacent file kinds are planned.

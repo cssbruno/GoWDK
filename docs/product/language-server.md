@@ -39,11 +39,11 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 - Accept full-document `textDocument/didOpen`, `textDocument/didChange`, `textDocument/didSave`, and `textDocument/didClose` notifications.
 - Publish diagnostics using the current GOWDK parser and validation rules.
 - Return whole-document formatting edits using `gowdk fmt` behavior.
-- Return keyword completions for annotations, render modes, blocks, and `g:` directives.
+- Return keyword completions for metadata declarations, render modes, blocks, and `g:` directives.
 - Return project completions for open-document components, layouts, guards,
   routes, page IDs, stores, local component props, and inferred component state
   or value fields.
-- Return hover text for known annotations, directives, blocks, routes, stores,
+- Return hover text for known metadata declarations, directives, blocks, routes, stores,
   props, components, layouts, guards, and handler symbols from open documents.
 - Return go-to-definition locations for same-package and `use`-qualified
   component calls from open documents.
@@ -82,8 +82,8 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 
 ## Edge Cases
 
-- Missing `@route` or `@guard` should publish a diagnostic at the relevant
-  source location when available. `@page` is optional for file-backed pages.
+- Missing `route` or `guard` should publish a diagnostic at the relevant
+  source location when available. `page` is optional for file-backed pages.
 - Closing a document should clear diagnostics for that URI.
 - Unknown LSP requests should return a method-not-found error.
 - Notifications without params should be ignored when safe.

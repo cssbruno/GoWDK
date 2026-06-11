@@ -61,7 +61,7 @@ Current v0.1-supported language surfaces report source locations as follows:
 
 - Parser syntax errors, including unsupported `paths {}` and `build {}` forms,
   report the offending source line with a line range.
-- Route validation uses annotation, block, and route-param spans where
+- Route validation uses metadata declaration, block, and route-param spans where
   available, including route declarations, request-time blocks, and dynamic
   route params.
 - View and component field validation uses parsed view-node spans for the

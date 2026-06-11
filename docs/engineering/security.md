@@ -4,7 +4,7 @@
 
 The initial implementation is a compiler/runtime scaffold. Security-critical behavior appears incrementally in the actions, partial, API, embed, and SSR addons.
 
-Do not treat current `act`, `api`, `partial`, `@guard`, or SSR scaffolding as complete production enforcement. Current validation records and checks metadata; generated request decoding and opt-in CSRF enforcement exist, while authorization and broader request-time policy are still planned.
+Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as complete production enforcement. Current validation records and checks metadata; generated request decoding and opt-in CSRF enforcement exist, while authorization and broader request-time policy are still planned.
 
 ## Baseline Rules
 

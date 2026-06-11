@@ -1,9 +1,9 @@
 package pages
 
-@page layout.stack
-@route "/layout-stack"
-@guard public
-@layout root, marketing.shell
+page layout.stack
+route "/layout-stack"
+guard public
+layout root, marketing.shell
 
 view {
   <main>

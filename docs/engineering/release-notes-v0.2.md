@@ -59,7 +59,7 @@ tooling contracts may change before a stable release.
 - `v0.2.5` release metadata: CLI/editor versions, optional module root-version
   requirements, root changelog, and release-doc current-version examples.
 - Explicit page access metadata: real page sources must declare
-  `@guard public` for intentionally public pages or protected guard IDs for
+  `guard public` for intentionally public pages or protected guard IDs for
   guarded pages.
 - Thin native RBAC guard IDs through `role:<name>` and `permission:<name>`,
   backed by application-owned `runtime/auth.Provider` implementations.
@@ -68,10 +68,10 @@ tooling contracts may change before a stable release.
   native RBAC guards.
 - `v0.2.6` release metadata: CLI/editor versions, optional module root-version
   requirements, root changelog, and release-doc current-version examples.
-- Optional `@page` annotations with filename-derived page IDs, while keeping
-  explicit `@route` and `@guard` metadata required.
+- Optional `page` metadata declarations with filename-derived page IDs, while keeping
+  explicit `route` and `guard` metadata required.
 - `gowdk init` now scaffolds the thinner route-first page shape and keeps
-  public pages explicit through `@guard public`.
+  public pages explicit through `guard public`.
 - Release packaging uploads `dist/*` as a GitHub Actions workflow artifact and
   verifies the selected tag release contains the expected download assets.
 - `v0.2.7` release metadata: CLI/editor versions, optional module root-version
@@ -92,11 +92,11 @@ tooling contracts may change before a stable release.
   without writing generated output.
 - `v0.2.8` release metadata: CLI/editor versions, optional module root-version
   requirements, root changelog, and release-doc current-version examples.
-- Layout identity now comes from the `.layout.gwdk` file name. `@layout` inside
+- Layout identity now comes from the `.layout.gwdk` file name. `layout` inside
   a layout is optional and declares the parent layout(s) the layout inherits
   from instead of its own identity.
 - Self-referential and cyclic layout inheritance are compile errors
-  (`layout_self_reference`, `cyclic_layout_reference`), and an `@layout` parent
+  (`layout_self_reference`, `cyclic_layout_reference`), and an `layout` parent
   that does not resolve reports `unknown_layout_id`.
 - A layout must contain exactly one `<slot />` placeholder; zero or multiple
   slots hard-error at validation time (`layout_slot_count`).

@@ -10,9 +10,9 @@ defense-in-depth redundancy.
 
 ## Goals
 
-- Reuse `@guard` metadata for native role and permission checks.
-- Require every real page source to declare access intent with `@guard`; public
-  pages use `@guard public`.
+- Reuse `guard` metadata for native role and permission checks.
+- Require every real page source to declare access intent with `guard`; public
+  pages use `guard public`.
 - Keep users, sessions, OAuth, tenant storage, and persistence in application Go.
 - Expose a small runtime auth contract for a current principal.
 - Require generated guarded apps to provide backing hooks without importing
@@ -38,7 +38,7 @@ defense-in-depth redundancy.
 
 ## User Flow
 
-1. A page declares `@guard role:admin` or `@guard permission:posts.write`.
+1. A page declares `guard role:admin` or `guard permission:posts.write`.
 2. App startup defines `GOWDKAuthProvider` or `GOWDKGuardRegistry`.
 3. Generated handlers execute rate limiting, then native RBAC/custom guards, then
    request decoding and user logic.
@@ -50,15 +50,15 @@ defense-in-depth redundancy.
 - Native guard IDs with `role:` require the principal to have that role.
 - Native guard IDs with `permission:` require the principal to have that
   permission.
-- Missing `@guard` on a real page source fails validation.
-- `@guard public` marks intentional public access, requires no runtime backing
+- Missing `guard` on a real page source fails validation.
+- `guard public` marks intentional public access, requires no runtime backing
   hook, and cannot be combined with protected guard IDs.
 - Non-public page guards require request-time page rendering so frontend page
   access can be checked before HTML is returned.
 - Missing required backing hooks fail Go compilation.
 - A missing principal or missing role/permission fails closed through the
   existing guard failure path.
-- Existing custom `@guard` registrations continue to work.
+- Existing custom `guard` registrations continue to work.
 
 ### Non-Functional
 
@@ -73,8 +73,8 @@ defense-in-depth redundancy.
 ## Acceptance Criteria
 
 - [x] `runtime/auth` exposes principal, provider, and native RBAC guard helpers.
-- [x] Real page sources fail validation without explicit `@guard` metadata.
-- [x] `@guard public` marks intentional public access and requires no backing
+- [x] Real page sources fail validation without explicit `guard` metadata.
+- [x] `guard public` marks intentional public access and requires no backing
   hook.
 - [x] Protected page guards fail validation on build-time SPA/action page
   routes.
@@ -96,7 +96,7 @@ defense-in-depth redundancy.
 
 ## Dependencies
 
-- Internal: existing `@guard` parser and generated `RegisterGuards` hook.
+- Internal: existing `guard` parser and generated `RegisterGuards` hook.
 - External: none.
 
 ## Open Questions

@@ -135,7 +135,7 @@ The addon module may import other GitHub/private/local modules. The project
 
 ## Generated App Request Guards
 
-When generated SSR, action, or API routes declare `@guard`, the generated app
+When generated SSR, action, or API routes declare `guard`, the generated app
 package exposes guard registration hooks:
 
 ```go
@@ -362,7 +362,7 @@ migration.
 
 `Head` controls app-level document head tags. `Favicon` emits
 `<link rel="icon">`. `SiteName`, `Image`, and `TwitterCard` enable generated
-Open Graph and Twitter metadata. A page-level `@image` overrides `Head.Image`
+Open Graph and Twitter metadata. A page-level `image` overrides `Head.Image`
 for that page.
 
 `Scripts` declares global script tags emitted into every GOWDK-generated HTML
@@ -420,7 +420,7 @@ When omitted, CSS discovery scans `**/*.css`, excludes `.git`, `vendor`,
 uses `global.css` as the default CSS input when present.
 
 `CSS.Default` names discovered CSS inputs used by the `default` built-in in
-`@css`. Generated page CSS defaults to `assets/gowdk/<page-id>.css` and hrefs
+`css`. Generated page CSS defaults to `assets/gowdk/<page-id>.css` and hrefs
 under `/assets/gowdk/`.
 
 ## Addons

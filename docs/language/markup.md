@@ -15,8 +15,8 @@ unsupported unless another language reference explicitly says otherwise.
   HTML syntax (including `{@html ...}`) is rejected.
 - Snippet/render blocks are not supported. Use GOWDK component slots for the
   supported reusable-markup model.
-- Head management is page metadata, not `view {}` markup. Use `@title`,
-  `@description`, `@canonical`, and `@image`.
+- Head management is page metadata, not `view {}` markup. Use `title`,
+  `description`, `canonical`, and `image`.
 - External template syntax is rejected instead of translated implicitly.
 
 Deferred construct families each fail with a registered diagnostic (see
@@ -149,9 +149,9 @@ Implemented today:
 - Client expressions support first-slice compiler-owned built-ins:
   `len(value)`, `lower(value)`, `upper(value)`, `contains(value, query)`,
   `string(value)`, `int(value)`, and `float(value)`.
-- Component-level `@wasm` declarations make normal calls to that component use
+- Component-level `wasm` declarations make normal calls to that component use
   WASM island assets. `g:island="wasm"` remains a call-site override. Unknown
-  `g:island` values are compile/render errors. Without `@wasm` or `g:island`,
+  `g:island` values are compile/render errors. Without `wasm` or `g:island`,
   stateful component calls use generated JavaScript by default.
 - The explicit raw HTML escape hatch `g:html={Expr}` on a non-void element
   without markup children. See the "Raw HTML (`g:html`)" section below.

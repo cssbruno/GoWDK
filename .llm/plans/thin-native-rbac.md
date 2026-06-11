@@ -6,9 +6,9 @@ Relevant spec: `.llm/features/thin-native-rbac.md`
 
 ## Assumptions
 
-- The first slice should reuse `@guard` instead of adding parser syntax.
+- The first slice should reuse `guard` instead of adding parser syntax.
 - Page access is default-deny at source validation time: public pages must say
-  `@guard public`; protected pages must declare non-public guard IDs.
+  `guard public`; protected pages must declare non-public guard IDs.
 - Non-public page guards need request-time rendering for frontend page access;
   static SPA output cannot enforce that gate.
 - Native guard IDs are `role:<name>` and `permission:<name>`.
@@ -23,7 +23,7 @@ Relevant spec: `.llm/features/thin-native-rbac.md`
 - Keep guard execution in the existing generated guard path for this slice.
 - Generate required backing hook references in guarded app packages.
 - Update generated guard execution to pass the configured auth provider.
-- Add validation for missing `@guard`, mixed `public` guard metadata, and
+- Add validation for missing `guard`, mixed `public` guard metadata, and
   protected guards on build-time page routes.
 - Add unit and generated-app tests.
 - Update hooks/reference docs and product status docs.

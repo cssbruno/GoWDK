@@ -412,8 +412,8 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 }
 
 // deniedPageRoutes returns the concrete (non-dynamic) page routes that declared
-// no @guard. Such pages are denied (403) at request time until the author adds
-// @guard public. Request-time (SSR) pages enforce the same default in their own
+// no guard. Such pages are denied (403) at request time until the author adds
+// guard public. Request-time (SSR) pages enforce the same default in their own
 // handler, so they are excluded here. Dynamic build-time pages expand to many
 // concrete artifacts and are denied by pattern instead; see
 // deniedPageRoutePatterns.

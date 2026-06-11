@@ -248,29 +248,29 @@ func ClassifySource(path string, source []byte) FileKind {
 			continue
 		}
 		switch {
-		case isAnnotation(text, "@page"):
+		case isMetadataDeclaration(text, "page"):
 			return FileKindPage
-		case isAnnotation(text, "@component"):
+		case isMetadataDeclaration(text, "component"):
 			return FileKindComponent
-		case isAnnotation(text, "@layout"):
+		case isMetadataDeclaration(text, "layout"):
 			return FileKindLayout
-		case isAnnotation(text, "@asset"):
+		case isMetadataDeclaration(text, "asset"):
 			return FileKindAsset
-		case isAnnotation(text, "@plugin"):
+		case isMetadataDeclaration(text, "plugin"):
 			return FileKindPlugin
 		}
 	}
 	return FileKindPage
 }
 
-func isAnnotation(text, annotation string) bool {
-	if !strings.HasPrefix(text, annotation) {
+func isMetadataDeclaration(text, keyword string) bool {
+	if !strings.HasPrefix(text, keyword) {
 		return false
 	}
-	if len(text) == len(annotation) {
+	if len(text) == len(keyword) {
 		return true
 	}
-	next := text[len(annotation)]
+	next := text[len(keyword)]
 	return next == ' ' || next == '\t'
 }
 
@@ -452,7 +452,7 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 	message := validation.Message
 	switch validation.Code {
 	case "missing_package_declaration":
-		return "Add package <name> before annotations, imports, and blocks."
+		return "Add package <name> before metadata, imports, and blocks."
 	case "package_mismatch":
 		return "Use the same package name as sibling .go files in this directory."
 	case "go_package_error":

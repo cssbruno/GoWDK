@@ -1,8 +1,8 @@
 package componentassets
 
-@page component.assets
-@route "/components/assets"
-@guard public
+page component.assets
+route "/components/assets"
+guard public
 
 view {
   <main>

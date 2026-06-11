@@ -42,7 +42,7 @@ syntax policy in one place.
 ### Functional
 
 - List file kinds and package rules.
-- List annotations, imports, use declarations, endpoints, blocks, Go blocks,
+- List metadata declarations, imports, use declarations, endpoints, blocks, Go blocks,
   scoped JavaScript, routes, view markup, components, slots, and directives.
 - State raw HTML and unsupported syntax policy.
 - State diagnostics and compatibility policy.

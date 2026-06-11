@@ -1,9 +1,9 @@
 package actions
 
-@page signup
-@route "/signup"
-@guard public
-@layout root
+page signup
+route "/signup"
+guard public
+layout root
 
 act Submit POST "/signup"
 

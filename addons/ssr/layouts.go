@@ -12,7 +12,7 @@ type LayoutFunc func(LoadContext, string) (string, error)
 type LayoutRegistry map[string]LayoutFunc
 
 // ComposeLayouts wraps body with the declared layout stack. Layouts are listed
-// from outermost to innermost, matching @layout root, dashboard semantics.
+// from outermost to innermost, matching layout root, dashboard semantics.
 func ComposeLayouts(ctx LoadContext, stack LayoutStack, registry LayoutRegistry, body string) (string, error) {
 	out := body
 	for index := len(stack) - 1; index >= 0; index-- {

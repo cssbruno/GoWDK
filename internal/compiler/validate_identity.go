@@ -87,7 +87,7 @@ func validatePageLayoutReferences(pages []gwdkir.Page, layouts []gwdkir.Layout) 
 						Source: page.Source,
 						Span:   spanForName(page.Spans.Layouts, layoutRef, page.Spans.Page),
 						Message: fmt.Sprintf(
-							"%s references layout %q, but alias %q is not declared. Add `use %s \"<package>\"` before @layout",
+							"%s references layout %q, but alias %q is not declared. Add `use %s \"<package>\"` before layout",
 							page.ID,
 							layoutRef,
 							alias,
@@ -105,7 +105,7 @@ func validatePageLayoutReferences(pages []gwdkir.Page, layouts []gwdkir.Layout) 
 					Source: page.Source,
 					Span:   spanForName(page.Spans.Layouts, layoutRef, page.Spans.Page),
 					Message: fmt.Sprintf(
-						"%s references layout %q through alias %q, but GOWDK package %s does not declare @layout %s",
+						"%s references layout %q through alias %q, but GOWDK package %s does not declare layout %s",
 						page.ID,
 						layoutRef,
 						alias,
@@ -129,7 +129,7 @@ func validatePageLayoutReferences(pages []gwdkir.Page, layouts []gwdkir.Layout) 
 				Source: page.Source,
 				Span:   spanForName(page.Spans.Layouts, layoutRef, page.Spans.Page),
 				Message: fmt.Sprintf(
-					"%s references layout %q, but no same-package .layout.gwdk file declares @layout %s. For cross-package layouts, add `use alias \"package\"` and write `@layout alias.%s`",
+					"%s references layout %q, but no same-package .layout.gwdk file declares layout %s. For cross-package layouts, add `use alias \"package\"` and write `layout alias.%s`",
 					page.ID,
 					layoutRef,
 					layoutRef,
@@ -141,7 +141,7 @@ func validatePageLayoutReferences(pages []gwdkir.Page, layouts []gwdkir.Layout) 
 	return diagnostics
 }
 
-// validateLayoutReferences checks a layout's own @layout parent declarations:
+// validateLayoutReferences checks a layout's own layout parent declarations:
 // a layout may not inherit from itself (layout_self_reference), may not form a
 // cyclic inheritance chain (cyclic_layout_reference), and must reference
 // layouts that exist (unknown_layout_id).
@@ -191,7 +191,7 @@ func validateLayoutReferences(layouts []gwdkir.Layout) []ValidationError {
 					Source: layout.Source,
 					Span:   span,
 					Message: fmt.Sprintf(
-						"layout %s lists itself in @layout; a layout cannot inherit from itself (layout identity comes from the file name, not @layout)",
+						"layout %s lists itself in layout; a layout cannot inherit from itself (layout identity comes from the file name, not layout)",
 						layoutDisplayName(layout.Package, layout.ID),
 					),
 				})
@@ -242,7 +242,7 @@ func detectLayoutCycles(layouts []gwdkir.Layout, edges map[string][]string) []Va
 						Source: layout.Source,
 						Span:   layout.Span,
 						Message: fmt.Sprintf(
-							"layout %s is part of a cyclic @layout inheritance chain",
+							"layout %s is part of a cyclic layout inheritance chain",
 							layoutDisplayName(layout.Package, layout.ID),
 						),
 					})

@@ -197,7 +197,7 @@ func validatePageQualifiedComponentRefs(page gwdkir.Page, usesByAlias map[string
 			Source: page.Source,
 			Span:   firstSpan(page.Blocks.Spans.View, page.Spans.Page),
 			Message: fmt.Sprintf(
-				"%s references component <%s />, but package %s does not declare @component %s",
+				"%s references component <%s />, but package %s does not declare component %s",
 				page.ID,
 				ref,
 				use.Package,
@@ -274,7 +274,7 @@ func validateComponentQualifiedComponentRefs(component gwdkir.Component, usesByA
 			Source:        component.Source,
 			Span:          firstSpan(component.Blocks.Spans.View, component.Span),
 			Message: fmt.Sprintf(
-				"component %s references component <%s />, but package %s does not declare @component %s",
+				"component %s references component <%s />, but package %s does not declare component %s",
 				component.Name,
 				ref,
 				use.Package,

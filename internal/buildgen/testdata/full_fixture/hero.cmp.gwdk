@@ -1,6 +1,6 @@
 package fixtures
 
-@component Hero
+component Hero
 
 props {
   title string

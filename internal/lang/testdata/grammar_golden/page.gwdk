@@ -1,10 +1,10 @@
 package grammar
 
-@page grammar.demo
-@route "/demo/{slug}"
-@guard public
-@layout root, demo
-@css default page forms
+page grammar.demo
+route "/demo/{slug}"
+guard public
+layout root, demo
+css default page forms
 
 paths {
   => { slug: "starter" }

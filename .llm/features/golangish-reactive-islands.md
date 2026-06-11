@@ -66,7 +66,7 @@ The language is Go-like, but intentionally not Go:
 ```gwdk
 package ui
 
-@component Counter
+component Counter
 
 import ui "github.com/acme/app/ui"
 

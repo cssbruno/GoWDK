@@ -40,52 +40,52 @@ type Package struct {
 	Span source.SourceSpan
 }
 
-// Annotation is one top-level @annotation.
+// Annotation is one top-level metadata declaration.
 type Annotation struct {
 	Name  string
 	Value string
 	Span  source.SourceSpan
 }
 
-// PageDecl is an @page declaration.
+// PageDecl is an page declaration.
 type PageDecl struct {
 	ID   string
 	Span source.SourceSpan
 }
 
-// ComponentDecl is an @component declaration.
+// ComponentDecl is an component declaration.
 type ComponentDecl struct {
 	Name string
 	Span source.SourceSpan
 }
 
-// LayoutDecl is an @layout declaration in a layout file.
+// LayoutDecl is an layout declaration in a layout file.
 type LayoutDecl struct {
 	ID   string
 	Span source.SourceSpan
 }
 
-// RouteDecl is an @route declaration.
+// RouteDecl is an route declaration.
 type RouteDecl struct {
 	Path   string
 	Params []RouteParam
 	Span   source.SourceSpan
 }
 
-// RouteParam is one dynamic route segment declared by @route.
+// RouteParam is one dynamic route segment declared by route.
 type RouteParam struct {
 	Name string
 	Type string
 	Span source.SourceSpan
 }
 
-// CacheDecl is an @cache route response policy declaration.
+// CacheDecl is an cache route response policy declaration.
 type CacheDecl struct {
 	Policy string
 	Span   source.SourceSpan
 }
 
-// RevalidateDecl is an @revalidate stale-while-revalidate declaration.
+// RevalidateDecl is an revalidate stale-while-revalidate declaration.
 type RevalidateDecl struct {
 	Seconds string
 	Span    source.SourceSpan
@@ -97,13 +97,13 @@ type ErrorPageDecl struct {
 	Span source.SourceSpan
 }
 
-// LayoutRef is one @layout reference on a page.
+// LayoutRef is one layout reference on a page.
 type LayoutRef struct {
 	ID   string
 	Span source.SourceSpan
 }
 
-// GuardRef is one @guard reference on a page.
+// GuardRef is one guard reference on a page.
 type GuardRef struct {
 	Name string
 	Span source.SourceSpan

@@ -1,8 +1,8 @@
 package ssr
 
-@page dynamic.ssr
-@route "/ssr/{slug}"
-@guard public
+page dynamic.ssr
+route "/ssr/{slug}"
+guard public
 
 go ssr {
 }

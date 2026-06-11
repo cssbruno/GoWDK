@@ -17,24 +17,24 @@
 
 ## Current Metadata Semantics
 
-- `@route` is required for page sources. `@guard` is optional but a page is not
-  public by default: a page that declares no `@guard` builds with a
+- `route` is required for page sources. `guard` is optional but a page is not
+  public by default: a page that declares no `guard` builds with a
   `missing_page_guard` warning and its route is denied (403) at request time
-  until access is stated. Declare `@guard public` to serve a page on purpose;
+  until access is stated. Declare `guard public` to serve a page on purpose;
   declare custom guard IDs or native RBAC IDs such as `role:admin` and
-  `permission:posts.write` for protected pages. `@guard public` must stand
+  `permission:posts.write` for protected pages. `guard public` must stand
   alone. Access is never granted by omission.
-- `@page` is optional for file-backed page sources. When omitted, page ID
+- `page` is optional for file-backed page sources. When omitted, page ID
   derives from the source filename by removing `.page.gwdk` or `.gwdk`.
-  Explicit `@page` keeps page identity stable across file renames.
-- `@title`, `@description`, `@canonical`, and `@image` record document metadata
-  used by generated HTML output. If `@title` is omitted, generated output falls
-  back to the page ID. `@image` feeds generated Open Graph and Twitter image
+  Explicit `page` keeps page identity stable across file renames.
+- `title`, `description`, `canonical`, and `image` record document metadata
+  used by generated HTML output. If `title` is omitted, generated output falls
+  back to the page ID. `image` feeds generated Open Graph and Twitter image
   tags when social head output is enabled by page or config metadata.
-- `@layout` records ordered page layout references. Bare references resolve to
+- `layout` records ordered page layout references. Bare references resolve to
   same-package layout IDs or legacy package-less layouts. Cross-package layouts
   require `use alias "package"` and qualified refs such as `alias.root`.
-- `@guard` records guard IDs. Generated SSR, action, and API handlers run
+- `guard` records guard IDs. Generated SSR, action, and API handlers run
   declared non-public guards before request-time user logic. Guarded generated
   apps require matching backing functions and fail Go compilation when those
   functions are missing. Non-public page guards require request-time page

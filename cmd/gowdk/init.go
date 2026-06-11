@@ -70,9 +70,9 @@ bin/
 			Path: "src/pages/home.page.gwdk",
 			Body: `package app
 
-@route "/"
-@guard public
-@css default page
+route "/"
+guard public
+css default page
 
 build {
   => { title: "Hello from GOWDK" }
@@ -91,7 +91,7 @@ view {
 			Path: "src/components/hero.cmp.gwdk",
 			Body: `package app
 
-@component Hero
+component Hero
 
 props {
   title string
@@ -148,8 +148,8 @@ bin/
 			Path: "src/pages/home.page.gwdk",
 			Body: `package app
 
-@route "/"
-@guard public
+route "/"
+guard public
 
 view {
   <main>

@@ -9,10 +9,10 @@ Language support for `.gwdk` files.
 - Diagnostics through `gowdk check --json`.
 - Formatting through `gowdk fmt`.
 - Standard Language Server Protocol support is available through `gowdk lsp` for editors that prefer LSP integration.
-- Keyword completions for annotations, render modes, blocks, client-island
+- Keyword completions for metadata declarations, render modes, blocks, client-island
   constructs, and `g:`/class/style directives, plus project-aware route,
-  layout, component, and CSS completions in route strings, `@layout` values,
-  component tag positions, and `@css` selections.
+  layout, component, and CSS completions in route strings, `layout` values,
+  component tag positions, and `css` selections.
 - Hover information for page IDs, layout IDs, component names, CSS input names,
   component event names, action names, and API names from project metadata.
 - Go-to-definition for current project metadata symbols. Definitions open the
@@ -20,8 +20,8 @@ Language support for `.gwdk` files.
   matching CSS file. Exact source ranges are planned with compiler spans.
 - Find references for current project metadata symbols. References are
   file-level until compiler spans are available. CSS references include pages
-  that declare the CSS input through `@css`.
-- Semantic tokens for annotations, block names, render modes, client-island
+  that declare the CSS input through `css`.
+- Semantic tokens for metadata declarations, block names, render modes, client-island
   keywords and built-ins, `g:`/class/style directives, CSS input names,
   action/API names, and component tag names.
 - Commands to show token output and manifest JSON for the active file.
@@ -32,14 +32,14 @@ Language support for `.gwdk` files.
 - Move-file action from the site map so a page can be reorganized without changing its declared route.
 
 The page hierarchy is generated from `gowdk sitemap` route metadata. It follows
-declared `@route` values, not the workspace folder layout.
+declared `route` values, not the workspace folder layout.
 
 The source outline is generated from the same page metadata, but groups pages by
 source file path. This gives a direct file-system view without making folder
 layout part of route identity.
 
 CSS names are discovered from workspace `.css` basenames for editor navigation
-and merged with page `@css` metadata from `gowdk manifest`. The compiler remains
+and merged with page `css` metadata from `gowdk manifest`. The compiler remains
 the source of truth for build-time CSS validation and output.
 
 Saved-file diagnostics, dirty-buffer diagnostics, manifest metadata, and the

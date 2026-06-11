@@ -18,7 +18,7 @@ import (
 func TestServerHandlesInitializeDiagnosticsFormattingCompletionAndShutdown(t *testing.T) {
 	uri := "file:///tmp/bad.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@page bad\n@route \"/bad\"\n\nview {\n<h1>Bad</h1>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\npage bad\nroute \"/bad\"\n\nview {\n<h1>Bad</h1>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/formatting","params":{"textDocument":{"uri":"`+uri+`"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/completion","params":{"textDocument":{"uri":"`+uri+`"},"position":{"line":0,"character":0}}}`) +
 		framed(`{"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}`) +
@@ -54,14 +54,14 @@ func TestServerHandlesInitializeDiagnosticsFormattingCompletionAndShutdown(t *te
 		t.Fatalf("expected one formatting edit, got %#v", edits)
 	}
 	edit := edits[0].(map[string]any)
-	if edit["newText"] != "package app\n\n@page bad\n@route \"/bad\"\n\nview {\n  <h1>Bad</h1>\n}\n" {
+	if edit["newText"] != "package app\n\npage bad\nroute \"/bad\"\n\nview {\n  <h1>Bad</h1>\n}\n" {
 		t.Fatalf("unexpected formatted text: %#v", edit["newText"])
 	}
 
 	assertResponseID(t, messages[3], float64(3))
 	completion := messages[3]["result"].(map[string]any)
-	if !hasCompletionLabel(completion["items"].([]any), "@page") {
-		t.Fatalf("expected @page completion, got %#v", completion["items"])
+	if !hasCompletionLabel(completion["items"].([]any), "page") {
+		t.Fatalf("expected page completion, got %#v", completion["items"])
 	}
 	if !hasCompletionLabel(completion["items"].([]any), "g:bind:value") {
 		t.Fatalf("expected g:bind:value completion, got %#v", completion["items"])
@@ -73,7 +73,7 @@ func TestServerHandlesInitializeDiagnosticsFormattingCompletionAndShutdown(t *te
 func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 	uri := "file:///tmp/bad.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@page bad\n@unknown nope\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\npage bad\n@unknown nope\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"`+uri+`"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)
@@ -114,7 +114,7 @@ func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 func TestServerPublishesComponentClientDiagnostics(t *testing.T) {
 	uri := "file:///tmp/counter.cmp.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@component Counter\n\nclient {\n  fn Bad() {\n    Missing++\n  }\n}\n\nview {\n  <button g:on:click={Bad()}>Bad</button>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent Counter\n\nclient {\n  fn Bad() {\n    Missing++\n  }\n}\n\nview {\n  <button g:on:click={Bad()}>Bad</button>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)
 
@@ -164,9 +164,9 @@ func TestServerReturnsProjectAwareCompletions(t *testing.T) {
 	layoutURI := "file:///tmp/root.layout.gwdk"
 	pageURI := "file:///tmp/home.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+componentURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@component ProductCard\n\nprops {\n  title string\n}\n\nclient {\n  fn Increment() {\n    Count++\n  }\n}\n\nview {\n  <article>{title}{Count}</article>\n}\n"}}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+layoutURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@layout root\n\nview {\n  <slot />\n}\n"}}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\nimport ui \"github.com/cssbruno/gowdk/testfixture/islands\"\n\n@page home\n@route \"/products\"\n@layout root\n@guard RequireUser\n\nstore cart ui.CounterState = ui.NewCounterState()\n\nview {\n  <main></main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+componentURI+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent ProductCard\n\nprops {\n  title string\n}\n\nclient {\n  fn Increment() {\n    Count++\n  }\n}\n\nview {\n  <article>{title}{Count}</article>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+layoutURI+`","languageId":"gwdk","version":1,"text":"package app\n\nlayout root\n\nview {\n  <slot />\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\nimport ui \"github.com/cssbruno/gowdk/testfixture/islands\"\n\npage home\nroute \"/products\"\nlayout root\nguard RequireUser\n\nstore cart ui.CounterState = ui.NewCounterState()\n\nview {\n  <main></main>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/completion","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":6,"character":8}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/completion","params":{"textDocument":{"uri":"`+componentURI+`"},"position":{"line":8,"character":13}}}`) +
 		framed(`{"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}`) +
@@ -205,7 +205,7 @@ func TestServerReturnsProjectAwareCompletions(t *testing.T) {
 func TestServerReturnsHoverForLanguageAndProjectSymbols(t *testing.T) {
 	uri := "file:///tmp/signup.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@page signup\n@route \"/signup\"\n\nact Submit POST \"/signup\"\n\nview {\n  <form g:post={Submit}></form>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\npage signup\nroute \"/signup\"\n\nact Submit POST \"/signup\"\n\nview {\n  <form g:post={Submit}></form>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/hover","params":{"textDocument":{"uri":"`+uri+`"},"position":{"line":3,"character":2}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/hover","params":{"textDocument":{"uri":"`+uri+`"},"position":{"line":5,"character":6}}}`) +
 		framed(`{"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}`) +
@@ -223,7 +223,7 @@ func TestServerReturnsHoverForLanguageAndProjectSymbols(t *testing.T) {
 		t.Fatalf("expected 5 output messages, got %d", len(messages))
 	}
 	assertResponseID(t, messages[2], float64(2))
-	assertHoverContains(t, messages[2], "@route", "Declare the route path")
+	assertHoverContains(t, messages[2], "route", "Declare the route path")
 	assertResponseID(t, messages[3], float64(3))
 	assertHoverContains(t, messages[3], "Submit", "GOWDK action handler")
 }
@@ -233,9 +233,9 @@ func TestServerReturnsDefinitionForComponentCalls(t *testing.T) {
 	importedComponentURI := "file:///tmp/button.cmp.gwdk"
 	pageURI := "file:///tmp/home.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+localComponentURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@component ProductCard\n\nview {\n  <article></article>\n}\n"}}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+importedComponentURI+`","languageId":"gwdk","version":1,"text":"package design\n\n@component Button\n\nview {\n  <button></button>\n}\n"}}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\nuse ui \"design\"\n\n@page home\n@route \"/\"\n\nview {\n  <main><ProductCard /><ui.Button /></main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+localComponentURI+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent ProductCard\n\nview {\n  <article></article>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+importedComponentURI+`","languageId":"gwdk","version":1,"text":"package design\n\ncomponent Button\n\nview {\n  <button></button>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\nuse ui \"design\"\n\npage home\nroute \"/\"\n\nview {\n  <main><ProductCard /><ui.Button /></main>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":7,"character":11}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/definition","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":7,"character":27}}}`) +
 		framed(`{"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}`) +
@@ -277,8 +277,8 @@ func TestServerReturnsDefinitionForWorkspaceComponentFile(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(componentPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	pageSource := "package demo\n\n@page app\n@route \"/\"\n\nview {\n  <main><RuntimeCard /></main>\n}\n"
-	componentSource := "package demo\n\n@component RuntimeCard\n\nview {\n  <section></section>\n}\n"
+	pageSource := "package demo\n\npage app\nroute \"/\"\n\nview {\n  <main><RuntimeCard /></main>\n}\n"
+	componentSource := "package demo\n\ncomponent RuntimeCard\n\nview {\n  <section></section>\n}\n"
 	if err := os.WriteFile(pagePath, []byte(pageSource), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +312,7 @@ func TestServerReturnsDefinitionForOpenGoHandlerSymbols(t *testing.T) {
 	pageURI := "file:///tmp/signup.page.gwdk"
 	goURI := "file:///tmp/handlers.go"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@page signup\n@route \"/signup\"\n\nact Submit POST \"/signup\"\n\nview {\n  <form g:post={Submit}></form>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\n\npage signup\nroute \"/signup\"\n\nact Submit POST \"/signup\"\n\nview {\n  <form g:post={Submit}></form>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+goURI+`","languageId":"go","version":1,"text":"package app\n\nfunc Submit() error {\n  return nil\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":5,"character":6}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"shutdown","params":null}`) +
@@ -340,9 +340,9 @@ func TestServerReturnsReferencesForProjectSymbols(t *testing.T) {
 	pageURI := "file:///tmp/home.page.gwdk"
 	adminURI := "file:///tmp/admin.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+componentURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@component ProductCard\n\nclient {\n  use cart\n}\n\nview {\n  <article></article>\n}\n"}}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\nimport ui \"github.com/cssbruno/gowdk/testfixture/islands\"\n\n@page home\n@route \"/products\"\n@guard RequireUser\n\nstore cart ui.CounterState = ui.NewCounterState()\n\nview {\n  <main><ProductCard /></main>\n}\n"}}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+adminURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@page admin\n@route \"/admin\"\n@guard RequireUser\n\nview {\n  <main>Admin</main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+componentURI+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent ProductCard\n\nclient {\n  use cart\n}\n\nview {\n  <article></article>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\nimport ui \"github.com/cssbruno/gowdk/testfixture/islands\"\n\npage home\nroute \"/products\"\nguard RequireUser\n\nstore cart ui.CounterState = ui.NewCounterState()\n\nview {\n  <main><ProductCard /></main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+adminURI+`","languageId":"gwdk","version":1,"text":"package app\n\npage admin\nroute \"/admin\"\nguard RequireUser\n\nview {\n  <main>Admin</main>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/references","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":10,"character":11},"context":{"includeDeclaration":true}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/references","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":7,"character":7},"context":{"includeDeclaration":true}}}`) +
 		framed(`{"jsonrpc":"2.0","id":4,"method":"textDocument/references","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":5,"character":10},"context":{"includeDeclaration":true}}}`) +
@@ -388,8 +388,8 @@ func TestServerReturnsCodeActionsForMigrationsAndMissingUses(t *testing.T) {
 	oldDiagnostic := `{"range":{"start":{"line":5,"character":0},"end":{"line":5,"character":13}},"severity":1,"code":"old_action_block_syntax","source":"gowdk","message":` + oldMessage + `}`
 	useDiagnostic := `{"range":{"start":{"line":7,"character":0},"end":{"line":7,"character":1}},"severity":1,"code":"unknown_gowdk_use_alias","source":"gowdk","message":` + useMessage + `}`
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+oldURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@page old\n@route \"/old\"\n\nact refresh {\n}\n\nview {\n}\n"}}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+useURI+`","languageId":"gwdk","version":1,"text":"package app\n\n@page home\n@route \"/\"\n\nview {\n  <main><ui.Button /></main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+oldURI+`","languageId":"gwdk","version":1,"text":"package app\n\npage old\nroute \"/old\"\n\nact refresh {\n}\n\nview {\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+useURI+`","languageId":"gwdk","version":1,"text":"package app\n\npage home\nroute \"/\"\n\nview {\n  <main><ui.Button /></main>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/codeAction","params":{"textDocument":{"uri":"`+oldURI+`"},"range":{"start":{"line":5,"character":0},"end":{"line":5,"character":13}},"context":{"diagnostics":[`+oldDiagnostic+`]}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/codeAction","params":{"textDocument":{"uri":"`+useURI+`"},"range":{"start":{"line":7,"character":0},"end":{"line":7,"character":1}},"context":{"diagnostics":[`+useDiagnostic+`]}}}`) +
 		framed(`{"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}`) +
@@ -421,7 +421,7 @@ func TestServerReturnsCodeActionsForMigrationsAndMissingUses(t *testing.T) {
 func TestServerReturnsSemanticTokens(t *testing.T) {
 	uri := "file:///tmp/home.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\n@page home\n@route \"/\"\n\nview {\n  <main>{title}</main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\npage home\nroute \"/\"\n\nview {\n  <main>{title}</main>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/semanticTokens/full","params":{"textDocument":{"uri":"`+uri+`"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"shutdown","params":null}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)
@@ -459,7 +459,7 @@ func TestServerReturnsSemanticTokens(t *testing.T) {
 	assertNumberPrefix(t, data, []float64{
 		0, 0, 7, 1, 0, // package
 		0, 8, 3, 1, 0, // app
-		2, 0, 5, 0, 0, // @page
+		2, 0, 4, 0, 0, // page
 	})
 }
 

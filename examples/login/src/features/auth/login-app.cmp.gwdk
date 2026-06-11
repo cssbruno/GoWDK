@@ -1,6 +1,6 @@
 package auth
 
-@component LoginApp
+component LoginApp
 
 view {
   <main class="shell">

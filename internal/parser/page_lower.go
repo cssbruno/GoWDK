@@ -72,10 +72,10 @@ func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (gwdkir.Pag
 		page.ID = strings.TrimSpace(defaultID)
 	}
 	if page.ID == "" {
-		return gwdkir.Page{}, fmt.Errorf("missing @page")
+		return gwdkir.Page{}, fmt.Errorf("missing page")
 	}
 	if page.Route == "" {
-		return gwdkir.Page{}, fmt.Errorf("%s missing @route", page.ID)
+		return gwdkir.Page{}, fmt.Errorf("%s missing route", page.ID)
 	}
 	return page, nil
 }
@@ -83,14 +83,14 @@ func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (gwdkir.Pag
 func lowerPageSyntaxAnnotations(src []byte, ast gwdkast.File, page *gwdkir.Page) error {
 	if ast.Page != nil {
 		if ast.Page.ID == "" {
-			return fmt.Errorf("line %d: @page requires a value", ast.Page.Span.Start.Line)
+			return fmt.Errorf("line %d: page requires a value", ast.Page.Span.Start.Line)
 		}
 		page.ID = ast.Page.ID
 		page.Spans.Page = ast.Page.Span
 	}
 	if ast.Route != nil {
 		if ast.Route.Path == "" {
-			return fmt.Errorf("line %d: @route requires a value", ast.Route.Span.Start.Line)
+			return fmt.Errorf("line %d: route requires a value", ast.Route.Span.Start.Line)
 		}
 		page.Route = ast.Route.Path
 		page.RouteParams = lowerSyntaxRouteParams(ast.Route.Params)

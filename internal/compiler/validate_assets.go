@@ -30,7 +30,7 @@ func validatePageAssetUses(app gwdkir.Program) []ValidationError {
 					Source: page.Source,
 					Span:   spanForName(page.Spans.CSS, css, page.Spans.Page),
 					Message: fmt.Sprintf(
-						"%s selects CSS asset %q, but alias %q is not declared. Add `use %s \"<package>\"` before @css",
+						"%s selects CSS asset %q, but alias %q is not declared. Add `use %s \"<package>\"` before css",
 						page.ID,
 						css,
 						alias,

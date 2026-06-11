@@ -1,9 +1,9 @@
 package tailwind
 
-@page tailwind
-@route "/tailwind"
-@guard public
-@css none
+page tailwind
+route "/tailwind"
+guard public
+css none
 
 view {
   <main class="min-h-screen bg-slate-950 px-6 py-12 text-white">

@@ -95,7 +95,7 @@ normal Go; generated code remains adapter glue.
 ### Functional
 
 - `.gwdk` files must reject missing package declarations.
-- A package declaration must appear before annotations, imports, stores, route
+- A package declaration must appear before metadata declarations, imports, stores, route
   declarations, and blocks, ignoring blank lines and `//` comments.
 - Package mismatch with sibling `.go` files must be a compiler diagnostic.
 - Go `import` inside `.gwdk` files must import normal Go packages only.

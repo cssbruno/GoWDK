@@ -1,6 +1,6 @@
 # Guards And Default-Deny Page Access
 
-This is the single source of truth for how `@guard` and page access control
+This is the single source of truth for how `guard` and page access control
 work in GOWDK. Other docs (spec, routing, ssr, hooks) describe their own
 concerns and link here for the access contract.
 
@@ -8,26 +8,26 @@ concerns and link here for the access contract.
 
 A page is **not public by default**. Access is never granted by omission.
 
-- `@guard` is **optional** on a page source. A page that declares no `@guard`
+- `guard` is **optional** on a page source. A page that declares no `guard`
   still builds — the build succeeds — but it is denied (403) at request time
   until access is stated.
 - A guardless page emits a `missing_page_guard` **warning** so the omission is
   visible to authors and editors.
-- Use `@guard public` to serve a page on purpose.
+- Use `guard public` to serve a page on purpose.
 - Use custom guard IDs, or native RBAC IDs such as `role:admin` and
   `permission:posts.write`, when the page is protected.
-- `@guard public` must stand alone — it cannot be combined with other guard IDs
+- `guard public` must stand alone — it cannot be combined with other guard IDs
   (`public_guard_exclusive`).
 
 ```gwdk
-@route "/"
-@guard public          # intentionally public
+route "/"
+guard public          # intentionally public
 
-@route "/dashboard"
-@guard auth.required   # protected
+route "/dashboard"
+guard auth.required   # protected
 
-@route "/draft"
-# no @guard -> builds with a warning, route returns 403 until a guard is added
+route "/draft"
+# no guard -> builds with a warning, route returns 403 until a guard is added
 ```
 
 ## How Denial Is Enforced
@@ -49,7 +49,7 @@ its canonical route.
 ### Backend Endpoints Cannot Be Public By Omission
 
 A page that declares `act`, `api`, or `fragment` blocks derives request-time
-endpoints that inherit the page's guards. If such a page declared no `@guard`,
+endpoints that inherit the page's guards. If such a page declared no `guard`,
 those endpoints would be publicly callable even though the page's own GET route
 is denied. That contradicts the contract, so it is a **build error** (not a
 warning): a guardless page with backend endpoints fails the build with
@@ -63,7 +63,7 @@ Do not rely on static hosting alone to protect a guardless page.
 
 ## Status
 
-`@guard` validation currently records and checks metadata and enforces the
+`guard` validation currently records and checks metadata and enforces the
 default-deny described above. Full authorization and broader request-time policy
 are still planned — see [docs/engineering/security.md](../engineering/security.md).
 

@@ -1,8 +1,8 @@
 package format
 
-@page home
-@route "/"
-@guard public
+page home
+route "/"
+guard public
 
 // Keep this page spa.
 view {

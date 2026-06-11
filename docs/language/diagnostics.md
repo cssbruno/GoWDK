@@ -16,7 +16,7 @@ CLI JSON diagnostics use:
         "end": {"line": 3, "column": 11}
       },
       "severity": "warning",
-      "message": "home declares no @guard; its route is denied (403) at request time. Add @guard public to serve it, or a protective guard such as @guard auth.required"
+      "message": "home declares no guard; its route is denied (403) at request time. Add guard public to serve it, or a protective guard such as guard auth.required"
     }
   ]
 }
@@ -25,7 +25,7 @@ CLI JSON diagnostics use:
 Positions and ranges are 1-based; range end columns are exclusive. Lexer,
 parser, and compiler validation diagnostics include ranges when the source line
 is known. Compiler validation ranges are derived from parser-recorded source
-spans for annotations, block declarations, route params, actions, APIs, guards,
+spans for metadata declarations, block declarations, route params, actions, APIs, guards,
 layouts, components, and CSS references. Parser errors use the public
 `parse_error` code until parser recovery has more specific codes.
 
@@ -35,9 +35,9 @@ view fields, missing `g:key`, and malformed `g:for` syntax.
 
 Warnings are non-fatal. `missing_img_alt` is emitted for literal `<img>`
 elements without an explicit `alt` attribute. `missing_page_guard` is emitted
-for a page that declares no `@guard`: the build still succeeds, but the page is
+for a page that declares no `guard`: the build still succeeds, but the page is
 not public by default — its route is denied (403) at request time until the
-author adds `@guard public` (or a protective guard). Access is never granted by
+author adds `guard public` (or a protective guard). Access is never granted by
 omission.
 
 ## Current Code Registry

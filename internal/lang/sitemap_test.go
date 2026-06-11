@@ -16,20 +16,20 @@ func TestSiteMapJSONIncludesMovableSourceAndRoute(t *testing.T) {
 	dashboard := filepath.Join(root, "anywhere", "dashboard.page.gwdk")
 	writeSiteMapFile(t, home, `package app
 
-@page home
-@route "/"
-@guard public
-@layout root
+page home
+route "/"
+guard public
+layout root
 
 view {
 }
 `)
 	writeSiteMapFile(t, dashboard, `package app
 
-@page dashboard
-@route "/dashboard"
-@layout root, dashboard
-@guard auth.required
+page dashboard
+route "/dashboard"
+layout root, dashboard
+guard auth.required
 
 load {
 }
@@ -65,9 +65,9 @@ func TestSiteMapJSONIncludesEndpointGraph(t *testing.T) {
 	page := filepath.Join(root, "contact.page.gwdk")
 	writeSiteMapFile(t, page, `package app
 
-@page contact
-@route "/contact"
-@guard public
+page contact
+route "/contact"
+guard public
 
 act Submit POST "/contact"
 api Health GET "/api/health"
@@ -101,9 +101,9 @@ func TestSiteMapJSONRunsCompilerValidation(t *testing.T) {
 	dashboard := filepath.Join(root, "dashboard.page.gwdk")
 	writeSiteMapFile(t, dashboard, `package app
 
-@page dashboard
-@route "/dashboard"
-@guard public
+page dashboard
+route "/dashboard"
+guard public
 
 go ssr {
 }

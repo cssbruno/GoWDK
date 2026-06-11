@@ -100,7 +100,7 @@ func TestParseSyntaxClientBlockOneLinersAndStrings(t *testing.T) {
 }
 
 func TestParseComponentClientBlockOneLiner(t *testing.T) {
-	component, err := ParseComponent([]byte("@component Counter\nclient {\n\tfn Inc() { Count++ }\n}\nview {\n\t<div></div>\n}\n"))
+	component, err := ParseComponent([]byte("component Counter\nclient {\n\tfn Inc() { Count++ }\n}\nview {\n\t<div></div>\n}\n"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

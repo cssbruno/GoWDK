@@ -1,6 +1,6 @@
 package pages
 
-@component Hero
+component Hero
 
 props {
   title string

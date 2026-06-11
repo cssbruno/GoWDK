@@ -7,7 +7,7 @@ const (
 	TokenIllegal    TokenKind = "illegal"
 	TokenEOF        TokenKind = "eof"
 	TokenNewline    TokenKind = "newline"
-	TokenAnnotation TokenKind = "annotation"
+	TokenMetadata   TokenKind = "metadata"
 	TokenIdentifier TokenKind = "identifier"
 	TokenString     TokenKind = "string"
 	TokenLBrace     TokenKind = "lbrace"

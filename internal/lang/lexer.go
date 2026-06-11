@@ -37,8 +37,6 @@ func (scanner *scanner) scan() ([]Token, Diagnostics) {
 			scanner.advance()
 		case ch == '/' && scanner.peekNext() == '/':
 			scanner.skipLineComment()
-		case ch == '@':
-			tokens = append(tokens, scanner.annotation())
 		case isIdentStart(ch):
 			tokens = append(tokens, scanner.identifier())
 		case ch == '"':
@@ -75,23 +73,17 @@ func (scanner *scanner) scan() ([]Token, Diagnostics) {
 	return tokens, diagnostics
 }
 
-func (scanner *scanner) annotation() Token {
-	pos := scanner.position()
-	start := scanner.index
-	scanner.advance()
-	for !scanner.done() && isIdentPart(scanner.peek()) {
-		scanner.advance()
-	}
-	return Token{Kind: TokenAnnotation, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos}
-}
-
 func (scanner *scanner) identifier() Token {
 	pos := scanner.position()
 	start := scanner.index
 	for !scanner.done() && (isIdentPart(scanner.peek()) || scanner.peek() == '.' || scanner.peek() == '-') {
 		scanner.advance()
 	}
-	return Token{Kind: TokenIdentifier, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos}
+	lexeme := string(scanner.source[start:scanner.index])
+	if scanner.isLineLeading(start) && isMetadataLexeme(lexeme) {
+		return Token{Kind: TokenMetadata, Lexeme: lexeme, Pos: pos}
+	}
+	return Token{Kind: TokenIdentifier, Lexeme: lexeme, Pos: pos}
 }
 
 func (scanner *scanner) quotedString() (Token, Diagnostic) {
@@ -140,7 +132,7 @@ func (scanner *scanner) text() Token {
 	start := scanner.index
 	for !scanner.done() {
 		ch := scanner.peek()
-		if unicode.IsSpace(ch) || ch == '@' || ch == '"' || ch == '{' || ch == '}' || ch == ',' || ch == ':' || ch == '?' || (ch == '=' && scanner.peekNext() == '>') {
+		if unicode.IsSpace(ch) || ch == '"' || ch == '{' || ch == '}' || ch == ',' || ch == ':' || ch == '?' || (ch == '=' && scanner.peekNext() == '>') {
 			break
 		}
 		if ch == '/' && scanner.peekNext() == '/' {
@@ -197,4 +189,27 @@ func isIdentStart(ch rune) bool {
 
 func isIdentPart(ch rune) bool {
 	return ch == '_' || unicode.IsLetter(ch) || unicode.IsDigit(ch)
+}
+
+func (scanner *scanner) isLineLeading(start int) bool {
+	for index := start - 1; index >= 0; index-- {
+		switch scanner.source[index] {
+		case '\n', '\r':
+			return true
+		case ' ', '\t':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func isMetadataLexeme(value string) bool {
+	switch value {
+	case "page", "route", "title", "description", "canonical", "image", "layout", "cache", "revalidate", "error", "guard", "css", "component", "wasm", "asset", "plugin":
+		return true
+	default:
+		return false
+	}
 }

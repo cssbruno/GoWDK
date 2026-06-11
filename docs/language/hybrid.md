@@ -7,4 +7,4 @@ page must run through generated request-time rendering. Both require the SSR
 addon.
 
 The compiler still has internal route metadata for future hybrid behavior, but
-there is no page annotation for selecting it in `.gwdk` files.
+there is no page metadata declaration for selecting it in `.gwdk` files.

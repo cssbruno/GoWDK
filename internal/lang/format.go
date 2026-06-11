@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-// Format normalizes whitespace for top-level .gwdk annotations and blocks.
+// Format normalizes whitespace for top-level .gwdk metadata and blocks.
 func Format(source []byte) []byte {
 	var out []string
 	blankPending := false
@@ -37,8 +37,21 @@ func Format(source []byte) []byte {
 }
 
 func shouldKeepBlank(previous, next string) bool {
-	if strings.HasPrefix(previous, "@") && strings.HasPrefix(next, "@") {
+	if isTopLevelMetadataLine(previous) && isTopLevelMetadataLine(next) {
 		return false
 	}
 	return true
+}
+
+func isTopLevelMetadataLine(line string) bool {
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return false
+	}
+	switch fields[0] {
+	case "page", "route", "title", "description", "canonical", "image", "layout", "cache", "revalidate", "error", "guard", "css", "component", "wasm", "asset", "plugin":
+		return true
+	default:
+		return false
+	}
 }

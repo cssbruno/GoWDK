@@ -1,8 +1,8 @@
 package ssr
 
-@page hybrid.static
-@route "/hybrid-static"
-@guard public
+page hybrid.static
+route "/hybrid-static"
+guard public
 
 go ssr {
 }

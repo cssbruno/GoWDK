@@ -1,9 +1,9 @@
 package home
 
-@page home
-@route "/"
-@guard public
-@layout root
+page home
+route "/"
+guard public
+layout root
 
 build {
   => { title: "Home" }

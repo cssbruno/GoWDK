@@ -1,9 +1,9 @@
 package auth
 
-@page login
-@route "/"
-@guard public
-@css auth
+page login
+route "/"
+guard public
+css auth
 
 act Login POST "/"
 

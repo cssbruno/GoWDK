@@ -4,7 +4,7 @@ The current formatter normalizes whitespace for line-oriented `.gwdk` files:
 
 - Trims trailing spaces and tabs.
 - Removes repeated blank lines except where one blank line separates meaningful sections.
-- Keeps annotations grouped without blank lines between adjacent annotations.
+- Keeps metadata declarations grouped without blank lines between adjacent declarations.
 - Indents lines by brace depth using two spaces.
 - Emits a final newline.
 

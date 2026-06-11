@@ -15,8 +15,9 @@ intentionally, never as a side effect.
   `gwdkanalysis.BuildProgram(config, sources)` in
   `internal/gwdkanalysis/ir_builder.go` (lowering; helpers in
   `ir_bindings.go`, `ir_contracts.go`, `routes.go`) →
-  `compiler.DiscoverGoEndpoints` → `compiler.ValidateProgramReport` →
-  `compiler.BindBackendHandlers`.
+  `compiler.DiscoverGoEndpoints` → `compiler.BindBackendHandlers` →
+  `compiler.ValidateProgramReport` (CLI build path, `cmd/gowdk/build.go`;
+  the `internal/lang/tools.go` editor path validates before binding).
 - IR root type: `gwdkir.Program` (Pages, Components, Layouts, Routes with
   `RouteStatic`/`RouteSPA`/`RouteSSR`/`RouteHybrid`, Endpoints, GoEndpoints,
   Templates, ContractRefs, ClientBehaviors, Assets, Diagnostics, Generated).

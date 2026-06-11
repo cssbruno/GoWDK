@@ -9,7 +9,7 @@ Reproduce before editing.
 
 ## Baselines
 
-- Compiler pipeline order: parse (`internal/parser`, `ParsePage`/`ParseComponent`/`ParseLayout` → `gwdkast`) → IR build (`gwdkanalysis.BuildProgram` → `gwdkir.Program`) → `compiler.DiscoverGoEndpoints` → `compiler.ValidateProgramReport` → `compiler.BindBackendHandlers` → generators (`buildgen`, `appgen`).
+- Compiler pipeline order (CLI build path, `cmd/gowdk/build.go`): parse (`internal/parser`, `ParsePage`/`ParseComponent`/`ParseLayout` → `gwdkast`) → IR build (`gwdkanalysis.BuildProgram` → `gwdkir.Program`) → `compiler.DiscoverGoEndpoints` → `compiler.BindBackendHandlers` → `compiler.ValidateProgramReport` → generators (`buildgen`, `appgen`). Note: the `internal/lang/tools.go` editor path validates before binding — binding-dependent diagnostics need the CLI ordering.
 - Diagnostics are snake_case codes (e.g. `missing_ssr_addon`, `duplicate_page_id`) registered in `internal/diagnostics/registry.go`; `go test ./internal/diagnostics` fails if an emitted code is missing from the registry.
 - Canonical smoke fixture: `examples/pages/home.page.gwdk` via `go run ./cmd/gowdk check examples/pages/home.page.gwdk` or `build --out /tmp/gowdk-build examples/pages/*.gwdk`.
 - Goldens are static files compared by string equality (no `-update` flag): `internal/parser/testdata/golden/`, `internal/lang/testdata/format_golden/`, `internal/buildgen/testdata/`, `internal/appgen/testdata/generated_go_golden/app.go.golden`. A golden diff is a contract change — update it deliberately, never regenerate blindly.

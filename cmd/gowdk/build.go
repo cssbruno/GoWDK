@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
@@ -14,20 +15,24 @@ import (
 	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
 )
 
-const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
+const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
 
 func build(args []string) error {
+	started := time.Now()
 	plan, err := loadBuildOptions(args)
 	if err != nil {
 		return err
 	}
+	timings := newBuildTimingRecorder(plan.Timings)
+	timings.addDuration("config_load", time.Since(started))
 	if plan.shouldBuildConfiguredTargets() {
-		return buildConfiguredTargets(plan.Options, plan.TargetNames)
+		return buildConfiguredTargets(plan, timings)
 	}
-	return buildOnce(plan.Options, plan.request())
+	return buildOnce(plan.Options, plan.request(), timings)
 }
 
 type buildRequest struct {
@@ -39,6 +44,7 @@ type buildRequest struct {
 	BackendBinaryPath string
 	Modules           []string
 	Paths             []string
+	TimingsPath       string
 }
 
 type buildOptions struct {
@@ -53,6 +59,8 @@ type buildOptions struct {
 	TargetNames       []string
 	ModuleNames       []string
 	Paths             []string
+	Timings           bool
+	TimingsPath       string
 }
 
 func loadBuildOptions(args []string) (buildOptions, error) {
@@ -79,6 +87,7 @@ func (plan buildOptions) request() buildRequest {
 		BackendBinaryPath: plan.BackendBinaryPath,
 		Modules:           plan.ModuleNames,
 		Paths:             plan.Paths,
+		TimingsPath:       plan.TimingsPath,
 	}
 }
 
@@ -90,7 +99,7 @@ func (plan buildOptions) shouldBuildConfiguredTargets() bool {
 	return shouldBuildConfiguredTargets(plan.Options.Config, plan.TargetNames, plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.ModuleNames, plan.Paths)
 }
 
-func buildOnce(options cliOptions, request buildRequest) error {
+func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRecorder) error {
 	outputDir := request.OutputDir
 	if strings.TrimSpace(request.BinaryPath) != "" && strings.TrimSpace(request.AppDir) == "" {
 		return fmt.Errorf("gowdk build --bin requires --app <dir>")
@@ -110,8 +119,12 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	options.Config.Build.Output = outputDir
 	paths := append([]string(nil), request.Paths...)
 	if len(paths) == 0 {
-		discovered, err := discoverBuildFiles(options.Config, outputDir, request.Modules, options.ProjectRoot)
-		if err != nil {
+		var discovered []string
+		if err := timings.measure("source_discovery", func() error {
+			var discoverErr error
+			discovered, discoverErr = discoverBuildFiles(options.Config, outputDir, request.Modules, options.ProjectRoot)
+			return discoverErr
+		}); err != nil {
 			return err
 		}
 		if len(discovered) == 0 {
@@ -119,21 +132,44 @@ func buildOnce(options cliOptions, request buildRequest) error {
 		}
 		paths = discovered
 	}
+	timings.counter("source_files", len(paths))
 
-	app, diagnostics := lang.ParseBuildFiles(paths)
+	var app gwdkanalysis.Sources
+	var diagnostics lang.Diagnostics
+	timings.measure("parse_lower", func() error {
+		app, diagnostics = lang.ParseBuildFiles(paths)
+		return nil
+	})
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
 	if diagnostics.HasErrors() {
 		return fmt.Errorf("build failed")
 	}
-	ir := gwdkanalysis.BuildProgram(options.Config, app)
-	if err := compiler.DiscoverGoEndpoints(&ir); err != nil {
+	var ir gwdkir.Program
+	timings.measure("ir_assembly", func() error {
+		ir = gwdkanalysis.BuildProgram(options.Config, app)
+		return nil
+	})
+	timings.counter("pages", len(ir.Pages))
+	timings.counter("components", len(ir.Components))
+	timings.counter("layouts", len(ir.Layouts))
+	timings.counter("endpoints", len(ir.Endpoints))
+	if err := timings.measure("go_binding", func() error {
+		if err := compiler.DiscoverGoEndpoints(&ir); err != nil {
+			return err
+		}
+		compiler.BindBackendHandlers(&ir)
+		return nil
+	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return fmt.Errorf("build failed")
 	}
-	compiler.BindBackendHandlers(&ir)
-	report := compiler.ValidateProgramReport(options.Config, ir)
+	var report compiler.ValidationErrors
+	timings.measure("ir_validation", func() error {
+		report = compiler.ValidateProgramReport(options.Config, ir)
+		return nil
+	})
 	for _, diagnostic := range report {
 		prefix := ""
 		if diagnostic.Severity == compiler.SeverityWarning {
@@ -144,20 +180,30 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	if report.HasErrors() {
 		return fmt.Errorf("build failed")
 	}
-	if err := linkIRContractReferences(&ir, options.ProjectRoot); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return fmt.Errorf("build failed")
-	}
-	if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
+	if err := timings.measure("contract_validation", func() error {
+		if err := linkIRContractReferences(&ir, options.ProjectRoot); err != nil {
+			return err
+		}
+		return compiler.ValidateContractReferences(ir.ContractRefs)
+	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return fmt.Errorf("build failed")
 	}
 
-	result, err := buildgen.BuildFromValidatedIR(options.Config, ir, outputDir)
-	if err != nil {
+	var result buildgen.Result
+	if err := timings.measure("output_plan_writes", func() error {
+		var buildErr error
+		result, buildErr = buildgen.BuildFromValidatedIR(options.Config, ir, outputDir)
+		return buildErr
+	}); err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)
 		return err
 	}
+	timings.counter("artifacts", len(result.Artifacts))
+	timings.counter("css_artifacts", len(result.CSSArtifacts))
+	timings.counter("asset_artifacts", len(result.AssetArtifacts))
+	timings.counter("files_written", result.WriteStats.FilesWritten)
+	timings.counter("identical_writes_skipped", result.WriteStats.IdenticalWritesSkipped)
 	for _, artifact := range result.Artifacts {
 		fmt.Println(artifact.Path)
 	}
@@ -183,52 +229,75 @@ func buildOnce(options cliOptions, request buildRequest) error {
 	backendAppDir := request.BackendAppDir
 	backendBinaryPath := request.BackendBinaryPath
 	if strings.TrimSpace(appDir) != "" {
-		app, err := appgen.GenerateWithOptions(outputDir, appDir, appgen.Options{
-			AutoRoutes:   true,
-			Config:       options.Config,
-			IR:           &ir,
-			ProxyBackend: strings.TrimSpace(backendAppDir) != "",
-		})
-		if err != nil {
+		var app appgen.Result
+		if err := timings.measure("app_generation", func() error {
+			var appErr error
+			app, appErr = appgen.GenerateWithOptions(outputDir, appDir, appgen.Options{
+				AutoRoutes:   true,
+				Config:       options.Config,
+				IR:           &ir,
+				ProxyBackend: strings.TrimSpace(backendAppDir) != "",
+			})
+			return appErr
+		}); err != nil {
 			return err
 		}
 		fmt.Println(app.ModulePath)
 		fmt.Println(app.PackagePath)
 		fmt.Println(app.MainPath)
 		if strings.TrimSpace(binaryPath) != "" {
-			built, err := appgen.BuildBinary(app.AppDir, binaryPath)
-			if err != nil {
+			var built string
+			if err := timings.measure("binary_build", func() error {
+				var buildErr error
+				built, buildErr = appgen.BuildBinary(app.AppDir, binaryPath)
+				return buildErr
+			}); err != nil {
 				return err
 			}
 			fmt.Println(built)
 		}
 		if strings.TrimSpace(wasmPath) != "" {
-			built, err := appgen.BuildWASM(app.AppDir, wasmPath)
-			if err != nil {
+			var built string
+			if err := timings.measure("wasm_build", func() error {
+				var buildErr error
+				built, buildErr = appgen.BuildWASM(app.AppDir, wasmPath)
+				return buildErr
+			}); err != nil {
 				return err
 			}
 			fmt.Println(built)
 		}
 	}
 	if strings.TrimSpace(backendAppDir) != "" {
-		app, err := appgen.GenerateBackendWithOptions(backendAppDir, appgen.Options{
-			AutoRoutes: true,
-			Config:     options.Config,
-			IR:         &ir,
-		})
-		if err != nil {
+		var app appgen.Result
+		if err := timings.measure("backend_app_generation", func() error {
+			var appErr error
+			app, appErr = appgen.GenerateBackendWithOptions(backendAppDir, appgen.Options{
+				AutoRoutes: true,
+				Config:     options.Config,
+				IR:         &ir,
+			})
+			return appErr
+		}); err != nil {
 			return err
 		}
 		fmt.Println(app.ModulePath)
 		fmt.Println(app.PackagePath)
 		fmt.Println(app.MainPath)
 		if strings.TrimSpace(backendBinaryPath) != "" {
-			built, err := appgen.BuildBinary(app.AppDir, backendBinaryPath)
-			if err != nil {
+			var built string
+			if err := timings.measure("backend_binary_build", func() error {
+				var buildErr error
+				built, buildErr = appgen.BuildBinary(app.AppDir, backendBinaryPath)
+				return buildErr
+			}); err != nil {
 				return err
 			}
 			fmt.Println(built)
 		}
+	}
+	if _, err := timings.write(outputDir, request.TimingsPath); err != nil {
+		return err
 	}
 	return nil
 }
@@ -261,13 +330,16 @@ func hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, b
 		len(paths) > 0
 }
 
-func buildConfiguredTargets(options cliOptions, targetNames []string) error {
-	targets, err := selectBuildTargets(options.Config.Build.Targets, targetNames)
+func buildConfiguredTargets(plan buildOptions, timings *buildTimingRecorder) error {
+	targets, err := selectBuildTargets(plan.Options.Config.Build.Targets, plan.TargetNames)
 	if err != nil {
 		return err
 	}
+	if plan.Timings && strings.TrimSpace(plan.TimingsPath) != "" && len(targets) > 1 {
+		return fmt.Errorf("--timings=<file> cannot be used when building multiple configured targets")
+	}
 	for _, target := range targets {
-		targetOptions := options
+		targetOptions := plan.Options
 		targetOptions.Config.Build.Output = target.Output
 		if err := buildOnce(targetOptions, buildRequest{
 			OutputDir:         target.Output,
@@ -277,7 +349,8 @@ func buildConfiguredTargets(options cliOptions, targetNames []string) error {
 			BackendAppDir:     target.BackendApp,
 			BackendBinaryPath: target.BackendBinary,
 			Modules:           target.Modules,
-		}); err != nil {
+			TimingsPath:       plan.TimingsPath,
+		}, timings.clone()); err != nil {
 			return fmt.Errorf("build target %q: %w", target.Name, err)
 		}
 	}
@@ -402,6 +475,15 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 			plan.Options.Config.Addons = append(plan.Options.Config.Addons, ssr.Addon())
 		case arg == "--debug":
 			plan.Options.Debug = true
+		case arg == "--timings":
+			plan.Timings = true
+		case strings.HasPrefix(arg, "--timings="):
+			path, err := parseBuildTimingFlagValue(strings.TrimPrefix(arg, "--timings="))
+			if err != nil {
+				return buildOptions{}, err
+			}
+			plan.Timings = true
+			plan.TimingsPath = path
 		case arg == "--allow-missing-backend":
 			plan.Options.AllowMissingBackend = true
 			plan.Options.Config.Build.AllowMissingBackend = true

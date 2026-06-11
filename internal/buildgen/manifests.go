@@ -207,17 +207,22 @@ func artifactLogicalPath(logicalPath string, fallback string) string {
 }
 
 func writeFileIfChanged(filePath string, contents []byte) error {
+	_, err := writeFileIfChangedStatus(filePath, contents)
+	return err
+}
+
+func writeFileIfChangedStatus(filePath string, contents []byte) (bool, error) {
 	current, err := os.ReadFile(filePath)
 	if err == nil && bytes.Equal(current, contents) {
-		return nil
+		return false, nil
 	}
 	if err != nil && !os.IsNotExist(err) {
-		return err
+		return false, err
 	}
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
-		return err
+		return false, err
 	}
-	return os.WriteFile(filePath, contents, 0o644)
+	return true, os.WriteFile(filePath, contents, 0o644)
 }
 
 func contentHash(contents []byte) string {

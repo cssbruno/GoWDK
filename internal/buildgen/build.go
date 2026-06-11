@@ -77,18 +77,22 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 		AssetArtifacts: make([]AssetArtifact, 0, len(planned.assets)),
 	}
 	for _, artifact := range planned.css {
-		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
+		wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
+		if err != nil {
 			return Result{}, reporter.fail("write", err)
 		}
+		recordWriteStat(&result, wrote)
 		reporter.debug("write", "css_written", "CSS artifact written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
 		artifact.CSSArtifact.Hash = contentHash(artifact.contents)
 		artifact.CSSArtifact.CachePolicy = immutableAssetCachePolicy
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
 	}
 	for _, artifact := range planned.assets {
-		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
+		wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
+		if err != nil {
 			return Result{}, reporter.fail("write", err)
 		}
+		recordWriteStat(&result, wrote)
 		reporter.debug("write", "asset_written", "runtime asset written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
 		artifact.AssetArtifact.Hash = contentHash(artifact.contents)
 		if artifact.AssetArtifact.CachePolicy == "" {
@@ -97,9 +101,11 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 	}
 	for _, artifact := range planned.pages {
-		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
+		wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
+		if err != nil {
 			return Result{}, reporter.fail("write", err)
 		}
+		recordWriteStat(&result, wrote)
 		reporter.debug("write", "page_written", "page artifact written", BuildEvent{
 			PageID: artifact.PageID,
 			Route:  artifact.Route,
@@ -133,6 +139,14 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 	}
 	result.BuildReportPath = buildReportPath
 	return result, nil
+}
+
+func recordWriteStat(result *Result, wrote bool) {
+	if wrote {
+		result.WriteStats.FilesWritten++
+		return
+	}
+	result.WriteStats.IdenticalWritesSkipped++
 }
 
 func BuildMemory(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (MemoryResult, error) {

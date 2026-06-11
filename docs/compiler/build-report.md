@@ -10,6 +10,11 @@ The report is mandatory for compiler-facing build APIs. It is deterministic:
 it does not include timestamps or durations, so unchanged builds can still skip
 rewriting identical generated files.
 
+Build timings are opt-in and separate. `gowdk build --timings` writes
+`gowdk-build-timings.json` at the output root, and `gowdk build
+--timings=<file>` writes the same versioned JSON shape to a custom file. Timing
+data is not printed to stdout and is not added to `gowdk-build-report.json`.
+
 ## Schema
 
 ```json
@@ -58,3 +63,32 @@ gowdk build --debug --out dist/site src/pages/home.page.gwdk
 Generated file paths are still scriptable from stdout; report details are only
 printed to stderr when `--debug` is present. The JSON report file is generated
 for every successful disk build even without `--debug`.
+
+## CLI Timing Output
+
+`gowdk build --timings` records elapsed phase durations and simple counters in
+a separate sidecar:
+
+```json
+{
+  "version": 1,
+  "mode": "build",
+  "outputDir": "dist/site",
+  "phases": [
+    {
+      "name": "parse_lower",
+      "durationMs": 1.25
+    }
+  ],
+  "counters": {
+    "source_files": 1,
+    "files_written": 4,
+    "identical_writes_skipped": 0
+  }
+}
+```
+
+Current phases include `config_load`, `source_discovery`, `parse_lower`,
+`ir_assembly`, `go_binding`, `ir_validation`, `contract_validation`,
+`output_plan_writes`, `app_generation`, `binary_build`, `wasm_build`,
+`backend_app_generation`, and `backend_binary_build` when those paths run.

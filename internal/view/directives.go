@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -38,6 +39,19 @@ var supportedMessageDirectives = map[string]bool{
 	"g:message:minlength": true,
 	"g:message:maxlength": true,
 	"g:message:pattern":   true,
+}
+
+// SupportedDirectiveNames returns the sorted closed set of exact-name g:
+// directives owned by the current view contract (excluding the g:on:* event
+// family and the g:message:* rules, which are validated separately). It is the
+// source of truth cross-checked against docs/language/stability.md.
+func SupportedDirectiveNames() []string {
+	names := make([]string, 0, len(supportedDirectiveNames))
+	for name := range supportedDirectiveNames {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func isSupportedDirectiveName(name string) bool {

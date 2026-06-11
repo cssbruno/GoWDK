@@ -38,6 +38,58 @@ func TestValidateBackendRoutePath(t *testing.T) {
 	}
 }
 
+func TestPositionAtAndOffsetOf(t *testing.T) {
+	// Multi-line, multi-byte (the euro sign is 3 bytes) so rune columns and byte
+	// offsets diverge.
+	src := []byte("ab\ncd€f\ngh")
+
+	cases := []struct {
+		offset int
+		line   int
+		column int
+	}{
+		{0, 1, 1},  // 'a'
+		{1, 1, 2},  // 'b'
+		{2, 1, 3},  // '\n' at end of line 1
+		{3, 2, 1},  // 'c'
+		{5, 2, 3},  // start of the 3-byte euro rune
+		{8, 2, 4},  // 'f', immediately after the euro rune
+		{10, 3, 1}, // 'g' on line 3
+		{12, 3, 3}, // end of buffer
+	}
+
+	for _, tc := range cases {
+		got := PositionAt(src, tc.offset)
+		if got.Line != tc.line || got.Column != tc.column || got.Offset != tc.offset {
+			t.Fatalf("PositionAt(%d) = {Line:%d Column:%d Offset:%d}, want {Line:%d Column:%d Offset:%d}",
+				tc.offset, got.Line, got.Column, got.Offset, tc.line, tc.column, tc.offset)
+		}
+		if back := OffsetOf(src, got); back != tc.offset {
+			t.Fatalf("OffsetOf(PositionAt(%d)) = %d, want %d", tc.offset, back, tc.offset)
+		}
+	}
+}
+
+func TestPositionAtClampsBounds(t *testing.T) {
+	src := []byte("abc")
+	if got := PositionAt(src, -5); got.Offset != 0 || got.Line != 1 || got.Column != 1 {
+		t.Fatalf("PositionAt(-5) = %+v, want clamped to start", got)
+	}
+	if got := PositionAt(src, 99); got.Offset != len(src) {
+		t.Fatalf("PositionAt(99) Offset = %d, want %d", got.Offset, len(src))
+	}
+}
+
+func TestOffsetOfUnsetPosition(t *testing.T) {
+	src := []byte("abc")
+	if got := OffsetOf(src, SourcePosition{}); got != 0 {
+		t.Fatalf("OffsetOf(unset) = %d, want 0", got)
+	}
+	if got := OffsetOf(src, SourcePosition{Line: 9, Column: 9}); got != len(src) {
+		t.Fatalf("OffsetOf(out-of-range) = %d, want clamp %d", got, len(src))
+	}
+}
+
 func TestBackendRouteMethod(t *testing.T) {
 	if got := BackendRouteMethod(" post "); got != "POST" {
 		t.Fatalf("expected normalized method POST, got %q", got)

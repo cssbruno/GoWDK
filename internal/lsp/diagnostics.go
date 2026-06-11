@@ -8,18 +8,40 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func diagnosticFromLang(item lang.Diagnostic, body string) diagnostic {
+func diagnosticFromLang(item lang.Diagnostic, uri string, body string) diagnostic {
 	severity := diagnosticSeverityError
 	if item.Severity == "warning" {
 		severity = diagnosticSeverityWarning
 	}
 	return diagnostic{
-		Range:    rangeFromLangDiagnostic(item, body),
-		Severity: severity,
-		Code:     item.Code,
-		Source:   "gowdk",
-		Message:  lang.RedactMessage(item.Message),
+		Range:              rangeFromLangDiagnostic(item, body),
+		Severity:           severity,
+		Code:               item.Code,
+		Source:             "gowdk",
+		Message:            lang.RedactMessage(item.Message),
+		RelatedInformation: relatedInformationFromLang(item.Related, uri, body),
 	}
+}
+
+// relatedInformationFromLang maps a diagnostic's secondary locations to LSP
+// relatedInformation. The current single-document check surfaces same-file
+// conflicts, so ranges are computed against body and the document uri is used.
+func relatedInformationFromLang(related []lang.RelatedLocation, uri string, body string) []diagnosticRelatedInformation {
+	if len(related) == 0 {
+		return nil
+	}
+	information := make([]diagnosticRelatedInformation, 0, len(related))
+	for _, item := range related {
+		rng := rangeFromPosition(item.Pos, body)
+		if item.Range != nil {
+			rng = rangeFromLangRange(*item.Range, body)
+		}
+		information = append(information, diagnosticRelatedInformation{
+			Location: location{URI: uri, Range: rng},
+			Message:  lang.RedactMessage(item.Message),
+		})
+	}
+	return information
 }
 
 func rangeFromLangDiagnostic(item lang.Diagnostic, body string) lspRange {

@@ -23,3 +23,6 @@ Recommended naming:
 - `0007-static-first-spa-navigation.md`: accepted static-first SPA navigation and generated JavaScript guardrails.
 - `0008-bounded-client-language.md`: accepted bounded `client {}` language and page-scoped store boundaries.
 - `0009-optional-inline-go-authoring.md`: accepted optional inline Go authoring direction, with extraction to normal package Go.
+- `0010-tokenizer-recursive-descent-parser.md`: accepted shared tokenizer and
+  recursive-descent parser with error recovery, migrated behind the stable
+  `gwdkast` AST seam.

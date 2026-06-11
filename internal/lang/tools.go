@@ -447,6 +447,7 @@ func compilerDiagnostics(err error, ir gwdkir.Program) Diagnostics {
 				Severity:   severity,
 				Message:    validation.Error(),
 				Suggestion: diagnosticSuggestion(validation),
+				Related:    relatedLocations(validation.Related),
 			})
 		}
 		return diagnostics
@@ -519,6 +520,22 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 
 func sourcePosition(position source.SourcePosition) Position {
 	return Position{Line: position.Line, Column: position.Column}
+}
+
+func relatedLocations(related []source.RelatedSpan) []RelatedLocation {
+	if len(related) == 0 {
+		return nil
+	}
+	locations := make([]RelatedLocation, 0, len(related))
+	for _, item := range related {
+		locations = append(locations, RelatedLocation{
+			File:    item.Source,
+			Pos:     sourcePosition(item.Span.Start),
+			Range:   sourceSpanRange(item.Span),
+			Message: item.Message,
+		})
+	}
+	return locations
 }
 
 func sourceSpanRange(span source.SourceSpan) *Range {

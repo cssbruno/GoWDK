@@ -70,3 +70,9 @@ project config
 
 Future build work should expand from the current generated-output slice while
 keeping downstream passes on `internal/gwdkir.Program`.
+
+The `lex/parse full AST` front-end is the line-oriented parser today. The
+decision to replace it with a shared tokenizer and a recursive-descent parser
+with error recovery, migrated behind the stable `internal/gwdkast` AST seam, is
+recorded in
+`docs/engineering/decisions/0010-tokenizer-recursive-descent-parser.md`.

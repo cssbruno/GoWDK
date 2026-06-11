@@ -206,10 +206,5 @@ func (scanner *scanner) isLineLeading(start int) bool {
 }
 
 func isMetadataLexeme(value string) bool {
-	switch value {
-	case "page", "route", "title", "description", "canonical", "image", "layout", "cache", "revalidate", "error", "guard", "css", "component", "wasm", "asset":
-		return true
-	default:
-		return false
-	}
+	return IsMetadataKeyword(value)
 }

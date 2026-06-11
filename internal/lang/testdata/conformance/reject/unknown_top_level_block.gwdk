@@ -1,0 +1,12 @@
+// expect: unsupported_top_level_block
+package pages
+
+route "/"
+
+frobnicate {
+  doStuff()
+}
+
+view {
+  <main></main>
+}

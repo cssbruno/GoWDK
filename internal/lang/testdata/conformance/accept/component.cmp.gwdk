@@ -1,0 +1,7 @@
+package widgets
+
+component Badge
+
+view {
+  <span class="badge">Badge</span>
+}

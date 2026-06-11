@@ -7,6 +7,33 @@ packages, and tooling contracts may change before a stable release.
 
 ### Changed
 
+- Conflict diagnostics (`duplicate_route`, `route_method_conflict`, including
+  contract-route conflicts) now carry a related source location pointing at the
+  first declaration. `gowdk check --json` gains an additive `related` array per
+  diagnostic, and the language server reports it as `relatedInformation`.
+- The formatter now tracks brace depth with the parser's string- and
+  comment-aware scanner, so braces inside string literals, comments, and
+  template literals (for example `title "a { b"`) no longer skew indentation.
+
+### Implemented
+
+- A machine-checked `.gwdk` conformance corpus
+  (`internal/lang/testdata/conformance/`) pins the language contract: `accept/`
+  cases must check clean and `reject/` cases must produce their declared stable
+  diagnostic codes. See `docs/language/conformance.md`.
+- A per-construct stability and deprecation table
+  (`docs/language/stability.md`) documents which blocks, metadata keywords, and
+  `g:` directives are stable, partial, planned, or deprecated, guarded against
+  drift from the code registries by a test.
+- `source.SourcePosition` carries a byte `Offset`, with `source.PositionAt` and
+  `source.OffsetOf` conversion helpers, as the exact substrate for future
+  AST-backed formatting and precise editor edits.
+- ADR 0010 records the decision to replace the line-oriented parser with a
+  shared tokenizer and a recursive-descent parser with error recovery, migrated
+  behind the stable `gwdkast` AST seam.
+
+### Changed
+
 - A page that declares no `guard` is no longer a build error. `guard` is now
   optional, but a page is not public by default: `missing_page_guard` is now a
   **warning** and the page's route is denied (403) at request time until the

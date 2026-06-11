@@ -184,10 +184,16 @@ type publishDiagnosticsParams struct {
 }
 
 type diagnostic struct {
-	Range    lspRange `json:"range"`
-	Severity int      `json:"severity,omitempty"`
-	Code     string   `json:"code,omitempty"`
-	Source   string   `json:"source,omitempty"`
+	Range              lspRange                       `json:"range"`
+	Severity           int                            `json:"severity,omitempty"`
+	Code               string                         `json:"code,omitempty"`
+	Source             string                         `json:"source,omitempty"`
+	Message            string                         `json:"message"`
+	RelatedInformation []diagnosticRelatedInformation `json:"relatedInformation,omitempty"`
+}
+
+type diagnosticRelatedInformation struct {
+	Location location `json:"location"`
 	Message  string   `json:"message"`
 }
 

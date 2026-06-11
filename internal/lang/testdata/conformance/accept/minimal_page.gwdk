@@ -1,0 +1,10 @@
+// Minimal static page: package, route, and a view.
+package pages
+
+route "/"
+
+view {
+  <main>
+    <h1>Hello</h1>
+  </main>
+}

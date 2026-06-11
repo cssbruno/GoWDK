@@ -74,7 +74,7 @@ func (server *Server) publishDiagnostics(doc document) []byte {
 	_, diagnostics := lang.CheckSource(server.config, doc.Path, []byte(doc.Text))
 	items := make([]diagnostic, 0, len(diagnostics))
 	for _, item := range diagnostics {
-		items = append(items, diagnosticFromLang(item, doc.Text))
+		items = append(items, diagnosticFromLang(item, doc.URI, doc.Text))
 	}
 	return publishDiagnostics(doc.URI, items)
 }

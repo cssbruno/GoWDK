@@ -1720,6 +1720,51 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 	}
 }
 
+func TestGenerateAutoRoutesUseDefaultHybridRenderMetadata(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:     "dashboard",
+		Route:  "/dashboard",
+		Guards: []string{"public"},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main><h1>Dashboard</h1></main>`,
+		},
+	}}}
+
+	config := gowdk.Config{
+		Render: gowdk.RenderConfig{Default: gowdk.Hybrid},
+		Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)},
+	}
+	ir := gwdkanalysis.BuildProgram(config, app)
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		AutoRoutes: true,
+		Config:     config,
+		IR:         &ir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	expected := `gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "hybrid", Guards: []string{"public"}}`
+	if !strings.Contains(source, expected) {
+		t.Fatalf("expected default-hybrid generated app source to contain %q:\n%s", expected, source)
+	}
+	if strings.Contains(source, `PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr"`) {
+		t.Fatalf("expected default-hybrid metadata not to report ssr:\n%s", source)
+	}
+}
+
 func TestGenerateWritesGuardRegistryAndGuardChecks(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

@@ -3252,6 +3252,51 @@ view {
 	})
 }
 
+func TestRoutesCommandPrintsDefaultHybridRouteKind(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "dashboard.page.gwdk")
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Render: gowdk.RenderConfig{Default: gowdk.Hybrid},
+}
+`)
+	writeCLIFile(t, page, `package app
+
+page dashboard
+route "/dashboard"
+
+view {
+  <main>Dashboard</main>
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"routes", "--ssr", "--config", config, page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(stderr, "spa_disabled") || strings.Contains(stderr, "ssr_disabled") {
+		t.Fatalf("expected no disabled route info for default hybrid route, got:\n%s", stderr)
+	}
+
+	var report routeMetadataReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
+	}
+	assertRouteBinding(t, report.Routes, routeBindingJSON{
+		Kind:    "hybrid",
+		Method:  "GET",
+		Route:   "/dashboard",
+		PageID:  "dashboard",
+		Handler: "hybrid.RenderDashboard",
+	})
+}
+
 func TestRoutesCommandDiscoversSelectedModuleOnly(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app

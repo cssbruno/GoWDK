@@ -19,6 +19,10 @@ func loadBuildConfig(options *cliOptions, configPath string) error {
 
 func loadProjectConfig(options *cliOptions, configPath string) error {
 	allowMissingBackend := options.AllowMissingBackend
+	projectRoot, err := resolveProjectRoot(configPath)
+	if err != nil {
+		return err
+	}
 	config, err := project.LoadConfig(configPath)
 	if err != nil {
 		return err
@@ -28,24 +32,38 @@ func loadProjectConfig(options *cliOptions, configPath string) error {
 		config.Build.AllowMissingBackend = true
 	}
 	options.Config = config
+	options.ProjectRoot = projectRoot
 	options.AllowMissingBackend = allowMissingBackend
 	return nil
 }
 
-func discoverBuildFiles(config gowdk.Config, outputDir string, moduleNames []string) ([]string, error) {
-	return discoverConfiguredFiles(config, outputDir, moduleNames)
-}
-
-func discoverProjectFiles(config gowdk.Config, moduleNames []string) ([]string, error) {
-	return discoverConfiguredFiles(config, config.Build.Output, moduleNames)
-}
-
-func discoverConfiguredFiles(config gowdk.Config, outputDir string, moduleNames []string) ([]string, error) {
-	root, err := os.Getwd()
-	if err != nil {
-		return nil, err
+func resolveProjectRoot(configPath string) (string, error) {
+	if strings.TrimSpace(configPath) != "" {
+		absolute, err := filepath.Abs(configPath)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Dir(absolute), nil
 	}
+	return os.Getwd()
+}
 
+func discoverBuildFiles(config gowdk.Config, outputDir string, moduleNames []string, root string) ([]string, error) {
+	return discoverConfiguredFiles(config, outputDir, moduleNames, root)
+}
+
+func discoverProjectFiles(config gowdk.Config, moduleNames []string, root string) ([]string, error) {
+	return discoverConfiguredFiles(config, config.Build.Output, moduleNames, root)
+}
+
+func discoverConfiguredFiles(config gowdk.Config, outputDir string, moduleNames []string, root string) ([]string, error) {
+	if strings.TrimSpace(root) == "" {
+		var err error
+		root, err = os.Getwd()
+		if err != nil {
+			return nil, err
+		}
+	}
 	modules, err := buildModules(config.Modules, moduleNames)
 	if err != nil {
 		return nil, err
@@ -68,7 +86,7 @@ func loadCommandInputs(args []string, command string, allowJSON bool) (cliOption
 		return options, nil, err
 	}
 	if len(paths) == 0 {
-		discovered, err := discoverProjectFiles(options.Config, moduleNames)
+		discovered, err := discoverProjectFiles(options.Config, moduleNames, options.ProjectRoot)
 		if err != nil {
 			return options, nil, err
 		}

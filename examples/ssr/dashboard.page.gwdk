@@ -1,9 +1,9 @@
 package ssr
 
-@page dashboard
-@route "/dashboard"
-@layout root, dashboard
-@guard auth.required
+page dashboard
+route "/dashboard"
+layout root, dashboard
+guard auth.required
 
 load {
   user := auth.User(ctx)?

@@ -104,20 +104,20 @@ Fields:
   `use alias "package"`; these are separate from normal Go imports.
 - `route`: declared route path.
 - `render`: effective render mode after applying default `spa`.
-- `metadata`: optional page document metadata from `@title`, `@description`,
-  `@canonical`, and `@image`.
+- `metadata`: optional page document metadata from `title`, `description`,
+  `canonical`, and `image`.
 - `layouts`: optional ordered layout references. Bare names are same-package or
   package-less layout IDs; qualified names such as `chrome.root` resolve through
   page `use chrome "package"` declarations.
 - `dynamicParams`: route param names declared in dynamic route segments.
 - `routeParams`: route param names and scalar types. Untyped params are
   reported as `string`.
-- `cache`: optional concrete page Cache-Control response metadata from `@cache`
-  and `@revalidate`.
+- `cache`: optional concrete page Cache-Control response metadata from `cache`
+  and `revalidate`.
 - `paths`: optional boolean present when `paths {}` exists.
 - `guard`: explicit page access metadata. Real page sources must declare it;
   intentionally public pages report `["public"]`.
-- `css`: optional `@css` page selection metadata.
+- `css`: optional `css` page selection metadata.
 - `js`: optional path-based scoped browser script declarations.
 - `inlineJS`: optional generated names for inline `js {}` browser script
   declarations. The manifest does not include inline code bodies.
@@ -176,5 +176,5 @@ logical asset names. Values are emitted slash-separated paths relative to the
 selected output directory; generated CSS is minified and emitted with
 content-hashed filenames. The `cache` map may include route HTML paths such as
 `index.html` without adding those route files to `files`; when a page declares
-`@revalidate`, the recorded cache policy includes the generated
+`revalidate`, the recorded cache policy includes the generated
 `stale-while-revalidate=<seconds>` directive.

@@ -6,7 +6,7 @@ The current browser-facing output slices are:
 - Partial form enhancement runtime emitted as `assets/gowdk/gowdk.js`.
 - Generated JavaScript islands for stateful components.
 - Component-level WASM island asset emission for components that declare
-  `@wasm`, with `g:island="wasm"` still supported as a call-site override.
+  `wasm`, with `g:island="wasm"` still supported as a call-site override.
 
 ## Partial Runtime
 
@@ -41,7 +41,7 @@ The runtime:
 Stateful components use generated JavaScript by default:
 
 ```gwdk
-@component Counter
+component Counter
 
 import ui "github.com/acme/app/ui"
 
@@ -84,8 +84,8 @@ Unsupported today:
 Components declare WASM at the component level:
 
 ```gwdk
-@component Counter
-@wasm ./browser/counter
+component Counter
+wasm ./browser/counter
 
 view {
   <button>Counter</button>
@@ -96,7 +96,7 @@ view {
 <Counter />
 ```
 
-When `@wasm` points to a local package, GOWDK builds that package with
+When `wasm` points to a local package, GOWDK builds that package with
 `GOOS=js GOARCH=wasm`. The package must be browser-safe and cannot import
 server/process/network packages such as `net/http`, `os/exec`, `database/sql`,
 raw `syscall`, `plugin`, or `unsafe`. Declared Go WASM island packages also
@@ -125,8 +125,8 @@ may use `setText`, `setAttr`, `removeAttr`, `toggleClass`, `setStyle`,
 rejected with a console error. Missing required exports and startup failures are
 reported to the browser console instead of silently disabling the island.
 
-Normal calls to a component with `@wasm` use the WASM island runtime. If a
-component is called with `g:island="wasm"` and no `@wasm` package is declared,
+Normal calls to a component with `wasm` use the WASM island runtime. If a
+component is called with `g:island="wasm"` and no `wasm` package is declared,
 GOWDK emits the current placeholder module plus loader shape.
 
 ## Production Mode

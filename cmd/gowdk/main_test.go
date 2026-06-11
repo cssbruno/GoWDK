@@ -107,8 +107,8 @@ func TestDoctorCommandSupportsJSON(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Healthy</main>
@@ -180,8 +180,8 @@ func TestDoctorCommandReportsValidMinimalProject(t *testing.T) {
 	writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Healthy</main>
@@ -221,8 +221,8 @@ func TestDoctorCommandReportsLanguageErrors(t *testing.T) {
 	source := filepath.Join(root, "bad.page.gwdk")
 	writeCLIFile(t, source, `package app
 
-@page bad
-@route "/bad"
+page bad
+route "/bad"
 
 load {
   => { title: "needs ssr" }
@@ -277,8 +277,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Styled</main>
@@ -331,8 +331,8 @@ func TestBuildCommandWritesIndexHTML(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, source, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>
@@ -362,8 +362,8 @@ func TestBuildCommandDebugPrintsBuildgenReport(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, source, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Debuggable</main>
@@ -396,8 +396,8 @@ func TestBuildCommandReportsBoundContractReference(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	pageSource := `package pages
 
-@page patients
-@route "/patients"
+page patients
+route "/patients"
 
 view {
   <main>
@@ -476,8 +476,8 @@ func TestBuildReportsBoundQueryContractReference(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	pageSource := `package pages
 
-@page patients
-@route "/patients"
+page patients
+route "/patients"
 
 view {
   <main>
@@ -553,8 +553,8 @@ func TestCheckJSONReportsMissingContractReference(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	pageSource := `package pages
 
-@page patients
-@route "/patients"
+page patients
+route "/patients"
 
 view {
   <main>
@@ -590,8 +590,8 @@ func TestCheckJSONReportsInvalidGoContractRegistration(t *testing.T) {
 	page := filepath.Join(root, "pages", "patients.page.gwdk")
 	writeCLIFile(t, page, `package pages
 
-@page patients
-@route "/patients"
+page patients
+route "/patients"
 
 view {
   <main>Patients</main>
@@ -638,8 +638,8 @@ func TestBuildFailsForMissingContractReference(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	pageSource := `package pages
 
-@page patients
-@route "/patients"
+page patients
+route "/patients"
 
 view {
   <main g:query="patients.GetPatientPage">
@@ -670,8 +670,8 @@ func TestBuildFailsForDuplicateCommandOwner(t *testing.T) {
 	outputDir := filepath.Join(root, "dist")
 	writeCLIFile(t, page, `package pages
 
-@page patients
-@route "/patients"
+page patients
+route "/patients"
 
 view {
   <main>Patients</main>
@@ -1035,8 +1035,8 @@ func TestBuildCommandRequiresProjectConfig(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Home</main>
@@ -1270,8 +1270,8 @@ func TestBuildInputSnapshotDetectsFileChanges(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, source, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Before</main>
@@ -1285,8 +1285,8 @@ view {
 	time.Sleep(time.Millisecond)
 	writeCLIFile(t, source, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>After</main>
@@ -1307,8 +1307,8 @@ func TestBuildInputSnapshotIgnoresUnchangedFileTouches(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	content := `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Same</main>
@@ -1345,8 +1345,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Styled</main>
@@ -1384,8 +1384,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Styled</main>
@@ -1464,8 +1464,8 @@ func TestBuildIncrementalSPAUsesChangedPageSources(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, home, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Before</main>
@@ -1473,8 +1473,8 @@ view {
 `)
 	writeCLIFile(t, about, `package app
 
-@page about
-@route "/about"
+page about
+route "/about"
 
 view {
   <main>Stable</main>
@@ -1494,8 +1494,8 @@ view {
 	time.Sleep(20 * time.Millisecond)
 	writeCLIFile(t, home, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>After</main>
@@ -1532,8 +1532,8 @@ func TestBuildIncrementalSPAFallsBackForComponentChanges(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main><Hero title="GOWDK" /></main>
@@ -1541,7 +1541,7 @@ view {
 `)
 	writeCLIFile(t, component, `package app
 
-@component Hero
+component Hero
 
 props {
   title string
@@ -1569,8 +1569,8 @@ func TestBuildCommandWritesComponentExpandedHTML(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>
@@ -1580,7 +1580,7 @@ view {
 `)
 	writeCLIFile(t, component, `package app
 
-@component Hero
+component Hero
 
 props {
   title string
@@ -1612,8 +1612,8 @@ func TestBuildCommandDiscoversFilesWhenNoPathsArePassed(t *testing.T) {
 	writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, filepath.Join(root, "src", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>
@@ -1623,7 +1623,7 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "src", "hero.cmp.gwdk"), `package app
 
-@component Hero
+component Hero
 
 props {
   title string
@@ -1637,8 +1637,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "dist", "stale.page.gwdk"), `package app
 
-@page stale
-@route "/stale"
+page stale
+route "/stale"
 
 view {
   <main>stale</main>
@@ -1700,8 +1700,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "src", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>
@@ -1711,7 +1711,7 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "src", "hero.cmp.gwdk"), `package app
 
-@component Hero
+component Hero
 
 props {
   title string
@@ -1725,8 +1725,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "src", "ignored.page.gwdk"), `package app
 
-@page ignored
-@route "/ignored"
+page ignored
+route "/ignored"
 
 view {
   <main>Ignored</main>
@@ -1830,8 +1830,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main class="font-bold">Home</main>
@@ -1904,8 +1904,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Frontend</main>
@@ -1913,8 +1913,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "ui2", "second.page.gwdk"), `package app
 
-@page second
-@route "/second"
+page second
+route "/second"
 
 view {
   <main>Frontend Two</main>
@@ -1922,8 +1922,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `package app
 
-@page admin
-@route "/admin"
+page admin
+route "/admin"
 
 view {
   <main>Backend</main>
@@ -1931,8 +1931,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "backend", "ignored.page.gwdk"), `package app
 
-@page ignored
-@route "/ignored"
+page ignored
+route "/ignored"
 
 view {
   <main>Ignored</main>
@@ -1940,8 +1940,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "other", "stray.page.gwdk"), `package app
 
-@page stray
-@route "/stray"
+page stray
+route "/stray"
 
 view {
   <main>Stray</main>
@@ -1991,8 +1991,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Frontend</main>
@@ -2000,8 +2000,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `package app
 
-@page admin
-@route "/admin"
+page admin
+route "/admin"
 
 view {
   <main>Backend</main>
@@ -2055,8 +2055,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Public module</main>
@@ -2064,8 +2064,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `package app
 
-@page dashboard
-@route "/admin"
+page dashboard
+route "/admin"
 
 view {
   <main>Admin module</main>
@@ -2073,8 +2073,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "api", "status.page.gwdk"), `package app
 
-@page status
-@route "/api/status"
+page status
+route "/api/status"
 
 view {
   <main>API module</main>
@@ -2131,8 +2131,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Public module</main>
@@ -2140,8 +2140,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `package app
 
-@page dashboard
-@route "/admin"
+page dashboard
+route "/admin"
 
 view {
   <main>Admin module</main>
@@ -2178,8 +2178,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Inferred output</main>
@@ -2222,8 +2222,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "public", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Public WASM module</main>
@@ -2288,8 +2288,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "src", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Override</main>
@@ -2327,8 +2327,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Custom config</main>
@@ -2656,8 +2656,8 @@ func TestCheckCommandJSONReportsDiagnostics(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, source, `package app
 
-@page bad
-@route "/bad"
+page bad
+route "/bad"
 `)
 
 	output, err := captureCLIStdout(t, func() error {
@@ -2678,8 +2678,8 @@ func TestManifestCommandHandlesMultipleFiles(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, home, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Home</main>
@@ -2687,8 +2687,8 @@ view {
 `)
 	writeCLIFile(t, about, `package app
 
-@page about
-@route "/about"
+page about
+route "/about"
 
 view {
   <main>About</main>
@@ -2721,8 +2721,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Configured check</main>
@@ -2730,8 +2730,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "pages", "ignored.page.gwdk"), `package app
 
-@page ignored
-@route "/"
+page ignored
+route "/"
 
 view {
   <main>Ignored duplicate</main>
@@ -2760,8 +2760,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Manifest discovery</main>
@@ -2769,8 +2769,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "pages", "ignored.page.gwdk"), `package app
 
-@page ignored
-@route "/ignored"
+page ignored
+route "/ignored"
 
 view {
   <main>Ignored</main>
@@ -2801,8 +2801,8 @@ func TestManifestCommandDefaultDiscoverySkipsTestdata(t *testing.T) {
 	writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, filepath.Join(root, "pages", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Home</main>
@@ -2810,8 +2810,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "internal", "lang", "testdata", "home.page.gwdk"), `package app
 
-@page home
-@route "/fixture"
+page home
+route "/fixture"
 
 view {
   <main>Fixture duplicate</main>
@@ -2857,8 +2857,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "pages", "dashboard.page.gwdk"), `package app
 
-@page dashboard
-@route "/dashboard"
+page dashboard
+route "/dashboard"
 
 go ssr {
 }
@@ -2899,8 +2899,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Frontend</main>
@@ -2908,8 +2908,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `package app
 
-@page admin
-@route "/admin"
+page admin
+route "/admin"
 
 view {
   <main>Backend</main>
@@ -2941,8 +2941,8 @@ func TestRoutesCommandPrintsRoutesAndEndpoints(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page newsletter
-@route "/newsletter"
+page newsletter
+route "/newsletter"
 
 act Subscribe POST "/newsletter"
 
@@ -3015,8 +3015,8 @@ func TestRoutesCommandPrintsSSRRouteKind(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page dashboard
-@route "/dashboard"
+page dashboard
+route "/dashboard"
 
 load {
 }
@@ -3055,8 +3055,8 @@ func TestRoutesCommandPrintsBareHybridAsSSRRoute(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page dashboard
-@route "/dashboard"
+page dashboard
+route "/dashboard"
 
 go ssr {
 }
@@ -3104,8 +3104,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Frontend</main>
@@ -3113,8 +3113,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `package app
 
-@page admin
-@route "/admin"
+page admin
+route "/admin"
 
 view {
   <main>Backend</main>
@@ -3154,8 +3154,8 @@ func TestRoutesCommandPrintsAPIBinding(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page status
-@route "/status"
+page status
+route "/status"
 
 api Health GET "/api/health"
 
@@ -3211,8 +3211,8 @@ func TestInspectIRCommandPrintsCompilerIR(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page newsletter
-@route "/newsletter"
+page newsletter
+route "/newsletter"
 
 act Subscribe POST "/newsletter"
 
@@ -3380,8 +3380,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Frontend</main>
@@ -3389,8 +3389,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "backend", "admin.page.gwdk"), `package app
 
-@page admin
-@route "/admin"
+page admin
+route "/admin"
 
 view {
   <main>Backend</main>
@@ -3439,8 +3439,8 @@ func TestRoutesCommandPrintsContractEndpoints(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package pages
 
-@page patients
-@route "/patients"
+page patients
+route "/patients"
 
 view {
   <main>
@@ -3527,8 +3527,8 @@ func TestBuildCommandWritesGeneratedEmbeddedApp(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Generated app</main>
@@ -3560,8 +3560,8 @@ func TestBuildCommandPrintsPartialRuntimeAsset(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page patients
-@route "/patients"
+page patients
+route "/patients"
 
 act Refresh POST "/patients"
 
@@ -3629,8 +3629,8 @@ func TestBuildCommandBuildsRunnableEmbeddedBinary(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>One binary</main>
@@ -3673,8 +3673,8 @@ func TestBuildCommandBuildsWASMArtifact(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>WASM artifact</main>
@@ -3708,8 +3708,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Frontend module</main>
@@ -3717,8 +3717,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `package app
 
-@page dashboard
-@route "/admin"
+page dashboard
+route "/admin"
 
 view {
   <main>Admin module</main>
@@ -3779,8 +3779,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, filepath.Join(root, "frontend", "home.page.gwdk"), `package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 view {
   <main>Frontend module</main>
@@ -3788,8 +3788,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "admin", "dashboard.page.gwdk"), `package app
 
-@page dashboard
-@route "/admin"
+page dashboard
+route "/admin"
 
 view {
   <main>Admin module</main>
@@ -3797,8 +3797,8 @@ view {
 `)
 	writeCLIFile(t, filepath.Join(root, "docs", "guide.page.gwdk"), `package app
 
-@page guide
-@route "/docs"
+page guide
+route "/docs"
 
 view {
   <main>Docs module</main>
@@ -3859,8 +3859,8 @@ func TestBuildCommandBuildsSSRBinary(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page dashboard
-@route "/dashboard"
+page dashboard
+route "/dashboard"
 
 go ssr {
 }
@@ -3912,8 +3912,8 @@ func TestBuildCommandBuildsDynamicSSRBinary(t *testing.T) {
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page blog.post
-@route "/blog/{slug}"
+page blog.post
+route "/blog/{slug}"
 
 go ssr {
 }
@@ -3971,8 +3971,8 @@ func TestBuildCommandBuildsActionBinaryReturns501ForMissingHandler(t *testing.T)
 	config := writeMinimalCLIConfig(t, root)
 	writeCLIFile(t, page, `package app
 
-@page newsletter
-@route "/newsletter"
+page newsletter
+route "/newsletter"
 
 act Subscribe POST "/newsletter"
 
@@ -4033,8 +4033,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, page, `package app
 
-@page newsletter
-@route "/newsletter"
+page newsletter
+route "/newsletter"
 
 act Subscribe POST "/newsletter"
 
@@ -4072,8 +4072,8 @@ var Config = gowdk.Config{
 `)
 	writeCLIFile(t, page, `package app
 
-@page newsletter
-@route "/newsletter"
+page newsletter
+route "/newsletter"
 
 act Subscribe POST "/newsletter"
 
@@ -4120,8 +4120,8 @@ var Config = gowdk.Config{}
 `)
 	writeCLIFile(t, filepath.Join(root, "features", "auth", "auth.page.gwdk"), `package auth
 
-@page auth
-@route "/login"
+page auth
+route "/login"
 
 act Login POST "/login"
 
@@ -4353,13 +4353,13 @@ func writeCLIFile(t *testing.T, path, content string) {
 
 func withPublicGuardForPageFixture(path, content string) string {
 	if !strings.HasSuffix(path, ".page.gwdk") ||
-		strings.Contains(content, "\n@guard ") {
+		strings.Contains(content, "\nguard ") {
 		return content
 	}
 	lines := strings.SplitAfter(content, "\n")
 	for index, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "@route ") {
-			lines[index] = line + "@guard public\n"
+		if strings.HasPrefix(strings.TrimSpace(line), "route ") {
+			lines[index] = line + "guard public\n"
 			return strings.Join(lines, "")
 		}
 	}

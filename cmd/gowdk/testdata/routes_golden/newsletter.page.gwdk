@@ -1,8 +1,8 @@
 package app
 
-@page newsletter
-@route "/newsletter"
-@guard public
+page newsletter
+route "/newsletter"
+guard public
 
 act Subscribe POST "/newsletter"
 

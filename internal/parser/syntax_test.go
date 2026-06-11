@@ -9,10 +9,10 @@ import (
 
 func TestParseSyntaxBuildsTypedASTForCurrentSubset(t *testing.T) {
 	file, err := ParseSyntax([]byte(`
-@page newsletter
-@route "/newsletter/{slug}"
-@guard auth.required
-@error "/errors/newsletter.html"
+page newsletter
+route "/newsletter/{slug}"
+guard auth.required
+error "/errors/newsletter.html"
 js "./newsletter.js"
 
 js {
@@ -31,9 +31,9 @@ build {
   => { title: "Newsletter" }
 }
 
-act Subscribe POST "/newsletter/{slug}" @error "/errors/subscribe.html"
+act Subscribe POST "/newsletter/{slug}" error "/errors/subscribe.html"
 
-api Health GET "/api/health" @error "/errors/health.html"
+api Health GET "/api/health" error "/errors/health.html"
 
 fragment List GET "/newsletter/list" "#items" {
   <ul><li>{title}</li></ul>
@@ -94,8 +94,8 @@ view {
 }
 
 func TestParseSyntaxReportsBodySyntaxLine(t *testing.T) {
-	_, err := ParseSyntax([]byte(`@page bad
-@route "/bad"
+	_, err := ParseSyntax([]byte(`page bad
+route "/bad"
 
 build {
   title = "Bad"
@@ -110,8 +110,8 @@ build {
 }
 
 func TestParseSyntaxReadsStyleBlockOutsideView(t *testing.T) {
-	file := mustParseSyntax(t, []byte(`@page styled
-@route "/styled"
+	file := mustParseSyntax(t, []byte(`page styled
+route "/styled"
 
 view {
   <main class="hero">Styled</main>
@@ -140,8 +140,8 @@ style {
 }
 
 func TestParseSyntaxReadsImportedBuildCall(t *testing.T) {
-	file, err := ParseSyntax([]byte(`@page imported
-@route "/imported"
+	file, err := ParseSyntax([]byte(`page imported
+route "/imported"
 
 import interop "github.com/cssbruno/gowdk/examples/go-interop"
 
@@ -169,8 +169,8 @@ view {
 
 func TestParseSyntaxReadsGoBlocks(t *testing.T) {
 	file, err := ParseSyntax([]byte(`package pages
-@page home
-@route "/"
+page home
+route "/"
 
 go {
 func HomePageForBuild() PageCopy {
@@ -209,8 +209,8 @@ view {
 }
 
 func TestParseSyntaxRejectsDuplicateGoBlockTarget(t *testing.T) {
-	_, err := ParseSyntax([]byte(`@page home
-@route "/"
+	_, err := ParseSyntax([]byte(`page home
+route "/"
 
 go ssr {
 func One() {}
@@ -234,10 +234,10 @@ view {
 
 func TestParseSyntaxReturnsGOWDKAST(t *testing.T) {
 	var _ gwdkast.File = mustParseSyntax(t, []byte(`package ui
-@component Counter
-@wasm ./counter/browser
-@css "./counter.css"
-@asset "./counter.svg"
+component Counter
+wasm ./counter/browser
+css "./counter.css"
+asset "./counter.svg"
 js "./counter.js"
 
 import ui "github.com/cssbruno/gowdk/examples/ui"
@@ -274,10 +274,10 @@ view {
 
 func TestParseSyntaxReadsStoresAndComponentContracts(t *testing.T) {
 	file := mustParseSyntax(t, []byte(`package ui
-@component Counter
-@wasm ./counter/browser
-@css "./counter.css"
-@asset "./counter.svg"
+component Counter
+wasm ./counter/browser
+css "./counter.css"
+asset "./counter.svg"
 js "./counter.js"
 
 import ui "github.com/cssbruno/gowdk/examples/ui"

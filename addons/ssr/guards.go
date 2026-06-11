@@ -10,7 +10,7 @@ import (
 // GuardFunc authorizes one generated request-time route access check.
 type GuardFunc func(LoadContext) error
 
-// GuardRegistry resolves @guard IDs to executable guard functions.
+// GuardRegistry resolves guard IDs to executable guard functions.
 type GuardRegistry map[string]GuardFunc
 
 // RunGuards executes guard IDs in declaration order.

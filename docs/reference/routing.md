@@ -5,15 +5,15 @@ identity.
 
 ## Page Routes
 
-Every current page file must declare a route. `@guard` is optional, but a page
+Every current page file must declare a route. `guard` is optional, but a page
 is not public by default: a guardless page warns (`missing_page_guard`) and its
-route is denied (403) until `@guard public` (or a protective guard) is added.
+route is denied (403) until `guard public` (or a protective guard) is added.
 See [guards.md](../language/guards.md) for the full access contract. Page ID
-derives from the filename unless `@page` is present:
+derives from the filename unless `page` is present:
 
 ```gwdk
-@route "/"
-@guard public
+route "/"
+guard public
 
 view {
   <main>
@@ -22,7 +22,7 @@ view {
 }
 ```
 
-Use explicit `@page` only when page identity should not follow the filename.
+Use explicit `page` only when page identity should not follow the filename.
 
 Current route rules:
 
@@ -42,8 +42,8 @@ Current route rules:
 A page route may declare one rest (catch-all) param as its final segment:
 
 ```gwdk
-@route "/docs/{path...}"
-@guard public
+route "/docs/{path...}"
+guard public
 
 go ssr {}
 
@@ -85,7 +85,7 @@ Unsupported route forms today:
 - Optional params such as `/docs/{slug?}`. The diagnostic is explicit: optional
   route parameters are not supported; declare explicit routes for each shape
   (rest parameters `{name...}` are supported as the final segment).
-- Route groups that affect URL shape independently from explicit `@route`.
+- Route groups that affect URL shape independently from explicit `route`.
 - Page/API same-path content negotiation. A page route and endpoint may share a
   path only when their HTTP methods do not conflict, such as `GET /signup` page
   plus `POST /signup` action.
@@ -94,7 +94,7 @@ Unsupported route forms today:
 
 Routes are canonical without a trailing slash. The policy is explicit:
 
-- Declarations: omit trailing slashes except for `/`. `@route "/blog/hello/"`
+- Declarations: omit trailing slashes except for `/`. `route "/blog/hello/"`
   is rejected with `malformed_route`.
 - Requests: generated servers respond to `GET` and `HEAD` requests whose path
   carries a trailing slash (and is not `/`) with a `308 Permanent Redirect` to
@@ -104,30 +104,30 @@ Routes are canonical without a trailing slash. The policy is explicit:
   slash on concrete POST routes as a compatibility fallback and redirect to the
   declared target when configured.
 
-Pages may declare response cache intent with `@cache`. The value is carried as
+Pages may declare response cache intent with `cache`. The value is carried as
 route metadata and should be a literal HTTP `Cache-Control` value:
 
 ```gwdk
-@route "/docs"
-@guard public
-@cache "public, max-age=60"
+route "/docs"
+guard public
+cache "public, max-age=60"
 ```
 
-Pages may also declare stale-while-revalidate behavior with `@revalidate`.
+Pages may also declare stale-while-revalidate behavior with `revalidate`.
 Values may be whole seconds or Go-style whole-second durations such as `60s`,
-`5m`, or `1h`. `@revalidate` requires `@cache` and appends a concrete
+`5m`, or `1h`. `revalidate` requires `cache` and appends a concrete
 `stale-while-revalidate=<seconds>` directive to the generated Cache-Control
 header:
 
 ```gwdk
-@route "/docs"
-@guard public
-@cache "public, max-age=60"
-@revalidate 5m
+route "/docs"
+guard public
+cache "public, max-age=60"
+revalidate 5m
 ```
 
-Generated binaries apply explicit page `@cache` values to successful static SPA
-HTML and SSR HTML responses. When `@revalidate` is present, generated binaries
+Generated binaries apply explicit page `cache` values to successful static SPA
+HTML and SSR HTML responses. When `revalidate` is present, generated binaries
 send the appended stale-while-revalidate directive for the same successful
 responses. Request-time safety policies still win for actions, APIs, partial
 responses, SSR load redirects, CSRF HTML mutation, and generated request-time
@@ -138,8 +138,8 @@ errors; those use `no-store`.
 SPA render is the default:
 
 ```gwdk
-@route "/docs"
-@guard public
+route "/docs"
+guard public
 
 view {
   <main>
@@ -167,8 +167,8 @@ Dynamic SPA routes require `paths {}`. Action endpoints on a dynamic SPA page
 inherit that page's generated concrete paths:
 
 ```gwdk
-@route "/blog/{slug}"
-@guard public
+route "/blog/{slug}"
+guard public
 
 paths {
   => { slug: "hello-gowdk" }
@@ -210,8 +210,8 @@ app slice:
 ```gwdk
 package signup
 
-@route "/signup"
-@guard public
+route "/signup"
+guard public
 
 act Submit POST "/signup"
 
@@ -261,8 +261,8 @@ same-package Go handlers:
 ```gwdk
 package api
 
-@route "/status"
-@guard public
+route "/status"
+guard public
 
 api Health GET "/api/health"
 

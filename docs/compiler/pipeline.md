@@ -32,7 +32,7 @@ functions, lowercase HTML markup in `view {}`, and `.cmp.gwdk` component files.
 
 `internal/gwdkast` owns the typed GOWDK AST. `internal/parser.ParseSyntax`
 returns that AST for the current source subset: package declarations, typed
-page/component/layout/route/render/layout/guard/CSS declarations, annotations,
+page/component/layout/route/render/layout/guard/CSS declarations, metadata declarations,
 Go imports, GOWDK uses, stores, typed component contracts, supported top-level
 blocks, parsed `view {}` markup nodes, literal `paths {}`/`build {}` records,
 action/API endpoint declarations, and source spans.
@@ -50,7 +50,7 @@ Go are constructed as Go ASTs, printed, and formatted before use or write.
 
 Browser-facing output is generated only when the source requires it. Partial
 form metadata can emit `assets/gowdk/gowdk.js`; stateful components can emit
-generated JavaScript island assets; component-level `@wasm` declarations can
+generated JavaScript island assets; component-level `wasm` declarations can
 emit WASM island loader assets. See `browser-compiler.md`.
 
 ## Target Pipeline

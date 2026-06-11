@@ -136,7 +136,7 @@ separate from `gowdk manifest` and records generated spa page artifacts:
 
 `gowdk build` also writes `gowdk-assets.json` in the selected output directory.
 It records generated spa assets that are not route entries, plus cache metadata
-for route HTML when a page declares `@cache`. Today that means CSS files emitted
+for route HTML when a page declares `cache`. Today that means CSS files emitted
 by compile-time CSS processors, `gowdk.js` when server fragment forms need it,
 generated default JS island files, WASM island files/loaders, and
 page-level cache policies:

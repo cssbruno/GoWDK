@@ -6,7 +6,7 @@ Spec: `.llm/features/scoped-js-assets.md`
 
 ## Assumptions
 
-- `js` is a source declaration, not an `@annotation`.
+- `js` is a source declaration, not an `@metadata declaration`.
 - Path-based declarations are preferred over inline `js {}` blocks.
 - TypeScript support means transform-only output, not type checking.
 - Bundling and dependency graph handling are separate future work.

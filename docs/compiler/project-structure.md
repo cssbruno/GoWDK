@@ -63,14 +63,14 @@ view {
 
 The quoted `use` target is a discovered `.gwdk` package name. Pages and
 components can use qualified component calls through their own scoped aliases.
-Pages use qualified layout references with `@layout alias.id`, components use
+Pages use qualified layout references with `layout alias.id`, components use
 qualified stores from client blocks with `use alias.store`, and pages select
-cross-package CSS assets with `@css alias.name`. Bare store and asset names are
+cross-package CSS assets with `css alias.name`. Bare store and asset names are
 same-package selections or built-in selections; cross-package lookup is never
 implicit.
 
 Current file-kind classification treats files ending in `.cmp.gwdk` or
-containing `@component` as components, files ending in `.layout.gwdk` as layout
+containing `component` as components, files ending in `.layout.gwdk` as layout
 files, files ending in `.asset.gwdk` as asset-adjacent planning files, files
 ending in `.plugin.gwdk` as plugin-adjacent planning files, and other `.gwdk`
 inputs as pages. Layout, asset, and plugin-adjacent files are classified so

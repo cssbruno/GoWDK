@@ -51,9 +51,9 @@ type Handler struct {
 	SSRExact   HandlerFunc
 	SSRDynamic HandlerFunc
 
-	// Denied holds concrete page routes that declared no @guard. Such a page is
+	// Denied holds concrete page routes that declared no guard. Such a page is
 	// not public by default: its GET/HEAD route returns 403 until the author
-	// opts in with @guard public (or a protective guard for request-time pages).
+	// opts in with guard public (or a protective guard for request-time pages).
 	// Keyed by exact route path.
 	Denied map[string]bool
 

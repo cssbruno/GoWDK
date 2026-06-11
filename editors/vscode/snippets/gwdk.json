@@ -4,11 +4,11 @@
     "body": [
       "package ${1:app}",
       "",
-      "@page ${2:home}",
-      "@route \"${3:/}\"",
-      "@title \"${4:Home}\"",
-      "@description \"${5:Compile-first Go web output.}\"",
-      "@layout ${6:root}",
+      "page ${2:home}",
+      "route \"${3:/}\"",
+      "title \"${4:Home}\"",
+      "description \"${5:Compile-first Go web output.}\"",
+      "layout ${6:root}",
       "",
       "view {",
       "  ${0:<h1>GOWDK</h1>}",
@@ -21,11 +21,11 @@
     "body": [
       "package ${1:app}",
       "",
-      "@page ${2:blog.post}",
-      "@route \"${3:/blog/{slug}}\"",
-      "@title \"${4:Blog post}\"",
-      "@description \"${5:Compile-first Go web output.}\"",
-      "@layout ${6:root, blog}",
+      "page ${2:blog.post}",
+      "route \"${3:/blog/{slug}}\"",
+      "title \"${4:Blog post}\"",
+      "description \"${5:Compile-first Go web output.}\"",
+      "layout ${6:root, blog}",
       "",
       "paths {",
       "  ${7:=> { slug: \"hello\" }}",
@@ -72,7 +72,7 @@
   "CSS selection": {
     "prefix": "css",
     "body": [
-      "@css ${1|default page,default page forms,reset tokens forms,none|}"
+      "css ${1|default page,default page forms,reset tokens forms,none|}"
     ],
     "description": "Select page CSS inputs"
   },
@@ -81,12 +81,12 @@
     "body": [
       "package ${1:app}",
       "",
-      "@page ${2:dashboard}",
-      "@route \"${3:/dashboard}\"",
-      "@title \"${4:Dashboard}\"",
-      "@description \"${5:Request-time Go page output.}\"",
-      "@layout ${6:root, dashboard}",
-      "@guard ${7:auth.required}",
+      "page ${2:dashboard}",
+      "route \"${3:/dashboard}\"",
+      "title \"${4:Dashboard}\"",
+      "description \"${5:Request-time Go page output.}\"",
+      "layout ${6:root, dashboard}",
+      "guard ${7:auth.required}",
       "",
       "load {",
       "  ${8:// request-time data}",
@@ -103,7 +103,7 @@
     "body": [
       "package ${1:app}",
       "",
-      "@component ${2:Option}",
+      "component ${2:Option}",
       "",
       "props {",
       "  ${3:Label string}",

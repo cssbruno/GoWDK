@@ -2,7 +2,7 @@
   "scopeName": "source.gwdk",
   "patterns": [
     { "include": "#comments" },
-    { "include": "#annotations" },
+    { "include": "#metadata" },
     { "include": "#strings" },
     { "include": "#client" },
     { "include": "#blocks" },
@@ -18,11 +18,11 @@
         }
       ]
     },
-    "annotations": {
+    "metadata": {
       "patterns": [
         {
-          "name": "keyword.control.annotation.gwdk",
-          "match": "@(?:page|route|title|description|canonical|image|layout|render|guard|component|css)\\b"
+          "name": "keyword.control.metadata.gwdk",
+          "match": "\\b(?:page|route|title|description|canonical|image|layout|render|guard|component|css|cache|revalidate|error|wasm|asset)\\b"
         }
       ]
     },

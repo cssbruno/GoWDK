@@ -4,12 +4,12 @@ This is the grammar accepted by the current metadata parser. It is intentionally
 
 ```text
 file        = line*
-line        = blank | comment | packageDecl | annotation | importDecl | useDecl | blockDecl | goDecl | actionDecl | apiDecl | unsupportedBlock | other
+line        = blank | comment | packageDecl | metadataDecl | importDecl | useDecl | blockDecl | goDecl | actionDecl | apiDecl | unsupportedBlock | other
 blank       = whitespace*
 comment     = whitespace* "//" text
 
 packageDecl = "package" whitespace+ ident
-annotation  = "@" ident value
+metadataDecl = metadataKeyword value
 importDecl  = "import" (whitespace+ ident)? whitespace+ string
 useDecl     = "use" whitespace+ ident whitespace+ string
 blockDecl   = ("paths" | "build" | "load" | "view" | "style") whitespace* "{"
@@ -39,7 +39,7 @@ literalField  = ident ":" string
 buildCall     = "=>" whitespace* ident "." ident "()"
 ```
 
-Unknown or malformed annotations fail at parse time. Unsupported top-level block
+Unknown or malformed legacy metadatas fail at parse time. Unsupported top-level block
 declarations fail when they have an identifier-like first token and a trailing
 `{`. SPA builds also accept the first imported `buildCall` subset when the
 page declares the referenced import.

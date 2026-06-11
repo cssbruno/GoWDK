@@ -69,8 +69,8 @@ package pages
 
 use widgets "components"
 
-@route "/"
-@guard public
+route "/"
+guard public
 
 build {
   => { title: "GoWDK ships apps" }
@@ -106,7 +106,7 @@ package components
 
 import ui "github.com/acme/hello-gowdk/ui"
 
-@component Counter
+component Counter
 
 state ui.CounterState = ui.NewCounterState()
 
@@ -180,7 +180,7 @@ still tracked in the hardening backlog.
 | SSR | Partial | Pages with `load {}` or `go ssr {}` can build request-time handlers when the SSR addon is enabled. | Typed route-param accessors, lifecycle docs, and error/cache contracts need more hardening. | [SSR](docs/language/ssr.md) | [SSR](examples/ssr/simple-ssr.page.gwdk) |
 | Hybrid | Partial | Hybrid request-time route metadata and generated request-time pages exist for the supported slice. | The public hybrid source contract, streaming, and data refresh policy are not stable. | [Hybrid](docs/language/hybrid.md) | [Hybrid](examples/ssr/hybrid-static.page.gwdk) |
 | Components | Partial | Components support imported contracts, slots, scoped CSS/assets, first local client behavior, and generated island assets. | Non-string props, richer slots/events, real `g:if`/`g:for`, lifecycle cleanup, and dependency diagnostics are planned. | [Components](docs/language/components.md) | [Components](examples/components/base/base-components.page.gwdk) |
-| WASM islands | Partial | Component-level `@wasm` and page-level `go client {}` can emit Go `js/wasm` browser assets for supported fixtures. | ABI docs, size reporting, runtime validation, and browser behavior coverage need hardening. | [Components](docs/language/components.md) | [Test fixture](testfixture/islands/islands.go) |
+| WASM islands | Partial | Component-level `wasm` and page-level `go client {}` can emit Go `js/wasm` browser assets for supported fixtures. | ABI docs, size reporting, runtime validation, and browser behavior coverage need hardening. | [Components](docs/language/components.md) | [Test fixture](testfixture/islands/islands.go) |
 | CSS/assets | Partial | CSS processors, page CSS, scoped component CSS, component assets, asset manifests, content-hashed filenames, and optional Tailwind wrapper exist. | CSS processor contracts and optional dependency boundaries need hardening. | [CSS](docs/reference/css.md) | [CSS](examples/css/styled.page.gwdk) |
 | One-binary output | Partial | `gowdk build --app --bin` can generate and compile an embedded Go server for supported SPA/backend/SSR slices. | Runtime operations, split/backend-only deploys, and artifact smoke coverage are still expanding. | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) |
 | Contracts | Partial | Runtime contracts support typed queries, commands, events, jobs, role filtering, local dispatch, file outbox, broker/fanout adapters, contract graph/trace/list commands, and generated `g:command`/`g:query` web adapters. | Split worker/cron generation, retry policy, managed deployment recipes, and editor-first contract visualization remain planned. | [Contracts](docs/reference/contracts.md) | [Runtime contracts](runtime/contracts) |

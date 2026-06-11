@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	annotationPattern       = linePattern{parse: parseAnnotationLine}
+	metadataPattern         = linePattern{parse: parseMetadataLine}
 	packagePattern          = linePattern{parse: parsePackageLine}
 	importPattern           = linePattern{parse: parseImportLine}
 	usePattern              = linePattern{parse: parseUseLine}
@@ -268,16 +268,12 @@ func (parser *lineParser) peek() lineToken {
 	return parser.tokens[parser.pos]
 }
 
-func parseAnnotationLine(line string) []string {
+func parseMetadataLine(line string) []string {
 	line = strings.TrimSpace(line)
-	if !strings.HasPrefix(line, "@") {
-		return nil
-	}
-	nameStart := 1
-	nameEnd := nameStart
+	nameEnd := 0
 	for nameEnd < len(line) {
 		r, size := runeAt(line, nameEnd)
-		if nameEnd == nameStart {
+		if nameEnd == 0 {
 			if !isIdentStart(r) {
 				return nil
 			}
@@ -286,10 +282,29 @@ func parseAnnotationLine(line string) []string {
 		}
 		nameEnd += size
 	}
-	if nameEnd == nameStart {
+	if nameEnd == 0 {
 		return nil
 	}
-	return []string{line, line[nameStart:nameEnd], strings.TrimSpace(line[nameEnd:])}
+	name := line[:nameEnd]
+	if !isMetadataKeyword(name) {
+		return nil
+	}
+	if nameEnd < len(line) {
+		r, _ := runeAt(line, nameEnd)
+		if !unicode.IsSpace(r) {
+			return nil
+		}
+	}
+	return []string{line, name, strings.TrimSpace(line[nameEnd:])}
+}
+
+func isMetadataKeyword(name string) bool {
+	switch name {
+	case "page", "route", "title", "description", "canonical", "image", "layout", "cache", "revalidate", "error", "guard", "css", "component", "wasm", "asset", "plugin":
+		return true
+	default:
+		return false
+	}
 }
 
 func parsePackageLine(line string) []string {
@@ -737,9 +752,6 @@ func (parser *lineParser) qualifiedIdent() (string, string, bool) {
 func (parser *lineParser) optionalErrorString() (string, bool) {
 	if parser.peek().kind == lineTokenEOF {
 		return "", true
-	}
-	if _, ok := parser.match(lineTokenAt); !ok {
-		return "", false
 	}
 	if !parser.matchIdent("error") {
 		return "", false

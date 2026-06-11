@@ -1,9 +1,9 @@
 package pages
 
-@page blog.post
-@route "/blog/{slug}"
-@guard public
-@layout root, blog
+page blog.post
+route "/blog/{slug}"
+guard public
+layout root, blog
 
 paths {
   => { slug: "hello-gowdk" }

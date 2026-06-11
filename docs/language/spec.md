@@ -30,13 +30,13 @@ files do not derive route identity from folders.
 
 Current file kinds:
 
-- Page files declare `@route` and `view {}`. `@guard` is optional but a page is
-  not public by default (see below). They may declare `@page` when they need an
+- Page files declare `route` and `view {}`. `guard` is optional but a page is
+  not public by default (see below). They may declare `page` when they need an
   explicit stable page ID.
-- Component files declare `@component` and usually `view {}`.
+- Component files declare `component` and usually `view {}`.
 - Layout files take their identity from the file name (`root.layout.gwdk`
   declares the layout `root`) and declare `view {}` with exactly one `<slot />`.
-  They may declare `@layout` to name the parent layout(s) they nest within.
+  They may declare `layout` to name the parent layout(s) they nest within.
 
 Planned or partial file kinds:
 
@@ -49,39 +49,40 @@ Planned or partial file kinds:
 Line comments start with `//`. Empty lines and line comments are ignored by the
 metadata parser outside block bodies.
 
-## Annotations
+## Metadata
 
-Annotations start with `@` at the beginning of the trimmed line.
+Metadata declarations start at the beginning of the trimmed line.
 
-Implemented or partial annotations:
+Implemented or partial metadata declarations:
 
-- `@page <id>`
-- `@route "<path>"`
-- `@title "<text>"`
-- `@description "<text>"`
-- `@canonical "<url>"`
-- `@image "<url>"`
-- `@layout <id>[, <id>...]`
-- `@cache "<policy>"`
-- `@revalidate <seconds|duration>`
-- `@error "<path.html>"`
-- `@guard <id>[, <id>...]`
-- `@component <Name>`
+- `page <id>`
+- `route "<path>"`
+- `title "<text>"`
+- `description "<text>"`
+- `canonical "<url>"`
+- `image "<url>"`
+- `layout <id>[, <id>...]`
+- `cache "<policy>"`
+- `revalidate <seconds|duration>`
+- `error "<path.html>"`
+- `guard <id>[, <id>...]`
+- `component <Name>`
 
-Unknown annotations are errors. Malformed `@` lines are errors.
+Unknown metadata declarations are errors. Lines starting with `@` are malformed
+legacy metadata.
 
-`@guard` is optional on page sources, but a page is not public by default. A
+`guard` is optional on page sources, but a page is not public by default. A
 guardless page builds with a `missing_page_guard` warning and its route is
-denied (403) at request time until access is stated. Use `@guard public` to
+denied (403) at request time until access is stated. Use `guard public` to
 serve a page on purpose, or custom/RBAC guard IDs such as `role:admin` when the
 page is protected. The full access contract — default-deny enforcement,
 `paths {}` and SSR coverage, and the backend-endpoint rule — lives in
 [guards.md](guards.md).
 
-`@page` is optional for file-backed page sources. When omitted, the compiler
+`page` is optional for file-backed page sources. When omitted, the compiler
 derives the page ID from the source filename by removing `.page.gwdk` or
 `.gwdk`. For example, `src/pages/blog-post.page.gwdk` derives page ID
-`blog-post`. Add `@page blog.post` when a route, filename, or file location
+`blog-post`. Add `page blog.post` when a route, filename, or file location
 change must not change page identity.
 
 ## Imports And Uses
@@ -109,7 +110,7 @@ discovered GOWDK sources, not Go import paths.
 Routes are explicit:
 
 ```gwdk
-@route "/patients/{id:int}"
+route "/patients/{id:int}"
 ```
 
 Current route rules:
@@ -191,7 +192,7 @@ api Health GET "/api/health"
 Endpoint-local error pages are supported:
 
 ```gwdk
-act Submit POST "/signup" @error "/errors/signup.html"
+act Submit POST "/signup" error "/errors/signup.html"
 ```
 
 Current rules:
@@ -230,7 +231,7 @@ message families) rather than being treated as raw HTML or silently ignored.
 
 ## Components
 
-Components use `@component <Name>`. They can define props and state contracts
+Components use `component <Name>`. They can define props and state contracts
 through imported Go types and can render same-package or `use`-qualified child
 components.
 
@@ -238,7 +239,7 @@ Current component support is partial:
 
 - String-like props and first typed Go prop/state contracts are supported.
 - Component CSS and assets can be scoped and emitted.
-- Component-level `@wasm` can emit browser WASM island assets.
+- Component-level `wasm` can emit browser WASM island assets.
 - Rich non-string props, broad lifecycle behavior, child-to-parent events, and
   a full reactive graph are planned.
 

@@ -1,8 +1,8 @@
 package fixtures
 
-@page docs.post
-@route "/docs/{slug}"
-@guard public
+page docs.post
+route "/docs/{slug}"
+guard public
 
 paths {
   => { slug: "getting-started" }

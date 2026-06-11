@@ -2,8 +2,8 @@
 // the auth feature and ships a working, dependency-free identity implementation:
 // PBKDF2 password hashing and signed-cookie sessions, all on the Go standard
 // library. It builds on the native RBAC guard machinery in runtime/auth, so
-// pages and routes protected with @guard role:... / @guard permission:... /
-// @guard public resolve through a session-backed Provider.
+// pages and routes protected with guard role:... / guard permission:... /
+// guard public resolve through a session-backed Provider.
 //
 // GOWDK still does not own your user store. Look users up however you like, then
 // hand the addon a Principal to issue a session for; the addon owns hashing,

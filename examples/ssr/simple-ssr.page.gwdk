@@ -1,8 +1,8 @@
 package ssr
 
-@page simple.ssr
-@route "/ssr"
-@guard public
+page simple.ssr
+route "/ssr"
+guard public
 
 go ssr {
 }

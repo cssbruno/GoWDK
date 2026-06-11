@@ -1,8 +1,8 @@
 package componentcss
 
-@page component.css
-@route "/components/css"
-@guard public
+page component.css
+route "/components/css"
+guard public
 
 view {
   <main>

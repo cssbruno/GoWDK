@@ -4,7 +4,7 @@ The first component slice is implemented for SPA build output.
 
 Implemented today:
 
-- Explicit or discovered `.cmp.gwdk` build inputs with `@component Name`.
+- Explicit or discovered `.cmp.gwdk` build inputs with `component Name`.
 - Optional `props { name string }` declarations.
 - Component-local Go imports using normal module import paths, such as
   `import ui "github.com/acme/app/ui"`.
@@ -53,7 +53,7 @@ Implemented today:
   can declare explicit dependencies with `use cart`; the compiler validates
   store type/init contracts and rejects unknown store uses. Runtime shared-state
   subscriptions are still planned.
-- A component can declare `@wasm ./browser/counter` to compile a browser-side
+- A component can declare `wasm ./browser/counter` to compile a browser-side
   Go package and make normal calls to that component use the WASM island
   runtime by default. The package is built with
   `GOOS=js GOARCH=wasm`, must produce a real browser WASM module, and must not
@@ -61,14 +61,14 @@ Implemented today:
   `database/sql`, raw `syscall`, `plugin`, or `unsafe`.
 - A component call can explicitly request the WASM island artifact with
   `<Counter g:island="wasm" />` when a call-site override is needed. If the
-  component has no `@wasm` package, GOWDK still emits the first-slice
+  component has no `wasm` package, GOWDK still emits the first-slice
   placeholder module plus loader shape for that explicit call.
 - Duplicate component names are rejected during manifest validation.
 - Redundant component implementations are rejected during manifest validation
   with `redundant_component_implementation`, even when their names differ.
-- Component `@css` declarations are parsed, lowered into compiler metadata,
+- Component `css` declarations are parsed, lowered into compiler metadata,
   emitted as scoped component CSS, linked from generated pages, content-hashed,
-  manifest-mapped, and served with immutable cache headers. Component `@asset`
+  manifest-mapped, and served with immutable cache headers. Component `asset`
   declarations are emitted as content-hashed files under
   `assets/gowdk/components/<package>/<component>/`, manifest-mapped, and served
   with immutable cache headers.
@@ -102,7 +102,7 @@ package marketing
 
 use icons "icons"
 
-@component Hero
+component Hero
 
 view {
   <section><icons.Badge /></section>
@@ -114,7 +114,7 @@ view {
 Default slot:
 
 ```gwdk
-@component Card
+component Card
 
 view {
   <section><slot /></section>
@@ -124,7 +124,7 @@ view {
 Named slot:
 
 ```gwdk
-@component Panel
+component Panel
 
 view {
   <section>
@@ -137,7 +137,7 @@ view {
 Scoped slot:
 
 ```gwdk
-@component Row
+component Row
 
 props {
   label string
@@ -161,7 +161,7 @@ view {
 Typed emits:
 
 ```gwdk
-@component Option
+component Option
 
 props {
   ID string
@@ -198,14 +198,14 @@ exports {
 Stores are explicit page-scoped UI state:
 
 ```gwdk
-@route "/cart"
-@guard public
+route "/cart"
+guard public
 
 store cart ui.CartState = ui.NewCartState()
 ```
 
 ```gwdk
-@component CartButton
+component CartButton
 
 client {
   use cart
@@ -215,8 +215,8 @@ client {
 WASM islands are declared on the component:
 
 ```gwdk
-@component Counter
-@wasm ./browser/counter
+component Counter
+wasm ./browser/counter
 
 view {
   <button>Count</button>
@@ -313,7 +313,7 @@ database access, trusted server validation, action behavior, or cache/loading
 policy. Real routes, direct browser refresh, and server behavior stay owned by
 the compiler manifest, generated Go, and user Go handlers.
 
-Production WASM islands are declared with component-level `@wasm`. Normal calls
+Production WASM islands are declared with component-level `wasm`. Normal calls
 to that component use the WASM island runtime by default. The referenced package
 is browser-side Go compiled for `GOOS=js GOARCH=wasm` with server and process
 packages rejected. GOWDK validates the required component-scoped ABI entrypoints,
@@ -332,7 +332,7 @@ Not implemented yet:
 - Wiring generated Go component packages into the generated app layout.
 - Cross-package store and asset use syntax.
 - Emitting and rewriting component-scoped CSS and component-level assets from
-  the existing component `@css` and `@asset` metadata.
+  the existing component `css` and `asset` metadata.
 
 Component design rules:
 

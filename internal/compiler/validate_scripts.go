@@ -100,7 +100,7 @@ func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]
 			ComponentName: componentName,
 			Source:        sourcePath,
 			Span:          block.Span,
-			Message:       "go client {} is page-level client-side behavior; use a page go client {} block or a component @wasm package",
+			Message:       "go client {} is page-level client-side behavior; use a page go client {} block or a component wasm package",
 		}}
 	case target == "ssr":
 		if config.HasFeature(gowdk.FeatureSSR) {

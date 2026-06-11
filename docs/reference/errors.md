@@ -47,25 +47,25 @@ dist/
     dashboard.html
 ```
 
-Route-local SSR error pages use `@error`:
+Route-local SSR error pages use `error`:
 
 ```gwdk
-@route "/dashboard"
-@guard auth.required
-@error "/errors/dashboard.html"
+route "/dashboard"
+guard auth.required
+error "/errors/dashboard.html"
 
 load {
 }
 ```
 
-Endpoint-local action and API error pages also use `@error`:
+Endpoint-local action and API error pages also use `error`:
 
 ```gwdk
-act Submit POST "/signup" @error "/errors/signup.html"
-api Health GET "/api/health" @error "/errors/api-health.html"
+act Submit POST "/signup" error "/errors/signup.html"
+api Health GET "/api/health" error "/errors/api-health.html"
 ```
 
-`@error` paths are output-relative. They may start with `/`, must end in
+`error` paths are output-relative. They may start with `/`, must end in
 `.html`, and must not contain `..`, query strings, fragments, or backslashes.
 Missing error documents fall back to `http.Error`.
 
@@ -73,7 +73,7 @@ Missing error documents fall back to `http.Error`.
 
 Generated error responses use `Cache-Control: no-store`.
 
-This includes generated `404.html`, `500.html`, route-local `@error` pages,
+This includes generated `404.html`, `500.html`, route-local `error` pages,
 panic-boundary responses, invalid generated forms, invalid CSRF responses,
 validation failures, guard failures, missing backend stubs, and SSR load
 failures. Successful SSR pages use their declared page cache policy instead.
@@ -82,8 +82,8 @@ failures. Successful SSR pages use their declared page cache policy instead.
 
 Supported boundary syntax:
 
-- Page/route boundary: `@error` on SSR pages.
-- Endpoint boundary: `@error` on `act` and `api`.
+- Page/route boundary: `error` on SSR pages.
+- Endpoint boundary: `error` on `act` and `api`.
 - Global fallback pages: `404.html` and `500.html`.
 
 Not supported today:

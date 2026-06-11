@@ -15,7 +15,7 @@ SSR is optional and must not become the default framework identity.
   placeholders and request-time HTML escaping.
 - Generated SSR supports declared identifier and dotted-path fields such as
   `load { => { user, title, account.plan } }` and calls a same-package exported
-  Go function named `Load<PageID>`. `<PageID>` is the explicit `@page` value
+  Go function named `Load<PageID>`. `<PageID>` is the explicit `page` value
   when present, otherwise the filename-derived page ID.
 - Supported load function signatures are
   `func LoadDashboard(ssr.LoadContext) map[string]any` and
@@ -27,28 +27,28 @@ SSR is optional and must not become the default framework identity.
   `ssr.Redirect("/login", http.StatusTemporaryRedirect)` to ask generated SSR
   handlers to write a no-store local redirect. Redirect URLs must be local
   absolute paths.
-- `@error "/errors/dashboard.html"` declares a route-local generated HTML
+- `error "/errors/dashboard.html"` declares a route-local generated HTML
   error document for SSR load failures, generated render failures, and route
   panics before response headers are written on that page. The path is
   output-relative, may be written with a leading slash, must end in `.html`,
   and must not contain `..`, query strings, fragments, or backslashes.
 - Generated embedded apps load optional `404.html` and `500.html` documents
-  from build output, plus any route-local `@error` documents selected by SSR
+  from build output, plus any route-local `error` documents selected by SSR
   routes. Missing error documents fall back to `http.Error`.
 - Generated SSR route handlers run inside a runtime panic boundary. A panic
   before response headers are written becomes a no-store HTTP 500 response,
-  using the route-local `@error` page when declared or `500.html` when present,
+  using the route-local `error` page when declared or `500.html` when present,
   without exposing the panic value.
 - The SSR addon exposes a small router registration contract for generated SSR
   page handlers.
 - The SSR addon provides a default HTTP 500 error handler contract for
   request-time SSR failures.
-- `@guard` is optional, but a page is not public by default: a page that
-  declares no `@guard` warns (`missing_page_guard`) and its route is denied
+- `guard` is optional, but a page is not public by default: a page that
+  declares no `guard` warns (`missing_page_guard`) and its route is denied
   (403) at request time until access is stated (see
-  [guards.md](guards.md) for the full access contract). `@guard public` marks an
+  [guards.md](guards.md) for the full access contract). `guard public` marks an
   intentionally public page and must stand alone. Non-public guards use
-  comma-separated guard IDs such as `@guard auth.required, billing.active`.
+  comma-separated guard IDs such as `guard auth.required, billing.active`.
   Protected page guards require request-time page rendering so the page GET
   route can be gated before HTML is returned. The SSR addon exposes
   `GuardFunc`, `GuardRegistry`, and ordered guard execution contracts.

@@ -1,6 +1,6 @@
 package shop
 
-@component ProductCard
+component ProductCard
 
 props {
   title string

@@ -15,20 +15,20 @@ Implemented today:
 - `gowdk-build-report.json` records build-output generator validation, planning,
   write, manifest, cleanup, and completion events for every successful disk
   build.
-- Page `@title`, `@description`, `@canonical`, `@image`, app-level
+- Page `title`, `description`, `canonical`, `image`, app-level
   `Build.Head`, configured stylesheets, and CSS processor stylesheet links are
   emitted in page `<head>` elements. `Build.Head` enables favicon, Open Graph,
   and Twitter card tags without a post-build patcher.
 - CSS processors can emit CSS asset files under the output directory.
 - Discovered page CSS inputs selected by implicit `default page` or explicit
-  `@css` annotations are concatenated into generated page CSS files. Page
+  `css` metadata declarations are concatenated into generated page CSS files. Page
   `style {}` CSS is appended to the same generated page CSS asset.
 - Page `js "./file.js"` declarations are copied under
   `assets/gowdk/pages/<page>/` and linked only from that page as module scripts.
   Page `js "./file.ts"` declarations are transformed to `.js` files in the same
   directory. Inline page `js {}` blocks emit deterministic files such as
   `inline-gowdk.js`.
-- Component `@css` files are emitted as scoped CSS assets, linked from
+- Component `css` files are emitted as scoped CSS assets, linked from
   generated pages, content-hashed, recorded in `gowdk-assets.json`, and served
   with immutable cache headers by generated binaries. Component `style {}` CSS
   is emitted through the same scoped CSS path.
@@ -93,15 +93,15 @@ Implemented today:
   formatting-only whitespace.
 - Generated build output emits `assets/gowdk/islands/<Component>.wasm` plus
   `assets/gowdk/islands/<Component>.wasm.js` for normal calls to components
-  that declare `@wasm <package>`, and for explicit call-site overrides that set
-  `g:island="wasm"`. When the component declares `@wasm <package>`, GOWDK runs
+  that declare `wasm <package>`, and for explicit call-site overrides that set
+  `g:island="wasm"`. When the component declares `wasm <package>`, GOWDK runs
   `GOOS=js GOARCH=wasm go build` for that package and writes the compiled
   browser WASM module to the component asset path plus
   `assets/gowdk/islands/wasm_exec.js` for Go's browser runtime imports. Local
   packages are checked for browser-safe imports before build; server, process,
   and network packages such as `net/http`, `os/exec`, and `database/sql` are
   rejected. A package that does not produce a WASM module or omits required ABI
-  exports fails the build. Components without `@wasm` keep the minimal
+  exports fails the build. Components without `wasm` keep the minimal
   placeholder module for the loader-shape slice and do not ship `wasm_exec.js`.
   The loader discovers matching island roots, builds the ADR-defined bootstrap
   object from state, props, emits, refs, and binding metadata, calls
@@ -119,14 +119,14 @@ Implemented today:
 - Generated embedded apps load optional `404.html` and `500.html` from the
   embedded build output and use those pages for not-found responses and
   generated SSR load failures. SSR routes can also declare
-  `@error "/errors/page.html"` to use a generated route-local HTML error page
+  `error "/errors/page.html"` to use a generated route-local HTML error page
   for load failures, generated render failures, and route panics before
   falling back to `500.html`.
 - Generated SSR, action, and API request-time lanes recover panics before
   response headers are written as no-store HTTP 500 responses without exposing
-  panic values. SSR route panics use a declared route-local `@error` page when
+  panic values. SSR route panics use a declared route-local `error` page when
   one is available. Action and API declarations can also use endpoint-local
-  `@error "/errors/name.html"` pages for generated panic boundaries.
+  `error "/errors/name.html"` pages for generated panic boundaries.
 - Generated apps can return partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests and standalone
   `fragment Name GET "/path" "#target" { ... }` routes. Standalone fragment
@@ -144,8 +144,8 @@ Implemented today:
 - `/patients` maps to `patients/index.html`.
 - Current asset names are stable and deterministic. `gowdk-assets.json`
   records content hashes and cache policy for generated CSS/runtime assets and
-  component-level `@asset` files. Generated CSS is minified and emitted with
-  content-hashed filenames. Component `@asset` files are emitted with
+  component-level `asset` files. Generated CSS is minified and emitted with
+  content-hashed filenames. Component `asset` files are emitted with
   content-hashed filenames under `assets/gowdk/components/`.
 - Generated embedded apps skip local environment files, source maps, source
   files, VCS/dependency directories, and common temporary artifacts when copying
@@ -240,7 +240,7 @@ Request-time action/API dispatch registers generated backend routes with
 older separate action/API hook fields remain a compatibility path for existing
 generated apps.
 It loads `gowdk-assets.json`, `404.html`, `500.html`, and route-local SSR
-`@error` pages from the embedded build output filesystem when present.
+`error` pages from the embedded build output filesystem when present.
 Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 `GOWDK_INSTANCE_ID`; if no instance ID is provided, the app creates one at
 process start from the module name, hostname, and a random token. It can also
@@ -248,7 +248,7 @@ serve auto-detected POST redirect handlers for the first supported action
 subset and supported SSR/hybrid pages with or without declared `load {}`
 identifier or dotted paths. SSR load functions can return safe local redirects with
 `ssr.RedirectTo`/`ssr.Redirect`, and generated SSR load failures render the
-route-local `@error` page when declared or the optional `500.html` when
+route-local `error` page when declared or the optional `500.html` when
 present.
 Action handlers decode allowlisted form fields into named input wrappers,
 cap request bodies before parsing, preserve repeated values, return HTTP 413
@@ -325,7 +325,7 @@ generated assets, and `cache` records the HTTP cache policy generated binaries
 should apply when serving generated assets or route HTML files. The current
 implementation records CSS files emitted by CSS processors, generated page CSS
 files, partial runtime assets, generated island runtime assets, generated island
-source maps, and page-level `@cache` policies for generated SPA HTML. It does
+source maps, and page-level `cache` policies for generated SPA HTML. It does
 not record configured stylesheet URLs that were not written by the build.
 
 ## Current Build Report

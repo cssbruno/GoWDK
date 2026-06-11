@@ -1,9 +1,9 @@
 package pages
 
-@page home
-@route "/"
-@guard public
-@layout root
+page home
+route "/"
+guard public
+layout root
 
 build {
   => { title: "GOWDK", tagline: "Portable Go web compiler" }

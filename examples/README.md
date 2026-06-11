@@ -31,8 +31,8 @@ even when explicit `.gwdk` files are passed.
 | `css/styled.page.gwdk` | Configured stylesheet-link example. | `go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk` |
 | `tailwind/site.page.gwdk` | Tailwind v4 addon example using the standalone CLI. | `go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk` |
 | `components/base/base-components.page.gwdk` | Source-level base component examples for `Button`, `TextField`, and `Card`. | `go run ./cmd/gowdk build --out /tmp/gowdk-base-components examples/components/base/*.gwdk` |
-| `components/css/scoped-card.page.gwdk` | Component-local `@css` metadata example. | `go run ./cmd/gowdk check examples/components/css/*.gwdk` |
-| `components/assets/asset-badge.page.gwdk` | Component-local `@asset` metadata and emitted asset manifest example. | `go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk` |
+| `components/css/scoped-card.page.gwdk` | Component-local `css` metadata example. | `go run ./cmd/gowdk check examples/components/css/*.gwdk` |
+| `components/assets/asset-badge.page.gwdk` | Component-local `asset` metadata and emitted asset manifest example. | `go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk` |
 
 Check all current examples with SSR validation enabled:
 
@@ -172,7 +172,7 @@ grep -F 'assets/gowdk/components/componentassets/AssetBadge/badge.' /tmp/gowdk-c
   `build { => alias.Func() }` for a no-argument Go function returning a JSON
   object. Generated action, API, partial, and `load {}` user handler wiring is
   implemented for the supported first request-time signatures.
-- `@guard` is enforced by generated SSR/action/API handlers. Custom guarded
+- `guard` is enforced by generated SSR/action/API handlers. Custom guarded
   routes require `GOWDKGuardRegistry`; native RBAC guard IDs such as
   `role:admin` require `GOWDKAuthProvider`.
 - Route params from literal `paths {}` are available to the current

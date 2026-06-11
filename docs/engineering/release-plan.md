@@ -287,7 +287,7 @@ Every 0.x minor release must have:
 - [ ] Add parser recovery so one syntax error does not hide the rest of the
   file.
 - [ ] Add exact spans and suggestions for package declarations, imports, `use`,
-  annotations, routes, layouts, render modes, `paths`, `build`, `load`, `view`,
+  metadata declarations, routes, layouts, render modes, `paths`, `build`, `load`, `view`,
   `style`, `client`, `go`, `go ssr`, `go client`, `go addon.*`, actions, APIs,
   fragments, component props, component state, and WASM declarations.
 - [ ] Add suggestions for missing config, missing SSR feature, duplicate routes,
@@ -299,7 +299,7 @@ Every 0.x minor release must have:
 - [ ] Add parser, route matcher, view parser, and form decoder fuzz tests.
 - [ ] Write a formal `.gwdk` language spec covering file kinds, package rules,
   Go imports, component `use`, layout references, asset references, addon
-  references, annotations, blocks, expressions, view markup, component calls,
+  references, metadata declarations, blocks, expressions, view markup, component calls,
   slots, event bindings, class/style directives, `g:` directives, comments,
   reserved words, Go identifier mapping, route params, dynamic paths, raw HTML
   policy, unsupported syntax behavior, deprecation policy, and 0.x
@@ -415,10 +415,10 @@ Every 0.x minor release must have:
 - [ ] Add route/build report output that shows hybrid clearly.
 - [ ] Document static asset, SPA HTML, SSR HTML, API, action, fragment, and
   hybrid cache policy.
-- [ ] Document `@cache` and `@revalidate`.
+- [ ] Document `cache` and `revalidate`.
 - [ ] Add route report cache column and build report cache section.
 - [ ] Test immutable asset cache, SPA `no-cache`, request-time `no-store`,
-  `@cache`, `@revalidate`, and invalid `@revalidate`.
+  `cache`, `revalidate`, and invalid `revalidate`.
 - [ ] Document guard syntax, required backing hooks, guard failure behavior, and
   support matrix for SSR, actions, APIs, fragments, and hybrid.
 - [ ] Document request context helpers for request, params, CSRF, session, and
@@ -472,8 +472,8 @@ Every 0.x minor release must have:
 - [ ] Document Tailwind installation through user-owned toolchains and
   `tailwind.Options.Command`.
 - [ ] Document CSS processor API, page-aware processors, scoped component CSS,
-  component `@css`, component `style {}`, layout `style {}`, component
-  `@asset`, non-CSS assets, image/font/icon assets, asset manifest helpers,
+  component `css`, component `style {}`, layout `style {}`, component
+  `asset`, non-CSS assets, image/font/icon assets, asset manifest helpers,
   content hashing, immutable cache, CSS ordering, duplicate CSS warnings,
   unused CSS warnings, missing asset diagnostics, asset graph command, and
   `gowdk inspect assets`.

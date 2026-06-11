@@ -245,15 +245,14 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 			return gwdkir.Component{}, fmt.Errorf("line %d: malformed js declaration %q", lineNumber, line)
 		}
 
-		if strings.HasPrefix(line, "@") {
-			match := annotationPattern.FindStringSubmatch(line)
-			if match == nil {
-				return gwdkir.Component{}, fmt.Errorf("line %d: malformed annotation %q", lineNumber, line)
-			}
+		if match := metadataPattern.FindStringSubmatch(line); match != nil {
 			if err := applyComponentAnnotation(&component, match[1], match[2], lineNumber, rawLine); err != nil {
 				return gwdkir.Component{}, fmt.Errorf("line %d: %w", lineNumber, err)
 			}
 			continue
+		}
+		if strings.HasPrefix(line, "@") {
+			return gwdkir.Component{}, fmt.Errorf("line %d: malformed legacy metadata %q", lineNumber, line)
 		}
 
 		if match := componentTypePattern.FindStringSubmatch(line); match != nil {
@@ -389,7 +388,7 @@ func ParseComponent(src []byte) (gwdkir.Component, error) {
 		return gwdkir.Component{}, fmt.Errorf("go block missing closing }")
 	}
 	if component.Name == "" {
-		return gwdkir.Component{}, fmt.Errorf("missing @component")
+		return gwdkir.Component{}, fmt.Errorf("missing component")
 	}
 	return component, nil
 }

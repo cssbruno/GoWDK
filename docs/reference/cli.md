@@ -183,7 +183,7 @@ them. The command exits non-zero only when at least one check is an error.
 
 `--wasm` produces a Go `js/wasm` compile artifact from the generated app. This
 is a deploy artifact for hosts that can run Go WebAssembly; it is separate from
-component-level browser island assets emitted for `@wasm` components.
+component-level browser island assets emitted for `wasm` components.
 
 `dev` is the one-command SPA development loop. It forwards non-dev flags to
 `build`, resolves the output directory from `--out`, exactly one selected

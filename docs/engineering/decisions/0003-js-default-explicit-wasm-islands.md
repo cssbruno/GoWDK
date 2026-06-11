@@ -22,7 +22,7 @@ with `state <alias>.<Type> = <alias>.<Init>()` renders initial state at build
 time and emits `assets/gowdk/islands/<Component>.js` when a page calls it
 without an island override.
 
-WASM is declared on the component with `@wasm <package>`. Normal calls to that
+WASM is declared on the component with `wasm <package>`. Normal calls to that
 component emit `assets/gowdk/islands/Counter.wasm` and
 `assets/gowdk/islands/Counter.wasm.js`. `g:island="wasm"` remains available as
 a call-site override for compatibility and targeted experiments. Unknown

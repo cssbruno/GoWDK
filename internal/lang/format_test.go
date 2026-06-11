@@ -8,9 +8,9 @@ import (
 )
 
 func TestFormatNormalizesTopLevelBlocks(t *testing.T) {
-	source := []byte("@page home\n\n@route \"/\"\n\n\nview {\n<h1>GOWDK</h1>\n}\n")
+	source := []byte("page home\n\nroute \"/\"\n\n\nview {\n<h1>GOWDK</h1>\n}\n")
 	got := string(Format(source))
-	want := "@page home\n@route \"/\"\n\nview {\n  <h1>GOWDK</h1>\n}\n"
+	want := "page home\nroute \"/\"\n\nview {\n  <h1>GOWDK</h1>\n}\n"
 	if got != want {
 		t.Fatalf("unexpected format:\n--- got ---\n%s--- want ---\n%s", got, want)
 	}
@@ -33,9 +33,9 @@ func TestFormatGoldenPreservesCommentsAndNestedMarkup(t *testing.T) {
 
 func TestFormatPreservesLinesLongerThanScannerLimit(t *testing.T) {
 	longLine := "<p>" + strings.Repeat("x", 70_000) + "</p>"
-	source := []byte("@page home\n@route \"/\"\n\nview {\n" + longLine + "\n}\n")
+	source := []byte("page home\nroute \"/\"\n\nview {\n" + longLine + "\n}\n")
 	got := string(Format(source))
-	want := "@page home\n@route \"/\"\n\nview {\n  " + longLine + "\n}\n"
+	want := "page home\nroute \"/\"\n\nview {\n  " + longLine + "\n}\n"
 	if got != want {
 		t.Fatalf("long line was truncated or reformatted (got %d bytes, want %d bytes)", len(got), len(want))
 	}
@@ -63,10 +63,10 @@ func TestFormatIsIdempotentForSupportedShapes(t *testing.T) {
 	tests := map[string]string{
 		"page": `package app
 
-@page home
+page home
 
 
-@route "/"
+route "/"
 
 view {
 <main>
@@ -76,7 +76,7 @@ view {
 `,
 		"component": `package components
 
-@component Hero
+component Hero
 
 props {
 title string
@@ -91,8 +91,8 @@ view {
 `,
 		"endpoints": `package app
 
-@page contact
-@route "/contact"
+page contact
+route "/contact"
 
 act Submit POST "/contact"
 api Status GET "/api/status"
@@ -121,8 +121,8 @@ view {
 func TestFormatDoesNotHideParserDiagnostics(t *testing.T) {
 	source := []byte(`package app
 
-@page home
-@route "/"
+page home
+route "/"
 
 act submit {
 }

@@ -4,7 +4,7 @@ import "github.com/cssbruno/gowdk/internal/lang"
 
 func semanticTokenType(kind lang.TokenKind) (string, bool) {
 	switch kind {
-	case lang.TokenAnnotation:
+	case lang.TokenMetadata:
 		return "decorator", true
 	case lang.TokenIdentifier, lang.TokenText:
 		return "variable", true

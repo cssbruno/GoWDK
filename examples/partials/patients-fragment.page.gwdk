@@ -1,8 +1,8 @@
 package partials
 
-@page patients
-@route "/patients"
-@guard public
+page patients
+route "/patients"
+guard public
 
 act Refresh POST "/patients"
 

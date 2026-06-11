@@ -14,10 +14,10 @@ import (
 
 func TestParsePageReadsSPADynamicRouteWithPathsAndBuild(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page blog.post
-@route "/blog/{slug}"
-@layout root, blog
-@css default page forms
+page blog.post
+route "/blog/{slug}"
+layout root, blog
+css default page forms
 
 import interop "github.com/cssbruno/gowdk/examples/go-interop"
 
@@ -75,10 +75,10 @@ view {
 		t.Fatalf("expected page import, got %#v", page.Imports)
 	}
 	if page.Spans.Route.Start.Line != 3 || page.Spans.Route.Start.Column != 1 {
-		t.Fatalf("expected route annotation span, got %#v", page.Spans.Route)
+		t.Fatalf("expected route metadata declaration span, got %#v", page.Spans.Route)
 	}
 	if len(page.Spans.RouteParams) != 1 || page.Spans.RouteParams[0].Name != "slug" ||
-		page.Spans.RouteParams[0].Span.Start.Line != 3 || page.Spans.RouteParams[0].Span.Start.Column != 15 {
+		page.Spans.RouteParams[0].Span.Start.Line != 3 || page.Spans.RouteParams[0].Span.Start.Column != 14 {
 		t.Fatalf("expected slug route param span, got %#v", page.Spans.RouteParams)
 	}
 	if page.Blocks.Spans.Paths.Start.Line != 9 || page.Blocks.Spans.Build.Start.Line != 14 || page.Blocks.Spans.View.Start.Line != 18 {
@@ -86,12 +86,12 @@ view {
 	}
 }
 
-func TestParsePageWithDefaultIDAllowsOmittedPageAnnotation(t *testing.T) {
+func TestParsePageWithDefaultIDAllowsOmittedPageMetadata(t *testing.T) {
 	page, err := ParsePageWithDefaultID([]byte(`
 package pages
 
-@route "/"
-@guard public
+route "/"
+guard public
 
 view {
   <main>Home</main>
@@ -108,13 +108,13 @@ view {
 	}
 }
 
-func TestParsePageWithDefaultIDKeepsExplicitPageAnnotation(t *testing.T) {
+func TestParsePageWithDefaultIDKeepsExplicitPageMetadata(t *testing.T) {
 	page, err := ParsePageWithDefaultID([]byte(`
 package pages
 
-@page marketing.home
-@route "/"
-@guard public
+page marketing.home
+route "/"
+guard public
 
 view {
   <main>Home</main>
@@ -128,10 +128,10 @@ view {
 	}
 }
 
-func TestParsePageRejectsUnknownAnnotation(t *testing.T) {
+func TestParsePageRejectsOldAtMetadata(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page home
-@route "/"
+page home
+route "/"
 @unknown nope
 
 view {
@@ -139,17 +139,17 @@ view {
 }
 `))
 	if err == nil {
-		t.Fatal("expected unknown annotation to be rejected")
+		t.Fatal("expected old metadata syntax to be rejected")
 	}
-	if !strings.Contains(err.Error(), "unsupported annotation @unknown") {
+	if !strings.Contains(err.Error(), `malformed legacy metadata "@unknown nope"`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestParsePageReadsStoreDeclaration(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page cart
-@route "/cart"
+page cart
+route "/cart"
 
 import ui "github.com/cssbruno/gowdk/testfixture/islands"
 
@@ -177,8 +177,8 @@ view {
 
 func TestParsePageReadsStyleBlockOutsideView(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page styled
-@route "/styled"
+page styled
+route "/styled"
 
 view {
   <main class="hero">Styled</main>
@@ -210,8 +210,8 @@ style {
 
 func TestParsePageNormalizesTypedRouteParams(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page patient
-@route "/patients/{id:int}"
+page patient
+route "/patients/{id:int}"
 view {
   <h1>Patient</h1>
 }
@@ -231,8 +231,8 @@ func TestParsePageReadsGOWDKUseDeclaration(t *testing.T) {
 	page, err := ParsePage([]byte(`
 package pages
 
-@page home
-@route "/"
+page home
+route "/"
 
 use ui "components"
 
@@ -259,9 +259,9 @@ func TestParsePageReadsQualifiedLayoutReference(t *testing.T) {
 	page, err := ParsePage([]byte(`
 package pages
 
-@page home
-@route "/"
-@layout chrome.root, local
+page home
+route "/"
+layout chrome.root, local
 
 use chrome "layouts"
 
@@ -282,12 +282,12 @@ view {
 
 func TestParsePageReadsDocumentMetadata(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page home
-@route "/"
-@title "GOWDK - Go-native web apps"
-@description "Portable .gwdk pages compiled into Go web output."
-@canonical "https://gowdk.com/"
-@image "https://gowdk.com/assets/wdk_logo.png"
+page home
+route "/"
+title "GOWDK - Go-native web apps"
+description "Portable .gwdk pages compiled into Go web output."
+canonical "https://gowdk.com/"
+image "https://gowdk.com/assets/wdk_logo.png"
 
 view {
   <main>Home</main>
@@ -317,8 +317,8 @@ func TestParsePageRejectsMalformedGOWDKUse(t *testing.T) {
 	_, err := ParsePage([]byte(`
 package pages
 
-@page home
-@route "/"
+page home
+route "/"
 
 use ui components
 
@@ -336,10 +336,10 @@ view {
 
 func TestParsePageReadsSSRLoadGuardAndActionEndpoint(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page dashboard
-@route "/dashboard"
-@layout root, dashboard
-@guard auth.required
+page dashboard
+route "/dashboard"
+layout root, dashboard
+guard auth.required
 
 load {
   user := session.User()
@@ -384,10 +384,10 @@ view {
 
 func TestParsePageReadsActionEndpointMetadata(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page newsletter
-@route "/newsletter"
+page newsletter
+route "/newsletter"
 
-act Subscribe POST "/newsletter" @error "/errors/subscribe.html"
+act Subscribe POST "/newsletter" error "/errors/subscribe.html"
 
 view {
   <main>Newsletter</main>
@@ -410,8 +410,8 @@ view {
 
 func TestParsePageReadsFragmentEndpointMetadata(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page patients
-@route "/patients"
+page patients
+route "/patients"
 
 fragment List GET "/patients/list" "#patients" {
   <section>Patients</section>
@@ -444,8 +444,8 @@ view {
 
 func TestParsePageRejectsOldActionBlockSyntax(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page patients
-@route "/patients"
+page patients
+route "/patients"
 
 act refresh {
   input := form FilterInput
@@ -469,7 +469,7 @@ view {
 
 func TestParseComponentReadsEmitsMetadata(t *testing.T) {
 	component, err := ParseComponent([]byte(`
-@component Child
+component Child
 
 emits {
   select(id string, active bool)
@@ -499,8 +499,8 @@ view {
 
 func TestParsePageRejectsLowercaseActionEndpoint(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page patients
-@route "/patients"
+page patients
+route "/patients"
 
 act refresh POST "/patients"
 
@@ -554,8 +554,8 @@ func TestParseGoldenFixture(t *testing.T) {
 
 func TestParsePageRejectsUnsupportedActionBodySyntax(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page newsletter
-@route "/newsletter"
+page newsletter
+route "/newsletter"
 
 act subscribe {
   send(input)
@@ -571,8 +571,8 @@ act subscribe {
 
 func TestParsePageRejectsMalformedImport(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page imported
-@route "/imported"
+page imported
+route "/imported"
 
 import interop github.com/cssbruno/gowdk/examples/go-interop
 
@@ -727,8 +727,8 @@ func parserGoldenProps(props []gwdkir.Prop) []parserGoldenProp {
 
 func TestParsePageRejectsUnsafeActionRedirect(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page newsletter
-@route "/newsletter"
+page newsletter
+route "/newsletter"
 
 act subscribe {
   input := form SubscribeInput
@@ -745,8 +745,8 @@ act subscribe {
 
 func TestParsePageRejectsActionValidationForDifferentInput(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page newsletter
-@route "/newsletter"
+page newsletter
+route "/newsletter"
 
 act subscribe {
   input := form SubscribeInput
@@ -763,8 +763,8 @@ act subscribe {
 
 func TestParsePageRejectsUnclosedPathsBlock(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page blog.post
-@route "/blog/{slug}"
+page blog.post
+route "/blog/{slug}"
 
 paths {
   => { slug: "hello-gowdk" }
@@ -779,8 +779,8 @@ paths {
 
 func TestParsePageRejectsUnclosedBuildBlock(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page home
-@route "/"
+page home
+route "/"
 
 build {
   => { title: "Home" }
@@ -793,26 +793,26 @@ build {
 	}
 }
 
-func TestParsePageRejectsUnknownPageAnnotation(t *testing.T) {
+func TestParsePageRejectsOldAtPageMetadata(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page home
-@route "/"
+page home
+route "/"
 @mode ssr
 `))
 	if err == nil {
-		t.Fatal("expected unknown annotation error")
+		t.Fatal("expected old metadata syntax error")
 	}
-	if !strings.Contains(err.Error(), "unsupported annotation @mode") {
+	if !strings.Contains(err.Error(), `malformed legacy metadata "@mode ssr"`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestParsePageReadsAPIEndpointMetadata(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page status
-@route "/status"
+page status
+route "/status"
 
-api Health GET "/api/health" @error "/errors/api-health.html"
+api Health GET "/api/health" error "/errors/api-health.html"
 
 view {
   <main>Status</main>
@@ -835,10 +835,10 @@ view {
 
 func TestParsePageRejectsUnsafeEndpointErrorPage(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page newsletter
-@route "/newsletter"
+page newsletter
+route "/newsletter"
 
-act Subscribe POST "/newsletter" @error "../secret.html"
+act Subscribe POST "/newsletter" error "../secret.html"
 
 view {
 }
@@ -846,15 +846,15 @@ view {
 	if err == nil {
 		t.Fatal("expected unsafe endpoint error page path error")
 	}
-	if !strings.Contains(err.Error(), `@error path must stay inside generated output`) {
+	if !strings.Contains(err.Error(), `error path must stay inside generated output`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestParsePageRejectsUnsupportedAPIBodySyntax(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page status
-@route "/status"
+page status
+route "/status"
 
 api health {
   return JSON({})
@@ -873,10 +873,10 @@ view {
 
 func TestParsePageReadsCachePolicy(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page home
-@route "/"
-@cache "public, max-age=60"
-@revalidate 5m
+page home
+route "/"
+cache "public, max-age=60"
+revalidate 5m
 
 view {
 }
@@ -900,9 +900,9 @@ view {
 
 func TestParsePageReadsErrorPage(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page dashboard
-@route "/dashboard"
-@error "/errors/dashboard.html"
+page dashboard
+route "/dashboard"
+error "/errors/dashboard.html"
 
 view {
 }
@@ -920,9 +920,9 @@ view {
 
 func TestParsePageRejectsUnsafeErrorPage(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page dashboard
-@route "/dashboard"
-@error "../secret.html"
+page dashboard
+route "/dashboard"
+error "../secret.html"
 
 view {
 }
@@ -930,32 +930,32 @@ view {
 	if err == nil {
 		t.Fatal("expected unsafe error page path error")
 	}
-	if !strings.Contains(err.Error(), `@error path must stay inside generated output`) {
+	if !strings.Contains(err.Error(), `error path must stay inside generated output`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestParsePageRejectsMalformedAnnotation(t *testing.T) {
+func TestParsePageRejectsMalformedMetadata(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page home
-@route "/"
+page home
+route "/"
 @123
 
 view {
 }
 `))
 	if err == nil {
-		t.Fatal("expected malformed annotation error")
+		t.Fatal("expected malformed legacy metadata error")
 	}
-	if err.Error() != `line 4: malformed annotation "@123"` {
+	if err.Error() != `line 4: malformed legacy metadata "@123"` {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestParsePageRejectsUnsupportedTopLevelBlock(t *testing.T) {
 	_, err := ParsePage([]byte(`
-@page home
-@route "/"
+page home
+route "/"
 
 fragment "#target" {
 }
@@ -973,7 +973,7 @@ view {
 
 func TestParseComponentReadsNamePropsAndViewBody(t *testing.T) {
 	component, err := ParseComponent([]byte(`
-@component Hero
+component Hero
 
 props {
   title string
@@ -1004,7 +1004,7 @@ func TestParseComponentReadsGoTypedContracts(t *testing.T) {
 	component, err := ParseComponent([]byte(`
 import ui "github.com/cssbruno/gowdk/testfixture/islands"
 
-@component Counter
+component Counter
 
 props ui.CounterProps
 state ui.CounterState = ui.NewCounterState()
@@ -1030,7 +1030,7 @@ view {
 
 func TestParseComponentReadsTypedExports(t *testing.T) {
 	component, err := ParseComponent([]byte(`
-@component Counter
+component Counter
 
 exports {
   selectedID string
@@ -1060,9 +1060,9 @@ view {
 
 func TestParseComponentReadsScopedCSSAndAssets(t *testing.T) {
 	component, err := ParseComponent([]byte(`
-@component Hero
-@css "./hero.css"
-@asset "./hero.png"
+component Hero
+css "./hero.css"
+asset "./hero.png"
 
 view {
   <section>Hero</section>
@@ -1084,8 +1084,8 @@ view {
 
 func TestParseComponentReadsWASMContract(t *testing.T) {
 	component, err := ParseComponent([]byte(`
-@component Counter
-@wasm ./browser/counter
+component Counter
+wasm ./browser/counter
 
 view {
   <button>{Count}</button>
@@ -1104,7 +1104,7 @@ view {
 
 func TestParseComponentReadsClientBlock(t *testing.T) {
 	component, err := ParseComponent([]byte(`
-@component Counter
+component Counter
 
 client {
   fn Increment() {
@@ -1132,8 +1132,8 @@ view {
 
 func TestParsePageReadsGoBlocks(t *testing.T) {
 	page, err := ParsePage([]byte(`
-@page home
-@route "/"
+page home
+route "/"
 
 go {
 func HomePageForBuild() PageCopy {
@@ -1170,7 +1170,7 @@ view {
 
 func TestParseComponentReadsGoBlock(t *testing.T) {
 	component, err := ParseComponent([]byte(`
-@component Counter
+component Counter
 
 go addon.counter {
 func RegisterCounter() {}
@@ -1193,7 +1193,7 @@ view {
 
 func TestParseLayoutReadsGoBlock(t *testing.T) {
 	layout, err := ParseLayout("root.layout.gwdk", []byte(`
-@layout root
+layout root
 
 go ssr {
 func LayoutData() string {
@@ -1215,7 +1215,7 @@ view {
 
 func TestParseComponentRejectsUnsupportedPropType(t *testing.T) {
 	_, err := ParseComponent([]byte(`
-@component Hero
+component Hero
 
 props {
   count int
@@ -1230,41 +1230,41 @@ view {
 	}
 }
 
-func TestParseComponentRejectsUnknownAnnotation(t *testing.T) {
+func TestParseComponentRejectsUnknownMetadata(t *testing.T) {
 	_, err := ParseComponent([]byte(`
-@component Hero
-@route "/"
+component Hero
+route "/"
 
 view {
 }
 `))
 	if err == nil {
-		t.Fatal("expected unknown annotation error")
+		t.Fatal("expected unknown metadata declaration error")
 	}
-	if err.Error() != `line 3: unsupported annotation @route` {
+	if err.Error() != `line 3: unsupported metadata route` {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestParseComponentRejectsMalformedAnnotation(t *testing.T) {
+func TestParseComponentRejectsMalformedMetadata(t *testing.T) {
 	_, err := ParseComponent([]byte(`
-@component Hero
+component Hero
 @
 
 view {
 }
 `))
 	if err == nil {
-		t.Fatal("expected malformed annotation error")
+		t.Fatal("expected malformed legacy metadata error")
 	}
-	if err.Error() != `line 3: malformed annotation "@"` {
+	if err.Error() != `line 3: malformed legacy metadata "@"` {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestParseComponentRejectsUnsupportedTopLevelBlock(t *testing.T) {
 	_, err := ParseComponent([]byte(`
-@component Hero
+component Hero
 
 load {
 }
@@ -1303,9 +1303,9 @@ view {
 	}
 }
 
-func TestParseLayoutTreatsLayoutAnnotationAsParent(t *testing.T) {
+func TestParseLayoutTreatsLayoutMetadataAsParent(t *testing.T) {
 	layout, err := ParseLayout("layouts/docs.layout.gwdk", []byte(`
-@layout root
+layout root
 
 view {
   <slot />
@@ -1318,22 +1318,22 @@ view {
 		t.Fatalf("expected identity from file name, got %q", layout.ID)
 	}
 	if len(layout.Layouts) != 1 || layout.Layouts[0] != "root" {
-		t.Fatalf("expected @layout to declare parent layout root, got %#v", layout.Layouts)
+		t.Fatalf("expected layout to declare parent layout root, got %#v", layout.Layouts)
 	}
 }
 
-func TestParseLayoutRejectsPageAnnotation(t *testing.T) {
+func TestParseLayoutRejectsPageMetadata(t *testing.T) {
 	_, err := ParseLayout("root.layout.gwdk", []byte(`
-@layout root
-@page home
+layout root
+page home
 
 view {
 }
 `))
 	if err == nil {
-		t.Fatal("expected unsupported annotation error")
+		t.Fatal("expected unsupported metadata error")
 	}
-	if err.Error() != `line 3: unsupported annotation @page` {
+	if err.Error() != `line 3: unsupported metadata page` {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -7,7 +7,7 @@ GOWDK's current hook model is small and `net/http`-first.
 | Extension point | Type | Scope |
 | --- | --- | --- |
 | Generated app handler | `http.Handler` | Wrap with normal Go middleware in app startup. |
-| Guards | `addons/ssr.GuardRegistry`, `runtime/auth.Provider` | Generated request-time routes with `@guard`. |
+| Guards | `addons/ssr.GuardRegistry`, `runtime/auth.Provider` | Generated request-time routes with `guard`. |
 | Rate limiting | `*ratelimit.Limiter` | Generated action, API, fragment, SSR, and split-backend proxy routes when the addon is enabled. |
 | Handler context | `context.Context` | User handlers read request metadata through `runtime/app` helpers. |
 
@@ -26,13 +26,13 @@ http.ListenAndServe(":8080", wrapped)
 
 ## Guards
 
-`@guard` is optional, but a page is not public by default: a page that declares
-no `@guard` warns (`missing_page_guard`) and its route is denied (403) at request
-time until access is stated. Use `@guard public` to serve the page on purpose.
+`guard` is optional, but a page is not public by default: a page that declares
+no `guard` warns (`missing_page_guard`) and its route is denied (403) at request
+time until access is stated. Use `guard public` to serve the page on purpose.
 `public` is a compile-time marker, must be the only guard on that page, and does
 not require runtime backing code.
 
-Routes with non-public `@guard` IDs require backing code in the generated app
+Routes with non-public `guard` IDs require backing code in the generated app
 package. A guarded generated app will not compile until the required hook
 exists. Non-public page guards also require request-time page rendering for the
 page GET route; build-time SPA pages emit static HTML and cannot enforce
@@ -48,10 +48,10 @@ func GOWDKGuardRegistry() ssr.GuardRegistry {
 }
 ```
 
-Native RBAC guards reuse `@guard` IDs:
+Native RBAC guards reuse `guard` IDs:
 
 ```gwdk
-@guard role:admin, permission:patients.read
+guard role:admin, permission:patients.read
 ```
 
 Generated app packages with native RBAC guard IDs require:
@@ -98,10 +98,10 @@ RBAC guard behavior:
 Guard behavior (see [guards.md](../language/guards.md) for the full access
 contract):
 
-- Missing `@guard` is a `missing_page_guard` warning and the route is denied
+- Missing `guard` is a `missing_page_guard` warning and the route is denied
   (403) at request time — except on a page that also declares `act`/`api`/
   `fragment` endpoints, where it is a build error.
-- `@guard public` marks intentional public access and cannot be combined with
+- `guard public` marks intentional public access and cannot be combined with
   protected guard IDs.
 - Non-public page guards on build-time SPA/action page routes fail validation;
   add `load {}` or `go ssr {}` with the SSR addon when the page itself is

@@ -1,6 +1,6 @@
 package components
 
-@component TextField
+component TextField
 
 props {
   label string

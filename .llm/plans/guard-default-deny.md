@@ -2,16 +2,16 @@
 
 ## Context
 
-Decide what happens when a page declares **no** `@guard`. Today that is a hard
+Decide what happens when a page declares **no** `guard`. Today that is a hard
 compile error (`missing_page_guard`,
 [validate_page.go:223](../../internal/compiler/validate_page.go#L223)).
 
 Target model — **secure-by-default**:
 
-- **No `@guard` → the page is denied (403) at request time**, never public.
-- **Compile time emits a warning, not an error**: "this page has no @guard; it
+- **No `guard` → the page is denied (403) at request time**, never public.
+- **Compile time emits a warning, not an error**: "this page has no guard; it
   will return 403 until you declare one." The build still succeeds.
-- **To serve a page publicly you must explicitly write `@guard public`.**
+- **To serve a page publicly you must explicitly write `guard public`.**
 - Protective guards (`auth.required`, `role:`, `permission:`) behave as today.
 
 The point: silence can never produce a public page. You cannot *accidentally*
@@ -57,10 +57,10 @@ precedent ([accessibility.go:52](../../internal/lang/accessibility.go#L52)).
 In `validatePageGuards` ([validate_page.go:219](../../internal/compiler/validate_page.go#L219)):
 
 - Guardless page → emit `missing_page_guard` as a **warning** (not error), with
-  reworded message: "%s declares no @guard; its route will return 403 at request
-  time. Add @guard public to serve it, or a protective guard such as
-  @guard auth.required."
-- `@guard public` alone → served (unchanged).
+  reworded message: "%s declares no guard; its route will return 403 at request
+  time. Add guard public to serve it, or a protective guard such as
+  guard auth.required."
+- `guard public` alone → served (unchanged).
 - `public` + protective → `public_guard_exclusive` (unchanged, error).
 - Protective guard on build-time route → `guard_requires_request_render`
   (unchanged, error).
@@ -69,7 +69,7 @@ In codegen (`internal/appgen/source_guards.go` + the page GET route emitter):
 
 - A page with **zero guards** must emit a GET route that **returns 403**
   (deny) instead of serving. This is the runtime fail-safe.
-- A page with `@guard public` serves normally (today's no-guard behavior).
+- A page with `guard public` serves normally (today's no-guard behavior).
 - Confirm the route handler can short-circuit to 403 for static/SPA pages
   before serving cached HTML.
 
@@ -85,14 +85,14 @@ In codegen (`internal/appgen/source_guards.go` + the page GET route emitter):
 - `internal/lsp/diagnostics.go` — already maps `"warning"`; just ensure the
   guard warning reaches it with the right severity.
 - `internal/appgen/source_guards.go` + page route emitter — 403 default for
-  guardless pages; `@guard public` serves.
+  guardless pages; `guard public` serves.
 - `internal/diagnostics/registry.go` — `missing_page_guard` is
   `StabilityStable`; keep the code but note it is now a **warning**, and that
   the runtime default is 403. (Severity change to a stable code should be called
   out in CHANGELOG.)
 - `internal/diagnostics/explain.go` — rewrite `missing_page_guard` details:
   warning, 403 default, opt-in to public.
-- `cmd/gowdk/init.go` — the scaffold's `@guard public`
+- `cmd/gowdk/init.go` — the scaffold's `guard public`
   ([init.go:74](../../cmd/gowdk/init.go#L74),
   [init.go:152](../../cmd/gowdk/init.go#L152)) stays: the home page is
   genuinely, intentionally public, and under this model that line is now an
@@ -104,11 +104,11 @@ In codegen (`internal/appgen/source_guards.go` + the page GET route emitter):
 ## Tests
 
 - Unit (validate): guardless page → exactly one diagnostic, severity warning,
-  code `missing_page_guard`, build not aborted. `@guard public` → no
+  code `missing_page_guard`, build not aborted. `guard public` → no
   diagnostics. `public` + protective → `public_guard_exclusive` (error).
 - Unit (severity plumbing): build proceeds with warnings present; fails with
   errors present; mixed → fails, both reported.
-- Codegen/generated-app: guardless page GET → 403; `@guard public` GET → 200.
+- Codegen/generated-app: guardless page GET → 403; `guard public` GET → 200.
   Build-time/static guardless page also 403s at the route.
 - Update existing `validate_test.go` (the missing-guard test at ~line 650 now
   asserts a **warning**, not just presence) and any golden diagnostics fixtures.

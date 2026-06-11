@@ -101,8 +101,8 @@ The package-integrated direction is:
 ```gwdk
 package auth
 
-@route "/"
-@guard public
+route "/"
+guard public
 
 act Login POST "/"
 api Session GET "/api/session"

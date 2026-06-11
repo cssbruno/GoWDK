@@ -19,56 +19,56 @@ The package name must match sibling `.go` files in the same directory.
 `gowdk.config.go` is project configuration and is not treated as a sibling
 application package for this check.
 
-## Annotations
+## Metadata
 
-Annotations must start at the beginning of the trimmed line:
+Metadata must start at the beginning of the trimmed line:
 
 ```gwdk
-@route "/"
-@title "Home"
-@description "Compile-first Go web output."
-@canonical "https://example.com/"
-@image "https://example.com/social.png"
-@layout root, marketing
-@cache "public, max-age=60"
-@revalidate 5m
-@error "/errors/home.html"
-@guard public
-@component Hero
-@layout root
+route "/"
+title "Home"
+description "Compile-first Go web output."
+canonical "https://example.com/"
+image "https://example.com/social.png"
+layout root, marketing
+cache "public, max-age=60"
+revalidate 5m
+error "/errors/home.html"
+guard public
+component Hero
+layout root
 ```
 
-Supported annotations:
+Supported metadata declarations:
 
-- `@page <id>`: optional stable page ID override. When omitted from a
+- `page <id>`: optional stable page ID override. When omitted from a
   file-backed page, the ID derives from the filename by removing `.page.gwdk`
   or `.gwdk`.
-- `@route "<path>"`: required route path. Quotes are trimmed.
-- `@title "<text>"`: optional HTML document title for generated page output.
-- `@description "<text>"`: optional HTML document description meta value.
-- `@canonical "<url>"`: optional canonical URL link for generated page output.
-- `@image "<url>"`: optional social preview image URL for Open Graph and
+- `route "<path>"`: required route path. Quotes are trimmed.
+- `title "<text>"`: optional HTML document title for generated page output.
+- `description "<text>"`: optional HTML document description meta value.
+- `canonical "<url>"`: optional canonical URL link for generated page output.
+- `image "<url>"`: optional social preview image URL for Open Graph and
   Twitter metadata.
-- `@layout <id>[, <id>...]`: optional page layout IDs, or a layout identity in
+- `layout <id>[, <id>...]`: optional page layout IDs, or a layout identity in
   `.layout.gwdk` files.
-- `@cache "<policy>"`: optional page Cache-Control policy for successful
+- `cache "<policy>"`: optional page Cache-Control policy for successful
   generated static SPA HTML and SSR HTML responses.
-- `@revalidate <seconds|duration>`: optional stale-while-revalidate duration
-  such as `60`, `60s`, `5m`, or `1h`; requires `@cache`.
-- `@error "<path.html>"`: optional route-local generated HTML error page for
+- `revalidate <seconds|duration>`: optional stale-while-revalidate duration
+  such as `60`, `60s`, `5m`, or `1h`; requires `cache`.
+- `error "<path.html>"`: optional route-local generated HTML error page for
   SSR load, generated render, and panic failures. The path is output-relative
   after normalization and must stay inside generated output.
-- `@guard <id>[, <id>...]`: page access metadata. Optional, but a page is not
-  public by default: omitting `@guard` warns (`missing_page_guard`) and the
-  route is denied (403) until stated. Use `@guard public` for intentionally
+- `guard <id>[, <id>...]`: page access metadata. Optional, but a page is not
+  public by default: omitting `guard` warns (`missing_page_guard`) and the
+  route is denied (403) until stated. Use `guard public` for intentionally
   public pages. Use custom guard IDs or native RBAC IDs such as `role:admin` and
   `permission:posts.write` for protected pages.
-- `@component <Name>`: component ID for `.cmp.gwdk` build inputs.
+- `component <Name>`: component ID for `.cmp.gwdk` build inputs.
 
-Unknown annotations are rejected. Lines starting with `@` that do not match
-`@<identifier>` are rejected as malformed annotations.
+Unknown metadata declarations are rejected. Lines starting with `@` are rejected
+as malformed legacy metadata.
 
-`@guard public` must be the only guard on a page. Protected pages can declare
+`guard public` must be the only guard on a page. Protected pages can declare
 multiple non-public guards; generated handlers enforce them in declaration
 order. Protected page guards require request-time page rendering for frontend
 page access; add `load {}` or `go ssr {}` with the SSR addon when the page is
@@ -130,11 +130,11 @@ view {
 Actions and APIs are top-level endpoint declarations, not blocks:
 
 ```gwdk
-act Submit POST "/signup" @error "/errors/signup.html"
-api Health GET "/api/health" @error "/errors/api-health.html"
+act Submit POST "/signup" error "/errors/signup.html"
+api Health GET "/api/health" error "/errors/api-health.html"
 ```
 
-The endpoint-local `@error` suffix is optional. When present on `act` or `api`,
+The endpoint-local `error` suffix is optional. When present on `act` or `api`,
 generated action/API panic boundaries use that generated HTML page before
 falling back to `500.html`.
 
@@ -174,7 +174,7 @@ package marketing
 
 use icons "icons"
 
-@component Hero
+component Hero
 
 view {
   <section><icons.Badge /></section>
@@ -209,7 +209,7 @@ Unsupported top-level block declarations that look like `name ... {` are
 rejected until their feature slice is implemented.
 
 `internal/gwdkast` defines the typed GOWDK AST. `internal/parser.ParseSyntax`
-returns that AST for the current subset: package declarations, annotations,
+returns that AST for the current subset: package declarations, metadata declarations,
 Go imports, GOWDK uses, stores, typed component contracts, blocks, parsed
 `view {}` markup nodes, literal `paths {}` and `build {}` records, endpoint
 declarations, and source spans.
@@ -273,7 +273,7 @@ use partial form metadata with a fragment-producing action.
 Layout files can declare a layout ID and `view {}` body:
 
 ```gwdk
-@layout root
+layout root
 
 view {
   <slot />
@@ -634,6 +634,6 @@ event-handler attributes are rejected until dedicated safety rules exist.
 
 ## Lexer Tokens
 
-Language tooling currently tokenizes annotations, identifiers, strings, `{`, `}`, `,`, `:`, `?`, `=>`, newlines, text, illegal tokens, and EOF.
+Language tooling currently tokenizes metadata declarations, identifiers, strings, `{`, `}`, `,`, `:`, `?`, `=>`, newlines, text, illegal tokens, and EOF.
 
 Identifiers may include letters, digits, underscores, dots, and hyphens after the first character. Quoted strings support escaped characters and report an error if a newline appears before the closing quote.

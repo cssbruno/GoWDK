@@ -234,7 +234,7 @@ func validatePageGuards(page gwdkir.Page) []ValidationError {
 				Span:     firstSpan(page.Spans.Page, page.Spans.Route),
 				Severity: SeverityError,
 				Message: fmt.Sprintf(
-					"%s declares no @guard but defines act/api/fragment endpoints, which would be publicly callable. Add @guard public to make them public, or a protective guard such as @guard auth.required",
+					"%s declares no guard but defines act/api/fragment endpoints, which would be publicly callable. Add guard public to make them public, or a protective guard such as guard auth.required",
 					page.ID,
 				),
 			}}
@@ -246,7 +246,7 @@ func validatePageGuards(page gwdkir.Page) []ValidationError {
 			Span:     firstSpan(page.Spans.Page, page.Spans.Route),
 			Severity: SeverityWarning,
 			Message: fmt.Sprintf(
-				"%s declares no @guard; its route is denied (403) at request time. Add @guard public to serve it, or a protective guard such as @guard auth.required",
+				"%s declares no guard; its route is denied (403) at request time. Add guard public to serve it, or a protective guard such as guard auth.required",
 				page.ID,
 			),
 		}}
@@ -265,7 +265,7 @@ func validatePageGuards(page gwdkir.Page) []ValidationError {
 			PageID:  page.ID,
 			Source:  page.Source,
 			Span:    firstNamedSpan(page.Spans.Guard, firstSpan(page.Spans.Page, page.Spans.Route)),
-			Message: fmt.Sprintf("%s declares @guard public with other guards; public must be the only guard ID", page.ID),
+			Message: fmt.Sprintf("%s declares guard public with other guards; public must be the only guard ID", page.ID),
 		}}
 	}
 	return nil
@@ -280,7 +280,7 @@ func validateProtectedPageGuardRender(page gwdkir.Page, mode gowdk.RenderMode) [
 		PageID:  page.ID,
 		Source:  page.Source,
 		Span:    firstNamedSpan(page.Spans.Guard, firstSpan(page.Spans.Page, page.Spans.Route)),
-		Message: fmt.Sprintf("%s declares protected guard IDs on a build-time page route. Add load {} or go ssr {} with the SSR addon so frontend page access is request-time guarded, or use @guard public for an intentionally public page", page.ID),
+		Message: fmt.Sprintf("%s declares protected guard IDs on a build-time page route. Add load {} or go ssr {} with the SSR addon so frontend page access is request-time guarded, or use guard public for an intentionally public page", page.ID),
 	}}
 }
 
@@ -339,7 +339,7 @@ func validatePageCachePolicy(page gwdkir.Page) []ValidationError {
 			PageID:  page.ID,
 			Source:  page.Source,
 			Span:    firstSpan(page.Spans.Revalidate, page.Spans.Page),
-			Message: fmt.Sprintf("%s declares @revalidate, but revalidation requires an explicit @cache policy", page.ID),
+			Message: fmt.Sprintf("%s declares revalidate, but revalidation requires an explicit cache policy", page.ID),
 		}}
 	}
 	if strings.Contains(strings.ToLower(page.Cache), "stale-while-revalidate") {
@@ -348,7 +348,7 @@ func validatePageCachePolicy(page gwdkir.Page) []ValidationError {
 			PageID:  page.ID,
 			Source:  page.Source,
 			Span:    firstSpan(page.Spans.Revalidate, page.Spans.Cache, page.Spans.Page),
-			Message: fmt.Sprintf("%s declares @revalidate and a @cache policy that already contains stale-while-revalidate", page.ID),
+			Message: fmt.Sprintf("%s declares revalidate and a cache policy that already contains stale-while-revalidate", page.ID),
 		}}
 	}
 	return nil
@@ -409,7 +409,7 @@ func validatePageCSS(page gwdkir.Page) []ValidationError {
 			Source: page.Source,
 			Span:   spanForName(page.Spans.CSS, "none", page.Spans.Page),
 			Message: fmt.Sprintf(
-				"%s uses @css none with other CSS inputs. Fix: use @css none by itself or remove none",
+				"%s uses css none with other CSS inputs. Fix: use css none by itself or remove none",
 				page.ID,
 			),
 		}}
@@ -425,7 +425,7 @@ func validatePageCSS(page gwdkir.Page) []ValidationError {
 				Source: page.Source,
 				Span:   spanForName(page.Spans.CSS, name, page.Spans.Page),
 				Message: fmt.Sprintf(
-					"%s uses invalid @css input %q. CSS inputs must be identifiers such as default, page, forms, or blog.post",
+					"%s uses invalid css input %q. CSS inputs must be identifiers such as default, page, forms, or blog.post",
 					page.ID,
 					name,
 				),
@@ -438,7 +438,7 @@ func validatePageCSS(page gwdkir.Page) []ValidationError {
 				PageID:  page.ID,
 				Source:  page.Source,
 				Span:    spanForName(page.Spans.CSS, name, page.Spans.Page),
-				Message: fmt.Sprintf("%s repeats @css input %q", page.ID, name),
+				Message: fmt.Sprintf("%s repeats css input %q", page.ID, name),
 			})
 			continue
 		}

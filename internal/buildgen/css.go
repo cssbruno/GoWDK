@@ -483,7 +483,7 @@ func pageCSSInputNames(config gowdk.Config, page gwdkir.Page, inputs map[string]
 				}
 			}
 		case "none":
-			return nil, fmt.Errorf("%s: @css none must be used by itself", page.ID)
+			return nil, fmt.Errorf("%s: css none must be used by itself", page.ID)
 		default:
 			if err := add(reference); err != nil {
 				return nil, err

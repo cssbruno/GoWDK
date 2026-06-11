@@ -5,16 +5,16 @@
       "code": "spa_dynamic_route_missing_paths",
       "pos": {
         "line": 4,
-        "column": 15
+        "column": 14
       },
       "range": {
         "start": {
           "line": 4,
-          "column": 15
+          "column": 14
         },
         "end": {
           "line": 4,
-          "column": 21
+          "column": 20
         }
       },
       "severity": "error",

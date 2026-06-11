@@ -1,6 +1,6 @@
 package home
 
-@component Hero
+component Hero
 
 props {
   title string

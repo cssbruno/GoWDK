@@ -77,7 +77,7 @@ func ssrDynamicIfStmt(route SSRRoute, rateLimit bool) ast.Stmt {
 
 func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool) []ast.Stmt {
 	if len(route.Guards) == 0 {
-		// No @guard declared: deny by default (403). There is nothing to render,
+		// No guard declared: deny by default (403). There is nothing to render,
 		// so the route returns before any context, load, or HTML statements.
 		return []ast.Stmt{
 			writeNoStoreErrorStmt(sel("http", "StatusForbidden"), "403 forbidden"),

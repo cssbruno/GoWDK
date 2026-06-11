@@ -150,7 +150,7 @@ are stable.
 
 | Step | Theme | Definition of Done |
 | --- | --- | --- |
-| 1 | GOWDK AST and analyzer | The compiler has explicit AST nodes for package declarations, annotations, routes, imports, stores, blocks, component contracts, client blocks, and source spans. A real analyzer lowers that AST into normalized package, route, endpoint, component, type, asset, and generated-output metadata. |
+| 1 | GOWDK AST and analyzer | The compiler has explicit AST nodes for package declarations, metadata declarations, routes, imports, stores, blocks, component contracts, client blocks, and source spans. A real analyzer lowers that AST into normalized package, route, endpoint, component, type, asset, and generated-output metadata. |
 | 2 | Stable internal IR | Templates, client behavior, routes, assets, CSS, endpoints, SSR pages, and generated output are represented by typed compiler IR instead of ad hoc parser/buildgen/appgen structs leaking across phases. |
 | 3 | Source import semantics | Cross-package component calls have explicit page/component-scoped `use` semantics. Layouts, stores, and assets have explicit `use` semantics or are rejected with clear diagnostics. Qualified layout references are either implemented or intentionally deferred with documented diagnostics. |
 | 4 | Build-time data and diagnostics | Build data moves beyond the first literal/imported no-argument subset. Same-package build functions are either supported or documented as intentionally unsupported. Parser, route, view, component, client, package, and build errors have useful spans and suggestions. |

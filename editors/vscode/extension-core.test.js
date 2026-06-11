@@ -441,13 +441,13 @@ test('completionEntries include expected language constructs', () => {
   assert.ok(labels.includes('package'));
   assert.ok(labels.includes('import'));
   assert.ok(labels.includes('use'));
-  assert.ok(labels.includes('@route'));
-  assert.ok(labels.includes('@title'));
-  assert.ok(labels.includes('@description'));
-  assert.ok(labels.includes('@canonical'));
-  assert.ok(labels.includes('@image'));
-  assert.ok(labels.includes('@component'));
-  assert.ok(labels.includes('@css'));
+  assert.ok(labels.includes('route'));
+  assert.ok(labels.includes('title'));
+  assert.ok(labels.includes('description'));
+  assert.ok(labels.includes('canonical'));
+  assert.ok(labels.includes('image'));
+  assert.ok(labels.includes('component'));
+  assert.ok(labels.includes('css'));
   assert.ok(labels.includes('paths'));
   assert.ok(labels.includes('client'));
   assert.ok(labels.includes('emits'));
@@ -461,9 +461,9 @@ test('completionEntries include expected language constructs', () => {
 });
 
 test('completionContext identifies project-aware completion contexts', () => {
-  assert.equal(core.completionContext('@layout root, '), 'layout');
-  assert.equal(core.completionContext('@css default, '), 'css');
-  assert.equal(core.completionContext('@css default '), 'css');
+  assert.equal(core.completionContext('layout root, '), 'layout');
+  assert.equal(core.completionContext('css default, '), 'css');
+  assert.equal(core.completionContext('css default '), 'css');
   assert.equal(core.completionContext('  <button g:'), 'directive');
   assert.equal(core.completionContext('  <button class:'), 'directive');
   assert.equal(core.completionContext('  <Counter g:island="w'), 'island');
@@ -751,13 +751,13 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
     'package app',
     'import interop "github.com/acme/app/interop"',
     'use ui "components"',
-    '@page home',
-    '@title "Home"',
-    '@description "Home page"',
-    '@canonical "https://example.com/"',
-    '@image "https://example.com/social.png"',
-    '@component Counter',
-    '@css default page forms',
+    'page home',
+    'title "Home"',
+    'description "Home page"',
+    'canonical "https://example.com/"',
+    'image "https://example.com/social.png"',
+    'component Counter',
+    'css default page forms',
     'act Submit POST "/submit"',
     'api Status GET "/api/status"',
     'script {',
@@ -800,23 +800,23 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
   assert.deepEqual(simplified.filter((token) => token.text === 'use'), [
     { line: 2, text: 'use', tokenType: 'keyword' }
   ]);
-  assert.deepEqual(simplified.filter((token) => token.text === '@page'), [
-    { line: 3, text: '@page', tokenType: 'namespace' }
+  assert.deepEqual(simplified.filter((token) => token.text === 'page' && token.tokenType === 'namespace'), [
+    { line: 3, text: 'page', tokenType: 'namespace' }
   ]);
-  assert.deepEqual(simplified.filter((token) => token.text === '@title'), [
-    { line: 4, text: '@title', tokenType: 'namespace' }
+  assert.deepEqual(simplified.filter((token) => token.text === 'title'), [
+    { line: 4, text: 'title', tokenType: 'namespace' }
   ]);
-  assert.deepEqual(simplified.filter((token) => token.text === '@description'), [
-    { line: 5, text: '@description', tokenType: 'namespace' }
+  assert.deepEqual(simplified.filter((token) => token.text === 'description'), [
+    { line: 5, text: 'description', tokenType: 'namespace' }
   ]);
-  assert.deepEqual(simplified.filter((token) => token.text === '@canonical'), [
-    { line: 6, text: '@canonical', tokenType: 'namespace' }
+  assert.deepEqual(simplified.filter((token) => token.text === 'canonical'), [
+    { line: 6, text: 'canonical', tokenType: 'namespace' }
   ]);
-  assert.deepEqual(simplified.filter((token) => token.text === '@image'), [
-    { line: 7, text: '@image', tokenType: 'namespace' }
+  assert.deepEqual(simplified.filter((token) => token.text === 'image'), [
+    { line: 7, text: 'image', tokenType: 'namespace' }
   ]);
-  assert.deepEqual(simplified.filter((token) => token.text === '@component'), [
-    { line: 8, text: '@component', tokenType: 'namespace' }
+  assert.deepEqual(simplified.filter((token) => token.text === 'component'), [
+    { line: 8, text: 'component', tokenType: 'namespace' }
   ]);
   assert.deepEqual(simplified.filter((token) => token.text === 'forms'), [
     { line: 9, text: 'forms', tokenType: 'property' }
@@ -856,12 +856,12 @@ test('semanticTokens classifies first-slice GOWDK language tokens', () => {
   assert.ok(simplified.some((token) => token.text === 'Hero' && token.tokenType === 'class'));
 });
 
-test('documentOutlineItems indexes annotations and major blocks', () => {
+test('documentOutlineItems indexes metadata declarations and major blocks', () => {
   const outline = core.documentOutlineItems([
     'package app',
     '',
-    '@page home',
-    '@layout root',
+    'page home',
+    'layout root',
     '',
     'build {',
     '  => { title: "Home" }',
@@ -883,8 +883,8 @@ test('documentOutlineItems indexes annotations and major blocks', () => {
     startLine: item.range.start.line,
     endLine: item.range.end.line
   })), [
-    { name: '@page home', detail: 'home', kind: 'namespace', startLine: 2, endLine: 2 },
-    { name: '@layout root', detail: 'root', kind: 'namespace', startLine: 3, endLine: 3 },
+    { name: 'page home', detail: 'home', kind: 'namespace', startLine: 2, endLine: 2 },
+    { name: 'layout root', detail: 'root', kind: 'namespace', startLine: 3, endLine: 3 },
     { name: 'build', detail: 'block', kind: 'property', startLine: 5, endLine: 7 },
     { name: 'script', detail: 'script block', kind: 'module', startLine: 9, endLine: 11 },
     { name: 'view', detail: 'markup block', kind: 'object', startLine: 13, endLine: 15 }

@@ -81,7 +81,7 @@ func composePageViewSource(page gwdkir.Page, layouts map[string]gwdkir.Layout) (
 }
 
 // composeLayoutWithParents wraps child in layout's slot, then wraps the result
-// in layout's own @layout parent chain (outermost last). The visiting set
+// in layout's own layout parent chain (outermost last). The visiting set
 // guards against cyclic inheritance, which validation also rejects.
 func composeLayoutWithParents(layout gwdkir.Layout, child string, layouts map[string]gwdkir.Layout, visiting map[string]bool) (string, error) {
 	key := layoutRegistryKey(layout.Package, layout.ID)

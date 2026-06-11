@@ -9,7 +9,7 @@ func ParsePage(source []byte) (gwdkir.Page, error) {
 }
 
 // ParsePageWithDefaultID extracts page metadata and uses defaultID when the
-// source omits @page.
+// source omits page.
 func ParsePageWithDefaultID(source []byte, defaultID string) (gwdkir.Page, error) {
 	ast, err := ParseSyntax(source)
 	if err != nil {

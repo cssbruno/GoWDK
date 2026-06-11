@@ -7,7 +7,7 @@ Status: Accepted
 ## Context
 
 ADR 0003 keeps generated JavaScript as the default island runtime and makes
-WASM explicit through component-level `@wasm` declarations, with
+WASM explicit through component-level `wasm` declarations, with
 `g:island="wasm"` retained as a call-site override. The compiler needs a stable
 ABI for bootstrapping state, passing props, dispatching events, lifecycle calls,
 and DOM updates.
@@ -115,7 +115,7 @@ Asset strategy:
 
 ## Implementation
 
-- GOWDK builds declared `@wasm` packages with `GOOS=js GOARCH=wasm`.
+- GOWDK builds declared `wasm` packages with `GOOS=js GOARCH=wasm`.
 - Built WASM artifacts are rejected unless they export
   `GOWDKMount<Component>`, `GOWDKHandle<Component>`, and
   `GOWDKDestroy<Component>`.

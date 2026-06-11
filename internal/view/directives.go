@@ -60,7 +60,7 @@ func unsupportedDirectiveMessage(name string) string {
 	case name == "g:transition" || name == "g:animate":
 		return fmt.Sprintf("unsupported g: directive %q; transitions and animations are deferred from the view {} contract — use CSS transitions or a future addon-specific contract", name)
 	case name == "g:window" || name == "g:document" || name == "g:body" || name == "g:head":
-		return fmt.Sprintf("unsupported g: directive %q; document, window, body, and head targets are deferred from the view {} contract — use page metadata such as @title, or g:on:* on rendered elements", name)
+		return fmt.Sprintf("unsupported g: directive %q; document, window, body, and head targets are deferred from the view {} contract — use page metadata such as title, or g:on:* on rendered elements", name)
 	case name == "g:await" || name == "g:async":
 		return fmt.Sprintf("unsupported g: directive %q; async placeholders are deferred from the view {} contract — use build/load data, actions, APIs, or fragments for asynchronous data", name)
 	case name == "g:use" || name == "g:action" || name == "g:attach":

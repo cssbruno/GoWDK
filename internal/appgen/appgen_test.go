@@ -164,7 +164,7 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, ".env"), "SECRET=value")
 	writeTestFile(t, filepath.Join(outputDir, ".env.local"), "SECRET=value")
 	writeTestFile(t, filepath.Join(outputDir, "assets", "app.css.map"), "{}")
-	writeTestFile(t, filepath.Join(outputDir, "source", "home.page.gwdk"), "@page home")
+	writeTestFile(t, filepath.Join(outputDir, "source", "home.page.gwdk"), "page home")
 	writeTestFile(t, filepath.Join(outputDir, "source", "main.go"), "package main")
 	writeTestFile(t, filepath.Join(outputDir, "tmp", "asset.css"), "body{}")
 	writeTestFile(t, filepath.Join(outputDir, "assets", "scratch.tmp"), "temporary")

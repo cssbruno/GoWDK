@@ -1,9 +1,9 @@
 package css
 
-@page styled
-@route "/styled"
-@guard public
-@layout root
+page styled
+route "/styled"
+guard public
+layout root
 
 view {
   <main>

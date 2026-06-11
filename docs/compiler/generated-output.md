@@ -136,6 +136,9 @@ Implemented today:
   fallback.
 - Generated app action endpoint extraction rejects direct file inputs and
   multipart `g:post` forms. Uploads belong in user-owned API/server handlers.
+- `internal/compiler` resolves same-package action, API, fragment, and SSR load
+  handlers through `go/packages` and `go/types`, so build tags, renamed imports,
+  type aliases, and package load errors follow ordinary Go package semantics.
 - `internal/gotypes` resolves component prop/state structs through Go module
   import paths using `go list`, `go/parser`, and `go/types`.
 - `addons/partial` exposes generated fragment and swap helpers. The underlying

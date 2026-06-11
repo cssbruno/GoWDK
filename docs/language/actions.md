@@ -50,7 +50,7 @@ Current behavior:
 - Generated first-slice action error responses use explicit status mapping for
   invalid CSRF tokens, invalid forms, oversized requests, and validation
   failures, and set `Cache-Control: no-store`.
-- Generated typed action decoders are built from same-package Go AST metadata,
+- Generated typed action decoders are built from same-package Go type metadata,
   then printed as ordinary Go code. They decode exported struct fields using
   `form:"name"` tags first, then Go field names. They ignore `form:"-"`, reject
   unknown user fields through the generated allowlist step, strip generated

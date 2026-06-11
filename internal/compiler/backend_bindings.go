@@ -1,36 +1,14 @@
 package compiler
 
 import (
-	"encoding/json"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"os"
-	"os/exec"
-	"path"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/goblockgen"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-)
-
-const (
-	actionHandlerKind   = "action"
-	apiHandlerKind      = "api"
-	fragmentHandlerKind = "fragment"
-	loadHandlerKind     = "load"
-
-	contextImportPath  = "context"
-	formImportPath     = "github.com/cssbruno/gowdk/runtime/form"
-	httpImportPath     = "net/http"
-	responseImportPath = "github.com/cssbruno/gowdk/runtime/response"
-	ssrImportPath      = "github.com/cssbruno/gowdk/addons/ssr"
 )
 
 // BindBackendHandlers discovers same-package Go handlers for act and api blocks,
@@ -134,7 +112,7 @@ func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {
 		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
 		if !function.Load() {
 			binding.Status = source.BackendBindingUnsupportedSignature
-			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", packageLabel(pkg), functionName)
+			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", bindingPackageLabel(binding, pkg), functionName)
 			return binding
 		}
 		binding.Signature = function.Signature
@@ -146,7 +124,7 @@ func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {
 		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, inlinePkg)
 		if !function.Load() {
 			binding.Status = source.BackendBindingUnsupportedSignature
-			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", packageLabel(inlinePkg), functionName)
+			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", bindingPackageLabel(binding, inlinePkg), functionName)
 			return binding
 		}
 		binding.Signature = function.Signature
@@ -155,7 +133,11 @@ func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {
 	}
 	binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
 	binding.Status = source.BackendBindingMissing
-	binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", packageLabel(pkg), functionName)
+	if pkg.LoadError != "" {
+		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s could not be inspected: %s", bindingPackageLabel(binding, pkg), functionName, pkg.LoadError)
+	} else {
+		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), functionName)
+	}
 	return binding
 }
 
@@ -168,18 +150,23 @@ func bindStandaloneAction(endpoint gwdkir.GoEndpoint, pkg featurePackage) source
 }
 
 func bindActionEndpoint(binding source.BackendBinding, pkg featurePackage) source.BackendBinding {
+	if pkg.LoadError != "" {
+		binding.Status = source.BackendBindingMissing
+		binding.Message = fmt.Sprintf("GOWDK action handler %s.%s could not be inspected: %s", bindingPackageLabel(binding, pkg), binding.FunctionName, pkg.LoadError)
+		return binding
+	}
 	function, ok := pkg.Functions[binding.FunctionName]
 	if !ok {
 		binding.Status = source.BackendBindingMissing
-		binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is not implemented", packageLabel(pkg), binding.FunctionName)
+		binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), binding.FunctionName)
 		return binding
 	}
 	if !function.Action() {
 		binding.Status = source.BackendBindingUnsupportedSignature
 		if function.SupportMessage != "" {
-			binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is unsupported: %s", packageLabel(pkg), binding.FunctionName, function.SupportMessage)
+			binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is unsupported: %s", bindingPackageLabel(binding, pkg), binding.FunctionName, function.SupportMessage)
 		} else {
-			binding.Message = fmt.Sprintf("GOWDK action handler %s.%s must have signature func(context.Context) (response.Response, error), func(context.Context, Input) (response.Response, error), func(context.Context, *Input) (response.Response, error), or func(context.Context, form.Values) (response.Response, error)", packageLabel(pkg), binding.FunctionName)
+			binding.Message = fmt.Sprintf("GOWDK action handler %s.%s must have signature func(context.Context) (response.Response, error), func(context.Context, Input) (response.Response, error), func(context.Context, *Input) (response.Response, error), or func(context.Context, form.Values) (response.Response, error)", bindingPackageLabel(binding, pkg), binding.FunctionName)
 		}
 		return binding
 	}
@@ -200,15 +187,20 @@ func bindStandaloneAPI(endpoint gwdkir.GoEndpoint, pkg featurePackage) source.Ba
 }
 
 func bindAPIEndpoint(binding source.BackendBinding, pkg featurePackage) source.BackendBinding {
+	if pkg.LoadError != "" {
+		binding.Status = source.BackendBindingMissing
+		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s could not be inspected: %s", bindingPackageLabel(binding, pkg), binding.FunctionName, pkg.LoadError)
+		return binding
+	}
 	function, ok := pkg.Functions[binding.FunctionName]
 	if !ok {
 		binding.Status = source.BackendBindingMissing
-		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s is not implemented", packageLabel(pkg), binding.FunctionName)
+		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), binding.FunctionName)
 		return binding
 	}
 	if !function.API() {
 		binding.Status = source.BackendBindingUnsupportedSignature
-		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s must have signature func(context.Context, *http.Request) (response.Response, error)", packageLabel(pkg), binding.FunctionName)
+		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s must have signature func(context.Context, *http.Request) (response.Response, error)", bindingPackageLabel(binding, pkg), binding.FunctionName)
 		return binding
 	}
 	binding.Signature = function.Signature
@@ -252,7 +244,7 @@ func bindFragment(page gwdkir.Page, fragment gwdkir.FragmentEndpoint, pkg featur
 	}
 	if !function.Fragment() {
 		binding.Status = source.BackendBindingUnsupportedSignature
-		binding.Message = fmt.Sprintf("GOWDK fragment handler %s.%s must have signature func(context.Context) (response.Response, error)", packageLabel(pkg), binding.FunctionName)
+		binding.Message = fmt.Sprintf("GOWDK fragment handler %s.%s must have signature func(context.Context) (response.Response, error)", bindingPackageLabel(binding, pkg), binding.FunctionName)
 		return binding, true
 	}
 	binding.Signature = source.BackendSignatureFragment
@@ -269,7 +261,7 @@ func baseBackendBinding(page gwdkir.Page, kind, blockName, method, route string,
 		Method:       method,
 		Route:        route,
 		ImportPath:   pkg.ImportPath,
-		PackageName:  pkg.Name,
+		PackageName:  bindingPackageName(pkg.Name, page.Package),
 		FunctionName: blockName,
 		Status:       source.BackendBindingMissing,
 	}
@@ -284,20 +276,10 @@ func baseStandaloneBackendBinding(endpoint gwdkir.GoEndpoint, kind, method strin
 		Method:       method,
 		Route:        endpoint.Route,
 		ImportPath:   pkg.ImportPath,
-		PackageName:  pkg.Name,
+		PackageName:  bindingPackageName(pkg.Name, endpoint.Package),
 		FunctionName: endpoint.Name,
 		Status:       source.BackendBindingMissing,
 	}
-}
-
-func packageLabel(pkg featurePackage) string {
-	if pkg.ImportPath != "" {
-		return pkg.ImportPath
-	}
-	if pkg.Name != "" {
-		return pkg.Name
-	}
-	return "feature"
 }
 
 func sourceDir(sourcePath string) string {
@@ -307,476 +289,8 @@ func sourceDir(sourcePath string) string {
 	return filepath.Dir(sourcePath)
 }
 
-type featurePackage struct {
-	Dir        string
-	ImportPath string
-	Name       string
-	Functions  map[string]featureFunction
-}
-
-type inputStruct struct {
-	Fields  []source.BackendInputField
-	Message string
-}
-
-type featureFunction struct {
-	Name           string
-	Signature      source.BackendSignatureKind
-	InputType      string
-	InputPointer   bool
-	InputFields    []source.BackendInputField
-	SupportMessage string
-}
-
-func (function featureFunction) Action() bool {
-	switch function.Signature {
-	case source.BackendSignatureAction0, source.BackendSignatureActionValues, source.BackendSignatureActionForm, source.BackendSignatureActionFormPtr:
-		return true
-	default:
-		return false
-	}
-}
-
-func (function featureFunction) API() bool {
-	return function.Signature == source.BackendSignatureAPI
-}
-
-func (function featureFunction) Fragment() bool {
-	return function.Signature == source.BackendSignatureAction0 || function.Signature == source.BackendSignatureFragment
-}
-
-func (function featureFunction) Load() bool {
-	return function.Signature == source.BackendSignatureLoad || function.Signature == source.BackendSignatureLoadError
-}
-
-func inspectFeaturePackage(dir string) featurePackage {
-	absDir, err := filepath.Abs(dir)
-	if err != nil {
-		absDir = dir
-	}
-	pkg := featurePackage{Dir: absDir, Functions: map[string]featureFunction{}}
-	info := goListDir(absDir)
-	pkg.ImportPath = info.ImportPath
-	pkg.Name = info.Name
-
-	entries, err := os.ReadDir(absDir)
-	if err != nil {
-		return pkg
-	}
-	fileSet := token.NewFileSet()
-	var files []*ast.File
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
-			continue
-		}
-		filePath := filepath.Join(absDir, entry.Name())
-		file, err := parser.ParseFile(fileSet, filePath, nil, 0)
-		if err != nil {
-			continue
-		}
-		if pkg.Name == "" {
-			pkg.Name = file.Name.Name
-		}
-		files = append(files, file)
-	}
-
-	inputStructs := collectInputStructs(files)
-	for _, file := range files {
-		imports := astImportAliases(file)
-		for _, declaration := range file.Decls {
-			fn, ok := declaration.(*ast.FuncDecl)
-			if !ok || fn.Recv != nil || fn.Name == nil || !fn.Name.IsExported() {
-				continue
-			}
-			signature, inputType, inputPointer := backendSignature(fn.Type, imports)
-			var inputFields []source.BackendInputField
-			var supportMessage string
-			if signature == source.BackendSignatureActionForm || signature == source.BackendSignatureActionFormPtr {
-				inputStruct, ok := inputStructs[inputType]
-				if !ok {
-					supportMessage = fmt.Sprintf("typed action input %s must be an exported struct in the same package", inputType)
-					signature = ""
-				} else if inputStruct.Message != "" {
-					supportMessage = inputStruct.Message
-					signature = ""
-				} else {
-					inputFields = append([]source.BackendInputField(nil), inputStruct.Fields...)
-				}
-			}
-			pkg.Functions[fn.Name.Name] = featureFunction{
-				Name:           fn.Name.Name,
-				Signature:      signature,
-				InputType:      inputType,
-				InputPointer:   inputPointer,
-				InputFields:    inputFields,
-				SupportMessage: supportMessage,
-			}
-		}
-	}
-	return pkg
-}
-
-func inspectInlineScriptFeaturePackage(page gwdkir.Page, target string) featurePackage {
-	pkg := featurePackage{
-		ImportPath: goblockgen.GeneratedImportPath(page.Package),
-		Name:       goblockgen.SafePackageName(page.Package),
-		Functions:  map[string]featureFunction{},
-	}
-	var files []*ast.File
-	var importMaps []map[string]string
-	for _, block := range page.Blocks.GoBlocks {
-		if strings.TrimSpace(block.Target) != target {
-			continue
-		}
-		file, err := goblockgen.ParseFile(page.Package, block)
-		if err != nil {
-			continue
-		}
-		files = append(files, file)
-		importMaps = append(importMaps, goblockgen.ImportAliases(file, page.Imports))
-	}
-	if len(files) == 0 {
-		return pkg
-	}
-	inputStructs := collectInputStructs(files)
-	for index, file := range files {
-		imports := importMaps[index]
-		for _, declaration := range file.Decls {
-			fn, ok := declaration.(*ast.FuncDecl)
-			if !ok || fn.Recv != nil || fn.Name == nil || !fn.Name.IsExported() {
-				continue
-			}
-			signature, inputType, inputPointer := backendSignature(fn.Type, imports)
-			var inputFields []source.BackendInputField
-			var supportMessage string
-			if signature == source.BackendSignatureActionForm || signature == source.BackendSignatureActionFormPtr {
-				inputStruct, ok := inputStructs[inputType]
-				if !ok {
-					supportMessage = fmt.Sprintf("typed action input %s must be an exported struct in the same package", inputType)
-					signature = ""
-				} else if inputStruct.Message != "" {
-					supportMessage = inputStruct.Message
-					signature = ""
-				} else {
-					inputFields = append([]source.BackendInputField(nil), inputStruct.Fields...)
-				}
-			}
-			pkg.Functions[fn.Name.Name] = featureFunction{
-				Name:           fn.Name.Name,
-				Signature:      signature,
-				InputType:      inputType,
-				InputPointer:   inputPointer,
-				InputFields:    inputFields,
-				SupportMessage: supportMessage,
-			}
-		}
-	}
-	return pkg
-}
-
-func collectInputStructs(files []*ast.File) map[string]inputStruct {
-	structs := map[string]inputStruct{}
-	for _, file := range files {
-		for _, declaration := range file.Decls {
-			gen, ok := declaration.(*ast.GenDecl)
-			if !ok || gen.Tok != token.TYPE {
-				continue
-			}
-			for _, spec := range gen.Specs {
-				typeSpec, ok := spec.(*ast.TypeSpec)
-				if !ok || typeSpec.Name == nil || !typeSpec.Name.IsExported() {
-					continue
-				}
-				structType, ok := typeSpec.Type.(*ast.StructType)
-				if !ok {
-					continue
-				}
-				structs[typeSpec.Name.Name] = backendInputStruct(typeSpec.Name.Name, structType)
-			}
-		}
-	}
-	return structs
-}
-
-func backendInputStruct(typeName string, structType *ast.StructType) inputStruct {
-	if structType == nil || structType.Fields == nil {
-		return inputStruct{}
-	}
-	seen := map[string]bool{}
-	var fields []source.BackendInputField
-	for _, field := range structType.Fields.List {
-		if len(field.Names) == 0 {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s cannot use embedded fields", typeName)}
-		}
-		formName, skip, explicit, err := formTagName(field)
-		if err != nil {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s has invalid form tag: %v", typeName, err)}
-		}
-		var exportedNames []*ast.Ident
-		for _, name := range field.Names {
-			if name != nil && name.IsExported() {
-				exportedNames = append(exportedNames, name)
-			}
-		}
-		if len(exportedNames) == 0 || skip {
-			continue
-		}
-		if explicit && len(exportedNames) > 1 {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s cannot reuse one explicit form tag across multiple fields", typeName)}
-		}
-		fieldType, ok := backendInputFieldType(field.Type)
-		if !ok {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s uses unsupported field type", typeName)}
-		}
-		for _, name := range exportedNames {
-			nameFormName := formName
-			if nameFormName == "" {
-				nameFormName = name.Name
-			}
-			if seen[nameFormName] {
-				return inputStruct{Message: fmt.Sprintf("typed action input %s maps multiple fields to form field %q", typeName, nameFormName)}
-			}
-			seen[nameFormName] = true
-			fields = append(fields, source.BackendInputField{
-				FieldName: name.Name,
-				FormName:  nameFormName,
-				Type:      fieldType,
-			})
-		}
-	}
-	return inputStruct{Fields: fields}
-}
-
-func formTagName(field *ast.Field) (string, bool, bool, error) {
-	if field == nil || field.Tag == nil {
-		return "", false, false, nil
-	}
-	tag, err := strconv.Unquote(field.Tag.Value)
-	if err != nil {
-		return "", false, false, err
-	}
-	value, ok, err := structTagValue(tag, "form")
-	if err != nil || !ok {
-		return "", false, ok, err
-	}
-	name, _, _ := strings.Cut(value, ",")
-	if name == "-" {
-		return "", true, true, nil
-	}
-	return strings.TrimSpace(name), false, true, nil
-}
-
-func structTagValue(tag string, key string) (string, bool, error) {
-	for tag != "" {
-		tag = strings.TrimLeft(tag, " ")
-		if tag == "" {
-			return "", false, nil
-		}
-		keyEnd := strings.IndexByte(tag, ':')
-		if keyEnd <= 0 {
-			return "", false, fmt.Errorf("malformed struct tag")
-		}
-		name := tag[:keyEnd]
-		rest := tag[keyEnd+1:]
-		if rest == "" || rest[0] != '"' {
-			return "", false, fmt.Errorf("malformed struct tag")
-		}
-		valueEnd := 1
-		for valueEnd < len(rest) {
-			if rest[valueEnd] == '\\' {
-				valueEnd += 2
-				continue
-			}
-			if rest[valueEnd] == '"' {
-				break
-			}
-			valueEnd++
-		}
-		if valueEnd >= len(rest) || rest[valueEnd] != '"' {
-			return "", false, fmt.Errorf("malformed struct tag")
-		}
-		rawValue := rest[:valueEnd+1]
-		value, err := strconv.Unquote(rawValue)
-		if err != nil {
-			return "", false, err
-		}
-		if name == key {
-			return value, true, nil
-		}
-		tag = rest[valueEnd+1:]
-	}
-	return "", false, nil
-}
-
-func backendInputFieldType(expression ast.Expr) (string, bool) {
-	if ident, ok := expression.(*ast.Ident); ok {
-		switch ident.Name {
-		case "string", "bool", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
-			return ident.Name, true
-		default:
-			return "", false
-		}
-	}
-	array, ok := expression.(*ast.ArrayType)
-	if !ok || array.Len != nil {
-		return "", false
-	}
-	ident, ok := array.Elt.(*ast.Ident)
-	if !ok || ident.Name != "string" {
-		return "", false
-	}
-	return "[]string", true
-}
-
-type goListDirInfo struct {
-	ImportPath string
-	Name       string
-}
-
-func goListDir(dir string) goListDirInfo {
-	command := exec.Command("go", "list", "-json", ".")
-	command.Dir = dir
-	output, err := command.Output()
-	if err != nil {
-		return goListDirInfo{}
-	}
-	var info goListDirInfo
-	if err := json.Unmarshal(output, &info); err != nil {
-		return goListDirInfo{}
-	}
-	return info
-}
-
-func astImportAliases(file *ast.File) map[string]string {
-	imports := map[string]string{}
-	for _, spec := range file.Imports {
-		importPath := strings.Trim(spec.Path.Value, `"`)
-		if importPath == "" {
-			continue
-		}
-		name := path.Base(importPath)
-		if spec.Name != nil && spec.Name.Name != "" && spec.Name.Name != "." && spec.Name.Name != "_" {
-			name = spec.Name.Name
-		}
-		imports[name] = importPath
-	}
-	return imports
-}
-
-func backendSignature(function *ast.FuncType, imports map[string]string) (source.BackendSignatureKind, string, bool) {
-	if kind, inputType, inputPointer, ok := actionSignature(function, imports); ok {
-		return kind, inputType, inputPointer
-	}
-	if isAPISignature(function, imports) {
-		return source.BackendSignatureAPI, "", false
-	}
-	if signature, ok := loadSignature(function, imports); ok {
-		return signature, "", false
-	}
-	return "", "", false
-}
-
-func actionSignature(function *ast.FuncType, imports map[string]string) (source.BackendSignatureKind, string, bool, bool) {
-	if function == nil || function.Params == nil || function.Results == nil {
-		return "", "", false, false
-	}
-	if len(function.Results.List) != 2 {
-		return "", "", false, false
-	}
-	if !isSelector(function.Results.List[0].Type, imports, responseImportPath, "Response") ||
-		!isError(function.Results.List[1].Type) {
-		return "", "", false, false
-	}
-	if len(function.Params.List) != 1 && len(function.Params.List) != 2 {
-		return "", "", false, false
-	}
-	if !isSelector(function.Params.List[0].Type, imports, contextImportPath, "Context") {
-		return "", "", false, false
-	}
-	if len(function.Params.List) == 1 {
-		return source.BackendSignatureAction0, "", false, true
-	}
-	second := function.Params.List[1].Type
-	if isSelector(second, imports, formImportPath, "Values") {
-		return source.BackendSignatureActionValues, "", false, true
-	}
-	if ident, ok := second.(*ast.Ident); ok && ident.IsExported() {
-		return source.BackendSignatureActionForm, ident.Name, false, true
-	}
-	if pointer, ok := second.(*ast.StarExpr); ok {
-		if ident, ok := pointer.X.(*ast.Ident); ok && ident.IsExported() {
-			return source.BackendSignatureActionFormPtr, ident.Name, true, true
-		}
-	}
-	return "", "", false, false
-}
-
-func isAPISignature(function *ast.FuncType, imports map[string]string) bool {
-	if function == nil || function.Params == nil || function.Results == nil {
-		return false
-	}
-	if len(function.Params.List) != 2 || len(function.Results.List) != 2 {
-		return false
-	}
-	request, ok := function.Params.List[1].Type.(*ast.StarExpr)
-	return ok &&
-		isSelector(function.Params.List[0].Type, imports, contextImportPath, "Context") &&
-		isSelector(request.X, imports, httpImportPath, "Request") &&
-		isSelector(function.Results.List[0].Type, imports, responseImportPath, "Response") &&
-		isError(function.Results.List[1].Type)
-}
-
-func loadSignature(function *ast.FuncType, imports map[string]string) (source.BackendSignatureKind, bool) {
-	if function == nil || function.Params == nil || function.Results == nil {
-		return "", false
-	}
-	if len(function.Params.List) != 1 || !isSelector(function.Params.List[0].Type, imports, ssrImportPath, "LoadContext") {
-		return "", false
-	}
-	if len(function.Results.List) == 1 && isMapStringAny(function.Results.List[0].Type) {
-		return source.BackendSignatureLoad, true
-	}
-	if len(function.Results.List) == 2 && isMapStringAny(function.Results.List[0].Type) && isError(function.Results.List[1].Type) {
-		return source.BackendSignatureLoadError, true
-	}
-	return "", false
-}
-
-func isMapStringAny(expression ast.Expr) bool {
-	mapType, ok := expression.(*ast.MapType)
-	if !ok {
-		return false
-	}
-	key, ok := mapType.Key.(*ast.Ident)
-	if !ok || key.Name != "string" {
-		return false
-	}
-	if value, ok := mapType.Value.(*ast.Ident); ok && value.Name == "any" {
-		return true
-	}
-	_, ok = mapType.Value.(*ast.InterfaceType)
-	return ok
-}
-
 func loadFunctionName(pageID string) string {
 	return "Load" + source.ExportedIdentifier(pageID, "Page")
-}
-
-func isSelector(expression ast.Expr, imports map[string]string, importPath, name string) bool {
-	selector, ok := expression.(*ast.SelectorExpr)
-	if !ok || selector.Sel == nil || selector.Sel.Name != name {
-		return false
-	}
-	ident, ok := selector.X.(*ast.Ident)
-	if !ok {
-		return false
-	}
-	return imports[ident.Name] == importPath
-}
-
-func isError(expression ast.Expr) bool {
-	ident, ok := expression.(*ast.Ident)
-	return ok && ident.Name == "error"
 }
 
 // BackendBindingsFromIR derives the backend binding records already attached to

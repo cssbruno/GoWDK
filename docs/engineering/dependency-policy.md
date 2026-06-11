@@ -42,7 +42,9 @@ readiness.
 
 ## Current Dependency Classification
 
-- Compiler core: standard library plus repository packages under `internal/`.
+- Compiler core: standard library plus repository packages under `internal/`,
+  and `golang.org/x/tools/go/packages` for Go package loading during endpoint
+  binding inspection.
 - Runtime core: standard library plus repository packages under `runtime/`.
 - Optional HTTP adapters: `runtime/adapters/echo`, `runtime/adapters/gin`, and
   `runtime/adapters/fiber`; each adapter is a nested Go module so framework

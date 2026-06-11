@@ -135,17 +135,17 @@ The addon module may import other GitHub/private/local modules. The project
 
 ## Generated App Request Guards
 
-When generated SSR, action, or API routes declare `guard`, the generated app
-package exposes guard registration hooks:
+When generated SSR, action, API, or fragment routes declare `guard`, the
+generated app package exposes guard registration hooks:
 
 ```go
 package gowdkapp
 
-import gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
+import gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
 
-func GOWDKGuardRegistry() gowdkssr.GuardRegistry {
-	return gowdkssr.GuardRegistry{
-		"auth.required": func(ctx gowdkssr.LoadContext) error {
+func GOWDKGuardRegistry() gowdkguard.Registry {
+	return gowdkguard.Registry{
+		"auth.required": func(ctx gowdkguard.Context) error {
 			return nil
 		},
 	}

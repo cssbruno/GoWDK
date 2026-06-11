@@ -49,8 +49,15 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	if len(options.Fragments) > 0 {
 		imports["path"] = "path"
 	}
+	if actionsUseFragments(options.Actions) || fragmentsUseStaticFallback(options.Fragments) {
+		imports["gowdkpartial"] = "github.com/cssbruno/gowdk/addons/partial"
+	}
 	if actionsUseValidation(options.Actions) {
 		imports["gowdkvalidation"] = "github.com/cssbruno/gowdk/runtime/validation"
+	}
+	if generatedUsesGuards(options) {
+		imports["gowdkauth"] = "github.com/cssbruno/gowdk/runtime/auth"
+		imports["gowdkguard"] = "github.com/cssbruno/gowdk/runtime/guard"
 	}
 	if csrfEnabled(options) {
 		imports["errors"] = "errors"

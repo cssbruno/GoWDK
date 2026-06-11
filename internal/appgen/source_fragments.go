@@ -71,11 +71,20 @@ func fragmentCaseStmts(fragment FragmentEndpoint, rateLimit bool) []ast.Stmt {
 		return stmts
 	}
 	stmts = append(stmts,
-		define([]ast.Expr{id("fragment")}, call(sel("gowdkresponse", "FragmentFor"), stringLit(fragment.Target), stringLit(fragment.HTML))),
+		define([]ast.Expr{id("fragment")}, call(sel("gowdkpartial", "Fragment"), stringLit(fragment.Target), stringLit(fragment.HTML))),
 		writeNoStoreHTTPStmt(id("fragment")),
 		returnBool(true),
 	)
 	return stmts
+}
+
+func fragmentsUseStaticFallback(fragments []FragmentEndpoint) bool {
+	for _, fragment := range fragments {
+		if fragment.Binding.Status != source.BackendBindingBound && fragment.Binding.Status != source.BackendBindingUnsupportedSignature {
+			return true
+		}
+	}
+	return false
 }
 
 func sortedFragmentEndpoints(fragments []FragmentEndpoint) []FragmentEndpoint {

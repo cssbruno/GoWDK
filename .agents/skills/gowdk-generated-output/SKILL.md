@@ -25,7 +25,7 @@ inspectable, and tested.
   `docs/compiler/manifest.md`, `docs/compiler/build-report.md`,
   `docs/reference/cli.md`, `docs/engineering/generated-code-policy.md`.
 - Runtime packages consumed by generated apps live in `runtime/` (app, asset,
-  form, response, route, validation, ...); optional features in `addons/`
+  form, guard, response, route, validation, ...); optional features in `addons/`
   (ssr, actions, api, auth, db, embed, partial, spa, tailwind, ...). Separate
   Go modules exist only for `runtime/adapters/{echo,fiber,gin}` and
   `runtime/contracts/{natsbroker,redisstream,websocketfanout}` — touch those

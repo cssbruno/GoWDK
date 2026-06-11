@@ -59,6 +59,9 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 		imports["path"] = "path"
 	}
+	if actionsUseFragments(actions) || fragmentsUseStaticFallback(fragments) {
+		imports["gowdkpartial"] = "github.com/cssbruno/gowdk/addons/partial"
+	}
 	if actionsParseForm(actions) {
 		imports["strings"] = "strings"
 	}
@@ -108,8 +111,10 @@ func runtimeImportMap(options Options) map[string]string {
 	if len(ssr) > 0 {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 	}
-	if generatedUsesGuards(options) || ssrUsesLoad(ssr) {
-		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
+	if generatedUsesGuards(options) {
+		imports["gowdkguard"] = "github.com/cssbruno/gowdk/runtime/guard"
+	}
+	if ssrUsesLoad(ssr) {
 		imports["gowdkssr"] = "github.com/cssbruno/gowdk/addons/ssr"
 	}
 	if generatedUsesGuards(options) {

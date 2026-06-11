@@ -180,7 +180,7 @@ func TestRunGuardsExecutesInDeclarationOrder(t *testing.T) {
 }
 
 func TestRunGuardsReportsMissingOrFailedGuard(t *testing.T) {
-	if err := RunGuards(LoadContext{}, []string{"auth.required"}, GuardRegistry{}); err == nil || !strings.Contains(err.Error(), `SSR guard "auth.required" is not registered`) {
+	if err := RunGuards(LoadContext{}, []string{"auth.required"}, GuardRegistry{}); err == nil || !strings.Contains(err.Error(), `guard "auth.required" is not registered`) {
 		t.Fatalf("expected missing guard error, got %v", err)
 	}
 

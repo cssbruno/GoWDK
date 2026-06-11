@@ -7,7 +7,7 @@ GOWDK's current hook model is small and `net/http`-first.
 | Extension point | Type | Scope |
 | --- | --- | --- |
 | Generated app handler | `http.Handler` | Wrap with normal Go middleware in app startup. |
-| Guards | `addons/ssr.GuardRegistry`, `runtime/auth.Provider` | Generated request-time routes with `guard`. |
+| Guards | `runtime/guard.Registry`, `runtime/auth.Provider` | Generated action, API, fragment, and SSR routes with `guard`. |
 | Rate limiting | `*ratelimit.Limiter` | Generated action, API, fragment, SSR, and split-backend proxy routes when the addon is enabled. |
 | Handler context | `context.Context` | User handlers read request metadata through `runtime/app` helpers. |
 
@@ -39,14 +39,19 @@ page GET route; build-time SPA pages emit static HTML and cannot enforce
 frontend access.
 
 ```go
-func GOWDKGuardRegistry() ssr.GuardRegistry {
-	return ssr.GuardRegistry{
-		"auth.required": func(ctx ssr.LoadContext) error {
+import gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
+
+func GOWDKGuardRegistry() gowdkguard.Registry {
+	return gowdkguard.Registry{
+		"auth.required": func(ctx gowdkguard.Context) error {
 			return nil
 		},
 	}
 }
 ```
+
+`addons/ssr.GuardRegistry` and `addons/ssr.LoadContext` remain aliases for
+existing SSR-facing guard code.
 
 Native RBAC guards reuse `guard` IDs:
 

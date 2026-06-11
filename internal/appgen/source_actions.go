@@ -74,6 +74,15 @@ func actionsUseForm(actions []ActionEndpoint) bool {
 	return false
 }
 
+func actionsUseFragments(actions []ActionEndpoint) bool {
+	for _, action := range actions {
+		if len(action.Fragments) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func actionsParseForm(actions []ActionEndpoint) bool {
 	for _, action := range actions {
 		if action.Binding.Status != source.BackendBindingMissing && action.Binding.Status != source.BackendBindingUnsupportedSignature {
@@ -500,23 +509,15 @@ func fragmentSwitchStmt(fragments []ActionFragment) ast.Stmt {
 
 func fragmentResponseStmts(fragment ActionFragment) []ast.Stmt {
 	return []ast.Stmt{
-		define([]ast.Expr{id("fragment")}, &ast.CompositeLit{
-			Type: sel("gowdkresponse", "Response"),
-			Elts: []ast.Expr{
-				keyValue("Kind", sel("gowdkresponse", "Fragment")),
-				keyValue("Status", sel("http", "StatusOK")),
-				keyValue("Target", stringLit(fragment.Target)),
-				keyValue("Body", stringLit(fragment.HTML)),
-			},
-		}),
+		define([]ast.Expr{id("fragment")}, call(sel("gowdkpartial", "Fragment"), stringLit(fragment.Target), stringLit(fragment.HTML))),
 		&ast.IfStmt{
 			Init: define([]ast.Expr{id("swap")}, trimHeaderCall("X-GOWDK-Swap")),
 			Cond: &ast.BinaryExpr{X: id("swap"), Op: token.NEQ, Y: stringLit("")},
 			Body: block(&ast.IfStmt{
 				Init: define([]ast.Expr{id("swapped"), id("err")}, call(
-					sel("gowdkresponse", "FragmentSwap"),
+					sel("gowdkpartial", "Swap"),
 					selExpr(id("fragment"), "Target"),
-					call(sel("gowdkresponse", "SwapMode"), id("swap")),
+					call(sel("gowdkpartial", "SwapMode"), id("swap")),
 					selExpr(id("fragment"), "Body"),
 				)),
 				Cond: &ast.BinaryExpr{X: id("err"), Op: token.EQL, Y: id("nil")},

@@ -91,6 +91,9 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 			t.Fatalf("expected generated gowdkapp/app.go to contain %q:\n%s", expected, packagePayload)
 		}
 	}
+	if strings.Contains(string(packagePayload), `github.com/cssbruno/gowdk/addons/ssr`) {
+		t.Fatalf("static-only generated app should not import SSR helpers:\n%s", packagePayload)
+	}
 	for _, copiedRuntime := range []string{
 		"type SPAHandler struct",
 		"func loadAssetManifest",
@@ -463,14 +466,18 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 		`value := os.Getenv("GOWDK_TEST_DATABASE_URL")`,
 		`missing = append(missing, "GOWDK_TEST_DATABASE_URL is required but is not set")`,
 		`func newBackendRouter() (*gowdkruntime.BackendRouter, error)`,
+		`gowdkpartial "github.com/cssbruno/gowdk/addons/partial"`,
 		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}`,
 		`gowdkruntime.BackendRoute{Method: http.MethodGet, Path: "/patients/list", Kind: "fragment", Handler: fragment}`,
 		`func fragment(response http.ResponseWriter, request *http.Request) bool`,
-		`gowdkresponse.FragmentFor("#patients", "<section>Patients</section>")`,
+		`gowdkpartial.Fragment("#patients", "<section>Patients</section>")`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated backend app source to contain %q:\n%s", expected, source)
 		}
+	}
+	if strings.Contains(source, `github.com/cssbruno/gowdk/addons/ssr`) {
+		t.Fatalf("fragment/action backend output should not import SSR helpers:\n%s", source)
 	}
 	if strings.Contains(source, `func backend(response http.ResponseWriter, request *http.Request) bool`) {
 		t.Fatalf("expected backend-only app to use BackendRouter instead of generated backend dispatcher:\n%s", source)
@@ -714,9 +721,9 @@ func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
 	for _, expected := range []string{
 		`gowdkratelimit "github.com/cssbruno/gowdk/addons/ratelimit"`,
 		`gowdkauth "github.com/cssbruno/gowdk/runtime/auth"`,
-		`gowdkssr "github.com/cssbruno/gowdk/addons/ssr"`,
+		`gowdkguard "github.com/cssbruno/gowdk/runtime/guard"`,
 		`func RegisterRateLimiter(limiter *gowdkratelimit.Limiter)`,
-		`func RegisterGuards(registry gowdkssr.GuardRegistry)`,
+		`func RegisterGuards(registry gowdkguard.Registry)`,
 		`func RegisterAuthProvider(provider gowdkauth.Provider)`,
 		`if runRateLimit(response, request)`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
@@ -724,6 +731,9 @@ func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected guarded/rate-limited contract source to contain %q:\n%s", expected, source)
 		}
+	}
+	if strings.Contains(source, `github.com/cssbruno/gowdk/addons/ssr`) {
+		t.Fatalf("guarded contract endpoints should not import SSR helpers:\n%s", source)
 	}
 	commandIndex := strings.Index(source, `ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "command"`)
 	if commandIndex < 0 {
@@ -1184,6 +1194,9 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
 		}
 	}
+	if strings.Contains(source, `github.com/cssbruno/gowdk/addons/ssr`) || strings.Contains(source, `github.com/cssbruno/gowdk/runtime/render`) {
+		t.Fatalf("API output should not import SSR or render helpers:\n%s", source)
+	}
 }
 
 func TestGenerateWritesEndpointErrorPages(t *testing.T) {
@@ -1267,10 +1280,11 @@ func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`gowdkform "github.com/cssbruno/gowdk/runtime/form"`,
+		`gowdkpartial "github.com/cssbruno/gowdk/addons/partial"`,
 		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`partial := strings.TrimSpace(request.Header.Get("X-GOWDK-Partial"))`,
-		`fragment := gowdkresponse.Response{Kind: gowdkresponse.Fragment, Status: http.StatusOK, Target: "#patients", Body: "<section><p>Updated patients</p></section>"}`,
-		`gowdkresponse.FragmentSwap(fragment.Target, gowdkresponse.SwapMode(swap), fragment.Body)`,
+		`fragment := gowdkpartial.Fragment("#patients", "<section><p>Updated patients</p></section>")`,
+		`gowdkpartial.Swap(fragment.Target, gowdkpartial.SwapMode(swap), fragment.Body)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, fragment)`,
 		`gowdkresponse.WriteNoStoreError(response, http.StatusNotFound, "partial fragment not found")`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.RedirectTo("/patients"))`,
@@ -1278,6 +1292,9 @@ func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
 		}
+	}
+	if strings.Contains(source, `github.com/cssbruno/gowdk/addons/ssr`) {
+		t.Fatalf("action fragment output should not import SSR helpers:\n%s", source)
 	}
 }
 
@@ -1686,7 +1703,7 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 		`func decodeNewsletterSubscribeInput(values gowdkform.Values) (SubscribeInput, error)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
 		`case request.Method == "GET" && requestPath == "/newsletter/list":`,
-		`gowdkresponse.FragmentFor("#newsletter", "<section>Newsletter list</section>")`,
+		`gowdkpartial.Fragment("#newsletter", "<section>Newsletter list</section>")`,
 		`case "/dashboard":`,
 		`gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr", Guards: []string{"auth.required"}}`,
 		`<main><h1>Dashboard</h1></main>`,
@@ -1735,20 +1752,23 @@ func TestGenerateWritesGuardRegistryAndGuardChecks(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`gowdkssr "github.com/cssbruno/gowdk/addons/ssr"`,
 		`gowdkauth "github.com/cssbruno/gowdk/runtime/auth"`,
-		`var guardRegistry gowdkssr.GuardRegistry`,
-		`func RegisterGuards(registry gowdkssr.GuardRegistry)`,
+		`gowdkguard "github.com/cssbruno/gowdk/runtime/guard"`,
+		`var guardRegistry gowdkguard.Registry`,
+		`func RegisterGuards(registry gowdkguard.Registry)`,
 		`var authProvider gowdkauth.Provider`,
 		`func RegisterAuthProvider(provider gowdkauth.Provider)`,
 		`func init()`,
 		`RegisterGuards(GOWDKGuardRegistry())`,
-		`gowdkssr.RunGuardsWithAuth(loadContext, guards, guardRegistry, authProvider)`,
+		`gowdkguard.RunGuardsWithAuth(guardContext, guards, guardRegistry, authProvider)`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected guard generated source to contain %q:\n%s", expected, source)
 		}
+	}
+	if strings.Contains(source, `github.com/cssbruno/gowdk/addons/ssr`) {
+		t.Fatalf("guard-only request-time output should not import SSR helpers:\n%s", source)
 	}
 }
 
@@ -1818,6 +1838,7 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`gowdkratelimit "github.com/cssbruno/gowdk/addons/ratelimit"`,
+		`gowdkguard "github.com/cssbruno/gowdk/runtime/guard"`,
 		`var rateLimiter *gowdkratelimit.Limiter`,
 		`func RegisterRateLimiter(limiter *gowdkratelimit.Limiter)`,
 		`result, err := rateLimiter.AllowRequest(request)`,
@@ -1851,7 +1872,7 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 	assertSourceOrder(t, source[fragmentIndex:],
 		`if runRateLimit(response, request)`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
-		`fragment := gowdkresponse.FragmentFor("#patients", "<section>Patients</section>")`,
+		`fragment := gowdkpartial.Fragment("#patients", "<section>Patients</section>")`,
 	)
 	ssrIndex := strings.Index(source, `ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr"`)
 	if ssrIndex < 0 {

@@ -2,6 +2,12 @@
 
 - 
 
+## Issue Closure
+
+<!-- Use Closes/Fixes/Resolves only when this PR fully resolves the issue.
+Use Related for partial or tracking-only links. GitHub does not auto-close
+issues from words like "Completes". -->
+
 ## Verification
 
 - [ ] I ran the relevant tests, lint, and build commands.

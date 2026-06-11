@@ -1,6 +1,7 @@
 package buildgen
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
 func TestBuildPreservesUnchangedArtifactModTimes(t *testing.T) {
@@ -174,6 +176,73 @@ func TestBuildIncrementalFromIRRendersChangedPageSources(t *testing.T) {
 	}
 	if html := readFile(t, filepath.Join(outputDir, "index.html")); !strings.Contains(html, "Home after") {
 		t.Fatalf("expected changed home output, got:\n%s", html)
+	}
+}
+
+func TestBuildIncrementalFromIREmitsComponentFileAssets(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	if err := os.MkdirAll("components", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "components", "hero.png"), "fake image\n")
+	outputDir := filepath.Join(root, "dist")
+	pageSource := "pages/home.page.gwdk"
+	initial := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			Source:  pageSource,
+			Package: "components",
+			ID:      "home",
+			Route:   "/",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Hero /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{{
+			Package: "components",
+			Source:  "components/hero.cmp.gwdk",
+			Name:    "Hero",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<section>Hero</section>`,
+			},
+		}},
+	}
+	if _, err := Build(gowdk.Config{}, initial, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	changed := initial
+	changed.Components[0].Assets = []string{"./hero.png"}
+	result, err := BuildIncrementalFromIR(gowdk.Config{}, gwdkanalysis.BuildProgram(gowdk.Config{}, changed), outputDir, []string{pageSource})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	logicalPath := "assets/gowdk/components/components/Hero/hero.png"
+	artifact := assetArtifactByLogicalPath(t, result.AssetArtifacts, logicalPath)
+	emittedRel := filepath.ToSlash(mustRelativePath(t, outputDir, artifact.Path))
+	if emittedRel == logicalPath || !strings.HasPrefix(emittedRel, "assets/gowdk/components/components/Hero/hero.") || !strings.HasSuffix(emittedRel, ".png") {
+		t.Fatalf("expected content-hashed incremental component asset filename, got %q", emittedRel)
+	}
+	if got := readFile(t, artifact.Path); got != "fake image\n" {
+		t.Fatalf("unexpected emitted asset contents: %q", got)
+	}
+
+	var assets runtimeasset.Manifest
+	manifestPayload := readBytes(t, filepath.Join(outputDir, assetManifestFile))
+	if err := json.Unmarshal(manifestPayload, &assets); err != nil {
+		t.Fatal(err)
+	}
+	if assets.Resolve(logicalPath) != emittedRel {
+		t.Fatalf("expected component asset manifest mapping, got %s", manifestPayload)
+	}
+	if hash := assets.Hash(logicalPath); !strings.HasPrefix(hash, "sha256:") {
+		t.Fatalf("expected component asset hash, got %q in %s", hash, manifestPayload)
+	}
+	if policy := assets.CachePolicy(logicalPath); policy != immutableAssetCachePolicy {
+		t.Fatalf("expected immutable component asset cache policy, got %q", policy)
 	}
 }
 

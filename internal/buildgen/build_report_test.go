@@ -314,6 +314,32 @@ func TestBuildReportIncludesContractReferences(t *testing.T) {
 	}
 }
 
+func TestBuildReportDerivesCommandReferencePathFromPageRoute(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		Source:  "pages/patients.page.gwdk",
+		Package: "pages",
+		ID:      "patients",
+		Route:   "/patients",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main><form g:command="patients.CreatePatient"><input name="name" /></form></main>`,
+		},
+	}}}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := findBuildReportEvent(result.Report, "bind", "contract_reference")
+	if event == nil {
+		t.Fatalf("missing contract_reference event in %#v", result.Report.Events)
+	}
+	if event.Data["kind"] != "command" || event.Data["method"] != "POST" || event.Data["path"] != "/patients" {
+		t.Fatalf("unexpected derived command route metadata: %#v", event.Data)
+	}
+}
+
 func TestBuildReportIncludesQueryContractReferences(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{

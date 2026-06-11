@@ -23,8 +23,12 @@ func appendContractReferences(program *gwdkir.Program, template gwdkir.Template)
 	for _, ref := range refs {
 		method := ref.Method
 		path := ref.Path
-		if ref.Kind == view.ContractReferenceQuery && path == "" && template.Route != "" {
-			method = "GET"
+		if path == "" && template.Route != "" {
+			if ref.Kind == view.ContractReferenceQuery {
+				method = "GET"
+			} else if method == "" {
+				method = "POST"
+			}
 			path = template.Route
 		}
 		importAlias, contractType := splitContractReferenceName(ref.Name)

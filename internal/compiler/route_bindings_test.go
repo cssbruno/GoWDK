@@ -197,6 +197,24 @@ func TestBuildRouteMetadataFromIR(t *testing.T) {
 	}
 }
 
+func TestBuildRouteMetadataIncludesDerivedCommandEndpointRoute(t *testing.T) {
+	ir := appFixture{Pages: []gwdkir.Page{{
+		Package: "pages",
+		ID:      "patients",
+		Route:   "/patients",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main><form g:command="patients.CreatePatient"></form></main>`,
+		},
+	}}}.program(gowdk.Config{})
+
+	metadata := BuildRouteMetadataFromIR(gowdk.Config{}, ir)
+	command := findEndpoint(t, metadata.Endpoints, EndpointCommand, "POST", "/patients")
+	if command.Symbol != "patients.CreatePatient" || command.PageID != "patients" {
+		t.Fatalf("unexpected derived command route metadata: %#v", command)
+	}
+}
+
 func assertRoute(t *testing.T, routes []RouteBinding, kind RouteKind, method, route, handler string) {
 	t.Helper()
 	for _, binding := range routes {

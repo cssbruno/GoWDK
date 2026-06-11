@@ -378,6 +378,42 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesDerivedCommandContractBackendRoute(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
+
+	program := gwdkanalysis.BuildProgram(gowdk.Config{}, gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		Package: "pages",
+		ID:      "patients",
+		Route:   "/patients",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main><form g:command="patients.CreatePatient"></form></main>`,
+		},
+	}}})
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{IR: &program})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`Kind: "command", Handler: commandPatientsCreatePatientPOSTPatients`,
+		`func commandPatientsCreatePatientPOSTPatients(response http.ResponseWriter, request *http.Request) bool`,
+		`GOWDK command contract is not implemented`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated derived command route source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestGeneratedGoMatchesGoldenFixture(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

@@ -98,6 +98,9 @@ func (parser *parser) element() (Node, error) {
 	if !isLowerHTMLName(name) {
 		return nil, parser.errorf("unsupported element <%s>; this build slice supports lowercase HTML tags only", name)
 	}
+	if blockedViewElement(name) {
+		return nil, parser.errorf("element <%s> is not supported in view {}; use configured or scoped script assets instead", name)
+	}
 
 	var attrs []Attr
 	for {
@@ -108,6 +111,9 @@ func (parser *parser) element() (Node, error) {
 			if err != nil {
 				return nil, err
 			}
+			if err := validateParsedHTMLAttrsSafety(attrs); err != nil {
+				return nil, parser.errorf("%s", err)
+			}
 			if err := validateRawHTMLDirective(name, attrs, nil); err != nil {
 				return nil, parser.errorf("%s", err)
 			}
@@ -116,6 +122,9 @@ func (parser *parser) element() (Node, error) {
 			attrs, err := normalizeHTMLAttrs(attrs)
 			if err != nil {
 				return nil, err
+			}
+			if err := validateParsedHTMLAttrsSafety(attrs); err != nil {
+				return nil, parser.errorf("%s", err)
 			}
 			children, err := parser.nodes(name)
 			if err != nil {
@@ -286,6 +295,15 @@ func normalizeHTMLAttrs(attrs []Attr) ([]Attr, error) {
 		out = append([]Attr{{Name: "class", Value: strings.Join(classValues, " ")}}, out...)
 	}
 	return out, nil
+}
+
+func validateParsedHTMLAttrsSafety(attrs []Attr) error {
+	for _, attr := range attrs {
+		if err := validateParsedHTMLAttrSafety(attr); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (parser *parser) directiveAttr(name string) (Attr, error) {

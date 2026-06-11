@@ -250,7 +250,7 @@ func TestSSRArtifactsRejectRouteParamInDangerousAttribute(t *testing.T) {
 			Render: gowdk.SSR,
 			Blocks: gwdkir.Blocks{
 				View:     true,
-				ViewBody: `<img src="x" onerror="{param(\"slug\")}" />`,
+				ViewBody: `<a href="/blog/{param(\"slug\")}">Post</a>`,
 			},
 		}},
 	}
@@ -259,7 +259,7 @@ func TestSSRArtifactsRejectRouteParamInDangerousAttribute(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected dangerous route param attribute error")
 	}
-	if !strings.Contains(err.Error(), `route param interpolation is not allowed in "onerror" attributes`) {
+	if !strings.Contains(err.Error(), `route param interpolation is not allowed in "href" attributes`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -282,6 +282,9 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 		if tainted && unsafeRouteParamAttr(attr.Name) {
 			return fmt.Errorf("route param interpolation is not allowed in %q attributes", attr.Name)
 		}
+		if err := validateRenderedHTMLAttrSafety(attr.Name, value); err != nil {
+			return err
+		}
 		out.writeByte(' ')
 		out.write(attr.Name)
 		if attr.Value != "" || !attr.Boolean {

@@ -53,7 +53,7 @@ func duplicateRouteMessage(route, firstID, firstSource, duplicateID, duplicateSo
 func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint) []ValidationError {
 	var registered []routeRegistration
 	var diagnostics []ValidationError
-	for _, current := range routeRegistrations(pages, endpoints) {
+	for _, current := range routeRegistrations(pages, endpoints, nil) {
 		for _, previous := range registered {
 			if current.Pattern == previous.Pattern {
 				// Exact duplicates are reported by the duplicate-route and
@@ -171,32 +171,33 @@ func routePatternSegments(pattern string) []string {
 	return strings.Split(trimmed, "/")
 }
 
-func validateRouteMethodConflicts(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint) []ValidationError {
-	seen := map[string]routeRegistration{}
+func validateRouteMethodConflicts(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []ValidationError {
+	seen := map[string][]routeRegistration{}
 	var diagnostics []ValidationError
-	for _, registration := range routeRegistrations(pages, endpoints) {
+	for _, registration := range routeRegistrations(pages, endpoints, refs) {
 		key := registration.Method + " " + registration.Pattern
-		first, exists := seen[key]
-		if !exists {
-			seen[key] = registration
-			continue
+		for _, previous := range seen[key] {
+			if previous.Kind == "page" && registration.Kind == "page" {
+				continue
+			}
+			if allowedPageOwnedQueryRouteConflict(previous, registration) {
+				continue
+			}
+			diagnostics = append(diagnostics, ValidationError{
+				Code:   "route_method_conflict",
+				PageID: registration.PageID,
+				Source: registration.Source,
+				Span:   registration.Span,
+				Message: fmt.Sprintf(
+					"%s %s for %s conflicts with %s",
+					registration.Method,
+					registration.Route,
+					registration.Owner,
+					previous.Owner,
+				),
+			})
 		}
-		if first.Kind == "page" && registration.Kind == "page" {
-			continue
-		}
-		diagnostics = append(diagnostics, ValidationError{
-			Code:   "route_method_conflict",
-			PageID: registration.PageID,
-			Source: registration.Source,
-			Span:   registration.Span,
-			Message: fmt.Sprintf(
-				"%s %s for %s conflicts with %s",
-				registration.Method,
-				registration.Route,
-				registration.Owner,
-				first.Owner,
-			),
-		})
+		seen[key] = append(seen[key], registration)
 	}
 	return diagnostics
 }
@@ -212,7 +213,7 @@ type routeRegistration struct {
 	Span    source.SourceSpan
 }
 
-func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint) []routeRegistration {
+func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []routeRegistration {
 	var registrations []routeRegistration
 	for _, page := range pages {
 		pageInfo, pageIssues := parseRoute(page.Route)
@@ -323,7 +324,42 @@ func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint) []ro
 			Span:    firstSpan(endpoint.RouteSpan, endpoint.Span),
 		})
 	}
+	for _, ref := range refs {
+		if strings.TrimSpace(ref.Method) == "" || strings.TrimSpace(ref.Path) == "" {
+			continue
+		}
+		info, issues := parseRoute(ref.Path)
+		if len(issues) > 0 {
+			continue
+		}
+		kind := "command"
+		if ref.Kind == gwdkir.ContractQuery {
+			kind = "query"
+		}
+		method := strings.ToUpper(strings.TrimSpace(ref.Method))
+		registrations = append(registrations, routeRegistration{
+			Kind:    "contract_" + kind,
+			Owner:   fmt.Sprintf("%s contract %s", kind, ref.Name),
+			Method:  method,
+			Route:   ref.Path,
+			Pattern: info.Pattern,
+			PageID:  ref.OwnerID,
+			Source:  ref.Source,
+			Span:    ref.Span,
+		})
+	}
 	return registrations
+}
+
+func allowedPageOwnedQueryRouteConflict(first routeRegistration, current routeRegistration) bool {
+	return pageOwnedQueryRouteConflict(first, current) || pageOwnedQueryRouteConflict(current, first)
+}
+
+func pageOwnedQueryRouteConflict(page routeRegistration, query routeRegistration) bool {
+	return page.Kind == "page" &&
+		query.Kind == "contract_query" &&
+		query.PageID == page.PageID &&
+		query.Route == page.Route
 }
 
 func validateStandaloneEndpoints(endpoints []gwdkir.GoEndpoint) []ValidationError {

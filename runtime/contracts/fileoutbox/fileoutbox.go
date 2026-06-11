@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sync"
 	"time"
 
@@ -22,7 +21,7 @@ const defaultBatchSize = 100
 
 // Decoder converts one persisted JSON payload back into the typed Go event
 // value expected by runtime/contracts subscribers.
-type Decoder func(json.RawMessage) (any, error)
+type Decoder = contracts.EventDecoder
 
 // Record is one durable outbox row stored as a JSON Lines object.
 type Record struct {
@@ -89,19 +88,13 @@ func WithDecoder(eventType string, decoder Decoder) Option {
 
 // WithJSONDecoder registers a JSON decoder for one stored event type.
 func WithJSONDecoder[T any](eventType string) Option {
-	return WithDecoder(eventType, func(raw json.RawMessage) (any, error) {
-		var value T
-		if err := json.Unmarshal(raw, &value); err != nil {
-			return nil, err
-		}
-		return value, nil
-	})
+	return WithDecoder(eventType, contracts.JSONEventDecoder[T]())
 }
 
 // WithJSONTypeDecoder registers a JSON decoder using the same Go type name
 // stored by runtime/contracts when T is emitted.
 func WithJSONTypeDecoder[T any]() Option {
-	return WithJSONDecoder[T](typeName[T]())
+	return WithJSONDecoder[T](contracts.ContractName[T]())
 }
 
 // New creates a file-backed outbox at path.
@@ -242,14 +235,6 @@ func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch
 func (store *Store) nextID() string {
 	store.seq++
 	return fmt.Sprintf("%d-%d", store.now().UTC().UnixNano(), store.seq)
-}
-
-func typeName[T any]() string {
-	t := reflect.TypeOf((*T)(nil)).Elem()
-	if t.PkgPath() == "" || t.Name() == "" {
-		return t.String()
-	}
-	return t.PkgPath() + "." + t.Name()
 }
 
 // decodeRecordsLocked decodes records into typed envelopes. Records that have

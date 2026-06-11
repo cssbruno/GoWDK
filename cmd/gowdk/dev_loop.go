@@ -33,25 +33,22 @@ func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 		return false, nil
 	}
 
-	options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	plan, err := loadBuildOptions(args)
 	if err != nil {
 		return true, err
 	}
-	if err := loadBuildConfig(&options, configPath); err != nil {
-		return true, err
-	}
-	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
-		return true, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
-	}
-	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
+	if plan.shouldBuildConfiguredTargets() {
 		return false, nil
 	}
-	if strings.TrimSpace(appDir) != "" || strings.TrimSpace(binaryPath) != "" || strings.TrimSpace(wasmPath) != "" || strings.TrimSpace(backendAppDir) != "" || strings.TrimSpace(backendBinaryPath) != "" {
+	if strings.TrimSpace(plan.AppDir) != "" || strings.TrimSpace(plan.BinaryPath) != "" || strings.TrimSpace(plan.WASMPath) != "" || strings.TrimSpace(plan.BackendAppDir) != "" || strings.TrimSpace(plan.BackendBinaryPath) != "" {
 		return false, nil
 	}
-	if inputChangeTouchesConfig(change, configPath) {
+	if inputChangeTouchesConfig(change, plan.ConfigPath) {
 		return false, nil
 	}
+	options := plan.Options
+	outputDir := plan.OutputDir
+	paths := append([]string(nil), plan.Paths...)
 	if outputDir == "" {
 		outputDir = options.Config.Build.Output
 	}
@@ -60,7 +57,7 @@ func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 	}
 	options.Config.Build.Output = outputDir
 	if len(paths) == 0 {
-		discovered, err := discoverBuildFiles(options.Config, outputDir, moduleNames)
+		discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames)
 		if err != nil {
 			return true, err
 		}
@@ -331,18 +328,15 @@ func canonicalDisplayPaths(base, path string) (string, string, bool) {
 }
 
 func buildInputSnapshot(args []string) (inputSnapshot, error) {
-	options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	plan, err := loadBuildOptions(args)
 	if err != nil {
 		return nil, err
 	}
-	if err := loadBuildConfig(&options, configPath); err != nil {
-		return nil, err
-	}
-	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
-		return nil, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
-	}
-	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
-		targets, err := selectBuildTargets(options.Config.Build.Targets, targetNames)
+	options := plan.Options
+	outputDir := plan.OutputDir
+	paths := append([]string(nil), plan.Paths...)
+	if plan.shouldBuildConfiguredTargets() {
+		targets, err := selectBuildTargets(options.Config.Build.Targets, plan.TargetNames)
 		if err != nil {
 			return nil, err
 		}
@@ -361,7 +355,7 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 	} else if outputDir == "" {
 		outputDir = options.Config.Build.Output
 		if len(paths) == 0 {
-			discovered, err := discoverBuildFiles(options.Config, outputDir, moduleNames)
+			discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames)
 			if err != nil {
 				return nil, err
 			}
@@ -373,7 +367,7 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 		}
 		paths = append(paths, css...)
 	} else if len(paths) == 0 {
-		discovered, err := discoverBuildFiles(options.Config, outputDir, moduleNames)
+		discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames)
 		if err != nil {
 			return nil, err
 		}
@@ -390,8 +384,8 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 		}
 		paths = append(paths, css...)
 	}
-	if strings.TrimSpace(configPath) != "" {
-		paths = append(paths, configPath)
+	if strings.TrimSpace(plan.ConfigPath) != "" {
+		paths = append(paths, plan.ConfigPath)
 	} else if _, err := os.Stat("gowdk.config.go"); err == nil {
 		paths = append(paths, "gowdk.config.go")
 	}

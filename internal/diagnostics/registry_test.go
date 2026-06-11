@@ -31,6 +31,21 @@ func TestRegistryIsSortedUniqueAndComplete(t *testing.T) {
 		default:
 			t.Fatalf("unknown stability for %s: %q", entry.Code, entry.Stability)
 		}
+		switch entry.Severity {
+		case SeverityError, SeverityWarning, SeverityInfo:
+		default:
+			t.Fatalf("unknown severity for %s: %q", entry.Code, entry.Severity)
+		}
+		if entry.Fix != nil {
+			if entry.Fix.Title == "" || entry.Fix.Description == "" || entry.Fix.Rewriter == "" {
+				t.Fatalf("fix metadata for %s must include title, description, and rewriter: %#v", entry.Code, entry.Fix)
+			}
+			switch entry.Fix.Rewriter {
+			case FixEndpointHeaderFromMessage, FixInsertMissingUse:
+			default:
+				t.Fatalf("unknown fix rewriter for %s: %q", entry.Code, entry.Fix.Rewriter)
+			}
+		}
 		if seen[entry.Code] {
 			t.Fatalf("duplicate diagnostic code %q", entry.Code)
 		}

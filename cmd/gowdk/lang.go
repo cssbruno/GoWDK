@@ -76,7 +76,7 @@ func check(args []string) error {
 		if len(payload) > 0 {
 			fmt.Print(string(payload))
 		}
-		if diagnostics.HasErrors() {
+		if checkShouldFail(options, diagnostics) {
 			return fmt.Errorf("check failed")
 		}
 		return nil
@@ -90,10 +90,17 @@ func check(args []string) error {
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
-	if diagnostics.HasErrors() {
+	if checkShouldFail(options, diagnostics) {
 		return fmt.Errorf("check failed")
 	}
 	return nil
+}
+
+func checkShouldFail(options cliOptions, diagnostics lang.Diagnostics) bool {
+	if diagnostics.HasErrors() {
+		return true
+	}
+	return options.WarningsAsErrors && len(diagnostics) > 0
 }
 
 func manifestJSON(args []string) error {

@@ -10,6 +10,8 @@ type Explanation struct {
 	Code      string    `json:"code"`
 	Area      string    `json:"area"`
 	Stability Stability `json:"stability"`
+	Severity  Severity  `json:"severity"`
+	Fix       *Fix      `json:"fix,omitempty"`
 	Summary   string    `json:"summary"`
 	Details   string    `json:"details,omitempty"`
 	NextSteps []string  `json:"nextSteps,omitempty"`
@@ -186,6 +188,8 @@ func Explain(code string) (Explanation, bool) {
 		Code:      entry.Code,
 		Area:      entry.Area,
 		Stability: entry.Stability,
+		Severity:  entry.Severity,
+		Fix:       entry.Fix,
 		Summary:   entry.Summary,
 		NextSteps: defaultNextSteps(entry),
 	}

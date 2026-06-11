@@ -13,7 +13,8 @@ gowdk add <addon> [--config <file>]
 gowdk add --list
 gowdk tokens <file.gwdk>
 gowdk fmt [--write] <files>
-gowdk check [--config <file>] [--module <name>] [--json] [--ssr] [files...]
+gowdk check [--config <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...]
+gowdk fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
@@ -41,9 +42,15 @@ gowdk lsp [--ssr]
 - `--json`: supported by `check`, `doctor`, `explain`, `contracts`, `graph`, `trace`, and `list`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available.
+- `--warnings-as-errors`: supported by `check`; exits non-zero when warning
+  diagnostics are present.
 - `gowdk doctor --json`: prints a versioned health report with overall status,
   summary counts, environment metadata, and check records.
 - `--write`: supported by `fmt`; overwrites formatted files.
+- `--dry-run`: supported by `fix`; prints files with available registered fixes
+  without writing changes.
+- `--code`: supported by `fix`; limits rewrites to one diagnostic code that has
+  a registered fix.
 - `--config`: supported by `add`, `check`, `doctor`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; selects the config file. Compile commands load a literal config subset from the given path instead of the required default `gowdk.config.go`.
 - `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
 - `gowdk build` writes `contract_reference` build-report events for
@@ -76,6 +83,8 @@ go run ./cmd/gowdk add --list
 go run ./cmd/gowdk add ssr actions partial
 go run ./cmd/gowdk check examples/pages/home.page.gwdk
 go run ./cmd/gowdk check --config gowdk.config.go
+go run ./cmd/gowdk check --warnings-as-errors --config gowdk.config.go
+go run ./cmd/gowdk fix --dry-run --code old_action_block_syntax --config gowdk.config.go
 go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk
 go run ./cmd/gowdk explain missing_ssr_addon
 go run ./cmd/gowdk explain --json spa_dynamic_route_missing_paths

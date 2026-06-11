@@ -30,6 +30,7 @@ gowdk explain missing_ssr_adon
   "code": "missing_ssr_addon",
   "area": "rendering",
   "stability": "stable",
+  "severity": "error",
   "summary": "request-time page behavior requires the SSR addon",
   "details": "The source selects request-time page rendering...",
   "nextSteps": [
@@ -51,6 +52,9 @@ The registry stores:
 - `area`: broad subsystem such as `parser`, `routing`, `components`, or
   `contracts`.
 - `stability`: compatibility level.
+- `severity`: default severity, one of `error`, `warning`, or `info`.
+- `fix`: optional safe rewrite metadata with a title, description, and named
+  rewriter.
 - `summary`: short description.
 
 `go test ./internal/diagnostics` scans non-test Go source for emitted
@@ -65,9 +69,23 @@ registry.
   feature hardens.
 - `addon`: emitted by addon-owned validation or fallback addon diagnostics.
 
-Most diagnostics use severity `error`. Accessibility diagnostics can use
-severity `warning`; warnings are reported by `gowdk check` but do not make the
-command fail.
+Most diagnostics use severity `error`. Accessibility diagnostics and
+guardless-page diagnostics can use severity `warning`; route-mode notes can use
+severity `info`. Warnings are reported by `gowdk check` but do not make the
+command fail unless `--warnings-as-errors` is passed.
+
+## Fixes
+
+Some diagnostics have registry-backed fixes. `gowdk fix` applies those safe
+single-file rewrites, and LSP code actions use the same metadata:
+
+```sh
+gowdk fix --dry-run --code old_action_block_syntax
+gowdk fix --code unknown_gowdk_use_alias
+```
+
+Old endpoint syntax fixes migrate empty blocks. Blocks that still contain
+behavior are refused because moving behavior into Go is not mechanically safe.
 
 ## Naming
 
@@ -136,7 +154,8 @@ gets more specific stable codes.
 
 When adding or renaming a diagnostic code:
 
-1. Add or update the registry entry in `internal/diagnostics/registry.go`.
+1. Add or update the registry entry in `internal/diagnostics/registry.go`,
+   including severity and any safe fix metadata.
 2. Add or update `gowdk explain` detail when the next step is not obvious.
 3. Update this page when a new area or stability rule appears.
 4. Run `go test ./internal/diagnostics`.

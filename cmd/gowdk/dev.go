@@ -241,18 +241,12 @@ func devRuntimePlan(args []string, outputDir string) (devRuntime, []string, erro
 }
 
 func devAppAndBinary(args []string, _ string) (string, string, error) {
-	options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	plan, err := loadBuildOptions(args)
 	if err != nil {
 		return "", "", err
 	}
-	if err := loadBuildConfig(&options, configPath); err != nil {
-		return "", "", err
-	}
-	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
-		return "", "", fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
-	}
-	if len(targetNames) > 0 {
-		targets, err := selectBuildTargets(options.Config.Build.Targets, targetNames)
+	if len(plan.TargetNames) > 0 {
+		targets, err := selectBuildTargets(plan.Options.Config.Build.Targets, plan.TargetNames)
 		if err != nil {
 			return "", "", err
 		}
@@ -261,25 +255,19 @@ func devAppAndBinary(args []string, _ string) (string, string, error) {
 		}
 		return targets[0].App, targets[0].Binary, nil
 	}
-	return appDir, binaryPath, nil
+	return plan.AppDir, plan.BinaryPath, nil
 }
 
 func devOutputDir(args []string) (string, error) {
-	options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	plan, err := loadBuildOptions(args)
 	if err != nil {
 		return "", err
 	}
-	if err := loadBuildConfig(&options, configPath); err != nil {
-		return "", err
+	if strings.TrimSpace(plan.OutputDir) != "" {
+		return plan.OutputDir, nil
 	}
-	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
-		return "", fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
-	}
-	if strings.TrimSpace(outputDir) != "" {
-		return outputDir, nil
-	}
-	if len(targetNames) > 0 {
-		targets, err := selectBuildTargets(options.Config.Build.Targets, targetNames)
+	if len(plan.TargetNames) > 0 {
+		targets, err := selectBuildTargets(plan.Options.Config.Build.Targets, plan.TargetNames)
 		if err != nil {
 			return "", err
 		}
@@ -290,9 +278,6 @@ func devOutputDir(args []string) (string, error) {
 			return "", fmt.Errorf("dev target %q is missing Output", targets[0].Name)
 		}
 		return targets[0].Output, nil
-	}
-	if strings.TrimSpace(outputDir) != "" {
-		return outputDir, nil
 	}
 	return defaultDevOutputDir, nil
 }

@@ -20,29 +20,14 @@ import (
 const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
 
 func build(args []string) error {
-	options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, err := parseBuildOptions(args)
+	plan, err := loadBuildOptions(args)
 	if err != nil {
 		return err
 	}
-	if err := loadBuildConfig(&options, configPath); err != nil {
-		return err
+	if plan.shouldBuildConfiguredTargets() {
+		return buildConfiguredTargets(plan.Options, plan.TargetNames)
 	}
-	if len(targetNames) > 0 && hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
-		return fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
-	}
-	if shouldBuildConfiguredTargets(options.Config, targetNames, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, moduleNames, paths) {
-		return buildConfiguredTargets(options, targetNames)
-	}
-	return buildOnce(options, buildRequest{
-		OutputDir:         outputDir,
-		AppDir:            appDir,
-		BinaryPath:        binaryPath,
-		WASMPath:          wasmPath,
-		BackendAppDir:     backendAppDir,
-		BackendBinaryPath: backendBinaryPath,
-		Modules:           moduleNames,
-		Paths:             paths,
-	})
+	return buildOnce(plan.Options, plan.request())
 }
 
 type buildRequest struct {
@@ -54,6 +39,55 @@ type buildRequest struct {
 	BackendBinaryPath string
 	Modules           []string
 	Paths             []string
+}
+
+type buildOptions struct {
+	Options           cliOptions
+	OutputDir         string
+	AppDir            string
+	BinaryPath        string
+	WASMPath          string
+	BackendAppDir     string
+	BackendBinaryPath string
+	ConfigPath        string
+	TargetNames       []string
+	ModuleNames       []string
+	Paths             []string
+}
+
+func loadBuildOptions(args []string) (buildOptions, error) {
+	plan, err := parseBuildOptions(args)
+	if err != nil {
+		return buildOptions{}, err
+	}
+	if err := loadBuildConfig(&plan.Options, plan.ConfigPath); err != nil {
+		return buildOptions{}, err
+	}
+	if len(plan.TargetNames) > 0 && plan.hasAdHocArgs() {
+		return buildOptions{}, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
+	}
+	return plan, nil
+}
+
+func (plan buildOptions) request() buildRequest {
+	return buildRequest{
+		OutputDir:         plan.OutputDir,
+		AppDir:            plan.AppDir,
+		BinaryPath:        plan.BinaryPath,
+		WASMPath:          plan.WASMPath,
+		BackendAppDir:     plan.BackendAppDir,
+		BackendBinaryPath: plan.BackendBinaryPath,
+		Modules:           plan.ModuleNames,
+		Paths:             plan.Paths,
+	}
+}
+
+func (plan buildOptions) hasAdHocArgs() bool {
+	return hasAdHocBuildArgs(plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.ModuleNames, plan.Paths)
+}
+
+func (plan buildOptions) shouldBuildConfiguredTargets() bool {
+	return shouldBuildConfiguredTargets(plan.Options.Config, plan.TargetNames, plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.ModuleNames, plan.Paths)
 }
 
 func buildOnce(options cliOptions, request buildRequest) error {
@@ -359,137 +393,126 @@ func buildgenBuildEventDetails(event buildgen.BuildEvent) string {
 	return strings.Join(details, ", ")
 }
 
-func parseBuildOptions(args []string) (cliOptions, string, string, string, string, string, string, string, []string, []string, []string, error) {
-	var options cliOptions
-	var outputDir string
-	var appDir string
-	var binaryPath string
-	var wasmPath string
-	var backendAppDir string
-	var backendBinaryPath string
-	var configPath string
-	var targetNames []string
-	var moduleNames []string
-	var paths []string
-
+func parseBuildOptions(args []string) (buildOptions, error) {
+	var plan buildOptions
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
 		case arg == "--ssr":
-			options.Config.Addons = append(options.Config.Addons, ssr.Addon())
+			plan.Options.Config.Addons = append(plan.Options.Config.Addons, ssr.Addon())
 		case arg == "--debug":
-			options.Debug = true
+			plan.Options.Debug = true
 		case arg == "--allow-missing-backend":
-			options.AllowMissingBackend = true
-			options.Config.Build.AllowMissingBackend = true
+			plan.Options.AllowMissingBackend = true
+			plan.Options.Config.Build.AllowMissingBackend = true
 		case arg == "--out":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return buildOptions{}, fmt.Errorf(buildUsage)
 			}
-			outputDir = args[i]
+			plan.OutputDir = args[i]
 		case len(arg) > len("--out=") && arg[:len("--out=")] == "--out=":
-			outputDir = arg[len("--out="):]
+			plan.OutputDir = arg[len("--out="):]
 		case arg == "--app":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return buildOptions{}, fmt.Errorf(buildUsage)
 			}
-			appDir = args[i]
-			if strings.TrimSpace(appDir) == "" {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated app directory is required")
+			plan.AppDir = args[i]
+			if strings.TrimSpace(plan.AppDir) == "" {
+				return buildOptions{}, fmt.Errorf("generated app directory is required")
 			}
 		case len(arg) > len("--app=") && arg[:len("--app=")] == "--app=":
-			appDir = arg[len("--app="):]
-			if strings.TrimSpace(appDir) == "" {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated app directory is required")
+			plan.AppDir = arg[len("--app="):]
+			if strings.TrimSpace(plan.AppDir) == "" {
+				return buildOptions{}, fmt.Errorf("generated app directory is required")
 			}
 		case arg == "--bin":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return buildOptions{}, fmt.Errorf(buildUsage)
 			}
-			binaryPath = args[i]
-			if strings.TrimSpace(binaryPath) == "" {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("binary output path is required")
+			plan.BinaryPath = args[i]
+			if strings.TrimSpace(plan.BinaryPath) == "" {
+				return buildOptions{}, fmt.Errorf("binary output path is required")
 			}
 		case len(arg) > len("--bin=") && arg[:len("--bin=")] == "--bin=":
-			binaryPath = arg[len("--bin="):]
-			if strings.TrimSpace(binaryPath) == "" {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("binary output path is required")
+			plan.BinaryPath = arg[len("--bin="):]
+			if strings.TrimSpace(plan.BinaryPath) == "" {
+				return buildOptions{}, fmt.Errorf("binary output path is required")
 			}
 		case arg == "--wasm":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return buildOptions{}, fmt.Errorf(buildUsage)
 			}
-			wasmPath = args[i]
-			if strings.TrimSpace(wasmPath) == "" {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("wasm output path is required")
+			plan.WASMPath = args[i]
+			if strings.TrimSpace(plan.WASMPath) == "" {
+				return buildOptions{}, fmt.Errorf("wasm output path is required")
 			}
 		case len(arg) > len("--wasm=") && arg[:len("--wasm=")] == "--wasm=":
-			wasmPath = arg[len("--wasm="):]
-			if strings.TrimSpace(wasmPath) == "" {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("wasm output path is required")
+			plan.WASMPath = arg[len("--wasm="):]
+			if strings.TrimSpace(plan.WASMPath) == "" {
+				return buildOptions{}, fmt.Errorf("wasm output path is required")
 			}
 		case arg == "--backend-app":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return buildOptions{}, fmt.Errorf(buildUsage)
 			}
-			backendAppDir = args[i]
-			if strings.TrimSpace(backendAppDir) == "" {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated backend app directory is required")
+			plan.BackendAppDir = args[i]
+			if strings.TrimSpace(plan.BackendAppDir) == "" {
+				return buildOptions{}, fmt.Errorf("generated backend app directory is required")
 			}
 		case len(arg) > len("--backend-app=") && arg[:len("--backend-app=")] == "--backend-app=":
-			backendAppDir = arg[len("--backend-app="):]
-			if strings.TrimSpace(backendAppDir) == "" {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("generated backend app directory is required")
+			plan.BackendAppDir = arg[len("--backend-app="):]
+			if strings.TrimSpace(plan.BackendAppDir) == "" {
+				return buildOptions{}, fmt.Errorf("generated backend app directory is required")
 			}
 		case arg == "--backend-bin":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return buildOptions{}, fmt.Errorf(buildUsage)
 			}
-			backendBinaryPath = args[i]
-			if strings.TrimSpace(backendBinaryPath) == "" {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("backend binary output path is required")
+			plan.BackendBinaryPath = args[i]
+			if strings.TrimSpace(plan.BackendBinaryPath) == "" {
+				return buildOptions{}, fmt.Errorf("backend binary output path is required")
 			}
 		case len(arg) > len("--backend-bin=") && arg[:len("--backend-bin=")] == "--backend-bin=":
-			backendBinaryPath = arg[len("--backend-bin="):]
-			if strings.TrimSpace(backendBinaryPath) == "" {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("backend binary output path is required")
+			plan.BackendBinaryPath = arg[len("--backend-bin="):]
+			if strings.TrimSpace(plan.BackendBinaryPath) == "" {
+				return buildOptions{}, fmt.Errorf("backend binary output path is required")
 			}
 		case arg == "--config":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return buildOptions{}, fmt.Errorf(buildUsage)
 			}
-			configPath = args[i]
+			plan.ConfigPath = args[i]
 		case len(arg) > len("--config=") && arg[:len("--config=")] == "--config=":
-			configPath = arg[len("--config="):]
+			plan.ConfigPath = arg[len("--config="):]
 		case arg == "--target":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return buildOptions{}, fmt.Errorf(buildUsage)
 			}
-			targetNames = appendNames(targetNames, args[i])
+			plan.TargetNames = appendNames(plan.TargetNames, args[i])
 		case len(arg) > len("--target=") && arg[:len("--target=")] == "--target=":
-			targetNames = appendNames(targetNames, arg[len("--target="):])
+			plan.TargetNames = appendNames(plan.TargetNames, arg[len("--target="):])
 		case arg == "--module":
 			i++
 			if i >= len(args) {
-				return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf(buildUsage)
+				return buildOptions{}, fmt.Errorf(buildUsage)
 			}
-			moduleNames = appendNames(moduleNames, args[i])
+			plan.ModuleNames = appendNames(plan.ModuleNames, args[i])
 		case len(arg) > len("--module=") && arg[:len("--module=")] == "--module=":
-			moduleNames = appendNames(moduleNames, arg[len("--module="):])
+			plan.ModuleNames = appendNames(plan.ModuleNames, arg[len("--module="):])
 		case len(arg) > 0 && arg[0] == '-':
-			return options, "", "", "", "", "", "", "", nil, nil, nil, fmt.Errorf("unknown build flag %q", arg)
+			return buildOptions{}, fmt.Errorf("unknown build flag %q", arg)
 		default:
-			paths = append(paths, arg)
+			plan.Paths = append(plan.Paths, arg)
 		}
 	}
 
-	return options, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath, configPath, targetNames, moduleNames, paths, nil
+	return plan, nil
 }

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/diagnostics"
 )
 
 // Position is a 1-based source location.
@@ -20,13 +22,14 @@ type Range struct {
 
 // Diagnostic describes a language-tool finding.
 type Diagnostic struct {
-	File       string   `json:"file"`
-	Code       string   `json:"code,omitempty"`
-	Pos        Position `json:"pos"`
-	Range      *Range   `json:"range,omitempty"`
-	Severity   string   `json:"severity"`
-	Message    string   `json:"message"`
-	Suggestion string   `json:"suggestion,omitempty"`
+	File       string           `json:"file"`
+	Code       string           `json:"code,omitempty"`
+	Pos        Position         `json:"pos"`
+	Range      *Range           `json:"range,omitempty"`
+	Severity   string           `json:"severity"`
+	Fix        *diagnostics.Fix `json:"fix,omitempty"`
+	Message    string           `json:"message"`
+	Suggestion string           `json:"suggestion,omitempty"`
 }
 
 func (diagnostic Diagnostic) String() string {
@@ -53,6 +56,16 @@ func (diagnostic Diagnostic) String() string {
 func (diagnostic Diagnostic) MarshalJSON() ([]byte, error) {
 	type alias Diagnostic
 	redacted := alias(diagnostic)
+	if redacted.Severity == "" && redacted.Code != "" {
+		if severity, ok := diagnostics.DefaultSeverity(redacted.Code); ok {
+			redacted.Severity = string(severity)
+		}
+	}
+	if redacted.Fix == nil && redacted.Code != "" {
+		if fix, ok := diagnostics.FixFor(redacted.Code); ok {
+			redacted.Fix = &fix
+		}
+	}
 	redacted.Message = RedactMessage(redacted.Message)
 	redacted.Suggestion = RedactMessage(redacted.Suggestion)
 	return json.Marshal(redacted)

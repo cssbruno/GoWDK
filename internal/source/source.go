@@ -61,6 +61,45 @@ func InlineScriptName(index int) string {
 	return fmt.Sprintf("inline-%d-gowdk.js", index+1)
 }
 
+// BackendRouteMethod returns the normalized HTTP method spelling used by
+// generated backend route metadata.
+func BackendRouteMethod(value string) string {
+	return strings.ToUpper(strings.TrimSpace(value))
+}
+
+// ValidateBackendRoutePath rejects paths that would be unsafe or ambiguous when
+// registered as generated backend routes.
+func ValidateBackendRoutePath(value string) error {
+	if strings.TrimSpace(value) != value {
+		return fmt.Errorf("endpoint path %q must not contain surrounding whitespace", value)
+	}
+	if value == "" {
+		return fmt.Errorf("endpoint path must not be empty")
+	}
+	if !strings.HasPrefix(value, "/") {
+		return fmt.Errorf("endpoint path %q must be a local absolute path", value)
+	}
+	if strings.HasPrefix(value, "//") {
+		return fmt.Errorf("endpoint path %q must not be protocol-relative", value)
+	}
+	if strings.Contains(value, "\\") {
+		return fmt.Errorf("endpoint path %q must not contain backslashes", value)
+	}
+	if strings.ContainsAny(value, "?#{}") {
+		return fmt.Errorf("endpoint path %q must be a concrete path without query, fragment, or params", value)
+	}
+	for _, char := range value {
+		if char < 0x20 || char == 0x7f {
+			return fmt.Errorf("endpoint path %q must not contain control characters", value)
+		}
+	}
+	cleaned := path.Clean(value)
+	if cleaned != value {
+		return fmt.Errorf("endpoint path %q must be a clean absolute path without dot segments, duplicate slashes, or trailing slash", value)
+	}
+	return nil
+}
+
 // BackendBindingStatus describes whether a .gwdk backend block has a matching
 // same-package Go handler.
 type BackendBindingStatus string

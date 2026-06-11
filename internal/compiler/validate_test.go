@@ -3401,6 +3401,88 @@ func TestValidateManifestReportsContractReferenceParseErrors(t *testing.T) {
 	}
 }
 
+func TestValidateManifestRejectsInvalidContractReferenceRoutes(t *testing.T) {
+	tests := []struct {
+		name     string
+		viewBody string
+		message  string
+	}{
+		{
+			name:     "external command action",
+			viewBody: `<form method="post" action="https://example.com/pay" g:command="patients.CreatePatient"></form>`,
+			message:  "must be a local absolute path",
+		},
+		{
+			name:     "dynamic command action",
+			viewBody: `<form method="post" action="/patients/{id}" g:command="patients.CreatePatient"></form>`,
+			message:  "without query, fragment, or params",
+		},
+		{
+			name:     "unsupported command method",
+			viewBody: `<form method="get" action="/patients" g:command="patients.CreatePatient"></form>`,
+			message:  "command contract routes require POST",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			app := appFixture{
+				Pages: []gwdkir.Page{{
+					Package: "pages",
+					ID:      "patients",
+					Route:   "/patients",
+					Source:  "pages/patients.page.gwdk",
+					Blocks: gwdkir.Blocks{
+						View:     true,
+						ViewBody: test.viewBody,
+					},
+				}},
+			}
+
+			err := validateManifest(gowdk.Config{}, app)
+			if err == nil {
+				t.Fatal("expected invalid contract route diagnostic")
+			}
+			diagnostics := err.(ValidationErrors)
+			if !hasDiagnosticCode(diagnostics, "contract_route_invalid") {
+				t.Fatalf("Missing contract_route_invalid diagnostic: %#v", diagnostics)
+			}
+			if !strings.Contains(diagnostics[0].Message, test.message) {
+				t.Fatalf("expected diagnostic message to contain %q, got %q", test.message, diagnostics[0].Message)
+			}
+			if diagnostics[0].Source != "pages/patients.page.gwdk" || diagnostics[0].Span.Start.Line == 0 {
+				t.Fatalf("expected source span on contract route diagnostic, got %#v", diagnostics[0])
+			}
+		})
+	}
+}
+
+func TestValidateManifestRejectsDefaultQueryRouteWithDynamicParams(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "patients.show",
+			Route:   "/patients/{id}",
+			Source:  "pages/patients-show.page.gwdk",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<section g:query="patients.GetPatient"></section>`,
+			},
+		}},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected invalid contract query route diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "contract_route_invalid") {
+		t.Fatalf("Missing contract_route_invalid diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(diagnostics[0].Message, "without query, fragment, or params") {
+		t.Fatalf("unexpected diagnostic message: %s", diagnostics[0].Message)
+	}
+}
+
 func TestValidateManifestRejectsLayoutWithoutSlot(t *testing.T) {
 	app := appFixture{
 		Layouts: []gwdkir.Layout{

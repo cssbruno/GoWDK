@@ -61,7 +61,7 @@ public runtime/addon packages used by generated adapters.
 The target GOWDK Compiler plus GOWDK Runtime output can include spa pages,
 components, typed actions, API handlers, server fragment handlers, embedded
 assets, and a Go binary. CSS tooling, including Tailwind, belongs in optional
-addons or plugins rather than the compiler core or runtime core. SSR is enabled
+addons rather than the compiler core or runtime core. SSR is enabled
 only when `ssr.Addon()` is present and a page opts into request-time rendering.
 
 When this document uses `Compiler`, it means GOWDK internals under `internal/`.

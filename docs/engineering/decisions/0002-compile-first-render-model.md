@@ -70,6 +70,6 @@ Compiler rules:
 - Implement `.gwdk` discovery and manifest generation.
 - Implement parser support for `paths`, `build`, `load`, `act`, `api`, and `view`.
 - Implement build-output/prerender codegen.
-- Implement CSS/plugin extension points. Tailwind should remain an optional
-  addon/plugin, not part of the initial compiler core or runtime core.
+- Implement CSS processor addon extension points. Tailwind should remain an
+  optional addon, not part of the initial compiler core or runtime core.
 - Implement one-binary serving before SSR addon internals.

@@ -95,7 +95,7 @@ These are the durable rules. Changing them should require an ADR.
 13. One-binary deploy must work with and without request-time page rendering.
 14. Core stays `net/http` compatible; Gin, Echo, Fiber, and similar frameworks
     are optional adapters, not core dependencies.
-15. CSS and styling tooling are plugin-driven; Tailwind is optional.
+15. CSS and styling tooling are addon-driven; Tailwind is optional.
 16. Normal app flows should not require user-written JavaScript.
 
 ## Current Baseline
@@ -167,7 +167,7 @@ are stable.
 | 15 | Static-first SPA navigation | SPA routes remain real URLs that work on direct open and refresh. Generated JS may intercept internal links, fetch built page shells or fragments, swap page regions, preserve scroll/focus, prefetch static route assets, and show loading/error UI, but it must not own routing, auth, business rules, validation, backend behavior, global app state, loading policy, or cache policy. |
 | 16 | Components and client language | Components gain real `g:if` mount/unmount, richer expression props, child-to-parent events, bindable state, typed exports, named/scoped slots, scoped CSS/assets, a documented component contract, a proper reactive dependency graph, predictable batching, and cycle diagnostics. |
 | 17 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Component-level WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
-| 18 | CSS, assets, and packaging | External plugin loading is hardened, richer page-aware CSS processor contracts are stable, and Tailwind/CSS deployment docs stay explicit that external tooling is user-installed. Implemented CSS asset hashing, component CSS scope/hash metadata, component non-CSS asset emission, and binary cache policy remain stable. Module selection remains artifact packaging, not runtime module orchestration. |
+| 18 | CSS, assets, and packaging | External addon loading is hardened, richer page-aware CSS processor contracts are stable, and Tailwind/CSS deployment docs stay explicit that external tooling is user-installed. Implemented CSS asset hashing, component CSS scope/hash metadata, component non-CSS asset emission, and binary cache policy remain stable. Module selection remains artifact packaging, not runtime module orchestration. |
 | 19 | Framework adapters | GOWDK Runtime remains `net/http` first. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
 | 20 | Dev and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, richer LSP completions, and editor navigation are added. |
 | 21 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
@@ -244,7 +244,7 @@ without making any minor version a production-readiness target.
 
 ### Platform Tooling Release
 
-- Full CSS/plugin loading.
+- Full CSS processor addon loading.
 - Generated app dev loop.
 - Stronger editor tooling.
 - Production operations docs must cover secrets, CSRF rotation, reverse

@@ -1,7 +1,7 @@
 # CSS Reference
 
 GOWDK has an initial compile-time CSS extension point. It is intentionally small:
-Tailwind and other CSS tools are addons or plugins, not core dependencies.
+Tailwind and other CSS tools are addons, not core dependencies.
 
 ## Discovered Page CSS
 
@@ -215,7 +215,7 @@ Relationship to other CSS features:
 
 ## Processor Contract
 
-Compile-time CSS plugins implement:
+Compile-time CSS processor addons implement:
 
 ```go
 type CSSProcessor interface {

@@ -71,9 +71,8 @@ implicit.
 
 Current file-kind classification treats files ending in `.cmp.gwdk` or
 containing `component` as components, files ending in `.layout.gwdk` as layout
-files, files ending in `.asset.gwdk` as asset-adjacent planning files, files
-ending in `.plugin.gwdk` as plugin-adjacent planning files, and other `.gwdk`
-inputs as pages. Layout, asset, and plugin-adjacent files are classified so
+files, files ending in `.asset.gwdk` as asset-adjacent planning files, and other
+`.gwdk` inputs as pages. Layout and asset-adjacent files are classified so
 project discovery can accept future conventions, but their parsing, resolution,
 and rendering remain planned.
 

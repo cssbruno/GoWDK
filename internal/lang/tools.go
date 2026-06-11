@@ -25,7 +25,6 @@ const (
 	FileKindComponent FileKind = "component"
 	FileKindLayout    FileKind = "layout"
 	FileKindAsset     FileKind = "asset"
-	FileKindPlugin    FileKind = "plugin"
 )
 
 // ParseFile reads and parses one .gwdk file.
@@ -165,7 +164,7 @@ func ParseBuildFiles(paths []string) (gwdkanalysis.Sources, Diagnostics) {
 				app.Layouts = append(app.Layouts, layout)
 			}
 			continue
-		case FileKindAsset, FileKindPlugin:
+		case FileKindAsset:
 			continue
 		}
 		page, fileDiagnostics := ParseSource(path, source)
@@ -239,9 +238,6 @@ func ClassifySource(path string, source []byte) FileKind {
 	if strings.HasSuffix(base, ".asset.gwdk") {
 		return FileKindAsset
 	}
-	if strings.HasSuffix(base, ".plugin.gwdk") {
-		return FileKindPlugin
-	}
 	for _, line := range strings.Split(string(source), "\n") {
 		text := strings.TrimSpace(line)
 		if text == "" || strings.HasPrefix(text, "//") {
@@ -256,8 +252,6 @@ func ClassifySource(path string, source []byte) FileKind {
 			return FileKindLayout
 		case isMetadataDeclaration(text, "asset"):
 			return FileKindAsset
-		case isMetadataDeclaration(text, "plugin"):
-			return FileKindPlugin
 		}
 	}
 	return FileKindPage
@@ -362,7 +356,7 @@ func CheckSource(config gowdk.Config, path string, source []byte) (gwdkir.Page, 
 		}
 		diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
 		return gwdkir.Page{}, diagnostics
-	case FileKindAsset, FileKindPlugin:
+	case FileKindAsset:
 		_, diagnostics := Lex(string(source))
 		for i := range diagnostics {
 			diagnostics[i].File = path

@@ -42,7 +42,7 @@ Planned or partial file kinds:
 
 - API-only files are planned separately. Current pages still own a page `GET`
   route and must declare `view {}`.
-- Island-only and plugin-adjacent files are not separate stable file kinds yet.
+- Island-only files are not a separate stable file kind yet.
 
 ## Comments
 

@@ -18,6 +18,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
+	"github.com/cssbruno/gowdk/internal/view"
 )
 
 func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
@@ -110,6 +111,28 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 	}
 	if len(sourceMap.SourcesContent) != 1 || !strings.Contains(sourceMap.SourcesContent[0], `view {`) || !strings.Contains(sourceMap.SourcesContent[0], `{Count}`) {
 		t.Fatalf("expected component source content in source map: %#v", sourceMap.SourcesContent)
+	}
+}
+
+func TestPageScriptsReportsComponentTraversalErrors(t *testing.T) {
+	page := gwdkir.Page{
+		ID:    "home",
+		Route: "/",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main><Broken /></main>`,
+		},
+	}
+	components := map[string]view.Component{
+		"Broken": {
+			Name: "Broken",
+			Body: `<a href="/broken"`,
+		},
+	}
+
+	_, err := pageScripts(gowdk.Config{}, page, page.Blocks.ViewBody, components, renderModeSPA)
+	if err == nil {
+		t.Fatal("expected component traversal error")
 	}
 }
 

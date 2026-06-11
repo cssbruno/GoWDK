@@ -38,6 +38,7 @@ var Registry = []Code{
 	{Code: "contract_input_invalid", Area: "contracts", Stability: StabilityExperimental, Summary: "contract input struct is invalid"},
 	{Code: "contract_reference_invalid", Area: "contracts", Stability: StabilityExperimental, Summary: "GOWDK command or query reference could not bind to a valid contract"},
 	{Code: "contract_reference_missing", Area: "contracts", Stability: StabilityExperimental, Summary: "GOWDK command or query reference has no matching contract"},
+	{Code: "contract_reference_parse_error", Area: "contracts", Stability: StabilityExperimental, Summary: "view contract reference directives could not be parsed"},
 	{Code: "contract_reference_role_not_allowed", Area: "contracts", Stability: StabilityExperimental, Summary: "contract reference targets a registration that is not available to the web role"},
 	{Code: "contract_result_invalid", Area: "contracts", Stability: StabilityExperimental, Summary: "contract result type is invalid"},
 	{Code: "contract_type_invalid", Area: "contracts", Stability: StabilityExperimental, Summary: "contract type is invalid"},

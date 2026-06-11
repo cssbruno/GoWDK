@@ -59,7 +59,7 @@ func LoadConfigFile(path string) (gowdk.Config, error) {
 				if needsExecutableLoad {
 					config, err := loadExecutableConfig(path)
 					if err != nil {
-						return gowdk.Config{}, fmt.Errorf("%s contains addon constructors outside the AST-only config subset: %w", path, err)
+						return gowdk.Config{}, fmt.Errorf("%s contains config expressions outside the AST-only subset: %w", path, err)
 					}
 					if err := config.Env.Validate(os.LookupEnv); err != nil {
 						return gowdk.Config{}, fmt.Errorf("%s env contract: %w", path, err)
@@ -110,18 +110,46 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 		}
 		switch key.Name {
 		case "AppName":
+			if needsConfigExpressionEvaluation(keyValue.Value) {
+				needsExecutableLoad = true
+				continue
+			}
 			config.AppName = parseString(keyValue.Value)
 		case "Source":
+			if needsConfigExpressionEvaluation(keyValue.Value) {
+				needsExecutableLoad = true
+				continue
+			}
 			config.Source = parseSourceConfig(keyValue.Value)
 		case "Modules":
+			if needsConfigExpressionEvaluation(keyValue.Value) {
+				needsExecutableLoad = true
+				continue
+			}
 			config.Modules = parseModuleConfigs(keyValue.Value)
 		case "Build":
+			if needsConfigExpressionEvaluation(keyValue.Value) {
+				needsExecutableLoad = true
+				continue
+			}
 			config.Build = parseBuildConfig(keyValue.Value)
 		case "CSS":
+			if needsConfigExpressionEvaluation(keyValue.Value) {
+				needsExecutableLoad = true
+				continue
+			}
 			config.CSS = parseCSSConfig(keyValue.Value)
 		case "Render":
+			if needsConfigExpressionEvaluation(keyValue.Value) {
+				needsExecutableLoad = true
+				continue
+			}
 			config.Render = parseRenderConfig(keyValue.Value)
 		case "Env":
+			if needsConfigExpressionEvaluation(keyValue.Value) {
+				needsExecutableLoad = true
+				continue
+			}
 			var err error
 			config.Env, err = parseEnvConfig(keyValue.Value)
 			if err != nil {
@@ -132,6 +160,34 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 		}
 	}
 	return config, needsExecutableLoad, true, nil
+}
+
+func needsConfigExpressionEvaluation(expression ast.Expr) bool {
+	switch typed := expression.(type) {
+	case *ast.BasicLit:
+		return false
+	case *ast.Ident:
+		return typed.Name != "true" && typed.Name != "false" && typed.Name != "nil"
+	case *ast.SelectorExpr:
+		return false
+	case *ast.UnaryExpr:
+		return needsConfigExpressionEvaluation(typed.X)
+	case *ast.CompositeLit:
+		for _, element := range typed.Elts {
+			if keyValue, ok := element.(*ast.KeyValueExpr); ok {
+				if needsConfigExpressionEvaluation(keyValue.Value) {
+					return true
+				}
+				continue
+			}
+			if needsConfigExpressionEvaluation(element) {
+				return true
+			}
+		}
+		return false
+	default:
+		return true
+	}
 }
 
 func importNames(file *ast.File) map[string]string {

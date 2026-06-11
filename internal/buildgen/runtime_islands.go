@@ -68,10 +68,10 @@ func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allCompone
 	return artifacts, nil
 }
 
-func islandScriptHrefs(source string, components map[string]view.Component, ownerPackage string, uses map[string]string) []string {
+func islandScriptHrefs(source string, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]string, error) {
 	usages, err := recursiveViewComponentCallUsages(source, components, ownerPackage, uses)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	seen := map[string]bool{}
 	var scripts []string
@@ -93,7 +93,7 @@ func islandScriptHrefs(source string, components map[string]view.Component, owne
 		scripts = append(scripts, href)
 	}
 	sort.Strings(scripts)
-	return scripts
+	return scripts, nil
 }
 
 func manifestComponentRuntimeMode(explicit string, component gwdkir.Component) string {

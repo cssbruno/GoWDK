@@ -78,6 +78,7 @@ func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) Val
 		return ValidationErrors{{Message: fmt.Sprintf("internal compiler error: %v", err)}}
 	}
 	var diagnostics ValidationErrors
+	diagnostics = append(diagnostics, validateIRDiagnostics(ir.Diagnostics)...)
 	diagnostics = append(diagnostics, validatePackages(ir)...)
 	diagnostics = append(diagnostics, validateUniquePages(ir.Pages)...)
 	diagnostics = append(diagnostics, validateUniqueComponents(ir.Components)...)
@@ -98,6 +99,19 @@ func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) Val
 	diagnostics = append(diagnostics, validateStandaloneEndpoints(ir.GoEndpoints)...)
 	for _, page := range ir.Pages {
 		diagnostics = append(diagnostics, ValidatePage(config, page)...)
+	}
+	return diagnostics
+}
+
+func validateIRDiagnostics(items []gwdkir.Diagnostic) []ValidationError {
+	diagnostics := make([]ValidationError, 0, len(items))
+	for _, item := range items {
+		diagnostics = append(diagnostics, ValidationError{
+			Code:    item.Code,
+			Source:  item.Source,
+			Span:    item.Span,
+			Message: item.Message,
+		})
 	}
 	return diagnostics
 }

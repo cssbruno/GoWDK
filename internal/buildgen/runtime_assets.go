@@ -9,24 +9,33 @@ import (
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-func clientRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, outputDir string, layouts map[string]gwdkir.Layout, components map[string]view.Component) []plannedAssetArtifact {
+func clientRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, outputDir string, layouts map[string]gwdkir.Layout, components map[string]view.Component) ([]plannedAssetArtifact, error) {
 	for _, page := range pages {
-		viewSource := page.Blocks.ViewBody
-		if source, err := composePageViewSource(page, layouts); err == nil {
-			viewSource = source
+		viewSource, err := composePageViewSource(page, layouts)
+		if err != nil {
+			return nil, err
 		}
-		if pageUsesPartialRuntime(page, viewSource) || pageUsesSPANavigationRuntime(config, page, viewSource, components) {
+		usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewSource, components)
+		if err != nil {
+			return nil, err
+		}
+		if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation {
 			return []plannedAssetArtifact{{
 				AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath))},
 				contents:      clientrt.Source(),
-			}}
+			}}, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
+
 func runtimeArtifacts(config gowdk.Config, ir gwdkir.Program, outputDir string, layouts map[string]gwdkir.Layout, components map[string]view.Component) ([]plannedAssetArtifact, error) {
 	var artifacts []plannedAssetArtifact
-	artifacts = append(artifacts, clientRuntimeArtifacts(config, ir.Pages, outputDir, layouts, components)...)
+	clientRuntime, err := clientRuntimeArtifacts(config, ir.Pages, outputDir, layouts, components)
+	if err != nil {
+		return nil, err
+	}
+	artifacts = append(artifacts, clientRuntime...)
 	artifacts = append(artifacts, storeRuntimeArtifacts(ir.Pages, outputDir)...)
 	islands, err := islandRuntimeArtifacts(config, ir.Pages, ir.Components, outputDir, layouts)
 	if err != nil {

@@ -28,7 +28,7 @@ func inspectIR(args []string) error {
 		return err
 	}
 
-	checked, diagnostics := lang.CheckFiles(options.Config, paths)
+	checked, diagnostics := lang.CheckFilesWithOptions(options.Config, paths, lang.CheckOptions{ProjectRoot: options.ProjectRoot})
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
@@ -37,7 +37,7 @@ func inspectIR(args []string) error {
 	}
 
 	ir := checked.IR
-	if err := linkIRContractReferences(&ir, "."); err != nil {
+	if err := linkIRContractReferences(&ir, options.ProjectRoot); err != nil {
 		return err
 	}
 	payload, err := json.MarshalIndent(ir, "", "  ")

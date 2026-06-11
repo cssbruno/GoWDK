@@ -276,8 +276,19 @@ type CheckResult struct {
 	Bindings []source.BackendBinding
 }
 
+// CheckOptions controls validation behavior that depends on project context.
+type CheckOptions struct {
+	ProjectRoot string
+}
+
 // CheckFiles parses and validates .gwdk files.
 func CheckFiles(config gowdk.Config, paths []string) (CheckResult, Diagnostics) {
+	return CheckFilesWithOptions(config, paths, CheckOptions{})
+}
+
+// CheckFilesWithOptions parses and validates .gwdk files with explicit project
+// context for checks that need to inspect sibling Go code.
+func CheckFilesWithOptions(config gowdk.Config, paths []string, options CheckOptions) (CheckResult, Diagnostics) {
 	sources, diagnostics := ParseFiles(paths)
 	if diagnostics.HasErrors() {
 		return CheckResult{}, diagnostics
@@ -298,13 +309,16 @@ func CheckFiles(config gowdk.Config, paths []string) (CheckResult, Diagnostics) 
 	diagnostics = append(diagnostics, accessibilityDiagnostics(result.IR)...)
 	if !diagnostics.HasErrors() {
 		result.Bindings = compiler.BindBackendHandlers(&result.IR)
-		diagnostics = append(diagnostics, validateContractReferences(config, result.IR)...)
+		diagnostics = append(diagnostics, validateContractReferences(config, result.IR, options.ProjectRoot)...)
 	}
 	return result, diagnostics
 }
 
-func validateContractReferences(config gowdk.Config, ir gwdkir.Program) Diagnostics {
-	report, err := contractscan.Scan(".")
+func validateContractReferences(config gowdk.Config, ir gwdkir.Program, projectRoot string) Diagnostics {
+	if strings.TrimSpace(projectRoot) == "" {
+		projectRoot = "."
+	}
+	report, err := contractscan.Scan(projectRoot)
 	if err != nil {
 		return Diagnostics{{Severity: "error", Message: fmt.Sprintf("scan Go contracts: %v", err)}}
 	}
@@ -381,7 +395,13 @@ type DiagnosticReport struct {
 
 // CheckJSON returns editor-friendly JSON diagnostics for parsed files.
 func CheckJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
-	_, diagnostics := CheckFiles(config, paths)
+	return CheckJSONWithOptions(config, paths, CheckOptions{})
+}
+
+// CheckJSONWithOptions returns editor-friendly JSON diagnostics for parsed
+// files with explicit project context.
+func CheckJSONWithOptions(config gowdk.Config, paths []string, options CheckOptions) ([]byte, Diagnostics) {
+	_, diagnostics := CheckFilesWithOptions(config, paths, options)
 	payload, err := json.MarshalIndent(DiagnosticReport{Diagnostics: diagnostics}, "", "  ")
 	if err != nil {
 		return nil, Diagnostics{{Severity: "error", Message: err.Error()}}
@@ -392,7 +412,13 @@ func CheckJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
 // ManifestJSON returns the manifest JSON report for parsed and validated
 // files. The report shape is derived from the compiler IR.
 func ManifestJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
-	result, diagnostics := CheckFiles(config, paths)
+	return ManifestJSONWithOptions(config, paths, CheckOptions{})
+}
+
+// ManifestJSONWithOptions returns the manifest JSON report with explicit
+// project context.
+func ManifestJSONWithOptions(config gowdk.Config, paths []string, options CheckOptions) ([]byte, Diagnostics) {
+	result, diagnostics := CheckFilesWithOptions(config, paths, options)
 	if diagnostics.HasErrors() {
 		return nil, diagnostics
 	}

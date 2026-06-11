@@ -102,7 +102,13 @@ func siteMapFromMetadata(pages []SiteMapPage, metadata compiler.RouteMetadata) S
 
 // SiteMapJSON returns the JSON site map for parsed and validated files.
 func SiteMapJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
-	result, diagnostics := CheckFiles(config, paths)
+	return SiteMapJSONWithOptions(config, paths, CheckOptions{})
+}
+
+// SiteMapJSONWithOptions returns the JSON site map with explicit project
+// context.
+func SiteMapJSONWithOptions(config gowdk.Config, paths []string, options CheckOptions) ([]byte, Diagnostics) {
+	result, diagnostics := CheckFilesWithOptions(config, paths, options)
 	if diagnostics.HasErrors() {
 		return nil, diagnostics
 	}

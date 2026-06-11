@@ -122,7 +122,7 @@ func runDoctor(args []string) (doctorReport, bool) {
 		report.Environment.ConfigPath = doctorConfigDisplayPath(configPath)
 	}
 
-	resolvedPaths, sourcesOK := report.runSourcesCheck(options.Config, moduleNames, paths)
+	resolvedPaths, sourcesOK := report.runSourcesCheck(options.Config, moduleNames, paths, options.ProjectRoot)
 	if !sourcesOK {
 		report.addSkipped("language_check", "language check skipped because no .gwdk sources were found")
 		report.addSkipped("routes", "route metadata skipped because no .gwdk sources were found")
@@ -131,7 +131,7 @@ func runDoctor(args []string) (doctorReport, bool) {
 		return report, options.JSON
 	}
 
-	app, languageOK := report.runLanguageCheck(options.Config, resolvedPaths)
+	app, languageOK := report.runLanguageCheck(options.Config, resolvedPaths, options.ProjectRoot)
 	if !languageOK {
 		report.addSkipped("routes", "route metadata skipped because language check failed")
 		report.runOptionalToolsCheck(options.Config)
@@ -139,7 +139,7 @@ func runDoctor(args []string) (doctorReport, bool) {
 		return report, options.JSON
 	}
 
-	report.runRoutesCheck(options.Config, app)
+	report.runRoutesCheck(options.Config, app, options.ProjectRoot)
 	report.runOptionalToolsCheck(options.Config)
 	report.finalize()
 	return report, options.JSON
@@ -234,9 +234,9 @@ func (report *doctorReport) runConfigCheck(options *cliOptions, configPath strin
 	return true
 }
 
-func (report *doctorReport) runSourcesCheck(config gowdk.Config, moduleNames, paths []string) ([]string, bool) {
+func (report *doctorReport) runSourcesCheck(config gowdk.Config, moduleNames, paths []string, projectRoot string) ([]string, bool) {
 	if len(paths) == 0 {
-		discovered, err := discoverProjectFiles(config, moduleNames)
+		discovered, err := discoverProjectFiles(config, moduleNames, projectRoot)
 		if err != nil {
 			report.addCheck(doctorCheck{
 				ID:       "sources",
@@ -269,8 +269,8 @@ func (report *doctorReport) runSourcesCheck(config gowdk.Config, moduleNames, pa
 	return paths, true
 }
 
-func (report *doctorReport) runLanguageCheck(config gowdk.Config, paths []string) (lang.CheckResult, bool) {
-	app, diagnostics := lang.CheckFiles(config, paths)
+func (report *doctorReport) runLanguageCheck(config gowdk.Config, paths []string, projectRoot string) (lang.CheckResult, bool) {
+	app, diagnostics := lang.CheckFilesWithOptions(config, paths, lang.CheckOptions{ProjectRoot: projectRoot})
 	if diagnostics.HasErrors() {
 		report.addCheck(doctorCheck{
 			ID:       "language_check",
@@ -304,9 +304,9 @@ func (report *doctorReport) runLanguageCheck(config gowdk.Config, paths []string
 	return app, true
 }
 
-func (report *doctorReport) runRoutesCheck(config gowdk.Config, checked lang.CheckResult) {
+func (report *doctorReport) runRoutesCheck(config gowdk.Config, checked lang.CheckResult, projectRoot string) {
 	ir := checked.IR
-	if err := linkIRContractReferences(&ir, "."); err != nil {
+	if err := linkIRContractReferences(&ir, projectRoot); err != nil {
 		report.addCheck(doctorCheck{
 			ID:       "routes",
 			Status:   "error",

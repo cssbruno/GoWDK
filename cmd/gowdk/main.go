@@ -133,6 +133,7 @@ func usage() {
 
 type cliOptions struct {
 	Config              gowdk.Config
+	ProjectRoot         string
 	JSON                bool
 	Debug               bool
 	AllowMissingBackend bool

@@ -66,6 +66,7 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 			"assets": fmt.Sprint(len(planned.assets)),
 		},
 	})
+	reportSkippedPrerenderPages(reporter, config, ir)
 
 	result := Result{
 		Artifacts:      make([]Artifact, 0, len(planned.pages)),
@@ -175,6 +176,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 			"assets": fmt.Sprint(len(planned.assets)),
 		},
 	})
+	reportSkippedPrerenderPages(reporter, config, ir)
 
 	result := MemoryResult{
 		Result: Result{
@@ -486,6 +488,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	if len(failures) > 0 {
 		return Result{}, reporter.fail("plan", errors.New(strings.Join(failures, "\n")))
 	}
+	reportSkippedPrerenderPages(reporter, config, ir)
 	if err := removeStaleChangedPageArtifacts(outputDir, previousRoutes, result.Artifacts, changedPageIDs); err != nil {
 		return Result{}, reporter.fail("cleanup", err)
 	}
@@ -524,6 +527,24 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 
 func plan(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (buildPlan, error) {
 	return planFromIR(config, gwdkanalysis.BuildProgram(config, sources), outputDir)
+}
+
+// reportSkippedPrerenderPages records a build-report event for every
+// request-time page (SSR/Hybrid) that build-output prerendering intentionally
+// does not emit as static HTML. The skip itself happens silently in
+// planFromIR/BuildIncrementalFromIR; this surfaces it as a clear diagnostic so
+// the build report makes the unsupported-for-prerender slice explicit.
+func reportSkippedPrerenderPages(reporter *buildReporter, config gowdk.Config, ir gwdkir.Program) {
+	for _, page := range ir.Pages {
+		if !isRequestTimePage(config, page) {
+			continue
+		}
+		reporter.info("plan", "request_time_page_skipped", "request-time page skipped from prerender output", BuildEvent{
+			PageID: page.ID,
+			Route:  page.Route,
+			Data:   map[string]string{"mode": string(page.RenderMode(config.Render.DefaultMode()))},
+		})
+	}
 }
 
 func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (buildPlan, error) {

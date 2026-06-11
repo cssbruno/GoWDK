@@ -14,6 +14,8 @@ type ComponentCall struct {
 	Name     string
 	Attrs    []Attr
 	Children []Node
+	Start    int
+	End      int
 }
 
 type slotContent struct {

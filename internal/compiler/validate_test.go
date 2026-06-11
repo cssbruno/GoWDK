@@ -477,6 +477,35 @@ func TestValidateManifestRejectsUnknownGOWDKUseAlias(t *testing.T) {
 	}
 }
 
+func TestValidateManifestUnknownGOWDKUseAliasPointsToComponentTag(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: "<main>\n  <ui.Hero />\n</main>",
+				Spans: gwdkir.BlockSpans{
+					View:          source.SourceSpan{Start: source.SourcePosition{Line: 8, Column: 1}, End: source.SourcePosition{Line: 8, Column: 7}},
+					ViewBodyStart: source.SourcePosition{Line: 9, Column: 1},
+				},
+			},
+		}},
+		Components: []gwdkir.Component{{Package: "components", Name: "Hero"}},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown use alias diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "unknown_gowdk_use_alias")
+	if diagnostic == nil {
+		t.Fatalf("missing unknown alias diagnostic: %#v", err)
+	}
+	assertSourceSpan(t, diagnostic.Span, 10, 3, 10, 14)
+}
+
 func TestValidateManifestRejectsUnknownQualifiedComponent(t *testing.T) {
 	app := appFixture{
 		Pages: []gwdkir.Page{{
@@ -497,6 +526,36 @@ func TestValidateManifestRejectsUnknownQualifiedComponent(t *testing.T) {
 	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_component") {
 		t.Fatalf("missing unknown component diagnostic: %#v", diagnostics)
 	}
+}
+
+func TestValidateManifestUnknownQualifiedComponentPointsToComponentTag(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Uses:    []gwdkir.Use{{Alias: "ui", Package: "components"}},
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: "<main>\n  <ui.Missing />\n</main>",
+				Spans: gwdkir.BlockSpans{
+					View:          source.SourceSpan{Start: source.SourcePosition{Line: 12, Column: 1}, End: source.SourcePosition{Line: 12, Column: 7}},
+					ViewBodyStart: source.SourcePosition{Line: 13, Column: 1},
+				},
+			},
+		}},
+		Components: []gwdkir.Component{{Package: "components", Name: "Hero"}},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown component diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "unknown_gowdk_component")
+	if diagnostic == nil {
+		t.Fatalf("missing unknown component diagnostic: %#v", err)
+	}
+	assertSourceSpan(t, diagnostic.Span, 14, 3, 14, 17)
 }
 
 func TestValidateManifestRejectsComponentRefToLayoutOnlyUsePackage(t *testing.T) {
@@ -2472,6 +2531,36 @@ func TestValidateManifestUnknownViewFieldDiagnosticPointsToIdentifier(t *testing
 	assertSourceSpan(t, diagnostic.Span, 5, 10, 5, 17)
 }
 
+func TestValidateManifestRepeatedViewExpressionDiagnosticPointsToOccurrence(t *testing.T) {
+	app := appFixture{Components: []gwdkir.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: gwdkir.Blocks{
+			View: true,
+			ViewBody: `<p>{Count}</p>
+<button class:active={Count}>Increment</button>`,
+			Spans: gwdkir.BlockSpans{
+				View: source.SourceSpan{Start: source.SourcePosition{Line: 4, Column: 1}, End: source.SourcePosition{Line: 4, Column: 7}},
+			},
+		},
+	}}}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected class toggle diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	if diagnostic == nil || !strings.Contains(diagnostic.Message, "class toggle") {
+		t.Fatalf("Missing class toggle diagnostic: %#v", err)
+	}
+	assertSourceSpan(t, diagnostic.Span, 6, 23, 6, 28)
+}
+
 func TestValidateManifestBadGForDiagnosticPointsToDirectiveValue(t *testing.T) {
 	app := appFixture{Components: []gwdkir.Component{{
 		Name:   "Nested",
@@ -3015,6 +3104,9 @@ func TestValidateManifestRejectsNonBoolReactiveBooleanAttribute(t *testing.T) {
 		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button disabled={Count}>{Count}</button>`,
+			Spans: gwdkir.BlockSpans{
+				View: source.SourceSpan{Start: source.SourcePosition{Line: 30, Column: 1}, End: source.SourcePosition{Line: 30, Column: 7}},
+			},
 		},
 	}}}
 
@@ -3026,6 +3118,8 @@ func TestValidateManifestRejectsNonBoolReactiveBooleanAttribute(t *testing.T) {
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
+	diagnostic := firstDiagnostic(diagnostics, "component_field_error")
+	assertSourceSpan(t, diagnostic.Span, 31, 19, 31, 24)
 }
 
 func TestValidateManifestRejectsUnsafeReactiveURLAttribute(t *testing.T) {
@@ -3085,6 +3179,9 @@ func TestValidateManifestRejectsNonBoolClassToggle(t *testing.T) {
 		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<button class:active={Count}>{Count}</button>`,
+			Spans: gwdkir.BlockSpans{
+				View: source.SourceSpan{Start: source.SourcePosition{Line: 40, Column: 1}, End: source.SourcePosition{Line: 40, Column: 7}},
+			},
 		},
 	}}}
 
@@ -3096,6 +3193,8 @@ func TestValidateManifestRejectsNonBoolClassToggle(t *testing.T) {
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
+	diagnostic := firstDiagnostic(diagnostics, "component_field_error")
+	assertSourceSpan(t, diagnostic.Span, 41, 23, 41, 28)
 }
 
 func TestValidateManifestAllowsStyleBinding(t *testing.T) {
@@ -3130,6 +3229,9 @@ func TestValidateManifestRejectsBoolStyleBinding(t *testing.T) {
 		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<div style:height.px={Open}>{Count}</div>`,
+			Spans: gwdkir.BlockSpans{
+				View: source.SourceSpan{Start: source.SourcePosition{Line: 50, Column: 1}, End: source.SourcePosition{Line: 50, Column: 7}},
+			},
 		},
 	}}}
 
@@ -3141,6 +3243,8 @@ func TestValidateManifestRejectsBoolStyleBinding(t *testing.T) {
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
+	diagnostic := firstDiagnostic(diagnostics, "component_field_error")
+	assertSourceSpan(t, diagnostic.Span, 51, 23, 51, 27)
 }
 
 func TestValidateManifestRejectsRelativeGoTypedImportPath(t *testing.T) {

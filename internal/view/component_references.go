@@ -2,14 +2,14 @@ package view
 
 import "strings"
 
-func collectComponentReferences(nodes []Node, names map[string]bool) {
+func collectComponentReferences(nodes []Node, refs *[]ComponentReference) {
 	for _, node := range nodes {
 		switch typed := node.(type) {
 		case ComponentCall:
-			names[typed.Name] = true
-			collectComponentReferences(typed.Children, names)
+			*refs = append(*refs, ComponentReference{Name: typed.Name, Start: typed.Start, End: typed.End})
+			collectComponentReferences(typed.Children, refs)
 		case Element:
-			collectComponentReferences(typed.Children, names)
+			collectComponentReferences(typed.Children, refs)
 		}
 	}
 }

@@ -16,6 +16,8 @@ type Node interface {
 // Text is escaped text content.
 type Text struct {
 	Value string
+	Start int
+	End   int
 }
 
 func (node Text) render(ctx *renderContext, out *renderOutput) error {

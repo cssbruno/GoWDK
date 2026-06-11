@@ -135,7 +135,7 @@ func validatePageQualifiedComponentRefs(page gwdkir.Page, usesByAlias map[string
 	if !page.Blocks.View || strings.TrimSpace(page.Blocks.ViewBody) == "" {
 		return nil
 	}
-	refs, err := view.ComponentReferences(page.Blocks.ViewBody)
+	refs, err := view.ComponentReferenceSpans(page.Blocks.ViewBody)
 	if err != nil {
 		return []ValidationError{{
 			Code:    "view_parse_error",
@@ -147,21 +147,22 @@ func validatePageQualifiedComponentRefs(page gwdkir.Page, usesByAlias map[string
 	}
 	var diagnostics []ValidationError
 	for _, ref := range refs {
-		alias, name, ok := strings.Cut(ref, ".")
+		alias, name, ok := strings.Cut(ref.Name, ".")
 		if !ok {
 			continue
 		}
+		span := pageViewBodyOffsetSpan(page, ref.Start, ref.End)
 		use, exists := usesByAlias[alias]
 		if !exists {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:   "unknown_gowdk_use_alias",
 				PageID: page.ID,
 				Source: page.Source,
-				Span:   firstSpan(page.Blocks.Spans.View, page.Spans.Page),
+				Span:   span,
 				Message: fmt.Sprintf(
 					"%s references component <%s />, but alias %q is not declared. Add `use %s \"<package>\"` before the view block",
 					page.ID,
-					ref,
+					ref.Name,
 					alias,
 					alias,
 				),
@@ -177,11 +178,11 @@ func validatePageQualifiedComponentRefs(page gwdkir.Page, usesByAlias map[string
 					Code:   "unknown_gowdk_component",
 					PageID: page.ID,
 					Source: page.Source,
-					Span:   firstSpan(page.Blocks.Spans.View, page.Spans.Page),
+					Span:   span,
 					Message: fmt.Sprintf(
 						"%s references component <%s />, but package %s does not declare components",
 						page.ID,
-						ref,
+						ref.Name,
 						use.Package,
 					),
 				})
@@ -195,11 +196,11 @@ func validatePageQualifiedComponentRefs(page gwdkir.Page, usesByAlias map[string
 			Code:   "unknown_gowdk_component",
 			PageID: page.ID,
 			Source: page.Source,
-			Span:   firstSpan(page.Blocks.Spans.View, page.Spans.Page),
+			Span:   span,
 			Message: fmt.Sprintf(
 				"%s references component <%s />, but package %s does not declare component %s",
 				page.ID,
-				ref,
+				ref.Name,
 				use.Package,
 				name,
 			),
@@ -212,7 +213,7 @@ func validateComponentQualifiedComponentRefs(component gwdkir.Component, usesByA
 	if !component.Blocks.View || strings.TrimSpace(component.Blocks.ViewBody) == "" {
 		return nil
 	}
-	refs, err := view.ComponentReferences(component.Blocks.ViewBody)
+	refs, err := view.ComponentReferenceSpans(component.Blocks.ViewBody)
 	if err != nil {
 		return []ValidationError{{
 			Code:          "view_parse_error",
@@ -224,21 +225,22 @@ func validateComponentQualifiedComponentRefs(component gwdkir.Component, usesByA
 	}
 	var diagnostics []ValidationError
 	for _, ref := range refs {
-		alias, name, ok := strings.Cut(ref, ".")
+		alias, name, ok := strings.Cut(ref.Name, ".")
 		if !ok {
 			continue
 		}
+		span := componentViewBodyOffsetSpan(component, ref.Start, ref.End)
 		use, exists := usesByAlias[alias]
 		if !exists {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "unknown_gowdk_use_alias",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.View, component.Span),
+				Span:          span,
 				Message: fmt.Sprintf(
 					"component %s references component <%s />, but alias %q is not declared. Add `use %s \"<package>\"` before the view block",
 					component.Name,
-					ref,
+					ref.Name,
 					alias,
 					alias,
 				),
@@ -254,11 +256,11 @@ func validateComponentQualifiedComponentRefs(component gwdkir.Component, usesByA
 					Code:          "unknown_gowdk_component",
 					ComponentName: component.Name,
 					Source:        component.Source,
-					Span:          firstSpan(component.Blocks.Spans.View, component.Span),
+					Span:          span,
 					Message: fmt.Sprintf(
 						"component %s references component <%s />, but package %s does not declare components",
 						component.Name,
-						ref,
+						ref.Name,
 						use.Package,
 					),
 				})
@@ -272,11 +274,11 @@ func validateComponentQualifiedComponentRefs(component gwdkir.Component, usesByA
 			Code:          "unknown_gowdk_component",
 			ComponentName: component.Name,
 			Source:        component.Source,
-			Span:          firstSpan(component.Blocks.Spans.View, component.Span),
+			Span:          span,
 			Message: fmt.Sprintf(
 				"component %s references component <%s />, but package %s does not declare component %s",
 				component.Name,
-				ref,
+				ref.Name,
 				use.Package,
 				name,
 			),

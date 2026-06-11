@@ -6,6 +6,7 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
@@ -37,19 +38,24 @@ func validateComponentViewContract(component gwdkir.Component, ctx componentVali
 
 func validateUnknownViewFields(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
 	var diagnostics []ValidationError
-	for field := range viewRefs.Fields {
-		if ctx.Props[field] || ctx.State[field] {
+	seen := map[string]bool{}
+	for _, field := range viewRefs.FieldRefs {
+		if seen[field.Name] {
 			continue
 		}
-		if _, ok := ctx.ComputedTypes[field]; ok {
+		seen[field.Name] = true
+		if ctx.Props[field.Name] || ctx.State[field.Name] {
+			continue
+		}
+		if _, ok := ctx.ComputedTypes[field.Name]; ok {
 			continue
 		}
 		diagnostics = append(diagnostics, ValidationError{
 			Code:          "component_field_error",
 			ComponentName: component.Name,
 			Source:        component.Source,
-			Span:          viewBodyNeedleSpan(component, field),
-			Message:       fmt.Sprintf("component %s view references unknown field %q", component.Name, field),
+			Span:          componentViewBodyOffsetSpan(component, field.Start, field.End),
+			Message:       fmt.Sprintf("component %s view references unknown field %q", component.Name, field.Name),
 		})
 	}
 	return diagnostics
@@ -63,7 +69,7 @@ func validateViewEventExpressions(component gwdkir.Component, ctx componentValid
 				Code:          "component_field_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          viewBodyNeedleSpan(component, eventExpr.Name),
+				Span:          componentViewBodyOffsetSpan(component, eventExpr.Start, eventExpr.End),
 				Message:       fmt.Sprintf("component %s event directive %q is invalid: %v", component.Name, eventExpr.Name, err),
 			})
 			continue
@@ -74,7 +80,7 @@ func validateViewEventExpressions(component gwdkir.Component, ctx componentValid
 				Code:          "component_field_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          viewBodyNeedleSpan(component, eventExpr.Expression),
+				Span:          componentViewBodyOffsetSpan(component, eventExpr.Start, eventExpr.End),
 				Message:       fmt.Sprintf("component %s event expression %q is invalid: %v", component.Name, eventExpr.Expression, err),
 			})
 		}
@@ -96,13 +102,13 @@ func mergeClientSymbols(left, right map[string]clientlang.ValueType) map[string]
 func validateViewBooleanExpressions(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
 	var diagnostics []ValidationError
 	for _, expr := range viewRefs.Bools {
-		if err := view.ValidateIslandBoolExpressionTyped(expr, ctx.SymbolTypes); err != nil {
+		if err := view.ValidateIslandBoolExpressionTyped(expr.Value, ctx.SymbolTypes); err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_field_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.View, component.Span),
-				Message:       fmt.Sprintf("component %s bool expression %q is invalid: %v", component.Name, expr, err),
+				Span:          componentViewBodyOffsetSpan(component, expr.Start, expr.End),
+				Message:       fmt.Sprintf("component %s bool expression %q is invalid: %v", component.Name, expr.Value, err),
 			})
 		}
 	}
@@ -117,7 +123,7 @@ func validateViewAttributeExpressions(component gwdkir.Component, ctx componentV
 				Code:          "component_field_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.View, component.Span),
+				Span:          componentViewBodyOffsetSpan(component, attrExpr.Start, attrExpr.End),
 				Message:       fmt.Sprintf("component %s reactive attribute %s=%q is invalid: %v", component.Name, attrExpr.Name, attrExpr.Expression, err),
 			})
 		}
@@ -128,7 +134,7 @@ func validateViewAttributeExpressions(component gwdkir.Component, ctx componentV
 				Code:          "component_field_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.View, component.Span),
+				Span:          componentViewBodyOffsetSpan(component, toggle.Start, toggle.End),
 				Message:       fmt.Sprintf("component %s class toggle %s=%q is invalid: %v", component.Name, toggle.Name, toggle.Expression, err),
 			})
 		}
@@ -139,7 +145,7 @@ func validateViewAttributeExpressions(component gwdkir.Component, ctx componentV
 				Code:          "component_field_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.View, component.Span),
+				Span:          componentViewBodyOffsetSpan(component, binding.Start, binding.End),
 				Message:       fmt.Sprintf("component %s style binding %s=%q is invalid: %v", component.Name, binding.Name, binding.Expression, err),
 			})
 		}
@@ -158,13 +164,13 @@ func validateViewValueBinds(component gwdkir.Component, ctx componentValidationC
 func validateViewValueBind(component gwdkir.Component, ctx componentValidationContext, field valueBindExpr) []ValidationError {
 	typ, ok := ctx.StateTypes[field.Field]
 	if !ok {
-		return []ValidationError{componentFieldError(component, fmt.Sprintf("component %s g:bind:value target %q must be a state field", component.Name, field.Field))}
+		return []ValidationError{componentFieldErrorAt(component, componentViewBodyOffsetSpan(component, field.Start, field.End), fmt.Sprintf("component %s g:bind:value target %q must be a state field", component.Name, field.Field))}
 	}
 	if !isValueBindableElement(field.Element) {
-		return []ValidationError{componentFieldError(component, fmt.Sprintf("component %s g:bind:value target %q is on unsupported <%s>", component.Name, field.Field, field.Element))}
+		return []ValidationError{componentFieldErrorAt(component, componentViewBodyOffsetSpan(component, field.Start, field.End), fmt.Sprintf("component %s g:bind:value target %q is on unsupported <%s>", component.Name, field.Field, field.Element))}
 	}
 	if field.Element == "input" && strings.EqualFold(field.InputType, "radio") && field.InputValue == "" {
-		return []ValidationError{componentFieldError(component, fmt.Sprintf("component %s g:bind:value radio target %q requires a literal value attribute", component.Name, field.Field))}
+		return []ValidationError{componentFieldErrorAt(component, componentViewBodyOffsetSpan(component, field.Start, field.End), fmt.Sprintf("component %s g:bind:value radio target %q requires a literal value attribute", component.Name, field.Field))}
 	}
 	if typ == clientlang.TypeString || typ == clientlang.TypeUnknown {
 		return nil
@@ -173,21 +179,22 @@ func validateViewValueBind(component gwdkir.Component, ctx componentValidationCo
 		if field.Element == "input" && strings.EqualFold(field.InputType, "number") {
 			return nil
 		}
-		return []ValidationError{componentFieldError(component, fmt.Sprintf("component %s g:bind:value numeric target %q requires <input type=\"number\">", component.Name, field.Field))}
+		return []ValidationError{componentFieldErrorAt(component, componentViewBodyOffsetSpan(component, field.Start, field.End), fmt.Sprintf("component %s g:bind:value numeric target %q requires <input type=\"number\">", component.Name, field.Field))}
 	}
-	return []ValidationError{componentFieldError(component, fmt.Sprintf("component %s g:bind:value target %q must be string or numeric, got %s", component.Name, field.Field, typ))}
+	return []ValidationError{componentFieldErrorAt(component, componentViewBodyOffsetSpan(component, field.Start, field.End), fmt.Sprintf("component %s g:bind:value target %q must be string or numeric, got %s", component.Name, field.Field, typ))}
 }
 
 func validateViewCheckedBinds(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
 	var diagnostics []ValidationError
 	for _, field := range viewRefs.CheckedBinds {
-		typ, ok := ctx.StateTypes[field]
+		span := componentViewBodyOffsetSpan(component, field.Start, field.End)
+		typ, ok := ctx.StateTypes[field.Name]
 		if !ok {
-			diagnostics = append(diagnostics, componentFieldError(component, fmt.Sprintf("component %s g:bind:checked target %q must be a state field", component.Name, field)))
+			diagnostics = append(diagnostics, componentFieldErrorAt(component, span, fmt.Sprintf("component %s g:bind:checked target %q must be a state field", component.Name, field.Name)))
 			continue
 		}
 		if typ != clientlang.TypeBool && typ != clientlang.TypeUnknown {
-			diagnostics = append(diagnostics, componentFieldError(component, fmt.Sprintf("component %s g:bind:checked target %q must be bool, got %s", component.Name, field, typ)))
+			diagnostics = append(diagnostics, componentFieldErrorAt(component, span, fmt.Sprintf("component %s g:bind:checked target %q must be bool, got %s", component.Name, field.Name, typ)))
 		}
 	}
 	return diagnostics
@@ -197,19 +204,20 @@ func validateViewRefBinds(component gwdkir.Component, ctx componentValidationCon
 	boundRefs := map[string]bool{}
 	var diagnostics []ValidationError
 	for _, refName := range viewRefs.RefBinds {
+		span := componentViewBodyOffsetSpan(component, refName.Start, refName.End)
 		if ctx.Refs == nil {
-			diagnostics = append(diagnostics, componentFieldError(component, fmt.Sprintf("component %s g:ref target %q is not declared", component.Name, refName)))
+			diagnostics = append(diagnostics, componentFieldErrorAt(component, span, fmt.Sprintf("component %s g:ref target %q is not declared", component.Name, refName.Name)))
 			continue
 		}
-		if _, ok := ctx.Refs[refName]; !ok {
-			diagnostics = append(diagnostics, componentFieldError(component, fmt.Sprintf("component %s g:ref target %q is not declared", component.Name, refName)))
+		if _, ok := ctx.Refs[refName.Name]; !ok {
+			diagnostics = append(diagnostics, componentFieldErrorAt(component, span, fmt.Sprintf("component %s g:ref target %q is not declared", component.Name, refName.Name)))
 			continue
 		}
-		if boundRefs[refName] {
-			diagnostics = append(diagnostics, componentFieldError(component, fmt.Sprintf("component %s g:ref target %q is bound more than once", component.Name, refName)))
+		if boundRefs[refName.Name] {
+			diagnostics = append(diagnostics, componentFieldErrorAt(component, span, fmt.Sprintf("component %s g:ref target %q is bound more than once", component.Name, refName.Name)))
 			continue
 		}
-		boundRefs[refName] = true
+		boundRefs[refName.Name] = true
 	}
 	for refName := range ctx.UsedRefs {
 		if !boundRefs[refName] {
@@ -226,11 +234,15 @@ func validateViewRefBinds(component gwdkir.Component, ctx componentValidationCon
 }
 
 func componentFieldError(component gwdkir.Component, message string) ValidationError {
+	return componentFieldErrorAt(component, firstSpan(component.Blocks.Spans.View, component.Span), message)
+}
+
+func componentFieldErrorAt(component gwdkir.Component, span source.SourceSpan, message string) ValidationError {
 	return ValidationError{
 		Code:          "component_field_error",
 		ComponentName: component.Name,
 		Source:        component.Source,
-		Span:          firstSpan(component.Blocks.Spans.View, component.Span),
+		Span:          span,
 		Message:       message,
 	}
 }

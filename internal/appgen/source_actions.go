@@ -76,11 +76,15 @@ func actionsUseForm(actions []ActionEndpoint) bool {
 
 func actionsUseFragments(actions []ActionEndpoint) bool {
 	for _, action := range actions {
-		if len(action.Fragments) > 0 {
+		if actionUsesPartialAddon(action) {
 			return true
 		}
 	}
 	return false
+}
+
+func actionUsesPartialAddon(action ActionEndpoint) bool {
+	return action.Binding.Status == "" && len(action.Fragments) > 0
 }
 
 func actionsParseForm(actions []ActionEndpoint) bool {

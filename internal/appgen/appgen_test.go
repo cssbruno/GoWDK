@@ -860,6 +860,9 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 	if strings.Contains(source, `gowdkresponse.RedirectTo("/dashboard")`) || strings.Contains(source, `<p>ignored</p>`) {
 		t.Fatalf("bound action must keep redirect and fragment policy in the user Go response:\n%s", source)
 	}
+	if strings.Contains(source, `gowdkpartial "github.com/cssbruno/gowdk/addons/partial"`) {
+		t.Fatalf("bound action fragments must not import partial helpers when generated partial branches are not emitted:\n%s", source)
+	}
 }
 
 func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) {
@@ -873,6 +876,7 @@ func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) 
 			PageID:     "home",
 			ActionName: "Submit",
 			Route:      "/",
+			Fragments:  []ActionFragment{{Target: "#home", HTML: "<p>ignored</p>"}},
 			Binding: source.BackendBinding{
 				Status:       source.BackendBindingMissing,
 				ImportPath:   "example.com/app/missing",
@@ -906,8 +910,10 @@ func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) 
 	for _, forbidden := range []string{
 		`"example.com/app/missing"`,
 		`"example.com/app/status"`,
+		`gowdkpartial "github.com/cssbruno/gowdk/addons/partial"`,
 		`missing.Submit(`,
 		`status.Status(`,
+		`<p>ignored</p>`,
 	} {
 		if strings.Contains(source, forbidden) {
 			t.Fatalf("did not expect generated missing-handler source to contain %q:\n%s", forbidden, source)

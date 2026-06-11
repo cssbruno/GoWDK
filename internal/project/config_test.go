@@ -390,6 +390,7 @@ import (
 	rl "github.com/cssbruno/gowdk/addons/ratelimit"
 	spaaddon "github.com/cssbruno/gowdk/addons/spa"
 	ssraddon "github.com/cssbruno/gowdk/addons/ssr"
+	staticaddon "github.com/cssbruno/gowdk/addons/static"
 )
 
 var Config = gowdk.Config{
@@ -402,6 +403,7 @@ var Config = gowdk.Config{
 		rl.Addon(),
 		spaaddon.Addon(),
 		ssraddon.Addon(),
+		staticaddon.Addon(),
 	},
 }
 `), 0o644); err != nil {
@@ -412,8 +414,11 @@ var Config = gowdk.Config{
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Addons) != 8 {
+	if len(config.Addons) != 9 {
 		t.Fatalf("unexpected addons: %#v", config.Addons)
+	}
+	if config.Addons[8].Name() != "static" {
+		t.Fatalf("expected static addon, got %#v", config.Addons[8])
 	}
 	for _, feature := range []gowdk.Feature{
 		gowdk.FeatureActions,

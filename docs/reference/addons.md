@@ -22,6 +22,7 @@ Current feature IDs:
 
 Current packages:
 
+- `addons/static`
 - `addons/spa`
 - `addons/actions`
 - `addons/partial`
@@ -32,6 +33,10 @@ Current packages:
 - `addons/tailwind`
 - `addons/ratelimit`
 - `addons/contracts`
+
+`addons/static` is the build-time static page output boundary. `addons/spa`
+remains available for existing configs and static-first SPA navigation; both
+enable the existing `spa` feature ID.
 
 Use `gowdk add --list` to print the built-in names the CLI can wire into
 `gowdk.config.go`:
@@ -56,6 +61,7 @@ built-ins:
 
 ```go
 Addons: []gowdk.Addon{
+	static.Addon(),
 	spa.Addon(),
 	actions.Addon(),
 	partial.Addon(),

@@ -448,10 +448,12 @@ import (
 	"github.com/cssbruno/gowdk/addons/ratelimit"
 	"github.com/cssbruno/gowdk/addons/spa"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/addons/static"
 )
 
 var Config = gowdk.Config{
 	Addons: []gowdk.Addon{
+		static.Addon(),
 		spa.Addon(),
 		actions.Addon(),
 		partial.Addon(),

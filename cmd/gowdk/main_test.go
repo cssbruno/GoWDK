@@ -355,6 +355,79 @@ view {
 	}
 }
 
+func TestBuildCommandPrerendersSupportedStaticSlice(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "docs.page.gwdk")
+	component := filepath.Join(root, "hero.cmp.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page docs.post
+route "/docs/{slug}"
+
+paths {
+  => { slug: "getting-started" }
+}
+
+build {
+  => { title: "Getting Started", tagline: "Portable Go web compiler" }
+}
+
+view {
+  <main>
+    <Hero title="{title}" tagline="{tagline}" />
+    <p>{param("slug")}</p>
+  </main>
+}
+`)
+	writeCLIFile(t, component, `package app
+
+component Hero
+
+props {
+  title string
+  tagline string
+}
+
+view {
+  <section><h1>{title}</h1><p>{tagline}</p></section>
+}
+`)
+
+	if err := run([]string{"build", "--config", config, "--out", outputDir, page, component}); err != nil {
+		t.Fatal(err)
+	}
+
+	payload, err := os.ReadFile(filepath.Join(outputDir, "docs", "getting-started", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, expected := range []string{
+		`<section><h1>Getting Started</h1><p>Portable Go web compiler</p></section>`,
+		`<p>getting-started</p>`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in prerendered output:\n%s", expected, output)
+		}
+	}
+
+	routeManifest, err := os.ReadFile(filepath.Join(outputDir, "gowdk-routes.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(routeManifest), `"route": "/docs/getting-started"`) ||
+		!strings.Contains(string(routeManifest), `"path": "docs/getting-started/index.html"`) {
+		t.Fatalf("unexpected route manifest:\n%s", routeManifest)
+	}
+	for _, artifact := range []string{"gowdk-assets.json", "gowdk-build-report.json"} {
+		if _, err := os.Stat(filepath.Join(outputDir, artifact)); err != nil {
+			t.Fatalf("expected %s artifact: %v", artifact, err)
+		}
+	}
+}
+
 func TestBuildCommandDebugPrintsBuildgenReport(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")
@@ -887,6 +960,7 @@ func TestAddCommandListsKnownAddons(t *testing.T) {
 		"partial",
 		"ratelimit",
 		"ssr",
+		"static",
 	} {
 		if !strings.Contains(stdout, expected) {
 			t.Fatalf("expected %q in addon list:\n%s", expected, stdout)

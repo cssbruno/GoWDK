@@ -383,7 +383,7 @@ view {
 	if !strings.Contains(stderr, "gowdk build report (build):") {
 		t.Fatalf("expected debug report header on stderr, got:\n%s", stderr)
 	}
-	if !strings.Contains(stderr, "validate/manifest_valid") || !strings.Contains(stderr, "complete/build_complete") {
+	if !strings.Contains(stderr, "validate/ir_valid") || !strings.Contains(stderr, "complete/build_complete") {
 		t.Fatalf("expected validation and completion events on stderr, got:\n%s", stderr)
 	}
 	if _, err := os.Stat(reportPath); err != nil {

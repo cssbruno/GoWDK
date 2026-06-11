@@ -1879,6 +1879,16 @@ func TestGenerateAutoRoutesRequiresIR(t *testing.T) {
 	}
 }
 
+func TestGenerateBackendAutoRoutesRejectsInvalidIR(t *testing.T) {
+	appDir := filepath.Join(t.TempDir(), "generated-backend")
+	invalidIR := &gwdkir.Program{}
+
+	_, err := GenerateBackendWithOptions(appDir, Options{AutoRoutes: true, IR: invalidIR})
+	if err == nil || !strings.Contains(err.Error(), "invalid compiler IR: invalid IR") {
+		t.Fatalf("expected invalid compiler IR error, got %v", err)
+	}
+}
+
 func TestActionEndpointsInfersInputFieldsFromGPostForm(t *testing.T) {
 	routes, err := actionEndpointsFromManifestFixture(gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "newsletter",

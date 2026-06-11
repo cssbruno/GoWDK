@@ -114,8 +114,8 @@ implemented.
 
 ## Open Questions
 
-- Which downstream compiler passes should migrate from manifest compatibility
-  structs to `internal/gwdkir.Program` first?
+- Which remaining diagnostics, reports, and LSP metadata need exact source spans
+  first?
 - Should hybrid pages get additional cache policy syntax beyond page-level
   `cache` and `revalidate`?
 - Should processor-emitted CSS become selectable named `css` inputs through a

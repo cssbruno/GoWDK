@@ -26,7 +26,8 @@ func BuildFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (Resu
 // BuildFromValidatedIR is BuildFromIR for orchestrators that already ran
 // compiler.ValidateProgram on the IR (the CLI build path). It skips the
 // defensive re-validation, which type-checks feature Go packages on disk and
-// is too expensive to run twice per build.
+// is too expensive to run twice per build, but still runs cheap IR invariant
+// checks before planning generated output.
 func BuildFromValidatedIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (Result, error) {
 	return buildFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, false)
 }
@@ -47,8 +48,10 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 		if err := compiler.ValidateProgram(config, ir); err != nil {
 			return Result{}, reporter.fail("validate", err)
 		}
+	} else if err := gwdkir.CheckInvariants(ir); err != nil {
+		return Result{}, reporter.fail("validate", fmt.Errorf("internal compiler error: %w", err))
 	}
-	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
+	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
 	reportBackendBindings(reporter, backendBindings)
 	reportContractReferences(reporter, ir.ContractRefs)
 	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
@@ -157,7 +160,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	if err := compiler.ValidateProgram(config, ir); err != nil {
 		return MemoryResult{}, reporter.fail("validate", err)
 	}
-	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
+	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
 	reportBackendBindings(reporter, backendBindings)
 	reportContractReferences(reporter, ir.ContractRefs)
 	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
@@ -375,7 +378,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	if err := compiler.ValidateProgram(config, ir); err != nil {
 		return Result{}, reporter.fail("validate", err)
 	}
-	reporter.info("validate", "manifest_valid", "manifest validation completed", BuildEvent{})
+	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
 	reportContractReferences(reporter, ir.ContractRefs)
 	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
 		return Result{}, reporter.fail("bind", err)

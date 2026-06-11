@@ -2212,6 +2212,53 @@ func TestGenerateRejectsDynamicActionEndpoint(t *testing.T) {
 	}
 }
 
+func TestGenerateRejectsInvalidContractRoutes(t *testing.T) {
+	tests := []struct {
+		name string
+		ref  gwdkir.ContractReference
+		want string
+	}{
+		{
+			name: "external command path",
+			ref: gwdkir.ContractReference{
+				Kind:   gwdkir.ContractCommand,
+				Name:   "patients.CreatePatient",
+				Method: "POST",
+				Path:   "https://example.com/pay",
+			},
+			want: `endpoint path "https://example.com/pay" must be a local absolute path`,
+		},
+		{
+			name: "unsupported query method",
+			ref: gwdkir.ContractReference{
+				Kind:   gwdkir.ContractQuery,
+				Name:   "patients.GetPatientPage",
+				Method: "POST",
+				Path:   "/patients",
+			},
+			want: "query contract routes require GET",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			outputDir := filepath.Join(root, "dist")
+			appDir := filepath.Join(root, "generated-app")
+			writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+			_, err := GenerateWithOptions(outputDir, appDir, Options{
+				IR: &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{test.ref}},
+			})
+			if err == nil {
+				t.Fatal("expected invalid contract route error")
+			}
+			if !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("expected error to contain %q, got %v", test.want, err)
+			}
+		})
+	}
+}
+
 func TestGenerateRejectsSSRReplacementForUndeclaredParam(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

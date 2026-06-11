@@ -56,6 +56,9 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (Result, err
 	if err := validateFragmentEndpoints(options.Fragments); err != nil {
 		return Result{}, err
 	}
+	if err := validateContractRoutes(options.IR); err != nil {
+		return Result{}, err
+	}
 	if err := validateSSRRoutes(options.SSR); err != nil {
 		return Result{}, err
 	}
@@ -145,6 +148,9 @@ func GenerateBackendWithOptions(appDir string, options Options) (Result, error) 
 		return Result{}, err
 	}
 	if err := validateFragmentEndpoints(options.Fragments); err != nil {
+		return Result{}, err
+	}
+	if err := validateContractRoutes(options.IR); err != nil {
 		return Result{}, err
 	}
 	if err := os.MkdirAll(absApp, 0o755); err != nil {

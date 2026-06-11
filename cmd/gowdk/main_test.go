@@ -657,6 +657,42 @@ view {
 	}
 }
 
+func TestCheckJSONReportsInvalidContractRoute(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	pageSource := `package pages
+
+page patients
+route "/patients"
+
+view {
+  <main>
+    <form method="post" action="https://example.com/pay" g:command="patients.CreatePatient">
+      <input name="name" />
+    </form>
+  </main>
+}
+`
+	page := filepath.Join(root, "pages", "patients.page.gwdk")
+	writeCLIFile(t, page, pageSource)
+
+	var output string
+	var err error
+	withWorkingDir(t, root, func() {
+		output, err = captureCLIStdout(t, func() error {
+			return run([]string{"check", "--config", config, "--json", page})
+		})
+	})
+	if err == nil {
+		t.Fatal("expected invalid contract route to fail check")
+	}
+	if !strings.Contains(output, `"code": "contract_route_invalid"`) ||
+		!strings.Contains(output, `endpoint path \"https://example.com/pay\" must be a local absolute path`) ||
+		!strings.Contains(output, `"line": 9`) {
+		t.Fatalf("expected invalid contract route diagnostic with source span, got:\n%s", output)
+	}
+}
+
 func TestCheckJSONReportsInvalidGoContractRegistration(t *testing.T) {
 	root := t.TempDir()
 	config := writeMinimalCLIConfig(t, root)

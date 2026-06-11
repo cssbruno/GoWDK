@@ -78,6 +78,7 @@ var Registry = []Code{
 	{Code: "contract_reference_parse_error", Area: "contracts", Stability: StabilityExperimental, Severity: SeverityError, Summary: "view contract reference directives could not be parsed"},
 	{Code: "contract_reference_role_not_allowed", Area: "contracts", Stability: StabilityExperimental, Severity: SeverityError, Summary: "contract reference targets a registration that is not available to the web role"},
 	{Code: "contract_result_invalid", Area: "contracts", Stability: StabilityExperimental, Severity: SeverityError, Summary: "contract result type is invalid"},
+	{Code: "contract_route_invalid", Area: "contracts", Stability: StabilityExperimental, Severity: SeverityError, Summary: "contract reference route method or path is invalid"},
 	{Code: "contract_type_invalid", Area: "contracts", Stability: StabilityExperimental, Severity: SeverityError, Summary: "contract type is invalid"},
 	{Code: "cyclic_layout_reference", Area: "layouts", Stability: StabilityStable, Severity: SeverityError, Summary: "layout layout inheritance forms a cycle"},
 	{Code: "duplicate_command_owner", Area: "contracts", Stability: StabilityExperimental, Severity: SeverityError, Summary: "command has more than one owner registration"},

@@ -357,6 +357,9 @@ func CheckSource(config gowdk.Config, path string, source []byte) (gwdkir.Page, 
 			return gwdkir.Page{}, diagnostics
 		}
 		ir := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{Layouts: []gwdkir.Layout{layout}})
+		if err := compiler.ValidateSourceProgram(config, ir); err != nil {
+			diagnostics = append(diagnostics, compilerDiagnostics(err, ir)...)
+		}
 		diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
 		return gwdkir.Page{}, diagnostics
 	case FileKindAsset, FileKindPlugin:

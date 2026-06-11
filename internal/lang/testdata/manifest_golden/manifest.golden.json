@@ -61,9 +61,10 @@
       "blockName": "Submit",
       "method": "POST",
       "route": "/",
+      "packageName": "home",
       "functionName": "Submit",
       "status": "missing",
-      "message": "GOWDK action handler feature.Submit is not implemented"
+      "message": "GOWDK action handler home.Submit is not implemented"
     }
   ]
 }

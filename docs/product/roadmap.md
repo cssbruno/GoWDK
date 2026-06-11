@@ -121,8 +121,8 @@ level, the current baseline already includes:
 - component discovery, imported props/state contracts, slots, generated
   JavaScript islands, component-level WASM island assets, and a first-slice client
   language for local component behavior;
-- same-package Go handler binding through `go list`, `go/parser`, `go/ast`, and
-  `go/types`, exact exported handler matching, typed action input decoding,
+- same-package Go handler binding through `go/packages` and `go/types`, exact
+  exported handler matching, typed action input decoding,
   generated `501` responses for missing or unsupported bindings, deterministic
   import aliases, and formatted generated app source;
 - shared backend routing primitives in `runtime/app`, runtime action/API

@@ -85,16 +85,16 @@ Target `.gwdk` compilation:
 Target Go package validation:
 
 ```text
-.go files
-  -> standard go/parser
-  -> standard go/ast
-  -> standard go/types
+.go package directory
+  -> go/packages load
+  -> standard Go syntax and type information
   -> validate exported handlers/types
 ```
 
 The GOWDK AST models `.gwdk` language constructs. Normal Go files and generated
-Go source use the standard Go AST and type checker. Analyzer output connects
-the lanes through package, route, type, component, and handler binding metadata.
+Go source use the standard Go syntax and type information. Analyzer output
+connects the lanes through package, route, type, component, and handler binding
+metadata.
 
 ## Compatibility Records
 
@@ -152,7 +152,7 @@ manifest report (`internal/lang/testdata/manifest_golden`).
 | `internal/lang` | Language tooling for lexing, diagnostics, formatting, checking, and the IR-derived manifest JSON report. | Tools | Initial CLI-backed tools implemented. |
 | `internal/lsp` | Language Server Protocol bridge for diagnostics, formatting, completions, and hover. | Tools | Dependency-free stdio server implemented with baseline and open-project completions plus hover for known language tokens and open-project symbols. |
 | `internal/project` | Load project-level config, module source groups, build targets, and future source roots. | Compiler | SPA `gowdk.config.go` subset implemented for build discovery, output, and `Build.Targets`; project-level CLI commands require this config or an explicit `--config` file before compiling `.gwdk` code. |
-| `internal/compiler` | Validate manifests and coordinate compilation metadata. | Compiler | Render-mode, duplicate identity, redundant component implementation, component Go contract, saved default `go {}` package type-checking with sibling Go files, route shape, duplicate route param, duplicate route pattern, route-method, required page-view validation, default `go {}` backend endpoint binding fallback, and backend binding implemented. CLI route/endpoint reports now convert through `internal/gwdkir.Program`. |
+| `internal/compiler` | Validate manifests and coordinate compilation metadata. | Compiler | Render-mode, duplicate identity, redundant component implementation, component Go contract, saved default `go {}` package type-checking with sibling Go files, route shape, duplicate route param, duplicate route pattern, route-method, required page-view validation, default `go {}` backend endpoint binding fallback, and `go/packages`-backed backend binding implemented. CLI route/endpoint reports now convert through `internal/gwdkir.Program`. |
 | `internal/buildgen` | Emit route-derived spa HTML files for build-time pages and SSR render artifacts. | Compiler | Disk builds, memory builds, incremental SPA builds, and SSR artifact planning consume `internal/gwdkir.Program`. Initial simple page, literal build data, imported Go build data calls, literal dynamic path expansion, component expansion, partial runtime asset emission, default JS island asset emission, component-level non-CSS asset emission, component-level WASM island asset emission, page-level `go client {}` WASM mount asset emission, concrete and dynamic SSR page rendering with declared `load {}` placeholders, route manifest emission, asset manifest emission, mandatory build report emission, identical-output write skipping, and incremental changed-page spa rendering implemented. |
 | `internal/appgen` | Emit generated Go app source for embedded spa output and request-time routes. | Compiler | Auto route planning consumes `internal/gwdkir.Program`, backend adapter planning uses typed appgen IR, and generated app Go files are assembled with `go/ast`/`go/printer` before `go/format`. Generates `go.mod`, `main.go`, copied spa assets, thin `runtime/app` server wiring, `runtime/app.BackendRouter` registrations for feature-bound action/API routes, 501 stubs for missing/unsupported handlers, POST redirect and partial fragment action handlers backed by `runtime/form`, `runtime/response`, `runtime/validation`, and `addons/partial`, form input decoders, concrete and dynamic SSR route handlers backed by `runtime/route`, declared SSR load path calls with redirect/error-page handling through `addons/ssr`, shared request-time guard checks through `runtime/guard`, generated `gowdk_go/` packages for default `go {}` and `go ssr {}` blocks, addon `GoBlockConsumer` Go files, split backend apps, command/query contract exposure metadata in adapter IR including runtime roles, identical-output write skipping, stale embedded spa cleanup, and can invoke `go build` for local binaries or Go `js/wasm` artifacts. |
 | `internal/clientrt` | Emit client runtime for partial updates and static-first SPA navigation. | Runtime | First partial form enhancement runtime emits lifecycle hooks, target/swap request headers, swaps, focus restoration, loading state metadata, island remounts, and page-level `go client {}` remounts after SPA navigation. |
@@ -161,7 +161,7 @@ manifest report (`internal/lang/testdata/manifest_golden`).
 | `runtime/html` | HTML escaping, attributes, and class helpers. | Runtime | Initial helpers implemented. |
 | `runtime/auth` | Thin principal and RBAC access-gate helpers. | Runtime | Defines application-owned principal/provider contracts and native `role:`/`permission:` guard ID helpers for defense-in-depth generated route access. It does not own users, sessions, OAuth, tenants, persistence, or backend resource authorization. |
 | `runtime/guard` | Shared request-time guard execution. | Runtime | Defines guard context, registry, ordered execution, and native RBAC guard resolution for generated action, API, fragment, and SSR handlers without depending on the SSR addon. |
-| `runtime/form` | Form value normalization and scalar helpers for generated decoders. | Runtime | Values, first-slice allowlist decoding, and scalar parse helpers implemented; typed struct shape decoding is generated from Go AST instead of runtime reflection. |
+| `runtime/form` | Form value normalization and scalar helpers for generated decoders. | Runtime | Values, first-slice allowlist decoding, and scalar parse helpers implemented; typed struct shape decoding is generated from Go package type metadata instead of runtime reflection. |
 | `runtime/validation` | Validation result and errors for actions. | Runtime | Initial result model implemented. |
 | `runtime/response` | HTML, redirect, fragment, and JSON response envelopes. | Runtime | Initial response model implemented. |
 | `runtime/asset` | Asset manifest resolution. | Runtime | Initial manifest helper implemented. |

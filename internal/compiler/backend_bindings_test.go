@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,7 @@ import (
 
 func TestBindBackendHandlersClassifiesSupportedActionSignatures(t *testing.T) {
 	root := t.TempDir()
-	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26.4\n")
+	writeCompilerTestModule(t, root)
 	writeCompilerTestFile(t, filepath.Join(root, "auth.go"), `package auth
 
 import (
@@ -131,9 +132,124 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 	}
 }
 
+func TestBindBackendHandlersUsesTypedGoPackageResolution(t *testing.T) {
+	root := t.TempDir()
+	writeCompilerTestModule(t, root)
+	writeCompilerTestFile(t, filepath.Join(root, "auth.go"), `package auth
+
+import (
+	ctx "context"
+	nethttp "net/http"
+
+	resp "github.com/cssbruno/gowdk/runtime/response"
+)
+
+type ActionResult = resp.Response
+
+type AliasInput struct {
+	Email string `+"`form:\"email\"`"+`
+}
+
+func Login(ctx.Context, AliasInput) (ActionResult, error) {
+	return resp.Response{}, nil
+}
+
+func Session(ctx.Context, *nethttp.Request) (ActionResult, error) {
+	return resp.Response{}, nil
+}
+
+func hidden(ctx.Context) (ActionResult, error) {
+	return resp.Response{}, nil
+}
+`)
+
+	app := bindBackendHandlers(appFixture{Pages: []gwdkir.Page{{
+		ID:     "login",
+		Source: filepath.Join(root, "login.page.gwdk"),
+		Route:  "/login",
+		Blocks: gwdkir.Blocks{
+			Actions: []gwdkir.Action{
+				{Name: "Login"},
+				{Name: "hidden"},
+			},
+			APIs: []gwdkir.API{{
+				Name:   "Session",
+				Method: "GET",
+				Route:  "/api/session",
+			}},
+		},
+	}}})
+
+	bindings := compilerBindingsByBlock(app.BackendBindings)
+	assertBinding(t, bindings["Login"], source.BackendBindingBound, source.BackendSignatureActionForm, "AliasInput", false)
+	assertInputFields(t, bindings["Login"].InputFields, "Email:email:string")
+	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
+	if got := bindings["hidden"]; got.Status != source.BackendBindingMissing {
+		t.Fatalf("expected unexported handler to remain missing, got %#v", got)
+	}
+}
+
+func TestBindBackendHandlersHonorsBuildTags(t *testing.T) {
+	root := t.TempDir()
+	writeCompilerTestModule(t, root)
+	writeCompilerTestFile(t, filepath.Join(root, "base.go"), `package auth
+`)
+	writeCompilerTestFile(t, filepath.Join(root, "tagged.go"), `//go:build gowdkextra
+
+package auth
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+func Tagged(context.Context) (response.Response, error) {
+	return response.Response{}, nil
+}
+`)
+
+	app := bindBackendHandlers(appFixture{Pages: []gwdkir.Page{{
+		ID:     "tagged",
+		Source: filepath.Join(root, "tagged.page.gwdk"),
+		Route:  "/tagged",
+		Blocks: gwdkir.Blocks{
+			Actions: []gwdkir.Action{{Name: "Tagged"}},
+		},
+	}}})
+
+	bindings := compilerBindingsByBlock(app.BackendBindings)
+	if got := bindings["Tagged"]; got.Status != source.BackendBindingMissing {
+		t.Fatalf("expected build-tagged handler to be missing without active tag, got %#v", got)
+	}
+}
+
+func TestBindBackendHandlersReportsPackageLoadErrors(t *testing.T) {
+	root := t.TempDir()
+	writeCompilerTestModule(t, root)
+	writeCompilerTestFile(t, filepath.Join(root, "broken.go"), `package broken
+
+func Broken(
+`)
+
+	app := bindBackendHandlers(appFixture{Pages: []gwdkir.Page{{
+		ID:     "broken",
+		Source: filepath.Join(root, "broken.page.gwdk"),
+		Route:  "/broken",
+		Blocks: gwdkir.Blocks{
+			Actions: []gwdkir.Action{{Name: "Broken"}},
+		},
+	}}})
+
+	bindings := compilerBindingsByBlock(app.BackendBindings)
+	if got := bindings["Broken"]; got.Status != source.BackendBindingMissing || !strings.Contains(got.Message, "could not be inspected") {
+		t.Fatalf("expected package load error metadata, got %#v", got)
+	}
+}
+
 func TestBindBackendHandlersClassifiesSSRLoadSignatures(t *testing.T) {
 	root := t.TempDir()
-	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26.4\n")
+	writeCompilerTestModule(t, root)
 	writeCompilerTestFile(t, filepath.Join(root, "dashboard.go"), `package dashboard
 
 import "github.com/cssbruno/gowdk/addons/ssr"
@@ -302,7 +418,7 @@ func List(context.Context) (response.Response, error) {
 
 func TestDiscoverGoEndpointCommentsBindsStandaloneEndpoints(t *testing.T) {
 	root := t.TempDir()
-	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26.4\n")
+	writeCompilerTestModule(t, root)
 	writeCompilerTestFile(t, filepath.Join(root, "handlers.go"), `package api
 
 import (
@@ -462,6 +578,23 @@ func compilerBindingsByBlock(bindings []source.BackendBinding) map[string]source
 		out[binding.BlockName] = binding
 	}
 	return out
+}
+
+func writeCompilerTestModule(t *testing.T, root string) {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(wd, "..", ".."))
+	writeCompilerTestFile(t, filepath.Join(root, "go.mod"), fmt.Sprintf(`module example.com/app
+
+go 1.26.4
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => %s
+`, filepath.ToSlash(repoRoot)))
 }
 
 func writeCompilerTestFile(t *testing.T, path string, content string) {

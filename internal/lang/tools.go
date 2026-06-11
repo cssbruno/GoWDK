@@ -54,30 +54,31 @@ func ParseSource(path string, source []byte) (gwdkir.Page, Diagnostics) {
 	page, err := parser.ParsePageWithDefaultID(source, derivedPageID(path))
 	page.Source = path
 	if err != nil {
-		diagnostics = append(diagnostics, Diagnostic{
-			File:     path,
-			Code:     parserErrorCode(err.Error()),
-			Pos:      parserErrorPosition(err.Error()),
-			Range:    parserErrorRange(source, err.Error()),
-			Severity: "error",
-			Message:  err.Error(),
-		})
+		diagnostics = append(diagnostics, parserDiagnostic(path, source, err))
 	}
 	return page, diagnostics
 }
 
-func parserErrorCode(message string) string {
-	switch {
-	case strings.Contains(message, "old action block syntax"):
-		return "old_action_block_syntax"
-	case strings.Contains(message, "old API block syntax"):
-		return "old_api_block_syntax"
-	case strings.Contains(message, "package declaration must be the first"):
-		return "package_must_be_first"
-	case strings.Contains(message, "malformed use"):
-		return "malformed_gowdk_use"
-	default:
-		return "parse_error"
+func parserDiagnostic(path string, src []byte, err error) Diagnostic {
+	if typed, ok := parser.ParserDiagnostic(err); ok {
+		position := sourcePosition(typed.Span.Start)
+		diagnosticRange := sourceSpanRange(typed.Span)
+		return Diagnostic{
+			File:     path,
+			Code:     typed.Code,
+			Pos:      position,
+			Range:    diagnosticRange,
+			Severity: "error",
+			Message:  err.Error(),
+		}
+	}
+	return Diagnostic{
+		File:     path,
+		Code:     "parse_error",
+		Pos:      parserErrorPosition(err.Error()),
+		Range:    parserErrorRange(src, err.Error()),
+		Severity: "error",
+		Message:  err.Error(),
 	}
 }
 
@@ -97,12 +98,12 @@ func parserErrorPosition(message string) Position {
 	return Position{Line: line, Column: 1}
 }
 
-func parserErrorRange(source []byte, message string) *Range {
+func parserErrorRange(src []byte, message string) *Range {
 	position := parserErrorPosition(message)
 	if position.Line <= 0 {
 		return nil
 	}
-	lines := strings.Split(string(source), "\n")
+	lines := strings.Split(string(src), "\n")
 	if position.Line > len(lines) {
 		return sourceRange(position, Position{Line: position.Line, Column: 2})
 	}
@@ -189,14 +190,7 @@ func ParseLayoutSource(path string, source []byte) (gwdkir.Layout, Diagnostics) 
 	layout, err := parser.ParseLayout(path, source)
 	layout.Source = path
 	if err != nil {
-		diagnostics = append(diagnostics, Diagnostic{
-			File:     path,
-			Code:     parserErrorCode(err.Error()),
-			Pos:      parserErrorPosition(err.Error()),
-			Range:    parserErrorRange(source, err.Error()),
-			Severity: "error",
-			Message:  err.Error(),
-		})
+		diagnostics = append(diagnostics, parserDiagnostic(path, source, err))
 	}
 	return layout, diagnostics
 }
@@ -214,14 +208,7 @@ func ParseComponentSource(path string, source []byte) (gwdkir.Component, Diagnos
 	component, err := parser.ParseComponent(source)
 	component.Source = path
 	if err != nil {
-		diagnostics = append(diagnostics, Diagnostic{
-			File:     path,
-			Code:     parserErrorCode(err.Error()),
-			Pos:      parserErrorPosition(err.Error()),
-			Range:    parserErrorRange(source, err.Error()),
-			Severity: "error",
-			Message:  err.Error(),
-		})
+		diagnostics = append(diagnostics, parserDiagnostic(path, source, err))
 	}
 	return component, diagnostics
 }

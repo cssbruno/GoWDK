@@ -138,7 +138,7 @@ func lowerPageSyntaxAnnotations(src []byte, ast gwdkast.File, page *gwdkir.Page)
 		lineNumber := annotation.Span.Start.Line
 		rawLine := sourceLineText(src, lineNumber)
 		if err := applyAnnotation(page, annotation.Name, annotation.Value, lineNumber, rawLine); err != nil {
-			return fmt.Errorf("line %d: %w", lineNumber, err)
+			return withLine(lineNumber, err)
 		}
 	}
 	return nil

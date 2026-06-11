@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -504,8 +505,8 @@ route "/bad"
 	if diagnostics[0].Pos.Line != 5 || diagnostics[0].Pos.Column != 1 {
 		t.Fatalf("expected line 5 diagnostic, got %#v", diagnostics[0].Pos)
 	}
-	if diagnostics[0].Code != "parse_error" {
-		t.Fatalf("expected parse_error code, got %#v", diagnostics[0])
+	if diagnostics[0].Code != "malformed_legacy_metadata" {
+		t.Fatalf("expected malformed_legacy_metadata code, got %#v", diagnostics[0])
 	}
 	if diagnostics[0].Range == nil {
 		t.Fatalf("expected parse diagnostic range, got %#v", diagnostics[0])
@@ -531,7 +532,7 @@ route "/bad"
 		t.Fatal("expected parser diagnostic")
 	}
 	output := string(payload)
-	if !strings.Contains(output, `"code": "parse_error"`) {
+	if !strings.Contains(output, `"code": "malformed_legacy_metadata"`) {
 		t.Fatalf("expected parser diagnostic code in JSON: %s", output)
 	}
 	if !strings.Contains(output, `"range"`) ||
@@ -589,14 +590,14 @@ view {
 	if !diagnostics.HasErrors() {
 		t.Fatal("expected unsupported build statement diagnostic")
 	}
-	if diagnostics[0].Code != "parse_error" {
-		t.Fatalf("expected parse_error code, got %#v", diagnostics[0])
+	if diagnostics[0].Code != "unsupported_literal_record_syntax" {
+		t.Fatalf("expected unsupported_literal_record_syntax code, got %#v", diagnostics[0])
 	}
-	if diagnostics[0].Pos.Line != 7 || diagnostics[0].Pos.Column != 1 {
+	if diagnostics[0].Pos.Line != 7 || diagnostics[0].Pos.Column != 3 {
 		t.Fatalf("expected build statement line diagnostic, got %#v", diagnostics[0].Pos)
 	}
 	if diagnostics[0].Range == nil ||
-		diagnostics[0].Range.Start.Line != 7 || diagnostics[0].Range.Start.Column != 1 ||
+		diagnostics[0].Range.Start.Line != 7 || diagnostics[0].Range.Start.Column != 3 ||
 		diagnostics[0].Range.End.Line != 7 || diagnostics[0].Range.End.Column != 17 {
 		t.Fatalf("expected build statement diagnostic range, got %#v", diagnostics[0].Range)
 	}
@@ -681,6 +682,70 @@ view {
 	}
 	if !strings.Contains(string(payload), `"suggestion": "Use g:for={item in Items}`) {
 		t.Fatalf("expected suggestion in JSON payload, got: %s", payload)
+	}
+}
+
+func TestParseLayoutSourceReportsTypedParserDiagnostic(t *testing.T) {
+	_, diagnostics := ParseLayoutSource("root.layout.gwdk", []byte(`package layouts
+
+page home
+
+view {
+  <slot />
+}
+`))
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected layout parser diagnostic")
+	}
+	diagnostic := diagnostics[0]
+	if diagnostic.Code != "unsupported_layout_metadata" {
+		t.Fatalf("expected unsupported_layout_metadata, got %#v", diagnostic)
+	}
+	if diagnostic.Pos.Line != 3 || diagnostic.Pos.Column != 1 {
+		t.Fatalf("expected layout metadata diagnostic at line 3, got %#v", diagnostic.Pos)
+	}
+	if diagnostic.Range == nil ||
+		diagnostic.Range.Start.Line != 3 || diagnostic.Range.Start.Column != 1 ||
+		diagnostic.Range.End.Line != 3 || diagnostic.Range.End.Column != 10 {
+		t.Fatalf("unexpected layout diagnostic range: %#v", diagnostic.Range)
+	}
+}
+
+func TestParseComponentSourceReportsTypedParserDiagnostic(t *testing.T) {
+	_, diagnostics := ParseComponentSource("badge.cmp.gwdk", []byte(`package components
+
+component Badge
+props {
+  Count int
+}
+
+view {
+}
+`))
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected component parser diagnostic")
+	}
+	diagnostic := diagnostics[0]
+	if diagnostic.Code != "unsupported_component_prop_type" {
+		t.Fatalf("expected unsupported_component_prop_type, got %#v", diagnostic)
+	}
+	if diagnostic.Pos.Line != 5 || diagnostic.Pos.Column != 3 {
+		t.Fatalf("expected component prop diagnostic at line 5, got %#v", diagnostic.Pos)
+	}
+	if diagnostic.Range == nil ||
+		diagnostic.Range.Start.Line != 5 || diagnostic.Range.Start.Column != 3 ||
+		diagnostic.Range.End.Line != 5 || diagnostic.Range.End.Column != 12 {
+		t.Fatalf("unexpected component diagnostic range: %#v", diagnostic.Range)
+	}
+}
+
+func TestParserDiagnosticFallsBackToParseError(t *testing.T) {
+	diagnostic := parserDiagnostic("bad.gwdk", []byte("not a typed parser error\n"), errors.New("unknown parser failure"))
+	if diagnostic.Code != "parse_error" {
+		t.Fatalf("expected parse_error fallback, got %#v", diagnostic)
+	}
+	if diagnostic.Pos.Line != 0 || diagnostic.Range != nil {
+		t.Fatalf("expected no source position for untyped parser error, got %#v", diagnostic)
 	}
 }
 

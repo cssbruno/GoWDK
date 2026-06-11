@@ -43,3 +43,16 @@ func TestBackendRouteMethod(t *testing.T) {
 		t.Fatalf("expected normalized method POST, got %q", got)
 	}
 }
+
+func TestBackendRoutePath(t *testing.T) {
+	tests := map[string]string{
+		"/patients":  "/patients",
+		"/patients/": "/patients",
+		"patients":   "/patients",
+	}
+	for input, want := range tests {
+		if got := BackendRoutePath(input); got != want {
+			t.Fatalf("expected %q to normalize to %q, got %q", input, want, got)
+		}
+	}
+}

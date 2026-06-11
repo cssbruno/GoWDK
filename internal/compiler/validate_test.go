@@ -3573,6 +3573,16 @@ func TestValidateManifestRejectsInvalidContractReferenceRoutes(t *testing.T) {
 			message:  "without query, fragment, or params",
 		},
 		{
+			name:     "trailing slash command action",
+			viewBody: `<form method="post" action="/patients/" g:command="patients.CreatePatient"></form>`,
+			message:  "clean absolute path",
+		},
+		{
+			name:     "relative command action",
+			viewBody: `<form method="post" action="patients" g:command="patients.CreatePatient"></form>`,
+			message:  "local absolute path",
+		},
+		{
 			name:     "unsupported command method",
 			viewBody: `<form method="get" action="/patients" g:command="patients.CreatePatient"></form>`,
 			message:  "command contract routes require POST",
@@ -3835,6 +3845,26 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		}
 	})
 
+	t.Run("identical command route references are allowed", func(t *testing.T) {
+		app := appFixture{
+			Pages: []gwdkir.Page{{
+				ID:    "patients",
+				Route: "/patients",
+				Blocks: gwdkir.Blocks{
+					View: true,
+					ViewBody: `<main>
+  <form method="post" action="/patients" g:command="patients.CreatePatient"></form>
+  <form method="post" action="/patients" g:command="patients.CreatePatient"></form>
+</main>`,
+				},
+			}},
+		}
+
+		if err := validateManifest(gowdk.Config{}, app); err != nil {
+			t.Fatalf("expected identical command route references to be valid, got %v", err)
+		}
+	})
+
 	t.Run("query route conflicts with api", func(t *testing.T) {
 		app := appFixture{
 			Pages: []gwdkir.Page{{
@@ -3880,6 +3910,26 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		diagnostics := err.(ValidationErrors)
 		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "GET", "/patients", "query contract patients.SearchPatients", "query contract patients.ListPatients") {
 			t.Fatalf("Missing duplicate query route_method_conflict diagnostic: %#v", diagnostics)
+		}
+	})
+
+	t.Run("identical query route references are allowed", func(t *testing.T) {
+		app := appFixture{
+			Pages: []gwdkir.Page{{
+				ID:    "patients",
+				Route: "/patients",
+				Blocks: gwdkir.Blocks{
+					View: true,
+					ViewBody: `<main>
+  <section g:query="patients.ListPatients"></section>
+  <section g:query="patients.ListPatients"></section>
+</main>`,
+				},
+			}},
+		}
+
+		if err := validateManifest(gowdk.Config{}, app); err != nil {
+			t.Fatalf("expected identical query route references to be valid, got %v", err)
 		}
 	})
 }

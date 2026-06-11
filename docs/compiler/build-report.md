@@ -21,8 +21,8 @@ rewriting identical generated files.
     {
       "level": "info",
       "stage": "validate",
-      "kind": "manifest_valid",
-      "message": "manifest validation completed"
+      "kind": "ir_valid",
+      "message": "compiler IR validation completed"
     }
   ]
 }
@@ -34,8 +34,8 @@ and optional page, route, path, and string data fields.
 
 Current stages are:
 
-- `start`: source manifest counts at build entry.
-- `validate`: manifest and compiler contract validation.
+- `start`: compiler IR counts at build entry.
+- `validate`: compiler IR and compiler contract validation.
 - `plan`: SPA page, CSS, and runtime asset planning.
 - `write`: page, CSS, and runtime asset writes or memory collection.
 - `manifest`: route and asset manifest reads/writes.

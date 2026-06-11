@@ -87,7 +87,7 @@ gowdk dev --out dist
 input content hashes, so touching a file without changing its bytes does not
 trigger another rebuild. For plain SPA `--out` builds, edits to existing
 page source files use incremental SPA rendering: GOWDK still parses and
-validates the full manifest, but writes only the changed page output and
+validates the full compiler IR, but writes only the changed page output and
 refreshes manifests. Component, layout, CSS, config, source-set, target, app,
 binary, and WASM changes use the full build path. Generated build output files,
 manifests, generated app source, and embedded build output files are skipped

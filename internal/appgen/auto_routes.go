@@ -80,6 +80,9 @@ func resolveBackendOptions(options Options) (Options, error) {
 
 func optionsIR(options Options) (gwdkir.Program, error) {
 	if options.IR != nil {
+		if err := gwdkir.CheckInvariants(*options.IR); err != nil {
+			return gwdkir.Program{}, fmt.Errorf("invalid compiler IR: %w", err)
+		}
 		return *options.IR, nil
 	}
 	return gwdkir.Program{}, fmt.Errorf("auto route detection requires compiler IR")

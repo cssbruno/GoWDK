@@ -208,8 +208,8 @@ Build output, route/asset manifests, generated `go.mod`, generated
 `gowdkapp/app.go`, generated `cmd/server/main.go`, and embedded build output
 files are only rewritten when their bytes change, which keeps local dev loops
 from retriggering on no-op generation. For plain SPA `--out` builds, page-only
-source edits use an incremental SPA renderer that validates the full manifest,
-refreshes manifests, writes only changed page output, and removes stale route
+source edits use an incremental SPA renderer that validates the full compiler
+IR, refreshes manifests, writes only changed page output, and removes stale route
 output for changed pages. Component, layout, CSS, config, source-set, target,
 app, binary, and WASM changes use the full build path.
 

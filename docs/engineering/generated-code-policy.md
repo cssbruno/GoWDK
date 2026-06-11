@@ -30,3 +30,39 @@ Generated code must:
 ## Compatibility
 
 Public generated-runtime contracts should live under `runtime/`. Compiler internals should stay under `internal/` and must not be imported by generated user applications unless explicitly promoted.
+
+## Generated Go Emission
+
+Generated Go belongs to the compiler spine. New generated Go must be built from
+Go AST nodes, printed with `go/printer`, and normalized with `go/format` before
+being written or compiled. A formatting error is a generator bug and must stop
+the build before `go build` sees broken generated files.
+
+Current AST-backed Go emission surfaces:
+
+- `internal/appgen`: generated app packages, backend route registrations,
+  action/API/fragment/contract/guard/rate-limit/SSR adapter functions, generated
+  imports, server main source, and split backend app source.
+- `internal/goblockgen`: captured `go {}` blocks parsed as Go files and emitted
+  through AST/printer/format into generated app package source.
+- `internal/buildgen`: build-data helper programs and Go client/WASM helper
+  source are parsed or formatted before execution or artifact emission.
+
+Tests in `internal/appgen` ban `strings.Builder` and hardcoded line-writing in
+the main generated Go emitters. Generated Go goldens under
+`internal/appgen/testdata/generated_go_golden/` pin the inspectable output.
+
+Allowed string payloads are limited to non-Go artifacts or user-owned Go source
+that is parsed/formatted before use:
+
+- HTML, CSS, JavaScript, JSON, markdown, route manifests, asset manifests, and
+  build reports.
+- User-authored inline `go {}` bodies, which are parsed into Go AST files before
+  generated package emission.
+- Literal source snippets used only as parse input for small Go helper programs,
+  when the result is immediately parsed or formatted and the source is not
+  appended through line-writing.
+
+Any future temporary generated-Go string exception must name the migration step
+in a code comment, be covered by a deterministic test or golden, and be removed
+before the surrounding generated Go surface is considered stable.

@@ -260,24 +260,33 @@ Every 0.x minor release must have:
 
 ## Compiler Spine
 
-- [ ] Keep lex -> parse -> AST -> analyze -> IR -> validate -> generate as
-  strict phases.
-- [ ] Finish downstream migration to `internal/gwdkir`.
-- [ ] Make build output generation, app generation, CLI reports, and LSP
+- [x] Keep lex -> parse -> AST -> analyze -> IR -> validate -> generate as
+  strict phases. See `docs/compiler/pipeline.md` and
+  `docs/engineering/architecture.md`.
+- [x] Finish downstream migration to `internal/gwdkir`.
+- [x] Make build output generation, app generation, CLI reports, and LSP
   metadata consume typed IR.
-- [ ] Remove compatibility structs from long-term generation paths.
-- [ ] Add IR, AST, generated Go, generated HTML, generated CSS, manifest, route
-  report, endpoint report, component graph, and asset graph golden tests.
-- [ ] Add source spans to every AST node and every IR node where possible.
-- [ ] Add compiler invariant checks.
-- [ ] Panic on invalid IR in tests.
-- [ ] Add deterministic output, stale output cleanup, and unchanged-output
+- [x] Remove compatibility structs from long-term generation paths.
+- [x] Add golden coverage for implemented compiler-spine handoffs: AST, IR,
+  generated Go, generated HTML/CSS, manifest, route report, endpoint report,
+  build report, and route/asset output manifests. Component graph and asset
+  graph commands are deferred to #235.
+- [x] Add source spans to current AST and IR records where possible. Remaining
+  exact-span improvements for diagnostics, reports, and LSP metadata are
+  deferred to #235.
+- [x] Add compiler invariant checks.
+- [x] Gate invalid IR before generated-output planning. Test-only invalid-IR
+  panic helper policy is deferred to #235.
+- [x] Add deterministic output, stale output cleanup, and unchanged-output
   preservation tests.
-- [ ] Ban stringy generated Go except temporary documented exceptions.
-- [ ] Move generated Go to `go/ast`, `go/printer`, and `go/format`.
-- [ ] Add internal architecture docs for compiler passes.
-- [ ] Add contributor guidance for new syntax requiring parser, formatter,
-  diagnostic, IR, generation, docs, and example/fixture coverage.
+- [x] Ban stringy generated Go except temporary documented exceptions. See
+  `docs/engineering/generated-code-policy.md`.
+- [x] Move generated Go to `go/ast`, `go/printer`, and `go/format` for current
+  generated app and adapter surfaces.
+- [x] Add internal architecture docs for compiler passes.
+- [x] Add contributor guidance for new syntax requiring parser, formatter,
+  diagnostic, IR, generation, docs, and example/fixture coverage. See
+  `docs/compiler/syntax-contributors.md`.
 
 ## Parser, Formatter, Diagnostics, And Language Spec
 

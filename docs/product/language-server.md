@@ -13,7 +13,7 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 
 ## Non-Goals
 
-- Implement semantic analysis beyond the current manifest validation rules.
+- Implement semantic analysis beyond the current compiler validation rules.
 - Replace the site-map visualizer or file-moving VS Code commands.
 - Add request-time SSR behavior or compile/codegen features.
 - Add editor-specific packages to the Go compiler core.
@@ -95,6 +95,6 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 
 ## Open Questions
 
-- Workspace-wide manifest validation can reuse the existing duplicate page and
-  route checks once the LSP maintains a project-wide manifest.
+- Workspace-wide compiler validation can reuse the existing duplicate page and
+  route checks once the LSP maintains project-wide IR.
 - Incremental sync can replace full-document sync if large `.gwdk` files become common.

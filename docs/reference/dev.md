@@ -24,7 +24,7 @@ attached to the terminal.
 ## Rebuild Scope
 
 For plain SPA `--out` builds, page-only edits use the incremental SPA renderer:
-the dev loop validates the full manifest, refreshes manifests, writes changed
+the dev loop validates the full compiler IR, refreshes manifests, writes changed
 page output, and removes stale route output for changed pages.
 
 These changes use the full build path:

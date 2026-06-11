@@ -1,0 +1,13 @@
+package pages
+
+route "/welcome"
+
+build {
+  => { title: "Welcome" }
+}
+
+view {
+  <main>
+    <h1>{title}</h1>
+  </main>
+}

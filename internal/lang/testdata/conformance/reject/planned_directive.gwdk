@@ -1,0 +1,11 @@
+// expect: parse_error
+// A planned g: directive is rejected. It currently surfaces as the generic
+// parse_error through the single-file check; when markup directives carry their
+// own code this should become unsupported_markup_directive and this case updates.
+package pages
+
+route "/"
+
+view {
+  <div g:await="data"></div>
+}

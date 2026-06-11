@@ -1,0 +1,10 @@
+// expect: malformed_legacy_metadata
+package pages
+
+@page Home
+
+route "/"
+
+view {
+  <main></main>
+}

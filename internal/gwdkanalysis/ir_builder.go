@@ -308,7 +308,6 @@ func (builder *irBuilder) addLayout(layout gwdkir.Layout) {
 	builder.program.Layouts = append(builder.program.Layouts, layout)
 	pkg := builder.ensurePackage(layout.Package, layout.Source)
 	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: layout.Source, Kind: gwdkir.SourceLayout, Package: layout.Package, Name: layout.ID, Span: layout.Span})
-	appendPackageUses(pkg, layout.Uses)
 	if !layout.Blocks.View {
 		return
 	}

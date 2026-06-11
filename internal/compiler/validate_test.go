@@ -3360,6 +3360,57 @@ func TestValidateManifestAcceptsLayoutInheritanceChain(t *testing.T) {
 	}
 }
 
+func TestValidateManifestRejectsLayoutFileUseAndQualifiedParentLayout(t *testing.T) {
+	useSpan := source.SourceSpan{Start: source.SourcePosition{Line: 2, Column: 1}, End: source.SourcePosition{Line: 2, Column: 20}}
+	parentSpan := source.SourceSpan{Start: source.SourcePosition{Line: 3, Column: 8}, End: source.SourcePosition{Line: 3, Column: 19}}
+	app := appFixture{
+		Layouts: []gwdkir.Layout{
+			{
+				Package:     "pages",
+				ID:          "docs",
+				Source:      "pages/docs.layout.gwdk",
+				Uses:        []gwdkir.Use{{Alias: "chrome", Package: "layouts", Span: useSpan}},
+				Layouts:     []string{"chrome.root"},
+				LayoutSpans: []source.NamedSpan{{Name: "chrome.root", Span: parentSpan}},
+				Blocks:      gwdkir.Blocks{View: true, ViewBody: "<slot />"},
+			},
+			{
+				Package: "layouts",
+				ID:      "root",
+				Source:  "layouts/root.layout.gwdk",
+				Blocks:  gwdkir.Blocks{View: true, ViewBody: "<slot />"},
+			},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected layout use diagnostics")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unsupported_gowdk_use_scope") {
+		t.Fatalf("Missing unsupported_gowdk_use_scope diagnostic: %#v", diagnostics)
+	}
+	if !hasDiagnosticCode(diagnostics, "unknown_layout_id") {
+		t.Fatalf("Missing unknown_layout_id diagnostic: %#v", diagnostics)
+	}
+	var sawUseSpan, sawParentSpan bool
+	for _, diagnostic := range diagnostics {
+		switch diagnostic.Code {
+		case "unsupported_gowdk_use_scope":
+			sawUseSpan = diagnostic.Span == useSpan
+		case "unknown_layout_id":
+			sawParentSpan = diagnostic.Span == parentSpan && strings.Contains(diagnostic.Message, "layout files do not support use aliases")
+		}
+	}
+	if !sawUseSpan {
+		t.Fatalf("expected unsupported use diagnostic at use span, got %#v", diagnostics)
+	}
+	if !sawParentSpan {
+		t.Fatalf("expected qualified parent diagnostic at parent layout span, got %#v", diagnostics)
+	}
+}
+
 func TestValidateManifestRejectsUnknownLayoutParent(t *testing.T) {
 	app := appFixture{
 		Layouts: []gwdkir.Layout{

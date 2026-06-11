@@ -1322,6 +1322,27 @@ view {
 	}
 }
 
+func TestParseLayoutPreservesUseForUnsupportedScopeDiagnostic(t *testing.T) {
+	layout, err := ParseLayout("layouts/docs.layout.gwdk", []byte(`
+package layouts
+use chrome "chrome"
+layout root
+
+view {
+  <slot />
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(layout.Uses) != 1 || layout.Uses[0].Alias != "chrome" || layout.Uses[0].Package != "chrome" {
+		t.Fatalf("expected layout use to be preserved for validation, got %#v", layout.Uses)
+	}
+	if layout.Uses[0].Span.Start.Line != 3 {
+		t.Fatalf("expected layout use span on line 3, got %#v", layout.Uses[0].Span)
+	}
+}
+
 func TestParseLayoutRejectsPageMetadata(t *testing.T) {
 	_, err := ParseLayout("root.layout.gwdk", []byte(`
 layout root

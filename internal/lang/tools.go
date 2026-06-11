@@ -486,7 +486,7 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 	case "unknown_gowdk_component":
 		return "Use a component exported by the imported GOWDK package, or fix the package alias."
 	case "unsupported_gowdk_use_scope":
-		return "Move this use declaration to the page that calls the imported component, or keep the component in the same package."
+		return "Move this use declaration to the page or component that uses the imported GOWDK package."
 	case "missing_ssr_addon":
 		return "Enable ssr.Addon() in gowdk.config.go or remove request-time page behavior."
 	case "spa_dynamic_route_missing_paths":

@@ -63,6 +63,8 @@ The quoted `use` target is a discovered `.gwdk` package name, not a Go import
 path. The qualified reference `chrome.root` resolves to the layout `root` (the
 file `root.layout.gwdk`) in package `layouts`. Unqualified cross-package lookup
 is rejected so layout reuse does not depend on global IDs or folder locations.
+Layout files do not support `use` declarations yet; parent layouts declared
+inside a layout file must be same-package references.
 
 When layout files are part of the project manifest, compiler validation resolves
 page `layout` references by package and declared ID and reports unknown or
@@ -85,6 +87,8 @@ Current app-shell layout rules:
   layout nests within.
 - Cross-package layouts use `layout alias.id` with a page-level
   `use alias "package"` declaration.
+- Layout files cannot declare `use`; cross-package parent layouts are deferred
+  until a layout-local import contract is stable.
 - Each layout must contain exactly one `<slot />` placeholder. Layouts with zero
   or multiple slots are rejected at validation time (`layout_slot_count`).
 - A layout may not reference itself or form a cyclic inheritance chain.

@@ -109,13 +109,7 @@ func composeLayoutWithParents(layout gwdkir.Layout, child string, layouts map[st
 }
 
 func resolveLayoutParent(layout gwdkir.Layout, layouts map[string]gwdkir.Layout, ref string) (gwdkir.Layout, bool) {
-	if alias, layoutID, ok := strings.Cut(ref, "."); ok {
-		for _, use := range layout.Uses {
-			if use.Alias == alias {
-				parent, exists := layouts[layoutRegistryKey(use.Package, layoutID)]
-				return parent, exists
-			}
-		}
+	if _, _, ok := strings.Cut(ref, "."); ok {
 		return gwdkir.Layout{}, false
 	}
 	if layout.Package != "" {

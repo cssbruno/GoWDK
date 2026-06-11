@@ -95,8 +95,8 @@ func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 		t.Fatal("expected diagnostics for invalid document")
 	}
 	first := firstDiagnostics[0].(map[string]any)
-	if first["code"] != "parse_error" {
-		t.Fatalf("expected parse_error code, got %#v", first)
+	if first["code"] != "malformed_legacy_metadata" {
+		t.Fatalf("expected malformed_legacy_metadata code, got %#v", first)
 	}
 	firstRange := first["range"].(map[string]any)
 	start := firstRange["start"].(map[string]any)

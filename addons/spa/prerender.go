@@ -1,10 +1,6 @@
 package spa
 
-import "github.com/cssbruno/gowdk/runtime/response"
+import "github.com/cssbruno/gowdk/addons/static"
 
 // PrerenderedPage is the build-time output for one SPA route.
-type PrerenderedPage struct {
-	Route string
-	Path  string
-	HTML  response.Response
-}
+type PrerenderedPage = static.PrerenderedPage

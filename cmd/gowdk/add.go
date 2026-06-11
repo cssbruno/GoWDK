@@ -92,6 +92,12 @@ var addonRegistry = map[string]addonSpec{
 		Package:    "ssr",
 		Summary:    "server-side rendering",
 	},
+	"static": {
+		Name:       "static",
+		ImportPath: "github.com/cssbruno/gowdk/addons/static",
+		Package:    "static",
+		Summary:    "build-time static page output",
+	},
 }
 
 func addAddon(args []string) error {

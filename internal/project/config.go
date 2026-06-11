@@ -21,6 +21,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/ratelimit"
 	"github.com/cssbruno/gowdk/addons/spa"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/addons/static"
 	"github.com/cssbruno/gowdk/addons/tailwind"
 )
 
@@ -832,6 +833,8 @@ func parseBuiltInAddon(expression ast.Expr, imports map[string]string) (gowdk.Ad
 		return spa.Addon(), true
 	case ssr.ImportPath:
 		return ssr.Addon(), true
+	case static.ImportPath:
+		return static.Addon(), true
 	default:
 		return nil, false
 	}

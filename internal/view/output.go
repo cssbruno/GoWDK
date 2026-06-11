@@ -1,19 +1,19 @@
 package view
 
-import "strings"
+import gowdkrender "github.com/cssbruno/gowdk/runtime/render"
 
 type renderOutput struct {
-	parts []string
+	builder gowdkrender.Builder
 }
 
 func (out *renderOutput) write(value string) {
-	out.parts = append(out.parts, value)
+	out.builder.Markup(value)
 }
 
 func (out *renderOutput) writeByte(value byte) {
-	out.parts = append(out.parts, string(value))
+	out.builder.Markup(string(value))
 }
 
 func (out *renderOutput) string() string {
-	return strings.Join(out.parts, "")
+	return out.builder.String()
 }

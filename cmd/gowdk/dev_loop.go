@@ -298,11 +298,36 @@ func displayInputPath(path string) string {
 	if err != nil {
 		return path
 	}
-	rel, err := filepath.Rel(cwd, path)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		return path
+	if rel, ok := relativeInputPath(cwd, path); ok {
+		return rel
 	}
-	return rel
+	canonicalCWD, canonicalPath, ok := canonicalDisplayPaths(cwd, path)
+	if ok {
+		if rel, ok := relativeInputPath(canonicalCWD, canonicalPath); ok {
+			return rel
+		}
+	}
+	return path
+}
+
+func relativeInputPath(base, path string) (string, bool) {
+	rel, err := filepath.Rel(base, path)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", false
+	}
+	return rel, true
+}
+
+func canonicalDisplayPaths(base, path string) (string, string, bool) {
+	canonicalBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return "", "", false
+	}
+	canonicalDir, err := filepath.EvalSymlinks(filepath.Dir(path))
+	if err != nil {
+		return "", "", false
+	}
+	return canonicalBase, filepath.Join(canonicalDir, filepath.Base(path)), true
 }
 
 func buildInputSnapshot(args []string) (inputSnapshot, error) {

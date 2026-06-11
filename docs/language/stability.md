@@ -91,7 +91,10 @@ Supported exact-name directives (the closed set in
 | `g:ref` | Partial | Client reference. |
 | `g:slot` | Partial | Named/scoped slot. |
 
-Planned directives are rejected with `unsupported_markup_directive`:
+Planned directives are rejected. They currently surface as the generic
+`parse_error` rather than the intended `unsupported_markup_directive` code; that
+code lands when markup rejections carry their own code (see
+[Conformance Corpus](conformance.md)).
 
 | Directive family | Tier | Replacement |
 | --- | --- | --- |
@@ -101,14 +104,15 @@ Planned directives are rejected with `unsupported_markup_directive`:
 | `g:use`, `g:action`, `g:attach` | Planned | `client {}` with `g:ref`. |
 
 Foreign template syntax (`{#if}`, `{@html}`, and similar) is **Planned/Unsupported**
-and rejected with `unsupported_markup_syntax`.
+and likewise currently surfaces as `parse_error` (intended:
+`unsupported_markup_syntax`).
 
 ## Endpoint Declarations
 
 | Construct | Tier | Notes |
 | --- | --- | --- |
-| `act <Name> POST "<path>"` | Stable | POST only today. |
-| `api <Name> <METHOD> "<path>"` | Stable | GET/POST/PUT/PATCH/DELETE. |
-| Fragment endpoints | Partial | First-slice partial updates. |
-| `act <name> { ... }` block form | Deprecated | Rejected with `old_action_block_syntax`. |
-| `api <name> { ... }` block form | Deprecated | Rejected with `old_api_block_syntax`. |
+| `act` | Stable | `act <Name> POST "<path>"`; POST only today. |
+| `api` | Stable | `api <Name> <METHOD> "<path>"`; GET/POST/PUT/PATCH/DELETE. |
+| `fragment` | Partial | First-slice partial updates. |
+| `act` block form | Deprecated | `act <name> { ... }`; rejected with `old_action_block_syntax`. |
+| `api` block form | Deprecated | `api <name> { ... }`; rejected with `old_api_block_syntax`. |

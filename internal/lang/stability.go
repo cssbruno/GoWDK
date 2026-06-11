@@ -47,13 +47,13 @@ func ConstructStabilities() []ConstructStability {
 		{Name: "package", Kind: ConstructBlock, Tier: TierStable},
 		{Name: "import", Kind: ConstructBlock, Tier: TierStable},
 		{Name: "use", Kind: ConstructBlock, Tier: TierStable},
-		{Name: "paths", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "build", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "load", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "view", Kind: ConstructBlock, Tier: TierStable},
-		{Name: "style", Kind: ConstructBlock, Tier: TierStable},
-		{Name: "client", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "go", Kind: ConstructBlock, Tier: TierPartial},
+		{Name: "paths {}", Kind: ConstructBlock, Tier: TierPartial},
+		{Name: "build {}", Kind: ConstructBlock, Tier: TierPartial},
+		{Name: "load {}", Kind: ConstructBlock, Tier: TierPartial},
+		{Name: "view {}", Kind: ConstructBlock, Tier: TierStable},
+		{Name: "style {}", Kind: ConstructBlock, Tier: TierStable},
+		{Name: "client {}", Kind: ConstructBlock, Tier: TierPartial},
+		{Name: "go {}", Kind: ConstructBlock, Tier: TierPartial},
 		{Name: "store", Kind: ConstructBlock, Tier: TierPartial},
 		{Name: "props", Kind: ConstructBlock, Tier: TierPartial},
 		{Name: "state", Kind: ConstructBlock, Tier: TierPartial},
@@ -79,18 +79,26 @@ func ConstructStabilities() []ConstructStability {
 		{Name: "g:ref", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:slot", Kind: ConstructDirective, Tier: TierPartial},
 
-		// Planned g: directives, rejected on use.
-		{Name: "g:transition", Kind: ConstructDirective, Tier: TierPlanned, DiagnosticCode: "unsupported_markup_directive"},
-		{Name: "g:animate", Kind: ConstructDirective, Tier: TierPlanned, DiagnosticCode: "unsupported_markup_directive"},
-		{Name: "g:window", Kind: ConstructDirective, Tier: TierPlanned, DiagnosticCode: "unsupported_markup_directive"},
-		{Name: "g:document", Kind: ConstructDirective, Tier: TierPlanned, DiagnosticCode: "unsupported_markup_directive"},
-		{Name: "g:body", Kind: ConstructDirective, Tier: TierPlanned, DiagnosticCode: "unsupported_markup_directive"},
-		{Name: "g:head", Kind: ConstructDirective, Tier: TierPlanned, DiagnosticCode: "unsupported_markup_directive"},
-		{Name: "g:await", Kind: ConstructDirective, Tier: TierPlanned, DiagnosticCode: "unsupported_markup_directive"},
-		{Name: "g:async", Kind: ConstructDirective, Tier: TierPlanned, DiagnosticCode: "unsupported_markup_directive"},
-		{Name: "g:use", Kind: ConstructDirective, Tier: TierPlanned, DiagnosticCode: "unsupported_markup_directive"},
-		{Name: "g:action", Kind: ConstructDirective, Tier: TierPlanned, DiagnosticCode: "unsupported_markup_directive"},
-		{Name: "g:attach", Kind: ConstructDirective, Tier: TierPlanned, DiagnosticCode: "unsupported_markup_directive"},
+		// Supported g: directive families (validated separately from the
+		// exact-name set, so view.SupportedDirectiveNames() excludes them).
+		{Name: "g:on:*", Kind: ConstructDirective, Tier: TierPartial},
+		{Name: "g:message:*", Kind: ConstructDirective, Tier: TierPartial},
+
+		// Planned g: directives, rejected on use. They currently surface as the
+		// generic parse_error rather than a typed code (see
+		// docs/language/conformance.md), so DiagnosticCode is left unset until
+		// markup rejections carry their own code.
+		{Name: "g:transition", Kind: ConstructDirective, Tier: TierPlanned},
+		{Name: "g:animate", Kind: ConstructDirective, Tier: TierPlanned},
+		{Name: "g:window", Kind: ConstructDirective, Tier: TierPlanned},
+		{Name: "g:document", Kind: ConstructDirective, Tier: TierPlanned},
+		{Name: "g:body", Kind: ConstructDirective, Tier: TierPlanned},
+		{Name: "g:head", Kind: ConstructDirective, Tier: TierPlanned},
+		{Name: "g:await", Kind: ConstructDirective, Tier: TierPlanned},
+		{Name: "g:async", Kind: ConstructDirective, Tier: TierPlanned},
+		{Name: "g:use", Kind: ConstructDirective, Tier: TierPlanned},
+		{Name: "g:action", Kind: ConstructDirective, Tier: TierPlanned},
+		{Name: "g:attach", Kind: ConstructDirective, Tier: TierPlanned},
 
 		// Endpoint declaration forms.
 		{Name: "act", Kind: ConstructEndpoint, Tier: TierStable},

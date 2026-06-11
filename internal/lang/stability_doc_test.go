@@ -3,11 +3,14 @@ package lang
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk/internal/view"
 )
+
+var backtickedToken = regexp.MustCompile("`([^`]+)`")
 
 // TestStabilityRegistryCoversCodeConstructs guards the construct stability
 // registry against the code: every metadata keyword and every supported g:
@@ -35,6 +38,14 @@ func TestStabilityRegistryCoversCodeConstructs(t *testing.T) {
 			t.Errorf("supported g: directive %q has no stability entry", directive)
 		}
 	}
+
+	// SupportedDirectiveNames excludes the accepted directive families, so guard
+	// them explicitly to keep the registry a complete source of truth.
+	for _, family := range []string{"g:on:*", "g:message:*"} {
+		if _, ok := registry[family]; !ok {
+			t.Errorf("supported g: directive family %q has no stability entry", family)
+		}
+	}
 }
 
 // TestStabilityTableMatchesRegistry guards the published table against the
@@ -49,17 +60,24 @@ func TestStabilityTableMatchesRegistry(t *testing.T) {
 	}
 	doc := string(content)
 
+	// Collect the exact backticked tokens (construct names and codes) from the
+	// table, so a match proves a real table cell rather than incidental prose:
+	// short names like `go`, `act`, and `api` must not pass by appearing inside
+	// words such as "diagnostics" or "contract".
+	tokens := map[string]bool{}
+	for _, match := range backtickedToken.FindAllStringSubmatch(doc, -1) {
+		tokens[match[1]] = true
+	}
+
 	for _, construct := range ConstructStabilities() {
-		// Planned/deprecated constructs are identified in the table by the
-		// diagnostic code emitted on use; stable/partial constructs by name.
+		// Constructs with a diagnostic code are identified in the table by that
+		// code (planned blocks, deprecated endpoint forms); the rest by name.
+		want := construct.Name
 		if construct.DiagnosticCode != "" {
-			if !strings.Contains(doc, construct.DiagnosticCode) {
-				t.Errorf("construct %q references diagnostic %q which is missing from %s", construct.Name, construct.DiagnosticCode, path)
-			}
-			continue
+			want = construct.DiagnosticCode
 		}
-		if !strings.Contains(doc, construct.Name) {
-			t.Errorf("construct %q (%s) is missing from %s", construct.Name, construct.Kind, path)
+		if !tokens[want] {
+			t.Errorf("construct %q (%s): expected backticked token %q in %s", construct.Name, construct.Kind, want, path)
 		}
 	}
 

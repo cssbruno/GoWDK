@@ -20,7 +20,8 @@ Current support:
   fragment body for generated render functions and first-slice generated action
   responses.
 - Runtime/addon package boundaries exist for partial responses and swaps.
-- `runtime/response` fragment responses carry target and swap metadata through
+- `addons/partial` exposes server fragment helpers. The underlying
+  `runtime/response` envelope carries target and swap metadata through
   `X-GOWDK-Fragment-Target` and `X-GOWDK-Fragment-Swap` when written to HTTP.
 - Page files can declare standalone fragment endpoints:
 

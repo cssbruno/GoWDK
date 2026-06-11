@@ -34,11 +34,11 @@
 - `layout` records ordered page layout references. Bare references resolve to
   same-package layout IDs or legacy package-less layouts. Cross-package layouts
   require `use alias "package"` and qualified refs such as `alias.root`.
-- `guard` records guard IDs. Generated SSR, action, and API handlers run
-  declared non-public guards before request-time user logic. Guarded generated
-  apps require matching backing functions and fail Go compilation when those
-  functions are missing. Non-public page guards require request-time page
-  rendering because build-time SPA output emits plain static HTML.
+- `guard` records guard IDs. Generated SSR, action, API, and fragment handlers
+  run declared non-public guards before request-time user logic. Guarded
+  generated apps require matching backing functions and fail Go compilation
+  when those functions are missing. Non-public page guards require request-time
+  page rendering because build-time SPA output emits plain static HTML.
 - Generated SSR, action, and API handlers are protected by runtime panic
   boundaries that return no-store HTTP 500 responses before headers are
   written.

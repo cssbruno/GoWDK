@@ -50,20 +50,20 @@ SSR is optional and must not become the default framework identity.
   intentionally public page and must stand alone. Non-public guards use
   comma-separated guard IDs such as `guard auth.required, billing.active`.
   Protected page guards require request-time page rendering so the page GET
-  route can be gated before HTML is returned. The SSR addon exposes
-  `GuardFunc`, `GuardRegistry`, and ordered guard execution contracts.
-  Generated SSR, action, and API handlers run declared guards before user
+  route can be gated before HTML is returned. `runtime/guard` exposes
+  `Context`, `Registry`, and ordered guard execution contracts. Generated SSR,
+  action, API, and fragment handlers run declared guards before user
   logic. A guarded generated app will not compile unless required guard backing
   functions exist. Native RBAC guard IDs use `role:<name>` and
   `permission:<name>` and resolve through an application-owned
   `runtime/auth.Provider`.
 
-Generated app packages that include at least one guarded SSR, action, or API
-route require backing functions in the generated app package:
+Generated app packages that include at least one guarded SSR, action, API, or
+fragment route require backing functions in the generated app package:
 
 ```go
-func GOWDKGuardRegistry() ssr.GuardRegistry // required when custom guard IDs are used
-func GOWDKAuthProvider() auth.Provider      // required when role:/permission: IDs are used
+func GOWDKGuardRegistry() gowdkguard.Registry // required when custom guard IDs are used
+func GOWDKAuthProvider() auth.Provider        // required when role:/permission: IDs are used
 ```
 
 Define custom guards in app startup code that is compiled with the generated app
@@ -73,11 +73,11 @@ build` fails.
 ```go
 package gowdkapp
 
-import gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
+import gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
 
-func GOWDKGuardRegistry() gowdkssr.GuardRegistry {
-	return gowdkssr.GuardRegistry{
-		"auth.required": func(ctx gowdkssr.LoadContext) error {
+func GOWDKGuardRegistry() gowdkguard.Registry {
+	return gowdkguard.Registry{
+		"auth.required": func(ctx gowdkguard.Context) error {
 			return nil
 		},
 	}

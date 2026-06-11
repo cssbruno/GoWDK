@@ -70,7 +70,7 @@ func guardDecls(options Options) []ast.Decl {
 func guardRegistryVarDecl() ast.Decl {
 	return &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
 		Names: []*ast.Ident{id("guardRegistry")},
-		Type:  sel("gowdkssr", "GuardRegistry"),
+		Type:  sel("gowdkguard", "Registry"),
 	}}}
 }
 
@@ -83,7 +83,7 @@ func authProviderVarDecl() ast.Decl {
 
 func registerGuardsDecl() ast.Decl {
 	return funcDecl("RegisterGuards", []*ast.Field{
-		{Names: []*ast.Ident{id("registry")}, Type: sel("gowdkssr", "GuardRegistry")},
+		{Names: []*ast.Ident{id("registry")}, Type: sel("gowdkguard", "Registry")},
 	}, nil, []ast.Stmt{
 		assign([]ast.Expr{id("guardRegistry")}, id("registry")),
 	})
@@ -121,9 +121,9 @@ func runGuardsDecl() ast.Decl {
 			Cond: &ast.BinaryExpr{X: call(id("len"), id("guards")), Op: token.EQL, Y: intLit(0)},
 			Body: block(returnBool(true)),
 		},
-		define([]ast.Expr{id("loadContext")}, call(sel("gowdkssr", "NewLoadContext"), id("request"), id("nil"))),
+		define([]ast.Expr{id("guardContext")}, call(sel("gowdkguard", "NewContext"), id("request"), id("nil"))),
 		&ast.IfStmt{
-			Init: define([]ast.Expr{id("err")}, call(sel("gowdkssr", "RunGuardsWithAuth"), id("loadContext"), id("guards"), id("guardRegistry"), id("authProvider"))),
+			Init: define([]ast.Expr{id("err")}, call(sel("gowdkguard", "RunGuardsWithAuth"), id("guardContext"), id("guards"), id("guardRegistry"), id("authProvider"))),
 			Cond: notNil("err"),
 			Body: block(
 				writeNoStoreErrorExprStmt(sel("http", "StatusForbidden"), call(selExpr(id("err"), "Error"))),

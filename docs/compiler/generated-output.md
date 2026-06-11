@@ -138,8 +138,9 @@ Implemented today:
   multipart `g:post` forms. Uploads belong in user-owned API/server handlers.
 - `internal/gotypes` resolves component prop/state structs through Go module
   import paths using `go list`, `go/parser`, and `go/types`.
-- `runtime/response` defines fragment responses with target and swap metadata
-  for generated and future partial handlers.
+- `addons/partial` exposes generated fragment and swap helpers. The underlying
+  `runtime/response` envelope carries target and swap metadata for generated
+  and future partial handlers.
 - `/` maps to `index.html`.
 - `/patients` maps to `patients/index.html`.
 - Current asset names are stable and deterministic. `gowdk-assets.json`

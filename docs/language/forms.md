@@ -33,8 +33,8 @@ Full-page POST handlers return `runtime/response.Response`:
 - `response.HTMLBody(status, body)` for an explicit HTML response.
 - `response.JSONBody(status, body)` or `response.JSONValue(status, value)` for
   JSON.
-- `response.FragmentFor(target, body)` or `response.FragmentSwap(target, swap,
-  body)` for fragment responses.
+- `partial.Fragment(target, body)` or `partial.Swap(target, swap, body)` for
+  fragment responses.
 - `response.ValidationJSON(result)` or `response.ValidationFragment(target,
   result)` for validation responses.
 - `response.ReloadPage()` for enhanced forms that should reload the current

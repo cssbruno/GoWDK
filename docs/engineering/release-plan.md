@@ -345,29 +345,36 @@ Every 0.x minor release must have:
 
 ## Routes, Layouts, View Engine, And HTML Safety
 
-- [ ] Formalize route pattern grammar, route priority, trailing slash policy,
-  encoded path handling, route params, typed params, and rest params if needed.
-- [ ] Add route conflict diagnostics for page, API, action, and fragment
-  combinations.
-- [ ] Add route reports with route, render mode, params, guards, cache, layout
-  stack, endpoints, source file, and generated output path.
-- [ ] Add direct refresh, 404, path traversal, encoded param, static SPA,
-  dynamic SPA `paths`, SSR, hybrid, API, action, and fragment route tests.
-- [ ] Define layout composition, nested layout behavior, ordering, data rules,
-  request-aware layouts, hybrid layouts, package-scoped layout imports, and
-  qualified layout references or diagnostics.
-- [ ] Add head and metadata support for title, route metadata, meta
-  description, canonical URL, Open Graph, Twitter card, robots/noindex,
-  sitemap metadata, and preload/prefetch declarations.
-- [ ] Document supported HTML subset.
-- [ ] Escape text and attributes by default.
-- [ ] Define URL escaping, boolean attributes, class binding, style binding,
+- [x] Formalize the current route pattern grammar, trailing slash policy,
+  encoded path handling, route params, typed param helpers, and final-segment
+  rest params. Route-priority/report hardening beyond the current generated
+  server behavior is deferred to #237.
+- [x] Add route conflict diagnostics for page, API, action, fragment, and
+  contract endpoint combinations in the current route model.
+- [x] Add versioned route reports for current route and endpoint metadata.
+  Richer route-report fields such as generated output path and source-span
+  completeness are deferred to #237.
+- [x] Add current direct refresh, 404, encoded param, static SPA, dynamic SPA
+  `paths`, SSR, hybrid, API, action, fragment, and trailing-slash tests.
+  Remaining path-traversal and expanded matrix coverage is deferred to #237.
+- [x] Define current layout composition, nested layout behavior, ordering, slot
+  rules, request-aware runtime layout contracts, package-scoped layout imports,
+  and qualified layout references/diagnostics. Generated app request-aware and
+  hybrid layout wiring follow-ups are deferred to #237.
+- [x] Add current head and metadata support for `title`, route metadata,
+  description, canonical URL, Open Graph, Twitter card, app `Head`, and
+  sitemap/manifest metadata. Robots/noindex, preload, and prefetch are deferred
+  to #237.
+- [x] Document supported HTML subset.
+- [x] Escape text and attributes by default.
+- [x] Define URL escaping, boolean attributes, class binding, style binding,
   event binding, form binding, and raw HTML policy.
-- [ ] Add unsafe raw HTML diagnostics if an escape hatch is ever introduced.
-- [ ] Add practical accessibility warnings for missing alt, missing labels,
-  empty links, button type, and heading order.
-- [ ] Add unsafe `href`, `src`, and `action` tests plus script and attribute
-  injection tests.
+- [x] Add unsafe raw HTML diagnostics for the explicit `g:html` escape hatch.
+- [x] Add the first practical accessibility warning, `missing_img_alt`.
+  Missing labels, empty links, button type, and heading order are deferred to
+  #237.
+- [x] Add unsafe `href`, `src`, and `action` tests plus script and attribute
+  injection tests for the current view renderer.
 
 ## Endpoint Adapters, Actions, APIs, And Fragments
 

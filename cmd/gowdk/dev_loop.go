@@ -298,11 +298,16 @@ func displayInputPath(path string) string {
 	if rel, ok := relativeInputPath(cwd, path); ok {
 		return rel
 	}
-	canonicalCWD, canonicalPath, ok := canonicalDisplayPaths(cwd, path)
-	if ok {
-		if rel, ok := relativeInputPath(canonicalCWD, canonicalPath); ok {
-			return rel
-		}
+	canonicalCWD, err := canonicalInputPath(cwd)
+	if err != nil {
+		return path
+	}
+	canonicalPath, err := canonicalInputPath(path)
+	if err != nil {
+		return path
+	}
+	if rel, ok := relativeInputPath(canonicalCWD, canonicalPath); ok {
+		return rel
 	}
 	return path
 }
@@ -315,16 +320,29 @@ func relativeInputPath(base, path string) (string, bool) {
 	return rel, true
 }
 
-func canonicalDisplayPaths(base, path string) (string, string, bool) {
-	canonicalBase, err := filepath.EvalSymlinks(base)
+func canonicalInputPath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
 	if err != nil {
-		return "", "", false
+		return "", err
 	}
-	canonicalDir, err := filepath.EvalSymlinks(filepath.Dir(path))
-	if err != nil {
-		return "", "", false
+	if evaluated, err := filepath.EvalSymlinks(abs); err == nil {
+		return evaluated, nil
 	}
-	return canonicalBase, filepath.Join(canonicalDir, filepath.Base(path)), true
+	var suffix []string
+	for current := abs; ; current = filepath.Dir(current) {
+		evaluated, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			for i := len(suffix) - 1; i >= 0; i-- {
+				evaluated = filepath.Join(evaluated, suffix[i])
+			}
+			return evaluated, nil
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return abs, nil
+		}
+		suffix = append(suffix, filepath.Base(current))
+	}
 }
 
 func buildInputSnapshot(args []string) (inputSnapshot, error) {

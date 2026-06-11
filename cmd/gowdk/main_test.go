@@ -1456,6 +1456,27 @@ func TestInputChangeDetailsReportsChangedAddedAndRemovedPaths(t *testing.T) {
 	})
 }
 
+func TestInputChangeDetailsRelativizesSymlinkedWorkingDirectory(t *testing.T) {
+	root := t.TempDir()
+	realRoot := filepath.Join(root, "real")
+	linkRoot := filepath.Join(root, "link")
+	if err := os.Mkdir(realRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realRoot, linkRoot); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	changed := filepath.Join(linkRoot, "changed.page.gwdk")
+
+	withWorkingDir(t, realRoot, func() {
+		change := inputChange{Changed: []string{changed}}
+		details := strings.Join(change.details(), "\n")
+		if !strings.Contains(details, "changed: changed.page.gwdk") {
+			t.Fatalf("expected symlinked change detail to be relative, got:\n%s", details)
+		}
+	})
+}
+
 func TestBuildIncrementalSPAUsesChangedPageSources(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home.page.gwdk")

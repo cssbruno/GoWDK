@@ -74,18 +74,13 @@ func interpolateValue(ctx *renderContext, value string) (string, bool, error) {
 }
 
 func unsafeRouteParamAttr(name string) bool {
-	name = strings.ToLower(strings.TrimSpace(name))
-	if strings.HasPrefix(name, "on") && len(name) > 2 {
+	if inlineEventHandlerAttr(name) {
 		return true
 	}
-	switch name {
-	case "style", "srcdoc":
+	if strings.EqualFold(strings.TrimSpace(name), "style") || strings.EqualFold(strings.TrimSpace(name), "srcdoc") {
 		return true
-	case "href", "src", "srcset", "action", "formaction", "poster", "cite", "data", "longdesc", "manifest", "xlink:href":
-		return true
-	default:
-		return false
 	}
+	return urlBearingAttr(name)
 }
 
 func routeParamExpression(value string) (string, bool) {

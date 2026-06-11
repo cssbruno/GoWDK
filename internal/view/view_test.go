@@ -1058,9 +1058,7 @@ func TestRenderWithDataInterpolatesRouteParams(t *testing.T) {
 
 func TestRenderWithDataRejectsRouteParamsInDangerousAttributes(t *testing.T) {
 	for _, source := range []string{
-		`<img src="x" onerror="{param(\"slug\")}" />`,
 		`<a href="/blog/{param(\"slug\")}">Post</a>`,
-		`<iframe srcdoc="{param(\"slug\")}"></iframe>`,
 		`<main style="color: {param(\"slug\")}">Post</main>`,
 	} {
 		t.Run(source, func(t *testing.T) {
@@ -1075,18 +1073,147 @@ func TestRenderWithDataRejectsRouteParamsInDangerousAttributes(t *testing.T) {
 	}
 }
 
+func TestRenderSPAAllowsSafeURLAttributes(t *testing.T) {
+	source := `<main><a href="/docs?q=go&sort=new">Docs</a><a href="https://example.com">External</a><a href="mailto:team@example.com">Mail</a><img srcset="/img.png 1x, https://cdn.example.com/img@2x.png 2x" data-uri="data:text/plain,ok" /></main>`
+	got, err := RenderSPA(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`href="/docs?q=go&amp;sort=new"`,
+		`href="https://example.com"`,
+		`href="mailto:team@example.com"`,
+		`srcset="/img.png 1x, https://cdn.example.com/img@2x.png 2x"`,
+		`data-uri="data:text/plain,ok"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in rendered HTML:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderSPARejectsUnsafeLiteralMarkup(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		message string
+	}{
+		{
+			name:    "javascript href",
+			source:  `<a href="javascript:alert(1)">Bad</a>`,
+			message: `scheme "javascript" is not supported`,
+		},
+		{
+			name:    "mixed case javascript href",
+			source:  `<a href="JaVaScRiPt:alert(1)">Bad</a>`,
+			message: `scheme "javascript" is not supported`,
+		},
+		{
+			name:    "entity encoded javascript href",
+			source:  `<a href="java&#x73;cript:alert(1)">Bad</a>`,
+			message: `scheme "javascript" is not supported`,
+		},
+		{
+			name:    "data src",
+			source:  `<img src="data:text/html,<svg onload=alert(1)>" />`,
+			message: `scheme "data" is not supported`,
+		},
+		{
+			name:    "protocol relative action",
+			source:  `<form action="//example.com/post"></form>`,
+			message: "protocol-relative URLs are not supported",
+		},
+		{
+			name:    "control character url",
+			source:  `<a href="java\nscript:alert(1)">Bad</a>`,
+			message: "control characters are not allowed",
+		},
+		{
+			name:    "srcset unsafe candidate",
+			source:  `<img srcset="/safe.png 1x, javascript:alert(1) 2x" />`,
+			message: `scheme "javascript" is not supported`,
+		},
+		{
+			name:    "inline event handler",
+			source:  `<button onclick="alert(1)">Bad</button>`,
+			message: "inline event handler attribute",
+		},
+		{
+			name:    "srcdoc",
+			source:  `<iframe srcdoc="<script>alert(1)</script>"></iframe>`,
+			message: "srcdoc attribute is not supported",
+		},
+		{
+			name:    "script element",
+			source:  `<script>alert(1)</script>`,
+			message: "element <script> is not supported",
+		},
+		{
+			name:    "boolean url attribute",
+			source:  `<a href>Bad</a>`,
+			message: `"href" attributes require a URL value`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := RenderSPA(test.source)
+			if err == nil {
+				t.Fatal("expected unsafe markup error")
+			}
+			if !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected error containing %q, got %v", test.message, err)
+			}
+		})
+	}
+}
+
+func TestRenderWithDataRejectsInterpolatedUnsafeURLAttributes(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		message string
+	}{
+		{
+			name:    "javascript",
+			url:     "javascript:alert(1)",
+			message: `scheme "javascript" is not supported`,
+		},
+		{
+			name:    "protocol relative",
+			url:     "//example.com/post",
+			message: "protocol-relative URLs are not supported",
+		},
+		{
+			name:    "control character",
+			url:     "/safe\nbad",
+			message: "control characters are not allowed",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := RenderWithData(`<a href="{url}">Bad</a>`, nil, map[string]string{"url": test.url})
+			if err == nil {
+				t.Fatal("expected unsafe interpolated URL error")
+			}
+			if !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected error containing %q, got %v", test.message, err)
+			}
+		})
+	}
+}
+
 func TestRenderWithDataRejectsRouteParamPassedToDangerousComponentAttribute(t *testing.T) {
 	_, err := RenderWithData(`<Avatar handler="{param(\"slug\")}" />`, map[string]Component{
 		"Avatar": {
 			Name:  "Avatar",
 			Props: []string{"handler"},
-			Body:  `<img src="x" onerror="{handler}" />`,
+			Body:  `<a href="{handler}">Avatar</a>`,
 		},
 	}, map[string]string{"slug": `alert(1)`})
 	if err == nil {
 		t.Fatal("expected dangerous route param component prop error")
 	}
-	if !strings.Contains(err.Error(), `route param interpolation is not allowed in "onerror" attributes`) {
+	if !strings.Contains(err.Error(), `route param interpolation is not allowed in "href" attributes`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

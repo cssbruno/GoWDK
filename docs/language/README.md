@@ -65,5 +65,5 @@ guard public
 The page ID derives from the filename unless `page` is present.
 
 Component files are supported as explicit or discovered `gowdk build` inputs
-with `component`. Layout files are also supported. Separate island and
-plugin-adjacent file kinds are planned.
+with `component`. Layout files are also supported. Separate island file kinds
+are planned.

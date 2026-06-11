@@ -337,7 +337,7 @@ var Config = gowdk.Config{
 ```
 
 Third-party addons should ship as Go modules. Versioning follows Go module
-versions, not CLI plugin discovery. GOWDK should not load production addons
+versions, not hidden CLI discovery. GOWDK should not load production addons
 from runtime filesystem scans, network registries, or hidden project metadata.
 
 ## Request-Time Feature Limits

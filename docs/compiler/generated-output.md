@@ -206,7 +206,7 @@ The target output can include:
 - Generated API handlers.
 - Generated server fragment handlers.
 - Optional SSR route handlers.
-- CSS/plugin artifacts.
+- CSS processor addon artifacts.
 - Embedded asset manifest.
 - A generated Go command for one-binary app serving.
 

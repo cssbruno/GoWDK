@@ -132,7 +132,7 @@ keeping the route, handler, and runtime contracts explicit.
   Go packages.
 - Generated code: generated Go is adapter glue, not generated application
   logic.
-- Styling: CSS tooling is plugin-driven. Tailwind is optional, not core.
+- Styling: CSS tooling is addon-driven. Tailwind is optional, not core.
 - JavaScript: generated JavaScript may enhance navigation, forms, fragments, and
   local UI state, but normal app contracts must not depend on user-written
   JavaScript.
@@ -140,6 +140,6 @@ keeping the route, handler, and runtime contracts explicit.
   rendering is explicit with `load {}` or `go ssr {}`.
 - Deployment: one-binary production deploy must work with and without
   request-time page rendering.
-- Extensibility: actions, APIs, partials, SSR, embed, CSS plugins, framework
+- Extensibility: actions, APIs, partials, SSR, embed, CSS processor addons, framework
   adapters, and WASM islands should remain modular implementation boundaries
   around the same core metadata.

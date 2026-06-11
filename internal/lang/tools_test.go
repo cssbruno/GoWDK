@@ -397,7 +397,6 @@ func TestClassifySourceUsesCurrentFileKindRules(t *testing.T) {
 		{"root.gwdk", "layout root", FileKindLayout},
 		{"root.layout.gwdk", "layout root", FileKindLayout},
 		{"images.asset.gwdk", "asset images", FileKindAsset},
-		{"tailwind.plugin.gwdk", "plugin tailwind", FileKindPlugin},
 	}
 
 	for _, tc := range cases {
@@ -412,7 +411,6 @@ func TestParseBuildFilesParsesLayoutFilesAndSkipsNonGWDKInputs(t *testing.T) {
 	page := filepath.Join(root, "home.page.gwdk")
 	layout := filepath.Join(root, "root.layout.gwdk")
 	asset := filepath.Join(root, "images.asset.gwdk")
-	plugin := filepath.Join(root, "tailwind.plugin.gwdk")
 	writeGWDK(t, page, `package app
 
 page home
@@ -433,10 +431,8 @@ view {
 `)
 	writeGWDK(t, asset, `asset images
 `)
-	writeGWDK(t, plugin, `plugin tailwind
-`)
 
-	app, diagnostics := ParseBuildFiles([]string{page, layout, asset, plugin})
+	app, diagnostics := ParseBuildFiles([]string{page, layout, asset})
 	if diagnostics.HasErrors() {
 		t.Fatal(diagnostics)
 	}

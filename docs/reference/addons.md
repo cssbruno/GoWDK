@@ -100,6 +100,12 @@ to resolve the addon and its dependency graph with the Go toolchain through
 `go.mod`, `go.sum`, `replace`, `GOPRIVATE`, or the user's configured module
 proxy settings. GOWDK does not vendor, sandbox, or rewrite addon imports.
 
+Custom addons are configured in Go, not declared by `.plugin.gwdk` source
+files. Use addon constructor options for addon-level configuration, implement
+`gowdk.CSSProcessor` for build-time CSS output, and implement
+`gowdk.GoBlockConsumer` when the addon needs source-local input through
+`go addon.<name> {}` blocks.
+
 ## Targeted Go Blocks
 
 External addons can opt into targeted inline Go through

@@ -300,7 +300,7 @@ func parseMetadataLine(line string) []string {
 
 func isMetadataKeyword(name string) bool {
 	switch name {
-	case "page", "route", "title", "description", "canonical", "image", "layout", "cache", "revalidate", "error", "guard", "css", "component", "wasm", "asset", "plugin":
+	case "page", "route", "title", "description", "canonical", "image", "layout", "cache", "revalidate", "error", "guard", "css", "component", "wasm", "asset":
 		return true
 	default:
 		return false

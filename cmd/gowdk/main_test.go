@@ -1822,9 +1822,10 @@ view {
 	}
 }
 
-func TestBuildIncrementalSPAFallsBackForComponentChanges(t *testing.T) {
+func TestBuildIncrementalSPAUsesComponentDependencies(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "home.page.gwdk")
+	about := filepath.Join(root, "about.page.gwdk")
 	component := filepath.Join(root, "hero.cmp.gwdk")
 	outputDir := filepath.Join(root, "dist")
 	config := writeMinimalCLIConfig(t, root)
@@ -1835,6 +1836,15 @@ route "/"
 
 view {
   <main><Hero title="GOWDK" /></main>
+}
+`)
+	writeCLIFile(t, about, `package app
+
+page about
+route "/about"
+
+view {
+  <main>Stable</main>
 }
 `)
 	writeCLIFile(t, component, `package app
@@ -1850,12 +1860,160 @@ view {
 }
 `)
 
-	used, err := buildIncrementalSPA([]string{"--config", config, "--out", outputDir, page, component}, inputChange{Changed: []string{component}})
+	args := []string{"--config", config, "--timings", "--out", outputDir, page, about, component}
+	if err := build(args); err != nil {
+		t.Fatal(err)
+	}
+	aboutPath := filepath.Join(outputDir, "about", "index.html")
+	aboutInfo, err := os.Stat(aboutPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	writeCLIFile(t, component, `package app
+
+component Hero
+
+props {
+  title string
+}
+
+view {
+  <h1>{title} after</h1>
+}
+`)
+	used, err := buildIncrementalSPA(args, inputChange{Changed: []string{component}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !used {
+		t.Fatal("expected incremental spa build to handle component dependency change")
+	}
+	homePayload, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(homePayload), "GOWDK after") {
+		t.Fatalf("expected changed component output:\n%s", homePayload)
+	}
+	afterAboutInfo, err := os.Stat(aboutPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !afterAboutInfo.ModTime().Equal(aboutInfo.ModTime()) {
+		t.Fatalf("expected unchanged about output mod time: before=%s after=%s", aboutInfo.ModTime(), afterAboutInfo.ModTime())
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, buildTimingsFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var timings buildTimingReport
+	if err := json.Unmarshal(payload, &timings); err != nil {
+		t.Fatalf("invalid timings JSON: %v\n%s", err, payload)
+	}
+	if timings.Counters["incremental_component_changes"] != 1 || timings.Counters["incremental_affected_pages"] != 1 {
+		t.Fatalf("expected incremental dependency counters, got %#v", timings.Counters)
+	}
+	if _, ok := timings.Counters["files_written"]; !ok {
+		t.Fatalf("expected incremental write counters, got %#v", timings.Counters)
+	}
+}
+
+func TestBuildIncrementalSPAUsesLayoutDependencies(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	about := filepath.Join(root, "about.page.gwdk")
+	layout := filepath.Join(root, "root.layout.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page home
+route "/"
+layout root
+
+view {
+  <main>Home</main>
+}
+`)
+	writeCLIFile(t, about, `package app
+
+page about
+route "/about"
+
+view {
+  <main>Stable</main>
+}
+`)
+	writeCLIFile(t, layout, `package app
+
+view {
+  <section class="before"><slot /></section>
+}
+`)
+
+	args := []string{"--config", config, "--out", outputDir, page, about, layout}
+	if err := build(args); err != nil {
+		t.Fatal(err)
+	}
+	aboutPath := filepath.Join(outputDir, "about", "index.html")
+	aboutInfo, err := os.Stat(aboutPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	writeCLIFile(t, layout, `package app
+
+view {
+  <section class="after"><slot /></section>
+}
+`)
+	used, err := buildIncrementalSPA(args, inputChange{Changed: []string{layout}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !used {
+		t.Fatal("expected incremental spa build to handle layout dependency change")
+	}
+	homePayload, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(homePayload), `class="after"`) {
+		t.Fatalf("expected changed layout output:\n%s", homePayload)
+	}
+	afterAboutInfo, err := os.Stat(aboutPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !afterAboutInfo.ModTime().Equal(aboutInfo.ModTime()) {
+		t.Fatalf("expected unchanged about output mod time: before=%s after=%s", aboutInfo.ModTime(), afterAboutInfo.ModTime())
+	}
+}
+
+func TestBuildIncrementalSPAFallsBackForConfigChanges(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+
+	used, err := buildIncrementalSPA([]string{"--config", config, "--out", outputDir, page}, inputChange{Changed: []string{config}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if used {
-		t.Fatal("expected component change to fall back to full build")
+		t.Fatal("expected config change to fall back to full build")
 	}
 }
 

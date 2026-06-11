@@ -92,3 +92,10 @@ Current phases include `config_load`, `source_discovery`, `parse_lower`,
 `ir_assembly`, `go_binding`, `ir_validation`, `contract_validation`,
 `output_plan_writes`, `app_generation`, `binary_build`, `wasm_build`,
 `backend_app_generation`, and `backend_binary_build` when those paths run.
+
+`gowdk dev` incremental SPA rebuilds reuse the same sidecar when `--timings` is
+forwarded in the build flags. Incremental counters include
+`incremental_input_changes`, `incremental_page_changes`,
+`incremental_component_changes`, `incremental_layout_changes`,
+`incremental_affected_pages`, `files_written`, and
+`identical_writes_skipped`.

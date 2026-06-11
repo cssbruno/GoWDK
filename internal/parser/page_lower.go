@@ -18,7 +18,7 @@ func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (gwdkir.Pag
 	page.Imports = lowerSyntaxImports(ast.Imports)
 	page.Uses = lowerSyntaxUses(ast.Uses)
 	page.Stores = lowerSyntaxStores(ast.Stores)
-	if err := lowerPageSyntaxAnnotations(src, ast, &page); err != nil {
+	if err := lowerPageSyntaxMetadata(src, ast, &page); err != nil {
 		return gwdkir.Page{}, err
 	}
 	for _, block := range ast.Blocks {
@@ -80,7 +80,7 @@ func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (gwdkir.Pag
 	return page, nil
 }
 
-func lowerPageSyntaxAnnotations(src []byte, ast gwdkast.File, page *gwdkir.Page) error {
+func lowerPageSyntaxMetadata(src []byte, ast gwdkast.File, page *gwdkir.Page) error {
 	if ast.Page != nil {
 		if ast.Page.ID == "" {
 			return fmt.Errorf("line %d: page requires a value", ast.Page.Span.Start.Line)
@@ -131,20 +131,20 @@ func lowerPageSyntaxAnnotations(src []byte, ast gwdkast.File, page *gwdkir.Page)
 		page.InlineJS = append(page.InlineJS, source.InlineScript{Name: name, Body: script.Inline, Span: script.Span})
 		page.Spans.InlineJS = append(page.Spans.InlineJS, source.NamedSpan{Name: name, Span: script.Span})
 	}
-	for _, annotation := range ast.Annotations {
-		if pageAnnotationLoweredFromAST(ast, annotation.Name) {
+	for _, metadata := range ast.Metadata {
+		if pageMetadataLoweredFromAST(ast, metadata.Name) {
 			continue
 		}
-		lineNumber := annotation.Span.Start.Line
+		lineNumber := metadata.Span.Start.Line
 		rawLine := sourceLineText(src, lineNumber)
-		if err := applyAnnotation(page, annotation.Name, annotation.Value, lineNumber, rawLine); err != nil {
+		if err := applyMetadata(page, metadata.Name, metadata.Value, lineNumber, rawLine); err != nil {
 			return fmt.Errorf("line %d: %w", lineNumber, err)
 		}
 	}
 	return nil
 }
 
-func pageAnnotationLoweredFromAST(ast gwdkast.File, name string) bool {
+func pageMetadataLoweredFromAST(ast gwdkast.File, name string) bool {
 	switch name {
 	case "page":
 		return ast.Page != nil

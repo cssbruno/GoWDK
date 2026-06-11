@@ -46,8 +46,8 @@ view {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(file.Annotations) != 4 || file.Annotations[1].Name != "route" || file.Annotations[1].Span.Start.Line != 3 {
-		t.Fatalf("unexpected annotations: %#v", file.Annotations)
+	if len(file.Metadata) != 4 || file.Metadata[1].Name != "route" || file.Metadata[1].Span.Start.Line != 3 {
+		t.Fatalf("unexpected metadata: %#v", file.Metadata)
 	}
 	if file.ErrorPage == nil || file.ErrorPage.Path != "errors/newsletter.html" {
 		t.Fatalf("unexpected error page declaration: %#v", file.ErrorPage)

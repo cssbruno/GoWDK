@@ -1164,9 +1164,9 @@ function documentOutlineItems(source) {
     if (!trimmed || trimmed.startsWith('//')) {
       continue;
     }
-    const annotation = outlineAnnotation(text, line);
-    if (annotation) {
-      items.push(annotation);
+    const metadata = outlineMetadata(text, line);
+    if (metadata) {
+      items.push(metadata);
       continue;
     }
     const block = outlineBlock(text, line, lines);
@@ -1183,7 +1183,7 @@ function documentOutlineItems(source) {
   return items;
 }
 
-function outlineAnnotation(text, line) {
+function outlineMetadata(text, line) {
   const match = text.match(/^(\s*)(page|component|layout|route|title|description|canonical|image|guard|css|render|cache|revalidate|error|wasm|asset)\b\s*(.*)$/);
   if (!match) {
     return undefined;
@@ -1193,7 +1193,7 @@ function outlineAnnotation(text, line) {
   return outlineItem({
     name: detail ? `${name} ${detail}` : name,
     detail,
-    kind: annotationOutlineKind(match[2]),
+    kind: metadataOutlineKind(match[2]),
     line,
     column: match[1].length,
     length: text.trimEnd().length - match[1].length
@@ -1296,7 +1296,7 @@ function outlineItem({ name, detail, kind, line, column, length }) {
   };
 }
 
-function annotationOutlineKind(name) {
+function metadataOutlineKind(name) {
   if (name === 'page' || name === 'layout') {
     return 'namespace';
   }

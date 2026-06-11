@@ -14,7 +14,7 @@ import (
 
 type SyntaxFile = gwdkast.File
 type SyntaxPackage = gwdkast.Package
-type SyntaxAnnotation = gwdkast.Annotation
+type SyntaxMetadata = gwdkast.MetadataDecl
 type SyntaxImport = gwdkast.Import
 type SyntaxUse = gwdkast.Use
 type SyntaxBlock = gwdkast.Block
@@ -137,12 +137,12 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 		}
 		seenDeclaration = true
 		if match := metadataPattern.FindStringSubmatch(line); match != nil {
-			annotation := SyntaxAnnotation{
+			metadata := SyntaxMetadata{
 				Name:  match[1],
 				Value: strings.TrimSpace(match[2]),
 				Span:  sourceLineSpan(lineNumber, rawLine),
 			}
-			if err := applySyntaxAnnotation(&file, annotation, lineNumber, rawLine); err != nil {
+			if err := applySyntaxMetadata(&file, metadata, lineNumber, rawLine); err != nil {
 				return SyntaxFile{}, fmt.Errorf("line %d: %w", lineNumber, err)
 			}
 			if match[1] == "wasm" {
@@ -151,7 +151,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 					Span:    sourceLineSpan(lineNumber, rawLine),
 				}
 			}
-			file.Annotations = append(file.Annotations, annotation)
+			file.Metadata = append(file.Metadata, metadata)
 			continue
 		}
 		if strings.HasPrefix(line, "@") {
@@ -356,17 +356,17 @@ func attachSyntaxAssetScopes(file *SyntaxFile) {
 	}
 }
 
-func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNumber int, rawLine string) error {
-	value := strings.TrimSpace(annotation.Value)
-	switch annotation.Name {
+func applySyntaxMetadata(file *SyntaxFile, metadata SyntaxMetadata, lineNumber int, rawLine string) error {
+	value := strings.TrimSpace(metadata.Value)
+	switch metadata.Name {
 	case "page":
-		file.Page = &gwdkast.PageDecl{ID: value, Span: annotation.Span}
+		file.Page = &gwdkast.PageDecl{ID: value, Span: metadata.Span}
 	case "component":
-		file.Component = &gwdkast.ComponentDecl{Name: value, Span: annotation.Span}
+		file.Component = &gwdkast.ComponentDecl{Name: value, Span: metadata.Span}
 	case "layout":
 		values := splitList(value)
 		if len(values) == 1 {
-			file.Layout = &gwdkast.LayoutDecl{ID: values[0], Span: annotation.Span}
+			file.Layout = &gwdkast.LayoutDecl{ID: values[0], Span: metadata.Span}
 		}
 		for _, span := range namedValueSpans(values, lineNumber, rawLine) {
 			file.Layouts = append(file.Layouts, gwdkast.LayoutRef{ID: span.Name, Span: span.Span})
@@ -380,21 +380,21 @@ func applySyntaxAnnotation(file *SyntaxFile, annotation SyntaxAnnotation, lineNu
 		for _, param := range params {
 			routeParams = append(routeParams, gwdkast.RouteParam{Name: param.Name, Type: param.Type, Span: param.Span})
 		}
-		file.Route = &gwdkast.RouteDecl{Path: path, Params: routeParams, Span: annotation.Span}
+		file.Route = &gwdkast.RouteDecl{Path: path, Params: routeParams, Span: metadata.Span}
 	case "cache":
-		file.Cache = &gwdkast.CacheDecl{Policy: trimQuotes(value), Span: annotation.Span}
+		file.Cache = &gwdkast.CacheDecl{Policy: trimQuotes(value), Span: metadata.Span}
 	case "revalidate":
 		seconds, err := revalidateSecondsValue(value)
 		if err != nil {
 			return err
 		}
-		file.Revalidate = &gwdkast.RevalidateDecl{Seconds: seconds, Span: annotation.Span}
+		file.Revalidate = &gwdkast.RevalidateDecl{Seconds: seconds, Span: metadata.Span}
 	case "error":
 		errorPage, err := source.ErrorPagePath(trimQuotes(value))
 		if err != nil {
 			return err
 		}
-		file.ErrorPage = &gwdkast.ErrorPageDecl{Path: errorPage, Span: annotation.Span}
+		file.ErrorPage = &gwdkast.ErrorPageDecl{Path: errorPage, Span: metadata.Span}
 	case "guard":
 		for _, span := range namedValueSpans(splitList(value), lineNumber, rawLine) {
 			file.Guards = append(file.Guards, gwdkast.GuardRef{Name: span.Name, Span: span.Span})

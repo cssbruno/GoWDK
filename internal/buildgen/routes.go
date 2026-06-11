@@ -99,10 +99,9 @@ func pageOutputs(page gwdkir.Page) ([]pageOutput, error) {
 			}
 		}
 
-		route := page.Route
-		for name, value := range declaration {
-			route = strings.ReplaceAll(route, "{"+name+"}", value)
-		}
+		route := expandRouteTemplate(page.Route, declaration, func(value string) string {
+			return value
+		})
 		outputs = append(outputs, pageOutput{
 			route: route,
 			data:  cloneStringMap(declaration),
@@ -142,4 +141,48 @@ func outputPath(outputDir, route string) (string, error) {
 	parts := append([]string{outputDir}, segments...)
 	parts = append(parts, "index.html")
 	return filepath.Join(parts...), nil
+}
+
+func expandRouteTemplate(route string, data map[string]string, escape func(string) string) string {
+	if len(data) == 0 || !strings.Contains(route, "{") {
+		return route
+	}
+	var out strings.Builder
+	for index := 0; index < len(route); {
+		if route[index] != '{' {
+			out.WriteByte(route[index])
+			index++
+			continue
+		}
+		end := strings.IndexByte(route[index:], '}')
+		if end < 0 {
+			out.WriteString(route[index:])
+			break
+		}
+		end += index
+		placeholder := route[index : end+1]
+		name, ok := routeTemplateParamName(placeholder)
+		if !ok {
+			out.WriteString(placeholder)
+			index = end + 1
+			continue
+		}
+		value, ok := data[name]
+		if !ok {
+			out.WriteString(placeholder)
+			index = end + 1
+			continue
+		}
+		out.WriteString(escape(value))
+		index = end + 1
+	}
+	return out.String()
+}
+
+func routeTemplateParamName(placeholder string) (string, bool) {
+	params := gwdkir.RouteParamsFromPath(placeholder)
+	if len(params) != 1 {
+		return "", false
+	}
+	return params[0].Name, true
 }

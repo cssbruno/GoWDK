@@ -176,9 +176,7 @@ func actionRoutes(page gwdkir.Page, data map[string]string) map[string]string {
 		if route == "" {
 			route = page.Route
 		}
-		for name, value := range data {
-			route = strings.ReplaceAll(route, "{"+name+"}", url.PathEscape(value))
-		}
+		route = expandRouteTemplate(route, data, url.PathEscape)
 		routes[action.Name] = route
 	}
 	return routes

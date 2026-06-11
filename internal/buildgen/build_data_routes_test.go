@@ -597,6 +597,46 @@ func TestBuildExpandsDynamicSPAPaths(t *testing.T) {
 	}
 }
 
+func TestBuildExpandsTypedDynamicSPAPathsAndInheritedActionRoutes(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:     "patients.show",
+		Route:  "/patients/{id:int}",
+		Render: gowdk.Action,
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
+			PathsBody: `=> { id: "123" }`,
+			View:      true,
+			ViewBody:  `<main><p>{id}</p><form g:post={Save}><input name="name" /></form></main>`,
+			Actions: []gwdkir.Action{{
+				Name: "Save",
+			}},
+		},
+	}}}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPath := filepath.Join(outputDir, "patients", "123", "index.html")
+	if len(result.Artifacts) != 1 || result.Artifacts[0].Route != "/patients/123" || result.Artifacts[0].Path != wantPath {
+		t.Fatalf("unexpected typed dynamic artifact: %#v", result.Artifacts)
+	}
+	html := readFile(t, wantPath)
+	for _, expected := range []string{
+		`<main><p>123</p><form method="post" action="/patients/123"><input name="name"></form></main>`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in typed dynamic action page:\n%s", expected, html)
+		}
+	}
+
+	routes := readRouteManifest(t, outputDir)
+	if len(routes.Routes) != 1 || routes.Routes[0].Route != "/patients/123" || routes.Routes[0].Path != "patients/123/index.html" {
+		t.Fatalf("unexpected typed dynamic route manifest: %#v", routes.Routes)
+	}
+}
+
 func TestBuildRejectsUnknownDynamicInterpolationBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{

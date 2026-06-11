@@ -60,6 +60,24 @@ view {
 	}
 }
 
+func TestCheckSourceValidatesUnsavedLayoutSlots(t *testing.T) {
+	_, diagnostics := CheckSource(gowdk.Config{}, "root.layout.gwdk", []byte(`package app
+
+view {
+  <main></main>
+}
+`))
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected layout slot diagnostic")
+	}
+	if diagnostics[0].Code != "layout_slot_count" {
+		t.Fatalf("expected layout_slot_count diagnostic, got %#v", diagnostics[0])
+	}
+	if diagnostics[0].File != "root.layout.gwdk" {
+		t.Fatalf("expected source path on diagnostic, got %#v", diagnostics[0])
+	}
+}
+
 func TestCompletionsIncludeCoreLanguageKeywords(t *testing.T) {
 	completions := Completions()
 	if len(completions) == 0 {

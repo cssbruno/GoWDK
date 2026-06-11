@@ -21,6 +21,7 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 				ReferencesProvider:         true,
 				CodeActionProvider:         true,
 				DocumentFormattingProvider: true,
+				DocumentSymbolProvider:     true,
 				CompletionProvider: completionOptions{
 					TriggerCharacters: []string{"@", ":", "<", " "},
 				},
@@ -96,6 +97,12 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
 		}
 		return singleMessage(response(request.ID, server.semanticTokens(params)))
+	case "textDocument/documentSymbol":
+		var params documentSymbolParams
+		if err := decodeParams(request.Params, &params); err != nil {
+			return singleMessage(errorResponse(request.ID, invalidParams, err.Error()))
+		}
+		return singleMessage(response(request.ID, server.documentSymbols(params)))
 	default:
 		return singleMessage(errorResponse(request.ID, methodNotFound, fmt.Sprintf("method not found: %s", request.Method)))
 	}

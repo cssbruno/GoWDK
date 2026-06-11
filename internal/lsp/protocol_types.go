@@ -49,8 +49,22 @@ type serverCapabilities struct {
 	ReferencesProvider         bool                    `json:"referencesProvider"`
 	CodeActionProvider         bool                    `json:"codeActionProvider"`
 	DocumentFormattingProvider bool                    `json:"documentFormattingProvider"`
+	DocumentSymbolProvider     bool                    `json:"documentSymbolProvider"`
 	CompletionProvider         completionOptions       `json:"completionProvider"`
 	SemanticTokensProvider     semanticTokensOptions   `json:"semanticTokensProvider"`
+}
+
+type documentSymbolParams struct {
+	TextDocument textDocumentIdentifier `json:"textDocument"`
+}
+
+type documentSymbol struct {
+	Name           string           `json:"name"`
+	Detail         string           `json:"detail,omitempty"`
+	Kind           int              `json:"kind"`
+	Range          lspRange         `json:"range"`
+	SelectionRange lspRange         `json:"selectionRange"`
+	Children       []documentSymbol `json:"children,omitempty"`
 }
 
 type textDocumentSyncOptions struct {

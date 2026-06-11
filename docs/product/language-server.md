@@ -55,6 +55,9 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
   missing GOWDK `use` aliases.
 - Return full-document semantic tokens for `.gwdk` decorators, identifiers,
   strings, and operators.
+- Return a document outline (top-level package, metadata, imports, uses, blocks,
+  endpoints, and component/page declarations) from the recursive-descent outline
+  pass over the shared tokenizer.
 
 ### Non-Functional
 
@@ -78,6 +81,8 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 - [x] `textDocument/references` returns open-document references for page IDs, routes, components, stores, and guards.
 - [x] `textDocument/codeAction` returns quick fixes for old endpoint syntax and missing GOWDK use aliases.
 - [x] `textDocument/semanticTokens/full` returns encoded token data for open `.gwdk` buffers.
+- [x] `textDocument/documentSymbol` returns a top-level outline parsed by the
+      recursive-descent outline pass over the shared tokenizer (ADR 0010).
 - [x] `go test ./...` and `go build ./cmd/gowdk` pass.
 
 ## Edge Cases

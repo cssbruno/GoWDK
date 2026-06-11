@@ -404,6 +404,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	components, componentFailures := buildComponents(ir.Components)
 	layouts, layoutFailures := buildLayouts(ir.Layouts)
 	css, cssFailures := planCSS(config, ir, outputDir)
+	componentAssets, componentAssetFailures := planComponentFileAssets(ir.Assets, outputDir)
 	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
@@ -412,6 +413,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	failures = append(failures, componentFailures...)
 	failures = append(failures, layoutFailures...)
 	failures = append(failures, cssFailures...)
+	failures = append(failures, componentAssetFailures...)
 	failures = append(failures, scopedJSFailures...)
 	if len(failures) > 0 {
 		return Result{}, reporter.fail("plan", errors.New(strings.Join(failures, "\n")))
@@ -420,7 +422,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	if err != nil {
 		return Result{}, reporter.fail("plan", err)
 	}
-	runtime = append(scopedJS, runtime...)
+	runtime = append(componentAssets, append(scopedJS, runtime...)...)
 	reporter.info("plan", "artifacts_planned", "incremental artifacts planned", BuildEvent{
 		Data: map[string]string{
 			"css":    fmt.Sprint(len(css.assets)),
@@ -457,6 +459,12 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 		}
 		recordWriteStat(&result, wrote)
 		reporter.debug("write", "asset_written", "runtime asset written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
+		if artifact.AssetArtifact.Hash == "" {
+			artifact.AssetArtifact.Hash = contentHash(artifact.contents)
+		}
+		if artifact.AssetArtifact.CachePolicy == "" {
+			artifact.AssetArtifact.CachePolicy = noCacheAssetCachePolicy
+		}
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 	}
 

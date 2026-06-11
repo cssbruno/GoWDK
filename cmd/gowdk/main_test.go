@@ -1920,6 +1920,90 @@ view {
 	}
 }
 
+func TestBuildIncrementalSPAUsesLayoutComponentDependencies(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	about := filepath.Join(root, "about.page.gwdk")
+	layout := filepath.Join(root, "root.layout.gwdk")
+	component := filepath.Join(root, "brand.cmp.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page home
+route "/"
+layout root
+
+view {
+  <main>Home</main>
+}
+`)
+	writeCLIFile(t, about, `package app
+
+page about
+route "/about"
+
+view {
+  <main>Stable</main>
+}
+`)
+	writeCLIFile(t, layout, `package app
+
+view {
+  <section><Brand /><slot /></section>
+}
+`)
+	writeCLIFile(t, component, `package app
+
+component Brand
+
+view {
+  <strong>Before</strong>
+}
+`)
+
+	args := []string{"--config", config, "--out", outputDir, page, about, layout, component}
+	if err := build(args); err != nil {
+		t.Fatal(err)
+	}
+	aboutPath := filepath.Join(outputDir, "about", "index.html")
+	aboutInfo, err := os.Stat(aboutPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	writeCLIFile(t, component, `package app
+
+component Brand
+
+view {
+  <strong>After</strong>
+}
+`)
+	used, err := buildIncrementalSPA(args, inputChange{Changed: []string{component}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !used {
+		t.Fatal("expected incremental spa build to handle layout-only component dependency change")
+	}
+	homePayload, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(homePayload), "<strong>After</strong>") {
+		t.Fatalf("expected changed layout component output:\n%s", homePayload)
+	}
+	afterAboutInfo, err := os.Stat(aboutPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !afterAboutInfo.ModTime().Equal(aboutInfo.ModTime()) {
+		t.Fatalf("expected unchanged about output mod time: before=%s after=%s", aboutInfo.ModTime(), afterAboutInfo.ModTime())
+	}
+}
+
 func TestBuildIncrementalSPAUsesLayoutDependencies(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "home.page.gwdk")

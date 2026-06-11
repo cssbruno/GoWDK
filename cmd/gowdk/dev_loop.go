@@ -247,7 +247,7 @@ func newIncrementalDependencyIndex(app gwdkanalysis.Sources) (incrementalDepende
 		index.layoutsBySource[abs] = key
 	}
 	for _, page := range app.Pages {
-		for key := range pageComponentDependencies(page, componentsByKey) {
+		for key := range pageComponentDependencies(page, componentsByKey, layoutsByKey) {
 			index.pagesByComponent[key] = append(index.pagesByComponent[key], page.Source)
 		}
 		for key := range pageLayoutDependencies(page, layoutsByKey) {
@@ -259,18 +259,41 @@ func newIncrementalDependencyIndex(app gwdkanalysis.Sources) (incrementalDepende
 	return index, true
 }
 
-func pageComponentDependencies(page gwdkir.Page, components map[string]gwdkir.Component) map[string]bool {
+func pageComponentDependencies(page gwdkir.Page, components map[string]gwdkir.Component, layouts map[string]gwdkir.Layout) map[string]bool {
 	seen := map[string]bool{}
-	refs, err := view.ComponentReferences(page.Blocks.ViewBody)
-	if err != nil {
-		return seen
-	}
-	for _, ref := range refs {
-		if component, ok := resolveComponentRef(page.Package, page.Uses, ref, components); ok {
-			collectComponentDependencies(component, components, seen)
+	collectComponentDependenciesFromView(page.Package, page.Uses, page.Blocks.ViewBody, components, seen)
+	for _, ref := range page.Layouts {
+		if layout, ok := resolvePageLayoutDependency(page.Package, page.Uses, ref, layouts); ok {
+			collectLayoutComponentDependencies(layout, layouts, components, map[string]bool{}, seen)
 		}
 	}
 	return seen
+}
+
+func collectComponentDependenciesFromView(ownerPackage string, uses []gwdkir.Use, viewBody string, components map[string]gwdkir.Component, seen map[string]bool) {
+	refs, err := view.ComponentReferences(viewBody)
+	if err != nil {
+		return
+	}
+	for _, ref := range refs {
+		if component, ok := resolveComponentRef(ownerPackage, uses, ref, components); ok {
+			collectComponentDependencies(component, components, seen)
+		}
+	}
+}
+
+func collectLayoutComponentDependencies(layout gwdkir.Layout, layouts map[string]gwdkir.Layout, components map[string]gwdkir.Component, seenLayouts map[string]bool, seenComponents map[string]bool) {
+	key := sourceLayoutKey(layout.Package, layout.ID)
+	if seenLayouts[key] {
+		return
+	}
+	seenLayouts[key] = true
+	collectComponentDependenciesFromView(layout.Package, layout.Uses, layout.Blocks.ViewBody, components, seenComponents)
+	for _, ref := range layout.Layouts {
+		if parent, ok := resolveLayoutDependency(layout.Package, layout.Uses, ref, layouts); ok {
+			collectLayoutComponentDependencies(parent, layouts, components, seenLayouts, seenComponents)
+		}
+	}
 }
 
 func collectComponentDependencies(component gwdkir.Component, components map[string]gwdkir.Component, seen map[string]bool) {

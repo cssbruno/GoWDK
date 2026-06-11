@@ -9,20 +9,20 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/cssbruno/gowdk)](https://goreportcard.com/report/github.com/cssbruno/gowdk)
 [![Go Reference](https://pkg.go.dev/badge/github.com/cssbruno/gowdk.svg)](https://pkg.go.dev/github.com/cssbruno/gowdk)
 
-GoWDK is a compiler, not a runtime framework. You write pages and components
-in `.gwdk` — a small declarative language that sits next to your normal Go
-packages and is type-checked against them — and `gowdk build` turns the whole
-app into artifacts you can read line by line: static HTML, `net/http`
-handlers, typed form decoders, guards, browser islands (JS or Go WASM),
-packaged into one binary.
+Write pages in `.gwdk`, ship one Go binary.
 
-Nothing interprets your templates at request time. Pages render at build time
-by default; request-time SSR is a per-page opt-in. Every compiler stage is
-observable from the CLI — `gowdk inspect ir` prints the typed intermediate
-representation, `gowdk explain ambiguous_dynamic_route` documents any
-diagnostic — and unsupported source fails with a diagnostic instead of
-generating something clever. No reflection, no request-time magic: the
-deployed artifact is plain Go you could have written yourself.
+GoWDK compiles pages and components into static HTML and plain Go at build
+time. No template engine or reflection at request time — the generated
+`net/http` handlers, form decoders, and guards are code you can read, backed
+by a thin runtime library.
+
+- **Build-time first** — pages render at build time; request-time SSR is a
+  per-page opt-in.
+- **Type-checked against your Go** — `.gwdk` files live next to your packages
+  and bind to real functions and types.
+- **Inspectable** — `gowdk inspect ir`, `gowdk explain <code>`, and
+  `gowdk doctor` expose every compiler stage; unsupported source fails with a
+  diagnostic instead of clever output.
 
 <!-- TODO: short GIF of `gowdk dev` rebuilding + live-reloading goes here. -->
 

@@ -183,6 +183,9 @@ func validateRouteMethodConflicts(pages []gwdkir.Page, endpoints []gwdkir.GoEndp
 			if allowedPageOwnedQueryRouteConflict(previous, registration) {
 				continue
 			}
+			if identicalContractRouteRegistration(previous, registration) {
+				continue
+			}
 			diagnostics = append(diagnostics, ValidationError{
 				Code:   "route_method_conflict",
 				PageID: registration.PageID,
@@ -203,14 +206,15 @@ func validateRouteMethodConflicts(pages []gwdkir.Page, endpoints []gwdkir.GoEndp
 }
 
 type routeRegistration struct {
-	Kind    string
-	Owner   string
-	Method  string
-	Route   string
-	Pattern string
-	PageID  string
-	Source  string
-	Span    source.SourceSpan
+	Kind     string
+	Owner    string
+	Method   string
+	Route    string
+	Pattern  string
+	Contract string
+	PageID   string
+	Source   string
+	Span     source.SourceSpan
 }
 
 func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []routeRegistration {
@@ -334,7 +338,8 @@ func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs
 		if err := source.ValidateBackendRoutePath(ref.Path); err != nil {
 			continue
 		}
-		info, issues := parseRoute(ref.Path)
+		route := source.BackendRoutePath(ref.Path)
+		info, issues := parseRoute(route)
 		if len(issues) > 0 {
 			continue
 		}
@@ -344,14 +349,15 @@ func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs
 		}
 		method := strings.ToUpper(strings.TrimSpace(ref.Method))
 		registrations = append(registrations, routeRegistration{
-			Kind:    "contract_" + kind,
-			Owner:   fmt.Sprintf("%s contract %s", kind, ref.Name),
-			Method:  method,
-			Route:   ref.Path,
-			Pattern: info.Pattern,
-			PageID:  ref.OwnerID,
-			Source:  ref.Source,
-			Span:    ref.Span,
+			Kind:     "contract_" + kind,
+			Owner:    fmt.Sprintf("%s contract %s", kind, ref.Name),
+			Method:   method,
+			Route:    route,
+			Pattern:  info.Pattern,
+			Contract: ref.Name,
+			PageID:   ref.OwnerID,
+			Source:   ref.Source,
+			Span:     ref.Span,
 		})
 	}
 	return registrations
@@ -359,6 +365,16 @@ func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs
 
 func allowedPageOwnedQueryRouteConflict(first routeRegistration, current routeRegistration) bool {
 	return pageOwnedQueryRouteConflict(first, current) || pageOwnedQueryRouteConflict(current, first)
+}
+
+func identicalContractRouteRegistration(first routeRegistration, current routeRegistration) bool {
+	if !strings.HasPrefix(first.Kind, "contract_") || first.Kind != current.Kind {
+		return false
+	}
+	return first.Method == current.Method &&
+		first.Route == current.Route &&
+		first.Contract == current.Contract &&
+		first.PageID == current.PageID
 }
 
 func pageOwnedQueryRouteConflict(page routeRegistration, query routeRegistration) bool {

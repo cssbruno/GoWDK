@@ -67,6 +67,12 @@ func BackendRouteMethod(value string) string {
 	return strings.ToUpper(strings.TrimSpace(value))
 }
 
+// BackendRoutePath returns the normalized path key used by generated backend
+// routers after ValidateBackendRoutePath has accepted the source value.
+func BackendRoutePath(value string) string {
+	return path.Clean("/" + value)
+}
+
 // ValidateBackendRoutePath rejects paths that would be unsafe or ambiguous when
 // registered as generated backend routes.
 func ValidateBackendRoutePath(value string) error {
@@ -93,7 +99,7 @@ func ValidateBackendRoutePath(value string) error {
 			return fmt.Errorf("endpoint path %q must not contain control characters", value)
 		}
 	}
-	cleaned := path.Clean(value)
+	cleaned := BackendRoutePath(value)
 	if cleaned != value {
 		return fmt.Errorf("endpoint path %q must be a clean absolute path without dot segments, duplicate slashes, or trailing slash", value)
 	}

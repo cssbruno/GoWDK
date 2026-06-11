@@ -3682,6 +3682,102 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 			t.Fatalf("Missing route_method_conflict diagnostic: %#v", diagnostics)
 		}
 	})
+
+	t.Run("command route conflicts with action", func(t *testing.T) {
+		app := appFixture{
+			Pages: []gwdkir.Page{{
+				ID:    "patients",
+				Route: "/patients",
+				Blocks: gwdkir.Blocks{
+					View:     true,
+					ViewBody: `<main><form method="post" action="/patients" g:command="patients.CreatePatient"></form></main>`,
+					Actions:  []gwdkir.Action{{Name: "CreatePatient"}},
+				},
+			}},
+		}
+
+		err := validateManifest(gowdk.Config{}, app)
+		if err == nil {
+			t.Fatal("expected command/action route method conflict")
+		}
+		diagnostics := err.(ValidationErrors)
+		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "POST", "/patients", "command contract patients.CreatePatient", "action patients.CreatePatient") {
+			t.Fatalf("Missing command/action route_method_conflict diagnostic: %#v", diagnostics)
+		}
+	})
+
+	t.Run("duplicate command routes conflict", func(t *testing.T) {
+		app := appFixture{
+			Pages: []gwdkir.Page{{
+				ID:    "patients",
+				Route: "/patients",
+				Blocks: gwdkir.Blocks{
+					View: true,
+					ViewBody: `<main>
+  <form method="post" action="/patients" g:command="patients.CreatePatient"></form>
+  <form method="post" action="/patients" g:command="patients.UpdatePatient"></form>
+</main>`,
+				},
+			}},
+		}
+
+		err := validateManifest(gowdk.Config{}, app)
+		if err == nil {
+			t.Fatal("expected duplicate command route method conflict")
+		}
+		diagnostics := err.(ValidationErrors)
+		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "POST", "/patients", "command contract patients.UpdatePatient", "command contract patients.CreatePatient") {
+			t.Fatalf("Missing duplicate command route_method_conflict diagnostic: %#v", diagnostics)
+		}
+	})
+
+	t.Run("query route conflicts with api", func(t *testing.T) {
+		app := appFixture{
+			Pages: []gwdkir.Page{{
+				ID:    "patients",
+				Route: "/patients",
+				Blocks: gwdkir.Blocks{
+					View:     true,
+					ViewBody: `<main><section g:query="patients.ListPatients"></section></main>`,
+					APIs:     []gwdkir.API{{Name: "ListPatients"}},
+				},
+			}},
+		}
+
+		err := validateManifest(gowdk.Config{}, app)
+		if err == nil {
+			t.Fatal("expected query/api route method conflict")
+		}
+		diagnostics := err.(ValidationErrors)
+		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "GET", "/patients", "query contract patients.ListPatients", "api patients.ListPatients") {
+			t.Fatalf("Missing query/api route_method_conflict diagnostic: %#v", diagnostics)
+		}
+	})
+
+	t.Run("duplicate query routes conflict", func(t *testing.T) {
+		app := appFixture{
+			Pages: []gwdkir.Page{{
+				ID:    "patients",
+				Route: "/patients",
+				Blocks: gwdkir.Blocks{
+					View: true,
+					ViewBody: `<main>
+  <section g:query="patients.ListPatients"></section>
+  <section g:query="patients.SearchPatients"></section>
+</main>`,
+				},
+			}},
+		}
+
+		err := validateManifest(gowdk.Config{}, app)
+		if err == nil {
+			t.Fatal("expected duplicate query route method conflict")
+		}
+		diagnostics := err.(ValidationErrors)
+		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "GET", "/patients", "query contract patients.SearchPatients", "query contract patients.ListPatients") {
+			t.Fatalf("Missing duplicate query route_method_conflict diagnostic: %#v", diagnostics)
+		}
+	})
 }
 
 func TestValidateManifestAllowsSameRouteWithDifferentMethods(t *testing.T) {
@@ -3698,6 +3794,23 @@ func TestValidateManifestAllowsSameRouteWithDifferentMethods(t *testing.T) {
 
 	if err := validateManifest(gowdk.Config{}, app); err != nil {
 		t.Fatalf("expected GET page plus POST action to be valid, got %v", err)
+	}
+}
+
+func TestValidateManifestAllowsPageOwnedQueryOnPageRoute(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			ID:    "patients",
+			Route: "/patients",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><section g:query="patients.GetPatientPage"></section></main>`,
+			},
+		}},
+	}
+
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected page-owned query to share the page GET route, got %v", err)
 	}
 }
 

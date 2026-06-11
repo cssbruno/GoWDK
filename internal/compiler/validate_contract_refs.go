@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // ValidateContractReferences converts linked contract-reference metadata into
@@ -39,6 +40,35 @@ func contractReferenceAllowsWeb(ref gwdkir.ContractReference) bool {
 		}
 	}
 	return false
+}
+
+func validateContractReferenceRoutes(refs []gwdkir.ContractReference) []ValidationError {
+	var diagnostics []ValidationError
+	for _, ref := range refs {
+		method := source.BackendRouteMethod(ref.Method)
+		if strings.TrimSpace(ref.Method) != "" && method != contractReferenceRouteMethod(ref.Kind) {
+			diagnostics = append(diagnostics, contractReferenceRouteDiagnostic(ref, fmt.Sprintf("%s %s route method %q is invalid; %s contract routes require %s", ref.Kind, ref.Name, ref.Method, ref.Kind, contractReferenceRouteMethod(ref.Kind))))
+		}
+		if strings.TrimSpace(ref.Path) != "" {
+			if err := source.ValidateBackendRoutePath(ref.Path); err != nil {
+				diagnostics = append(diagnostics, contractReferenceRouteDiagnostic(ref, fmt.Sprintf("%s %s route path is invalid: %v", ref.Kind, ref.Name, err)))
+			}
+		}
+	}
+	return diagnostics
+}
+
+func contractReferenceRouteMethod(kind gwdkir.ContractKind) string {
+	if kind == gwdkir.ContractQuery {
+		return "GET"
+	}
+	return "POST"
+}
+
+func contractReferenceRouteDiagnostic(ref gwdkir.ContractReference, message string) ValidationError {
+	diagnostic := contractReferenceDiagnostic(ref, "contract_route_invalid")
+	diagnostic.Message = message
+	return diagnostic
 }
 
 func contractReferenceRoleDiagnostic(ref gwdkir.ContractReference) ValidationError {

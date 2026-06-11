@@ -57,7 +57,7 @@ func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 	}
 	options.Config.Build.Output = outputDir
 	if len(paths) == 0 {
-		discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames)
+		discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames, options.ProjectRoot)
 		if err != nil {
 			return true, err
 		}
@@ -359,12 +359,12 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 			return nil, err
 		}
 		for _, target := range targets {
-			discovered, err := discoverBuildFiles(options.Config, target.Output, target.Modules)
+			discovered, err := discoverBuildFiles(options.Config, target.Output, target.Modules, options.ProjectRoot)
 			if err != nil {
 				return nil, err
 			}
 			paths = append(paths, discovered...)
-			css, err := discoverBuildCSSFiles(options.Config, target.Output)
+			css, err := discoverBuildCSSFiles(options.Config, target.Output, options.ProjectRoot)
 			if err != nil {
 				return nil, err
 			}
@@ -373,30 +373,30 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 	} else if outputDir == "" {
 		outputDir = options.Config.Build.Output
 		if len(paths) == 0 {
-			discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames)
+			discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames, options.ProjectRoot)
 			if err != nil {
 				return nil, err
 			}
 			paths = discovered
 		}
-		css, err := discoverBuildCSSFiles(options.Config, outputDir)
+		css, err := discoverBuildCSSFiles(options.Config, outputDir, options.ProjectRoot)
 		if err != nil {
 			return nil, err
 		}
 		paths = append(paths, css...)
 	} else if len(paths) == 0 {
-		discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames)
+		discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames, options.ProjectRoot)
 		if err != nil {
 			return nil, err
 		}
 		paths = discovered
-		css, err := discoverBuildCSSFiles(options.Config, outputDir)
+		css, err := discoverBuildCSSFiles(options.Config, outputDir, options.ProjectRoot)
 		if err != nil {
 			return nil, err
 		}
 		paths = append(paths, css...)
 	} else {
-		css, err := discoverBuildCSSFiles(options.Config, outputDir)
+		css, err := discoverBuildCSSFiles(options.Config, outputDir, options.ProjectRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -404,8 +404,11 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 	}
 	if strings.TrimSpace(plan.ConfigPath) != "" {
 		paths = append(paths, plan.ConfigPath)
-	} else if _, err := os.Stat("gowdk.config.go"); err == nil {
-		paths = append(paths, "gowdk.config.go")
+	} else {
+		configPath := filepath.Join(options.ProjectRoot, "gowdk.config.go")
+		if _, err := os.Stat(configPath); err == nil {
+			paths = append(paths, configPath)
+		}
 	}
 	snapshot := inputSnapshot{}
 	for _, item := range paths {
@@ -430,7 +433,7 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 	return snapshot, nil
 }
 
-func discoverBuildCSSFiles(config gowdk.Config, outputDir string) ([]string, error) {
+func discoverBuildCSSFiles(config gowdk.Config, outputDir string, root string) ([]string, error) {
 	includes := appendPatterns(nil, config.CSS.Include)
 	if len(includes) == 1 && includes[0] == buildgen.DisableCSSDiscovery {
 		return nil, nil
@@ -439,9 +442,12 @@ func discoverBuildCSSFiles(config gowdk.Config, outputDir string) ([]string, err
 		includes = []string{"**/*.css"}
 	}
 
-	root, err := os.Getwd()
-	if err != nil {
-		return nil, err
+	if strings.TrimSpace(root) == "" {
+		var err error
+		root, err = os.Getwd()
+		if err != nil {
+			return nil, err
+		}
 	}
 	excludes := []string{".git/**", "**/.git/**", "vendor/**", "**/vendor/**", "node_modules/**", "**/node_modules/**", ".gowdk/**", "**/.gowdk/**", "dist/**", "**/dist/**"}
 	excludes = appendPatterns(excludes, config.CSS.Exclude)

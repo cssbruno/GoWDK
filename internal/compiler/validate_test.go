@@ -3360,6 +3360,57 @@ func TestValidateManifestAcceptsLayoutInheritanceChain(t *testing.T) {
 	}
 }
 
+func TestValidateManifestRejectsLayoutFileUseAndQualifiedParentLayout(t *testing.T) {
+	useSpan := source.SourceSpan{Start: source.SourcePosition{Line: 2, Column: 1}, End: source.SourcePosition{Line: 2, Column: 20}}
+	parentSpan := source.SourceSpan{Start: source.SourcePosition{Line: 3, Column: 8}, End: source.SourcePosition{Line: 3, Column: 19}}
+	app := appFixture{
+		Layouts: []gwdkir.Layout{
+			{
+				Package:     "pages",
+				ID:          "docs",
+				Source:      "pages/docs.layout.gwdk",
+				Uses:        []gwdkir.Use{{Alias: "chrome", Package: "layouts", Span: useSpan}},
+				Layouts:     []string{"chrome.root"},
+				LayoutSpans: []source.NamedSpan{{Name: "chrome.root", Span: parentSpan}},
+				Blocks:      gwdkir.Blocks{View: true, ViewBody: "<slot />"},
+			},
+			{
+				Package: "layouts",
+				ID:      "root",
+				Source:  "layouts/root.layout.gwdk",
+				Blocks:  gwdkir.Blocks{View: true, ViewBody: "<slot />"},
+			},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected layout use diagnostics")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "unsupported_gowdk_use_scope") {
+		t.Fatalf("Missing unsupported_gowdk_use_scope diagnostic: %#v", diagnostics)
+	}
+	if !hasDiagnosticCode(diagnostics, "unknown_layout_id") {
+		t.Fatalf("Missing unknown_layout_id diagnostic: %#v", diagnostics)
+	}
+	var sawUseSpan, sawParentSpan bool
+	for _, diagnostic := range diagnostics {
+		switch diagnostic.Code {
+		case "unsupported_gowdk_use_scope":
+			sawUseSpan = diagnostic.Span == useSpan
+		case "unknown_layout_id":
+			sawParentSpan = diagnostic.Span == parentSpan && strings.Contains(diagnostic.Message, "layout files do not support use aliases")
+		}
+	}
+	if !sawUseSpan {
+		t.Fatalf("expected unsupported use diagnostic at use span, got %#v", diagnostics)
+	}
+	if !sawParentSpan {
+		t.Fatalf("expected qualified parent diagnostic at parent layout span, got %#v", diagnostics)
+	}
+}
+
 func TestValidateManifestRejectsUnknownLayoutParent(t *testing.T) {
 	app := appFixture{
 		Layouts: []gwdkir.Layout{
@@ -3398,6 +3449,88 @@ func TestValidateManifestReportsContractReferenceParseErrors(t *testing.T) {
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "contract_reference_parse_error") {
 		t.Fatalf("Missing contract_reference_parse_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsInvalidContractReferenceRoutes(t *testing.T) {
+	tests := []struct {
+		name     string
+		viewBody string
+		message  string
+	}{
+		{
+			name:     "external command action",
+			viewBody: `<form method="post" action="https://example.com/pay" g:command="patients.CreatePatient"></form>`,
+			message:  "must be a local absolute path",
+		},
+		{
+			name:     "dynamic command action",
+			viewBody: `<form method="post" action="/patients/{id}" g:command="patients.CreatePatient"></form>`,
+			message:  "without query, fragment, or params",
+		},
+		{
+			name:     "unsupported command method",
+			viewBody: `<form method="get" action="/patients" g:command="patients.CreatePatient"></form>`,
+			message:  "command contract routes require POST",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			app := appFixture{
+				Pages: []gwdkir.Page{{
+					Package: "pages",
+					ID:      "patients",
+					Route:   "/patients",
+					Source:  "pages/patients.page.gwdk",
+					Blocks: gwdkir.Blocks{
+						View:     true,
+						ViewBody: test.viewBody,
+					},
+				}},
+			}
+
+			err := validateManifest(gowdk.Config{}, app)
+			if err == nil {
+				t.Fatal("expected invalid contract route diagnostic")
+			}
+			diagnostics := err.(ValidationErrors)
+			if !hasDiagnosticCode(diagnostics, "contract_route_invalid") {
+				t.Fatalf("Missing contract_route_invalid diagnostic: %#v", diagnostics)
+			}
+			if !strings.Contains(diagnostics[0].Message, test.message) {
+				t.Fatalf("expected diagnostic message to contain %q, got %q", test.message, diagnostics[0].Message)
+			}
+			if diagnostics[0].Source != "pages/patients.page.gwdk" || diagnostics[0].Span.Start.Line == 0 {
+				t.Fatalf("expected source span on contract route diagnostic, got %#v", diagnostics[0])
+			}
+		})
+	}
+}
+
+func TestValidateManifestRejectsDefaultQueryRouteWithDynamicParams(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "patients.show",
+			Route:   "/patients/{id}",
+			Source:  "pages/patients-show.page.gwdk",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<section g:query="patients.GetPatient"></section>`,
+			},
+		}},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected invalid contract query route diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "contract_route_invalid") {
+		t.Fatalf("Missing contract_route_invalid diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(diagnostics[0].Message, "without query, fragment, or params") {
+		t.Fatalf("unexpected diagnostic message: %s", diagnostics[0].Message)
 	}
 }
 

@@ -461,6 +461,113 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
 }
 
+func TestDiscoverGoEndpointCommentsRejectsMalformedComments(t *testing.T) {
+	tests := []struct {
+		name    string
+		comment string
+		want    string
+	}{
+		{
+			name:    "missing method",
+			comment: "//gowdk:api /api/health",
+			want:    "expected //gowdk:act METHOD /path or //gowdk:api METHOD /path",
+		},
+		{
+			name:    "missing path",
+			comment: "//gowdk:api GET",
+			want:    "expected //gowdk:act METHOD /path or //gowdk:api METHOD /path",
+		},
+		{
+			name:    "unknown kind",
+			comment: "//gowdk:route GET /api/health",
+			want:    "supported endpoint kinds are act and api",
+		},
+		{
+			name:    "invalid method",
+			comment: "//gowdk:api G3T /api/health",
+			want:    "method must contain only ASCII letters",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeCompilerTestModule(t, root)
+			writeCompilerTestFile(t, filepath.Join(root, "handlers.go"), `package api
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+`+test.comment+`
+func Session(context.Context, *http.Request) (response.Response, error) {
+	return response.Response{}, nil
+}
+`)
+			app := appFixture{Pages: []gwdkir.Page{{
+				ID:     "home",
+				Source: filepath.Join(root, "home.page.gwdk"),
+				Route:  "/",
+				Guards: []string{"public"},
+				Blocks: gwdkir.Blocks{View: true, ViewBody: "<main>Home</main>"},
+			}}}
+
+			ir := app.program(gowdk.Config{})
+			err := DiscoverGoEndpoints(&ir)
+			if err == nil {
+				t.Fatal("expected malformed endpoint comment diagnostic")
+			}
+			diagnostics := err.(ValidationErrors)
+			if len(diagnostics) != 1 || diagnostics[0].Code != "malformed_go_endpoint_comment" {
+				t.Fatalf("unexpected diagnostics: %#v", diagnostics)
+			}
+			if !strings.Contains(diagnostics[0].Message, test.want) {
+				t.Fatalf("expected diagnostic to contain %q, got %q", test.want, diagnostics[0].Message)
+			}
+			if diagnostics[0].Source != filepath.Join(root, "handlers.go") || diagnostics[0].Span.Start.Line == 0 {
+				t.Fatalf("expected source span on malformed endpoint comment, got %#v", diagnostics[0])
+			}
+		})
+	}
+}
+
+func TestDiscoverGoEndpointCommentsIgnoresUnrelatedComments(t *testing.T) {
+	root := t.TempDir()
+	writeCompilerTestModule(t, root)
+	writeCompilerTestFile(t, filepath.Join(root, "handlers.go"), `package api
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+//gowdkx:api GET /api/ignored
+//gowdk:api GET /api/session
+func Session(context.Context, *http.Request) (response.Response, error) {
+	return response.Response{}, nil
+}
+`)
+	app := appFixture{Pages: []gwdkir.Page{{
+		ID:     "home",
+		Source: filepath.Join(root, "home.page.gwdk"),
+		Route:  "/",
+		Guards: []string{"public"},
+		Blocks: gwdkir.Blocks{View: true, ViewBody: "<main>Home</main>"},
+	}}}
+
+	ir := app.program(gowdk.Config{})
+	if err := DiscoverGoEndpoints(&ir); err != nil {
+		t.Fatal(err)
+	}
+	if len(ir.GoEndpoints) != 1 || ir.GoEndpoints[0].Route != "/api/session" {
+		t.Fatalf("expected only the valid GOWDK endpoint, got %#v", ir.GoEndpoints)
+	}
+}
+
 func TestValidateManifestRejectsGoEndpointConflictWithGOWDKEndpoint(t *testing.T) {
 	root := t.TempDir()
 	sourcePath := filepath.Join(root, "home.page.gwdk")

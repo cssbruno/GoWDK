@@ -117,9 +117,9 @@ gets more specific stable codes.
   `missing_page_guard`, `public_guard_exclusive`, and
   `guard_requires_request_render`.
 - Backend endpoints: `invalid_backend_handler_name`,
-  `invalid_go_endpoint_handler`, `go_endpoint_parse_error`,
-  `duplicate_go_endpoint_comment`, `unsupported_action_method`,
-  `backend_binding_required`.
+  `invalid_go_endpoint_handler`, `malformed_go_endpoint_comment`,
+  `go_endpoint_parse_error`, `duplicate_go_endpoint_comment`,
+  `unsupported_action_method`, `backend_binding_required`.
 - Layouts, CSS, and cache: `duplicate_layout_id`, `unknown_layout_id`,
   `invalid_css_selection`, `duplicate_css_selection`,
   `revalidate_requires_cache`, `duplicate_revalidate_policy`.
@@ -140,7 +140,8 @@ gets more specific stable codes.
   `contract_type_invalid`, `contract_result_invalid`,
   `contract_input_invalid`, `contract_event_name_invalid`,
   `contract_event_category_invalid`, `duplicate_command_owner`,
-  `contract_reference_missing`, `contract_reference_invalid`,
+  `contract_route_invalid`, `contract_reference_missing`,
+  `contract_reference_invalid`,
   `contract_reference_role_not_allowed`.
 - WASM and browser Go: `unsupported_wasm_import`,
   `wasm_package_build_error`, `wasm_package_entrypoint_error`,

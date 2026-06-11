@@ -105,7 +105,8 @@ func discoverGoEndpointsInDir(dir string) ([]gwdkir.GoEndpoint, []ValidationErro
 			if !ok || function.Doc == nil {
 				continue
 			}
-			found := endpointCommentsForFunction(fileSet, path, file.Name.Name, function)
+			found, foundDiagnostics := endpointCommentsForFunction(fileSet, path, file.Name.Name, function)
+			diagnostics = append(diagnostics, foundDiagnostics...)
 			if len(found) > 1 {
 				diagnostics = append(diagnostics, goEndpointDiagnostic(fileSet, path, function, "duplicate_go_endpoint_comment", fmt.Sprintf("Go handler %s has multiple gowdk endpoint comments; declare at most one", function.Name.Name)))
 				continue
@@ -129,19 +130,29 @@ func discoverGoEndpointsInDir(dir string) ([]gwdkir.GoEndpoint, []ValidationErro
 	return endpoints, diagnostics
 }
 
-func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageName string, function *ast.FuncDecl) []gwdkir.GoEndpoint {
+func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageName string, function *ast.FuncDecl) ([]gwdkir.GoEndpoint, []ValidationError) {
 	var endpoints []gwdkir.GoEndpoint
+	var diagnostics []ValidationError
 	for _, comment := range function.Doc.List {
 		text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
 		text = strings.TrimSpace(strings.TrimPrefix(text, "/*"))
 		text = strings.TrimSpace(strings.TrimSuffix(text, "*/"))
-		kind, methodText, routeText, ok := parseGoEndpointComment(text)
-		if !ok {
+		kind, methodText, routeText, matched, err := parseGoEndpointComment(text)
+		if !matched {
+			continue
+		}
+		span := goTokenSpan(fileSet, comment.Pos(), comment.End())
+		if err != nil {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "malformed_go_endpoint_comment",
+				Source:  path,
+				Span:    span,
+				Message: err.Error(),
+			})
 			continue
 		}
 		method := strings.ToUpper(methodText)
 		route := strings.Trim(routeText, `"`)
-		span := goTokenSpan(fileSet, comment.Pos(), comment.End())
 		endpoints = append(endpoints, gwdkir.GoEndpoint{
 			Kind:        kind,
 			SourceKind:  gwdkir.EndpointSourceGo,
@@ -155,26 +166,26 @@ func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageNam
 			RouteParams: routeParamSpansFallback(route, span),
 		})
 	}
-	return endpoints
+	return endpoints, diagnostics
 }
 
-func parseGoEndpointComment(text string) (string, string, string, bool) {
+func parseGoEndpointComment(text string) (string, string, string, bool, error) {
 	rest, ok := strings.CutPrefix(text, "gowdk:")
 	if !ok {
-		return "", "", "", false
+		return "", "", "", false, nil
 	}
 	fields := strings.Fields(rest)
 	if len(fields) != 3 {
-		return "", "", "", false
+		return "", "", "", true, fmt.Errorf("malformed Go endpoint comment %q; expected //gowdk:act METHOD /path or //gowdk:api METHOD /path", text)
 	}
 	kind := fields[0]
 	if kind != "act" && kind != "api" {
-		return "", "", "", false
+		return "", "", "", true, fmt.Errorf("malformed Go endpoint comment %q; supported endpoint kinds are act and api", text)
 	}
 	if !isASCIILetters(fields[1]) {
-		return "", "", "", false
+		return "", "", "", true, fmt.Errorf("malformed Go endpoint comment %q; method must contain only ASCII letters", text)
 	}
-	return kind, fields[1], fields[2], true
+	return kind, fields[1], fields[2], true, nil
 }
 
 func isASCIILetters(value string) bool {

@@ -122,7 +122,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		var discovered []string
 		if err := timings.measure("source_discovery", func() error {
 			var discoverErr error
-			discovered, discoverErr = discoverBuildFiles(options.Config, outputDir, request.Modules)
+			discovered, discoverErr = discoverBuildFiles(options.Config, outputDir, request.Modules, options.ProjectRoot)
 			return discoverErr
 		}); err != nil {
 			return err
@@ -181,7 +181,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		return fmt.Errorf("build failed")
 	}
 	if err := timings.measure("contract_validation", func() error {
-		if err := linkIRContractReferences(&ir, "."); err != nil {
+		if err := linkIRContractReferences(&ir, options.ProjectRoot); err != nil {
 			return err
 		}
 		return compiler.ValidateContractReferences(ir.ContractRefs)

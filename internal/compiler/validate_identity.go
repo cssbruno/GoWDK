@@ -156,15 +156,9 @@ func validateLayoutReferences(layouts []gwdkir.Layout) []ValidationError {
 		}
 	}
 
-	resolve := func(layout gwdkir.Layout, usesByAlias map[string]gwdkir.Use, ref string) (key string, known bool) {
-		if alias, layoutID, ok := strings.Cut(ref, "."); ok {
-			use, exists := usesByAlias[alias]
-			if !exists {
-				return ref, false
-			}
-			key = layoutIdentityKey(use.Package, layoutID)
-			_, known = declared[key]
-			return key, known
+	resolve := func(layout gwdkir.Layout, ref string) (key string, known bool) {
+		if _, _, ok := strings.Cut(ref, "."); ok {
+			return ref, false
 		}
 		if layout.Package != "" {
 			key = layoutIdentityKey(layout.Package, ref)
@@ -181,9 +175,8 @@ func validateLayoutReferences(layouts []gwdkir.Layout) []ValidationError {
 	edges := map[string][]string{}
 	for _, layout := range layouts {
 		selfKey := layoutIdentityKey(layout.Package, layout.ID)
-		usesByAlias := layoutUsesByAlias(layout)
 		for index, ref := range layout.Layouts {
-			key, known := resolve(layout, usesByAlias, ref)
+			key, known := resolve(layout, ref)
 			span := layoutRefSpan(layout, index)
 			if key == selfKey {
 				diagnostics = append(diagnostics, ValidationError{
@@ -198,15 +191,23 @@ func validateLayoutReferences(layouts []gwdkir.Layout) []ValidationError {
 				continue
 			}
 			if !known {
-				diagnostics = append(diagnostics, ValidationError{
-					Code:   "unknown_layout_id",
-					Source: layout.Source,
-					Span:   span,
-					Message: fmt.Sprintf(
-						"layout %s references parent layout %q, but no matching .layout.gwdk file declares it",
+				message := fmt.Sprintf(
+					"layout %s references parent layout %q, but no matching .layout.gwdk file declares it",
+					layoutDisplayName(layout.Package, layout.ID),
+					ref,
+				)
+				if strings.Contains(ref, ".") {
+					message = fmt.Sprintf(
+						"layout %s references qualified parent layout %q, but layout files do not support use aliases yet; parent layouts must be in the same GOWDK package",
 						layoutDisplayName(layout.Package, layout.ID),
 						ref,
-					),
+					)
+				}
+				diagnostics = append(diagnostics, ValidationError{
+					Code:    "unknown_layout_id",
+					Source:  layout.Source,
+					Span:    span,
+					Message: message,
 				})
 				continue
 			}
@@ -316,16 +317,6 @@ func countLayoutSlots(body string) int {
 		}
 	}
 	return count
-}
-
-func layoutUsesByAlias(layout gwdkir.Layout) map[string]gwdkir.Use {
-	usesByAlias := map[string]gwdkir.Use{}
-	for _, use := range layout.Uses {
-		if _, exists := usesByAlias[use.Alias]; !exists {
-			usesByAlias[use.Alias] = use
-		}
-	}
-	return usesByAlias
 }
 
 func layoutRefSpan(layout gwdkir.Layout, index int) source.SourceSpan {

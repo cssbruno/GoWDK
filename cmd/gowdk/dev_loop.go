@@ -16,6 +16,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
+	"github.com/cssbruno/gowdk/internal/view"
 )
 
 func buildDevChange(args []string, change inputChange, allowIncremental bool) (bool, error) {
@@ -37,6 +38,7 @@ func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 	if err != nil {
 		return true, err
 	}
+	timings := newBuildTimingRecorder(plan.Timings)
 	if plan.shouldBuildConfiguredTargets() {
 		return false, nil
 	}
@@ -67,7 +69,13 @@ func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 		paths = discovered
 	}
 
-	app, diagnostics := lang.ParseBuildFiles(paths)
+	timings.counter("incremental_input_changes", len(change.Changed))
+	var app gwdkanalysis.Sources
+	var diagnostics lang.Diagnostics
+	timings.measure("parse_lower", func() error {
+		app, diagnostics = lang.ParseBuildFiles(paths)
+		return nil
+	})
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
@@ -75,18 +83,32 @@ func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 		return true, fmt.Errorf("build failed")
 	}
 
-	pageSources, incremental := changedPageSources(app, change.Changed)
+	incrementalPlan, incremental := changedIncrementalSPAPages(app, change.Changed)
 	if !incremental {
 		return false, nil
 	}
-	ir := gwdkanalysis.BuildProgram(options.Config, app)
-	result, err := buildgen.BuildIncrementalFromIR(options.Config, ir, outputDir, pageSources)
-	if err != nil {
+	timings.counter("incremental_page_changes", incrementalPlan.PageChanges)
+	timings.counter("incremental_component_changes", incrementalPlan.ComponentChanges)
+	timings.counter("incremental_layout_changes", incrementalPlan.LayoutChanges)
+	timings.counter("incremental_affected_pages", len(incrementalPlan.PageSources))
+	var ir gwdkir.Program
+	timings.measure("ir_assembly", func() error {
+		ir = gwdkanalysis.BuildProgram(options.Config, app)
+		return nil
+	})
+	var result buildgen.Result
+	if err := timings.measure("output_plan_writes", func() error {
+		var buildErr error
+		result, buildErr = buildgen.BuildIncrementalFromIR(options.Config, ir, outputDir, incrementalPlan.PageSources)
+		return buildErr
+	}); err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)
 		return true, err
 	}
+	timings.counter("files_written", result.WriteStats.FilesWritten)
+	timings.counter("identical_writes_skipped", result.WriteStats.IdenticalWritesSkipped)
 	for _, artifact := range result.Artifacts {
-		if pageIDChanged(artifact.PageID, pageSources, app.Pages) {
+		if pageIDChanged(artifact.PageID, incrementalPlan.PageSources, app.Pages) {
 			fmt.Println(artifact.Path)
 		}
 	}
@@ -106,6 +128,9 @@ func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 		fmt.Println(result.BuildReportPath)
 	}
 	printBuildgenBuildReport(result.Report, options.Debug)
+	if _, err := timings.write(outputDir, plan.TimingsPath); err != nil {
+		return true, err
+	}
 	return true, nil
 }
 
@@ -134,28 +159,224 @@ func devConfigPath(configPath string) (string, bool) {
 	return filepath.Clean(abs), err == nil
 }
 
-func changedPageSources(app gwdkanalysis.Sources, changedPaths []string) ([]string, bool) {
-	pageSources := map[string]string{}
-	for _, page := range app.Pages {
-		abs, ok := cleanAbs(page.Source)
-		if ok {
-			pageSources[abs] = page.Source
-		}
-	}
+type incrementalSPAChangePlan struct {
+	PageSources      []string
+	PageChanges      int
+	ComponentChanges int
+	LayoutChanges    int
+}
 
-	var changedPages []string
+func changedIncrementalSPAPages(app gwdkanalysis.Sources, changedPaths []string) (incrementalSPAChangePlan, bool) {
+	index, ok := newIncrementalDependencyIndex(app)
+	if !ok {
+		return incrementalSPAChangePlan{}, false
+	}
+	affected := map[string]bool{}
+	plan := incrementalSPAChangePlan{}
 	for _, changedPath := range changedPaths {
 		abs, ok := cleanAbs(changedPath)
 		if !ok {
-			return nil, false
+			return incrementalSPAChangePlan{}, false
 		}
-		source, ok := pageSources[abs]
-		if !ok {
-			return nil, false
+		if source, ok := index.pagesBySource[abs]; ok {
+			affected[source] = true
+			plan.PageChanges++
+			continue
 		}
-		changedPages = append(changedPages, source)
+		if key, ok := index.componentsBySource[abs]; ok {
+			for _, source := range index.pagesByComponent[key] {
+				affected[source] = true
+			}
+			plan.ComponentChanges++
+			continue
+		}
+		if key, ok := index.layoutsBySource[abs]; ok {
+			for _, source := range index.pagesByLayout[key] {
+				affected[source] = true
+			}
+			plan.LayoutChanges++
+			continue
+		}
+		return incrementalSPAChangePlan{}, false
 	}
-	return changedPages, len(changedPages) > 0
+	plan.PageSources = sortedKeys(affected)
+	return plan, true
+}
+
+type incrementalDependencyIndex struct {
+	pagesBySource      map[string]string
+	componentsBySource map[string]string
+	layoutsBySource    map[string]string
+	pagesByComponent   map[string][]string
+	pagesByLayout      map[string][]string
+}
+
+func newIncrementalDependencyIndex(app gwdkanalysis.Sources) (incrementalDependencyIndex, bool) {
+	index := incrementalDependencyIndex{
+		pagesBySource:      map[string]string{},
+		componentsBySource: map[string]string{},
+		layoutsBySource:    map[string]string{},
+		pagesByComponent:   map[string][]string{},
+		pagesByLayout:      map[string][]string{},
+	}
+	componentsByKey := map[string]gwdkir.Component{}
+	for _, page := range app.Pages {
+		abs, ok := cleanAbs(page.Source)
+		if !ok {
+			return incrementalDependencyIndex{}, false
+		}
+		index.pagesBySource[abs] = page.Source
+	}
+	for _, component := range app.Components {
+		key := sourceComponentKey(component.Package, component.Name)
+		componentsByKey[key] = component
+		abs, ok := cleanAbs(component.Source)
+		if !ok {
+			return incrementalDependencyIndex{}, false
+		}
+		index.componentsBySource[abs] = key
+	}
+	layoutsByKey := map[string]gwdkir.Layout{}
+	for _, layout := range app.Layouts {
+		key := sourceLayoutKey(layout.Package, layout.ID)
+		layoutsByKey[key] = layout
+		abs, ok := cleanAbs(layout.Source)
+		if !ok {
+			return incrementalDependencyIndex{}, false
+		}
+		index.layoutsBySource[abs] = key
+	}
+	for _, page := range app.Pages {
+		for key := range pageComponentDependencies(page, componentsByKey) {
+			index.pagesByComponent[key] = append(index.pagesByComponent[key], page.Source)
+		}
+		for key := range pageLayoutDependencies(page, layoutsByKey) {
+			index.pagesByLayout[key] = append(index.pagesByLayout[key], page.Source)
+		}
+	}
+	sortDependencyIndex(index.pagesByComponent)
+	sortDependencyIndex(index.pagesByLayout)
+	return index, true
+}
+
+func pageComponentDependencies(page gwdkir.Page, components map[string]gwdkir.Component) map[string]bool {
+	seen := map[string]bool{}
+	refs, err := view.ComponentReferences(page.Blocks.ViewBody)
+	if err != nil {
+		return seen
+	}
+	for _, ref := range refs {
+		if component, ok := resolveComponentRef(page.Package, page.Uses, ref, components); ok {
+			collectComponentDependencies(component, components, seen)
+		}
+	}
+	return seen
+}
+
+func collectComponentDependencies(component gwdkir.Component, components map[string]gwdkir.Component, seen map[string]bool) {
+	key := sourceComponentKey(component.Package, component.Name)
+	if seen[key] {
+		return
+	}
+	seen[key] = true
+	refs, err := view.ComponentReferences(component.Blocks.ViewBody)
+	if err != nil {
+		return
+	}
+	for _, ref := range refs {
+		if child, ok := resolveComponentRef(component.Package, component.Uses, ref, components); ok {
+			collectComponentDependencies(child, components, seen)
+		}
+	}
+}
+
+func resolveComponentRef(ownerPackage string, uses []gwdkir.Use, ref string, components map[string]gwdkir.Component) (gwdkir.Component, bool) {
+	if alias, name, ok := strings.Cut(ref, "."); ok {
+		for _, use := range uses {
+			if use.Alias == alias {
+				component, exists := components[sourceComponentKey(use.Package, name)]
+				return component, exists
+			}
+		}
+		return gwdkir.Component{}, false
+	}
+	if ownerPackage != "" {
+		if component, ok := components[sourceComponentKey(ownerPackage, ref)]; ok {
+			return component, true
+		}
+	}
+	component, ok := components[sourceComponentKey("", ref)]
+	return component, ok
+}
+
+func pageLayoutDependencies(page gwdkir.Page, layouts map[string]gwdkir.Layout) map[string]bool {
+	seen := map[string]bool{}
+	for _, ref := range page.Layouts {
+		if layout, ok := resolvePageLayoutDependency(page.Package, page.Uses, ref, layouts); ok {
+			collectLayoutDependencies(layout, layouts, seen)
+		}
+	}
+	return seen
+}
+
+func collectLayoutDependencies(layout gwdkir.Layout, layouts map[string]gwdkir.Layout, seen map[string]bool) {
+	key := sourceLayoutKey(layout.Package, layout.ID)
+	if seen[key] {
+		return
+	}
+	seen[key] = true
+	for _, ref := range layout.Layouts {
+		if parent, ok := resolveLayoutDependency(layout.Package, layout.Uses, ref, layouts); ok {
+			collectLayoutDependencies(parent, layouts, seen)
+		}
+	}
+}
+
+func resolvePageLayoutDependency(ownerPackage string, uses []gwdkir.Use, ref string, layouts map[string]gwdkir.Layout) (gwdkir.Layout, bool) {
+	return resolveLayoutDependency(ownerPackage, uses, ref, layouts)
+}
+
+func resolveLayoutDependency(ownerPackage string, uses []gwdkir.Use, ref string, layouts map[string]gwdkir.Layout) (gwdkir.Layout, bool) {
+	if alias, id, ok := strings.Cut(ref, "."); ok {
+		for _, use := range uses {
+			if use.Alias == alias {
+				layout, exists := layouts[sourceLayoutKey(use.Package, id)]
+				return layout, exists
+			}
+		}
+		return gwdkir.Layout{}, false
+	}
+	if ownerPackage != "" {
+		if layout, ok := layouts[sourceLayoutKey(ownerPackage, ref)]; ok {
+			return layout, true
+		}
+	}
+	layout, ok := layouts[sourceLayoutKey("", ref)]
+	return layout, ok
+}
+
+func sourceComponentKey(packageName string, name string) string {
+	return packageName + "\x00" + name
+}
+
+func sourceLayoutKey(packageName string, id string) string {
+	return packageName + "\x00" + id
+}
+
+func sortedKeys(values map[string]bool) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortDependencyIndex(index map[string][]string) {
+	for key, values := range index {
+		sort.Strings(values)
+		index[key] = values
+	}
 }
 
 func pageIDChanged(pageID string, changedSources []string, pages []gwdkir.Page) bool {

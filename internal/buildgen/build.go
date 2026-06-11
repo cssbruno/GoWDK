@@ -442,16 +442,20 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	})
 	changedPageIDs := map[string]bool{}
 	for _, artifact := range css.assets {
-		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
+		wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
+		if err != nil {
 			return Result{}, reporter.fail("write", err)
 		}
+		recordWriteStat(&result, wrote)
 		reporter.debug("write", "css_written", "CSS artifact written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
 	}
 	for _, artifact := range runtime {
-		if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
+		wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
+		if err != nil {
 			return Result{}, reporter.fail("write", err)
 		}
+		recordWriteStat(&result, wrote)
 		reporter.debug("write", "asset_written", "runtime asset written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 	}
@@ -492,9 +496,11 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 			continue
 		}
 		for _, artifact := range pageArtifacts {
-			if err := writeFileIfChanged(artifact.Path, artifact.contents); err != nil {
+			wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
+			if err != nil {
 				return Result{}, reporter.fail("write", err)
 			}
+			recordWriteStat(&result, wrote)
 			reporter.debug("write", "page_written", "page artifact written", BuildEvent{
 				PageID: artifact.PageID,
 				Route:  artifact.Route,

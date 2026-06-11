@@ -23,19 +23,23 @@ attached to the terminal.
 
 ## Rebuild Scope
 
-For plain SPA `--out` builds, page-only edits use the incremental SPA renderer:
-the dev loop validates the full compiler IR, refreshes manifests, writes changed
-page output, and removes stale route output for changed pages.
+For plain SPA `--out` builds, page, component, and layout edits use the
+incremental SPA renderer when the changed files are already in the source set.
+The dev loop validates the full compiler IR, derives page/component/layout
+reverse dependencies, refreshes manifests, writes affected page output, and
+removes stale route output for changed pages.
 
 These changes use the full build path:
 
-- component files;
-- layout files;
 - CSS files;
 - config files;
 - source-set changes;
 - target changes;
 - generated app, binary, backend, or WASM output.
+
+When build flags include `--timings`, incremental rebuilds update the timings
+sidecar with counters for input changes, affected pages, component/layout/page
+changes, files written, and identical writes skipped.
 
 ## HMR
 

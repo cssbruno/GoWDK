@@ -46,6 +46,8 @@ Not implemented yet:
 - `browser-compiler.md`: browser-facing partial runtime, JavaScript islands, and
   component-level WASM island behavior.
 - `build-report.md`: generated build report schema and CLI debug output.
+- `incremental-cache-keys.md`: compiler cache-key model and implemented
+  incremental invalidation slice.
 - `manifest.md`: manifest and site-map JSON contracts.
 - `syntax-contributors.md`: checklist for parser, diagnostics, IR, generation,
   docs, and fixture coverage when syntax changes.

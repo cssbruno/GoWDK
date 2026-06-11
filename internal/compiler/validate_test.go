@@ -3621,6 +3621,31 @@ func TestValidateManifestRejectsInvalidContractReferenceRoutes(t *testing.T) {
 	}
 }
 
+func TestValidateManifestRejectsDefaultContractRouteOnDynamicPage(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "blog.show",
+			Route:   "/blog/{slug}",
+			Source:  "pages/blog-show.page.gwdk",
+			Blocks: gwdkir.Blocks{
+				Paths:    true,
+				View:     true,
+				ViewBody: `<form g:command="posts.CreateComment"></form>`,
+			},
+		}},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected invalid dynamic default contract route diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticMessage(diagnostics, "contract_route_invalid", "dynamic page route", "/blog/{slug}") {
+		t.Fatalf("Missing dynamic default contract_route_invalid diagnostic: %#v", diagnostics)
+	}
+}
+
 func TestValidateManifestRejectsDefaultQueryRouteWithDynamicParams(t *testing.T) {
 	app := appFixture{
 		Pages: []gwdkir.Page{{
@@ -3643,7 +3668,7 @@ func TestValidateManifestRejectsDefaultQueryRouteWithDynamicParams(t *testing.T)
 	if !hasDiagnosticCode(diagnostics, "contract_route_invalid") {
 		t.Fatalf("Missing contract_route_invalid diagnostic: %#v", diagnostics)
 	}
-	if !strings.Contains(diagnostics[0].Message, "without query, fragment, or params") {
+	if !strings.Contains(diagnostics[0].Message, "dynamic page route") {
 		t.Fatalf("unexpected diagnostic message: %s", diagnostics[0].Message)
 	}
 }
@@ -3817,6 +3842,29 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		diagnostics := err.(ValidationErrors)
 		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "POST", "/patients", "command contract patients.CreatePatient", "action patients.CreatePatient") {
 			t.Fatalf("Missing command/action route_method_conflict diagnostic: %#v", diagnostics)
+		}
+	})
+
+	t.Run("default command route conflicts with inherited action route", func(t *testing.T) {
+		app := appFixture{
+			Pages: []gwdkir.Page{{
+				ID:    "patients",
+				Route: "/patients",
+				Blocks: gwdkir.Blocks{
+					View:     true,
+					ViewBody: `<main><form g:command="patients.CreatePatient"></form></main>`,
+					Actions:  []gwdkir.Action{{Name: "Save"}},
+				},
+			}},
+		}
+
+		err := validateManifest(gowdk.Config{}, app)
+		if err == nil {
+			t.Fatal("expected default command/action route method conflict")
+		}
+		diagnostics := err.(ValidationErrors)
+		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "POST", "/patients", "command contract patients.CreatePatient", "action patients.Save") {
+			t.Fatalf("Missing default command/action route_method_conflict diagnostic: %#v", diagnostics)
 		}
 	})
 

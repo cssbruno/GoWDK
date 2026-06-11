@@ -34,6 +34,38 @@ func TestBuildProgramDerivesPageOwnedContractRoutes(t *testing.T) {
 	}
 }
 
+func TestBuildProgramRejectsDynamicPageOwnedDefaultContractRoutes(t *testing.T) {
+	program := BuildProgram(gowdk.Config{}, Sources{Pages: []gwdkir.Page{{
+		Package: "pages",
+		ID:      "blog.show",
+		Route:   "/blog/{slug}",
+		Blocks: gwdkir.Blocks{
+			Paths: true,
+			View:  true,
+			ViewBody: `<main>
+  <form g:command="posts.CreateComment"></form>
+  <section g:query="posts.GetComments"></section>
+</main>`,
+		},
+	}}})
+
+	refs := contractRefsByName(program.ContractRefs)
+	if ref := refs["posts.CreateComment"]; ref.Method != "POST" || ref.Path != "" {
+		t.Fatalf("dynamic default command method/path = %s %s, want POST with empty non-routable path", ref.Method, ref.Path)
+	}
+	if ref := refs["posts.GetComments"]; ref.Method != "" || ref.Path != "" {
+		t.Fatalf("dynamic default query method/path = %s %s, want empty non-routable metadata", ref.Method, ref.Path)
+	}
+	if len(program.Diagnostics) != 2 {
+		t.Fatalf("expected two dynamic default contract route diagnostics, got %#v", program.Diagnostics)
+	}
+	for _, diagnostic := range program.Diagnostics {
+		if diagnostic.Code != "contract_route_invalid" {
+			t.Fatalf("expected contract_route_invalid diagnostic, got %#v", diagnostic)
+		}
+	}
+}
+
 func TestBuildProgramKeepsComponentQueryNonRoutable(t *testing.T) {
 	program := BuildProgram(gowdk.Config{}, Sources{Components: []gwdkir.Component{{
 		Package: "components",

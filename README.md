@@ -9,17 +9,21 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/cssbruno/gowdk)](https://goreportcard.com/report/github.com/cssbruno/gowdk)
 [![Go Reference](https://pkg.go.dev/badge/github.com/cssbruno/gowdk.svg)](https://pkg.go.dev/github.com/cssbruno/gowdk)
 
-Write pages in `.gwdk`, ship one Go binary.
+GoWDK ships Go web apps through two coordinated layers: the **GOWDK
+Compiler** and the **GOWDK Runtime**.
 
-GoWDK compiles pages and components into static HTML and plain Go at build
-time. No template engine or reflection at request time — the generated
-`net/http` handlers, form decoders, and guards are code you can read, backed
-by a thin runtime library.
+The Compiler owns `.gwdk` — pages, components, layouts, routes — and turns
+them at build time into static HTML, assets, and plain Go adapters you can
+read: `net/http` routes, typed form decoders, guards. The Runtime owns
+request time: serving, actions, APIs, fragments, SSR, CSRF, and typed
+contracts (commands, queries, events, jobs). Together they ship as one Go
+binary. No reflection, no template engine at request time.
 
-- **Build-time first** — pages render at build time; request-time SSR is a
-  per-page opt-in.
-- **Type-checked against your Go** — `.gwdk` files live next to your packages
-  and bind to real functions and types.
+- **Build-time first** — full pages default to static output; request-time
+  SSR is a per-page opt-in.
+- **Your logic stays in Go** — `.gwdk` files live next to your packages and
+  bind to real functions and types; generated Go is adapter glue, not
+  application logic.
 - **Inspectable** — `gowdk inspect ir`, `gowdk explain <code>`, and
   `gowdk doctor` expose every compiler stage; unsupported source fails with a
   diagnostic instead of clever output.

@@ -9,6 +9,7 @@ GOWDK is a Go module. The root module path is `github.com/cssbruno/gowdk`.
 Keep top-level directories purposeful:
 
 - `docs/`: product and engineering documentation.
+- `.codex/skills/`: project-local Codex skills for recurring agent workflows.
 - `.llm/`: tool-neutral LLM workflows and reusable templates.
 - `.github/`: GitHub metadata, issue templates, and PR template.
 - `gowdk.go`: root public API for `github.com/cssbruno/gowdk`; keep this as

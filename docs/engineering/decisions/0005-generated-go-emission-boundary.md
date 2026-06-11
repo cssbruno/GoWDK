@@ -12,8 +12,8 @@ large raw string templates are a poor long-term implementation boundary for Go
 developers. They are hard to refactor, easy to break syntactically, and do not
 feel like ordinary Go code.
 
-The implementation plan for this boundary lives in
-`.llm/plans/go-native-adapter-boundary.md`.
+Current generated output behavior is tracked in
+`docs/compiler/generated-output.md` and `docs/engineering/architecture.md`.
 
 ## Decision
 

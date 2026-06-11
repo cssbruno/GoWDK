@@ -39,6 +39,9 @@ If a file still contains placeholders, treat that as unknown project context. Ma
 
 ## Planning Standard
 
+For recurring agent workflows, prefer the project-local skills under
+`.codex/skills/` over adding one-off feature or plan markdown files.
+
 For new features or large changes:
 
 1. Write or update a feature spec using `.llm/templates/feature-spec.md`.

@@ -168,9 +168,7 @@ domain logic, handlers, stores, auth, validation policy, or storage code.
 
 ## Follow-Up
 
-- Treat `.llm/features/deep-go-package-integration.md` as the language-facing
-  package integration source of truth.
-- Treat `.llm/plans/go-native-adapter-boundary.md` as the generated adapter and
-  runtime implementation source of truth.
-- Keep `.llm/plans/gowdk-world-roadmap.md` as the active planning index.
+- Keep `docs/product/roadmap.md` as the active product direction.
+- Keep `docs/engineering/architecture.md` as the implementation boundary
+  source of truth.
 - Keep server fragments in runtime responses, not old action body syntax.

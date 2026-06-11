@@ -299,14 +299,27 @@ var Config = gowdk.Config{
 	}
 }
 
-func TestLoadConfigFileIgnoresNonLiteralValues(t *testing.T) {
+func TestLoadConfigFileFallsBackForNonLiteralValues(t *testing.T) {
 	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+`)
 	path := filepath.Join(root, DefaultConfigFile)
-	if err := os.WriteFile(path, []byte(`package app
+	writeTestFile(t, path, `package app
 
 import "github.com/cssbruno/gowdk"
 
 var includes = []string{"src/**/*.gwdk"}
+
+func outputDir() string {
+	return "dist/site"
+}
 
 var Config = gowdk.Config{
 	Source: gowdk.SourceConfig{
@@ -316,19 +329,18 @@ var Config = gowdk.Config{
 		Output: outputDir(),
 	},
 }
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+`)
+	tidyTestModule(t, root)
 
 	config, err := LoadConfigFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Source.Include) != 0 {
-		t.Fatalf("expected non-literal includes to be ignored, got %#v", config.Source.Include)
+	if len(config.Source.Include) != 1 || config.Source.Include[0] != "src/**/*.gwdk" {
+		t.Fatalf("expected executable config to load includes, got %#v", config.Source.Include)
 	}
-	if config.Build.Output != "" {
-		t.Fatalf("expected non-literal output to be ignored, got %q", config.Build.Output)
+	if config.Build.Output != "dist/site" {
+		t.Fatalf("expected executable config to load output, got %q", config.Build.Output)
 	}
 }
 

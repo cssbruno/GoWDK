@@ -1,6 +1,7 @@
 package gwdkanalysis
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
@@ -11,6 +12,12 @@ import (
 func appendContractReferences(program *gwdkir.Program, template gwdkir.Template) {
 	refs, err := view.ContractReferences(template.Body)
 	if err != nil {
+		program.Diagnostics = append(program.Diagnostics, gwdkir.Diagnostic{
+			Code:    "contract_reference_parse_error",
+			Source:  template.Source,
+			Span:    template.Span,
+			Message: fmt.Sprintf("parse contract references in %s %s view: %v", template.OwnerKind, template.OwnerID, err),
+		})
 		return
 	}
 	for _, ref := range refs {

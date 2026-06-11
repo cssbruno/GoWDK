@@ -3377,6 +3377,30 @@ func TestValidateManifestRejectsUnknownLayoutParent(t *testing.T) {
 	}
 }
 
+func TestValidateManifestReportsContractReferenceParseErrors(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Source:  "pages/home.page.gwdk",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<form g:command="CreatePatient"></form>`,
+			},
+		}},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected contract reference parse diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "contract_reference_parse_error") {
+		t.Fatalf("Missing contract_reference_parse_error diagnostic: %#v", diagnostics)
+	}
+}
+
 func TestValidateManifestRejectsLayoutWithoutSlot(t *testing.T) {
 	app := appFixture{
 		Layouts: []gwdkir.Layout{

@@ -53,7 +53,11 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
-	return document(config, page, body, stylesheets, storeSeeds, pageScripts(config, page, viewSource, pageComponents, policy)), nil
+	scripts, err := pageScripts(config, page, viewSource, pageComponents, policy)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", page.ID, err)
+	}
+	return document(config, page, body, stylesheets, storeSeeds, scripts), nil
 }
 
 func composePageViewSource(page gwdkir.Page, layouts map[string]gwdkir.Layout) (string, error) {
@@ -186,27 +190,35 @@ func actionRoutes(page gwdkir.Page, data map[string]string) map[string]string {
 	return routes
 }
 
-func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) []gowdk.Script {
+func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) ([]gowdk.Script, error) {
 	scripts := append([]gowdk.Script{}, nonEmptyScripts(config.Build.Scripts)...)
 	for _, href := range scopedScriptHrefs(page, viewSource, components) {
 		scripts = append(scripts, gowdk.Script{Src: href, Type: "module"})
 	}
 	if policy != renderModeSPA {
-		return scripts
+		return scripts, nil
 	}
-	if pageUsesPartialRuntime(page, viewSource) || pageUsesSPANavigationRuntime(config, page, viewSource, components) {
+	usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewSource, components)
+	if err != nil {
+		return nil, err
+	}
+	if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation {
 		scripts = append(scripts, gowdk.Script{Src: clientRuntimeHref})
 	}
 	if len(page.Stores) > 0 {
 		scripts = append(scripts, gowdk.Script{Src: storeRuntimeHref})
 	}
-	for _, href := range islandScriptHrefs(viewSource, components, page.Package, componentUses(page.Uses)) {
+	islandScripts, err := islandScriptHrefs(viewSource, components, page.Package, componentUses(page.Uses))
+	if err != nil {
+		return nil, err
+	}
+	for _, href := range islandScripts {
 		scripts = append(scripts, gowdk.Script{Src: href})
 	}
 	for _, href := range clientGoBlockHrefs(page) {
 		scripts = append(scripts, gowdk.Script{Src: href})
 	}
-	return scripts
+	return scripts, nil
 }
 
 func pageUsesPartialRuntime(page gwdkir.Page, viewSource string) bool {
@@ -216,24 +228,24 @@ func pageUsesPartialRuntime(page gwdkir.Page, viewSource string) bool {
 	return len(page.Blocks.Actions) > 0
 }
 
-func pageUsesSPANavigationRuntime(config gowdk.Config, page gwdkir.Page, viewSource string, components map[string]view.Component) bool {
+func pageUsesSPANavigationRuntime(config gowdk.Config, page gwdkir.Page, viewSource string, components map[string]view.Component) (bool, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if mode != gowdk.SPA && mode != gowdk.Action {
-		return false
+		return false, nil
 	}
 	if viewSourceHasInternalLink(viewSource) {
-		return true
+		return true, nil
 	}
 	usages, err := recursiveViewComponentCallUsages(viewSource, components, page.Package, componentUses(page.Uses))
 	if err != nil {
-		return false
+		return false, err
 	}
 	for _, usage := range usages {
 		if viewSourceHasInternalLink(usage.component.Body) {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 func viewSourceHasInternalLink(source string) bool {

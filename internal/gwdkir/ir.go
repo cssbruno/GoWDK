@@ -23,7 +23,16 @@ type Program struct {
 	ContractRefs    []ContractReference
 	ClientBehaviors []ClientBehavior
 	Assets          []Asset
+	Diagnostics     []Diagnostic
 	Generated       GeneratedOutput
+}
+
+// Diagnostic records an author-facing problem found while assembling IR.
+type Diagnostic struct {
+	Code    string
+	Source  string
+	Span    source.SourceSpan
+	Message string
 }
 
 // Package groups analyzed GOWDK source files by declared package.

@@ -52,6 +52,9 @@ jobs:
           go run ./cmd/gowdk manifest --ssr $examples
           go run ./cmd/gowdk sitemap --ssr $examples
           go run ./cmd/gowdk routes --ssr $examples
+          go run ./cmd/gowdk endpoints --ssr $examples
+          go run ./cmd/gowdk inspect tree --json --ssr $examples
+          go run ./cmd/gowdk inspect endpoint-graph --json --ssr $examples
           (
             set -euxo pipefail
             cd examples/login

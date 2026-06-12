@@ -11,7 +11,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/ssr"
 )
 
-const version = "0.2.8"
+const version = "0.3.0"
 
 var (
 	defaultSourceIncludes = []string{"**/*.gwdk"}

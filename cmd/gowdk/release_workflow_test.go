@@ -58,6 +58,9 @@ func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 		"draft: false",
 		"prerelease: true",
 		"Verify release assets",
+		"gowdk endpoints",
+		"inspect tree",
+		"inspect endpoint-graph",
 	} {
 		if !strings.Contains(releaseText, expected) {
 			t.Fatalf("expected %q in release.yml:\n%s", expected, releaseText)

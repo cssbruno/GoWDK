@@ -6,14 +6,14 @@ pre-releases with downloadable assets from `v*` tags or a manual workflow
 dispatch. VS Code Marketplace publishing lives in
 `.github/workflows/vscode-extension-publish.yml`.
 
-The current CLI version is `0.2.8`, but this is not a production-readiness
+The current CLI version is `0.3.0`, but this is not a production-readiness
 claim. It identifies the current development line while the compiler, generated
 runtime, and docs continue through the 0.x line. Public release notes must
 call the build experimental until the release gates below are satisfied.
 
 Use `docs/engineering/v0.2-release-checklist.md` for the current Public Truth
 and Release Trust checklist.
-Use `docs/engineering/release-notes-v0.2.md` as the draft v0.2 release notes.
+Use `docs/engineering/release-notes-v0.3.md` as the draft v0.3 release notes.
 Use `docs/engineering/release-plan.md` for the open-ended 0.x hardening
 checklist. It does not make any minor version a production-readiness target.
 Use `.github/release-note-template.md` for future 0.x release bodies.
@@ -77,6 +77,9 @@ go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk exa
 go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
 go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
 go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk endpoints --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk inspect tree --json --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk inspect endpoint-graph --json --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
 go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk
 go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk
 ```
@@ -85,14 +88,14 @@ After those gates pass on the release commit, run the release workflow manually
 for the current CLI line or push the corresponding tag:
 
 ```sh
-gh workflow run release.yml -f version=v0.2.8
+gh workflow run release.yml -f version=v0.3.0
 ```
 
 After the release workflow completes, smoke the published artifacts for each
 supported OS artifact:
 
 ```sh
-gh workflow run release-smoke.yml -f version=v0.2.8
+gh workflow run release-smoke.yml -f version=v0.3.0
 ```
 
 ## Artifacts
@@ -103,7 +106,7 @@ gh workflow run release-smoke.yml -f version=v0.2.8
 - `gowdk-darwin-arm64`
 - `gowdk-windows-amd64.exe`
 - `checksums.txt`
-- `gowdk-vscode-0.2.8.vsix`
+- `gowdk-vscode-0.3.0.vsix`
 
 ## Install Script
 
@@ -117,7 +120,7 @@ binary SHA-256, and writes `gowdk` into `GOWDK_INSTALL_DIR` or
 Pinned install:
 
 ```sh
-GOWDK_VERSION=v0.2.8 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+GOWDK_VERSION=v0.3.0 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
 ```
 
@@ -138,7 +141,7 @@ gh attestation verify <artifact> -R <owner>/<repo>
 ## Extension Publishing
 
 The release workflow packages the extension into a `.vsix` named from
-`editors/vscode/package.json`, currently `gowdk-vscode-0.2.8.vsix`.
+`editors/vscode/package.json`, currently `gowdk-vscode-0.3.0.vsix`.
 Marketplace publishing is handled by the `Publish VS Code Extension` workflow.
 It is manual-only so CLI/runtime releases do not accidentally republish an
 extension version that already exists on the Marketplace.

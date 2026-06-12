@@ -9,7 +9,7 @@ description: Bump the GOWDK release version. Use when updating the CLI version, 
 
 - Source of truth: `const version = "0.x.y"` near the top of
   `cmd/gowdk/main.go` (no `v` prefix). GitHub tags and install snippets use
-  `v0.x.y`. Current line: `const version = "0.2.8"`.
+  `v0.x.y`. Current line: `const version = "0.3.0"`.
 - `editors/vscode/package.json` must match the CLI constant exactly;
   `editors/vscode/scripts/sync-version.js` reads the constant from
   `cmd/gowdk/main.go` and writes/checks `package.json`. Never edit the
@@ -43,7 +43,7 @@ node editors/vscode/scripts/sync-version.js --check
    skill file):
 
 ```bash
-grep -rn "0\.2\.8\|v0\.2\.8" README.md docs/ cmd/ editors/vscode/package.json .agents/
+grep -rn "0\.3\.0\|v0\.3\.0" README.md docs/ cmd/ editors/vscode/package.json .agents/
 ```
 
    Leave historical records (old CHANGELOG entries, dated release notes,

@@ -24,11 +24,15 @@ import (
 //   - the Go-typed contracts (Stores, PropsType, State), whose pkg.Type and
 //     pkg.NewFn() references are parsed by go/parser per ADR 0010's split —
 //     custom grammar for .gwdk, the real Go parser for embedded Go — then
-//     constrained to the shapes the line parser accepts.
+//     constrained to the shapes the line parser accepts;
+//   - the exact act/api endpoint declarations (Actions, APIs), with the line
+//     parser's post-match validation (exported handler name, allowed method,
+//     resolvable error page).
 //
 // Metadata that needs validation to reach a typed field (route, revalidate,
-// error, layout, guard, css, asset), block bodies, view markup, and endpoints
-// remain on the line-oriented parser until later phases.
+// error, layout, guard, css, asset), block bodies, view markup, and the
+// block-bodied fragment endpoint remain on the line-oriented parser until later
+// phases.
 type TopLevel struct {
 	Package   *gwdkast.Package
 	Imports   []gwdkast.Import
@@ -41,6 +45,8 @@ type TopLevel struct {
 	PropsType *gwdkast.GoTypeRef
 	State     *gwdkast.StateContract
 	WASM      *gwdkast.WASMContract
+	Actions   []gwdkast.Endpoint
+	APIs      []gwdkast.Endpoint
 }
 
 // ParseTopLevel parses the package, import, and use declarations of .gwdk source
@@ -100,6 +106,14 @@ func ParseTopLevel(src string) TopLevel {
 			case "state":
 				if state, ok := parseStateTokens(src, line, tokens[lineEnd]); ok {
 					result.State = &state
+				}
+			case "act":
+				if endpoint, ok := parseEndpointTokens("act", line); ok {
+					result.Actions = append(result.Actions, endpoint)
+				}
+			case "api":
+				if endpoint, ok := parseEndpointTokens("api", line); ok {
+					result.APIs = append(result.APIs, endpoint)
 				}
 			}
 		case first.Kind == TokenMetadata:
@@ -331,6 +345,93 @@ func parseUseTokens(line []Token) (gwdkast.Use, bool) {
 		return gwdkast.Use{}, false
 	}
 	return gwdkast.Use{Alias: line[1].Lexeme, Package: pkg, Span: spanOf(line[0], line[len(line)-1])}, true
+}
+
+// parseEndpointTokens recovers an exact endpoint declaration:
+//
+//	act <Name> POST "<route>" [error "<page>"]
+//	api <Name> <METHOD> "<route>" [error "<page>"]
+//
+// matching parseActionEndpointLine / parseAPIEndpointLine plus the validation the
+// line parser applies after the pattern: the handler name must be an exported Go
+// identifier, the method must be an uppercase token (POST for actions; one of the
+// REST verbs for APIs), and an optional error page must resolve. Lines that fail
+// any check are skipped so recovery never emits an endpoint the line parser would
+// reject.
+func parseEndpointTokens(kind string, line []Token) (gwdkast.Endpoint, bool) {
+	if len(line) != 4 && len(line) != 6 {
+		return gwdkast.Endpoint{}, false
+	}
+	name := line[1]
+	if name.Kind != TokenIdentifier || !isExportedIdent(name.Lexeme) {
+		return gwdkast.Endpoint{}, false
+	}
+	method := line[2]
+	if method.Kind != TokenIdentifier || !isUpperMethod(method.Lexeme) || !methodAllowed(kind, method.Lexeme) {
+		return gwdkast.Endpoint{}, false
+	}
+	if line[3].Kind != TokenString {
+		return gwdkast.Endpoint{}, false
+	}
+	span := spanOf(line[0], line[len(line)-1])
+	endpoint := gwdkast.Endpoint{
+		Kind:   kind,
+		Name:   name.Lexeme,
+		Method: method.Lexeme,
+		Route:  unquote(line[3].Lexeme),
+		Span:   span,
+	}
+	if len(line) == 6 {
+		if line[4].Kind != TokenIdentifier || line[4].Lexeme != "error" || line[5].Kind != TokenString {
+			return gwdkast.Endpoint{}, false
+		}
+		errorPage, err := source.ErrorPagePath(unquote(line[5].Lexeme))
+		if err != nil {
+			return gwdkast.Endpoint{}, false
+		}
+		endpoint.ErrorPage = errorPage
+		endpoint.ErrorPageSpan = span
+	}
+	return endpoint, true
+}
+
+// isExportedIdent reports whether value is a strict identifier whose first rune
+// is an ASCII capital, matching the line parser's isExportedIdentifier.
+func isExportedIdent(value string) bool {
+	if !isStrictIdent(value) {
+		return false
+	}
+	first := []rune(value)[0]
+	return first >= 'A' && first <= 'Z'
+}
+
+// isUpperMethod reports whether value is a non-empty run of ASCII capitals,
+// matching the line parser's method() rule.
+func isUpperMethod(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return true
+}
+
+// methodAllowed enforces the per-kind method constraint: actions require POST;
+// APIs accept the REST verb set.
+func methodAllowed(kind, method string) bool {
+	switch kind {
+	case "act":
+		return method == "POST"
+	case "api":
+		switch method {
+		case "GET", "POST", "PUT", "PATCH", "DELETE":
+			return true
+		}
+	}
+	return false
 }
 
 // isStrictIdent mirrors the line parser's identifier rule: a leading letter or

@@ -181,7 +181,7 @@ func ssrLoadErrorStmts() []ast.Stmt {
 				returnBool(true),
 			),
 		},
-		exprStmt(call(sel("gowdkruntime", "WriteErrorPage"), id("response"), id("request"), sel("http", "StatusInternalServerError"), call(selExpr(id("err"), "Error")))),
+		exprStmt(call(sel("gowdkruntime", "WriteErrorPage"), id("response"), id("request"), sel("http", "StatusInternalServerError"), handlerErrorMessageExpr(id("err"), sel("http", "StatusInternalServerError")))),
 		returnBool(true),
 	}
 }

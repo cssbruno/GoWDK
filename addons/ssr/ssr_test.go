@@ -108,13 +108,19 @@ func TestErrorHandlerContract(t *testing.T) {
 
 func TestDefaultErrorHandlerWritesHTTP500(t *testing.T) {
 	response := httptest.NewRecorder()
-	DefaultErrorHandler(response, httptest.NewRequest(http.MethodGet, "/dashboard", nil), errors.New("load failed"))
+	DefaultErrorHandler(response, httptest.NewRequest(http.MethodGet, "/dashboard", nil), errors.New("load failed password=secret"))
 
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", response.Code)
 	}
-	if !strings.Contains(response.Body.String(), "GOWDK SSR error: load failed") {
+	if !strings.Contains(response.Body.String(), "GOWDK SSR error") {
 		t.Fatalf("unexpected error response body: %q", response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "load failed") || strings.Contains(response.Body.String(), "secret") {
+		t.Fatalf("internal error leaked in response body: %q", response.Body.String())
+	}
+	if cache := response.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store error response, got %q", cache)
 	}
 }
 

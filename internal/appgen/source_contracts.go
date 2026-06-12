@@ -59,7 +59,7 @@ func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool,
 		&ast.IfStmt{
 			Cond: notNil("err"),
 			Body: block(
-				writeNoStoreErrorExprStmt(sel("http", "StatusInternalServerError"), call(selExpr(id("err"), "Error"))),
+				writeNoStoreHandlerErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
 				returnBool(true),
 			),
 		},
@@ -81,7 +81,7 @@ func executableCommandContractStmts(exposure BackendContractExposure) []ast.Stmt
 		&ast.IfStmt{
 			Cond: notNil("err"),
 			Body: block(
-				writeNoStoreErrorExprStmt(call(sel("gowdkresponse", "HandlerStatus"), id("err"), sel("http", "StatusInternalServerError")), call(selExpr(id("err"), "Error"))),
+				writeNoStoreHandlerErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
 				returnBool(true),
 			),
 		},
@@ -89,7 +89,7 @@ func executableCommandContractStmts(exposure BackendContractExposure) []ast.Stmt
 			Init: define([]ast.Expr{id("dispatchErr")}, call(sel("gowdkcontracts", "DispatchCommandEvents"), id("ctx"), call(id("currentContractEventSink")), id("contractRegistry"), sel("gowdkcontracts", "RoleWeb"), id("events"))),
 			Cond: notNil("dispatchErr"),
 			Body: block(
-				writeNoStoreErrorExprStmt(call(sel("gowdkresponse", "HandlerStatus"), id("dispatchErr"), sel("http", "StatusInternalServerError")), call(selExpr(id("dispatchErr"), "Error"))),
+				writeNoStoreHandlerErrorExprStmt(id("dispatchErr"), sel("http", "StatusInternalServerError")),
 				returnBool(true),
 			),
 		},
@@ -108,7 +108,7 @@ func executableQueryContractStmts(exposure BackendContractExposure) []ast.Stmt {
 		&ast.IfStmt{
 			Cond: notNil("err"),
 			Body: block(
-				writeNoStoreErrorExprStmt(call(sel("gowdkresponse", "HandlerStatus"), id("err"), sel("http", "StatusInternalServerError")), call(selExpr(id("err"), "Error"))),
+				writeNoStoreHandlerErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
 				returnBool(true),
 			),
 		},

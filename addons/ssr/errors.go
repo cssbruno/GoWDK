@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/cssbruno/gowdk/runtime/response"
 )
 
 // ErrorHandler renders request-time SSR failures.
@@ -14,10 +16,10 @@ type ErrorHandler func(http.ResponseWriter, *http.Request, error)
 func DefaultErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
 	_ = r
 	message := "GOWDK SSR error"
-	if err != nil {
-		message = "GOWDK SSR error: " + err.Error()
+	if safe := response.HandlerErrorMessage(err, http.StatusInternalServerError); safe != http.StatusText(http.StatusInternalServerError) {
+		message = safe
 	}
-	http.Error(w, message, http.StatusInternalServerError)
+	response.WriteNoStoreError(w, http.StatusInternalServerError, message)
 }
 
 // RedirectError asks generated SSR handlers to issue a safe local redirect.

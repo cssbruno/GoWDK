@@ -278,7 +278,7 @@ func prepareActionValues(writer http.ResponseWriter, request *http.Request) (con
 
 func writeBackendResult(writer http.ResponseWriter, result response.Response, err error) {
 	if err != nil {
-		response.WriteNoStoreError(writer, response.HandlerStatus(err, http.StatusInternalServerError), err.Error())
+		response.WriteNoStoreHandlerError(writer, err, http.StatusInternalServerError)
 		return
 	}
 	_ = response.WriteNoStoreHTTP(writer, result)

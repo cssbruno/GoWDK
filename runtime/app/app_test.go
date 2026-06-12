@@ -707,6 +707,64 @@ func TestBackendRouterDispatchesNormalizedRoutes(t *testing.T) {
 	}
 }
 
+func TestBackendRouterHidesOrdinaryHandlerErrorDetails(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Method: http.MethodGet,
+		Path:   "/api/session",
+		Handler: APIHandler(func(context.Context, *http.Request) (response.Response, error) {
+			return response.Response{}, errors.New("sql: password=secret dsn=postgres://root:secret@db/app")
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/session", nil)
+
+	if !router.Dispatch(recorder, request) {
+		t.Fatal("expected route to dispatch")
+	}
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, http.StatusText(http.StatusInternalServerError)) {
+		t.Fatalf("expected generic error body, got %q", body)
+	}
+	if strings.Contains(body, "secret") || strings.Contains(body, "postgres") || strings.Contains(body, "sql:") {
+		t.Fatalf("internal detail leaked in response: %q", body)
+	}
+}
+
+func TestBackendRouterUsesExplicitHandlerErrorMessage(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Method: http.MethodGet,
+		Path:   "/api/session",
+		Handler: APIHandler(func(context.Context, *http.Request) (response.Response, error) {
+			return response.Response{}, response.NewHandlerError(http.StatusServiceUnavailable, "session service unavailable", errors.New("dial tcp password=secret"))
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/session", nil)
+
+	if !router.Dispatch(recorder, request) {
+		t.Fatal("expected route to dispatch")
+	}
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "session service unavailable") {
+		t.Fatalf("expected explicit handler message, got %q", body)
+	}
+	if strings.Contains(body, "secret") || strings.Contains(body, "dial tcp") {
+		t.Fatalf("internal detail leaked in response: %q", body)
+	}
+}
+
 func TestBackendRouterRejectsDuplicateRoutes(t *testing.T) {
 	handler := NotImplemented("missing")
 	_, err := NewBackendRouter(

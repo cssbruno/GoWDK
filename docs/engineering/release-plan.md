@@ -403,47 +403,63 @@ Every 0.x minor release must have:
 
 ## Endpoint Adapters, Actions, APIs, And Fragments
 
-- [ ] Normalize actions, APIs, fragments, SSR loads, commands, and queries into
-  one endpoint/contract metadata model where appropriate.
+- [x] Normalize actions, APIs, fragments, SSR loads, commands, and queries into
+  one endpoint/contract metadata model for the current report and adapter IR
+  surface.
 - [x] Include source file, source span, kind, package path, package name, symbol,
   method, path, signature kind, input type, guards, CSRF policy, cache policy,
   and binding status in the current endpoint report.
 - [ ] Add endpoint report output type and rate limit policy once the adapter IR
-  carries stable metadata for both.
-- [ ] Add strict binding mode for production-shaped builds.
-- [ ] Allow 501 stubs only behind an explicit flag.
-- [ ] Add loud dev/migration compatibility mode only if needed.
+  carries stable metadata for both. Deferred to
+  [#57](https://github.com/cssbruno/GoWDK/issues/57).
+- [x] Add strict binding mode for production-shaped builds. See
+  [#83](https://github.com/cssbruno/GoWDK/issues/83).
+- [x] Allow 501 stubs only behind an explicit flag. See
+  [#87](https://github.com/cssbruno/GoWDK/issues/87).
+- [x] Keep development/default builds compatible and make production migration
+  stubs explicit through `Build.AllowMissingBackend` /
+  `--allow-missing-backend`.
 - [x] Add endpoint conflict diagnostics and a versioned endpoint report command.
 - [x] Emit OpenAPI and AsyncAPI inspection artifacts from `gowdk build` for the
   routable web surface and integration-event contract surface.
 - [x] Add endpoint graph output. See
   [#319](https://github.com/cssbruno/GoWDK/issues/319).
-- [ ] Generate adapters from typed IR with deterministic imports, route
-  registration, request decoding, and response writing.
-- [ ] Test generated adapters for success, validation error, missing handler,
+- [x] Generate adapters from typed IR with deterministic imports, route
+  registration, request decoding, and response writing for the current
+  action/API/fragment/SSR/contract surface. See
+  [#86](https://github.com/cssbruno/GoWDK/issues/86).
+- [x] Test generated adapters for success, validation error, missing handler,
   unsupported handler, redirect, guard failure, CSRF failure, panic, no-store
   response, and method not allowed.
-- [ ] Fully document action syntax, methods, form encoding, JSON support,
+- [x] Fully document action syntax, methods, form encoding, JSON support,
   direct file input rejection, multipart rejection, user-owned uploads, typed
   input decoding, scalar decoding, unknown field policy, missing/repeated field
   policy, checkbox/radio/select policy, submit intent, request-shape
   validation, domain validation handoff, validation error shape, partial
   validation fragments, redirects, reload outcomes, CSRF token placement,
   invalid CSRF response, and body limits.
-- [ ] Add action examples for contact, newsletter, login, settings, validation
-  fragments, redirects, and partial fragment responses.
-- [ ] Document supported API signatures, context/request support, typed route
-  params, typed query params, typed JSON bodies, typed responses,
-  `response.Response`, optional `(T, error)` support, error-to-status mapping,
-  content type, method not allowed, unsupported methods, and CORS.
-- [ ] Add API examples for status, session, search, JSON CRUD, and webhooks with
-  user-owned validation.
-- [ ] Document fragments, standalone fragment routes, action-returned
+- [ ] Add broader action examples for contact, settings, validation fragments,
+  redirects, and partial fragment responses beyond the current
+  newsletter/signup/login slices. Deferred to
+  [#337](https://github.com/cssbruno/GoWDK/issues/337).
+- [ ] Document broader API helpers for typed route params, typed query params,
+  typed JSON bodies, typed responses, `(T, error)` support, content type,
+  method-not-allowed behavior, CORS, and richer examples. Deferred to
+  [#24](https://github.com/cssbruno/GoWDK/issues/24).
+- [x] Document supported API signatures, context/request support,
+  `response.Response`, generated error handling, guards, no-store responses,
+  missing/unsupported handler behavior, and unsupported methods for the current
+  first slice.
+- [ ] Add broader API examples for session, search, JSON CRUD, and webhooks with
+  user-owned validation. Deferred to
+  [#337](https://github.com/cssbruno/GoWDK/issues/337).
+- [x] Document fragments, standalone fragment routes, action-returned
   fragments, validation fragments, `g:target`, `g:swap`, swap modes, partial
   request headers, no-JS fallback, errors, focus restoration, island remounts,
   and no-store behavior.
 - [ ] Add fragment examples for inline validation, table row update, list
-  refresh, modal body update, and dashboard card refresh.
+  refresh, modal body update, and dashboard card refresh. Deferred to
+  [#337](https://github.com/cssbruno/GoWDK/issues/337).
 
 ## SSR, Hybrid, Cache, Guards, And Auth Hooks
 

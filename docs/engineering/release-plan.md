@@ -371,6 +371,9 @@ Every 0.x minor release must have:
   Route records include source spans, route params, guards, layouts, cache, and
   planned handlers. Generated output paths remain in `gowdk-routes.json`
   because dynamic SPA routes can expand to multiple files.
+- [x] Add a source-linked inspect tree for current package, page, component,
+  layout, route, endpoint, contract-reference, and view markup nodes. See
+  [#317](https://github.com/cssbruno/GoWDK/issues/317).
 - [x] Add current direct refresh, 404, encoded param, static SPA, dynamic SPA
   `paths`, SSR, hybrid, API, action, fragment, and trailing-slash tests.
   Remaining path-traversal and expanded matrix coverage is deferred to #237.
@@ -408,7 +411,7 @@ Every 0.x minor release must have:
 - [x] Add endpoint conflict diagnostics and a versioned endpoint report command.
 - [x] Emit OpenAPI and AsyncAPI inspection artifacts from `gowdk build` for the
   routable web surface and integration-event contract surface.
-- [ ] Add endpoint graph output. See
+- [x] Add endpoint graph output. See
   [#319](https://github.com/cssbruno/GoWDK/issues/319).
 - [ ] Generate adapters from typed IR with deterministic imports, route
   registration, request decoding, and response writing.
@@ -542,9 +545,8 @@ Every 0.x minor release must have:
 
 - [x] Add `gowdk doctor`.
 - [ ] Add `gowdk explain <diagnostic-code>`.
-- [ ] Add `gowdk inspect ir`, `gowdk inspect endpoints`, `gowdk inspect assets`,
-  `gowdk inspect go-bindings`, `gowdk inspect generated`, and
-  `gowdk inspect deps`.
+- [ ] Add `gowdk inspect` targets. `ir`, `tree`, and `endpoint-graph` are
+  implemented; `assets`, `go-bindings`, `generated`, and `deps` remain planned.
 - [ ] Add `gowdk generate stubs`.
 - [ ] Add `gowdk clean`, `gowdk env`, `gowdk version --json`, and
   `gowdk benchmark`.

@@ -14,6 +14,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/appgen"
 	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/contractscan"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
@@ -180,10 +181,14 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	if report.HasErrors() {
 		return fmt.Errorf("build failed")
 	}
+	var contractReport contractscan.Report
 	if err := timings.measure("contract_validation", func() error {
-		if err := linkIRContractReferences(&ir, options.ProjectRoot); err != nil {
+		scanned, err := scanContractReport(options.ProjectRoot)
+		if err != nil {
 			return err
 		}
+		contractReport = scanned
+		linkIRContractReferencesFromReport(&ir, contractReport)
 		return compiler.ValidateContractReferences(ir.ContractRefs)
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -218,6 +223,20 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	}
 	if result.AssetManifestPath != "" {
 		fmt.Println(result.AssetManifestPath)
+	}
+	if result.OpenAPIPath != "" {
+		fmt.Println(result.OpenAPIPath)
+	}
+	var asyncAPIPath string
+	if err := timings.measure("asyncapi_report", func() error {
+		var writeErr error
+		asyncAPIPath, writeErr = contractscan.WriteAsyncAPI(outputDir, contractReport, contractscan.AsyncAPIOptions{})
+		return writeErr
+	}); err != nil {
+		return err
+	}
+	if asyncAPIPath != "" {
+		fmt.Println(asyncAPIPath)
 	}
 	if result.BuildReportPath != "" {
 		fmt.Println(result.BuildReportPath)

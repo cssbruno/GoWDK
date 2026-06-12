@@ -42,12 +42,20 @@ type RouteMetadata struct {
 // RouteBinding is route-level metadata. Route kinds are intentionally limited
 // to static files, SPA routes, SSR routes, and hybrid routes.
 type RouteBinding struct {
-	Kind    RouteKind
-	Method  string
-	Route   string
-	PageID  string
-	Cache   string
-	Handler string
+	Kind          RouteKind
+	Method        string
+	Route         string
+	PageID        string
+	Package       string
+	Render        gowdk.RenderMode
+	Cache         string
+	DynamicParams []string
+	RouteParams   []source.RouteParam
+	Layouts       []string
+	Guards        []string
+	Source        string
+	SourceSpan    source.SourceSpan
+	Handler       string
 }
 
 // EndpointBinding is backend action/API metadata. Endpoints are not route
@@ -63,6 +71,9 @@ type EndpointBinding struct {
 	Symbol            string
 	Method            string
 	Route             string
+	Cache             string
+	Guards            []string
+	CSRF              bool
 	PageID            string
 	Handler           string
 	BindingStatus     source.BackendBindingStatus
@@ -109,12 +120,20 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 		switch route.Kind {
 		case gwdkir.RouteSSR:
 			routes = append(routes, RouteBinding{
-				Kind:    RouteSSR,
-				Method:  route.Method,
-				Route:   route.Path,
-				PageID:  route.PageID,
-				Cache:   route.Cache,
-				Handler: "ssr.Render" + exportedRouteName(route.PageID),
+				Kind:          RouteSSR,
+				Method:        route.Method,
+				Route:         route.Path,
+				PageID:        route.PageID,
+				Package:       route.Package,
+				Render:        route.Render,
+				Cache:         route.Cache,
+				DynamicParams: append([]string(nil), route.DynamicParams...),
+				RouteParams:   append([]source.RouteParam(nil), route.RouteParams...),
+				Layouts:       append([]string(nil), route.Layouts...),
+				Guards:        append([]string(nil), route.Guards...),
+				Source:        route.Source,
+				SourceSpan:    route.Span,
+				Handler:       "ssr.Render" + exportedRouteName(route.PageID),
 			})
 			info = append(info, RouteInfo{
 				Code:    "spa_disabled",
@@ -124,21 +143,37 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 			})
 		case gwdkir.RouteHybrid:
 			routes = append(routes, RouteBinding{
-				Kind:    RouteHybrid,
-				Method:  route.Method,
-				Route:   route.Path,
-				PageID:  route.PageID,
-				Cache:   route.Cache,
-				Handler: "hybrid.Render" + exportedRouteName(route.PageID),
+				Kind:          RouteHybrid,
+				Method:        route.Method,
+				Route:         route.Path,
+				PageID:        route.PageID,
+				Package:       route.Package,
+				Render:        route.Render,
+				Cache:         route.Cache,
+				DynamicParams: append([]string(nil), route.DynamicParams...),
+				RouteParams:   append([]source.RouteParam(nil), route.RouteParams...),
+				Layouts:       append([]string(nil), route.Layouts...),
+				Guards:        append([]string(nil), route.Guards...),
+				Source:        route.Source,
+				SourceSpan:    route.Span,
+				Handler:       "hybrid.Render" + exportedRouteName(route.PageID),
 			})
 		default:
 			routes = append(routes, RouteBinding{
-				Kind:    RouteSPA,
-				Method:  route.Method,
-				Route:   route.Path,
-				PageID:  route.PageID,
-				Cache:   route.Cache,
-				Handler: fmt.Sprintf(`embedded.SPA("pages/%s.html")`, routeAssetName(route.PageID)),
+				Kind:          RouteSPA,
+				Method:        route.Method,
+				Route:         route.Path,
+				PageID:        route.PageID,
+				Package:       route.Package,
+				Render:        route.Render,
+				Cache:         route.Cache,
+				DynamicParams: append([]string(nil), route.DynamicParams...),
+				RouteParams:   append([]source.RouteParam(nil), route.RouteParams...),
+				Layouts:       append([]string(nil), route.Layouts...),
+				Guards:        append([]string(nil), route.Guards...),
+				Source:        route.Source,
+				SourceSpan:    route.Span,
+				Handler:       fmt.Sprintf(`embedded.SPA("pages/%s.html")`, routeAssetName(route.PageID)),
 			})
 			info = append(info, RouteInfo{
 				Code:    "ssr_disabled",
@@ -164,6 +199,9 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Symbol:            endpoint.Symbol,
 				Method:            endpoint.Method,
 				Route:             endpoint.Path,
+				Cache:             endpoint.Cache,
+				Guards:            append([]string(nil), endpoint.Guards...),
+				CSRF:              endpoint.CSRF,
 				PageID:            endpoint.PageID,
 				Handler:           "actions." + exportedRouteName(endpoint.PageID) + exportedRouteName(endpoint.Symbol),
 				BindingStatus:     binding.Status,
@@ -190,6 +228,9 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Symbol:            endpoint.Symbol,
 				Method:            endpoint.Method,
 				Route:             endpoint.Path,
+				Cache:             endpoint.Cache,
+				Guards:            append([]string(nil), endpoint.Guards...),
+				CSRF:              endpoint.CSRF,
 				PageID:            endpoint.PageID,
 				Handler:           "api." + handlerName,
 				BindingStatus:     binding.Status,
@@ -212,6 +253,9 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Symbol:            endpoint.Symbol,
 				Method:            endpoint.Method,
 				Route:             endpoint.Path,
+				Cache:             endpoint.Cache,
+				Guards:            append([]string(nil), endpoint.Guards...),
+				CSRF:              endpoint.CSRF,
 				PageID:            endpoint.PageID,
 				Handler:           "fragments." + exportedRouteName(endpoint.PageID) + exportedRouteName(endpoint.Symbol),
 				BindingStatus:     binding.Status,
@@ -241,6 +285,9 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 			Symbol:         ref.Name,
 			Method:         ref.Method,
 			Route:          ref.Path,
+			Cache:          "no-store",
+			Guards:         append([]string(nil), ref.Guards...),
+			CSRF:           config.Build.CSRF.Enabled && ref.Kind == gwdkir.ContractCommand,
 			PageID:         ref.OwnerID,
 			Handler:        "contracts." + string(ref.Kind) + "." + ref.Name,
 			Contract: ContractEndpointBinding{

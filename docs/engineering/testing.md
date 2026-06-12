@@ -25,6 +25,8 @@ rm -rf /tmp/gowdk-init && /tmp/gowdk-cli init /tmp/gowdk-init && (cd /tmp/gowdk-
 go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 test -f /tmp/gowdk-build/gowdk-routes.json
 test -f /tmp/gowdk-build/gowdk-assets.json
+test -f /tmp/gowdk-build/openapi.json
+test -f /tmp/gowdk-build/asyncapi.json
 go test ./cmd/gowdk
 ```
 
@@ -49,7 +51,7 @@ must pass `--config <file>`.
 | Init project smoke | `go build -o /tmp/gowdk-cli ./cmd/gowdk && rm -rf /tmp/gowdk-init && /tmp/gowdk-cli init /tmp/gowdk-init && (cd /tmp/gowdk-init && /tmp/gowdk-cli build)` | CLI scaffold changes. |
 | SSR example | `go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk` | SSR validation or example changes. |
 | Manifest smoke | `go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk` | Manifest, parser, or CLI output changes. |
-| SPA build smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk && test -f /tmp/gowdk-build/gowdk-routes.json && test -f /tmp/gowdk-build/gowdk-assets.json` | Parser, view, buildgen, component, or CLI build changes. |
+| SPA build smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk && test -f /tmp/gowdk-build/gowdk-routes.json && test -f /tmp/gowdk-build/gowdk-assets.json && test -f /tmp/gowdk-build/openapi.json && test -f /tmp/gowdk-build/asyncapi.json` | Parser, view, buildgen, component, or CLI build changes. |
 | Dev loop tests | `go test ./cmd/gowdk` | Dev mode changes. |
 | Action redirect smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/actions/signup.page.gwdk` | Action parsing or generated action endpoint changes. |
 | Local serve tests | `go test ./cmd/gowdk` | CLI serving or option parsing changes. |

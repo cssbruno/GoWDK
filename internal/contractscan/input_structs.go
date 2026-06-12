@@ -58,6 +58,55 @@ func contractInputStruct(typeName string, structType *ast.StructType) inputStruc
 	return inputStruct{Fields: fields}
 }
 
+func contractPayloadStruct(typeName string, structType *ast.StructType) inputStruct {
+	if structType == nil || structType.Fields == nil {
+		return inputStruct{}
+	}
+	seen := map[string]bool{}
+	var fields []source.BackendInputField
+	for _, field := range structType.Fields.List {
+		if len(field.Names) == 0 {
+			return inputStruct{Message: fmt.Sprintf("contract payload %s cannot use embedded fields", typeName)}
+		}
+		jsonName, skip, explicit, err := contractJSONTagName(field)
+		if err != nil {
+			return inputStruct{Message: fmt.Sprintf("contract payload %s has invalid json tag: %v", typeName, err)}
+		}
+		var exportedNames []*ast.Ident
+		for _, name := range field.Names {
+			if name != nil && name.IsExported() {
+				exportedNames = append(exportedNames, name)
+			}
+		}
+		if len(exportedNames) == 0 || skip {
+			continue
+		}
+		if explicit && len(exportedNames) > 1 {
+			return inputStruct{Message: fmt.Sprintf("contract payload %s cannot reuse one explicit json tag across multiple fields", typeName)}
+		}
+		fieldType, ok := contractInputFieldType(field.Type)
+		if !ok {
+			return inputStruct{Message: fmt.Sprintf("contract payload %s uses unsupported field type", typeName)}
+		}
+		for _, name := range exportedNames {
+			nameJSONName := jsonName
+			if nameJSONName == "" {
+				nameJSONName = name.Name
+			}
+			if seen[nameJSONName] {
+				return inputStruct{Message: fmt.Sprintf("contract payload %s maps multiple fields to json field %q", typeName, nameJSONName)}
+			}
+			seen[nameJSONName] = true
+			fields = append(fields, source.BackendInputField{
+				FieldName: name.Name,
+				FormName:  nameJSONName,
+				Type:      fieldType,
+			})
+		}
+	}
+	return inputStruct{Fields: fields}
+}
+
 func contractFormTagName(field *ast.Field) (string, bool, bool, error) {
 	if field == nil || field.Tag == nil {
 		return "", false, false, nil
@@ -67,6 +116,25 @@ func contractFormTagName(field *ast.Field) (string, bool, bool, error) {
 		return "", false, false, err
 	}
 	value, ok, err := contractStructTagValue(tag, "form")
+	if err != nil || !ok {
+		return "", false, ok, err
+	}
+	name, _, _ := strings.Cut(value, ",")
+	if name == "-" {
+		return "", true, true, nil
+	}
+	return strings.TrimSpace(name), false, true, nil
+}
+
+func contractJSONTagName(field *ast.Field) (string, bool, bool, error) {
+	if field == nil || field.Tag == nil {
+		return "", false, false, nil
+	}
+	tag, err := strconv.Unquote(field.Tag.Value)
+	if err != nil {
+		return "", false, false, err
+	}
+	value, ok, err := contractStructTagValue(tag, "json")
 	if err != nil || !ok {
 		return "", false, ok, err
 	}

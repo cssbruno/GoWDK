@@ -25,20 +25,32 @@ func contractsReport(args []string) error {
 }
 
 func linkIRContractReferences(ir *gwdkir.Program, root string) error {
+	report, err := scanContractReport(root)
+	if err != nil {
+		return err
+	}
+	linkIRContractReferencesFromReport(ir, report)
+	return nil
+}
+
+func scanContractReport(root string) (contractscan.Report, error) {
 	if strings.TrimSpace(root) == "" {
 		root = "."
 	}
 	report, err := contractscan.Scan(root)
 	if err != nil {
-		return err
+		return contractscan.Report{}, err
 	}
 	if err := validateContractScanReport(report); err != nil {
-		return err
+		return contractscan.Report{}, err
 	}
+	return report, nil
+}
+
+func linkIRContractReferencesFromReport(ir *gwdkir.Program, report contractscan.Report) {
 	if ir != nil && len(ir.ContractRefs) > 0 {
 		ir.ContractRefs = contractscan.LinkReferences(ir.ContractRefs, report)
 	}
-	return nil
 }
 
 func validateContractScanReport(report contractscan.Report) error {

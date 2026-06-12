@@ -93,6 +93,7 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile, inspectionCache *pac
 	}
 	types := collectContractTypes(astFiles)
 	inputStructs := collectContractInputStructs(astFiles)
+	payloadStructs := collectContractPayloadStructs(astFiles)
 	packageDir := ""
 	if len(files) > 0 {
 		packageDir = filepath.Dir(files[0].Path)
@@ -115,6 +116,7 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile, inspectionCache *pac
 		}
 	}
 	applyContractInputFields(contracts, inputStructs)
+	applyContractPayloadFields(contracts, payloadStructs)
 	diagnostics = append(diagnostics, validateContractTypes(contracts, types, typedPackage.Types)...)
 	diagnostics = append(diagnostics, validateEventNames(contracts)...)
 	diagnostics = append(diagnostics, validateContracts(contracts, typedPackage.Functions)...)
@@ -174,6 +176,30 @@ func collectContractInputStructs(files []*ast.File) map[string]inputStruct {
 	return structs
 }
 
+func collectContractPayloadStructs(files []*ast.File) map[string]inputStruct {
+	structs := map[string]inputStruct{}
+	for _, file := range files {
+		for _, declaration := range file.Decls {
+			gen, ok := declaration.(*ast.GenDecl)
+			if !ok || gen.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok || typeSpec.Name == nil || !typeSpec.Name.IsExported() {
+					continue
+				}
+				structType, ok := typeSpec.Type.(*ast.StructType)
+				if !ok {
+					continue
+				}
+				structs[typeSpec.Name.Name] = contractPayloadStruct(typeSpec.Name.Name, structType)
+			}
+		}
+	}
+	return structs
+}
+
 func applyContractInputFields(contracts []Contract, structs map[string]inputStruct) {
 	for index := range contracts {
 		if contracts[index].Kind != runtimecontracts.Command && contracts[index].Kind != runtimecontracts.Query {
@@ -184,6 +210,19 @@ func applyContractInputFields(contracts []Contract, structs map[string]inputStru
 			continue
 		}
 		contracts[index].InputFields = append([]source.BackendInputField(nil), inputStruct.Fields...)
+	}
+}
+
+func applyContractPayloadFields(contracts []Contract, structs map[string]inputStruct) {
+	for index := range contracts {
+		if contracts[index].Kind != runtimecontracts.Event {
+			continue
+		}
+		payloadStruct, ok := structs[contracts[index].Type]
+		if !ok || payloadStruct.Message != "" {
+			continue
+		}
+		contracts[index].PayloadFields = append([]source.BackendInputField(nil), payloadStruct.Fields...)
 	}
 }
 

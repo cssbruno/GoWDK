@@ -28,6 +28,7 @@ type Result struct {
 	AssetArtifacts    []AssetArtifact
 	RouteManifestPath string
 	AssetManifestPath string
+	OpenAPIPath       string
 	BuildReportPath   string
 	Report            BuildReport
 	WriteStats        WriteStats

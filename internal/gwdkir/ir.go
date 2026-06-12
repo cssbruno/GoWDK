@@ -349,6 +349,9 @@ type Endpoint struct {
 	Symbol        string
 	Method        string
 	Path          string
+	Cache         string
+	Guards        []string
+	CSRF          bool
 	ErrorPage     string
 	DynamicParams []string
 	SourceFile    string

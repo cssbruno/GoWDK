@@ -726,6 +726,14 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   not use string line writing.
 - `gowdk routes` includes routable `g:command` and `g:query` references as
   backend endpoint metadata with contract binding details.
+- `gowdk build` writes `openapi.json` for the routable web surface and
+  `asyncapi.json` for contract integration events. The AsyncAPI report excludes
+  domain and presentation events by default. Its CloudEvents mapping is:
+  `type` = contract event type, `source` = the application/module boundary,
+  `id` = event envelope identifier supplied by the transport, `time` = event
+  envelope time supplied by the transport, and `datacontenttype` =
+  `application/json`. Imported event payload structs currently emit shallow
+  named schemas; #315 tracks imported payload field expansion.
 - Command contract adapter IR includes the form method and either the literal
   form action or, for page-owned forms that omit `action`, the page route.
 - Page-owned query contract adapter IR includes `GET` plus the page route.

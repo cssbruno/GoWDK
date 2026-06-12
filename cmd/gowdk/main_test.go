@@ -743,6 +743,172 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 	t.Fatalf("missing contract_reference event in report: %s", payload)
 }
 
+func TestBuildWritesOpenAPIAndAsyncAPIReports(t *testing.T) {
+	root := t.TempDir()
+	moduleRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeCLIFile(t, filepath.Join(root, "go.mod"), fmt.Sprintf(`module example.com/gowdk-specs
+
+go 1.26.4
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => %s
+`, filepath.ToSlash(moduleRoot)))
+	config := writeMinimalCLIConfig(t, root)
+	page := filepath.Join(root, "pages", "newsletter.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, page, `package pages
+
+page newsletter
+route "/newsletter"
+guard public
+
+act Subscribe POST "/newsletter"
+api Health GET "/api/health"
+
+view {
+  <main>
+    <form g:post={Subscribe}>
+      <input name="email" />
+    </form>
+    <form method="post" action="/patients" g:command="patients.CreatePatient">
+      <input name="name" />
+    </form>
+    <section g:query="patients.GetPatientPage">
+      <h2>Patients</h2>
+    </section>
+  </main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "pages", "handlers.go"), `package pages
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+type SubscribeForm struct {
+	Email string `+"`form:\"email\"`"+`
+}
+
+func Subscribe(ctx context.Context, input SubscribeForm) (response.Response, error) {
+	return response.JSONValue(http.StatusOK, map[string]any{"ok": true})
+}
+
+func Health(ctx context.Context, request *http.Request) (response.Response, error) {
+	return response.JSONValue(http.StatusOK, map[string]any{"ok": true})
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "contracts", "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct {
+	Name string `+"`form:\"name\"`"+`
+}
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+}
+type GetPatientPage struct {
+	Search string `+"`form:\"search\"`"+`
+}
+type PatientPageData struct{}
+type PatientSynced struct {
+	ID string `+"`json:\"id\"`"+`
+	Tags []string `+"`json:\"tags\"`"+`
+}
+type PatientCreated struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, contracts.RoleWeb)
+	contracts.RegisterQuery[GetPatientPage, PatientPageData](r, LoadPatientPage, contracts.RoleWeb)
+	contracts.RegisterIntegrationEvent[PatientSynced](r, HandlePatientSynced, contracts.RoleWorker)
+	contracts.RegisterDomainEvent[PatientCreated](r, HandlePatientCreated, contracts.RoleWorker)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{ID: command.Name}, nil
+}
+
+func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData, error) {
+	return PatientPageData{}, nil
+}
+
+func HandlePatientSynced(ctx context.Context, event PatientSynced) error {
+	return nil
+}
+
+func HandlePatientCreated(ctx context.Context, event PatientCreated) error {
+	return nil
+}
+`)
+
+	var stdout string
+	withWorkingDir(t, root, func() {
+		captured, err := captureCLIStdout(t, func() error {
+			return run([]string{"build", "--config", config, "--out", outputDir, page})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		stdout = captured
+	})
+	openAPIPath := filepath.Join(outputDir, "openapi.json")
+	asyncAPIPath := filepath.Join(outputDir, "asyncapi.json")
+	if !strings.Contains(stdout, openAPIPath) || !strings.Contains(stdout, asyncAPIPath) {
+		t.Fatalf("expected build stdout to include spec paths %q and %q, got:\n%s", openAPIPath, asyncAPIPath, stdout)
+	}
+
+	openAPI, err := os.ReadFile(openAPIPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`"openapi": "3.1.0"`,
+		`"/newsletter"`,
+		`"application/x-www-form-urlencoded"`,
+		`"email"`,
+		`"/api/health"`,
+		`"patients.CreatePatient"`,
+		`"CreatePatientResult"`,
+		`"patients.GetPatientPage"`,
+	} {
+		if !strings.Contains(string(openAPI), expected) {
+			t.Fatalf("expected OpenAPI report to contain %q:\n%s", expected, openAPI)
+		}
+	}
+
+	asyncAPI, err := os.ReadFile(asyncAPIPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`"asyncapi": "3.0.0"`,
+		`"integration.PatientSynced"`,
+		`"PatientSynced"`,
+		`"id"`,
+		`"tags"`,
+		`"cloudEvents"`,
+	} {
+		if !strings.Contains(string(asyncAPI), expected) {
+			t.Fatalf("expected AsyncAPI report to contain %q:\n%s", expected, asyncAPI)
+		}
+	}
+	if strings.Contains(string(asyncAPI), "PatientCreated") {
+		t.Fatalf("domain events should be excluded from the default AsyncAPI report:\n%s", asyncAPI)
+	}
+}
+
 func TestCheckJSONReportsMissingContractReference(t *testing.T) {
 	root := t.TempDir()
 	config := writeMinimalCLIConfig(t, root)
@@ -777,6 +943,106 @@ view {
 		!strings.Contains(output, `"line": 9`) {
 		t.Fatalf("expected missing contract diagnostic with source span, got:\n%s", output)
 	}
+}
+
+func TestCheckJSONReportsVersionedSchema(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	page := filepath.Join(root, "home.page.gwdk")
+	writeCLIFile(t, page, `package pages
+
+page home
+route "/"
+guard public
+
+view {
+  <main>Home</main>
+}
+`)
+
+	output, err := captureCLIStdout(t, func() error {
+		return run([]string{"check", "--config", config, "--json", page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		Version     int `json:"version"`
+		Diagnostics []struct {
+			File     string `json:"file"`
+			Code     string `json:"code"`
+			Severity string `json:"severity"`
+			Message  string `json:"message"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid check JSON: %v\n%s", err, output)
+	}
+	if report.Version != 1 {
+		t.Fatalf("expected check JSON schema version 1, got %d", report.Version)
+	}
+	if len(report.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %#v", report.Diagnostics)
+	}
+}
+
+func TestCheckJSONReportsRouteMethodConflictWithRelatedLocation(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	page := filepath.Join(root, "status.page.gwdk")
+	writeCLIFile(t, page, `package pages
+
+page status
+route "/status"
+guard public
+
+api Health GET "/status"
+
+view {
+  <main>Status</main>
+}
+`)
+
+	output, err := captureCLIStdout(t, func() error {
+		return run([]string{"check", "--config", config, "--json", page})
+	})
+	if err == nil {
+		t.Fatal("expected route-method conflict to fail check")
+	}
+	var report struct {
+		Version     int `json:"version"`
+		Diagnostics []struct {
+			Code  string `json:"code"`
+			Range *struct {
+				Start struct {
+					Line int `json:"line"`
+				} `json:"start"`
+			} `json:"range"`
+			Related []struct {
+				File    string `json:"file"`
+				Message string `json:"message"`
+			} `json:"related"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid check JSON: %v\n%s", err, output)
+	}
+	if report.Version != 1 || len(report.Diagnostics) == 0 {
+		t.Fatalf("expected versioned diagnostics, got %#v", report)
+	}
+	for _, diagnostic := range report.Diagnostics {
+		if diagnostic.Code != "route_method_conflict" {
+			continue
+		}
+		if diagnostic.Range == nil || diagnostic.Range.Start.Line != 7 {
+			t.Fatalf("expected conflict range on API declaration, got %#v", diagnostic.Range)
+		}
+		if len(diagnostic.Related) != 1 || !strings.Contains(diagnostic.Related[0].Message, "page status first declared here") {
+			t.Fatalf("expected related page route location, got %#v", diagnostic.Related)
+		}
+		return
+	}
+	t.Fatalf("missing route_method_conflict diagnostic:\n%s", output)
 }
 
 func TestCheckJSONReportsInvalidContractRoute(t *testing.T) {
@@ -3601,6 +3867,8 @@ view {
 		Symbol:         "Subscribe",
 		Method:         "POST",
 		Route:          "/newsletter",
+		Cache:          "no-store",
+		Guards:         []string{"public"},
 		PageID:         "newsletter",
 		Handler:        "actions.NewsletterSubscribe",
 		BindingStatus:  "missing",
@@ -3615,6 +3883,79 @@ view {
 		t.Fatalf("expected endpoint source span for action declaration, got %#v", report.Endpoints[0].SourceSpan)
 	}
 	assertRouteInfo(t, report.Info, "ssr_disabled", "newsletter")
+}
+
+func TestEndpointsCommandPrintsEndpointMetadataOnly(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "newsletter.page.gwdk")
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		CSRF: gowdk.CSRFConfig{Enabled: true},
+	},
+}
+`)
+	writeCLIFile(t, page, `package app
+
+page newsletter
+route "/newsletter"
+guard public
+
+act Subscribe POST "/newsletter"
+
+view {
+  <form g:post={Subscribe}>
+    <input name="email" required />
+    <button type="submit">Subscribe</button>
+  </form>
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"endpoints", "--config", config, page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected endpoint report to keep route info off stderr, got:\n%s", stderr)
+	}
+	var report endpointMetadataReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid endpoints JSON: %v\n%s", err, output)
+	}
+	if report.Version != 1 {
+		t.Fatalf("unexpected endpoints version: %d", report.Version)
+	}
+	if len(report.Endpoints) != 1 {
+		t.Fatalf("expected one endpoint, got %#v", report.Endpoints)
+	}
+	assertEndpointBinding(t, report.Endpoints, endpointBindingJSON{
+		Kind:           "action",
+		EndpointSource: "gwdk",
+		Source:         page,
+		Package:        "app",
+		PackageName:    "app",
+		Symbol:         "Subscribe",
+		Method:         "POST",
+		Route:          "/newsletter",
+		Cache:          "no-store",
+		Guards:         []string{"public"},
+		CSRF:           true,
+		PageID:         "newsletter",
+		Handler:        "actions.NewsletterSubscribe",
+		BindingStatus:  "missing",
+		BackendBinding: &backendBindingJSON{
+			Status:       "missing",
+			PackageName:  "app",
+			FunctionName: "Subscribe",
+			Message:      "GOWDK action handler app.Subscribe is not implemented",
+		},
+	})
 }
 
 func TestRoutesCommandPrintsSSRRouteKind(t *testing.T) {
@@ -3843,6 +4184,8 @@ view {
 		Symbol:         "Health",
 		Method:         "GET",
 		Route:          "/api/health",
+		Cache:          "no-store",
+		Guards:         []string{"public"},
 		PageID:         "status",
 		Handler:        "api.StatusHealth",
 		BindingStatus:  "missing",
@@ -4150,6 +4493,8 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 		Symbol:         "patients.CreatePatient",
 		Method:         "POST",
 		Route:          "/patients",
+		Cache:          "no-store",
+		Guards:         []string{"public"},
 		PageID:         "patients",
 		Handler:        "contracts.command.patients.CreatePatient",
 		Contract: &contractBindingJSON{
@@ -4233,6 +4578,8 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 		Symbol:         "patients.CreatePatient",
 		Method:         "POST",
 		Route:          "/patients",
+		Cache:          "no-store",
+		Guards:         []string{"public"},
 		PageID:         "patients",
 		Handler:        "contracts.command.patients.CreatePatient",
 		Contract: &contractBindingJSON{
@@ -5311,6 +5658,9 @@ func assertEndpointBinding(t *testing.T, endpoints []endpointBindingJSON, expect
 			endpoint.Symbol != expected.Symbol ||
 			endpoint.Method != expected.Method ||
 			endpoint.Route != expected.Route ||
+			endpoint.Cache != expected.Cache ||
+			!reflect.DeepEqual(endpoint.Guards, expected.Guards) ||
+			endpoint.CSRF != expected.CSRF ||
 			endpoint.PageID != expected.PageID ||
 			endpoint.Handler != expected.Handler ||
 			endpoint.BindingStatus != expected.BindingStatus ||

@@ -463,6 +463,44 @@ func TestServerReturnsSemanticTokens(t *testing.T) {
 	})
 }
 
+func TestServerReturnsDocumentSymbols(t *testing.T) {
+	uri := "file:///tmp/home.page.gwdk"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\nroute \"/\"\ntitle \"Home\"\n\nview {\n  <main></main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/documentSymbol","params":{"textDocument":{"uri":"`+uri+`"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":3,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	capabilities := messages[0]["result"].(map[string]any)["capabilities"].(map[string]any)
+	if capabilities["documentSymbolProvider"] != true {
+		t.Fatalf("expected documentSymbolProvider capability, got %#v", capabilities["documentSymbolProvider"])
+	}
+
+	assertResponseID(t, messages[2], float64(2))
+	result, ok := messages[2]["result"].([]any)
+	if !ok {
+		t.Fatalf("expected a document-symbol array, got %#v", messages[2]["result"])
+	}
+	names := map[string]bool{}
+	for _, item := range result {
+		symbol := item.(map[string]any)
+		names[symbol["name"].(string)] = true
+	}
+	for _, want := range []string{"package app", "route", "title", "view"} {
+		if !names[want] {
+			t.Fatalf("expected document symbol %q, got %#v", want, names)
+		}
+	}
+}
+
 func TestServerReturnsMethodNotFoundForUnknownRequests(t *testing.T) {
 	input := framed(`{"jsonrpc":"2.0","id":"x","method":"gowdk/unknown","params":{}}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)

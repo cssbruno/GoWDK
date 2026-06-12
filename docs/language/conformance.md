@@ -42,6 +42,19 @@ code appears among the diagnostics for that file. Diagnostic codes are the ones
 registered in `internal/diagnostics/registry.go` and documented in
 `docs/reference/diagnostic-codes.md`.
 
+## Scope and limits
+
+The corpus uses single-file `CheckSource`, so it pins what one file can verify
+without a project: package and metadata declarations, route forms, `view {}`
+markup, `style {}`, literal `build {}`, slots, and the rejection contracts below.
+
+It cannot cleanly cover constructs that require project context: reactive `g:`
+directives (`g:if`/`g:on`/`g:bind`) reference a Go-typed `state` contract that
+does not resolve single-file; endpoint forms (`act`/`api`) need exported Go
+handlers; and `layout`/`wasm`/`asset`/`css` need sibling files or config. Those
+are exercised by the package- and build-level tests instead. Expanding the
+corpus to a project-level harness for them is tracked separately.
+
 ## Coverage
 
 `TestConformanceCorpusCoversRejectionContracts` fails when a rejection contract

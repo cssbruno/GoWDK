@@ -202,8 +202,8 @@ build {
 }
 ```
 
-The function must return a JSON-encodable object. Scalar fields are exposed to
-`view {}` as string interpolation data.
+The function must return `T` or `(T, error)` where `T` is a JSON-encodable
+object. Scalar fields are exposed to `view {}` as string interpolation data.
 
 Unsupported top-level block declarations that look like `name ... {` are
 rejected until their feature slice is implemented.

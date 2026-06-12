@@ -19,7 +19,8 @@ gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk endpoints [--config <file>] [--module <name>] [--ssr] [files...]
-gowdk inspect ir|tree|endpoint-graph [--config <file>] [--module <name>] [--json] [--ssr] [files...]
+gowdk inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--module <name>] [--json] [--ssr] [files...]
+gowdk generate stubs [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...]
 gowdk contracts [--json] [dir]
@@ -54,7 +55,10 @@ gowdk lsp [--ssr]
   without writing changes.
 - `--code`: supported by `fix`; limits rewrites to one diagnostic code that has
   a registered fix.
-- `--config`: supported by `add`, `check`, `doctor`, `manifest`, `sitemap`, `routes`, `endpoints`, `inspect`, and `build`; selects the config file. Compile commands load a literal config subset from the given path instead of the required default `gowdk.config.go`.
+- `--config`: supported by `add`, `check`, `doctor`, `manifest`, `sitemap`,
+  `routes`, `endpoints`, `inspect`, `generate stubs`, and `build`; selects the
+  config file. Compile commands load a literal config subset from the given
+  path instead of the required default `gowdk.config.go`.
 - `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
 - `--timings[=<file>]`: supported by `build`; writes a separate versioned JSON
   timing report. Without an explicit file, the report is written to
@@ -68,7 +72,10 @@ gowdk lsp [--ssr]
   command owners.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
-- `--module`: supported by `check`, `doctor`, `manifest`, `sitemap`, `routes`, `endpoints`, `inspect`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
+- `--module`: supported by `check`, `doctor`, `manifest`, `sitemap`, `routes`,
+  `endpoints`, `inspect`, `generate stubs`, and `build`; may be repeated or
+  comma-separated, and limits discovery to selected configured modules when no
+  explicit file list is passed.
 - `--out`: supported by `build`; selects the output directory and overrides `Build.Output`.
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
@@ -270,6 +277,19 @@ cache, guards, CSRF policy, binding status, signature, and input type when
 available. The graph is additive on top of `gowdk routes`/`gowdk endpoints`;
 keep those commands for stable route and endpoint report integrations.
 
+`gowdk inspect go-bindings` prints a versioned report of Go interop bindings:
+actions, APIs, fragments, SSR load functions, build-time Go function calls, and
+web command/query contract references where those surfaces exist. Records
+include source, package, expected symbol, package path when known, method/path
+for request-time handlers, binding status, signature/input metadata, message,
+and a suggested next step for missing or unsupported bindings.
+
+`gowdk generate stubs` writes missing action/API handler stubs to
+`gowdk_stubs.go` beside the owning source package. It refuses to overwrite an
+existing stub file and does not generate load, fragment, command, query, or
+unsupported-signature replacements. The generated code is normal importable Go
+that should be edited or moved into app-owned files before serious use.
+
 `openapi.json` describes the routable web surface: actions, APIs, fragments,
 and web-routable command/query contract references. It includes paths, methods,
 path/query/form request schemas when input fields are known, and deterministic
@@ -299,7 +319,8 @@ Current `build` limitations: it emits app-shell HTML files,
 `gowdk-build-report.json`, generated embedded app source, and an optional
 generated binary for build-time pages with non-dynamic routes or literal
 `paths {}` dynamic routes, literal `build {}` data, lowercase HTML markup,
-imported or same-package no-argument Go build data functions,
+imported or same-package no-argument Go build data functions returning `T` or
+`(T, error)`,
 component files with string props, supported action redirect handlers with form
 decoder wrappers and required-field validation, and supported action fragment
 responses for partial requests.

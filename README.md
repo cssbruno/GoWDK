@@ -163,7 +163,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 | `gowdk fix` | Apply registered safe fixes for diagnostics (`--dry-run`, `--code`) |
 | `gowdk explain <code>` | Explain a diagnostic code and its next steps |
 | `gowdk doctor` | Check local environment and project health |
-| `gowdk inspect ir` / `tree` / `endpoint-graph` | Print validated compiler IR, source-linked node tree, or endpoint dispatch graph JSON |
+| `gowdk inspect ir` / `tree` / `endpoint-graph` / `go-bindings` | Print validated compiler IR, source-linked node tree, endpoint dispatch graph, or Go binding report JSON |
 | `gowdk manifest` / `routes` / `sitemap` | Print validated manifest, route/endpoint metadata, or editor site-map JSON |
 | `gowdk tokens` | Print raw language tokens for a file |
 | `gowdk fmt` | Format `.gwdk` sources (`--write`) |
@@ -172,6 +172,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 
 | Command | What it does |
 | --- | --- |
+| `gowdk generate stubs` | Write conservative missing action/API Go handler stubs next to their owning source package |
 | `gowdk contracts` / `graph` / `trace` / `list` | Print contract registration metadata, the command/event graph, a single contract trace, or filtered lists of commands/queries/events/jobs |
 | `gowdk add <addon>` | Wire an optional addon into `gowdk.config.go` (`add --list` to see all) |
 | `gowdk lsp` | Start the language server over stdio |

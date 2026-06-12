@@ -1,8 +1,8 @@
 # Go Imports
 
-This example shows the first supported `.gwdk` to Go import slice: a page imports
-a Go package by its GitHub module path and calls a no-argument build-time
-function from `build {}`.
+This example shows the supported `.gwdk` to Go import slice: a page imports a Go
+package by module path and calls a no-argument build-time function from
+`build {}`.
 
 What works today:
 
@@ -12,18 +12,21 @@ What works today:
   `package gointerop`.
 - `build {}` can call one no-argument imported Go function:
   `=> interop.FeaturedCopyForBuild()`.
-- Build-time Go calls must use an explicit imported alias. Same-package helper
-  functions are intentionally not resolved by bare name in this slice.
-- The function must return a JSON object. Scalar fields become string
+- Build-time Go calls can also use a bare same-package helper when the page
+  directory is a buildable Go package.
+- Build helpers can return `T` or `(T, error)`.
+- The returned value must JSON-encode to an object. Scalar fields become string
   interpolation data for `view {}`.
+- Successful stderr logging from the helper is kept separate from the JSON
+  payload.
 - Literal `build {}` and `paths {}` records still work in other examples.
 
 What does not work yet:
 
-- `load {}`, `act {}`, and `api {}` do not execute user-owned Go handlers from
-  the generated app yet.
 - Arbitrary Go statements inside `build {}` are not supported.
-- `(T, error)` build function signatures are not supported yet.
+- Passing route params into Go build functions is not supported yet.
+- Generated per-route param structs and typed load/action result accessors are
+  deferred.
 
 `catalog.go` is the imported application code. The `.gwdk` page uses the import
 as its main data path, with no literal fallback.

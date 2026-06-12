@@ -11,8 +11,10 @@ The parser records whether these top-level blocks are present:
 - `build {}`: build-time data block. Presence and raw body text are recorded.
   SPA builds support the first literal subset, `=> { title: "Hello" }`, and
   the first imported or same-package no-argument Go function subset,
-  `=> interop.FeaturedCopyForBuild()`. Other statement forms are rejected with
-  a `parse_error` diagnostic; arbitrary build-time statements remain planned.
+  `=> interop.FeaturedCopyForBuild()` or `=> FeaturedCopyForBuild()`. The Go
+  function can return `T` or `(T, error)`. Other statement forms are rejected
+  with a `parse_error` diagnostic; arbitrary build-time statements remain
+  planned.
 - `load {}`: request-time data block. Presence and raw body text are recorded,
   then rejected on SPA/action pages.
 - `go {}` and `go target {}`: optional inline Go authoring blocks.
@@ -42,10 +44,10 @@ api Health GET "/api/health"
 - `paths {}` and `build {}` are build-time concepts.
 - Page-level Go imports used by `build {}` run at build time with the local Go
   toolchain.
-- Build-time Go function calls must use an explicit imported alias such as
-  `interop.FeaturedCopyForBuild()`. Same-package Go functions are not resolved
-  by bare name in the current slice; importing the package keeps build-time
-  execution dependencies visible and avoids implicit same-package execution.
+- Build-time Go function calls can use an explicit imported alias such as
+  `interop.FeaturedCopyForBuild()` or a bare same-package function such as
+  `FeaturedCopyForBuild()` when the page directory is a buildable Go package.
+  Passing route params into Go build functions is not supported yet.
 - `load {}` is request-time behavior and must not make SPA pages implicitly SSR.
 - `go {}` is parsed as Go and can run static build-time helpers for
   `build {}`. Saved default `go {}` blocks are also type-checked with

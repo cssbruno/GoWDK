@@ -55,6 +55,10 @@ Implemented today:
   into one local binary.
 - Generated apps include POST endpoint handlers for the first supported
   action subset on concrete SPA page paths.
+- `gowdk inspect go-bindings` reports Go binding status for actions, APIs,
+  fragments, SSR load functions, build-time Go calls, and web command/query
+  references. `gowdk generate stubs` can write missing action/API handler
+  stubs as normal Go code beside the owning source package.
 - Generated apps pass one backend hook into `runtime/app.Handler`; generated
   action and API dispatch are internal details behind that hook.
 - Generated app creation auto-detects supported action endpoints and supported
@@ -164,7 +168,8 @@ Not implemented yet:
   processor stylesheet and generated CSS asset support.
 - Non-string props in inline `props {}` blocks.
 - Arbitrary build-time statements beyond literal expression records and
-  imported/same-package no-argument build data functions.
+  imported/same-package no-argument build data functions returning `T` or
+  `(T, error)`.
 - Broader user Go type resolution beyond typed action decoders, user action
   logic, API handlers, and general fragment routes.
 - Generated handlers beyond the supported action, API, fragment, and SSR load

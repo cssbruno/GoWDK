@@ -15,9 +15,9 @@ Implemented today:
 - Imported Go props/state contract resolution through `internal/gotypes`.
 - Route-binding metadata for `gowdk routes` through `internal/compiler`.
 - App-shell HTML, route manifest, and asset manifest emission for simple build-time
-  pages, literal build data, imported Go build data functions, literal dynamic
-  paths, components, partial runtime assets, and island runtime assets through
-  `internal/buildgen`.
+  pages, literal build data, imported and same-package Go build data functions,
+  literal dynamic paths, components, partial runtime assets, and island runtime
+  assets through `internal/buildgen`.
 - Mandatory SPA build reports through `internal/buildgen`, written as
   `gowdk-build-report.json` for disk builds and returned on build errors.
 - Generated embedded app source and optional binary compilation through
@@ -43,6 +43,7 @@ Not implemented yet:
 - `pipeline.md`: current and target compile pipeline.
 - `project-structure.md`: current source inputs and planned project layout.
 - `generated-output.md`: planned generated artifacts and current limitations.
+- `endpoint-binding-inspection.md`: current Go package binding inspection.
 - `browser-compiler.md`: browser-facing partial runtime, JavaScript islands, and
   component-level WASM island behavior.
 - `build-report.md`: generated build report schema and CLI debug output.

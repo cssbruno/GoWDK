@@ -10,7 +10,7 @@ metadata, and generates build-time SPA output, generated app source, local
 binaries, and Go `js/wasm` deploy artifacts.
 
 Generated build output covers simple static pages, literal dynamic `paths {}`
-entries, literal, default `go {}`, and same-package/imported no-argument `build {}` data,
+entries, literal, default `go {}`, and same-package/imported no-argument `build {}` data returning `T` or `(T, error)`,
 declared layouts, discovered components, page CSS, processor-emitted CSS,
 partial-update client assets, generated JavaScript island assets, component-level
 browser WASM island assets, route manifests, asset manifests, source-linked
@@ -142,7 +142,7 @@ manifest report (`internal/lang/testdata/manifest_golden`).
 
 | Component | Responsibility | Owner | Notes |
 | --- | --- | --- | --- |
-| `cmd/gowdk` | CLI entrypoint. | Core | Exposes `version`, `tokens`, `fmt`, `check`, `manifest`, `sitemap`, `routes`, `endpoints`, `build`, `dev`, `preview`, `serve`, and `lsp`. `build` can emit spa files, generated embedded app source, an optional binary, an optional WASM artifact, and OpenAPI/AsyncAPI inspection reports for all discovered sources, selected configured modules, or spa `Build.Targets`; `dev` compares input content hashes, can use incremental spa rendering for page-only plain output changes, persists a dev input cache, serves static output, or runs/restarts a generated app binary for backend/SSR flows; `preview` builds and serves a local deploy preview, with `--hot` reusing the dev loop. |
+| `cmd/gowdk` | CLI entrypoint. | Core | Exposes `version`, `tokens`, `fmt`, `check`, `manifest`, `sitemap`, `routes`, `endpoints`, `inspect`, `generate stubs`, `build`, `dev`, `preview`, `serve`, and `lsp`. `build` can emit spa files, generated embedded app source, an optional binary, an optional WASM artifact, and OpenAPI/AsyncAPI inspection reports for all discovered sources, selected configured modules, or spa `Build.Targets`; `inspect go-bindings` reports Go interop status for backend handlers, load functions, build-time Go calls, and web contracts; `generate stubs` writes conservative missing action/API handler stubs; `dev` compares input content hashes, can use incremental spa rendering for page-only plain output changes, persists a dev input cache, serves static output, or runs/restarts a generated app binary for backend/SSR flows; `preview` builds and serves a local deploy preview, with `--hot` reusing the dev loop. |
 | `gowdk` root package | Public config, render modes, addon registration, and extension contracts. | Core | Includes `Config`, `RenderMode`, `Addon`, `CSSConfig`, `CSSProcessor`, and `GoBlockConsumer`. |
 | `internal/discover` | Find portable `.gwdk` files from include/exclude patterns. | Compiler | Recursive glob discovery implemented. |
 | `internal/gwdkast` | Define the typed GOWDK source AST. | Compiler | Package declarations, typed page/component/layout/route/render/layout/guard/CSS declarations, component CSS scope/hash metadata, metadata declarations, Go imports, GOWDK uses, stores, typed component contracts, blocks, endpoint declarations, parsed view nodes, literal records, and source spans implemented. |

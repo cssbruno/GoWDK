@@ -335,28 +335,32 @@ Every 0.x minor release must have:
 
 ## Go Interop
 
-- [ ] Make Go interop a first-class docs page.
-- [ ] Add `gowdk inspect go-bindings`.
-- [ ] Add `gowdk generate stubs`.
-- [ ] Support build functions returning `(T, error)`.
-- [ ] Support same-package build functions consistently.
-- [ ] Support imported package aliases consistently.
-- [ ] Support route params into build functions.
-- [ ] Support `context.Context` for request-time functions.
+- [x] Make Go interop a first-class docs page.
+- [x] Add `gowdk inspect go-bindings`.
+- [x] Add `gowdk generate stubs`.
+- [x] Support build functions returning `(T, error)`.
+- [x] Support same-package build functions consistently.
+- [x] Support imported package aliases consistently.
+- [ ] Support route params into build functions. Deferred to #327.
+- [x] Support `context.Context` for request-time functions.
 - [ ] Support typed route params in `load`, APIs, actions, and fragments where
-  relevant.
-- [ ] Add Go symbol discovery reports.
+  relevant. The current generated route context exposes `app.Params(ctx)` and
+  `app.TypedParams(ctx)` for SSR/load; per-route structs and broader
+  action/API/fragment typed accessors are deferred to #23.
+- [x] Add Go symbol discovery reports.
 - [ ] Add diagnostics for unsupported signatures, hidden-by-build-tags symbols,
   non-exported symbols, wrong packages, ambiguous imports, unsupported return
   types, unsupported parameter types, and JSON encoding failures for build data.
+  Deferred to #328.
 - [ ] Add examples using normal Go packages such as `database/sql`, `pgx`,
   `sqlc`, `slog`, session packages, validator packages, email packages,
-  markdown packages, image processing packages, and queue packages.
-- [ ] Keep serious app behavior in `.go` files.
-- [ ] Keep inline `go {}` extractable and testable.
-- [ ] Document that `.gwdk` calls supported Go contracts and is not arbitrary Go
+  markdown packages, image processing packages, and queue packages. Deferred to
+  #329.
+- [x] Keep serious app behavior in `.go` files.
+- [x] Keep inline `go {}` extractable and testable.
+- [x] Document that `.gwdk` calls supported Go contracts and is not arbitrary Go
   everywhere.
-- [ ] Add tests for package path resolution, aliased imports, build tags,
+- [x] Add tests for package path resolution, aliased imports, build tags,
   generated `gowdk_go/` packages, same-package handler discovery, and imported
   build-data errors.
 

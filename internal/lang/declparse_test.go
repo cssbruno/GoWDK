@@ -405,3 +405,90 @@ func equalKeys(a, b map[string]bool) bool {
 	}
 	return true
 }
+
+// TestParseTopLevelRejectsTrailingComments locks the equivalence fix for the
+// shared tokenizer stripping // comments. The line parser requires eof() after
+// every identifier-led declaration, so a trailing comment makes it emit nothing
+// (it errors on package/import or simply drops the line for act). Recovery must
+// match: the stripped comment must not let a phantom node through. Metadata is
+// exempt because the line parser keeps the raw remainder, comment included.
+func TestParseTopLevelRejectsTrailingComments(t *testing.T) {
+	t.Run("package", func(t *testing.T) {
+		if top := ParseTopLevel("package home // c\n"); top.Package != nil {
+			t.Fatalf("emitted package for trailing-comment line: %#v", top.Package)
+		}
+	})
+	t.Run("import", func(t *testing.T) {
+		if top := ParseTopLevel("package p\nimport \"fmt\" // c\n"); len(top.Imports) != 0 {
+			t.Fatalf("emitted import for trailing-comment line: %#v", top.Imports)
+		}
+	})
+	t.Run("use", func(t *testing.T) {
+		if top := ParseTopLevel("package p\nuse ui \"ui\" // c\n"); len(top.Uses) != 0 {
+			t.Fatalf("emitted use for trailing-comment line: %#v", top.Uses)
+		}
+	})
+	t.Run("store", func(t *testing.T) {
+		// go/parser would silently ignore the comment in the initializer slice;
+		// the guard rejects the line first, matching the line parser's eof().
+		src := "package p\nstore Cart cart.Cart = cart.NewCart() // c\n"
+		if top := ParseTopLevel(src); len(top.Stores) != 0 {
+			t.Fatalf("emitted store for trailing-comment line: %#v", top.Stores)
+		}
+	})
+	t.Run("endpoint anchored to line parser", func(t *testing.T) {
+		// The line parser parses this successfully but emits no action; recovery
+		// must agree rather than report a phantom endpoint.
+		src := "package p\nact Submit POST \"/x\" // c\n"
+		syntaxFile, err := parser.ParseSyntax([]byte(src))
+		if err != nil {
+			t.Fatalf("line parser failed: %v", err)
+		}
+		if len(syntaxFile.Actions) != 0 {
+			t.Fatalf("precondition: line parser emitted an action: %#v", syntaxFile.Actions)
+		}
+		if top := ParseTopLevel(src); len(top.Actions) != 0 {
+			t.Fatalf("emitted endpoint for trailing-comment line: %#v", top.Actions)
+		}
+	})
+	t.Run("metadata keeps the comment in its raw value", func(t *testing.T) {
+		src := "package p\nroute \"/\" // c\n"
+		syntaxFile, err := parser.ParseSyntax([]byte(src))
+		if err != nil {
+			t.Fatalf("line parser failed: %v", err)
+		}
+		top := ParseTopLevel(src)
+		if got, want := metadataPairs(top.Metadata), metadataPairs(syntaxFile.Metadata); !equalOrdered(got, want) {
+			t.Fatalf("metadata mismatch:\n got %v\nwant %v", got, want)
+		}
+	})
+}
+
+// TestParseTopLevelDecodesStringEscapes locks the second equivalence fix: string
+// values the line parser pulls through stringValue()/identString() are decoded
+// (\t, \n, \", \\), so recovery must decode them too rather than keep the raw
+// backslash escapes.
+func TestParseTopLevelDecodesStringEscapes(t *testing.T) {
+	src := "package p\nimport \"a\\tb\"\nact Tab POST \"/x\\ty\"\n"
+	syntaxFile, err := parser.ParseSyntax([]byte(src))
+	if err != nil {
+		t.Fatalf("line parser failed: %v", err)
+	}
+	top := ParseTopLevel(src)
+
+	if len(top.Actions) != 1 {
+		t.Fatalf("expected one action, got %#v", top.Actions)
+	}
+	if top.Actions[0].Route != "/x\ty" {
+		t.Fatalf("route = %q, want %q (a decoded tab)", top.Actions[0].Route, "/x\ty")
+	}
+	if len(syntaxFile.Actions) != 1 || top.Actions[0].Route != syntaxFile.Actions[0].Route {
+		t.Fatalf("route diverged from line parser: got %q want %q", top.Actions[0].Route, syntaxFile.Actions[0].Route)
+	}
+	if len(top.Imports) != 1 || top.Imports[0].Path != "a\tb" {
+		t.Fatalf("import path = %#v, want decoded \"a\\tb\"", top.Imports)
+	}
+	if len(syntaxFile.Imports) != 1 || top.Imports[0].Path != syntaxFile.Imports[0].Path {
+		t.Fatalf("import path diverged from line parser: got %q want %q", top.Imports[0].Path, syntaxFile.Imports[0].Path)
+	}
+}

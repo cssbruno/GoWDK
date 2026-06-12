@@ -83,8 +83,10 @@ Current behavior:
 - `addons/actions.ValidateRequired` exposes the same required-field behavior as
   a `runtime/validation.Result` for addon and generated-handler integrations.
 - `addons/actions.NewCSRF` provides signed double-submit CSRF tokens with an
-  HttpOnly, Secure, SameSite=Lax cookie by default. Normal builds do not expose
-  a no-op CSRF validator; package tests keep their no-op helper in `_test.go`.
+  HttpOnly, Secure, SameSite=Lax cookie by default. Local HTTP `Insecure` mode
+  uses a non-prefixed `gowdk-csrf` cookie because browsers reject `__Host-`
+  cookies without Secure. Normal builds do not expose a no-op CSRF validator;
+  package tests keep their no-op helper in `_test.go`.
 - `Build.CSRF.Enabled` wires generated CSRF token generation and validation for
   generated action adapters. Generated apps read the signing secret from
   `Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`, inject a hidden token field into

@@ -4388,7 +4388,7 @@ func TestGeneratedBinaryValidatesCSRFWhenEnabled(t *testing.T) {
 		t.Fatalf("expected generated form csrf token, got %s", body)
 	}
 	cookie := cookieHeader(headers.Get("Set-Cookie"))
-	if !strings.Contains(cookie, "__Host-gowdk-csrf=") {
+	if !strings.HasPrefix(cookie, "gowdk-csrf=") {
 		t.Fatalf("expected csrf cookie, got %q", headers.Get("Set-Cookie"))
 	}
 

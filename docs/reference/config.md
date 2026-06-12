@@ -376,7 +376,10 @@ hidden token field into served HTML POST forms, and validate action POSTs before
 generated decoding or user handlers run. Invalid or missing tokens return HTTP
 403 with `invalid csrf token` and `Cache-Control: no-store`. `CookieName`,
 `FieldName`, and `HeaderName` override the generated token transport names.
-`Insecure` disables the Secure cookie flag for local HTTP development only.
+`Insecure` is for local HTTP development only: it disables the Secure cookie
+flag, uses the default cookie name `gowdk-csrf` instead of
+`__Host-gowdk-csrf`, and rejects explicit `__Host-`/`__Secure-` cookie names
+because browsers require those prefixes to be Secure.
 
 `Name` is required. `Output` is optional and defaults to
 `.gowdk/output/<target-name>` when omitted. `Modules` selects configured

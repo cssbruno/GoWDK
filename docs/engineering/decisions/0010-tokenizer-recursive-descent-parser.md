@@ -58,6 +58,20 @@ Concretely:
   `gwdkast.File` with explicit declaration, block, and view productions instead
   of line-pattern matching. The brace scanner's string/comment/template state
   becomes ordinary lexer state rather than a separate counter.
+- **Custom grammar for `.gwdk`, the real Go parser for embedded Go.** The
+  recursive-descent parser owns only the framework grammar — package, imports,
+  uses, metadata, blocks, view markup, contracts, and endpoints. Wherever a
+  construct embeds Go — `go {}`/`client {}` block bodies and the `pkg.Type` /
+  `pkg.NewFn()` references in `store`/`props`/`state` contracts — the parser
+  delegates to `go/parser` (`go/ast`) on the extracted source span rather than
+  re-implementing Go lexing or parsing. The framework tokenizer only locates the
+  boundaries (e.g. the `=` separating a contract type from its initializer); the
+  Go operands are handed to the Go parser, which is then constrained to the
+  shapes the language accepts (a single `pkg.Name` selector, a zero-argument
+  constructor call). This keeps one definition of Go syntax — the Go toolchain's
+  — and means generics, multi-segment selectors, and call arguments are
+  recognized and accepted or rejected by Go's own grammar, not a hand-rolled
+  approximation.
 - **Error recovery.** The parser synchronizes at top-level declaration
   boundaries and block braces so one syntax error does not hide the rest of the
   file. It accumulates diagnostics instead of returning on the first error.
@@ -121,6 +135,11 @@ holds, then the line-oriented path and `lexLine` are removed.
 - **Incremental/streaming parser from day one.** Useful for an editor, but
   premature. The AST seam lets an incremental layer be added later without
   another front-end decision.
+- **Hand-roll Go lexing/parsing for embedded Go.** Re-implementing qualified
+  identifiers, call expressions, and (eventually) type expressions inside the
+  `.gwdk` tokenizer would duplicate a moving target and drift from `go/build`
+  semantics. Rejected: `go/parser` already parses Go exactly, so embedded Go is
+  delegated to it and only the framework-level boundaries are tokenized here.
 
 ## Follow-Up
 

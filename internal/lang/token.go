@@ -14,6 +14,7 @@ const (
 	TokenRBrace     TokenKind = "rbrace"
 	TokenComma      TokenKind = "comma"
 	TokenColon      TokenKind = "colon"
+	TokenAssign     TokenKind = "assign"
 	TokenQuestion   TokenKind = "question"
 	TokenArrow      TokenKind = "arrow"
 	TokenText       TokenKind = "text"

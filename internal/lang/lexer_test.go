@@ -36,6 +36,33 @@ view {
 	}
 }
 
+func TestLexEmitsAssignToken(t *testing.T) {
+	// A bare `=` is the framework-level separator in store/state contracts; `=>`
+	// must still win as an arrow.
+	tokens, diagnostics := Lex("store Cart cart.Cart = cart.NewCart()\npaths {\n=> {}\n}\n")
+	if diagnostics.HasErrors() {
+		t.Fatal(diagnostics)
+	}
+	var assigns, arrows int
+	for _, token := range tokens {
+		switch token.Kind {
+		case TokenAssign:
+			assigns++
+			if token.Lexeme != "=" {
+				t.Fatalf("assign lexeme = %q, want =", token.Lexeme)
+			}
+		case TokenArrow:
+			arrows++
+		}
+	}
+	if assigns != 1 {
+		t.Fatalf("got %d assign tokens, want 1", assigns)
+	}
+	if arrows != 1 {
+		t.Fatalf("got %d arrow tokens, want 1 (=> must not split into assign)", arrows)
+	}
+}
+
 func TestLexReportsUnterminatedString(t *testing.T) {
 	_, diagnostics := Lex("route \"unterminated\n")
 	if !diagnostics.HasErrors() {

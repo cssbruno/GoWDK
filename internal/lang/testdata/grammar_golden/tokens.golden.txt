@@ -57,7 +57,7 @@
 18:11	identifier	"g"
 18:12	colon	":"
 18:13	identifier	"post"
-18:17	text	"="
+18:17	assign	"="
 18:18	lbrace	"{"
 18:19	identifier	"Submit"
 18:25	rbrace	"}"

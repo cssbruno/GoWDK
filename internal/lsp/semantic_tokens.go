@@ -10,7 +10,7 @@ func semanticTokenType(kind lang.TokenKind) (string, bool) {
 		return "variable", true
 	case lang.TokenString:
 		return "string", true
-	case lang.TokenLBrace, lang.TokenRBrace, lang.TokenComma, lang.TokenColon, lang.TokenQuestion, lang.TokenArrow:
+	case lang.TokenLBrace, lang.TokenRBrace, lang.TokenComma, lang.TokenColon, lang.TokenAssign, lang.TokenQuestion, lang.TokenArrow:
 		return "operator", true
 	default:
 		return "", false

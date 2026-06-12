@@ -122,6 +122,49 @@ view {
 	}
 }
 
+// TestParseTopLevelRejectsMalformedDeclarations checks the cutover parser does
+// not emit nodes for declarations the line parser rejects: trailing tokens, an
+// extra import identifier, a non-identifier use package, and a non-strict
+// package name. Emitting these would let recovery surface invalid declarations
+// as valid AST.
+func TestParseTopLevelRejectsMalformedDeclarations(t *testing.T) {
+	t.Run("package with trailing tokens", func(t *testing.T) {
+		top := ParseTopLevel("package pages extra\n")
+		if top.Package != nil {
+			t.Fatalf("emitted a package for malformed declaration: %v", top.Package)
+		}
+		if _, err := parser.ParseSyntax([]byte("package pages extra\n")); err == nil {
+			t.Fatal("line parser unexpectedly accepted the malformed package")
+		}
+	})
+
+	t.Run("non-strict package name", func(t *testing.T) {
+		if top := ParseTopLevel("package my.pkg\n"); top.Package != nil {
+			t.Fatalf("emitted a package for non-strict name: %v", top.Package)
+		}
+	})
+
+	t.Run("import with extra identifier", func(t *testing.T) {
+		src := "package pages\nimport ui extra \"github.com/acme/ui\"\n"
+		if top := ParseTopLevel(src); len(top.Imports) != 0 {
+			t.Fatalf("emitted an import for malformed declaration: %v", top.Imports)
+		}
+		if _, err := parser.ParseSyntax([]byte(src)); err == nil {
+			t.Fatal("line parser unexpectedly accepted the malformed import")
+		}
+	})
+
+	t.Run("use with non-identifier package", func(t *testing.T) {
+		src := "package pages\nuse widgets \"foo/bar\"\n"
+		if top := ParseTopLevel(src); len(top.Uses) != 0 {
+			t.Fatalf("emitted a use for malformed package string: %v", top.Uses)
+		}
+		if _, err := parser.ParseSyntax([]byte(src)); err == nil {
+			t.Fatal("line parser unexpectedly accepted the malformed use")
+		}
+	})
+}
+
 func equalKeys(a, b map[string]bool) bool {
 	if len(a) != len(b) {
 		return false

@@ -1,10 +1,16 @@
 package lang
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+)
 
 // corpusConstructs are the constructs the single-file conformance corpus
-// exercises directly (in an accept case, or a reject case asserting the
-// construct's diagnostic code).
+// exercises directly. TestConformanceCoversEveryConstruct verifies each one is
+// actually present in a corpus file, so the claim cannot outlive its case.
 var corpusConstructs = map[string]bool{
 	"package":                     true,
 	"use":                         true,
@@ -22,78 +28,82 @@ var corpusConstructs = map[string]bool{
 }
 
 // integrationCoverage maps each construct the single-file corpus cannot exercise
-// cleanly to the test surface that does. These constructs need project context
-// the corpus lacks: reactive g: directives reference a Go-typed state contract,
+// cleanly to a test file that does. These constructs need project context the
+// corpus lacks: reactive g: directives reference a Go-typed state contract,
 // endpoints need exported Go handlers, and several metadata keywords/blocks need
-// sibling files or config. Keeping the mapping here makes "full construct
-// coverage" a verifiable gate.
+// sibling files or config. Paths are relative to this package and verified to
+// exist by TestIntegrationCoverageFilesExist, so a renamed or deleted file
+// breaks the gate instead of silently passing.
 var integrationCoverage = map[string]string{
-	// g: directives: parsed by internal/view, validated against component
-	// contracts by internal/compiler.
-	"g:if":           "internal/view view_test.go; internal/compiler validate_component_view",
-	"g:else-if":      "internal/view view_test.go",
-	"g:else":         "internal/view view_test.go",
-	"g:for":          "internal/view view_test.go",
-	"g:key":          "internal/view view_test.go",
-	"g:html":         "internal/view view_test.go",
-	"g:bind:value":   "internal/compiler validate_component_client",
-	"g:bind:checked": "internal/compiler validate_component_client",
-	"g:post":         "internal/compiler validate_component_view (forms)",
-	"g:target":       "internal/compiler validate_component_view (forms)",
-	"g:swap":         "internal/compiler validate_component_view (forms)",
-	"g:island":       "internal/compiler validate_component_client (islands)",
-	"g:command":      "internal/compiler validate_contract_refs",
-	"g:query":        "internal/compiler validate_contract_refs",
-	"g:event":        "internal/view directives (domain-event explainer)",
-	"g:ref":          "internal/compiler validate_component_client",
-	"g:slot":         "internal/compiler validate_component_view (slots)",
-	"g:on:*":         "internal/view view_test.go (event directives)",
-	"g:message:*":    "internal/compiler validate_component_view (validation messages)",
+	// g: directives parsed by internal/view.
+	"g:if":      "../view/view_test.go",
+	"g:else-if": "../view/view_test.go",
+	"g:else":    "../view/view_test.go",
+	"g:for":     "../view/view_test.go",
+	"g:key":     "../view/view_test.go",
+	"g:html":    "../view/view_test.go",
+	"g:on:*":    "../view/view_test.go",
 
-	// Planned g: directives: rejected by internal/view markup validation.
-	"g:transition": "internal/view directives (unsupported markup)",
-	"g:animate":    "internal/view directives (unsupported markup)",
-	"g:window":     "internal/view directives (unsupported markup)",
-	"g:document":   "internal/view directives (unsupported markup)",
-	"g:body":       "internal/view directives (unsupported markup)",
-	"g:head":       "internal/view directives (unsupported markup)",
-	"g:await":      "internal/view directives (unsupported markup)",
-	"g:async":      "internal/view directives (unsupported markup)",
-	"g:use":        "internal/view directives (unsupported markup)",
-	"g:action":     "internal/view directives (unsupported markup)",
-	"g:attach":     "internal/view directives (unsupported markup)",
+	// g: directives validated against component contracts by internal/compiler.
+	"g:bind:value":   "../compiler/validate_test.go",
+	"g:bind:checked": "../compiler/validate_test.go",
+	"g:post":         "../compiler/validate_test.go",
+	"g:target":       "../compiler/validate_test.go",
+	"g:swap":         "../compiler/validate_test.go",
+	"g:island":       "../compiler/validate_test.go",
+	"g:event":        "../compiler/validate_test.go",
+	"g:ref":          "../compiler/validate_test.go",
+	"g:slot":         "../compiler/validate_test.go",
+	"g:message:*":    "../compiler/validate_test.go",
+	"g:command":      "../compiler/validate_contract_refs_test.go",
+	"g:query":        "../compiler/validate_contract_refs_test.go",
+
+	// Planned g: directives rejected by internal/view markup validation.
+	"g:transition": "../view/view_test.go",
+	"g:animate":    "../view/view_test.go",
+	"g:window":     "../view/view_test.go",
+	"g:document":   "../view/view_test.go",
+	"g:body":       "../view/view_test.go",
+	"g:head":       "../view/view_test.go",
+	"g:await":      "../view/view_test.go",
+	"g:async":      "../view/view_test.go",
+	"g:use":        "../view/view_test.go",
+	"g:action":     "../view/view_test.go",
+	"g:attach":     "../view/view_test.go",
 
 	// Blocks and keywords needing Go types, sibling files, or config.
-	"import":     "internal/parser syntax_test (Go imports)",
-	"paths {}":   "internal/compiler routes_test (dynamic SPA paths)",
-	"load {}":    "internal/compiler validate_page (SSR load)",
-	"client {}":  "internal/compiler validate_component_client",
-	"go {}":      "internal/compiler backend_bindings_test",
-	"store":      "internal/compiler validate_page (page stores)",
-	"state":      "internal/compiler validate_component_client",
-	"emits":      "internal/compiler validate_identity (component emits)",
-	"page":       "internal/compiler validate_identity (page id)",
-	"canonical":  "internal/compiler validate_page (head metadata)",
-	"image":      "internal/compiler validate_page (head metadata)",
-	"layout":     "internal/compiler validate_identity (layouts)",
-	"cache":      "internal/compiler validate_page (cache policy)",
-	"revalidate": "internal/compiler validate_page (revalidate policy)",
-	"error":      "internal/compiler validate_errors (error pages)",
-	"guard":      "internal/compiler validate_page (guards)",
-	"css":        "internal/compiler validate_page (css selection)",
-	"wasm":       "internal/compiler validate_component_fingerprint (wasm islands)",
-	"asset":      "internal/compiler validate_assets",
-	"act":        "internal/compiler backend_bindings_test (actions)",
-	"api":        "internal/compiler backend_bindings_test (apis)",
-	"fragment":   "internal/compiler backend_bindings_test (fragments)",
+	"import":     "../parser/syntax_test.go",
+	"paths {}":   "../compiler/validate_test.go",
+	"load {}":    "../compiler/validate_test.go",
+	"client {}":  "../compiler/validate_test.go",
+	"go {}":      "../compiler/backend_bindings_test.go",
+	"store":      "../compiler/validate_test.go",
+	"state":      "../compiler/validate_test.go",
+	"emits":      "../compiler/validate_test.go",
+	"page":       "../compiler/validate_test.go",
+	"canonical":  "../compiler/validate_test.go",
+	"image":      "../compiler/validate_test.go",
+	"layout":     "../compiler/validate_test.go",
+	"cache":      "../compiler/validate_test.go",
+	"revalidate": "../compiler/validate_test.go",
+	"error":      "../compiler/validate_test.go",
+	"guard":      "../compiler/validate_test.go",
+	"css":        "../compiler/validate_test.go",
+	"wasm":       "../compiler/validate_test.go",
+	"asset":      "../compiler/validate_test.go",
+	"act":        "../compiler/backend_bindings_test.go",
+	"api":        "../compiler/backend_bindings_test.go",
+	"fragment":   "../compiler/backend_bindings_test.go",
 }
 
 // TestConformanceCoversEveryConstruct asserts every construct in the stability
 // registry is accounted for — exercised by the single-file corpus or mapped to
-// the integration test that covers it — and that the two coverage sets do not
-// overlap. A new construct fails here until it is given coverage, so "full
-// construct coverage" cannot silently regress.
+// an integration test — the two sets do not overlap, and a corpus claim is
+// backed by an actual corpus file. A new construct fails here until it is given
+// real coverage.
 func TestConformanceCoversEveryConstruct(t *testing.T) {
+	corpus := readAllCorpus(t)
+
 	for _, construct := range ConstructStabilities() {
 		inCorpus := corpusConstructs[construct.Name]
 		_, inIntegration := integrationCoverage[construct.Name]
@@ -102,6 +112,18 @@ func TestConformanceCoversEveryConstruct(t *testing.T) {
 			t.Errorf("construct %q is listed as both corpus and integration covered", construct.Name)
 		case !inCorpus && !inIntegration:
 			t.Errorf("construct %q (%s) has no corpus or integration coverage entry", construct.Name, construct.Kind)
+		case inCorpus && !constructPresentInCorpus(construct, corpus):
+			t.Errorf("construct %q claims corpus coverage but no corpus file exercises it", construct.Name)
+		}
+	}
+}
+
+// TestIntegrationCoverageFilesExist verifies every integration-coverage
+// reference points at a real file, so a rename or deletion fails the gate.
+func TestIntegrationCoverageFilesExist(t *testing.T) {
+	for name, path := range integrationCoverage {
+		if _, err := os.Stat(filepath.FromSlash(path)); err != nil {
+			t.Errorf("integration coverage for %q points at missing file %q: %v", name, path, err)
 		}
 	}
 }
@@ -123,4 +145,30 @@ func TestCoverageSetsHaveNoStaleEntries(t *testing.T) {
 			t.Errorf("integrationCoverage entry %q is not a registry construct", name)
 		}
 	}
+}
+
+func readAllCorpus(t *testing.T) string {
+	t.Helper()
+	var builder strings.Builder
+	for _, dir := range []string{"testdata/conformance/accept", "testdata/conformance/reject"} {
+		base := filepath.FromSlash(dir)
+		for _, name := range conformanceFiles(t, base) {
+			builder.Write(readConformanceFile(t, filepath.Join(base, name)))
+			builder.WriteByte('\n')
+		}
+	}
+	return builder.String()
+}
+
+// constructPresentInCorpus checks the corpus actually exercises a construct: by
+// its diagnostic code (reject cases), its `name {` header (block constructs), or
+// a line beginning with its name (keywords and endpoints).
+func constructPresentInCorpus(construct ConstructStability, corpus string) bool {
+	if construct.DiagnosticCode != "" {
+		return strings.Contains(corpus, construct.DiagnosticCode)
+	}
+	if header := strings.TrimSuffix(construct.Name, " {}"); header != construct.Name {
+		return regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(header) + `[ \t]*\{`).MatchString(corpus)
+	}
+	return regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(construct.Name) + `([ \t]|"|$)`).MatchString(corpus)
 }

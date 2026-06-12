@@ -7,11 +7,11 @@ import (
 
 // This file re-exports the leaf internal/syntax package (the shared tokenizer
 // and the ADR 0010 recursive-descent parser) under the lang namespace. The
-// lexer and parser moved down into a leaf so internal/parser can adopt the
-// recursive-descent parser at cutover without the import cycle that would
-// otherwise form (parser -> lang -> parser, since lang's tooling imports
-// parser). Tooling and tests keep using lang.Lex / lang.Token* / lang.Position
-// unchanged; the rich Diagnostic type and message redaction stay in lang.
+// lexer and parser live in a leaf package so internal/parser and internal/lang
+// can both consume them without an import cycle (parser -> lang -> parser,
+// since lang's tooling imports parser). Tooling and tests keep using lang.Lex /
+// lang.Token* / lang.Position unchanged; the rich Diagnostic type and message
+// redaction stay in lang.
 
 // Token and position types are aliases, so lang.Token and syntax.Token are the
 // same type and values cross the boundary without conversion.

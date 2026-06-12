@@ -37,18 +37,48 @@ type APIStatement = gwdkast.APIStatement
 // current compiler subset.
 func ParseSyntax(src []byte) (SyntaxFile, error) {
 	var file SyntaxFile
+	var parseErrors []error
 	var body []syntaxBodyLine
 	var captured SyntaxBlock
 	var capturedFragment *SyntaxFragmentEndpoint
 	var blockScanner braceScanner
 	depth := 0
+	skippingBlock := false
+	skipDepth := 0
+	var skipScanner braceScanner
 	seenDeclaration := false
 	seenGoBlocks := map[string]source.SourceSpan{}
+
+	addError := func(err error) {
+		if err != nil {
+			parseErrors = append(parseErrors, err)
+		}
+	}
+	startSkippingBlock := func(kind string) {
+		skippingBlock = true
+		skipDepth = 1
+		skipScanner = braceScanner{lang: blockScanLang(kind)}
+	}
 
 	scanner := bufio.NewScanner(bytes.NewReader(src))
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
 		line := strings.TrimSpace(rawLine)
+		if skippingBlock {
+			if line == "}" && !skipScanner.inMultiline() {
+				skipDepth--
+				if skipDepth == 0 {
+					skippingBlock = false
+					continue
+				}
+				continue
+			}
+			skipDepth += skipScanner.delta(rawLine)
+			if skipDepth < 1 {
+				skippingBlock = false
+			}
+			continue
+		}
 		if capturedFragment != nil {
 			if line == "}" {
 				capturedFragment.Body = strings.TrimSpace(joinSyntaxBody(body))
@@ -62,7 +92,8 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 		}
 		if captured.Kind != "" {
 			if captured.Kind == "view" && line == "style {" {
-				return SyntaxFile{}, fmt.Errorf("line %d: style block must be outside view {}", lineNumber)
+				addError(fmt.Errorf("line %d: style block must be outside view {}", lineNumber))
+				continue
 			}
 			if line == "}" && !blockScanner.inMultiline() {
 				depth--
@@ -79,7 +110,10 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 					}
 					block, err := finishSyntaxBlock(captured, body)
 					if err != nil {
-						return SyntaxFile{}, err
+						addError(err)
+						captured = SyntaxBlock{}
+						body = nil
+						continue
 					}
 					file.Blocks = append(file.Blocks, block)
 					captured = SyntaxBlock{}
@@ -95,25 +129,37 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			if captured.Kind == "client" {
 				depth += blockScanner.delta(rawLine)
 				if depth < 1 {
-					return SyntaxFile{}, fmt.Errorf("line %d: client block closed unexpectedly", lineNumber)
+					addError(fmt.Errorf("line %d: client block closed unexpectedly", lineNumber))
+					captured = SyntaxBlock{}
+					body = nil
+					continue
 				}
 			}
 			if captured.Kind == "go" {
 				depth += blockScanner.delta(rawLine)
 				if depth < 1 {
-					return SyntaxFile{}, fmt.Errorf("line %d: go block closed unexpectedly", lineNumber)
+					addError(fmt.Errorf("line %d: go block closed unexpectedly", lineNumber))
+					captured = SyntaxBlock{}
+					body = nil
+					continue
 				}
 			}
 			if captured.Kind == "style" {
 				depth += blockScanner.delta(rawLine)
 				if depth < 1 {
-					return SyntaxFile{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
+					addError(fmt.Errorf("line %d: style block closed unexpectedly", lineNumber))
+					captured = SyntaxBlock{}
+					body = nil
+					continue
 				}
 			}
 			if captured.Kind == "js" {
 				depth += blockScanner.delta(rawLine)
 				if depth < 1 {
-					return SyntaxFile{}, fmt.Errorf("line %d: js block closed unexpectedly", lineNumber)
+					addError(fmt.Errorf("line %d: js block closed unexpectedly", lineNumber))
+					captured = SyntaxBlock{}
+					body = nil
+					continue
 				}
 			}
 			body = append(body, syntaxBodyLine{Text: rawLine, Line: lineNumber})
@@ -125,7 +171,8 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 		}
 		if match := packagePattern.FindStringSubmatch(line); match != nil {
 			if seenDeclaration {
-				return SyntaxFile{}, lineDiagnosticError(DiagnosticPackageMustBeFirst, lineNumber, rawLine, "package declaration must be the first non-comment declaration")
+				addError(lineDiagnosticError(DiagnosticPackageMustBeFirst, lineNumber, rawLine, "package declaration must be the first non-comment declaration"))
+				continue
 			}
 			pkg := SyntaxPackage{Name: match[1], Span: sourceLineSpan(lineNumber, rawLine)}
 			file.Package = &pkg
@@ -133,7 +180,8 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "package ") {
-			return SyntaxFile{}, fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line)
+			addError(fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line))
+			continue
 		}
 		seenDeclaration = true
 		if match := metadataPattern.FindStringSubmatch(line); match != nil {
@@ -143,7 +191,8 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 				Span:  sourceLineSpan(lineNumber, rawLine),
 			}
 			if err := applySyntaxMetadata(&file, metadata, lineNumber, rawLine); err != nil {
-				return SyntaxFile{}, withLine(lineNumber, err)
+				addError(withLine(lineNumber, err))
+				continue
 			}
 			if match[1] == "wasm" {
 				file.WASM = &WASMContract{
@@ -155,7 +204,8 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "@") {
-			return SyntaxFile{}, lineDiagnosticError(DiagnosticMalformedLegacyMetadata, lineNumber, rawLine, "malformed legacy metadata %q", line)
+			addError(lineDiagnosticError(DiagnosticMalformedLegacyMetadata, lineNumber, rawLine, "malformed legacy metadata %q", line))
+			continue
 		}
 		if match := importPattern.FindStringSubmatch(line); match != nil {
 			file.Imports = append(file.Imports, SyntaxImport{
@@ -166,7 +216,8 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if isMalformedImport(line) {
-			return SyntaxFile{}, fmt.Errorf("line %d: malformed import %q", lineNumber, line)
+			addError(fmt.Errorf("line %d: malformed import %q", lineNumber, line))
+			continue
 		}
 		if match := usePattern.FindStringSubmatch(line); match != nil {
 			file.Uses = append(file.Uses, SyntaxUse{
@@ -177,7 +228,8 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if isMalformedUse(line) {
-			return SyntaxFile{}, lineDiagnosticError(DiagnosticMalformedGOWDKUse, lineNumber, rawLine, "malformed use %q", line)
+			addError(lineDiagnosticError(DiagnosticMalformedGOWDKUse, lineNumber, rawLine, "malformed use %q", line))
+			continue
 		}
 		if match := jsPattern.FindStringSubmatch(line); match != nil {
 			file.JS = append(file.JS, gwdkast.AssetRef{
@@ -194,7 +246,8 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if isMalformedJS(line) {
-			return SyntaxFile{}, fmt.Errorf("line %d: malformed js declaration %q", lineNumber, line)
+			addError(fmt.Errorf("line %d: malformed js declaration %q", lineNumber, line))
+			continue
 		}
 		if match := storePattern.FindStringSubmatch(line); match != nil {
 			span := sourceLineSpan(lineNumber, rawLine)
@@ -212,12 +265,14 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			switch match[1] {
 			case "props":
 				if match[4] != "" || match[5] != "" {
-					return SyntaxFile{}, fmt.Errorf("line %d: props contract must not declare an init function", lineNumber)
+					addError(fmt.Errorf("line %d: props contract must not declare an init function", lineNumber))
+					continue
 				}
 				file.PropsType = &typeRef
 			case "state":
 				if match[4] == "" || match[5] == "" {
-					return SyntaxFile{}, fmt.Errorf("line %d: state contract requires an init function", lineNumber)
+					addError(fmt.Errorf("line %d: state contract requires an init function", lineNumber))
+					continue
 				}
 				file.State = &StateContract{
 					Type: typeRef,
@@ -240,7 +295,9 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 				if target != "" {
 					label = "go " + target
 				}
-				return SyntaxFile{}, fmt.Errorf("line %d: duplicate %s block; first declared on line %d", lineNumber, label, span.Start.Line)
+				addError(fmt.Errorf("line %d: duplicate %s block; first declared on line %d", lineNumber, label, span.Start.Line))
+				startSkippingBlock("go")
+				continue
 			}
 			span := sourceLineSpan(lineNumber, rawLine)
 			seenGoBlocks[target] = span
@@ -251,14 +308,17 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 		}
 		if match := actionEndpointPattern.FindStringSubmatch(line); match != nil {
 			if !isExportedIdentifier(match[1]) {
-				return SyntaxFile{}, fmt.Errorf("line %d: action handler %q must be an exported Go identifier", lineNumber, match[1])
+				addError(fmt.Errorf("line %d: action handler %q must be an exported Go identifier", lineNumber, match[1]))
+				continue
 			}
 			if match[2] != "POST" {
-				return SyntaxFile{}, fmt.Errorf("line %d: action %s uses unsupported method %s; actions currently require POST", lineNumber, match[1], match[2])
+				addError(fmt.Errorf("line %d: action %s uses unsupported method %s; actions currently require POST", lineNumber, match[1], match[2]))
+				continue
 			}
 			errorPage, err := endpointErrorPage(match, lineNumber)
 			if err != nil {
-				return SyntaxFile{}, err
+				addError(err)
+				continue
 			}
 			file.Actions = append(file.Actions, SyntaxEndpoint{
 				Kind:          "act",
@@ -272,15 +332,19 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if match := actionPattern.FindStringSubmatch(line); match != nil {
-			return SyntaxFile{}, lineDiagnosticError(DiagnosticOldActionBlockSyntax, lineNumber, rawLine, "old action block syntax is not supported; use `act %s POST \"<path>\"` and move behavior to Go", exportedIdentifierSuggestion(match[1]))
+			addError(lineDiagnosticError(DiagnosticOldActionBlockSyntax, lineNumber, rawLine, "old action block syntax is not supported; use `act %s POST \"<path>\"` and move behavior to Go", exportedIdentifierSuggestion(match[1])))
+			startSkippingBlock("act")
+			continue
 		}
 		if match := apiEndpointPattern.FindStringSubmatch(line); match != nil {
 			if !isExportedIdentifier(match[1]) {
-				return SyntaxFile{}, fmt.Errorf("line %d: API handler %q must be an exported Go identifier", lineNumber, match[1])
+				addError(fmt.Errorf("line %d: API handler %q must be an exported Go identifier", lineNumber, match[1]))
+				continue
 			}
 			errorPage, err := endpointErrorPage(match, lineNumber)
 			if err != nil {
-				return SyntaxFile{}, err
+				addError(err)
+				continue
 			}
 			file.APIs = append(file.APIs, SyntaxEndpoint{
 				Kind:          "api",
@@ -294,14 +358,20 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if match := apiPattern.FindStringSubmatch(line); match != nil {
-			return SyntaxFile{}, lineDiagnosticError(DiagnosticOldAPIBlockSyntax, lineNumber, rawLine, "old API block syntax is not supported; use `api %s GET \"<path>\"` and move behavior to Go", exportedIdentifierSuggestion(match[1]))
+			addError(lineDiagnosticError(DiagnosticOldAPIBlockSyntax, lineNumber, rawLine, "old API block syntax is not supported; use `api %s GET \"<path>\"` and move behavior to Go", exportedIdentifierSuggestion(match[1])))
+			startSkippingBlock("api")
+			continue
 		}
 		if match := fragmentEndpointPattern.FindStringSubmatch(line); match != nil {
 			if match[2] != "GET" {
-				return SyntaxFile{}, fmt.Errorf("line %d: fragment %s uses unsupported method %s; fragments currently require GET", lineNumber, match[1], match[2])
+				addError(fmt.Errorf("line %d: fragment %s uses unsupported method %s; fragments currently require GET", lineNumber, match[1], match[2]))
+				startSkippingBlock("fragment")
+				continue
 			}
 			if err := validateFragmentTarget(match[4]); err != nil {
-				return SyntaxFile{}, fmt.Errorf("line %d: %w", lineNumber, err)
+				addError(fmt.Errorf("line %d: %w", lineNumber, err))
+				startSkippingBlock("fragment")
+				continue
 			}
 			span := sourceLineSpan(lineNumber, rawLine)
 			capturedFragment = &SyntaxFragmentEndpoint{
@@ -317,20 +387,22 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if name := unsupportedTopLevelBlockName(line); name != "" {
-			return SyntaxFile{}, lineDiagnosticError(DiagnosticUnsupportedTopLevelBlock, lineNumber, rawLine, "unsupported top-level block %q", name)
+			addError(lineDiagnosticError(DiagnosticUnsupportedTopLevelBlock, lineNumber, rawLine, "unsupported top-level block %q", name))
+			startSkippingBlock(name)
+			continue
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return SyntaxFile{}, err
+		addError(err)
 	}
 	if captured.Kind != "" {
-		return SyntaxFile{}, fmt.Errorf("%s block missing closing }", captured.Kind)
+		addError(fmt.Errorf("%s block missing closing }", captured.Kind))
 	}
 	if capturedFragment != nil {
-		return SyntaxFile{}, fmt.Errorf("fragment %s block missing closing }", capturedFragment.Name)
+		addError(fmt.Errorf("fragment %s block missing closing }", capturedFragment.Name))
 	}
 	attachSyntaxAssetScopes(&file)
-	return file, nil
+	return file, diagnosticErrors(parseErrors)
 }
 
 func attachSyntaxAssetScopes(file *SyntaxFile) {
@@ -578,10 +650,10 @@ func parseSyntaxProps(body []syntaxBodyLine) ([]Prop, error) {
 		}
 		match := propPattern.FindStringSubmatch(line)
 		if match == nil {
-			return nil, fmt.Errorf("line %d: unsupported prop syntax %q", raw.Line, line)
+			return nil, lineDiagnosticError(DiagnosticInvalidComponentProp, raw.Line, raw.Text, "invalid prop declaration %q", line)
 		}
 		if !supportedSyntaxPropType(match[2]) {
-			return nil, fmt.Errorf("line %d: unsupported prop type %q", raw.Line, match[2])
+			return nil, lineDiagnosticError(DiagnosticUnsupportedComponentPropType, raw.Line, raw.Text, "prop %s uses unsupported type %q", match[1], match[2])
 		}
 		props = append(props, Prop{Name: match[1], Type: match[2], Span: sourceLineSpan(raw.Line, raw.Text)})
 	}

@@ -6,6 +6,12 @@ Date: 2026-06-11
 
 Accepted
 
+Implemented on 2026-06-12. `internal/syntax` owns the shared tokenizer,
+`internal/parser.ParseSyntax` consumes the shared token rules behind the
+`gwdkast.File` seam, page/component/layout entry points lower that AST into
+`gwdkir`, parser diagnostics accumulate across declaration and block boundaries,
+and the former `internal/parser` `lexLine` path has been removed.
+
 ## Context
 
 The compiler front-end is line-oriented. `internal/parser.ParseSyntax` reads

@@ -2,8 +2,8 @@ package parser
 
 import (
 	"strings"
-	"unicode"
-	"unicode/utf8"
+
+	"github.com/cssbruno/gowdk/internal/syntax"
 )
 
 var (
@@ -47,240 +47,71 @@ func (pattern linePattern) MatchString(line string) bool {
 	return pattern.parse(line) != nil
 }
 
-type lineParser struct {
-	tokens []lineToken
-	pos    int
-}
-
-type lineTokenKind int
-
-const (
-	lineTokenEOF lineTokenKind = iota
-	lineTokenIdent
-	lineTokenString
-	lineTokenRest
-	lineTokenAt
-	lineTokenArrow
-	lineTokenFatArrow
-	lineTokenAssign
-	lineTokenDeclare
-	lineTokenLBrace
-	lineTokenRBrace
-	lineTokenLParen
-	lineTokenRParen
-	lineTokenDot
-	lineTokenQuestion
-	lineTokenColon
-)
-
-type lineToken struct {
-	kind lineTokenKind
-	text string
-}
-
-func newLineParser(line string) lineParser {
-	return lineParser{tokens: lexLine(line)}
-}
-
-func lexLine(line string) []lineToken {
-	var tokens []lineToken
-	for index := 0; index < len(line); {
-		r, size := runeAt(line, index)
-		if unicode.IsSpace(r) {
-			index += size
-			continue
-		}
-		if isLineIdentStart(r) {
-			start := index
-			index += size
-			for index < len(line) {
-				next, nextSize := runeAt(line, index)
-				if !isLineIdentPart(next) {
-					break
-				}
-				index += nextSize
-			}
-			tokens = append(tokens, lineToken{kind: lineTokenIdent, text: line[start:index]})
-			continue
-		}
-		if r == '"' {
-			value, next, ok := lexLineString(line, index)
-			if !ok {
-				return append(tokens, lineToken{kind: lineTokenRest, text: line[index:]}, lineToken{kind: lineTokenEOF})
-			}
-			tokens = append(tokens, lineToken{kind: lineTokenString, text: value})
-			index = next
-			continue
-		}
-		if strings.HasPrefix(line[index:], "=>") {
-			tokens = append(tokens, lineToken{kind: lineTokenFatArrow, text: "=>"})
-			index += 2
-			continue
-		}
-		if strings.HasPrefix(line[index:], "->") {
-			tokens = append(tokens, lineToken{kind: lineTokenArrow, text: "->"})
-			index += 2
-			continue
-		}
-		if strings.HasPrefix(line[index:], ":=") {
-			tokens = append(tokens, lineToken{kind: lineTokenDeclare, text: ":="})
-			index += 2
-			continue
-		}
-		switch r {
-		case '@':
-			tokens = append(tokens, lineToken{kind: lineTokenAt, text: "@"})
-		case '=':
-			tokens = append(tokens, lineToken{kind: lineTokenAssign, text: "="})
-		case '{':
-			tokens = append(tokens, lineToken{kind: lineTokenLBrace, text: "{"})
-		case '}':
-			tokens = append(tokens, lineToken{kind: lineTokenRBrace, text: "}"})
-		case '(':
-			tokens = append(tokens, lineToken{kind: lineTokenLParen, text: "("})
-		case ')':
-			tokens = append(tokens, lineToken{kind: lineTokenRParen, text: ")"})
-		case '.':
-			tokens = append(tokens, lineToken{kind: lineTokenDot, text: "."})
-		case '?':
-			tokens = append(tokens, lineToken{kind: lineTokenQuestion, text: "?"})
-		case ':':
-			tokens = append(tokens, lineToken{kind: lineTokenColon, text: ":"})
-		default:
-			tokens = append(tokens, lineToken{kind: lineTokenRest, text: line[index:]})
-			index = len(line)
-			continue
-		}
-		index += size
+func syntaxTokens(line string) []syntax.Token {
+	if hasLineComment(line) {
+		return nil
 	}
-	tokens = append(tokens, lineToken{kind: lineTokenEOF})
-	return tokens
+	tokens, diagnostics := syntax.Lex(line)
+	if len(diagnostics) > 0 {
+		return nil
+	}
+	out := make([]syntax.Token, 0, len(tokens))
+	for _, token := range tokens {
+		switch token.Kind {
+		case syntax.TokenEOF, syntax.TokenNewline:
+			return out
+		case syntax.TokenIllegal:
+			return nil
+		default:
+			out = append(out, token)
+		}
+	}
+	return out
 }
 
-func runeAt(value string, index int) (rune, int) {
-	r, size := utf8.DecodeRuneInString(value[index:])
-	return r, size
-}
-
-func lexLineString(line string, start int) (string, int, bool) {
-	var builder strings.Builder
-	for index := start + 1; index < len(line); index++ {
-		switch line[index] {
-		case '"':
-			return builder.String(), index + 1, true
-		case '\\':
-			if index+1 >= len(line) {
-				builder.WriteByte(line[index])
+func hasLineComment(line string) bool {
+	inString := false
+	escaped := false
+	for index := 0; index+1 < len(line); index++ {
+		ch := line[index]
+		if inString {
+			if escaped {
+				escaped = false
 				continue
 			}
-			index++
-			switch line[index] {
-			case '"', '\\':
-				builder.WriteByte(line[index])
-			case 'n':
-				builder.WriteByte('\n')
-			case 't':
-				builder.WriteByte('\t')
-			default:
-				builder.WriteByte('\\')
-				builder.WriteByte(line[index])
+			if ch == '\\' {
+				escaped = true
+				continue
 			}
-		default:
-			builder.WriteByte(line[index])
-		}
-	}
-	return "", start, false
-}
-
-func isLineIdentStart(r rune) bool {
-	return r == '_' || unicode.IsLetter(r)
-}
-
-func isLineIdentPart(r rune) bool {
-	return isLineIdentStart(r) || unicode.IsDigit(r)
-}
-
-func isStrictIdent(value string) bool {
-	if value == "" {
-		return false
-	}
-	for index, r := range value {
-		if index == 0 {
-			if !isIdentStart(r) {
-				return false
+			if ch == '"' {
+				inString = false
 			}
 			continue
 		}
-		if !isIdentStart(r) && (r < '0' || r > '9') {
-			return false
+		if ch == '"' {
+			inString = true
+			continue
+		}
+		if ch == '/' && line[index+1] == '/' {
+			return true
 		}
 	}
-	return true
-}
-
-func (parser *lineParser) match(kind lineTokenKind) (lineToken, bool) {
-	token := parser.peek()
-	if token.kind != kind {
-		return lineToken{}, false
-	}
-	parser.pos++
-	return token, true
-}
-
-func (parser *lineParser) matchIdent(text string) bool {
-	token := parser.peek()
-	if token.kind != lineTokenIdent || token.text != text {
-		return false
-	}
-	parser.pos++
-	return true
-}
-
-func (parser *lineParser) ident() (string, bool) {
-	token, ok := parser.match(lineTokenIdent)
-	if !ok || !isStrictIdent(token.text) {
-		return "", false
-	}
-	return token.text, true
-}
-
-func (parser *lineParser) blockName() (string, bool) {
-	token, ok := parser.match(lineTokenIdent)
-	if !ok || !isBlockName(token.text) {
-		return "", false
-	}
-	return token.text, true
-}
-
-func (parser *lineParser) stringValue() (string, bool) {
-	token, ok := parser.match(lineTokenString)
-	return token.text, ok
-}
-
-func (parser *lineParser) eof() bool {
-	return parser.peek().kind == lineTokenEOF
-}
-
-func (parser *lineParser) peek() lineToken {
-	if parser.pos >= len(parser.tokens) {
-		return lineToken{kind: lineTokenEOF}
-	}
-	return parser.tokens[parser.pos]
+	return false
 }
 
 func parseMetadataLine(line string) []string {
 	line = strings.TrimSpace(line)
 	nameEnd := 0
 	for nameEnd < len(line) {
-		r, size := runeAt(line, nameEnd)
+		ch := line[nameEnd]
 		if nameEnd == 0 {
-			if !isIdentStart(r) {
+			if !isIdentStart(rune(ch)) {
 				return nil
 			}
-		} else if !isIdentStart(r) && (r < '0' || r > '9') {
+		} else if !isIdentStart(rune(ch)) && (ch < '0' || ch > '9') {
 			break
 		}
-		nameEnd += size
+		nameEnd++
 	}
 	if nameEnd == 0 {
 		return nil
@@ -290,8 +121,8 @@ func parseMetadataLine(line string) []string {
 		return nil
 	}
 	if nameEnd < len(line) {
-		r, _ := runeAt(line, nameEnd)
-		if !unicode.IsSpace(r) {
+		next := line[nameEnd]
+		if next != ' ' && next != '\t' {
 			return nil
 		}
 	}
@@ -308,190 +139,141 @@ func isMetadataKeyword(name string) bool {
 }
 
 func parsePackageLine(line string) []string {
-	parser := newLineParser(line)
-	if !parser.matchIdent("package") {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 2 || tokens[0].Lexeme != "package" || tokens[1].Kind != syntax.TokenIdentifier || !isStrictIdent(tokens[1].Lexeme) {
 		return nil
 	}
-	name, ok := parser.ident()
-	if !ok || !parser.eof() {
-		return nil
-	}
-	return []string{line, name}
+	return []string{line, tokens[1].Lexeme}
 }
 
 func parseImportLine(line string) []string {
-	parser := newLineParser(line)
-	if !parser.matchIdent("import") {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 2 && len(tokens) != 3 {
 		return nil
 	}
+	if tokens[0].Kind != syntax.TokenIdentifier || tokens[0].Lexeme != "import" {
+		return nil
+	}
+	index := 1
 	alias := ""
-	if parser.peek().kind == lineTokenIdent {
-		value, ok := parser.ident()
-		if !ok {
+	if len(tokens) == 3 {
+		if tokens[index].Kind != syntax.TokenIdentifier || !isStrictIdent(tokens[index].Lexeme) {
 			return nil
 		}
-		alias = value
+		alias = tokens[index].Lexeme
+		index++
 	}
-	path, ok := parser.stringValue()
-	if !ok || !parser.eof() {
+	if tokens[index].Kind != syntax.TokenString {
 		return nil
 	}
-	return []string{line, alias, path}
+	return []string{line, alias, decodeStringLiteral(tokens[index].Lexeme)}
 }
 
 func parseUseLine(line string) []string {
-	parser := newLineParser(line)
-	if !parser.matchIdent("use") {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 3 || tokens[0].Kind != syntax.TokenIdentifier || tokens[0].Lexeme != "use" {
 		return nil
 	}
-	alias, ok := parser.ident()
-	if !ok {
+	if tokens[1].Kind != syntax.TokenIdentifier || !isStrictIdent(tokens[1].Lexeme) || tokens[2].Kind != syntax.TokenString {
 		return nil
 	}
-	pkg, ok := parser.identString()
-	if !ok || !parser.eof() {
+	pkg := decodeStringLiteral(tokens[2].Lexeme)
+	if !isStrictIdent(pkg) {
 		return nil
 	}
-	return []string{line, alias, pkg}
-}
-
-func (parser *lineParser) identString() (string, bool) {
-	value, ok := parser.stringValue()
-	if !ok || !isStrictIdent(value) {
-		return "", false
-	}
-	return value, true
+	return []string{line, tokens[1].Lexeme, pkg}
 }
 
 func parseJSLine(line string) []string {
-	parser := newLineParser(line)
-	if !parser.matchIdent("js") {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 2 || tokens[0].Kind != syntax.TokenIdentifier || tokens[0].Lexeme != "js" || tokens[1].Kind != syntax.TokenString {
 		return nil
 	}
-	path, ok := parser.stringValue()
-	if !ok || !parser.eof() {
-		return nil
-	}
-	return []string{line, path}
+	return []string{line, decodeStringLiteral(tokens[1].Lexeme)}
 }
 
 func parseJSBlockLine(line string) []string {
-	parser := newLineParser(line)
-	if !parser.matchIdent("js") {
-		return nil
-	}
-	if _, ok := parser.match(lineTokenLBrace); !ok || !parser.eof() {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 2 || tokens[0].Kind != syntax.TokenIdentifier || tokens[0].Lexeme != "js" || tokens[1].Kind != syntax.TokenLBrace {
 		return nil
 	}
 	return []string{line}
 }
 
 func parseBuildCallLine(line string) []string {
-	parser := newLineParser(line)
-	if _, ok := parser.match(lineTokenFatArrow); !ok {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 3 || tokens[0].Kind != syntax.TokenArrow {
 		return nil
 	}
-	alias, ok := parser.ident()
+	alias, function, ok := parseQualifiedCall(tokens[1:])
 	if !ok {
-		return nil
-	}
-	if _, ok := parser.match(lineTokenDot); !ok {
-		return nil
-	}
-	function, ok := parser.ident()
-	if !ok {
-		return nil
-	}
-	if _, ok := parser.match(lineTokenLParen); !ok {
-		return nil
-	}
-	if _, ok := parser.match(lineTokenRParen); !ok || !parser.eof() {
 		return nil
 	}
 	return []string{line, alias, function}
 }
 
 func parseActionEndpointLine(line string) []string {
-	parser := newLineParser(line)
-	if !parser.matchIdent("act") {
-		return nil
-	}
-	name, ok := parser.ident()
-	if !ok {
-		return nil
-	}
-	method, ok := parser.method()
-	if !ok {
-		return nil
-	}
-	route, ok := parser.stringValue()
-	if !ok {
-		return nil
-	}
-	errorPath, ok := parser.optionalErrorString()
-	if !ok || !parser.eof() {
-		return nil
-	}
-	return []string{line, name, method, route, errorPath}
+	return parseEndpointLine(line, "act", true)
 }
 
 func parseAPIEndpointLine(line string) []string {
-	parser := newLineParser(line)
-	if !parser.matchIdent("api") {
+	return parseEndpointLine(line, "api", false)
+}
+
+func parseEndpointLine(line, keyword string, action bool) []string {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 4 && len(tokens) != 6 {
 		return nil
 	}
-	name, ok := parser.ident()
-	if !ok {
+	if tokens[0].Kind != syntax.TokenIdentifier || tokens[0].Lexeme != keyword {
 		return nil
 	}
-	method, ok := parser.apiMethod()
-	if !ok {
+	if tokens[1].Kind != syntax.TokenIdentifier || !isStrictIdent(tokens[1].Lexeme) {
 		return nil
 	}
-	route, ok := parser.stringValue()
-	if !ok {
+	if tokens[2].Kind != syntax.TokenIdentifier || !methodToken(tokens[2].Lexeme) {
 		return nil
 	}
-	errorPath, ok := parser.optionalErrorString()
-	if !ok || !parser.eof() {
+	if action {
+		if tokens[2].Lexeme != "POST" {
+			return nil
+		}
+	} else if !apiMethodToken(tokens[2].Lexeme) {
 		return nil
 	}
-	return []string{line, name, method, route, errorPath}
+	if tokens[3].Kind != syntax.TokenString {
+		return nil
+	}
+	errorPath := ""
+	if len(tokens) == 6 {
+		if tokens[4].Kind != syntax.TokenIdentifier || tokens[4].Lexeme != "error" || tokens[5].Kind != syntax.TokenString {
+			return nil
+		}
+		errorPath = decodeStringLiteral(tokens[5].Lexeme)
+	}
+	return []string{line, tokens[1].Lexeme, tokens[2].Lexeme, decodeStringLiteral(tokens[3].Lexeme), errorPath}
 }
 
 func parseFragmentEndpointLine(line string) []string {
-	parser := newLineParser(line)
-	if !parser.matchIdent("fragment") {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 6 || tokens[0].Kind != syntax.TokenIdentifier || tokens[0].Lexeme != "fragment" {
 		return nil
 	}
-	name, ok := parser.ident()
-	if !ok {
+	if tokens[1].Kind != syntax.TokenIdentifier || !isStrictIdent(tokens[1].Lexeme) {
 		return nil
 	}
-	method, ok := parser.apiMethod()
-	if !ok {
+	if tokens[2].Kind != syntax.TokenIdentifier || !apiMethodToken(tokens[2].Lexeme) {
 		return nil
 	}
-	route, ok := parser.stringValue()
-	if !ok {
+	if tokens[3].Kind != syntax.TokenString || tokens[4].Kind != syntax.TokenString || tokens[5].Kind != syntax.TokenLBrace {
 		return nil
 	}
-	target, ok := parser.stringValue()
-	if !ok {
-		return nil
-	}
-	if _, ok := parser.match(lineTokenLBrace); !ok || !parser.eof() {
-		return nil
-	}
-	return []string{line, name, method, route, target}
+	return []string{line, tokens[1].Lexeme, tokens[2].Lexeme, decodeStringLiteral(tokens[3].Lexeme), decodeStringLiteral(tokens[4].Lexeme)}
 }
 
 func parseActionBlockLine(line string) []string {
 	body, ok := keywordBlockBody(line, "act")
-	if !ok {
-		return nil
-	}
-	if !isBlockName(body) {
+	if !ok || !isBlockName(body) {
 		return nil
 	}
 	return []string{strings.TrimSpace(line), body}
@@ -499,26 +281,21 @@ func parseActionBlockLine(line string) []string {
 
 func parseAPIBlockLine(line string) []string {
 	body, ok := keywordBlockBody(line, "api")
-	if !ok {
-		return nil
-	}
-	if body != "" && !isBlockName(body) {
+	if !ok || (body != "" && !isBlockName(body)) {
 		return nil
 	}
 	return []string{strings.TrimSpace(line), body}
 }
 
 func parsePropLine(line string) []string {
-	parser := newLineParser(line)
-	name, ok := parser.ident()
-	if !ok {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 2 || !isIdentifierToken(tokens[0]) || !isIdentifierToken(tokens[1]) {
 		return nil
 	}
-	typ, ok := parser.ident()
-	if !ok || !parser.eof() {
+	if !isStrictIdent(tokens[0].Lexeme) || !isStrictIdent(tokens[1].Lexeme) {
 		return nil
 	}
-	return []string{line, name, typ}
+	return []string{line, tokens[0].Lexeme, tokens[1].Lexeme}
 }
 
 func parseEmitLine(line string) []string {
@@ -544,141 +321,98 @@ func parseIdentifierLine(line string) []string {
 }
 
 func parseComponentTypeLine(line string) []string {
-	parser := newLineParser(line)
-	kind, ok := parser.ident()
-	if !ok || (kind != "props" && kind != "state") {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 2 && len(tokens) != 5 {
 		return nil
 	}
-	typeAlias, typeName, ok := parser.qualifiedIdent()
+	if tokens[0].Kind != syntax.TokenIdentifier || (tokens[0].Lexeme != "props" && tokens[0].Lexeme != "state") {
+		return nil
+	}
+	typeAlias, typeName, ok := splitQualifiedIdentifier(tokens[1])
 	if !ok {
 		return nil
 	}
 	initAlias, initName := "", ""
-	if _, ok := parser.match(lineTokenAssign); ok {
-		initAlias, initName, ok = parser.qualifiedIdent()
+	if len(tokens) == 5 {
+		if tokens[2].Kind != syntax.TokenAssign {
+			return nil
+		}
+		initAlias, initName, ok = parseQualifiedCall(tokens[3:])
 		if !ok {
 			return nil
 		}
-		if _, ok := parser.match(lineTokenLParen); !ok {
-			return nil
-		}
-		if _, ok := parser.match(lineTokenRParen); !ok {
-			return nil
-		}
 	}
-	if !parser.eof() {
-		return nil
-	}
-	return []string{line, kind, typeAlias, typeName, initAlias, initName}
+	return []string{line, tokens[0].Lexeme, typeAlias, typeName, initAlias, initName}
 }
 
 func parseStoreLine(line string) []string {
-	parser := newLineParser(line)
-	if !parser.matchIdent("store") {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 6 || tokens[0].Kind != syntax.TokenIdentifier || tokens[0].Lexeme != "store" {
 		return nil
 	}
-	name, ok := parser.ident()
+	if tokens[1].Kind != syntax.TokenIdentifier || !isStrictIdent(tokens[1].Lexeme) || tokens[3].Kind != syntax.TokenAssign {
+		return nil
+	}
+	typeAlias, typeName, ok := splitQualifiedIdentifier(tokens[2])
 	if !ok {
 		return nil
 	}
-	typeAlias, typeName, ok := parser.qualifiedIdent()
+	initAlias, initName, ok := parseQualifiedCall(tokens[4:])
 	if !ok {
 		return nil
 	}
-	if _, ok := parser.match(lineTokenAssign); !ok {
-		return nil
-	}
-	initAlias, initName, ok := parser.qualifiedIdent()
-	if !ok {
-		return nil
-	}
-	if _, ok := parser.match(lineTokenLParen); !ok {
-		return nil
-	}
-	if _, ok := parser.match(lineTokenRParen); !ok || !parser.eof() {
-		return nil
-	}
-	return []string{line, name, typeAlias, typeName, initAlias, initName}
+	return []string{line, tokens[1].Lexeme, typeAlias, typeName, initAlias, initName}
 }
 
 func parseActionInputLine(line string) []string {
-	parser := newLineParser(line)
-	name, ok := parser.ident()
-	if !ok {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if len(fields) != 4 || fields[1] != ":=" || fields[2] != "form" || !isStrictIdent(fields[0]) || !isStrictIdent(fields[3]) {
 		return nil
 	}
-	if _, ok := parser.match(lineTokenDeclare); !ok {
-		return nil
-	}
-	if !parser.matchIdent("form") {
-		return nil
-	}
-	typ, ok := parser.ident()
-	if !ok || !parser.eof() {
-		return nil
-	}
-	return []string{line, name, typ}
+	return []string{line, fields[0], fields[3]}
 }
 
 func parseActionValidLine(line string) []string {
-	parser := newLineParser(line)
-	if !parser.matchIdent("valid") {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "valid(") || !strings.HasSuffix(line, ")?") {
 		return nil
 	}
-	if _, ok := parser.match(lineTokenLParen); !ok {
-		return nil
-	}
-	name, ok := parser.ident()
-	if !ok {
-		return nil
-	}
-	if _, ok := parser.match(lineTokenRParen); !ok {
-		return nil
-	}
-	if _, ok := parser.match(lineTokenQuestion); !ok || !parser.eof() {
+	name := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, "valid("), ")?"))
+	if !isStrictIdent(name) {
 		return nil
 	}
 	return []string{line, name}
 }
 
 func parseActionRedirectLine(line string) []string {
-	parser := newLineParser(line)
-	if _, ok := parser.match(lineTokenArrow); !ok {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "->") {
 		return nil
 	}
-	target, ok := parser.stringValue()
-	if !ok || !parser.eof() {
+	target, ok := parseOnlyString(strings.TrimSpace(strings.TrimPrefix(line, "->")))
+	if !ok {
 		return nil
 	}
 	return []string{line, target}
 }
 
 func parseActionFragmentLine(line string) []string {
-	parser := newLineParser(line)
-	if !parser.matchIdent("fragment") {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 3 || tokens[0].Kind != syntax.TokenIdentifier || tokens[0].Lexeme != "fragment" {
 		return nil
 	}
-	target, ok := parser.stringValue()
-	if !ok {
+	if tokens[1].Kind != syntax.TokenString || tokens[2].Kind != syntax.TokenLBrace {
 		return nil
 	}
-	if _, ok := parser.match(lineTokenLBrace); !ok || !parser.eof() {
-		return nil
-	}
-	return []string{line, target}
+	return []string{line, decodeStringLiteral(tokens[1].Lexeme)}
 }
 
 func parseAPIRouteLine(line string) []string {
-	parser := newLineParser(line)
-	method, ok := parser.apiMethod()
-	if !ok {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 2 || tokens[0].Kind != syntax.TokenIdentifier || !apiMethodToken(tokens[0].Lexeme) || tokens[1].Kind != syntax.TokenString {
 		return nil
 	}
-	route, ok := parser.stringValue()
-	if !ok || !parser.eof() {
-		return nil
-	}
-	return []string{line, method, route}
+	return []string{line, tokens[0].Lexeme, decodeStringLiteral(tokens[1].Lexeme)}
 }
 
 func parseLiteralRecordLine(line string) []string {
@@ -694,23 +428,16 @@ func parseLiteralRecordLine(line string) []string {
 }
 
 func parseSyntaxBlockLine(line string) []string {
-	parser := newLineParser(line)
-	name, ok := parser.ident()
-	if !ok || !isSyntaxBlockName(name) {
+	tokens := syntaxTokens(line)
+	if len(tokens) != 2 || tokens[0].Kind != syntax.TokenIdentifier || tokens[1].Kind != syntax.TokenLBrace || !isSyntaxBlockName(tokens[0].Lexeme) {
 		return nil
 	}
-	if _, ok := parser.match(lineTokenLBrace); !ok || !parser.eof() {
-		return nil
-	}
-	return []string{line, name}
+	return []string{line, tokens[0].Lexeme}
 }
 
 func parseGoBlockLine(line string) []string {
 	body, ok := keywordBlockBody(line, "go")
-	if !ok {
-		return nil
-	}
-	if body != "" && !isBlockName(body) {
+	if !ok || (body != "" && !isBlockName(body)) {
 		return nil
 	}
 	return []string{strings.TrimSpace(line), body}
@@ -728,60 +455,73 @@ func keywordBlockBody(line string, keyword string) (string, bool) {
 	if rest == "" {
 		return "", true
 	}
-	if !unicode.IsSpace(rune(line[len(keyword)])) {
+	if len(line) <= len(keyword) || (line[len(keyword)] != ' ' && line[len(keyword)] != '\t') {
 		return "", false
 	}
 	return rest, true
 }
 
-func (parser *lineParser) qualifiedIdent() (string, string, bool) {
-	alias, ok := parser.ident()
-	if !ok {
+func isStrictIdent(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		if index == 0 {
+			if !isIdentStart(r) {
+				return false
+			}
+			continue
+		}
+		if !isIdentStart(r) && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func isIdentifierToken(token syntax.Token) bool {
+	return token.Kind == syntax.TokenIdentifier || token.Kind == syntax.TokenMetadata
+}
+
+func splitQualifiedIdentifier(token syntax.Token) (string, string, bool) {
+	if !isIdentifierToken(token) {
 		return "", "", false
 	}
-	if _, ok := parser.match(lineTokenDot); !ok {
-		return "", "", false
-	}
-	name, ok := parser.ident()
-	if !ok {
+	alias, name, ok := strings.Cut(token.Lexeme, ".")
+	if !ok || strings.Contains(name, ".") || !isStrictIdent(alias) || !isStrictIdent(name) {
 		return "", "", false
 	}
 	return alias, name, true
 }
 
-func (parser *lineParser) optionalErrorString() (string, bool) {
-	if parser.peek().kind == lineTokenEOF {
-		return "", true
+func parseQualifiedCall(tokens []syntax.Token) (string, string, bool) {
+	if len(tokens) != 2 || tokens[1].Kind != syntax.TokenText || tokens[1].Lexeme != "()" {
+		return "", "", false
 	}
-	if !parser.matchIdent("error") {
-		return "", false
-	}
-	return parser.stringValue()
+	return splitQualifiedIdentifier(tokens[0])
 }
 
-func (parser *lineParser) method() (string, bool) {
-	token, ok := parser.match(lineTokenIdent)
-	if !ok || token.text == "" {
-		return "", false
+func methodToken(value string) bool {
+	if value == "" {
+		return false
 	}
-	for _, r := range token.text {
+	for _, r := range value {
 		if r < 'A' || r > 'Z' {
-			return "", false
+			return false
 		}
 	}
-	return token.text, true
+	return true
 }
 
-func (parser *lineParser) apiMethod() (string, bool) {
-	method, ok := parser.method()
-	if !ok {
-		return "", false
+func apiMethodToken(value string) bool {
+	if !methodToken(value) {
+		return false
 	}
-	switch method {
+	switch value {
 	case "GET", "POST", "PUT", "PATCH", "DELETE":
-		return method, true
+		return true
 	default:
-		return "", false
+		return false
 	}
 }
 
@@ -792,6 +532,48 @@ func isSyntaxBlockName(name string) bool {
 	default:
 		return false
 	}
+}
+
+func parseOnlyString(value string) (string, bool) {
+	tokens := syntaxTokens(value)
+	if len(tokens) != 1 || tokens[0].Kind != syntax.TokenString {
+		return "", false
+	}
+	return decodeStringLiteral(tokens[0].Lexeme), true
+}
+
+func decodeStringLiteral(lexeme string) string {
+	if len(lexeme) < 2 || lexeme[0] != '"' {
+		return strings.Trim(lexeme, "\"")
+	}
+	var builder strings.Builder
+	for index := 1; index < len(lexeme); index++ {
+		ch := lexeme[index]
+		if ch == '"' {
+			break
+		}
+		if ch == '\\' {
+			if index+1 >= len(lexeme) {
+				builder.WriteByte(ch)
+				continue
+			}
+			index++
+			switch lexeme[index] {
+			case '"', '\\':
+				builder.WriteByte(lexeme[index])
+			case 'n':
+				builder.WriteByte('\n')
+			case 't':
+				builder.WriteByte('\t')
+			default:
+				builder.WriteByte('\\')
+				builder.WriteByte(lexeme[index])
+			}
+			continue
+		}
+		builder.WriteByte(ch)
+	}
+	return builder.String()
 }
 
 type routeParamPatternScanner struct{}

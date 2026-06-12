@@ -1,10 +1,10 @@
 // Package syntax is the leaf lexer + recursive-descent parser for .gwdk source.
 // It owns the shared tokenizer (ADR 0010) and the typed declaration parser that
 // produces real gwdkast nodes, and it imports neither internal/lang (the
-// tooling layer) nor internal/parser (the line-oriented compiler parser). That
+// tooling layer) nor internal/parser (the compiler parser). That
 // one-directional dependency — tooling and the compiler parser both sit above
-// syntax — is what lets internal/parser adopt the recursive-descent parser at
-// cutover without an import cycle.
+// syntax — lets internal/parser consume the shared tokenizer without an import
+// cycle.
 package syntax
 
 // TokenKind identifies one lexical token.

@@ -31,12 +31,15 @@ source set. The current rendered page subset covers simple `spa` and
 literal `build {}` data, imported or same-package no-argument Go build data
 functions, lowercase HTML markup in `view {}`, and `.cmp.gwdk` component files.
 
-`internal/gwdkast` owns the typed GOWDK AST. `internal/parser.ParseSyntax`
-returns that AST for the current source subset: package declarations, typed
-page/component/layout/route/render/layout/guard/CSS declarations, metadata declarations,
-Go imports, GOWDK uses, stores, typed component contracts, supported top-level
-blocks, parsed `view {}` markup nodes, literal `paths {}`/`build {}` records,
-action/API endpoint declarations, and source spans.
+`internal/syntax` owns the shared tokenizer. `internal/parser.ParseSyntax` uses
+that token stream to recover a typed `internal/gwdkast.File` for the current
+source subset: package declarations, typed page/component/layout/route/render/layout/guard/CSS
+declarations, metadata declarations, Go imports, GOWDK uses, stores, typed
+component contracts, supported top-level blocks, parsed `view {}` markup nodes,
+literal `paths {}`/`build {}` records, action/API endpoint declarations, and
+source spans. Parser diagnostics accumulate across declaration and block
+boundaries so one syntax error does not hide later declarations in the same
+file.
 
 `internal/gwdkanalysis` assembles parsed page, component, and layout records
 into a versioned `internal/gwdkir.Program`. The IR models packages, source
@@ -71,8 +74,6 @@ project config
 Future build work should expand from the current generated-output slice while
 keeping downstream passes on `internal/gwdkir.Program`.
 
-The `lex/parse full AST` front-end is the line-oriented parser today. The
-decision to replace it with a shared tokenizer and a recursive-descent parser
-with error recovery, migrated behind the stable `internal/gwdkast` AST seam, is
-recorded in
+The `lex/parse full AST` front-end is the shared-token parser behind the stable
+`internal/gwdkast` AST seam. The decision record for that cutover is
 `docs/engineering/decisions/0010-tokenizer-recursive-descent-parser.md`.

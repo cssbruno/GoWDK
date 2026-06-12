@@ -127,7 +127,7 @@ route "/"
 `,
 	},
 	"parse_error": {
-		Details: "The current parser is still line-oriented. It emits parse_error when source is outside the supported grammar and no more specific stable parser code exists.",
+		Details: "The parser emits parse_error when source is outside the supported grammar and no more specific stable parser code exists.",
 		NextSteps: []string{
 			"Check the line reported by the diagnostic against docs/language/spec.md.",
 			"Use current endpoint declarations and supported block forms instead of planned syntax.",

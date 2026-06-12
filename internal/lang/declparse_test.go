@@ -47,10 +47,10 @@ func equalOrdered(a, b []string) bool {
 	return true
 }
 
-// TestParseTopLevelMatchesLineParser anchors the recursive-descent declaration
-// parser against the line-oriented parser: for valid source they must agree on
+// TestParseTopLevelMatchesCompilerParser anchors the recursive-descent declaration
+// parser against ParseSyntax: for valid source they must agree on
 // the package name and the set of imports and uses.
-func TestParseTopLevelMatchesLineParser(t *testing.T) {
+func TestParseTopLevelMatchesCompilerParser(t *testing.T) {
 	src := `package pages
 
 import "fmt"
@@ -71,12 +71,12 @@ view {
 `
 	syntaxFile, err := parser.ParseSyntax([]byte(src))
 	if err != nil {
-		t.Fatalf("line parser failed: %v", err)
+		t.Fatalf("compiler parser failed: %v", err)
 	}
 	top := ParseTopLevel(src)
 
 	if top.Package == nil || syntaxFile.Package == nil || top.Package.Name != syntaxFile.Package.Name {
-		t.Fatalf("package mismatch: got %v, line parser %v", top.Package, syntaxFile.Package)
+		t.Fatalf("package mismatch: got %v, compiler parser %v", top.Package, syntaxFile.Package)
 	}
 	if got, want := importKeys(top.Imports), importKeys(syntaxFile.Imports); !equalKeys(got, want) {
 		t.Fatalf("import mismatch:\n got %v\nwant %v", got, want)
@@ -88,10 +88,10 @@ view {
 		t.Fatalf("metadata mismatch:\n got %v\nwant %v", got, want)
 	}
 	if (top.Page == nil) != (syntaxFile.Page == nil) || (top.Page != nil && top.Page.ID != syntaxFile.Page.ID) {
-		t.Fatalf("page mismatch: got %v, line parser %v", top.Page, syntaxFile.Page)
+		t.Fatalf("page mismatch: got %v, compiler parser %v", top.Page, syntaxFile.Page)
 	}
 	if (top.Cache == nil) != (syntaxFile.Cache == nil) || (top.Cache != nil && top.Cache.Policy != syntaxFile.Cache.Policy) {
-		t.Fatalf("cache mismatch: got %v, line parser %v", top.Cache, syntaxFile.Cache)
+		t.Fatalf("cache mismatch: got %v, compiler parser %v", top.Cache, syntaxFile.Cache)
 	}
 }
 
@@ -107,7 +107,7 @@ func TestParseTopLevelMatchesPackageOnCorpus(t *testing.T) {
 			}
 			syntaxFile, err := parser.ParseSyntax(source)
 			if err != nil {
-				t.Skipf("line parser rejects %s: %v", name, err)
+				t.Skipf("compiler parser rejects %s: %v", name, err)
 			}
 			top := ParseTopLevel(string(source))
 			lineName := ""
@@ -119,7 +119,7 @@ func TestParseTopLevelMatchesPackageOnCorpus(t *testing.T) {
 				topName = top.Package.Name
 			}
 			if topName != lineName {
-				t.Fatalf("package mismatch for %s: got %q, line parser %q", name, topName, lineName)
+				t.Fatalf("package mismatch for %s: got %q, compiler parser %q", name, topName, lineName)
 			}
 			if got, want := metadataPairs(top.Metadata), metadataPairs(syntaxFile.Metadata); !equalOrdered(got, want) {
 				t.Fatalf("metadata mismatch for %s:\n got %v\nwant %v", name, got, want)
@@ -135,8 +135,7 @@ func TestParseTopLevelMatchesPackageOnCorpus(t *testing.T) {
 }
 
 // TestParseTopLevelRecoversPastError is the headline #306 capability: the
-// recursive-descent parser surfaces declarations after a malformed line, where
-// the line-oriented parser bails on the first error and returns nothing.
+// recursive-descent parser surfaces declarations after a malformed line.
 func TestParseTopLevelRecoversPastError(t *testing.T) {
 	src := `package pages
 
@@ -153,9 +152,8 @@ view {
   <main></main>
 }
 `
-	// The line parser bails on the malformed use and returns nothing usable.
 	if _, err := parser.ParseSyntax([]byte(src)); err == nil {
-		t.Fatal("expected the line parser to bail on the malformed use line")
+		t.Fatal("expected the compiler parser to report the malformed use line")
 	}
 
 	top := ParseTopLevel(src)
@@ -166,15 +164,14 @@ view {
 	if !keys["\x00fmt"] || !keys["alias\x00github.com/x/y"] {
 		t.Fatalf("recovery lost an import past the malformed line; got %v", keys)
 	}
-	// Metadata after the malformed line is recovered too, where the line parser
-	// surfaces nothing.
+	// Metadata after the malformed line is recovered too.
 	if got := metadataPairs(top.Metadata); !equalOrdered(got, []string{`route="/"`, `title="Home"`}) {
 		t.Fatalf("recovery lost metadata past the malformed line; got %v", got)
 	}
 }
 
 // TestParseTopLevelRejectsMalformedDeclarations checks the cutover parser does
-// not emit nodes for declarations the line parser rejects: trailing tokens, an
+// not emit nodes for declarations the compiler parser rejects: trailing tokens, an
 // extra import identifier, a non-identifier use package, and a non-strict
 // package name. Emitting these would let recovery surface invalid declarations
 // as valid AST.
@@ -185,7 +182,7 @@ func TestParseTopLevelRejectsMalformedDeclarations(t *testing.T) {
 			t.Fatalf("emitted a package for malformed declaration: %v", top.Package)
 		}
 		if _, err := parser.ParseSyntax([]byte("package pages extra\n")); err == nil {
-			t.Fatal("line parser unexpectedly accepted the malformed package")
+			t.Fatal("compiler parser unexpectedly accepted the malformed package")
 		}
 	})
 
@@ -201,7 +198,7 @@ func TestParseTopLevelRejectsMalformedDeclarations(t *testing.T) {
 			t.Fatalf("emitted an import for malformed declaration: %v", top.Imports)
 		}
 		if _, err := parser.ParseSyntax([]byte(src)); err == nil {
-			t.Fatal("line parser unexpectedly accepted the malformed import")
+			t.Fatal("compiler parser unexpectedly accepted the malformed import")
 		}
 	})
 
@@ -211,30 +208,30 @@ func TestParseTopLevelRejectsMalformedDeclarations(t *testing.T) {
 			t.Fatalf("emitted a use for malformed package string: %v", top.Uses)
 		}
 		if _, err := parser.ParseSyntax([]byte(src)); err == nil {
-			t.Fatal("line parser unexpectedly accepted the malformed use")
+			t.Fatal("compiler parser unexpectedly accepted the malformed use")
 		}
 	})
 }
 
 // TestParseTopLevelRoutesTypedMetadata locks the three validation-free typed
-// routings against the line parser: page and component carry the raw value as
+// routings against the compiler parser: page and component carry the raw value as
 // their identifier, cache strips surrounding quotes from its policy.
 func TestParseTopLevelRoutesTypedMetadata(t *testing.T) {
 	src := "package widgets\ncomponent Card\ncache \"no-store\"\n"
 	syntaxFile, err := parser.ParseSyntax([]byte(src))
 	if err != nil {
-		t.Fatalf("line parser failed: %v", err)
+		t.Fatalf("compiler parser failed: %v", err)
 	}
 	top := ParseTopLevel(src)
 
 	if syntaxFile.Component == nil || top.Component == nil || top.Component.Name != syntaxFile.Component.Name {
-		t.Fatalf("component mismatch: got %v, line parser %v", top.Component, syntaxFile.Component)
+		t.Fatalf("component mismatch: got %v, compiler parser %v", top.Component, syntaxFile.Component)
 	}
 	if top.Component.Name != "Card" {
 		t.Fatalf("component name = %q, want Card", top.Component.Name)
 	}
 	if syntaxFile.Cache == nil || top.Cache == nil || top.Cache.Policy != syntaxFile.Cache.Policy {
-		t.Fatalf("cache mismatch: got %v, line parser %v", top.Cache, syntaxFile.Cache)
+		t.Fatalf("cache mismatch: got %v, compiler parser %v", top.Cache, syntaxFile.Cache)
 	}
 	if top.Cache.Policy != "no-store" {
 		t.Fatalf("cache policy = %q, want unquoted no-store", top.Cache.Policy)
@@ -242,7 +239,7 @@ func TestParseTopLevelRoutesTypedMetadata(t *testing.T) {
 }
 
 // TestParseTopLevelMatchesContractsOnComponent anchors the Go-typed contract
-// recovery (store/props/state/wasm) against the line parser, including the
+// recovery (store/props/state/wasm) against the compiler parser, including the
 // go/parser-backed pkg.Type and pkg.NewFn() references.
 func TestParseTopLevelMatchesContractsOnComponent(t *testing.T) {
 	src := `package widgets
@@ -264,43 +261,43 @@ view {
 `
 	syntaxFile, err := parser.ParseSyntax([]byte(src))
 	if err != nil {
-		t.Fatalf("line parser failed: %v", err)
+		t.Fatalf("compiler parser failed: %v", err)
 	}
 	top := ParseTopLevel(src)
 
 	if syntaxFile.State == nil || top.State == nil {
-		t.Fatalf("state contract missing: got %v, line parser %v", top.State, syntaxFile.State)
+		t.Fatalf("state contract missing: got %v, compiler parser %v", top.State, syntaxFile.State)
 	}
 	if top.State.Type.Alias != syntaxFile.State.Type.Alias || top.State.Type.Name != syntaxFile.State.Type.Name {
-		t.Fatalf("state type mismatch: got %+v, line parser %+v", top.State.Type, syntaxFile.State.Type)
+		t.Fatalf("state type mismatch: got %+v, compiler parser %+v", top.State.Type, syntaxFile.State.Type)
 	}
 	if top.State.Init.Alias != syntaxFile.State.Init.Alias || top.State.Init.Name != syntaxFile.State.Init.Name {
-		t.Fatalf("state init mismatch: got %+v, line parser %+v", top.State.Init, syntaxFile.State.Init)
+		t.Fatalf("state init mismatch: got %+v, compiler parser %+v", top.State.Init, syntaxFile.State.Init)
 	}
 	if syntaxFile.PropsType == nil || top.PropsType == nil ||
 		top.PropsType.Alias != syntaxFile.PropsType.Alias || top.PropsType.Name != syntaxFile.PropsType.Name {
-		t.Fatalf("props type mismatch: got %v, line parser %v", top.PropsType, syntaxFile.PropsType)
+		t.Fatalf("props type mismatch: got %v, compiler parser %v", top.PropsType, syntaxFile.PropsType)
 	}
 	if len(top.Stores) != len(syntaxFile.Stores) || len(top.Stores) != 1 {
-		t.Fatalf("store count mismatch: got %d, line parser %d", len(top.Stores), len(syntaxFile.Stores))
+		t.Fatalf("store count mismatch: got %d, compiler parser %d", len(top.Stores), len(syntaxFile.Stores))
 	}
 	if top.Stores[0].Name != syntaxFile.Stores[0].Name ||
 		top.Stores[0].Type.Name != syntaxFile.Stores[0].Type.Name ||
 		top.Stores[0].Init.Name != syntaxFile.Stores[0].Init.Name {
-		t.Fatalf("store mismatch: got %+v, line parser %+v", top.Stores[0], syntaxFile.Stores[0])
+		t.Fatalf("store mismatch: got %+v, compiler parser %+v", top.Stores[0], syntaxFile.Stores[0])
 	}
 	if syntaxFile.WASM == nil || top.WASM == nil || top.WASM.Package != syntaxFile.WASM.Package {
-		t.Fatalf("wasm mismatch: got %v, line parser %v", top.WASM, syntaxFile.WASM)
+		t.Fatalf("wasm mismatch: got %v, compiler parser %v", top.WASM, syntaxFile.WASM)
 	}
 }
 
 // TestParseTopLevelRejectsMalformedContracts checks the go/parser-constrained
-// recovery does not emit nodes for contract references the line parser does not
-// accept: multi-segment selectors, generics, a constructor with arguments, props
-// with an initializer, and state without one. The line parser handles these two
+// recovery does not emit nodes for contract references the compiler parser does
+// not accept: multi-segment selectors, generics, a constructor with arguments, props
+// with an initializer, and state without one. The compiler parser handles these two
 // ways — some it errors on (props-with-init, state-without-init), others its
 // pattern simply ignores (multi-dot, generics, args) — so the equivalence is
-// that neither parser emits a contract node, not that the line parser errors.
+// that neither parser emits a contract node, not that the compiler parser errors.
 func TestParseTopLevelRejectsMalformedContracts(t *testing.T) {
 	cases := map[string]string{
 		"store init with args":   "package p\nstore X a.T = a.New(1)\n",
@@ -315,11 +312,11 @@ func TestParseTopLevelRejectsMalformedContracts(t *testing.T) {
 			if len(top.Stores) != 0 || top.PropsType != nil || top.State != nil {
 				t.Fatalf("emitted a contract node for malformed source: stores=%v props=%v state=%v", top.Stores, top.PropsType, top.State)
 			}
-			// Equivalence: where the line parser succeeds, it emits no such
+			// Equivalence: where the compiler parser succeeds, it emits no such
 			// contract either (where it errors, it definitionally has none).
 			if syntaxFile, err := parser.ParseSyntax([]byte(src)); err == nil {
 				if len(syntaxFile.Stores) != 0 || syntaxFile.PropsType != nil || syntaxFile.State != nil {
-					t.Fatalf("line parser emitted a contract for %q", src)
+					t.Fatalf("compiler parser emitted a contract for %q", src)
 				}
 			}
 		})
@@ -335,7 +332,7 @@ func endpointKeys(endpoints []gwdkast.Endpoint) map[string]bool {
 }
 
 // TestParseTopLevelMatchesEndpoints anchors act/api endpoint recovery against the
-// line parser, including the optional error page.
+// compiler parser, including the optional error page.
 func TestParseTopLevelMatchesEndpoints(t *testing.T) {
 	src := `package pages
 
@@ -352,7 +349,7 @@ view {
 `
 	syntaxFile, err := parser.ParseSyntax([]byte(src))
 	if err != nil {
-		t.Fatalf("line parser failed: %v", err)
+		t.Fatalf("compiler parser failed: %v", err)
 	}
 	top := ParseTopLevel(src)
 
@@ -368,7 +365,7 @@ view {
 }
 
 // TestParseTopLevelRejectsMalformedEndpoints checks recovery does not emit
-// endpoints the line parser rejects: a non-exported handler name, an action with
+// endpoints the compiler parser rejects: a non-exported handler name, an action with
 // a non-POST method, an API with an unknown verb, and a bareword (unquoted)
 // route. None should produce a node.
 func TestParseTopLevelRejectsMalformedEndpoints(t *testing.T) {
@@ -387,7 +384,7 @@ func TestParseTopLevelRejectsMalformedEndpoints(t *testing.T) {
 			}
 			if syntaxFile, err := parser.ParseSyntax([]byte(src)); err == nil {
 				if len(syntaxFile.Actions) != 0 || len(syntaxFile.APIs) != 0 {
-					t.Fatalf("line parser emitted an endpoint for %q", src)
+					t.Fatalf("compiler parser emitted an endpoint for %q", src)
 				}
 			}
 		})
@@ -407,11 +404,11 @@ func equalKeys(a, b map[string]bool) bool {
 }
 
 // TestParseTopLevelRejectsTrailingComments locks the equivalence fix for the
-// shared tokenizer stripping // comments. The line parser requires eof() after
+// shared tokenizer stripping // comments. The compiler parser requires eof() after
 // every identifier-led declaration, so a trailing comment makes it emit nothing
 // (it errors on package/import or simply drops the line for act). Recovery must
 // match: the stripped comment must not let a phantom node through. Metadata is
-// exempt because the line parser keeps the raw remainder, comment included.
+// exempt because the compiler parser keeps the raw remainder, comment included.
 func TestParseTopLevelRejectsTrailingComments(t *testing.T) {
 	t.Run("package", func(t *testing.T) {
 		if top := ParseTopLevel("package home // c\n"); top.Package != nil {
@@ -430,22 +427,22 @@ func TestParseTopLevelRejectsTrailingComments(t *testing.T) {
 	})
 	t.Run("store", func(t *testing.T) {
 		// go/parser would silently ignore the comment in the initializer slice;
-		// the guard rejects the line first, matching the line parser's eof().
+		// the guard rejects the line first, matching the compiler parser's eof().
 		src := "package p\nstore Cart cart.Cart = cart.NewCart() // c\n"
 		if top := ParseTopLevel(src); len(top.Stores) != 0 {
 			t.Fatalf("emitted store for trailing-comment line: %#v", top.Stores)
 		}
 	})
-	t.Run("endpoint anchored to line parser", func(t *testing.T) {
-		// The line parser parses this successfully but emits no action; recovery
+	t.Run("endpoint anchored to compiler parser", func(t *testing.T) {
+		// The compiler parser parses this successfully but emits no action; recovery
 		// must agree rather than report a phantom endpoint.
 		src := "package p\nact Submit POST \"/x\" // c\n"
 		syntaxFile, err := parser.ParseSyntax([]byte(src))
 		if err != nil {
-			t.Fatalf("line parser failed: %v", err)
+			t.Fatalf("compiler parser failed: %v", err)
 		}
 		if len(syntaxFile.Actions) != 0 {
-			t.Fatalf("precondition: line parser emitted an action: %#v", syntaxFile.Actions)
+			t.Fatalf("precondition: compiler parser emitted an action: %#v", syntaxFile.Actions)
 		}
 		if top := ParseTopLevel(src); len(top.Actions) != 0 {
 			t.Fatalf("emitted endpoint for trailing-comment line: %#v", top.Actions)
@@ -455,7 +452,7 @@ func TestParseTopLevelRejectsTrailingComments(t *testing.T) {
 		src := "package p\nroute \"/\" // c\n"
 		syntaxFile, err := parser.ParseSyntax([]byte(src))
 		if err != nil {
-			t.Fatalf("line parser failed: %v", err)
+			t.Fatalf("compiler parser failed: %v", err)
 		}
 		top := ParseTopLevel(src)
 		if got, want := metadataPairs(top.Metadata), metadataPairs(syntaxFile.Metadata); !equalOrdered(got, want) {
@@ -465,14 +462,14 @@ func TestParseTopLevelRejectsTrailingComments(t *testing.T) {
 }
 
 // TestParseTopLevelDecodesStringEscapes locks the second equivalence fix: string
-// values the line parser pulls through stringValue()/identString() are decoded
+// values the compiler parser pulls through stringValue()/identString() are decoded
 // (\t, \n, \", \\), so recovery must decode them too rather than keep the raw
 // backslash escapes.
 func TestParseTopLevelDecodesStringEscapes(t *testing.T) {
 	src := "package p\nimport \"a\\tb\"\nact Tab POST \"/x\\ty\"\n"
 	syntaxFile, err := parser.ParseSyntax([]byte(src))
 	if err != nil {
-		t.Fatalf("line parser failed: %v", err)
+		t.Fatalf("compiler parser failed: %v", err)
 	}
 	top := ParseTopLevel(src)
 
@@ -483,12 +480,12 @@ func TestParseTopLevelDecodesStringEscapes(t *testing.T) {
 		t.Fatalf("route = %q, want %q (a decoded tab)", top.Actions[0].Route, "/x\ty")
 	}
 	if len(syntaxFile.Actions) != 1 || top.Actions[0].Route != syntaxFile.Actions[0].Route {
-		t.Fatalf("route diverged from line parser: got %q want %q", top.Actions[0].Route, syntaxFile.Actions[0].Route)
+		t.Fatalf("route diverged from compiler parser: got %q want %q", top.Actions[0].Route, syntaxFile.Actions[0].Route)
 	}
 	if len(top.Imports) != 1 || top.Imports[0].Path != "a\tb" {
 		t.Fatalf("import path = %#v, want decoded \"a\\tb\"", top.Imports)
 	}
 	if len(syntaxFile.Imports) != 1 || top.Imports[0].Path != syntaxFile.Imports[0].Path {
-		t.Fatalf("import path diverged from line parser: got %q want %q", top.Imports[0].Path, syntaxFile.Imports[0].Path)
+		t.Fatalf("import path diverged from compiler parser: got %q want %q", top.Imports[0].Path, syntaxFile.Imports[0].Path)
 	}
 }

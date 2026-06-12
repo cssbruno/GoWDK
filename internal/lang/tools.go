@@ -377,6 +377,7 @@ func CheckSource(config gowdk.Config, path string, source []byte) (gwdkir.Page, 
 
 // DiagnosticReport is the JSON shape consumed by editor integrations.
 type DiagnosticReport struct {
+	Version     int         `json:"version"`
 	Diagnostics Diagnostics `json:"diagnostics"`
 }
 
@@ -389,7 +390,10 @@ func CheckJSON(config gowdk.Config, paths []string) ([]byte, Diagnostics) {
 // files with explicit project context.
 func CheckJSONWithOptions(config gowdk.Config, paths []string, options CheckOptions) ([]byte, Diagnostics) {
 	_, diagnostics := CheckFilesWithOptions(config, paths, options)
-	payload, err := json.MarshalIndent(DiagnosticReport{Diagnostics: diagnostics}, "", "  ")
+	if diagnostics == nil {
+		diagnostics = Diagnostics{}
+	}
+	payload, err := json.MarshalIndent(DiagnosticReport{Version: 1, Diagnostics: diagnostics}, "", "  ")
 	if err != nil {
 		return nil, Diagnostics{{Severity: "error", Message: err.Error()}}
 	}

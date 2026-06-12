@@ -6,6 +6,7 @@ CLI JSON diagnostics use:
 
 ```json
 {
+  "version": 1,
   "diagnostics": [
     {
       "file": "examples/pages/home.page.gwdk",
@@ -22,11 +23,12 @@ CLI JSON diagnostics use:
 }
 ```
 
-Positions and ranges are 1-based; range end columns are exclusive. Lexer,
-parser, and compiler validation diagnostics include ranges when the source line
-is known. Compiler validation ranges are derived from parser-recorded source
-spans for metadata declarations, block declarations, route params, actions, APIs, guards,
-layouts, components, and CSS references. Parser errors use the public
+`version` is the JSON schema version and is currently `1`. Positions and ranges
+are 1-based; range end columns are exclusive. Lexer, parser, and compiler
+validation diagnostics include ranges when the source line is known. Compiler
+validation ranges are derived from parser-recorded source spans for metadata
+declarations, block declarations, route params, actions, APIs, guards, layouts,
+components, and CSS references. Parser errors use the public
 `parse_error` code until parser recovery has more specific codes.
 
 The optional `suggestion` field carries a short structured fix hint for common

@@ -54,6 +54,8 @@ func run(args []string) error {
 		return siteMapJSON(args[1:])
 	case "routes":
 		return routesJSON(args[1:])
+	case "endpoints":
+		return endpointsJSONCommand(args[1:])
 	case "inspect":
 		return inspect(args[1:])
 	case "explain":
@@ -117,6 +119,7 @@ func usage() {
 	fmt.Println("  manifest [--config <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
 	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
+	fmt.Println("  endpoints [--config <file>] [--module <name>] [--ssr] [files...] print endpoint metadata JSON")
 	fmt.Println("  inspect ir [--config <file>] [--module <name>] [--ssr] [files...] print validated compiler IR JSON")
 	fmt.Println("  explain [--json] <diagnostic-code> explain a diagnostic code and next steps")
 	fmt.Println("  doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health")

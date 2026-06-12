@@ -18,6 +18,7 @@ gowdk fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--module <na
 gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
+gowdk endpoints [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk inspect ir [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...]
@@ -41,7 +42,8 @@ gowdk lsp [--ssr]
 - `--list`: supported by `add`; prints built-in addon names the command can wire.
 - `--json`: supported by `check`, `doctor`, `explain`, `contracts`, `graph`, `trace`, and `list`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
-  signature diagnostics when available.
+  signature diagnostics when available. `gowdk check --json` uses diagnostic
+  schema version `1`.
 - `--warnings-as-errors`: supported by `check`; exits non-zero when warning
   diagnostics are present.
 - `gowdk doctor --json`: prints a versioned health report with overall status,
@@ -51,7 +53,7 @@ gowdk lsp [--ssr]
   without writing changes.
 - `--code`: supported by `fix`; limits rewrites to one diagnostic code that has
   a registered fix.
-- `--config`: supported by `add`, `check`, `doctor`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; selects the config file. Compile commands load a literal config subset from the given path instead of the required default `gowdk.config.go`.
+- `--config`: supported by `add`, `check`, `doctor`, `manifest`, `sitemap`, `routes`, `endpoints`, `inspect ir`, and `build`; selects the config file. Compile commands load a literal config subset from the given path instead of the required default `gowdk.config.go`.
 - `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
 - `--timings[=<file>]`: supported by `build`; writes a separate versioned JSON
   timing report. Without an explicit file, the report is written to
@@ -65,7 +67,7 @@ gowdk lsp [--ssr]
   command owners.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
-- `--module`: supported by `check`, `doctor`, `manifest`, `sitemap`, `routes`, `inspect ir`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
+- `--module`: supported by `check`, `doctor`, `manifest`, `sitemap`, `routes`, `endpoints`, `inspect ir`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
 - `--out`: supported by `build`; selects the output directory and overrides `Build.Output`.
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
@@ -99,6 +101,7 @@ go run ./cmd/gowdk manifest --module frontend --ssr
 go run ./cmd/gowdk sitemap --module frontend --ssr
 go run ./cmd/gowdk trace patients.CreatePatient
 go run ./cmd/gowdk routes --module frontend --ssr
+go run ./cmd/gowdk endpoints --module frontend --ssr
 go run ./cmd/gowdk inspect ir --module frontend --ssr
 go run ./cmd/gowdk contracts --json .
 go run ./cmd/gowdk graph .
@@ -231,14 +234,35 @@ by `Build.Targets` or the selected `--module` flags.
 
 `gowdk routes` prints validated route and endpoint metadata as JSON. The current
 schema is version `1`. The `routes` list is limited to page/file route kinds
-such as `static`, `spa`, `ssr`, and `hybrid`; backend actions and APIs appear
-in the separate `endpoints` list with source path, `.gwdk` package, method,
-path, page ID, planned adapter handler, and backend binding metadata. Backend
-binding metadata includes the Go package name, import path when known, handler
-symbol, signature/input metadata when bound, status, and binding message.
-Non-fatal route-mode notes, such as request-time page rendering disabled on a
-SPA route or static SPA output disabled on an SSR route, appear in `info` and
-are also mirrored to stderr as `info:` console lines.
+such as `static`, `spa`, `ssr`, and `hybrid`; route records include package,
+render/cache metadata, route params, layouts, guards, source file, source span,
+and planned handler. Backend actions, APIs, fragments, and routable command or
+query contracts appear in the separate `endpoints` list with source path,
+source span, `.gwdk` package, method, path, page ID, no-store backend cache
+policy, inherited guards, CSRF applicability, planned adapter handler, and
+backend or contract binding metadata. Backend binding metadata includes the Go
+package name, import path when known, handler symbol, signature/input metadata
+when bound, status, and binding message. Non-fatal route-mode notes, such as
+request-time page rendering disabled on a SPA route or static SPA output
+disabled on an SSR route, appear in `info` and are also mirrored to stderr as
+`info:` console lines.
+
+`gowdk endpoints` uses the same project loading, validation, binding, and
+contract-reference scan as `gowdk routes`, but prints only the versioned
+`endpoints` report. Use it when tooling needs backend surface metadata without
+page route records or route-mode notes.
+
+`openapi.json` describes the routable web surface: actions, APIs, fragments,
+and web-routable command/query contract references. It includes paths, methods,
+path/query/form request schemas when input fields are known, and deterministic
+named response schema references. Full response struct expansion is deferred to
+[#316](https://github.com/cssbruno/GoWDK/issues/316).
+
+`asyncapi.json` describes integration-event contract registrations. Local event
+payload structs contribute JSON-field schemas; imported event payload schemas
+fall back to deterministic named object schemas until
+[#315](https://github.com/cssbruno/GoWDK/issues/315) resolves imported payload
+fields. Domain and presentation events are excluded from the default report.
 
 `gowdk inspect ir` prints the validated `internal/gwdkir.Program` compiler IR as
 JSON. This is an M2 compiler-spine debugging and snapshot surface, not a stable
@@ -253,10 +277,11 @@ suggestions. Use `--json` for editor and tooling integrations. See
 policy.
 
 Current `build` limitations: it emits app-shell HTML files,
-`gowdk-routes.json`, `gowdk-assets.json`, generated embedded app source, and
-an optional generated binary for build-time pages with non-dynamic routes or
-literal `paths {}` dynamic routes, literal `build {}` data, lowercase HTML
-markup, imported or same-package no-argument Go build data functions,
+`gowdk-routes.json`, `gowdk-assets.json`, `openapi.json`, `asyncapi.json`,
+`gowdk-build-report.json`, generated embedded app source, and an optional
+generated binary for build-time pages with non-dynamic routes or literal
+`paths {}` dynamic routes, literal `build {}` data, lowercase HTML markup,
+imported or same-package no-argument Go build data functions,
 component files with string props, supported action redirect handlers with form
 decoder wrappers and required-field validation, and supported action fragment
 responses for partial requests.

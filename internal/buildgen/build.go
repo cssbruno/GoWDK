@@ -125,6 +125,12 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 	}
 	result.AssetManifestPath = assetManifestPath
 	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
+	openAPIPath, err := writeOpenAPI(outputDir, ir)
+	if err != nil {
+		return Result{}, reporter.fail("report", err)
+	}
+	result.OpenAPIPath = openAPIPath
+	reporter.info("report", "openapi_written", "OpenAPI report written", BuildEvent{Path: eventPath(outputDir, openAPIPath)})
 	reporter.info("complete", "build_complete", "SPA build completed", BuildEvent{
 		Data: map[string]string{
 			"pages":  fmt.Sprint(len(result.Artifacts)),
@@ -202,6 +208,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 			AssetArtifacts:    make([]AssetArtifact, 0, len(planned.assets)),
 			RouteManifestPath: filepath.Join(outputDir, routeManifestFile),
 			AssetManifestPath: filepath.Join(outputDir, assetManifestFile),
+			OpenAPIPath:       filepath.Join(outputDir, openAPIFile),
 			BuildReportPath:   buildReportPath(outputDir),
 		},
 		Files: map[string][]byte{},
@@ -256,6 +263,12 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	}
 	result.Files[assetManifestFile] = assetManifest
 	reporter.info("manifest", "asset_manifest_collected", "asset manifest collected", BuildEvent{Path: assetManifestFile})
+	openAPI, err := openAPIPayload(ir)
+	if err != nil {
+		return MemoryResult{}, reporter.fail("report", err)
+	}
+	result.Files[openAPIFile] = openAPI
+	reporter.info("report", "openapi_collected", "OpenAPI report collected", BuildEvent{Path: openAPIFile})
 	reporter.info("complete", "build_complete", "in-memory SPA build completed", BuildEvent{
 		Data: map[string]string{
 			"pages":  fmt.Sprint(len(result.Artifacts)),
@@ -539,6 +552,12 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	}
 	result.AssetManifestPath = assetManifestPath
 	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
+	openAPIPath, err := writeOpenAPI(outputDir, ir)
+	if err != nil {
+		return Result{}, reporter.fail("report", err)
+	}
+	result.OpenAPIPath = openAPIPath
+	reporter.info("report", "openapi_written", "OpenAPI report written", BuildEvent{Path: eventPath(outputDir, openAPIPath)})
 	reporter.info("complete", "build_complete", "incremental SPA build completed", BuildEvent{
 		Data: map[string]string{
 			"pages":        fmt.Sprint(len(result.Artifacts)),

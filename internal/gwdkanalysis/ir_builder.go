@@ -50,6 +50,8 @@ type irBuilder struct {
 	packages map[string]*gwdkir.Package
 }
 
+const endpointNoStoreCache = "no-store"
+
 func (builder *irBuilder) ensurePackage(name string, src string) *gwdkir.Package {
 	pkg := builder.packages[name]
 	if pkg == nil {
@@ -169,6 +171,9 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 			Symbol:        action.Name,
 			Method:        endpointMethod(action.Method, "POST"),
 			Path:          path,
+			Cache:         endpointNoStoreCache,
+			Guards:        append([]string(nil), page.Guards...),
+			CSRF:          builder.config.Build.CSRF.Enabled,
 			ErrorPage:     action.ErrorPage,
 			DynamicParams: routeParams(path),
 			SourceFile:    page.Source,
@@ -185,6 +190,8 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 			Symbol:        api.Name,
 			Method:        endpointMethod(api.Method, "GET"),
 			Path:          path,
+			Cache:         endpointNoStoreCache,
+			Guards:        append([]string(nil), page.Guards...),
 			ErrorPage:     api.ErrorPage,
 			DynamicParams: routeParams(path),
 			SourceFile:    page.Source,
@@ -200,6 +207,8 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 			Symbol:        fragment.Name,
 			Method:        endpointMethod(fragment.Method, "GET"),
 			Path:          fragment.Route,
+			Cache:         endpointNoStoreCache,
+			Guards:        append([]string(nil), page.Guards...),
 			DynamicParams: routeParams(fragment.Route),
 			SourceFile:    page.Source,
 			Span:          fragment.Span,
@@ -339,6 +348,8 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
 		Symbol:        endpoint.Name,
 		Method:        endpointMethod(endpoint.Method, defaultMethod),
 		Path:          endpoint.Route,
+		Cache:         endpointNoStoreCache,
+		CSRF:          builder.config.Build.CSRF.Enabled && kind == gwdkir.EndpointAction,
 		DynamicParams: routeParams(endpoint.Route),
 		SourceFile:    endpoint.Source,
 		Span:          endpoint.Span,

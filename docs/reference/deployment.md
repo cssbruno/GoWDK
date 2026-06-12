@@ -27,6 +27,8 @@ dist/site/
   assets...
   gowdk-routes.json
   gowdk-assets.json
+  openapi.json
+  asyncapi.json
   gowdk-build-report.json
 ```
 

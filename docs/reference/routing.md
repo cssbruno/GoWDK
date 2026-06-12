@@ -363,21 +363,35 @@ Use `gowdk routes` to inspect validated route and endpoint metadata:
 
 ```sh
 gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
+gowdk endpoints --ssr examples/actions/*.gwdk examples/api/*.gwdk
 ```
 
 The current JSON schema is version `1`. `routes` contains only page/file route
-kinds such as `static`, `spa`, `ssr`, and `hybrid`; `endpoints` contains one
-framework-neutral endpoint record per action/API/fragment declaration and
-routable `g:command`/`g:query` contract reference. Endpoint records include
-`endpointSource` (`gwdk` or `contract`), source file and source span, `.gwdk`
-package, Go package path/name when known, exact declared symbol or contract
-reference, method, path, planned adapter handler information, and binding
-status/message. Backend binding details repeat the Go package name, import path
-when known, handler symbol, and supported signature/input metadata when the
-handler is bound. Contract binding details include the contract kind, reference
-name, binding status, local input type, result type, roles, handler, register
-function, and message when known. The `info` list reports disabled route-mode
-lanes, for example SSR disabled on a SPA route.
+kinds such as `static`, `spa`, `ssr`, and `hybrid`. Route records include the
+HTTP method/path, page ID, `.gwdk` package, effective render mode, cache policy
+when declared, dynamic route params, layouts, guards, source file, source span,
+and planned handler. Static generated-output paths stay in `gowdk-routes.json`
+because dynamic SPA paths can expand one source route into multiple concrete
+files.
+
+`endpoints` contains one framework-neutral endpoint record per action, API,
+fragment declaration, and routable `g:command`/`g:query` contract reference.
+Endpoint records include `endpointSource` (`gwdk`, `go`, or `contract`), source
+file and source span, `.gwdk` package, Go package path/name when known, exact
+declared symbol or contract reference, method, path, no-store backend cache
+policy, inherited guards, CSRF applicability, planned adapter handler
+information, and binding status/message. Backend binding details repeat the Go
+package name, import path when known, handler symbol, and supported
+signature/input metadata when the handler is bound. Contract binding details
+include the contract kind, reference name, binding status, local input type,
+result type, roles, handler, register function, and message when known. The
+`info` list reports disabled route-mode lanes, for example SSR disabled on a
+SPA route.
+
+`gowdk endpoints` prints the same versioned endpoint records without page route
+records or `info` notes. Route/method conflicts remain hard validation
+diagnostics; `gowdk check --json` reports the conflicting declaration with a
+source range and a related location for the first declaration when available.
 
 Use `gowdk inspect ir` when route debugging needs the full typed compiler IR
 instead of the route-report schema. The IR output is for M2 compiler debugging

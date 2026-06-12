@@ -12,12 +12,31 @@ type routeMetadataReport struct {
 	Info      []routeInfoJSON       `json:"info,omitempty"`
 }
 
+type endpointMetadataReport struct {
+	Version   int                   `json:"version"`
+	Endpoints []endpointBindingJSON `json:"endpoints"`
+}
+
 type routeBindingJSON struct {
-	Kind    compiler.RouteKind `json:"kind"`
-	Method  string             `json:"method"`
-	Route   string             `json:"route"`
-	PageID  string             `json:"pageId"`
-	Handler string             `json:"handler"`
+	Kind          compiler.RouteKind `json:"kind"`
+	Method        string             `json:"method"`
+	Route         string             `json:"route"`
+	PageID        string             `json:"pageId"`
+	Package       string             `json:"package,omitempty"`
+	Render        string             `json:"render,omitempty"`
+	Cache         string             `json:"cache,omitempty"`
+	DynamicParams []string           `json:"dynamicParams,omitempty"`
+	RouteParams   []routeParamJSON   `json:"routeParams,omitempty"`
+	Layouts       []string           `json:"layouts,omitempty"`
+	Guards        []string           `json:"guards,omitempty"`
+	Source        string             `json:"source,omitempty"`
+	SourceSpan    *sourceSpanJSON    `json:"sourceSpan,omitempty"`
+	Handler       string             `json:"handler"`
+}
+
+type routeParamJSON struct {
+	Name string `json:"name"`
+	Type string `json:"type,omitempty"`
 }
 
 type endpointBindingJSON struct {
@@ -31,6 +50,9 @@ type endpointBindingJSON struct {
 	Symbol         string                `json:"symbol,omitempty"`
 	Method         string                `json:"method"`
 	Route          string                `json:"route"`
+	Cache          string                `json:"cache,omitempty"`
+	Guards         []string              `json:"guards,omitempty"`
+	CSRF           bool                  `json:"csrf,omitempty"`
 	PageID         string                `json:"pageId"`
 	Handler        string                `json:"handler"`
 	BindingStatus  string                `json:"bindingStatus,omitempty"`
@@ -85,15 +107,50 @@ func routeMetadataJSON(metadata compiler.RouteMetadata) routeMetadataReport {
 	routes := make([]routeBindingJSON, 0, len(metadata.Routes))
 	for _, binding := range metadata.Routes {
 		routes = append(routes, routeBindingJSON{
-			Kind:    binding.Kind,
-			Method:  binding.Method,
-			Route:   binding.Route,
-			PageID:  binding.PageID,
-			Handler: binding.Handler,
+			Kind:          binding.Kind,
+			Method:        binding.Method,
+			Route:         binding.Route,
+			PageID:        binding.PageID,
+			Package:       binding.Package,
+			Render:        string(binding.Render),
+			Cache:         binding.Cache,
+			DynamicParams: append([]string(nil), binding.DynamicParams...),
+			RouteParams:   routeParamsJSON(binding.RouteParams),
+			Layouts:       append([]string(nil), binding.Layouts...),
+			Guards:        append([]string(nil), binding.Guards...),
+			Source:        binding.Source,
+			SourceSpan:    endpointSourceSpanJSON(binding.SourceSpan),
+			Handler:       binding.Handler,
 		})
 	}
-	endpoints := make([]endpointBindingJSON, 0, len(metadata.Endpoints))
-	for _, binding := range metadata.Endpoints {
+	endpoints := endpointsJSON(metadata.Endpoints)
+	info := make([]routeInfoJSON, 0, len(metadata.Info))
+	for _, item := range metadata.Info {
+		info = append(info, routeInfoJSON{
+			Code:    item.Code,
+			PageID:  item.PageID,
+			Route:   item.Route,
+			Message: item.Message,
+		})
+	}
+	return routeMetadataReport{
+		Version:   1,
+		Routes:    routes,
+		Endpoints: endpoints,
+		Info:      info,
+	}
+}
+
+func endpointMetadataJSON(metadata compiler.RouteMetadata) endpointMetadataReport {
+	return endpointMetadataReport{
+		Version:   1,
+		Endpoints: endpointsJSON(metadata.Endpoints),
+	}
+}
+
+func endpointsJSON(bindings []compiler.EndpointBinding) []endpointBindingJSON {
+	endpoints := make([]endpointBindingJSON, 0, len(bindings))
+	for _, binding := range bindings {
 		item := endpointBindingJSON{
 			Kind:           binding.Kind,
 			EndpointSource: binding.EndpointSource,
@@ -105,6 +162,9 @@ func routeMetadataJSON(metadata compiler.RouteMetadata) routeMetadataReport {
 			Symbol:         binding.Symbol,
 			Method:         binding.Method,
 			Route:          binding.Route,
+			Cache:          binding.Cache,
+			Guards:         append([]string(nil), binding.Guards...),
+			CSRF:           binding.CSRF,
 			PageID:         binding.PageID,
 			Handler:        binding.Handler,
 			BindingStatus:  string(binding.BindingStatus),
@@ -139,21 +199,18 @@ func routeMetadataJSON(metadata compiler.RouteMetadata) routeMetadataReport {
 		}
 		endpoints = append(endpoints, item)
 	}
-	info := make([]routeInfoJSON, 0, len(metadata.Info))
-	for _, item := range metadata.Info {
-		info = append(info, routeInfoJSON{
-			Code:    item.Code,
-			PageID:  item.PageID,
-			Route:   item.Route,
-			Message: item.Message,
-		})
+	return endpoints
+}
+
+func routeParamsJSON(params []source.RouteParam) []routeParamJSON {
+	if len(params) == 0 {
+		return nil
 	}
-	return routeMetadataReport{
-		Version:   1,
-		Routes:    routes,
-		Endpoints: endpoints,
-		Info:      info,
+	out := make([]routeParamJSON, 0, len(params))
+	for _, param := range params {
+		out = append(out, routeParamJSON{Name: param.Name, Type: param.Type})
 	}
+	return out
 }
 
 func endpointSourceSpanJSON(span source.SourceSpan) *sourceSpanJSON {

@@ -4,6 +4,7 @@
 
 ```json
 {
+  "version": 1,
   "diagnostics": [
     {
       "file": "examples/actions/signup.page.gwdk",
@@ -27,6 +28,7 @@
 
 Current diagnostic fields:
 
+- `version`: diagnostic JSON schema version. Current value is `1`.
 - `file`: source file path when known.
 - `code`: stable diagnostic category when known.
 - `pos.line`: 1-based line when known; zero means no exact position is available.

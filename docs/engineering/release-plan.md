@@ -368,8 +368,9 @@ Every 0.x minor release must have:
 - [x] Add route conflict diagnostics for page, API, action, fragment, and
   contract endpoint combinations in the current route model.
 - [x] Add versioned route reports for current route and endpoint metadata.
-  Richer route-report fields such as generated output path and source-span
-  completeness are deferred to #237.
+  Route records include source spans, route params, guards, layouts, cache, and
+  planned handlers. Generated output paths remain in `gowdk-routes.json`
+  because dynamic SPA routes can expand to multiple files.
 - [x] Add current direct refresh, 404, encoded param, static SPA, dynamic SPA
   `paths`, SSR, hybrid, API, action, fragment, and trailing-slash tests.
   Remaining path-traversal and expanded matrix coverage is deferred to #237.
@@ -396,14 +397,19 @@ Every 0.x minor release must have:
 
 - [ ] Normalize actions, APIs, fragments, SSR loads, commands, and queries into
   one endpoint/contract metadata model where appropriate.
-- [ ] Include source file, source span, kind, package path, package name, symbol,
-  method, path, signature kind, input type, output type, guards, rate limit
-  policy, CSRF policy, cache policy, and binding status.
+- [x] Include source file, source span, kind, package path, package name, symbol,
+  method, path, signature kind, input type, guards, CSRF policy, cache policy,
+  and binding status in the current endpoint report.
+- [ ] Add endpoint report output type and rate limit policy once the adapter IR
+  carries stable metadata for both.
 - [ ] Add strict binding mode for production-shaped builds.
 - [ ] Allow 501 stubs only behind an explicit flag.
 - [ ] Add loud dev/migration compatibility mode only if needed.
-- [ ] Add endpoint conflict diagnostics, endpoint report command, and endpoint
-  graph output.
+- [x] Add endpoint conflict diagnostics and a versioned endpoint report command.
+- [x] Emit OpenAPI and AsyncAPI inspection artifacts from `gowdk build` for the
+  routable web surface and integration-event contract surface.
+- [ ] Add endpoint graph output. See
+  [#319](https://github.com/cssbruno/GoWDK/issues/319).
 - [ ] Generate adapters from typed IR with deterministic imports, route
   registration, request decoding, and response writing.
 - [ ] Test generated adapters for success, validation error, missing handler,

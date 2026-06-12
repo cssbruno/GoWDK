@@ -222,7 +222,7 @@ This table describes the current demoable 0.x slice. Status levels:
 
 | Surface | Status | Works Today | Current Limit | Docs | Example |
 | --- | --- | --- | --- | --- | --- |
-| Static build output | Works | `gowdk build --out` emits HTML, route metadata, and asset metadata for simple build-time pages. | Generated output is still pre-1.0. | [CLI](docs/reference/cli.md) | [Pages](examples/pages/home.page.gwdk) |
+| Static build output | Works | `gowdk build --out` emits HTML, route metadata, asset metadata, build reports, and OpenAPI/AsyncAPI inspection reports for simple build-time pages. | Generated output is still pre-1.0. | [CLI](docs/reference/cli.md) | [Pages](examples/pages/home.page.gwdk) |
 | Dynamic SPA paths | Early | Dynamic SPA routes can be expanded from the first supported literal `paths {}` subset. | Dynamic SPA routes need `paths {}` unless the page uses request-time rendering. | [Routing](docs/reference/routing.md) | [Blog](examples/pages/blog-post.page.gwdk) |
 | Build-time Go data | Early | Literal build records and supported no-argument Go build functions can feed SPA rendering. | Arbitrary build-time Go statements and broader data lifecycles are not stable. | [Data](docs/language/data.md) | [Go interop](examples/go-interop/README.md) |
 | Actions | Works, contract unstable | Generated apps can serve typed POST action handlers, decode supported form inputs, validate request shape, return redirects/fragments, and opt into CSRF. | File uploads, multipart generated forms, and domain validation stay in user-owned Go handlers. | [Actions](docs/language/actions.md) | [Login](examples/login/README.md) |

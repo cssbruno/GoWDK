@@ -24,7 +24,7 @@ Each doc lane has one owner — write in the right one and link from the others:
   `diagnostic-codes.md` (must mirror `internal/diagnostics/registry.go`),
   routing, addons, deployment, hooks.
 - Onboarding: `README.md`, `docs/getting-started.md` — both pin the current
-  release (`v0.2.8` install snippets); version changes go through
+  release (`v0.3.0` install snippets); version changes go through
   `gowdk-version-bump`, not ad-hoc edits.
 - `CHANGELOG.md` — canonical change log (`## v0.x.y - date` with
   `### Changed` / `### Implemented` / `### Known Gaps`).

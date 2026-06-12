@@ -5,8 +5,14 @@ packages, and tooling contracts may change before a stable release.
 
 ## Unreleased
 
+No entries yet.
+
+## v0.3.0 - 2026-06-12
+
 ### Changed
 
+- `gowdk version` and the VS Code extension metadata now report `0.3.0`.
+- Optional contract adapter modules require `github.com/cssbruno/gowdk v0.3.0`.
 - Conflict diagnostics (`duplicate_route`, `route_method_conflict`, including
   contract-route conflicts) now carry a related source location pointing at the
   first declaration. `gowdk check --json` gains an additive `related` array per
@@ -14,9 +20,26 @@ packages, and tooling contracts may change before a stable release.
 - The formatter now tracks brace depth with the parser's string- and
   comment-aware scanner, so braces inside string literals, comments, and
   template literals (for example `title "a { b"`) no longer skew indentation.
+- A page that declares no `guard` is no longer a build error. `guard` is now
+  optional, but a page is not public by default: `missing_page_guard` is now a
+  **warning** and the page's route is denied (403) at request time until the
+  author adds `guard public` or a protective guard. Static pages are denied
+  through the generated app's deny registry; request-time SSR pages are denied
+  in their own handler. Access is never granted by omission.
+- Compiler validation diagnostics now carry a severity. Warning-severity
+  diagnostics surface to authors and editors but do not fail the build.
 
 ### Implemented
 
+- M3 route, endpoint, and contract reporting is complete for the current 0.x
+  surface: `gowdk routes`, `gowdk endpoints`, `gowdk inspect tree`, and
+  `gowdk inspect endpoint-graph` expose source-linked route and backend
+  metadata without requiring users to read generated source.
+- `gowdk build` writes `openapi.json` for the routable web surface and
+  `asyncapi.json` for contract integration-event metadata.
+- Route and endpoint reports include versioned JSON, source spans, route
+  params, render/cache metadata, guards, planned handlers, backend binding
+  state, contract binding state, and non-fatal route-mode notes.
 - A machine-checked `.gwdk` conformance corpus
   (`internal/lang/testdata/conformance/`) pins the language contract: `accept/`
   cases must check clean and `reject/` cases must produce their declared stable
@@ -30,23 +53,7 @@ packages, and tooling contracts may change before a stable release.
   AST-backed formatting and precise editor edits.
 - ADR 0010 records the decision to replace the line-oriented parser with a
   shared tokenizer and a recursive-descent parser with error recovery, migrated
-  behind the stable `gwdkast` AST seam.
-
-### Changed
-
-- A page that declares no `guard` is no longer a build error. `guard` is now
-  optional, but a page is not public by default: `missing_page_guard` is now a
-  **warning** and the page's route is denied (403) at request time until the
-  author adds `guard public` (or a protective guard). Static pages are denied
-  through the generated app's deny registry; request-time (SSR) pages are denied
-  in their own handler. Access is never granted by omission. A pure static
-  export served without the generated Go server cannot enforce the 403 — the
-  build warning is the backstop.
-- Compiler validation diagnostics now carry a severity. Warning-severity
-  diagnostics surface to authors and editors but do not fail the build.
-
-### Implemented
-
+  behind the stable `gwdkast` AST boundary.
 - The default-deny contract now covers every way a guardless page could leak:
   dynamic build-time pages (`paths {}`) are denied by route pattern so each
   concrete artifact returns 403, direct index artifact paths
@@ -54,6 +61,14 @@ packages, and tooling contracts may change before a stable release.
   and a guardless page that declares `act`/`api`/`fragment` endpoints is a build
   **error** (`missing_page_guard`) because those endpoints would otherwise be
   publicly callable.
+
+### Known Gaps
+
+- GOWDK remains not production-ready.
+- Generated output and tooling reports remain pre-1.0 and may change unless a
+  reference document marks a surface stable.
+- M3 completes the current reportability milestone; it does not complete secure
+  runtime, SSR/hybrid, component/client, or production operations hardening.
 
 ## v0.2.8 - 2026-06-10
 

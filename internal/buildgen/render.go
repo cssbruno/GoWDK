@@ -403,7 +403,5 @@ func socialHeadEnabled(head gowdk.HeadConfig, metadata gwdkir.PageMetadata) bool
 }
 
 func escapeScriptJSON(payload string) string {
-	payload = strings.ReplaceAll(payload, "</script", "<\\/script")
-	payload = strings.ReplaceAll(payload, "</SCRIPT", "<\\/SCRIPT")
-	return payload
+	return strings.ReplaceAll(payload, "<", "\\u003c")
 }

@@ -124,6 +124,12 @@ func TestParseTopLevelMatchesPackageOnCorpus(t *testing.T) {
 			if got, want := metadataPairs(top.Metadata), metadataPairs(syntaxFile.Metadata); !equalOrdered(got, want) {
 				t.Fatalf("metadata mismatch for %s:\n got %v\nwant %v", name, got, want)
 			}
+			if got, want := endpointKeys(top.Actions), endpointKeys(syntaxFile.Actions); !equalKeys(got, want) {
+				t.Fatalf("action mismatch for %s:\n got %v\nwant %v", name, got, want)
+			}
+			if got, want := endpointKeys(top.APIs), endpointKeys(syntaxFile.APIs); !equalKeys(got, want) {
+				t.Fatalf("api mismatch for %s:\n got %v\nwant %v", name, got, want)
+			}
 		})
 	}
 }
@@ -314,6 +320,74 @@ func TestParseTopLevelRejectsMalformedContracts(t *testing.T) {
 			if syntaxFile, err := parser.ParseSyntax([]byte(src)); err == nil {
 				if len(syntaxFile.Stores) != 0 || syntaxFile.PropsType != nil || syntaxFile.State != nil {
 					t.Fatalf("line parser emitted a contract for %q", src)
+				}
+			}
+		})
+	}
+}
+
+func endpointKeys(endpoints []gwdkast.Endpoint) map[string]bool {
+	keys := map[string]bool{}
+	for _, e := range endpoints {
+		keys[e.Kind+"\x00"+e.Name+"\x00"+e.Method+"\x00"+e.Route+"\x00"+e.ErrorPage] = true
+	}
+	return keys
+}
+
+// TestParseTopLevelMatchesEndpoints anchors act/api endpoint recovery against the
+// line parser, including the optional error page.
+func TestParseTopLevelMatchesEndpoints(t *testing.T) {
+	src := `package pages
+
+route "/"
+
+act Submit POST "/submit"
+act Save POST "/save" error "/oops.html"
+api List GET "/api/list"
+api Remove DELETE "/api/remove"
+
+view {
+  <main></main>
+}
+`
+	syntaxFile, err := parser.ParseSyntax([]byte(src))
+	if err != nil {
+		t.Fatalf("line parser failed: %v", err)
+	}
+	top := ParseTopLevel(src)
+
+	if got, want := endpointKeys(top.Actions), endpointKeys(syntaxFile.Actions); !equalKeys(got, want) {
+		t.Fatalf("action mismatch:\n got %v\nwant %v", got, want)
+	}
+	if got, want := endpointKeys(top.APIs), endpointKeys(syntaxFile.APIs); !equalKeys(got, want) {
+		t.Fatalf("api mismatch:\n got %v\nwant %v", got, want)
+	}
+	if len(top.Actions) != 2 || len(top.APIs) != 2 {
+		t.Fatalf("expected 2 actions and 2 apis, got %d and %d", len(top.Actions), len(top.APIs))
+	}
+}
+
+// TestParseTopLevelRejectsMalformedEndpoints checks recovery does not emit
+// endpoints the line parser rejects: a non-exported handler name, an action with
+// a non-POST method, an API with an unknown verb, and a bareword (unquoted)
+// route. None should produce a node.
+func TestParseTopLevelRejectsMalformedEndpoints(t *testing.T) {
+	cases := map[string]string{
+		"non-exported action": "package p\nact submit POST \"/x\"\n",
+		"action non-POST":     "package p\nact Submit GET \"/x\"\n",
+		"api unknown verb":    "package p\napi List FETCH \"/x\"\n",
+		"unquoted route":      "package p\nact Submit POST /x\n",
+		"non-exported api":    "package p\napi list GET \"/x\"\n",
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			top := ParseTopLevel(src)
+			if len(top.Actions) != 0 || len(top.APIs) != 0 {
+				t.Fatalf("emitted an endpoint for malformed source: actions=%v apis=%v", top.Actions, top.APIs)
+			}
+			if syntaxFile, err := parser.ParseSyntax([]byte(src)); err == nil {
+				if len(syntaxFile.Actions) != 0 || len(syntaxFile.APIs) != 0 {
+					t.Fatalf("line parser emitted an endpoint for %q", src)
 				}
 			}
 		})

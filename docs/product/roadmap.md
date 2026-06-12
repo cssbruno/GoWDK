@@ -106,7 +106,8 @@ partial, experimental, planned, and intentionally out of scope. At a high
 level, the current baseline already includes:
 
 - project config loading, source discovery, build targets, module selection,
-  manifests, route validation, sitemap output, formatting, diagnostics, CLI
+  manifests, route validation, sitemap output, formatting, diagnostics, a
+  shared tokenizer with parser recovery across declaration boundaries, CLI
   route/endpoint/inspect reports, and LSP support;
 - package-first `.gwdk` files, package mismatch diagnostics, package source
   spans, package-scoped `use alias "package"` component imports, exact

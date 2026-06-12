@@ -517,6 +517,25 @@ route "/bad"
 	}
 }
 
+func TestParseSourceReportsRecoveredParserDiagnostics(t *testing.T) {
+	_, diagnostics := ParseSource("bad.page.gwdk", []byte(`package app
+
+page bad
+use ui ui
+@unknown nope
+route "/bad"
+`))
+	if len(diagnostics) != 2 {
+		t.Fatalf("expected two parser diagnostics, got %#v", diagnostics)
+	}
+	if diagnostics[0].Code != "malformed_gowdk_use" || diagnostics[0].Pos.Line != 4 {
+		t.Fatalf("unexpected first diagnostic: %#v", diagnostics[0])
+	}
+	if diagnostics[1].Code != "malformed_legacy_metadata" || diagnostics[1].Pos.Line != 5 {
+		t.Fatalf("unexpected second diagnostic: %#v", diagnostics[1])
+	}
+}
+
 func TestCheckJSONReportsParserDiagnosticRangeAndCode(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "bad.page.gwdk")

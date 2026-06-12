@@ -12,27 +12,25 @@ import (
 )
 
 // TopLevel holds the top-level declaration nodes a recursive-descent parse
-// recovers from .gwdk source. It is the ADR 0010 parser producing real gwdkast
-// nodes (rather than the tooling outline), built behind an equivalence test
-// against internal/parser.ParseSyntax. It currently recovers:
+// recovers from .gwdk source. It is the ADR 0010 declaration parser producing
+// real gwdkast nodes (rather than the tooling outline), built behind an
+// equivalence test against internal/parser.ParseSyntax. It currently recovers:
 //
 //   - the package declaration, Go imports, and GOWDK uses;
 //   - the top-level metadata declarations, both as the raw list (Metadata,
-//     mirroring SyntaxFile.Metadata) and routed into the validation-free typed
-//     fields the line parser assigns unconditionally (Page, Component, Cache,
-//     WASM);
+//     mirroring SyntaxFile.Metadata) and routed into validation-free typed
+//     fields (Page, Component, Cache, WASM);
 //   - the Go-typed contracts (Stores, PropsType, State), whose pkg.Type and
 //     pkg.NewFn() references are parsed by go/parser per ADR 0010's split —
 //     custom grammar for .gwdk, the real Go parser for embedded Go — then
-//     constrained to the shapes the line parser accepts;
-//   - the exact act/api endpoint declarations (Actions, APIs), with the line
+//     constrained to the shapes the compiler parser accepts;
+//   - the exact act/api endpoint declarations (Actions, APIs), with the compiler
 //     parser's post-match validation (exported handler name, allowed method,
 //     resolvable error page).
 //
 // Metadata that needs validation to reach a typed field (route, revalidate,
 // error, layout, guard, css, asset), block bodies, view markup, and the
-// block-bodied fragment endpoint remain on the line-oriented parser until later
-// phases.
+// block-bodied fragment endpoint are recovered by internal/parser.ParseSyntax.
 type TopLevel struct {
 	Package   *gwdkast.Package
 	Imports   []gwdkast.Import
@@ -51,7 +49,7 @@ type TopLevel struct {
 
 // ParseTopLevel parses the package, import, and use declarations of .gwdk source
 // with a recursive-descent pass over the shared tokenizer. It accepts only the
-// exact shapes the line-oriented parser accepts (so an equivalence-anchored
+// exact shapes ParseSyntax accepts (so an equivalence-anchored
 // cutover never turns malformed source into valid nodes) and recovers from any
 // other line by skipping to the next line, skipping block bodies by brace
 // matching, so one bad declaration never hides the rest.
@@ -80,7 +78,7 @@ func ParseTopLevel(src string) TopLevel {
 		first := line[0]
 		switch {
 		case first.Kind == TokenIdentifier:
-			// The line parser requires eof() after every identifier-led
+			// ParseSyntax requires eof() after every identifier-led
 			// declaration, but the shared tokenizer strips // comments, so a
 			// trailing comment leaves a clean token line here. Reject any line
 			// whose raw tail still holds a dropped comment so recovery never
@@ -135,7 +133,7 @@ func ParseTopLevel(src string) TopLevel {
 }
 
 // metadataValue returns the source text after a line-leading metadata keyword,
-// trimmed, mirroring parseMetadataLine in the line parser (which keeps the raw
+// trimmed, mirroring parseMetadataLine in the compiler parser (which keeps the raw
 // remainder of the line — quotes and any trailing comment included — and only
 // trims surrounding whitespace). end is the newline or EOF token that closes the
 // line, so its byte offset bounds the value.
@@ -150,11 +148,10 @@ func metadataValue(src string, keyword, end Token) string {
 
 // applyMetadata records one top-level metadata declaration. Every metadata line
 // is appended to Metadata as a raw {Name, Value} pair (matching
-// SyntaxFile.Metadata), and the three keywords the line parser routes into typed
-// fields without validation are mirrored here. The line parser assigns these
-// unconditionally, so the last occurrence wins. Keywords whose typed field needs
-// validation (route, revalidate, error, layout, guard, css, asset) are left to a
-// later phase and survive only in the raw Metadata list for now.
+// SyntaxFile.Metadata), and validation-free keywords are mirrored here. The
+// compiler parser assigns these unconditionally, so the last occurrence wins.
+// Keywords whose typed field needs validation (route, revalidate, error, layout,
+// guard, css, asset) survive in the raw Metadata list for ParseSyntax.
 func (top *TopLevel) applyMetadata(keyword Token, line []Token, value string) {
 	span := SpanOf(keyword, line[len(line)-1])
 	top.Metadata = append(top.Metadata, gwdkast.MetadataDecl{Name: keyword.Lexeme, Value: value, Span: span})
@@ -176,7 +173,7 @@ func (top *TopLevel) applyMetadata(keyword Token, line []Token, value string) {
 // name is a strict identifier; the type and initializer are Go expressions
 // delegated to go/parser per ADR 0010 (custom .gwdk grammar, reused Go parser for
 // embedded Go), then constrained to the single-selector / zero-arg-call shapes
-// the line parser's qualifiedIdent accepts so recovery stays equivalent.
+// the compiler parser's qualified identifier rule accepts so recovery stays equivalent.
 func parseStoreTokens(src string, line []Token, end Token) (gwdkast.Store, bool) {
 	if len(line) < 2 || line[1].Kind != TokenIdentifier || !isStrictIdent(line[1].Lexeme) {
 		return gwdkast.Store{}, false
@@ -198,7 +195,7 @@ func parseStoreTokens(src string, line []Token, end Token) (gwdkast.Store, bool)
 }
 
 // parsePropsTokens recovers a `props <pkg.Type>` contract: a type reference with
-// no initializer (an `=` makes it a malformed props line the line parser
+// no initializer (an `=` makes it a malformed props line the compiler parser
 // rejects, so it is skipped rather than emitted).
 func parsePropsTokens(src string, line []Token, end Token) (gwdkast.GoTypeRef, bool) {
 	if assignIndex(line) != -1 {
@@ -228,7 +225,7 @@ func parseStateTokens(src string, line []Token, end Token) (gwdkast.StateContrac
 }
 
 // goTypeRef parses a Go type reference (pkg.Type) and accepts only a single
-// selector of two strict identifiers — the line parser's qualifiedIdent rule, so
+// selector of two strict identifiers — the compiler parser's qualified identifier rule, so
 // generics (pkg.Type[T]) and multi-segment paths (a.b.c) are rejected.
 func goTypeRef(expr string, span source.SourceSpan) (gwdkast.GoTypeRef, bool) {
 	parsed, err := goparser.ParseExpr(strings.TrimSpace(expr))
@@ -243,7 +240,7 @@ func goTypeRef(expr string, span source.SourceSpan) (gwdkast.GoTypeRef, bool) {
 }
 
 // goFuncRef parses a Go constructor reference (pkg.NewFn()) — a call of a
-// pkg.Fn selector with no arguments, matching the line parser's `()` requirement.
+// pkg.Fn selector with no arguments, matching the compiler parser's `()` requirement.
 func goFuncRef(expr string, span source.SourceSpan) (gwdkast.GoFuncRef, bool) {
 	parsed, err := goparser.ParseExpr(strings.TrimSpace(expr))
 	if err != nil {
@@ -304,7 +301,7 @@ func sourceBetween(src string, start, stop int) string {
 
 // hasTrailingContent reports whether non-whitespace source remains between the
 // last token of line and the line terminator end — that is, a // comment the
-// shared tokenizer stripped. The line-oriented parser requires eof() after
+// shared tokenizer stripped. ParseSyntax requires eof() after
 // every identifier-led declaration, so a line with a trailing comment is
 // rejected there; this check keeps recovery from emitting a node ParseSyntax
 // would not.
@@ -314,7 +311,7 @@ func hasTrailingContent(src string, line []Token, end Token) bool {
 }
 
 // decodeString decodes a "..."-quoted lexeme using the same escape rules as the
-// line parser's lexLineString: \" and \\ collapse, \n and \t become the control
+// compiler parser: \" and \\ collapse, \n and \t become the control
 // characters, any other \x keeps the backslash and the character, and a
 // trailing backslash is kept literally. Recovered string values (routes, error
 // pages, import paths, use packages) must match ParseSyntax byte for byte, and
@@ -354,7 +351,7 @@ func decodeString(lexeme string) string {
 }
 
 // parsePackageName accepts exactly `package <strict-ident>` with no trailing
-// tokens, matching parsePackageLine in the line parser.
+// tokens, matching parsePackageLine in the compiler parser.
 func parsePackageName(line []Token) (string, bool) {
 	if len(line) != 2 || line[1].Kind != TokenIdentifier || !isStrictIdent(line[1].Lexeme) {
 		return "", false
@@ -413,10 +410,10 @@ func parseUseTokens(line []Token) (gwdkast.Use, bool) {
 //	api <Name> <METHOD> "<route>" [error "<page>"]
 //
 // matching parseActionEndpointLine / parseAPIEndpointLine plus the validation the
-// line parser applies after the pattern: the handler name must be an exported Go
+// compiler parser applies after the pattern: the handler name must be an exported Go
 // identifier, the method must be an uppercase token (POST for actions; one of the
 // REST verbs for APIs), and an optional error page must resolve. Lines that fail
-// any check are skipped so recovery never emits an endpoint the line parser would
+// any check are skipped so recovery never emits an endpoint ParseSyntax would
 // reject.
 func parseEndpointTokens(kind string, line []Token) (gwdkast.Endpoint, bool) {
 	if len(line) != 4 && len(line) != 6 {
@@ -456,7 +453,7 @@ func parseEndpointTokens(kind string, line []Token) (gwdkast.Endpoint, bool) {
 }
 
 // isExportedIdent reports whether value is a strict identifier whose first rune
-// is an ASCII capital, matching the line parser's isExportedIdentifier.
+// is an ASCII capital, matching the compiler parser's isExportedIdentifier.
 func isExportedIdent(value string) bool {
 	if !isStrictIdent(value) {
 		return false
@@ -466,7 +463,7 @@ func isExportedIdent(value string) bool {
 }
 
 // isUpperMethod reports whether value is a non-empty run of ASCII capitals,
-// matching the line parser's method() rule.
+// matching the compiler parser's method() rule.
 func isUpperMethod(value string) bool {
 	if value == "" {
 		return false
@@ -494,7 +491,7 @@ func methodAllowed(kind, method string) bool {
 	return false
 }
 
-// isStrictIdent mirrors the line parser's identifier rule: a leading letter or
+// isStrictIdent mirrors the compiler parser's identifier rule: a leading letter or
 // underscore followed by letters, underscores, or digits. The shared tokenizer
 // also admits '.' and '-' in identifier lexemes, so this re-checks strictness.
 func isStrictIdent(value string) bool {

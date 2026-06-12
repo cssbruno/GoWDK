@@ -3,6 +3,7 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -38,6 +39,33 @@ func (err *DiagnosticError) Error() string {
 	return err.Message
 }
 
+// DiagnosticErrors carries every parser diagnostic recovered from one file.
+type DiagnosticErrors []error
+
+func (errs DiagnosticErrors) Error() string {
+	if len(errs) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(errs))
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		parts = append(parts, err.Error())
+	}
+	return strings.Join(parts, "; ")
+}
+
+func (errs DiagnosticErrors) Unwrap() []error {
+	out := make([]error, 0, len(errs))
+	for _, err := range errs {
+		if err != nil {
+			out = append(out, err)
+		}
+	}
+	return out
+}
+
 // ParserDiagnostic extracts a typed parser diagnostic from err when available.
 func ParserDiagnostic(err error) (*DiagnosticError, bool) {
 	var diagnostic *DiagnosticError
@@ -45,6 +73,44 @@ func ParserDiagnostic(err error) (*DiagnosticError, bool) {
 		return diagnostic, true
 	}
 	return nil, false
+}
+
+// ParserDiagnostics extracts every typed parser diagnostic from err. Untyped
+// parse failures are returned as nil entries by callers through their fallback
+// diagnostic path.
+func ParserDiagnostics(err error) []*DiagnosticError {
+	if err == nil {
+		return nil
+	}
+	var joined interface{ Unwrap() []error }
+	if errors.As(err, &joined) {
+		var diagnostics []*DiagnosticError
+		for _, child := range joined.Unwrap() {
+			diagnostics = append(diagnostics, ParserDiagnostics(child)...)
+		}
+		return diagnostics
+	}
+	if diagnostic, ok := ParserDiagnostic(err); ok {
+		return []*DiagnosticError{diagnostic}
+	}
+	return nil
+}
+
+func diagnosticErrors(errs []error) error {
+	out := make(DiagnosticErrors, 0, len(errs))
+	for _, err := range errs {
+		if err != nil {
+			out = append(out, err)
+		}
+	}
+	switch len(out) {
+	case 0:
+		return nil
+	case 1:
+		return out[0]
+	default:
+		return out
+	}
 }
 
 func diagnosticError(code string, span source.SourceSpan, message string) error {

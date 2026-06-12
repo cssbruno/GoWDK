@@ -24,12 +24,11 @@ import (
 // Offset is the 0-based byte offset of the position into the source buffer. It
 // is the exact substrate for AST-backed formatting, precise LSP edits, and
 // exact diagnostic ranges, none of which should re-derive offsets from
-// line/column. Offset is best-effort: the current line-oriented parser does not
-// populate it, so a position produced by that parser leaves Offset at its zero
-// value while Line/Column are set. Use PositionAt/OffsetOf to convert against a
-// source buffer when an exact offset is required. Set-ness of a position is
-// determined by Line/Column being positive, not by Offset, because byte offset
-// 0 is a valid first-byte position.
+// line/column. Offset is best-effort: some parser spans are still line-derived
+// and leave Offset at its zero value while Line/Column are set. Use
+// PositionAt/OffsetOf to convert against a source buffer when an exact offset is
+// required. Set-ness of a position is determined by Line/Column being positive,
+// not by Offset, because byte offset 0 is a valid first-byte position.
 type SourcePosition struct {
 	Line   int
 	Column int

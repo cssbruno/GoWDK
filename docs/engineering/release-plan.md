@@ -297,8 +297,9 @@ Every 0.x minor release must have:
 - [x] Make `gowdk check --json` a stable tooling contract. See
   `docs/reference/diagnostics.md` and `docs/language/diagnostics.md`.
 - [x] Add parser recovery so one syntax error does not hide the rest of the
-  file. Deferred to #250 while the current line-oriented parser keeps broad
-  `parse_error` diagnostics.
+  file. The shared parser now accumulates declaration/block diagnostics while
+  preserving broad `parse_error` fallback diagnostics where no stable code
+  exists.
 - [x] Add exact spans and suggestions for package declarations, imports, `use`,
   metadata declarations, routes, layouts, render modes, `paths`, `build`, `load`, `view`,
   `style`, `client`, `go`, `go ssr`, `go client`, `go addon.*`, actions, APIs,

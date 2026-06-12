@@ -129,7 +129,7 @@ var Registry = []Code{
 	{Code: "package_mismatch", Area: "packages", Stability: StabilityStable, Severity: SeverityError, Summary: "GOWDK package does not match sibling Go files"},
 	{Code: "package_must_be_first", Area: "packages", Stability: StabilityStable, Severity: SeverityError, Summary: "package declaration is not the first non-comment declaration"},
 	{Code: "page_store_error", Area: "stores", Stability: StabilityExperimental, Severity: SeverityError, Summary: "page store type or initializer is invalid"},
-	{Code: "parse_error", Area: "parser", Stability: StabilityStable, Severity: SeverityError, Summary: "line-oriented parser rejected source without a more specific code"},
+	{Code: "parse_error", Area: "parser", Stability: StabilityStable, Severity: SeverityError, Summary: "parser rejected source without a more specific code"},
 	{Code: "public_guard_exclusive", Area: "pages", Stability: StabilityStable, Severity: SeverityError, Summary: "guard public must be the only guard on an intentionally public page"},
 	{Code: "redundant_component_implementation", Area: "components", Stability: StabilityStable, Severity: SeverityError, Summary: "same component has both GOWDK and generated Go implementations"},
 	{Code: "revalidate_requires_cache", Area: "cache", Stability: StabilityStable, Severity: SeverityError, Summary: "revalidate requires an explicit cache policy"},

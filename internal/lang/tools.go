@@ -54,9 +54,23 @@ func ParseSource(path string, source []byte) (gwdkir.Page, Diagnostics) {
 	page, err := parser.ParsePageWithDefaultID(source, derivedPageID(path))
 	page.Source = path
 	if err != nil {
-		diagnostics = append(diagnostics, parserDiagnostic(path, source, err))
+		diagnostics = append(diagnostics, parserDiagnostics(path, source, err)...)
 	}
 	return page, diagnostics
+}
+
+func parserDiagnostics(path string, src []byte, err error) Diagnostics {
+	if err == nil {
+		return nil
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		var diagnostics Diagnostics
+		for _, child := range joined.Unwrap() {
+			diagnostics = append(diagnostics, parserDiagnostics(path, src, child)...)
+		}
+		return diagnostics
+	}
+	return Diagnostics{parserDiagnostic(path, src, err)}
 }
 
 func parserDiagnostic(path string, src []byte, err error) Diagnostic {
@@ -190,7 +204,7 @@ func ParseLayoutSource(path string, source []byte) (gwdkir.Layout, Diagnostics) 
 	layout, err := parser.ParseLayout(path, source)
 	layout.Source = path
 	if err != nil {
-		diagnostics = append(diagnostics, parserDiagnostic(path, source, err))
+		diagnostics = append(diagnostics, parserDiagnostics(path, source, err)...)
 	}
 	return layout, diagnostics
 }
@@ -208,7 +222,7 @@ func ParseComponentSource(path string, source []byte) (gwdkir.Component, Diagnos
 	component, err := parser.ParseComponent(source)
 	component.Source = path
 	if err != nil {
-		diagnostics = append(diagnostics, parserDiagnostic(path, source, err))
+		diagnostics = append(diagnostics, parserDiagnostics(path, source, err)...)
 	}
 	return component, diagnostics
 }

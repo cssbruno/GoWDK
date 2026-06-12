@@ -1,12 +1,11 @@
 package parser
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"path/filepath"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/gwdkast"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -21,185 +20,73 @@ func layoutIDFromPath(path string) string {
 // Layout identity is derived from the file name (`root.layout.gwdk` -> `root`);
 // any `layout` metadata declaration declares parent layouts this layout nests within.
 func ParseLayout(path string, src []byte) (gwdkir.Layout, error) {
-	var layout gwdkir.Layout
-	layout.ID = layoutIDFromPath(path)
-	var viewBody []string
-	inView := false
-	var styleBody []string
-	inStyle := false
-	styleDepth := 0
-	var goBlockBody []string
-	inGoBlock := false
-	goBlockDepth := 0
-	goBlockTarget := ""
-	seenGoBlocks := map[string]source.SourceSpan{}
-	seenDeclaration := false
-	var blockScanner braceScanner
-
-	scanner := bufio.NewScanner(bytes.NewReader(src))
-	for lineNumber := 1; scanner.Scan(); lineNumber++ {
-		rawLine := scanner.Text()
-		line := strings.TrimSpace(rawLine)
-		if inGoBlock {
-			if line == "}" && !blockScanner.inMultiline() {
-				goBlockDepth--
-				if goBlockDepth == 0 {
-					layout.Blocks.GoBlocks = append(layout.Blocks.GoBlocks, gwdkir.GoBlock{
-						Target: goBlockTarget,
-						Body:   strings.TrimSpace(strings.Join(goBlockBody, "\n")),
-						Span:   seenGoBlocks[goBlockTarget],
-					})
-					layout.Blocks.Spans.GoBlocks = append(layout.Blocks.Spans.GoBlocks, source.NamedSpan{Name: goBlockTarget, Span: seenGoBlocks[goBlockTarget]})
-					inGoBlock = false
-					goBlockBody = nil
-					goBlockDepth = 0
-					goBlockTarget = ""
-					continue
-				}
-				goBlockBody = append(goBlockBody, rawLine)
-				continue
-			}
-			goBlockDepth += blockScanner.delta(rawLine)
-			if goBlockDepth < 1 {
-				return gwdkir.Layout{}, fmt.Errorf("line %d: go block closed unexpectedly", lineNumber)
-			}
-			goBlockBody = append(goBlockBody, rawLine)
-			continue
-		}
-		if inStyle {
-			styleDepth += blockScanner.delta(rawLine)
-			if styleDepth < 0 {
-				return gwdkir.Layout{}, fmt.Errorf("line %d: style block closed unexpectedly", lineNumber)
-			}
-			if styleDepth == 0 {
-				layout.Blocks.StyleBody = strings.TrimSpace(strings.Join(styleBody, "\n"))
-				layout.Blocks.Style = layout.Blocks.StyleBody != ""
-				inStyle = false
-				styleBody = nil
-				styleDepth = 0
-				continue
-			}
-			styleBody = append(styleBody, rawLine)
-			continue
-		}
-		if inView {
-			if line == "style {" {
-				return gwdkir.Layout{}, fmt.Errorf("line %d: style block must be outside view {}", lineNumber)
-			}
-			if line == "}" {
-				layout.Blocks.View = true
-				layout.Blocks.ViewBody = strings.TrimSpace(strings.Join(viewBody, "\n"))
-				layout.Blocks.Spans.ViewBodyStart = sourceBodyStart(viewBody, lineNumber-len(viewBody))
-				inView = false
-				viewBody = nil
-				continue
-			}
-			viewBody = append(viewBody, rawLine)
-			continue
-		}
-
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
-		}
-
-		if match := packagePattern.FindStringSubmatch(line); match != nil {
-			if seenDeclaration {
-				return gwdkir.Layout{}, lineDiagnosticError(DiagnosticPackageMustBeFirst, lineNumber, rawLine, "package declaration must be the first non-comment declaration")
-			}
-			layout.Package = match[1]
-			layout.PackageSpan = sourceLineSpan(lineNumber, rawLine)
-			seenDeclaration = true
-			continue
-		}
-		if strings.HasPrefix(line, "package ") {
-			return gwdkir.Layout{}, fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line)
-		}
-		seenDeclaration = true
-
-		if match := metadataPattern.FindStringSubmatch(line); match != nil {
-			if err := applyLayoutMetadata(&layout, match[1], match[2], lineNumber, rawLine); err != nil {
-				return gwdkir.Layout{}, withLine(lineNumber, err)
-			}
-			continue
-		}
-		if strings.HasPrefix(line, "@") {
-			return gwdkir.Layout{}, lineDiagnosticError(DiagnosticMalformedLegacyMetadata, lineNumber, rawLine, "malformed legacy metadata %q", line)
-		}
-
-		if match := usePattern.FindStringSubmatch(line); match != nil {
-			layout.Uses = append(layout.Uses, gwdkir.Use{
-				Alias:   match[1],
-				Package: match[2],
-				Span:    sourceLineSpan(lineNumber, rawLine),
-			})
-			continue
-		}
-		if isMalformedUse(line) {
-			return gwdkir.Layout{}, lineDiagnosticError(DiagnosticMalformedGOWDKUse, lineNumber, rawLine, "malformed use %q", line)
-		}
-
-		switch line {
-		case "view {":
-			layout.Blocks.Spans.View = sourceLineSpan(lineNumber, rawLine)
-			inView = true
-			continue
-		case "style {":
-			if layout.Blocks.Style {
-				return gwdkir.Layout{}, fmt.Errorf("line %d: layout declares multiple style blocks", lineNumber)
-			}
-			layout.Blocks.Style = true
-			inStyle = true
-			styleDepth = 1
-			blockScanner = braceScanner{lang: braceLangCSS}
-			continue
-		case "go {":
-			span := sourceLineSpan(lineNumber, rawLine)
-			if first, exists := seenGoBlocks[""]; exists {
-				return gwdkir.Layout{}, fmt.Errorf("line %d: duplicate go block; first declared on line %d", lineNumber, first.Start.Line)
-			}
-			seenGoBlocks[""] = span
-			inGoBlock = true
-			goBlockDepth = 1
-			goBlockTarget = ""
-			blockScanner = braceScanner{lang: braceLangGo}
-			continue
-		}
-		if match := goBlockPattern.FindStringSubmatch(line); match != nil {
-			target := strings.TrimSpace(match[1])
-			span := sourceLineSpan(lineNumber, rawLine)
-			if first, exists := seenGoBlocks[target]; exists {
-				label := "go"
-				if target != "" {
-					label = "go " + target
-				}
-				return gwdkir.Layout{}, fmt.Errorf("line %d: duplicate %s block; first declared on line %d", lineNumber, label, first.Start.Line)
-			}
-			seenGoBlocks[target] = span
-			inGoBlock = true
-			goBlockDepth = 1
-			goBlockTarget = target
-			blockScanner = braceScanner{lang: braceLangGo}
-			continue
-		}
-
-		if name := unsupportedTopLevelBlockName(line); name != "" {
-			return gwdkir.Layout{}, lineDiagnosticError(DiagnosticUnsupportedTopLevelBlock, lineNumber, rawLine, "unsupported top-level block %q", name)
-		}
-	}
-	if err := scanner.Err(); err != nil {
+	ast, err := ParseSyntax(src)
+	if err != nil {
 		return gwdkir.Layout{}, err
 	}
-	if inView {
-		return gwdkir.Layout{}, fmt.Errorf("view block missing closing }")
+	return lowerLayoutSyntax(path, src, ast)
+}
+
+func lowerLayoutSyntax(path string, src []byte, ast gwdkast.File) (gwdkir.Layout, error) {
+	layout := gwdkir.Layout{ID: layoutIDFromPath(path)}
+	if ast.Package != nil {
+		layout.Package = ast.Package.Name
+		layout.PackageSpan = ast.Package.Span
 	}
-	if inStyle {
-		return gwdkir.Layout{}, fmt.Errorf("style block missing closing }")
+	layout.Uses = lowerSyntaxUses(ast.Uses)
+	for _, metadata := range ast.Metadata {
+		lineNumber := metadata.Span.Start.Line
+		value := strings.TrimSpace(metadata.Value)
+		switch metadata.Name {
+		case "layout":
+			if value == "" {
+				return gwdkir.Layout{}, fmt.Errorf("line %d: layout requires a value", lineNumber)
+			}
+			if (layout.Span == source.SourceSpan{}) {
+				layout.Span = metadata.Span
+			}
+		default:
+			return gwdkir.Layout{}, lineDiagnosticError(DiagnosticUnsupportedLayoutMetadata, lineNumber, sourceLineText(src, lineNumber), "unsupported metadata %s", metadata.Name)
+		}
 	}
-	if inGoBlock {
-		return gwdkir.Layout{}, fmt.Errorf("go block missing closing }")
+	for _, ref := range ast.Layouts {
+		layout.Layouts = append(layout.Layouts, ref.ID)
+		layout.LayoutSpans = append(layout.LayoutSpans, source.NamedSpan{Name: ref.ID, Span: ref.Span})
+	}
+	for _, block := range ast.Blocks {
+		if err := applyLayoutSyntaxBlock(src, &layout, block); err != nil {
+			return gwdkir.Layout{}, err
+		}
 	}
 	if layout.ID == "" {
 		return gwdkir.Layout{}, fmt.Errorf("layout file name must be <name>.layout.gwdk")
 	}
 	return layout, nil
+}
+
+func applyLayoutSyntaxBlock(src []byte, layout *gwdkir.Layout, block gwdkast.Block) error {
+	switch block.Kind {
+	case "view":
+		layout.Blocks.View = true
+		layout.Blocks.ViewBody = block.Body
+		layout.Blocks.Spans.View = block.Span
+		layout.Blocks.Spans.ViewBodyStart = block.BodyStart
+	case "style":
+		if layout.Blocks.Style {
+			return fmt.Errorf("line %d: layout declares multiple style blocks", block.Span.Start.Line)
+		}
+		layout.Blocks.StyleBody = block.StyleBody
+		layout.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
+	case "go":
+		layout.Blocks.GoBlocks = append(layout.Blocks.GoBlocks, gwdkir.GoBlock{
+			Target: block.Name,
+			Body:   block.Body,
+			Span:   block.Span,
+		})
+		layout.Blocks.Spans.GoBlocks = append(layout.Blocks.Spans.GoBlocks, source.NamedSpan{Name: block.Name, Span: block.Span})
+	default:
+		lineNumber := block.Span.Start.Line
+		return lineDiagnosticError(DiagnosticUnsupportedTopLevelBlock, lineNumber, sourceLineText(src, lineNumber), "unsupported top-level block %q", block.Kind)
+	}
+	return nil
 }

@@ -73,44 +73,6 @@ func Outline(src string) []OutlineSymbol {
 	return symbols
 }
 
-// lineExtent returns the index that ends the logical line starting at from (the
-// next newline or EOF) and whether the line contains a block-opening brace.
-func lineExtent(tokens []Token, from int) (int, bool) {
-	hasBrace := false
-	index := from
-	for index < len(tokens) && tokens[index].Kind != TokenNewline && tokens[index].Kind != TokenEOF {
-		if tokens[index].Kind == TokenLBrace {
-			hasBrace = true
-		}
-		index++
-	}
-	return index, hasBrace
-}
-
-// matchBrace returns the index of the close brace that balances the first open
-// brace at or after from. An unbalanced block recovers to the last token before
-// EOF so the outline still terminates.
-func matchBrace(tokens []Token, from int) int {
-	depth := 0
-	for index := from; index < len(tokens); index++ {
-		switch tokens[index].Kind {
-		case TokenLBrace:
-			depth++
-		case TokenRBrace:
-			depth--
-			if depth == 0 {
-				return index
-			}
-		case TokenEOF:
-			if index > from {
-				return index - 1
-			}
-			return index
-		}
-	}
-	return len(tokens) - 1
-}
-
 func blockName(line []Token) string {
 	var parts []string
 	for _, token := range line {
@@ -187,19 +149,4 @@ func lineValue(line []Token, at int) string {
 		}
 	}
 	return strings.Join(parts, " ")
-}
-
-func unquote(lexeme string) string {
-	return strings.Trim(lexeme, "\"")
-}
-
-func spanOf(first, last Token) source.SourceSpan {
-	return source.SourceSpan{
-		Start: source.SourcePosition{Line: first.Pos.Line, Column: first.Pos.Column, Offset: first.Offset},
-		End: source.SourcePosition{
-			Line:   last.Pos.Line,
-			Column: last.Pos.Column + len([]rune(last.Lexeme)),
-			Offset: last.Offset + len(last.Lexeme),
-		},
-	}
 }

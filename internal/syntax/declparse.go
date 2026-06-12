@@ -1,4 +1,4 @@
-package lang
+package syntax
 
 import (
 	"go/ast"
@@ -70,9 +70,9 @@ func ParseTopLevel(src string) TopLevel {
 			continue
 		}
 
-		lineEnd, hasBrace := lineExtent(tokens, index)
+		lineEnd, hasBrace := LineExtent(tokens, index)
 		if hasBrace {
-			index = matchBrace(tokens, index) + 1
+			index = MatchBrace(tokens, index) + 1
 			continue
 		}
 
@@ -84,7 +84,7 @@ func ParseTopLevel(src string) TopLevel {
 			case "package":
 				if result.Package == nil {
 					if name, ok := parsePackageName(line); ok {
-						result.Package = &gwdkast.Package{Name: name, Span: spanOf(first, line[len(line)-1])}
+						result.Package = &gwdkast.Package{Name: name, Span: SpanOf(first, line[len(line)-1])}
 					}
 				}
 			case "import":
@@ -147,7 +147,7 @@ func metadataValue(src string, keyword, end Token) string {
 // validation (route, revalidate, error, layout, guard, css, asset) are left to a
 // later phase and survive only in the raw Metadata list for now.
 func (top *TopLevel) applyMetadata(keyword Token, line []Token, value string) {
-	span := spanOf(keyword, line[len(line)-1])
+	span := SpanOf(keyword, line[len(line)-1])
 	top.Metadata = append(top.Metadata, gwdkast.MetadataDecl{Name: keyword.Lexeme, Value: value, Span: span})
 	switch keyword.Lexeme {
 	case "page":
@@ -155,7 +155,7 @@ func (top *TopLevel) applyMetadata(keyword Token, line []Token, value string) {
 	case "component":
 		top.Component = &gwdkast.ComponentDecl{Name: value, Span: span}
 	case "cache":
-		top.Cache = &gwdkast.CacheDecl{Policy: unquote(value), Span: span}
+		top.Cache = &gwdkast.CacheDecl{Policy: Unquote(value), Span: span}
 	case "wasm":
 		// The SyntaxFile path keeps the raw quoted value (it does not trimQuotes),
 		// so match it for equivalence rather than unquoting.
@@ -176,7 +176,7 @@ func parseStoreTokens(src string, line []Token, end Token) (gwdkast.Store, bool)
 	if assign < 2 {
 		return gwdkast.Store{}, false
 	}
-	span := spanOf(line[0], line[len(line)-1])
+	span := SpanOf(line[0], line[len(line)-1])
 	typeRef, ok := goTypeRef(sourceBetween(src, tokenEnd(line[1]), line[assign].Offset), span)
 	if !ok {
 		return gwdkast.Store{}, false
@@ -195,7 +195,7 @@ func parsePropsTokens(src string, line []Token, end Token) (gwdkast.GoTypeRef, b
 	if assignIndex(line) != -1 {
 		return gwdkast.GoTypeRef{}, false
 	}
-	span := spanOf(line[0], line[len(line)-1])
+	span := SpanOf(line[0], line[len(line)-1])
 	return goTypeRef(sourceBetween(src, tokenEnd(line[0]), end.Offset), span)
 }
 
@@ -206,7 +206,7 @@ func parseStateTokens(src string, line []Token, end Token) (gwdkast.StateContrac
 	if assign < 1 {
 		return gwdkast.StateContract{}, false
 	}
-	span := spanOf(line[0], line[len(line)-1])
+	span := SpanOf(line[0], line[len(line)-1])
 	typeRef, ok := goTypeRef(sourceBetween(src, tokenEnd(line[0]), line[assign].Offset), span)
 	if !ok {
 		return gwdkast.StateContract{}, false
@@ -319,12 +319,12 @@ func parseImportTokens(line []Token) (gwdkast.Import, bool) {
 	if index >= len(line) || line[index].Kind != TokenString {
 		return gwdkast.Import{}, false
 	}
-	path := unquote(line[index].Lexeme)
+	path := Unquote(line[index].Lexeme)
 	index++
 	if index != len(line) || path == "" {
 		return gwdkast.Import{}, false
 	}
-	return gwdkast.Import{Alias: alias, Path: path, Span: spanOf(line[0], line[len(line)-1])}, true
+	return gwdkast.Import{Alias: alias, Path: path, Span: SpanOf(line[0], line[len(line)-1])}, true
 }
 
 // parseUseTokens accepts exactly `use <strict-ident alias> "<strict-ident package>"`
@@ -340,11 +340,11 @@ func parseUseTokens(line []Token) (gwdkast.Use, bool) {
 	if line[2].Kind != TokenString {
 		return gwdkast.Use{}, false
 	}
-	pkg := unquote(line[2].Lexeme)
+	pkg := Unquote(line[2].Lexeme)
 	if !isStrictIdent(pkg) {
 		return gwdkast.Use{}, false
 	}
-	return gwdkast.Use{Alias: line[1].Lexeme, Package: pkg, Span: spanOf(line[0], line[len(line)-1])}, true
+	return gwdkast.Use{Alias: line[1].Lexeme, Package: pkg, Span: SpanOf(line[0], line[len(line)-1])}, true
 }
 
 // parseEndpointTokens recovers an exact endpoint declaration:
@@ -373,19 +373,19 @@ func parseEndpointTokens(kind string, line []Token) (gwdkast.Endpoint, bool) {
 	if line[3].Kind != TokenString {
 		return gwdkast.Endpoint{}, false
 	}
-	span := spanOf(line[0], line[len(line)-1])
+	span := SpanOf(line[0], line[len(line)-1])
 	endpoint := gwdkast.Endpoint{
 		Kind:   kind,
 		Name:   name.Lexeme,
 		Method: method.Lexeme,
-		Route:  unquote(line[3].Lexeme),
+		Route:  Unquote(line[3].Lexeme),
 		Span:   span,
 	}
 	if len(line) == 6 {
 		if line[4].Kind != TokenIdentifier || line[4].Lexeme != "error" || line[5].Kind != TokenString {
 			return gwdkast.Endpoint{}, false
 		}
-		errorPage, err := source.ErrorPagePath(unquote(line[5].Lexeme))
+		errorPage, err := source.ErrorPagePath(Unquote(line[5].Lexeme))
 		if err != nil {
 			return gwdkast.Endpoint{}, false
 		}

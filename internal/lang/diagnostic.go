@@ -8,17 +8,9 @@ import (
 	"github.com/cssbruno/gowdk/internal/diagnostics"
 )
 
-// Position is a 1-based source location.
-type Position struct {
-	Line   int `json:"line"`
-	Column int `json:"column"`
-}
-
-// Range is a 1-based source range. End is exclusive.
-type Range struct {
-	Start Position `json:"start"`
-	End   Position `json:"end"`
-}
+// Position (lang.Position) and Range (lang.Range) are aliases of the leaf
+// syntax package's types — see syntax_shim.go — so the lexer and editor
+// diagnostics share one position type.
 
 // RelatedLocation is a secondary source location attached to a diagnostic, such
 // as the first declaration that a conflict diagnostic also points at.

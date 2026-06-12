@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"strings"
 	"unicode"
 
 	"github.com/cssbruno/gowdk/internal/gwdkast"
@@ -9,14 +10,23 @@ import (
 // TopLevel holds the top-level declaration nodes a recursive-descent parse
 // recovers from .gwdk source. It is the first slice of the ADR 0010 parser
 // producing real gwdkast nodes (rather than the tooling outline): the package
-// declaration plus Go imports and GOWDK uses, which map one-to-one to the
-// line-oriented parser's output and are exercised by an equivalence test against
-// internal/parser.ParseSyntax. Metadata routing, blocks, view markup, and
-// endpoints remain on the line-oriented parser until later phases.
+// declaration, Go imports and GOWDK uses, and the top-level metadata
+// declarations — all of which map one-to-one to the line-oriented parser's
+// output and are exercised by an equivalence test against
+// internal/parser.ParseSyntax. Metadata is recovered both as the raw
+// declaration list (Metadata, mirroring SyntaxFile.Metadata) and routed into the
+// validation-free typed fields the line parser assigns unconditionally (Page,
+// Component, Cache). Metadata that needs validation to reach a typed field
+// (route, revalidate, error, layout, guard, css, asset), block bodies, view
+// markup, and endpoints remain on the line-oriented parser until later phases.
 type TopLevel struct {
-	Package *gwdkast.Package
-	Imports []gwdkast.Import
-	Uses    []gwdkast.Use
+	Package   *gwdkast.Package
+	Imports   []gwdkast.Import
+	Uses      []gwdkast.Use
+	Metadata  []gwdkast.MetadataDecl
+	Page      *gwdkast.PageDecl
+	Component *gwdkast.ComponentDecl
+	Cache     *gwdkast.CacheDecl
 }
 
 // ParseTopLevel parses the package, import, and use declarations of .gwdk source
@@ -48,7 +58,8 @@ func ParseTopLevel(src string) TopLevel {
 
 		line := tokens[index:lineEnd]
 		first := line[0]
-		if first.Kind == TokenIdentifier {
+		switch {
+		case first.Kind == TokenIdentifier:
 			switch first.Lexeme {
 			case "package":
 				if result.Package == nil {
@@ -65,11 +76,47 @@ func ParseTopLevel(src string) TopLevel {
 					result.Uses = append(result.Uses, use)
 				}
 			}
+		case first.Kind == TokenMetadata:
+			result.applyMetadata(first, line, metadataValue(src, first, tokens[lineEnd]))
 		}
 		index = lineEnd
 	}
 
 	return result
+}
+
+// metadataValue returns the source text after a line-leading metadata keyword,
+// trimmed, mirroring parseMetadataLine in the line parser (which keeps the raw
+// remainder of the line — quotes and any trailing comment included — and only
+// trims surrounding whitespace). end is the newline or EOF token that closes the
+// line, so its byte offset bounds the value.
+func metadataValue(src string, keyword, end Token) string {
+	start := keyword.Offset + len(keyword.Lexeme)
+	stop := end.Offset
+	if start < 0 || stop > len(src) || start > stop {
+		return ""
+	}
+	return strings.TrimSpace(src[start:stop])
+}
+
+// applyMetadata records one top-level metadata declaration. Every metadata line
+// is appended to Metadata as a raw {Name, Value} pair (matching
+// SyntaxFile.Metadata), and the three keywords the line parser routes into typed
+// fields without validation are mirrored here. The line parser assigns these
+// unconditionally, so the last occurrence wins. Keywords whose typed field needs
+// validation (route, revalidate, error, layout, guard, css, asset) are left to a
+// later phase and survive only in the raw Metadata list for now.
+func (top *TopLevel) applyMetadata(keyword Token, line []Token, value string) {
+	span := spanOf(keyword, line[len(line)-1])
+	top.Metadata = append(top.Metadata, gwdkast.MetadataDecl{Name: keyword.Lexeme, Value: value, Span: span})
+	switch keyword.Lexeme {
+	case "page":
+		top.Page = &gwdkast.PageDecl{ID: value, Span: span}
+	case "component":
+		top.Component = &gwdkast.ComponentDecl{Name: value, Span: span}
+	case "cache":
+		top.Cache = &gwdkast.CacheDecl{Policy: unquote(value), Span: span}
+	}
 }
 
 // parsePackageName accepts exactly `package <strict-ident>` with no trailing

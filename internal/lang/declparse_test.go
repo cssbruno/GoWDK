@@ -25,6 +25,28 @@ func useKeys(uses []gwdkast.Use) map[string]bool {
 	return keys
 }
 
+// metadataPairs reduces metadata declarations to ordered Name=Value strings, the
+// surface both parsers must agree on (spans differ by construction).
+func metadataPairs(decls []gwdkast.MetadataDecl) []string {
+	pairs := make([]string, 0, len(decls))
+	for _, decl := range decls {
+		pairs = append(pairs, decl.Name+"="+decl.Value)
+	}
+	return pairs
+}
+
+func equalOrdered(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for index := range a {
+		if a[index] != b[index] {
+			return false
+		}
+	}
+	return true
+}
+
 // TestParseTopLevelMatchesLineParser anchors the recursive-descent declaration
 // parser against the line-oriented parser: for valid source they must agree on
 // the package name and the set of imports and uses.
@@ -37,8 +59,11 @@ import alias "github.com/x/y"
 use widgets "components"
 use forms "forms"
 
+page home
 route "/"
 title "Home"
+description "Welcome"
+cache "public, max-age=60"
 
 view {
   <main>{title}</main>
@@ -58,6 +83,15 @@ view {
 	}
 	if got, want := useKeys(top.Uses), useKeys(syntaxFile.Uses); !equalKeys(got, want) {
 		t.Fatalf("use mismatch:\n got %v\nwant %v", got, want)
+	}
+	if got, want := metadataPairs(top.Metadata), metadataPairs(syntaxFile.Metadata); !equalOrdered(got, want) {
+		t.Fatalf("metadata mismatch:\n got %v\nwant %v", got, want)
+	}
+	if (top.Page == nil) != (syntaxFile.Page == nil) || (top.Page != nil && top.Page.ID != syntaxFile.Page.ID) {
+		t.Fatalf("page mismatch: got %v, line parser %v", top.Page, syntaxFile.Page)
+	}
+	if (top.Cache == nil) != (syntaxFile.Cache == nil) || (top.Cache != nil && top.Cache.Policy != syntaxFile.Cache.Policy) {
+		t.Fatalf("cache mismatch: got %v, line parser %v", top.Cache, syntaxFile.Cache)
 	}
 }
 
@@ -87,6 +121,9 @@ func TestParseTopLevelMatchesPackageOnCorpus(t *testing.T) {
 			if topName != lineName {
 				t.Fatalf("package mismatch for %s: got %q, line parser %q", name, topName, lineName)
 			}
+			if got, want := metadataPairs(top.Metadata), metadataPairs(syntaxFile.Metadata); !equalOrdered(got, want) {
+				t.Fatalf("metadata mismatch for %s:\n got %v\nwant %v", name, got, want)
+			}
 		})
 	}
 }
@@ -100,6 +137,9 @@ func TestParseTopLevelRecoversPastError(t *testing.T) {
 import "fmt"
 
 use widgets
+
+route "/"
+title "Home"
 
 import alias "github.com/x/y"
 
@@ -119,6 +159,11 @@ view {
 	keys := importKeys(top.Imports)
 	if !keys["\x00fmt"] || !keys["alias\x00github.com/x/y"] {
 		t.Fatalf("recovery lost an import past the malformed line; got %v", keys)
+	}
+	// Metadata after the malformed line is recovered too, where the line parser
+	// surfaces nothing.
+	if got := metadataPairs(top.Metadata); !equalOrdered(got, []string{`route="/"`, `title="Home"`}) {
+		t.Fatalf("recovery lost metadata past the malformed line; got %v", got)
 	}
 }
 
@@ -163,6 +208,31 @@ func TestParseTopLevelRejectsMalformedDeclarations(t *testing.T) {
 			t.Fatal("line parser unexpectedly accepted the malformed use")
 		}
 	})
+}
+
+// TestParseTopLevelRoutesTypedMetadata locks the three validation-free typed
+// routings against the line parser: page and component carry the raw value as
+// their identifier, cache strips surrounding quotes from its policy.
+func TestParseTopLevelRoutesTypedMetadata(t *testing.T) {
+	src := "package widgets\ncomponent Card\ncache \"no-store\"\n"
+	syntaxFile, err := parser.ParseSyntax([]byte(src))
+	if err != nil {
+		t.Fatalf("line parser failed: %v", err)
+	}
+	top := ParseTopLevel(src)
+
+	if syntaxFile.Component == nil || top.Component == nil || top.Component.Name != syntaxFile.Component.Name {
+		t.Fatalf("component mismatch: got %v, line parser %v", top.Component, syntaxFile.Component)
+	}
+	if top.Component.Name != "Card" {
+		t.Fatalf("component name = %q, want Card", top.Component.Name)
+	}
+	if syntaxFile.Cache == nil || top.Cache == nil || top.Cache.Policy != syntaxFile.Cache.Policy {
+		t.Fatalf("cache mismatch: got %v, line parser %v", top.Cache, syntaxFile.Cache)
+	}
+	if top.Cache.Policy != "no-store" {
+		t.Fatalf("cache policy = %q, want unquoted no-store", top.Cache.Policy)
+	}
 }
 
 func equalKeys(a, b map[string]bool) bool {

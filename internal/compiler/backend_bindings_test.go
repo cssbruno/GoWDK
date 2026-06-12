@@ -778,6 +778,36 @@ func TestValidateBackendBindingPolicyIRSeesMissingLoadBinding(t *testing.T) {
 	}
 }
 
+func TestValidateBackendBindingPolicyIRFailsProductionUnsupportedFragmentBinding(t *testing.T) {
+	ir := gwdkir.Program{
+		Endpoints: []gwdkir.Endpoint{{
+			Kind:       gwdkir.EndpointFragment,
+			PageID:     "dashboard",
+			SourceFile: "dashboard.page.gwdk",
+			Symbol:     "Stats",
+			Method:     "GET",
+			Path:       "/fragments/stats",
+			Binding: gwdkir.Binding{
+				Status:       source.BackendBindingUnsupportedSignature,
+				FunctionName: "Stats",
+				Message:      "GOWDK fragment handler app.Stats must have signature func(context.Context) (response.Response, error)",
+			},
+		}},
+	}
+
+	err := ValidateBackendBindingPolicyIR(gowdk.Config{Build: gowdk.BuildConfig{Mode: gowdk.Production}}, ir)
+	if err == nil {
+		t.Fatal("expected unsupported fragment binding to fail the production policy")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "backend_binding_required") {
+		t.Fatalf("missing backend_binding_required diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(err.Error(), "fragment handler Stats") {
+		t.Fatalf("expected diagnostic to identify the fragment binding, got %v", err)
+	}
+}
+
 func TestBackendBindingFromIRKeepsFragmentKind(t *testing.T) {
 	binding := backendBindingFromIR(gwdkir.Endpoint{
 		Kind:    gwdkir.EndpointFragment,

@@ -418,28 +418,73 @@ func TestGeneratedGoMatchesGoldenFixture(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
-	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
-		Kind:        gwdkir.ContractCommand,
-		Name:        "patients.CreatePatient",
-		ImportAlias: "patients",
-		ImportPath:  "example.com/app/contracts/patients",
-		Type:        "CreatePatient",
-		Result:      "CreatePatientResult",
-		InputFields: []source.BackendInputField{
-			{FieldName: "Name", FormName: "name", Type: "string"},
+	program := &gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			InputFields: []source.BackendInputField{
+				{FieldName: "Name", FormName: "name", Type: "string"},
+				{FieldName: "Tags", FormName: "tag", Type: "[]string"},
+				{FieldName: "Age", FormName: "age", Type: "int"},
+				{FieldName: "Remember", FormName: "remember", Type: "bool"},
+			},
+			Method:    "POST",
+			Path:      "/patients",
+			Status:    gwdkir.ContractBindingBound,
+			Handler:   "HandleCreatePatient",
+			Register:  "Register",
+			OwnerKind: gwdkir.SourcePage,
+			OwnerID:   "patients",
+		}, {
+			Kind:        gwdkir.ContractQuery,
+			Name:        "patients.GetPatientPage",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "GetPatientPage",
+			Result:      "PatientPageData",
+			InputFields: []source.BackendInputField{
+				{FieldName: "Filter", FormName: "filter", Type: "string"},
+			},
+			Method:    "GET",
+			Path:      "/patients",
+			Status:    gwdkir.ContractBindingBound,
+			Handler:   "LoadPatientPage",
+			Register:  "Register",
+			OwnerKind: gwdkir.SourcePage,
+			OwnerID:   "patients",
 		},
-		Method:    "POST",
-		Path:      "/patients",
-		Status:    gwdkir.ContractBindingBound,
-		Handler:   "HandleCreatePatient",
-		Register:  "Register",
-		OwnerKind: gwdkir.SourcePage,
-		OwnerID:   "patients",
-	}}}
+		},
+	}
+	actions := []ActionEndpoint{{
+		PageID:      "newsletter",
+		ActionName:  "Subscribe",
+		Method:      "POST",
+		Route:       "/newsletter",
+		InputFields: []string{"email", "tag", "age", "remember"},
+		Binding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/newsletter",
+			PackageName:  "newsletter",
+			FunctionName: "Subscribe",
+			Signature:    source.BackendSignatureActionForm,
+			InputType:    "SubscribeInput",
+			InputFields: []source.BackendInputField{
+				{FieldName: "Email", FormName: "email", Type: "string"},
+				{FieldName: "Tags", FormName: "tag", Type: "[]string"},
+				{FieldName: "Age", FormName: "age", Type: "int"},
+				{FieldName: "Remember", FormName: "remember", Type: "bool"},
+			},
+		},
+	}}
 
-	result, err := GenerateWithOptions(outputDir, appDir, Options{IR: program})
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: actions, IR: program})
 	if err != nil {
 		t.Fatal(err)
 	}

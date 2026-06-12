@@ -8,14 +8,16 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 const (
-	defaultCSRFCookie = "__Host-gowdk-csrf"
-	defaultCSRFField  = "_gowdk_csrf"
-	defaultCSRFHeader = "X-GOWDK-CSRF"
-	csrfNonceBytes    = 32
-	csrfMACBytes      = sha256.Size
+	defaultCSRFCookie         = "__Host-gowdk-csrf"
+	defaultInsecureCSRFCookie = "gowdk-csrf"
+	defaultCSRFField          = "_gowdk_csrf"
+	defaultCSRFHeader         = "X-GOWDK-CSRF"
+	csrfNonceBytes            = 32
+	csrfMACBytes              = sha256.Size
 )
 
 // CSRFValidator validates action requests before generated handlers run.
@@ -57,6 +59,12 @@ func NewCSRF(options CSRFOptions) (*CSRF, error) {
 	cookieName := options.CookieName
 	if cookieName == "" {
 		cookieName = defaultCSRFCookie
+		if options.Insecure {
+			cookieName = defaultInsecureCSRFCookie
+		}
+	}
+	if options.Insecure && secureCookiePrefix(cookieName) {
+		return nil, fmt.Errorf("csrf cookie name %q requires Secure and cannot be used with insecure CSRF mode", cookieName)
 	}
 	fieldName := options.FieldName
 	if fieldName == "" {
@@ -78,6 +86,10 @@ func NewCSRF(options CSRFOptions) (*CSRF, error) {
 		secure:     !options.Insecure,
 		sameSite:   sameSite,
 	}, nil
+}
+
+func secureCookiePrefix(name string) bool {
+	return strings.HasPrefix(name, "__Host-") || strings.HasPrefix(name, "__Secure-")
 }
 
 // Token returns the CSRF token for a generated hidden form field. It reuses

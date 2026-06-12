@@ -101,6 +101,41 @@ func TestCSRFGeneratesSecureCookieAndValidatesFormToken(t *testing.T) {
 	}
 }
 
+func TestCSRFInsecureDefaultUsesBrowserAcceptedCookieName(t *testing.T) {
+	csrf, err := NewCSRF(CSRFOptions{
+		Secret:   []byte(strings.Repeat("s", 32)),
+		Insecure: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	token, err := csrf.Token(response, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookies := response.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected csrf cookie, got %#v", cookies)
+	}
+	cookie := cookies[0]
+	if cookie.Name != defaultInsecureCSRFCookie || cookie.Secure {
+		t.Fatalf("unexpected insecure csrf cookie: %#v", cookie)
+	}
+	if csrf.CookieName() != defaultInsecureCSRFCookie {
+		t.Fatalf("unexpected insecure csrf cookie name: %q", csrf.CookieName())
+	}
+
+	form := url.Values{defaultCSRFField: []string{token}}
+	request := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(cookie)
+
+	if err := csrf.Validate(request); err != nil {
+		t.Fatalf("expected csrf validation to pass: %v", err)
+	}
+}
+
 func TestCSRFValidatesHeaderToken(t *testing.T) {
 	csrf, err := NewCSRF(CSRFOptions{Secret: []byte(strings.Repeat("s", 32))})
 	if err != nil {
@@ -166,6 +201,22 @@ func TestNewCSRFRejectsShortSecret(t *testing.T) {
 	_, err := NewCSRF(CSRFOptions{Secret: []byte("short")})
 	if err == nil {
 		t.Fatal("expected short secret error")
+	}
+}
+
+func TestNewCSRFRejectsSecureCookiePrefixInInsecureMode(t *testing.T) {
+	for _, name := range []string{"__Host-gowdk-csrf", "__Secure-gowdk-csrf"} {
+		_, err := NewCSRF(CSRFOptions{
+			Secret:     []byte(strings.Repeat("s", 32)),
+			CookieName: name,
+			Insecure:   true,
+		})
+		if err == nil {
+			t.Fatalf("expected insecure secure-prefix cookie error for %q", name)
+		}
+		if !strings.Contains(err.Error(), "requires Secure") {
+			t.Fatalf("unexpected error for %q: %v", name, err)
+		}
 	}
 }
 

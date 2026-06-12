@@ -80,6 +80,15 @@ func ParseTopLevel(src string) TopLevel {
 		first := line[0]
 		switch {
 		case first.Kind == TokenIdentifier:
+			// The line parser requires eof() after every identifier-led
+			// declaration, but the shared tokenizer strips // comments, so a
+			// trailing comment leaves a clean token line here. Reject any line
+			// whose raw tail still holds a dropped comment so recovery never
+			// emits a node ParseSyntax (which sees the comment as a leftover
+			// token and bails) would not.
+			if hasTrailingContent(src, line, tokens[lineEnd]) {
+				break
+			}
 			switch first.Lexeme {
 			case "package":
 				if result.Package == nil {
@@ -293,6 +302,57 @@ func sourceBetween(src string, start, stop int) string {
 	return src[start:stop]
 }
 
+// hasTrailingContent reports whether non-whitespace source remains between the
+// last token of line and the line terminator end — that is, a // comment the
+// shared tokenizer stripped. The line-oriented parser requires eof() after
+// every identifier-led declaration, so a line with a trailing comment is
+// rejected there; this check keeps recovery from emitting a node ParseSyntax
+// would not.
+func hasTrailingContent(src string, line []Token, end Token) bool {
+	last := line[len(line)-1]
+	return strings.TrimSpace(sourceBetween(src, tokenEnd(last), end.Offset)) != ""
+}
+
+// decodeString decodes a "..."-quoted lexeme using the same escape rules as the
+// line parser's lexLineString: \" and \\ collapse, \n and \t become the control
+// characters, any other \x keeps the backslash and the character, and a
+// trailing backslash is kept literally. Recovered string values (routes, error
+// pages, import paths, use packages) must match ParseSyntax byte for byte, and
+// ParseSyntax decodes these escapes, so trimming quotes alone is not enough.
+func decodeString(lexeme string) string {
+	if len(lexeme) < 2 || lexeme[0] != '"' {
+		return Unquote(lexeme)
+	}
+	var builder strings.Builder
+	for index := 1; index < len(lexeme); index++ {
+		ch := lexeme[index]
+		if ch == '"' {
+			break
+		}
+		if ch == '\\' {
+			if index+1 >= len(lexeme) {
+				builder.WriteByte(ch)
+				continue
+			}
+			index++
+			switch lexeme[index] {
+			case '"', '\\':
+				builder.WriteByte(lexeme[index])
+			case 'n':
+				builder.WriteByte('\n')
+			case 't':
+				builder.WriteByte('\t')
+			default:
+				builder.WriteByte('\\')
+				builder.WriteByte(lexeme[index])
+			}
+			continue
+		}
+		builder.WriteByte(ch)
+	}
+	return builder.String()
+}
+
 // parsePackageName accepts exactly `package <strict-ident>` with no trailing
 // tokens, matching parsePackageLine in the line parser.
 func parsePackageName(line []Token) (string, bool) {
@@ -319,7 +379,7 @@ func parseImportTokens(line []Token) (gwdkast.Import, bool) {
 	if index >= len(line) || line[index].Kind != TokenString {
 		return gwdkast.Import{}, false
 	}
-	path := Unquote(line[index].Lexeme)
+	path := decodeString(line[index].Lexeme)
 	index++
 	if index != len(line) || path == "" {
 		return gwdkast.Import{}, false
@@ -340,7 +400,7 @@ func parseUseTokens(line []Token) (gwdkast.Use, bool) {
 	if line[2].Kind != TokenString {
 		return gwdkast.Use{}, false
 	}
-	pkg := Unquote(line[2].Lexeme)
+	pkg := decodeString(line[2].Lexeme)
 	if !isStrictIdent(pkg) {
 		return gwdkast.Use{}, false
 	}
@@ -378,14 +438,14 @@ func parseEndpointTokens(kind string, line []Token) (gwdkast.Endpoint, bool) {
 		Kind:   kind,
 		Name:   name.Lexeme,
 		Method: method.Lexeme,
-		Route:  Unquote(line[3].Lexeme),
+		Route:  decodeString(line[3].Lexeme),
 		Span:   span,
 	}
 	if len(line) == 6 {
 		if line[4].Kind != TokenIdentifier || line[4].Lexeme != "error" || line[5].Kind != TokenString {
 			return gwdkast.Endpoint{}, false
 		}
-		errorPage, err := source.ErrorPagePath(Unquote(line[5].Lexeme))
+		errorPage, err := source.ErrorPagePath(decodeString(line[5].Lexeme))
 		if err != nil {
 			return gwdkast.Endpoint{}, false
 		}

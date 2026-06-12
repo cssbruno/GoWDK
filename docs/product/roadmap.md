@@ -107,7 +107,7 @@ level, the current baseline already includes:
 
 - project config loading, source discovery, build targets, module selection,
   manifests, route validation, sitemap output, formatting, diagnostics, CLI
-  route reports, and LSP support;
+  route/endpoint/inspect reports, and LSP support;
 - package-first `.gwdk` files, package mismatch diagnostics, package source
   spans, package-scoped `use alias "package"` component imports, exact
   `act Name POST "/path"` and `api Name METHOD "/path"` declarations, optional

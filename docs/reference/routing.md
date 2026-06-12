@@ -396,3 +396,17 @@ source range and a related location for the first declaration when available.
 Use `gowdk inspect ir` when route debugging needs the full typed compiler IR
 instead of the route-report schema. The IR output is for M2 compiler debugging
 and snapshots; keep `gowdk routes` for route and endpoint report integrations.
+
+Use `gowdk inspect endpoint-graph --json` when route debugging needs the
+dispatch graph. The current graph schema is version `1` and includes `page`,
+`route`, `endpoint`, `handler`, `guard`, and `contract` nodes. Edges describe
+route declarations, page-owned endpoints, planned/generated handlers, inherited
+guard policy, and routable command/query contract references. Endpoint nodes
+carry method/path, source kind, cache, guards, CSRF policy, binding status,
+signature, input type, and source span when available.
+
+Use `gowdk inspect tree --json` when source navigation needs the unified node
+tree instead of a route-only projection. The current tree schema is version `1`
+and includes package, page, component, layout, route, endpoint,
+contract-reference, view, element, component-call, and text nodes with stable
+IDs, source paths, source spans when known, properties, and ordered children.

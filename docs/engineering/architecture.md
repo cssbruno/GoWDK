@@ -13,9 +13,10 @@ Generated build output covers simple static pages, literal dynamic `paths {}`
 entries, literal, default `go {}`, and same-package/imported no-argument `build {}` data,
 declared layouts, discovered components, page CSS, processor-emitted CSS,
 partial-update client assets, generated JavaScript island assets, component-level
-browser WASM island assets, route manifests, asset manifests, OpenAPI and
-AsyncAPI inspection artifacts, and cache metadata. The build pipeline skips
-identical generated writes and can
+browser WASM island assets, route manifests, asset manifests, source-linked
+inspect trees, endpoint dispatch graphs, OpenAPI and AsyncAPI inspection
+artifacts, and cache metadata. The build pipeline skips identical generated
+writes and can
 incrementally render page-only SPA edits in the dev loop.
 
 Generated apps use `runtime/app` and `net/http` handler contracts. They can
@@ -151,6 +152,7 @@ manifest report (`internal/lang/testdata/manifest_golden`).
 | `internal/view` | Parse and render the first spa `view {}` markup subset. | Compiler | Lowercase HTML elements, spa/boolean/expression attributes, shorthand class/id normalization, escaped text/attribute interpolation, self-closing component calls, prop/state interpolation, `g:on:*`, and `g:island` handling implemented. |
 | `internal/gotypes` | Resolve Go props/state contracts for components. | Compiler | Uses `go list`, `go/parser`, and `go/types` to resolve imported structs and state init signatures. |
 | `internal/lang` | Language tooling for lexing, diagnostics, formatting, checking, and the IR-derived manifest JSON report. | Tools | Initial CLI-backed tools implemented. |
+| `internal/inspectreport` | Versioned compiler inspection report projections. | Tools | Builds the source-linked inspect tree and endpoint dispatch graph from validated `internal/gwdkir.Program` state and route metadata for `gowdk inspect tree` and `gowdk inspect endpoint-graph`. |
 | `internal/lsp` | Language Server Protocol bridge for diagnostics, formatting, completions, and hover. | Tools | Dependency-free stdio server implemented with baseline and open-project completions plus hover for known language tokens and open-project symbols. |
 | `internal/project` | Load project-level config, module source groups, build targets, and future source roots. | Compiler | SPA `gowdk.config.go` subset implemented for build discovery, output, and `Build.Targets`; project-level CLI commands require this config or an explicit `--config` file before compiling `.gwdk` code. |
 | `internal/compiler` | Validate manifests and coordinate compilation metadata. | Compiler | Render-mode, duplicate identity, redundant component implementation, component Go contract, saved default `go {}` package type-checking with sibling Go files, route shape, duplicate route param, duplicate route pattern, route-method, required page-view validation, default `go {}` backend endpoint binding fallback, and `go/packages`-backed backend binding implemented. CLI route/endpoint reports now convert through `internal/gwdkir.Program`. |

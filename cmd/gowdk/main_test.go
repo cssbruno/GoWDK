@@ -4297,6 +4297,201 @@ view {
 	}
 }
 
+func TestInspectTreeCommandPrintsSourceLinkedViewTree(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "newsletter.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page newsletter
+route "/newsletter"
+
+act Subscribe POST "/newsletter"
+
+view {
+  <main class="shell">
+    <form g:post={Subscribe}>
+      <input name="email" required />
+      <button type="submit">Subscribe</button>
+    </form>
+  </main>
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"inspect", "tree", "--json", "--config", config, page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected no inspect diagnostics on stderr, got:\n%s", stderr)
+	}
+
+	var report inspectTreeGolden
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid inspect tree JSON: %v\n%s", err, output)
+	}
+	if report.Version != 1 || report.Root.Kind != "program" {
+		t.Fatalf("unexpected tree root: %#v", report)
+	}
+	pageNode, ok := findInspectNode(report.Root, "page", "newsletter")
+	if !ok || pageNode.Source != page {
+		t.Fatalf("expected source-linked page node, got %#v", pageNode)
+	}
+	formNode, ok := findInspectNode(report.Root, "element", "form")
+	if !ok {
+		t.Fatalf("expected form element node in tree:\n%s", output)
+	}
+	if formNode.Span == nil || formNode.Span.Start.Line != 11 {
+		t.Fatalf("expected form source span on line 11, got %#v", formNode.Span)
+	}
+	if !inspectPropListContains(formNode.Props, "directives", "g:post") {
+		t.Fatalf("expected form g:post directive in props, got %#v", formNode.Props)
+	}
+	if _, ok := findInspectNode(report.Root, "text", "Subscribe"); !ok {
+		t.Fatalf("expected button text node in tree:\n%s", output)
+	}
+}
+
+func TestInspectEndpointGraphCommandPrintsEndpointEdges(t *testing.T) {
+	root := t.TempDir()
+	moduleRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeCLIFile(t, filepath.Join(root, "go.mod"), fmt.Sprintf(`module example.com/gowdk-endpoint-graph
+
+go 1.26.4
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => %s
+`, filepath.ToSlash(moduleRoot)))
+	page := filepath.Join(root, "pages", "patients.page.gwdk")
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		CSRF: gowdk.CSRFConfig{Enabled: true},
+	},
+}
+`)
+	writeCLIFile(t, page, `package pages
+
+page patients
+route "/patients"
+
+act Save POST "/patients/save"
+
+view {
+  <main>
+    <form g:post={Save}>
+      <button type="submit">Save</button>
+    </form>
+    <form method="post" action="/patients" g:command="patients.CreatePatient">
+      <input name="name" />
+    </form>
+  </main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "contracts", "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct {
+	Name string `+"`json:\"name\" form:\"name\"`"+`
+}
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, contracts.RoleWeb)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{ID: command.Name}, nil
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "pages", "handlers.go"), `package pages
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+//gowdk:api GET /api/patients
+func ListPatients(context.Context, *http.Request) (response.Response, error) {
+	return response.JSONValue(http.StatusOK, []string{"Ada"})
+}
+`)
+
+	var output string
+	withWorkingDir(t, root, func() {
+		stdout, stderr, err := captureCLIOutput(t, func() error {
+			return run([]string{"inspect", "endpoint-graph", "--json", "--config", config, page})
+		})
+		if err != nil {
+			t.Fatalf("%v\nstderr:\n%s", err, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("expected no inspect diagnostics on stderr, got:\n%s", stderr)
+		}
+		output = stdout
+	})
+
+	var report endpointGraphGolden
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid endpoint graph JSON: %v\n%s", err, output)
+	}
+	if report.Version != 1 {
+		t.Fatalf("unexpected endpoint graph version: %d", report.Version)
+	}
+	pageGraphNode, ok := findGraphNode(report.Nodes, "page", "patients")
+	if !ok {
+		t.Fatalf("expected patients page node:\n%s", output)
+	}
+	actionNode, ok := findGraphNode(report.Nodes, "endpoint", "Save")
+	if !ok || !graphPropBool(actionNode.Props, "csrf") || !graphPropListContains(actionNode.Props, "guards", "public") {
+		t.Fatalf("expected CSRF/guarded action endpoint node, got %#v", actionNode)
+	}
+	contractNode, ok := findGraphNode(report.Nodes, "contract", "patients.CreatePatient")
+	if !ok {
+		t.Fatalf("expected contract node:\n%s", output)
+	}
+	if _, ok := findGraphNode(report.Nodes, "handler", "contracts.command.patients.CreatePatient"); !ok {
+		t.Fatalf("expected generated contract handler node:\n%s", output)
+	}
+	standaloneNode, ok := findGraphNode(report.Nodes, "endpoint", "ListPatients")
+	if !ok || standaloneNode.Source != filepath.Join(root, "pages", "handlers.go") || standaloneNode.Props["endpointSource"] != "go" {
+		t.Fatalf("expected standalone Go API endpoint node, got %#v", standaloneNode)
+	}
+	if !hasGraphEdge(report.Edges, pageGraphNode.ID, actionNode.ID, "owns_endpoint") {
+		t.Fatalf("expected page -> action edge in %#v", report.Edges)
+	}
+	if !hasGraphEdgeToKind(report.Edges, report.Nodes, actionNode.ID, "handler", "handled_by") {
+		t.Fatalf("expected action -> handler edge in %#v", report.Edges)
+	}
+	if !hasGraphEdgeTo(report.Edges, contractNode.ID, "references_contract") {
+		t.Fatalf("expected endpoint -> contract edge in %#v", report.Edges)
+	}
+	if !hasGraphEdgeToKind(report.Edges, report.Nodes, actionNode.ID, "guard", "uses_guard") {
+		t.Fatalf("expected action -> guard edge in %#v", report.Edges)
+	}
+	if !hasGraphEdgeToKind(report.Edges, report.Nodes, standaloneNode.ID, "handler", "handled_by") {
+		t.Fatalf("expected standalone endpoint -> handler edge in %#v", report.Edges)
+	}
+}
+
 func TestInspectIRCommandMatchesGoldenFixture(t *testing.T) {
 	fixture := filepath.FromSlash("testdata/inspect_ir_golden")
 	var output string
@@ -5510,6 +5705,42 @@ type inspectIRGolden struct {
 	} `json:"Templates"`
 }
 
+type inspectTreeGolden struct {
+	Version int             `json:"version"`
+	Root    inspectTreeNode `json:"root"`
+}
+
+type inspectTreeNode struct {
+	ID       string            `json:"id"`
+	Kind     string            `json:"kind"`
+	Name     string            `json:"name"`
+	Source   string            `json:"source"`
+	Span     *sourceSpanJSON   `json:"span"`
+	Props    map[string]any    `json:"props"`
+	Children []inspectTreeNode `json:"children"`
+}
+
+type endpointGraphGolden struct {
+	Version int                 `json:"version"`
+	Nodes   []endpointGraphNode `json:"nodes"`
+	Edges   []endpointGraphEdge `json:"edges"`
+}
+
+type endpointGraphNode struct {
+	ID     string          `json:"id"`
+	Kind   string          `json:"kind"`
+	Name   string          `json:"name"`
+	Source string          `json:"source"`
+	Span   *sourceSpanJSON `json:"span"`
+	Props  map[string]any  `json:"props"`
+}
+
+type endpointGraphEdge struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Kind string `json:"kind"`
+}
+
 func canonicalInspectIRGolden(t *testing.T, payload []byte) string {
 	t.Helper()
 	var report inspectIRGolden
@@ -5703,6 +5934,97 @@ func contractBindingEqual(actual *contractBindingJSON, expected *contractBinding
 		}
 	}
 	return true
+}
+
+func findInspectNode(node inspectTreeNode, kind string, name string) (inspectTreeNode, bool) {
+	if node.Kind == kind && node.Name == name {
+		return node, true
+	}
+	for _, child := range node.Children {
+		if found, ok := findInspectNode(child, kind, name); ok {
+			return found, true
+		}
+	}
+	return inspectTreeNode{}, false
+}
+
+func inspectPropListContains(props map[string]any, key string, value string) bool {
+	raw, ok := props[key]
+	if !ok {
+		return false
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range items {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
+func findGraphNode(nodes []endpointGraphNode, kind string, name string) (endpointGraphNode, bool) {
+	for _, node := range nodes {
+		if node.Kind == kind && node.Name == name {
+			return node, true
+		}
+	}
+	return endpointGraphNode{}, false
+}
+
+func graphPropBool(props map[string]any, key string) bool {
+	value, _ := props[key].(bool)
+	return value
+}
+
+func graphPropListContains(props map[string]any, key string, value string) bool {
+	raw, ok := props[key]
+	if !ok {
+		return false
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range items {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
+func hasGraphEdge(edges []endpointGraphEdge, from string, to string, kind string) bool {
+	for _, edge := range edges {
+		if edge.From == from && edge.To == to && edge.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func hasGraphEdgeTo(edges []endpointGraphEdge, to string, kind string) bool {
+	for _, edge := range edges {
+		if edge.To == to && edge.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func hasGraphEdgeToKind(edges []endpointGraphEdge, nodes []endpointGraphNode, from string, toKind string, kind string) bool {
+	nodeKinds := map[string]string{}
+	for _, node := range nodes {
+		nodeKinds[node.ID] = node.Kind
+	}
+	for _, edge := range edges {
+		if edge.From == from && edge.Kind == kind && nodeKinds[edge.To] == toKind {
+			return true
+		}
+	}
+	return false
 }
 
 func assertRouteInfo(t *testing.T, infos []routeInfoJSON, code string, pageID string) {

@@ -19,7 +19,7 @@ gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk endpoints [--config <file>] [--module <name>] [--ssr] [files...]
-gowdk inspect ir [--config <file>] [--module <name>] [--ssr] [files...]
+gowdk inspect ir|tree|endpoint-graph [--config <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...]
 gowdk contracts [--json] [dir]
@@ -40,10 +40,11 @@ gowdk lsp [--ssr]
 - `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
 - `--list`: supported by `add`; prints built-in addon names the command can wire.
-- `--json`: supported by `check`, `doctor`, `explain`, `contracts`, `graph`, `trace`, and `list`; prints
+- `--json`: supported by `check`, `doctor`, `explain`, `inspect`, `contracts`, `graph`, `trace`, and `list`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available. `gowdk check --json` uses diagnostic
-  schema version `1`.
+  schema version `1`. `gowdk inspect` emits JSON by default; `--json` is
+  accepted for scripts that pass a format flag consistently.
 - `--warnings-as-errors`: supported by `check`; exits non-zero when warning
   diagnostics are present.
 - `gowdk doctor --json`: prints a versioned health report with overall status,
@@ -53,7 +54,7 @@ gowdk lsp [--ssr]
   without writing changes.
 - `--code`: supported by `fix`; limits rewrites to one diagnostic code that has
   a registered fix.
-- `--config`: supported by `add`, `check`, `doctor`, `manifest`, `sitemap`, `routes`, `endpoints`, `inspect ir`, and `build`; selects the config file. Compile commands load a literal config subset from the given path instead of the required default `gowdk.config.go`.
+- `--config`: supported by `add`, `check`, `doctor`, `manifest`, `sitemap`, `routes`, `endpoints`, `inspect`, and `build`; selects the config file. Compile commands load a literal config subset from the given path instead of the required default `gowdk.config.go`.
 - `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
 - `--timings[=<file>]`: supported by `build`; writes a separate versioned JSON
   timing report. Without an explicit file, the report is written to
@@ -67,7 +68,7 @@ gowdk lsp [--ssr]
   command owners.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
-- `--module`: supported by `check`, `doctor`, `manifest`, `sitemap`, `routes`, `endpoints`, `inspect ir`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
+- `--module`: supported by `check`, `doctor`, `manifest`, `sitemap`, `routes`, `endpoints`, `inspect`, and `build`; may be repeated or comma-separated, and limits discovery to selected configured modules when no explicit file list is passed.
 - `--out`: supported by `build`; selects the output directory and overrides `Build.Output`.
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
@@ -103,6 +104,8 @@ go run ./cmd/gowdk trace patients.CreatePatient
 go run ./cmd/gowdk routes --module frontend --ssr
 go run ./cmd/gowdk endpoints --module frontend --ssr
 go run ./cmd/gowdk inspect ir --module frontend --ssr
+go run ./cmd/gowdk inspect tree --json --module frontend --ssr
+go run ./cmd/gowdk inspect endpoint-graph --json --module frontend --ssr
 go run ./cmd/gowdk contracts --json .
 go run ./cmd/gowdk graph .
 go run ./cmd/gowdk list commands .
@@ -251,6 +254,21 @@ disabled on an SSR route, appear in `info` and are also mirrored to stderr as
 contract-reference scan as `gowdk routes`, but prints only the versioned
 `endpoints` report. Use it when tooling needs backend surface metadata without
 page route records or route-mode notes.
+
+`gowdk inspect ir` prints the validated compiler IR. `gowdk inspect tree` prints
+a versioned source-linked node tree with `program`, `package`, `page`,
+`component`, `layout`, `route`, `endpoint`, `contract-reference`, `view`,
+`element`, `component-call`, and `text` nodes. Each node has a stable `id`,
+`kind`, optional `name`, source path, source span when known, node-specific
+`props`, and ordered `children`.
+
+`gowdk inspect endpoint-graph` prints a versioned graph with `page`, `route`,
+`endpoint`, `handler`, `guard`, and `contract` nodes plus deterministic
+`declares`, `owns_endpoint`, `handled_by`, `uses_guard`, and
+`references_contract` edges. Endpoint nodes include method/path, source kind,
+cache, guards, CSRF policy, binding status, signature, and input type when
+available. The graph is additive on top of `gowdk routes`/`gowdk endpoints`;
+keep those commands for stable route and endpoint report integrations.
 
 `openapi.json` describes the routable web surface: actions, APIs, fragments,
 and web-routable command/query contract references. It includes paths, methods,

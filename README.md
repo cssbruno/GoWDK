@@ -163,7 +163,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 | `gowdk fix` | Apply registered safe fixes for diagnostics (`--dry-run`, `--code`) |
 | `gowdk explain <code>` | Explain a diagnostic code and its next steps |
 | `gowdk doctor` | Check local environment and project health |
-| `gowdk inspect ir` | Print the validated compiler IR as JSON |
+| `gowdk inspect ir` / `tree` / `endpoint-graph` | Print validated compiler IR, source-linked node tree, or endpoint dispatch graph JSON |
 | `gowdk manifest` / `routes` / `sitemap` | Print validated manifest, route/endpoint metadata, or editor site-map JSON |
 | `gowdk tokens` | Print raw language tokens for a file |
 | `gowdk fmt` | Format `.gwdk` sources (`--write`) |
@@ -180,7 +180,8 @@ pipeline. Run `gowdk` with no arguments for full flags.
 
 `.gwdk` sources move through an explicit pipeline: parse → AST → validation →
 a typed intermediate representation → code generation. Every stage is
-observable from the CLI (`tokens`, `check`, `inspect ir`, `manifest`), and the
+observable from the CLI (`tokens`, `check`, `inspect ir`, `inspect tree`,
+`inspect endpoint-graph`, `manifest`), and the
 generators emit three kinds of output from the same IR: static HTML/CSS/asset
 bundles, generated Go adapters (`net/http` routes, form decoders, guards), and
 browser islands (JS and Go `js/wasm`, with source maps). Diagnostics come from

@@ -120,7 +120,7 @@ func usage() {
 	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
 	fmt.Println("  endpoints [--config <file>] [--module <name>] [--ssr] [files...] print endpoint metadata JSON")
-	fmt.Println("  inspect ir [--config <file>] [--module <name>] [--ssr] [files...] print validated compiler IR JSON")
+	fmt.Println("  inspect ir|tree|endpoint-graph [--config <file>] [--module <name>] [--json] [--ssr] [files...] print validated compiler inspection JSON")
 	fmt.Println("  explain [--json] <diagnostic-code> explain a diagnostic code and next steps")
 	fmt.Println("  doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health")
 	fmt.Println("  contracts [--json] [dir]  print Go contract registration metadata")

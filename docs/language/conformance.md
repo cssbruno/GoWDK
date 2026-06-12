@@ -52,8 +52,15 @@ It cannot cleanly cover constructs that require project context: reactive `g:`
 directives (`g:if`/`g:on`/`g:bind`) reference a Go-typed `state` contract that
 does not resolve single-file; endpoint forms (`act`/`api`) need exported Go
 handlers; and `layout`/`wasm`/`asset`/`css` need sibling files or config. Those
-are exercised by the package- and build-level tests instead. Expanding the
-corpus to a project-level harness for them is tracked separately.
+are exercised by the package- and build-level tests instead.
+
+Full construct coverage is therefore split, and the split is enforced.
+`TestConformanceCoversEveryConstruct` partitions every construct in the
+stability registry (`lang.ConstructStabilities`) into `corpusConstructs` (the
+single-file corpus exercises it) or `integrationCoverage` (a named integration
+test covers the project-context construct). Adding a construct to the registry
+fails that test until it is given coverage in one set or the other, so no
+construct can silently go untested.
 
 ## Coverage
 

@@ -1,0 +1,112 @@
+# Go Interop
+
+GOWDK source declares web surface. Normal Go packages own behavior.
+
+## Build Data
+
+`build {}` can call one no-argument Go function:
+
+```gwdk
+import interop "github.com/acme/site/content"
+
+build {
+  => interop.HomePage()
+}
+```
+
+Bare same-package calls are also supported when the page directory is a
+buildable Go package:
+
+```gwdk
+build {
+  => HomePage()
+}
+```
+
+Supported return shapes:
+
+```go
+func HomePage() HomeCopy
+func HomePage() (HomeCopy, error)
+```
+
+The returned value must JSON-encode to a non-empty object. Scalar object fields
+become string interpolation data for `view {}`. Build-helper stderr is kept
+separate from the JSON payload; successful logging does not corrupt build data,
+and failed helpers include stderr in the error message.
+
+Route params can be used in literal `build {}` expressions with
+`param("name")`. Passing route params into Go build functions remains deferred.
+
+## Actions And APIs
+
+Actions and APIs bind exported same-package Go functions or default `go {}`
+block functions with these signatures:
+
+```go
+func Submit(context.Context) (response.Response, error)
+func Submit(context.Context, SignupInput) (response.Response, error)
+func Submit(context.Context, *SignupInput) (response.Response, error)
+func Submit(context.Context, form.Values) (response.Response, error)
+func Health(context.Context, *http.Request) (response.Response, error)
+```
+
+`SignupInput` must be an exported same-package struct with supported scalar
+form fields. Missing handlers are non-fatal in development builds and produce
+generated HTTP 501 handlers. Production builds require bound handlers unless
+`Build.AllowMissingBackend` or `--allow-missing-backend` is set.
+
+Use:
+
+```sh
+gowdk inspect go-bindings --ssr
+gowdk generate stubs
+```
+
+`inspect go-bindings` reports actions, APIs, fragments, SSR load functions,
+build-time Go calls, and web command/query references with status, package,
+symbol, signature, input metadata, reason, and next-step suggestions.
+
+`generate stubs` starts conservatively with missing action/API handlers. It
+writes `gowdk_stubs.go` next to the owning source package and refuses to
+overwrite an existing stub file.
+
+## Load Functions
+
+Request-time pages with `load {}` bind same-package functions named
+`Load<PageID>`:
+
+```go
+func LoadDashboard(ssr.LoadContext) map[string]any
+func LoadDashboard(ssr.LoadContext) (map[string]any, error)
+```
+
+`context.Context` is available through `ssr.LoadContext` /
+`runtime/guard.Context`. Route, endpoint, params, typed params, CSRF, session,
+and request metadata are available through `runtime/app` helpers where the
+generated route attaches them.
+
+## Route Params
+
+Generated request-time route handlers attach raw params through
+`app.Params(ctx)` and decoded typed params through `app.TypedParams(ctx)`.
+The lower-level `runtime/route` helpers decode `string`, `int`, `int64`,
+`uint`, `uint64`, `bool`, and `float64` from raw params without echoing raw
+request values in errors.
+
+Generated per-route param struct types are deferred. Typed load-result and
+action-result accessors are also deferred until those result contracts are
+stable.
+
+## Middleware And Hooks
+
+Generated apps expose ordinary `net/http` entry points:
+
+```go
+handler, err := gowdkapp.Handler()
+mux, err := gowdkapp.ServeMux()
+```
+
+Wrap those with app-owned middleware in startup code. Generated route rewriting,
+response transformation hooks, and fetch/navigation interception hooks are not
+part of the current contract.

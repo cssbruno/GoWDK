@@ -10,7 +10,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/lang"
 )
 
-const inspectUsage = "usage: gowdk inspect ir|tree|endpoint-graph [--config <file>] [--module <name>] [--json] [--ssr] [files...]"
+const inspectUsage = "usage: gowdk inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--module <name>] [--json] [--ssr] [files...]"
 
 func inspect(args []string) error {
 	if len(args) == 0 {
@@ -23,6 +23,8 @@ func inspect(args []string) error {
 		return inspectTree(args[1:])
 	case "endpoint-graph":
 		return inspectEndpointGraph(args[1:])
+	case "go-bindings":
+		return inspectGoBindings(args[1:])
 	default:
 		return fmt.Errorf("unknown inspect target %q", args[0])
 	}
@@ -57,8 +59,20 @@ func inspectEndpointGraph(args []string) error {
 	return writeInspectJSON(inspectreport.BuildEndpointGraph(options.Config, ir))
 }
 
+func inspectGoBindings(args []string) error {
+	options, ir, err := inspectProgram(args, "inspect go-bindings")
+	if err != nil {
+		return err
+	}
+	return writeInspectJSON(buildGoBindingsReport(options.Config, ir))
+}
+
 func inspectProgram(args []string, command string) (cliOptions, gwdkir.Program, error) {
-	options, paths, err := loadCommandInputs(args, command, true)
+	return commandProgram(args, command, true)
+}
+
+func commandProgram(args []string, command string, allowJSON bool) (cliOptions, gwdkir.Program, error) {
+	options, paths, err := loadCommandInputs(args, command, allowJSON)
 	if err != nil {
 		return cliOptions{}, gwdkir.Program{}, err
 	}

@@ -58,6 +58,8 @@ func run(args []string) error {
 		return endpointsJSONCommand(args[1:])
 	case "inspect":
 		return inspect(args[1:])
+	case "generate":
+		return generate(args[1:])
 	case "explain":
 		return explainDiagnostic(args[1:])
 	case "doctor":
@@ -120,7 +122,8 @@ func usage() {
 	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
 	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
 	fmt.Println("  endpoints [--config <file>] [--module <name>] [--ssr] [files...] print endpoint metadata JSON")
-	fmt.Println("  inspect ir|tree|endpoint-graph [--config <file>] [--module <name>] [--json] [--ssr] [files...] print validated compiler inspection JSON")
+	fmt.Println("  inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--module <name>] [--json] [--ssr] [files...] print validated compiler inspection JSON")
+	fmt.Println("  generate stubs [--config <file>] [--module <name>] [--ssr] [files...] write missing action/API Go handler stubs")
 	fmt.Println("  explain [--json] <diagnostic-code> explain a diagnostic code and next steps")
 	fmt.Println("  doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health")
 	fmt.Println("  contracts [--json] [dir]  print Go contract registration metadata")

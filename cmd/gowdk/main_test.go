@@ -4492,6 +4492,234 @@ func ListPatients(context.Context, *http.Request) (response.Response, error) {
 	}
 }
 
+func TestInspectGoBindingsCommandPrintsBindingReport(t *testing.T) {
+	root := t.TempDir()
+	writeCLITestModule(t, root, "example.com/gowdk-go-bindings")
+	page := filepath.Join(root, "pages", "dashboard.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package pages
+
+page dashboard
+route "/dashboard"
+
+import interop "github.com/cssbruno/gowdk/examples/go-interop"
+
+build {
+  => interop.FeaturedCopyWithErrorForBuild()
+}
+
+load {
+  => { user.name }
+}
+
+act Save POST "/dashboard/save"
+api Session GET "/api/session"
+fragment Summary GET "/dashboard/summary" "#summary" {
+  <section>Summary</section>
+}
+
+view {
+  <main>
+    <form method="post" action="/patients" g:command="patients.CreatePatient">
+      <input name="name" />
+    </form>
+    <section id="summary" g:query="patients.GetPatientPage">
+      {title}
+    </section>
+  </main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "contracts", "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct {
+	Name string `+"`form:\"name\"`"+`
+}
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+}
+type GetPatientPage struct{}
+type PatientPageData struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, contracts.RoleWeb)
+	contracts.RegisterQuery[GetPatientPage, PatientPageData](r, LoadPatientPage, contracts.RoleWeb)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{ID: command.Name}, nil
+}
+
+func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData, error) {
+	return PatientPageData{}, nil
+}
+`)
+
+	var output string
+	withWorkingDir(t, root, func() {
+		stdout, stderr, err := captureCLIOutput(t, func() error {
+			return run([]string{"inspect", "go-bindings", "--json", "--ssr", "--config", config, page})
+		})
+		if err != nil {
+			t.Fatalf("%v\nstderr:\n%s", err, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("expected no inspect diagnostics on stderr, got:\n%s", stderr)
+		}
+		output = stdout
+	})
+
+	var report goBindingsReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid go-bindings JSON: %v\n%s", err, output)
+	}
+	if report.Version != 1 {
+		t.Fatalf("unexpected go-bindings version: %d", report.Version)
+	}
+	assertGoBinding(t, report.Bindings, "build", "FeaturedCopyWithErrorForBuild", "unverified")
+	assertGoBinding(t, report.Bindings, "load", "LoadDashboard", "missing")
+	assertGoBinding(t, report.Bindings, "action", "Save", "missing")
+	assertGoBinding(t, report.Bindings, "api", "Session", "missing")
+	assertGoBinding(t, report.Bindings, "fragment", "Summary", "unknown")
+	assertGoBinding(t, report.Bindings, "command", "patients.CreatePatient", "bound")
+	assertGoBinding(t, report.Bindings, "query", "patients.GetPatientPage", "bound")
+	if binding, ok := findGoBinding(report.Bindings, "build", "FeaturedCopyWithErrorForBuild"); !ok || binding.PackagePath != "github.com/cssbruno/gowdk/examples/go-interop" {
+		t.Fatalf("expected imported build package path, got %#v", binding)
+	}
+}
+
+func TestGenerateStubsWritesMissingActionAndAPIHandlers(t *testing.T) {
+	root := t.TempDir()
+	writeCLITestModule(t, root, "example.com/gowdk-stubs")
+	page := filepath.Join(root, "pages", "signup.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package pages
+
+page signup
+route "/signup"
+
+act Submit POST "/signup"
+api Session GET "/api/session"
+
+view {
+  <main>Signup</main>
+}
+`)
+
+	var generatedPath string
+	withWorkingDir(t, root, func() {
+		stdout, stderr, err := captureCLIOutput(t, func() error {
+			return run([]string{"generate", "stubs", "--config", config, page})
+		})
+		if err != nil {
+			t.Fatalf("%v\nstderr:\n%s", err, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("expected generate stubs to keep stderr empty, got:\n%s", stderr)
+		}
+		generatedPath = strings.TrimSpace(stdout)
+	})
+	if generatedPath == "" {
+		t.Fatal("expected generated stub path on stdout")
+	}
+	payload, err := os.ReadFile(generatedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		"package pages",
+		"func Submit(gowdkcontext.Context) (gowdkresponse.Response, error)",
+		"func Session(gowdkcontext.Context, *gowdkhttp.Request) (gowdkresponse.Response, error)",
+		"GOWDK generated stub: implement Submit",
+		"GOWDK generated stub: implement Session",
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated stubs to contain %q:\n%s", expected, source)
+		}
+	}
+
+	var output string
+	withWorkingDir(t, root, func() {
+		stdout, stderr, err := captureCLIOutput(t, func() error {
+			return run([]string{"inspect", "go-bindings", "--config", config, page})
+		})
+		if err != nil {
+			t.Fatalf("%v\nstderr:\n%s", err, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("expected no inspect diagnostics on stderr, got:\n%s", stderr)
+		}
+		output = stdout
+	})
+	var report goBindingsReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid go-bindings JSON: %v\n%s", err, output)
+	}
+	assertGoBinding(t, report.Bindings, "action", "Submit", "bound")
+	assertGoBinding(t, report.Bindings, "api", "Session", "bound")
+}
+
+func TestGenerateStubsRejectsJSONFlag(t *testing.T) {
+	root := t.TempDir()
+	writeCLITestModule(t, root, "example.com/gowdk-stubs-json")
+	page := filepath.Join(root, "pages", "signup.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package pages
+
+page signup
+route "/signup"
+
+act Submit POST "/signup"
+
+view {
+  <main>Signup</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		_, _, err := captureCLIOutput(t, func() error {
+			return run([]string{"generate", "stubs", "--json", "--config", config, page})
+		})
+		if err == nil || !strings.Contains(err.Error(), `unknown generate stubs flag "--json"`) {
+			t.Fatalf("expected generate stubs to reject --json, got %v", err)
+		}
+	})
+}
+
+func TestGenerateStubsRefusesToOverwriteExistingStubFile(t *testing.T) {
+	root := t.TempDir()
+	writeCLITestModule(t, root, "example.com/gowdk-stubs-overwrite")
+	page := filepath.Join(root, "pages", "signup.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package pages
+
+page signup
+route "/signup"
+
+act Submit POST "/signup"
+
+view {
+  <main>Signup</main>
+}
+`)
+	existing := filepath.Join(root, "pages", "gowdk_stubs.go")
+	writeCLIFile(t, existing, "package pages\n")
+
+	withWorkingDir(t, root, func() {
+		_, _, err := captureCLIOutput(t, func() error {
+			return run([]string{"generate", "stubs", "--config", config, page})
+		})
+		if err == nil || !strings.Contains(err.Error(), "already exists; refusing to overwrite handler stubs") {
+			t.Fatalf("expected generate stubs to refuse overwrite, got %v", err)
+		}
+	})
+}
+
 func TestInspectIRCommandMatchesGoldenFixture(t *testing.T) {
 	fixture := filepath.FromSlash("testdata/inspect_ir_golden")
 	var output string
@@ -5648,6 +5876,42 @@ import "github.com/cssbruno/gowdk"
 var Config = gowdk.Config{}
 `)
 	return path
+}
+
+func writeCLITestModule(t *testing.T, root string, modulePath string) {
+	t.Helper()
+	moduleRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeCLIFile(t, filepath.Join(root, "go.mod"), fmt.Sprintf(`module %s
+
+go 1.26.4
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => %s
+`, modulePath, filepath.ToSlash(moduleRoot)))
+}
+
+func assertGoBinding(t *testing.T, bindings []goBindingJSON, kind, symbol, status string) {
+	t.Helper()
+	binding, ok := findGoBinding(bindings, kind, symbol)
+	if !ok {
+		t.Fatalf("missing %s binding %s in %#v", kind, symbol, bindings)
+	}
+	if binding.Status != status {
+		t.Fatalf("expected %s %s status %q, got %#v", kind, symbol, status, binding)
+	}
+}
+
+func findGoBinding(bindings []goBindingJSON, kind, symbol string) (goBindingJSON, bool) {
+	for _, binding := range bindings {
+		if binding.Kind == kind && binding.Symbol == symbol {
+			return binding, true
+		}
+	}
+	return goBindingJSON{}, false
 }
 
 type inspectIRGolden struct {

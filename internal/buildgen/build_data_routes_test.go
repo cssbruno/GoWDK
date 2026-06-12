@@ -293,6 +293,78 @@ func TestBuildUsesImportedGoBuildData(t *testing.T) {
 	}
 }
 
+func TestBuildUsesImportedGoBuildDataWhenFunctionWritesStderr(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "go.imported",
+		Route: "/go-imported",
+		Imports: []gwdkir.Import{{
+			Alias: "interop",
+			Path:  "github.com/cssbruno/gowdk/examples/go-interop",
+		}},
+		Blocks: gwdkir.Blocks{
+			Build:     true,
+			BuildBody: `=> interop.FeaturedCopyWithStderrForBuild()`,
+			View:      true,
+			ViewBody:  `<main><h1>{title}</h1><p>{tagline}</p></main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "go-imported", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, expected := range []string{
+		`<h1>Logged Go data</h1>`,
+		`<p>Build helper stderr does not corrupt JSON build data.</p>`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in imported build data output:\n%s", expected, output)
+		}
+	}
+}
+
+func TestBuildUsesImportedGoBuildDataReturningError(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "go.imported",
+		Route: "/go-imported",
+		Imports: []gwdkir.Import{{
+			Alias: "interop",
+			Path:  "github.com/cssbruno/gowdk/examples/go-interop",
+		}},
+		Blocks: gwdkir.Blocks{
+			Build:     true,
+			BuildBody: `=> interop.FeaturedCopyWithErrorForBuild()`,
+			View:      true,
+			ViewBody:  `<main><h1>{title}</h1><p>{tagline}</p></main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "go-imported", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, expected := range []string{
+		`<h1>Checked Go data</h1>`,
+		`<p>Build helpers can return a value and error.</p>`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in imported build data output:\n%s", expected, output)
+		}
+	}
+}
+
 func TestBuildUsesInlineGoBlockGoBuildData(t *testing.T) {
 	outputDir := t.TempDir()
 	sourceDir := t.TempDir()

@@ -87,6 +87,10 @@ Implemented today:
   through per-binding functions for text, form values, checked state, classes,
   styles, attributes, conditionals, and lists; keyed list updates reuse
   existing DOM nodes by `g:key` and remove stale keyed nodes.
+- Page store seed JSON embedded in compiler-owned
+  `<script type="application/json">` tags escapes literal `<` as `\u003c`, so
+  store data cannot terminate the script element or enter HTML escaped-script
+  parser states.
 - In the default development build mode, generated JavaScript island assets are
   accompanied by `assets/gowdk/islands/<Component>.js.map` source map files
   that reference the component `.gwdk` source, are recorded in

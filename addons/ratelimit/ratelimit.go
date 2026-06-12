@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cssbruno/gowdk/runtime/response"
+
 	"github.com/cssbruno/gowdk"
 )
 
@@ -186,7 +188,8 @@ func DefaultLimitHandler(writer http.ResponseWriter, _ *http.Request, _ Result) 
 
 // DefaultErrorHandler writes HTTP 500 for limiter failures.
 func DefaultErrorHandler(writer http.ResponseWriter, _ *http.Request, err error) {
-	http.Error(writer, "GOWDK rate limit error: "+err.Error(), http.StatusInternalServerError)
+	_ = err
+	response.WriteNoStoreError(writer, http.StatusInternalServerError, "GOWDK rate limit error")
 }
 
 // InMemoryOptions configures the in-memory store.

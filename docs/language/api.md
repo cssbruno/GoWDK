@@ -65,8 +65,9 @@ rendering; build-time SPA HTML cannot enforce frontend page access.
 - Generated API responses and generated API error responses use
   `Cache-Control: no-store` in the current first slice.
 - Handler errors are written with `runtime/response.HandlerStatus`, defaulting
-  to HTTP 500 when the error does not carry an explicit status. Error messages
-  should not include secrets, tokens, credentials, or submitted sensitive data.
+  to HTTP 500 when the error does not carry an explicit status. Ordinary 5xx
+  responses use generic status text; expose only intentional client-facing
+  messages through `runtime/response.HandlerError.Message`.
 - Missing or unsupported generated API bindings return HTTP 501 only in
   development/default mode or when an explicit missing-backend migration flag is
   set.

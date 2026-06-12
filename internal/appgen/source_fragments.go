@@ -61,7 +61,7 @@ func fragmentCaseStmts(fragment FragmentEndpoint, rateLimit bool) []ast.Stmt {
 			&ast.IfStmt{
 				Cond: notNil("err"),
 				Body: block(
-					writeNoStoreErrorExprStmt(call(sel("gowdkresponse", "HandlerStatus"), id("err"), sel("http", "StatusInternalServerError")), call(selExpr(id("err"), "Error"))),
+					writeNoStoreHandlerErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
 					returnBool(true),
 				),
 			},

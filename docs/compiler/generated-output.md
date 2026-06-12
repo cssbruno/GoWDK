@@ -131,6 +131,11 @@ Implemented today:
   panic values. SSR route panics use a declared route-local `error` page when
   one is available. Action and API declarations can also use endpoint-local
   `error "/errors/name.html"` pages for generated panic boundaries.
+- Generated action, API, fragment, contract, SSR load, and addon 5xx error
+  responses hide ordinary returned error details from clients. Apps can expose
+  an intentional client message by returning `response.HandlerError` with an
+  explicit `Message`; generated 4xx handler errors keep their application
+  message contract.
 - Generated apps can return partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests and standalone
   `fragment Name GET "/path" "#target" { ... }` routes. Standalone fragment

@@ -80,6 +80,37 @@ func HandlerStatus(err error, fallback int) int {
 	return fallback
 }
 
+// HandlerErrorMessage returns the client-facing message for a generated
+// handler error. Ordinary 5xx failures use generic status text so internal
+// details stay out of HTTP responses. HandlerError.Message remains an explicit
+// application-owned override.
+func HandlerErrorMessage(err error, status int) string {
+	var handlerErr HandlerError
+	if errors.As(err, &handlerErr) && strings.TrimSpace(handlerErr.Message) != "" {
+		return handlerErr.Message
+	}
+	if status >= http.StatusInternalServerError {
+		if text := http.StatusText(status); text != "" {
+			return text
+		}
+		return http.StatusText(http.StatusInternalServerError)
+	}
+	if err != nil {
+		return err.Error()
+	}
+	if text := http.StatusText(status); text != "" {
+		return text
+	}
+	return "request failed"
+}
+
+// WriteNoStoreHandlerError writes a generated handler error using the
+// client-safe HandlerErrorMessage policy.
+func WriteNoStoreHandlerError(writer http.ResponseWriter, err error, fallbackStatus int) {
+	status := HandlerStatus(err, fallbackStatus)
+	WriteNoStoreError(writer, status, HandlerErrorMessage(err, status))
+}
+
 // HTMLBody creates a full HTML response.
 func HTMLBody(status int, body string) Response {
 	return Response{Kind: HTML, Status: status, Body: body}

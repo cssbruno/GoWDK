@@ -328,3 +328,48 @@ func TestHandlerError(t *testing.T) {
 		t.Fatalf("unexpected fallback status: %d", got)
 	}
 }
+
+func TestHandlerErrorMessageHidesOrdinary5xxDetails(t *testing.T) {
+	err := errors.New("sql: password=secret dsn=postgres://root:secret@db/app")
+
+	message := HandlerErrorMessage(err, http.StatusInternalServerError)
+
+	if message != http.StatusText(http.StatusInternalServerError) {
+		t.Fatalf("expected generic 500 message, got %q", message)
+	}
+	if strings.Contains(message, "secret") || strings.Contains(message, "postgres") {
+		t.Fatalf("internal detail leaked through message: %q", message)
+	}
+}
+
+func TestHandlerErrorMessageUsesExplicitHandlerErrorMessage(t *testing.T) {
+	err := NewHandlerError(http.StatusServiceUnavailable, "temporarily unavailable", errors.New("dial tcp password=secret"))
+
+	if got := HandlerErrorMessage(err, HandlerStatus(err, http.StatusInternalServerError)); got != "temporarily unavailable" {
+		t.Fatalf("unexpected handler error message: %q", got)
+	}
+}
+
+func TestHandlerErrorMessageKeeps4xxDetails(t *testing.T) {
+	err := NewHandlerError(http.StatusForbidden, "session expired", nil)
+
+	if got := HandlerErrorMessage(err, HandlerStatus(err, http.StatusInternalServerError)); got != "session expired" {
+		t.Fatalf("unexpected 4xx handler message: %q", got)
+	}
+}
+
+func TestWriteNoStoreHandlerError(t *testing.T) {
+	recorder := httptest.NewRecorder()
+
+	WriteNoStoreHandlerError(recorder, errors.New("internal database password=secret"), http.StatusInternalServerError)
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store, got %q", cache)
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, http.StatusText(http.StatusInternalServerError)) || strings.Contains(body, "secret") {
+		t.Fatalf("unexpected safe handler error body: %q", body)
+	}
+}

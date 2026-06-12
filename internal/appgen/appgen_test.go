@@ -1229,7 +1229,7 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 		`case request.Method == "GET" && requestPath == "/api/health":`,
 		`ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "api", PageID: "status", Name: "Health", Method: "GET", Path: "/api/health"})`,
 		`result, err := status.Health(ctx, request)`,
-		`gowdkresponse.WriteNoStoreError(response, gowdkresponse.HandlerStatus(err, http.StatusInternalServerError), err.Error())`,
+		`gowdkresponse.WriteNoStoreHandlerError(response, err, http.StatusInternalServerError)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, result)`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -1458,7 +1458,7 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 		`loadData, err := dashboard.LoadDashboard(loadContext)`,
 		`redirectURL, redirectStatus, ok := gowdkssr.RedirectTarget(err)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.Response{Kind: gowdkresponse.Redirect, Status: redirectStatus, URL: redirectURL})`,
-		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, err.Error())`,
+		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, gowdkresponse.HandlerErrorMessage(err, http.StatusInternalServerError))`,
 		`loadValue0, loadOK0 := gowdkssr.LoadPath(loadData, "user.name")`,
 		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, "missing load field user.name")`,
 		`strings.ReplaceAll(html, "__USER__", gowdkhtml.Escape(fmt.Sprint(loadValue0)))`,

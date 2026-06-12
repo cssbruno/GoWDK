@@ -39,6 +39,9 @@ SSR is optional and must not become the default framework identity.
   before response headers are written becomes a no-store HTTP 500 response,
   using the route-local `error` page when declared or `500.html` when present,
   without exposing the panic value.
+- Non-redirect `load {}` failures also use the same 5xx message policy:
+  ordinary error details are hidden, and only explicit
+  `response.HandlerError.Message` values are rendered to clients.
 - The SSR addon exposes a small router registration contract for generated SSR
   page handlers.
 - The SSR addon provides a default HTTP 500 error handler contract for

@@ -244,11 +244,13 @@ Security note: request-time features are still 0.x, but the core request-time
 hardening is now in place. Generated handlers apply body-size limits (actions
 and APIs), server read/header/write/idle timeouts, and a per-request handler
 deadline; recovered panics return a generic no-store 500 and are logged
-server-side with secret redaction; CSRF is opt-in with a 403 invalid-token
-contract; redirects are validated against a safe allowlist (local paths only,
-no protocol-relative or CRLF, same-origin referer); and diagnostics redact
-secrets quoted from source. Still hardening: full auth/session, multipart
-uploads, and the broader operations policy.
+server-side with secret redaction; ordinary returned 5xx errors use generic
+client messages unless the app sets an explicit `response.HandlerError`
+message; CSRF is opt-in with a 403 invalid-token contract; redirects are
+validated against a safe allowlist (local paths only, no protocol-relative or
+CRLF, same-origin referer); and diagnostics redact secrets quoted from source.
+Still hardening: full auth/session, multipart uploads, and the broader
+operations policy.
 
 Known gaps and release hardening work live in
 [the 0.x improvement checklist](docs/engineering/release-plan.md), with public

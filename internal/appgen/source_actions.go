@@ -393,7 +393,7 @@ func boundActionResultStmts(action ActionEndpoint) []ast.Stmt {
 		&ast.IfStmt{
 			Cond: notNil("err"),
 			Body: block(
-				writeNoStoreErrorExprStmt(call(sel("gowdkresponse", "HandlerStatus"), id("err"), sel("http", "StatusInternalServerError")), call(selExpr(id("err"), "Error"))),
+				writeNoStoreHandlerErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
 				returnBool(true),
 			),
 		},
@@ -716,6 +716,14 @@ func writeNoStoreErrorStmt(status ast.Expr, message string) ast.Stmt {
 
 func writeNoStoreErrorExprStmt(status ast.Expr, message ast.Expr) ast.Stmt {
 	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreError"), id("response"), status, message))
+}
+
+func writeNoStoreHandlerErrorExprStmt(err ast.Expr, fallbackStatus ast.Expr) ast.Stmt {
+	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreHandlerError"), id("response"), err, fallbackStatus))
+}
+
+func handlerErrorMessageExpr(err ast.Expr, fallbackStatus ast.Expr) ast.Expr {
+	return call(sel("gowdkresponse", "HandlerErrorMessage"), err, fallbackStatus)
 }
 
 func writeNoStoreHTTPStmt(result ast.Expr) ast.Stmt {

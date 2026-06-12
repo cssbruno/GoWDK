@@ -136,8 +136,8 @@ func TestMiddlewareAllowsThenBlocksRequests(t *testing.T) {
 	}
 }
 
-func TestMiddlewareWritesStoreErrors(t *testing.T) {
-	expected := errors.New("redis unavailable")
+func TestMiddlewareHidesStoreErrorDetails(t *testing.T) {
+	expected := errors.New("redis unavailable password=secret")
 	limiter, err := New(Options{
 		Limit:  1,
 		Window: time.Minute,
@@ -157,8 +157,14 @@ func TestMiddlewareWritesStoreErrors(t *testing.T) {
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", recorder.Code)
 	}
-	if !strings.Contains(recorder.Body.String(), "GOWDK rate limit error: redis unavailable") {
+	if !strings.Contains(recorder.Body.String(), "GOWDK rate limit error") {
 		t.Fatalf("unexpected error body: %q", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "redis unavailable") || strings.Contains(recorder.Body.String(), "secret") {
+		t.Fatalf("internal error leaked in response body: %q", recorder.Body.String())
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store error response, got %q", cache)
 	}
 }
 

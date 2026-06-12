@@ -1,9 +1,22 @@
-package lang
+package syntax
 
 import "unicode"
 
-// Lex tokenizes .gwdk source for editor and CLI tooling.
-func Lex(source string) ([]Token, Diagnostics) {
+// LexError is a lexer-level finding (currently only unterminated string
+// literals). It carries the position substrate the tooling layer needs; the
+// richer Diagnostic type — severity, fixes, redaction, JSON — lives in
+// internal/lang, which maps each LexError into a lang.Diagnostic in its Lex
+// wrapper. Keeping the lexer free of that machinery is what keeps this package a
+// leaf.
+type LexError struct {
+	Pos     Position
+	Range   *Range
+	Code    string
+	Message string
+}
+
+// Lex tokenizes .gwdk source for the parser, editor, and CLI tooling.
+func Lex(source string) ([]Token, []LexError) {
 	runes := []rune(source)
 	// byteOffsets[i] is the 0-based byte offset of rune i in the original
 	// source; the final entry is the total byte length. Offsets are taken from
@@ -44,9 +57,9 @@ func (scanner *scanner) offset() int {
 	return scanner.byteOffsets[len(scanner.byteOffsets)-1]
 }
 
-func (scanner *scanner) scan() ([]Token, Diagnostics) {
+func (scanner *scanner) scan() ([]Token, []LexError) {
 	var tokens []Token
-	var diagnostics Diagnostics
+	var errors []LexError
 
 	for !scanner.done() {
 		ch := scanner.peek()
@@ -66,10 +79,10 @@ func (scanner *scanner) scan() ([]Token, Diagnostics) {
 		case isIdentStart(ch):
 			tokens = append(tokens, scanner.identifier())
 		case ch == '"':
-			token, diagnostic := scanner.quotedString()
+			token, lexError := scanner.quotedString()
 			tokens = append(tokens, token)
-			if diagnostic.Message != "" {
-				diagnostics = append(diagnostics, diagnostic)
+			if lexError.Message != "" {
+				errors = append(errors, lexError)
 			}
 		case ch == '{':
 			scanner.advance()
@@ -99,7 +112,7 @@ func (scanner *scanner) scan() ([]Token, Diagnostics) {
 	}
 
 	tokens = append(tokens, Token{Kind: TokenEOF, Pos: scanner.position(), Offset: scanner.offset()})
-	return tokens, diagnostics
+	return tokens, errors
 }
 
 func (scanner *scanner) identifier() Token {
@@ -116,7 +129,7 @@ func (scanner *scanner) identifier() Token {
 	return Token{Kind: TokenIdentifier, Lexeme: lexeme, Pos: pos, Offset: offset}
 }
 
-func (scanner *scanner) quotedString() (Token, Diagnostic) {
+func (scanner *scanner) quotedString() (Token, LexError) {
 	pos := scanner.position()
 	offset := scanner.offset()
 	start := scanner.index
@@ -132,30 +145,19 @@ func (scanner *scanner) quotedString() (Token, Diagnostic) {
 		}
 		if ch == '"' {
 			scanner.advance()
-			return Token{Kind: TokenString, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos, Offset: offset}, Diagnostic{}
+			return Token{Kind: TokenString, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos, Offset: offset}, LexError{}
 		}
 		if ch == '\n' {
 			break
 		}
 		scanner.advance()
 	}
-	return Token{Kind: TokenIllegal, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos, Offset: offset}, Diagnostic{
-		Pos:      pos,
-		Range:    sourceRange(pos, scanner.position()),
-		Code:     "unterminated_string",
-		Severity: "error",
-		Message:  "unterminated string literal",
+	return Token{Kind: TokenIllegal, Lexeme: string(scanner.source[start:scanner.index]), Pos: pos, Offset: offset}, LexError{
+		Pos:     pos,
+		Range:   SourceRange(pos, scanner.position()),
+		Code:    "unterminated_string",
+		Message: "unterminated string literal",
 	}
-}
-
-func sourceRange(start, end Position) *Range {
-	if start.Line <= 0 || start.Column <= 0 {
-		return nil
-	}
-	if end.Line <= 0 || end.Column <= 0 || (end.Line == start.Line && end.Column <= start.Column) {
-		end = Position{Line: start.Line, Column: start.Column + 1}
-	}
-	return &Range{Start: start, End: end}
 }
 
 func (scanner *scanner) text() Token {

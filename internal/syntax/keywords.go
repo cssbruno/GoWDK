@@ -1,4 +1,4 @@
-package lang
+package syntax
 
 // MetadataKeywords is the canonical, ordered set of top-level metadata keywords
 // the current parser recognizes. It is the single source of truth for metadata

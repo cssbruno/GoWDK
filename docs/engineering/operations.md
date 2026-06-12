@@ -123,7 +123,11 @@ readiness claim:
 - Serve app assets with deterministic cache headers.
 - Avoid public debug endpoints by default.
 - Exclude local env files, private source files, and temporary build artifacts from embedded output.
-- Keep logs useful for route/action/API/SSR failures without logging secrets or sensitive form values.
+- Keep logs useful for route/action/API/SSR failures without logging secrets or
+  sensitive form values. Generated panic-boundary logs and diagnostics redact
+  common secret fields (`password`, `secret`, `_gowdk_csrf`, cookies,
+  authorization headers, session IDs, and access/refresh/id tokens), but
+  app-owned logs remain the application's responsibility.
 
 ## Maintenance
 

@@ -99,8 +99,24 @@ Not supported today:
 Generated panic boundaries render safe fixed messages or generated HTML error
 documents. They intentionally do not render panic values.
 
-Returned handler errors are user-owned. If a handler returns an error message
-that includes secrets, tokens, credentials, submitted values, SQL details, or
-internal service details, GOWDK will not rewrite that message. Prefer returning
-a safe `response.Response` or `response.NewHandlerError` message and logging
-the detailed cause in app-owned middleware or handler code.
+Generated action, API, fragment, contract, SSR load, and addon 5xx responses
+hide ordinary returned error details. Apps can expose an intentional
+client-facing message by returning `response.HandlerError` with an explicit
+`Message`; 4xx handler errors keep their application message contract.
+
+Runtime panic logs and compiler diagnostics apply conservative redaction before
+writing to logs, terminal output, JSON diagnostics, or LSP diagnostics. The
+redaction policy masks common credential surfaces:
+
+- DSN passwords such as `postgres://user:password@host`.
+- Bearer and Basic authorization header values.
+- `password`, `passwd`, `pwd`, `secret`, `token`, `_gowdk_csrf`,
+  `csrf_token`, `cookie`, `set-cookie`, `auth_token`, `session`,
+  `session_id`, `jwt`, `api_key`, `access_key`, `access_token`,
+  `refresh_token`, `id_token`, `client_secret`, and `private_key` values when
+  they appear as `name=value` or `name: value`.
+
+Limitations: app-owned logging is outside GOWDK's control, and explicit
+client-facing `HandlerError.Message` values are trusted as app-owned text. Do
+not put secrets, credentials, submitted sensitive values, SQL details, or
+internal service details in messages intended for clients.

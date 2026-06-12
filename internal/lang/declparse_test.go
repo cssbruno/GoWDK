@@ -235,6 +235,91 @@ func TestParseTopLevelRoutesTypedMetadata(t *testing.T) {
 	}
 }
 
+// TestParseTopLevelMatchesContractsOnComponent anchors the Go-typed contract
+// recovery (store/props/state/wasm) against the line parser, including the
+// go/parser-backed pkg.Type and pkg.NewFn() references.
+func TestParseTopLevelMatchesContractsOnComponent(t *testing.T) {
+	src := `package widgets
+
+use cart "cart"
+
+component Cart
+
+state cart.State = cart.NewState()
+props cart.Props
+
+store Items cart.Items = cart.NewItems()
+
+wasm "github.com/acme/cart/wasm"
+
+view {
+  <main></main>
+}
+`
+	syntaxFile, err := parser.ParseSyntax([]byte(src))
+	if err != nil {
+		t.Fatalf("line parser failed: %v", err)
+	}
+	top := ParseTopLevel(src)
+
+	if syntaxFile.State == nil || top.State == nil {
+		t.Fatalf("state contract missing: got %v, line parser %v", top.State, syntaxFile.State)
+	}
+	if top.State.Type.Alias != syntaxFile.State.Type.Alias || top.State.Type.Name != syntaxFile.State.Type.Name {
+		t.Fatalf("state type mismatch: got %+v, line parser %+v", top.State.Type, syntaxFile.State.Type)
+	}
+	if top.State.Init.Alias != syntaxFile.State.Init.Alias || top.State.Init.Name != syntaxFile.State.Init.Name {
+		t.Fatalf("state init mismatch: got %+v, line parser %+v", top.State.Init, syntaxFile.State.Init)
+	}
+	if syntaxFile.PropsType == nil || top.PropsType == nil ||
+		top.PropsType.Alias != syntaxFile.PropsType.Alias || top.PropsType.Name != syntaxFile.PropsType.Name {
+		t.Fatalf("props type mismatch: got %v, line parser %v", top.PropsType, syntaxFile.PropsType)
+	}
+	if len(top.Stores) != len(syntaxFile.Stores) || len(top.Stores) != 1 {
+		t.Fatalf("store count mismatch: got %d, line parser %d", len(top.Stores), len(syntaxFile.Stores))
+	}
+	if top.Stores[0].Name != syntaxFile.Stores[0].Name ||
+		top.Stores[0].Type.Name != syntaxFile.Stores[0].Type.Name ||
+		top.Stores[0].Init.Name != syntaxFile.Stores[0].Init.Name {
+		t.Fatalf("store mismatch: got %+v, line parser %+v", top.Stores[0], syntaxFile.Stores[0])
+	}
+	if syntaxFile.WASM == nil || top.WASM == nil || top.WASM.Package != syntaxFile.WASM.Package {
+		t.Fatalf("wasm mismatch: got %v, line parser %v", top.WASM, syntaxFile.WASM)
+	}
+}
+
+// TestParseTopLevelRejectsMalformedContracts checks the go/parser-constrained
+// recovery does not emit nodes for contract references the line parser does not
+// accept: multi-segment selectors, generics, a constructor with arguments, props
+// with an initializer, and state without one. The line parser handles these two
+// ways — some it errors on (props-with-init, state-without-init), others its
+// pattern simply ignores (multi-dot, generics, args) — so the equivalence is
+// that neither parser emits a contract node, not that the line parser errors.
+func TestParseTopLevelRejectsMalformedContracts(t *testing.T) {
+	cases := map[string]string{
+		"store init with args":   "package p\nstore X a.T = a.New(1)\n",
+		"store multi-dot type":   "package p\nstore X a.b.C = a.New()\n",
+		"props with initializer": "package p\nprops a.T = a.New()\n",
+		"state without init":     "package p\nstate a.T\n",
+		"generic type":           "package p\nstate a.T[int] = a.New()\n",
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			top := ParseTopLevel(src)
+			if len(top.Stores) != 0 || top.PropsType != nil || top.State != nil {
+				t.Fatalf("emitted a contract node for malformed source: stores=%v props=%v state=%v", top.Stores, top.PropsType, top.State)
+			}
+			// Equivalence: where the line parser succeeds, it emits no such
+			// contract either (where it errors, it definitionally has none).
+			if syntaxFile, err := parser.ParseSyntax([]byte(src)); err == nil {
+				if len(syntaxFile.Stores) != 0 || syntaxFile.PropsType != nil || syntaxFile.State != nil {
+					t.Fatalf("line parser emitted a contract for %q", src)
+				}
+			}
+		})
+	}
+}
+
 func equalKeys(a, b map[string]bool) bool {
 	if len(a) != len(b) {
 		return false

@@ -90,6 +90,9 @@ func (scanner *scanner) scan() ([]Token, Diagnostics) {
 			scanner.advance()
 			scanner.advance()
 			tokens = append(tokens, Token{Kind: TokenArrow, Lexeme: "=>", Pos: pos, Offset: offset})
+		case ch == '=':
+			scanner.advance()
+			tokens = append(tokens, Token{Kind: TokenAssign, Lexeme: "=", Pos: pos, Offset: offset})
 		default:
 			tokens = append(tokens, scanner.text())
 		}

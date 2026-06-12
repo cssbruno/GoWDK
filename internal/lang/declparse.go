@@ -1,24 +1,34 @@
 package lang
 
 import (
+	"go/ast"
+	goparser "go/parser"
+	"go/token"
 	"strings"
 	"unicode"
 
 	"github.com/cssbruno/gowdk/internal/gwdkast"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // TopLevel holds the top-level declaration nodes a recursive-descent parse
-// recovers from .gwdk source. It is the first slice of the ADR 0010 parser
-// producing real gwdkast nodes (rather than the tooling outline): the package
-// declaration, Go imports and GOWDK uses, and the top-level metadata
-// declarations — all of which map one-to-one to the line-oriented parser's
-// output and are exercised by an equivalence test against
-// internal/parser.ParseSyntax. Metadata is recovered both as the raw
-// declaration list (Metadata, mirroring SyntaxFile.Metadata) and routed into the
-// validation-free typed fields the line parser assigns unconditionally (Page,
-// Component, Cache). Metadata that needs validation to reach a typed field
-// (route, revalidate, error, layout, guard, css, asset), block bodies, view
-// markup, and endpoints remain on the line-oriented parser until later phases.
+// recovers from .gwdk source. It is the ADR 0010 parser producing real gwdkast
+// nodes (rather than the tooling outline), built behind an equivalence test
+// against internal/parser.ParseSyntax. It currently recovers:
+//
+//   - the package declaration, Go imports, and GOWDK uses;
+//   - the top-level metadata declarations, both as the raw list (Metadata,
+//     mirroring SyntaxFile.Metadata) and routed into the validation-free typed
+//     fields the line parser assigns unconditionally (Page, Component, Cache,
+//     WASM);
+//   - the Go-typed contracts (Stores, PropsType, State), whose pkg.Type and
+//     pkg.NewFn() references are parsed by go/parser per ADR 0010's split —
+//     custom grammar for .gwdk, the real Go parser for embedded Go — then
+//     constrained to the shapes the line parser accepts.
+//
+// Metadata that needs validation to reach a typed field (route, revalidate,
+// error, layout, guard, css, asset), block bodies, view markup, and endpoints
+// remain on the line-oriented parser until later phases.
 type TopLevel struct {
 	Package   *gwdkast.Package
 	Imports   []gwdkast.Import
@@ -27,6 +37,10 @@ type TopLevel struct {
 	Page      *gwdkast.PageDecl
 	Component *gwdkast.ComponentDecl
 	Cache     *gwdkast.CacheDecl
+	Stores    []gwdkast.Store
+	PropsType *gwdkast.GoTypeRef
+	State     *gwdkast.StateContract
+	WASM      *gwdkast.WASMContract
 }
 
 // ParseTopLevel parses the package, import, and use declarations of .gwdk source
@@ -75,6 +89,18 @@ func ParseTopLevel(src string) TopLevel {
 				if use, ok := parseUseTokens(line); ok {
 					result.Uses = append(result.Uses, use)
 				}
+			case "store":
+				if store, ok := parseStoreTokens(src, line, tokens[lineEnd]); ok {
+					result.Stores = append(result.Stores, store)
+				}
+			case "props":
+				if ref, ok := parsePropsTokens(src, line, tokens[lineEnd]); ok {
+					result.PropsType = &ref
+				}
+			case "state":
+				if state, ok := parseStateTokens(src, line, tokens[lineEnd]); ok {
+					result.State = &state
+				}
 			}
 		case first.Kind == TokenMetadata:
 			result.applyMetadata(first, line, metadataValue(src, first, tokens[lineEnd]))
@@ -116,7 +142,141 @@ func (top *TopLevel) applyMetadata(keyword Token, line []Token, value string) {
 		top.Component = &gwdkast.ComponentDecl{Name: value, Span: span}
 	case "cache":
 		top.Cache = &gwdkast.CacheDecl{Policy: unquote(value), Span: span}
+	case "wasm":
+		// The SyntaxFile path keeps the raw quoted value (it does not trimQuotes),
+		// so match it for equivalence rather than unquoting.
+		top.WASM = &gwdkast.WASMContract{Package: value, Span: span}
 	}
+}
+
+// parseStoreTokens recovers a `store <name> <pkg.Type> = <pkg.NewFn()>` line. The
+// name is a strict identifier; the type and initializer are Go expressions
+// delegated to go/parser per ADR 0010 (custom .gwdk grammar, reused Go parser for
+// embedded Go), then constrained to the single-selector / zero-arg-call shapes
+// the line parser's qualifiedIdent accepts so recovery stays equivalent.
+func parseStoreTokens(src string, line []Token, end Token) (gwdkast.Store, bool) {
+	if len(line) < 2 || line[1].Kind != TokenIdentifier || !isStrictIdent(line[1].Lexeme) {
+		return gwdkast.Store{}, false
+	}
+	assign := assignIndex(line)
+	if assign < 2 {
+		return gwdkast.Store{}, false
+	}
+	span := spanOf(line[0], line[len(line)-1])
+	typeRef, ok := goTypeRef(sourceBetween(src, tokenEnd(line[1]), line[assign].Offset), span)
+	if !ok {
+		return gwdkast.Store{}, false
+	}
+	initRef, ok := goFuncRef(sourceBetween(src, tokenEnd(line[assign]), end.Offset), span)
+	if !ok {
+		return gwdkast.Store{}, false
+	}
+	return gwdkast.Store{Name: line[1].Lexeme, Type: typeRef, Init: initRef, Span: span}, true
+}
+
+// parsePropsTokens recovers a `props <pkg.Type>` contract: a type reference with
+// no initializer (an `=` makes it a malformed props line the line parser
+// rejects, so it is skipped rather than emitted).
+func parsePropsTokens(src string, line []Token, end Token) (gwdkast.GoTypeRef, bool) {
+	if assignIndex(line) != -1 {
+		return gwdkast.GoTypeRef{}, false
+	}
+	span := spanOf(line[0], line[len(line)-1])
+	return goTypeRef(sourceBetween(src, tokenEnd(line[0]), end.Offset), span)
+}
+
+// parseStateTokens recovers a `state <pkg.Type> = <pkg.NewFn()>` contract. Unlike
+// props, the initializer is required, so a missing `=` is rejected.
+func parseStateTokens(src string, line []Token, end Token) (gwdkast.StateContract, bool) {
+	assign := assignIndex(line)
+	if assign < 1 {
+		return gwdkast.StateContract{}, false
+	}
+	span := spanOf(line[0], line[len(line)-1])
+	typeRef, ok := goTypeRef(sourceBetween(src, tokenEnd(line[0]), line[assign].Offset), span)
+	if !ok {
+		return gwdkast.StateContract{}, false
+	}
+	initRef, ok := goFuncRef(sourceBetween(src, tokenEnd(line[assign]), end.Offset), span)
+	if !ok {
+		return gwdkast.StateContract{}, false
+	}
+	return gwdkast.StateContract{Type: typeRef, Init: initRef, Span: span}, true
+}
+
+// goTypeRef parses a Go type reference (pkg.Type) and accepts only a single
+// selector of two strict identifiers — the line parser's qualifiedIdent rule, so
+// generics (pkg.Type[T]) and multi-segment paths (a.b.c) are rejected.
+func goTypeRef(expr string, span source.SourceSpan) (gwdkast.GoTypeRef, bool) {
+	parsed, err := goparser.ParseExpr(strings.TrimSpace(expr))
+	if err != nil {
+		return gwdkast.GoTypeRef{}, false
+	}
+	alias, name, ok := selectorParts(parsed)
+	if !ok {
+		return gwdkast.GoTypeRef{}, false
+	}
+	return gwdkast.GoTypeRef{Alias: alias, Name: name, Span: span}, true
+}
+
+// goFuncRef parses a Go constructor reference (pkg.NewFn()) — a call of a
+// pkg.Fn selector with no arguments, matching the line parser's `()` requirement.
+func goFuncRef(expr string, span source.SourceSpan) (gwdkast.GoFuncRef, bool) {
+	parsed, err := goparser.ParseExpr(strings.TrimSpace(expr))
+	if err != nil {
+		return gwdkast.GoFuncRef{}, false
+	}
+	call, ok := parsed.(*ast.CallExpr)
+	if !ok || len(call.Args) != 0 || call.Ellipsis != token.NoPos {
+		return gwdkast.GoFuncRef{}, false
+	}
+	alias, name, ok := selectorParts(call.Fun)
+	if !ok {
+		return gwdkast.GoFuncRef{}, false
+	}
+	return gwdkast.GoFuncRef{Alias: alias, Name: name, Span: span}, true
+}
+
+// selectorParts splits a pkg.Name selector into its two strict identifiers.
+func selectorParts(node ast.Expr) (string, string, bool) {
+	selector, ok := node.(*ast.SelectorExpr)
+	if !ok {
+		return "", "", false
+	}
+	pkg, ok := selector.X.(*ast.Ident)
+	if !ok {
+		return "", "", false
+	}
+	if !isStrictIdent(pkg.Name) || !isStrictIdent(selector.Sel.Name) {
+		return "", "", false
+	}
+	return pkg.Name, selector.Sel.Name, true
+}
+
+// assignIndex returns the position of the first framework-level `=` token in the
+// line, or -1. The shared tokenizer emits `=>` as an arrow, so this never matches
+// inside a paths block's arrow.
+func assignIndex(line []Token) int {
+	for index, token := range line {
+		if token.Kind == TokenAssign {
+			return index
+		}
+	}
+	return -1
+}
+
+// tokenEnd returns the byte offset just past a token.
+func tokenEnd(token Token) int {
+	return token.Offset + len(token.Lexeme)
+}
+
+// sourceBetween returns the source slice for a byte range, clamped to valid
+// bounds (an empty string for an inverted or out-of-range span).
+func sourceBetween(src string, start, stop int) string {
+	if start < 0 || stop > len(src) || start > stop {
+		return ""
+	}
+	return src[start:stop]
 }
 
 // parsePackageName accepts exactly `package <strict-ident>` with no trailing

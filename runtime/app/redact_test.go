@@ -51,6 +51,36 @@ func TestRedactSecretsMasksCredentials(t *testing.T) {
 			leaked:  "live_sk_9921aabbcc",
 			wantSub: "api_key=[REDACTED]",
 		},
+		{
+			name:    "csrf token",
+			in:      "invalid form _gowdk_csrf=csrf-secret-token",
+			leaked:  "csrf-secret-token",
+			wantSub: "_gowdk_csrf=[REDACTED]",
+		},
+		{
+			name:    "cookie header",
+			in:      "request Cookie: gowdk_session=signed-secret; theme=dark",
+			leaked:  "signed-secret",
+			wantSub: "Cookie: [REDACTED]",
+		},
+		{
+			name:    "set cookie header",
+			in:      "response Set-Cookie: gowdk_session=signed-secret; HttpOnly",
+			leaked:  "signed-secret",
+			wantSub: "Set-Cookie: [REDACTED]",
+		},
+		{
+			name:    "session query value",
+			in:      "request query session_id=abc123secret path=/account",
+			leaked:  "abc123secret",
+			wantSub: "session_id=[REDACTED]",
+		},
+		{
+			name:    "refresh token form value",
+			in:      "form refresh_token=refresh-secret-token rejected",
+			leaked:  "refresh-secret-token",
+			wantSub: "refresh_token=[REDACTED]",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

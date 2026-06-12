@@ -38,10 +38,11 @@ var redactionRules = []struct {
 		pattern:     regexp.MustCompile(`(?i)\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}`),
 		replacement: `${1} ` + redactionMask,
 	},
-	// key=value / key: value where key names a secret. Requires an explicit
-	// : or = separator so it does not swallow following words by whitespace.
+	// key=value / key: value where key names a secret-bearing header, cookie,
+	// form field, query param, or credential. Requires an explicit : or =
+	// separator so it does not swallow following words by whitespace.
 	{
-		pattern:     regexp.MustCompile(`(?i)\b(password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key)\b(\s*[:=]\s*)("?)[^\s"',;)]+`),
+		pattern:     regexp.MustCompile(`(?i)\b(password|passwd|pwd|secret|token|_?gowdk[_-]?csrf|_?csrf(?:[_-]?token)?|cookie|set-cookie|auth[_-]?token|session(?:[_-]?id)?|jwt|api[_-]?key|access(?:[_-]?(?:key|token))?|refresh[_-]?token|id[_-]?token|client[_-]?secret|private[_-]?key)\b(\s*[:=]\s*)("?)[^\s"',;)]+`),
 		replacement: `${1}${2}${3}` + redactionMask,
 	},
 }

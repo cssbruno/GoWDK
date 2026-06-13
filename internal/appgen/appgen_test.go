@@ -174,6 +174,13 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "source", "home.page.gwdk"), "page home")
 	writeTestFile(t, filepath.Join(outputDir, "source", "main.go"), "package main")
 	writeTestFile(t, filepath.Join(outputDir, "tmp", "asset.css"), "body{}")
+	writeTestFile(t, filepath.Join(outputDir, "private", "notes.txt"), "private")
+	writeTestFile(t, filepath.Join(outputDir, "secrets", "config.json"), `{"token":"secret"}`)
+	writeTestFile(t, filepath.Join(outputDir, "keys", "server.key"), "private key")
+	writeTestFile(t, filepath.Join(outputDir, "keys", "server.pem"), "private key")
+	writeTestFile(t, filepath.Join(outputDir, "keys", "bundle.p12"), "private key")
+	writeTestFile(t, filepath.Join(outputDir, "keys", "id_ed25519"), "private key")
+	writeTestFile(t, filepath.Join(outputDir, ".npmrc"), "//registry.example/:_authToken=secret")
 	writeTestFile(t, filepath.Join(outputDir, "assets", "scratch.tmp"), "temporary")
 	writeTestFile(t, filepath.Join(outputDir, "assets", "app.css"), "body{}")
 
@@ -192,6 +199,13 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 		filepath.Join(result.OutputDir, "source", "home.page.gwdk"),
 		filepath.Join(result.OutputDir, "source", "main.go"),
 		filepath.Join(result.OutputDir, "tmp", "asset.css"),
+		filepath.Join(result.OutputDir, "private", "notes.txt"),
+		filepath.Join(result.OutputDir, "secrets", "config.json"),
+		filepath.Join(result.OutputDir, "keys", "server.key"),
+		filepath.Join(result.OutputDir, "keys", "server.pem"),
+		filepath.Join(result.OutputDir, "keys", "bundle.p12"),
+		filepath.Join(result.OutputDir, "keys", "id_ed25519"),
+		filepath.Join(result.OutputDir, ".npmrc"),
 		filepath.Join(result.OutputDir, "assets", "scratch.tmp"),
 	} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {

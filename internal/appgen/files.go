@@ -80,7 +80,7 @@ func copyOutputFiles(sourceRoot, targetRoot string) ([]string, error) {
 func unsafeEmbeddedDirectory(rel string) bool {
 	base := path.Base(filepath.ToSlash(rel))
 	switch base {
-	case ".git", ".hg", ".svn", "node_modules", "tmp", "temp", ".tmp":
+	case ".git", ".hg", ".svn", "node_modules", "tmp", "temp", ".tmp", "private", ".private", "secrets", ".secrets":
 		return true
 	default:
 		return false
@@ -94,11 +94,26 @@ func unsafeEmbeddedFile(rel string) bool {
 	switch {
 	case base == ".env" || strings.HasPrefix(base, ".env."):
 		return true
+	case base == ".npmrc" || base == ".netrc":
+		return true
+	case privateKeyFile(base):
+		return true
 	case ext == ".map" || ext == ".gwdk" || ext == ".go":
 		return true
 	case ext == ".tmp" || ext == ".temp" || strings.HasSuffix(base, "~"):
 		return true
+	case ext == ".key" || ext == ".pem" || ext == ".p12" || ext == ".pfx":
+		return true
 	case strings.HasSuffix(base, ".swp") || strings.HasSuffix(base, ".swo"):
+		return true
+	default:
+		return false
+	}
+}
+
+func privateKeyFile(base string) bool {
+	switch base {
+	case "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519":
 		return true
 	default:
 		return false

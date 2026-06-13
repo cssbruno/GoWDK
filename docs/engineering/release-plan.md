@@ -256,7 +256,7 @@ Every 0.x minor release must have:
   domain policy.
 - [ ] Add safe redirect allowlists, open redirect tests, and unsafe external
   redirect diagnostics.
-- [ ] Add embedded secret exclusion tests for `.env`, source maps with secrets,
+- [x] Add embedded secret exclusion tests for `.env`, source maps with secrets,
   private files, and temporary artifacts.
 - [x] Add reverse proxy, TLS termination, request ID, health endpoint, and
   metrics endpoint security policy docs.

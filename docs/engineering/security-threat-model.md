@@ -73,7 +73,6 @@ Apply the `security review` GitHub label to issues or pull requests that touch:
 ## Follow-Up Areas
 
 - Enable GitHub private vulnerability reporting if available for the repository.
-- Add focused tests for embedded secret exclusion.
 - Add configurable request body/header limit policy.
 - Finish safe redirect allowlists, diagnostics, and open-redirect tests.
 - Finish public API helper hardening in #24.

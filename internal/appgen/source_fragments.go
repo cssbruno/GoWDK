@@ -9,11 +9,11 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func fragmentFuncDecl(fragments []FragmentEndpoint, rateLimit bool) *ast.FuncDecl {
+func fragmentFuncDecl(fragments []BackendFragmentAdapter, rateLimit bool) *ast.FuncDecl {
 	if len(fragments) == 0 {
 		return funcDecl("fragment", actionParams(), boolResults(), []ast.Stmt{returnBool(false)})
 	}
-	sorted := sortedFragmentEndpoints(fragments)
+	sorted := sortedFragmentAdapters(fragments)
 	body := []ast.Stmt{}
 	var clauses []ast.Stmt
 	for _, fragment := range sorted {
@@ -45,7 +45,7 @@ func fragmentFuncDecl(fragments []FragmentEndpoint, rateLimit bool) *ast.FuncDec
 	return funcDecl("fragment", actionParams(), boolResults(), body)
 }
 
-func fragmentCaseExpr(fragment FragmentEndpoint) ast.Expr {
+func fragmentCaseExpr(fragment BackendFragmentAdapter) ast.Expr {
 	return &ast.BinaryExpr{
 		X: &ast.BinaryExpr{
 			X:  selExpr(id("request"), "Method"),
@@ -61,7 +61,7 @@ func fragmentCaseExpr(fragment FragmentEndpoint) ast.Expr {
 	}
 }
 
-func fragmentCaseStmts(fragment FragmentEndpoint, rateLimit bool) []ast.Stmt {
+func fragmentCaseStmts(fragment BackendFragmentAdapter, rateLimit bool) []ast.Stmt {
 	stmts := fragmentContextStmts(fragment, false)
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(fragment.Guards)...)
@@ -93,7 +93,7 @@ func fragmentCaseStmts(fragment FragmentEndpoint, rateLimit bool) []ast.Stmt {
 	return stmts
 }
 
-func fragmentDynamicIfStmt(fragment FragmentEndpoint, rateLimit bool) ast.Stmt {
+func fragmentDynamicIfStmt(fragment BackendFragmentAdapter, rateLimit bool) ast.Stmt {
 	return &ast.IfStmt{
 		Init: define([]ast.Expr{id("params"), id("ok")}, call(sel("gowdkroute", "Match"), stringLit(fragment.Route), selExpr(selExpr(id("request"), "URL"), "Path"))),
 		Cond: &ast.BinaryExpr{
@@ -109,7 +109,7 @@ func fragmentDynamicIfStmt(fragment FragmentEndpoint, rateLimit bool) ast.Stmt {
 	}
 }
 
-func fragmentDynamicCaseStmts(fragment FragmentEndpoint, rateLimit bool) []ast.Stmt {
+func fragmentDynamicCaseStmts(fragment BackendFragmentAdapter, rateLimit bool) []ast.Stmt {
 	stmts := fragmentContextStmts(fragment, true)
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(fragment.Guards)...)
@@ -141,7 +141,7 @@ func fragmentDynamicCaseStmts(fragment FragmentEndpoint, rateLimit bool) []ast.S
 	return stmts
 }
 
-func fragmentContextStmts(fragment FragmentEndpoint, includeParams bool) []ast.Stmt {
+func fragmentContextStmts(fragment BackendFragmentAdapter, includeParams bool) []ast.Stmt {
 	stmts := []ast.Stmt{
 		endpointContextStmt("fragment", fragment.PageID, fragment.FragmentName, fragment.Method, fragment.Route, ""),
 	}
@@ -153,14 +153,14 @@ func fragmentContextStmts(fragment FragmentEndpoint, includeParams bool) []ast.S
 	return stmts
 }
 
-func fragmentTypedRouteParams(fragment FragmentEndpoint) []source.RouteParam {
+func fragmentTypedRouteParams(fragment BackendFragmentAdapter) []source.RouteParam {
 	if len(fragment.RouteParams) > 0 {
 		return fragment.RouteParams
 	}
 	return gwdkir.RouteParamsFromPath(fragment.Route)
 }
 
-func fragmentsUseStaticFallback(fragments []FragmentEndpoint) bool {
+func fragmentsUseStaticFallback(fragments []BackendFragmentAdapter) bool {
 	for _, fragment := range fragments {
 		if fragment.Binding.Status != source.BackendBindingBound && fragment.Binding.Status != source.BackendBindingUnsupportedSignature {
 			return true
@@ -169,7 +169,7 @@ func fragmentsUseStaticFallback(fragments []FragmentEndpoint) bool {
 	return false
 }
 
-func fragmentsUseExactRoutes(fragments []FragmentEndpoint) bool {
+func fragmentsUseExactRoutes(fragments []BackendFragmentAdapter) bool {
 	for _, fragment := range fragments {
 		if !fragmentRouteIsDynamic(fragment) {
 			return true
@@ -178,7 +178,7 @@ func fragmentsUseExactRoutes(fragments []FragmentEndpoint) bool {
 	return false
 }
 
-func fragmentsUseDynamicRoutes(fragments []FragmentEndpoint) bool {
+func fragmentsUseDynamicRoutes(fragments []BackendFragmentAdapter) bool {
 	for _, fragment := range fragments {
 		if fragmentRouteIsDynamic(fragment) {
 			return true
@@ -187,12 +187,26 @@ func fragmentsUseDynamicRoutes(fragments []FragmentEndpoint) bool {
 	return false
 }
 
-func fragmentRouteIsDynamic(fragment FragmentEndpoint) bool {
+func fragmentRouteIsDynamic(fragment BackendFragmentAdapter) bool {
 	return len(ssrRoutePatternParams(fragment.Route)) > 0
 }
 
 func sortedFragmentEndpoints(fragments []FragmentEndpoint) []FragmentEndpoint {
 	sorted := append([]FragmentEndpoint(nil), fragments...)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Route == sorted[j].Route {
+			if sorted[i].Method == sorted[j].Method {
+				return sorted[i].FragmentName < sorted[j].FragmentName
+			}
+			return sorted[i].Method < sorted[j].Method
+		}
+		return sorted[i].Route < sorted[j].Route
+	})
+	return sorted
+}
+
+func sortedFragmentAdapters(fragments []BackendFragmentAdapter) []BackendFragmentAdapter {
+	sorted := append([]BackendFragmentAdapter(nil), fragments...)
 	sort.Slice(sorted, func(i, j int) bool {
 		if sorted[i].Route == sorted[j].Route {
 			if sorted[i].Method == sorted[j].Method {

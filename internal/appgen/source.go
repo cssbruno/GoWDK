@@ -41,10 +41,10 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["os"] = "os"
 		imports["strings"] = "strings"
 	}
-	actions := options.Actions
-	apis := options.APIs
-	fragments := options.Fragments
 	adapter := backendAdapterIR(options)
+	actions := adapter.Actions
+	apis := adapter.APIs
+	fragments := adapter.Fragments
 	contractExposures := adapter.ContractExposures
 	routableContracts := routableContractExposures(contractExposures)
 	executableContracts := executableContractExposures(contractExposures)
@@ -250,9 +250,9 @@ func backendShellDecls(options Options) []ast.Decl {
 
 func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	adapter := backendAdapterIR(direct)
-	decls := actionHandlerDecls(direct.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
-	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(direct.APIs), generatedUsesRateLimit(direct)))
-	decls = append(decls, fragmentFuncDecl(direct.Fragments, generatedUsesRateLimit(direct)))
+	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
+	decls = append(decls, apiFuncDecl(adapter.APIs, generatedUsesRateLimit(direct)))
+	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(direct)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(direct), generatedUsesRateLimit(direct))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
 	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures)...)
@@ -277,9 +277,9 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 
 func backendGeneratedDecls(options Options) []ast.Decl {
 	adapter := backendAdapterIR(options)
-	decls := actionHandlerDecls(options.Actions, csrfEnabled(options), generatedUsesRateLimit(options))
-	decls = append(decls, apiFuncDecl(sortedAPIEndpoints(options.APIs), generatedUsesRateLimit(options)))
-	decls = append(decls, fragmentFuncDecl(options.Fragments, generatedUsesRateLimit(options)))
+	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(options), generatedUsesRateLimit(options))
+	decls = append(decls, apiFuncDecl(adapter.APIs, generatedUsesRateLimit(options)))
+	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(options)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(options), generatedUsesRateLimit(options))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
 	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures)...)
@@ -297,8 +297,8 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	return decls
 }
 
-func actionHandlerDecls(actions []ActionEndpoint, csrf bool, rateLimit bool) []ast.Decl {
-	sorted := sortedActionEndpoints(actions)
+func actionHandlerDecls(actions []BackendActionAdapter, csrf bool, rateLimit bool) []ast.Decl {
+	sorted := sortedActionAdapters(actions)
 	decls := []ast.Decl{actionFuncDecl(sorted, csrf, rateLimit)}
 	if len(sorted) > 0 {
 		decls = append(decls, actionRequestPathDecl())
@@ -533,13 +533,14 @@ func errorPagesExpr(options Options) ast.Expr {
 }
 
 func customErrorPagePaths(options Options) []string {
+	adapter := backendAdapterIR(options)
 	seen := map[string]bool{}
-	for _, action := range options.Actions {
+	for _, action := range adapter.Actions {
 		if action.ErrorPage != "" {
 			seen[action.ErrorPage] = true
 		}
 	}
-	for _, api := range options.APIs {
+	for _, api := range adapter.APIs {
 		if api.ErrorPage != "" {
 			seen[api.ErrorPage] = true
 		}

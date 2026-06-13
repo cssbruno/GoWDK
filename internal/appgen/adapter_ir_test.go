@@ -17,7 +17,10 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 			Guards:      []string{"auth.required"},
 			InputType:   "SubscribeInput",
 			InputFields: []string{"email"},
-			Redirect:    "/newsletter?ok=1",
+			RequiredMessages: map[string]string{
+				"email": "Email is required",
+			},
+			Redirect: "/newsletter?ok=1",
 			Binding: source.BackendBinding{
 				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/newsletter",
@@ -59,6 +62,15 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 
 	if len(ir.Registrations) != 3 {
 		t.Fatalf("expected action, API, and fragment registrations, got %#v", ir.Registrations)
+	}
+	if len(ir.Actions) != 1 || ir.Actions[0].Endpoint.Path != ir.Registrations[0].Path || ir.Actions[0].Endpoint.Kind != BackendEndpointAction || ir.Actions[0].RequiredMessages["email"] != "Email is required" {
+		t.Fatalf("expected action adapter metadata, got %#v", ir.Actions)
+	}
+	if len(ir.APIs) != 1 || ir.APIs[0].Endpoint.Path != ir.Registrations[1].Path || ir.APIs[0].Endpoint.Kind != BackendEndpointAPI || ir.APIs[0].APIName != "Health" {
+		t.Fatalf("expected API adapter metadata, got %#v", ir.APIs)
+	}
+	if len(ir.Fragments) != 1 || ir.Fragments[0].Endpoint.Path != ir.Registrations[2].Path || ir.Fragments[0].Endpoint.Kind != BackendEndpointFragment || ir.Fragments[0].Target != "#patients" {
+		t.Fatalf("expected fragment adapter metadata, got %#v", ir.Fragments)
 	}
 	if ir.Registrations[0].Kind != BackendEndpointAction || ir.Registrations[0].Path != "/newsletter" || ir.Registrations[0].Handler != "action" {
 		t.Fatalf("unexpected action registration: %#v", ir.Registrations[0])

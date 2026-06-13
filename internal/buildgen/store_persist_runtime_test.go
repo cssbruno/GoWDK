@@ -287,6 +287,43 @@ assert.equal(storageListeners.length, 1, "one storage listener after boot");
 new Function(runtimeSrc)();
 assert.equal(storageListeners.length, 1, "re-executing the runtime does not add a second storage listener");
 
+// 15. A route that declares the same store WITHOUT persist must stop an earlier
+// route's persistence: after navigating to the unpersisted declaration, set()
+// must not keep writing to storage, while the in-memory value stays shared.
+seedJSON = '{"Count":0,"Open":false}';
+scope = "local";
+version = "v1";
+global.document.querySelectorAll = () => [makeNode()];
+r = boot();
+r.set("cart", { Count: 4, Open: false });
+assert.ok(localStorage.getItem("gowdk:store:cart") != null, "precondition: the persisted route writes storage");
+localStorage.removeItem("gowdk:store:cart");
+global.document.querySelectorAll = () => [{
+  getAttribute(name) { return name === "data-gowdk-store" ? "cart" : null; },
+  get textContent() { return '{"Count":0,"Open":false}'; }
+}];
+r.hydrate();
+r.set("cart", { Count: 8, Open: true });
+assert.equal(localStorage.getItem("gowdk:store:cart"), null, "an unpersisted declaration stops set() from writing storage");
+assert.equal(r.get("cart").Count, 8, "the in-memory store stays shared across the navigation");
+
+// 16. A bulk localStorage.clear() in another tab fires a "storage" event with a
+// null key; local-scoped stores must reset to their seed instead of keeping
+// values whose persisted backing is gone. A clear of the other area is ignored.
+seedJSON = '{"Count":0,"Open":false}';
+scope = "local";
+version = "v1";
+global.document.querySelectorAll = () => [makeNode()];
+r = boot();
+r.set("cart", { Count: 6, Open: true });
+let bulkCleared = null;
+r.subscribe("cart", (next) => { bulkCleared = next; });
+storageListeners[0]({ key: null, oldValue: null, newValue: null, storageArea: sessionStorage });
+assert.equal(r.get("cart").Count, 6, "a clear() of a different storage area is ignored");
+storageListeners[0]({ key: null, oldValue: null, newValue: null, storageArea: localStorage });
+assert.equal(r.get("cart").Count, 0, "a cross-tab localStorage.clear() resets local stores to seed");
+assert.ok(bulkCleared && bulkCleared.Count === 0, "a bulk clear notifies subscribers");
+
 console.log("OK");
 `
 }

@@ -184,6 +184,14 @@ func storeRuntimeSource() string {
         notify(name);
         return;
       }
+      // Same field set and (if persisted) same version. If this route declares
+      // the store WITHOUT persistence but an earlier route persisted it, honor
+      // the current declaration and stop persisting, so set() does not keep
+      // writing to storage this route never opted into. The in-memory value is
+      // left intact so the store stays shared across routes.
+      if (!hasPersist && prior) {
+        delete registry.persist[name];
+      }
       return;
     }
 
@@ -248,7 +256,22 @@ func storeRuntimeSource() string {
   if (!registry.storageListenerAttached && typeof window.addEventListener === "function") {
     registry.storageListenerAttached = true;
     window.addEventListener("storage", (event) => {
-      if (!event || !event.key) return;
+      if (!event) return;
+      // A bulk Storage.clear() in another tab fires a "storage" event with a null
+      // key (and null newValue) rather than one event per removed key. Reset every
+      // local-scoped persisted store backed by the cleared area to its seed, so
+      // this tab does not keep values whose persisted backing is gone. Keyed
+      // setItem/removeItem (including __gowdkStores.clear) falls through below.
+      if (!event.key) {
+        if (event.storageArea && event.storageArea !== storageFor("local")) return;
+        Object.keys(registry.persist).forEach((name) => {
+          const config = registry.persist[name];
+          if (!config || config.scope !== "local") return;
+          if (registry.seeds[name]) registry.stores[name] = Object.assign({}, registry.seeds[name]);
+          notify(name);
+        });
+        return;
+      }
       Object.keys(registry.persist).forEach((name) => {
         const config = registry.persist[name];
         if (!config || config.scope !== "local" || config.key !== event.key) return;

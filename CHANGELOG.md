@@ -5,7 +5,38 @@ packages, and tooling contracts may change before a stable release.
 
 ## Unreleased
 
-No entries yet.
+### Implemented
+
+- M4 Go interop is complete for the current 0.x surface: a user can see why a Go
+  function or type did or did not bind. `gowdk inspect go-bindings` emits a
+  versioned JSON report (schema version 1) covering actions, APIs, fragments,
+  SSR load functions, build-time Go calls, and web command/query references,
+  each with source, source span, package, expected symbol, signature, input
+  metadata, binding status, reason, and a next-step suggestion.
+- `gowdk generate stubs` writes conservative missing action/API handler stubs to
+  a `gowdk_stubs.go` file beside the owning source package, formats them with
+  gofmt, and refuses to overwrite an existing stub file. Action stubs use
+  `func(context.Context) (response.Response, error)` and API stubs use
+  `func(context.Context, *http.Request) (response.Response, error)`.
+- Build-time Go helpers may now return `T` or `(T, error)`; the runner tries the
+  error-returning shape before falling back to the legacy single-return shape.
+- Build-helper execution parses stdout as the JSON payload and preserves stderr
+  only for failure messages, so successful helper logging no longer corrupts
+  build data.
+- `docs/reference/go-interop.md` is a first-class page documenting build data,
+  supported action/API/load signatures, typed route-param access through
+  `app.Params`/`app.TypedParams`, and `net/http` middleware wrapping.
+
+### Known Gaps
+
+- GOWDK remains not production-ready.
+- Passing route params into Go build functions is deferred (#327).
+- Generated per-route param structs and typed load/action result accessors are
+  deferred (#23).
+- Broader Go binding diagnostics for unsupported signatures, build-tag-hidden
+  symbols, and unsupported return/parameter types are deferred (#328).
+- Broader Go-package interop examples (`database/sql`, `pgx`, `sqlc`, `slog`,
+  and similar) are deferred (#329).
 
 ## v0.3.0 - 2026-06-12
 

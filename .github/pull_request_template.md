@@ -16,6 +16,9 @@ issues from words like "Completes". -->
 - [ ] I ran `node --check editors/vscode/extension.js` when editor files changed.
 - [ ] I updated docs for behavior, setup, or architecture changes.
 - [ ] I added or updated tests for changed behavior.
+- [ ] I considered security-sensitive surfaces such as auth, CSRF, redirects,
+  request-time handlers, logs, diagnostics, embedded assets, editor commands,
+  WASM, contracts, and realtime behavior.
 
 ## LLM Assistance
 

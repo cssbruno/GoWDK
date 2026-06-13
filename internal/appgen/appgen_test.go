@@ -63,6 +63,10 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 		`"gowdk-generated-app/gowdkapp"`,
 		"handler, err := gowdkapp.Handler()",
 		"ReadHeaderTimeout: 5 * time.Second",
+		"ReadTimeout: 10 * time.Second",
+		"WriteTimeout: 30 * time.Second",
+		"IdleTimeout: 60 * time.Second",
+		"MaxHeaderBytes: 1 << 20",
 	} {
 		if !strings.Contains(string(mainPayload), expected) {
 			t.Fatalf("expected generated server main.go to contain %q:\n%s", expected, mainPayload)

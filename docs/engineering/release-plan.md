@@ -215,28 +215,30 @@ Every 0.x minor release must have:
 
 ## Security And Production-Safety Gates
 
-- [ ] Update root `SECURITY.md` to match `docs/engineering/security.md`.
-- [ ] Keep the production warning.
-- [ ] Replace outdated "planned but not complete" wording with precise
+- [x] Update root `SECURITY.md` to match `docs/engineering/security.md`.
+- [x] Keep the production warning.
+- [x] Replace outdated "planned but not complete" wording with precise
   "first slice exists, not production enforcement" wording.
-- [ ] List implemented first slices: generated action decoding, unexpected
+- [x] List implemented first slices: generated action decoding, unexpected
   field rejection, direct literal request-shape validation, opt-in CSRF, action
-  body cap, safe local redirect slice, guard execution slice, SSR panic
-  boundaries, and no-store request-time responses.
-- [ ] List incomplete production areas: auth/session policy, full guard
-  contract, CSRF secret rotation, full redirect policy, log redaction, request
-  timeout defaults, broad body/header limits, file upload policy, public API
-  hardening, realtime security policy, and admin tooling policy.
+  body cap, generated `http.Server` timeout defaults, `MaxHeaderBytes`, safe
+  local redirect slice, guard execution slice, SSR panic boundaries, and
+  no-store request-time responses.
+- [x] List incomplete production areas: auth/session policy, full guard
+  contract, CSRF secret rotation, full redirect policy, log redaction,
+  configurable request body/header limit policy beyond current defaults, file
+  upload policy, public API hardening, realtime security policy, and admin
+  tooling policy.
 - [ ] Enable GitHub private vulnerability reporting if available.
-- [ ] Add a vulnerability report contact path.
+- [x] Add a vulnerability report contact path.
 - [ ] Add threat models for compiler diagnostics, generated logs, actions,
   APIs, fragments, SSR load, guards, generated assets, VS Code extension, WASM
   islands, and contracts/realtime.
-- [ ] Add security checklist items to the PR template.
+- [x] Add security checklist items to the PR template.
 - [ ] Add security review trigger labels.
-- [ ] Add generated `http.Server` timeout configuration: read, write, idle, and
+- [x] Add generated `http.Server` timeout configuration: read, write, idle, and
   read-header timeouts.
-- [ ] Add `MaxHeaderBytes`.
+- [x] Add `MaxHeaderBytes`.
 - [ ] Keep action request body caps and add API/fragment body caps where
   relevant.
 - [ ] Add configurable body limits.

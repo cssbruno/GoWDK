@@ -407,7 +407,10 @@ func validatePageStores(page gwdkir.Page) []ValidationError {
 // a field whose name resembles a secret earns a warning because browser storage
 // is readable by any script on the origin.
 func validateStorePersist(page gwdkir.Page, store gwdkir.Store, resolved gotypes.Struct) []ValidationError {
-	if store.Persist == "" {
+	// No `persist` clause: nothing to validate. An explicit but empty scope
+	// (`persist ""`) sets PersistSet, so it falls through to the scope check below
+	// and is reported as invalid rather than silently treated as unpersisted.
+	if !store.PersistSet {
 		return nil
 	}
 	if store.Persist != "local" && store.Persist != "session" {

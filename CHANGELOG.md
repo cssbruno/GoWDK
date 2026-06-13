@@ -15,7 +15,8 @@ packages, and tooling contracts may change before a stable release.
   swap, and a store first declared without persistence adopts a later route's
   persist config and restores its saved value, so persistence never depends on
   navigation order), writes the store's declared fields on change, mirrors cross-tab writes
-  through the `storage` event, exposes `window.__gowdkStores.clear(name)` to drop
+  for `persist "local"` stores through the `storage` event (`persist "session"`
+  stores are tab-local), exposes `window.__gowdkStores.clear(name)` to drop
   a persisted store, and discards persisted state whose embedded schema hash no longer
   matches the store's shape (so a struct change never restores stale data).
   Only the store's own fields persist — never component state, props, or computed

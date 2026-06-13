@@ -157,15 +157,20 @@ func storeRuntimeSource() string {
       // The store already exists (for example SPA navigation reached a later
       // route that declares the same store).
       const prior = registry.persist[name];
-      // If the later route changes the field set, or the persisted version
-      // (shape hash) of an already-persisted store, re-seed so the current
-      // route's islands read the fields and version they declared and stale
-      // storage written under the old shape is discarded. Divergent shapes that
-      // share a storage key are reported at build time by
-      // page_store_persist_key_conflict.
+      // Re-seed when the field set changes, when an already-persisted store's
+      // version (shape hash) changes, OR when this declaration FIRST adds
+      // persistence (!prior). In every case the current route's islands must read
+      // the fields, seed and version they declared, with any saved value restored
+      // on top. Adopting persistence without re-seeding is unsafe: two routes can
+      // share top-level field names yet declare a different nested seed, and on a
+      // fresh storage slot (nothing to restore) the later route's islands would
+      // otherwise mount on the earlier route's seed. Divergent shapes that share a
+      // storage key are reported at build time by page_store_persist_key_conflict;
+      // a conflicting scope is kept first-wins (page_store_persist_scope_conflict),
+      // so navigation cannot thrash storage.
       const shapeChanged =
         !sameFieldSet(registry.fields[name] || [], fields) ||
-        (hasPersist && prior && prior.version !== persist.version);
+        (hasPersist && (!prior || prior.version !== persist.version));
       if (shapeChanged) {
         registry.fields[name] = fields;
         registry.seeds[name] = Object.assign(Object.create(null), seed);
@@ -178,19 +183,6 @@ func storeRuntimeSource() string {
         registry.stores[name] = seed;
         notify(name);
         return;
-      }
-      // Same shape: if this declaration adds persistence and we are not
-      // persisting yet, adopt it and restore the saved value so persistence does
-      // not depend on which route loaded first. A conflicting scope is kept
-      // first-wins and reported at build time by
-      // page_store_persist_scope_conflict, so navigation cannot thrash storage.
-      if (hasPersist && !prior) {
-        registry.persist[name] = persist;
-        const restored = readPersisted(persist, registry.fields[name]);
-        if (restored) {
-          registry.stores[name] = Object.assign({}, registry.stores[name] || {}, restored);
-          notify(name);
-        }
       }
       return;
     }
@@ -242,18 +234,27 @@ func storeRuntimeSource() string {
     };
   };
 
-  // Cross-tab sync: when another tab writes a persisted store, mirror the value
-  // here and notify islands. We never write back, so tabs cannot loop.
-  if (typeof window.addEventListener === "function") {
+  // Cross-tab sync: when another tab writes a persisted LOCAL store, mirror the
+  // value here and notify islands. Only localStorage is shared across tabs on the
+  // origin, so its "storage" event is what carries cross-tab writes. sessionStorage
+  // is partitioned per top-level tab, so session-scoped stores are deliberately
+  // tab-local and skipped here (a "storage" event for them only fires within the
+  // same page session, e.g. iframes). We never write back, so tabs cannot loop.
+  //
+  // Register exactly once per registry. SPA navigation can re-execute this script
+  // (the head swap drops the stores.js tag while window.__gowdkStores stays alive,
+  // so a later store page makes activateNewScripts treat it as new); a second
+  // listener would notify islands — and rerun render/effects — twice per write.
+  if (!registry.storageListenerAttached && typeof window.addEventListener === "function") {
+    registry.storageListenerAttached = true;
     window.addEventListener("storage", (event) => {
       if (!event || !event.key) return;
       Object.keys(registry.persist).forEach((name) => {
         const config = registry.persist[name];
-        if (!config || config.key !== event.key) return;
-        // Local and session stores can share the gowdk:store:<name> key. Ignore
-        // events from the other storage area so a localStorage write never
-        // overwrites a sessionStorage-backed store (or vice versa). Older
-        // browsers omit storageArea, where the key match alone is used.
+        if (!config || config.scope !== "local" || config.key !== event.key) return;
+        // Only local stores reach here, but keep the storageArea guard: a
+        // session store can share the gowdk:store:<name> key, and older browsers
+        // omit storageArea, where the key + scope match alone is used.
         if (event.storageArea && event.storageArea !== storageFor(config.scope)) return;
         if (event.newValue == null) {
           if (registry.seeds[name]) registry.stores[name] = Object.assign({}, registry.seeds[name]);

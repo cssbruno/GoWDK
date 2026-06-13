@@ -242,6 +242,51 @@ assert.equal(r.get("cart").Count, 1, "a storage event from a different area (ses
 storageListeners[0]({ key: "gowdk:store:cart", newValue: JSON.stringify({ v: "v1", s: { Count: 99, Open: true } }), storageArea: localStorage });
 assert.equal(r.get("cart").Count, 99, "a storage event from the matching area is applied");
 
+// 12. Adopting persistence on a FRESH storage slot must re-seed to the later
+// route's declared seed, not silently keep the earlier unpersisted route's seed.
+// Two routes can share a top-level field name yet declare a different default;
+// with nothing to restore, the current route's islands must read THEIR seed.
+global.document.querySelectorAll = () => [{
+  getAttribute(name) { return name === "data-gowdk-store" ? "banner" : null; },
+  get textContent() { return '{"Dismissed":true}'; }
+}];
+r.hydrate();
+assert.equal(r.get("banner").Dismissed, true, "precondition: unpersisted route uses its own seed");
+global.document.querySelectorAll = () => [{
+  getAttribute(name) {
+    if (name === "data-gowdk-store") return "banner";
+    if (name === "data-gowdk-persist") return "local";
+    if (name === "data-gowdk-persist-key") return "gowdk:store:banner";
+    if (name === "data-gowdk-persist-version") return "b1";
+    return null;
+  },
+  get textContent() { return '{"Dismissed":false}'; }
+}];
+r.hydrate();
+assert.equal(r.get("banner").Dismissed, false, "adopting persistence on empty storage re-seeds to the persisted route's declared seed");
+
+// 13. Session-scoped stores must NOT mirror cross-tab storage events:
+// sessionStorage is partitioned per top-level tab, so a "storage" event from
+// another tab cannot belong to this tab's session store.
+seedJSON = '{"Count":0,"Open":false}';
+scope = "session";
+version = "v1";
+global.document.querySelectorAll = () => [makeNode()];
+r = boot();
+r.set("cart", { Count: 3, Open: false });
+storageListeners[0]({ key: "gowdk:store:cart", newValue: JSON.stringify({ v: "v1", s: { Count: 77, Open: true } }), storageArea: sessionStorage });
+assert.equal(r.get("cart").Count, 3, "a session-scoped store ignores cross-tab storage events");
+
+// 14. Re-executing the runtime against the SAME window (as SPA navigation does
+// when stores.js is re-activated) must NOT register a second storage listener;
+// a duplicate would notify islands twice per cross-tab write.
+scope = "local";
+global.document.querySelectorAll = () => [makeNode()];
+r = boot();
+assert.equal(storageListeners.length, 1, "one storage listener after boot");
+new Function(runtimeSrc)();
+assert.equal(storageListeners.length, 1, "re-executing the runtime does not add a second storage listener");
+
 console.log("OK");
 `
 }

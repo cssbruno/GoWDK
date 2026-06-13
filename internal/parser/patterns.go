@@ -364,13 +364,17 @@ func parseStoreLine(line string) []string {
 		return nil
 	}
 	persistScope := ""
+	persistSet := ""
 	if len(tokens) == 8 {
 		if tokens[6].Kind != syntax.TokenIdentifier || tokens[6].Lexeme != "persist" || tokens[7].Kind != syntax.TokenString {
 			return nil
 		}
 		persistScope = syntax.Unquote(tokens[7].Lexeme)
+		// Record that the clause was present so an explicit `persist ""` is
+		// distinguishable from no persistence (both have an empty scope).
+		persistSet = "1"
 	}
-	return []string{line, tokens[1].Lexeme, typeAlias, typeName, initAlias, initName, persistScope}
+	return []string{line, tokens[1].Lexeme, typeAlias, typeName, initAlias, initName, persistScope, persistSet}
 }
 
 func parseActionInputLine(line string) []string {

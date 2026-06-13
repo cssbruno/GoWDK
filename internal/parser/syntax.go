@@ -252,11 +252,12 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 		if match := storePattern.FindStringSubmatch(line); match != nil {
 			span := sourceLineSpan(lineNumber, rawLine)
 			file.Stores = append(file.Stores, gwdkast.Store{
-				Name:    match[1],
-				Type:    GoTypeRef{Alias: match[2], Name: match[3], Span: span},
-				Init:    GoFuncRef{Alias: match[4], Name: match[5], Span: span},
-				Persist: match[6],
-				Span:    span,
+				Name:       match[1],
+				Type:       GoTypeRef{Alias: match[2], Name: match[3], Span: span},
+				Init:       GoFuncRef{Alias: match[4], Name: match[5], Span: span},
+				Persist:    match[6],
+				PersistSet: len(match) > 7 && match[7] == "1",
+				Span:       span,
 			})
 			continue
 		}

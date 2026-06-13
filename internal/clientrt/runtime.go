@@ -235,15 +235,43 @@ const runtimeSource = `(function () {
   }
 
   function activateNewScripts(previousScripts) {
-    var pending = [];
+    var storeScripts = [];
+    var otherScripts = [];
     Array.prototype.forEach.call(document.querySelectorAll('script[src]'), function (script) {
       if (previousScripts[script.src]) {
         return;
       }
+      if (script.hasAttribute('data-gowdk-store-runtime')) {
+        storeScripts.push(script);
+      } else {
+        otherScripts.push(script);
+      }
+    });
+    // Run the store runtime first, then hydrate the registry, before island
+    // bundles execute. Island bundles auto-mount on execution and read
+    // window.__gowdkStores during mount, so a store loaded after them would leave
+    // islands mounted with no subscription or persisted value -- and the
+    // post-navigation mount pass skips already-mounted roots. Hydrating here also
+    // covers the case where stores.js already ran on the previous page (skipped
+    // above) yet this route introduces new store seeds.
+    return runScripts(storeScripts).then(function () {
+      if (typeof window !== 'undefined' && window.__gowdkStores && window.__gowdkStores.hydrate) {
+        window.__gowdkStores.hydrate();
+      }
+      return runScripts(otherScripts);
+    });
+  }
+
+  function runScripts(scripts) {
+    var pending = [];
+    scripts.forEach(function (script) {
       var active = document.createElement('script');
       Array.prototype.forEach.call(script.attributes, function (attr) {
         active.setAttribute(attr.name, attr.value);
       });
+      // Dynamically inserted scripts default to async; force ordered execution so
+      // a dependency (the store runtime) cannot lose a race with its dependents.
+      active.async = false;
       pending.push(new Promise(function (resolve, reject) {
         active.onload = resolve;
         active.onerror = reject;

@@ -19,10 +19,11 @@ func persistedStorePageNamed(id, route, storeName, typeName, initName, scope str
 			Path:  "github.com/cssbruno/gowdk/testfixture/islands",
 		}},
 		Stores: []gwdkir.Store{{
-			Name:    storeName,
-			Type:    gwdkir.GoRef{Alias: "ui", Name: typeName},
-			Init:    gwdkir.GoRef{Alias: "ui", Name: initName},
-			Persist: scope,
+			Name:       storeName,
+			Type:       gwdkir.GoRef{Alias: "ui", Name: typeName},
+			Init:       gwdkir.GoRef{Alias: "ui", Name: initName},
+			Persist:    scope,
+			PersistSet: scope != "",
 		}},
 		Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Page</main>`},
 	}
@@ -39,10 +40,11 @@ func persistedStorePage(storeName, typeName, initName, scope string) gwdkir.Page
 			Path:  "github.com/cssbruno/gowdk/testfixture/islands",
 		}},
 		Stores: []gwdkir.Store{{
-			Name:    storeName,
-			Type:    gwdkir.GoRef{Alias: "ui", Name: typeName},
-			Init:    gwdkir.GoRef{Alias: "ui", Name: initName},
-			Persist: scope,
+			Name:       storeName,
+			Type:       gwdkir.GoRef{Alias: "ui", Name: typeName},
+			Init:       gwdkir.GoRef{Alias: "ui", Name: initName},
+			Persist:    scope,
+			PersistSet: scope != "",
 		}},
 		Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Cart</main>`},
 	}
@@ -69,6 +71,22 @@ func TestValidatePageRejectsInvalidPersistScope(t *testing.T) {
 	}
 	if diagnostic.Severity != SeverityError {
 		t.Fatalf("invalid persist scope should be an error, got severity %v", diagnostic.Severity)
+	}
+}
+
+func TestValidatePageRejectsEmptyPersistScope(t *testing.T) {
+	// `persist ""` (clause present, empty scope) must be diagnosed, not silently
+	// treated as unpersisted. The page builds the IR directly with PersistSet set
+	// and an empty scope, mirroring what the parser produces for `persist ""`.
+	page := persistedStorePage("cart", "CounterState", "NewCounterState", "")
+	page.Stores[0].PersistSet = true
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	diagnostic := firstDiagnostic(diagnostics, "page_store_persist_scope_invalid")
+	if diagnostic == nil {
+		t.Fatalf("missing page_store_persist_scope_invalid diagnostic for empty scope: %#v", diagnostics)
+	}
+	if diagnostic.Severity != SeverityError {
+		t.Fatalf("empty persist scope should be an error, got severity %v", diagnostic.Severity)
 	}
 }
 

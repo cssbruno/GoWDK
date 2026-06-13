@@ -84,7 +84,10 @@ type Store struct {
 	// Persist is the optional `persist "<scope>"` modifier scope literal
 	// ("" when not persisted). Validated in the compiler, not the parser.
 	Persist string
-	Span    source.SourceSpan
+	// PersistSet reports whether a `persist` clause was present, so an explicit
+	// empty scope (`persist ""`) is diagnosed instead of treated as unpersisted.
+	PersistSet bool
+	Span       source.SourceSpan
 }
 
 // Page is the normalized IR for one page source.

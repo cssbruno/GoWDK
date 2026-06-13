@@ -187,11 +187,12 @@ func lowerSyntaxStores(in []gwdkast.Store) []gwdkir.Store {
 	out := make([]gwdkir.Store, 0, len(in))
 	for _, item := range in {
 		out = append(out, gwdkir.Store{
-			Name:    item.Name,
-			Type:    gwdkir.GoRef{Alias: item.Type.Alias, Name: item.Type.Name, Span: item.Type.Span},
-			Init:    gwdkir.GoRef{Alias: item.Init.Alias, Name: item.Init.Name, Span: item.Init.Span},
-			Persist: item.Persist,
-			Span:    item.Span,
+			Name:       item.Name,
+			Type:       gwdkir.GoRef{Alias: item.Type.Alias, Name: item.Type.Name, Span: item.Type.Span},
+			Init:       gwdkir.GoRef{Alias: item.Init.Alias, Name: item.Init.Name, Span: item.Init.Span},
+			Persist:    item.Persist,
+			PersistSet: item.PersistSet,
+			Span:       item.Span,
 		})
 	}
 	return out

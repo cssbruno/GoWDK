@@ -299,8 +299,11 @@ whole value of each top-level field: keep credentials and trusted authorization
 state server-side. An unknown scope is rejected — see
 `gowdk explain page_store_persist_scope_invalid`.
 
-Persisted stores also sync across tabs: when one tab writes, other tabs on the
-origin mirror the value through the browser `storage` event. To drop a persisted
+`persist "local"` stores also sync across tabs: when one tab writes, other tabs
+on the origin mirror the value through the browser `storage` event. `persist
+"session"` stores are deliberately tab-local — `sessionStorage` is partitioned
+per top-level tab, so session-scoped stores do not (and cannot) sync across tabs.
+To drop a persisted
 store (for example after checkout or logout), call
 `window.__gowdkStores.clear("<name>")`, which removes the stored copy and resets
 the store to its build-time init value. If two pages persist a store with the

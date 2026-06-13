@@ -177,16 +177,20 @@ view {
 
 func TestParsePageReadsStorePersistModifier(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		line  string
-		scope string
+		name       string
+		line       string
+		scope      string
+		persistSet bool
 	}{
-		{name: "local", line: `store cart ui.CounterState = ui.NewCounterState() persist "local"`, scope: "local"},
-		{name: "session", line: `store cart ui.CounterState = ui.NewCounterState() persist "session"`, scope: "session"},
-		{name: "no-persist", line: `store cart ui.CounterState = ui.NewCounterState()`, scope: ""},
+		{name: "local", line: `store cart ui.CounterState = ui.NewCounterState() persist "local"`, scope: "local", persistSet: true},
+		{name: "session", line: `store cart ui.CounterState = ui.NewCounterState() persist "session"`, scope: "session", persistSet: true},
+		{name: "no-persist", line: `store cart ui.CounterState = ui.NewCounterState()`, scope: "", persistSet: false},
 		// An unknown scope still parses into a store so validation can emit a
 		// precise diagnostic rather than a generic parse error.
-		{name: "invalid-scope", line: `store cart ui.CounterState = ui.NewCounterState() persist "disk"`, scope: "disk"},
+		{name: "invalid-scope", line: `store cart ui.CounterState = ui.NewCounterState() persist "disk"`, scope: "disk", persistSet: true},
+		// An explicit empty scope must be distinguishable from no persistence so it
+		// is diagnosed rather than silently treated as unpersisted.
+		{name: "empty-scope", line: `store cart ui.CounterState = ui.NewCounterState() persist ""`, scope: "", persistSet: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			page, err := ParsePage([]byte("\npage cart\nroute \"/cart\"\n\nimport ui \"github.com/cssbruno/gowdk/testfixture/islands\"\n\n" + tc.line + "\n\nview {\n  <main>Cart</main>\n}\n"))
@@ -198,6 +202,9 @@ func TestParsePageReadsStorePersistModifier(t *testing.T) {
 			}
 			if got := page.Stores[0].Persist; got != tc.scope {
 				t.Fatalf("store persist = %q, want %q", got, tc.scope)
+			}
+			if got := page.Stores[0].PersistSet; got != tc.persistSet {
+				t.Fatalf("store persistSet = %v, want %v", got, tc.persistSet)
 			}
 			if page.Stores[0].Name != "cart" || page.Stores[0].Init.Name != "NewCounterState" {
 				t.Fatalf("persist modifier corrupted the store: %#v", page.Stores[0])

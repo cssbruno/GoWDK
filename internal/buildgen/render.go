@@ -444,7 +444,14 @@ func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []
 		if strings.TrimSpace(script.Type) != "" {
 			tag += gowhtml.Attr("type", script.Type)
 		}
-		tag += gowhtml.Attr("src", script.Src) + " defer></script>"
+		tag += gowhtml.Attr("src", script.Src)
+		// Mark the store runtime so the SPA navigation runtime can run (and
+		// hydrate) it before island bundles, which auto-mount on execution and read
+		// the store registry during mount.
+		if script.Src == storeRuntimeHref {
+			tag += " data-gowdk-store-runtime"
+		}
+		tag += " defer></script>"
 		head = append(head, tag)
 	}
 	head = append(head, "</head>")

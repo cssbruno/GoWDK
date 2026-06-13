@@ -76,7 +76,4 @@ Apply the `security review` GitHub label to issues or pull requests that touch:
 - Add focused tests for embedded secret exclusion.
 - Add configurable request body/header limit policy.
 - Finish safe redirect allowlists, diagnostics, and open-redirect tests.
-- Add secure header and cookie helper guidance.
 - Finish public API helper hardening in #24.
-- Expand operations docs for reverse proxies, TLS termination, request IDs,
-  health endpoints, metrics endpoints, and logging policy.

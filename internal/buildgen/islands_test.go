@@ -2226,6 +2226,43 @@ func TestBuildRejectsWASMIslandPackageMissingABIExports(t *testing.T) {
 	requireBuildDiagnostic(t, err, "wasm_package_export_error", "Counter")
 }
 
+func TestBuildRejectsWASMIslandPackageBadABIExportSignature(t *testing.T) {
+	packageDir := writeWASMIslandPackage(t, "main", `//go:wasmexport GOWDKMountCounter
+func GOWDKMountCounter() {}
+
+//go:wasmexport GOWDKHandleCounter
+func GOWDKHandleCounter() uint32 { return 0 }
+
+//go:wasmexport GOWDKDestroyCounter
+func GOWDKDestroyCounter() uint32 { return 0 }
+
+func main() {}
+`)
+	outputDir := t.TempDir()
+	component := counterComponent()
+	component.WASM = gwdkir.WASMContract{Package: packageDir}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{component},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected bad wasm export signature error")
+	}
+	if !strings.Contains(err.Error(), `WASM export GOWDKMountCounter must have signature func() uint32`) {
+		t.Fatalf("unexpected bad wasm export signature error: %v", err)
+	}
+	requireBuildDiagnostic(t, err, "wasm_package_export_error", "Counter")
+}
+
 func TestBuildRejectsWASMIslandPackageWithoutMainEntrypoint(t *testing.T) {
 	packageDir := writeWASMIslandPackage(t, "counter", `func NotMain() {}`)
 	outputDir := t.TempDir()
@@ -2568,6 +2605,7 @@ async function waitForCall(calls, kind) {
   await page.goto(baseURL + "/counter/", { waitUntil: "networkidle" });
   await page.waitForFunction(() => document.querySelector("[data-gowdk-binding-text='b2']")?.textContent === "mounted");
   const mount = await waitForCall(calls, "mount");
+  assert.equal(mount.payload.abiVersion, "gowdk-wasm-island-v1");
   assert.equal(mount.payload.component, "Counter");
   assert.equal(mount.payload.state.Count, 1);
   assert.equal(mount.payload.bindings.text[0].field, "Count");
@@ -2582,12 +2620,15 @@ async function waitForCall(calls, kind) {
   await page.click("button");
   await page.waitForFunction(() => document.querySelector("[data-gowdk-binding-text='b2']")?.textContent === "clicked");
   const handle = await waitForCall(calls, "handle");
+  assert.equal(handle.payload.abiVersion, "gowdk-wasm-island-v1");
+  assert.equal(handle.payload.component, "Counter");
   assert.equal(handle.payload.event, "click");
   assert.ok(handle.payload.binding);
   assert.deepEqual(await page.evaluate(() => window.__gowdkWASMEmit), { count: 2 });
 
   await page.goto("about:blank");
   const destroy = await waitForCall(calls, "destroy");
+  assert.equal(destroy.payload.abiVersion, "gowdk-wasm-island-v1");
   assert.equal(destroy.payload.component, "Counter");
   assert.deepEqual(consoleErrors, []);
   await browser.close();

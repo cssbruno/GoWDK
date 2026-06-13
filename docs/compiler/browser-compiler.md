@@ -105,7 +105,8 @@ tries a direct WASM instantiate path and falls back to Go runtime imports when a
 compiled Go module needs them.
 
 Declared browser-side Go packages must produce a browser WASM module and export
-the component-scoped ABI entrypoints:
+the component-scoped ABI entrypoints with the current `func() uint32`
+signature:
 
 ```go
 //go:wasmexport GOWDKMountCounter

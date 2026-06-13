@@ -31,6 +31,8 @@ Entrypoint naming:
 - The generated loader looks for exported functions named
   `GOWDKMount<Component>`, `GOWDKHandle<Component>`, and
   `GOWDKDestroy<Component>`.
+- Each required export must currently have the WASM signature produced by Go
+  `func() uint32`: no parameters and one `i32` result.
 - Exported names are component-scoped to avoid a registry in the first slice.
 - Missing required exports are compile or load diagnostics, not silent no-ops.
 
@@ -124,7 +126,8 @@ Asset strategy:
 - Generated loader payloads use ABI version `gowdk-wasm-island-v1`.
 - Built WASM artifacts are rejected unless they export
   `GOWDKMount<Component>`, `GOWDKHandle<Component>`, and
-  `GOWDKDestroy<Component>`.
+  `GOWDKDestroy<Component>` with the required no-parameter, `uint32` result
+  signature.
 - The generated loader passes the bootstrap object, applies the defined patch
   operations, rejects unknown patch operations through a console error, and
   supports JS/WASM island coexistence on the same page.

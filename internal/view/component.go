@@ -86,8 +86,15 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 	if mode == "" {
 		mode = component.DefaultIsland
 	}
-	props := map[string]string{}
+	props := cloneValues(component.PropDefaults)
 	propValues := map[string]any{}
+	for prop, value := range props {
+		typed, err := typedComponentPropString(prop, value, component.PropType(prop))
+		if err != nil {
+			return err
+		}
+		propValues[prop] = typed
+	}
 	propExpressions := map[string]string{}
 	taintedValues := map[string]bool{}
 	var parentListeners []parentComponentListener
@@ -331,6 +338,20 @@ func coerceComponentPropValue(name string, value any, propType clientlang.ValueT
 	default:
 		return nil, fmt.Errorf("prop %q uses unsupported type %s", name, propType)
 	}
+}
+
+func typedComponentPropString(name string, value string, propType clientlang.ValueType) (any, error) {
+	if propType == clientlang.TypeUnknown {
+		propType = clientlang.TypeString
+	}
+	if propType == clientlang.TypeString {
+		return value, nil
+	}
+	typed, err := clientlang.EvalValue(value, nil)
+	if err != nil {
+		return nil, fmt.Errorf("prop %q default: %w", name, err)
+	}
+	return coerceComponentPropValue(name, typed, propType)
 }
 
 func writeParentComponentListenerAttrs(out *renderOutput, listener parentComponentListener) {

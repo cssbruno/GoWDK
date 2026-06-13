@@ -243,9 +243,11 @@ type BuildCall struct {
 
 // Prop is one scalar prop declaration inside props {}.
 type Prop struct {
-	Name string
-	Type string
-	Span source.SourceSpan
+	Name       string
+	Type       string
+	Default    string
+	DefaultSet bool
+	Span       source.SourceSpan
 }
 
 // Export is one typed public component export inside exports {}.

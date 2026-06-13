@@ -735,7 +735,7 @@ func TestParseComponentSourceReportsTypedParserDiagnostic(t *testing.T) {
 
 component Badge
 props {
-  Count int
+  Count time
 }
 
 view {
@@ -753,7 +753,7 @@ view {
 	}
 	if diagnostic.Range == nil ||
 		diagnostic.Range.Start.Line != 5 || diagnostic.Range.Start.Column != 3 ||
-		diagnostic.Range.End.Line != 5 || diagnostic.Range.End.Column != 12 {
+		diagnostic.Range.End.Line != 5 || diagnostic.Range.End.Column != 13 {
 		t.Fatalf("unexpected component diagnostic range: %#v", diagnostic.Range)
 	}
 }

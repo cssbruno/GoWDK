@@ -165,6 +165,58 @@ func TestRenderWithComponentsRejectsTypedPropMismatch(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsUsesPropDefaults(t *testing.T) {
+	got, err := RenderWithComponents(`<main><Stats /></main>`, map[string]Component{
+		"Stats": {
+			Name:  "Stats",
+			Props: []string{"label", "count", "ratio", "active"},
+			PropTypes: map[string]clientlang.ValueType{
+				"label":  clientlang.TypeString,
+				"count":  clientlang.TypeInt,
+				"ratio":  clientlang.TypeFloat,
+				"active": clientlang.TypeBool,
+			},
+			PropDefaults: map[string]string{
+				"label":  "Default",
+				"count":  "2",
+				"ratio":  "1.5",
+				"active": "true",
+			},
+			Body: `<section data-active="{active}"><p>{label}: {count} / {ratio}</p></section>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<main><section data-active="true"><p>Default: 2 / 1.5</p></section></main>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderWithComponentsLetsPropsOverrideDefaults(t *testing.T) {
+	got, err := RenderWithComponents(`<Stats count={4} />`, map[string]Component{
+		"Stats": {
+			Name:         "Stats",
+			Props:        []string{"count"},
+			PropTypes:    map[string]clientlang.ValueType{"count": clientlang.TypeInt},
+			PropDefaults: map[string]string{"count": "2"},
+			Body:         `<p>{count}</p>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-state="{&#34;count&#34;:4}"`,
+		`<span data-gowdk-bind="count" data-gowdk-binding-text="b1">4</span>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in override output:\n%s", want, got)
+		}
+	}
+}
+
 func TestRenderWithComponentsExpandsQualifiedComponentCall(t *testing.T) {
 	got, err := RenderWithOptions(`<main><ui.Hero title="GOWDK" /></main>`, map[string]Component{
 		"ui.Hero": {

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/cssscope"
@@ -657,13 +658,51 @@ func parseSyntaxProps(body []syntaxBodyLine) ([]Prop, error) {
 		if !supportedSyntaxPropType(match[2]) {
 			return nil, lineDiagnosticError(DiagnosticUnsupportedComponentPropType, raw.Line, raw.Text, "prop %s uses unsupported type %q", match[1], match[2])
 		}
-		props = append(props, Prop{Name: match[1], Type: match[2], Span: sourceLineSpan(raw.Line, raw.Text)})
+		prop := Prop{Name: match[1], Type: match[2], Span: sourceLineSpan(raw.Line, raw.Text)}
+		if len(match) > 3 && strings.TrimSpace(match[3]) != "" {
+			value, err := validateSyntaxPropDefault(match[1], match[2], match[3])
+			if err != nil {
+				return nil, lineDiagnosticError(DiagnosticInvalidComponentProp, raw.Line, raw.Text, "%v", err)
+			}
+			prop.Default = value
+			prop.DefaultSet = true
+		}
+		props = append(props, prop)
 	}
 	return props, nil
 }
 
 func supportedSyntaxPropType(value string) bool {
 	return supportedScalarType(value)
+}
+
+func validateSyntaxPropDefault(name string, typ string, value string) (string, error) {
+	value = strings.TrimSpace(value)
+	switch typ {
+	case "string":
+		decoded, err := strconv.Unquote(value)
+		if err != nil {
+			return "", fmt.Errorf("prop %s default for string must be a quoted string literal", name)
+		}
+		return decoded, nil
+	case "int":
+		if _, err := strconv.Atoi(value); err != nil {
+			return "", fmt.Errorf("prop %s default must be an int literal", name)
+		}
+		return value, nil
+	case "float":
+		if _, err := strconv.ParseFloat(value, 64); err != nil {
+			return "", fmt.Errorf("prop %s default must be a float literal", name)
+		}
+		return value, nil
+	case "bool":
+		if value != "true" && value != "false" {
+			return "", fmt.Errorf("prop %s default must be true or false", name)
+		}
+		return value, nil
+	default:
+		return "", fmt.Errorf("prop %s uses unsupported type %q", name, typ)
+	}
 }
 
 func parseSyntaxExports(body []syntaxBodyLine) ([]Export, error) {

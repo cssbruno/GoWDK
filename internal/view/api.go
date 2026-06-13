@@ -27,6 +27,7 @@ type Component struct {
 	DefaultIsland string
 	Props         []string
 	PropTypes     map[string]clientlang.ValueType
+	PropDefaults  map[string]string
 	State         map[string]string
 	StateJSON     string
 	Handlers      map[string]clientlang.Handler

@@ -41,7 +41,7 @@ func buildComponents(components []gwdkir.Component) (map[string]view.Component, 
 			continue
 		}
 
-		props, propTypes, propFailures := componentProps(component)
+		props, propTypes, propDefaults, propFailures := componentProps(component)
 		for _, failure := range propFailures {
 			failures = append(failures, failure)
 			valid = false
@@ -80,6 +80,7 @@ func buildComponents(components []gwdkir.Component) (map[string]view.Component, 
 			DefaultIsland: componentDefaultIsland(component),
 			Props:         props,
 			PropTypes:     propTypes,
+			PropDefaults:  propDefaults,
 			State:         state,
 			StateJSON:     stateJSON,
 			Handlers:      handlers,
@@ -232,11 +233,11 @@ func componentEmits(component gwdkir.Component) map[string]clientlang.Emit {
 	return out
 }
 
-func componentProps(component gwdkir.Component) ([]string, map[string]clientlang.ValueType, []string) {
+func componentProps(component gwdkir.Component) ([]string, map[string]clientlang.ValueType, map[string]string, []string) {
 	if component.PropsType.Name != "" {
 		resolved, err := gotypes.ResolveStruct(component.Imports, component.PropsType)
 		if err != nil {
-			return nil, nil, []string{fmt.Sprintf("component %s props: %v", component.Name, err)}
+			return nil, nil, nil, []string{fmt.Sprintf("component %s props: %v", component.Name, err)}
 		}
 		propTypes := map[string]clientlang.ValueType{}
 		for _, field := range resolved.Fields {
@@ -245,10 +246,11 @@ func componentProps(component gwdkir.Component) ([]string, map[string]clientlang
 		for field, typ := range resolved.FieldTypes {
 			propTypes[field] = clientlang.NormalizeType(typ)
 		}
-		return resolved.FieldNames(), propTypes, nil
+		return resolved.FieldNames(), propTypes, nil, nil
 	}
 	props := make([]string, 0, len(component.Props))
 	propTypes := map[string]clientlang.ValueType{}
+	propDefaults := map[string]string{}
 	seen := map[string]bool{}
 	var failures []string
 	for _, prop := range component.Props {
@@ -264,8 +266,14 @@ func componentProps(component gwdkir.Component) ([]string, map[string]clientlang
 		seen[prop.Name] = true
 		props = append(props, prop.Name)
 		propTypes[prop.Name] = propType
+		if prop.DefaultSet {
+			propDefaults[prop.Name] = prop.Default
+		}
 	}
-	return props, propTypes, failures
+	if len(propDefaults) == 0 {
+		propDefaults = nil
+	}
+	return props, propTypes, propDefaults, failures
 }
 
 func componentInitialState(component gwdkir.Component) (map[string]string, map[string]clientlang.ValueType, string, error) {

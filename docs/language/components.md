@@ -5,7 +5,8 @@ The first component slice is implemented for SPA build output.
 Implemented today:
 
 - Explicit or discovered `.cmp.gwdk` build inputs with `component Name`.
-- Optional `props { name string }` declarations.
+- Optional `props { name string }` declarations, including scalar default
+  literals such as `props { count int = 0 }`.
 - Inline scalar props with `string`, `int`, `float`, and `bool` types.
 - Component-local Go imports using normal module import paths, such as
   `import ui "github.com/acme/app/ui"`.
@@ -142,6 +143,8 @@ component Row
 
 props {
   label string
+  count int = 0
+  active bool = false
 }
 
 view {
@@ -246,9 +249,10 @@ values from the implemented build-data subset. Props are read-only to
 page store.
 
 Imported Go structs are the stable typed prop path for richer contracts.
-Defaults should be expressed in normal Go init/build data or by rendering a
-fallback in the component `view {}`. There is no rest/spread prop syntax, prop
-renaming syntax, or implicit global prop lookup in the current contract.
+Inline props can declare static scalar defaults with `name type = literal`.
+Defaults are used when a caller omits the prop and are overridden by explicit
+caller values. There is no rest/spread prop syntax, prop renaming syntax, or
+implicit global prop lookup in the current contract.
 
 State is component-local UI state. A `state Type = Init()` declaration runs the
 no-argument Go init function at build time for SPA/static output and serializes

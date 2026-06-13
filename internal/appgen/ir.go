@@ -162,12 +162,13 @@ func fragmentComponentsFromIR(components []gwdkir.Component) map[string]view.Com
 	out := map[string]view.Component{}
 	for _, component := range components {
 		compiled := view.Component{
-			Name:      component.Name,
-			Package:   component.Package,
-			Uses:      irUsesMap(component.Uses),
-			Props:     irPropNames(component.Props),
-			PropTypes: irPropTypes(component.Props),
-			Body:      component.Blocks.ViewBody,
+			Name:         component.Name,
+			Package:      component.Package,
+			Uses:         irUsesMap(component.Uses),
+			Props:        irPropNames(component.Props),
+			PropTypes:    irPropTypes(component.Props),
+			PropDefaults: irPropDefaults(component.Props),
+			Body:         component.Blocks.ViewBody,
 		}
 		addFragmentComponent(out, compiled)
 	}
@@ -238,6 +239,19 @@ func irPropTypes(props []gwdkir.Prop) map[string]clientlang.ValueType {
 	out := map[string]clientlang.ValueType{}
 	for _, prop := range props {
 		out[prop.Name] = clientlang.NormalizeType(prop.Type)
+	}
+	return out
+}
+
+func irPropDefaults(props []gwdkir.Prop) map[string]string {
+	out := map[string]string{}
+	for _, prop := range props {
+		if prop.DefaultSet {
+			out[prop.Name] = prop.Default
+		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

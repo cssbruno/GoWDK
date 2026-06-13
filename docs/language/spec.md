@@ -250,8 +250,8 @@ Current component support is partial:
 - Scalar inline props and first typed Go prop/state contracts are supported.
 - Component CSS and assets can be scoped and emitted.
 - Component-level `wasm` can emit browser WASM island assets.
-- Prop defaults, broad lifecycle behavior, child-to-parent events, and a full
-  reactive graph are planned.
+- Broad lifecycle behavior, child-to-parent events, and a full reactive graph
+  are planned.
 
 ## Scoped JavaScript
 

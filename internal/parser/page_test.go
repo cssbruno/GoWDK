@@ -1023,10 +1023,10 @@ component Hero
 
 props {
   title string
-  tagline string
-  count int
-  ratio float
-  active bool
+  tagline string = "Portable"
+  count int = 2
+  ratio float = 1.5
+  active bool = true
 }
 
 view {
@@ -1041,7 +1041,7 @@ view {
 	if component.Name != "Hero" {
 		t.Fatalf("expected Hero, got %q", component.Name)
 	}
-	if len(component.Props) != 5 || component.Props[0].Name != "title" || component.Props[2].Type != "int" || component.Props[3].Type != "float" || component.Props[4].Type != "bool" {
+	if len(component.Props) != 5 || component.Props[0].Name != "title" || component.Props[1].Default != "Portable" || !component.Props[1].DefaultSet || component.Props[2].Type != "int" || component.Props[2].Default != "2" || component.Props[3].Type != "float" || component.Props[3].Default != "1.5" || component.Props[4].Type != "bool" || component.Props[4].Default != "true" {
 		t.Fatalf("unexpected props: %#v", component.Props)
 	}
 	if component.Blocks.ViewBody != "<section>\n    <h1>{title}</h1>\n  </section>" {
@@ -1276,6 +1276,26 @@ view {
 `))
 	if err == nil {
 		t.Fatal("expected unsupported prop type error")
+	}
+}
+
+func TestParseComponentRejectsInvalidPropDefault(t *testing.T) {
+	_, err := ParseComponent([]byte(`
+component Hero
+
+props {
+  count int = true
+}
+
+view {
+  <section>Count</section>
+}
+`))
+	if err == nil {
+		t.Fatal("expected invalid prop default error")
+	}
+	if !strings.Contains(err.Error(), "default must be an int literal") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

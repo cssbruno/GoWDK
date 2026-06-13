@@ -14,6 +14,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/actions"
 	"github.com/cssbruno/gowdk/addons/api"
 	"github.com/cssbruno/gowdk/addons/auth"
+	contractsaddon "github.com/cssbruno/gowdk/addons/contracts"
 	"github.com/cssbruno/gowdk/addons/css"
 	"github.com/cssbruno/gowdk/addons/db"
 	"github.com/cssbruno/gowdk/addons/embed"
@@ -847,6 +848,8 @@ func parseBuiltInAddon(expression ast.Expr, imports map[string]string) (gowdk.Ad
 		return api.Addon(), true
 	case auth.ImportPath:
 		return auth.Addon(), true
+	case contractsaddon.ImportPath:
+		return contractsaddon.Addon(), true
 	case css.ImportPath:
 		return css.Addon(), true
 	case db.ImportPath:

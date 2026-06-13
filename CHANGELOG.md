@@ -35,6 +35,17 @@ packages, and tooling contracts may change before a stable release.
   candidate function stays silent so the 501-stub workflow is unaffected; strict
   production builds still fail closed via `backend_binding_required`. This is the
   first slice of #328.
+- Backend handler binding no longer hides failures behind silent fallbacks: a
+  handler declared in both same-package Go and an inline `go {}` block is
+  reported as `ambiguous_backend_handler` instead of silently preferring one
+  source; a sibling Go package that fails to compile keeps a "could not be
+  inspected" binding instead of falling back to an inline block and reporting a
+  misleading bound handler (the compile error is reported by `go_package_error`);
+  and a failing `go list` for a same-package build function now surfaces its real
+  cause (for example a missing `go.mod`) rather than a generic "requires a
+  buildable Go package" message. A component-script resolution error during
+  build now fails the build instead of silently omitting the page's component
+  scripts.
 
 ### Known Gaps
 

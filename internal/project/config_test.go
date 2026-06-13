@@ -391,6 +391,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	act "github.com/cssbruno/gowdk/addons/actions"
 	apiaddon "github.com/cssbruno/gowdk/addons/api"
+	contractsaddon "github.com/cssbruno/gowdk/addons/contracts"
 	cssaddon "github.com/cssbruno/gowdk/addons/css"
 	embedaddon "github.com/cssbruno/gowdk/addons/embed"
 	partialaddon "github.com/cssbruno/gowdk/addons/partial"
@@ -404,6 +405,7 @@ var Config = gowdk.Config{
 	Addons: []gowdk.Addon{
 		act.Addon(),
 		apiaddon.Addon(),
+		contractsaddon.Addon(),
 		cssaddon.Addon(),
 		embedaddon.Addon(),
 		partialaddon.Addon(),
@@ -421,15 +423,16 @@ var Config = gowdk.Config{
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Addons) != 9 {
+	if len(config.Addons) != 10 {
 		t.Fatalf("unexpected addons: %#v", config.Addons)
 	}
-	if config.Addons[8].Name() != "static" {
-		t.Fatalf("expected static addon, got %#v", config.Addons[8])
+	if config.Addons[9].Name() != "static" {
+		t.Fatalf("expected static addon, got %#v", config.Addons[9])
 	}
 	for _, feature := range []gowdk.Feature{
 		gowdk.FeatureActions,
 		gowdk.FeatureAPI,
+		gowdk.FeatureContracts,
 		gowdk.FeatureCSS,
 		gowdk.FeatureEmbed,
 		gowdk.FeaturePartial,

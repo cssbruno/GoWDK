@@ -64,16 +64,17 @@ func (hub *Hub) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
 
+	ctx := conn.CloseRead(request.Context())
 	client := make(chan []byte, hub.bufferSize)
 	hub.add(conn, client)
 	defer hub.remove(conn)
 
 	for {
 		select {
-		case <-request.Context().Done():
+		case <-ctx.Done():
 			return
 		case payload := <-client:
-			if err := conn.Write(request.Context(), websocket.MessageText, payload); err != nil {
+			if err := conn.Write(ctx, websocket.MessageText, payload); err != nil {
 				return
 			}
 		}

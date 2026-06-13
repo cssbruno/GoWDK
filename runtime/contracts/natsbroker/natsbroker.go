@@ -130,9 +130,12 @@ func (broker *Broker) ReceiveEventBatch(ctx context.Context) (contracts.EventBat
 	events := []contracts.EventEnvelope{first}
 	for len(events) < broker.batchSize {
 		pollCtx, cancel := context.WithTimeout(ctx, time.Millisecond)
-		event, err := broker.nextMessage(pollCtx)
+		event, ok, err := broker.tryNextMessage(pollCtx)
 		cancel()
 		if err != nil {
+			return contracts.EventBatch{}, err
+		}
+		if !ok {
 			break
 		}
 		events = append(events, event)
@@ -175,23 +178,39 @@ func (broker *Broker) ensureSubscription() error {
 }
 
 func (broker *Broker) nextMessage(ctx context.Context) (contracts.EventEnvelope, error) {
-	waitCtx := ctx
-	cancel := func() {}
-	if broker.timeout > 0 {
-		waitCtx, cancel = context.WithTimeout(ctx, broker.timeout)
+	for {
+		waitCtx := ctx
+		cancel := func() {}
+		if broker.timeout > 0 {
+			waitCtx, cancel = context.WithTimeout(ctx, broker.timeout)
+		}
+		event, ok, err := broker.tryNextMessage(waitCtx)
+		cancel()
+		if err != nil {
+			return contracts.EventEnvelope{}, err
+		}
+		if ok {
+			return event, nil
+		}
+		if err := ctx.Err(); err != nil {
+			return contracts.EventEnvelope{}, err
+		}
 	}
-	defer cancel()
-	message, err := broker.sub.NextMsgWithContext(waitCtx)
+}
+
+func (broker *Broker) tryNextMessage(ctx context.Context) (contracts.EventEnvelope, bool, error) {
+	message, err := broker.sub.NextMsgWithContext(ctx)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			if ctx.Err() != nil {
-				return contracts.EventEnvelope{}, ctx.Err()
-			}
-			return contracts.EventEnvelope{}, contracts.ErrEventSourceClosed
+			return contracts.EventEnvelope{}, false, nil
 		}
-		return contracts.EventEnvelope{}, err
+		return contracts.EventEnvelope{}, false, err
 	}
-	return broker.decodeMessage(message)
+	event, err := broker.decodeMessage(message)
+	if err != nil {
+		return contracts.EventEnvelope{}, false, err
+	}
+	return event, true, nil
 }
 
 func (broker *Broker) decodeMessage(message *nats.Msg) (contracts.EventEnvelope, error) {

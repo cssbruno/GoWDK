@@ -231,6 +231,10 @@ type BackendBinding struct {
 	// unexported Go function exists in the inspected package, so tooling can
 	// explain that the function is present but not exported.
 	UnexportedCandidate bool
+	// Ambiguous is set when the same handler name is declared in more than one
+	// Go source (sibling same-package code and an inline go {} block), so tooling
+	// reports the conflict instead of silently preferring one.
+	Ambiguous bool
 }
 
 // ErrorPagePath returns a clean generated-output-relative error page path.

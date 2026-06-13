@@ -123,7 +123,8 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `invalid_go_endpoint_handler`, `malformed_go_endpoint_comment`,
   `go_endpoint_parse_error`, `duplicate_go_endpoint_comment`,
   `unsupported_action_method`, `backend_binding_required`,
-  `unsupported_backend_signature`, `unexported_backend_handler`.
+  `unsupported_backend_signature`, `unexported_backend_handler`,
+  `ambiguous_backend_handler`.
 - Layouts, CSS, and cache: `duplicate_layout_id`, `unknown_layout_id`,
   `invalid_css_selection`, `duplicate_css_selection`,
   `revalidate_requires_cache`, `duplicate_revalidate_policy`.

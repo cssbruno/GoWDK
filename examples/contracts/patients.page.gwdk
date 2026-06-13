@@ -1,0 +1,20 @@
+package contracts
+
+import patients "github.com/cssbruno/gowdk/examples/contracts/patients"
+
+page contractPatients
+route "/contracts/patients"
+guard public
+
+view {
+  <main>
+    <h1>Contracts</h1>
+    <form method="post" action="/contracts/patients" g:command="patients.CreatePatient">
+      <label>Name <input name="name" /></label>
+      <button>Create patient</button>
+    </form>
+    <section g:query="patients.GetPatientPage">
+      <p>Patient query data is available through the generated JSON adapter.</p>
+    </section>
+  </main>
+}

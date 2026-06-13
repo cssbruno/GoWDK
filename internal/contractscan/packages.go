@@ -16,9 +16,8 @@ import (
 )
 
 type fileScan struct {
-	Contracts      []Contract
-	Diagnostics    []Diagnostic
-	EmitsByHandler map[string][]EventRef
+	Contracts   []Contract
+	Diagnostics []Diagnostic
 }
 
 type inputStruct struct {
@@ -121,10 +120,19 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile, inspectionCache *pac
 	diagnostics = append(diagnostics, validateEventNames(contracts)...)
 	diagnostics = append(diagnostics, validateContracts(contracts, typedPackage.Functions)...)
 	diagnostics = append(diagnostics, validateContractInputStructs(contracts, inputStructs)...)
+	attachCommandEmits(contracts, emitsByHandler)
 	return fileScan{
-		Contracts:      contracts,
-		Diagnostics:    diagnostics,
-		EmitsByHandler: emitsByHandler,
+		Contracts:   contracts,
+		Diagnostics: diagnostics,
+	}
+}
+
+func attachCommandEmits(contracts []Contract, emitsByHandler map[string][]EventRef) {
+	for index := range contracts {
+		if contracts[index].Kind != runtimecontracts.Command {
+			continue
+		}
+		contracts[index].Emits = copyEventRefs(emitsByHandler[contracts[index].Handler])
 	}
 }
 

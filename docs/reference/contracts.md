@@ -83,6 +83,98 @@ Generated web adapters always execute command/query references with
 worker/cron/admin/API-only contract is a compiler diagnostic, not a generated
 route that fails later.
 
+## Local Single-Binary App Path
+
+The supported M6 path is local-first: one generated binary can serve the page,
+execute `g:command` and `g:query` web adapters through the web role, and replay
+captured backend events through local runtime helpers. Split worker binaries
+and cron generation remain planned, not production-ready behavior.
+
+Minimal page:
+
+```gwdk
+package contracts
+
+import patients "github.com/acme/clinic/patients"
+
+page patients
+route "/patients"
+guard public
+
+view {
+  <main>
+    <form method="post" action="/patients" g:command="patients.CreatePatient">
+      <input name="name" />
+      <button>Create patient</button>
+    </form>
+    <section g:query="patients.GetPatientPage"></section>
+  </main>
+}
+```
+
+Normal Go owns the contracts and handlers:
+
+```go
+package patients
+
+import (
+    "context"
+
+    "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type GetPatientPage struct{ Filter string }
+type PatientPageData struct{ Source string `json:"source"` }
+type CreatePatient struct{ Name string }
+type CreatePatientResult struct{ ID string `json:"id"` }
+type PatientCreated struct{ ID string }
+
+func Register(registry *contracts.Registry) {
+    contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage, contracts.RoleWeb)
+    contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
+    contracts.RegisterDomainEvent[PatientCreated](registry, SendWelcomeEmail, contracts.RoleWorker)
+}
+
+func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData, error) {
+    return PatientPageData{Source: "db"}, nil
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+    if err := contracts.EmitDomain(ctx, PatientCreated{ID: "patient-1"}); err != nil {
+        return CreatePatientResult{}, err
+    }
+    return CreatePatientResult{ID: "patient-1"}, nil
+}
+
+func SendWelcomeEmail(ctx context.Context, event PatientCreated) error { return nil }
+```
+
+The generated command adapter captures events emitted by `HandleCreatePatient`
+only after the command succeeds. Browser events remain untrusted UI input;
+backend facts must be emitted from Go handlers with `EmitDomain`,
+`EmitIntegration`, or `EmitPresentation`.
+
+The repository example is `examples/contracts/`:
+
+```sh
+go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go \
+  --out /tmp/gowdk-contracts-build \
+  --app /tmp/gowdk-contracts-app \
+  --bin /tmp/gowdk-contracts-site \
+  examples/contracts/patients.page.gwdk
+```
+
+Verify adapter metadata through the build report:
+
+```sh
+grep -F '"name": "patients.CreatePatient"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"kind": "command"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"path": "/contracts/patients"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"guards": "public"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"name": "patients.GetPatientPage"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"kind": "query"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+```
+
 ## Observability
 
 `runtime/contracts` exposes stable operation names and labels for logs,
@@ -300,7 +392,10 @@ err := contracts.RunEventWorker(ctx, r, PatientEventSource{})
 successful subscriber replay, calls `Nack` when subscriber replay fails, stops
 cleanly when the source returns `ErrEventSourceClosed`, and returns the context
 error when `ctx` is canceled. `RunEventWorkerForRole` can be used for another
-runtime role.
+runtime role. `ErrEventSourceClosed` means a finite source drained cleanly, as
+with the file outbox or in-memory broker; long-lived brokers such as Redis
+Streams and NATS should keep blocking until the worker context is canceled or
+the adapter is genuinely closed.
 
 Generated command routes use the same event-plumbing boundary through one
 configurable sink:
@@ -357,6 +452,11 @@ err := gowdkapp.RunContractEventWorker(ctx, source)
 `NewContractRegistry` creates a fresh registry using the scanned registration
 functions. `RunContractEventWorker` replays an `EventSource` through the same
 registrations with the worker role.
+
+These helpers are deliberately local process APIs. Generated apps do not yet
+emit separate worker or cron binaries, supervisor configs, queue topology, or
+managed deployment recipes. Use them from the generated binary, a user-owned
+command, or a test fixture until split worker generation is designed.
 
 Dependency-free adapters:
 
@@ -741,4 +841,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   do not replace normal static, SPA, or SSR page responses.
 - Cross-package contract input field discovery remains planned.
 - Retry backoff policy, split web/worker/cron binaries, and managed deployment
-  recipes remain planned.
+  recipes remain planned. Split worker generation is blocked on stable local
+  command/query adapters, generated registry/replay helper usage, durable
+  outbox/broker policy, retry/backoff semantics, and deployment supervision
+  docs. Cron generation is blocked on the same runtime role policy plus
+  schedule ownership, overlap prevention, failure reporting, and restart
+  behavior. M6 does not make a production-readiness claim for either path.

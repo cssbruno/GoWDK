@@ -156,14 +156,18 @@ func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch
 		}
 		store.setPendingFirst(false)
 	}
-	batch, ok, err := store.readBatch(ctx, ">")
-	if err != nil {
-		return contracts.EventBatch{}, err
+	for {
+		batch, ok, err := store.readBatch(ctx, ">")
+		if err != nil {
+			return contracts.EventBatch{}, err
+		}
+		if ok {
+			return batch, nil
+		}
+		if err := ctx.Err(); err != nil {
+			return contracts.EventBatch{}, err
+		}
 	}
-	if !ok {
-		return contracts.EventBatch{}, contracts.ErrEventSourceClosed
-	}
-	return batch, nil
 }
 
 func (store *Store) pendingFirst() bool {

@@ -12,6 +12,27 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
+func TestSamePackageImportPathSurfacesGoListError(t *testing.T) {
+	// A temp dir outside any Go module makes `go list` fail with a clear reason
+	// (no go.mod), which must be surfaced rather than collapsed into a generic
+	// "requires a buildable Go package" message.
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "page.go"), []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := samePackageImportPath(filepath.Join(root, "home.page.gwdk"))
+	if err == nil {
+		t.Fatal("expected a same-package build data error outside a Go module")
+	}
+	if !strings.Contains(err.Error(), "buildable Go package") {
+		t.Fatalf("expected the user-facing message, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "go.mod") {
+		t.Fatalf("expected the underlying go list error (go.mod not found) to be surfaced, got: %v", err)
+	}
+}
+
 func TestBuildRendersLiteralBuildData(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{

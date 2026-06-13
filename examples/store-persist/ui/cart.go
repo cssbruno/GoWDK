@@ -3,9 +3,11 @@
 package ui
 
 // CartState is the cart store's Go type. When the page store opts into
-// persist "local", only these declared fields are written to browser storage.
+// persist "local", only these declared fields are written to browser storage,
+// keyed by their exported Go field name (so the seed and persisted blob use
+// "Count", not a json tag).
 type CartState struct {
-	Count int `json:"count"`
+	Count int
 }
 
 // NewCartState is the build-time initializer for the cart store.

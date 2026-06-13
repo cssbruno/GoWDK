@@ -28,7 +28,7 @@ The generated `shop/index.html` carries the persist config on the store seed:
 <script type="application/json" data-gowdk-store="cart"
   data-gowdk-persist="local"
   data-gowdk-persist-key="gowdk:store:cart"
-  data-gowdk-persist-version="…">{"count":0}</script>
+  data-gowdk-persist-version="…">{"Count":0}</script>
 ```
 
 and `assets/gowdk/islands/stores.js` hydrates the store from `localStorage` on

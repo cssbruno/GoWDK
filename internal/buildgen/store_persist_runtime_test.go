@@ -194,6 +194,54 @@ assert.ok(adopted && adopted.Items === 2, "adopting persistence notifies subscri
 r.set("wishlist", { Items: 7 });
 assert.equal(JSON.parse(localStorage.getItem("gowdk:store:wishlist")).s.Items, 7, "after adoption, set() writes through to storage");
 
+// 10. A later route re-declares an existing persisted store with a different
+// shape and version. The runtime must re-seed to the new field set and discard
+// storage written under the old version, so the current route's islands read the
+// fields they declared instead of the prior route's (build-time
+// page_store_persist_key_conflict warns on the divergence).
+localStorage.setItem("gowdk:store:profile", JSON.stringify({ v: "a1", s: { Name: "ada", Theme: "dark" } }));
+global.document.querySelectorAll = () => [{
+  getAttribute(name) {
+    if (name === "data-gowdk-store") return "profile";
+    if (name === "data-gowdk-persist") return "local";
+    if (name === "data-gowdk-persist-key") return "gowdk:store:profile";
+    if (name === "data-gowdk-persist-version") return "a1";
+    return null;
+  },
+  get textContent() { return '{"Name":"","Theme":"light"}'; }
+}];
+r.hydrate();
+assert.equal(r.get("profile").Theme, "dark", "precondition: restored saved value under version a1");
+let reseeded = null;
+r.subscribe("profile", (next) => { reseeded = next; });
+global.document.querySelectorAll = () => [{
+  getAttribute(name) {
+    if (name === "data-gowdk-store") return "profile";
+    if (name === "data-gowdk-persist") return "local";
+    if (name === "data-gowdk-persist-key") return "gowdk:store:profile";
+    if (name === "data-gowdk-persist-version") return "a2";
+    return null;
+  },
+  get textContent() { return '{"Name":"","Density":"cozy"}'; }
+}];
+r.hydrate();
+assert.equal(r.get("profile").Density, "cozy", "shape/version change re-seeds to the new field set");
+assert.ok(!("Theme" in r.get("profile")), "the dropped field is gone after a re-seed");
+assert.equal(JSON.parse(localStorage.getItem("gowdk:store:profile") || "{}").v, "a1", "stale storage stays under the old version until the next write");
+assert.ok(reseeded && reseeded.Density === "cozy", "a shape/version change notifies subscribers");
+r.set("profile", { Name: "ada", Density: "compact" });
+assert.equal(JSON.parse(localStorage.getItem("gowdk:store:profile")).v, "a2", "after a re-seed, writes persist under the new version");
+
+// 11. A storage event from a different storage area must be ignored so local and
+// session stores that share a key cannot cross-contaminate.
+global.document.querySelectorAll = () => [makeNode()];
+r = boot();
+r.set("cart", { Count: 1, Open: false });
+storageListeners[0]({ key: "gowdk:store:cart", newValue: JSON.stringify({ v: "v1", s: { Count: 99, Open: true } }), storageArea: sessionStorage });
+assert.equal(r.get("cart").Count, 1, "a storage event from a different area (session) is ignored by a local store");
+storageListeners[0]({ key: "gowdk:store:cart", newValue: JSON.stringify({ v: "v1", s: { Count: 99, Open: true } }), storageArea: localStorage });
+assert.equal(r.get("cart").Count, 99, "a storage event from the matching area is applied");
+
 console.log("OK");
 `
 }

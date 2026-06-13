@@ -77,14 +77,22 @@ func validatePersistedStoreConflicts(pages []gwdkir.Page) []ValidationError {
 	return diagnostics
 }
 
+// persistedStoreSignature folds in the resolved struct's full field-type map
+// (every top-level and nested path, keyed by name) so the conflict signature
+// tracks the same Go-shape inputs as buildgen.storeSchemaHash, which seeds the
+// runtime persist version. Comparing only top-level fields would miss a nested
+// shape change that still rotates the version hash and makes the runtime discard
+// the other page's saved value. The reflective seed encoder keys JSON by Go
+// field name, so the on-wire keys storeSchemaHash also folds in equal the
+// top-level field names already covered here.
 func persistedStoreSignature(page gwdkir.Page, store gwdkir.Store) string {
 	resolved, err := gotypes.ResolveStruct(page.Imports, store.Type)
 	if err != nil {
 		return ""
 	}
-	parts := make([]string, 0, len(resolved.Fields))
-	for _, field := range resolved.Fields {
-		parts = append(parts, field.Name+":"+field.Type)
+	parts := make([]string, 0, len(resolved.FieldTypes))
+	for name, fieldType := range resolved.FieldTypes {
+		parts = append(parts, name+":"+fieldType)
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, ",")

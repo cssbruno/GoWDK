@@ -80,10 +80,18 @@ the JSON report or running a strict production build:
 - `unexported_backend_handler` — a same-named Go function exists but is not
   exported, so binding cannot see it (for example `func submit` when the block
   expects `Submit`).
+- `ambiguous_backend_handler` — the same handler is declared in both
+  same-package Go and an inline `go {}` block. (When both live in the same
+  compiled package, Go's own redeclaration error surfaces first.)
 
 A handler with no candidate function stays silent because the default workflow
 generates 501 stubs for not-yet-implemented handlers; strict production builds
 still fail closed through `backend_binding_required`.
+
+When the sibling Go package fails to compile, binding does not fall back to an
+inline `go {}` block and report a misleading bound handler: the load/action/API
+binding stays "could not be inspected" and the package error itself is reported
+by `go_package_error`.
 
 ## Load Functions
 

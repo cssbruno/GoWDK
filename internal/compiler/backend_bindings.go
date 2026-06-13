@@ -53,25 +53,23 @@ func computeBackendBindings(ir gwdkir.Program) []source.BackendBinding {
 			bindings = append(bindings, bindLoad(page, pkg))
 		}
 		for _, action := range page.Blocks.Actions {
-			binding := bindAction(page, action, pkg)
-			if binding.Status == source.BackendBindingMissing {
-				binding = preferInlineBinding(binding, bindAction(page, action, defaultInlinePkg()))
-			}
-			bindings = append(bindings, binding)
+			inlinePkg := defaultInlinePkg()
+			bindings = append(bindings, resolveBackendBinding(
+				bindAction(page, action, pkg),
+				bindAction(page, action, inlinePkg),
+				pkg, inlinePkg, action.Name,
+			))
 		}
 		for _, api := range page.Blocks.APIs {
-			binding := bindAPI(page, api, pkg)
-			if binding.Status == source.BackendBindingMissing {
-				binding = preferInlineBinding(binding, bindAPI(page, api, defaultInlinePkg()))
-			}
-			bindings = append(bindings, binding)
+			inlinePkg := defaultInlinePkg()
+			bindings = append(bindings, resolveBackendBinding(
+				bindAPI(page, api, pkg),
+				bindAPI(page, api, inlinePkg),
+				pkg, inlinePkg, api.Name,
+			))
 		}
 		for _, fragment := range page.Blocks.Fragments {
-			if binding, ok := bindFragment(page, fragment, pkg); ok {
-				bindings = append(bindings, binding)
-			} else if binding, ok := bindFragment(page, fragment, defaultInlinePkg()); ok {
-				bindings = append(bindings, binding)
-			} else if binding, ok := bindMissingFragmentCandidate(page, fragment, pkg, defaultInlinePkg()); ok {
+			if binding, ok := resolveFragmentBinding(page, fragment, pkg, defaultInlinePkg()); ok {
 				bindings = append(bindings, binding)
 			}
 		}
@@ -104,37 +102,51 @@ func computeBackendBindings(ir gwdkir.Program) []source.BackendBinding {
 
 func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {
 	functionName := loadFunctionName(page.ID)
-	if function, ok := pkg.Functions[functionName]; ok {
-		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
-		if !function.Load() {
-			binding.Status = source.BackendBindingUnsupportedSignature
-			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", bindingPackageLabel(binding, pkg), functionName)
-			return binding
-		}
-		binding.Signature = function.Signature
-		binding.Status = source.BackendBindingBound
-		return binding
-	}
-	inlinePkg := inspectInlineScriptFeaturePackage(page, "ssr")
-	if function, ok := inlinePkg.Functions[functionName]; ok {
-		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, inlinePkg)
-		if !function.Load() {
-			binding.Status = source.BackendBindingUnsupportedSignature
-			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", bindingPackageLabel(binding, inlinePkg), functionName)
-			return binding
-		}
-		binding.Signature = function.Signature
-		binding.Status = source.BackendBindingBound
-		return binding
-	}
-	binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
-	binding.Status = source.BackendBindingMissing
+	// A broken same-package Go package cannot be inspected: surface that instead
+	// of falling back to an inline go ssr {} block and reporting a misleading
+	// bound status. The broken package itself is reported by go_package_error.
 	if pkg.LoadError != "" {
+		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
+		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s could not be inspected: %s", bindingPackageLabel(binding, pkg), functionName, pkg.LoadError)
 		return binding
 	}
-	binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), functionName)
-	return markUnexportedCandidate(binding, pkg)
+	inlinePkg := inspectInlineScriptFeaturePackage(page, "ssr")
+	_, inSame := pkg.Functions[functionName]
+	_, inInline := inlinePkg.Functions[functionName]
+	switch {
+	case inSame && inInline:
+		binding := bindLoadFromPackage(page, functionName, pkg)
+		binding.Ambiguous = true
+		binding.Message = ambiguousHandlerMessage(loadHandlerKind, functionName)
+		return binding
+	case inSame:
+		return bindLoadFromPackage(page, functionName, pkg)
+	case inInline:
+		return bindLoadFromPackage(page, functionName, inlinePkg)
+	default:
+		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
+		binding.Status = source.BackendBindingMissing
+		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), functionName)
+		binding = markUnexportedCandidate(binding, pkg)
+		if !binding.UnexportedCandidate {
+			binding = markUnexportedCandidate(binding, inlinePkg)
+		}
+		return binding
+	}
+}
+
+func bindLoadFromPackage(page gwdkir.Page, functionName string, pkg featurePackage) source.BackendBinding {
+	binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
+	function := pkg.Functions[functionName]
+	if !function.Load() {
+		binding.Status = source.BackendBindingUnsupportedSignature
+		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", bindingPackageLabel(binding, pkg), functionName)
+		return binding
+	}
+	binding.Signature = function.Signature
+	binding.Status = source.BackendBindingBound
+	return binding
 }
 
 func bindStandaloneAction(endpoint gwdkir.GoEndpoint, pkg featurePackage) source.BackendBinding {
@@ -298,6 +310,74 @@ func baseStandaloneBackendBinding(endpoint gwdkir.GoEndpoint, kind, method strin
 		FunctionName: endpoint.Name,
 		Status:       source.BackendBindingMissing,
 	}
+}
+
+// resolveBackendBinding chooses the binding for an action/api block across its
+// two possible Go sources — sibling same-package code and the inline default
+// go {} block — without masking failures:
+//
+//   - When the same-package package failed to compile (LoadError), the
+//     could-not-inspect binding is kept instead of falling back to the inline
+//     result, so a broken package never looks bound. The compile error itself is
+//     reported by go_package_error.
+//   - When the handler is declared in BOTH sources it is ambiguous: the binding
+//     is flagged so tooling reports the conflict instead of silently preferring
+//     one source.
+//   - Otherwise the source that actually declares the handler wins, and when
+//     neither does, an unexported near-miss in either source is surfaced.
+func resolveBackendBinding(samePackage, inline source.BackendBinding, samePkg, inlinePkg featurePackage, name string) source.BackendBinding {
+	if samePkg.LoadError != "" {
+		return samePackage
+	}
+	inSame := packageHasFunction(samePkg, name)
+	inInline := packageHasFunction(inlinePkg, name)
+	switch {
+	case inSame && inInline:
+		out := samePackage
+		out.Ambiguous = true
+		out.Message = ambiguousHandlerMessage(out.Kind, name)
+		return out
+	case inSame:
+		return samePackage
+	case inInline:
+		return inline
+	default:
+		return preferInlineBinding(samePackage, inline)
+	}
+}
+
+// resolveFragmentBinding mirrors resolveBackendBinding for fragments, which
+// never require a Go handler: a fragment with no bound handler renders static
+// .gwdk output. It returns ok=false (no binding, static) unless a handler is
+// declared, ambiguous, or only present as an unexported near-miss.
+func resolveFragmentBinding(page gwdkir.Page, fragment gwdkir.FragmentEndpoint, samePkg, inlinePkg featurePackage) (source.BackendBinding, bool) {
+	if samePkg.LoadError != "" {
+		return source.BackendBinding{}, false
+	}
+	inSame := packageHasFunction(samePkg, fragment.Name)
+	inInline := packageHasFunction(inlinePkg, fragment.Name)
+	switch {
+	case inSame && inInline:
+		binding, _ := bindFragment(page, fragment, samePkg)
+		binding.Ambiguous = true
+		binding.Message = ambiguousHandlerMessage(fragmentHandlerKind, fragment.Name)
+		return binding, true
+	case inSame:
+		return bindFragment(page, fragment, samePkg)
+	case inInline:
+		return bindFragment(page, fragment, inlinePkg)
+	default:
+		return bindMissingFragmentCandidate(page, fragment, samePkg, inlinePkg)
+	}
+}
+
+func packageHasFunction(pkg featurePackage, name string) bool {
+	_, ok := pkg.Functions[name]
+	return ok
+}
+
+func ambiguousHandlerMessage(kind, name string) string {
+	return fmt.Sprintf("GOWDK %s handler %s is declared in both same-package Go and an inline go {} block; declare it in exactly one source", kind, name)
 }
 
 // preferInlineBinding resolves an action/api block that did not bind in its

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -309,7 +310,13 @@ func inspectSamePackageImportPath(sourcePath string) (string, error) {
 	command.Dir = dir
 	output, err := command.Output()
 	if err != nil {
-		return "", fmt.Errorf("same-package build data function requires a buildable Go package for %s", dir)
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			if stderr := strings.TrimSpace(string(exit.Stderr)); stderr != "" {
+				return "", fmt.Errorf("same-package build data function requires a buildable Go package for %s: %w\n%s", dir, err, stderr)
+			}
+		}
+		return "", fmt.Errorf("same-package build data function requires a buildable Go package for %s: %w", dir, err)
 	}
 	var info struct {
 		ImportPath string

@@ -249,16 +249,16 @@ Every 0.x minor release must have:
 - [x] Prevent secret values in diagnostics and logs.
 - [x] Add log redaction for cookies, auth headers, CSRF tokens, passwords,
   secrets, sensitive form fields, and sensitive query params.
-- [ ] Add secure headers middleware or docs for `X-Content-Type-Options`,
+- [x] Add secure headers middleware or docs for `X-Content-Type-Options`,
   `Referrer-Policy`, `Content-Security-Policy`, frame policy, and optional
   HSTS.
-- [ ] Add cookie helper docs for `HttpOnly`, `Secure`, `SameSite`, path, and
+- [x] Add cookie helper docs for `HttpOnly`, `Secure`, `SameSite`, path, and
   domain policy.
 - [ ] Add safe redirect allowlists, open redirect tests, and unsafe external
   redirect diagnostics.
 - [ ] Add embedded secret exclusion tests for `.env`, source maps with secrets,
   private files, and temporary artifacts.
-- [ ] Add reverse proxy, TLS termination, request ID, health endpoint, and
+- [x] Add reverse proxy, TLS termination, request ID, health endpoint, and
   metrics endpoint security policy docs.
 
 ## Compiler Spine

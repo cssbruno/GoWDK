@@ -181,6 +181,72 @@ server {
 Configure trusted proxy behavior in app-owned middleware when handlers depend
 on forwarded IP, host, or scheme values.
 
+## Security Headers
+
+Generated binaries do not currently install a global security-header middleware.
+Set edge security headers in the reverse proxy or app-owned middleware before
+making request-time routes public:
+
+- `X-Content-Type-Options: nosniff`.
+- `Referrer-Policy: strict-origin-when-cross-origin` for most sites, or
+  `no-referrer` for apps with sensitive URLs.
+- `Content-Security-Policy` scoped to the app's real asset needs. Start from
+  `default-src 'self'`; add only the script, style, image, font, connect, WASM,
+  and API origins the generated app and user code actually use.
+- Frame policy through `Content-Security-Policy: frame-ancestors 'none'` or
+  `'self'`. Use `X-Frame-Options: DENY` or `SAMEORIGIN` only as a compatibility
+  header for older clients.
+- `Strict-Transport-Security` only at the HTTPS edge, after TLS, redirects, and
+  rollback behavior are verified. Do not send HSTS from local HTTP dev servers.
+
+Preserve generated `Cache-Control: no-store` responses for actions, APIs,
+fragments, SSR failures, generated errors, and CSRF-mutated HTML.
+
+## Cookie Policy
+
+Generated CSRF cookies use `HttpOnly`, `Secure`, and `SameSite=Lax` by default.
+`Build.CSRF.Insecure` is only for local HTTP development and disables the
+`Secure` flag because browsers reject secure-prefixed cookies over plain HTTP.
+
+Application-owned cookies remain application-owned. When handlers use
+`runtime/response.WithCookie`, `http.SetCookie`, or addon helpers, set:
+
+- `HttpOnly` for cookies that JavaScript should not read.
+- `Secure` for every non-local deployment.
+- `SameSite=Lax` or `SameSite=Strict` unless a cross-site flow explicitly needs
+  `SameSite=None; Secure`.
+- `Path` to the narrowest route prefix that needs the cookie.
+- `Domain` only when sharing across subdomains is intentional; omit it for
+  host-only cookies.
+- Short, explicit `MaxAge`/`Expires` values for session and action-flow cookies.
+
+Do not store bearer tokens, API keys, private keys, passwords, CSRF secrets, or
+database credentials in client cookies.
+
+## Operations Security
+
+Terminate TLS at the reverse proxy, load balancer, or platform edge. Generated
+binaries should usually bind to `127.0.0.1:<port>` behind that edge on VMs, or
+to `0.0.0.0:<port>` only inside a container or platform network that provides
+the public TLS boundary.
+
+Generate or sanitize request IDs at the trusted edge and pass them through a
+single header such as `X-Request-ID`. Do not trust arbitrary client-supplied
+request IDs for audit or correlation without validation. App-owned middleware
+can attach the trusted request ID to logs and handler context.
+
+Use `/_gowdk/health` for process and artifact identity checks. Treat it as an
+operational endpoint: keep it internal when possible, or expose it only when
+the identity fields and counters are acceptable for public visibility. Do not
+put secrets, tenant data, user data, or database connectivity details in health
+responses.
+
+Generated runtime metrics are process-local counters exposed through
+`runtime/app.Metrics` when the generated handler is configured with a collector.
+Export, scrape, or aggregate them through app-owned telemetry code. Keep metrics
+labels low-cardinality and avoid user identifiers, tokens, submitted values, or
+full URLs with sensitive query strings.
+
 ## Cache Defaults
 
 Generated binaries use explicit cache headers:

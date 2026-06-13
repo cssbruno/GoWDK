@@ -3777,6 +3777,117 @@ func TestValidateManifestAllowsConcreteRouteBesideDynamicPageRoute(t *testing.T)
 	}
 }
 
+func TestValidateManifestRejectsDynamicFragmentEndpointOverlap(t *testing.T) {
+	tests := []struct {
+		name      string
+		fragment  gwdkir.FragmentEndpoint
+		api       gwdkir.API
+		expectMsg []string
+	}{
+		{
+			name:     "dynamic fragment shadows concrete fragment",
+			fragment: gwdkir.FragmentEndpoint{Name: "Summary", Method: "GET", Route: "/patients/summary/vitals", Target: "#vitals"},
+			expectMsg: []string{
+				"/patients/summary/vitals",
+				"fragment patients.Summary",
+				"fragment patients.Vitals",
+			},
+		},
+		{
+			name:      "concrete api shadows dynamic fragment",
+			api:       gwdkir.API{Name: "Summary", Method: "GET", Route: "/patients/summary/vitals"},
+			expectMsg: []string{"/patients/summary/vitals", "api patients.Summary", "fragment patients.Vitals"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			page := gwdkir.Page{
+				ID:     "patients",
+				Route:  "/patients",
+				Blocks: gwdkir.Blocks{View: true},
+			}
+			page.Blocks.Fragments = []gwdkir.FragmentEndpoint{{
+				Name:   "Vitals",
+				Method: "GET",
+				Route:  "/patients/{id:int}/vitals",
+				Target: "#vitals",
+			}}
+			if test.fragment.Name != "" {
+				page.Blocks.Fragments = append(page.Blocks.Fragments, test.fragment)
+			}
+			if test.api.Name != "" {
+				page.Blocks.APIs = append(page.Blocks.APIs, test.api)
+			}
+
+			err := validateManifest(gowdk.Config{}, appFixture{Pages: []gwdkir.Page{page}})
+			if err == nil {
+				t.Fatal("expected ambiguous dynamic route diagnostic")
+			}
+			diagnostics := err.(ValidationErrors)
+			if !hasDiagnosticMessage(diagnostics, "ambiguous_dynamic_route", test.expectMsg...) {
+				t.Fatalf("Missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
+			}
+		})
+	}
+}
+
+func TestValidateManifestRejectsDynamicFragmentContractOverlap(t *testing.T) {
+	program := appFixture{Pages: []gwdkir.Page{{
+		ID:    "patients",
+		Route: "/patients",
+		Blocks: gwdkir.Blocks{View: true, Fragments: []gwdkir.FragmentEndpoint{{
+			Name:   "Vitals",
+			Method: "GET",
+			Route:  "/patients/{id:int}/vitals",
+			Target: "#vitals",
+		}}},
+	}}}.program(gowdk.Config{})
+	program.ContractRefs = append(program.ContractRefs, gwdkir.ContractReference{
+		Kind:      gwdkir.ContractQuery,
+		Name:      "patients.GetVitals",
+		Method:    "GET",
+		Path:      "/patients/42/vitals",
+		OwnerKind: gwdkir.SourcePage,
+		OwnerID:   "patients",
+		Source:    "pages/patients.page.gwdk",
+	})
+
+	err := ValidateProgram(gowdk.Config{}, program)
+	if err == nil {
+		t.Fatal("expected ambiguous dynamic route diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticMessage(diagnostics, "ambiguous_dynamic_route", "/patients/42/vitals", "query contract patients.GetVitals", "fragment patients.Vitals") {
+		t.Fatalf("Missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestAllowsDifferentMethodEndpointBesideDynamicFragment(t *testing.T) {
+	app := appFixture{Pages: []gwdkir.Page{{
+		ID:    "patients",
+		Route: "/patients",
+		Blocks: gwdkir.Blocks{
+			View: true,
+			Fragments: []gwdkir.FragmentEndpoint{{
+				Name:   "Vitals",
+				Method: "GET",
+				Route:  "/patients/{id:int}/vitals",
+				Target: "#vitals",
+			}},
+			Actions: []gwdkir.Action{{
+				Name:   "SaveVitals",
+				Method: "POST",
+				Route:  "/patients/summary/vitals",
+			}},
+		},
+	}}}
+
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected different methods to be valid, got %v", err)
+	}
+}
+
 func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 	t.Run("multiple actions on one route", func(t *testing.T) {
 		app := appFixture{
@@ -4111,24 +4222,44 @@ func TestValidatePageRouteDiagnosticsUseExactSpans(t *testing.T) {
 		assertSourceSpan(t, diagnostic.Span, 9, 21, 9, 30)
 	})
 
-	t.Run("fragment dynamic route", func(t *testing.T) {
+	t.Run("fragment malformed param type", func(t *testing.T) {
 		page := page
 		page.Blocks.Fragments = []gwdkir.FragmentEndpoint{{
 			Name:        "Preview",
 			Method:      "GET",
-			Route:       "/preview/{id}",
+			Route:       "/preview/{id:uuid}",
 			Span:        testSourceSpan(12, 1, 12, 34),
-			RouteSpan:   testSourceSpan(12, 20, 12, 35),
-			RouteParams: []source.NamedSpan{{Name: "id", Span: testSourceSpan(12, 29, 12, 33)}},
+			RouteSpan:   testSourceSpan(12, 20, 12, 40),
+			RouteParams: []source.NamedSpan{{Name: "id", Span: testSourceSpan(12, 29, 12, 38)}},
 		}}
 
 		diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
-		diagnostic := firstDiagnostic(diagnostics, "fragment_dynamic_route")
+		diagnostic := firstDiagnostic(diagnostics, "malformed_route")
 		if diagnostic == nil {
-			t.Fatalf("Missing fragment_dynamic_route diagnostic: %#v", diagnostics)
+			t.Fatalf("Missing malformed_route diagnostic: %#v", diagnostics)
 		}
-		assertSourceSpan(t, diagnostic.Span, 12, 29, 12, 33)
+		assertSourceSpan(t, diagnostic.Span, 12, 29, 12, 38)
 	})
+}
+
+func TestValidatePageAllowsDynamicFragmentRouteParams(t *testing.T) {
+	page := gwdkir.Page{
+		ID:     "patients",
+		Route:  "/patients",
+		Blocks: gwdkir.Blocks{View: true},
+	}
+	page.Blocks.Fragments = []gwdkir.FragmentEndpoint{{
+		Name:        "Vitals",
+		Method:      "GET",
+		Route:       "/patients/{id:int}/vitals",
+		Target:      "#vitals",
+		RouteParams: []source.NamedSpan{{Name: "id", Span: testSourceSpan(6, 20, 6, 28)}},
+	}}
+
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	if hasDiagnosticCode(diagnostics, "malformed_route") {
+		t.Fatalf("dynamic fragment route should be valid, got %#v", diagnostics)
+	}
 }
 
 func TestValidatePageRejectsRevalidateWithoutCache(t *testing.T) {

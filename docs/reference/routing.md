@@ -66,13 +66,13 @@ Rest param contract:
   Go through `app.Params(ctx)` and `route.Required(params, "name")`.
 - Rest params are always strings. Typed rest params such as `{path...:int}` are
   rejected.
-- Rest params require request-time (SSR) rendering, because build-time SPA
-  paths cannot enumerate and escape multi-segment values. Declare `load {}` or
-  `go ssr {}` on the page.
-- Rest params are only supported on page routes; action, API, fragment, and Go
-  comment endpoint paths reject them. An action or API that omits its path
-  inherits the page route, so inline endpoints on a rest page are rejected the
-  same way unless they declare their own concrete path.
+- Rest params require request-time (SSR) rendering when used on page routes,
+  because build-time SPA paths cannot enumerate and escape multi-segment
+  values. Declare `load {}` or `go ssr {}` on the page.
+- Rest params are supported on request-time fragment endpoint routes. Action,
+  API, and Go comment endpoint paths reject rest params. An action or API that
+  omits its path inherits the page route, so inline endpoints on a rest page
+  are rejected the same way unless they declare their own concrete path.
 - Rest routes participate in ambiguity validation: `/docs/{path...}` overlaps
   `/docs/{slug}`, `/docs/{section}/{slug}`, and concrete routes such as
   `/docs/guides/intro`, so those combinations are rejected as
@@ -314,12 +314,13 @@ gowdk build --ssr --out /tmp/gowdk-ssr-build \
 ```
 
 Dynamic SSR route params render through generated placeholders and request-time
-HTML escaping. Params can be declared as `{name}`, `{name:type}`, or — as the
-final segment only — `{name...}` (always a string). Supported
-types are `string`, `int`, `int64`, `uint`, `uint64`, `bool`, and `float64`.
-Generated SSR handlers attach route metadata through `runtime/app.Route(ctx)`,
-raw dynamic params through `runtime/app.Params(ctx)`, and decoded typed params
-through `runtime/app.TypedParams(ctx)`.
+HTML escaping. Dynamic fragment endpoint params are attached to fragment hook
+contexts. Params can be declared as `{name}`, `{name:type}`, or — as the final
+segment only — `{name...}` (always a string). Supported types are `string`,
+`int`, `int64`, `uint`, `uint64`, `bool`, and `float64`. Generated SSR handlers
+attach route metadata through `runtime/app.Route(ctx)`. Generated SSR and
+fragment handlers attach raw dynamic params through `runtime/app.Params(ctx)`
+and decoded typed params through `runtime/app.TypedParams(ctx)`.
 
 There are no generated per-route param struct types yet. Request-time user code
 should use `app.Params(ctx)`, `app.TypedParams(ctx)`, or the `runtime/route`
@@ -343,8 +344,9 @@ _ = id
 The helpers support `String`, `Int`, `Int64`, `Uint`, `Uint64`, `Bool`, and
 `Float64`. `Required` returns a missing-param error when a required param is not
 present. Decode errors name the param and expected type without echoing the raw
-request value. Generated typed SSR bindings return `400` for invalid typed route
-params and `404` for missing route params before guards or page rendering run.
+request value. Generated typed SSR and fragment bindings return `400` for
+invalid typed route params and `404` for missing route params before guards,
+page rendering, or fragment hooks run.
 
 Endpoint user code can read generated endpoint metadata with
 `runtime/app.Endpoint(ctx)`. This is the stable accessor for action, API, and
@@ -379,12 +381,13 @@ fragment declaration, and routable `g:command`/`g:query` contract reference.
 Endpoint records include `endpointSource` (`gwdk`, `go`, or `contract`), source
 file and source span, `.gwdk` package, Go package path/name when known, exact
 declared symbol or contract reference, method, path, no-store backend cache
-policy, inherited guards, CSRF applicability, planned adapter handler
-information, and binding status/message. Backend binding details repeat the Go
-package name, import path when known, handler symbol, and supported
-signature/input metadata when the handler is bound. Contract binding details
-include the contract kind, reference name, binding status, local input type,
-result type, roles, handler, register function, and message when known. The
+policy, inherited guards, CSRF applicability, route params when declared,
+planned adapter handler information, and binding status/message. Backend
+binding details repeat the Go package name, import path when known, handler
+symbol, and supported signature/input metadata when the handler is bound.
+Contract binding details include the contract kind, reference name, binding
+status, local input type, result type, roles, handler, register function, and
+message when known. The
 `info` list reports disabled route-mode lanes, for example SSR disabled on a
 SPA route.
 

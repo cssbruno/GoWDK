@@ -51,6 +51,8 @@ type endpointBindingJSON struct {
 	Method         string                `json:"method"`
 	Route          string                `json:"route"`
 	Cache          string                `json:"cache,omitempty"`
+	DynamicParams  []string              `json:"dynamicParams,omitempty"`
+	RouteParams    []routeParamJSON      `json:"routeParams,omitempty"`
 	Guards         []string              `json:"guards,omitempty"`
 	CSRF           bool                  `json:"csrf,omitempty"`
 	PageID         string                `json:"pageId"`
@@ -163,6 +165,8 @@ func endpointsJSON(bindings []compiler.EndpointBinding) []endpointBindingJSON {
 			Method:         binding.Method,
 			Route:          binding.Route,
 			Cache:          binding.Cache,
+			DynamicParams:  append([]string(nil), binding.DynamicParams...),
+			RouteParams:    routeParamsJSON(binding.RouteParams),
 			Guards:         append([]string(nil), binding.Guards...),
 			CSRF:           binding.CSRF,
 			PageID:         binding.PageID,

@@ -143,10 +143,12 @@ Implemented today:
 - Generated apps can return partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests and standalone
   `fragment Name GET "/path" "#target" { ... }` routes. Standalone fragment
-  bodies can expand known components at app generation time. If the source
-  package exports `func Name(context.Context) (response.Response, error)`, the
-  generated fragment handler calls that request-time hook instead of the static
-  fallback.
+  routes can be concrete or dynamic; dynamic fragment route params are matched
+  with `runtime/route` and exposed to hooks through `runtime/app.Params(ctx)`
+  and `runtime/app.TypedParams(ctx)`. Standalone fragment bodies can expand
+  known components at app generation time. If the source package exports
+  `func Name(context.Context) (response.Response, error)`, the generated
+  fragment handler calls that request-time hook instead of the static fallback.
 - Generated app action endpoint extraction rejects direct file inputs and
   multipart `g:post` forms. Uploads belong in user-owned API/server handlers.
 - `internal/compiler` resolves same-package action, API, fragment, and SSR load
@@ -255,7 +257,7 @@ requests, applies `http.Server` defaults of `ReadHeaderTimeout: 5s`,
 `MaxHeaderBytes: 1 MiB`, maps extensionless routes to nested `index.html`
 files, and does not list directories. It exposes `/_gowdk/health` and adds
 `X-GOWDK-App`, `X-GOWDK-Module`, and `X-GOWDK-Instance-ID` headers to responses.
-Request-time action/API dispatch registers generated backend routes with
+Request-time action/API/fragment dispatch registers generated backend routes with
 `runtime/app.BackendRouter` and passes the router hook into `runtime/app`.
 Generated action/API body caps default to 1 MiB and use `Build.BodyLimits`
 overrides when configured. Older separate action/API hook fields remain a

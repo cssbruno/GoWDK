@@ -59,7 +59,7 @@ var missingUseFix = &Fix{
 var Registry = []Code{
 	{Code: "addon_go_block_diagnostic", Area: "go-block", Stability: StabilityAddon, Severity: SeverityError, Summary: "addon-provided go block diagnostic without a custom code"},
 	{Code: "ambiguous_backend_handler", Area: "backend", Stability: StabilityStable, Severity: SeverityWarning, Summary: "a backend handler is declared in both same-package Go and an inline go block"},
-	{Code: "ambiguous_dynamic_route", Area: "routing", Stability: StabilityStable, Severity: SeverityError, Summary: "dynamic page route overlaps another dynamic page route"},
+	{Code: "ambiguous_dynamic_route", Area: "routing", Stability: StabilityStable, Severity: SeverityError, Summary: "dynamic route pattern overlaps another route pattern"},
 	{Code: "backend_binding_required", Area: "backend", Stability: StabilityStable, Severity: SeverityError, Summary: "strict builds require a supported backend handler binding"},
 	{Code: "client_go_block_wasm_build_error", Area: "wasm", Stability: StabilityExperimental, Severity: SeverityError, Summary: "page go client WASM build failed"},
 	{Code: "client_go_block_wasm_entrypoint_error", Area: "wasm", Stability: StabilityExperimental, Severity: SeverityError, Summary: "page go client WASM entrypoint is missing or invalid"},
@@ -97,7 +97,6 @@ var Registry = []Code{
 	{Code: "duplicate_route", Area: "routing", Stability: StabilityStable, Severity: SeverityError, Summary: "page route pattern is duplicated"},
 	{Code: "duplicate_route_param", Area: "routing", Stability: StabilityStable, Severity: SeverityError, Summary: "route declares the same param more than once"},
 	{Code: "env_name_required", Area: "config", Stability: StabilityStable, Severity: SeverityError, Summary: "environment variable contract entry is missing a name"},
-	{Code: "fragment_dynamic_route", Area: "partials", Stability: StabilityExperimental, Severity: SeverityError, Summary: "fragment endpoint path is dynamic, which is not supported yet"},
 	{Code: "generated_app_import_cycle", Area: "generated-go", Stability: StabilityStable, Severity: SeverityError, Summary: "generated app would import itself through user code"},
 	{Code: "go_client_requires_page", Area: "go-block", Stability: StabilityExperimental, Severity: SeverityError, Summary: "go client block was declared outside a page"},
 	{Code: "go_endpoint_parse_error", Area: "backend", Stability: StabilityStable, Severity: SeverityError, Summary: "Go endpoint comment scan failed to parse a Go file"},

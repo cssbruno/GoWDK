@@ -9,7 +9,7 @@ GOWDK's current hook model is small and `net/http`-first.
 | Generated app handler | `http.Handler` | Wrap with normal Go middleware in app startup. |
 | Guards | `runtime/guard.Registry`, `runtime/auth.Provider` | Generated action, API, fragment, and SSR routes with `guard`. |
 | Rate limiting | `*ratelimit.Limiter` | Generated action, API, fragment, SSR, and split-backend proxy routes when the addon is enabled. |
-| Handler context | `context.Context` | User handlers read request metadata through `runtime/app` helpers. |
+| Handler context | `context.Context` | User handlers read request metadata, raw route params, and typed route params through `runtime/app` helpers. |
 
 Generated apps expose `Handler() (http.Handler, error)` and
 `ServeMux() (*http.ServeMux, error)`. App-owned startup code can wrap the
@@ -116,8 +116,37 @@ contract):
 - Guard errors fail closed with HTTP 403.
 - Guards run before action decoding, API handler calls, fragment hooks, SSR
   `load {}`, and user business logic.
-- Guards return `nil` or `error` today. Redirect/custom response guard results
-  are planned.
+- Guards return `nil` or `error`. Ordinary errors fail closed with HTTP 403.
+  `runtime/guard.RedirectTo`, `runtime/guard.Redirect`, and
+  `runtime/guard.Respond` are the explicit no-store redirect/custom-response
+  helpers for guard failures.
+
+Guard redirect and response helpers keep the guard signature small while making
+the few intentional non-403 outcomes visible in code:
+
+```go
+import (
+	"net/http"
+
+	gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
+	gowdkresponse "github.com/cssbruno/gowdk/runtime/response"
+)
+
+func GOWDKGuardRegistry() gowdkguard.Registry {
+	return gowdkguard.Registry{
+		"auth.required": func(ctx gowdkguard.Context) error {
+			return gowdkguard.RedirectTo("/login")
+		},
+		"api.auth": func(ctx gowdkguard.Context) error {
+			return gowdkguard.Respond(gowdkresponse.JSONBody(http.StatusUnauthorized, `{"error":"login required"}`))
+		},
+	}
+}
+```
+
+Guard redirects must be local absolute paths. Protocol-relative URLs,
+backslashes, newlines, and non-3xx redirect statuses are rejected before the
+generated app can write them.
 
 ## Rate Limiting
 
@@ -134,7 +163,8 @@ user handler logic. If no limiter is registered, requests continue.
 
 Current generated request-time order:
 
-1. Attach route or endpoint context metadata.
+1. Attach route or endpoint context metadata, including raw and typed route
+   params when the route declares them.
 2. Install panic boundary for supported generated lanes.
 3. Run rate limiter when enabled and registered.
 4. Run guards when declared.

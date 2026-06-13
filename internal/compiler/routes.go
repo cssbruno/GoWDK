@@ -65,18 +65,17 @@ func duplicateRouteMessage(route, firstID, firstSource, duplicateID, duplicateSo
 	return message
 }
 
-func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint) []ValidationError {
+func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []ValidationError {
 	var registered []routeRegistration
 	var diagnostics []ValidationError
-	for _, current := range routeRegistrations(pages, endpoints, nil) {
+	for _, current := range routeRegistrations(pages, endpoints, refs) {
 		for _, previous := range registered {
 			if current.Pattern == previous.Pattern {
 				// Exact duplicates are reported by the duplicate-route and
 				// route-method-conflict checks.
 				continue
 			}
-			bothPages := current.Kind == "page" && previous.Kind == "page"
-			if bothPages {
+			if current.Kind == "page" && previous.Kind == "page" {
 				// Dynamic routes are compared against other dynamic routes.
 				// Rest routes match one or more trailing segments, so they
 				// are also compared against concrete routes that share their
@@ -87,12 +86,13 @@ func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page, endpoints []gwdkir.
 					continue
 				}
 			} else {
-				// Endpoints cannot declare rest routes themselves, but a
-				// same-method endpoint inside a rest page's namespace would
-				// shadow part of it at request time, so flag that overlap.
-				restPage := (current.Kind == "page" && patternHasRest(current.Pattern)) ||
-					(previous.Kind == "page" && patternHasRest(previous.Pattern))
-				if !restPage || current.Method != previous.Method {
+				// Same-method endpoints share one generated request-time
+				// namespace with pages. Any dynamic overlap can shadow the
+				// concrete handler that should own a request path.
+				if current.Method != previous.Method {
+					continue
+				}
+				if !patternIsDynamic(current.Pattern) && !patternIsDynamic(previous.Pattern) {
 					continue
 				}
 			}
@@ -113,7 +113,7 @@ func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page, endpoints []gwdkir.
 }
 
 func ambiguousDynamicRouteMessage(current, previous routeRegistration) string {
-	message := fmt.Sprintf("ambiguous dynamic page route %q overlaps %q", current.Route, previous.Route)
+	message := fmt.Sprintf("ambiguous dynamic route %q overlaps %q", current.Route, previous.Route)
 	if current.Owner != "" && previous.Owner != "" {
 		message = fmt.Sprintf("%s; %s could match the same request path as %s", message, current.Owner, previous.Owner)
 	}

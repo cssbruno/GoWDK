@@ -9,6 +9,7 @@ import (
 
 	"github.com/cssbruno/gowdk/runtime/form"
 	"github.com/cssbruno/gowdk/runtime/response"
+	gowdkroute "github.com/cssbruno/gowdk/runtime/route"
 )
 
 // DefaultActionBodyLimit is the generated action request body limit.
@@ -31,9 +32,10 @@ type BackendRoute struct {
 	Handler BackendHandler
 }
 
-// BackendRouter dispatches exact generated backend routes.
+// BackendRouter dispatches generated backend routes.
 type BackendRouter struct {
-	routes map[backendRouteKey]backendRouteEntry
+	routes   map[backendRouteKey]backendRouteEntry
+	patterns []backendPatternRouteEntry
 }
 
 type backendRouteKey struct {
@@ -42,6 +44,12 @@ type backendRouteKey struct {
 }
 
 type backendRouteEntry struct {
+	kind    string
+	handler BackendHandler
+}
+
+type backendPatternRouteEntry struct {
+	key     backendRouteKey
 	kind    string
 	handler BackendHandler
 }
@@ -77,6 +85,15 @@ func (router *BackendRouter) handle(kind string, method string, routePath string
 		return fmt.Errorf("backend route %s %s handler is required", method, routePath)
 	}
 	key := backendRouteKey{method: method, path: normalizeBackendPath(routePath)}
+	if backendRouteIsDynamic(key.path) {
+		for _, route := range router.patterns {
+			if route.key == key {
+				return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
+			}
+		}
+		router.patterns = append(router.patterns, backendPatternRouteEntry{key: key, kind: strings.ToLower(strings.TrimSpace(kind)), handler: BackendBoundary(kind, handler)})
+		return nil
+	}
 	if _, exists := router.routes[key]; exists {
 		return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
 	}
@@ -99,17 +116,38 @@ func (router *BackendRouter) Dispatch(writer http.ResponseWriter, request *http.
 	if router == nil || request == nil {
 		return false
 	}
-	route := router.routes[backendRouteKey{
+	key := backendRouteKey{
 		method: strings.ToUpper(strings.TrimSpace(request.Method)),
 		path:   normalizeBackendPath(request.URL.Path),
-	}]
+	}
+	route := router.routes[key]
 	if route.handler == nil {
-		return false
+		return router.dispatchPattern(writer, request, key.method)
 	}
 	if route.kind == "query" && !isContractQueryRequest(request) {
 		return false
 	}
 	return route.handler(writer, request)
+}
+
+func (router *BackendRouter) dispatchPattern(writer http.ResponseWriter, request *http.Request, method string) bool {
+	for _, route := range router.patterns {
+		if route.key.method != method {
+			continue
+		}
+		if route.kind == "query" && !isContractQueryRequest(request) {
+			continue
+		}
+		if _, ok := gowdkroute.Match(route.key.path, request.URL.Path); !ok {
+			continue
+		}
+		return route.handler(writer, request)
+	}
+	return false
+}
+
+func backendRouteIsDynamic(routePath string) bool {
+	return strings.Contains(routePath, "{") && strings.Contains(routePath, "}")
 }
 
 func isContractQueryRequest(request *http.Request) bool {

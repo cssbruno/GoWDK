@@ -134,6 +134,7 @@ func fragmentEndpointsFromIR(ir gwdkir.Program) ([]FragmentEndpoint, error) {
 				FragmentName: fragment.Name,
 				Method:       method,
 				Route:        strings.TrimSpace(fragment.Route),
+				RouteParams:  gwdkir.RouteParamsFromPath(strings.TrimSpace(fragment.Route)),
 				Target:       fragment.Target,
 				HTML:         html,
 				Package:      page.Package,

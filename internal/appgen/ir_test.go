@@ -114,11 +114,49 @@ func TestFragmentEndpointsFromIR(t *testing.T) {
 	if endpoint.FragmentName != "List" || endpoint.Route != "/patients/list" || endpoint.Target != "#patients" {
 		t.Fatalf("unexpected fragment endpoint: %#v", endpoint)
 	}
+	if len(endpoint.RouteParams) != 0 {
+		t.Fatalf("did not expect static fragment route params, got %#v", endpoint.RouteParams)
+	}
 	if endpoint.HTML != "<section><article>Updated &amp; safe</article></section>" {
 		t.Fatalf("unexpected rendered fragment HTML: %q", endpoint.HTML)
 	}
 	if len(endpoint.Guards) != 1 || endpoint.Guards[0] != "auth.required" {
 		t.Fatalf("expected inherited guards, got %#v", endpoint.Guards)
+	}
+}
+
+func TestFragmentEndpointsFromIRPopulatesRouteParams(t *testing.T) {
+	endpoints, err := fragmentEndpointsFromIR(gwdkir.Program{
+		Version: gwdkir.Version,
+		Pages: []gwdkir.Page{{
+			ID:    "patients",
+			Route: "/patients",
+			Blocks: gwdkir.Blocks{
+				Fragments: []gwdkir.FragmentEndpoint{{
+					Name:   "Vitals",
+					Method: "GET",
+					Route:  "/patients/{id:int}/vitals/{section...}",
+					Target: "#vitals",
+					Body:   `<section>Vitals</section>`,
+				}},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(endpoints) != 1 {
+		t.Fatalf("expected one fragment endpoint, got %#v", endpoints)
+	}
+	want := []source.RouteParam{{Name: "id", Type: "int"}, {Name: "section", Type: "string"}}
+	got := endpoints[0].RouteParams
+	if len(got) != len(want) {
+		t.Fatalf("RouteParams = %#v, want %#v", got, want)
+	}
+	for index := range want {
+		if got[index].Name != want[index].Name || got[index].Type != want[index].Type {
+			t.Fatalf("RouteParams = %#v, want %#v", got, want)
+		}
 	}
 }
 

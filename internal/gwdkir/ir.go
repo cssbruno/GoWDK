@@ -354,6 +354,7 @@ type Endpoint struct {
 	CSRF          bool
 	ErrorPage     string
 	DynamicParams []string
+	RouteParams   []source.RouteParam
 	SourceFile    string
 	Span          source.SourceSpan
 	Binding       Binding

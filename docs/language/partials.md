@@ -2,7 +2,7 @@
 
 Partial updates use server fragments, not full-page SSR. The generated slice
 supports action-driven fragment responses for SPA/action pages and standalone
-static fragment routes.
+concrete or dynamic fragment routes.
 
 Current support:
 
@@ -29,18 +29,28 @@ Current support:
   fragment Patients GET "/patients/list" "#patients" {
     <section>Patients</section>
   }
+
+  fragment PatientVitals GET "/patients/{id:int}/vitals" "#patients" {
+    <section>Vitals</section>
+  }
   ```
 
   Generated apps register these as backend endpoints, not page route kinds.
-  They currently require `GET`, a concrete absolute path without route params,
-  and a literal id-selector target.
+  They currently require `GET`, an absolute route pattern, and a literal
+  id-selector target. Fragment route params use the same syntax as page routes:
+  `{name}`, `{name:type}`, and final-segment `{name...}`. Supported scalar
+  types are `string`, `int`, `int64`, `uint`, `uint64`, `bool`, and `float64`.
 - If the same package exports a function with the fragment name and signature
   `func(context.Context) (response.Response, error)`, generated apps call that
   user-owned hook at request time. The hook owns data loading, validation,
   redirects, HTML, JSON, and fragment response decisions through
   `runtime/response.Response`. `runtime/app.Request(ctx)` exposes the current
-  request. If no function with the fragment name exists, the generated handler
-  serves the static rendered fragment body.
+  request, `runtime/app.Params(ctx)` exposes raw dynamic route params, and
+  `runtime/app.TypedParams(ctx)` exposes decoded typed route params. Generated
+  typed fragment bindings return `400` for invalid scalar params and `404` for
+  missing params before guards or fragment hooks run. If no function with the
+  fragment name exists, the generated handler serves the static rendered
+  fragment body.
 - Generated embedded app action handlers can respond to `X-GOWDK-Partial`
   requests with rendered fragment HTML, `Cache-Control: no-store`, and fragment
   target metadata. Normal POST requests still use the redirect/no-content

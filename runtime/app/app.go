@@ -590,6 +590,9 @@ func readSPAFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
 	if name == "" {
 		name = "index.html"
 	}
+	if unsafeSPAFile(name) {
+		return nil, nil, false
+	}
 	info, err := fs.Stat(root, name)
 	if err != nil {
 		return nil, nil, false
@@ -606,4 +609,8 @@ func readSPAFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
 		return nil, nil, false
 	}
 	return payload, info, true
+}
+
+func unsafeSPAFile(name string) bool {
+	return strings.EqualFold(path.Base(name), "gowdk-security.json")
 }

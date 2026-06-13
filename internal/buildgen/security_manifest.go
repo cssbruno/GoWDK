@@ -2,6 +2,7 @@ package buildgen
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 
 	"github.com/cssbruno/gowdk"
@@ -23,9 +24,36 @@ func writeSecurityManifest(outputDir string, config gowdk.Config, ir gwdkir.Prog
 	if err != nil {
 		return "", err
 	}
-	manifestPath := filepath.Join(outputDir, securityManifestFile)
+	manifestPath, err := securityManifestPath(outputDir)
+	if err != nil {
+		return "", err
+	}
 	if err := writeFileIfChanged(manifestPath, payload); err != nil {
 		return "", err
 	}
+	if err := removeServedSecurityManifest(outputDir); err != nil {
+		return "", err
+	}
 	return manifestPath, nil
+}
+
+func securityManifestPath(outputDir string) (string, error) {
+	absOutput, err := filepath.Abs(outputDir)
+	if err != nil {
+		return "", err
+	}
+	cleanOutput := filepath.Clean(absOutput)
+	outputName := filepath.Base(cleanOutput)
+	if outputName == "" || outputName == "." || outputName == string(filepath.Separator) {
+		outputName = "root"
+	}
+	return filepath.Join(filepath.Dir(cleanOutput), ".gowdk", "reports", outputName, securityManifestFile), nil
+}
+
+func removeServedSecurityManifest(outputDir string) error {
+	servedPath := filepath.Join(outputDir, securityManifestFile)
+	if err := os.Remove(servedPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }

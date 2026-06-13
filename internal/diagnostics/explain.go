@@ -241,8 +241,15 @@ guard public
 			"Serve the route through the generated Go server, which enforces the deny registry.",
 		},
 	},
+	"audit_command_missing_csrf": {
+		Details: "gowdk audit derives a generated command endpoint that accepts a state-changing web request without CSRF enforcement. The built-in security baseline treats this as an error because command POSTs are cross-site-forgeable in the same way as action POSTs.",
+		NextSteps: []string{
+			"Set Build.CSRF.Enabled and a runtime CSRF secret so generated command endpoints validate tokens before decoding.",
+			"Use an audit policy waiver with a documented reason if the endpoint is intentionally exempt.",
+		},
+	},
 	"audit_guardless_endpoint_page": {
-		Details: "A page that declares act, api, or fragment endpoints has no guard. Those endpoints would be publicly callable even though the page GET route is denied, which contradicts default-deny.",
+		Details: "A page that declares backend endpoints has no guard. Actions, fragments, commands, queries, and APIs would be publicly callable even when the page GET route is denied, which contradicts default-deny.",
 		NextSteps: []string{
 			"Add a guard to the page so its derived endpoints inherit it.",
 			"Use guard public only when every derived endpoint is intentionally unauthenticated.",

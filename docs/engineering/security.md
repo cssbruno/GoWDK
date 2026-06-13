@@ -18,8 +18,8 @@ Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as com
 
 ## GOWDK-Specific Security Rules
 
-- Generated actions must enable `Build.CSRF.Enabled` and set a stable CSRF
-  secret before production use.
+- Generated actions and command endpoints must enable `Build.CSRF.Enabled` and
+  set a stable CSRF secret before production use.
 - Generated form decoders must validate expected fields and avoid mass assignment.
 - Generated action forms must reject direct file inputs and multipart posts.
   Uploads are user-owned API/server behavior with explicit size, storage,
@@ -37,7 +37,8 @@ Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as com
 
 Before generated app output is considered production-ready:
 
-- Generated action CSRF must be enabled and configured with a runtime secret.
+- Generated action and command CSRF must be enabled and configured with a
+  runtime secret.
 - Redirects must reject unsafe external destinations unless explicitly allowed.
 - Generated decoders must define how unknown, missing, repeated, and file fields are handled.
 - Guards must have a documented execution contract, failure behavior, and test coverage.
@@ -51,11 +52,13 @@ Before generated app output is considered production-ready:
 ## Auditing The Posture
 
 `gowdk audit` makes this baseline executable. It derives a declarative security
-posture from validated IR (written as `gowdk-security.json` at build time) and
-evaluates a built-in policy that encodes the production-readiness gates above —
-for example, actions must enforce CSRF and APIs must not be public by omission.
-Findings carry a stable diagnostic code, a `file:line`, and remediation; run
-`gowdk explain <code>` for details.
+posture from validated IR. `gowdk build` writes the posture as
+`gowdk-security.json` in a non-served sibling report path under
+`.gowdk/reports/<output-name>/`, and `gowdk audit --json` includes the same
+posture inline. The built-in policy encodes the production-readiness gates
+above — for example, actions and commands must enforce CSRF and APIs must not
+be public by omission. Findings carry a stable diagnostic code, a `file:line`,
+and remediation; run `gowdk explain <code>` for details.
 
 `gowdk audit` is a standalone command. `gowdk build` never runs it, so it cannot
 fail a build implicitly; run it on demand or in CI, where its non-zero exit on

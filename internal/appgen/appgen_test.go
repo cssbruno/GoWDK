@@ -185,6 +185,7 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "keys", "id_ed25519"), "private key")
 	writeTestFile(t, filepath.Join(outputDir, "keys", "ID_RSA"), "private key")
 	writeTestFile(t, filepath.Join(outputDir, ".npmrc"), "//registry.example/:_authToken=secret")
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-security.json"), `{"endpoints":[{"path":"/admin"}]}`)
 	writeTestFile(t, filepath.Join(outputDir, "assets", "scratch.tmp"), "temporary")
 	writeTestFile(t, filepath.Join(outputDir, "assets", "app.css"), "body{}")
 
@@ -205,6 +206,7 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 		filepath.Join(result.OutputDir, "tmp", "asset.css"),
 		filepath.Join(result.OutputDir, "private", "notes.txt"),
 		filepath.Join(result.OutputDir, "secrets", "config.json"),
+		filepath.Join(result.OutputDir, "gowdk-security.json"),
 		filepath.Join(result.OutputDir, "keys", "server.key"),
 		filepath.Join(result.OutputDir, "keys", "server.pem"),
 		filepath.Join(result.OutputDir, "keys", "server-upper.PEM"),

@@ -160,13 +160,15 @@ emits the referenced file.
 
 ## Current Security Manifest
 
-`gowdk build` also writes `gowdk-security.json` in the selected output
-directory. It is a declarative, IR-derived security posture: every route,
-backend endpoint, and contract with its guards, CSRF state, body limit, public/
-default-deny classification, and source location, plus a `frontend` surface
-block. Like the route and asset manifests, it is pure data — it never evaluates
-policy. `gowdk audit` reads this same posture and applies the security baseline
-(and, in later M8 phases, declared policies) to produce findings.
+`gowdk build` also writes `gowdk-security.json` as a non-served report outside
+the selected output directory, under a sibling
+`.gowdk/reports/<output-name>/` directory. It is a declarative, IR-derived
+security posture: every route, backend endpoint, and contract with its guards,
+CSRF state, body limit, public/default-deny classification, and source
+location, plus a `frontend` surface block. Like the route and asset manifests,
+it is pure data — it never evaluates policy. `gowdk audit` reads this same
+posture and applies the security baseline (and, in later M8 phases, declared
+policies) to produce findings.
 
 ```json
 {

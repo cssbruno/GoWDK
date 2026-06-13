@@ -65,7 +65,8 @@ only from the diagnostic registry, so the baseline never hardcodes severity.
 
 ## Acceptance Criteria
 
-- [x] `gowdk-security.json` is emitted at build time and by `gowdk audit --json`.
+- [x] `gowdk-security.json` is emitted to a non-served build report path and by
+      `gowdk audit --json`.
 - [x] `gowdk audit` applies the baseline, cites findings by code + `file:line`,
       and exits non-zero on error findings.
 - [x] New `audit_*` / `policy_*` codes are registered and `gowdk explain`-able.
@@ -79,7 +80,8 @@ only from the diagnostic registry, so the baseline never hardcodes severity.
 - **Phase 0–1 (shipped in this slice):** diagnostic codes; `internal/auditspec`
   (composable policy model, selector matcher, `extends`, baseline, engine);
   `internal/securitymanifest` (IR → posture); `gowdk audit` with the baseline;
-  `gowdk-security.json` at build time. Unit + CLI tests.
+  `gowdk-security.json` at build time outside the served output directory. Unit
+  + CLI tests.
 - **Phase 2:** the four frontend audits as baseline rules.
 - **Phase 3:** the `*.audit.gwdk` file kind and declared composable policies.
 - **Phase 4:** `runtime/testkit`, generated `_test.go`, `--emit-tests`/`--run`,
@@ -99,5 +101,5 @@ go test ./internal/securitymanifest ./internal/auditspec ./cmd/gowdk ./internal/
 go run ./cmd/gowdk audit --json --config gowdk.config.go
 go run ./cmd/gowdk explain audit_api_public_by_omission
 go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk \
-  examples/pages/hero.cmp.gwdk && test -f /tmp/gowdk-build/gowdk-security.json
+  examples/pages/hero.cmp.gwdk && test -f /tmp/.gowdk/reports/gowdk-build/gowdk-security.json
 ```

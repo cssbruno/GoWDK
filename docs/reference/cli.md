@@ -56,8 +56,10 @@ gowdk lsp [--ssr]
   command — `gowdk build` never runs it — so it cannot fail a build implicitly.
   It exits non-zero when any error-severity finding exists, so it can gate CI.
   `--json` prints the posture manifest plus findings and a summary. Every finding
-  carries a diagnostic code; run `gowdk explain <code>` for details. The posture
-  alone is also written to `gowdk-security.json` at build time.
+  carries a diagnostic code; run `gowdk explain <code>` for details.
+  `gowdk build` also writes the posture alone to a non-served
+  `.gowdk/reports/<output-name>/gowdk-security.json` path outside the selected
+  output directory.
 - `--write`: supported by `fmt`; overwrites formatted files.
 - `--dry-run`: supported by `fix`; prints files with available registered fixes
   without writing changes.
@@ -229,12 +231,13 @@ declarative posture from validated IR — every route, backend endpoint, and
 contract with its guards, CSRF state, body limit, and source location — and
 evaluates the built-in security baseline against it. The baseline encodes the
 production-readiness gates from `docs/engineering/security.md` (for example:
-actions must enforce CSRF, APIs must not be public by omission). Findings carry
-a diagnostic code, a `file:line`, and remediation; run `gowdk explain <code>`
-for details. `audit` never runs as part of `gowdk build`, so it cannot fail a
-build implicitly; run it on demand or wire it into CI, where its non-zero exit
-on error findings gates the pipeline. The posture alone is also emitted as
-`gowdk-security.json` by `gowdk build`.
+actions and commands must enforce CSRF, APIs must not be public by omission).
+Findings carry a diagnostic code, a `file:line`, and remediation; run
+`gowdk explain <code>` for details. `audit` never runs as part of `gowdk build`,
+so it cannot fail a build implicitly; run it on demand or wire it into CI,
+where its non-zero exit on error findings gates the pipeline. The posture alone
+is also emitted as `gowdk-security.json` by `gowdk build`, but outside the
+selected output directory in a non-served `.gowdk/reports/<output-name>/` path.
 
 `--wasm` produces a Go `js/wasm` compile artifact from the generated app. This
 is a deploy artifact for hosts that can run Go WebAssembly; it is separate from

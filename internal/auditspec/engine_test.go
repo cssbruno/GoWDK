@@ -21,6 +21,8 @@ func TestBaselineFlagsMissingCSRFAndPublicAPI(t *testing.T) {
 			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"public"}, CSRF: false, Public: true},
 			{ID: "Health", Kind: "api", Method: "GET", Path: "/api/health", CSRF: false, DefaultDeny: true},
 			{ID: "Refresh", Kind: "fragment", Method: "GET", Path: "/frag", DefaultDeny: true},
+			{ID: "patients.CreatePatient", Kind: "command", Method: "POST", Path: "/patients", CSRF: false, DefaultDeny: true},
+			{ID: "patients.GetPatientPage", Kind: "query", Method: "GET", Path: "/patients", CSRF: false, DefaultDeny: true},
 		},
 		Frontend: securitymanifest.FrontendSurface{},
 	}
@@ -32,8 +34,11 @@ func TestBaselineFlagsMissingCSRFAndPublicAPI(t *testing.T) {
 	if got["audit_api_public_by_omission"] != 1 {
 		t.Fatalf("expected one public-by-omission API finding, got %d", got["audit_api_public_by_omission"])
 	}
-	if got["audit_guardless_endpoint_page"] != 1 {
-		t.Fatalf("expected one guardless fragment finding, got %d", got["audit_guardless_endpoint_page"])
+	if got["audit_command_missing_csrf"] != 1 {
+		t.Fatalf("expected one missing-CSRF command finding, got %d", got["audit_command_missing_csrf"])
+	}
+	if got["audit_guardless_endpoint_page"] != 3 {
+		t.Fatalf("expected three guardless fragment/contract findings, got %d", got["audit_guardless_endpoint_page"])
 	}
 }
 
@@ -42,6 +47,8 @@ func TestBaselinePassesWhenPostureIsSound(t *testing.T) {
 		Endpoints: []securitymanifest.EndpointEntry{
 			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"auth.required"}, CSRF: true},
 			{ID: "List", Kind: "api", Method: "GET", Path: "/api/list", Guards: []string{"permission:list.read"}},
+			{ID: "patients.CreatePatient", Kind: "command", Method: "POST", Path: "/patients", Guards: []string{"auth.required"}, CSRF: true},
+			{ID: "patients.GetPatientPage", Kind: "query", Method: "GET", Path: "/patients", Guards: []string{"auth.required"}},
 		},
 	}
 	findings := Evaluate(manifest, Baseline())
@@ -182,6 +189,8 @@ func TestParseSelectorClassifies(t *testing.T) {
 		{"/admin/**", SelectorRoute},
 		{"act:*", SelectorEndpoint},
 		{"api:Health", SelectorEndpoint},
+		{"command:*", SelectorEndpoint},
+		{"query:*", SelectorEndpoint},
 		{"frontend", SelectorFrontend},
 		{"nonsense", SelectorUnknown},
 	}

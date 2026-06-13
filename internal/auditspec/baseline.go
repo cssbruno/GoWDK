@@ -42,6 +42,27 @@ func Baseline() []Policy {
 			},
 		},
 		{
+			Name:    "baseline.contract_commands",
+			Builtin: true,
+			Selectors: []Selector{
+				{Raw: "command:*", Kind: SelectorEndpoint},
+			},
+			Rules: []Rule{
+				{Kind: RuleRequireCSRF, Code: "audit_command_missing_csrf"},
+				{Kind: RuleRequireAnyGuard, Code: "audit_guardless_endpoint_page"},
+			},
+		},
+		{
+			Name:    "baseline.contract_queries",
+			Builtin: true,
+			Selectors: []Selector{
+				{Raw: "query:*", Kind: SelectorEndpoint},
+			},
+			Rules: []Rule{
+				{Kind: RuleRequireAnyGuard, Code: "audit_guardless_endpoint_page"},
+			},
+		},
+		{
 			Name:    "baseline.frontend",
 			Builtin: true,
 			Selectors: []Selector{

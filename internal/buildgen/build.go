@@ -222,6 +222,11 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 		},
 		Files: map[string][]byte{},
 	}
+	manifestPath, err := securityManifestPath(outputDir)
+	if err != nil {
+		return MemoryResult{}, reporter.fail("manifest", err)
+	}
+	result.SecurityManifestPath = manifestPath
 	for _, artifact := range planned.css {
 		rel, err := relativeOutputPath(outputDir, artifact.Path)
 		if err != nil {
@@ -279,13 +284,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	}
 	result.Files[openAPIFile] = openAPI
 	reporter.info("report", "openapi_collected", "OpenAPI report collected", BuildEvent{Path: openAPIFile})
-	securityManifest, err := securityManifestPayload(config, ir)
-	if err != nil {
-		return MemoryResult{}, reporter.fail("manifest", err)
-	}
-	result.Files[securityManifestFile] = securityManifest
-	result.SecurityManifestPath = filepath.Join(outputDir, securityManifestFile)
-	reporter.info("manifest", "security_manifest_collected", "security manifest collected", BuildEvent{Path: securityManifestFile})
+	reporter.info("manifest", "security_manifest_planned", "security manifest planned outside served output", BuildEvent{Path: eventPath(outputDir, result.SecurityManifestPath)})
 	reporter.info("complete", "build_complete", "in-memory SPA build completed", BuildEvent{
 		Data: map[string]string{
 			"pages":  fmt.Sprint(len(result.Artifacts)),

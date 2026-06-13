@@ -95,6 +95,8 @@ func unsafeEmbeddedFile(rel string) bool {
 	switch {
 	case normalizedBase == ".env" || strings.HasPrefix(normalizedBase, ".env."):
 		return true
+	case normalizedBase == "gowdk-security.json":
+		return true
 	case normalizedBase == ".npmrc" || normalizedBase == ".netrc":
 		return true
 	case privateKeyFile(normalizedBase):

@@ -178,6 +178,24 @@ func TestHandlerAppliesAssetManifestCachePolicy(t *testing.T) {
 	}
 }
 
+func TestHandlerDoesNotServeSecurityManifest(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"gowdk-security.json": {Data: []byte(`{"endpoints":[{"path":"/admin"}]}`)},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/gowdk-security.json", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d with body %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestHandlerRedirectsTrailingSlashGETToCanonicalPath(t *testing.T) {
 	handler := Handler{
 		Root:     fstest.MapFS{"blog/hello/index.html": {Data: []byte("<main>Hello</main>")}},

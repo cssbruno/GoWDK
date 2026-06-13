@@ -254,7 +254,7 @@ Every 0.x minor release must have:
   HSTS.
 - [x] Add cookie helper docs for `HttpOnly`, `Secure`, `SameSite`, path, and
   domain policy.
-- [ ] Add safe redirect allowlists, open redirect tests, and unsafe external
+- [x] Add safe redirect allowlists, open redirect tests, and unsafe external
   redirect diagnostics.
 - [x] Add embedded secret exclusion tests for `.env`, source maps with secrets,
   private files, and temporary artifacts.

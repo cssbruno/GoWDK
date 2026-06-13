@@ -235,6 +235,11 @@ func validateActionRedirect(value string) error {
 	if strings.HasPrefix(value, "//") {
 		return fmt.Errorf("redirect %q must not be protocol-relative", value)
 	}
+	// Browsers normalize "\" to "/" before navigating, so "/\evil.com" is
+	// treated like the protocol-relative "//evil.com".
+	if strings.Contains(value, "\\") {
+		return fmt.Errorf("redirect %q must not contain backslashes", value)
+	}
 	if strings.ContainsAny(value, "\r\n") {
 		return fmt.Errorf("redirect %q must not contain newlines", value)
 	}

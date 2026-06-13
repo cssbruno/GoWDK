@@ -2249,22 +2249,37 @@ func TestGenerateRejectsSPAOutputInsideGeneratedSPADir(t *testing.T) {
 }
 
 func TestGenerateRejectsUnsafeActionRedirect(t *testing.T) {
-	root := t.TempDir()
-	outputDir := filepath.Join(root, "dist")
-	appDir := filepath.Join(root, "generated-app")
-	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
-
-	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
-		PageID:     "newsletter",
-		ActionName: "Subscribe",
-		Route:      "/newsletter",
-		Redirect:   "https://example.com",
-	}}})
-	if err == nil {
-		t.Fatal("expected unsafe redirect error")
+	tests := []struct {
+		redirect string
+		message  string
+	}{
+		{redirect: "https://example.com", message: "must be a local absolute path"},
+		{redirect: "//example.com", message: "must not be protocol-relative"},
+		{redirect: "/login\nSet-Cookie: bad=true", message: "must not contain newlines"},
+		{redirect: `/\evil.com`, message: "must not contain backslashes"},
+		{redirect: `\\evil.com`, message: "must be a local absolute path"},
+		{redirect: `/foo\..\\evil.com`, message: "must not contain backslashes"},
 	}
-	if !strings.Contains(err.Error(), `redirect "https://example.com" must be a local absolute path`) {
-		t.Fatalf("unexpected error: %v", err)
+	for _, test := range tests {
+		t.Run(test.redirect, func(t *testing.T) {
+			root := t.TempDir()
+			outputDir := filepath.Join(root, "dist")
+			appDir := filepath.Join(root, "generated-app")
+			writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
+
+			_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+				PageID:     "newsletter",
+				ActionName: "Subscribe",
+				Route:      "/newsletter",
+				Redirect:   test.redirect,
+			}}})
+			if err == nil {
+				t.Fatal("expected unsafe redirect error")
+			}
+			if !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected error to contain %q, got %v", test.message, err)
+			}
+		})
 	}
 }
 

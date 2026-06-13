@@ -152,9 +152,10 @@ through `runtime/response.Response`.
   `runtime/response.ValidationFragment` provide reusable patterns for returning
   structured validation errors or an escaped live-region fragment for partial
   form updates.
-- Generated action redirects must stay local. User handlers should also keep
-  redirects local unless they intentionally implement and audit an external
-  redirect allowlist.
+- Generated action redirects must stay local. Generated declarations reject
+  external, protocol-relative, newline-bearing, and backslash-bearing redirect
+  targets before output. User handlers should also keep redirects local unless
+  they intentionally implement and audit an external redirect allowlist.
 - Generated action, validation, redirect, fragment, invalid-form, oversized
   body, missing-handler, unsupported-handler, and invalid-CSRF responses use
   `Cache-Control: no-store`.

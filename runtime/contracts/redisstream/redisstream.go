@@ -122,6 +122,7 @@ func (store *Store) PublishEvents(ctx context.Context, events []contracts.EventE
 		return err
 	}
 	for _, event := range events {
+		event = contracts.EnsureEventID(event)
 		payload, err := marshalEnvelope(event)
 		if err != nil {
 			return err

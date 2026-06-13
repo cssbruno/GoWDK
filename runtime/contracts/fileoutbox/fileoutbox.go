@@ -49,7 +49,6 @@ type Store struct {
 	deadLetterPath string
 	maxAttempts    int
 	decoders       map[string]Decoder
-	seq            uint64
 	now            func() time.Time
 }
 
@@ -134,13 +133,14 @@ func (store *Store) StoreEvents(ctx context.Context, events []contracts.EventEnv
 
 	encoder := json.NewEncoder(file)
 	for _, event := range events {
+		event = contracts.EnsureEventID(event)
 		value, err := json.Marshal(event.Value)
 		if err != nil {
 			file.Close()
 			return err
 		}
 		record := Record{
-			ID:       store.nextID(),
+			ID:       event.ID,
 			StoredAt: store.now().UTC(),
 			Category: event.Category,
 			Type:     event.Type,
@@ -232,11 +232,6 @@ func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch
 	}, nil
 }
 
-func (store *Store) nextID() string {
-	store.seq++
-	return fmt.Sprintf("%d-%d", store.now().UTC().UnixNano(), store.seq)
-}
-
 // decodeRecordsLocked decodes records into typed envelopes. Records that have
 // no decoder or fail to decode are reported as failed instead of failing the
 // whole batch so one poison record cannot wedge delivery of the rest; failed
@@ -261,6 +256,7 @@ func (store *Store) decodeRecordsLocked(records []Record) ([]contracts.EventEnve
 		}
 		decoded[record.ID] = true
 		events = append(events, contracts.EventEnvelope{
+			ID:       record.ID,
 			Category: record.Category,
 			Type:     record.Type,
 			Value:    value,

@@ -375,6 +375,7 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 		`contractEventSinkMu.RLock()`,
 		`func NewContractRegistry() *gowdkcontracts.Registry`,
 		`func RunContractEventWorker(ctx context.Context, source gowdkcontracts.EventSource) error`,
+		`func RunContractEventWorkerWithSeenStore(ctx context.Context, source gowdkcontracts.EventSource, seen gowdkcontracts.SeenStore) error`,
 		`func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler`,
 		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`values := gowdkform.FromURLValues(request.PostForm)`,
@@ -394,6 +395,7 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 		`func decodeContractPatientsGetPatientPageInput(values gowdkform.Values) (patients.GetPatientPage, error)`,
 		`input.Filter = field0`,
 		`gowdkresponse.JSONValue(http.StatusOK, result)`,
+		`gowdkresponse.WriteNoStoreHandlerJSONError(response, err, http.StatusInternalServerError)`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated contract app source to contain %q:\n%s", expected, source)
@@ -3634,8 +3636,11 @@ func TestGeneratedBinaryContractFallbacksAreExplicitNoStore(t *testing.T) {
 	if response.StatusCode != http.StatusNotImplemented {
 		t.Fatalf("expected missing contract response status 501, got %d: %s", response.StatusCode, payload)
 	}
-	if !strings.Contains(string(payload), "command patients.CreatePatient is not registered") {
-		t.Fatalf("expected explicit missing contract response, got %s", payload)
+	if contentType := response.Header.Get("Content-Type"); contentType != "application/json; charset=utf-8" {
+		t.Fatalf("expected JSON missing contract response, got content type %q: %s", contentType, payload)
+	}
+	if strings.TrimSpace(string(payload)) != `{"error":"command patients.CreatePatient is not registered"}` {
+		t.Fatalf("expected explicit JSON missing contract response, got %s", payload)
 	}
 	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("expected no-store on missing contract response, got %q", cacheControl)
@@ -3863,6 +3868,149 @@ func init() {
 		if !strings.Contains(string(eventPayload), expected) {
 			t.Fatalf("expected event sink output to contain %q, got %s", expected, eventPayload)
 		}
+	}
+}
+
+func TestGeneratedBinaryContractAdaptersReturnJSONErrors(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients page</main>")
+
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{
+		{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "gowdk-generated-app/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			InputFields: []source.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
+			Method:      http.MethodPost,
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		},
+		{
+			Kind:        gwdkir.ContractQuery,
+			Name:        "patients.GetPatientPage",
+			ImportAlias: "patients",
+			ImportPath:  "gowdk-generated-app/patients",
+			Type:        "GetPatientPage",
+			Result:      "PatientPageData",
+			InputFields: []source.BackendInputField{{FieldName: "Filter", FormName: "filter", Type: "string"}},
+			Method:      http.MethodGet,
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "LoadPatientPage",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		},
+	}}
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{IR: program}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
+
+import (
+	"context"
+	"errors"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+	gowdkresponse "github.com/cssbruno/gowdk/runtime/response"
+)
+
+type CreatePatient struct {
+	Name string
+}
+
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+type GetPatientPage struct {
+	Filter string
+}
+
+type PatientPageData struct {
+	Filter string `+"`json:\"filter\"`"+`
+}
+
+func Register(registry *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient)
+	contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{}, errors.New("secret command failure")
+}
+
+func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData, error) {
+	return PatientPageData{}, gowdkresponse.NewHandlerError(http.StatusBadRequest, "invalid filter", nil)
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	commandResponse, err := waitForHTTPStatus("http://"+addr+"/patients", http.MethodPost, "name=Ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commandPayload, err := io.ReadAll(commandResponse.Body)
+	_ = commandResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commandResponse.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected command error status 500, got %d: %s", commandResponse.StatusCode, commandPayload)
+	}
+	if commandResponse.Header.Get("Content-Type") != "application/json; charset=utf-8" {
+		t.Fatalf("expected command JSON error content type, got %q", commandResponse.Header.Get("Content-Type"))
+	}
+	if strings.TrimSpace(string(commandPayload)) != `{"error":"Internal Server Error"}` {
+		t.Fatalf("unexpected command JSON error payload: %s", commandPayload)
+	}
+	if strings.Contains(string(commandPayload), "secret") {
+		t.Fatalf("command JSON error leaked handler detail: %s", commandPayload)
+	}
+
+	queryResponse, err := waitForHTTPStatusWithHeaders("http://"+addr+"/patients?filter=bad", http.MethodGet, "", map[string]string{
+		"Accept": "application/json",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queryPayload, err := io.ReadAll(queryResponse.Body)
+	_ = queryResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queryResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected query error status 400, got %d: %s", queryResponse.StatusCode, queryPayload)
+	}
+	if queryResponse.Header.Get("Content-Type") != "application/json; charset=utf-8" {
+		t.Fatalf("expected query JSON error content type, got %q", queryResponse.Header.Get("Content-Type"))
+	}
+	if strings.TrimSpace(string(queryPayload)) != `{"error":"invalid filter"}` {
+		t.Fatalf("unexpected query JSON error payload: %s", queryPayload)
 	}
 }
 

@@ -52,6 +52,7 @@ type (
 
 // EventEnvelope is a backend-owned event captured from a successful command.
 type EventEnvelope struct {
+	ID       string
 	Category EventCategory
 	Type     string
 	Value    any
@@ -64,6 +65,7 @@ type EventDecoder func(json.RawMessage) (any, error)
 // StoredEventEnvelope is the JSON transport shape shared by contract outbox
 // and broker adapters.
 type StoredEventEnvelope struct {
+	ID       string          `json:"id,omitempty"`
 	Category EventCategory   `json:"category"`
 	Type     string          `json:"type"`
 	Value    json.RawMessage `json:"value"`
@@ -83,11 +85,12 @@ func JSONEventDecoder[T any]() EventDecoder {
 // MarshalEventEnvelopeJSON encodes an event envelope into the shared JSON
 // transport shape.
 func MarshalEventEnvelopeJSON(event EventEnvelope) ([]byte, error) {
+	event = EnsureEventID(event)
 	value, err := json.Marshal(event.Value)
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(StoredEventEnvelope{Category: event.Category, Type: event.Type, Value: value})
+	return json.Marshal(StoredEventEnvelope{ID: event.ID, Category: event.Category, Type: event.Type, Value: value})
 }
 
 // DecodeEventEnvelopeJSON decodes the shared JSON transport shape and uses a
@@ -106,7 +109,7 @@ func DecodeEventEnvelopeJSON(payload []byte, decoders map[string]EventDecoder) (
 		}
 		value = decoded
 	}
-	return EventEnvelope{Category: stored.Category, Type: stored.Type, Value: value}, nil
+	return EventEnvelope{ID: stored.ID, Category: stored.Category, Type: stored.Type, Value: value}, nil
 }
 
 // Outbox stores command-emitted events for durable delivery. Implementations
@@ -125,6 +128,12 @@ type Broker interface {
 // transport such as SSE or WebSocket.
 type PresentationFanout interface {
 	SendPresentationEvents(context.Context, []EventEnvelope) error
+}
+
+// SeenStore records durable event IDs that have already been accepted for
+// worker dispatch within an adapter-defined deduplication window.
+type SeenStore interface {
+	MarkIfNew(context.Context, string) (bool, error)
 }
 
 // CommandEventSink receives events captured from a successful command. The
@@ -211,6 +220,7 @@ const (
 	ObservationWorkerReceiveEventBatch ObservationName = "gowdk.contract.worker.receive"
 	ObservationWorkerAckEventBatch     ObservationName = "gowdk.contract.worker.ack"
 	ObservationWorkerNackEventBatch    ObservationName = "gowdk.contract.worker.nack"
+	ObservationWorkerDedupSkip         ObservationName = "gowdk.contract.worker.dedup_skip"
 )
 
 // ObservationLabels are stable contract attributes for logs, metrics, and
@@ -219,6 +229,7 @@ const (
 type ObservationLabels struct {
 	Kind          Kind
 	EventCategory EventCategory
+	EventID       string
 	Contract      string
 	Result        string
 	Role          Role
@@ -269,6 +280,7 @@ func (event EventEnvelope) ObservationLabels() ObservationLabels {
 	return ObservationLabels{
 		Kind:          Event,
 		EventCategory: event.Category,
+		EventID:       event.ID,
 		Contract:      event.Type,
 	}
 }

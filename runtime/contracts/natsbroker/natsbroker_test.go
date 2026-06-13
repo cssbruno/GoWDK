@@ -22,7 +22,8 @@ func TestMarshalEnvelope(t *testing.T) {
 		t.Fatalf("marshal envelope: %v", err)
 	}
 	source := string(payload)
-	if !strings.Contains(source, `"category":"integration"`) ||
+	if !strings.Contains(source, `"id":"`) ||
+		!strings.Contains(source, `"category":"integration"`) ||
 		!strings.Contains(source, `"type":"PatientCreated"`) ||
 		!strings.Contains(source, `"id":"patient-1"`) {
 		t.Fatalf("unexpected payload: %s", source)
@@ -35,6 +36,7 @@ func TestDecodePayloadWithRegisteredDecoder(t *testing.T) {
 		t.Fatal(err)
 	}
 	payload, err := json.Marshal(contracts.StoredEventEnvelope{
+		ID:       "event-1",
 		Category: contracts.IntegrationEvent,
 		Type:     "PatientCreated",
 		Value:    value,
@@ -50,6 +52,9 @@ func TestDecodePayloadWithRegisteredDecoder(t *testing.T) {
 	}
 	if event.Category != contracts.IntegrationEvent || event.Type != "PatientCreated" {
 		t.Fatalf("unexpected event metadata: %#v", event)
+	}
+	if event.ID != "event-1" {
+		t.Fatalf("event.ID = %q, want event-1", event.ID)
 	}
 	if decoded, ok := event.Value.(patientCreated); !ok || decoded.ID != "patient-1" {
 		t.Fatalf("event.Value = %#v, want patientCreated patient-1", event.Value)

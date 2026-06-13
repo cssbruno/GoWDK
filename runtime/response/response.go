@@ -111,6 +111,13 @@ func WriteNoStoreHandlerError(writer http.ResponseWriter, err error, fallbackSta
 	WriteNoStoreError(writer, status, HandlerErrorMessage(err, status))
 }
 
+// WriteNoStoreHandlerJSONError writes a generated handler error as the stable
+// JSON shape used by contract web adapters.
+func WriteNoStoreHandlerJSONError(writer http.ResponseWriter, err error, fallbackStatus int) {
+	status := HandlerStatus(err, fallbackStatus)
+	WriteNoStoreJSONError(writer, status, HandlerErrorMessage(err, status))
+}
+
 // HTMLBody creates a full HTML response.
 func HTMLBody(status int, body string) Response {
 	return Response{Kind: HTML, Status: status, Body: body}
@@ -266,6 +273,19 @@ func WriteHTML(writer http.ResponseWriter, request *http.Request, body string, c
 func WriteNoStoreError(writer http.ResponseWriter, status int, message string) {
 	writer.Header().Set("Cache-Control", "no-store")
 	http.Error(writer, message, status)
+}
+
+// WriteNoStoreJSONError writes the stable generated JSON error shape.
+func WriteNoStoreJSONError(writer http.ResponseWriter, status int, message string) {
+	writer.Header().Set("Cache-Control", "no-store")
+	result, err := JSONValue(status, struct {
+		Error string `json:"error"`
+	}{Error: message})
+	if err != nil {
+		WriteNoStoreError(writer, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		return
+	}
+	_ = WriteHTTP(writer, result)
 }
 
 func statusOrDefault(result Response) int {

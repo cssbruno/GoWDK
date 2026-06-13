@@ -59,7 +59,7 @@ func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool,
 		&ast.IfStmt{
 			Cond: notNil("err"),
 			Body: block(
-				writeNoStoreHandlerErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
+				writeNoStoreHandlerJSONErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
 				returnBool(true),
 			),
 		},
@@ -81,7 +81,7 @@ func executableCommandContractStmts(exposure BackendContractExposure) []ast.Stmt
 		&ast.IfStmt{
 			Cond: notNil("err"),
 			Body: block(
-				writeNoStoreHandlerErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
+				writeNoStoreHandlerJSONErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
 				returnBool(true),
 			),
 		},
@@ -89,7 +89,7 @@ func executableCommandContractStmts(exposure BackendContractExposure) []ast.Stmt
 			Init: define([]ast.Expr{id("dispatchErr")}, call(sel("gowdkcontracts", "DispatchCommandEvents"), id("ctx"), call(id("currentContractEventSink")), id("contractRegistry"), sel("gowdkcontracts", "RoleWeb"), id("events"))),
 			Cond: notNil("dispatchErr"),
 			Body: block(
-				writeNoStoreHandlerErrorExprStmt(id("dispatchErr"), sel("http", "StatusInternalServerError")),
+				writeNoStoreHandlerJSONErrorExprStmt(id("dispatchErr"), sel("http", "StatusInternalServerError")),
 				returnBool(true),
 			),
 		},
@@ -108,7 +108,7 @@ func executableQueryContractStmts(exposure BackendContractExposure) []ast.Stmt {
 		&ast.IfStmt{
 			Cond: notNil("err"),
 			Body: block(
-				writeNoStoreHandlerErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
+				writeNoStoreHandlerJSONErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
 				returnBool(true),
 			),
 		},
@@ -197,7 +197,7 @@ func contractFormSchemaExpr(fields []source.BackendInputField) ast.Expr {
 
 func fallbackContractHandlerDecl(exposure BackendContractExposure) *ast.FuncDecl {
 	return funcDecl(contractHandlerName(exposure), actionParams(), boolResults(), []ast.Stmt{
-		writeNoStoreErrorStmt(sel("http", "StatusNotImplemented"), contractFallbackMessage(exposure)),
+		writeNoStoreJSONErrorStmt(sel("http", "StatusNotImplemented"), contractFallbackMessage(exposure)),
 		returnBool(true),
 	})
 }
@@ -298,6 +298,7 @@ func contractRegistryDecls(exposures []BackendContractExposure) []ast.Decl {
 	return []ast.Decl{
 		newContractRegistryDecl(exposures),
 		runContractEventWorkerDecl(),
+		runContractEventWorkerWithSeenStoreDecl(),
 	}
 }
 
@@ -321,6 +322,18 @@ func runContractEventWorkerDecl() ast.Decl {
 	}, []*ast.Field{{Type: id("error")}}, []ast.Stmt{
 		&ast.ReturnStmt{Results: []ast.Expr{
 			call(sel("gowdkcontracts", "RunEventWorker"), id("ctx"), call(id("NewContractRegistry")), id("source")),
+		}},
+	})
+}
+
+func runContractEventWorkerWithSeenStoreDecl() ast.Decl {
+	return funcDecl("RunContractEventWorkerWithSeenStore", []*ast.Field{
+		{Names: []*ast.Ident{id("ctx")}, Type: sel("context", "Context")},
+		{Names: []*ast.Ident{id("source")}, Type: sel("gowdkcontracts", "EventSource")},
+		{Names: []*ast.Ident{id("seen")}, Type: sel("gowdkcontracts", "SeenStore")},
+	}, []*ast.Field{{Type: id("error")}}, []ast.Stmt{
+		&ast.ReturnStmt{Results: []ast.Expr{
+			call(sel("gowdkcontracts", "RunEventWorkerWithSeenStore"), id("ctx"), call(id("NewContractRegistry")), id("source"), id("seen")),
 		}},
 	})
 }

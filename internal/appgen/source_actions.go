@@ -722,6 +722,14 @@ func writeNoStoreHandlerErrorExprStmt(err ast.Expr, fallbackStatus ast.Expr) ast
 	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreHandlerError"), id("response"), err, fallbackStatus))
 }
 
+func writeNoStoreJSONErrorStmt(status ast.Expr, message string) ast.Stmt {
+	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreJSONError"), id("response"), status, stringLit(message)))
+}
+
+func writeNoStoreHandlerJSONErrorExprStmt(err ast.Expr, fallbackStatus ast.Expr) ast.Stmt {
+	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreHandlerJSONError"), id("response"), err, fallbackStatus))
+}
+
 func handlerErrorMessageExpr(err ast.Expr, fallbackStatus ast.Expr) ast.Expr {
 	return call(sel("gowdkresponse", "HandlerErrorMessage"), err, fallbackStatus)
 }

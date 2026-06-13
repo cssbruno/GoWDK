@@ -46,6 +46,15 @@ packages, and tooling contracts may change before a stable release.
   buildable Go package" message. A component-script resolution error during
   build now fails the build instead of silently omitting the page's component
   scripts.
+- Generated `g:command` and `g:query` contract web adapters now use one JSON
+  response contract: success writes the command/query result as no-store JSON,
+  and failures write `{"error":"..."}` as no-store JSON with ordinary 5xx
+  details redacted unless the handler returns an explicit `response.HandlerError`.
+- Contract event envelopes now carry stable IDs for durable delivery. Workers
+  can opt into deduplication with `RunEventWorkerWithSeenStore` or
+  `RunEventWorkerForRoleWithSeenStore`; duplicate IDs are acked without
+  subscriber dispatch inside the configured window. Runtime includes bounded
+  in-memory, file-backed, and Redis SETNX-with-TTL seen-store adapters.
 
 ### Known Gaps
 

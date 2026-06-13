@@ -32,6 +32,9 @@ func TestBrokerPublishesReceivesAndAcksEvents(t *testing.T) {
 	if len(batch.Events) != 1 {
 		t.Fatalf("len(batch.Events) = %d, want 1", len(batch.Events))
 	}
+	if batch.Events[0].ID == "" {
+		t.Fatalf("expected broker to assign event ID: %#v", batch.Events[0])
+	}
 	if err := batch.Ack(context.Background()); err != nil {
 		t.Fatalf("ack batch: %v", err)
 	}

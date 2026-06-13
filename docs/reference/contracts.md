@@ -207,12 +207,14 @@ The stable operation names include:
 | Worker receive batch | `gowdk.contract.worker.receive` |
 | Worker ack batch | `gowdk.contract.worker.ack` |
 | Worker nack batch | `gowdk.contract.worker.nack` |
+| Worker dedup skip | `gowdk.contract.worker.dedup_skip` |
 
 `Metadata.ObservationLabels()` returns the stable contract labels: kind, event
 category, contract type name, result type name, role, roles, and handler count
 when known. `EventEnvelope.ObservationLabels()` returns the event kind,
-category, and captured event contract type. `ContractName[T]()` returns the same
-Go contract type name used by metadata and event envelopes.
+category, stable event ID, and captured event contract type.
+`ContractName[T]()` returns the same Go contract type name used by metadata and
+event envelopes.
 `ObservationForRole` records the runtime role that performed the operation.
 
 Inside a command handler, emit backend-owned events through the command context:
@@ -241,8 +243,8 @@ result, events, err := contracts.CaptureCommandEvents[CreatePatient, CreatePatie
 )
 ```
 
-Each captured `EventEnvelope` contains the event category, Go type name, and
-typed value. Capturing does not run event subscribers.
+Each captured `EventEnvelope` contains a stable event ID, event category, Go
+type name, and typed value. Capturing does not run event subscribers.
 
 For dependency-free outbox integration, implement the small `Outbox` interface:
 
@@ -315,11 +317,31 @@ Applications that need database transactions, cross-process locking, retry
 backoff, broker delivery, or operational dead-letter processing should use a
 database-backed or broker-backed adapter.
 
-Subscriber handlers must be idempotent for any durable delivery adapter. A
-worker can crash after a subscriber side effect but before `Ack`, or an adapter
-can retry after `Nack`. Use a stable domain key, event id, outbox record id, or
-application-level dedupe table to make repeated deliveries safe. GOWDK Runtime
-does not hide retries behind generated JavaScript or browser state.
+Delivery guarantees:
+
+- Local in-process dispatch is process-local exactly once for that command
+  execution because subscribers run before the command response is written.
+- Outbox and broker delivery is at-least-once. Use `RunEventWorkerWithSeenStore`
+  or `RunEventWorkerForRoleWithSeenStore` with a `contracts.SeenStore` to skip
+  duplicate event IDs inside a configured deduplication window. Duplicate
+  batches are acknowledged without invoking subscribers.
+- A deduplication window is not an exactly-once guarantee. Subscribers must
+  still tolerate redelivery outside the window, after store loss, or when a
+  subscriber fails after the worker has marked the event ID as seen.
+
+GOWDK Runtime provides three seen-store adapters:
+
+- `contracts.NewMemorySeenStore(limit)` keeps a bounded process-local LRU
+  window for local single-binary apps and tests.
+- `fileoutbox.NewSeenStore(path, fileoutbox.WithSeenLimit(limit))` keeps a
+  dependency-free JSON Lines window next to the file outbox.
+- `redisstream.NewSeenStore(client, prefix, ttl)` records IDs with Redis
+  `SETNX` and an expiration TTL for Redis Streams worker deployments.
+
+Subscriber handlers must still be idempotent for any durable delivery adapter.
+Use a stable domain key, event ID, outbox record ID, or application-level
+dedupe table to make repeated deliveries safe. GOWDK Runtime does not hide
+retries behind generated JavaScript or browser state.
 
 External broker adapters can implement the dependency-free `Broker` interface:
 
@@ -447,11 +469,14 @@ Generated packages with executable contract registrations also expose:
 ```go
 registry := gowdkapp.NewContractRegistry()
 err := gowdkapp.RunContractEventWorker(ctx, source)
+err = gowdkapp.RunContractEventWorkerWithSeenStore(ctx, source, seen)
 ```
 
 `NewContractRegistry` creates a fresh registry using the scanned registration
 functions. `RunContractEventWorker` replays an `EventSource` through the same
-registrations with the worker role.
+registrations with the worker role. `RunContractEventWorkerWithSeenStore` uses
+the same worker role and skips duplicate event IDs through the provided
+`contracts.SeenStore`.
 
 These helpers are deliberately local process APIs. Generated apps do not yet
 emit separate worker or cron binaries, supervisor configs, queue topology, or
@@ -675,6 +700,11 @@ Current behavior:
   `CaptureCommandEventsForRole(..., contracts.RoleWeb, input)`, send captured
   events to the configured command event sink, and return the command result as
   no-store JSON.
+- Success responses are `200 application/json` with the command result encoded
+  directly as JSON. Error responses are `application/json` with
+  `{"error":"..."}` and `Cache-Control: no-store`; ordinary 5xx errors use the
+  generic HTTP status text, while `response.NewHandlerError(status, message,
+  cause)` can opt into an explicit client-safe status and message.
 - When the scanner can see the exported command input struct fields, generated
   adapters parse submitted form values, allow only the scanned fields, decode
   supported scalar fields, and pass the typed command input to the registry.
@@ -721,6 +751,11 @@ Current behavior:
   local `runtime/contracts.Registry`, route page-owned query references through
   the backend router, execute the query with `ExecuteQueryForRole(...,
   contracts.RoleWeb, input)`, and return the query result as no-store JSON.
+- Success responses are `200 application/json` with the query result encoded
+  directly as JSON. Error responses are `application/json` with
+  `{"error":"..."}` and `Cache-Control: no-store`; ordinary 5xx errors use the
+  generic HTTP status text, while `response.NewHandlerError(status, message,
+  cause)` can opt into an explicit client-safe status and message.
 - Page-owned query routes share the page path, so generated apps dispatch them
   only for explicit query requests: `Accept: application/json`, another
   `+json` media type, or `X-GOWDK-Query: true`. Normal document requests keep
@@ -799,11 +834,15 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - `runtime/contracts` can capture command-emitted events as `EventEnvelope`
   values and pass them to a dependency-free `Outbox` interface without
   dispatching subscribers.
+- `EventEnvelope` carries a stable event ID for outbox/broker replay and worker
+  deduplication.
 - Captured event envelopes can be replayed later with
   `PublishEnvelope`, `PublishEnvelopes`, and role-filtered variants.
 - `runtime/contracts/fileoutbox` provides a dependency-free JSON Lines adapter
   that implements `contracts.Outbox` and `contracts.EventSource`, including
   nack retry metadata and an opt-in dead-letter file.
+- `contracts.NewMemorySeenStore`, `fileoutbox.NewSeenStore`, and
+  `redisstream.NewSeenStore` provide deduplication windows for event workers.
 - External broker adapters can implement the dependency-free `Broker`
   interface and receive captured envelopes through `ExecuteCommandToBroker` or
   `PublishEventsToBroker`.
@@ -814,7 +853,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   `CommandEventSink` receives captured command events before the generated
   adapter writes the JSON command result.
 - Generated contract packages expose `NewContractRegistry` and
-  `RunContractEventWorker` when executable contract registrations are present.
+  `RunContractEventWorker` / `RunContractEventWorkerWithSeenStore` when
+  executable contract registrations are present.
 - Queue/outbox adapters can implement the dependency-free `EventSource`
   interface and drive worker-role subscribers through `RunEventWorker`.
 - `internal/appgen` records command/query contract exposure metadata in backend

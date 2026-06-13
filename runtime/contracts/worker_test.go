@@ -73,6 +73,83 @@ func TestRunEventWorkerDispatchesAndAcks(t *testing.T) {
 	}
 }
 
+func TestRunEventWorkerWithSeenStoreAcksDuplicateWithoutDispatch(t *testing.T) {
+	registry := NewRegistry()
+	var handled int
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		handled++
+		return nil
+	}, RoleWorker))
+	seen := NewMemorySeenStore(10)
+	if fresh, err := seen.MarkIfNew(context.Background(), "event-1"); err != nil || !fresh {
+		t.Fatalf("prime seen store fresh=%v err=%v, want true nil", fresh, err)
+	}
+	var acked, nacked int
+	source := &scriptedEventSource{
+		batches: []EventBatch{{
+			Events: []EventEnvelope{{
+				ID:       "event-1",
+				Category: DomainEvent,
+				Type:     typeName[patientCreated](),
+				Value:    patientCreated{ID: "patient-1"},
+			}},
+			Ack: func(ctx context.Context) error {
+				acked++
+				return nil
+			},
+			Nack: func(ctx context.Context, err error) error {
+				nacked++
+				return nil
+			},
+		}},
+		err: ErrEventSourceClosed,
+	}
+
+	if err := RunEventWorkerWithSeenStore(context.Background(), registry, source, seen); err != nil {
+		t.Fatalf("run event worker: %v", err)
+	}
+	if handled != 0 {
+		t.Fatalf("handled duplicate count = %d, want 0", handled)
+	}
+	if acked != 1 || nacked != 0 {
+		t.Fatalf("acked=%d nacked=%d, want acked=1 nacked=0", acked, nacked)
+	}
+}
+
+func TestRunEventWorkerWithSeenStoreDispatchesOnlyNewEvents(t *testing.T) {
+	registry := NewRegistry()
+	var handled []string
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		handled = append(handled, event.ID)
+		return nil
+	}, RoleWorker))
+	seen := NewMemorySeenStore(10)
+	if fresh, err := seen.MarkIfNew(context.Background(), "event-1"); err != nil || !fresh {
+		t.Fatalf("prime seen store fresh=%v err=%v, want true nil", fresh, err)
+	}
+	source := &scriptedEventSource{
+		batches: []EventBatch{{
+			Events: []EventEnvelope{
+				{ID: "event-1", Category: DomainEvent, Type: typeName[patientCreated](), Value: patientCreated{ID: "duplicate"}},
+				{ID: "event-2", Category: DomainEvent, Type: typeName[patientCreated](), Value: patientCreated{ID: "new"}},
+			},
+			Ack: func(ctx context.Context) error { return nil },
+		}},
+		err: ErrEventSourceClosed,
+	}
+
+	if err := RunEventWorkerWithSeenStore(context.Background(), registry, source, seen); err != nil {
+		t.Fatalf("run event worker: %v", err)
+	}
+	if strings.Join(handled, ",") != "new" {
+		t.Fatalf("handled = %#v, want only new event", handled)
+	}
+	fresh, err := seen.MarkIfNew(context.Background(), "event-2")
+	if err != nil || fresh {
+		t.Fatalf("event-2 should be recorded as seen, fresh=%v err=%v", fresh, err)
+	}
+}
+
 func TestRunEventWorkerNacksSubscriberFailureAndContinues(t *testing.T) {
 	registry := NewRegistry()
 	subscriberErr := errors.New("subscriber unavailable")

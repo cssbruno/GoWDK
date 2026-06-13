@@ -6,6 +6,12 @@ import (
 )
 
 var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{
+		Include: []string{"examples/contracts/*.gwdk"},
+	},
+	CSS: gowdk.CSSConfig{
+		Include: []string{"examples/contracts/**/*.css"},
+	},
 	Addons: []gowdk.Addon{
 		contractsaddon.Addon(),
 	},

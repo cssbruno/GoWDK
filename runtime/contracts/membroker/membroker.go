@@ -59,7 +59,7 @@ func (broker *Broker) PublishEvents(ctx context.Context, events []contracts.Even
 	defer broker.mu.Unlock()
 	for _, event := range events {
 		broker.nextID++
-		broker.records = append(broker.records, record{id: broker.nextID, event: event})
+		broker.records = append(broker.records, record{id: broker.nextID, event: contracts.EnsureEventID(event)})
 	}
 	return nil
 }

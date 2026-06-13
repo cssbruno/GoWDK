@@ -43,6 +43,9 @@ func TestStoreEventsAppendsDurableRecords(t *testing.T) {
 	if records[0].Category != contracts.DomainEvent || records[0].Type != patientCreatedType {
 		t.Fatalf("unexpected record metadata: %#v", records[0])
 	}
+	if records[0].ID == "" {
+		t.Fatalf("expected durable record ID to be assigned: %#v", records[0])
+	}
 	var value patientCreated
 	if err := json.Unmarshal(records[0].Value, &value); err != nil {
 		t.Fatalf("unmarshal record value: %v", err)
@@ -71,6 +74,9 @@ func TestReceiveEventBatchDecodesAndAcksRecords(t *testing.T) {
 	}
 	if len(batch.Events) != 2 {
 		t.Fatalf("len(batch.Events) = %d, want 2", len(batch.Events))
+	}
+	if batch.Events[0].ID == "" || batch.Events[1].ID == "" || batch.Events[0].ID == batch.Events[1].ID {
+		t.Fatalf("expected replayed events to carry unique IDs: %#v", batch.Events)
 	}
 	first, ok := batch.Events[0].Value.(patientCreated)
 	if !ok || first.ID != "patient-1" {
@@ -348,5 +354,49 @@ func TestReceiveEventBatchRequiresDecoder(t *testing.T) {
 	_, err := store.ReceiveEventBatch(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "no decoder") {
 		t.Fatalf("expected decoder error, got %v", err)
+	}
+}
+
+func TestSeenStoreMarksNewOnceAndPersists(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seen.jsonl")
+	store := NewSeenStore(path)
+	store.now = func() time.Time { return time.Unix(123, 0).UTC() }
+
+	fresh, err := store.MarkIfNew(context.Background(), "event-1")
+	if err != nil || !fresh {
+		t.Fatalf("first mark fresh=%v err=%v, want true nil", fresh, err)
+	}
+	fresh, err = store.MarkIfNew(context.Background(), "event-1")
+	if err != nil || fresh {
+		t.Fatalf("second mark fresh=%v err=%v, want false nil", fresh, err)
+	}
+
+	reopened := NewSeenStore(path)
+	fresh, err = reopened.MarkIfNew(context.Background(), "event-1")
+	if err != nil || fresh {
+		t.Fatalf("reopened mark fresh=%v err=%v, want false nil", fresh, err)
+	}
+	records, err := reopened.readRecordsLocked()
+	if err != nil {
+		t.Fatalf("read seen records: %v", err)
+	}
+	if len(records) != 1 || records[0].ID != "event-1" {
+		t.Fatalf("unexpected seen records: %#v", records)
+	}
+}
+
+func TestSeenStoreEvictsOldestRecord(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seen.jsonl")
+	store := NewSeenStore(path, WithSeenLimit(1))
+
+	if fresh, err := store.MarkIfNew(context.Background(), "event-1"); err != nil || !fresh {
+		t.Fatalf("mark event-1 fresh=%v err=%v, want true nil", fresh, err)
+	}
+	if fresh, err := store.MarkIfNew(context.Background(), "event-2"); err != nil || !fresh {
+		t.Fatalf("mark event-2 fresh=%v err=%v, want true nil", fresh, err)
+	}
+	fresh, err := store.MarkIfNew(context.Background(), "event-1")
+	if err != nil || !fresh {
+		t.Fatalf("event-1 should be new after eviction, fresh=%v err=%v", fresh, err)
 	}
 }

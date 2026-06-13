@@ -114,6 +114,9 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 			if attr.Name == "g:event" {
 				return fmt.Errorf("component %s must not declare g:event; domain and integration events are backend-owned facts", node.Name)
 			}
+			if strings.HasPrefix(attr.Name, "g:bind:") || attr.Name == "g:bind" {
+				return fmt.Errorf("component %s bindable child state is not supported; use typed emits plus parent-owned state", node.Name)
+			}
 			return fmt.Errorf("component %s uses unsupported directive attribute %q", node.Name, attr.Name)
 		}
 		if strings.Contains(attr.Name, ":") {

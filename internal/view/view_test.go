@@ -109,6 +109,18 @@ func TestRenderWithComponentsRejectsPropRenaming(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsRejectsBindableChildState(t *testing.T) {
+	_, err := RenderWithComponents(`<Child g:bind:value={SelectedID} />`, map[string]Component{
+		"Child": {Name: "Child", Props: []string{"value"}, Body: `<p>{value}</p>`},
+	})
+	if err == nil {
+		t.Fatal("expected bindable child state error")
+	}
+	if !strings.Contains(err.Error(), "bindable child state is not supported") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestParseRejectsUnsupportedTemplateSyntaxWithGOWDKAlternatives(t *testing.T) {
 	tests := []struct {
 		name    string

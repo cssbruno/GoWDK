@@ -265,7 +265,7 @@ state, or server validation results that the server still needs to enforce.
 
 Bindable child state is not stable as a parent/child contract. Parent-child
 coordination should use typed emits plus parent-owned state, or server actions
-for trusted behavior.
+for trusted behavior. Component-call `g:bind:*` is rejected with that guidance.
 
 Computed values are read-only derived state. They can depend on props, state,
 and other computed values. The compiler builds a dependency graph for declared

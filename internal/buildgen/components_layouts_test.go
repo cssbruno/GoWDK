@@ -127,6 +127,32 @@ func TestBuildUsesComponentPropDefaults(t *testing.T) {
 	}
 }
 
+func TestBuildRejectsRecursiveComponentCycle(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "home",
+			Route: "/",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><A /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{
+			{Name: "A", Blocks: gwdkir.Blocks{View: true, ViewBody: `<B />`}},
+			{Name: "B", Blocks: gwdkir.Blocks{View: true, ViewBody: `<A />`}},
+		},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected recursive component cycle error")
+	}
+	if !strings.Contains(err.Error(), `recursive component "A"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestBuildExpandsImportedGOWDKPackageComponent(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{

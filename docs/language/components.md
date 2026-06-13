@@ -344,8 +344,9 @@ slot props plus caller-side `let:` bindings. GOWDK does not currently have a
 separate snippet/render value model.
 
 Recursive component rendering is rejected to prevent unbounded build-time
-rendering. Dynamic component selection is deferred; component calls must name a
-known component directly or through an explicit `use` alias.
+rendering; direct and transitive cycles fail before output is written. Dynamic
+component selection is rejected; component calls must name a known component
+directly or through an explicit `use` alias.
 
 `client {}` is a compiler-owned UI language, not arbitrary JavaScript. The
 supported handlers, helpers, lifecycle blocks, effects, refs, list built-ins,
@@ -379,8 +380,8 @@ replacement for backend handlers.
 Not implemented yet:
 
 - Stable parent consumption of typed `exports {}` values.
-- Rest/spread props, prop renaming, recursive component rendering, dynamic
-  component selection, and bindable child state.
+- Rest/spread props, prop renaming, supported recursive component rendering,
+  supported dynamic component selection, and bindable child state.
 - Full runtime validation for user browser logic in WASM islands, including
   required Go/JS entrypoint registration and export checks.
 - Wiring generated Go component packages into the generated app layout.

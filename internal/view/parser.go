@@ -88,6 +88,9 @@ func (parser *parser) element() (Node, error) {
 	if !parser.consume("<") {
 		return nil, parser.errorf("expected element")
 	}
+	if parser.startsWith("{") {
+		return nil, parser.errorf("dynamic component selection is not supported; component calls must name a known component directly")
+	}
 	name, err := parser.name()
 	if err != nil {
 		return nil, err

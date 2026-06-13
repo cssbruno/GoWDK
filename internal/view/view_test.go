@@ -62,6 +62,29 @@ func TestRenderSPARejectsMissingComponent(t *testing.T) {
 	}
 }
 
+func TestRenderSPARejectsDynamicComponentSyntax(t *testing.T) {
+	_, err := RenderSPA(`<main><{Current} /></main>`)
+	if err == nil {
+		t.Fatal("expected dynamic component error")
+	}
+	if !strings.Contains(err.Error(), "dynamic component selection is not supported") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithComponentsRejectsRecursiveComponentCycle(t *testing.T) {
+	_, err := RenderWithComponents(`<A />`, map[string]Component{
+		"A": {Name: "A", Body: `<B />`},
+		"B": {Name: "B", Body: `<A />`},
+	})
+	if err == nil {
+		t.Fatal("expected recursive component error")
+	}
+	if !strings.Contains(err.Error(), `recursive component "A"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestParseRejectsUnsupportedTemplateSyntaxWithGOWDKAlternatives(t *testing.T) {
 	tests := []struct {
 		name    string

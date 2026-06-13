@@ -24,6 +24,13 @@ func ValidateBackendBindingPolicyIR(config gowdk.Config, ir gwdkir.Program) erro
 
 	var diagnostics []ValidationError
 	for _, binding := range bindings {
+		// A fragment never requires a Go handler: a fragment with no bound
+		// handler renders static .gwdk output. Only an existing-but-unsupported
+		// fragment signature is a hard production error; a missing fragment
+		// handler (including an unexported near-miss) stays a non-fatal warning.
+		if binding.Kind == fragmentHandlerKind && binding.Status == source.BackendBindingMissing {
+			continue
+		}
 		switch binding.Status {
 		case source.BackendBindingMissing, source.BackendBindingUnsupportedSignature:
 			diagnostics = append(diagnostics, backendBindingRequiredDiagnostic(binding))

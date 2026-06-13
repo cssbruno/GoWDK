@@ -55,20 +55,14 @@ func computeBackendBindings(ir gwdkir.Program) []source.BackendBinding {
 		for _, action := range page.Blocks.Actions {
 			binding := bindAction(page, action, pkg)
 			if binding.Status == source.BackendBindingMissing {
-				inlineBinding := bindAction(page, action, defaultInlinePkg())
-				if inlineBinding.Status != source.BackendBindingMissing {
-					binding = inlineBinding
-				}
+				binding = preferInlineBinding(binding, bindAction(page, action, defaultInlinePkg()))
 			}
 			bindings = append(bindings, binding)
 		}
 		for _, api := range page.Blocks.APIs {
 			binding := bindAPI(page, api, pkg)
 			if binding.Status == source.BackendBindingMissing {
-				inlineBinding := bindAPI(page, api, defaultInlinePkg())
-				if inlineBinding.Status != source.BackendBindingMissing {
-					binding = inlineBinding
-				}
+				binding = preferInlineBinding(binding, bindAPI(page, api, defaultInlinePkg()))
 			}
 			bindings = append(bindings, binding)
 		}
@@ -76,6 +70,8 @@ func computeBackendBindings(ir gwdkir.Program) []source.BackendBinding {
 			if binding, ok := bindFragment(page, fragment, pkg); ok {
 				bindings = append(bindings, binding)
 			} else if binding, ok := bindFragment(page, fragment, defaultInlinePkg()); ok {
+				bindings = append(bindings, binding)
+			} else if binding, ok := bindMissingFragmentCandidate(page, fragment, pkg, defaultInlinePkg()); ok {
 				bindings = append(bindings, binding)
 			}
 		}
@@ -252,6 +248,28 @@ func bindFragment(page gwdkir.Page, fragment gwdkir.FragmentEndpoint, pkg featur
 	return binding, true
 }
 
+// bindMissingFragmentCandidate emits a missing fragment binding only when a
+// same-named unexported Go function exists in one of the inspected packages
+// (same-package or inline go block), so a casing mistake surfaces the
+// unexported_backend_handler warning instead of silently falling back to static
+// fragment output. A fragment with no candidate at all stays unbound, because
+// fragments do not require a Go handler.
+func bindMissingFragmentCandidate(page gwdkir.Page, fragment gwdkir.FragmentEndpoint, pkgs ...featurePackage) (source.BackendBinding, bool) {
+	method := strings.TrimSpace(fragment.Method)
+	if method == "" {
+		method = "GET"
+	}
+	for _, pkg := range pkgs {
+		binding := baseBackendBinding(page, fragmentHandlerKind, fragment.Name, method, strings.TrimSpace(fragment.Route), pkg)
+		binding.Status = source.BackendBindingMissing
+		binding.Message = fmt.Sprintf("GOWDK fragment handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), binding.FunctionName)
+		if binding = markUnexportedCandidate(binding, pkg); binding.UnexportedCandidate {
+			return binding, true
+		}
+	}
+	return source.BackendBinding{}, false
+}
+
 func baseBackendBinding(page gwdkir.Page, kind, blockName, method, route string, pkg featurePackage) source.BackendBinding {
 	return source.BackendBinding{
 		Kind:         kind,
@@ -280,6 +298,21 @@ func baseStandaloneBackendBinding(endpoint gwdkir.GoEndpoint, kind, method strin
 		FunctionName: endpoint.Name,
 		Status:       source.BackendBindingMissing,
 	}
+}
+
+// preferInlineBinding resolves an action/api block that did not bind in its
+// same-package Go code by consulting the inline default go {} block. It prefers
+// the inline result when the inline block actually binds (bound or unsupported
+// signature) and, failing that, when only the inline block surfaces an
+// unexported same-named near-miss the user almost certainly meant to bind.
+func preferInlineBinding(samePackage, inline source.BackendBinding) source.BackendBinding {
+	if inline.Status != source.BackendBindingMissing {
+		return inline
+	}
+	if !samePackage.UnexportedCandidate && inline.UnexportedCandidate {
+		return inline
+	}
+	return samePackage
 }
 
 // markUnexportedCandidate flags a missing binding when a same-named unexported

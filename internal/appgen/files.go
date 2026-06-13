@@ -90,21 +90,22 @@ func unsafeEmbeddedDirectory(rel string) bool {
 func unsafeEmbeddedFile(rel string) bool {
 	rel = filepath.ToSlash(rel)
 	base := path.Base(rel)
-	ext := path.Ext(base)
+	normalizedBase := strings.ToLower(base)
+	ext := path.Ext(normalizedBase)
 	switch {
-	case base == ".env" || strings.HasPrefix(base, ".env."):
+	case normalizedBase == ".env" || strings.HasPrefix(normalizedBase, ".env."):
 		return true
-	case base == ".npmrc" || base == ".netrc":
+	case normalizedBase == ".npmrc" || normalizedBase == ".netrc":
 		return true
-	case privateKeyFile(base):
+	case privateKeyFile(normalizedBase):
 		return true
 	case ext == ".map" || ext == ".gwdk" || ext == ".go":
 		return true
-	case ext == ".tmp" || ext == ".temp" || strings.HasSuffix(base, "~"):
+	case ext == ".tmp" || ext == ".temp" || strings.HasSuffix(normalizedBase, "~"):
 		return true
 	case ext == ".key" || ext == ".pem" || ext == ".p12" || ext == ".pfx":
 		return true
-	case strings.HasSuffix(base, ".swp") || strings.HasSuffix(base, ".swo"):
+	case strings.HasSuffix(normalizedBase, ".swp") || strings.HasSuffix(normalizedBase, ".swo"):
 		return true
 	default:
 		return false

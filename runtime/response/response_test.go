@@ -2,6 +2,7 @@ package response
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -308,6 +309,38 @@ func TestWriteHTTPWritesJSON(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `"ok":true`) {
 		t.Fatalf("unexpected body: %s", recorder.Body.String())
+	}
+}
+
+func TestWriteHTTPSkipsBodyForNoBodyStatuses(t *testing.T) {
+	for _, status := range []int{http.StatusNoContent, http.StatusNotModified} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			writeErr := make(chan error, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				writeErr <- WriteHTTP(writer, JSONBody(status, `{"ignored":true}`))
+			}))
+			defer server.Close()
+
+			resp, err := http.Get(server.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != status {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, status)
+			}
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(body) != "" {
+				t.Fatalf("body = %q, want empty", string(body))
+			}
+			if err := <-writeErr; err != nil {
+				t.Fatalf("WriteHTTP error = %v, want nil", err)
+			}
+		})
 	}
 }
 

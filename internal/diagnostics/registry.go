@@ -131,6 +131,7 @@ var Registry = []Code{
 	{Code: "package_must_be_first", Area: "packages", Stability: StabilityStable, Severity: SeverityError, Summary: "package declaration is not the first non-comment declaration"},
 	{Code: "page_store_error", Area: "stores", Stability: StabilityExperimental, Severity: SeverityError, Summary: "page store type or initializer is invalid"},
 	{Code: "page_store_persist_key_conflict", Area: "stores", Stability: StabilityExperimental, Severity: SeverityWarning, Summary: "persisted stores share a storage key but have different shapes"},
+	{Code: "page_store_persist_scope_conflict", Area: "stores", Stability: StabilityExperimental, Severity: SeverityWarning, Summary: "persisted stores share a storage key but use different scopes"},
 	{Code: "page_store_persist_scope_invalid", Area: "stores", Stability: StabilityExperimental, Severity: SeverityError, Summary: "page store persist scope is not \"local\" or \"session\""},
 	{Code: "page_store_persist_secret_field", Area: "stores", Stability: StabilityExperimental, Severity: SeverityWarning, Summary: "persisted page store field resembles a secret"},
 	{Code: "parse_error", Area: "parser", Stability: StabilityStable, Severity: SeverityError, Summary: "parser rejected source without a more specific code"},

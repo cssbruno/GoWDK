@@ -163,6 +163,37 @@ r.hydrate();
 assert.equal(r.get("prefs").Theme, "dark", "hydrate() picks up a store first seen on a later route");
 assert.equal(r.get("cart").Count, 0, "re-hydrate leaves an existing store untouched");
 
+// 9. Adopting persistence across SPA navigation: a store first declared WITHOUT
+// persistence must pick up a later route's persist config (and restore the saved
+// value) instead of silently staying unpersisted, so persistence does not depend
+// on which route loaded first.
+localStorage.setItem("gowdk:store:wishlist", JSON.stringify({ v: "w1", s: { Items: 2 } }));
+// First navigation declares wishlist without persistence (no data-gowdk-persist).
+global.document.querySelectorAll = () => [{
+  getAttribute(name) { return name === "data-gowdk-store" ? "wishlist" : null; },
+  get textContent() { return '{"Items":0}'; }
+}];
+r.hydrate();
+assert.equal(r.get("wishlist").Items, 0, "unpersisted first declaration uses the seed, not storage");
+// Second navigation declares the same store as persist "local".
+let adopted = null;
+r.subscribe("wishlist", (next) => { adopted = next; });
+global.document.querySelectorAll = () => [{
+  getAttribute(name) {
+    if (name === "data-gowdk-store") return "wishlist";
+    if (name === "data-gowdk-persist") return "local";
+    if (name === "data-gowdk-persist-key") return "gowdk:store:wishlist";
+    if (name === "data-gowdk-persist-version") return "w1";
+    return null;
+  },
+  get textContent() { return '{"Items":0}'; }
+}];
+r.hydrate();
+assert.equal(r.get("wishlist").Items, 2, "re-hydrate adopts persistence and restores the saved value");
+assert.ok(adopted && adopted.Items === 2, "adopting persistence notifies subscribers");
+r.set("wishlist", { Items: 7 });
+assert.equal(JSON.parse(localStorage.getItem("gowdk:store:wishlist")).s.Items, 7, "after adoption, set() writes through to storage");
+
 console.log("OK");
 `
 }

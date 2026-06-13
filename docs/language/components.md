@@ -293,9 +293,11 @@ component state, props, or computed values. The compiler embeds a hash of the
 store's struct shape; when the shape changes, stale persisted state is discarded
 rather than restored, so a struct change never crashes on old data. Because
 browser storage is readable by any script on the origin, persisting a field whose
-name resembles a secret (`token`, `password`, `secret`, `auth`, …) is a warning:
-keep credentials and trusted authorization state server-side. An unknown scope is
-rejected — see `gowdk explain page_store_persist_scope_invalid`.
+name resembles a secret (`token`, `password`, `secret`, `auth`, …) is a warning —
+including a nested field such as `Profile.Token`, because persistence writes the
+whole value of each top-level field: keep credentials and trusted authorization
+state server-side. An unknown scope is rejected — see
+`gowdk explain page_store_persist_scope_invalid`.
 
 Persisted stores also sync across tabs: when one tab writes, other tabs on the
 origin mirror the value through the browser `storage` event. To drop a persisted
@@ -304,7 +306,11 @@ store (for example after checkout or logout), call
 the store to its build-time init value. If two pages persist a store with the
 same name but different shapes, they share one storage key and discard each
 other's data on navigation; the compiler warns with
-`page_store_persist_key_conflict`.
+`page_store_persist_key_conflict`. If they share the same shape but declare
+different `local`/`session` scopes, the runtime keeps whichever scope initialized
+first and the compiler warns with `page_store_persist_scope_conflict`. A store
+first reached on a route that does not persist it still adopts persistence when a
+later route declares it, restoring the saved value regardless of navigation order.
 
 Persistence survives SPA navigation: when the client runtime swaps page content
 it re-scans store seeds, so a store first declared on a later client-side route

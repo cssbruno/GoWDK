@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
@@ -85,6 +86,52 @@ func TestValidatePageWarnsOnPersistedSecretField(t *testing.T) {
 	// A resembling-secret field name must not fail the build.
 	if ValidationErrors(diagnostics).HasErrors() {
 		t.Fatalf("secret field warning should not fail the build: %#v", diagnostics)
+	}
+}
+
+func TestValidatePageWarnsOnNestedPersistedSecretField(t *testing.T) {
+	// ProfileState has no top-level secret-like field, but nests Account.Token.
+	// Persistence writes the whole Account value, so the nested secret must be
+	// flagged even though the top-level scan alone would miss it.
+	page := persistedStorePage("profile", "ProfileState", "NewProfileState", "local")
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	diagnostic := firstDiagnostic(diagnostics, "page_store_persist_secret_field")
+	if diagnostic == nil {
+		t.Fatalf("missing nested page_store_persist_secret_field diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(diagnostic.Message, "Account.Token") {
+		t.Fatalf("expected the nested field path Account.Token in the message, got %q", diagnostic.Message)
+	}
+	if diagnostic.Severity != SeverityWarning {
+		t.Fatalf("nested secret field should be a warning, got severity %v", diagnostic.Severity)
+	}
+	if ValidationErrors(diagnostics).HasErrors() {
+		t.Fatalf("nested secret field warning should not fail the build: %#v", diagnostics)
+	}
+}
+
+func TestValidateWarnsOnPersistedStoreScopeConflict(t *testing.T) {
+	// Same store name and shape but different persist scopes share one storage
+	// key; the effective scope then depends on navigation order.
+	app := appFixture{Pages: []gwdkir.Page{
+		persistedStorePageNamed("shop", "/shop", "cart", "CounterState", "NewCounterState", "local"),
+		persistedStorePageNamed("checkout", "/checkout", "cart", "CounterState", "NewCounterState", "session"),
+	}}
+	diagnostics := ValidateProgramReport(gowdk.Config{}, app.program(gowdk.Config{}))
+	d := firstDiagnostic(diagnostics, "page_store_persist_scope_conflict")
+	if d == nil {
+		t.Fatalf("missing page_store_persist_scope_conflict: %#v", diagnostics)
+	}
+	if d.Severity != SeverityWarning {
+		t.Fatalf("scope conflict should be a warning, got %v", d.Severity)
+	}
+	// A mismatched-shape conflict is reported separately; same shape must not
+	// also raise a key conflict.
+	if other := firstDiagnostic(diagnostics, "page_store_persist_key_conflict"); other != nil {
+		t.Fatalf("same-shape scope conflict must not also raise a key conflict: %#v", other)
+	}
+	if ValidationErrors(diagnostics).HasErrors() {
+		t.Fatalf("scope conflict alone must not fail the build: %#v", diagnostics)
 	}
 }
 

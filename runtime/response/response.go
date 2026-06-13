@@ -208,26 +208,26 @@ func WriteHTTP(writer http.ResponseWriter, result Response) error {
 		writer.Header().Set("X-GOWDK-Reload", "1")
 		writer.WriteHeader(status)
 	case Fragment:
-		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if statusAllowsBody(status) {
+			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		}
 		if result.Target != "" {
 			writer.Header().Set("X-GOWDK-Fragment-Target", result.Target)
 		}
 		if result.Swap != "" {
 			writer.Header().Set("X-GOWDK-Fragment-Swap", string(result.Swap))
 		}
-		writer.WriteHeader(status)
-		_, err := writer.Write([]byte(result.Body))
-		return err
+		return writeBody(writer, status, result.Body)
 	case JSON:
-		writer.Header().Set("Content-Type", "application/json; charset=utf-8")
-		writer.WriteHeader(status)
-		_, err := writer.Write([]byte(result.Body))
-		return err
+		if statusAllowsBody(status) {
+			writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+		}
+		return writeBody(writer, status, result.Body)
 	default:
-		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-		writer.WriteHeader(status)
-		_, err := writer.Write([]byte(result.Body))
-		return err
+		if statusAllowsBody(status) {
+			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		}
+		return writeBody(writer, status, result.Body)
 	}
 	return nil
 }
@@ -276,6 +276,19 @@ func statusOrDefault(result Response) int {
 		return http.StatusSeeOther
 	}
 	return http.StatusOK
+}
+
+func writeBody(writer http.ResponseWriter, status int, body string) error {
+	writer.WriteHeader(status)
+	if !statusAllowsBody(status) {
+		return nil
+	}
+	_, err := writer.Write([]byte(body))
+	return err
+}
+
+func statusAllowsBody(status int) bool {
+	return status >= http.StatusOK && status != http.StatusNoContent && status != http.StatusNotModified
 }
 
 func validSwapMode(swap SwapMode) bool {

@@ -178,8 +178,12 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "secrets", "config.json"), `{"token":"secret"}`)
 	writeTestFile(t, filepath.Join(outputDir, "keys", "server.key"), "private key")
 	writeTestFile(t, filepath.Join(outputDir, "keys", "server.pem"), "private key")
+	writeTestFile(t, filepath.Join(outputDir, "keys", "server-upper.PEM"), "private key")
 	writeTestFile(t, filepath.Join(outputDir, "keys", "bundle.p12"), "private key")
+	writeTestFile(t, filepath.Join(outputDir, "keys", "bundle-upper.P12"), "private key")
+	writeTestFile(t, filepath.Join(outputDir, "keys", "client.PFX"), "private key")
 	writeTestFile(t, filepath.Join(outputDir, "keys", "id_ed25519"), "private key")
+	writeTestFile(t, filepath.Join(outputDir, "keys", "ID_RSA"), "private key")
 	writeTestFile(t, filepath.Join(outputDir, ".npmrc"), "//registry.example/:_authToken=secret")
 	writeTestFile(t, filepath.Join(outputDir, "assets", "scratch.tmp"), "temporary")
 	writeTestFile(t, filepath.Join(outputDir, "assets", "app.css"), "body{}")
@@ -203,8 +207,12 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 		filepath.Join(result.OutputDir, "secrets", "config.json"),
 		filepath.Join(result.OutputDir, "keys", "server.key"),
 		filepath.Join(result.OutputDir, "keys", "server.pem"),
+		filepath.Join(result.OutputDir, "keys", "server-upper.PEM"),
 		filepath.Join(result.OutputDir, "keys", "bundle.p12"),
+		filepath.Join(result.OutputDir, "keys", "bundle-upper.P12"),
+		filepath.Join(result.OutputDir, "keys", "client.PFX"),
 		filepath.Join(result.OutputDir, "keys", "id_ed25519"),
+		filepath.Join(result.OutputDir, "keys", "ID_RSA"),
 		filepath.Join(result.OutputDir, ".npmrc"),
 		filepath.Join(result.OutputDir, "assets", "scratch.tmp"),
 	} {

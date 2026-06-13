@@ -354,7 +354,11 @@ Every 0.x minor release must have:
 - [ ] Add diagnostics for unsupported signatures, hidden-by-build-tags symbols,
   non-exported symbols, wrong packages, ambiguous imports, unsupported return
   types, unsupported parameter types, and JSON encoding failures for build data.
-  Deferred to #328.
+  First slice landed: `gowdk check`/`build` now emit `unsupported_backend_signature`
+  and `unexported_backend_handler` warnings for backend handler near-misses.
+  Build-tag-hidden symbols, wrong packages, ambiguous imports, detailed
+  return/parameter type diagnostics, and build-data JSON encoding diagnostics
+  remain deferred to #328.
 - [ ] Add examples using normal Go packages such as `database/sql`, `pgx`,
   `sqlc`, `slog`, session packages, validator packages, email packages,
   markdown packages, image processing packages, and queue packages. Deferred to

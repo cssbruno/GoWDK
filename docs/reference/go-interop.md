@@ -71,6 +71,20 @@ symbol, signature, input metadata, reason, and next-step suggestions.
 writes `gowdk_stubs.go` next to the owning source package and refuses to
 overwrite an existing stub file.
 
+`gowdk check` and `gowdk build` also surface binding near-misses as non-fatal
+warnings, so a wrong signature or a casing mistake is visible without reading
+the JSON report or running a strict production build:
+
+- `unsupported_backend_signature` — a same-named Go function exists but its
+  signature is not a supported action/API/load/fragment shape.
+- `unexported_backend_handler` — a same-named Go function exists but is not
+  exported, so binding cannot see it (for example `func submit` when the block
+  expects `Submit`).
+
+A handler with no candidate function stays silent because the default workflow
+generates 501 stubs for not-yet-implemented handlers; strict production builds
+still fail closed through `backend_binding_required`.
+
 ## Load Functions
 
 Request-time pages with `load {}` bind same-package functions named

@@ -26,6 +26,7 @@ func inspectFeaturePackage(dir string) featurePackage {
 		pkg.Name = loaded.Name
 	}
 	pkg.Functions = typedFeatureFunctions(loaded)
+	pkg.Unexported = unexportedFunctionNames(loaded)
 	return pkg
 }
 
@@ -120,6 +121,26 @@ func typedFeatureFunctions(pkg *packages.Package) map[string]featureFunction {
 		}
 	}
 	return functions
+}
+
+// unexportedFunctionNames collects package-level (non-method) function names
+// that are not exported, so binding can detect a same-named lowercase near-miss
+// for a declared handler (e.g. func submit when the .gwdk block expects Submit).
+func unexportedFunctionNames(pkg *packages.Package) map[string]bool {
+	names := map[string]bool{}
+	if pkg == nil {
+		return names
+	}
+	for _, file := range pkg.Syntax {
+		for _, declaration := range file.Decls {
+			fn, ok := declaration.(*ast.FuncDecl)
+			if !ok || fn.Recv != nil || fn.Name == nil || fn.Name.IsExported() {
+				continue
+			}
+			names[fn.Name.Name] = true
+		}
+	}
+	return names
 }
 
 func typedFeatureFunction(obj *types.Func, pkg *types.Package) (featureFunction, bool) {

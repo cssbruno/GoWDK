@@ -15,6 +15,7 @@ func inspectInlineScriptFeaturePackage(page gwdkir.Page, target string) featureP
 		ImportPath: goblockgen.GeneratedImportPath(page.Package),
 		Name:       goblockgen.SafePackageName(page.Package),
 		Functions:  map[string]featureFunction{},
+		Unexported: map[string]bool{},
 	}
 	var files []*ast.File
 	var importMaps []map[string]string
@@ -37,7 +38,11 @@ func inspectInlineScriptFeaturePackage(page gwdkir.Page, target string) featureP
 		imports := importMaps[index]
 		for _, declaration := range file.Decls {
 			fn, ok := declaration.(*ast.FuncDecl)
-			if !ok || fn.Recv != nil || fn.Name == nil || !fn.Name.IsExported() {
+			if !ok || fn.Recv != nil || fn.Name == nil {
+				continue
+			}
+			if !fn.Name.IsExported() {
+				pkg.Unexported[fn.Name.Name] = true
 				continue
 			}
 			signature, inputType, inputPointer := backendSignature(fn.Type, imports)

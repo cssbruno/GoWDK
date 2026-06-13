@@ -95,7 +95,6 @@ func Scan(root string) (Report, error) {
 	fset := token.NewFileSet()
 	var contracts []Contract
 	var diagnostics []Diagnostic
-	emitsByHandler := map[string][]EventRef{}
 	packages, err := parseScanPackages(fset, absRoot, files)
 	if err != nil {
 		return Report{}, err
@@ -105,17 +104,8 @@ func Scan(root string) (Report, error) {
 		discovered := scanPackage(fset, pkg, inspectionCache)
 		contracts = append(contracts, discovered.Contracts...)
 		diagnostics = append(diagnostics, discovered.Diagnostics...)
-		for handler, emits := range discovered.EmitsByHandler {
-			emitsByHandler[handler] = append(emitsByHandler[handler], emits...)
-		}
 	}
 	diagnostics = append(diagnostics, duplicateCommandDiagnostics(contracts)...)
-	for index := range contracts {
-		if contracts[index].Kind != runtimecontracts.Command {
-			continue
-		}
-		contracts[index].Emits = copyEventRefs(emitsByHandler[contracts[index].Handler])
-	}
 	diagnostics = append(diagnostics, emittedEventCategoryDiagnostics(contracts)...)
 	sort.Slice(contracts, func(i, j int) bool {
 		if contracts[i].Kind != contracts[j].Kind {

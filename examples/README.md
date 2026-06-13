@@ -27,6 +27,7 @@ even when explicit `.gwdk` files are passed.
 | `ssr/dynamic-ssr.page.gwdk` | Validation example for dynamic SSR route metadata. | `go run ./cmd/gowdk check --ssr examples/ssr/dynamic-ssr.page.gwdk` |
 | `ssr/dashboard.page.gwdk` | SSR page with `load` and guard metadata. | `go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk` |
 | `go-interop/imported-build.page.gwdk` | Buildable `.gwdk` import example that calls Go code from `build {}`. | `go run ./cmd/gowdk build --out /tmp/gowdk-go-interop examples/go-interop/imported-build.page.gwdk` |
+| `contracts/patients.page.gwdk` | Local command/query contract web adapter example backed by normal Go registrations. | `go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk` |
 | `embed/site.page.gwdk` | Standalone one-binary generated app example. | `go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk` |
 | `css/styled.page.gwdk` | Configured stylesheet-link example. | `go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk` |
 | `tailwind/site.page.gwdk` | Tailwind v4 addon example using the standalone CLI. | `go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk` |
@@ -37,10 +38,10 @@ even when explicit `.gwdk` files are passed.
 Check all current examples with SSR validation enabled:
 
 ```sh
-go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
-go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
-go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
-go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk
+go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk
+go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk
+go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk
 ```
 
 Build the current simple page:
@@ -99,6 +100,19 @@ Build the current `.gwdk` Go import example:
 go run ./cmd/gowdk build --out /tmp/gowdk-go-interop examples/go-interop/imported-build.page.gwdk
 test -f /tmp/gowdk-go-interop/go-imported/index.html
 go test ./examples/go-interop
+```
+
+Build the local command/query contract web adapter example:
+
+```sh
+go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk
+test -x /tmp/gowdk-contracts-site
+grep -F '"name": "patients.CreatePatient"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"kind": "command"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"path": "/contracts/patients"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"guards": "public"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"name": "patients.GetPatientPage"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"kind": "query"' /tmp/gowdk-contracts-build/gowdk-build-report.json
 ```
 
 Build the one-binary generated app example:

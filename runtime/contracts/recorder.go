@@ -59,11 +59,11 @@ func (recorder *eventRecorder) envelopes() []EventEnvelope {
 	}
 	envelopes := make([]EventEnvelope, 0, len(recorder.events))
 	for _, event := range recorder.events {
-		envelopes = append(envelopes, EventEnvelope{
+		envelopes = append(envelopes, EnsureEventID(EventEnvelope{
 			Category: event.category,
 			Type:     event.eventType,
 			Value:    event.value,
-		})
+		}))
 	}
 	return envelopes
 }

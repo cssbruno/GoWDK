@@ -25,6 +25,7 @@ func TestStoreEventsAppendsDurableRecords(t *testing.T) {
 	store.now = func() time.Time { return time.Unix(123, 0).UTC() }
 
 	err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+		ID:       "event-1",
 		Category: contracts.DomainEvent,
 		Type:     patientCreatedType,
 		Value:    patientCreated{ID: "patient-1"},
@@ -43,6 +44,15 @@ func TestStoreEventsAppendsDurableRecords(t *testing.T) {
 	if records[0].Category != contracts.DomainEvent || records[0].Type != patientCreatedType {
 		t.Fatalf("unexpected record metadata: %#v", records[0])
 	}
+	if records[0].ID == "" {
+		t.Fatalf("expected durable record ID to be assigned: %#v", records[0])
+	}
+	if records[0].EventID != "event-1" {
+		t.Fatalf("record event ID = %q, want event-1", records[0].EventID)
+	}
+	if records[0].ID == records[0].EventID {
+		t.Fatalf("record ID should be distinct from event ID: %#v", records[0])
+	}
 	var value patientCreated
 	if err := json.Unmarshal(records[0].Value, &value); err != nil {
 		t.Fatalf("unmarshal record value: %v", err)
@@ -52,6 +62,74 @@ func TestStoreEventsAppendsDurableRecords(t *testing.T) {
 	}
 	if info, err := os.Stat(path); err != nil || info.Size() == 0 {
 		t.Fatalf("expected durable file at %s, info=%v err=%v", path, info, err)
+	}
+}
+
+func TestStoreEventsFailedReplacementPreservesExistingRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "outbox.jsonl")
+	store := New(path)
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+		ID:       "event-1",
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    patientCreated{ID: "patient-1"},
+	}}); err != nil {
+		t.Fatalf("store initial event: %v", err)
+	}
+
+	renameErr := errors.New("rename failed")
+	store.rename = func(_, _ string) error { return renameErr }
+	err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+		ID:       "event-2",
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    patientCreated{ID: "patient-2"},
+	}})
+	if !errors.Is(err, renameErr) {
+		t.Fatalf("store replacement error = %v, want %v", err, renameErr)
+	}
+
+	records, err := store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records after failed replacement: %v", err)
+	}
+	if len(records) != 1 || records[0].EventID != "event-1" {
+		t.Fatalf("failed replacement should preserve only original record: %#v", records)
+	}
+}
+
+func TestAppendRecordsToPathFailedReplacementPreservesExistingRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "deadletter.jsonl")
+	store := New(filepath.Join(t.TempDir(), "outbox.jsonl"))
+	if err := store.appendRecordsToPathLocked(path, []Record{{
+		ID:       "record-1",
+		EventID:  "event-1",
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    json.RawMessage(`{"id":"patient-1"}`),
+	}}); err != nil {
+		t.Fatalf("append initial record: %v", err)
+	}
+
+	renameErr := errors.New("rename failed")
+	store.rename = func(_, _ string) error { return renameErr }
+	err := store.appendRecordsToPathLocked(path, []Record{{
+		ID:       "record-2",
+		EventID:  "event-2",
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    json.RawMessage(`{"id":"patient-2"}`),
+	}})
+	if !errors.Is(err, renameErr) {
+		t.Fatalf("append replacement error = %v, want %v", err, renameErr)
+	}
+
+	records, err := store.readRecordsFromPathLocked(path)
+	if err != nil {
+		t.Fatalf("records after failed append replacement: %v", err)
+	}
+	if len(records) != 1 || records[0].EventID != "event-1" {
+		t.Fatalf("failed append replacement should preserve only original record: %#v", records)
 	}
 }
 
@@ -71,6 +149,9 @@ func TestReceiveEventBatchDecodesAndAcksRecords(t *testing.T) {
 	}
 	if len(batch.Events) != 2 {
 		t.Fatalf("len(batch.Events) = %d, want 2", len(batch.Events))
+	}
+	if batch.Events[0].ID == "" || batch.Events[1].ID == "" || batch.Events[0].ID == batch.Events[1].ID {
+		t.Fatalf("expected replayed events to carry unique IDs: %#v", batch.Events)
 	}
 	first, ok := batch.Events[0].Value.(patientCreated)
 	if !ok || first.ID != "patient-1" {
@@ -113,6 +194,88 @@ func TestReceiveEventBatchNackKeepsRecords(t *testing.T) {
 	}
 	if records[0].Attempts != 1 || records[0].LastError != nackErr.Error() || records[0].LastAttemptAt == nil {
 		t.Fatalf("unexpected retry metadata after nack: %#v", records[0])
+	}
+}
+
+func TestReceiveEventBatchAckKeepsDuplicateEventIDRowsDistinct(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "outbox.jsonl")
+	store := New(path, WithBatchSize(1), WithJSONTypeDecoder[patientCreated]())
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{
+		{ID: "event-1", Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-1"}},
+		{ID: "event-1", Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-2"}},
+	}); err != nil {
+		t.Fatalf("store events: %v", err)
+	}
+
+	first, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive first batch: %v", err)
+	}
+	if len(first.Events) != 1 || first.Events[0].ID != "event-1" {
+		t.Fatalf("unexpected first batch: %#v", first.Events)
+	}
+	if err := first.Ack(context.Background()); err != nil {
+		t.Fatalf("ack first batch: %v", err)
+	}
+	records, err := store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records after first ack: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("len(records) after first ack = %d, want 1: %#v", len(records), records)
+	}
+	if records[0].EventID != "event-1" || records[0].ID == "event-1" {
+		t.Fatalf("remaining record should keep duplicate event ID with distinct record ID: %#v", records[0])
+	}
+
+	second, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive second batch: %v", err)
+	}
+	if len(second.Events) != 1 || second.Events[0].ID != "event-1" {
+		t.Fatalf("unexpected second batch: %#v", second.Events)
+	}
+}
+
+func TestReceiveEventBatchNackKeepsDuplicateEventIDRowsDistinct(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "outbox.jsonl")
+	store := New(path, WithBatchSize(1), WithJSONTypeDecoder[patientCreated]())
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{
+		{ID: "event-1", Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-1"}},
+		{ID: "event-1", Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-2"}},
+	}); err != nil {
+		t.Fatalf("store events: %v", err)
+	}
+
+	first, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive first batch: %v", err)
+	}
+	nackErr := errors.New("subscriber failed")
+	if err := first.Nack(context.Background(), nackErr); err != nil {
+		t.Fatalf("nack first batch: %v", err)
+	}
+	records, err := store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records after first nack: %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("len(records) after first nack = %d, want 2: %#v", len(records), records)
+	}
+	var retried, untouched int
+	for _, record := range records {
+		if record.EventID != "event-1" || record.ID == "event-1" {
+			t.Fatalf("unexpected duplicate event record identity: %#v", record)
+		}
+		if record.Attempts == 1 && record.LastError == nackErr.Error() {
+			retried++
+		}
+		if record.Attempts == 0 && record.LastError == "" {
+			untouched++
+		}
+	}
+	if retried != 1 || untouched != 1 {
+		t.Fatalf("retry metadata should affect one row only, retried=%d untouched=%d records=%#v", retried, untouched, records)
 	}
 }
 
@@ -348,5 +511,94 @@ func TestReceiveEventBatchRequiresDecoder(t *testing.T) {
 	_, err := store.ReceiveEventBatch(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "no decoder") {
 		t.Fatalf("expected decoder error, got %v", err)
+	}
+}
+
+func TestSeenStoreSeenMarkSeenAndPersists(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seen.jsonl")
+	store := NewSeenStore(path)
+	store.now = func() time.Time { return time.Unix(123, 0).UTC() }
+
+	alreadySeen, err := store.Seen(context.Background(), "event-1")
+	if err != nil || alreadySeen {
+		t.Fatalf("initial seen event-1 seen=%v err=%v, want false nil", alreadySeen, err)
+	}
+	if err := store.MarkSeen(context.Background(), "event-1"); err != nil {
+		t.Fatalf("mark seen: %v", err)
+	}
+	alreadySeen, err = store.Seen(context.Background(), "event-1")
+	if err != nil || !alreadySeen {
+		t.Fatalf("seen event-1 after mark seen=%v err=%v, want true nil", alreadySeen, err)
+	}
+
+	reopened := NewSeenStore(path)
+	alreadySeen, err = reopened.Seen(context.Background(), "event-1")
+	if err != nil || !alreadySeen {
+		t.Fatalf("reopened seen event-1 seen=%v err=%v, want true nil", alreadySeen, err)
+	}
+	records, err := reopened.readRecordsLocked()
+	if err != nil {
+		t.Fatalf("read seen records: %v", err)
+	}
+	if len(records) != 1 || records[0].ID != "event-1" {
+		t.Fatalf("unexpected seen records: %#v", records)
+	}
+}
+
+func TestSeenStoreMarkIfNew(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seen.jsonl")
+	store := NewSeenStore(path)
+
+	fresh, err := store.MarkIfNew(context.Background(), "event-1")
+	if err != nil || !fresh {
+		t.Fatalf("first mark fresh=%v err=%v, want true nil", fresh, err)
+	}
+	fresh, err = store.MarkIfNew(context.Background(), "event-1")
+	if err != nil || fresh {
+		t.Fatalf("second mark fresh=%v err=%v, want false nil", fresh, err)
+	}
+}
+
+func TestSeenStoreFailedReplacementPreservesExistingRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seen.jsonl")
+	store := NewSeenStore(path)
+	if err := store.MarkSeen(context.Background(), "event-1"); err != nil {
+		t.Fatalf("mark initial seen: %v", err)
+	}
+
+	renameErr := errors.New("rename failed")
+	store.rename = func(_, _ string) error { return renameErr }
+	err := store.MarkSeen(context.Background(), "event-2")
+	if !errors.Is(err, renameErr) {
+		t.Fatalf("mark replacement error = %v, want %v", err, renameErr)
+	}
+
+	reopened := NewSeenStore(path)
+	event1Seen, err := reopened.Seen(context.Background(), "event-1")
+	if err != nil {
+		t.Fatalf("seen event-1 after failed replacement: %v", err)
+	}
+	event2Seen, err := reopened.Seen(context.Background(), "event-2")
+	if err != nil {
+		t.Fatalf("seen event-2 after failed replacement: %v", err)
+	}
+	if !event1Seen || event2Seen {
+		t.Fatalf("failed replacement should preserve event-1 only, event1=%v event2=%v", event1Seen, event2Seen)
+	}
+}
+
+func TestSeenStoreEvictsOldestRecord(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seen.jsonl")
+	store := NewSeenStore(path, WithSeenLimit(1))
+
+	if err := store.MarkSeen(context.Background(), "event-1"); err != nil {
+		t.Fatalf("mark event-1: %v", err)
+	}
+	if err := store.MarkSeen(context.Background(), "event-2"); err != nil {
+		t.Fatalf("mark event-2: %v", err)
+	}
+	alreadySeen, err := store.Seen(context.Background(), "event-1")
+	if err != nil || alreadySeen {
+		t.Fatalf("event-1 should be evicted, seen=%v err=%v", alreadySeen, err)
 	}
 }

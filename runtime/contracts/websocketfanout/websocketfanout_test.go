@@ -58,3 +58,34 @@ func TestHubStreamsPresentationEvents(t *testing.T) {
 		t.Fatalf("websocket payload included non-presentation event: %s", source)
 	}
 }
+
+func TestHubRemovesDisconnectedClientsWithoutBroadcast(t *testing.T) {
+	hub := New()
+	server := httptest.NewServer(hub)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	waitForClientCount(t, hub, 1)
+	if err := conn.Close(websocket.StatusNormalClosure, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitForClientCount(t, hub, 0)
+}
+
+func waitForClientCount(t *testing.T, hub *Hub, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if got := hub.ClientCount(); got == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("hub.ClientCount() = %d, want %d", hub.ClientCount(), want)
+}

@@ -176,6 +176,62 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 	}
 }
 
+func TestScanKeepsEmittedEventsScopedToPackageHandlers(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "patients", "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+type PatientCreated struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreate)
+	contracts.RegisterDomainEvent[PatientCreated](r, SendWelcomeEmail)
+}
+
+func HandleCreate(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	if err := contracts.EmitDomain(ctx, PatientCreated{}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	return CreatePatientResult{}, nil
+}
+
+func SendWelcomeEmail(ctx context.Context, event PatientCreated) error {
+	return nil
+}
+`)
+	writeFile(t, filepath.Join(root, "billing", "billing.go"), `package billing
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type PatientCreated struct{}
+
+func HandleCreate(ctx context.Context) error {
+	return contracts.EmitPresentation(ctx, PatientCreated{})
+}
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics from unrelated package handler emits: %#v", report.Diagnostics)
+	}
+	command := findContract(t, report.Contracts, runtimecontracts.Command, "CreatePatient")
+	if len(command.Emits) != 1 || command.Emits[0] != (EventRef{Category: runtimecontracts.DomainEvent, Type: "PatientCreated"}) {
+		t.Fatalf("unexpected command emits: %#v", command.Emits)
+	}
+}
+
 func TestScanReportsInvalidHandlerSignatures(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "patients.go"), `package patients

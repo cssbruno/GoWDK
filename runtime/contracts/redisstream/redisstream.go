@@ -122,6 +122,7 @@ func (store *Store) PublishEvents(ctx context.Context, events []contracts.EventE
 		return err
 	}
 	for _, event := range events {
+		event = contracts.EnsureEventID(event)
 		payload, err := marshalEnvelope(event)
 		if err != nil {
 			return err
@@ -156,14 +157,18 @@ func (store *Store) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch
 		}
 		store.setPendingFirst(false)
 	}
-	batch, ok, err := store.readBatch(ctx, ">")
-	if err != nil {
-		return contracts.EventBatch{}, err
+	for {
+		batch, ok, err := store.readBatch(ctx, ">")
+		if err != nil {
+			return contracts.EventBatch{}, err
+		}
+		if ok {
+			return batch, nil
+		}
+		if err := ctx.Err(); err != nil {
+			return contracts.EventBatch{}, err
+		}
 	}
-	if !ok {
-		return contracts.EventBatch{}, contracts.ErrEventSourceClosed
-	}
-	return batch, nil
 }
 
 func (store *Store) pendingFirst() bool {

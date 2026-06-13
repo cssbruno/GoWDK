@@ -41,23 +41,26 @@ packages, and tooling contracts may change before a stable release.
   source; a sibling Go package that fails to compile keeps a "could not be
   inspected" binding instead of falling back to an inline block and reporting a
   misleading bound handler (the compile error is reported by `go_package_error`);
-  a failing `go list` for a same-package build function now surfaces its real
+  and a failing `go list` for a same-package build function now surfaces its real
   cause (for example a missing `go.mod`) rather than a generic "requires a
-  buildable Go package" message; and a component-script resolution error during
+  buildable Go package" message. A component-script resolution error during
   build now fails the build instead of silently omitting the page's component
-  scripts. The contract scanner's `go list -deps -export` failures now surface
-  their stderr instead of reaching the type checker as an opaque "exit status 1",
-  and an unknown build-data interpolation reference now reports whether the
-  missing name was a build-data field or a route param instead of always saying
-  "unknown route param". Generated-app module resolution no longer silently
-  drops the app module's `require`/`replace` when `go list -m` fails: if the
-  generated app imports app-owned packages it now fails with the real `go list`
-  error instead of producing a go.mod that fails to build with an opaque
-  "cannot find package".
-- The generated-app module loud-failure path is now covered by an integration
-  test: with `go list -m` unable to determine the main module, `moduleSource`
-  fails when the app imports app-owned packages and stays silent when it does
-  not, so the fail-loudly contract for app-module resolution is regression-proof.
+  scripts.
+- Generated `g:command` and `g:query` contract web adapters now use one JSON
+  response contract: success writes the command/query result as no-store JSON,
+  and failures write `{"error":"..."}` as no-store JSON with ordinary 5xx
+  details redacted unless the handler returns an explicit
+  `response.HandlerError`; command form parse, oversized body, CSRF, and input
+  decode failures use the same JSON error shape.
+- Contract event envelopes now carry stable IDs for durable delivery. Workers
+  can opt into deduplication with `RunEventWorkerWithSeenStore` or
+  `RunEventWorkerForRoleWithSeenStore`; duplicate IDs are acked without
+  subscriber dispatch inside the configured window, and fresh IDs are marked
+  seen only after dispatch and source ack succeed. Runtime includes bounded
+  in-memory, file-backed, and Redis TTL seen-store adapters. File outbox records
+  keep unique row IDs separate from event IDs, file-backed outbox/dead-letter
+  and seen-store updates use temp-file replacement, and NATS batch drains
+  preserve already-decoded events if a later drained message cannot be decoded.
 
 ### Known Gaps
 

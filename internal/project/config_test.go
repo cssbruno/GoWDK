@@ -391,6 +391,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	act "github.com/cssbruno/gowdk/addons/actions"
 	apiaddon "github.com/cssbruno/gowdk/addons/api"
+	contractsaddon "github.com/cssbruno/gowdk/addons/contracts"
 	cssaddon "github.com/cssbruno/gowdk/addons/css"
 	embedaddon "github.com/cssbruno/gowdk/addons/embed"
 	partialaddon "github.com/cssbruno/gowdk/addons/partial"
@@ -404,6 +405,7 @@ var Config = gowdk.Config{
 	Addons: []gowdk.Addon{
 		act.Addon(),
 		apiaddon.Addon(),
+		contractsaddon.Addon(),
 		cssaddon.Addon(),
 		embedaddon.Addon(),
 		partialaddon.Addon(),
@@ -421,15 +423,16 @@ var Config = gowdk.Config{
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Addons) != 9 {
+	if len(config.Addons) != 10 {
 		t.Fatalf("unexpected addons: %#v", config.Addons)
 	}
-	if config.Addons[8].Name() != "static" {
-		t.Fatalf("expected static addon, got %#v", config.Addons[8])
+	if config.Addons[9].Name() != "static" {
+		t.Fatalf("expected static addon, got %#v", config.Addons[9])
 	}
 	for _, feature := range []gowdk.Feature{
 		gowdk.FeatureActions,
 		gowdk.FeatureAPI,
+		gowdk.FeatureContracts,
 		gowdk.FeatureCSS,
 		gowdk.FeatureEmbed,
 		gowdk.FeaturePartial,
@@ -440,6 +443,49 @@ var Config = gowdk.Config{
 		if !config.HasFeature(feature) {
 			t.Fatalf("expected feature %q from parsed built-in addons", feature)
 		}
+	}
+}
+
+func TestLoadConfigFileKeepsExecutableFallbackWithBuiltInAddons(t *testing.T) {
+	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+`)
+	path := filepath.Join(root, DefaultConfigFile)
+	writeTestFile(t, path, `package app
+
+import (
+	"os"
+
+	"github.com/cssbruno/gowdk"
+	contractsaddon "github.com/cssbruno/gowdk/addons/contracts"
+)
+
+var Config = gowdk.Config{
+	AppName: os.Getenv("GOWDK_TEST_APP_NAME"),
+	Addons: []gowdk.Addon{
+		contractsaddon.Addon(),
+	},
+}
+`)
+	tidyTestModule(t, root)
+	t.Setenv("GOWDK_TEST_APP_NAME", "Executable Contracts App")
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.AppName != "Executable Contracts App" {
+		t.Fatalf("expected executable config to load app name, got %q", config.AppName)
+	}
+	if !config.HasFeature(gowdk.FeatureContracts) {
+		t.Fatalf("expected executable config to keep contracts addon, got %#v", config.Addons)
 	}
 }
 

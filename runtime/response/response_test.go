@@ -406,3 +406,36 @@ func TestWriteNoStoreHandlerError(t *testing.T) {
 		t.Fatalf("unexpected safe handler error body: %q", body)
 	}
 }
+
+func TestWriteNoStoreHandlerJSONError(t *testing.T) {
+	recorder := httptest.NewRecorder()
+
+	WriteNoStoreHandlerJSONError(recorder, errors.New("internal database password=secret"), http.StatusInternalServerError)
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store, got %q", cache)
+	}
+	if contentType := recorder.Header().Get("Content-Type"); contentType != "application/json; charset=utf-8" {
+		t.Fatalf("expected JSON content type, got %q", contentType)
+	}
+	if body := strings.TrimSpace(recorder.Body.String()); body != `{"error":"Internal Server Error"}` {
+		t.Fatalf("unexpected JSON handler error body: %q", body)
+	}
+}
+
+func TestWriteNoStoreHandlerJSONErrorUsesExplicitHandlerErrorMessage(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	err := NewHandlerError(http.StatusConflict, "duplicate patient", errors.New("unique constraint detail"))
+
+	WriteNoStoreHandlerJSONError(recorder, err, http.StatusInternalServerError)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if body := strings.TrimSpace(recorder.Body.String()); body != `{"error":"duplicate patient"}` {
+		t.Fatalf("unexpected JSON handler error body: %q", body)
+	}
+}

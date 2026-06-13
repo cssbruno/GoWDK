@@ -180,6 +180,18 @@ func actionCaseStmts(action ActionEndpoint, csrf bool, rateLimit bool) []ast.Stm
 }
 
 func actionParseFormStmts(csrf bool) []ast.Stmt {
+	return actionParseFormStmtsWithErrors(csrf, false)
+}
+
+func contractParseFormStmts(csrf bool) []ast.Stmt {
+	return actionParseFormStmtsWithErrors(csrf, true)
+}
+
+func actionParseFormStmtsWithErrors(csrf bool, jsonErrors bool) []ast.Stmt {
+	writeError := writeNoStoreErrorStmt
+	if jsonErrors {
+		writeError = writeNoStoreJSONErrorStmt
+	}
 	stmts := []ast.Stmt{
 		assign([]ast.Expr{selExpr(id("request"), "Body")}, call(sel("http", "MaxBytesReader"), id("response"), selExpr(id("request"), "Body"), id("maxActionBodyBytes"))),
 		&ast.IfStmt{
@@ -189,11 +201,11 @@ func actionParseFormStmts(csrf bool) []ast.Stmt {
 				&ast.IfStmt{
 					Cond: call(sel("strings", "Contains"), call(selExpr(id("err"), "Error")), stringLit("request body too large")),
 					Body: block(
-						writeNoStoreErrorStmt(sel("http", "StatusRequestEntityTooLarge"), "request body too large"),
+						writeError(sel("http", "StatusRequestEntityTooLarge"), "request body too large"),
 						returnBool(true),
 					),
 				},
-				writeNoStoreErrorStmt(sel("http", "StatusBadRequest"), "invalid form"),
+				writeError(sel("http", "StatusBadRequest"), "invalid form"),
 				returnBool(true),
 			),
 		},
@@ -205,7 +217,7 @@ func actionParseFormStmts(csrf bool) []ast.Stmt {
 				Init: define([]ast.Expr{id("err")}, call(selExpr(id("csrfValidator"), "Validate"), id("request"))),
 				Cond: notNil("err"),
 				Body: block(
-					writeNoStoreErrorStmt(sel("http", "StatusForbidden"), "invalid csrf token"),
+					writeError(sel("http", "StatusForbidden"), "invalid csrf token"),
 					returnBool(true),
 				),
 			}),
@@ -722,6 +734,14 @@ func writeNoStoreHandlerErrorExprStmt(err ast.Expr, fallbackStatus ast.Expr) ast
 	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreHandlerError"), id("response"), err, fallbackStatus))
 }
 
+func writeNoStoreJSONErrorStmt(status ast.Expr, message string) ast.Stmt {
+	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreJSONError"), id("response"), status, stringLit(message)))
+}
+
+func writeNoStoreHandlerJSONErrorExprStmt(err ast.Expr, fallbackStatus ast.Expr) ast.Stmt {
+	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreHandlerJSONError"), id("response"), err, fallbackStatus))
+}
+
 func handlerErrorMessageExpr(err ast.Expr, fallbackStatus ast.Expr) ast.Expr {
 	return call(sel("gowdkresponse", "HandlerErrorMessage"), err, fallbackStatus)
 }
@@ -739,6 +759,16 @@ func ifErrReturnInvalidForm() ast.Stmt {
 		Cond: notNil("err"),
 		Body: block(
 			writeNoStoreErrorStmt(sel("http", "StatusBadRequest"), "invalid form"),
+			returnBool(true),
+		),
+	}
+}
+
+func ifErrReturnInvalidJSONForm() ast.Stmt {
+	return &ast.IfStmt{
+		Cond: notNil("err"),
+		Body: block(
+			writeNoStoreJSONErrorStmt(sel("http", "StatusBadRequest"), "invalid form"),
 			returnBool(true),
 		),
 	}

@@ -870,6 +870,7 @@ func TestNewObservationCopiesRoleLabels(t *testing.T) {
 
 func TestEventEnvelopeObservationUsesStableLabels(t *testing.T) {
 	envelope := EventEnvelope{
+		ID:       "event-1",
 		Category: DomainEvent,
 		Type:     ContractName[patientCreated](),
 		Value:    patientCreated{ID: "patient-1"},
@@ -888,11 +889,38 @@ func TestEventEnvelopeObservationUsesStableLabels(t *testing.T) {
 	if observation.Labels.EventCategory != DomainEvent {
 		t.Fatalf("event category = %q, want domain", observation.Labels.EventCategory)
 	}
+	if observation.Labels.EventID != "event-1" {
+		t.Fatalf("event id = %q, want event-1", observation.Labels.EventID)
+	}
 	if observation.Labels.Contract != ContractName[patientCreated]() {
 		t.Fatalf("contract = %q, want patientCreated", observation.Labels.Contract)
 	}
 	if observation.Labels.Handlers != 0 {
 		t.Fatalf("handlers = %d, want 0 for envelope labels", observation.Labels.Handlers)
+	}
+}
+
+func TestEventEnvelopeJSONPreservesID(t *testing.T) {
+	payload, err := MarshalEventEnvelopeJSON(EventEnvelope{
+		ID:       "event-1",
+		Category: DomainEvent,
+		Type:     ContractName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	})
+	if err != nil {
+		t.Fatalf("marshal envelope: %v", err)
+	}
+	decoded, err := DecodeEventEnvelopeJSON(payload, map[string]EventDecoder{
+		ContractName[patientCreated](): JSONEventDecoder[patientCreated](),
+	})
+	if err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	if decoded.ID != "event-1" {
+		t.Fatalf("decoded ID = %q, want event-1", decoded.ID)
+	}
+	if value, ok := decoded.Value.(patientCreated); !ok || value.ID != "patient-1" {
+		t.Fatalf("decoded value = %#v, want patientCreated patient-1", decoded.Value)
 	}
 }
 

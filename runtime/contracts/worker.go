@@ -93,7 +93,7 @@ func dispatchEventBatch(ctx context.Context, registry *Registry, role Role, batc
 	if len(batch.Events) == 0 {
 		return ackEventBatch(ctx, batch)
 	}
-	events, err := unseenEvents(ctx, role, batch.Events, seen)
+	events, deliveredIDs, err := unseenEvents(ctx, role, batch.Events, seen)
 	if err != nil {
 		return err
 	}
@@ -112,30 +112,53 @@ func dispatchEventBatch(ctx context.Context, registry *Registry, role Role, batc
 		logWorkerDispatchFailure(err)
 		return nil
 	}
-	return ackEventBatch(ctx, batch)
+	if err := ackEventBatch(ctx, batch); err != nil {
+		return err
+	}
+	return markSeenEvents(ctx, seen, deliveredIDs)
 }
 
-func unseenEvents(ctx context.Context, role Role, events []EventEnvelope, seen SeenStore) ([]EventEnvelope, error) {
+func unseenEvents(ctx context.Context, role Role, events []EventEnvelope, seen SeenStore) ([]EventEnvelope, []string, error) {
 	if seen == nil {
-		return events, nil
+		return events, nil, nil
 	}
 	out := make([]EventEnvelope, 0, len(events))
+	deliveredIDs := make([]string, 0, len(events))
+	pending := map[string]bool{}
 	for _, event := range events {
 		if event.ID == "" {
 			out = append(out, event)
 			continue
 		}
-		fresh, err := seen.MarkIfNew(ctx, event.ID)
-		if err != nil {
-			return nil, err
-		}
-		if !fresh {
+		if pending[event.ID] {
 			logWorkerDedupSkip(event, role)
 			continue
 		}
+		alreadySeen, err := seen.Seen(ctx, event.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if alreadySeen {
+			logWorkerDedupSkip(event, role)
+			continue
+		}
+		pending[event.ID] = true
+		deliveredIDs = append(deliveredIDs, event.ID)
 		out = append(out, event)
 	}
-	return out, nil
+	return out, deliveredIDs, nil
+}
+
+func markSeenEvents(ctx context.Context, seen SeenStore, ids []string) error {
+	if seen == nil {
+		return nil
+	}
+	for _, id := range ids {
+		if err := seen.MarkSeen(ctx, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func logWorkerDedupSkip(event EventEnvelope, role Role) {

@@ -58,6 +58,51 @@ func NewSeenStore(path string, options ...SeenOption) *SeenStore {
 	return store
 }
 
+// Seen reports whether id is present in the retained file window.
+func (store *SeenStore) Seen(ctx context.Context, id string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if id == "" {
+		return false, errors.New("event id is required")
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	records, err := store.readRecordsLocked()
+	if err != nil {
+		return false, err
+	}
+	for _, record := range records {
+		if record.ID == id {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// MarkSeen records id in the retained file window.
+func (store *SeenStore) MarkSeen(ctx context.Context, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if id == "" {
+		return errors.New("event id is required")
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	records, err := store.readRecordsLocked()
+	if err != nil {
+		return err
+	}
+	records = store.markSeenLocked(records, id)
+	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
+		return err
+	}
+	return store.writeRecordsLocked(records)
+}
+
 // MarkIfNew records id and reports whether it was not already present in the
 // retained file window.
 func (store *SeenStore) MarkIfNew(ctx context.Context, id string) (bool, error) {
@@ -79,14 +124,26 @@ func (store *SeenStore) MarkIfNew(ctx context.Context, id string) (bool, error) 
 			return false, nil
 		}
 	}
-	records = append(records, SeenRecord{ID: id, SeenAt: store.now().UTC()})
-	if len(records) > store.limit {
-		records = append([]SeenRecord(nil), records[len(records)-store.limit:]...)
-	}
+	records = store.markSeenLocked(records, id)
 	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
 		return false, err
 	}
 	return true, store.writeRecordsLocked(records)
+}
+
+func (store *SeenStore) markSeenLocked(records []SeenRecord, id string) []SeenRecord {
+	seenAt := store.now().UTC()
+	out := records[:0]
+	for _, record := range records {
+		if record.ID != id {
+			out = append(out, record)
+		}
+	}
+	out = append(out, SeenRecord{ID: id, SeenAt: seenAt})
+	if len(out) > store.limit {
+		return append([]SeenRecord(nil), out[len(out)-store.limit:]...)
+	}
+	return out
 }
 
 func (store *SeenStore) readRecordsLocked() ([]SeenRecord, error) {

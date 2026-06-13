@@ -158,7 +158,9 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 				return gowdk.Config{}, false, false, err
 			}
 		case "Addons":
-			config.Addons, needsExecutableLoad = parseAddons(keyValue.Value, imports)
+			addons, addonsNeedExecutableLoad := parseAddons(keyValue.Value, imports)
+			config.Addons = addons
+			needsExecutableLoad = needsExecutableLoad || addonsNeedExecutableLoad
 		}
 	}
 	return config, needsExecutableLoad, true, nil

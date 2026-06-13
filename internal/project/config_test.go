@@ -446,6 +446,49 @@ var Config = gowdk.Config{
 	}
 }
 
+func TestLoadConfigFileKeepsExecutableFallbackWithBuiltInAddons(t *testing.T) {
+	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+`)
+	path := filepath.Join(root, DefaultConfigFile)
+	writeTestFile(t, path, `package app
+
+import (
+	"os"
+
+	"github.com/cssbruno/gowdk"
+	contractsaddon "github.com/cssbruno/gowdk/addons/contracts"
+)
+
+var Config = gowdk.Config{
+	AppName: os.Getenv("GOWDK_TEST_APP_NAME"),
+	Addons: []gowdk.Addon{
+		contractsaddon.Addon(),
+	},
+}
+`)
+	tidyTestModule(t, root)
+	t.Setenv("GOWDK_TEST_APP_NAME", "Executable Contracts App")
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.AppName != "Executable Contracts App" {
+		t.Fatalf("expected executable config to load app name, got %q", config.AppName)
+	}
+	if !config.HasFeature(gowdk.FeatureContracts) {
+		t.Fatalf("expected executable config to keep contracts addon, got %#v", config.Addons)
+	}
+}
+
 func TestLoadConfigFileReadsImportableExternalAddon(t *testing.T) {
 	root := t.TempDir()
 	repoRoot := repositoryRoot(t)

@@ -130,7 +130,7 @@ func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.R
 		values := gowdkform.FromURLValues(request.PostForm)
 		input, err := decodeContractPatientsCreatePatientInput(values)
 		if err != nil {
-			gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid form")
+			gowdkresponse.WriteNoStoreJSONError(response, http.StatusBadRequest, "invalid form")
 			return true
 		}
 		result, events, err := gowdkcontracts.CaptureCommandEventsForRole[patients.CreatePatient, patients.CreatePatientResult](ctx, contractRegistry, gowdkcontracts.RoleWeb, input)
@@ -158,7 +158,7 @@ func queryPatientsGetPatientPageGETPatients(contractRegistry *gowdkcontracts.Reg
 		values := gowdkform.FromURLValues(request.URL.Query())
 		input, err := decodeContractPatientsGetPatientPageInput(values)
 		if err != nil {
-			gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid form")
+			gowdkresponse.WriteNoStoreJSONError(response, http.StatusBadRequest, "invalid form")
 			return true
 		}
 		result, err := gowdkcontracts.ExecuteQueryForRole[patients.GetPatientPage, patients.PatientPageData](ctx, contractRegistry, gowdkcontracts.RoleWeb, input)

@@ -90,6 +90,26 @@ type fakeSeenClient struct {
 	ttl    time.Duration
 }
 
+func (client *fakeSeenClient) Exists(ctx context.Context, keys ...string) *redis.IntCmd {
+	var count int64
+	for _, key := range keys {
+		if client.values[key] {
+			count++
+		}
+	}
+	return redis.NewIntResult(count, nil)
+}
+
+func (client *fakeSeenClient) Set(ctx context.Context, key string, value any, expiration time.Duration) *redis.StatusCmd {
+	client.key = key
+	client.ttl = expiration
+	if client.values == nil {
+		client.values = map[string]bool{}
+	}
+	client.values[key] = true
+	return redis.NewStatusResult("OK", nil)
+}
+
 func (client *fakeSeenClient) SetNX(ctx context.Context, key string, value any, expiration time.Duration) *redis.BoolCmd {
 	client.key = key
 	client.ttl = expiration
@@ -103,16 +123,33 @@ func (client *fakeSeenClient) SetNX(ctx context.Context, key string, value any, 
 	return redis.NewBoolResult(true, nil)
 }
 
-func TestSeenStoreUsesSetNXWithTTL(t *testing.T) {
+func TestSeenStoreUsesExistsAndSetWithTTL(t *testing.T) {
+	client := &fakeSeenClient{}
+	store := newSeenStore(client, "seen:", time.Minute)
+
+	alreadySeen, err := store.Seen(context.Background(), "event-1")
+	if err != nil || alreadySeen {
+		t.Fatalf("initial seen seen=%v err=%v, want false nil", alreadySeen, err)
+	}
+	if err := store.MarkSeen(context.Background(), "event-1"); err != nil {
+		t.Fatalf("mark seen: %v", err)
+	}
+	if client.key != "seen:event-1" || client.ttl != time.Minute {
+		t.Fatalf("unexpected SET key/ttl: key=%q ttl=%s", client.key, client.ttl)
+	}
+	alreadySeen, err = store.Seen(context.Background(), "event-1")
+	if err != nil || !alreadySeen {
+		t.Fatalf("seen after mark seen=%v err=%v, want true nil", alreadySeen, err)
+	}
+}
+
+func TestSeenStoreMarkIfNewUsesSetNX(t *testing.T) {
 	client := &fakeSeenClient{}
 	store := newSeenStore(client, "seen:", time.Minute)
 
 	fresh, err := store.MarkIfNew(context.Background(), "event-1")
 	if err != nil || !fresh {
 		t.Fatalf("first mark fresh=%v err=%v, want true nil", fresh, err)
-	}
-	if client.key != "seen:event-1" || client.ttl != time.Minute {
-		t.Fatalf("unexpected SETNX key/ttl: key=%q ttl=%s", client.key, client.ttl)
 	}
 	fresh, err = store.MarkIfNew(context.Background(), "event-1")
 	if err != nil || fresh {

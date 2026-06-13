@@ -357,24 +357,27 @@ func TestReceiveEventBatchRequiresDecoder(t *testing.T) {
 	}
 }
 
-func TestSeenStoreMarksNewOnceAndPersists(t *testing.T) {
+func TestSeenStoreSeenMarkSeenAndPersists(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "seen.jsonl")
 	store := NewSeenStore(path)
 	store.now = func() time.Time { return time.Unix(123, 0).UTC() }
 
-	fresh, err := store.MarkIfNew(context.Background(), "event-1")
-	if err != nil || !fresh {
-		t.Fatalf("first mark fresh=%v err=%v, want true nil", fresh, err)
+	alreadySeen, err := store.Seen(context.Background(), "event-1")
+	if err != nil || alreadySeen {
+		t.Fatalf("initial seen event-1 seen=%v err=%v, want false nil", alreadySeen, err)
 	}
-	fresh, err = store.MarkIfNew(context.Background(), "event-1")
-	if err != nil || fresh {
-		t.Fatalf("second mark fresh=%v err=%v, want false nil", fresh, err)
+	if err := store.MarkSeen(context.Background(), "event-1"); err != nil {
+		t.Fatalf("mark seen: %v", err)
+	}
+	alreadySeen, err = store.Seen(context.Background(), "event-1")
+	if err != nil || !alreadySeen {
+		t.Fatalf("seen event-1 after mark seen=%v err=%v, want true nil", alreadySeen, err)
 	}
 
 	reopened := NewSeenStore(path)
-	fresh, err = reopened.MarkIfNew(context.Background(), "event-1")
-	if err != nil || fresh {
-		t.Fatalf("reopened mark fresh=%v err=%v, want false nil", fresh, err)
+	alreadySeen, err = reopened.Seen(context.Background(), "event-1")
+	if err != nil || !alreadySeen {
+		t.Fatalf("reopened seen event-1 seen=%v err=%v, want true nil", alreadySeen, err)
 	}
 	records, err := reopened.readRecordsLocked()
 	if err != nil {
@@ -385,18 +388,32 @@ func TestSeenStoreMarksNewOnceAndPersists(t *testing.T) {
 	}
 }
 
+func TestSeenStoreMarkIfNew(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seen.jsonl")
+	store := NewSeenStore(path)
+
+	fresh, err := store.MarkIfNew(context.Background(), "event-1")
+	if err != nil || !fresh {
+		t.Fatalf("first mark fresh=%v err=%v, want true nil", fresh, err)
+	}
+	fresh, err = store.MarkIfNew(context.Background(), "event-1")
+	if err != nil || fresh {
+		t.Fatalf("second mark fresh=%v err=%v, want false nil", fresh, err)
+	}
+}
+
 func TestSeenStoreEvictsOldestRecord(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "seen.jsonl")
 	store := NewSeenStore(path, WithSeenLimit(1))
 
-	if fresh, err := store.MarkIfNew(context.Background(), "event-1"); err != nil || !fresh {
-		t.Fatalf("mark event-1 fresh=%v err=%v, want true nil", fresh, err)
+	if err := store.MarkSeen(context.Background(), "event-1"); err != nil {
+		t.Fatalf("mark event-1: %v", err)
 	}
-	if fresh, err := store.MarkIfNew(context.Background(), "event-2"); err != nil || !fresh {
-		t.Fatalf("mark event-2 fresh=%v err=%v, want true nil", fresh, err)
+	if err := store.MarkSeen(context.Background(), "event-2"); err != nil {
+		t.Fatalf("mark event-2: %v", err)
 	}
-	fresh, err := store.MarkIfNew(context.Background(), "event-1")
-	if err != nil || !fresh {
-		t.Fatalf("event-1 should be new after eviction, fresh=%v err=%v", fresh, err)
+	alreadySeen, err := store.Seen(context.Background(), "event-1")
+	if err != nil || alreadySeen {
+		t.Fatalf("event-1 should be evicted, seen=%v err=%v", alreadySeen, err)
 	}
 }

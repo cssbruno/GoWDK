@@ -326,8 +326,9 @@ Delivery guarantees:
   duplicate event IDs inside a configured deduplication window. Duplicate
   batches are acknowledged without invoking subscribers.
 - A deduplication window is not an exactly-once guarantee. Subscribers must
-  still tolerate redelivery outside the window, after store loss, or when a
-  subscriber fails after the worker has marked the event ID as seen.
+  still tolerate redelivery outside the window, after store loss, after seen
+  store write failures, or across concurrent workers. Event IDs are marked seen
+  only after worker dispatch and source `Ack` both succeed.
 
 GOWDK Runtime provides three seen-store adapters:
 
@@ -335,8 +336,9 @@ GOWDK Runtime provides three seen-store adapters:
   window for local single-binary apps and tests.
 - `fileoutbox.NewSeenStore(path, fileoutbox.WithSeenLimit(limit))` keeps a
   dependency-free JSON Lines window next to the file outbox.
-- `redisstream.NewSeenStore(client, prefix, ttl)` records IDs with Redis
-  `SETNX` and an expiration TTL for Redis Streams worker deployments.
+- `redisstream.NewSeenStore(client, prefix, ttl)` checks IDs with Redis
+  `EXISTS`, records IDs with `SET`, and applies an expiration TTL for Redis
+  Streams worker deployments.
 
 Subscriber handlers must still be idempotent for any durable delivery adapter.
 Use a stable domain key, event ID, outbox record ID, or application-level

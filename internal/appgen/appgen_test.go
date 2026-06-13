@@ -3886,14 +3886,17 @@ func TestGeneratedBinaryContractAdaptersReturnJSONErrors(t *testing.T) {
 			ImportPath:  "gowdk-generated-app/patients",
 			Type:        "CreatePatient",
 			Result:      "CreatePatientResult",
-			InputFields: []source.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
-			Method:      http.MethodPost,
-			Path:        "/patients",
-			Status:      gwdkir.ContractBindingBound,
-			Handler:     "HandleCreatePatient",
-			Register:    "Register",
-			OwnerKind:   gwdkir.SourcePage,
-			OwnerID:     "patients",
+			InputFields: []source.BackendInputField{
+				{FieldName: "Name", FormName: "name", Type: "string"},
+				{FieldName: "Age", FormName: "age", Type: "int"},
+			},
+			Method:    http.MethodPost,
+			Path:      "/patients",
+			Status:    gwdkir.ContractBindingBound,
+			Handler:   "HandleCreatePatient",
+			Register:  "Register",
+			OwnerKind: gwdkir.SourcePage,
+			OwnerID:   "patients",
 		},
 		{
 			Kind:        gwdkir.ContractQuery,
@@ -3928,6 +3931,7 @@ import (
 
 type CreatePatient struct {
 	Name string
+	Age int
 }
 
 type CreatePatientResult struct {
@@ -3992,6 +3996,25 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 		t.Fatalf("command JSON error leaked handler detail: %s", commandPayload)
 	}
 
+	commandDecodeResponse, err := waitForHTTPStatus("http://"+addr+"/patients", http.MethodPost, "name=Ada&age=not-int")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commandDecodePayload, err := io.ReadAll(commandDecodeResponse.Body)
+	_ = commandDecodeResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commandDecodeResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected command decode error status 400, got %d: %s", commandDecodeResponse.StatusCode, commandDecodePayload)
+	}
+	if commandDecodeResponse.Header.Get("Content-Type") != "application/json; charset=utf-8" {
+		t.Fatalf("expected command decode JSON error content type, got %q", commandDecodeResponse.Header.Get("Content-Type"))
+	}
+	if strings.TrimSpace(string(commandDecodePayload)) != `{"error":"invalid form"}` {
+		t.Fatalf("unexpected command decode JSON error payload: %s", commandDecodePayload)
+	}
+
 	queryResponse, err := waitForHTTPStatusWithHeaders("http://"+addr+"/patients?filter=bad", http.MethodGet, "", map[string]string{
 		"Accept": "application/json",
 	})
@@ -4011,6 +4034,27 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 	}
 	if strings.TrimSpace(string(queryPayload)) != `{"error":"invalid filter"}` {
 		t.Fatalf("unexpected query JSON error payload: %s", queryPayload)
+	}
+
+	queryDecodeResponse, err := waitForHTTPStatusWithHeaders("http://"+addr+"/patients?filter=bad&role=admin", http.MethodGet, "", map[string]string{
+		"Accept": "application/json",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queryDecodePayload, err := io.ReadAll(queryDecodeResponse.Body)
+	_ = queryDecodeResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queryDecodeResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected query decode error status 400, got %d: %s", queryDecodeResponse.StatusCode, queryDecodePayload)
+	}
+	if queryDecodeResponse.Header.Get("Content-Type") != "application/json; charset=utf-8" {
+		t.Fatalf("expected query decode JSON error content type, got %q", queryDecodeResponse.Header.Get("Content-Type"))
+	}
+	if strings.TrimSpace(string(queryDecodePayload)) != `{"error":"invalid form"}` {
+		t.Fatalf("unexpected query decode JSON error payload: %s", queryDecodePayload)
 	}
 }
 

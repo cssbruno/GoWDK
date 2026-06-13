@@ -130,10 +130,11 @@ type PresentationFanout interface {
 	SendPresentationEvents(context.Context, []EventEnvelope) error
 }
 
-// SeenStore records durable event IDs that have already been accepted for
-// worker dispatch within an adapter-defined deduplication window.
+// SeenStore records durable event IDs that have already been successfully
+// dispatched and acknowledged within an adapter-defined deduplication window.
 type SeenStore interface {
-	MarkIfNew(context.Context, string) (bool, error)
+	Seen(context.Context, string) (bool, error)
+	MarkSeen(context.Context, string) error
 }
 
 // CommandEventSink receives events captured from a successful command. The

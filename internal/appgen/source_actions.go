@@ -752,6 +752,16 @@ func ifErrReturnInvalidForm() ast.Stmt {
 	}
 }
 
+func ifErrReturnInvalidJSONForm() ast.Stmt {
+	return &ast.IfStmt{
+		Cond: notNil("err"),
+		Body: block(
+			writeNoStoreJSONErrorStmt(sel("http", "StatusBadRequest"), "invalid form"),
+			returnBool(true),
+		),
+	}
+}
+
 func trimHeaderCall(name string) ast.Expr {
 	return call(sel("strings", "TrimSpace"), call(selExpr(selExpr(id("request"), "Header"), "Get"), stringLit(name)))
 }

@@ -143,7 +143,7 @@ func contractDecodeInputStmts(exposure BackendContractExposure, values ast.Expr)
 	return []ast.Stmt{
 		define([]ast.Expr{id("values")}, values),
 		define([]ast.Expr{id("input"), id("err")}, call(sel(contractDecoderName(exposure)), id("values"))),
-		ifErrReturnInvalidForm(),
+		ifErrReturnInvalidJSONForm(),
 	}
 }
 

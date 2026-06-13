@@ -53,8 +53,9 @@ packages, and tooling contracts may change before a stable release.
 - Contract event envelopes now carry stable IDs for durable delivery. Workers
   can opt into deduplication with `RunEventWorkerWithSeenStore` or
   `RunEventWorkerForRoleWithSeenStore`; duplicate IDs are acked without
-  subscriber dispatch inside the configured window. Runtime includes bounded
-  in-memory, file-backed, and Redis SETNX-with-TTL seen-store adapters.
+  subscriber dispatch inside the configured window, and fresh IDs are marked
+  seen only after dispatch and source ack succeed. Runtime includes bounded
+  in-memory, file-backed, and Redis TTL seen-store adapters.
 
 ### Known Gaps
 

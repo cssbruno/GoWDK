@@ -32,6 +32,37 @@ func NewMemorySeenStore(limit int) *MemorySeenStore {
 	}
 }
 
+// Seen reports whether id is present in the current memory window.
+func (store *MemorySeenStore) Seen(ctx context.Context, id string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if id == "" {
+		return false, errors.New("event id is required")
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if element := store.items[id]; element != nil {
+		store.order.MoveToBack(element)
+		return true, nil
+	}
+	return false, nil
+}
+
+// MarkSeen records id in the current memory window.
+func (store *MemorySeenStore) MarkSeen(ctx context.Context, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if id == "" {
+		return errors.New("event id is required")
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	store.markSeenLocked(id)
+	return nil
+}
+
 // MarkIfNew records id and reports whether it had not been seen inside the
 // current memory window.
 func (store *MemorySeenStore) MarkIfNew(ctx context.Context, id string) (bool, error) {
@@ -47,6 +78,15 @@ func (store *MemorySeenStore) MarkIfNew(ctx context.Context, id string) (bool, e
 		store.order.MoveToBack(element)
 		return false, nil
 	}
+	store.markSeenLocked(id)
+	return true, nil
+}
+
+func (store *MemorySeenStore) markSeenLocked(id string) {
+	if element := store.items[id]; element != nil {
+		store.order.MoveToBack(element)
+		return
+	}
 	element := store.order.PushBack(id)
 	store.items[id] = element
 	for len(store.items) > store.limit {
@@ -57,5 +97,4 @@ func (store *MemorySeenStore) MarkIfNew(ctx context.Context, id string) (bool, e
 		delete(store.items, oldest.Value.(string))
 		store.order.Remove(oldest)
 	}
-	return true, nil
 }

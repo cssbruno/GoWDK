@@ -65,6 +65,10 @@ Perform a focused security review when adding:
 First-slice actions, partials, APIs, SSR guards, layouts, and fragments should
 be reviewed against this file before public release.
 
+Use the `security review` GitHub label for issues or pull requests that need a
+focused security pass before merge or release. The repository threat-model
+baseline lives in `docs/engineering/security-threat-model.md`.
+
 ## Reporting
 
 Security reporting policy lives in the repository root `SECURITY.md`.

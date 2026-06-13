@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -51,6 +50,7 @@ type Store struct {
 	maxAttempts    int
 	decoders       map[string]Decoder
 	now            func() time.Time
+	rename         func(string, string) error
 }
 
 // Option configures a Store.
@@ -104,6 +104,7 @@ func New(path string, options ...Option) *Store {
 		batchSize: defaultBatchSize,
 		decoders:  map[string]Decoder{},
 		now:       time.Now,
+		rename:    os.Rename,
 	}
 	for _, option := range options {
 		if option != nil {
@@ -124,36 +125,26 @@ func (store *Store) StoreEvents(ctx context.Context, events []contracts.EventEnv
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(store.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	records, err := store.readRecordsLocked()
 	if err != nil {
 		return err
 	}
-
-	encoder := json.NewEncoder(file)
 	for _, event := range events {
 		event = contracts.EnsureEventID(event)
 		value, err := json.Marshal(event.Value)
 		if err != nil {
-			file.Close()
 			return err
 		}
-		record := Record{
+		records = append(records, Record{
 			ID:       newRecordID(),
 			EventID:  event.ID,
 			StoredAt: store.now().UTC(),
 			Category: event.Category,
 			Type:     event.Type,
 			Value:    value,
-		}
-		if err := encoder.Encode(record); err != nil {
-			file.Close()
-			return err
-		}
+		})
 	}
-	return file.Close()
+	return store.writeRecordsLocked(records)
 }
 
 // Records returns all currently pending outbox records.
@@ -361,52 +352,16 @@ func (store *Store) markRecordsFailedLocked(mark map[string]bool, cause error) e
 }
 
 func (store *Store) writeRecordsLocked(records []Record) error {
-	if len(records) == 0 {
-		if err := os.Remove(store.path); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
-		return err
-	}
-	temp, err := os.CreateTemp(filepath.Dir(store.path), ".gowdk-outbox-*")
-	if err != nil {
-		return err
-	}
-	tempName := temp.Name()
-	encoder := json.NewEncoder(temp)
-	for _, record := range records {
-		if err := encoder.Encode(record); err != nil {
-			temp.Close()
-			os.Remove(tempName)
-			return err
-		}
-	}
-	if err := temp.Close(); err != nil {
-		os.Remove(tempName)
-		return err
-	}
-	return os.Rename(tempName, store.path)
+	return writeJSONLinesAtomic(store.path, ".gowdk-outbox-*", records, store.rename)
 }
 
 func (store *Store) appendRecordsToPathLocked(path string, records []Record) error {
 	if len(records) == 0 {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	existing, err := store.readRecordsFromPathLocked(path)
 	if err != nil {
 		return err
 	}
-	encoder := json.NewEncoder(file)
-	for _, record := range records {
-		if err := encoder.Encode(record); err != nil {
-			file.Close()
-			return err
-		}
-	}
-	return file.Close()
+	return writeJSONLinesAtomic(path, ".gowdk-outbox-*", append(existing, records...), store.rename)
 }

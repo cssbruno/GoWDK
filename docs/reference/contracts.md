@@ -306,11 +306,12 @@ err = contracts.RunEventWorker(ctx, r, outbox)
 ```
 
 The file outbox implements both `contracts.Outbox` and
-`contracts.EventSource`. It appends captured envelopes as JSON Lines records,
-decodes records through explicitly registered decoders, removes records only
-after worker `Ack`, and keeps records after `Nack` for retry. Nack records the
-attempt count, last attempt time, and last error in the durable record. It is
-useful for local development, small single-host deployments, and tests.
+`contracts.EventSource`. It stores captured envelopes as JSON Lines records,
+rewrites pending and dead-letter files through temp-file replacement, decodes
+records through explicitly registered decoders, removes records only after
+worker `Ack`, and keeps records after `Nack` for retry. Nack records the attempt
+count, last attempt time, and last error in the durable record. It is useful for
+local development, small single-host deployments, and tests.
 When `WithDeadLetter(path, maxAttempts)` is configured, records move to the
 dead-letter JSON Lines file after the configured failed delivery count.
 Applications that need database transactions, cross-process locking, retry
@@ -848,7 +849,7 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   `PublishEnvelope`, `PublishEnvelopes`, and role-filtered variants.
 - `runtime/contracts/fileoutbox` provides a dependency-free JSON Lines adapter
   that implements `contracts.Outbox` and `contracts.EventSource`, including
-  nack retry metadata and an opt-in dead-letter file.
+  atomic file replacement, nack retry metadata, and an opt-in dead-letter file.
 - `contracts.NewMemorySeenStore`, `fileoutbox.NewSeenStore`, and
   `redisstream.NewSeenStore` provide deduplication windows for event workers.
 - External broker adapters can implement the dependency-free `Broker`

@@ -24,10 +24,11 @@ type SeenRecord struct {
 // SeenStore records delivered event IDs in a JSON Lines file. It is intended
 // for local single-binary apps that also use fileoutbox.
 type SeenStore struct {
-	mu    sync.Mutex
-	path  string
-	limit int
-	now   func() time.Time
+	mu     sync.Mutex
+	path   string
+	limit  int
+	now    func() time.Time
+	rename func(string, string) error
 }
 
 // SeenOption configures a SeenStore.
@@ -46,9 +47,10 @@ func WithSeenLimit(limit int) SeenOption {
 // NewSeenStore creates a file-backed seen store at path.
 func NewSeenStore(path string, options ...SeenOption) *SeenStore {
 	store := &SeenStore{
-		path:  path,
-		limit: defaultSeenLimit,
-		now:   time.Now,
+		path:   path,
+		limit:  defaultSeenLimit,
+		now:    time.Now,
+		rename: os.Rename,
 	}
 	for _, option := range options {
 		if option != nil {
@@ -176,22 +178,5 @@ func (store *SeenStore) readRecordsLocked() ([]SeenRecord, error) {
 }
 
 func (store *SeenStore) writeRecordsLocked(records []SeenRecord) error {
-	if len(records) == 0 {
-		if err := os.Remove(store.path); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
-	}
-	file, err := os.OpenFile(store.path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	encoder := json.NewEncoder(file)
-	for _, record := range records {
-		if err := encoder.Encode(record); err != nil {
-			file.Close()
-			return err
-		}
-	}
-	return file.Close()
+	return writeJSONLinesAtomic(store.path, ".gowdk-seen-*", records, store.rename)
 }

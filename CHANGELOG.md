@@ -58,8 +58,9 @@ packages, and tooling contracts may change before a stable release.
   subscriber dispatch inside the configured window, and fresh IDs are marked
   seen only after dispatch and source ack succeed. Runtime includes bounded
   in-memory, file-backed, and Redis TTL seen-store adapters. File outbox records
-  keep unique row IDs separate from event IDs, and NATS batch drains preserve
-  already-decoded events if a later drained message cannot be decoded.
+  keep unique row IDs separate from event IDs, file-backed outbox/dead-letter
+  and seen-store updates use temp-file replacement, and NATS batch drains
+  preserve already-decoded events if a later drained message cannot be decoded.
 
 ### Known Gaps
 

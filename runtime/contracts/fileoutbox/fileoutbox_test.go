@@ -65,6 +65,74 @@ func TestStoreEventsAppendsDurableRecords(t *testing.T) {
 	}
 }
 
+func TestStoreEventsFailedReplacementPreservesExistingRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "outbox.jsonl")
+	store := New(path)
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+		ID:       "event-1",
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    patientCreated{ID: "patient-1"},
+	}}); err != nil {
+		t.Fatalf("store initial event: %v", err)
+	}
+
+	renameErr := errors.New("rename failed")
+	store.rename = func(_, _ string) error { return renameErr }
+	err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+		ID:       "event-2",
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    patientCreated{ID: "patient-2"},
+	}})
+	if !errors.Is(err, renameErr) {
+		t.Fatalf("store replacement error = %v, want %v", err, renameErr)
+	}
+
+	records, err := store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records after failed replacement: %v", err)
+	}
+	if len(records) != 1 || records[0].EventID != "event-1" {
+		t.Fatalf("failed replacement should preserve only original record: %#v", records)
+	}
+}
+
+func TestAppendRecordsToPathFailedReplacementPreservesExistingRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "deadletter.jsonl")
+	store := New(filepath.Join(t.TempDir(), "outbox.jsonl"))
+	if err := store.appendRecordsToPathLocked(path, []Record{{
+		ID:       "record-1",
+		EventID:  "event-1",
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    json.RawMessage(`{"id":"patient-1"}`),
+	}}); err != nil {
+		t.Fatalf("append initial record: %v", err)
+	}
+
+	renameErr := errors.New("rename failed")
+	store.rename = func(_, _ string) error { return renameErr }
+	err := store.appendRecordsToPathLocked(path, []Record{{
+		ID:       "record-2",
+		EventID:  "event-2",
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    json.RawMessage(`{"id":"patient-2"}`),
+	}})
+	if !errors.Is(err, renameErr) {
+		t.Fatalf("append replacement error = %v, want %v", err, renameErr)
+	}
+
+	records, err := store.readRecordsFromPathLocked(path)
+	if err != nil {
+		t.Fatalf("records after failed append replacement: %v", err)
+	}
+	if len(records) != 1 || records[0].EventID != "event-1" {
+		t.Fatalf("failed append replacement should preserve only original record: %#v", records)
+	}
+}
+
 func TestReceiveEventBatchDecodesAndAcksRecords(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "outbox.jsonl")
 	store := New(path, WithJSONTypeDecoder[patientCreated]())
@@ -488,6 +556,34 @@ func TestSeenStoreMarkIfNew(t *testing.T) {
 	fresh, err = store.MarkIfNew(context.Background(), "event-1")
 	if err != nil || fresh {
 		t.Fatalf("second mark fresh=%v err=%v, want false nil", fresh, err)
+	}
+}
+
+func TestSeenStoreFailedReplacementPreservesExistingRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seen.jsonl")
+	store := NewSeenStore(path)
+	if err := store.MarkSeen(context.Background(), "event-1"); err != nil {
+		t.Fatalf("mark initial seen: %v", err)
+	}
+
+	renameErr := errors.New("rename failed")
+	store.rename = func(_, _ string) error { return renameErr }
+	err := store.MarkSeen(context.Background(), "event-2")
+	if !errors.Is(err, renameErr) {
+		t.Fatalf("mark replacement error = %v, want %v", err, renameErr)
+	}
+
+	reopened := NewSeenStore(path)
+	event1Seen, err := reopened.Seen(context.Background(), "event-1")
+	if err != nil {
+		t.Fatalf("seen event-1 after failed replacement: %v", err)
+	}
+	event2Seen, err := reopened.Seen(context.Background(), "event-2")
+	if err != nil {
+		t.Fatalf("seen event-2 after failed replacement: %v", err)
+	}
+	if !event1Seen || event2Seen {
+		t.Fatalf("failed replacement should preserve event-1 only, event1=%v event2=%v", event1Seen, event2Seen)
 	}
 }
 

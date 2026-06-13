@@ -3,6 +3,7 @@ package compiler
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -419,20 +420,46 @@ func validateStorePersist(page gwdkir.Page, store gwdkir.Store, resolved gotypes
 		}}
 	}
 	var diagnostics []ValidationError
-	for _, field := range resolved.Fields {
-		if !looksLikeSecretFieldName(field.Name) {
-			continue
-		}
+	// Persistence writes the whole value of each top-level field, so a nested
+	// field such as Profile.Token reaches browser storage too. Scan every field
+	// path the resolver recorded (top-level and nested), not just the top level.
+	for _, path := range secretResemblingFieldPaths(resolved) {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:     "page_store_persist_secret_field",
 			PageID:   page.ID,
 			Source:   page.Source,
 			Span:     firstSpan(store.Span, page.Spans.Page),
 			Severity: SeverityWarning,
-			Message:  fmt.Sprintf("page %s store %q persists field %q, which resembles a secret; %s browser storage is readable by any script on this origin", page.ID, store.Name, field.Name, store.Persist),
+			Message:  fmt.Sprintf("page %s store %q persists field %q, which resembles a secret; %s browser storage is readable by any script on this origin", page.ID, store.Name, path, store.Persist),
 		})
 	}
 	return diagnostics
+}
+
+// secretResemblingFieldPaths returns the resolved struct's field paths (top-level
+// and nested) whose leaf name resembles a secret, deduplicated and sorted for a
+// stable diagnostic order. Slice/array markers ("[]") are stripped so a path
+// reads like Tags.Token rather than Tags[].Token.
+func secretResemblingFieldPaths(resolved gotypes.Struct) []string {
+	seen := map[string]bool{}
+	var paths []string
+	for raw := range resolved.FieldTypes {
+		path := strings.ReplaceAll(raw, "[]", "")
+		leaf := path
+		if index := strings.LastIndex(path, "."); index >= 0 {
+			leaf = path[index+1:]
+		}
+		if leaf == "" || !looksLikeSecretFieldName(leaf) {
+			continue
+		}
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 // looksLikeSecretFieldName flags field names that commonly hold credentials or

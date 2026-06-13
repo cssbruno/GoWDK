@@ -138,7 +138,24 @@ func storeRuntimeSource() string {
   };
 
   registry.init = (name, state, persist) => {
-    if (!name || registry.stores[name]) return;
+    if (!name) return;
+    if (registry.stores[name]) {
+      // The store already exists (for example SPA navigation reached a later
+      // route that declares the same store). If this declaration adds
+      // persistence and we are not persisting yet, adopt it and restore the
+      // saved value so persistence does not depend on which route loaded first.
+      // A conflicting scope is kept first-wins and reported at build time by
+      // page_store_persist_scope_conflict, so navigation cannot thrash storage.
+      if (persist && persist.scope && persist.key && persist.version && !registry.persist[name]) {
+        registry.persist[name] = persist;
+        const restored = readPersisted(persist, registry.fields[name]);
+        if (restored) {
+          registry.stores[name] = Object.assign({}, registry.stores[name] || {}, restored);
+          notify(name);
+        }
+      }
+      return;
+    }
     const seed = Object.assign(Object.create(null), state || {});
     registry.fields[name] = Object.keys(seed);
     registry.seeds[name] = Object.assign(Object.create(null), seed);

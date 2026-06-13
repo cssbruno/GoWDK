@@ -499,7 +499,9 @@ The scope must be `"local"` (localStorage) or `"session"` (sessionStorage); any
 other value is rejected with `page_store_persist_scope_invalid`. Persisted store
 state is keyed by store name, restores over the build-time init value on load,
 is discarded when the store's struct shape changes, and warns when a persisted
-field name resembles a secret.
+field name resembles a secret (nested fields included). Declaring the same store
+name with a different `local`/`session` scope across pages warns with
+`page_store_persist_scope_conflict`.
 
 Client blocks can declare limited DOM refs for safe methods:
 

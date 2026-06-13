@@ -42,6 +42,21 @@ store cart  ui.CartState     = ui.NewCartState()     persist "local"
 // pages/admin.page.gwdk
 store audit admin.AuditState = admin.NewAuditState() persist "local"`,
 	},
+	"page_store_persist_scope_conflict": {
+		Details: "Two pages declare a persisted store with the same name and the same struct shape but different persist scopes (one local, one session). Persistence is keyed by store name (gowdk:store:<name>), so they share one storage slot, but local uses window.localStorage and session uses window.sessionStorage. The runtime keeps whichever scope initialized first, so the effective backend — and whether the value survives a browser restart — depends on which route the user visited first. Use the same scope on both pages, or rename one store.",
+		NextSteps: []string{
+			"Declare the same persist scope (both \"local\" or both \"session\") wherever the store is persisted.",
+			"Rename one of the stores so each persisted store owns its own scope and storage key.",
+		},
+		Invalid: `// pages/shop.page.gwdk
+store cart ui.CartState = ui.NewCartState() persist "local"
+// pages/checkout.page.gwdk  (same shape, different scope)
+store cart ui.CartState = ui.NewCartState() persist "session"`,
+		Fixed: `// pages/shop.page.gwdk
+store cart ui.CartState = ui.NewCartState() persist "local"
+// pages/checkout.page.gwdk
+store cart ui.CartState = ui.NewCartState() persist "local"`,
+	},
 	"page_store_persist_scope_invalid": {
 		Details: "A page store may opt into browser persistence with persist \"local\" or persist \"session\". local uses window.localStorage (survives a browser restart); session uses window.sessionStorage (survives reload and SPA navigation, cleared when the tab closes). No other scope is supported.",
 		NextSteps: []string{

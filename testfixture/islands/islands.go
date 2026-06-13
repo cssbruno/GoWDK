@@ -51,12 +51,31 @@ type SessionState struct {
 	Open  bool
 }
 
+// Credentials nests a secret-resembling field. It exercises the nested
+// persisted-store secret-field warning and should not be persisted in practice.
+type Credentials struct {
+	Token string
+	Label string
+}
+
+// ProfileState carries a nested Credentials value, so persisting it would write
+// the nested Token to browser storage even though no top-level field looks like
+// a secret.
+type ProfileState struct {
+	Name    string
+	Account Credentials
+}
+
 func NewCounterState() CounterState {
 	return CounterState{Count: 1, Open: false}
 }
 
 func NewSessionState() SessionState {
 	return SessionState{}
+}
+
+func NewProfileState() ProfileState {
+	return ProfileState{}
 }
 
 func NewOtherState() OtherState {

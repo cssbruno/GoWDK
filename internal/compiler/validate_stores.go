@@ -36,21 +36,42 @@ func validatePersistedStoreConflicts(pages []gwdkir.Page) []ValidationError {
 				seen[store.Name] = seenStore{page: page, store: store, signature: signature}
 				continue
 			}
-			if prior.signature == signature {
-				continue // same shape sharing one key across routes is intended
+			if prior.signature != signature {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:     "page_store_persist_key_conflict",
+					PageID:   page.ID,
+					Source:   page.Source,
+					Span:     firstSpan(store.Span, page.Spans.Page),
+					Severity: SeverityWarning,
+					Related:  relatedSpan(prior.page.Source, prior.store.Span, fmt.Sprintf("store %q first persisted here on page %s", prior.store.Name, prior.page.ID)),
+					Message: fmt.Sprintf(
+						"persisted store %q has different shapes on pages %s and %s but shares browser storage key %q; navigating between them discards each other's saved data. Rename one store or give them matching shapes",
+						store.Name, prior.page.ID, page.ID, "gowdk:store:"+store.Name,
+					),
+				})
+				continue
 			}
-			diagnostics = append(diagnostics, ValidationError{
-				Code:     "page_store_persist_key_conflict",
-				PageID:   page.ID,
-				Source:   page.Source,
-				Span:     firstSpan(store.Span, page.Spans.Page),
-				Severity: SeverityWarning,
-				Related:  relatedSpan(prior.page.Source, prior.store.Span, fmt.Sprintf("store %q first persisted here on page %s", prior.store.Name, prior.page.ID)),
-				Message: fmt.Sprintf(
-					"persisted store %q has different shapes on pages %s and %s but shares browser storage key %q; navigating between them discards each other's saved data. Rename one store or give them matching shapes",
-					store.Name, prior.page.ID, page.ID, "gowdk:store:"+store.Name,
-				),
-			})
+			if prior.store.Persist != store.Persist {
+				// Same name and shape but different persist scopes (local vs
+				// session) still share one browser storage key. The runtime
+				// registry keeps the scope of whichever route initialized first,
+				// so the effective backend depends on navigation history. Flag
+				// it instead of silently letting nav order decide.
+				diagnostics = append(diagnostics, ValidationError{
+					Code:     "page_store_persist_scope_conflict",
+					PageID:   page.ID,
+					Source:   page.Source,
+					Span:     firstSpan(store.Span, page.Spans.Page),
+					Severity: SeverityWarning,
+					Related:  relatedSpan(prior.page.Source, prior.store.Span, fmt.Sprintf("store %q first persisted with scope %q here on page %s", prior.store.Name, prior.store.Persist, prior.page.ID)),
+					Message: fmt.Sprintf(
+						"persisted store %q uses scope %q on page %s but scope %q on page %s while sharing browser storage key %q; only one scope wins and which one depends on navigation order. Use the same persist scope on both pages or rename one store",
+						store.Name, prior.store.Persist, prior.page.ID, store.Persist, page.ID, "gowdk:store:"+store.Name,
+					),
+				})
+				continue
+			}
+			// Same name, shape, and scope is intentional cross-route sharing.
 		}
 	}
 	return diagnostics

@@ -207,7 +207,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 	if err != nil {
 		return err
 	}
-	if component.StateJSON != "" || component.HandlersJSON != "" || mode != "" || len(component.Emits) > 0 || len(propExpressions) > 0 {
+	if component.StateJSON != "" || component.HandlersJSON != "" || mode != "" || len(component.Emits) > 0 || len(component.Exports) > 0 || len(propExpressions) > 0 {
 		if mode == "" {
 			mode = "js"
 		}
@@ -382,7 +382,18 @@ func (node ComponentCall) parentListener(attr Attr, component Component, ctx *re
 	}
 	event, ok := component.Emits[directive.Event]
 	if !ok {
-		return parentComponentListener{}, fmt.Errorf("component %s does not emit event %q", node.Name, directive.Event)
+		if directive.Event != "exports" || len(component.Exports) == 0 {
+			return parentComponentListener{}, fmt.Errorf("component %s does not emit event %q", node.Name, directive.Event)
+		}
+		readSymbols := mergeClientSymbols(ctx.readSymbols(), exportPayloadSymbols(component.Exports))
+		if err := ValidateIslandEventExpressionTypedWithFunctions(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil); err != nil {
+			return parentComponentListener{}, fmt.Errorf("%s: %w", attr.Name, err)
+		}
+		return parentComponentListener{
+			Event:      directive.Event,
+			Expression: attr.Value,
+			Modifiers:  directive.RuntimeOptions(),
+		}, nil
 	}
 	readSymbols := mergeClientSymbols(ctx.readSymbols(), eventPayloadSymbols(event))
 	if err := ValidateIslandEventExpressionTypedWithFunctions(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil); err != nil {
@@ -393,6 +404,20 @@ func (node ComponentCall) parentListener(attr Attr, component Component, ctx *re
 		Expression: attr.Value,
 		Modifiers:  directive.RuntimeOptions(),
 	}, nil
+}
+
+func exportPayloadSymbols(exports map[string]clientlang.ValueType) map[string]clientlang.ValueType {
+	out := map[string]clientlang.ValueType{
+		"event":        clientlang.TypeObject,
+		"event.active": clientlang.TypeBool,
+	}
+	for name, typ := range exports {
+		if typ == clientlang.TypeUnknown {
+			typ = clientlang.TypeString
+		}
+		out["event."+name] = typ
+	}
+	return out
 }
 
 func eventPayloadSymbols(event clientlang.Emit) map[string]clientlang.ValueType {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	goruntime "runtime"
 	"sort"
 	"strings"
 
@@ -649,6 +650,9 @@ func reportAssetSizes(reporter *buildReporter, outputDir string, assets []AssetA
 		}
 		if artifact.CachePolicy != "" {
 			data["cache"] = artifact.CachePolicy
+		}
+		if logical == islandWASMExecAssetPath() {
+			data["wasmExecGoVersion"] = goruntime.Version()
 		}
 		reporter.info("report", "asset_size", "generated asset size recorded", BuildEvent{
 			Path: rel,

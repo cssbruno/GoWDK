@@ -82,7 +82,7 @@ func islandScriptHrefs(source string, components map[string]view.Component, owne
 		case "wasm":
 			href = "/" + islandWASMLoaderAssetPath(component.Name)
 		case "":
-			if component.StateJSON != "" || component.HandlersJSON != "" || len(component.Emits) > 0 || usage.call.ReactiveProps {
+			if component.StateJSON != "" || component.HandlersJSON != "" || len(component.Emits) > 0 || len(component.Exports) > 0 || usage.call.ReactiveProps {
 				href = "/" + islandJSAssetPath(component.Name)
 			}
 		}

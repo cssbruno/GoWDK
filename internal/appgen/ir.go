@@ -168,6 +168,7 @@ func fragmentComponentsFromIR(components []gwdkir.Component) map[string]view.Com
 			Props:        irPropNames(component.Props),
 			PropTypes:    irPropTypes(component.Props),
 			PropDefaults: irPropDefaults(component.Props),
+			Exports:      irExportTypes(component.Exports),
 			Body:         component.Blocks.ViewBody,
 		}
 		addFragmentComponent(out, compiled)
@@ -252,6 +253,17 @@ func irPropDefaults(props []gwdkir.Prop) map[string]string {
 	}
 	if len(out) == 0 {
 		return nil
+	}
+	return out
+}
+
+func irExportTypes(exports []gwdkir.Export) map[string]clientlang.ValueType {
+	if len(exports) == 0 {
+		return nil
+	}
+	out := map[string]clientlang.ValueType{}
+	for _, export := range exports {
+		out[export.Name] = clientlang.NormalizeType(export.Type)
 	}
 	return out
 }

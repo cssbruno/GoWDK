@@ -112,10 +112,12 @@ Implemented today:
   exports fails the build. Components without `wasm` keep the minimal
   placeholder module for the loader-shape slice and do not ship `wasm_exec.js`.
   The loader discovers matching island roots, builds the ADR-defined bootstrap
-  object from state, props, emits, refs, and binding metadata, calls
-  component-scoped WASM exports when present, captures host DOM events, and
-  applies the supported validated patch commands for text, visibility,
-  attribute, class, style, and emitted-event updates.
+  object from ABI version `gowdk-wasm-island-v1`, state, props, emits, refs,
+  and binding metadata, calls component-scoped WASM exports when present,
+  captures host DOM events, and applies the supported validated patch commands
+  for text, visibility, attribute, class, style, and emitted-event updates. The
+  build report records the Go toolchain version used for generated
+  `wasm_exec.js` runtime assets.
 - Generated apps can serve concrete and dynamic SSR pages in the supported
   generated request-time slice. Dynamic route params are substituted into
   generated SSR placeholders with request-time HTML escaping. Declared

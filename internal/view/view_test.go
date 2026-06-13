@@ -528,6 +528,39 @@ func TestRenderWithComponentsWiresParentComponentEventListener(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsWiresTypedExportListener(t *testing.T) {
+	got, err := RenderWithComponents(`<Parent />`, map[string]Component{
+		"Parent": {
+			Name:       "Parent",
+			State:      map[string]string{"SelectedID": ""},
+			StateJSON:  `{"SelectedID":""}`,
+			StateTypes: map[string]clientlang.ValueType{"SelectedID": clientlang.TypeString},
+			Body:       `<Child g:on:exports={SelectedID = event.ID} />`,
+		},
+		"Child": {
+			Name:         "Child",
+			State:        map[string]string{"ID": "first"},
+			StateJSON:    `{"ID":"first"}`,
+			StateTypes:   map[string]clientlang.ValueType{"ID": clientlang.TypeString},
+			Exports:      map[string]clientlang.ValueType{"ID": clientlang.TypeString},
+			HandlersJSON: `{"exports":["ID"]}`,
+			Body:         `<p>{ID}</p>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-parent-on-exports="SelectedID = event.ID"`,
+		`data-gowdk-client="{&#34;exports&#34;:[&#34;ID&#34;]}"`,
+		`<p><span data-gowdk-bind="ID" data-gowdk-binding-text="b1">first</span></p>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in typed export output:\n%s", want, got)
+		}
+	}
+}
+
 func TestRenderWithComponentsMarksReactivePropExpressions(t *testing.T) {
 	got, err := RenderWithComponents(`<Parent />`, map[string]Component{
 		"Parent": {

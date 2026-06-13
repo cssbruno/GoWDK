@@ -37,8 +37,9 @@ Entrypoint naming:
 Bootstrap ABI:
 
 - The loader passes one JSON object to `GOWDKMount<Component>`.
-- The object contains `component`, `state`, `props`, `emits`, `refs`, and
-  `bindings`.
+- The object contains `abiVersion`, `component`, `state`, `props`, `emits`,
+  `refs`, and `bindings`.
+- The current `abiVersion` is `gowdk-wasm-island-v1`.
 - `state` is the same JSON object used by JS islands.
 - `props` contains initial prop values and reactive prop expression names.
 - `bindings` is the compiler-owned table of text, attribute, class, style,
@@ -47,7 +48,8 @@ Bootstrap ABI:
 Event ABI:
 
 - DOM events are captured by the JS host.
-- The host calls `GOWDKHandle<Component>` with `{ event, binding, detail }`.
+- The host calls `GOWDKHandle<Component>` with
+  `{ abiVersion, component, event, binding, detail }`.
 - `event` is the DOM event name or component event name.
 - `binding` is the compiler-assigned binding ID.
 - `detail` contains scalar event payload fields.
@@ -66,7 +68,7 @@ Lifecycle ABI:
 
 - The host calls `GOWDKMount<Component>` once per island root.
 - The host calls `GOWDKDestroy<Component>` when the island root is removed or on
-  pagehide before unload.
+  pagehide before unload, with `{ abiVersion, component, state }`.
 - Future effect cleanup uses explicit patch/lifecycle return values rather than
   ambient goroutines.
 
@@ -74,6 +76,9 @@ Asset strategy:
 
 - Component WASM stays at `assets/gowdk/islands/<Component>.wasm`.
 - The loader stays at `assets/gowdk/islands/<Component>.wasm.js`.
+- Declared Go WASM packages ship `assets/gowdk/islands/wasm_exec.js` from the
+  Go toolchain used for the build; the build report records that Go version on
+  the `asset_size` event for the runtime asset.
 - Multiple component instances share the same WASM module asset but receive
   separate bootstrap objects.
 - JS and WASM islands may coexist on the same page.
@@ -116,6 +121,7 @@ Asset strategy:
 ## Implementation
 
 - GOWDK builds declared `wasm` packages with `GOOS=js GOARCH=wasm`.
+- Generated loader payloads use ABI version `gowdk-wasm-island-v1`.
 - Built WASM artifacts are rejected unless they export
   `GOWDKMount<Component>`, `GOWDKHandle<Component>`, and
   `GOWDKDestroy<Component>`.

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -647,6 +648,88 @@ func TestBuildEmitsComponentEventRuntimeForJSIsland(t *testing.T) {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated component event runtime:\n%s", expected, js)
 		}
+	}
+}
+
+func TestBuildEmitsTypedExportRuntimeForJSIsland(t *testing.T) {
+	outputDir := t.TempDir()
+	parent := textComponent()
+	parent.Name = "Parent"
+	parent.Source = "components/parent.cmp.gwdk"
+	parent.Blocks.ViewBody = `<Option g:on:exports={Query = event.Query} />`
+	option := textComponent()
+	option.Name = "Option"
+	option.Source = "components/option.cmp.gwdk"
+	option.Exports = []gwdkir.Export{{Name: "Query", Type: "string"}}
+	option.Blocks.ViewBody = `<p>{Query}</p>`
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "picker",
+			Route: "/picker",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Parent /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{parent, option},
+	}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	optionJS := filepath.Join(outputDir, "assets", "gowdk", "islands", "Option.js")
+	if !hasAssetArtifact(result.AssetArtifacts, optionJS) {
+		t.Fatalf("expected Option.js asset, got %#v", result.AssetArtifacts)
+	}
+	html := readFile(t, filepath.Join(outputDir, "picker", "index.html"))
+	for _, expected := range []string{
+		`data-gowdk-parent-on-exports="Query = event.Query"`,
+		`data-gowdk-client="{&#34;exports&#34;:[&#34;Query&#34;]}`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in typed export page:\n%s", expected, html)
+		}
+	}
+	js := readFile(t, optionJS)
+	for _, expected := range []string{
+		`function dispatchComponentExports(root, exportNames, state, active)`,
+		`payload.active = Boolean(active);`,
+		`root.__gowdkExports = payload;`,
+		`root.dispatchEvent(new CustomEvent("exports", { detail: payload, bubbles: true }))`,
+		`root.dispatchEvent(new CustomEvent("gowdk:exports", { detail: payload, bubbles: true }))`,
+		`if (event === "exports" && node.__gowdkExports)`,
+		`dispatchComponentExports(root, exportNames, state, true);`,
+		`dispatchComponentExports(root, exportNames, state, false);`,
+	} {
+		if !strings.Contains(js, expected) {
+			t.Fatalf("expected %q in generated typed export runtime:\n%s", expected, js)
+		}
+	}
+}
+
+func TestBuildRejectsTypedExportWithoutLocalSymbol(t *testing.T) {
+	outputDir := t.TempDir()
+	component := textComponent()
+	component.Exports = []gwdkir.Export{{Name: "Missing", Type: "string"}}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "home",
+			Route: "/",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Search /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{component},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected missing export symbol error")
+	}
+	if !strings.Contains(err.Error(), `export "Missing" must reference a declared prop, state field, or computed value`) {
+		t.Fatalf("unexpected export error: %v", err)
 	}
 }
 
@@ -1853,10 +1936,12 @@ func TestBuildEmitsWASMIslandAssetsOnlyWhenExplicit(t *testing.T) {
 	}
 	loader := readFile(t, loaderPath)
 	for _, expected := range []string{
+		`const abiVersion = "gowdk-wasm-island-v1";`,
 		`const wasmExecPath = "/assets/gowdk/islands/wasm_exec.js";`,
 		`const mountExport = "GOWDKMount" + component;`,
 		`const handleExport = "GOWDKHandle" + component;`,
 		`const destroyExport = "GOWDKDestroy" + component;`,
+		`abiVersion,`,
 		`state: parseJSON(root.getAttribute("data-gowdk-state"), {}),`,
 		`props: parseJSON(root.getAttribute("data-gowdk-props"), {}),`,
 		`bindings: collectBindings(root)`,
@@ -1987,6 +2072,20 @@ func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
 	wasmExec := readFile(t, wasmExecPath)
 	if !strings.Contains(wasmExec, "globalThis.Go = class") {
 		t.Fatalf("expected Go wasm runtime asset, got:\n%s", wasmExec[:min(len(wasmExec), 256)])
+	}
+	var wasmExecSizeEvent *BuildEvent
+	for index := range result.Report.Events {
+		event := &result.Report.Events[index]
+		if event.Stage == "report" && event.Kind == "asset_size" && event.Path == "assets/gowdk/islands/wasm_exec.js" {
+			wasmExecSizeEvent = event
+			break
+		}
+	}
+	if wasmExecSizeEvent == nil {
+		t.Fatalf("missing wasm_exec asset size event in %#v", result.Report.Events)
+	}
+	if wasmExecSizeEvent.Data["wasmExecGoVersion"] != goruntime.Version() {
+		t.Fatalf("expected wasm_exec Go version %q, got %#v", goruntime.Version(), wasmExecSizeEvent.Data)
 	}
 }
 

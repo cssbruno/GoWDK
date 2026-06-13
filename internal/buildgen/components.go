@@ -51,19 +51,24 @@ func buildComponents(components []gwdkir.Component) (map[string]view.Component, 
 			failures = append(failures, fmt.Sprintf("component %s state: %v", component.Name, err))
 			valid = false
 		}
-		handlers, handlersJSON, err := componentClientHandlers(component)
+		emits := componentEmits(component)
+		computeds, computedFailures := componentClientComputeds(component)
+		for _, failure := range computedFailures {
+			failures = append(failures, failure)
+			valid = false
+		}
+		exports, exportNames, exportFailures := componentExports(component, propTypes, stateTypes, computeds)
+		for _, failure := range exportFailures {
+			failures = append(failures, failure)
+			valid = false
+		}
+		handlers, handlersJSON, err := componentClientHandlers(component, exportNames)
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("component %s client: %v", component.Name, err))
 			valid = false
 		}
 		refs, refFailures := componentClientRefs(component)
 		for _, failure := range refFailures {
-			failures = append(failures, failure)
-			valid = false
-		}
-		emits := componentEmits(component)
-		computeds, computedFailures := componentClientComputeds(component)
-		for _, failure := range computedFailures {
 			failures = append(failures, failure)
 			valid = false
 		}
@@ -88,6 +93,7 @@ func buildComponents(components []gwdkir.Component) (map[string]view.Component, 
 			StateTypes:    stateTypes,
 			Refs:          refs,
 			Emits:         emits,
+			Exports:       exports,
 			Computed:      computeds,
 			Body:          component.Blocks.ViewBody,
 		}
@@ -170,13 +176,13 @@ func componentClientRefs(component gwdkir.Component) (map[string]clientlang.Ref,
 	return program.RefMap(), nil
 }
 
-func componentClientHandlers(component gwdkir.Component) (map[string]clientlang.Handler, string, error) {
+func componentClientHandlers(component gwdkir.Component, exports []string) (map[string]clientlang.Handler, string, error) {
 	emits := componentEmits(component)
-	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" && len(emits) == 0 {
+	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" && len(emits) == 0 && len(exports) == 0 {
 		return nil, "", nil
 	}
 	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
-		payload, err := json.Marshal(clientlang.Bootstrap{Emits: emits})
+		payload, err := json.Marshal(clientlang.Bootstrap{Emits: emits, Exports: exports})
 		if err != nil {
 			return nil, "", err
 		}
@@ -188,7 +194,7 @@ func componentClientHandlers(component gwdkir.Component) (map[string]clientlang.
 	}
 	handlers := program.HandlerMap()
 	helpers := program.HelperMap()
-	if len(handlers) == 0 && len(helpers) == 0 && !program.NeedsBootstrap() && len(emits) == 0 {
+	if len(handlers) == 0 && len(helpers) == 0 && !program.NeedsBootstrap() && len(emits) == 0 && len(exports) == 0 {
 		return nil, "", nil
 	}
 	computeds, err := program.OrderedComputed()
@@ -196,11 +202,12 @@ func componentClientHandlers(component gwdkir.Component) (map[string]clientlang.
 		return nil, "", err
 	}
 	var payload []byte
-	if program.NeedsBootstrap() || len(emits) > 0 {
+	if program.NeedsBootstrap() || len(emits) > 0 || len(exports) > 0 {
 		payload, err = json.Marshal(clientlang.Bootstrap{
 			Handlers: handlers,
 			Helpers:  helpers,
 			Emits:    emits,
+			Exports:  exports,
 			Stores:   program.StoreNames(),
 			Mount:    append([]string(nil), program.Mount...),
 			Destroy:  append([]string(nil), program.Destroy...),
@@ -231,6 +238,59 @@ func componentEmits(component gwdkir.Component) map[string]clientlang.Emit {
 		out[event.Name] = clientlang.Emit{Name: event.Name, Params: params, ParamTypes: paramTypes}
 	}
 	return out
+}
+
+func componentExports(component gwdkir.Component, propTypes map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, computeds []clientlang.Computed) (map[string]clientlang.ValueType, []string, []string) {
+	if len(component.Exports) == 0 {
+		return nil, nil, nil
+	}
+	computedTypes := map[string]clientlang.ValueType{}
+	for _, computed := range computeds {
+		computedTypes[computed.Name] = clientlang.NormalizeType(computed.Type)
+	}
+	out := map[string]clientlang.ValueType{}
+	names := make([]string, 0, len(component.Exports))
+	seen := map[string]bool{}
+	var failures []string
+	for _, export := range component.Exports {
+		if seen[export.Name] {
+			failures = append(failures, fmt.Sprintf("component %s declares duplicate export %q", component.Name, export.Name))
+			continue
+		}
+		seen[export.Name] = true
+		expected := clientlang.NormalizeType(export.Type)
+		if expected == clientlang.TypeUnknown || expected == clientlang.TypeArray || expected == clientlang.TypeObject {
+			failures = append(failures, fmt.Sprintf("component %s export %s uses unsupported type %q", component.Name, export.Name, export.Type))
+			continue
+		}
+		actual, ok := propTypes[export.Name]
+		if !ok {
+			actual, ok = stateTypes[export.Name]
+		}
+		if !ok {
+			actual, ok = computedTypes[export.Name]
+		}
+		if !ok {
+			failures = append(failures, fmt.Sprintf("component %s export %q must reference a declared prop, state field, or computed value", component.Name, export.Name))
+			continue
+		}
+		if actual != clientlang.TypeUnknown && actual != expected && !compatibleClientNumericTypes(actual, expected) {
+			failures = append(failures, fmt.Sprintf("component %s export %q declares %s but local symbol is %s", component.Name, export.Name, expected, actual))
+			continue
+		}
+		out[export.Name] = expected
+		names = append(names, export.Name)
+	}
+	if len(out) == 0 {
+		out = nil
+		names = nil
+	}
+	return out, names, failures
+}
+
+func compatibleClientNumericTypes(actual clientlang.ValueType, expected clientlang.ValueType) bool {
+	return (actual == clientlang.TypeInt || actual == clientlang.TypeFloat) &&
+		(expected == clientlang.TypeInt || expected == clientlang.TypeFloat)
 }
 
 func componentProps(component gwdkir.Component) ([]string, map[string]clientlang.ValueType, map[string]string, []string) {

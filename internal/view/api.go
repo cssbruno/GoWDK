@@ -35,6 +35,7 @@ type Component struct {
 	StateTypes    map[string]clientlang.ValueType
 	Refs          map[string]clientlang.Ref
 	Emits         map[string]clientlang.Emit
+	Exports       map[string]clientlang.ValueType
 	Computed      []clientlang.Computed
 	Body          string
 }

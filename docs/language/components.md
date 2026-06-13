@@ -191,11 +191,24 @@ view {
 }
 ```
 
-Typed exports are metadata today:
+Typed exports declare local component values that a parent can observe through
+the generated `exports` event:
 
 ```gwdk
 exports {
-  selectedID string
+  SelectedID string
+}
+
+view {
+  <button g:on:click={SelectedID = "first"}>{SelectedID}</button>
+}
+```
+
+Parent components can listen with `g:on:exports`:
+
+```gwdk
+view {
+  <Picker g:on:exports={CurrentID = event.SelectedID} />
 }
 ```
 
@@ -335,11 +348,13 @@ component that reads a persisted store still declares a matching `state` shape.
 Invalid scopes are reported but not auto-fixed, because choosing `local` vs
 `session` is a deliberate decision.
 
-Exports are typed component metadata today. They document values a component
-intends to expose, but parent pages/components do not yet have a stable runtime
-API for consuming exported component values. Until that contract is generated
-and documented, use props, typed emits, stores, actions, or build/load data for
-actual data flow.
+Exports must reference a declared prop, state field, or computed value and the
+declared type must match that local symbol. Generated JavaScript islands emit
+an `exports` event with `event.active == true` after mount and updates, plus a
+`gowdk:exports` DOM event for direct integrations. Before unmount, the runtime
+emits the same events with `event.active == false` and exported values set to
+`null`, so parent code can clear local handles. Exports are local UI handles;
+they are not server state, trusted input, or a replacement for backend actions.
 
 Slots are the reusable-markup primitive. A default slot uses `<slot />`, named
 slots use `<slot name="name">`, and scoped slots pass scalar values through
@@ -377,16 +392,16 @@ to that component use the WASM island runtime by default. The referenced package
 is browser-side Go compiled for `GOOS=js GOARCH=wasm` with server and process
 packages rejected. GOWDK validates the required component-scoped ABI entrypoints,
 ships Go's browser `wasm_exec.js` runtime asset for declared Go WASM packages,
-and keeps DOM mutation in the generated host loader. WASM islands are not a
-replacement for backend handlers.
+passes `gowdk-wasm-island-v1` payloads to component WASM exports, and keeps DOM
+mutation in the generated host loader. WASM islands are not a replacement for
+backend handlers.
 
 Not implemented yet:
 
-- Stable parent consumption of typed `exports {}` values.
 - Rest/spread props, prop renaming, supported recursive component rendering,
   supported dynamic component selection, and bindable child state.
-- Full runtime validation for user browser logic in WASM islands, including
-  required Go/JS entrypoint registration and export checks.
+- Full runtime validation for user browser logic in WASM islands beyond
+  required export, browser import, and patch-operation checks.
 - Wiring generated Go component packages into the generated app layout.
 - Cross-package store and asset use syntax.
 - Emitting and rewriting component-scoped CSS and component-level assets from

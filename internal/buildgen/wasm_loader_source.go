@@ -7,6 +7,8 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
+const wasmIslandABIVersion = "gowdk-wasm-island-v1"
+
 func clientGoBlockWASMLoaderSource(page gwdkir.Page) string {
 	pageID := strconv.Quote(page.ID)
 	loaderPath := strconv.Quote("/" + clientGoBlockWASMLoaderAssetPath(page))
@@ -90,10 +92,12 @@ func clientGoBlockWASMLoaderSource(page gwdkir.Page) string {
 
 func islandWASMLoaderSource(componentName string) string {
 	component := strconv.Quote(componentName)
+	abiVersion := strconv.Quote(wasmIslandABIVersion)
 	wasmPath := strconv.Quote("/" + islandWASMAssetPath(componentName))
 	wasmExecPath := strconv.Quote("/" + islandWASMExecAssetPath())
 	return fmt.Sprintf(`(() => {
   const component = %s;
+  const abiVersion = %s;
   const wasmPath = %s;
   const wasmExecPath = %s;
   const mountExport = "GOWDKMount" + component;
@@ -164,6 +168,7 @@ func islandWASMLoaderSource(componentName string) string {
   function bootstrap(root) {
     const client = parseJSON(root.getAttribute("data-gowdk-client"), {});
     return {
+      abiVersion,
       component,
       state: parseJSON(root.getAttribute("data-gowdk-state"), {}),
       props: parseJSON(root.getAttribute("data-gowdk-props"), {}),
@@ -278,6 +283,8 @@ func islandWASMLoaderSource(componentName string) string {
           const event = attr.name.slice("data-gowdk-binding-on-".length);
           node.addEventListener(event, (domEvent) => {
             applyPatches(root, callExport(exports, handleExport, {
+              abiVersion,
+              component,
               event,
               binding: attr.value,
               detail: { value: domEvent && domEvent.target ? domEvent.target.value : undefined }
@@ -286,12 +293,12 @@ func islandWASMLoaderSource(componentName string) string {
         });
       });
       window.addEventListener("pagehide", () => {
-        applyPatches(root, callExport(exports, destroyExport, { component, state: parseJSON(root.getAttribute("data-gowdk-state"), {}) }));
+        applyPatches(root, callExport(exports, destroyExport, { abiVersion, component, state: parseJSON(root.getAttribute("data-gowdk-state"), {}) }));
       }, { once: true });
     });
   }).catch((error) => {
     if (typeof console !== "undefined") console.error("GOWDK WASM island failed to start", component, error);
   });
 })();
-`, component, wasmPath, wasmExecPath)
+`, component, abiVersion, wasmPath, wasmExecPath)
 }

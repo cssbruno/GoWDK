@@ -52,6 +52,14 @@ func TestSourceEmitsSPANavigationRuntime(t *testing.T) {
 		`gowdk:navigate-error`,
 		`window.location.href = url.href`,
 		`activateNewScripts(previousScripts)`,
+		// The store runtime runs (and hydrates) before island bundles, which
+		// auto-mount on execution and read the store registry during mount.
+		`script.hasAttribute('data-gowdk-store-runtime')`,
+		`return runScripts(storeScripts).then(`,
+		`window.__gowdkStores.hydrate()`,
+		`return runScripts(otherScripts)`,
+		// Ordered (non-async) execution so a dependency cannot lose the race.
+		`active.async = false`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected runtime source to contain %q:\n%s", expected, source)

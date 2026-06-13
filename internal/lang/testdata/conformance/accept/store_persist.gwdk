@@ -1,0 +1,12 @@
+package pages
+
+import ui "github.com/cssbruno/gowdk/testfixture/islands"
+
+route "/shop"
+guard public
+
+store cart ui.CounterState = ui.NewCounterState() persist "local"
+
+view {
+  <main>Shop</main>
+}

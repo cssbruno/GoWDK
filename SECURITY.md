@@ -5,8 +5,10 @@ production-ready security enforcement.
 
 First slices exist for generated action decoding, unexpected-field rejection,
 direct literal request-shape validation, opt-in CSRF, action request body caps,
-safe local redirects, guard execution, SSR panic boundaries, and no-store
-request-time responses. These are not a complete production security model.
+generated `http.Server` read/header/write/idle timeout defaults,
+`MaxHeaderBytes`, safe local redirects, guard execution, SSR panic boundaries,
+and no-store request-time responses. These are not a complete production
+security model.
 
 ## Reporting Vulnerabilities
 
@@ -46,8 +48,8 @@ Known incomplete production areas include:
 - Multi-key CSRF secret rotation.
 - Full redirect policy.
 - Log redaction.
-- Request timeout defaults.
-- Broad request body/header limits.
+- Configurable request body/header limit policy beyond the current generated
+  defaults.
 - File upload policy.
 - Public API hardening.
 - Realtime security policy.

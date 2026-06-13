@@ -250,8 +250,10 @@ The generated `gowdkapp` package exposes `Handler() (http.Handler, error)` and
 `ServeMux() (*http.ServeMux, error)` for `net/http`, Chi, Echo, Gin, and other
 router integrations. The generated `cmd/server` entrypoint uses that same
 handler, reads `GOWDK_ADDR`, defaults to `127.0.0.1:8080`, serves GET and HEAD
-requests, maps extensionless routes to nested `index.html` files, and does not
-list directories. It exposes `/_gowdk/health` and adds
+requests, applies `http.Server` defaults of `ReadHeaderTimeout: 5s`,
+`ReadTimeout: 10s`, `WriteTimeout: 30s`, `IdleTimeout: 60s`, and
+`MaxHeaderBytes: 1 MiB`, maps extensionless routes to nested `index.html`
+files, and does not list directories. It exposes `/_gowdk/health` and adds
 `X-GOWDK-App`, `X-GOWDK-Module`, and `X-GOWDK-Instance-ID` headers to responses.
 Request-time action/API dispatch registers generated backend routes with
 `runtime/app.BackendRouter` and passes the router hook into `runtime/app`;

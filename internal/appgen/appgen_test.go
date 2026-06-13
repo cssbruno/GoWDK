@@ -3085,6 +3085,46 @@ func HomeTitle() string {
 	}
 }
 
+func TestIsLocalModuleImportPath(t *testing.T) {
+	cases := map[string]bool{
+		"context":                   false,
+		"net/http":                  false,
+		"github.com/cssbruno/gowdk": false,
+		"github.com/cssbruno/gowdk/runtime/response": false,
+		"example.com/site/content":                   true,
+		"github.com/acme/app/pages":                  true,
+		"":                                           false,
+	}
+	for path, want := range cases {
+		if got := isLocalModuleImportPath(path); got != want {
+			t.Fatalf("isLocalModuleImportPath(%q) = %v, want %v", path, got, want)
+		}
+	}
+}
+
+func TestAppHasLocalModuleImportsFromInlineGoBlock(t *testing.T) {
+	ir := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Blocks: gwdkir.Blocks{GoBlocks: []gwdkir.GoBlock{{
+				Body: `import local "example.com/site/local"
+
+func HomeTitle() string { return local.Suffix() }`,
+			}}},
+		}},
+	}
+	if !appHasLocalModuleImports(Options{IR: &ir}) {
+		t.Fatal("expected an app importing example.com/site/local to need the local module")
+	}
+
+	empty := gwdkir.Program{Pages: []gwdkir.Page{{Package: "pages", ID: "home", Route: "/"}}}
+	if appHasLocalModuleImports(Options{IR: &empty}) {
+		t.Fatal("expected an app with no app-owned imports not to need the local module")
+	}
+}
+
 func TestGenerateWritesAddonGoBlockConsumerFiles(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

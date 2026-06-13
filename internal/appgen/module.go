@@ -2,6 +2,7 @@ package appgen
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"os"
@@ -39,7 +40,17 @@ func moduleSource(options Options) (string, error) {
 		}
 		lines = append(lines, "", "replace "+gowdkRuntimeModulePath+" => "+filepath.ToSlash(root))
 	}
-	if appModule, ok := currentAppModule(); ok && appModule.Path != gowdkRuntimeModulePath && optionsUsesModuleImports(options, appModule.Path) {
+	appModule, err := currentAppModule()
+	if err != nil {
+		// A missing/broken main module is only fatal when the generated app
+		// imports app-owned packages: without the module path we cannot add the
+		// require/replace, so the generated app would otherwise fail to build
+		// later with an opaque "cannot find package" error. When the app imports
+		// nothing app-owned, the module is not needed and the failure is ignored.
+		if appHasLocalModuleImports(options) {
+			return "", fmt.Errorf("cannot determine the app Go module for generated app imports: %w", err)
+		}
+	} else if appModule.Path != gowdkRuntimeModulePath && optionsUsesModuleImports(options, appModule.Path) {
 		lines = append(lines,
 			"",
 			"require "+appModule.Path+" v0.0.0",
@@ -55,20 +66,58 @@ type appModuleInfo struct {
 	Dir  string
 }
 
-func currentAppModule() (appModuleInfo, bool) {
+func currentAppModule() (appModuleInfo, error) {
 	command := exec.Command("go", "list", "-m", "-json")
 	output, err := command.Output()
 	if err != nil {
-		return appModuleInfo{}, false
+		return appModuleInfo{}, goListModuleError(err)
 	}
 	var info appModuleInfo
 	if err := json.Unmarshal(output, &info); err != nil {
-		return appModuleInfo{}, false
+		return appModuleInfo{}, fmt.Errorf("parse go list -m output: %w", err)
 	}
 	if strings.TrimSpace(info.Path) == "" || strings.TrimSpace(info.Dir) == "" {
-		return appModuleInfo{}, false
+		return appModuleInfo{}, fmt.Errorf("go list -m did not report a main module path and directory")
 	}
-	return info, true
+	return info, nil
+}
+
+// goListModuleError surfaces the underlying go list -m failure, including its
+// stderr (e.g. a missing go.mod), instead of an opaque exit status.
+func goListModuleError(err error) error {
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		if stderr := strings.TrimSpace(string(exit.Stderr)); stderr != "" {
+			return fmt.Errorf("%w\n%s", err, stderr)
+		}
+	}
+	return err
+}
+
+// appHasLocalModuleImports reports whether the generated app imports any
+// app-owned package (a module-path import that is not stdlib and not the GOWDK
+// runtime module), which is exactly the case that needs the main module's
+// require/replace lines.
+func appHasLocalModuleImports(options Options) bool {
+	for path := range appBackendImportPaths(options) {
+		if isLocalModuleImportPath(path) {
+			return true
+		}
+	}
+	return false
+}
+
+func isLocalModuleImportPath(path string) bool {
+	path = strings.TrimSpace(path)
+	if path == "" || path == gowdkRuntimeModulePath || strings.HasPrefix(path, gowdkRuntimeModulePath+"/") {
+		return false
+	}
+	first := path
+	if index := strings.Index(path, "/"); index >= 0 {
+		first = path[:index]
+	}
+	// Standard-library import paths have no dot in their first segment.
+	return strings.Contains(first, ".")
 }
 
 func optionsUsesModuleImports(options Options, modulePath string) bool {
@@ -76,22 +125,29 @@ func optionsUsesModuleImports(options Options, modulePath string) bool {
 	if modulePath == "" {
 		return false
 	}
-	for importPath := range backendImports(options.Actions, options.APIs, options.Fragments, options.SSR) {
-		if importPath == modulePath || strings.HasPrefix(importPath, modulePath+"/") {
-			return true
-		}
-	}
-	for importPath := range backendContractImports(executableContractExposures(backendAdapterIR(options).ContractExposures)) {
-		if importPath == modulePath || strings.HasPrefix(importPath, modulePath+"/") {
-			return true
-		}
-	}
-	for importPath := range inlineGoBlockImports(options.IR) {
+	for importPath := range appBackendImportPaths(options) {
 		if importPath == modulePath || strings.HasPrefix(importPath, modulePath+"/") {
 			return true
 		}
 	}
 	return false
+}
+
+// appBackendImportPaths collects every Go import the generated app's backend
+// glue pulls in: request-time handlers, contract exposures, and inline go {}
+// blocks.
+func appBackendImportPaths(options Options) map[string]bool {
+	paths := map[string]bool{}
+	for importPath := range backendImports(options.Actions, options.APIs, options.Fragments, options.SSR) {
+		paths[importPath] = true
+	}
+	for importPath := range backendContractImports(executableContractExposures(backendAdapterIR(options).ContractExposures)) {
+		paths[importPath] = true
+	}
+	for importPath := range inlineGoBlockImports(options.IR) {
+		paths[importPath] = true
+	}
+	return paths
 }
 
 func inlineGoBlockImports(ir *gwdkir.Program) map[string]bool {

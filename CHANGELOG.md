@@ -49,7 +49,11 @@ packages, and tooling contracts may change before a stable release.
   their stderr instead of reaching the type checker as an opaque "exit status 1",
   and an unknown build-data interpolation reference now reports whether the
   missing name was a build-data field or a route param instead of always saying
-  "unknown route param".
+  "unknown route param". Generated-app module resolution no longer silently
+  drops the app module's `require`/`replace` when `go list -m` fails: if the
+  generated app imports app-owned packages it now fails with the real `go list`
+  error instead of producing a go.mod that fails to build with an opaque
+  "cannot find package".
 
 ### Known Gaps
 

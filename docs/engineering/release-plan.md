@@ -569,9 +569,10 @@ Every 0.x minor release must have:
 
 - [x] Add `gowdk doctor`.
 - [ ] Add `gowdk explain <diagnostic-code>`.
-- [ ] Add `gowdk inspect` targets. `ir`, `tree`, and `endpoint-graph` are
-  implemented; `assets`, `go-bindings`, `generated`, and `deps` remain planned.
-- [ ] Add `gowdk generate stubs`.
+- [ ] Add `gowdk inspect` targets. `ir`, `tree`, `endpoint-graph`, and
+  `go-bindings` are implemented; `assets`, `generated`, and `deps` remain
+  planned.
+- [x] Add `gowdk generate stubs`.
 - [ ] Add `gowdk clean`, `gowdk env`, `gowdk version --json`, and
   `gowdk benchmark`.
 - [ ] Improve JSON output for `check`, `routes`, `manifest`, and `sitemap`.
@@ -697,8 +698,8 @@ Start with these in order:
 - [x] Add release note template.
 - [ ] Add `gowdk doctor`.
 - [ ] Add `gowdk explain`.
-- [ ] Add `gowdk inspect go-bindings`.
-- [ ] Add `gowdk generate stubs`.
+- [x] Add `gowdk inspect go-bindings`.
+- [x] Add `gowdk generate stubs`.
 - [ ] Stabilize `gowdk check --json`.
 - [ ] Add diagnostic codes.
 - [ ] Add exact source spans where missing.

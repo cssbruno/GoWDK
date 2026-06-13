@@ -44,7 +44,8 @@ func runtimeImportMap(options Options) map[string]string {
 	actions := options.Actions
 	apis := options.APIs
 	fragments := options.Fragments
-	contractExposures := backendAdapterIR(options).ContractExposures
+	adapter := backendAdapterIR(options)
+	contractExposures := adapter.ContractExposures
 	routableContracts := routableContractExposures(contractExposures)
 	executableContracts := executableContractExposures(contractExposures)
 	if options.ProxyBackend {
@@ -95,7 +96,7 @@ func runtimeImportMap(options Options) map[string]string {
 	}
 	if options.ProxyBackend {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
-		if fragmentsUseDynamicRoutes(options.Fragments) {
+		if adapter.HasDynamicRoutes() {
 			imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 		}
 		imports["neturl"] = "net/url"
@@ -142,7 +143,7 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["gowdkratelimit"] = "github.com/cssbruno/gowdk/addons/ratelimit"
 	}
 	if !options.ProxyBackend {
-		for importPath, alias := range backendImports(actions, apis, fragments, ssr) {
+		for importPath, alias := range backendImports(adapter, ssr) {
 			imports[alias] = importPath
 		}
 		for importPath, alias := range backendContractImports(executableContracts) {
@@ -263,7 +264,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 		decls = append(decls, emptyBackendHandlerDecl())
 	}
 	if full.ProxyBackend {
-		decls = append(decls, backendProxyDecl(generatedUsesRateLimit(full)), isBackendRouteDecl(full))
+		decls = append(decls, backendProxyDecl(generatedUsesRateLimit(full)), isBackendRouteDecl(backendAdapterIR(full)))
 	}
 	if csrfEnabled(direct) {
 		decls = append(decls, csrfValidatorVarDecl(), csrfNewFuncDecl(direct.Config.Build.CSRF))
@@ -601,7 +602,8 @@ func importSpecSource(imports map[string]string) string {
 }
 
 func csrfEnabled(options Options) bool {
-	return options.Config.Build.CSRF.Enabled && (len(options.Actions) > 0 || contractExposuresParseForm(executableContractExposures(backendAdapterIR(options).ContractExposures)))
+	adapter := backendAdapterIR(options)
+	return options.Config.Build.CSRF.Enabled && (adapter.HasEndpointKind(BackendEndpointAction) || contractExposuresParseForm(executableContractExposures(adapter.ContractExposures)))
 }
 
 func csrfHelperSource(options Options) (string, error) {
@@ -666,26 +668,11 @@ func backendCallbackName(options Options) string {
 }
 
 func hasBackendRoutes(options Options) bool {
-	return len(options.Actions) > 0 || len(options.APIs) > 0 || len(options.Fragments) > 0 || hasRoutableContractReferences(options)
+	return backendAdapterIR(options).HasRegistrations()
 }
 
-func backendImports(actions []ActionEndpoint, apis []APIEndpoint, fragments []FragmentEndpoint, ssr []SSRRoute) map[string]string {
-	imports := map[string]string{}
-	for _, action := range actions {
-		if action.Binding.ImportPath != "" && action.BackendAlias != "" {
-			imports[action.Binding.ImportPath] = action.BackendAlias
-		}
-	}
-	for _, api := range apis {
-		if api.Binding.ImportPath != "" && api.BackendAlias != "" {
-			imports[api.Binding.ImportPath] = api.BackendAlias
-		}
-	}
-	for _, fragment := range fragments {
-		if fragment.Binding.ImportPath != "" && fragment.BackendAlias != "" {
-			imports[fragment.Binding.ImportPath] = fragment.BackendAlias
-		}
-	}
+func backendImports(adapter BackendAdapterIR, ssr []SSRRoute) map[string]string {
+	imports := adapter.BackendImports()
 	for _, route := range ssr {
 		// Guardless routes are denied before rendering, so their load handler is
 		// never called and contributes no import. Importing it anyway leaves an

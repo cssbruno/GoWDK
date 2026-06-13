@@ -27,6 +27,58 @@ type explanationDetail struct {
 }
 
 var explanationDetails = map[string]explanationDetail{
+	"page_store_persist_key_conflict": {
+		Details: "Two pages declare a persisted store with the same name but different struct shapes. Persistence is keyed by store name (gowdk:store:<name>), so both pages read and write the same browser storage slot. Because their embedded schema hashes differ, navigating from one page to the other discards the saved value every time. Either rename one store so each owns its own key, or give them the same shape so sharing is intentional.",
+		NextSteps: []string{
+			"Rename one of the stores so each persisted store has a unique name.",
+			"Give both stores the same Go type when sharing one persisted value across pages is intended.",
+		},
+		Invalid: `// pages/shop.page.gwdk
+store cart ui.CartState = ui.NewCartState() persist "local"
+// pages/admin.page.gwdk  (different shape, same name)
+store cart admin.AuditState = admin.NewAuditState() persist "local"`,
+		Fixed: `// pages/shop.page.gwdk
+store cart  ui.CartState     = ui.NewCartState()     persist "local"
+// pages/admin.page.gwdk
+store audit admin.AuditState = admin.NewAuditState() persist "local"`,
+	},
+	"page_store_persist_scope_conflict": {
+		Details: "Two pages declare a persisted store with the same name and the same struct shape but different persist scopes (one local, one session). Persistence is keyed by store name (gowdk:store:<name>), so they share one storage slot, but local uses window.localStorage and session uses window.sessionStorage. The runtime keeps whichever scope initialized first, so the effective backend — and whether the value survives a browser restart — depends on which route the user visited first. Use the same scope on both pages, or rename one store.",
+		NextSteps: []string{
+			"Declare the same persist scope (both \"local\" or both \"session\") wherever the store is persisted.",
+			"Rename one of the stores so each persisted store owns its own scope and storage key.",
+		},
+		Invalid: `// pages/shop.page.gwdk
+store cart ui.CartState = ui.NewCartState() persist "local"
+// pages/checkout.page.gwdk  (same shape, different scope)
+store cart ui.CartState = ui.NewCartState() persist "session"`,
+		Fixed: `// pages/shop.page.gwdk
+store cart ui.CartState = ui.NewCartState() persist "local"
+// pages/checkout.page.gwdk
+store cart ui.CartState = ui.NewCartState() persist "local"`,
+	},
+	"page_store_persist_scope_invalid": {
+		Details: "A page store may opt into browser persistence with persist \"local\" or persist \"session\". local uses window.localStorage (survives a browser restart); session uses window.sessionStorage (survives reload and SPA navigation, cleared when the tab closes). No other scope is supported.",
+		NextSteps: []string{
+			"Use persist \"local\" to keep the store across browser restarts.",
+			"Use persist \"session\" to keep the store for the life of the tab.",
+			"Remove the persist modifier when the store should reset on reload.",
+		},
+		Invalid: `store cart ui.CartState = ui.NewCartState() persist "disk"`,
+		Fixed:   `store cart ui.CartState = ui.NewCartState() persist "local"`,
+	},
+	"page_store_persist_secret_field": {
+		Details: "A persisted store field name resembles a secret (for example token, password, secret, or auth). Persisted store state is written to browser storage, which is readable by any script on the same origin, so it must never hold credentials, session tokens, or trusted authorization state. This is a warning, not an error: rename the field if it is not actually a secret.",
+		NextSteps: []string{
+			"Keep secrets, session tokens, and authorization state in server-owned Go and never in a persisted store.",
+			"Rename the field if its name only resembles a secret but holds plain UI state.",
+			"Drop the persist modifier if the store legitimately needs sensitive values in memory but not on disk.",
+		},
+		Invalid: `store session ui.SessionState = ui.NewSession() persist "local"
+// SessionState has a Token field`,
+		Fixed: `store prefs ui.UIPrefs = ui.DefaultPrefs() persist "local"
+// UIPrefs holds only non-sensitive UI state`,
+	},
 	"guard_requires_request_render": {
 		Details: "Protected page guards must gate the page GET route at request time. A build-time SPA page emits plain static HTML, so it cannot enforce frontend page access.",
 		NextSteps: []string{

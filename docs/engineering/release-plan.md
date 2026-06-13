@@ -470,31 +470,34 @@ Every 0.x minor release must have:
 
 ## SSR, Hybrid, Cache, Guards, And Auth Hooks
 
-- [ ] Document SSR lifecycle, render mode, feature requirement, `load {}`
+- [x] Document SSR lifecycle, render mode, feature requirement, `load {}`
   grammar, declared load paths, typed route params, `(T, error)` load functions,
   `context.Context` load functions, redirects, not found, custom errors,
   route-local error pages, endpoint-local error pages, panic boundaries,
   guard-before-load ordering, layout-data merge, and cache policy.
 - [ ] Add SSR examples for simple pages, dashboards, guarded account pages,
-  dynamic detail pages, and route-local error pages.
-- [ ] Document hybrid lifecycle, bare hybrid behavior, hybrid with and without
+  dynamic detail pages, and route-local error pages. Deferred to
+  [#102](https://github.com/cssbruno/GoWDK/issues/102).
+- [x] Document hybrid lifecycle, bare hybrid behavior, hybrid with and without
   `load`, SSR feature requirement, cache, revalidation, action invalidation,
   fragment refresh, and data refresh.
-- [ ] Defer hybrid streaming until simpler behavior is stable.
-- [ ] Add route/build report output that shows hybrid clearly.
-- [ ] Document static asset, SPA HTML, SSR HTML, API, action, fragment, and
+- [x] Defer hybrid streaming until simpler behavior is stable.
+- [x] Add route/build report output that shows hybrid clearly.
+- [x] Document static asset, SPA HTML, SSR HTML, API, action, fragment, and
   hybrid cache policy.
-- [ ] Document `cache` and `revalidate`.
-- [ ] Add route report cache column and build report cache section.
-- [ ] Test immutable asset cache, SPA `no-cache`, request-time `no-store`,
+- [x] Document `cache` and `revalidate`.
+- [x] Add route report cache column and build report cache section.
+- [x] Test immutable asset cache, SPA `no-cache`, request-time `no-store`,
   `cache`, `revalidate`, and invalid `revalidate`.
-- [ ] Document guard syntax, required backing hooks, guard failure behavior, and
+- [x] Document guard syntax, required backing hooks, guard failure behavior, and
   support matrix for SSR, actions, APIs, fragments, and hybrid.
-- [ ] Document request context helpers for request, params, CSRF, session, and
+- [x] Document request context helpers for request, params, CSRF, session, and
   app context.
 - [ ] Add user-owned session, cookie session, bearer token, admin role,
   guest-only page, JSON auth failure, redirect auth failure, and partial auth
-  failure examples.
+  failure examples. Deferred to
+  [#102](https://github.com/cssbruno/GoWDK/issues/102) and
+  [#337](https://github.com/cssbruno/GoWDK/issues/337).
 
 ## Components, Client Language, SPA Navigation, And WASM
 

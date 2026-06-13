@@ -176,7 +176,7 @@ fn Add() {
 	html := readFile(t, filepath.Join(outputDir, "counter", "index.html"))
 	for _, expected := range []string{
 		`<script type="application/json" data-gowdk-store="cart">{"Count":1,"Open":false}</script>`,
-		`<script src="/assets/gowdk/islands/stores.js" defer></script>`,
+		`<script src="/assets/gowdk/islands/stores.js" data-gowdk-store-runtime defer></script>`,
 		`<script src="/assets/gowdk/islands/Counter.js" defer></script>`,
 		`data-gowdk-client="{&#34;handlers&#34;:{&#34;Add&#34;:{&#34;statements&#34;:[&#34;Count++&#34;]}},&#34;stores&#34;:[&#34;cart&#34;]}"`,
 	} {

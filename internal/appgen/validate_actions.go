@@ -97,7 +97,7 @@ func validateFragmentEndpoints(endpoints []FragmentEndpoint) error {
 		if endpoint.Method != "GET" {
 			return fmt.Errorf("generated fragment %s.%s uses unsupported method %s; fragments currently require GET", endpoint.PageID, endpoint.FragmentName, endpoint.Method)
 		}
-		if err := validateActionEndpointPath(endpoint.Route); err != nil {
+		if err := source.ValidateBackendRoutePattern(endpoint.Route); err != nil {
 			return fmt.Errorf("generated fragment %s.%s: %w", endpoint.PageID, endpoint.FragmentName, err)
 		}
 		if err := validateFragmentTargetValue(endpoint.Target); err != nil {

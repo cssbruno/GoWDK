@@ -194,9 +194,12 @@ paths still bypass discovery. A module with a name and no explicit include uses
 `testdata`, root/module `Source.Exclude` globs, and the configured build output
 directory when one exists. `build --out` overrides `Build.Output`; one of them
 is required for `build`. Every successful disk build writes
-`gowdk-build-report.json` to the output root. Passing `--debug` prints the same
-build report to stderr for validation, planning, write, manifest, cleanup, and
-completion events without changing stdout artifact-path output. Passing
+`gowdk-build-report.json` to the output root. The report includes validation,
+planning, write, manifest, cache-policy, cleanup, and completion events;
+request-time SSR/hybrid pages that are intentionally skipped from static
+prerender output appear as `request_time_page_skipped` events. Passing `--debug`
+prints the same build report to stderr without changing stdout artifact-path
+output. Passing
 `--timings` writes `gowdk-build-timings.json` next to the build report, or
 `--timings=<file>` writes the timing JSON to a custom path; timing data is kept
 out of `gowdk-build-report.json` so normal build reports stay deterministic.
@@ -270,9 +273,10 @@ such as `static`, `spa`, `ssr`, and `hybrid`; route records include package,
 render/cache metadata, route params, layouts, guards, source file, source span,
 and planned handler. Backend actions, APIs, fragments, and routable command or
 query contracts appear in the separate `endpoints` list with source path,
-source span, `.gwdk` package, method, path, page ID, no-store backend cache
-policy, inherited guards, CSRF applicability, planned adapter handler, and
-backend or contract binding metadata. Backend binding metadata includes the Go
+source span, `.gwdk` package, method, path, page ID, route params when
+declared, no-store backend cache policy, inherited guards, CSRF applicability,
+planned adapter handler, and backend or contract binding metadata. Backend
+binding metadata includes the Go
 package name, import path when known, handler symbol, signature/input metadata
 when bound, status, and binding message. Non-fatal route-mode notes, such as
 request-time page rendering disabled on a SPA route or static SPA output

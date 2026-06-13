@@ -55,6 +55,8 @@ type SiteMapEndpoint struct {
 	PageID        string                      `json:"pageId"`
 	Symbol        string                      `json:"symbol,omitempty"`
 	Package       string                      `json:"package,omitempty"`
+	DynamicParams []string                    `json:"dynamicParams,omitempty"`
+	RouteParams   []routeParamJSON            `json:"routeParams,omitempty"`
 	BindingStatus source.BackendBindingStatus `json:"bindingStatus,omitempty"`
 	Signature     source.BackendSignatureKind `json:"signature,omitempty"`
 	InputType     string                      `json:"inputType,omitempty"`
@@ -171,6 +173,8 @@ func siteMapEndpoints(endpoints []compiler.EndpointBinding) []SiteMapEndpoint {
 			PageID:        endpoint.PageID,
 			Symbol:        endpoint.Symbol,
 			Package:       endpoint.Package,
+			DynamicParams: append([]string(nil), endpoint.DynamicParams...),
+			RouteParams:   routeParamsJSON(endpoint.RouteParams),
 			BindingStatus: endpoint.BindingStatus,
 			Signature:     endpoint.BindingSignature,
 			InputType:     endpoint.BindingInputType,

@@ -152,6 +152,9 @@ func isBackendRouteDecl(options Options) *ast.FuncDecl {
 		})
 	}
 	for _, fragment := range sortedFragmentEndpoints(options.Fragments) {
+		if fragmentRouteIsDynamic(fragment) {
+			continue
+		}
 		clauses = append(clauses, &ast.CaseClause{
 			List: []ast.Expr{backendRouteCond(stringLit(fragment.Method), fragment.Route)},
 			Body: []ast.Stmt{returnBool(true)},
@@ -163,14 +166,25 @@ func isBackendRouteDecl(options Options) *ast.FuncDecl {
 			Body: []ast.Stmt{returnBool(true)},
 		})
 	}
-	clauses = append(clauses, &ast.CaseClause{Body: []ast.Stmt{returnBool(false)}})
+	body := []ast.Stmt{}
+	if fragmentsUseDynamicRoutes(options.Fragments) {
+		body = append(body, define([]ast.Expr{id("rawRequestPath")}, id("requestPath")))
+	}
+	body = append(body,
+		assign([]ast.Expr{id("requestPath")}, call(sel("path", "Clean"), &ast.BinaryExpr{X: stringLit("/"), Op: token.ADD, Y: id("requestPath")})),
+		&ast.SwitchStmt{Body: &ast.BlockStmt{List: clauses}},
+	)
+	for _, fragment := range sortedFragmentEndpoints(options.Fragments) {
+		if !fragmentRouteIsDynamic(fragment) {
+			continue
+		}
+		body = append(body, backendDynamicRouteIfStmt(stringLit(fragment.Method), fragment.Route))
+	}
+	body = append(body, returnBool(false))
 	return funcDecl("isBackendRoute", []*ast.Field{
 		{Names: []*ast.Ident{id("method")}, Type: id("string")},
 		{Names: []*ast.Ident{id("requestPath")}, Type: id("string")},
-	}, boolResults(), []ast.Stmt{
-		assign([]ast.Expr{id("requestPath")}, call(sel("path", "Clean"), &ast.BinaryExpr{X: stringLit("/"), Op: token.ADD, Y: id("requestPath")})),
-		&ast.SwitchStmt{Body: &ast.BlockStmt{List: clauses}},
-	})
+	}, boolResults(), body)
 }
 
 func backendRouteCond(method ast.Expr, route string) ast.Expr {
@@ -186,5 +200,21 @@ func backendRouteCond(method ast.Expr, route string) ast.Expr {
 			Op: token.EQL,
 			Y:  stringLit(cleanRoutePath(route)),
 		},
+	}
+}
+
+func backendDynamicRouteIfStmt(method ast.Expr, route string) ast.Stmt {
+	return &ast.IfStmt{
+		Init: define([]ast.Expr{id("_"), id("ok")}, call(sel("gowdkroute", "Match"), stringLit(route), id("rawRequestPath"))),
+		Cond: &ast.BinaryExpr{
+			X: &ast.BinaryExpr{
+				X:  id("method"),
+				Op: token.EQL,
+				Y:  method,
+			},
+			Op: token.LAND,
+			Y:  id("ok"),
+		},
+		Body: block(returnBool(true)),
 	}
 }

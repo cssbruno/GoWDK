@@ -275,7 +275,57 @@ Store use is explicit. Same-page stores use `client { use cart }`; stores from
 another discovered `.gwdk` package require a GOWDK `use` alias and a qualified
 client store reference such as `client { use stores.cart }`. Cross-package
 stores are validated by alias and store name, not discovered globally.
-App-global stores and cross-route persistence are deferred.
+App-global stores are deferred.
+
+A page store can opt into browser persistence with a `persist` modifier:
+
+```gwdk
+store cart  ui.CartState = ui.NewCartState() persist "local"
+store prefs ui.UIPrefs   = ui.DefaultPrefs() persist "session"
+```
+
+`persist "local"` keeps the store in `localStorage` (survives a browser
+restart); `persist "session"` keeps it in `sessionStorage` (survives reload and
+SPA navigation, cleared when the tab closes). Persistence is keyed by store name
+(`gowdk:store:<name>`), so the same persisted store keeps its value across routes
+on the origin. Only the store's own declared fields are persisted — never
+component state, props, or computed values. The compiler embeds a hash of the
+store's struct shape; when the shape changes, stale persisted state is discarded
+rather than restored, so a struct change never crashes on old data. Because
+browser storage is readable by any script on the origin, persisting a field whose
+name resembles a secret (`token`, `password`, `secret`, `auth`, …) is a warning —
+including a nested field such as `Profile.Token`, because persistence writes the
+whole value of each top-level field: keep credentials and trusted authorization
+state server-side. An unknown scope is rejected — see
+`gowdk explain page_store_persist_scope_invalid`.
+
+`persist "local"` stores also sync across tabs: when one tab writes, other tabs
+on the origin mirror the value through the browser `storage` event. `persist
+"session"` stores are deliberately tab-local — `sessionStorage` is partitioned
+per top-level tab, so session-scoped stores do not (and cannot) sync across tabs.
+To drop a persisted
+store (for example after checkout or logout), call
+`window.__gowdkStores.clear("<name>")`, which removes the stored copy and resets
+the store to its build-time init value. If two pages persist a store with the
+same name but different shapes, they share one storage key and discard each
+other's data on navigation; the compiler warns with
+`page_store_persist_key_conflict`. If they share the same shape but declare
+different `local`/`session` scopes, the runtime keeps whichever scope initialized
+first and the compiler warns with `page_store_persist_scope_conflict`. A store
+first reached on a route that does not persist it still adopts persistence when a
+later route declares it, restoring the saved value regardless of navigation order.
+
+Persistence survives SPA navigation: when the client runtime swaps page content
+it re-scans store seeds, so a store first declared on a later client-side route
+hydrates without a full page load, and a store already in memory keeps its value.
+
+Current limits. Persistence is a JS-island/store-runtime feature: WASM islands
+do not yet participate in page stores, so a WASM-only island will not read or
+write a persisted store. Because a component references store fields through its
+own `state` declaration (`use <name>` syncs that field with the store), a
+component that reads a persisted store still declares a matching `state` shape.
+Invalid scopes are reported but not auto-fixed, because choosing `local` vs
+`session` is a deliberate decision.
 
 Exports are typed component metadata today. They document values a component
 intends to expose, but parent pages/components do not yet have a stable runtime

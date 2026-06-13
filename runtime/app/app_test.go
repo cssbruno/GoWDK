@@ -707,6 +707,34 @@ func TestBackendRouterDispatchesNormalizedRoutes(t *testing.T) {
 	}
 }
 
+func TestBackendRouterDispatchesDynamicRoutes(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Method: http.MethodGet,
+		Path:   "/patients/{id:int}/vitals",
+		Kind:   "fragment",
+		Handler: func(writer http.ResponseWriter, request *http.Request) bool {
+			writer.WriteHeader(http.StatusAccepted)
+			return true
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/patients/42/vitals", nil)
+
+	if !router.Dispatch(recorder, request) {
+		t.Fatal("expected dynamic route to dispatch")
+	}
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+
+	if router.Dispatch(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/patients/42/edit", nil)) {
+		t.Fatal("did not expect different dynamic shape to dispatch")
+	}
+}
+
 func TestBackendRouterHidesOrdinaryHandlerErrorDetails(t *testing.T) {
 	router, err := NewBackendRouter(BackendRoute{
 		Method: http.MethodGet,

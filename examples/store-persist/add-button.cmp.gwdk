@@ -1,0 +1,21 @@
+package shop
+
+import ui "github.com/cssbruno/gowdk/examples/store-persist/ui"
+
+component AddButton
+
+// The local state shape matches the cart store; `use cart` syncs Count across
+// every island that uses the store, and the page's persist "local" keeps it.
+state ui.CartState = ui.NewCartState()
+
+client {
+  use cart
+
+  func Add() {
+    Count++
+  }
+}
+
+view {
+  <button g:on:click={Add()}>Add to cart</button>
+}

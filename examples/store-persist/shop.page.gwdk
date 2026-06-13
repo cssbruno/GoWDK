@@ -1,0 +1,20 @@
+package shop
+
+import ui "github.com/cssbruno/gowdk/examples/store-persist/ui"
+
+page shop
+route "/shop"
+guard public
+
+// persist "local" keeps the cart in localStorage. Add to cart, reload the page,
+// and the badge still shows your count. The same store is shared across routes
+// on this origin and discarded automatically if CartState's shape changes.
+store cart ui.CartState = ui.NewCartState() persist "local"
+
+view {
+  <main>
+    <h1>Shop</h1>
+    <CartBadge />
+    <AddButton />
+  </main>
+}

@@ -79,6 +79,7 @@ type FragmentEndpoint struct {
 	FragmentName string
 	Method       string
 	Route        string
+	RouteParams  []source.RouteParam
 	Target       string
 	HTML         string
 	Package      string

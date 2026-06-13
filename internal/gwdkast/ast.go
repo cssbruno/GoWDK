@@ -161,7 +161,17 @@ type Store struct {
 	Name string
 	Type GoTypeRef
 	Init GoFuncRef
-	Span source.SourceSpan
+	// Persist is the optional `persist "<scope>"` modifier. It is empty when the
+	// store is not persisted, otherwise the raw (unquoted) scope literal. The
+	// scope value is validated later so an invalid literal still parses into a
+	// store and yields a precise diagnostic rather than a generic parse error.
+	Persist string
+	// PersistSet reports whether a `persist` clause was present, distinguishing an
+	// absent clause from an explicit empty scope (`persist ""`). Without it the
+	// latter is indistinguishable from no persistence and would silently parse as
+	// unpersisted instead of yielding page_store_persist_scope_invalid.
+	PersistSet bool
+	Span       source.SourceSpan
 }
 
 // StateContract describes a component state type and initializer.

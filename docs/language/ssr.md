@@ -12,7 +12,10 @@ SSR is optional and must not become the default framework identity.
   literal or imported `build {}` data, and declared `load {}` data.
 - Dynamic SSR routes such as `/blog/{slug}` can be matched by generated
   binaries in the first supported slice. Route params render through generated
-  placeholders and request-time HTML escaping.
+  placeholders and request-time HTML escaping. Generated handlers attach raw
+  params through `runtime/app.Params(ctx)` and decoded typed params through
+  `runtime/app.TypedParams(ctx)` before guards, load functions, or rendering
+  run. Invalid typed params return 400; missing params return 404.
 - Generated SSR supports declared identifier and dotted-path fields such as
   `load { => { user, title, account.plan } }` and calls a same-package exported
   Go function named `Load<PageID>`. `<PageID>` is the explicit `page` value
@@ -42,6 +45,12 @@ SSR is optional and must not become the default framework identity.
 - Non-redirect `load {}` failures also use the same 5xx message policy:
   ordinary error details are hidden, and only explicit
   `response.HandlerError.Message` values are rendered to clients.
+- Page layouts compose around SSR pages at request time. Declared load data is
+  merged into the request render scope before the page and layout stack are
+  written.
+- Successful SSR HTML uses the page `cache`/`revalidate` policy when declared
+  and otherwise uses `Cache-Control: no-store`. Load redirects, guard failures,
+  route-local error pages, and panic boundaries are always no-store.
 - The SSR addon exposes a small router registration contract for generated SSR
   page handlers.
 - The SSR addon provides a default HTTP 500 error handler contract for
@@ -57,7 +66,10 @@ SSR is optional and must not become the default framework identity.
   `Context`, `Registry`, and ordered guard execution contracts. Generated SSR,
   action, API, and fragment handlers run declared guards before user
   logic. A guarded generated app will not compile unless required guard backing
-  functions exist. Native RBAC guard IDs use `role:<name>` and
+  functions exist. Ordinary guard errors fail closed with HTTP 403. Guards can
+  intentionally return `runtime/guard.RedirectTo`, `runtime/guard.Redirect`, or
+  `runtime/guard.Respond` errors to write no-store redirects or custom
+  responses. Native RBAC guard IDs use `role:<name>` and
   `permission:<name>` and resolve through an application-owned
   `runtime/auth.Provider`.
 

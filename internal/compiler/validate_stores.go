@@ -2,11 +2,101 @@ package compiler
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
+	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
+
+// validatePersistedStoreConflicts warns when two pages persist a store under
+// the same name but with different struct shapes. Persistence keys on the store
+// name, so they share one browser storage slot; their differing schema hashes
+// then discard each other's saved value on every navigation between the pages.
+func validatePersistedStoreConflicts(pages []gwdkir.Page) []ValidationError {
+	type seenStore struct {
+		page      gwdkir.Page
+		store     gwdkir.Store
+		signature string
+	}
+	seen := map[string]seenStore{}
+	var diagnostics []ValidationError
+	for _, page := range pages {
+		for _, store := range page.Stores {
+			if store.Name == "" || (store.Persist != "local" && store.Persist != "session") {
+				continue
+			}
+			signature := persistedStoreSignature(page, store)
+			if signature == "" {
+				continue // unresolvable types are already reported as page_store_error
+			}
+			prior, exists := seen[store.Name]
+			if !exists {
+				seen[store.Name] = seenStore{page: page, store: store, signature: signature}
+				continue
+			}
+			if prior.signature != signature {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:     "page_store_persist_key_conflict",
+					PageID:   page.ID,
+					Source:   page.Source,
+					Span:     firstSpan(store.Span, page.Spans.Page),
+					Severity: SeverityWarning,
+					Related:  relatedSpan(prior.page.Source, prior.store.Span, fmt.Sprintf("store %q first persisted here on page %s", prior.store.Name, prior.page.ID)),
+					Message: fmt.Sprintf(
+						"persisted store %q has different shapes on pages %s and %s but shares browser storage key %q; navigating between them discards each other's saved data. Rename one store or give them matching shapes",
+						store.Name, prior.page.ID, page.ID, "gowdk:store:"+store.Name,
+					),
+				})
+				continue
+			}
+			if prior.store.Persist != store.Persist {
+				// Same name and shape but different persist scopes (local vs
+				// session) still share one browser storage key. The runtime
+				// registry keeps the scope of whichever route initialized first,
+				// so the effective backend depends on navigation history. Flag
+				// it instead of silently letting nav order decide.
+				diagnostics = append(diagnostics, ValidationError{
+					Code:     "page_store_persist_scope_conflict",
+					PageID:   page.ID,
+					Source:   page.Source,
+					Span:     firstSpan(store.Span, page.Spans.Page),
+					Severity: SeverityWarning,
+					Related:  relatedSpan(prior.page.Source, prior.store.Span, fmt.Sprintf("store %q first persisted with scope %q here on page %s", prior.store.Name, prior.store.Persist, prior.page.ID)),
+					Message: fmt.Sprintf(
+						"persisted store %q uses scope %q on page %s but scope %q on page %s while sharing browser storage key %q; only one scope wins and which one depends on navigation order. Use the same persist scope on both pages or rename one store",
+						store.Name, prior.store.Persist, prior.page.ID, store.Persist, page.ID, "gowdk:store:"+store.Name,
+					),
+				})
+				continue
+			}
+			// Same name, shape, and scope is intentional cross-route sharing.
+		}
+	}
+	return diagnostics
+}
+
+// persistedStoreSignature folds in the resolved struct's full field-type map
+// (every top-level and nested path, keyed by name) so the conflict signature
+// tracks the same Go-shape inputs as buildgen.storeSchemaHash, which seeds the
+// runtime persist version. Comparing only top-level fields would miss a nested
+// shape change that still rotates the version hash and makes the runtime discard
+// the other page's saved value. The reflective seed encoder keys JSON by Go
+// field name, so the on-wire keys storeSchemaHash also folds in equal the
+// top-level field names already covered here.
+func persistedStoreSignature(page gwdkir.Page, store gwdkir.Store) string {
+	resolved, err := gotypes.ResolveStruct(page.Imports, store.Type)
+	if err != nil {
+		return ""
+	}
+	parts := make([]string, 0, len(resolved.FieldTypes))
+	for name, fieldType := range resolved.FieldTypes {
+		parts = append(parts, name+":"+fieldType)
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
 
 func validateComponentStoreUses(pages []gwdkir.Page, components []gwdkir.Component) []ValidationError {
 	declared := declaredStoreNamesByPackage(pages)

@@ -132,6 +132,8 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `redundant_component_implementation`, `component_contract_error`,
   `component_field_error`, `component_client_error`,
   `duplicate_component_emit`, `duplicate_page_store`, `page_store_error`,
+  `page_store_persist_key_conflict`, `page_store_persist_scope_conflict`,
+  `page_store_persist_scope_invalid`, `page_store_persist_secret_field`,
   `unknown_component_store`, `view_parse_error`.
 - Accessibility: `missing_img_alt`.
 - Go blocks and generated app wiring: `invalid_go_block`,
@@ -139,8 +141,7 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `unknown_go_block_target`, `unknown_addon_go_block_target`,
   `unsupported_addon_go_block_target`, `addon_go_block_diagnostic`,
   `generated_app_import_cycle`.
-- Partials and fragments: `unsupported_fragment_method`,
-  `fragment_dynamic_route`.
+- Partials and fragments: `unsupported_fragment_method`.
 - Contracts: `contract_handler_invalid`, `contract_handler_missing`,
   `contract_type_invalid`, `contract_result_invalid`,
   `contract_input_invalid`, `contract_event_name_invalid`,

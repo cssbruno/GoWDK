@@ -418,6 +418,51 @@ func TestBuildReportIncludesBoundContractReferenceRoles(t *testing.T) {
 	}
 }
 
+func TestBuildReportIncludesCachePolicySummary(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{
+		{
+			ID:         "home",
+			Route:      "/",
+			Cache:      "public, max-age=120",
+			Revalidate: "30",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><a href="/about">About</a></main>`,
+			},
+		},
+		{
+			ID:    "about",
+			Route: "/about",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main>About</main>`,
+			},
+		},
+	}}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := findBuildReportEvent(result.Report, "report", "cache_policy")
+	if event == nil {
+		t.Fatalf("missing cache_policy event in %#v", result.Report.Events)
+	}
+	for key, expected := range map[string]string{
+		"pageHtml":           "2",
+		"assets":             "1",
+		"defaultPageHTML":    "no-cache",
+		"defaultRequestTime": "no-store",
+		"pageHTMLPolicies":   `{"no-cache":1,"public, max-age=120, stale-while-revalidate=30":1}`,
+		"assetPolicies":      `{"no-cache":1}`,
+	} {
+		if event.Data[key] != expected {
+			t.Fatalf("expected cache policy data %s=%q, got %#v", key, expected, event.Data)
+		}
+	}
+}
+
 func TestBuildReportIncludesBackendBindingEndpointMetadata(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

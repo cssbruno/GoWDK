@@ -116,6 +116,9 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 			}
 			return fmt.Errorf("component %s uses unsupported directive attribute %q", node.Name, attr.Name)
 		}
+		if strings.Contains(attr.Name, ":") {
+			return fmt.Errorf("component %s prop renaming is not supported; pass declared prop %q directly", node.Name, strings.Split(attr.Name, ":")[0])
+		}
 		if !component.HasProp(attr.Name) {
 			return fmt.Errorf("component %s does not declare prop %q", node.Name, attr.Name)
 		}

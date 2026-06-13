@@ -253,6 +253,9 @@ Inline props can declare static scalar defaults with `name type = literal`.
 Defaults are used when a caller omits the prop and are overridden by explicit
 caller values. There is no rest/spread prop syntax, prop renaming syntax, or
 implicit global prop lookup in the current contract.
+Rest/spread-looking component calls such as `<Hero {...props} />` and
+renaming-looking props such as `title:heading="..."` are rejected; pass each
+declared prop explicitly.
 
 State is component-local UI state. A `state Type = Init()` declaration runs the
 no-argument Go init function at build time for SPA/static output and serializes

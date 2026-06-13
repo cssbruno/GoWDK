@@ -165,6 +165,9 @@ func (parser *parser) componentCall(name string, start int) (ComponentCall, erro
 		case parser.done():
 			return ComponentCall{}, parser.errorf("unterminated <%s> component tag", name)
 		default:
+			if parser.startsWith("{...") || parser.startsWith("...") {
+				return ComponentCall{}, parser.errorf("component rest/spread props are not supported; pass declared props explicitly")
+			}
 			attr, err := parser.attr()
 			if err != nil {
 				return ComponentCall{}, err

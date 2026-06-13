@@ -85,6 +85,30 @@ func TestRenderWithComponentsRejectsRecursiveComponentCycle(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsRejectsRestSpreadProps(t *testing.T) {
+	_, err := RenderWithComponents(`<Hero {...props} />`, map[string]Component{
+		"Hero": {Name: "Hero", Props: []string{"title"}, Body: `<h1>{title}</h1>`},
+	})
+	if err == nil {
+		t.Fatal("expected rest/spread prop error")
+	}
+	if !strings.Contains(err.Error(), "rest/spread props are not supported") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithComponentsRejectsPropRenaming(t *testing.T) {
+	_, err := RenderWithComponents(`<Hero title:heading="GOWDK" />`, map[string]Component{
+		"Hero": {Name: "Hero", Props: []string{"title"}, Body: `<h1>{title}</h1>`},
+	})
+	if err == nil {
+		t.Fatal("expected prop renaming error")
+	}
+	if !strings.Contains(err.Error(), "prop renaming is not supported") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestParseRejectsUnsupportedTemplateSyntaxWithGOWDKAlternatives(t *testing.T) {
 	tests := []struct {
 		name    string

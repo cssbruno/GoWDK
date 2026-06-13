@@ -239,14 +239,15 @@ Every 0.x minor release must have:
 - [x] Add generated `http.Server` timeout configuration: read, write, idle, and
   read-header timeouts.
 - [x] Add `MaxHeaderBytes`.
-- [ ] Keep action request body caps and add API/fragment body caps where
-  relevant.
+- [x] Keep action request body caps and add API/fragment body caps where
+  relevant. Current action and API lanes use 1 MiB caps; generated standalone
+  fragments are GET-only and action fragments share the action cap.
 - [ ] Add configurable body limits.
-- [ ] Add explicit 405 responses.
-- [ ] Ensure panic recovery wraps all generated request-time user Go.
-- [ ] Ensure production-safe error pages and no stack traces in production mode.
-- [ ] Prevent secret values in diagnostics and logs.
-- [ ] Add log redaction for cookies, auth headers, CSRF tokens, passwords,
+- [x] Add explicit 405 responses.
+- [x] Ensure panic recovery wraps all generated request-time user Go.
+- [x] Ensure production-safe error pages and no stack traces in production mode.
+- [x] Prevent secret values in diagnostics and logs.
+- [x] Add log redaction for cookies, auth headers, CSRF tokens, passwords,
   secrets, sensitive form fields, and sensitive query params.
 - [ ] Add secure headers middleware or docs for `X-Content-Type-Options`,
   `Referrer-Policy`, `Content-Security-Policy`, frame policy, and optional

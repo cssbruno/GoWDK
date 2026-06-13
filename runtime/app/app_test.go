@@ -1018,6 +1018,22 @@ func TestActionValuesRejectsTooLargeBody(t *testing.T) {
 	}
 }
 
+func TestActionValuesWithBodyLimitRejectsTooLargeBody(t *testing.T) {
+	handler := ActionValuesWithBodyLimit(8, func(context.Context, form.Values) (response.Response, error) {
+		t.Fatal("handler should not run for oversized body")
+		return response.Response{}, nil
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/submit", strings.NewReader("field=too-large"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	handler(recorder, request)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+}
+
 func TestAPIHandlerCapsRequestBody(t *testing.T) {
 	var readErr error
 	handler := APIHandler(func(_ context.Context, request *http.Request) (response.Response, error) {
@@ -1030,6 +1046,28 @@ func TestAPIHandlerCapsRequestBody(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	oversized := strings.Repeat("a", int(DefaultAPIBodyLimit)+1)
 	request := httptest.NewRequest(http.MethodPost, "/api/echo", strings.NewReader(oversized))
+
+	handler(recorder, request)
+
+	if readErr == nil {
+		t.Fatal("expected oversized API body read to fail")
+	}
+	if !strings.Contains(readErr.Error(), "request body too large") {
+		t.Fatalf("expected body-too-large read error, got %v", readErr)
+	}
+}
+
+func TestAPIHandlerWithBodyLimitCapsRequestBody(t *testing.T) {
+	var readErr error
+	handler := APIHandlerWithBodyLimit(4, func(_ context.Context, request *http.Request) (response.Response, error) {
+		_, readErr = io.ReadAll(request.Body)
+		if readErr != nil {
+			return response.Response{}, readErr
+		}
+		return response.JSONBody(http.StatusOK, `{"ok":true}`), nil
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/echo", strings.NewReader("12345"))
 
 	handler(recorder, request)
 

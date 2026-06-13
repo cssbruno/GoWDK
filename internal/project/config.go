@@ -480,6 +480,8 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 			build.Head = parseHeadConfig(keyValue.Value)
 		case "CSRF":
 			build.CSRF = parseCSRFConfig(keyValue.Value)
+		case "BodyLimits":
+			build.BodyLimits = parseBodyLimitsConfig(keyValue.Value)
 		case "AllowMissingBackend":
 			build.AllowMissingBackend = parseBool(keyValue.Value)
 		case "Stylesheets":
@@ -491,6 +493,32 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 		}
 	}
 	return build
+}
+
+func parseBodyLimitsConfig(expression ast.Expr) gowdk.BodyLimitsConfig {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.BodyLimitsConfig{}
+	}
+
+	var limits gowdk.BodyLimitsConfig
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "ActionBytes":
+			limits.ActionBytes = parseInt64(keyValue.Value)
+		case "APIBytes":
+			limits.APIBytes = parseInt64(keyValue.Value)
+		}
+	}
+	return limits
 }
 
 func parseHeadConfig(expression ast.Expr) gowdk.HeadConfig {
@@ -943,6 +971,32 @@ func parseString(expression ast.Expr) string {
 func parseBool(expression ast.Expr) bool {
 	identifier, ok := expression.(*ast.Ident)
 	return ok && identifier.Name == "true"
+}
+
+func parseInt64(expression ast.Expr) int64 {
+	switch typed := expression.(type) {
+	case *ast.BasicLit:
+		if typed.Kind != token.INT {
+			return 0
+		}
+		value, err := strconv.ParseInt(typed.Value, 0, 64)
+		if err != nil {
+			return 0
+		}
+		return value
+	case *ast.UnaryExpr:
+		value := parseInt64(typed.X)
+		switch typed.Op {
+		case token.ADD:
+			return value
+		case token.SUB:
+			return -value
+		default:
+			return 0
+		}
+	default:
+		return 0
+	}
 }
 
 func isConfigType(expression ast.Expr) bool {

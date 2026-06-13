@@ -256,8 +256,10 @@ requests, applies `http.Server` defaults of `ReadHeaderTimeout: 5s`,
 files, and does not list directories. It exposes `/_gowdk/health` and adds
 `X-GOWDK-App`, `X-GOWDK-Module`, and `X-GOWDK-Instance-ID` headers to responses.
 Request-time action/API dispatch registers generated backend routes with
-`runtime/app.BackendRouter` and passes the router hook into `runtime/app`;
-older separate action/API hook fields remain a compatibility path for existing
+`runtime/app.BackendRouter` and passes the router hook into `runtime/app`.
+Generated action/API body caps default to 1 MiB and use `Build.BodyLimits`
+overrides when configured. Older separate action/API hook fields remain a
+compatibility path for existing
 generated apps.
 It loads `gowdk-assets.json`, `404.html`, `500.html`, and route-local SSR
 `error` pages from the embedded build output filesystem when present.

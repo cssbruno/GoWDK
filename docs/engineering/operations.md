@@ -115,7 +115,8 @@ readiness claim:
 - Set `http.Server` read, write, idle, and header timeouts.
 - Set `MaxHeaderBytes`.
 - Cap action/API request body size before form or JSON decoding; generated
-  action handlers currently use a fixed 1 MiB cap.
+  apps default to 1 MiB and can override action/API caps with
+  `Build.BodyLimits`.
 - Enable `Build.CSRF.Enabled` for generated action handlers and provide a
   stable `GOWDK_CSRF_SECRET` or configured `Build.CSRF.SecretEnv` value in each
   runtime environment.

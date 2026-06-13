@@ -33,12 +33,12 @@ current controls, and open follow-up areas for review.
 | --- | --- | --- | --- |
 | `.gwdk` source to compiler diagnostics | Parser, analyzer, `gowdk check`, LSP diagnostics | Stable diagnostic registry, source spans where available, redaction policy for secret-like values | Broader exact spans and diagnostic expansion remain tracked outside M5. |
 | Generated logs and panic sinks | `runtime/app` panic boundaries, contract worker logs | Panic responses avoid stack traces; recovered panic logs pass through secret redaction | Broader app-owned logging guidance and redaction coverage remain planned. |
-| Browser/client to action endpoints | POST forms, enhanced partial forms, command form adapters | Expected-field decoding, direct literal validation, 1 MiB action body cap, opt-in CSRF, 405 on wrong methods, no-store error responses | Configurable body limits, broader upload policy, and full production CSRF rotation remain planned. |
-| Browser/client to API endpoints | Generated API routes, contract query routes | Method dispatch, API body cap in runtime backend router, rate-limit hook when addon is enabled | Public API hardening, typed helper expansion, and per-route policy are tracked in #24 and #57. |
-| Browser/client to fragments | Standalone fragments, action fragment responses | Fragment routing through generated handlers, escaped render core, no-store request-time responses | Broader fragment body-limit and auth/session policy remain planned. |
+| Browser/client to action endpoints | POST forms, enhanced partial forms, command form adapters | Expected-field decoding, direct literal validation, configurable action body cap defaulting to 1 MiB, opt-in CSRF, 405 on wrong methods, no-store error responses | Broader upload policy, per-route limits, and full production CSRF rotation remain planned. |
+| Browser/client to API endpoints | Generated API routes, contract query routes | Method dispatch, configurable API body cap defaulting to 1 MiB, rate-limit hook when addon is enabled | Public API hardening, typed helper expansion, and per-route policy are tracked in #24. |
+| Browser/client to fragments | Standalone fragments, action fragment responses | Fragment routing through generated handlers, escaped render core, no-store request-time responses; standalone fragments are GET-only and action fragments share the action cap | Broader auth/session policy remains planned. |
 | Browser/client to SSR `load {}` | Request-time SSR routes, route-local error pages | SSR feature gate, guard execution, safe local redirect helpers, panic boundaries, no-store failures | Full guard contract, route-local auth/session policy, and richer request-time error policy remain planned. |
 | Guard metadata to user authorization | `guard` declarations, `GOWDKGuardRegistry`, `GOWDKAuthProvider` | Guards run before generated request-time user logic; native RBAC helpers are defense-in-depth only | Backend resource authorization remains app-owned; full guard response contract is planned. |
-| Embedded build output to generated server | Embedded SPA assets, generated error pages, health endpoint | Generated server uses HTTP timeouts and `MaxHeaderBytes`; embedded output is selected from build output | Secret exclusion tests and broader asset policy remain planned. |
+| Embedded build output to generated server | Embedded SPA assets, generated error pages, health endpoint | Generated server uses HTTP timeouts and `MaxHeaderBytes`; embedded output skips known secret/private/temp artifacts | Broader asset policy remains planned. |
 | VS Code extension to workspace | LSP/editor commands and workspace file access | Dependency-light local tooling; no production runtime authority | Extension command/file threat model needs focused review before broader editor automation. |
 | WASM islands to browser runtime | `go client {}`, component WASM assets, host loader | WASM is explicit and separate from backend handlers; browser-unsafe import validation exists | Production ABI hardening and user-code runtime validation remain planned. |
 | Contracts and realtime adapters | Command/query web adapters, workers, outbox, broker, fanout | Web-role validation, CSRF before command decoding, guard/rate-limit preflight, local default dispatch | Split worker/cron wiring, retry policy, managed deployment recipes, and realtime security policy remain planned. |
@@ -48,7 +48,7 @@ current controls, and open follow-up areas for review.
 | Abuse Path | Impact | Current Mitigation | Priority |
 | --- | --- | --- | --- |
 | Submit unexpected action fields to overwrite handler input. | Integrity of action input. | Generated decoders reject unexpected fields and skip runtime fields such as CSRF. | Medium until broader typed helper contracts stabilize. |
-| Send large request bodies to exhaust memory or handler time. | Availability of generated servers. | Generated action adapters and runtime API backend routing cap bodies; generated server entrypoints set HTTP timeouts and max-header defaults. | Medium because configurable per-route limits remain planned. |
+| Send large request bodies to exhaust memory or handler time. | Availability of generated servers. | Generated action/API adapters cap bodies with configurable app-level limits; generated server entrypoints set HTTP timeouts and max-header defaults. | Medium because per-route limits remain planned. |
 | Reuse or forge action CSRF tokens. | Cross-site action execution. | Generated CSRF is opt-in and validates before decoding or user handlers run. | High for production until secret rotation and deployment guidance are complete. |
 | Trigger handler panics and read stack traces or secret values. | Secret exposure and debugging data leakage. | Runtime panic boundaries avoid stack traces in responses and redact recovered-panic logs. | Medium because app-owned logs are outside generated control. |
 | Use unsafe redirects to move users off-site. | Phishing or token leakage through redirects. | First slices require safe local redirects for generated action/SSR redirect paths. | Medium until full redirect allowlists and diagnostics are complete. |
@@ -72,6 +72,5 @@ Apply the `security review` GitHub label to issues or pull requests that touch:
 
 ## Follow-Up Areas
 
-- Enable GitHub private vulnerability reporting if available for the repository.
-- Add configurable request body/header limit policy.
+- Add per-route request body/header limit policy.
 - Finish public API helper hardening in #24.

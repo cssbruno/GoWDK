@@ -68,6 +68,7 @@ func apiCaseStmts(api APIEndpoint, rateLimit bool) []ast.Stmt {
 		return stmts
 	}
 	stmts = append(stmts,
+		assign([]ast.Expr{selExpr(id("request"), "Body")}, call(sel("http", "MaxBytesReader"), id("response"), selExpr(id("request"), "Body"), id("maxAPIBodyBytes"))),
 		define([]ast.Expr{id("result"), id("err")}, call(sel(api.BackendAlias, api.Binding.FunctionName), id("ctx"), id("request"))),
 		&ast.IfStmt{
 			Cond: notNil("err"),

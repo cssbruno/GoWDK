@@ -64,6 +64,10 @@ var Config = gowdk.Config{
 			HeaderName: "X-Example-CSRF",
 			Insecure: true,
 		},
+		BodyLimits: gowdk.BodyLimitsConfig{
+			ActionBytes: 2097152,
+			APIBytes: 524288,
+		},
 		AllowMissingBackend: true,
 		Stylesheets: []gowdk.Stylesheet{
 			{Href: "/assets/app.css"},
@@ -159,6 +163,9 @@ var Config = gowdk.Config{
 	}
 	if !config.Build.CSRF.Enabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
 		t.Fatalf("unexpected build csrf config: %#v", config.Build.CSRF)
+	}
+	if config.Build.BodyLimits.ActionBytes != 2097152 || config.Build.BodyLimits.APIBytes != 524288 {
+		t.Fatalf("unexpected body limits config: %#v", config.Build.BodyLimits)
 	}
 	if !config.Build.AllowMissingBackend {
 		t.Fatal("expected AllowMissingBackend to be parsed")

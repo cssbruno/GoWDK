@@ -376,7 +376,8 @@ func validatePageStores(page gwdkir.Page) []ValidationError {
 			continue
 		}
 		seen[store.Name] = store
-		if _, err := gotypes.ResolveStruct(page.Imports, store.Type); err != nil {
+		resolved, err := gotypes.ResolveStruct(page.Imports, store.Type)
+		if err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:    "page_store_error",
 				PageID:  page.ID,
@@ -395,8 +396,57 @@ func validatePageStores(page gwdkir.Page) []ValidationError {
 				Message: fmt.Sprintf("page %s store %q init is invalid: %v", page.ID, store.Name, err),
 			})
 		}
+		diagnostics = append(diagnostics, validateStorePersist(page, store, resolved)...)
 	}
 	return diagnostics
+}
+
+// validateStorePersist checks the optional `persist "<scope>"` modifier on a
+// page store: the scope must be a known browser storage backend, and persisting
+// a field whose name resembles a secret earns a warning because browser storage
+// is readable by any script on the origin.
+func validateStorePersist(page gwdkir.Page, store gwdkir.Store, resolved gotypes.Struct) []ValidationError {
+	if store.Persist == "" {
+		return nil
+	}
+	if store.Persist != "local" && store.Persist != "session" {
+		return []ValidationError{{
+			Code:    "page_store_persist_scope_invalid",
+			PageID:  page.ID,
+			Source:  page.Source,
+			Span:    firstSpan(store.Span, page.Spans.Page),
+			Message: fmt.Sprintf("page %s store %q persist scope %q is invalid; use \"local\" or \"session\"", page.ID, store.Name, store.Persist),
+		}}
+	}
+	var diagnostics []ValidationError
+	for _, field := range resolved.Fields {
+		if !looksLikeSecretFieldName(field.Name) {
+			continue
+		}
+		diagnostics = append(diagnostics, ValidationError{
+			Code:     "page_store_persist_secret_field",
+			PageID:   page.ID,
+			Source:   page.Source,
+			Span:     firstSpan(store.Span, page.Spans.Page),
+			Severity: SeverityWarning,
+			Message:  fmt.Sprintf("page %s store %q persists field %q, which resembles a secret; %s browser storage is readable by any script on this origin", page.ID, store.Name, field.Name, store.Persist),
+		})
+	}
+	return diagnostics
+}
+
+// looksLikeSecretFieldName flags field names that commonly hold credentials or
+// trusted authorization state, which the store contract already forbids from
+// browser-visible state and which persistence would write to disk.
+func looksLikeSecretFieldName(name string) bool {
+	lower := strings.ToLower(name)
+	needles := []string{"password", "passwd", "secret", "token", "apikey", "api_key", "auth", "credential", "private_key", "privatekey", "ssn"}
+	for _, needle := range needles {
+		if strings.Contains(lower, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func validatePageCSS(page gwdkir.Page) []ValidationError {

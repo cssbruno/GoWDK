@@ -7,6 +7,20 @@ packages, and tooling contracts may change before a stable release.
 
 ### Implemented
 
+- Page stores can opt into browser persistence with a `persist "local"` or
+  `persist "session"` modifier
+  (`store cart ui.CartState = ui.NewCartState() persist "local"`). The generated
+  store runtime hydrates from localStorage/sessionStorage on load, re-hydrates on
+  SPA navigation (stores first declared on a later route are picked up on content
+  swap), writes the store's declared fields on change, mirrors cross-tab writes
+  through the `storage` event, exposes `window.__gowdkStores.clear(name)` to drop
+  a persisted store, and discards persisted state whose embedded schema hash no longer
+  matches the store's shape (so a struct change never restores stale data).
+  Only the store's own fields persist — never component state, props, or computed
+  values. New diagnostics: `page_store_persist_scope_invalid` (error),
+  `page_store_persist_secret_field` (warning), and
+  `page_store_persist_key_conflict` (warning). Persistence is a JS-island/store
+  runtime feature; WASM islands do not yet participate in page stores.
 - M4 Go interop is complete for the current 0.x surface: a user can see why a Go
   function or type did or did not bind. `gowdk inspect go-bindings` emits a
   versioned JSON report (schema version 1) covering actions, APIs, fragments,

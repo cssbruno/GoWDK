@@ -60,6 +60,9 @@ const runtimeSource = `(function () {
       } else {
         target.innerHTML = html;
       }
+      if (typeof window !== 'undefined' && window.__gowdkStores && window.__gowdkStores.hydrate) {
+        window.__gowdkStores.hydrate();
+      }
       if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
         window.__gowdkMountIslands();
       }
@@ -189,6 +192,9 @@ const runtimeSource = `(function () {
     await activateNewScripts(previousScripts);
     if (push && window.history && window.history.pushState) {
       window.history.pushState({}, document.title, url);
+    }
+    if (typeof window !== 'undefined' && window.__gowdkStores && window.__gowdkStores.hydrate) {
+      window.__gowdkStores.hydrate();
     }
     if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
       window.__gowdkMountIslands();

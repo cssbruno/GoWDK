@@ -1,0 +1,22 @@
+package shop
+
+import ui "github.com/cssbruno/gowdk/examples/store-persist/ui"
+
+component CartBadge
+
+state ui.CartState = ui.NewCartState()
+
+client {
+  use cart
+
+  computed Label string {
+    if Count == 0 {
+      return "Cart empty"
+    }
+    return string(Count)
+  }
+}
+
+view {
+  <span class:has-items={Count > 0}>{Label}</span>
+}

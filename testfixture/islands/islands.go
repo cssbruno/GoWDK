@@ -44,8 +44,19 @@ type FilterState struct {
 	Items []Item
 }
 
+// SessionState carries a secret-resembling field. It exists to exercise the
+// persisted-store secret-field warning and should not be persisted in practice.
+type SessionState struct {
+	Token string
+	Open  bool
+}
+
 func NewCounterState() CounterState {
 	return CounterState{Count: 1, Open: false}
+}
+
+func NewSessionState() SessionState {
+	return SessionState{}
 }
 
 func NewOtherState() OtherState {

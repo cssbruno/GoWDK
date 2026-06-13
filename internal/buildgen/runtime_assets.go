@@ -68,10 +68,86 @@ func storeRuntimeSource() string {
     stores: Object.create(null),
     listeners: Object.create(null)
   });
+  registry.persist = registry.persist || Object.create(null);
+  registry.fields = registry.fields || Object.create(null);
+  registry.seeds = registry.seeds || Object.create(null);
+  const warned = Object.create(null);
 
-  registry.init = (name, state) => {
+  const storageFor = (scope) => {
+    try {
+      return scope === "session" ? window.sessionStorage : window.localStorage;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const projectFields = (name, source) => {
+    const projected = Object.create(null);
+    (registry.fields[name] || []).forEach((field) => {
+      if (Object.prototype.hasOwnProperty.call(source, field)) projected[field] = source[field];
+    });
+    return projected;
+  };
+
+  const decodePersisted = (config, fields, raw) => {
+    if (!raw) return null;
+    let blob = null;
+    try {
+      blob = JSON.parse(raw);
+    } catch (error) {
+      return null;
+    }
+    if (!blob || blob.v !== config.version || typeof blob.s !== "object" || blob.s === null) return null;
+    const restored = Object.create(null);
+    fields.forEach((field) => {
+      if (Object.prototype.hasOwnProperty.call(blob.s, field)) restored[field] = blob.s[field];
+    });
+    return restored;
+  };
+
+  const readPersisted = (config, fields) => {
+    const storage = storageFor(config.scope);
+    if (!storage) return null;
+    let raw = null;
+    try {
+      raw = storage.getItem(config.key);
+    } catch (error) {
+      return null;
+    }
+    return decodePersisted(config, fields, raw);
+  };
+
+  const writePersisted = (name) => {
+    const config = registry.persist[name];
+    if (!config) return;
+    const storage = storageFor(config.scope);
+    if (!storage) return;
+    try {
+      storage.setItem(config.key, JSON.stringify({ v: config.version, s: projectFields(name, registry.stores[name] || {}) }));
+    } catch (error) {
+      // Quota, private-mode, or disabled storage must never break the island.
+      if (!warned[name] && typeof console !== "undefined" && console.warn) {
+        warned[name] = true;
+        console.warn("GOWDK: could not persist store \"" + name + "\" (storage unavailable or full); continuing without persistence.");
+      }
+    }
+  };
+
+  const notify = (name) => {
+    (registry.listeners[name] || []).slice().forEach((listener) => listener(registry.get(name)));
+  };
+
+  registry.init = (name, state, persist) => {
     if (!name || registry.stores[name]) return;
-    registry.stores[name] = Object.assign({}, state || {});
+    const seed = Object.assign(Object.create(null), state || {});
+    registry.fields[name] = Object.keys(seed);
+    registry.seeds[name] = Object.assign(Object.create(null), seed);
+    if (persist && persist.scope && persist.key && persist.version) {
+      registry.persist[name] = persist;
+      const restored = readPersisted(persist, registry.fields[name]);
+      if (restored) Object.assign(seed, restored);
+    }
+    registry.stores[name] = seed;
   };
 
   registry.get = (name) => {
@@ -81,7 +157,25 @@ func storeRuntimeSource() string {
   registry.set = (name, next) => {
     if (!name) return;
     registry.stores[name] = Object.assign({}, registry.stores[name] || {}, next || {});
-    (registry.listeners[name] || []).slice().forEach((listener) => listener(registry.get(name)));
+    writePersisted(name);
+    notify(name);
+  };
+
+  // clear drops the persisted copy and resets the in-memory store to its build
+  // -time seed, then notifies islands. Use after checkout, logout, or reset.
+  registry.clear = (name) => {
+    if (!name) return;
+    const config = registry.persist[name];
+    if (config) {
+      const storage = storageFor(config.scope);
+      if (storage) {
+        try {
+          storage.removeItem(config.key);
+        } catch (error) {}
+      }
+    }
+    if (registry.seeds[name]) registry.stores[name] = Object.assign({}, registry.seeds[name]);
+    notify(name);
   };
 
   registry.subscribe = (name, listener) => {
@@ -93,14 +187,49 @@ func storeRuntimeSource() string {
     };
   };
 
-  document.querySelectorAll("script[type=\"application/json\"][data-gowdk-store]").forEach((node) => {
-    const name = node.getAttribute("data-gowdk-store");
-    try {
-      registry.init(name, JSON.parse(node.textContent || "{}"));
-    } catch (error) {
-      registry.init(name, {});
-    }
-  });
+  // Cross-tab sync: when another tab writes a persisted store, mirror the value
+  // here and notify islands. We never write back, so tabs cannot loop.
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener("storage", (event) => {
+      if (!event || !event.key) return;
+      Object.keys(registry.persist).forEach((name) => {
+        const config = registry.persist[name];
+        if (!config || config.key !== event.key) return;
+        if (event.newValue == null) {
+          if (registry.seeds[name]) registry.stores[name] = Object.assign({}, registry.seeds[name]);
+        } else {
+          const restored = decodePersisted(config, registry.fields[name] || [], event.newValue);
+          if (restored) registry.stores[name] = Object.assign({}, registry.stores[name] || {}, restored);
+        }
+        notify(name);
+      });
+    });
+  }
+
+  // hydrate scans the current document for store seeds and initializes any not
+  // already in the registry. It is idempotent (init bails on existing stores),
+  // so the SPA navigation runtime can call it after swapping page content to
+  // pick up stores first declared on a later route.
+  registry.hydrate = () => {
+    document.querySelectorAll("script[type=\"application/json\"][data-gowdk-store]").forEach((node) => {
+      const name = node.getAttribute("data-gowdk-store");
+      let persist = null;
+      const scope = node.getAttribute("data-gowdk-persist");
+      if (scope) {
+        persist = {
+          scope: scope,
+          key: node.getAttribute("data-gowdk-persist-key") || ("gowdk:store:" + name),
+          version: node.getAttribute("data-gowdk-persist-version") || ""
+        };
+      }
+      try {
+        registry.init(name, JSON.parse(node.textContent || "{}"), persist);
+      } catch (error) {
+        registry.init(name, {}, persist);
+      }
+    });
+  };
+  registry.hydrate();
 })();
 `)
 }

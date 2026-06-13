@@ -347,7 +347,9 @@ func parseComponentTypeLine(line string) []string {
 
 func parseStoreLine(line string) []string {
 	tokens := syntaxTokens(line)
-	if len(tokens) != 6 || tokens[0].Kind != syntax.TokenIdentifier || tokens[0].Lexeme != "store" {
+	// 6 tokens: `store <name> <pkg.Type> = <pkg.NewFn> ()`.
+	// 8 tokens: the same followed by `persist "<scope>"`.
+	if (len(tokens) != 6 && len(tokens) != 8) || tokens[0].Kind != syntax.TokenIdentifier || tokens[0].Lexeme != "store" {
 		return nil
 	}
 	if tokens[1].Kind != syntax.TokenIdentifier || !isStrictIdent(tokens[1].Lexeme) || tokens[3].Kind != syntax.TokenAssign {
@@ -357,11 +359,18 @@ func parseStoreLine(line string) []string {
 	if !ok {
 		return nil
 	}
-	initAlias, initName, ok := parseQualifiedCall(tokens[4:])
+	initAlias, initName, ok := parseQualifiedCall(tokens[4:6])
 	if !ok {
 		return nil
 	}
-	return []string{line, tokens[1].Lexeme, typeAlias, typeName, initAlias, initName}
+	persistScope := ""
+	if len(tokens) == 8 {
+		if tokens[6].Kind != syntax.TokenIdentifier || tokens[6].Lexeme != "persist" || tokens[7].Kind != syntax.TokenString {
+			return nil
+		}
+		persistScope = syntax.Unquote(tokens[7].Lexeme)
+	}
+	return []string{line, tokens[1].Lexeme, typeAlias, typeName, initAlias, initName, persistScope}
 }
 
 func parseActionInputLine(line string) []string {

@@ -1,8 +1,12 @@
 package buildgen
 
 import (
+	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -284,8 +288,18 @@ func isInternalNavigationHref(value string) bool {
 }
 
 type pageStoreSeed struct {
-	Name string
-	JSON string
+	Name    string
+	JSON    string
+	Persist *storePersistSeed
+}
+
+// storePersistSeed is the persistence config carried to the browser store
+// registry on the seed <script> tag. Version is a hash of the store's resolved
+// struct shape so stale browser storage from an older shape is discarded.
+type storePersistSeed struct {
+	Scope   string
+	Key     string
+	Version string
 }
 
 func pageStoreSeeds(page gwdkir.Page) ([]pageStoreSeed, error) {
@@ -302,9 +316,56 @@ func pageStoreSeeds(page gwdkir.Page) ([]pageStoreSeed, error) {
 		if err != nil {
 			return nil, fmt.Errorf("store %s init: %w", store.Name, err)
 		}
-		seeds = append(seeds, pageStoreSeed{Name: store.Name, JSON: string(payload)})
+		seed := pageStoreSeed{Name: store.Name, JSON: string(payload)}
+		if store.Persist == "local" || store.Persist == "session" {
+			resolved, err := gotypes.ResolveStruct(page.Imports, store.Type)
+			if err != nil {
+				return nil, fmt.Errorf("store %s persist: %w", store.Name, err)
+			}
+			seed.Persist = &storePersistSeed{
+				Scope:   store.Persist,
+				Key:     "gowdk:store:" + store.Name,
+				Version: storeSchemaHash(resolved, seed.JSON),
+			}
+		}
+		seeds = append(seeds, seed)
 	}
 	return seeds, nil
+}
+
+// storeSchemaHash derives a stable short token from a store's shape. It folds in
+// both the resolved Go field names and fully-qualified types (catching field
+// add/remove/retype, including nested fields) and the on-wire JSON keys of the
+// seed (catching json-tag-only renames that leave the Go field unchanged). The
+// token changes whenever the shape changes, which the browser runtime uses to
+// discard persisted state written against an older shape.
+func storeSchemaHash(resolved gotypes.Struct, seedJSON string) string {
+	digest := fnv.New32a()
+	typeKeys := make([]string, 0, len(resolved.FieldTypes))
+	for name := range resolved.FieldTypes {
+		typeKeys = append(typeKeys, name)
+	}
+	sort.Strings(typeKeys)
+	for _, name := range typeKeys {
+		digest.Write([]byte(name))
+		digest.Write([]byte{0})
+		digest.Write([]byte(resolved.FieldTypes[name]))
+		digest.Write([]byte{0})
+	}
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(seedJSON), &wire); err == nil {
+		wireKeys := make([]string, 0, len(wire))
+		for key := range wire {
+			wireKeys = append(wireKeys, key)
+		}
+		sort.Strings(wireKeys)
+		digest.Write([]byte{1})
+		for _, key := range wireKeys {
+			digest.Write([]byte(key))
+			digest.Write([]byte{0})
+		}
+	}
+	return strconv.FormatUint(uint64(digest.Sum32()), 16)
 }
 
 func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []gowdk.Script) string {
@@ -370,7 +431,13 @@ func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []
 		if strings.TrimSpace(seed.Name) == "" {
 			continue
 		}
-		head = append(head, "  <script type=\"application/json\""+gowhtml.Attr("data-gowdk-store", seed.Name)+">"+escapeScriptJSON(seed.JSON)+"</script>")
+		attrs := gowhtml.Attr("data-gowdk-store", seed.Name)
+		if seed.Persist != nil {
+			attrs += gowhtml.Attr("data-gowdk-persist", seed.Persist.Scope)
+			attrs += gowhtml.Attr("data-gowdk-persist-key", seed.Persist.Key)
+			attrs += gowhtml.Attr("data-gowdk-persist-version", seed.Persist.Version)
+		}
+		head = append(head, "  <script type=\"application/json\""+attrs+">"+escapeScriptJSON(seed.JSON)+"</script>")
 	}
 	for _, script := range nonEmptyScripts(scripts) {
 		tag := "  <script"

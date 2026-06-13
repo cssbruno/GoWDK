@@ -489,6 +489,18 @@ or trusted authorization, validation, database, or action state. Runtime
 cross-island subscriptions are planned; the current contract validates
 declarations and explicit uses, but does not make stores global app state.
 
+A page store may opt into browser persistence with a trailing `persist` scope:
+
+```gwdk
+store cart ui.CartState = ui.NewCartState() persist "local"
+```
+
+The scope must be `"local"` (localStorage) or `"session"` (sessionStorage); any
+other value is rejected with `page_store_persist_scope_invalid`. Persisted store
+state is keyed by store name, restores over the build-time init value on load,
+is discarded when the store's struct shape changes, and warns when a persisted
+field name resembles a secret.
+
 Client blocks can declare limited DOM refs for safe methods:
 
 ```gwdk

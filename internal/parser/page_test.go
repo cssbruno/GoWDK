@@ -175,6 +175,45 @@ view {
 	}
 }
 
+func TestParsePageReadsStorePersistModifier(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		line  string
+		scope string
+	}{
+		{name: "local", line: `store cart ui.CounterState = ui.NewCounterState() persist "local"`, scope: "local"},
+		{name: "session", line: `store cart ui.CounterState = ui.NewCounterState() persist "session"`, scope: "session"},
+		{name: "no-persist", line: `store cart ui.CounterState = ui.NewCounterState()`, scope: ""},
+		// An unknown scope still parses into a store so validation can emit a
+		// precise diagnostic rather than a generic parse error.
+		{name: "invalid-scope", line: `store cart ui.CounterState = ui.NewCounterState() persist "disk"`, scope: "disk"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			page, err := ParsePage([]byte("\npage cart\nroute \"/cart\"\n\nimport ui \"github.com/cssbruno/gowdk/testfixture/islands\"\n\n" + tc.line + "\n\nview {\n  <main>Cart</main>\n}\n"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(page.Stores) != 1 {
+				t.Fatalf("expected one store, got %#v", page.Stores)
+			}
+			if got := page.Stores[0].Persist; got != tc.scope {
+				t.Fatalf("store persist = %q, want %q", got, tc.scope)
+			}
+			if page.Stores[0].Name != "cart" || page.Stores[0].Init.Name != "NewCounterState" {
+				t.Fatalf("persist modifier corrupted the store: %#v", page.Stores[0])
+			}
+		})
+	}
+}
+
+func TestParsePageStorePersistRequiresStringScope(t *testing.T) {
+	// `persist` without a string scope is not a valid store line.
+	page, err := ParsePage([]byte("\npage cart\nroute \"/cart\"\n\nimport ui \"github.com/cssbruno/gowdk/testfixture/islands\"\n\nstore cart ui.CounterState = ui.NewCounterState() persist\n\nview {\n  <main>Cart</main>\n}\n"))
+	if err == nil && len(page.Stores) == 1 {
+		t.Fatalf("expected the bare persist keyword to be rejected, got store %#v", page.Stores[0])
+	}
+}
+
 func TestParsePageReadsStyleBlockOutsideView(t *testing.T) {
 	page, err := ParsePage([]byte(`
 page styled

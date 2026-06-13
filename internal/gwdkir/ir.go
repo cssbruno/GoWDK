@@ -81,7 +81,10 @@ type Store struct {
 	Name string
 	Type GoRef
 	Init GoRef
-	Span source.SourceSpan
+	// Persist is the optional `persist "<scope>"` modifier scope literal
+	// ("" when not persisted). Validated in the compiler, not the parser.
+	Persist string
+	Span    source.SourceSpan
 }
 
 // Page is the normalized IR for one page source.

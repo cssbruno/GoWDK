@@ -187,11 +187,25 @@ func parseStoreTokens(src string, line []Token, end Token) (gwdkast.Store, bool)
 	if !ok {
 		return gwdkast.Store{}, false
 	}
-	initRef, ok := goFuncRef(sourceBetween(src, tokenEnd(line[assign]), end.Offset), span)
+	// An optional trailing `persist "<scope>"` clause bounds the initializer: the
+	// init expression runs from `=` up to the `persist` keyword (or end of line).
+	persistScope := ""
+	initStop := end.Offset
+	for index := assign + 1; index < len(line); index++ {
+		if line[index].Kind == TokenIdentifier && line[index].Lexeme == "persist" {
+			if index+1 >= len(line) || line[index+1].Kind != TokenString {
+				return gwdkast.Store{}, false
+			}
+			persistScope = Unquote(line[index+1].Lexeme)
+			initStop = line[index].Offset
+			break
+		}
+	}
+	initRef, ok := goFuncRef(sourceBetween(src, tokenEnd(line[assign]), initStop), span)
 	if !ok {
 		return gwdkast.Store{}, false
 	}
-	return gwdkast.Store{Name: line[1].Lexeme, Type: typeRef, Init: initRef, Span: span}, true
+	return gwdkast.Store{Name: line[1].Lexeme, Type: typeRef, Init: initRef, Persist: persistScope, Span: span}, true
 }
 
 // parsePropsTokens recovers a `props <pkg.Type>` contract: a type reference with

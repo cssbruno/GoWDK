@@ -33,15 +33,20 @@ func interpolateBuildValue(value string, routeParams map[string]string, data map
 			value = value[end+1:]
 			continue
 		}
+		wasField := false
 		if field, ok := buildFieldExpression(name); ok {
 			name = field
+			wasField = true
 		}
 		resolved, ok := data[name]
 		if !ok {
 			resolved, ok = routeParams[name]
 		}
 		if !ok {
-			return "", fmt.Errorf("unknown route param %q", name)
+			if wasField {
+				return "", fmt.Errorf("unknown build data field %q", name)
+			}
+			return "", fmt.Errorf("unknown build data field or route param %q", name)
 		}
 		parts = append(parts, resolved)
 		value = value[end+1:]

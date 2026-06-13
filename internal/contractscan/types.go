@@ -2,6 +2,7 @@ package contractscan
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/importer"
@@ -193,7 +194,7 @@ func scanGoListExportFiles(packageDir string, importPaths []string) (map[string]
 	command.Dir = packageDir
 	output, err := command.Output()
 	if err != nil {
-		return nil, err
+		return nil, goListExportError(err)
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(output)))
 	exports := map[string]string{}
@@ -214,4 +215,17 @@ func scanGoListExportFiles(packageDir string, importPaths []string) (map[string]
 		exports[item.ImportPath] = item.Export
 	}
 	return exports, nil
+}
+
+// goListExportError surfaces the underlying go list failure, including its
+// stderr, instead of letting the bare exit status reach the type checker as an
+// opaque "load export data for X: exit status 1" with no cause.
+func goListExportError(err error) error {
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		if stderr := strings.TrimSpace(string(exit.Stderr)); stderr != "" {
+			return fmt.Errorf("%w\n%s", err, stderr)
+		}
+	}
+	return err
 }

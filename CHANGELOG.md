@@ -45,7 +45,11 @@ packages, and tooling contracts may change before a stable release.
   cause (for example a missing `go.mod`) rather than a generic "requires a
   buildable Go package" message; and a component-script resolution error during
   build now fails the build instead of silently omitting the page's component
-  scripts.
+  scripts. The contract scanner's `go list -deps -export` failures now surface
+  their stderr instead of reaching the type checker as an opaque "exit status 1",
+  and an unknown build-data interpolation reference now reports whether the
+  missing name was a build-data field or a route param instead of always saying
+  "unknown route param".
 
 ### Known Gaps
 

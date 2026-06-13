@@ -37,6 +37,63 @@ generated app packages, generated `gowdkapp` output, generated `cmd/server`
 code, or build output directories. Generated app source imports feature
 packages, never the other way around.
 
+## Handler Helpers
+
+API handlers can use `github.com/cssbruno/gowdk/addons/api` for the current
+public helper contract:
+
+```go
+package api
+
+import (
+	"context"
+	"net/http"
+
+	gowdkapi "github.com/cssbruno/gowdk/addons/api"
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+type CreatePatientInput struct {
+	Name string `json:"name"`
+}
+
+func CreatePatient(ctx context.Context, request *http.Request) (response.Response, error) {
+	input, err := gowdkapi.DecodeJSON[CreatePatientInput](request)
+	if err != nil {
+		return gowdkapi.Error(http.StatusBadRequest, "invalid_json", "Invalid JSON body")
+	}
+
+	active, ok, err := gowdkapi.QueryBool(request, "active")
+	if err != nil {
+		return gowdkapi.Error(http.StatusBadRequest, "invalid_query", "Invalid query")
+	}
+	_ = input
+	_ = active
+	_ = ok
+
+	return gowdkapi.JSON(http.StatusCreated, map[string]any{"ok": true})
+}
+```
+
+`DecodeJSON[T]` decodes the capped request body into `T`, accepts
+`application/json` and `+json` content types, rejects unknown object fields,
+and rejects trailing JSON values. Empty `Content-Type` is accepted so simple
+clients can still post JSON bodies.
+
+Query helpers read from `request.URL.Query()`:
+
+- `QueryString(request, name) (string, bool)`
+- `QueryStrings(request, name) []string`
+- `QueryBool(request, name) (bool, bool, error)`
+- `QueryInt(request, name) (int, bool, error)`
+- `QueryInt64(request, name) (int64, bool, error)`
+
+Response helpers return `runtime/response.Response`:
+
+- `JSON(status, value)` marshals a JSON response.
+- `Error(status, code, message)` returns `{ "ok": false, "error": ... }`.
+- `NoContent()` returns a 204 response.
+
 Generated bound API adapters attach endpoint metadata to the handler context.
 Handlers can call `app.Endpoint(ctx)` from `runtime/app` to read the generated
 endpoint kind, page ID, symbol name, method, path, and optional generated error
@@ -57,13 +114,17 @@ rendering; build-time SPA HTML cannot enforce frontend page access.
 
 ## Production Notes
 
-- API handlers own authentication, backend authorization, request validation,
+- API handlers own authentication, backend authorization, domain validation,
   storage, service calls, and response shape in normal Go.
+- `addons/api` helpers cover strict JSON body decoding, typed query access, and
+  JSON response envelopes without requiring framework-specific adapters.
 - Bound API handlers return `runtime/response.Response`; generated adapters
   only dispatch by method/path, call the handler, and write the returned
   response.
 - Generated API responses and generated API error responses use
   `Cache-Control: no-store` in the current first slice.
+- Generated API adapters dispatch only the declared HTTP method/path pair;
+  unsupported methods do not call user handlers.
 - Handler errors are written with `runtime/response.HandlerStatus`, defaulting
   to HTTP 500 when the error does not carry an explicit status. Ordinary 5xx
   responses use generic status text; expose only intentional client-facing
@@ -77,7 +138,9 @@ rendering; build-time SPA HTML cannot enforce frontend page access.
 
 Future API behavior must define:
 
-- Request body and query decoding.
 - Authentication and authorization hooks.
-- Error response shape.
+- Generated typed handler signatures beyond
+  `func(context.Context, *http.Request) (response.Response, error)`.
+- Per-route body/query/result contracts and route-param accessors.
+- CORS policy and richer content negotiation.
 - Interaction with SPA/action pages without full-page SSR.

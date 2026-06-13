@@ -445,10 +445,10 @@ Every 0.x minor release must have:
   redirects, and partial fragment responses beyond the current
   newsletter/signup/login slices. Deferred to
   [#337](https://github.com/cssbruno/GoWDK/issues/337).
-- [ ] Document broader API helpers for typed route params, typed query params,
-  typed JSON bodies, typed responses, `(T, error)` support, content type,
-  method-not-allowed behavior, CORS, and richer examples. Deferred to
-  [#24](https://github.com/cssbruno/GoWDK/issues/24).
+- [x] Document and add broader API helpers for strict JSON bodies, typed query
+  params, JSON/error/no-content responses, content type handling, and
+  method-not-allowed behavior. Generated typed route params, `(T, error)`
+  signatures, CORS, and richer examples remain planned.
 - [x] Document supported API signatures, context/request support,
   `response.Response`, generated error handling, guards, no-store responses,
   missing/unsupported handler behavior, and unsupported methods for the current

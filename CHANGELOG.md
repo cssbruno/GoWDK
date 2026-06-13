@@ -54,6 +54,10 @@ packages, and tooling contracts may change before a stable release.
   generated app imports app-owned packages it now fails with the real `go list`
   error instead of producing a go.mod that fails to build with an opaque
   "cannot find package".
+- The generated-app module loud-failure path is now covered by an integration
+  test: with `go list -m` unable to determine the main module, `moduleSource`
+  fails when the app imports app-owned packages and stays silent when it does
+  not, so the fail-loudly contract for app-module resolution is regression-proof.
 
 ### Known Gaps
 

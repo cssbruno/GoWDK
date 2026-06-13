@@ -41,7 +41,7 @@ func buildComponents(components []gwdkir.Component) (map[string]view.Component, 
 			continue
 		}
 
-		props, propFailures := componentPropNames(component)
+		props, propTypes, propFailures := componentProps(component)
 		for _, failure := range propFailures {
 			failures = append(failures, failure)
 			valid = false
@@ -79,6 +79,7 @@ func buildComponents(components []gwdkir.Component) (map[string]view.Component, 
 			ScopeIDs:      componentScopeIDs(component),
 			DefaultIsland: componentDefaultIsland(component),
 			Props:         props,
+			PropTypes:     propTypes,
 			State:         state,
 			StateJSON:     stateJSON,
 			Handlers:      handlers,
@@ -231,19 +232,28 @@ func componentEmits(component gwdkir.Component) map[string]clientlang.Emit {
 	return out
 }
 
-func componentPropNames(component gwdkir.Component) ([]string, []string) {
+func componentProps(component gwdkir.Component) ([]string, map[string]clientlang.ValueType, []string) {
 	if component.PropsType.Name != "" {
 		resolved, err := gotypes.ResolveStruct(component.Imports, component.PropsType)
 		if err != nil {
-			return nil, []string{fmt.Sprintf("component %s props: %v", component.Name, err)}
+			return nil, nil, []string{fmt.Sprintf("component %s props: %v", component.Name, err)}
 		}
-		return resolved.FieldNames(), nil
+		propTypes := map[string]clientlang.ValueType{}
+		for _, field := range resolved.Fields {
+			propTypes[field.Name] = clientlang.NormalizeType(field.Type)
+		}
+		for field, typ := range resolved.FieldTypes {
+			propTypes[field] = clientlang.NormalizeType(typ)
+		}
+		return resolved.FieldNames(), propTypes, nil
 	}
 	props := make([]string, 0, len(component.Props))
+	propTypes := map[string]clientlang.ValueType{}
 	seen := map[string]bool{}
 	var failures []string
 	for _, prop := range component.Props {
-		if prop.Type != "string" {
+		propType := clientlang.NormalizeType(prop.Type)
+		if propType == clientlang.TypeUnknown || propType == clientlang.TypeArray || propType == clientlang.TypeObject {
 			failures = append(failures, fmt.Sprintf("component %s prop %s uses unsupported type %q", component.Name, prop.Name, prop.Type))
 			continue
 		}
@@ -253,8 +263,9 @@ func componentPropNames(component gwdkir.Component) ([]string, []string) {
 		}
 		seen[prop.Name] = true
 		props = append(props, prop.Name)
+		propTypes[prop.Name] = propType
 	}
-	return props, failures
+	return props, propTypes, failures
 }
 
 func componentInitialState(component gwdkir.Component) (map[string]string, map[string]clientlang.ValueType, string, error) {

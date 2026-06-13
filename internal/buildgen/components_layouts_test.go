@@ -50,6 +50,47 @@ func TestBuildExpandsExplicitComponents(t *testing.T) {
 	}
 }
 
+func TestBuildExpandsTypedLiteralComponentProps(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "home",
+			Route: "/",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Stats count={3} ratio={1.5} active /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{{
+			Name: "Stats",
+			Props: []gwdkir.Prop{
+				{Name: "count", Type: "int"},
+				{Name: "ratio", Type: "float"},
+				{Name: "active", Type: "bool"},
+			},
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<section data-active="{active}">{count}:{ratio}</section>`,
+			},
+		}},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := readFile(t, filepath.Join(outputDir, "index.html"))
+	for _, expected := range []string{
+		`data-gowdk-state="{&#34;active&#34;:true,&#34;count&#34;:3,&#34;ratio&#34;:1.5}"`,
+		`data-active="true"`,
+		`>3:1.5</section>`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in typed component prop output:\n%s", expected, output)
+		}
+	}
+}
+
 func TestBuildExpandsImportedGOWDKPackageComponent(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{

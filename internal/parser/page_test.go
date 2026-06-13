@@ -1024,6 +1024,9 @@ component Hero
 props {
   title string
   tagline string
+  count int
+  ratio float
+  active bool
 }
 
 view {
@@ -1038,7 +1041,7 @@ view {
 	if component.Name != "Hero" {
 		t.Fatalf("expected Hero, got %q", component.Name)
 	}
-	if len(component.Props) != 2 || component.Props[0].Name != "title" || component.Props[1].Type != "string" {
+	if len(component.Props) != 5 || component.Props[0].Name != "title" || component.Props[2].Type != "int" || component.Props[3].Type != "float" || component.Props[4].Type != "bool" {
 		t.Fatalf("unexpected props: %#v", component.Props)
 	}
 	if component.Blocks.ViewBody != "<section>\n    <h1>{title}</h1>\n  </section>" {
@@ -1264,7 +1267,7 @@ func TestParseComponentRejectsUnsupportedPropType(t *testing.T) {
 component Hero
 
 props {
-  count int
+  items []string
 }
 
 view {

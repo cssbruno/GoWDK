@@ -26,6 +26,7 @@ type Component struct {
 	ScopeIDs      []string
 	DefaultIsland string
 	Props         []string
+	PropTypes     map[string]clientlang.ValueType
 	State         map[string]string
 	StateJSON     string
 	Handlers      map[string]clientlang.Handler
@@ -52,6 +53,20 @@ func (component Component) HasProp(name string) bool {
 		}
 	}
 	return false
+}
+
+// PropType returns the declared scalar type for a prop. Components constructed
+// by older tests only populate Props; those props remain string-typed.
+func (component Component) PropType(name string) clientlang.ValueType {
+	if component.PropTypes != nil {
+		if typ, ok := component.PropTypes[name]; ok && typ != clientlang.TypeUnknown {
+			return typ
+		}
+	}
+	if component.HasProp(name) {
+		return clientlang.TypeString
+	}
+	return clientlang.TypeUnknown
 }
 
 // Parse parses a view markup fragment.

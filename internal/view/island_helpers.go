@@ -172,7 +172,7 @@ func evalComputedValues(computeds []clientlang.Computed, values map[string]strin
 	return stringsOut, valuesOut, nil
 }
 
-func componentStateJSON(stateJSON string, props map[string]string, computed map[string]any) (string, error) {
+func componentStateJSON(stateJSON string, props map[string]any, computed map[string]any) (string, error) {
 	if stateJSON == "" && len(props) == 0 && len(computed) == 0 {
 		return "", nil
 	}

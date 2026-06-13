@@ -284,7 +284,6 @@ server-rendered HTML via `innerHTML`/`outerHTML`, so raw HTML rendered with
 
 Not implemented yet:
 
-- Non-string component props in inline `props {}` blocks.
 - Raw HTML escape hatches beyond the `g:html` element directive, including
   attribute-position or text-position raw output.
 - Snippet/render block syntax as a first-class reusable markup value.

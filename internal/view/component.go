@@ -87,6 +87,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 		mode = component.DefaultIsland
 	}
 	props := map[string]string{}
+	propValues := map[string]any{}
 	propExpressions := map[string]string{}
 	taintedValues := map[string]bool{}
 	var parentListeners []parentComponentListener
@@ -108,14 +109,24 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 			}
 			return fmt.Errorf("component %s uses unsupported directive attribute %q", node.Name, attr.Name)
 		}
-		if attr.Boolean {
-			return fmt.Errorf("component %s prop %q requires a string value", node.Name, attr.Name)
+		if !component.HasProp(attr.Name) {
+			return fmt.Errorf("component %s does not declare prop %q", node.Name, attr.Name)
 		}
-		value, tainted, err := interpolateValue(ctx, attr.Value)
+		propType := component.PropType(attr.Name)
+		if attr.Boolean {
+			if propType != clientlang.TypeBool {
+				return fmt.Errorf("component %s prop %q requires a value", node.Name, attr.Name)
+			}
+			props[attr.Name] = "true"
+			propValues[attr.Name] = true
+			continue
+		}
+		value, typedValue, tainted, err := componentPropValue(ctx, attr, propType)
 		if err != nil {
 			return err
 		}
 		props[attr.Name] = value
+		propValues[attr.Name] = typedValue
 		if attr.Expression {
 			propExpressions[attr.Name] = expressionAttrSource(attr.Value)
 		}
@@ -192,6 +203,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 			Mode:            mode,
 			Body:            body,
 			Props:           props,
+			PropValues:      propValues,
 			PropExpressions: propExpressions,
 			ComputedValues:  computedValues,
 			ParentListeners: parentListeners,
@@ -207,6 +219,7 @@ type componentIslandRender struct {
 	Mode            string
 	Body            string
 	Props           map[string]string
+	PropValues      map[string]any
 	PropExpressions map[string]string
 	ComputedValues  map[string]any
 	ParentListeners []parentComponentListener
@@ -217,7 +230,7 @@ func renderComponentIsland(out *renderOutput, island componentIslandRender) erro
 	if err != nil {
 		return err
 	}
-	stateJSON, err := componentStateJSON(island.Component.StateJSON, island.Props, island.ComputedValues)
+	stateJSON, err := componentStateJSON(island.Component.StateJSON, island.PropValues, island.ComputedValues)
 	if err != nil {
 		return err
 	}
@@ -250,6 +263,74 @@ func componentPropExpressionsJSON(propExpressions map[string]string) (string, er
 		return "", err
 	}
 	return string(payload), nil
+}
+
+func componentPropValue(ctx *renderContext, attr Attr, propType clientlang.ValueType) (string, any, bool, error) {
+	if propType == clientlang.TypeUnknown {
+		propType = clientlang.TypeString
+	}
+	if propType == clientlang.TypeString {
+		value, tainted, err := interpolateValue(ctx, attr.Value)
+		if err != nil {
+			return "", nil, false, err
+		}
+		return value, value, tainted, nil
+	}
+	if !attr.Expression && strings.Contains(attr.Value, "{") {
+		return "", nil, false, fmt.Errorf("prop %q with type %s requires a scalar literal or expression", attr.Name, propType)
+	}
+	source := strings.TrimSpace(attr.Value)
+	if attr.Expression {
+		source = expressionAttrSource(source)
+	}
+	if source == "" {
+		return "", nil, false, fmt.Errorf("prop %q with type %s requires a scalar literal or expression", attr.Name, propType)
+	}
+	value, err := clientlang.EvalValue(source, ctx.values)
+	if err != nil {
+		return "", nil, false, fmt.Errorf("prop %q: %w", attr.Name, err)
+	}
+	typed, err := coerceComponentPropValue(attr.Name, value, propType)
+	if err != nil {
+		return "", nil, false, err
+	}
+	scalar, ok := scalarString(typed)
+	if !ok {
+		return "", nil, false, fmt.Errorf("prop %q with type %s must resolve to a scalar value", attr.Name, propType)
+	}
+	return scalar, typed, false, nil
+}
+
+func coerceComponentPropValue(name string, value any, propType clientlang.ValueType) (any, error) {
+	switch propType {
+	case clientlang.TypeBool:
+		typed, ok := value.(bool)
+		if !ok {
+			return nil, fmt.Errorf("prop %q expects bool, got %T", name, value)
+		}
+		return typed, nil
+	case clientlang.TypeInt:
+		switch typed := value.(type) {
+		case int:
+			return typed, nil
+		case float64:
+			asInt := int(typed)
+			if float64(asInt) == typed {
+				return asInt, nil
+			}
+		}
+		return nil, fmt.Errorf("prop %q expects int, got %T", name, value)
+	case clientlang.TypeFloat:
+		switch typed := value.(type) {
+		case int:
+			return float64(typed), nil
+		case float64:
+			return typed, nil
+		}
+		return nil, fmt.Errorf("prop %q expects float, got %T", name, value)
+	default:
+		return nil, fmt.Errorf("prop %q uses unsupported type %s", name, propType)
+	}
 }
 
 func writeParentComponentListenerAttrs(out *renderOutput, listener parentComponentListener) {

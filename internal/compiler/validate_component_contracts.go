@@ -82,7 +82,7 @@ func resolveComponentContracts(component gwdkir.Component) (componentContracts, 
 	}
 	for _, prop := range component.Props {
 		contracts.Props[prop.Name] = true
-		contracts.PropTypes[prop.Name] = clientlang.TypeString
+		contracts.PropTypes[prop.Name] = clientlang.NormalizeType(prop.Type)
 	}
 
 	var diagnostics []ValidationError

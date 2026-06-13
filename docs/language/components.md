@@ -6,6 +6,7 @@ Implemented today:
 
 - Explicit or discovered `.cmp.gwdk` build inputs with `component Name`.
 - Optional `props { name string }` declarations.
+- Inline scalar props with `string`, `int`, `float`, and `bool` types.
 - Component-local Go imports using normal module import paths, such as
   `import ui "github.com/acme/app/ui"`.
 - Typed props contracts that reference imported Go structs, such as
@@ -237,14 +238,14 @@ files import normal Go packages for typed contracts and build-time helpers.
 GOWDK `use` declarations import discovered `.gwdk` source packages; today that
 contract is implemented for qualified component calls.
 
-Props are caller-provided inputs. Inline `props {}` declarations are string-only
-in the current slice, while imported Go struct contracts can provide typed
-props metadata. Parent calls can pass literal strings and the implemented
-build-data interpolation subset. Props are read-only to `client {}` code; mutable
-browser state belongs in `state` or in an explicit page store.
+Props are caller-provided inputs. Inline `props {}` declarations support scalar
+`string`, `int`, `float`, and `bool` types. Parent calls pass quoted string
+props, scalar literal expressions for numbers and booleans, or expression
+values from the implemented build-data subset. Props are read-only to
+`client {}` code; mutable browser state belongs in `state` or in an explicit
+page store.
 
-Imported Go structs are the stable typed prop path today. Non-string inline
-props are planned, but inline `props {}` blocks currently accept only `string`.
+Imported Go structs are the stable typed prop path for richer contracts.
 Defaults should be expressed in normal Go init/build data or by rendering a
 fallback in the component `view {}`. There is no rest/spread prop syntax, prop
 renaming syntax, or implicit global prop lookup in the current contract.
@@ -373,7 +374,6 @@ replacement for backend handlers.
 
 Not implemented yet:
 
-- Non-string props in inline `props {}` blocks.
 - Stable parent consumption of typed `exports {}` values.
 - Rest/spread props, prop renaming, recursive component rendering, dynamic
   component selection, and bindable child state.

@@ -663,7 +663,7 @@ func parseSyntaxProps(body []syntaxBodyLine) ([]Prop, error) {
 }
 
 func supportedSyntaxPropType(value string) bool {
-	return value == "string"
+	return supportedScalarType(value)
 }
 
 func parseSyntaxExports(body []syntaxBodyLine) ([]Export, error) {

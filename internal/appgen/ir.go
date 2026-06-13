@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
@@ -161,11 +162,12 @@ func fragmentComponentsFromIR(components []gwdkir.Component) map[string]view.Com
 	out := map[string]view.Component{}
 	for _, component := range components {
 		compiled := view.Component{
-			Name:    component.Name,
-			Package: component.Package,
-			Uses:    irUsesMap(component.Uses),
-			Props:   irPropNames(component.Props),
-			Body:    component.Blocks.ViewBody,
+			Name:      component.Name,
+			Package:   component.Package,
+			Uses:      irUsesMap(component.Uses),
+			Props:     irPropNames(component.Props),
+			PropTypes: irPropTypes(component.Props),
+			Body:      component.Blocks.ViewBody,
 		}
 		addFragmentComponent(out, compiled)
 	}
@@ -225,6 +227,17 @@ func irPropNames(props []gwdkir.Prop) []string {
 	out := make([]string, 0, len(props))
 	for _, prop := range props {
 		out = append(out, prop.Name)
+	}
+	return out
+}
+
+func irPropTypes(props []gwdkir.Prop) map[string]clientlang.ValueType {
+	if len(props) == 0 {
+		return nil
+	}
+	out := map[string]clientlang.ValueType{}
+	for _, prop := range props {
+		out[prop.Name] = clientlang.NormalizeType(prop.Type)
 	}
 	return out
 }

@@ -119,6 +119,52 @@ func TestRenderWithComponentsExpandsSPAStringProps(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsExpandsTypedLiteralProps(t *testing.T) {
+	got, err := RenderWithComponents(`<main><Stats count={3} ratio={1.5} active label="GOWDK" /></main>`, map[string]Component{
+		"Stats": {
+			Name:  "Stats",
+			Props: []string{"count", "ratio", "active", "label"},
+			PropTypes: map[string]clientlang.ValueType{
+				"count":  clientlang.TypeInt,
+				"ratio":  clientlang.TypeFloat,
+				"active": clientlang.TypeBool,
+				"label":  clientlang.TypeString,
+			},
+			Body: `<section data-active="{active}"><p>{label}: {count} / {ratio}</p></section>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-state="{&#34;active&#34;:true,&#34;count&#34;:3,&#34;label&#34;:&#34;GOWDK&#34;,&#34;ratio&#34;:1.5}"`,
+		`data-gowdk-props="{&#34;count&#34;:&#34;3&#34;,&#34;ratio&#34;:&#34;1.5&#34;}"`,
+		`data-active="true"`,
+		`<p>GOWDK: 3 / 1.5</p>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in typed prop output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsRejectsTypedPropMismatch(t *testing.T) {
+	_, err := RenderWithComponents(`<Stats count={true} />`, map[string]Component{
+		"Stats": {
+			Name:      "Stats",
+			Props:     []string{"count"},
+			PropTypes: map[string]clientlang.ValueType{"count": clientlang.TypeInt},
+			Body:      `<p>{count}</p>`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected typed prop mismatch error")
+	}
+	if !strings.Contains(err.Error(), `prop "count" expects int`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRenderWithComponentsExpandsQualifiedComponentCall(t *testing.T) {
 	got, err := RenderWithOptions(`<main><ui.Hero title="GOWDK" /></main>`, map[string]Component{
 		"ui.Hero": {

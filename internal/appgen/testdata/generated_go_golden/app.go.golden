@@ -17,6 +17,7 @@ import (
 )
 
 const maxActionBodyBytes int64 = 1 << 20
+const maxAPIBodyBytes int64 = 1 << 20
 
 //go:embed app
 var embeddedFiles embed.FS

@@ -220,16 +220,15 @@ Every 0.x minor release must have:
 - [x] Replace outdated "planned but not complete" wording with precise
   "first slice exists, not production enforcement" wording.
 - [x] List implemented first slices: generated action decoding, unexpected
-  field rejection, direct literal request-shape validation, opt-in CSRF, action
-  body cap, generated `http.Server` timeout defaults, `MaxHeaderBytes`, safe
-  local redirect slice, guard execution slice, SSR panic boundaries, and
-  no-store request-time responses.
+  field rejection, direct literal request-shape validation, opt-in CSRF,
+  configurable action/API body caps, generated `http.Server` timeout defaults,
+  `MaxHeaderBytes`, safe local redirect slice, guard execution slice, SSR panic
+  boundaries, and no-store request-time responses.
 - [x] List incomplete production areas: auth/session policy, full guard
-  contract, CSRF secret rotation, full redirect policy, log redaction,
-  configurable request body/header limit policy beyond current defaults, file
-  upload policy, public API hardening, realtime security policy, and admin
-  tooling policy.
-- [ ] Enable GitHub private vulnerability reporting if available.
+  contract, CSRF secret rotation, full redirect policy, per-route body/header
+  limit policy beyond current defaults, file upload policy, public API
+  hardening, realtime security policy, and admin tooling policy.
+- [x] Enable GitHub private vulnerability reporting if available.
 - [x] Add a vulnerability report contact path.
 - [x] Add threat models for compiler diagnostics, generated logs, actions,
   APIs, fragments, SSR load, guards, generated assets, VS Code extension, WASM
@@ -240,9 +239,10 @@ Every 0.x minor release must have:
   read-header timeouts.
 - [x] Add `MaxHeaderBytes`.
 - [x] Keep action request body caps and add API/fragment body caps where
-  relevant. Current action and API lanes use 1 MiB caps; generated standalone
-  fragments are GET-only and action fragments share the action cap.
-- [ ] Add configurable body limits.
+  relevant. Current action and API lanes use configurable caps that default to
+  1 MiB; generated standalone fragments are GET-only and action fragments share
+  the action cap.
+- [x] Add configurable body limits.
 - [x] Add explicit 405 responses.
 - [x] Ensure panic recovery wraps all generated request-time user Go.
 - [x] Ensure production-safe error pages and no stack traces in production mode.

@@ -4,17 +4,19 @@ GOWDK is an experimental 0.x compiler/runtime. Do not treat generated apps as
 production-ready security enforcement.
 
 First slices exist for generated action decoding, unexpected-field rejection,
-direct literal request-shape validation, opt-in CSRF, action request body caps,
-generated `http.Server` read/header/write/idle timeout defaults,
-`MaxHeaderBytes`, safe local redirects, guard execution, SSR panic boundaries,
-and no-store request-time responses. These are not a complete production
-security model.
+direct literal request-shape validation, opt-in CSRF, configurable action/API
+request body caps, generated `http.Server` read/header/write/idle timeout
+defaults, `MaxHeaderBytes`, safe local redirects, guard execution, SSR panic
+boundaries, log redaction, and no-store request-time responses. These are not a
+complete production security model.
 
 ## Reporting Vulnerabilities
 
 Do not open public issues for vulnerabilities, secrets, private keys, credentials, or sensitive personal data.
 
-Until a private advisory process is enabled for the repository, report security concerns privately to the repository maintainers through the repository owner or organization contact path. Include:
+Use GitHub private vulnerability reporting on the repository Security tab, or
+open a private advisory at
+`https://github.com/cssbruno/GoWDK/security/advisories/new`. Include:
 
 - Affected commit or version.
 - Reproduction steps or proof of concept.
@@ -47,9 +49,8 @@ Known incomplete production areas include:
 - Full guard contract coverage.
 - Multi-key CSRF secret rotation.
 - Full redirect policy.
-- Log redaction.
-- Configurable request body/header limit policy beyond the current generated
-  defaults.
+- Per-route request body/header limit policy beyond the current generated
+  body caps and server header cap.
 - File upload policy.
 - Public API hardening.
 - Realtime security policy.

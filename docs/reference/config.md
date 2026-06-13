@@ -291,13 +291,13 @@ runtime-specific security controls.
 ## Build
 
 `BuildConfig.Output`, `BuildConfig.Mode`, `BuildConfig.Assets`,
-`BuildConfig.Head`, `BuildConfig.CSRF`, `BuildConfig.AllowMissingBackend`,
-`BuildConfig.Stylesheets`, `BuildConfig.Scripts`, and
-`BuildConfig.Targets` are target build settings. Current `gowdk build` reads
-literal `Build.Output`, `Build.Mode`, `Build.Head`, `Build.CSRF`,
-`Build.AllowMissingBackend`, `Build.Stylesheets`, `Build.Scripts`, and
-`Build.Targets` from `gowdk.config.go`; `--out` overrides `Build.Output` for
-ad hoc builds.
+`BuildConfig.Head`, `BuildConfig.CSRF`, `BuildConfig.BodyLimits`,
+`BuildConfig.AllowMissingBackend`, `BuildConfig.Stylesheets`,
+`BuildConfig.Scripts`, and `BuildConfig.Targets` are target build settings.
+Current `gowdk build` reads literal `Build.Output`, `Build.Mode`,
+`Build.Head`, `Build.CSRF`, `Build.BodyLimits`, `Build.AllowMissingBackend`,
+`Build.Stylesheets`, `Build.Scripts`, and `Build.Targets` from
+`gowdk.config.go`; `--out` overrides `Build.Output` for ad hoc builds.
 `BuildConfig.Assets` remains planned.
 
 `Build.Targets` declares repeatable module-to-output packaging:
@@ -309,6 +309,7 @@ type BuildConfig struct {
 	Assets              gowdk.AssetMode
 	Head                gowdk.HeadConfig
 	CSRF                gowdk.CSRFConfig
+	BodyLimits          gowdk.BodyLimitsConfig
 	AllowMissingBackend bool
 	Stylesheets         []gowdk.Stylesheet
 	Scripts             []gowdk.Script
@@ -329,6 +330,11 @@ type CSRFConfig struct {
 	FieldName  string
 	HeaderName string
 	Insecure   bool
+}
+
+type BodyLimitsConfig struct {
+	ActionBytes int64
+	APIBytes    int64
 }
 
 type Script struct {
@@ -380,6 +386,12 @@ generated decoding or user handlers run. Invalid or missing tokens return HTTP
 flag, uses the default cookie name `gowdk-csrf` instead of
 `__Host-gowdk-csrf`, and rejects explicit `__Host-`/`__Secure-` cookie names
 because browsers require those prefixes to be Secure.
+
+`BodyLimits` controls generated request body caps in bytes. Omitted or
+non-positive values use the default 1 MiB cap. `ActionBytes` applies to
+generated action POST handlers and web command form adapters before form
+decoding. `APIBytes` applies to generated API handlers before user code reads
+the request body.
 
 `Name` is required. `Output` is optional and defaults to
 `.gowdk/output/<target-name>` when omitted. `Modules` selects configured

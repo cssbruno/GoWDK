@@ -163,6 +163,7 @@ type BuildConfig struct {
 	Assets              AssetMode
 	Head                HeadConfig
 	CSRF                CSRFConfig
+	BodyLimits          BodyLimitsConfig
 	AllowMissingBackend bool
 	Stylesheets         []Stylesheet
 	Scripts             []Script
@@ -197,6 +198,33 @@ func (config CSRFConfig) SecretEnvName() string {
 		return DefaultCSRFSecretEnv
 	}
 	return config.SecretEnv
+}
+
+// DefaultRequestBodyLimitBytes is the default generated request body cap for
+// action and API endpoints.
+const DefaultRequestBodyLimitBytes int64 = 1 << 20
+
+// BodyLimitsConfig controls generated request body caps. Omitted or non-positive
+// values use the default 1 MiB cap.
+type BodyLimitsConfig struct {
+	ActionBytes int64
+	APIBytes    int64
+}
+
+// ActionLimitBytes returns the configured action body cap or the default cap.
+func (config BodyLimitsConfig) ActionLimitBytes() int64 {
+	if config.ActionBytes > 0 {
+		return config.ActionBytes
+	}
+	return DefaultRequestBodyLimitBytes
+}
+
+// APILimitBytes returns the configured API body cap or the default cap.
+func (config BodyLimitsConfig) APILimitBytes() int64 {
+	if config.APIBytes > 0 {
+		return config.APIBytes
+	}
+	return DefaultRequestBodyLimitBytes
 }
 
 // BuildTargetConfig declares one configured build target. Modules selects the

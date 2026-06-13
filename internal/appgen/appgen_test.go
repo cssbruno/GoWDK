@@ -1287,10 +1287,12 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`status "example.com/app/status"`,
+		`const maxAPIBodyBytes int64 = 1 << 20`,
 		`func api(response http.ResponseWriter, request *http.Request) bool`,
 		`requestPath := path.Clean("/" + request.URL.Path)`,
 		`case request.Method == "GET" && requestPath == "/api/health":`,
 		`ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "api", PageID: "status", Name: "Health", Method: "GET", Path: "/api/health"})`,
+		`request.Body = http.MaxBytesReader(response, request.Body, maxAPIBodyBytes)`,
 		`result, err := status.Health(ctx, request)`,
 		`gowdkresponse.WriteNoStoreHandlerError(response, err, http.StatusInternalServerError)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, result)`,
@@ -1301,6 +1303,56 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 	}
 	if strings.Contains(source, `github.com/cssbruno/gowdk/addons/ssr`) || strings.Contains(source, `github.com/cssbruno/gowdk/runtime/render`) {
 		t.Fatalf("API output should not import SSR or render helpers:\n%s", source)
+	}
+}
+
+func TestGenerateUsesConfiguredBodyLimits(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{BodyLimits: gowdk.BodyLimitsConfig{
+			ActionBytes: 2048,
+			APIBytes:    4096,
+		}}},
+		Actions: []ActionEndpoint{{
+			PageID:     "newsletter",
+			ActionName: "Subscribe",
+			Route:      "/newsletter",
+		}},
+		APIs: []APIEndpoint{{
+			PageID:  "newsletter",
+			APIName: "Health",
+			Method:  http.MethodPost,
+			Route:   "/api/health",
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
+				ImportPath:   "example.com/app/status",
+				PackageName:  "status",
+				FunctionName: "Health",
+				Signature:    source.BackendSignatureAPI,
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`const maxActionBodyBytes int64 = 2048`,
+		`const maxAPIBodyBytes int64 = 4096`,
+		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
+		`request.Body = http.MaxBytesReader(response, request.Body, maxAPIBodyBytes)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
+		}
 	}
 }
 

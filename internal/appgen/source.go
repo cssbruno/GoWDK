@@ -218,7 +218,8 @@ func forceImportAlias(importPath string) bool {
 
 func appShellDecls(options Options) []ast.Decl {
 	decls := []ast.Decl{
-		maxActionBodyBytesDecl(),
+		maxActionBodyBytesDecl(options),
+		maxAPIBodyBytesDecl(options),
 		embeddedFilesDecl(),
 		handlerDecl(),
 		serveMuxDecl(options, true),
@@ -229,7 +230,8 @@ func appShellDecls(options Options) []ast.Decl {
 
 func backendShellDecls(options Options) []ast.Decl {
 	decls := []ast.Decl{
-		maxActionBodyBytesDecl(),
+		maxActionBodyBytesDecl(options),
+		maxAPIBodyBytesDecl(options),
 		handlerDecl(),
 		serveMuxDecl(options, false),
 	}
@@ -296,16 +298,31 @@ func actionHandlerDecls(actions []ActionEndpoint, csrf bool, rateLimit bool) []a
 	return decls
 }
 
-func maxActionBodyBytesDecl() ast.Decl {
+func maxActionBodyBytesDecl(options Options) ast.Decl {
+	return maxBodyBytesDecl("maxActionBodyBytes", options.Config.Build.BodyLimits.ActionLimitBytes())
+}
+
+func maxAPIBodyBytesDecl(options Options) ast.Decl {
+	return maxBodyBytesDecl("maxAPIBodyBytes", options.Config.Build.BodyLimits.APILimitBytes())
+}
+
+func maxBodyBytesDecl(name string, bytes int64) ast.Decl {
 	return &ast.GenDecl{Tok: token.CONST, Specs: []ast.Spec{&ast.ValueSpec{
-		Names: []*ast.Ident{id("maxActionBodyBytes")},
-		Type:  id("int64"),
-		Values: []ast.Expr{&ast.BinaryExpr{
+		Names:  []*ast.Ident{id(name)},
+		Type:   id("int64"),
+		Values: []ast.Expr{bodyLimitExpr(bytes)},
+	}}}
+}
+
+func bodyLimitExpr(bytes int64) ast.Expr {
+	if bytes == gowdk.DefaultRequestBodyLimitBytes {
+		return &ast.BinaryExpr{
 			X:  intLit(1),
 			Op: token.SHL,
 			Y:  intLit(20),
-		}},
-	}}}
+		}
+	}
+	return int64Lit(bytes)
 }
 
 func embeddedFilesDecl() ast.Decl {

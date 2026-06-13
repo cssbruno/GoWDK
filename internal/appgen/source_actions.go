@@ -863,6 +863,10 @@ func intLit(value int) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(value)}
 }
 
+func int64Lit(value int64) *ast.BasicLit {
+	return &ast.BasicLit{Kind: token.INT, Value: strconv.FormatInt(value, 10)}
+}
+
 func goString(value string) string {
 	return strconv.Quote(value)
 }

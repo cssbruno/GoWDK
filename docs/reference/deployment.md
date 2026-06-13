@@ -416,6 +416,8 @@ Generated binaries currently support:
 - Feature-bound same-package action handlers with no-input, typed value, typed
   pointer, or `form.Values` signatures.
 - Feature-bound same-package API handlers.
+- Configurable action and API request body caps through
+  `Build.BodyLimits`, defaulting to 1 MiB.
 - No-store panic boundaries for generated SSR, action, and API request-time
   lanes.
 - First-slice same-page POST action redirects.

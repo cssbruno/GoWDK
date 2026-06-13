@@ -42,9 +42,9 @@ Before generated app output is considered production-ready:
 - Generated decoders must define how unknown, missing, repeated, and file fields are handled.
 - Guards must have a documented execution contract, failure behavior, and test coverage.
 - Generated server entrypoints set read, read-header, write, idle, and
-  max-header defaults. Broader configurable request body/header limit policy is
-  still planned; action request bodies currently have a fixed 1 MiB generated
-  cap.
+  max-header defaults. Generated action/API body caps default to 1 MiB and can
+  be configured with `Build.BodyLimits`; per-route body/header policy remains
+  planned.
 - Embedded asset selection must exclude secrets, local env files, private source files, and temporary artifacts.
 - Diagnostics and logs must avoid printing sensitive form values, credentials, or private build-time data.
 

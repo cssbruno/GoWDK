@@ -154,11 +154,17 @@ func (router *BackendRouter) ServeHTTP(writer http.ResponseWriter, request *http
 
 // Action0 adapts a no-input action handler.
 func Action0(handler func(context.Context) (response.Response, error)) BackendHandler {
+	return Action0WithBodyLimit(DefaultActionBodyLimit, handler)
+}
+
+// Action0WithBodyLimit adapts a no-input action handler with a custom request
+// body limit. Non-positive limits use DefaultActionBodyLimit.
+func Action0WithBodyLimit(bodyLimit int64, handler func(context.Context) (response.Response, error)) BackendHandler {
 	if handler == nil {
 		return NotImplemented("GOWDK action handler is not implemented")
 	}
 	return func(writer http.ResponseWriter, request *http.Request) bool {
-		ctx, ok := prepareAction(writer, request)
+		ctx, ok := prepareAction(writer, request, bodyLimit)
 		if !ok {
 			return true
 		}
@@ -170,11 +176,18 @@ func Action0(handler func(context.Context) (response.Response, error)) BackendHa
 
 // ActionForm adapts a typed value action handler with an explicit decoder.
 func ActionForm[T any](decode func(form.Values) (T, error), handler func(context.Context, T) (response.Response, error)) BackendHandler {
+	return ActionFormWithBodyLimit(DefaultActionBodyLimit, decode, handler)
+}
+
+// ActionFormWithBodyLimit adapts a typed value action handler with an explicit
+// decoder and custom request body limit. Non-positive limits use
+// DefaultActionBodyLimit.
+func ActionFormWithBodyLimit[T any](bodyLimit int64, decode func(form.Values) (T, error), handler func(context.Context, T) (response.Response, error)) BackendHandler {
 	if decode == nil || handler == nil {
 		return NotImplemented("GOWDK action handler is not implemented")
 	}
 	return func(writer http.ResponseWriter, request *http.Request) bool {
-		ctx, values, ok := prepareActionValues(writer, request)
+		ctx, values, ok := prepareActionValues(writer, request, bodyLimit)
 		if !ok {
 			return true
 		}
@@ -191,11 +204,18 @@ func ActionForm[T any](decode func(form.Values) (T, error), handler func(context
 
 // ActionFormPtr adapts a typed pointer action handler with an explicit decoder.
 func ActionFormPtr[T any](decode func(form.Values) (T, error), handler func(context.Context, *T) (response.Response, error)) BackendHandler {
+	return ActionFormPtrWithBodyLimit(DefaultActionBodyLimit, decode, handler)
+}
+
+// ActionFormPtrWithBodyLimit adapts a typed pointer action handler with an
+// explicit decoder and custom request body limit. Non-positive limits use
+// DefaultActionBodyLimit.
+func ActionFormPtrWithBodyLimit[T any](bodyLimit int64, decode func(form.Values) (T, error), handler func(context.Context, *T) (response.Response, error)) BackendHandler {
 	if decode == nil || handler == nil {
 		return NotImplemented("GOWDK action handler is not implemented")
 	}
 	return func(writer http.ResponseWriter, request *http.Request) bool {
-		ctx, values, ok := prepareActionValues(writer, request)
+		ctx, values, ok := prepareActionValues(writer, request, bodyLimit)
 		if !ok {
 			return true
 		}
@@ -212,11 +232,17 @@ func ActionFormPtr[T any](decode func(form.Values) (T, error), handler func(cont
 
 // ActionValues adapts a low-level form.Values action handler.
 func ActionValues(handler func(context.Context, form.Values) (response.Response, error)) BackendHandler {
+	return ActionValuesWithBodyLimit(DefaultActionBodyLimit, handler)
+}
+
+// ActionValuesWithBodyLimit adapts a low-level form.Values action handler with
+// a custom request body limit. Non-positive limits use DefaultActionBodyLimit.
+func ActionValuesWithBodyLimit(bodyLimit int64, handler func(context.Context, form.Values) (response.Response, error)) BackendHandler {
 	if handler == nil {
 		return NotImplemented("GOWDK action handler is not implemented")
 	}
 	return func(writer http.ResponseWriter, request *http.Request) bool {
-		ctx, values, ok := prepareActionValues(writer, request)
+		ctx, values, ok := prepareActionValues(writer, request, bodyLimit)
 		if !ok {
 			return true
 		}
@@ -228,11 +254,17 @@ func ActionValues(handler func(context.Context, form.Values) (response.Response,
 
 // APIHandler adapts an API handler.
 func APIHandler(handler func(context.Context, *http.Request) (response.Response, error)) BackendHandler {
+	return APIHandlerWithBodyLimit(DefaultAPIBodyLimit, handler)
+}
+
+// APIHandlerWithBodyLimit adapts an API handler with a custom request body
+// limit. Non-positive limits use DefaultAPIBodyLimit.
+func APIHandlerWithBodyLimit(bodyLimit int64, handler func(context.Context, *http.Request) (response.Response, error)) BackendHandler {
 	if handler == nil {
 		return NotImplemented("GOWDK API handler is not implemented")
 	}
 	return func(writer http.ResponseWriter, request *http.Request) bool {
-		request.Body = http.MaxBytesReader(writer, request.Body, DefaultAPIBodyLimit)
+		request.Body = http.MaxBytesReader(writer, request.Body, normalizeBodyLimit(bodyLimit, DefaultAPIBodyLimit))
 		ctx := WithRequest(request.Context(), request)
 		result, err := handler(ctx, request)
 		writeBackendResult(writer, result, err)
@@ -252,18 +284,18 @@ func NotImplemented(message string) BackendHandler {
 	}
 }
 
-func prepareAction(writer http.ResponseWriter, request *http.Request) (context.Context, bool) {
-	ctx, _, ok := prepareActionValues(writer, request)
+func prepareAction(writer http.ResponseWriter, request *http.Request, bodyLimit int64) (context.Context, bool) {
+	ctx, _, ok := prepareActionValues(writer, request, bodyLimit)
 	return ctx, ok
 }
 
-func prepareActionValues(writer http.ResponseWriter, request *http.Request) (context.Context, form.Values, bool) {
+func prepareActionValues(writer http.ResponseWriter, request *http.Request, bodyLimit int64) (context.Context, form.Values, bool) {
 	if request.Method != http.MethodPost {
 		writer.Header().Set("Allow", http.MethodPost)
 		response.WriteNoStoreError(writer, http.StatusMethodNotAllowed, "method not allowed")
 		return nil, nil, false
 	}
-	request.Body = http.MaxBytesReader(writer, request.Body, DefaultActionBodyLimit)
+	request.Body = http.MaxBytesReader(writer, request.Body, normalizeBodyLimit(bodyLimit, DefaultActionBodyLimit))
 	if err := request.ParseForm(); err != nil {
 		if strings.Contains(err.Error(), "request body too large") {
 			response.WriteNoStoreError(writer, http.StatusRequestEntityTooLarge, "request body too large")
@@ -274,6 +306,13 @@ func prepareActionValues(writer http.ResponseWriter, request *http.Request) (con
 	}
 	ctx := WithRequest(request.Context(), request)
 	return ctx, form.FromURLValues(request.PostForm), true
+}
+
+func normalizeBodyLimit(bodyLimit int64, fallback int64) int64 {
+	if bodyLimit > 0 {
+		return bodyLimit
+	}
+	return fallback
 }
 
 func writeBackendResult(writer http.ResponseWriter, result response.Response, err error) {

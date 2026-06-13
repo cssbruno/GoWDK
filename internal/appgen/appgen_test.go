@@ -698,9 +698,11 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 		`func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler`,
 		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`if err := request.ParseForm(); err != nil`,
+		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusRequestEntityTooLarge, "request body too large")`,
+		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusBadRequest, "invalid form")`,
 		`if csrfValidator != nil {`,
 		`err := csrfValidator.Validate(request)`,
-		`gowdkresponse.WriteNoStoreError(response, http.StatusForbidden, "invalid csrf token")`,
+		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "invalid csrf token")`,
 		`input := patients.CreatePatient{}`,
 		`gowdkcontracts.CaptureCommandEventsForRole[patients.CreatePatient, patients.CreatePatientResult]`,
 		`gowdkcontracts.DispatchCommandEvents(ctx, currentContractEventSink(), contractRegistry, gowdkcontracts.RoleWeb, events)`,
@@ -3996,6 +3998,25 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 		t.Fatalf("command JSON error leaked handler detail: %s", commandPayload)
 	}
 
+	commandParseResponse, err := waitForHTTPStatus("http://"+addr+"/patients", http.MethodPost, "%zz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commandParsePayload, err := io.ReadAll(commandParseResponse.Body)
+	_ = commandParseResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commandParseResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected command parse error status 400, got %d: %s", commandParseResponse.StatusCode, commandParsePayload)
+	}
+	if commandParseResponse.Header.Get("Content-Type") != "application/json; charset=utf-8" {
+		t.Fatalf("expected command parse JSON error content type, got %q", commandParseResponse.Header.Get("Content-Type"))
+	}
+	if strings.TrimSpace(string(commandParsePayload)) != `{"error":"invalid form"}` {
+		t.Fatalf("unexpected command parse JSON error payload: %s", commandParsePayload)
+	}
+
 	commandDecodeResponse, err := waitForHTTPStatus("http://"+addr+"/patients", http.MethodPost, "name=Ada&age=not-int")
 	if err != nil {
 		t.Fatal(err)
@@ -4055,6 +4076,101 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 	}
 	if strings.TrimSpace(string(queryDecodePayload)) != `{"error":"invalid form"}` {
 		t.Fatalf("unexpected query decode JSON error payload: %s", queryDecodePayload)
+	}
+}
+
+func TestGeneratedBinaryContractCommandCSRFReturnsJSONError(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients page</main>")
+
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
+		Kind:        gwdkir.ContractCommand,
+		Name:        "patients.CreatePatient",
+		ImportAlias: "patients",
+		ImportPath:  "gowdk-generated-app/patients",
+		Type:        "CreatePatient",
+		Result:      "CreatePatientResult",
+		Method:      http.MethodPost,
+		Path:        "/patients",
+		Status:      gwdkir.ContractBindingBound,
+		Handler:     "HandleCreatePatient",
+		Register:    "Register",
+		OwnerKind:   gwdkir.SourcePage,
+		OwnerID:     "patients",
+	}}}
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
+			Enabled:   true,
+			SecretEnv: "GOWDK_TEST_CSRF_SECRET",
+			Insecure:  true,
+		}}},
+		IR: program,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct{}
+
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+func Register(registry *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{ID: "patient-1"}, nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(),
+		"GOWDK_ADDR="+addr,
+		"GOWDK_TEST_CSRF_SECRET="+strings.Repeat("s", 32),
+	)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/patients", http.MethodPost, "name=Ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected missing csrf token to return 403, got %d: %s", response.StatusCode, payload)
+	}
+	if response.Header.Get("Content-Type") != "application/json; charset=utf-8" {
+		t.Fatalf("expected csrf JSON error content type, got %q", response.Header.Get("Content-Type"))
+	}
+	if strings.TrimSpace(string(payload)) != `{"error":"invalid csrf token"}` {
+		t.Fatalf("unexpected csrf JSON error payload: %s", payload)
+	}
+	if cache := response.Header.Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store on invalid csrf response, got %q", cache)
 	}
 }
 

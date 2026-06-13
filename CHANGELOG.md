@@ -49,13 +49,17 @@ packages, and tooling contracts may change before a stable release.
 - Generated `g:command` and `g:query` contract web adapters now use one JSON
   response contract: success writes the command/query result as no-store JSON,
   and failures write `{"error":"..."}` as no-store JSON with ordinary 5xx
-  details redacted unless the handler returns an explicit `response.HandlerError`.
+  details redacted unless the handler returns an explicit
+  `response.HandlerError`; command form parse, oversized body, CSRF, and input
+  decode failures use the same JSON error shape.
 - Contract event envelopes now carry stable IDs for durable delivery. Workers
   can opt into deduplication with `RunEventWorkerWithSeenStore` or
   `RunEventWorkerForRoleWithSeenStore`; duplicate IDs are acked without
   subscriber dispatch inside the configured window, and fresh IDs are marked
   seen only after dispatch and source ack succeed. Runtime includes bounded
-  in-memory, file-backed, and Redis TTL seen-store adapters.
+  in-memory, file-backed, and Redis TTL seen-store adapters. File outbox records
+  keep unique row IDs separate from event IDs, and NATS batch drains preserve
+  already-decoded events if a later drained message cannot be decoded.
 
 ### Known Gaps
 

@@ -1,7 +1,9 @@
 package natsbroker
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -58,6 +60,27 @@ func TestDecodePayloadWithRegisteredDecoder(t *testing.T) {
 	}
 	if decoded, ok := event.Value.(patientCreated); !ok || decoded.ID != "patient-1" {
 		t.Fatalf("event.Value = %#v, want patientCreated patient-1", event.Value)
+	}
+}
+
+func TestDrainAvailableEventsReturnsAccumulatedEventsOnLaterError(t *testing.T) {
+	decodeErr := errors.New("decode failed")
+	first := contracts.EventEnvelope{ID: "event-1", Category: contracts.IntegrationEvent, Type: "PatientCreated", Value: patientCreated{ID: "patient-1"}}
+	second := contracts.EventEnvelope{ID: "event-2", Category: contracts.IntegrationEvent, Type: "PatientCreated", Value: patientCreated{ID: "patient-2"}}
+	calls := 0
+
+	events := drainAvailableEvents(context.Background(), first, 3, func(ctx context.Context) (contracts.EventEnvelope, bool, error) {
+		calls++
+		if calls == 1 {
+			return second, true, nil
+		}
+		return contracts.EventEnvelope{}, false, decodeErr
+	})
+	if len(events) != 2 {
+		t.Fatalf("len(events) = %d, want 2: %#v", len(events), events)
+	}
+	if events[0].ID != "event-1" || events[1].ID != "event-2" {
+		t.Fatalf("unexpected event IDs: %#v", events)
 	}
 }
 

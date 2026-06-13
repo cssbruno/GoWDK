@@ -25,6 +25,7 @@ func TestStoreEventsAppendsDurableRecords(t *testing.T) {
 	store.now = func() time.Time { return time.Unix(123, 0).UTC() }
 
 	err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+		ID:       "event-1",
 		Category: contracts.DomainEvent,
 		Type:     patientCreatedType,
 		Value:    patientCreated{ID: "patient-1"},
@@ -45,6 +46,12 @@ func TestStoreEventsAppendsDurableRecords(t *testing.T) {
 	}
 	if records[0].ID == "" {
 		t.Fatalf("expected durable record ID to be assigned: %#v", records[0])
+	}
+	if records[0].EventID != "event-1" {
+		t.Fatalf("record event ID = %q, want event-1", records[0].EventID)
+	}
+	if records[0].ID == records[0].EventID {
+		t.Fatalf("record ID should be distinct from event ID: %#v", records[0])
 	}
 	var value patientCreated
 	if err := json.Unmarshal(records[0].Value, &value); err != nil {
@@ -119,6 +126,88 @@ func TestReceiveEventBatchNackKeepsRecords(t *testing.T) {
 	}
 	if records[0].Attempts != 1 || records[0].LastError != nackErr.Error() || records[0].LastAttemptAt == nil {
 		t.Fatalf("unexpected retry metadata after nack: %#v", records[0])
+	}
+}
+
+func TestReceiveEventBatchAckKeepsDuplicateEventIDRowsDistinct(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "outbox.jsonl")
+	store := New(path, WithBatchSize(1), WithJSONTypeDecoder[patientCreated]())
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{
+		{ID: "event-1", Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-1"}},
+		{ID: "event-1", Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-2"}},
+	}); err != nil {
+		t.Fatalf("store events: %v", err)
+	}
+
+	first, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive first batch: %v", err)
+	}
+	if len(first.Events) != 1 || first.Events[0].ID != "event-1" {
+		t.Fatalf("unexpected first batch: %#v", first.Events)
+	}
+	if err := first.Ack(context.Background()); err != nil {
+		t.Fatalf("ack first batch: %v", err)
+	}
+	records, err := store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records after first ack: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("len(records) after first ack = %d, want 1: %#v", len(records), records)
+	}
+	if records[0].EventID != "event-1" || records[0].ID == "event-1" {
+		t.Fatalf("remaining record should keep duplicate event ID with distinct record ID: %#v", records[0])
+	}
+
+	second, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive second batch: %v", err)
+	}
+	if len(second.Events) != 1 || second.Events[0].ID != "event-1" {
+		t.Fatalf("unexpected second batch: %#v", second.Events)
+	}
+}
+
+func TestReceiveEventBatchNackKeepsDuplicateEventIDRowsDistinct(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "outbox.jsonl")
+	store := New(path, WithBatchSize(1), WithJSONTypeDecoder[patientCreated]())
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{
+		{ID: "event-1", Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-1"}},
+		{ID: "event-1", Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-2"}},
+	}); err != nil {
+		t.Fatalf("store events: %v", err)
+	}
+
+	first, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive first batch: %v", err)
+	}
+	nackErr := errors.New("subscriber failed")
+	if err := first.Nack(context.Background(), nackErr); err != nil {
+		t.Fatalf("nack first batch: %v", err)
+	}
+	records, err := store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records after first nack: %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("len(records) after first nack = %d, want 2: %#v", len(records), records)
+	}
+	var retried, untouched int
+	for _, record := range records {
+		if record.EventID != "event-1" || record.ID == "event-1" {
+			t.Fatalf("unexpected duplicate event record identity: %#v", record)
+		}
+		if record.Attempts == 1 && record.LastError == nackErr.Error() {
+			retried++
+		}
+		if record.Attempts == 0 && record.LastError == "" {
+			untouched++
+		}
+	}
+	if retried != 1 || untouched != 1 {
+		t.Fatalf("retry metadata should affect one row only, retried=%d untouched=%d records=%#v", retried, untouched, records)
 	}
 }
 

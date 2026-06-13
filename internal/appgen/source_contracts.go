@@ -118,7 +118,7 @@ func executableQueryContractStmts(exposure BackendContractExposure) []ast.Stmt {
 func contractInputStmts(exposure BackendContractExposure, csrf bool) []ast.Stmt {
 	switch exposure.Endpoint.Kind {
 	case BackendEndpointCommand:
-		stmts := actionParseFormStmts(csrf)
+		stmts := contractParseFormStmts(csrf)
 		if len(exposure.InputFields) == 0 {
 			stmts = append(stmts, define([]ast.Expr{id("input")}, &ast.CompositeLit{Type: sel(exposure.ImportAlias, exposure.Type)}))
 			return stmts

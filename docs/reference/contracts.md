@@ -488,7 +488,8 @@ command, or a test fixture until split worker generation is designed.
 Dependency-free adapters:
 
 - `runtime/contracts/fileoutbox` stores JSON Lines records on disk and
-  implements both `Outbox` and `EventSource`.
+  implements both `Outbox` and `EventSource`. Each record has its own durable
+  record ID plus the event envelope ID used by worker deduplication.
 - `runtime/contracts/membroker` provides an in-memory `Broker` and
   `EventSource` for tests, local development, and single-process apps.
 - `runtime/contracts/sse` provides an `http.Handler` and
@@ -600,7 +601,10 @@ if err := gowdkapp.RunContractEventWorker(ctx, events); err != nil {
 
 This adapter uses core NATS publish/subscribe. It does not provide durable
 replay for offline subscribers. Use Redis Streams, the file outbox, or a
-custom JetStream adapter when events must survive worker downtime.
+custom JetStream adapter when events must survive worker downtime. When a batch
+drain encounters a later malformed message after already decoding earlier
+messages, the adapter returns the decoded events so they can still be
+dispatched.
 
 ### SSE Presentation Fanout
 
@@ -706,7 +710,9 @@ Current behavior:
   directly as JSON. Error responses are `application/json` with
   `{"error":"..."}` and `Cache-Control: no-store`; ordinary 5xx errors use the
   generic HTTP status text, while `response.NewHandlerError(status, message,
-  cause)` can opt into an explicit client-safe status and message.
+  cause)` can opt into an explicit client-safe status and message. Form parse,
+  oversized body, CSRF, and typed input decode failures use the same JSON error
+  shape.
 - When the scanner can see the exported command input struct fields, generated
   adapters parse submitted form values, allow only the scanned fields, decode
   supported scalar fields, and pass the typed command input to the registry.

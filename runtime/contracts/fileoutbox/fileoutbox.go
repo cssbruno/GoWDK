@@ -26,6 +26,7 @@ type Decoder = contracts.EventDecoder
 // Record is one durable outbox row stored as a JSON Lines object.
 type Record struct {
 	ID            string                  `json:"id"`
+	EventID       string                  `json:"eventId,omitempty"`
 	StoredAt      time.Time               `json:"storedAt"`
 	Category      contracts.EventCategory `json:"category"`
 	Type          string                  `json:"type"`
@@ -140,7 +141,8 @@ func (store *Store) StoreEvents(ctx context.Context, events []contracts.EventEnv
 			return err
 		}
 		record := Record{
-			ID:       event.ID,
+			ID:       newRecordID(),
+			EventID:  event.ID,
 			StoredAt: store.now().UTC(),
 			Category: event.Category,
 			Type:     event.Type,
@@ -255,14 +257,22 @@ func (store *Store) decodeRecordsLocked(records []Record) ([]contracts.EventEnve
 			continue
 		}
 		decoded[record.ID] = true
+		eventID := record.EventID
+		if eventID == "" {
+			eventID = record.ID
+		}
 		events = append(events, contracts.EventEnvelope{
-			ID:       record.ID,
+			ID:       eventID,
 			Category: record.Category,
 			Type:     record.Type,
 			Value:    value,
 		})
 	}
 	return events, decoded, failed, failure
+}
+
+func newRecordID() string {
+	return "record-" + contracts.NewEventID()
 }
 
 func (store *Store) readRecordsLocked() ([]Record, error) {

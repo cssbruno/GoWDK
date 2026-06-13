@@ -128,20 +128,25 @@ func (broker *Broker) ReceiveEventBatch(ctx context.Context) (contracts.EventBat
 	if err != nil {
 		return contracts.EventBatch{}, err
 	}
+	events := drainAvailableEvents(ctx, first, broker.batchSize, broker.tryNextMessage)
+	return contracts.EventBatch{Events: events}, nil
+}
+
+func drainAvailableEvents(ctx context.Context, first contracts.EventEnvelope, batchSize int, next func(context.Context) (contracts.EventEnvelope, bool, error)) []contracts.EventEnvelope {
 	events := []contracts.EventEnvelope{first}
-	for len(events) < broker.batchSize {
+	for len(events) < batchSize {
 		pollCtx, cancel := context.WithTimeout(ctx, time.Millisecond)
-		event, ok, err := broker.tryNextMessage(pollCtx)
+		event, ok, err := next(pollCtx)
 		cancel()
 		if err != nil {
-			return contracts.EventBatch{}, err
+			return events
 		}
 		if !ok {
 			break
 		}
 		events = append(events, event)
 	}
-	return contracts.EventBatch{Events: events}, nil
+	return events
 }
 
 // Close unsubscribes the receive subscription.

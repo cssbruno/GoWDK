@@ -121,10 +121,10 @@ func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.R
 		request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)
 		if err := request.ParseForm(); err != nil {
 			if strings.Contains(err.Error(), "request body too large") {
-				gowdkresponse.WriteNoStoreError(response, http.StatusRequestEntityTooLarge, "request body too large")
+				gowdkresponse.WriteNoStoreJSONError(response, http.StatusRequestEntityTooLarge, "request body too large")
 				return true
 			}
-			gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid form")
+			gowdkresponse.WriteNoStoreJSONError(response, http.StatusBadRequest, "invalid form")
 			return true
 		}
 		values := gowdkform.FromURLValues(request.PostForm)

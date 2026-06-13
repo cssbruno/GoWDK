@@ -4720,6 +4720,112 @@ view {
 	})
 }
 
+func TestCheckWarnsOnUnsupportedBackendSignature(t *testing.T) {
+	root := t.TempDir()
+	writeCLITestModule(t, root, "example.com/gowdk-unsupported-binding")
+	config := writeMinimalCLIConfig(t, root)
+	page := filepath.Join(root, "pages", "signup.page.gwdk")
+	writeCLIFile(t, page, `package pages
+
+page signup
+route "/signup"
+
+act Submit POST "/signup"
+
+view {
+  <main>Signup</main>
+}
+`)
+	// Submit exists but with a signature GOWDK cannot bind as an action.
+	writeCLIFile(t, filepath.Join(root, "pages", "handlers.go"), `package pages
+
+func Submit() string { return "" }
+`)
+
+	var output string
+	var err error
+	withWorkingDir(t, root, func() {
+		output, err = captureCLIStdout(t, func() error {
+			return run([]string{"check", "--config", config, "--json", page})
+		})
+	})
+	if err != nil {
+		t.Fatalf("expected an unsupported signature to be a non-fatal warning, got error: %v\n%s", err, output)
+	}
+	diagnostic := requireCheckDiagnostic(t, output, "unsupported_backend_signature")
+	if diagnostic.Severity != "warning" {
+		t.Fatalf("expected warning severity, got %q", diagnostic.Severity)
+	}
+	if !strings.Contains(diagnostic.Message, "Submit") {
+		t.Fatalf("expected message to name the handler, got %q", diagnostic.Message)
+	}
+}
+
+func TestCheckWarnsOnUnexportedBackendHandler(t *testing.T) {
+	root := t.TempDir()
+	writeCLITestModule(t, root, "example.com/gowdk-unexported-binding")
+	config := writeMinimalCLIConfig(t, root)
+	page := filepath.Join(root, "pages", "signup.page.gwdk")
+	writeCLIFile(t, page, `package pages
+
+page signup
+route "/signup"
+
+act Submit POST "/signup"
+
+view {
+  <main>Signup</main>
+}
+`)
+	// The same-named function exists but is unexported, so binding cannot see it.
+	writeCLIFile(t, filepath.Join(root, "pages", "handlers.go"), `package pages
+
+func submit() {}
+`)
+
+	var output string
+	var err error
+	withWorkingDir(t, root, func() {
+		output, err = captureCLIStdout(t, func() error {
+			return run([]string{"check", "--config", config, "--json", page})
+		})
+	})
+	if err != nil {
+		t.Fatalf("expected an unexported near-miss to be a non-fatal warning, got error: %v\n%s", err, output)
+	}
+	diagnostic := requireCheckDiagnostic(t, output, "unexported_backend_handler")
+	if diagnostic.Severity != "warning" {
+		t.Fatalf("expected warning severity, got %q", diagnostic.Severity)
+	}
+	if !strings.Contains(diagnostic.Message, "export it as Submit") {
+		t.Fatalf("expected message to suggest exporting the function, got %q", diagnostic.Message)
+	}
+}
+
+type checkDiagnosticJSON struct {
+	File     string `json:"file"`
+	Code     string `json:"code"`
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+}
+
+func requireCheckDiagnostic(t *testing.T, output, code string) checkDiagnosticJSON {
+	t.Helper()
+	var report struct {
+		Diagnostics []checkDiagnosticJSON `json:"diagnostics"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid check JSON: %v\n%s", err, output)
+	}
+	for _, diagnostic := range report.Diagnostics {
+		if diagnostic.Code == code {
+			return diagnostic
+		}
+	}
+	t.Fatalf("expected a %q diagnostic, got %#v", code, report.Diagnostics)
+	return checkDiagnosticJSON{}
+}
+
 func TestInspectIRCommandMatchesGoldenFixture(t *testing.T) {
 	fixture := filepath.FromSlash("testdata/inspect_ir_golden")
 	var output string

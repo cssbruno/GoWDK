@@ -310,6 +310,9 @@ func CheckFilesWithOptions(config gowdk.Config, paths []string, options CheckOpt
 	diagnostics = append(diagnostics, accessibilityDiagnostics(result.IR)...)
 	if !diagnostics.HasErrors() {
 		result.Bindings = compiler.BindBackendHandlers(&result.IR)
+		if bindingDiagnostics := compiler.BackendBindingDiagnostics(result.Bindings); len(bindingDiagnostics) > 0 {
+			diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidationErrors(bindingDiagnostics), result.IR)...)
+		}
 		diagnostics = append(diagnostics, validateContractReferences(config, result.IR, options.ProjectRoot)...)
 	}
 	return result, diagnostics

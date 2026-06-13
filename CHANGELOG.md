@@ -26,6 +26,15 @@ packages, and tooling contracts may change before a stable release.
 - `docs/reference/go-interop.md` is a first-class page documenting build data,
   supported action/API/load signatures, typed route-param access through
   `app.Params`/`app.TypedParams`, and `net/http` middleware wrapping.
+- `gowdk check` and `gowdk build` now surface Go binding near-misses as
+  non-fatal warnings, so a user sees why a handler did not bind without reading
+  the JSON report or running a strict production build: a same-named function
+  with an unsupported signature emits `unsupported_backend_signature`, and a
+  same-named but unexported function (for example `func submit` where the block
+  expects `Submit`) emits `unexported_backend_handler`. A handler with no
+  candidate function stays silent so the 501-stub workflow is unaffected; strict
+  production builds still fail closed via `backend_binding_required`. This is the
+  first slice of #328.
 
 ### Known Gaps
 

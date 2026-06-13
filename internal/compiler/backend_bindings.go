@@ -135,10 +135,10 @@ func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {
 	binding.Status = source.BackendBindingMissing
 	if pkg.LoadError != "" {
 		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s could not be inspected: %s", bindingPackageLabel(binding, pkg), functionName, pkg.LoadError)
-	} else {
-		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), functionName)
+		return binding
 	}
-	return binding
+	binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), functionName)
+	return markUnexportedCandidate(binding, pkg)
 }
 
 func bindStandaloneAction(endpoint gwdkir.GoEndpoint, pkg featurePackage) source.BackendBinding {
@@ -159,7 +159,7 @@ func bindActionEndpoint(binding source.BackendBinding, pkg featurePackage) sourc
 	if !ok {
 		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK action handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), binding.FunctionName)
-		return binding
+		return markUnexportedCandidate(binding, pkg)
 	}
 	if !function.Action() {
 		binding.Status = source.BackendBindingUnsupportedSignature
@@ -196,7 +196,7 @@ func bindAPIEndpoint(binding source.BackendBinding, pkg featurePackage) source.B
 	if !ok {
 		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), binding.FunctionName)
-		return binding
+		return markUnexportedCandidate(binding, pkg)
 	}
 	if !function.API() {
 		binding.Status = source.BackendBindingUnsupportedSignature
@@ -280,6 +280,23 @@ func baseStandaloneBackendBinding(endpoint gwdkir.GoEndpoint, kind, method strin
 		FunctionName: endpoint.Name,
 		Status:       source.BackendBindingMissing,
 	}
+}
+
+// markUnexportedCandidate flags a missing binding when a same-named unexported
+// Go function exists in the inspected package, and appends the near-miss to the
+// binding message so tooling can explain that the function is present but not
+// exported. It is a no-op when no such candidate exists.
+func markUnexportedCandidate(binding source.BackendBinding, pkg featurePackage) source.BackendBinding {
+	if !pkg.hasUnexported(binding.FunctionName) {
+		return binding
+	}
+	binding.UnexportedCandidate = true
+	binding.Message += fmt.Sprintf(
+		"; an unexported function %s exists in the same package — export it as %s",
+		firstRuneLower(binding.FunctionName),
+		binding.FunctionName,
+	)
+	return binding
 }
 
 func sourceDir(sourcePath string) string {

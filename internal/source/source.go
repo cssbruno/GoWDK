@@ -227,6 +227,10 @@ type BackendBinding struct {
 	InputFields  []BackendInputField
 	Status       BackendBindingStatus
 	Message      string
+	// UnexportedCandidate is set when a handler is missing but a same-named
+	// unexported Go function exists in the inspected package, so tooling can
+	// explain that the function is present but not exported.
+	UnexportedCandidate bool
 }
 
 // ErrorPagePath returns a clean generated-output-relative error page path.

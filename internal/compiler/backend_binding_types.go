@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"strings"
+	"unicode"
 
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -25,7 +26,28 @@ type featurePackage struct {
 	ImportPath string
 	Name       string
 	Functions  map[string]featureFunction
+	// Unexported holds the names of package-level functions that exist but are
+	// not exported, so binding can explain a same-named lowercase near-miss.
+	Unexported map[string]bool
 	LoadError  string
+}
+
+// hasUnexported reports whether a same-named unexported function exists for the
+// exported handler name (the canonical first-letter-lowercased near-miss).
+func (pkg featurePackage) hasUnexported(exportedName string) bool {
+	if len(pkg.Unexported) == 0 {
+		return false
+	}
+	return pkg.Unexported[firstRuneLower(exportedName)]
+}
+
+func firstRuneLower(name string) string {
+	if name == "" {
+		return ""
+	}
+	runes := []rune(name)
+	runes[0] = unicode.ToLower(runes[0])
+	return string(runes)
 }
 
 type featureFunction struct {

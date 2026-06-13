@@ -18,6 +18,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
@@ -156,11 +157,12 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	timings.counter("components", len(ir.Components))
 	timings.counter("layouts", len(ir.Layouts))
 	timings.counter("endpoints", len(ir.Endpoints))
+	var bindings []source.BackendBinding
 	if err := timings.measure("go_binding", func() error {
 		if err := compiler.DiscoverGoEndpoints(&ir); err != nil {
 			return err
 		}
-		compiler.BindBackendHandlers(&ir)
+		bindings = compiler.BindBackendHandlers(&ir)
 		return nil
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -169,6 +171,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	var report compiler.ValidationErrors
 	timings.measure("ir_validation", func() error {
 		report = compiler.ValidateProgramReport(options.Config, ir)
+		report = append(report, compiler.BackendBindingDiagnostics(bindings)...)
 		return nil
 	})
 	for _, diagnostic := range report {

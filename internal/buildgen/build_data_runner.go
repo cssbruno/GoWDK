@@ -3,6 +3,7 @@ package buildgen
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -222,7 +223,10 @@ func inlineBuildDataMainDecl(function string, returnsError bool) ast.Decl {
 
 func samePackageImportPath(source string) (string, error) {
 	dir := sourceDir(source)
-	info := goListDir(dir)
+	info, err := goListDir(dir)
+	if err != nil {
+		return "", fmt.Errorf("same-package build data function requires a buildable Go package for %s: %w", dir, err)
+	}
 	if strings.TrimSpace(info.ImportPath) == "" {
 		return "", fmt.Errorf("same-package build data function requires a buildable Go package for %s", dir)
 	}
@@ -233,18 +237,31 @@ type goListDirInfo struct {
 	ImportPath string
 }
 
-func goListDir(dir string) goListDirInfo {
+func goListDir(dir string) (goListDirInfo, error) {
 	command := exec.Command("go", "list", "-json", ".")
 	command.Dir = dir
 	output, err := command.Output()
 	if err != nil {
-		return goListDirInfo{}
+		return goListDirInfo{}, goListError(err)
 	}
 	var info goListDirInfo
 	if err := json.Unmarshal(output, &info); err != nil {
-		return goListDirInfo{}
+		return goListDirInfo{}, fmt.Errorf("parse go list output: %w", err)
 	}
-	return info
+	return info, nil
+}
+
+// goListError surfaces the underlying go list failure, including its stderr,
+// instead of collapsing it into a generic message that hides the cause (for
+// example a sibling package compile error or a missing go.mod).
+func goListError(err error) error {
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		if stderr := strings.TrimSpace(string(exit.Stderr)); stderr != "" {
+			return fmt.Errorf("%w\n%s", err, stderr)
+		}
+	}
+	return err
 }
 
 func sourceDir(source string) string {

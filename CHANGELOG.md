@@ -35,6 +35,25 @@ packages, and tooling contracts may change before a stable release.
   candidate function stays silent so the 501-stub workflow is unaffected; strict
   production builds still fail closed via `backend_binding_required`. This is the
   first slice of #328.
+- Backend handler binding no longer hides failures behind silent fallbacks: a
+  handler declared in both same-package Go and an inline `go {}` block is
+  reported as `ambiguous_backend_handler` instead of silently preferring one
+  source; a sibling Go package that fails to compile keeps a "could not be
+  inspected" binding instead of falling back to an inline block and reporting a
+  misleading bound handler (the compile error is reported by `go_package_error`);
+  a failing `go list` for a same-package build function now surfaces its real
+  cause (for example a missing `go.mod`) rather than a generic "requires a
+  buildable Go package" message; and a component-script resolution error during
+  build now fails the build instead of silently omitting the page's component
+  scripts. The contract scanner's `go list -deps -export` failures now surface
+  their stderr instead of reaching the type checker as an opaque "exit status 1",
+  and an unknown build-data interpolation reference now reports whether the
+  missing name was a build-data field or a route param instead of always saying
+  "unknown route param". Generated-app module resolution no longer silently
+  drops the app module's `require`/`replace` when `go list -m` fails: if the
+  generated app imports app-owned packages it now fails with the real `go list`
+  error instead of producing a go.mod that fails to build with an opaque
+  "cannot find package".
 
 ### Known Gaps
 

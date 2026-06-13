@@ -12,6 +12,27 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
+func TestSamePackageImportPathSurfacesGoListError(t *testing.T) {
+	// A temp dir outside any Go module makes `go list` fail with a clear reason
+	// (no go.mod), which must be surfaced rather than collapsed into a generic
+	// "requires a buildable Go package" message.
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "page.go"), []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := samePackageImportPath(filepath.Join(root, "home.page.gwdk"))
+	if err == nil {
+		t.Fatal("expected a same-package build data error outside a Go module")
+	}
+	if !strings.Contains(err.Error(), "buildable Go package") {
+		t.Fatalf("expected the user-facing message, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "go.mod") {
+		t.Fatalf("expected the underlying go list error (go.mod not found) to be surfaced, got: %v", err)
+	}
+}
+
 func TestBuildRendersLiteralBuildData(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{
@@ -497,10 +518,29 @@ func TestBuildRejectsUnknownRouteParamInBuildDataValue(t *testing.T) {
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
 	if err == nil {
-		t.Fatal("expected unknown route param error")
+		t.Fatal("expected unknown interpolation reference error")
 	}
-	if !strings.Contains(err.Error(), `build field title: unknown route param "missing"`) {
+	if !strings.Contains(err.Error(), `build field title: unknown build data field or route param "missing"`) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestInterpolateBuildValueReportsAccurateUnknownReference(t *testing.T) {
+	data := map[string]string{"title": "Hi"}
+	params := map[string]string{"slug": "x"}
+	cases := []struct {
+		value string
+		want  string
+	}{
+		{`{field("missing")}`, `unknown build data field "missing"`},
+		{`{missing}`, `unknown build data field or route param "missing"`},
+		{`{param("missing")}`, `unknown route param "missing"`},
+	}
+	for _, tc := range cases {
+		_, err := interpolateBuildValue(tc.value, params, data)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("interpolateBuildValue(%q): want error containing %q, got %v", tc.value, tc.want, err)
+		}
 	}
 }
 

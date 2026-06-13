@@ -11,7 +11,11 @@
   Action endpoints on those pages inherit the generated concrete paths.
 - SPA navigation enhancement is optional runtime behavior over literal internal
   links. Route existence, route output, auth, and server behavior remain owned
-  by generated files and generated Go.
+  by generated files and generated Go. The runtime can prefetch same-origin
+  internal page HTML on hover, focus, or touch, fetch it with
+  `X-GOWDK-Navigate` during navigation, mark `<html data-gowdk-navigating>`,
+  dispatch `gowdk:navigate-start` / `gowdk:navigate-end`, and fall back to a
+  normal browser navigation on unsupported or failed responses.
 - `load {}` runs at request time.
 - SPA pages may declare `act` blocks without SSR.
 

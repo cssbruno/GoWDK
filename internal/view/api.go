@@ -102,9 +102,17 @@ func RenderWithData(source string, components map[string]Component, data map[str
 
 // Options configures view rendering.
 type Options struct {
-	Actions map[string]string
-	Package string
-	Uses    map[string]string
+	Actions           map[string]string
+	ActionInputFields map[string][]ActionInputField
+	Package           string
+	Uses              map[string]string
+}
+
+// ActionInputField describes Go action input metadata available while rendering
+// literal controls inside a g:post form.
+type ActionInputField struct {
+	FormName string
+	Type     string
 }
 
 // ActionFormField describes one direct literal form field for a g:post action.
@@ -192,6 +200,7 @@ func RenderWithOptions(source string, components map[string]Component, data map[
 		uses:         cloneValues(options.Uses),
 		values:       cloneValues(data),
 		actions:      cloneValues(options.Actions),
+		actionFields: cloneActionInputFields(options.ActionInputFields),
 		stack:        map[string]bool{},
 		stateFields:  map[string]bool{},
 		readFields:   map[string]bool{},

@@ -336,6 +336,9 @@ as `/blog/hello-gowdk`.
   "hashes": {
     "assets/app.css": "sha256:..."
   },
+  "sizes": {
+    "assets/app.css": 1204
+  },
   "cache": {
     "assets/app.css": "public, max-age=31536000, immutable",
     "index.html": "public, max-age=120"
@@ -345,11 +348,12 @@ as `/blog/hello-gowdk`.
 
 The `files` map resolves logical asset names to slash-separated paths relative
 to the selected output directory. `hashes` records SHA-256 content hashes for
-generated assets, and `cache` records the HTTP cache policy generated binaries
-should apply when serving generated assets or route HTML files. The current
-implementation records CSS files emitted by CSS processors, generated page CSS
-files, partial runtime assets, generated island runtime assets, generated island
-source maps, and page-level `cache` policies for generated SPA HTML. It does
+generated assets, `sizes` records generated asset byte counts, and `cache`
+records the HTTP cache policy generated binaries should apply when serving
+generated assets or route HTML files. The current implementation records CSS
+files emitted by CSS processors, generated page CSS files, partial runtime
+assets, generated island runtime assets, generated island source maps, WASM
+island assets, and page-level `cache` policies for generated SPA HTML. It does
 not record configured stylesheet URLs that were not written by the build.
 
 ## Current Build Report

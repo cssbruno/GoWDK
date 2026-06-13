@@ -1417,6 +1417,47 @@ func TestRenderWithOptionsLowersGPostDirective(t *testing.T) {
 	}
 }
 
+func TestRenderWithOptionsSynthesizesActionInputAttrs(t *testing.T) {
+	got, err := RenderWithOptions(`<form g:post={save}><input name="age" /><input name="score" type="number" /><input name="email" /></form>`, nil, nil, Options{
+		Actions: map[string]string{"save": "/profile"},
+		ActionInputFields: map[string][]ActionInputField{
+			"save": {
+				{FormName: "age", Type: "uint8"},
+				{FormName: "score", Type: "int16"},
+				{FormName: "email", Type: "string"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`<input name="age" type="number" inputmode="numeric" min="0" max="255">`,
+		`<input name="score" type="number" inputmode="numeric" min="-32768" max="32767">`,
+		`<input name="email">`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithOptionsKeepsExplicitActionInputAttrs(t *testing.T) {
+	got, err := RenderWithOptions(`<form g:post={save}><input name="age" type="text" inputmode="decimal" min="5" max="9" /></form>`, nil, nil, Options{
+		Actions: map[string]string{"save": "/profile"},
+		ActionInputFields: map[string][]ActionInputField{
+			"save": {{FormName: "age", Type: "uint8"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<form method="post" action="/profile"><input name="age" type="text" inputmode="decimal" min="5" max="9"></form>`
+	if got != want {
+		t.Fatalf("unexpected output:\n%s", got)
+	}
+}
+
 func TestRenderWithOptionsMarksGCommandForm(t *testing.T) {
 	got, err := RenderWithOptions(`<form method="post" action="/patients" g:command="patients.CreatePatient"><input name="email" /></form>`, nil, nil, Options{})
 	if err != nil {

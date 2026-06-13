@@ -23,7 +23,7 @@ const (
 	renderModeRequestTime renderModePolicy = "request-time"
 )
 
-func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, data map[string]string, policy renderModePolicy) (string, error) {
+func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, policy renderModePolicy) (string, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if policy == renderModeSPA && mode != gowdk.SPA && mode != gowdk.Action {
 		return "", fmt.Errorf("%s: SPA build cannot emit request-time %s pages yet", page.ID, mode)
@@ -47,8 +47,9 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 
 	pageComponents := componentRegistryForPage(page, components)
 	body, err := view.RenderWithOptions(viewSource, pageComponents, data, view.Options{
-		Actions: actionRoutes(page, data),
-		Package: page.Package,
+		Actions:           actionRoutes(page, data),
+		ActionInputFields: actionFields,
+		Package:           page.Package,
 	})
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)

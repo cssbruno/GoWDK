@@ -147,16 +147,22 @@ page-level cache policies:
   "files": {
     "assets/app.css": "assets/app.7ada5a1234b1.css",
     "assets/gowdk/islands/Counter.js": "assets/gowdk/islands/Counter.js"
+  },
+  "sizes": {
+    "assets/app.css": 1204,
+    "assets/gowdk/islands/Counter.js": 4096
   }
 }
 ```
 
 Keys are stable logical asset names and values are emitted slash-separated paths
 relative to the selected output directory. Generated CSS values include a
-content hash in the filename after minification. The `cache` map may also
-include route HTML paths such as `index.html`; those route entries do not need
-to appear in `files`. Configured stylesheet links are not included unless GOWDK
-emits the referenced file.
+content hash in the filename after minification. The optional `hashes`,
+`cache`, and `sizes` maps record content hashes, generated cache policy, and
+byte size for emitted assets. The `cache` map may also include route HTML paths
+such as `index.html`; those route entries do not need to appear in `files`.
+Configured stylesheet links are not included unless GOWDK emits the referenced
+file.
 
 ## Planned Manifest Work
 

@@ -293,6 +293,7 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 			out.writeByte('"')
 		}
 	}
+	node.writeActionInputAttrs(ctx, out)
 	if selected, err := node.optionSelected(ctx); err != nil {
 		return err
 	} else if selected {
@@ -363,6 +364,11 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 		next := *childCtx
 		next.selectBound = true
 		next.selectValue = ctx.values[valueBinding]
+		childCtx = &next
+	}
+	if node.Name == "form" && directives.Action != "" {
+		next := *childCtx
+		next.formAction = directives.Action
 		childCtx = &next
 	}
 	if hasRawHTML {

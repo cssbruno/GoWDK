@@ -57,6 +57,7 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 	css, cssFailures := planCSS(config, ir, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
+	actionFields := pageActionInputFields(ir)
 
 	var artifacts []SSRArtifact
 	var failures []string
@@ -67,7 +68,7 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 		if !isRequestTimePage(config, page) {
 			continue
 		}
-		artifact, err := ssrArtifact(config, page, components, layouts, append(baseStylesheets, css.pageStylesheets[page.ID]...))
+		artifact, err := ssrArtifact(config, page, components, layouts, append(baseStylesheets, css.pageStylesheets[page.ID]...), actionFields[page.ID])
 		if err != nil {
 			failures = append(failures, err.Error())
 			continue
@@ -80,7 +81,7 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 	return artifacts, nil
 }
 
-func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet) (SSRArtifact, error) {
+func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField) (SSRArtifact, error) {
 	render := page.RenderMode(config.Render.DefaultMode())
 	routeData, replacements := ssrRouteData(page)
 	buildData, err := parseBuildData(page.Blocks.BuildBody, routeData, page.Imports, page.Blocks.GoBlocks, page.Source)
@@ -98,7 +99,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 	for key, value := range loadData {
 		data[key] = value
 	}
-	html, err := renderPage(config, page, components, layouts, stylesheets, data, renderModeRequestTime)
+	html, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, renderModeRequestTime)
 	if err != nil {
 		return SSRArtifact{}, err
 	}

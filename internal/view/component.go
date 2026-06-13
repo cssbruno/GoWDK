@@ -188,6 +188,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 		values:       values,
 		tainted:      taintedValues,
 		actions:      ctx.actions,
+		actionFields: ctx.actionFields,
 		stack:        cloneStack(ctx.stack),
 		slotHTML:     slotHTML,
 		slots:        slots,

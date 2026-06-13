@@ -85,8 +85,7 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 		}
 		recordWriteStat(&result, wrote)
 		reporter.debug("write", "css_written", "CSS artifact written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
-		artifact.CSSArtifact.Hash = contentHash(artifact.contents)
-		artifact.CSSArtifact.CachePolicy = immutableAssetCachePolicy
+		finalizeCSSArtifact(&artifact)
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
 	}
 	for _, artifact := range planned.assets {
@@ -96,10 +95,7 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 		}
 		recordWriteStat(&result, wrote)
 		reporter.debug("write", "asset_written", "runtime asset written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
-		artifact.AssetArtifact.Hash = contentHash(artifact.contents)
-		if artifact.AssetArtifact.CachePolicy == "" {
-			artifact.AssetArtifact.CachePolicy = noCacheAssetCachePolicy
-		}
+		finalizeAssetArtifact(&artifact)
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 	}
 	for _, artifact := range planned.pages {
@@ -128,6 +124,7 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 	result.AssetManifestPath = assetManifestPath
 	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
 	reportCachePolicies(reporter, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
+	reportAssetSizes(reporter, outputDir, result.AssetArtifacts)
 	openAPIPath, err := writeOpenAPI(outputDir, ir)
 	if err != nil {
 		return Result{}, reporter.fail("report", err)
@@ -156,6 +153,22 @@ func recordWriteStat(result *Result, wrote bool) {
 		return
 	}
 	result.WriteStats.IdenticalWritesSkipped++
+}
+
+func finalizeCSSArtifact(artifact *plannedCSSArtifact) {
+	artifact.CSSArtifact.Hash = contentHash(artifact.contents)
+	artifact.CSSArtifact.CachePolicy = immutableAssetCachePolicy
+	artifact.CSSArtifact.SizeBytes = int64(len(artifact.contents))
+}
+
+func finalizeAssetArtifact(artifact *plannedAssetArtifact) {
+	if artifact.AssetArtifact.Hash == "" {
+		artifact.AssetArtifact.Hash = contentHash(artifact.contents)
+	}
+	if artifact.AssetArtifact.CachePolicy == "" {
+		artifact.AssetArtifact.CachePolicy = noCacheAssetCachePolicy
+	}
+	artifact.AssetArtifact.SizeBytes = int64(len(artifact.contents))
 }
 
 func BuildMemory(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (MemoryResult, error) {
@@ -221,8 +234,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 		if err != nil {
 			return MemoryResult{}, reporter.fail("memory", err)
 		}
-		artifact.CSSArtifact.Hash = contentHash(artifact.contents)
-		artifact.CSSArtifact.CachePolicy = immutableAssetCachePolicy
+		finalizeCSSArtifact(&artifact)
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
 		result.Files[rel] = append([]byte(nil), artifact.contents...)
 		reporter.debug("memory", "css_collected", "CSS artifact collected", BuildEvent{Path: rel})
@@ -232,10 +244,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 		if err != nil {
 			return MemoryResult{}, reporter.fail("memory", err)
 		}
-		artifact.AssetArtifact.Hash = contentHash(artifact.contents)
-		if artifact.AssetArtifact.CachePolicy == "" {
-			artifact.AssetArtifact.CachePolicy = noCacheAssetCachePolicy
-		}
+		finalizeAssetArtifact(&artifact)
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 		result.Files[rel] = append([]byte(nil), artifact.contents...)
 		reporter.debug("memory", "asset_collected", "runtime asset collected", BuildEvent{Path: rel})
@@ -267,6 +276,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	result.Files[assetManifestFile] = assetManifest
 	reporter.info("manifest", "asset_manifest_collected", "asset manifest collected", BuildEvent{Path: assetManifestFile})
 	reportCachePolicies(reporter, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
+	reportAssetSizes(reporter, outputDir, result.AssetArtifacts)
 	openAPI, err := openAPIPayload(ir)
 	if err != nil {
 		return MemoryResult{}, reporter.fail("report", err)
@@ -428,6 +438,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
+	actionFields := pageActionInputFields(ir)
 
 	var failures []string
 	failures = append(failures, componentFailures...)
@@ -470,6 +481,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 		}
 		recordWriteStat(&result, wrote)
 		reporter.debug("write", "css_written", "CSS artifact written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
+		finalizeCSSArtifact(&artifact)
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
 	}
 	for _, artifact := range runtime {
@@ -479,12 +491,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 		}
 		recordWriteStat(&result, wrote)
 		reporter.debug("write", "asset_written", "runtime asset written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
-		if artifact.AssetArtifact.Hash == "" {
-			artifact.AssetArtifact.Hash = contentHash(artifact.contents)
-		}
-		if artifact.AssetArtifact.CachePolicy == "" {
-			artifact.AssetArtifact.CachePolicy = noCacheAssetCachePolicy
-		}
+		finalizeAssetArtifact(&artifact)
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
 	}
 
@@ -518,7 +525,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 		changedPageIDs[page.ID] = true
 		stylesheets := append([]gowdk.Stylesheet{}, baseStylesheets...)
 		stylesheets = append(stylesheets, css.pageStylesheets[page.ID]...)
-		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets)
+		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets, actionFields[page.ID])
 		if err != nil {
 			failures = append(failures, err.Error())
 			continue
@@ -560,6 +567,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	result.AssetManifestPath = assetManifestPath
 	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
 	reportCachePolicies(reporter, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
+	reportAssetSizes(reporter, outputDir, result.AssetArtifacts)
 	openAPIPath, err := writeOpenAPI(outputDir, ir)
 	if err != nil {
 		return Result{}, reporter.fail("report", err)
@@ -623,6 +631,45 @@ func reportCachePolicies(reporter *buildReporter, pages []Artifact, css []CSSArt
 		data["assetPolicies"] = policies
 	}
 	reporter.info("report", "cache_policy", "cache policies summarized", BuildEvent{Data: data})
+}
+
+func reportAssetSizes(reporter *buildReporter, outputDir string, assets []AssetArtifact) {
+	for _, artifact := range assets {
+		rel := eventPath(outputDir, artifact.Path)
+		logical := artifactLogicalPath(artifact.LogicalPath, rel)
+		data := map[string]string{
+			"bytes": fmt.Sprint(artifact.SizeBytes),
+			"kind":  assetReportKind(logical),
+		}
+		if logical != "" && logical != rel {
+			data["logicalPath"] = logical
+		}
+		if artifact.Hash != "" {
+			data["hash"] = artifact.Hash
+		}
+		if artifact.CachePolicy != "" {
+			data["cache"] = artifact.CachePolicy
+		}
+		reporter.info("report", "asset_size", "generated asset size recorded", BuildEvent{
+			Path: rel,
+			Data: data,
+		})
+	}
+}
+
+func assetReportKind(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".js":
+		return "javascript"
+	case ".wasm":
+		return "wasm"
+	case ".map":
+		return "sourcemap"
+	case ".css":
+		return "css"
+	default:
+		return "asset"
+	}
 }
 
 func pageCachePolicies(artifacts []Artifact) []string {
@@ -693,6 +740,7 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
+	actionFields := pageActionInputFields(ir)
 	var planned []plannedArtifact
 	var failures []string
 	seenOutputPaths := map[string]string{}
@@ -707,7 +755,7 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 		}
 		stylesheets := append([]gowdk.Stylesheet{}, baseStylesheets...)
 		stylesheets = append(stylesheets, css.pageStylesheets[page.ID]...)
-		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets)
+		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets, actionFields[page.ID])
 		if err != nil {
 			failures = append(failures, err.Error())
 			continue

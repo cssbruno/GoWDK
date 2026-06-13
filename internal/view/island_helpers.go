@@ -141,6 +141,14 @@ func cloneValues(input map[string]string) map[string]string {
 	return output
 }
 
+func cloneActionInputFields(input map[string][]ActionInputField) map[string][]ActionInputField {
+	output := map[string][]ActionInputField{}
+	for key, fields := range input {
+		output[key] = append([]ActionInputField(nil), fields...)
+	}
+	return output
+}
+
 func mergeValues(base map[string]string, overlay map[string]string) map[string]string {
 	out := cloneValues(base)
 	for key, value := range overlay {

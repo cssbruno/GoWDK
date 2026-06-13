@@ -65,11 +65,15 @@ submits the form with:
 - `X-GOWDK-Swap: <swap>`
 
 Successful enhanced responses swap `innerHTML` or `outerHTML` into the target.
-The runtime dispatches `gowdk:before-request`, `gowdk:after-swap`, and
-`gowdk:request-error`, toggles `aria-busy`, preserves focus where possible,
-and remounts generated islands around replaced DOM. Failed enhanced requests
-dispatch `gowdk:request-error` with `detail.status`, `detail.body`, and
-`detail.response` when an HTTP response exists.
+Before the partial POST, the runtime runs the browser's native constraint
+validation (`checkValidity` / `reportValidity`) when available. Invalid
+enhanced forms are not posted, `gowdk:validation-blocked` is dispatched on the
+form, and the server remains authoritative for every request that reaches the
+action handler. The runtime dispatches `gowdk:before-request`,
+`gowdk:after-swap`, and `gowdk:request-error`, toggles `aria-busy`, preserves
+focus where possible, and remounts generated islands around replaced DOM.
+Failed enhanced requests dispatch `gowdk:request-error` with `detail.status`,
+`detail.body`, and `detail.response` when an HTTP response exists.
 
 Enhanced redirects are not a stable contract today. For enhanced requests,
 return a fragment response for the target. Use normal full-page POST redirects
@@ -104,6 +108,15 @@ policy.
 The generated first slice infers direct `input`, `textarea`, `select`, and
 named submit controls with literal `name` attributes. It does not infer fields
 hidden inside component calls.
+
+Author-written form controls keep their literal browser validation attributes
+such as `required`, `type`, `inputmode`, `min`, and `max`. When a `g:post`
+action has bound Go input metadata, the renderer can add missing numeric browser
+attributes to direct literal `<input name="...">` controls: `type="number"`,
+`inputmode="numeric"`, `min="0"` for unsigned integers, and exact `min`/`max`
+bounds for sized integer types. It does not synthesize `required` because
+requiredness is enforced from literal form constraints, not from Go field type
+metadata.
 
 File uploads are intentionally user-owned. Direct `input type="file"` controls
 and multipart generated action forms are rejected. Use a normal Go API/server

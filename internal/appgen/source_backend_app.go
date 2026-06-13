@@ -46,8 +46,11 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	if len(options.APIs) > 0 {
 		imports["path"] = "path"
 	}
-	if len(options.Fragments) > 0 {
+	if fragmentsUseExactRoutes(options.Fragments) {
 		imports["path"] = "path"
+	}
+	if fragmentsUseDynamicRoutes(options.Fragments) {
+		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 	}
 	if actionsUseFragments(options.Actions) || fragmentsUseStaticFallback(options.Fragments) {
 		imports["gowdkpartial"] = "github.com/cssbruno/gowdk/addons/partial"

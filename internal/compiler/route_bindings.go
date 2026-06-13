@@ -72,6 +72,8 @@ type EndpointBinding struct {
 	Method            string
 	Route             string
 	Cache             string
+	DynamicParams     []string
+	RouteParams       []source.RouteParam
 	Guards            []string
 	CSRF              bool
 	PageID            string
@@ -200,6 +202,8 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Method:            endpoint.Method,
 				Route:             endpoint.Path,
 				Cache:             endpoint.Cache,
+				DynamicParams:     append([]string(nil), endpoint.DynamicParams...),
+				RouteParams:       append([]source.RouteParam(nil), endpoint.RouteParams...),
 				Guards:            append([]string(nil), endpoint.Guards...),
 				CSRF:              endpoint.CSRF,
 				PageID:            endpoint.PageID,
@@ -229,6 +233,8 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Method:            endpoint.Method,
 				Route:             endpoint.Path,
 				Cache:             endpoint.Cache,
+				DynamicParams:     append([]string(nil), endpoint.DynamicParams...),
+				RouteParams:       append([]source.RouteParam(nil), endpoint.RouteParams...),
 				Guards:            append([]string(nil), endpoint.Guards...),
 				CSRF:              endpoint.CSRF,
 				PageID:            endpoint.PageID,
@@ -254,6 +260,8 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Method:            endpoint.Method,
 				Route:             endpoint.Path,
 				Cache:             endpoint.Cache,
+				DynamicParams:     append([]string(nil), endpoint.DynamicParams...),
+				RouteParams:       append([]source.RouteParam(nil), endpoint.RouteParams...),
 				Guards:            append([]string(nil), endpoint.Guards...),
 				CSRF:              endpoint.CSRF,
 				PageID:            endpoint.PageID,

@@ -265,7 +265,8 @@ Generated binaries use explicit cache headers:
   errors, generated error pages, and invalid-CSRF responses use
   `Cache-Control: no-store`.
 - Page-level `cache` records route response cache intent in compiler, route,
-  manifest, generated asset metadata, and generated SSR route metadata.
+  build-report, manifest, generated asset metadata, and generated SSR route
+  metadata.
   Generated binaries apply it to successful static SPA HTML and SSR HTML
   responses for that page. It does not override the no-store safety policy for
   actions, APIs, partial responses, load redirects, generated errors, or
@@ -425,6 +426,8 @@ Generated binaries currently support:
   the configured secret environment variable is present.
 - First-slice required-field validation for directly declared form controls.
 - First-slice partial action fragment responses.
+- Standalone concrete and dynamic fragment routes with raw and typed route
+  params exposed to fragment hooks.
 - First-slice concrete and dynamic request-time SSR pages with declared
   `load {}` identifier or dotted paths.
 - Optional split frontend/backend generation with `--backend-app` and

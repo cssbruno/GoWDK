@@ -124,22 +124,8 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 				Message: fmt.Sprintf("%s fragment %s uses unsupported method %s; fragments currently require GET", page.ID, fragment.Name, method),
 			})
 		}
-		fragmentRoute, issues := parseRoute(fragment.Route)
+		_, issues := parseRoute(fragment.Route)
 		diagnostics = append(diagnostics, routeDiagnostics(page, fmt.Sprintf("fragment %s endpoint path", fragment.Name), issues, fragment.RouteSpan, fragment.RouteParams)...)
-		if len(issues) == 0 && len(fragmentRoute.Params) > 0 {
-			diagnostics = append(diagnostics, ValidationError{
-				Code:   "fragment_dynamic_route",
-				PageID: page.ID,
-				Source: page.Source,
-				Span:   firstNamedSpan(fragment.RouteParams, fragment.RouteSpan),
-				Message: fmt.Sprintf(
-					"%s fragment %s endpoint path %q must be concrete; dynamic fragment routes are not supported yet",
-					page.ID,
-					fragment.Name,
-					fragment.Route,
-				),
-			})
-		}
 	}
 
 	if requiresSSRFeature(mode, page) && !config.HasFeature(gowdk.FeatureSSR) {

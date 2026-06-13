@@ -38,6 +38,43 @@ func TestValidateBackendRoutePath(t *testing.T) {
 	}
 }
 
+func TestValidateBackendRoutePattern(t *testing.T) {
+	valid := []string{
+		"/",
+		"/patients",
+		"/patients/{id}",
+		"/patients/{id:int}",
+		"/docs/{path...}",
+	}
+	for _, path := range valid {
+		if err := ValidateBackendRoutePattern(path); err != nil {
+			t.Fatalf("expected %q to be valid, got %v", path, err)
+		}
+	}
+
+	invalid := []string{
+		"",
+		"patients",
+		"//example.com/pay",
+		"/patients?filter=active",
+		"/patients#form",
+		"/patients/{id:uuid}",
+		"/patients/{id}/{id}",
+		"/docs/{path...}/edit",
+		"/docs/{path...:int}",
+		"/patients/{id?}",
+		"/patients/{id",
+		"/patients/{id}/",
+		"/patients//{id}",
+		"/patients/../{id}",
+	}
+	for _, path := range invalid {
+		if err := ValidateBackendRoutePattern(path); err == nil {
+			t.Fatalf("expected %q to be invalid", path)
+		}
+	}
+}
+
 func TestPositionAtAndOffsetOf(t *testing.T) {
 	// Multi-line, multi-byte (the euro sign is 3 bytes) so rune columns and byte
 	// offsets diverge.

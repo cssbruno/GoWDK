@@ -177,6 +177,140 @@ func ValidateBackendRoutePath(value string) error {
 	return nil
 }
 
+// ValidateBackendRoutePattern rejects unsafe generated route patterns while
+// allowing whole-segment route params such as /patients/{id:int}.
+func ValidateBackendRoutePattern(value string) error {
+	if strings.TrimSpace(value) != value {
+		return fmt.Errorf("endpoint path %q must not contain surrounding whitespace", value)
+	}
+	if value == "" {
+		return fmt.Errorf("endpoint path must not be empty")
+	}
+	if !strings.HasPrefix(value, "/") {
+		return fmt.Errorf("endpoint path %q must be a local absolute path", value)
+	}
+	if strings.HasPrefix(value, "//") {
+		return fmt.Errorf("endpoint path %q must not be protocol-relative", value)
+	}
+	if strings.Contains(value, "\\") {
+		return fmt.Errorf("endpoint path %q must not contain backslashes", value)
+	}
+	if strings.ContainsAny(value, "?#") {
+		return fmt.Errorf("endpoint path %q must not contain query strings or fragments", value)
+	}
+	for _, char := range value {
+		if char < 0x20 || char == 0x7f {
+			return fmt.Errorf("endpoint path %q must not contain control characters", value)
+		}
+	}
+	cleaned := BackendRoutePath(value)
+	if cleaned != value {
+		return fmt.Errorf("endpoint path %q must be a clean absolute path without dot segments, duplicate slashes, or trailing slash", value)
+	}
+	if value == "/" {
+		return nil
+	}
+
+	seen := map[string]bool{}
+	segments := strings.Split(strings.TrimPrefix(value, "/"), "/")
+	for index, segment := range segments {
+		if !strings.ContainsAny(segment, "{}") {
+			continue
+		}
+		param, ok := backendRouteParamSegment(segment)
+		if !ok {
+			return fmt.Errorf("endpoint path %q has invalid route parameter segment %q; use {name} or {name:type} as the whole segment", value, segment)
+		}
+		if strings.HasSuffix(param.name, "?") {
+			return fmt.Errorf("endpoint path %q uses optional route parameter %q; optional route parameters are not supported", value, segment)
+		}
+		if param.rest && param.name == "" {
+			return fmt.Errorf("endpoint path %q has rest route parameter segment %q without a name; declare it as {name...}", value, segment)
+		}
+		if !param.rest && strings.Contains(param.name, ".") {
+			return fmt.Errorf("endpoint path %q has invalid route parameter segment %q; rest route parameters use exactly three dots, such as {name...}", value, segment)
+		}
+		if !isBackendRouteParamName(param.name) {
+			return fmt.Errorf("endpoint path %q has invalid route parameter name %q", value, param.name)
+		}
+		if param.rest && param.hasType {
+			return fmt.Errorf("endpoint path %q declares typed rest route parameter %q; rest route parameters are always strings", value, segment)
+		}
+		if !isBackendRouteParamType(param.typ) {
+			return fmt.Errorf("endpoint path %q has invalid route parameter type %q for %q; supported types are string, int, int64, uint, uint64, bool, float64", value, param.typ, param.name)
+		}
+		if param.rest && index != len(segments)-1 {
+			return fmt.Errorf("endpoint path %q declares rest route parameter {%s...} before the end of the route; rest parameters must be the last segment", value, param.name)
+		}
+		if seen[param.name] {
+			return fmt.Errorf("endpoint path %q repeats route parameter %q", value, param.name)
+		}
+		seen[param.name] = true
+	}
+	return nil
+}
+
+type backendRouteParam struct {
+	name    string
+	typ     string
+	rest    bool
+	hasType bool
+}
+
+func backendRouteParamSegment(segment string) (backendRouteParam, bool) {
+	if !strings.HasPrefix(segment, "{") || !strings.HasSuffix(segment, "}") {
+		return backendRouteParam{}, false
+	}
+	if strings.Count(segment, "{") != 1 || strings.Count(segment, "}") != 1 {
+		return backendRouteParam{}, false
+	}
+	value := strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}")
+	name, paramType, found := strings.Cut(value, ":")
+	if !found {
+		paramType = "string"
+	}
+	rest := strings.HasSuffix(name, "...")
+	if rest {
+		name = strings.TrimSuffix(name, "...")
+	}
+	return backendRouteParam{name: name, typ: paramType, rest: rest, hasType: found}, true
+}
+
+func isBackendRouteParamType(value string) bool {
+	switch value {
+	case "string", "int", "int64", "uint", "uint64", "bool", "float64":
+		return true
+	default:
+		return false
+	}
+}
+
+func isBackendRouteParamName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		if index == 0 {
+			if !isASCIIIdentifierStart(r) {
+				return false
+			}
+			continue
+		}
+		if !isASCIIIdentifierPart(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isASCIIIdentifierStart(r rune) bool {
+	return r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')
+}
+
+func isASCIIIdentifierPart(r rune) bool {
+	return isASCIIIdentifierStart(r) || (r >= '0' && r <= '9')
+}
+
 // BackendBindingStatus describes whether a .gwdk backend block has a matching
 // same-package Go handler.
 type BackendBindingStatus string

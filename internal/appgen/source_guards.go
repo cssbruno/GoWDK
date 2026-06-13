@@ -126,7 +126,7 @@ func runGuardsDecl() ast.Decl {
 			Init: define([]ast.Expr{id("err")}, call(sel("gowdkguard", "RunGuardsWithAuth"), id("guardContext"), id("guards"), id("guardRegistry"), id("authProvider"))),
 			Cond: notNil("err"),
 			Body: block(
-				writeNoStoreErrorExprStmt(sel("http", "StatusForbidden"), call(selExpr(id("err"), "Error"))),
+				exprStmt(call(sel("gowdkguard", "WriteNoStoreFailure"), id("response"), id("err"))),
 				returnBool(false),
 			),
 		},

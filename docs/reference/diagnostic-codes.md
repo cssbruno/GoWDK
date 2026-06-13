@@ -139,8 +139,7 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `unknown_go_block_target`, `unknown_addon_go_block_target`,
   `unsupported_addon_go_block_target`, `addon_go_block_diagnostic`,
   `generated_app_import_cycle`.
-- Partials and fragments: `unsupported_fragment_method`,
-  `fragment_dynamic_route`.
+- Partials and fragments: `unsupported_fragment_method`.
 - Contracts: `contract_handler_invalid`, `contract_handler_missing`,
   `contract_type_invalid`, `contract_result_invalid`,
   `contract_input_invalid`, `contract_event_name_invalid`,

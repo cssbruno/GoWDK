@@ -129,9 +129,10 @@ level, the current baseline already includes:
 - shared backend routing primitives in `runtime/app`, runtime action/API
   adapter helpers, one generated backend hook, request body limits, and no-store
   defaults for request-time responses;
-- first-slice action/API execution, partial fragment responses, and concrete or
-  dynamic request-time SSR pages with declared `load {}` fields through
-  buildgen, appgen, `runtime/app`, and `runtime/route`.
+- first-slice action/API execution, partial fragment responses, dynamic
+  standalone fragment routes, and concrete or dynamic request-time SSR pages
+  with declared `load {}` fields through buildgen, appgen, `runtime/app`, and
+  `runtime/route`.
 
 Do not roadmap those completed slices as future work. Future work should
 stabilize their contracts, remove generation debt, and fill the missing

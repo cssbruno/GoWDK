@@ -1809,6 +1809,48 @@ func TestGenerateWritesTypedSSRRouteParamBindings(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesDynamicFragmentRouteParamBindings(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		PageID:       "patients",
+		FragmentName: "Vitals",
+		Method:       "GET",
+		Route:        "/patients/{id:int}/vitals",
+		RouteParams:  []source.RouteParam{{Name: "id", Type: "int"}},
+		Target:       "#vitals",
+		HTML:         "<section>Vitals</section>",
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkroute "github.com/cssbruno/gowdk/runtime/route"`,
+		`if params, ok := gowdkroute.Match("/patients/{id:int}/vitals", request.URL.Path); request.Method == "GET" && ok {`,
+		`ctx = gowdkruntime.WithParams(ctx, params)`,
+		`paramValue0, paramOK0, paramErr0 := gowdkroute.Int(params, "id")`,
+		`gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid route parameter id")`,
+		`typedParams["id"] = paramValue0`,
+		`ctx = gowdkruntime.WithTypedParams(ctx, typedParams)`,
+		`gowdkpartial.Fragment("#vitals", "<section>Vitals</section>")`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, `requestPath == "/patients/{id:int}/vitals"`) {
+		t.Fatalf("expected generated main.go not to use exact literal match for dynamic fragment route:\n%s", source)
+	}
+}
+
 func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -1975,6 +2017,7 @@ func TestGenerateWritesGuardRegistryAndGuardChecks(t *testing.T) {
 		`func init()`,
 		`RegisterGuards(GOWDKGuardRegistry())`,
 		`gowdkguard.RunGuardsWithAuth(guardContext, guards, guardRegistry, authProvider)`,
+		`gowdkguard.WriteNoStoreFailure(response, err)`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -4378,6 +4421,60 @@ func Session(context.Context, *http.Request) (gowdkresponse.Response, error) {
 	}
 }
 
+func TestGeneratedBinaryGuardCanRedirectRequestTimeRoute(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		SSR: []SSRRoute{{
+			PageID: "dashboard",
+			Route:  "/dashboard",
+			Guards: []string{"auth.required"},
+			HTML:   "<main><h1>Request Dashboard</h1></main>",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, appPackageDirName, "guards_register.go"), `package gowdkapp
+
+import gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
+
+func GOWDKGuardRegistry() gowdkguard.Registry {
+	return gowdkguard.Registry{
+		"auth.required": func(ctx gowdkguard.Context) error {
+			return gowdkguard.RedirectTo("/login")
+		},
+	}
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/dashboard", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther || response.Header.Get("Location") != "/login" || response.Header.Get("Cache-Control") != "no-store" {
+		t.Fatalf("expected no-store guard redirect, got status=%d headers=%v", response.StatusCode, response.Header)
+	}
+}
+
 func TestGeneratedBinaryNativeRBACGuardUsesRegisteredAuthProvider(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -5167,6 +5264,100 @@ func List(ctx context.Context) (response.Response, error) {
 	}
 	if response.Header.Get("X-GOWDK-Fragment-Target") != "#patients" {
 		t.Fatalf("unexpected fragment target: %q", response.Header.Get("X-GOWDK-Fragment-Target"))
+	}
+}
+
+func TestGeneratedBinaryExecutesDynamicFragmentUserHook(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		PageID:       "patients",
+		FragmentName: "Vitals",
+		Method:       "GET",
+		Route:        "/patients/{id:int}/vitals",
+		Target:       "#vitals",
+		HTML:         "<section><p>Static fallback</p></section>",
+		Binding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/patients",
+			PackageName:  "patients",
+			FunctionName: "Vitals",
+			Signature:    source.BackendSignatureFragment,
+		},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
+
+import (
+	"context"
+	"fmt"
+
+	gowdkapp "github.com/cssbruno/gowdk/runtime/app"
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+func Vitals(ctx context.Context) (response.Response, error) {
+	params := gowdkapp.TypedParams(ctx)
+	id, ok := params["id"].(int)
+	if !ok {
+		return response.HTMLBody(500, "missing typed id"), nil
+	}
+	return response.FragmentFor("#vitals", fmt.Sprintf("<section><p>Patient %d</p></section>", id)), nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/patients/42/vitals", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected fragment response status 200, got %d: %s", response.StatusCode, payload)
+	}
+	if strings.TrimSpace(string(payload)) != "<section><p>Patient 42</p></section>" {
+		t.Fatalf("expected runtime fragment hook response, got %s", payload)
+	}
+	if response.Header.Get("X-GOWDK-Fragment-Target") != "#vitals" {
+		t.Fatalf("unexpected fragment target: %q", response.Header.Get("X-GOWDK-Fragment-Target"))
+	}
+
+	invalid, err := waitForHTTPStatus("http://"+addr+"/patients/not-int/vitals", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidPayload, err := io.ReadAll(invalid.Body)
+	_ = invalid.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if invalid.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected invalid typed route param status 400, got %d: %s", invalid.StatusCode, invalidPayload)
+	}
+	if !strings.Contains(string(invalidPayload), "invalid route parameter id") {
+		t.Fatalf("expected invalid route parameter body, got %s", invalidPayload)
 	}
 }
 

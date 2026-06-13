@@ -6,6 +6,12 @@ guard public
 
 act Refresh POST "/patients"
 
+fragment PatientVitals GET "/patients/{id:int}/vitals" "#patients" {
+  <section id="patients">
+    <p>Vitals fragment</p>
+  </section>
+}
+
 view {
   <main>
     <form g:post={Refresh} g:target="#patients" g:swap="innerHTML">

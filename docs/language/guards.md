@@ -64,8 +64,12 @@ Do not rely on static hosting alone to protect a guardless page.
 ## Status
 
 `guard` validation currently records and checks metadata and enforces the
-default-deny described above. Full authorization and broader request-time policy
-are still planned — see [docs/engineering/security.md](../engineering/security.md).
+default-deny described above. Guard functions return `nil` to allow a request
+or an `error` to stop it. Ordinary errors fail closed with 403; explicit
+`runtime/guard.RedirectTo`, `runtime/guard.Redirect`, and
+`runtime/guard.Respond` errors write no-store redirects or custom responses.
+Full authorization and richer request-local state are still planned — see
+[docs/engineering/security.md](../engineering/security.md).
 
 ## Related
 

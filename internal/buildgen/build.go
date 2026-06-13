@@ -1,9 +1,11 @@
 package buildgen
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -125,6 +127,7 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 	}
 	result.AssetManifestPath = assetManifestPath
 	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
+	reportCachePolicies(reporter, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	openAPIPath, err := writeOpenAPI(outputDir, ir)
 	if err != nil {
 		return Result{}, reporter.fail("report", err)
@@ -263,6 +266,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	}
 	result.Files[assetManifestFile] = assetManifest
 	reporter.info("manifest", "asset_manifest_collected", "asset manifest collected", BuildEvent{Path: assetManifestFile})
+	reportCachePolicies(reporter, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	openAPI, err := openAPIPayload(ir)
 	if err != nil {
 		return MemoryResult{}, reporter.fail("report", err)
@@ -555,6 +559,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	}
 	result.AssetManifestPath = assetManifestPath
 	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
+	reportCachePolicies(reporter, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	openAPIPath, err := writeOpenAPI(outputDir, ir)
 	if err != nil {
 		return Result{}, reporter.fail("report", err)
@@ -598,6 +603,86 @@ func reportSkippedPrerenderPages(reporter *buildReporter, config gowdk.Config, i
 			Data:   map[string]string{"mode": string(page.RenderMode(config.Render.DefaultMode()))},
 		})
 	}
+}
+
+func reportCachePolicies(reporter *buildReporter, pages []Artifact, css []CSSArtifact, assets []AssetArtifact) {
+	data := map[string]string{
+		"pageHtml":           fmt.Sprint(len(pages)),
+		"css":                fmt.Sprint(len(css)),
+		"assets":             fmt.Sprint(len(assets)),
+		"defaultPageHTML":    noCacheAssetCachePolicy,
+		"defaultRequestTime": "no-store",
+	}
+	if policies := cachePolicyCounts(pageCachePolicies(pages)); policies != "" {
+		data["pageHTMLPolicies"] = policies
+	}
+	if policies := cachePolicyCounts(cssCachePolicies(css)); policies != "" {
+		data["cssPolicies"] = policies
+	}
+	if policies := cachePolicyCounts(assetCachePolicies(assets)); policies != "" {
+		data["assetPolicies"] = policies
+	}
+	reporter.info("report", "cache_policy", "cache policies summarized", BuildEvent{Data: data})
+}
+
+func pageCachePolicies(artifacts []Artifact) []string {
+	policies := make([]string, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		policy := artifact.CachePolicy
+		if policy == "" {
+			policy = noCacheAssetCachePolicy
+		}
+		policies = append(policies, policy)
+	}
+	return policies
+}
+
+func cssCachePolicies(artifacts []CSSArtifact) []string {
+	policies := make([]string, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		policy := artifact.CachePolicy
+		if policy == "" {
+			policy = immutableAssetCachePolicy
+		}
+		policies = append(policies, policy)
+	}
+	return policies
+}
+
+func assetCachePolicies(artifacts []AssetArtifact) []string {
+	policies := make([]string, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		policy := artifact.CachePolicy
+		if policy == "" {
+			policy = noCacheAssetCachePolicy
+		}
+		policies = append(policies, policy)
+	}
+	return policies
+}
+
+func cachePolicyCounts(policies []string) string {
+	if len(policies) == 0 {
+		return ""
+	}
+	counts := map[string]int{}
+	for _, policy := range policies {
+		counts[policy]++
+	}
+	keys := make([]string, 0, len(counts))
+	for policy := range counts {
+		keys = append(keys, policy)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, policy := range keys {
+		key, err := json.Marshal(policy)
+		if err != nil {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s:%d", key, counts[policy]))
+	}
+	return "{" + strings.Join(parts, ",") + "}"
 }
 
 func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (buildPlan, error) {

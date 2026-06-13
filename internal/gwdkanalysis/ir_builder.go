@@ -176,6 +176,7 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 			CSRF:          builder.config.Build.CSRF.Enabled,
 			ErrorPage:     action.ErrorPage,
 			DynamicParams: routeParams(path),
+			RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(path)),
 			SourceFile:    page.Source,
 			Span:          action.Span,
 		})
@@ -194,6 +195,7 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 			Guards:        append([]string(nil), page.Guards...),
 			ErrorPage:     api.ErrorPage,
 			DynamicParams: routeParams(path),
+			RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(path)),
 			SourceFile:    page.Source,
 			Span:          api.Span,
 		})
@@ -210,6 +212,7 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 			Cache:         endpointNoStoreCache,
 			Guards:        append([]string(nil), page.Guards...),
 			DynamicParams: routeParams(fragment.Route),
+			RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(fragment.Route)),
 			SourceFile:    page.Source,
 			Span:          fragment.Span,
 		})
@@ -351,6 +354,7 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
 		Cache:         endpointNoStoreCache,
 		CSRF:          builder.config.Build.CSRF.Enabled && kind == gwdkir.EndpointAction,
 		DynamicParams: routeParams(endpoint.Route),
+		RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(endpoint.Route)),
 		SourceFile:    endpoint.Source,
 		Span:          endpoint.Span,
 	})

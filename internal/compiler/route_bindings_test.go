@@ -37,7 +37,7 @@ func TestBuildRouteMetadataSeparatesRoutesFromEndpoints(t *testing.T) {
 				Blocks: gwdkir.Blocks{
 					View:      true,
 					APIs:      []gwdkir.API{{Name: "List", Method: "GET", Route: "/api/patients"}},
-					Fragments: []gwdkir.FragmentEndpoint{{Name: "Table", Method: "GET", Route: "/patients/table", Target: "#patients", Body: "<section>Patients</section>"}},
+					Fragments: []gwdkir.FragmentEndpoint{{Name: "Table", Method: "GET", Route: "/patients/{id:int}/table", Target: "#patients", Body: "<section>Patients</section>"}},
 				},
 			},
 		},
@@ -52,7 +52,13 @@ func TestBuildRouteMetadataSeparatesRoutesFromEndpoints(t *testing.T) {
 	assertRoute(t, metadata.Routes, RouteSSR, "GET", "/dashboard", "ssr.RenderDashboard")
 	assertEndpoint(t, metadata.Endpoints, EndpointAction, "POST", "/newsletter", "actions.NewsletterSubscribe")
 	assertEndpoint(t, metadata.Endpoints, EndpointAPI, "GET", "/api/patients", "api.PatientsIndexList")
-	assertEndpoint(t, metadata.Endpoints, EndpointFragment, "GET", "/patients/table", "fragments.PatientsIndexTable")
+	fragment := findEndpoint(t, metadata.Endpoints, EndpointFragment, "GET", "/patients/{id:int}/table", "fragments.PatientsIndexTable")
+	if len(fragment.DynamicParams) != 1 || fragment.DynamicParams[0] != "id" {
+		t.Fatalf("expected fragment dynamic param id, got %#v", fragment.DynamicParams)
+	}
+	if len(fragment.RouteParams) != 1 || fragment.RouteParams[0].Name != "id" || fragment.RouteParams[0].Type != "int" {
+		t.Fatalf("expected typed fragment route param id:int, got %#v", fragment.RouteParams)
+	}
 	assertInfo(t, metadata.Info, "ssr_disabled", "newsletter")
 	assertInfo(t, metadata.Info, "spa_disabled", "dashboard")
 }

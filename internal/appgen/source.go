@@ -57,7 +57,12 @@ func runtimeImportMap(options Options) map[string]string {
 	ssr := options.SSR
 	if len(actions) > 0 || len(fragments) > 0 {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
+	}
+	if len(actions) > 0 || fragmentsUseExactRoutes(fragments) {
 		imports["path"] = "path"
+	}
+	if fragmentsUseDynamicRoutes(fragments) {
+		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 	}
 	if actionsUseFragments(actions) || fragmentsUseStaticFallback(fragments) {
 		imports["gowdkpartial"] = "github.com/cssbruno/gowdk/addons/partial"
@@ -90,6 +95,9 @@ func runtimeImportMap(options Options) map[string]string {
 	}
 	if options.ProxyBackend {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
+		if fragmentsUseDynamicRoutes(options.Fragments) {
+			imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
+		}
 		imports["neturl"] = "net/url"
 		imports["os"] = "os"
 		imports["httputil"] = "net/http/httputil"

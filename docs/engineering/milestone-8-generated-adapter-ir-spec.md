@@ -66,13 +66,13 @@ harder to reason about as endpoint kinds grow.
 
 ## Acceptance Criteria
 
-- [ ] `internal/appgen` can prove adapter IR contains registrations, decoders,
+- [x] `internal/appgen` can prove adapter IR contains registrations, decoders,
   handler calls, responses, fallbacks, guards, imports, and dynamic-route flags.
-- [ ] Generated app and backend-only source use adapter IR for backend router
+- [x] Generated app and backend-only source use adapter IR for backend router
   construction.
-- [ ] Split frontend proxy source uses adapter IR for backend route matching.
-- [ ] Existing generated app goldens and appgen tests pass.
-- [ ] The roadmap step 8 row is accurate after implementation.
+- [x] Split frontend proxy source uses adapter IR for backend route matching.
+- [x] Existing generated app goldens and appgen tests pass.
+- [x] The roadmap step 8 row is accurate after implementation.
 
 ## Edge Cases
 

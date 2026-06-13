@@ -56,3 +56,5 @@ Known incomplete production areas include:
 - Admin tooling policy.
 
 See `docs/engineering/security.md` for the repository security baseline.
+The current threat-model baseline lives in
+`docs/engineering/security-threat-model.md`.

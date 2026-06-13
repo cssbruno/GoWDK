@@ -231,11 +231,11 @@ Every 0.x minor release must have:
   tooling policy.
 - [ ] Enable GitHub private vulnerability reporting if available.
 - [x] Add a vulnerability report contact path.
-- [ ] Add threat models for compiler diagnostics, generated logs, actions,
+- [x] Add threat models for compiler diagnostics, generated logs, actions,
   APIs, fragments, SSR load, guards, generated assets, VS Code extension, WASM
   islands, and contracts/realtime.
 - [x] Add security checklist items to the PR template.
-- [ ] Add security review trigger labels.
+- [x] Add security review trigger labels.
 - [x] Add generated `http.Server` timeout configuration: read, write, idle, and
   read-header timeouts.
 - [x] Add `MaxHeaderBytes`.

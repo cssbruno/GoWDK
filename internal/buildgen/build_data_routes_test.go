@@ -518,10 +518,29 @@ func TestBuildRejectsUnknownRouteParamInBuildDataValue(t *testing.T) {
 
 	_, err := Build(gowdk.Config{}, app, outputDir)
 	if err == nil {
-		t.Fatal("expected unknown route param error")
+		t.Fatal("expected unknown interpolation reference error")
 	}
-	if !strings.Contains(err.Error(), `build field title: unknown route param "missing"`) {
+	if !strings.Contains(err.Error(), `build field title: unknown build data field or route param "missing"`) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestInterpolateBuildValueReportsAccurateUnknownReference(t *testing.T) {
+	data := map[string]string{"title": "Hi"}
+	params := map[string]string{"slug": "x"}
+	cases := []struct {
+		value string
+		want  string
+	}{
+		{`{field("missing")}`, `unknown build data field "missing"`},
+		{`{missing}`, `unknown build data field or route param "missing"`},
+		{`{param("missing")}`, `unknown route param "missing"`},
+	}
+	for _, tc := range cases {
+		_, err := interpolateBuildValue(tc.value, params, data)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("interpolateBuildValue(%q): want error containing %q, got %v", tc.value, tc.want, err)
+		}
 	}
 }
 

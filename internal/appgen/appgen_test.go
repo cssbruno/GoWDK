@@ -3089,6 +3089,90 @@ func HomeTitle() string {
 	}
 }
 
+func TestIsLocalModuleImportPath(t *testing.T) {
+	cases := map[string]bool{
+		"context":                   false,
+		"net/http":                  false,
+		"github.com/cssbruno/gowdk": false,
+		"github.com/cssbruno/gowdk/runtime/response": false,
+		"example.com/site/content":                   true,
+		"github.com/acme/app/pages":                  true,
+		"":                                           false,
+	}
+	for path, want := range cases {
+		if got := isLocalModuleImportPath(path); got != want {
+			t.Fatalf("isLocalModuleImportPath(%q) = %v, want %v", path, got, want)
+		}
+	}
+}
+
+func TestAppHasLocalModuleImportsFromInlineGoBlock(t *testing.T) {
+	ir := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Blocks: gwdkir.Blocks{GoBlocks: []gwdkir.GoBlock{{
+				Body: `import local "example.com/site/local"
+
+func HomeTitle() string { return local.Suffix() }`,
+			}}},
+		}},
+	}
+	if !appHasLocalModuleImports(Options{IR: &ir}) {
+		t.Fatal("expected an app importing example.com/site/local to need the local module")
+	}
+
+	empty := gwdkir.Program{Pages: []gwdkir.Page{{Package: "pages", ID: "home", Route: "/"}}}
+	if appHasLocalModuleImports(Options{IR: &empty}) {
+		t.Fatal("expected an app with no app-owned imports not to need the local module")
+	}
+}
+
+func TestModuleSourceFailsLoudlyWhenAppModuleUndeterminedWithLocalImports(t *testing.T) {
+	// Run outside any Go module so `go list -m -json` fails with a clear reason
+	// (no go.mod). When the generated app imports an app-owned package we cannot
+	// emit its require/replace without the module path, so that failure must
+	// surface here instead of producing an app that later fails to build with an
+	// opaque "cannot find package" error.
+	t.Chdir(t.TempDir())
+
+	ir := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "home",
+			Route:   "/",
+			Blocks: gwdkir.Blocks{GoBlocks: []gwdkir.GoBlock{{
+				Body: `import local "example.com/site/local"
+
+func HomeTitle() string { return local.Suffix() }`,
+			}}},
+		}},
+	}
+
+	if _, err := moduleSource(Options{IR: &ir}); err == nil {
+		t.Fatal("expected moduleSource to fail when the app module is undetermined and the app imports app-owned packages")
+	} else if !strings.Contains(err.Error(), "cannot determine the app Go module") {
+		t.Fatalf("expected the app-module determination failure to be surfaced, got: %v", err)
+	}
+}
+
+func TestModuleSourceToleratesUndeterminedAppModuleWithoutLocalImports(t *testing.T) {
+	// The same `go list -m` failure is non-fatal when the generated app imports
+	// nothing app-owned: there is no require/replace to add, so a missing main
+	// module is irrelevant and module generation must still succeed.
+	t.Chdir(t.TempDir())
+
+	empty := gwdkir.Program{Pages: []gwdkir.Page{{Package: "pages", ID: "home", Route: "/"}}}
+	source, err := moduleSource(Options{IR: &empty})
+	if err != nil {
+		t.Fatalf("expected moduleSource to tolerate an undetermined app module without app-owned imports, got: %v", err)
+	}
+	if !strings.Contains(source, "module gowdk-generated-app") {
+		t.Fatalf("expected a valid generated go.mod, got:\n%s", source)
+	}
+}
+
 func TestGenerateWritesAddonGoBlockConsumerFiles(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

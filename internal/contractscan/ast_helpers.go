@@ -237,7 +237,10 @@ func exprString(fset *token.FileSet, expr ast.Expr) string {
 
 func shouldSkipDir(name string) bool {
 	switch name {
-	case ".git", ".gowdk", "vendor", "node_modules", "dist", "bin":
+	case ".git", ".gowdk", ".claude", "vendor", "node_modules", "dist", "bin":
+		// .claude holds tooling state and nested git worktrees
+		// (.claude/worktrees/*); scanning them double-counts a sibling
+		// checkout's contract registrations as duplicates of this tree's.
 		return true
 	default:
 		return false

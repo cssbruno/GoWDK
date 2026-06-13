@@ -48,6 +48,22 @@ Before generated app output is considered production-ready:
 - Embedded asset selection must exclude secrets, local env files, private source files, and temporary artifacts.
 - Diagnostics and logs must avoid printing sensitive form values, credentials, or private build-time data.
 
+## Auditing The Posture
+
+`gowdk audit` makes this baseline executable. It derives a declarative security
+posture from validated IR (written as `gowdk-security.json` at build time) and
+evaluates a built-in policy that encodes the production-readiness gates above —
+for example, actions must enforce CSRF and APIs must not be public by omission.
+Findings carry a stable diagnostic code, a `file:line`, and remediation; run
+`gowdk explain <code>` for details.
+
+`gowdk audit` is a standalone command. `gowdk build` never runs it, so it cannot
+fail a build implicitly; run it on demand or in CI, where its non-zero exit on
+error findings gates the pipeline. It is the auditable, human- and
+LLM-readable view of how close generated output is to these gates. Later M8
+phases add frontend audits, declared `*.audit.gwdk` policies, and an
+integration-test runner.
+
 ## Security Review Triggers
 
 Perform a focused security review when adding:

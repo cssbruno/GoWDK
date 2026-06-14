@@ -13,8 +13,10 @@ Language support for `.gwdk` files.
   constructs, and `g:`/class/style directives, plus project-aware route,
   layout, component, and CSS completions in route strings, `layout` values,
   component tag positions, and `css` selections.
-- Hover information for page IDs, layout IDs, component names, CSS input names,
-  component event names, action names, and API names from project metadata.
+- Hover information for page IDs, routes, layout IDs, component names, CSS input
+  names, component event names, action names, API names, and Go contract
+  symbols from project metadata, including implemented/partial/planned/
+  unsupported status labels, docs links, and current limits where useful.
 - Go-to-definition for current project metadata symbols. Definitions open the
   owning source file. CSS inputs discovered from workspace `.css` files open the
   matching CSS file. Exact source ranges are planned with compiler spans.

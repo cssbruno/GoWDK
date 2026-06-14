@@ -2,6 +2,85 @@ const fs = require('fs');
 const path = require('path');
 
 const GOWDK_MODULE_PATH = 'github.com/cssbruno/gowdk';
+const DOCS_BASE_URL = 'https://github.com/cssbruno/GoWDK/blob/main/';
+
+const SURFACE_STATUS = {
+  page: {
+    status: 'partial',
+    docs: 'docs/reference/routing.md',
+    limit: 'Full pages default to build-time SPA output; request-time page rendering is explicit with `load {}` or `go ssr {}`.'
+  },
+  route: {
+    status: 'implemented',
+    docs: 'docs/reference/routing.md',
+    limit: 'Routes are declared in source files; folder layout is not route truth.'
+  },
+  action: {
+    status: 'partial',
+    docs: 'docs/language/actions.md',
+    limit: 'Generated typed action adapters cover the supported form subset; uploads stay in user-owned API/server handlers.'
+  },
+  api: {
+    status: 'partial',
+    docs: 'docs/language/api.md',
+    limit: 'Generated API handlers currently target the documented response-helper signatures.'
+  },
+  component: {
+    status: 'partial',
+    docs: 'docs/language/components.md',
+    limit: 'Component props, state, slots, CSS/assets, client behavior, and WASM islands have first-slice support; recursive and dynamic component selection are rejected.'
+  },
+  componentEvent: {
+    status: 'partial',
+    docs: 'docs/language/components.md',
+    limit: 'Component events are local component metadata; backend-owned events use the contract runtime.'
+  },
+  layout: {
+    status: 'partial',
+    docs: 'docs/language/layouts.md',
+    limit: 'Layouts compose declared pages; request-aware layout behavior belongs to the SSR lane.'
+  },
+  css: {
+    status: 'partial',
+    docs: 'docs/reference/css.md',
+    limit: 'CSS processor support is addon-driven; Tailwind and external processors remain optional.'
+  },
+  store: {
+    status: 'partial',
+    docs: 'docs/language/components.md',
+    limit: 'Stores are page/island scoped; app-global stores remain deferred.'
+  },
+  goContract: {
+    status: 'partial',
+    docs: 'docs/reference/go-interop.md',
+    limit: 'Application behavior stays in normal Go; generated Go remains adapter glue.'
+  },
+  dataField: {
+    status: 'partial',
+    docs: 'docs/reference/go-interop.md',
+    limit: '`build {}` is build-time data; `load {}` is request-time data and requires SSR.'
+  },
+  spa: {
+    status: 'implemented',
+    docs: 'docs/reference/routing.md',
+    limit: 'SPA/build-time output is the default full-page lane.'
+  },
+  ssr: {
+    status: 'partial',
+    docs: 'docs/language/ssr.md',
+    limit: 'SSR is an integrated non-default request-time page lane gated by the SSR addon.'
+  },
+  hybrid: {
+    status: 'planned',
+    docs: 'docs/product/requirements.md',
+    limit: 'Hybrid route metadata exists internally; a stable source contract is still deferred.'
+  },
+  unsupported: {
+    status: 'unsupported',
+    docs: 'docs/product/requirements.md',
+    limit: 'This surface is intentionally outside the current GOWDK source contract.'
+  }
+};
 
 const SEMANTIC_TOKEN_TYPES = [
   'namespace',
@@ -764,13 +843,69 @@ function cssInputMarkdown(name, metadata = {}) {
   if (name === 'none') {
     lines.push('', 'Built-in none disables GOWDK-managed page CSS and must be used alone.');
   }
-  return lines.join('\n');
+  return withSurfaceStatus(lines, 'css');
+}
+
+function languageSurfaceMarkdown(value) {
+  switch (value) {
+    case 'spa':
+      return withSurfaceStatus([`**GOWDK render mode** \`${value}\``], 'spa');
+    case 'ssr':
+      return withSurfaceStatus([`**GOWDK render mode** \`${value}\``], 'ssr');
+    case 'hybrid':
+      return withSurfaceStatus([`**GOWDK render mode** \`${value}\``], 'hybrid');
+    case 'load':
+      return withSurfaceStatus(['**GOWDK block** `load {}`'], 'ssr');
+    case 'paths':
+      return withSurfaceStatus(['**GOWDK block** `paths {}`'], 'route');
+    case 'script':
+      return withSurfaceStatus(['**GOWDK block** `script {}`'], 'unsupported');
+    default:
+      return '';
+  }
+}
+
+function withSurfaceStatus(lines, surface) {
+  const status = SURFACE_STATUS[surface];
+  if (!status) {
+    return formatHoverLines(lines);
+  }
+  const next = lines.slice();
+  next.push('', `Status: \`${status.status}\``);
+  if (status.docs) {
+    next.push(`Docs: [${status.docs}](${DOCS_BASE_URL}${status.docs})`);
+  }
+  if (status.limit) {
+    next.push(`Current limit: ${status.limit}`);
+  }
+  return formatHoverLines(next);
+}
+
+function formatHoverLines(lines) {
+  const compact = [];
+  for (const line of lines) {
+    if (!line) {
+      if (compact.length > 0 && compact[compact.length - 1] !== '') {
+        compact.push('');
+      }
+      continue;
+    }
+    compact.push(line);
+  }
+  while (compact[compact.length - 1] === '') {
+    compact.pop();
+  }
+  return compact.join('\n');
 }
 
 function hoverMarkdown(token, metadata = {}, context = {}) {
   const value = String(token || '');
   if (!value) {
     return '';
+  }
+  const languageSurface = languageSurfaceMarkdown(value);
+  if (languageSurface) {
+    return languageSurface;
   }
   const dataField = projectDataFields(metadata).find((field) => field.name === value);
   if (dataField) {
@@ -788,60 +923,69 @@ function hoverMarkdown(token, metadata = {}, context = {}) {
     if (dataField.goField) {
       lines.push(`Go field: \`${escapeMarkdown(dataField.goField)}\``);
     }
-    return lines.join('\n');
+    return withSurfaceStatus(lines, 'dataField');
   }
   const pages = projectPages(metadata);
   const manifest = metadata.manifest || {};
   const page = pages.find((item) => item.id === value);
   if (page) {
-    return [
+    return withSurfaceStatus([
       `**GOWDK page** \`${escapeMarkdown(value)}\``,
       '',
       `Route: \`${escapeMarkdown(page.route || '')}\``,
       `Render: \`${escapeMarkdown(page.render || 'spa')}\``
-    ].join('\n');
+    ], 'page');
+  }
+  const routePage = pages.find((item) => item.route === value);
+  if (routePage) {
+    return withSurfaceStatus([
+      `**GOWDK route** \`${escapeMarkdown(value)}\``,
+      '',
+      routePage.id ? `Page: \`${escapeMarkdown(routePage.id)}\`` : '',
+      `Render: \`${escapeMarkdown(routePage.render || 'spa')}\``
+    ], 'route');
   }
   if (manifest.components && manifest.components[value]) {
     const component = manifest.components[value];
     const props = (component.props || []).map((prop) => `${prop.name} ${prop.type}`).join(', ');
     const emits = (component.emits || []).map(formatEmit).join(', ');
     const state = formatState(component.state);
-    return [
+    return withSurfaceStatus([
       `**GOWDK component** \`${escapeMarkdown(value)}\``,
       '',
       props ? `Props: \`${escapeMarkdown(props)}\`` : 'Props: none',
       state ? `State: \`${escapeMarkdown(state)}\`` : '',
       emits ? `Emits: \`${escapeMarkdown(emits)}\`` : ''
-    ].filter(Boolean).join('\n');
+    ], 'component');
   }
   const event = componentEvent(value, metadata, context);
   if (event) {
-    return [
+    return withSurfaceStatus([
       `**GOWDK component event** \`${escapeMarkdown(value)}\``,
       '',
       `Component: \`${escapeMarkdown(event.component)}\``,
       event.params.length ? `Payload: \`${escapeMarkdown(event.params.join(', '))}\`` : 'Payload: none'
-    ].join('\n');
+    ], 'componentEvent');
   }
   const store = projectStores(metadata).find((item) => item.name === value);
   if (store) {
-    return [
+    return withSurfaceStatus([
       `**GOWDK store** \`${escapeMarkdown(value)}\``,
       '',
       store.page ? `Page: \`${escapeMarkdown(store.page)}\`` : '',
       store.type ? `Type: \`${escapeMarkdown(store.type)}\`` : '',
       store.init ? `Init: \`${escapeMarkdown(store.init)}\`` : ''
-    ].filter(Boolean).join('\n');
+    ], 'store');
   }
   const goContract = projectGoContracts(metadata).find((item) => item.name === value || item.alias === value);
   if (goContract) {
-    return [
+    return withSurfaceStatus([
       `**GOWDK Go contract** \`${escapeMarkdown(value)}\``,
       '',
       goContract.alias ? `Import alias: \`${escapeMarkdown(goContract.alias)}\`` : '',
       goContract.path ? `Import path: \`${escapeMarkdown(goContract.path)}\`` : '',
       goContract.owner ? `Declared by: \`${escapeMarkdown(goContract.owner)}\`` : ''
-    ].filter(Boolean).join('\n');
+    ], 'goContract');
   }
   const layout = projectLayouts(metadata).find((item) => item.id === value);
   if (layout) {
@@ -856,7 +1000,7 @@ function hoverMarkdown(token, metadata = {}, context = {}) {
     if (layoutPages.length > 0) {
       lines.push(`Referenced by ${layoutPages.length} page${layoutPages.length === 1 ? '' : 's'}.`);
     }
-    return lines.join('\n');
+    return withSurfaceStatus(lines, 'layout');
   }
   const cssMarkdown = cssInputMarkdown(value, metadata);
   if (cssMarkdown) {
@@ -865,11 +1009,19 @@ function hoverMarkdown(token, metadata = {}, context = {}) {
   for (const item of pages) {
     const actions = (item.blocks && item.blocks.actions) || [];
     if (actions.includes(value)) {
-      return `**GOWDK action** \`${escapeMarkdown(value)}\`\n\nPage: \`${escapeMarkdown(item.id || '')}\``;
+      return withSurfaceStatus([
+        `**GOWDK action** \`${escapeMarkdown(value)}\``,
+        '',
+        `Page: \`${escapeMarkdown(item.id || '')}\``
+      ], 'action');
     }
     const apis = (item.blocks && item.blocks.apis) || [];
     if (apis.includes(value)) {
-      return `**GOWDK API** \`${escapeMarkdown(value)}\`\n\nPage: \`${escapeMarkdown(item.id || '')}\``;
+      return withSurfaceStatus([
+        `**GOWDK API** \`${escapeMarkdown(value)}\``,
+        '',
+        `Page: \`${escapeMarkdown(item.id || '')}\``
+      ], 'api');
     }
   }
   return '';

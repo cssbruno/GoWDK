@@ -370,14 +370,14 @@ test('projectCompletionEntries returns data fields and hover explains origin', (
     ['title', 'build field string from interop.FeaturedCopyForBuild().']
   ]);
 
-  assert.equal(core.hoverMarkdown('title', metadata), [
-    '**GOWDK data field** `title`',
-    '',
-    'Lane: `build`',
-    'Type: `string`',
-    'From: `interop.FeaturedCopyForBuild()`',
-    'Go field: `Title`'
-  ].join('\n'));
+  const hover = core.hoverMarkdown('title', metadata);
+  assert.match(hover, /\*\*GOWDK data field\*\* `title`/);
+  assert.match(hover, /Lane: `build`/);
+  assert.match(hover, /Type: `string`/);
+  assert.match(hover, /From: `interop\.FeaturedCopyForBuild\(\)`/);
+  assert.match(hover, /Go field: `Title`/);
+  assert.match(hover, /Status: `partial`/);
+  assert.match(hover, /docs\/reference\/go-interop\.md/);
 });
 
 test('nearestProjectRoot finds nested GOWDK app roots inside broad workspaces', () => {
@@ -657,7 +657,12 @@ test('hoverMarkdown describes project symbols from metadata', () => {
 	const metadata = symbolMetadata();
 
   assert.match(core.hoverMarkdown('home', metadata), /\*\*GOWDK page\*\* `home`/);
+  assert.match(core.hoverMarkdown('home', metadata), /Status: `partial`/);
+  assert.match(core.hoverMarkdown('home', metadata), /docs\/reference\/routing\.md/);
+  assert.match(core.hoverMarkdown('/', metadata), /\*\*GOWDK route\*\* `\/`/);
+  assert.match(core.hoverMarkdown('/', metadata), /Status: `implemented`/);
   assert.match(core.hoverMarkdown('Hero', metadata), /Props: `title string`/);
+  assert.match(core.hoverMarkdown('Hero', metadata), /Current limit: Component props, state, slots/);
   assert.match(core.hoverMarkdown('Hero', metadata), /State: `ui\.HeroState`/);
   assert.match(core.hoverMarkdown('Hero', metadata), /Emits: `select\(id string\)`/);
   assert.match(core.hoverMarkdown('select', metadata), /\*\*GOWDK component event\*\*/);
@@ -667,7 +672,10 @@ test('hoverMarkdown describes project symbols from metadata', () => {
   assert.match(core.hoverMarkdown('CartState', metadata), /\*\*GOWDK Go contract\*\* `CartState`/);
   assert.match(core.hoverMarkdown('ui', metadata), /Import alias: `ui`/);
   assert.match(core.hoverMarkdown('submit', metadata), /\*\*GOWDK action\*\*/);
+  assert.match(core.hoverMarkdown('submit', metadata), /docs\/language\/actions\.md/);
   assert.match(core.hoverMarkdown('health', metadata), /\*\*GOWDK API\*\*/);
+  assert.match(core.hoverMarkdown('hybrid', metadata), /Status: `planned`/);
+  assert.match(core.hoverMarkdown('script', metadata), /Status: `unsupported`/);
   assert.equal(core.hoverMarkdown('missing', metadata), '');
 });
 

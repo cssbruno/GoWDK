@@ -31,15 +31,9 @@ type SSRArtifact struct {
 	LoadReplacements []SSRLoadReplacement
 }
 
-type SSRReplacement struct {
-	Param       string
-	Placeholder string
-}
+type SSRReplacement = source.SSRReplacement
 
-type SSRLoadReplacement struct {
-	Path        string
-	Placeholder string
-}
+type SSRLoadReplacement = source.SSRLoadReplacement
 
 func SSRArtifacts(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) ([]SSRArtifact, error) {
 	return SSRArtifactsFromIR(config, gwdkanalysis.BuildProgram(config, sources), outputDir)

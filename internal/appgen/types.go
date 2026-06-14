@@ -113,15 +113,6 @@ type SSRRoute struct {
 	LoadReplacements []SSRLoadReplacement
 }
 
-// SSRReplacement maps a generated placeholder back to a request route param.
-type SSRReplacement struct {
-	Param       string
-	Placeholder string
-}
+type SSRReplacement = source.SSRReplacement
 
-// SSRLoadReplacement maps a generated placeholder back to a request-time load
-// field path.
-type SSRLoadReplacement struct {
-	Path        string
-	Placeholder string
-}
+type SSRLoadReplacement = source.SSRLoadReplacement

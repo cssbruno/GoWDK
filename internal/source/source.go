@@ -115,6 +115,19 @@ type RouteParam struct {
 	Span SourceSpan
 }
 
+// SSRReplacement maps a generated placeholder back to a request route param.
+type SSRReplacement struct {
+	Param       string
+	Placeholder string
+}
+
+// SSRLoadReplacement maps a generated placeholder back to a request-time load
+// field path.
+type SSRLoadReplacement struct {
+	Path        string
+	Placeholder string
+}
+
 // InlineScript records browser module code declared directly inside a .gwdk
 // source file. Path-based script declarations should remain preferred.
 type InlineScript struct {

@@ -601,6 +601,8 @@ func parseCSRFConfig(expression ast.Expr) gowdk.CSRFConfig {
 		switch key.Name {
 		case "Enabled":
 			csrf.Enabled = parseBool(keyValue.Value)
+		case "Disabled":
+			csrf.Disabled = parseBool(keyValue.Value)
 		case "SecretEnv":
 			csrf.SecretEnv = parseString(keyValue.Value)
 		case "CookieName":

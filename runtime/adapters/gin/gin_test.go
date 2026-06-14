@@ -3,10 +3,30 @@ package gin
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	gowdkadapters "github.com/cssbruno/gowdk/runtime/adapters"
+	"github.com/cssbruno/gowdk/runtime/adapters/internal/conformance"
 	ginframework "github.com/gin-gonic/gin"
 )
+
+const openAPISpec = `{
+  "openapi": "3.1.0",
+  "servers": [{"url": "/app"}],
+  "paths": {
+    "/": {"get": {"responses": {"200": {"description": "OK"}}}},
+    "/api/status": {"get": {"responses": {"200": {"description": "OK"}}}},
+    "/patients": {"post": {"responses": {"200": {"description": "OK"}}}},
+    "/patients/{id}": {"get": {"responses": {"200": {"description": "OK"}}}}
+  }
+}`
+
+const emptyOpenAPISpec = `{
+  "openapi": "3.1.0",
+  "servers": [{"url": "/app"}],
+  "paths": {}
+}`
 
 func TestHandlerWrapsHTTPHandler(t *testing.T) {
 	ginframework.SetMode(ginframework.TestMode)
@@ -42,5 +62,50 @@ func TestHandlerWrapsHTTPHandler(t *testing.T) {
 		if recorder.Header().Get("X-GOWDK-Route") != "/*path" {
 			t.Fatalf("expected attached Gin context route, got %#v", recorder.Header())
 		}
+	}
+}
+
+func TestMountOpenAPIConformance(t *testing.T) {
+	ginframework.SetMode(ginframework.TestMode)
+	conformance.AssertOpenAPIConformance(t, []byte(openAPISpec), "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
+		engine := ginframework.New()
+		err := MountOpenAPI(engine, []byte(openAPISpec), handler, WithPrefix(prefix))
+		return engine, err
+	})
+}
+
+func TestMountOpenAPIFallbackConformance(t *testing.T) {
+	ginframework.SetMode(ginframework.TestMode)
+	conformance.AssertEmptyOpenAPIFallback(t, []byte(emptyOpenAPISpec), "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
+		engine := ginframework.New()
+		err := MountOpenAPI(engine, []byte(emptyOpenAPISpec), handler, WithPrefix(prefix))
+		return engine, err
+	})
+}
+
+func TestMountOpenAPIRestRouteConformance(t *testing.T) {
+	ginframework.SetMode(ginframework.TestMode)
+	conformance.AssertOpenAPIRestRoute(t, "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
+		engine := ginframework.New()
+		err := MountRoutes(engine, routes, handler, WithPrefix(prefix))
+		return engine, err
+	})
+}
+
+func TestMountRoutesReturnsGinConflict(t *testing.T) {
+	ginframework.SetMode(ginframework.TestMode)
+	engine := ginframework.New()
+	err := MountRoutes(engine, []gowdkadapters.Route{
+		{Method: http.MethodGet, Path: "/patients/{id}"},
+		{Method: http.MethodGet, Path: "/patients/new"},
+	}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	if err == nil {
+		t.Fatal("expected conflict error")
+	}
+	message := err.Error()
+	if !strings.Contains(message, "gin route conflict") ||
+		!strings.Contains(message, "GET /patients/{id}") ||
+		!strings.Contains(message, "GET /patients/new") {
+		t.Fatalf("expected conflict to name both routes, got %q", message)
 	}
 }

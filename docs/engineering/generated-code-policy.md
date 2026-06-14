@@ -66,3 +66,9 @@ that is parsed/formatted before use:
 Any future temporary generated-Go string exception must name the migration step
 in a code comment, be covered by a deterministic test or golden, and be removed
 before the surrounding generated Go surface is considered stable.
+
+Framework-owned browser JavaScript is not a broad string-payload exception.
+Runtime assets such as `gowdk.js`, store persistence, JS islands, and WASM
+loaders live as `.js` files under `internal/clientrt/assets/` and are embedded
+through `go:embed`; Go code may only perform narrow placeholder substitution
+for generated names and paths.

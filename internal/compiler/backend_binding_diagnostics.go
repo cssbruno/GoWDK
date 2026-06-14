@@ -36,7 +36,7 @@ func BackendBindingDiagnostics(bindings []source.BackendBinding) []ValidationErr
 			diagnostics = append(diagnostics, backendBindingDiagnostic("unexported_backend_handler", binding))
 		}
 	}
-	return diagnostics
+	return normalizeValidationErrors(diagnostics)
 }
 
 func backendBindingDiagnostic(code string, binding source.BackendBinding) ValidationError {

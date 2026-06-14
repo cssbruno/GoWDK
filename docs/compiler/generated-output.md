@@ -76,6 +76,10 @@ Implemented today:
   `required` fields when the action declares `valid(input)?`.
 - Generated build output emits `assets/gowdk/gowdk.js` only for pages that use
   partial form metadata with fragment-producing actions.
+- Framework-owned browser runtime sources are authored as `.js` files under
+  `internal/clientrt/assets/` and embedded with `go:embed`; generated output
+  helpers only perform narrow placeholder substitution for component names,
+  page IDs, asset paths, and WASM export names.
 - Generated build output emits `assets/gowdk/islands/<Component>.js` for
   stateful component instances that use the default generated JavaScript island
   runtime. Island roots carry compiler-owned `data-gowdk-island` markers, and
@@ -290,11 +294,12 @@ fragment matching `X-GOWDK-Target` and expose fragment target/swap metadata in
 headers. Feature-bound generated action handlers can call no-input,
 `form.Values`, typed value, and typed pointer same-package Go handlers; typed
 handlers decode through generated normal Go functions built from Go AST input
-struct metadata. When `Build.CSRF.Enabled` is true, generated apps read a
-signing secret from `Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`, inject hidden
-CSRF token fields into served HTML POST forms, validate action POSTs before
-generated decoding or user handlers run, and return HTTP 403
-`invalid csrf token` with `Cache-Control: no-store` for invalid tokens. The
+struct metadata. Generated action and web-command POST handlers enable CSRF by
+default: generated apps read a signing secret from `Build.CSRF.SecretEnv` or
+`GOWDK_CSRF_SECRET`, inject hidden CSRF token fields into served HTML POST
+forms, validate POSTs before generated decoding or user handlers run, and
+return HTTP 403 `invalid csrf token` with `Cache-Control: no-store` for invalid
+tokens. Set `Build.CSRF.Disabled` only for an intentional opt-out. The
 generated app does not run user-defined validation beyond handler logic,
 handle uploads, stream hybrid responses, refresh hybrid server data in place, or
 perform non-HTTP revalidation today.

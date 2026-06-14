@@ -5,6 +5,9 @@ builds write it to `gowdk-build-report.json` at the selected output root;
 in-memory builds return the same file in `MemoryResult.Files`; failed builds
 wrap the original error in `buildgen.BuildError` so callers can inspect the
 partial report while preserving the original error text.
+Callers without a real output root can use `BuildMemoryWithOptions` or
+`BuildMemoryFromIRWithOptions`; an empty `OutputBase` uses `.` for deterministic
+relative path metadata and does not create files or report directories.
 
 The report is mandatory for compiler-facing build APIs. It is deterministic:
 it does not include timestamps or durations, so unchanged builds can still skip

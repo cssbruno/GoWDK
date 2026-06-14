@@ -55,6 +55,12 @@ Run the binary:
 ./bin/site
 ```
 
+Smoke-test a known generated route from the repository root:
+
+```sh
+GOWDK_SMOKE_ADDR=127.0.0.1:18085 scripts/smoke-generated-binary.sh bin/site /
+```
+
 The generated app embeds the selected build output and serves it through
 `runtime/app`. It also exposes:
 

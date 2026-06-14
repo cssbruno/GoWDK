@@ -121,6 +121,7 @@ Build the one-binary generated app example:
 ```sh
 go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
 test -x /tmp/gowdk-embed-site
+GOWDK_SMOKE_ADDR=127.0.0.1:18085 scripts/smoke-generated-binary.sh /tmp/gowdk-embed-site /embed "Embedded GOWDK"
 ```
 
 Build the CSS stylesheet-link example:

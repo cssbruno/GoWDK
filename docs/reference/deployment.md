@@ -392,9 +392,16 @@ Use distinct `Output` and `App` directories for separate binaries.
 gowdk build --out dist/site --app .gowdk/app --wasm bin/site.wasm
 ```
 
+Smoke-test the emitted module header:
+
+```sh
+scripts/smoke-generated-wasm.sh bin/site.wasm
+```
+
 This is a Go `js/wasm` deploy artifact for runtimes that can execute that
 artifact. It is separate from browser island assets emitted for component-level
-`wasm` declarations.
+`wasm` declarations. GOWDK does not emit a generic host runtime or loader for
+this deploy artifact; that integration belongs to the selected deploy platform.
 
 ## Addons
 

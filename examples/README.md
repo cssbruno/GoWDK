@@ -124,6 +124,13 @@ test -x /tmp/gowdk-embed-site
 GOWDK_SMOKE_ADDR=127.0.0.1:18085 scripts/smoke-generated-binary.sh /tmp/gowdk-embed-site /embed "Embedded GOWDK"
 ```
 
+Build the generated app WASM deploy artifact:
+
+```sh
+go run ./cmd/gowdk build --out /tmp/gowdk-wasm-build --app /tmp/gowdk-wasm-app --wasm /tmp/gowdk-site.wasm examples/embed/site.page.gwdk
+scripts/smoke-generated-wasm.sh /tmp/gowdk-site.wasm
+```
+
 Build the CSS stylesheet-link example:
 
 ```sh

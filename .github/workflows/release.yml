@@ -80,6 +80,9 @@ jobs:
           go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
           test -x /tmp/gowdk-embed-site
           GOWDK_SMOKE_ADDR=127.0.0.1:18086 scripts/smoke-generated-binary.sh /tmp/gowdk-embed-site /embed "Embedded GOWDK"
+          rm -rf /tmp/gowdk-wasm-build /tmp/gowdk-wasm-app /tmp/gowdk-site.wasm
+          go run ./cmd/gowdk build --out /tmp/gowdk-wasm-build --app /tmp/gowdk-wasm-app --wasm /tmp/gowdk-site.wasm examples/embed/site.page.gwdk
+          scripts/smoke-generated-wasm.sh /tmp/gowdk-site.wasm
           rm -rf /tmp/gowdk-hybrid-build /tmp/gowdk-hybrid-app /tmp/gowdk-hybrid-site
           go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk
           test -x /tmp/gowdk-hybrid-site

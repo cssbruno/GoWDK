@@ -172,9 +172,10 @@ Current implementation status:
   processor-emitted CSS, minified hashed filenames, asset manifest mappings,
   and generated binary cache headers are implemented for build output.
 - Component `css` metadata declarations are parsed, analyzed, emitted as scoped CSS
-  files, content-hashed, linked from generated pages, recorded in
-  `gowdk-assets.json`, and served with immutable generated binary cache
-  headers. Component `style {}` CSS uses the same scoped emission path.
+  files, content-hashed, linked from pages whose composed view recursively calls
+  the component, recorded in `gowdk-assets.json`, and served with immutable
+  generated binary cache headers. Component `style {}` CSS uses the same scoped
+  emission path.
 - Component `asset` metadata declarations are parsed, analyzed, emitted as
   content-hashed files, recorded in `gowdk-assets.json`, and served with
   immutable generated binary cache headers.
@@ -206,6 +207,9 @@ Relationship to other CSS features:
 - Page CSS is the implemented build-output path today.
 - Component CSS is the component-local authoring and emitted build-output path
   today.
+- Stylesheet order is deterministic: configured global stylesheets, processor
+  global stylesheets, processor page-specific stylesheets, generated page CSS,
+  layout `style {}` CSS, then scoped CSS for components used by the page.
 - CSS processors and Tailwind are optional. They can operate on discovered
   source metadata and emitted assets, but they must not become mandatory core
   dependencies.

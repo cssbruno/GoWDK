@@ -28,10 +28,11 @@ Implemented today:
   Page `js "./file.ts"` declarations are transformed to `.js` files in the same
   directory. Inline page `js {}` blocks emit deterministic files such as
   `inline-gowdk.js`.
-- Component `css` files are emitted as scoped CSS assets, linked from
-  generated pages, content-hashed, recorded in `gowdk-assets.json`, and served
-  with immutable cache headers by generated binaries. Component `style {}` CSS
-  is emitted through the same scoped CSS path.
+- Component `css` files are emitted as scoped CSS assets, linked from pages
+  whose composed view recursively calls the component, content-hashed, recorded
+  in `gowdk-assets.json`, and served with immutable cache headers by generated
+  binaries. Component `style {}` CSS is emitted through the same scoped CSS
+  path.
 - Component `js "./file.js"` declarations are copied under
   `assets/gowdk/components/<package>/<component>/` and linked only from pages
   that use the component. Component `js "./file.ts"` declarations are
@@ -180,6 +181,9 @@ Implemented today:
   component-level `asset` files. Generated CSS is minified and emitted with
   content-hashed filenames. Component `asset` files are emitted with
   content-hashed filenames under `assets/gowdk/components/`.
+- CSS link order is deterministic: configured global links, processor global
+  links, processor page-specific links, generated page CSS, layout CSS, then
+  scoped component CSS for components used by the page.
 - Generated embedded apps skip local environment files, source maps, source
   files, VCS/dependency directories, and common temporary artifacts when copying
   build output into the embedded app.

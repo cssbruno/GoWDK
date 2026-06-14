@@ -465,7 +465,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	changedPages := sourcePathSet(changedPageSources)
 	components, componentFailures := buildComponents(ir.Components)
 	layouts, layoutFailures := buildLayouts(ir.Layouts)
-	css, cssFailures := planCSS(config, ir, outputDir)
+	css, cssFailures := planCSS(config, ir, outputDir, components, layouts)
 	componentAssets, componentAssetFailures := planComponentFileAssets(ir.Assets, outputDir)
 	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
@@ -776,7 +776,7 @@ func cachePolicyCounts(policies []string) string {
 func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (buildPlan, error) {
 	components, componentFailures := buildComponents(ir.Components)
 	layouts, layoutFailures := buildLayouts(ir.Layouts)
-	css, cssFailures := planCSS(config, ir, outputDir)
+	css, cssFailures := planCSS(config, ir, outputDir, components, layouts)
 	componentAssets, componentAssetFailures := planComponentFileAssets(ir.Assets, outputDir)
 	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)

@@ -55,10 +55,11 @@ readiness.
   file outbox, memory broker, and SSE stay in the root module. Applications opt
   in.
 
-Nested optional modules are listed in the checked-in `go.work` so local tooling
-and CI resolve the root module and optional adapters from the same checkout;
-`scripts/go-modules.sh` reads that workspace instead of keeping a second module
-list.
+Nested optional modules are intentionally not listed in a checked-in root
+`go.work`; ordinary root `go test ./...` and `go build ./cmd/gowdk` should stay
+outside workspace mode so optional framework and broker dependencies do not
+enter the root module graph. `scripts/go-modules.sh` discovers the root module
+plus nested runtime modules for multi-module CI gates.
 Nested optional modules that import the root GOWDK module should still require
 the current released `github.com/cssbruno/gowdk` version and keep a local
 `replace github.com/cssbruno/gowdk => ../../..` for repository tests outside

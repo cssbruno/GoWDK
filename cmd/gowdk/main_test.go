@@ -2024,6 +2024,137 @@ view {
 	})
 }
 
+func TestDevBuildStateConfigChangeRequestsReload(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{Include: []string{"*.gwdk"}},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		state, err := newDevBuildState(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first, err := state.snapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{Include: []string{"pages/*.gwdk"}},
+}
+`)
+		second, err := state.snapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		change := second.diff(first)
+		if !state.configChanged(change) {
+			t.Fatalf("expected config change to request a dev plan reload: %#v", change)
+		}
+	})
+}
+
+func TestDevInputTrackerDetectsAddedSourceBeforeRediscovery(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{Include: []string{"*.gwdk"}},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		state, err := newDevBuildState(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first, err := state.snapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		about := filepath.Join(root, "about.page.gwdk")
+		writeCLIFile(t, about, `package app
+
+page about
+route "/about"
+
+view {
+  <main>About</main>
+}
+`)
+		second, err := waitForSnapshotChange(state, first)
+		if err != nil {
+			t.Fatal(err)
+		}
+		change := second.diff(first)
+		if len(change.Changed) == 0 {
+			t.Fatalf("expected cached tracker to detect a directory change for the added source: %#v", change)
+		}
+
+		refreshed, err := newDevInputTracker(state.plan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		refreshedSnapshot, err := refreshed.snapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		absAbout, err := filepath.Abs(about)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := refreshedSnapshot[absAbout]; !ok {
+			t.Fatalf("expected refreshed tracker to include added source %q: %#v", absAbout, refreshedSnapshot)
+		}
+	})
+}
+
+func waitForSnapshotChange(state devBuildState, previous inputSnapshot) (inputSnapshot, error) {
+	deadline := time.Now().Add(time.Second)
+	for {
+		current, err := state.snapshot()
+		if err != nil {
+			return nil, err
+		}
+		if !current.same(previous) {
+			return current, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("snapshot did not change before deadline")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestInputSnapshotDiffReportsChangedAddedAndRemovedPaths(t *testing.T) {
 	current := inputSnapshot{
 		"/tmp/b.page.gwdk": "changed",

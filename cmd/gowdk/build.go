@@ -29,8 +29,12 @@ func build(args []string) error {
 	if err != nil {
 		return err
 	}
+	return buildLoaded(plan, time.Since(started))
+}
+
+func buildLoaded(plan buildOptions, configLoad time.Duration) error {
 	timings := newBuildTimingRecorder(plan.Timings)
-	timings.addDuration("config_load", time.Since(started))
+	timings.addDuration("config_load", configLoad)
 	if plan.shouldBuildConfiguredTargets() {
 		return buildConfiguredTargets(plan, timings)
 	}

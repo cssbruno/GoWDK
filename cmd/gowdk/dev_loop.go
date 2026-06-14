@@ -20,24 +20,36 @@ import (
 )
 
 func buildDevChange(args []string, change inputChange, allowIncremental bool) (bool, error) {
+	plan, err := loadBuildOptions(args)
+	if err != nil {
+		return false, err
+	}
+	return buildDevChangeLoaded(plan, change, allowIncremental)
+}
+
+func buildDevChangeLoaded(plan buildOptions, change inputChange, allowIncremental bool) (bool, error) {
 	if allowIncremental {
-		incremental, err := buildIncrementalSPA(args, change)
+		incremental, err := buildIncrementalSPALoaded(plan, change)
 		if incremental || err != nil {
 			return false, err
 		}
 	}
-	return true, build(args)
+	return true, buildLoaded(plan, 0)
 }
 
 func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
-	if len(change.Added) > 0 || len(change.Removed) > 0 || len(change.Changed) == 0 {
-		return false, nil
-	}
-
 	plan, err := loadBuildOptions(args)
 	if err != nil {
 		return true, err
 	}
+	return buildIncrementalSPALoaded(plan, change)
+}
+
+func buildIncrementalSPALoaded(plan buildOptions, change inputChange) (bool, error) {
+	if len(change.Added) > 0 || len(change.Removed) > 0 || len(change.Changed) == 0 {
+		return false, nil
+	}
+
 	timings := newBuildTimingRecorder(plan.Timings)
 	if plan.shouldBuildConfiguredTargets() {
 		return false, nil
@@ -142,9 +154,11 @@ func inputChangeTouchesConfig(change inputChange, configPath string) bool {
 	if !ok {
 		return false
 	}
-	for _, changedPath := range change.Changed {
-		if samePath(changedPath, configAbs) {
-			return true
+	for _, paths := range [][]string{change.Changed, change.Added, change.Removed} {
+		for _, changedPath := range paths {
+			if samePath(changedPath, configAbs) {
+				return true
+			}
 		}
 	}
 	return false
@@ -604,74 +618,150 @@ func canonicalInputPath(path string) (string, error) {
 	}
 }
 
+type devInputTracker struct {
+	files []string
+	dirs  []string
+}
+
+type devInputPaths struct {
+	files []string
+	dirs  []string
+}
+
+func newDevInputTracker(plan buildOptions) (devInputTracker, error) {
+	paths, err := buildInputPaths(plan)
+	if err != nil {
+		return devInputTracker{}, err
+	}
+	return devInputTracker{
+		files: uniqueInputPaths(paths.files),
+		dirs:  uniqueInputPaths(paths.dirs),
+	}, nil
+}
+
+func (tracker devInputTracker) snapshot() (inputSnapshot, error) {
+	return snapshotInputPaths(tracker.files, tracker.dirs)
+}
+
 func buildInputSnapshot(args []string) (inputSnapshot, error) {
 	plan, err := loadBuildOptions(args)
 	if err != nil {
 		return nil, err
 	}
+	return buildInputSnapshotLoaded(plan)
+}
+
+func buildInputSnapshotLoaded(plan buildOptions) (inputSnapshot, error) {
+	tracker, err := newDevInputTracker(plan)
+	if err != nil {
+		return nil, err
+	}
+	return tracker.snapshot()
+}
+
+func buildInputPaths(plan buildOptions) (devInputPaths, error) {
 	options := plan.Options
 	outputDir := plan.OutputDir
 	paths := append([]string(nil), plan.Paths...)
+	inputs := devInputPaths{}
 	if plan.shouldBuildConfiguredTargets() {
 		targets, err := selectBuildTargets(options.Config.Build.Targets, plan.TargetNames)
 		if err != nil {
-			return nil, err
+			return devInputPaths{}, err
 		}
 		for _, target := range targets {
-			discovered, err := discoverBuildFiles(options.Config, target.Output, target.Modules, options.ProjectRoot)
+			discovered, dirs, err := discoverBuildFilesAndDirs(options.Config, target.Output, target.Modules, options.ProjectRoot)
 			if err != nil {
-				return nil, err
+				return devInputPaths{}, err
 			}
-			paths = append(paths, discovered...)
-			css, err := discoverBuildCSSFiles(options.Config, target.Output, options.ProjectRoot)
+			inputs.addFiles(discovered...)
+			inputs.addDirs(dirs...)
+			css, cssDirs, err := discoverBuildCSSFilesAndDirs(options.Config, target.Output, options.ProjectRoot)
 			if err != nil {
-				return nil, err
+				return devInputPaths{}, err
 			}
-			paths = append(paths, css...)
+			inputs.addFiles(css...)
+			inputs.addDirs(cssDirs...)
 		}
 	} else if outputDir == "" {
 		outputDir = options.Config.Build.Output
 		if len(paths) == 0 {
-			discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames, options.ProjectRoot)
+			discovered, dirs, err := discoverBuildFilesAndDirs(options.Config, outputDir, plan.ModuleNames, options.ProjectRoot)
 			if err != nil {
-				return nil, err
+				return devInputPaths{}, err
 			}
-			paths = discovered
+			inputs.addFiles(discovered...)
+			inputs.addDirs(dirs...)
+		} else {
+			inputs.addFiles(paths...)
+			inputs.addParentDirs(paths...)
 		}
-		css, err := discoverBuildCSSFiles(options.Config, outputDir, options.ProjectRoot)
+		css, cssDirs, err := discoverBuildCSSFilesAndDirs(options.Config, outputDir, options.ProjectRoot)
 		if err != nil {
-			return nil, err
+			return devInputPaths{}, err
 		}
-		paths = append(paths, css...)
+		inputs.addFiles(css...)
+		inputs.addDirs(cssDirs...)
 	} else if len(paths) == 0 {
-		discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames, options.ProjectRoot)
+		discovered, dirs, err := discoverBuildFilesAndDirs(options.Config, outputDir, plan.ModuleNames, options.ProjectRoot)
 		if err != nil {
-			return nil, err
+			return devInputPaths{}, err
 		}
-		paths = discovered
-		css, err := discoverBuildCSSFiles(options.Config, outputDir, options.ProjectRoot)
+		inputs.addFiles(discovered...)
+		inputs.addDirs(dirs...)
+		css, cssDirs, err := discoverBuildCSSFilesAndDirs(options.Config, outputDir, options.ProjectRoot)
 		if err != nil {
-			return nil, err
+			return devInputPaths{}, err
 		}
-		paths = append(paths, css...)
+		inputs.addFiles(css...)
+		inputs.addDirs(cssDirs...)
 	} else {
-		css, err := discoverBuildCSSFiles(options.Config, outputDir, options.ProjectRoot)
+		inputs.addFiles(paths...)
+		inputs.addParentDirs(paths...)
+		css, cssDirs, err := discoverBuildCSSFilesAndDirs(options.Config, outputDir, options.ProjectRoot)
 		if err != nil {
-			return nil, err
+			return devInputPaths{}, err
 		}
-		paths = append(paths, css...)
+		inputs.addFiles(css...)
+		inputs.addDirs(cssDirs...)
 	}
 	if strings.TrimSpace(plan.ConfigPath) != "" {
-		paths = append(paths, plan.ConfigPath)
+		inputs.addFiles(plan.ConfigPath)
+		inputs.addParentDirs(plan.ConfigPath)
 	} else {
 		configPath := filepath.Join(options.ProjectRoot, "gowdk.config.go")
 		if _, err := os.Stat(configPath); err == nil {
-			paths = append(paths, configPath)
+			inputs.addFiles(configPath)
+			inputs.addParentDirs(configPath)
 		}
 	}
+	return inputs, nil
+}
+
+func (paths *devInputPaths) addFiles(files ...string) {
+	paths.files = append(paths.files, files...)
+}
+
+func (paths *devInputPaths) addDirs(dirs ...string) {
+	paths.dirs = append(paths.dirs, dirs...)
+}
+
+func (paths *devInputPaths) addParentDirs(files ...string) {
+	for _, file := range files {
+		if strings.TrimSpace(file) == "" {
+			continue
+		}
+		paths.dirs = append(paths.dirs, filepath.Dir(file))
+	}
+}
+
+func snapshotInputPaths(files, dirs []string) (inputSnapshot, error) {
 	snapshot := inputSnapshot{}
-	for _, item := range paths {
+	for _, item := range files {
 		info, err := os.Stat(item)
+		if os.IsNotExist(err) {
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -689,13 +779,57 @@ func buildInputSnapshot(args []string) (inputSnapshot, error) {
 		sum := sha256.Sum256(payload)
 		snapshot[abs] = fmt.Sprintf("%x", sum)
 	}
+	for _, item := range dirs {
+		info, err := os.Stat(item)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !info.IsDir() {
+			continue
+		}
+		abs, err := filepath.Abs(item)
+		if err != nil {
+			return nil, err
+		}
+		snapshot[abs] = fmt.Sprintf("dir:%d:%d", info.ModTime().UnixNano(), info.Size())
+	}
 	return snapshot, nil
 }
 
+func uniqueInputPaths(paths []string) []string {
+	seen := map[string]bool{}
+	var unique []string
+	for _, path := range paths {
+		if strings.TrimSpace(path) == "" {
+			continue
+		}
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			continue
+		}
+		abs = filepath.Clean(abs)
+		if seen[abs] {
+			continue
+		}
+		seen[abs] = true
+		unique = append(unique, abs)
+	}
+	sort.Strings(unique)
+	return unique
+}
+
 func discoverBuildCSSFiles(config gowdk.Config, outputDir string, root string) ([]string, error) {
+	files, _, err := discoverBuildCSSFilesAndDirs(config, outputDir, root)
+	return files, err
+}
+
+func discoverBuildCSSFilesAndDirs(config gowdk.Config, outputDir string, root string) ([]string, []string, error) {
 	includes := appendPatterns(nil, config.CSS.Include)
 	if len(includes) == 1 && includes[0] == buildgen.DisableCSSDiscovery {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if len(includes) == 0 {
 		includes = []string{"**/*.css"}
@@ -705,7 +839,7 @@ func discoverBuildCSSFiles(config gowdk.Config, outputDir string, root string) (
 		var err error
 		root, err = os.Getwd()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	excludes := []string{".git/**", "**/.git/**", "vendor/**", "**/vendor/**", "node_modules/**", "**/node_modules/**", ".gowdk/**", "**/.gowdk/**", "dist/**", "**/dist/**"}
@@ -713,7 +847,7 @@ func discoverBuildCSSFiles(config gowdk.Config, outputDir string, root string) (
 	if pattern := outputExcludePattern(root, outputDir); pattern != "" {
 		excludes = append(excludes, pattern)
 	}
-	return discover.Files(root, includes, excludes)
+	return discover.FilesAndDirs(root, includes, excludes)
 }
 
 func (snapshot inputSnapshot) same(other inputSnapshot) bool {

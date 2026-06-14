@@ -21,30 +21,35 @@ func dev(args []string) error {
 	if err != nil {
 		return err
 	}
-	buildArgs, outputDir, err := devBuildArgs(options.BuildArgs)
+	rawBuildArgs := append([]string(nil), options.BuildArgs...)
+	state, err := newDevBuildState(rawBuildArgs)
 	if err != nil {
 		return err
 	}
-	options.BuildArgs = buildArgs
-	runtime, buildArgs, err := devRuntimePlan(buildArgs, outputDir)
-	if err != nil {
-		return err
-	}
-	options.BuildArgs = buildArgs
-	absDir, err := filepath.Abs(outputDir)
+	options.BuildArgs = state.buildArgs
+	absDir, err := filepath.Abs(state.outputDir)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(absDir, 0o755); err != nil {
 		return err
 	}
-	previous, err := buildInputSnapshot(options.BuildArgs)
+	previous, err := state.snapshot()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
-	if runtime.Enabled || previous == nil || !devInputCacheFresh(absDir, previous) {
-		if err := build(options.BuildArgs); err != nil {
+	if state.runtime.Enabled || previous == nil || !devInputCacheFresh(absDir, previous) {
+		if err := buildLoaded(state.plan, 0); err != nil {
 			return err
+		}
+		if tracker, err := newDevInputTracker(state.plan); err == nil {
+			state.tracker = tracker
+			previous, err = state.snapshot()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, err)
 		}
 		if previous != nil {
 			if err := writeDevInputCache(absDir, previous); err != nil {
@@ -58,12 +63,12 @@ func dev(args []string) error {
 	var reload *liveReloadBroker
 	var server *http.Server
 	var process *devRuntimeProcess
-	if runtime.Enabled {
+	if state.runtime.Enabled {
 		fmt.Println("Live reload is not available for app targets; reload the browser manually after each rebuild.")
-		if _, err := appgen.BuildBinary(runtime.AppDir, runtime.BinaryPath); err != nil {
+		if _, err := appgen.BuildBinary(state.runtime.AppDir, state.runtime.BinaryPath); err != nil {
 			return err
 		}
-		process = &devRuntimeProcess{plan: runtime, addr: options.Addr}
+		process = &devRuntimeProcess{plan: state.runtime, addr: options.Addr}
 		if err := process.restart(); err != nil {
 			return err
 		}
@@ -87,14 +92,14 @@ func dev(args []string) error {
 	}
 
 	fmt.Printf("Dev server polling GOWDK inputs every %s\n", options.Interval)
-	if runtime.Enabled {
-		fmt.Printf("Running generated app %s at http://%s\n", runtime.BinaryPath, options.Addr)
+	if state.runtime.Enabled {
+		fmt.Printf("Running generated app %s at http://%s\n", state.runtime.BinaryPath, options.Addr)
 	} else {
 		fmt.Printf("Serving %s at http://%s\n", absDir, options.Addr)
 	}
 	for {
 		time.Sleep(options.Interval)
-		current, err := buildInputSnapshot(options.BuildArgs)
+		current, err := state.snapshot()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			reload.notifyData("build-error", err.Error())
@@ -104,19 +109,45 @@ func dev(args []string) error {
 			continue
 		}
 		change := current.diff(previous)
+		if state.configChanged(change) {
+			next, err := newDevBuildState(rawBuildArgs)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				reload.notifyData("build-error", err.Error())
+				continue
+			}
+			state = next
+			options.BuildArgs = state.buildArgs
+			current, err = state.snapshot()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				reload.notifyData("build-error", err.Error())
+				continue
+			}
+			change = current.diff(previous)
+		}
 		previous = current
 		fmt.Printf("Change detected at %s: %s\n", time.Now().Format(time.RFC3339), change.summary())
 		for _, detail := range change.details() {
 			fmt.Printf("  %s\n", detail)
 		}
-		_, err = buildDevChange(options.BuildArgs, change, true)
+		_, err = buildDevChangeLoaded(state.plan, change, true)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			reload.notifyData("build-error", err.Error())
 			continue
 		}
 		if process != nil {
-			if _, err := appgen.BuildBinary(runtime.AppDir, runtime.BinaryPath); err != nil {
+			if !state.runtime.Enabled {
+				process.stop()
+				process = nil
+				continue
+			}
+			if process.plan != state.runtime {
+				process.stop()
+				process.plan = state.runtime
+			}
+			if _, err := appgen.BuildBinary(state.runtime.AppDir, state.runtime.BinaryPath); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				reload.notifyData("build-error", err.Error())
 				continue
@@ -127,7 +158,17 @@ func dev(args []string) error {
 				continue
 			}
 		}
-		if err := writeDevInputCache(absDir, current); err != nil {
+		if tracker, err := newDevInputTracker(state.plan); err == nil {
+			state.tracker = tracker
+			if refreshed, err := state.snapshot(); err == nil {
+				previous = refreshed
+			} else {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		if err := writeDevInputCache(absDir, previous); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		}
 		reload.notify("reload")
@@ -144,6 +185,61 @@ type devRuntime struct {
 	Enabled    bool
 	AppDir     string
 	BinaryPath string
+}
+
+type devBuildState struct {
+	buildArgs []string
+	plan      buildOptions
+	outputDir string
+	runtime   devRuntime
+	tracker   devInputTracker
+}
+
+func newDevBuildState(args []string) (devBuildState, error) {
+	state, err := newDevBuildPlan(args)
+	if err != nil {
+		return devBuildState{}, err
+	}
+	tracker, err := newDevInputTracker(state.plan)
+	if err != nil {
+		return devBuildState{}, err
+	}
+	state.tracker = tracker
+	return state, nil
+}
+
+func newDevBuildPlan(args []string) (devBuildState, error) {
+	plan, err := loadBuildOptions(args)
+	if err != nil {
+		return devBuildState{}, err
+	}
+	outputDir, err := devOutputDirLoaded(plan)
+	if err != nil {
+		return devBuildState{}, err
+	}
+	buildArgs := append([]string(nil), args...)
+	if !devArgsHaveOutput(args) && !devArgsHaveTarget(args) {
+		buildArgs = append(buildArgs, "--out", outputDir)
+		plan.OutputDir = outputDir
+	}
+	runtime, err := devRuntimePlanLoaded(plan, outputDir)
+	if err != nil {
+		return devBuildState{}, err
+	}
+	return devBuildState{
+		buildArgs: buildArgs,
+		plan:      plan,
+		outputDir: outputDir,
+		runtime:   runtime,
+	}, nil
+}
+
+func (state devBuildState) snapshot() (inputSnapshot, error) {
+	return state.tracker.snapshot()
+}
+
+func (state devBuildState) configChanged(change inputChange) bool {
+	return inputChangeTouchesConfig(change, state.plan.ConfigPath)
 }
 
 type devRuntimeProcess struct {
@@ -259,18 +355,27 @@ func devUsage() string {
 }
 
 func devRuntimePlan(args []string, outputDir string) (devRuntime, []string, error) {
-	appDir, binaryPath, err := devAppAndBinary(args, outputDir)
-	if err != nil || strings.TrimSpace(appDir) == "" {
+	plan, err := loadBuildOptions(args)
+	if err != nil {
 		return devRuntime{}, args, err
 	}
+	runtime, err := devRuntimePlanLoaded(plan, outputDir)
+	return runtime, args, err
+}
+
+func devRuntimePlanLoaded(plan buildOptions, outputDir string) (devRuntime, error) {
+	appDir, binaryPath, err := devAppAndBinaryLoaded(plan)
+	if err != nil || strings.TrimSpace(appDir) == "" {
+		return devRuntime{}, err
+	}
 	if strings.TrimSpace(binaryPath) != "" {
-		return devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}, args, nil
+		return devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}, nil
 	}
 	binaryPath = filepath.Join(outputDir, ".gowdk", "dev", "app")
 	if os.PathSeparator == '\\' {
 		binaryPath += ".exe"
 	}
-	return devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}, args, nil
+	return devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}, nil
 }
 
 func devAppAndBinary(args []string, _ string) (string, string, error) {
@@ -278,6 +383,10 @@ func devAppAndBinary(args []string, _ string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
+	return devAppAndBinaryLoaded(plan)
+}
+
+func devAppAndBinaryLoaded(plan buildOptions) (string, string, error) {
 	if len(plan.TargetNames) > 0 {
 		targets, err := selectBuildTargets(plan.Options.Config.Build.Targets, plan.TargetNames)
 		if err != nil {
@@ -296,6 +405,10 @@ func devOutputDir(args []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return devOutputDirLoaded(plan)
+}
+
+func devOutputDirLoaded(plan buildOptions) (string, error) {
 	if strings.TrimSpace(plan.OutputDir) != "" {
 		return plan.OutputDir, nil
 	}
@@ -316,16 +429,11 @@ func devOutputDir(args []string) (string, error) {
 }
 
 func devBuildArgs(args []string) ([]string, string, error) {
-	outputDir, err := devOutputDir(args)
+	state, err := newDevBuildPlan(args)
 	if err != nil {
 		return nil, "", err
 	}
-	if devArgsHaveOutput(args) || devArgsHaveTarget(args) {
-		return append([]string(nil), args...), outputDir, nil
-	}
-	next := append([]string(nil), args...)
-	next = append(next, "--out", outputDir)
-	return next, outputDir, nil
+	return state.buildArgs, state.outputDir, nil
 }
 
 func devArgsHaveOutput(args []string) bool {

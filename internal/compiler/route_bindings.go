@@ -295,7 +295,7 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 			Route:          ref.Path,
 			Cache:          "no-store",
 			Guards:         append([]string(nil), ref.Guards...),
-			CSRF:           config.Build.CSRF.Enabled && ref.Kind == gwdkir.ContractCommand,
+			CSRF:           config.Build.CSRF.EnabledForGeneratedEndpoints() && ref.Kind == gwdkir.ContractCommand,
 			PageID:         ref.OwnerID,
 			Handler:        "contracts." + string(ref.Kind) + "." + ref.Name,
 			Contract: ContractEndpointBinding{

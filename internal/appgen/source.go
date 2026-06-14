@@ -274,12 +274,13 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	if full.ProxyBackend {
 		decls = append(decls, backendProxyDecl(generatedUsesRateLimit(full)), isBackendRouteDecl(backendAdapterIR(full)))
 	}
-	if csrfEnabled(csrfOptions) {
-		decls = append(decls, csrfValidatorVarDecl(), csrfNewFuncDecl(csrfOptions.Config.Build.CSRF))
+	csrf := csrfEnabled(csrfOptions)
+	if csrf {
+		decls = append(decls, csrfTokenSourceVarDecl(), csrfValidatorVarDecl(), csrfNewFuncDecl(csrfOptions.Config.Build.CSRF))
 	}
 	decls = append(decls, rateLimitDecls(full)...)
 	decls = append(decls, guardDecls(full)...)
-	decls = append(decls, ssrExactDecl(full.SSR, generatedUsesRateLimit(full)), ssrDynamicDecl(full.SSR, generatedUsesRateLimit(full)))
+	decls = append(decls, ssrExactDecl(full.SSR, generatedUsesRateLimit(full), csrf), ssrDynamicDecl(full.SSR, generatedUsesRateLimit(full), csrf))
 	return decls
 }
 
@@ -298,7 +299,7 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 		decls = append(decls, emptyBackendHandlerDecl())
 	}
 	if csrfEnabled(options) {
-		decls = append(decls, csrfValidatorVarDecl(), csrfNewFuncDecl(options.Config.Build.CSRF))
+		decls = append(decls, csrfTokenSourceVarDecl(), csrfValidatorVarDecl(), csrfNewFuncDecl(options.Config.Build.CSRF))
 	}
 	decls = append(decls, rateLimitDecls(options)...)
 	decls = append(decls, guardDecls(options)...)
@@ -412,10 +413,14 @@ func csrfSetupStmts(options Options) []ast.Stmt {
 		return nil
 	}
 	return []ast.Stmt{
-		define([]ast.Expr{id("csrfTokenSource"), id("err")}, call(sel("newCSRF"))),
+		&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+			Names: []*ast.Ident{id("csrfErr")},
+			Type:  id("error"),
+		}}}},
+		assign([]ast.Expr{id("csrfTokenSource"), id("csrfErr")}, call(sel("newCSRF"))),
 		&ast.IfStmt{
-			Cond: notNil("err"),
-			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
+			Cond: notNil("csrfErr"),
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("csrfErr")}}),
 		},
 		assign([]ast.Expr{id("csrfValidator")}, id("csrfTokenSource")),
 	}
@@ -714,7 +719,7 @@ func importSpecSource(imports map[string]string) string {
 
 func csrfEnabled(options Options) bool {
 	adapter := backendAdapterIR(options)
-	return options.Config.Build.CSRF.Enabled && (adapter.HasEndpointKind(BackendEndpointAction) || contractExposuresParseForm(executableContractExposures(adapter.ContractExposures)))
+	return options.Config.Build.CSRF.EnabledForGeneratedEndpoints() && (adapter.HasEndpointKind(BackendEndpointAction) || contractExposuresParseForm(executableContractExposures(adapter.ContractExposures)))
 }
 
 func csrfHelperSource(options Options) (source string, err error) {
@@ -724,9 +729,20 @@ func csrfHelperSource(options Options) (source string, err error) {
 		return "", nil
 	}
 	return printActionDecls([]ast.Decl{
+		csrfTokenSourceVarDecl(),
 		csrfValidatorVarDecl(),
 		csrfNewFuncDecl(options.Config.Build.CSRF),
 	})
+}
+
+func csrfTokenSourceVarDecl() ast.Decl {
+	return &ast.GenDecl{
+		Tok: token.VAR,
+		Specs: []ast.Spec{&ast.ValueSpec{
+			Names: []*ast.Ident{id("csrfTokenSource")},
+			Type:  &ast.StarExpr{X: sel("gowdkactions", "CSRF")},
+		}},
+	}
 }
 
 func csrfValidatorVarDecl() ast.Decl {

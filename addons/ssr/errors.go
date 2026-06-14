@@ -67,10 +67,10 @@ func RedirectTarget(err error) (string, int, bool) {
 }
 
 func validateRedirectURL(url string) error {
-	if !strings.HasPrefix(url, "/") {
+	if url == "" || url[0] != '/' {
 		return fmt.Errorf("SSR redirect %q must be a local absolute path", url)
 	}
-	if strings.HasPrefix(url, "//") {
+	if len(url) > 1 && (url[1] == '/' || url[1] == '\\') {
 		return fmt.Errorf("SSR redirect %q must not be protocol-relative", url)
 	}
 	// Browsers normalize "\" to "/" before navigating, so "/\evil.com" is

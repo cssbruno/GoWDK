@@ -29,7 +29,7 @@ framework shape.
 - [ ] Do not let generated JavaScript own auth, routing truth, validation truth,
   business logic, server state, or cache policy.
 - [ ] Keep `net/http` as the runtime boundary.
-- [ ] Keep Gin, Echo, and Fiber as optional adapters.
+- [ ] Keep Chi, Gin, Echo, and Fiber as optional adapters.
 - [ ] Keep Redis, NATS, SSE, and WebSocket adapters optional.
 - [ ] Keep Tailwind optional.
 - [ ] Keep npm optional.
@@ -204,13 +204,13 @@ Every 0.x minor release must have:
 - [x] Classify dependencies as compiler core, runtime core, optional HTTP
   adapters, optional broker adapters, optional realtime adapters, optional
   CSS/tool adapters, or test/dev only.
-- [x] Explain why Gin, Echo, Fiber, Redis, NATS, and WebSocket packages are
+- [x] Explain why Chi, Gin, Echo, Fiber, Redis, NATS, and WebSocket packages are
   direct dependencies, or move them to optional submodules.
 - [ ] Add CI checks for new direct dependencies.
 - [ ] Add dependency diff, license report, vulnerability report, and module
   graph report to releases.
 - [x] Enforce no mandatory npm and no build-time downloads.
-- [ ] Test that generated code does not import Gin, Echo, Fiber, Redis, or NATS
+- [ ] Test that generated code does not import Chi, Gin, Echo, Fiber, Redis, or NATS
   by default.
 
 ## Security And Production-Safety Gates
@@ -736,12 +736,12 @@ Start with these in order:
 - [x] Do not generate user domain logic.
 - [x] Do not generate auth or business validation logic.
 - [x] Do not auto-discover endpoints by function name.
-- [x] Do not scan Gin/Echo/Fiber route registrations as route truth.
+- [x] Do not scan Chi/Gin/Echo/Fiber route registrations as route truth.
 - [x] Do not require npm.
 - [x] Do not require Tailwind.
 - [x] Do not require Redis.
 - [x] Do not require NATS.
-- [x] Do not require Gin, Echo, or Fiber.
+- [x] Do not require Chi, Gin, Echo, or Fiber.
 - [x] Do not download optional tools during builds.
 - [x] Do not hide partial features behind confident wording.
 - [ ] Do not add more syntax without diagnostics, tests, docs, and examples.

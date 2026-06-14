@@ -13,8 +13,8 @@ func ssrHandlerSource(routes []SSRRoute) (source string, err error) {
 
 	sorted := sortedSSRRoutes(routes)
 	return printActionDecls([]ast.Decl{
-		ssrExactDecl(sorted, false),
-		ssrDynamicDecl(sorted, false),
+		ssrExactDecl(sorted, false, false),
+		ssrDynamicDecl(sorted, false, false),
 	})
 }
 
@@ -29,7 +29,7 @@ func sortedSSRRoutes(routes []SSRRoute) []SSRRoute {
 	return sorted
 }
 
-func ssrExactDecl(routes []SSRRoute, rateLimit bool) *ast.FuncDecl {
+func ssrExactDecl(routes []SSRRoute, rateLimit bool, csrf bool) *ast.FuncDecl {
 	clauses := []ast.Stmt{}
 	for _, route := range routes {
 		if len(ssrRoutePatternParams(route.Route)) > 0 {
@@ -37,7 +37,7 @@ func ssrExactDecl(routes []SSRRoute, rateLimit bool) *ast.FuncDecl {
 		}
 		clauses = append(clauses, &ast.CaseClause{
 			List: []ast.Expr{stringLit(route.Route)},
-			Body: ssrRouteBodyStmts(route, false, rateLimit),
+			Body: ssrRouteBodyStmts(route, false, rateLimit, csrf),
 		})
 	}
 	return funcDecl("ssrExact", actionParams(), namedBoolResults("handled"), []ast.Stmt{
@@ -49,19 +49,19 @@ func ssrExactDecl(routes []SSRRoute, rateLimit bool) *ast.FuncDecl {
 	})
 }
 
-func ssrDynamicDecl(routes []SSRRoute, rateLimit bool) *ast.FuncDecl {
+func ssrDynamicDecl(routes []SSRRoute, rateLimit bool, csrf bool) *ast.FuncDecl {
 	body := []ast.Stmt{}
 	for _, route := range routes {
 		if len(ssrRoutePatternParams(route.Route)) == 0 {
 			continue
 		}
-		body = append(body, ssrDynamicIfStmt(route, rateLimit))
+		body = append(body, ssrDynamicIfStmt(route, rateLimit, csrf))
 	}
 	body = append(body, returnBool(false))
 	return funcDecl("ssrDynamic", actionParams(), namedBoolResults("handled"), body)
 }
 
-func ssrDynamicIfStmt(route SSRRoute, rateLimit bool) ast.Stmt {
+func ssrDynamicIfStmt(route SSRRoute, rateLimit bool, csrf bool) ast.Stmt {
 	// A guardless route is denied before rendering, so its matched params are
 	// unused; bind them to _ to keep the generated code free of unused vars.
 	paramsName := ast.Expr(id("params"))
@@ -69,7 +69,7 @@ func ssrDynamicIfStmt(route SSRRoute, rateLimit bool) ast.Stmt {
 		paramsName = id("_")
 	}
 	names := []ast.Expr{paramsName, id("ok")}
-	body := ssrRouteBodyStmts(route, true, rateLimit)
+	body := ssrRouteBodyStmts(route, true, rateLimit, csrf)
 	return &ast.IfStmt{
 		Init: define(names, call(sel("gowdkroute", "Match"), stringLit(route.Route), selExpr(selExpr(id("request"), "URL"), "Path"))),
 		Cond: id("ok"),
@@ -77,7 +77,7 @@ func ssrDynamicIfStmt(route SSRRoute, rateLimit bool) ast.Stmt {
 	}
 }
 
-func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool) []ast.Stmt {
+func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool, csrf bool) []ast.Stmt {
 	if len(route.Guards) == 0 {
 		// No guard declared: deny by default (403). There is nothing to render,
 		// so the route returns before any context, load, or HTML statements.
@@ -100,8 +100,33 @@ func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool) []ast
 		)))
 	}
 	body = append(body, ssrLoadStmts(route)...)
+	if csrf {
+		body = append(body, ssrCSRFHTMLStmts()...)
+	}
 	body = append(body, ssrWriteHTMLStmts(id("html"), route.Cache)...)
 	return body
+}
+
+func ssrCSRFHTMLStmts() []ast.Stmt {
+	return []ast.Stmt{
+		&ast.IfStmt{
+			Cond: notNil("csrfTokenSource"),
+			Body: block(
+				define([]ast.Expr{id("htmlBytes"), id("csrfOK")}, call(
+					sel("gowdkruntime", "CSRFInjectHTML"),
+					id("response"),
+					id("request"),
+					call(&ast.ArrayType{Elt: id("byte")}, id("html")),
+					id("csrfTokenSource"),
+				)),
+				&ast.IfStmt{
+					Cond: &ast.UnaryExpr{Op: token.NOT, X: id("csrfOK")},
+					Body: block(returnBool(true)),
+				},
+				assign([]ast.Expr{id("html")}, call(id("string"), id("htmlBytes"))),
+			),
+		},
+	}
 }
 
 func ssrRoutePanicBoundaryStmt() ast.Stmt {

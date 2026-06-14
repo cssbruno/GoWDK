@@ -18,6 +18,7 @@ func TestBuildLowersGPostDirectiveForActionPage(t *testing.T) {
 		ID:     "signup",
 		Route:  "/signup",
 		Render: gowdk.Action,
+		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<form g:post={Submit}><input name="email" /></form>`,
@@ -48,6 +49,7 @@ func TestBuildSynthesizesActionInputAttrsFromBindingFields(t *testing.T) {
 		ID:     "signup",
 		Route:  "/signup",
 		Render: gowdk.Action,
+		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<form g:post={Submit}><input name="age" /><input name="score" /></form>`,
@@ -93,6 +95,7 @@ func TestBuildProductionRequiresBoundBackendHandlers(t *testing.T) {
 		Source:  filepath.Join(t.TempDir(), "signup.page.gwdk"),
 		Route:   "/signup",
 		Render:  gowdk.Action,
+		Guards:  []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<form g:post={Submit}><input name="email" /></form>`,
@@ -117,6 +120,7 @@ func TestBuildProductionAllowsExplicitMissingBackendStubs(t *testing.T) {
 		Source:  filepath.Join(t.TempDir(), "signup.page.gwdk"),
 		Route:   "/signup",
 		Render:  gowdk.Action,
+		Guards:  []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<form g:post={Submit}><input name="email" /></form>`,
@@ -142,6 +146,7 @@ func TestBuildAllowsGPostWithLocalValueBinding(t *testing.T) {
 			ID:     "search",
 			Route:  "/search",
 			Render: gowdk.Action,
+			Guards: []string{"public"},
 			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><Search /></main>`,
@@ -182,8 +187,9 @@ func TestBuildAllowsGPostWithLocalValueBinding(t *testing.T) {
 func TestBuildEmitsPartialRuntimeForFragmentForms(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
-		ID:    "patients",
-		Route: "/patients",
+		ID:     "patients",
+		Route:  "/patients",
+		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View: true,
 			ViewBody: `<main>
@@ -233,8 +239,9 @@ func TestBuildEmitsPartialRuntimeForFragmentForms(t *testing.T) {
 func TestBuildRejectsUnknownGPostActionBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
-		ID:    "signup",
-		Route: "/signup",
+		ID:     "signup",
+		Route:  "/signup",
+		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<form g:post={Missing}></form>`,

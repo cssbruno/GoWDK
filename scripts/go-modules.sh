@@ -3,6 +3,7 @@ set -eu
 
 cat <<'EOF'
 .
+runtime/adapters/chi
 runtime/adapters/echo
 runtime/adapters/fiber
 runtime/adapters/gin

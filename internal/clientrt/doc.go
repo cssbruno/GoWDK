@@ -1,2 +1,3 @@
-// Package clientrt emits the tiny client runtime used for partial updates.
+// Package clientrt embeds framework-owned browser runtime sources and renders
+// the small generated templates consumed by buildgen.
 package clientrt

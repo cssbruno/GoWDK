@@ -208,4 +208,6 @@ The compiler passes those blocks to the matching addon only when it implements
 `gowdk.GoBlockConsumer`. The addon decides accepted targets, diagnostics, and
 which generated app files to emit. Addon go block files are formatted when they
 are Go files. If the addon is not configured, the compiler reports an
-`unknown_addon_go_block_target` diagnostic.
+`unknown_addon_go_block_target` diagnostic. If the addon is configured but does
+not implement `GoBlockConsumer` or does not accept the exact target, the
+compiler reports `unsupported_addon_go_block_target`.

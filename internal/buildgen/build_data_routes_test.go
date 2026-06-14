@@ -715,6 +715,7 @@ func TestBuildExpandsTypedDynamicSPAPathsAndInheritedActionRoutes(t *testing.T) 
 		ID:     "patients.show",
 		Route:  "/patients/{id:int}",
 		Render: gowdk.Action,
+		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			Paths:     true,
 			PathsBody: `=> { id: "123" }`,

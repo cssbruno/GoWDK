@@ -124,7 +124,7 @@ func writeAddonGoBlockFiles(appDir string, options Options) ([]string, error) {
 	for _, target := range addonGoBlockTargets(*options.IR, options.Config) {
 		consumer, ok := addonGoBlockConsumer(options.Config, target.target.Target)
 		if !ok {
-			continue
+			return nil, fmt.Errorf("go block target %s requires an enabled addon implementing gowdk.GoBlockConsumer", target.target.Target)
 		}
 		generated, err := consumer.GeneratedGo(target.target, gowdk.GoBlockContext{Render: target.render})
 		if err != nil {

@@ -2,6 +2,8 @@ package compiler
 
 import (
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/diagnostics"
 )
 
 type ValidationErrors []ValidationError
@@ -34,4 +36,26 @@ func (errs ValidationErrors) Warnings() ValidationErrors {
 		}
 	}
 	return out
+}
+
+func normalizeValidationErrors(errs []ValidationError) ValidationErrors {
+	normalized := make(ValidationErrors, len(errs))
+	copy(normalized, errs)
+	for index := range normalized {
+		normalized[index].normalizeSeverity()
+	}
+	return normalized
+}
+
+func (err *ValidationError) normalizeSeverity() {
+	if err.Severity != "" {
+		return
+	}
+	if err.Code != "" {
+		if severity, ok := diagnostics.DefaultSeverity(err.Code); ok {
+			err.Severity = severity
+			return
+		}
+	}
+	err.Severity = SeverityError
 }

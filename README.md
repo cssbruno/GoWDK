@@ -312,6 +312,7 @@ reviewable test diff rather than a silent behavior change.
 
 - [Getting started](docs/getting-started.md)
 - [Native learning path](docs/learning/native.md)
+- [Playground onboarding and sandboxing](docs/product/playground.md)
 - [Changelog](CHANGELOG.md)
 - [0.x improvement checklist](docs/engineering/release-plan.md)
 - [v0.2 release checklist](docs/engineering/v0.2-release-checklist.md)

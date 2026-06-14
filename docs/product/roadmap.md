@@ -261,10 +261,10 @@ without making any minor version a production-readiness target.
   proxies, cache/CDN policy, health checks, metrics, logging, binary deploy,
   and rollback before any production-ready claim.
 - P2 ecosystem polish is owned by optional docs, examples, website pages, or
-  CLI generators: addon discovery, performance
+  CLI generators: playground onboarding, addon discovery, performance
   profiling, migration guides, image guidance, and PWA/offline guidance must
-  not add mandatory npm, framework, or platform dependencies to the repository
-  core.
+  not add mandatory npm, framework, hosted execution, or platform dependencies
+  to the repository core.
 
 ## Non-Goals For Repository Core
 
@@ -281,5 +281,6 @@ without making any minor version a production-readiness target.
 ## Planning Sources
 
 - `docs/product/requirements.md`: requirement status.
+- `docs/product/playground.md`: docs-first playground and sandboxing contract.
 - `docs/engineering/architecture.md`: architecture and implemented boundaries.
 - `docs/engineering/release-plan.md`: open-ended 0.x hardening checklist.

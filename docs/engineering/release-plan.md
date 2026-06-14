@@ -657,6 +657,8 @@ Every 0.x minor release must have:
 - [ ] Add build timing to build reports and `gowdk benchmark`.
 - [ ] Update website install docs to match release assets and sync website docs
   from the repo automatically.
+- [x] Define the docs-first playground onboarding path, sandbox rules, and
+  export contract.
 - [ ] Add website current release badge, experimental warning, what works today,
   known gaps, cookbook, examples index, runnable snippets, generated output
   preview, route manifest preview, build report preview, and website link

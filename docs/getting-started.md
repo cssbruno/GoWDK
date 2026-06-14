@@ -286,6 +286,8 @@ For a lesson-by-lesson path through pages, build-time Go data, components,
 CSS/assets, actions, validation, CSRF, APIs, fragments, SSR, guards,
 database-owned Go code, one-binary deploys, Caddy, diagnostics, tests,
 Tailwind, and WASM islands, use the [Native Learning Path](learning/native.md).
+For website-style onboarding and hosted execution constraints, use the
+[Playground Onboarding and Sandboxing](product/playground.md) contract.
 
 Dynamic SPA routes work when literal `paths {}` entries are present:
 

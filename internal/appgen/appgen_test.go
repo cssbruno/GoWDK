@@ -3827,7 +3827,7 @@ func TestGenerateRejectsUnsupportedAddonGoBlockTarget(t *testing.T) {
 	appDir := filepath.Join(root, "generated-app")
 	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
-	program := gwdkir.Program{Version: gwdkir.Version, Pages: []gwdkir.Page{{
+	program := gwdkir.Program{Pages: []gwdkir.Page{{
 		ID:      "patients",
 		Package: "pages",
 		Source:  "patients.page.gwdk",

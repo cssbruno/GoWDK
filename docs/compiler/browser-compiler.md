@@ -8,6 +8,12 @@ The current browser-facing output slices are:
 - Component-level WASM island asset emission for components that declare
   `wasm`, with `g:island="wasm"` still supported as a call-site override.
 
+Framework-owned browser runtime source lives under `internal/clientrt/assets/`
+as ordinary `.js` files embedded with `go:embed`. Buildgen consumes those
+sources through small template helpers for component names, page IDs, asset
+paths, and WASM export names; it should not grow new multi-hundred-line
+JavaScript raw strings in Go files.
+
 ## Partial Runtime
 
 When a page uses a fragment-producing action form with `g:target` and `g:swap`,

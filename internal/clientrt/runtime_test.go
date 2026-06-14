@@ -1,6 +1,9 @@
 package clientrt
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -89,5 +92,76 @@ func TestSourceEmitsSPANavigationRuntime(t *testing.T) {
 func TestFilename(t *testing.T) {
 	if Filename != "gowdk.js" {
 		t.Fatalf("unexpected runtime filename %q", Filename)
+	}
+}
+
+func TestEmbeddedRuntimeSourceFilesParseWithNode(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	entries, err := runtimeAssets.ReadDir("assets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected embedded JavaScript runtime source files")
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".js") {
+			continue
+		}
+		t.Run(entry.Name(), func(t *testing.T) {
+			source, err := runtimeAssets.ReadFile("assets/" + entry.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			file := filepath.Join(t.TempDir(), entry.Name())
+			if err := os.WriteFile(file, source, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if output, err := exec.Command(node, "--check", file).CombinedOutput(); err != nil {
+				t.Fatalf("embedded JavaScript source must parse: %v\n%s", err, output)
+			}
+		})
+	}
+}
+
+func TestRuntimeTemplatesReplacePlaceholders(t *testing.T) {
+	rendered := []string{
+		IslandJSSource(IslandJSOptions{
+			Component:       "Counter",
+			MountFunction:   "mountCounterIsland",
+			DestroyFunction: "destroyCounterIsland",
+		}),
+		ClientGoBlockWASMLoaderSource(ClientGoBlockWASMLoaderOptions{
+			PageID:       "home",
+			LoaderPath:   "/assets/gowdk/islands/pages/Home.wasm.js",
+			WASMPath:     "/assets/gowdk/islands/pages/Home.wasm",
+			WASMExecPath: "/assets/gowdk/islands/wasm_exec.js",
+			MountExport:  "GOWDKMountHome",
+		}),
+		WASMIslandLoaderSource(WASMIslandLoaderOptions{
+			Component:    "Counter",
+			ABIVersion:   "gowdk-wasm-island-v1",
+			WASMPath:     "/assets/gowdk/islands/Counter.wasm",
+			WASMExecPath: "/assets/gowdk/islands/wasm_exec.js",
+		}),
+	}
+	for _, source := range rendered {
+		if strings.Contains(source, "__GOWDK_") {
+			t.Fatalf("rendered runtime template still contains a placeholder:\n%s", source)
+		}
+	}
+	if !strings.Contains(rendered[0], `const component = "Counter";`) ||
+		!strings.Contains(rendered[0], `async function mountCounterIsland(scope)`) ||
+		!strings.Contains(rendered[0], `async function destroyCounterIsland()`) {
+		t.Fatalf("rendered island runtime did not include component-specific names:\n%s", rendered[0])
+	}
+	if !strings.Contains(rendered[1], `const mountExport = "GOWDKMountHome";`) {
+		t.Fatalf("rendered page WASM loader did not include mount export:\n%s", rendered[1])
+	}
+	if !strings.Contains(rendered[2], `const abiVersion = "gowdk-wasm-island-v1";`) {
+		t.Fatalf("rendered WASM island loader did not include ABI version:\n%s", rendered[2])
 	}
 }

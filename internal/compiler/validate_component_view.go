@@ -75,9 +75,13 @@ func componentViewReferences(source string) (componentViewRefs, error) {
 	if err != nil {
 		return componentViewRefs{}, err
 	}
+	return componentViewReferencesFromNodes(source, nodes), nil
+}
+
+func componentViewReferencesFromNodes(source string, nodes []view.Node) componentViewRefs {
 	refs := componentViewRefs{Fields: map[string]bool{}}
 	collectComponentViewReferences(source, nodes, &refs)
-	return refs, nil
+	return refs
 }
 
 func validateInterpolations(value string, symbols map[string]clientlang.ValueType, messages *[]spannedMessage) {

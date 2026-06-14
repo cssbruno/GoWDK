@@ -10,6 +10,10 @@ func render(source string, ctx renderContext) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return renderParsedNodes(nodes, ctx)
+}
+
+func renderParsedNodes(nodes []Node, ctx renderContext) (string, error) {
 	if err := validateFragmentTargetReferences(nodes); err != nil {
 		return "", err
 	}

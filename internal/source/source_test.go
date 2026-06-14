@@ -1,6 +1,32 @@
 package source
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestSupportedBackendInputFieldTypes(t *testing.T) {
+	got := strings.Join(SupportedBackendInputFieldTypes(), ",")
+	want := "[]string,bool,byte,int,int16,int32,int64,int8,rune,string,uint,uint16,uint32,uint64,uint8"
+	if got != want {
+		t.Fatalf("SupportedBackendInputFieldTypes() = %q, want %q", got, want)
+	}
+	for _, name := range SupportedBackendInputFieldTypes() {
+		info, ok := LookupBackendInputFieldType(name)
+		if !ok || info.Name != name || info.Kind == "" {
+			t.Fatalf("LookupBackendInputFieldType(%q) = %#v, %v", name, info, ok)
+		}
+	}
+	if _, ok := LookupBackendInputFieldType("float64"); ok {
+		t.Fatal("float64 must not be a supported backend input field type until decoders support it")
+	}
+	if info, ok := LookupBackendInputFieldType("byte"); !ok || info.Name != "byte" || info.Kind != BackendInputFieldKindUnsignedInt || info.BitSize != 8 {
+		t.Fatalf("LookupBackendInputFieldType(byte) = %#v, %v", info, ok)
+	}
+	if info, ok := LookupBackendInputFieldType("rune"); !ok || info.Name != "rune" || info.Kind != BackendInputFieldKindSignedInt || info.BitSize != 32 {
+		t.Fatalf("LookupBackendInputFieldType(rune) = %#v, %v", info, ok)
+	}
+}
 
 func TestValidateBackendRoutePath(t *testing.T) {
 	valid := []string{

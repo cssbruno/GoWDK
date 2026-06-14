@@ -161,9 +161,24 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 			addons, addonsNeedExecutableLoad := parseAddons(keyValue.Value, imports)
 			config.Addons = addons
 			needsExecutableLoad = needsExecutableLoad || addonsNeedExecutableLoad
+		default:
+			return gowdk.Config{}, false, false, fmt.Errorf("unsupported Config field %q", key.Name)
 		}
 	}
 	return config, needsExecutableLoad, true, nil
+}
+
+func supportedConfigLiteralFields() map[string]bool {
+	return map[string]bool{
+		"AppName": true,
+		"Source":  true,
+		"Modules": true,
+		"Render":  true,
+		"Env":     true,
+		"Build":   true,
+		"CSS":     true,
+		"Addons":  true,
+	}
 }
 
 func needsConfigExpressionEvaluation(expression ast.Expr) bool {

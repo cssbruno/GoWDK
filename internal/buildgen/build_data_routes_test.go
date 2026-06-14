@@ -72,6 +72,80 @@ func TestBuildRendersLiteralBuildData(t *testing.T) {
 	}
 }
 
+func TestBuildUsesTypedPathAndBuildRecords(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "post",
+			Route: "/blog/{slug}",
+			Blocks: gwdkir.Blocks{
+				Paths: true,
+				PathsRecords: []gwdkir.LiteralRecord{{
+					Fields: map[string]string{"slug": "typed"},
+				}},
+				Build: true,
+				BuildRecords: []gwdkir.LiteralRecord{{
+					Fields: map[string]string{
+						"title": "Typed",
+						"copy":  "Typed route",
+					},
+					Expressions: map[string]string{
+						"title": `"Typed"`,
+						"copy":  `title + " route"`,
+					},
+					FieldOrder: []string{"title", "copy"},
+				}},
+				View:     true,
+				ViewBody: `<main data-slug="{slug}"><h1>{title}</h1><p>{copy}</p></main>`,
+			},
+		}},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "blog", "typed", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	if !strings.Contains(output, `<main data-slug="typed"><h1>Typed</h1><p>Typed route</p></main>`) {
+		t.Fatalf("expected typed path/build records in output:\n%s", output)
+	}
+}
+
+func TestBuildRejectsNonStringTypedPathRecordValuesBeforeWriting(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "blog.post",
+		Route: "/blog/{slug}",
+		Blocks: gwdkir.Blocks{
+			Paths: true,
+			PathsRecords: []gwdkir.LiteralRecord{{
+				Fields:      map[string]string{"slug": `field("title")`},
+				Expressions: map[string]string{"slug": `field("title")`},
+				FieldOrder:  []string{"slug"},
+			}},
+			View:     true,
+			ViewBody: `<main>Post</main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected build error")
+	}
+	if !strings.Contains(err.Error(), `path param slug: value must be a string literal`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if entries, err := os.ReadDir(outputDir); err != nil {
+		t.Fatal(err)
+	} else if len(entries) != 0 {
+		t.Fatalf("expected no partial output, got %#v", entries)
+	}
+}
+
 func TestBuildRejectsInvalidBuildDataBeforeWriting(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -29,9 +29,13 @@ func viewAccessibilityDiagnostics(file string, blocks gwdkir.Blocks) Diagnostics
 	if !strings.Contains(blocks.ViewBody, "<img") {
 		return nil
 	}
-	nodes, err := view.Parse(blocks.ViewBody)
-	if err != nil {
-		return nil
+	nodes := blocks.ViewNodes
+	if len(nodes) == 0 {
+		var err error
+		nodes, err = view.Parse(blocks.ViewBody)
+		if err != nil {
+			return nil
+		}
 	}
 	return imageAltDiagnostics(file, blocks.ViewBody, blocks.Spans.ViewBodyStart, nodes)
 }

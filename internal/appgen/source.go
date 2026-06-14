@@ -37,6 +37,7 @@ func runtimeImportSource(options Options) string {
 func runtimeImportMap(options Options) map[string]string {
 	imports := map[string]string{
 		"gowdkruntime": "github.com/cssbruno/gowdk/runtime/app",
+		"sync":         "sync",
 	}
 	if envRuntimeValidationRequired(options.Config.Env) {
 		imports["errors"] = "errors"
@@ -232,9 +233,12 @@ func appShellDecls(options Options) []ast.Decl {
 		maxActionBodyBytesDecl(options),
 		maxAPIBodyBytesDecl(options),
 		embeddedFilesDecl(),
+	}
+	decls = append(decls, middlewareDecls()...)
+	decls = append(decls,
 		handlerDecl(),
 		serveMuxDecl(options, true),
-	}
+	)
 	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
 	return decls
 }
@@ -243,9 +247,12 @@ func backendShellDecls(options Options) []ast.Decl {
 	decls := []ast.Decl{
 		maxActionBodyBytesDecl(options),
 		maxAPIBodyBytesDecl(options),
+	}
+	decls = append(decls, middlewareDecls()...)
+	decls = append(decls,
 		handlerDecl(),
 		serveMuxDecl(options, false),
-	}
+	)
 	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
 	return decls
 }
@@ -385,9 +392,13 @@ func serveMuxDecl(options Options, embedded bool) ast.Decl {
 	}
 	stmts = append(stmts, define([]ast.Expr{id("mux")}, call(sel("http", "NewServeMux"))))
 	if embedded {
-		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), &ast.CompositeLit{
-			Type: sel("gowdkruntime", "Handler"),
-			Elts: embeddedHandlerFields(options),
+		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), &ast.CallExpr{
+			Fun: sel("gowdkruntime", "ApplyMiddlewares"),
+			Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{
+				Type: sel("gowdkruntime", "Handler"),
+				Elts: embeddedHandlerFields(options),
+			}}, call(id("registeredMiddlewares"))},
+			Ellipsis: token.Pos(1),
 		})))
 	} else {
 		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), backendOnlyHandlerExpr(options))))
@@ -640,9 +651,13 @@ func customErrorPagePaths(options Options) []string {
 func backendOnlyHandlerExpr(options Options) ast.Expr {
 	handler := backendOnlyBaseHandlerExpr(options)
 	if headers := securityHeadersExpr(options); headers != nil {
-		return call(sel("http", "HandlerFunc"), backendOnlySecurityHeadersHandlerFunc(handler, headers))
+		handler = call(sel("http", "HandlerFunc"), backendOnlySecurityHeadersHandlerFunc(handler, headers))
 	}
-	return handler
+	return &ast.CallExpr{
+		Fun:      sel("gowdkruntime", "ApplyMiddlewares"),
+		Args:     []ast.Expr{handler, call(id("registeredMiddlewares"))},
+		Ellipsis: token.Pos(1),
+	}
 }
 
 func backendOnlyBaseHandlerExpr(options Options) ast.Expr {

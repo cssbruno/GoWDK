@@ -15,7 +15,7 @@ func clientRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, outputDir 
 		if err != nil {
 			return nil, err
 		}
-		usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewSource, components)
+		usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewSource, composedPageViewNodes(page), components)
 		if err != nil {
 			return nil, err
 		}

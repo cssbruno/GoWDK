@@ -8,6 +8,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
+	"github.com/cssbruno/gowdk/internal/view"
 )
 
 // Sources are the parsed IR records one program is assembled from.
@@ -121,6 +122,7 @@ func (builder *irBuilder) addPageTemplate(page gwdkir.Page) {
 		Guards:    append([]string(nil), page.Guards...),
 		Imports:   append([]gwdkir.Import(nil), page.Imports...),
 		Body:      page.Blocks.ViewBody,
+		Nodes:     append([]view.Node(nil), page.Blocks.ViewNodes...),
 		Span:      page.Blocks.Spans.View,
 		BodyStart: page.Blocks.Spans.ViewBodyStart,
 	}
@@ -321,6 +323,7 @@ func (builder *irBuilder) addComponentTemplate(component gwdkir.Component) {
 		Source:    component.Source,
 		Imports:   append([]gwdkir.Import(nil), component.Imports...),
 		Body:      component.Blocks.ViewBody,
+		Nodes:     append([]view.Node(nil), component.Blocks.ViewNodes...),
 		Span:      component.Blocks.Spans.View,
 		BodyStart: component.Blocks.Spans.ViewBodyStart,
 	})
@@ -339,6 +342,7 @@ func (builder *irBuilder) addLayout(layout gwdkir.Layout) {
 		Package:   layout.Package,
 		Source:    layout.Source,
 		Body:      layout.Blocks.ViewBody,
+		Nodes:     append([]view.Node(nil), layout.Blocks.ViewNodes...),
 		Span:      layout.Blocks.Spans.View,
 		BodyStart: layout.Blocks.Spans.ViewBodyStart,
 	})

@@ -55,6 +55,10 @@ Implemented today:
   into one local binary.
 - Generated apps include POST endpoint handlers for the first supported
   action subset on concrete SPA page paths.
+- Generated embedded and backend-only app packages expose
+  `RegisterMiddleware(runtime/app.Middleware)`. Registered middleware wraps the
+  full generated app handler chain in registration order before static serving,
+  health checks, generated headers, and request-time route dispatch.
 - `gowdk inspect go-bindings` reports Go binding status for actions, APIs,
   fragments, SSR load functions, build-time Go calls, and web command/query
   references. `gowdk generate stubs` can write missing action/API handler
@@ -256,9 +260,12 @@ for `.gowdk/app/cmd/server` and writes `dist/site`.
 
 The generated `gowdkapp` package exposes `Handler() (http.Handler, error)` and
 `ServeMux() (*http.ServeMux, error)` for `net/http`, Chi, Echo, Gin, and other
-router integrations. The generated `cmd/server` entrypoint uses that same
-handler, reads `GOWDK_ADDR`, defaults to `127.0.0.1:8080`, serves GET and HEAD
-requests, applies `http.Server` defaults of `ReadHeaderTimeout: 5s`,
+router integrations. It also exposes `RegisterMiddleware` for app-owned
+`net/http` middleware that should be installed before `Handler()` or
+`ServeMux()` constructs the generated handler. The generated `cmd/server`
+entrypoint uses that same handler, reads `GOWDK_ADDR`, defaults to
+`127.0.0.1:8080`, serves GET and HEAD requests, applies `http.Server` defaults
+of `ReadHeaderTimeout: 5s`,
 `ReadTimeout: 10s`, `WriteTimeout: 30s`, `IdleTimeout: 60s`, and
 `MaxHeaderBytes: 1 MiB`, maps extensionless routes to nested `index.html`
 files, and does not list directories. It exposes `/_gowdk/health` and adds

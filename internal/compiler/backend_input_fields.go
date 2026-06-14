@@ -190,8 +190,8 @@ func structTagValue(tag string, key string) (string, bool, error) {
 
 func backendInputFieldType(expression ast.Expr) (string, bool) {
 	if ident, ok := expression.(*ast.Ident); ok {
-		if source.BackendInputFieldTypeSupported(ident.Name) {
-			return ident.Name, true
+		if fieldType, ok := source.LookupBackendInputFieldType(ident.Name); ok {
+			return fieldType.Name, true
 		}
 		return "", false
 	}
@@ -203,14 +203,14 @@ func backendInputFieldType(expression ast.Expr) (string, bool) {
 	if !ok || ident.Name != "string" {
 		return "", false
 	}
-	return "[]string", true
+	return source.BackendInputTypeStringSlice, true
 }
 
 func backendTypedInputFieldType(typ types.Type) (string, bool) {
 	typ = types.Unalias(typ)
 	if basic, ok := typ.Underlying().(*types.Basic); ok {
-		if source.BackendInputFieldTypeSupported(basic.Name()) {
-			return basic.Name(), true
+		if fieldType, ok := source.LookupBackendInputFieldType(basic.Name()); ok {
+			return fieldType.Name, true
 		}
 		return "", false
 	}
@@ -222,5 +222,5 @@ func backendTypedInputFieldType(typ types.Type) (string, bool) {
 	if !ok || basic.Kind() != types.String {
 		return "", false
 	}
-	return "[]string", true
+	return source.BackendInputTypeStringSlice, true
 }

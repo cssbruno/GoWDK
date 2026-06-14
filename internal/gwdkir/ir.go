@@ -5,6 +5,7 @@ package gwdkir
 import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/source"
+	"github.com/cssbruno/gowdk/internal/view"
 )
 
 // Program is the normalized compiler IR produced from analyzed .gwdk sources.
@@ -121,23 +122,42 @@ type PageMetadata struct {
 }
 
 type Blocks struct {
-	Paths      bool
-	PathsBody  string
-	Build      bool
-	BuildBody  string
-	Load       bool
-	LoadBody   string
-	Client     bool
-	ClientBody string
-	GoBlocks   []GoBlock
-	View       bool
-	ViewBody   string
-	Style      bool
-	StyleBody  string
-	Actions    []Action
-	APIs       []API
-	Fragments  []FragmentEndpoint
-	Spans      BlockSpans
+	Paths        bool
+	PathsBody    string
+	PathsRecords []LiteralRecord `json:"-"`
+	Build        bool
+	BuildBody    string
+	BuildRecords []LiteralRecord `json:"-"`
+	BuildCall    *BuildCall      `json:"-"`
+	Load         bool
+	LoadBody     string
+	Client       bool
+	ClientBody   string
+	GoBlocks     []GoBlock
+	View         bool
+	ViewBody     string
+	ViewNodes    []view.Node `json:"-"`
+	Style        bool
+	StyleBody    string
+	Actions      []Action
+	APIs         []API
+	Fragments    []FragmentEndpoint
+	Spans        BlockSpans
+}
+
+// LiteralRecord is a parsed literal record from paths {} or build {}.
+type LiteralRecord struct {
+	Fields      map[string]string
+	Expressions map[string]string `json:"-"`
+	FieldOrder  []string          `json:"-"`
+	Span        source.SourceSpan
+}
+
+// BuildCall is a parsed imported or same-package build data function call.
+type BuildCall struct {
+	Alias    string
+	Function string
+	Span     source.SourceSpan
 }
 
 // GoBlock records one optional inline Go authoring block preserved for the
@@ -430,6 +450,7 @@ type Template struct {
 	Guards    []string
 	Imports   []Import
 	Body      string
+	Nodes     []view.Node `json:"-"`
 	Span      source.SourceSpan
 	BodyStart source.SourcePosition
 }

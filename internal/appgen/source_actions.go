@@ -663,16 +663,20 @@ func boundActionDecoderDecl(action BackendActionAdapter) *ast.FuncDecl {
 
 func boundActionFieldDecodeStmts(index int, field source.BackendInputField) []ast.Stmt {
 	value := id(fmtFieldValueName(index))
-	switch {
-	case field.Type == "string":
+	fieldType, ok := source.LookupBackendInputFieldType(field.Type)
+	if !ok {
+		panic(fmt.Sprintf("unsupported backend input field type %q for %s.%s", field.Type, field.FieldName, field.FormName))
+	}
+	switch fieldType.Kind {
+	case source.BackendInputFieldKindString:
 		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "String"), id("values"), stringLit(field.FormName)), value)
-	case field.Type == "bool":
+	case source.BackendInputFieldKindBool:
 		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "Bool"), id("values"), stringLit(field.FormName)), value)
-	case source.BackendInputFieldSignedInteger(field.Type):
-		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "Int"), id("values"), stringLit(field.FormName), intLit(source.BackendInputFieldIntegerBitSize(field.Type))), convertIfNeeded(field.Type, value))
-	case source.BackendInputFieldUnsignedInteger(field.Type):
-		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "Uint"), id("values"), stringLit(field.FormName), intLit(source.BackendInputFieldIntegerBitSize(field.Type))), convertIfNeeded(field.Type, value))
-	case field.Type == "[]string":
+	case source.BackendInputFieldKindSignedInt:
+		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "Int"), id("values"), stringLit(field.FormName), intLit(fieldType.BitSize)), convertIfNeeded(field.Type, value))
+	case source.BackendInputFieldKindUnsignedInt:
+		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "Uint"), id("values"), stringLit(field.FormName), intLit(fieldType.BitSize)), convertIfNeeded(field.Type, value))
+	case source.BackendInputFieldKindStringSlice:
 		return []ast.Stmt{
 			define([]ast.Expr{value}, call(sel("gowdkform", "Strings"), id("values"), stringLit(field.FormName))),
 			&ast.IfStmt{
@@ -704,10 +708,11 @@ func fmtFieldValueName(index int) string {
 }
 
 func convertIfNeeded(goType string, value ast.Expr) ast.Expr {
-	if goType == "string" || goType == "bool" || goType == "[]string" {
+	fieldType := source.MustBackendInputFieldType(goType)
+	if fieldType.Kind == source.BackendInputFieldKindString || fieldType.Kind == source.BackendInputFieldKindBool || fieldType.Kind == source.BackendInputFieldKindStringSlice {
 		return value
 	}
-	return call(id(goType), value)
+	return call(id(fieldType.Name), value)
 }
 
 func actionDecoderName(action BackendActionAdapter) string {

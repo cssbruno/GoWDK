@@ -11,9 +11,13 @@ import (
 )
 
 func validateComponentListDirectives(component gwdkir.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction) []ValidationError {
-	nodes, err := view.Parse(component.Blocks.ViewBody)
-	if err != nil {
-		return nil
+	nodes := component.Blocks.ViewNodes
+	if len(nodes) == 0 {
+		var err error
+		nodes, err = view.Parse(component.Blocks.ViewBody)
+		if err != nil {
+			return nil
+		}
 	}
 	var messages []spannedMessage
 	validateListNodes(nodes, component, symbols, stateTypes, handlers, helpers, &messages)

@@ -131,7 +131,7 @@ func TestPageScriptsReportsComponentTraversalErrors(t *testing.T) {
 		},
 	}
 
-	_, err := pageScripts(gowdk.Config{}, page, page.Blocks.ViewBody, components, renderModeSPA)
+	_, err := pageScripts(gowdk.Config{}, page, page.Blocks.ViewBody, nil, components, renderModeSPA)
 	if err == nil {
 		t.Fatal("expected component traversal error")
 	}

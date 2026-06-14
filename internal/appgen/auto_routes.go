@@ -119,7 +119,7 @@ func assignBackendAliases(options *Options) {
 	}
 	sort.Strings(importPaths)
 	aliases := map[string]string{}
-	used := map[string]int{}
+	used := generatedImportAliasUseCounts()
 	for _, importPath := range importPaths {
 		base := safeImportAlias(paths[importPath])
 		if base == "" {
@@ -128,12 +128,7 @@ func assignBackendAliases(options *Options) {
 		if base == "" {
 			base = "feature"
 		}
-		used[base]++
-		alias := base
-		if used[base] > 1 {
-			alias = fmt.Sprintf("%s%d", base, used[base])
-		}
-		aliases[importPath] = alias
+		aliases[importPath] = nextImportAlias(base, used)
 	}
 	for index := range options.Actions {
 		options.Actions[index].BackendAlias = aliases[options.Actions[index].Binding.ImportPath]
@@ -147,6 +142,49 @@ func assignBackendAliases(options *Options) {
 	for index := range options.SSR {
 		options.SSR[index].LoadBackendAlias = aliases[options.SSR[index].LoadBinding.ImportPath]
 	}
+}
+
+func generatedImportAliasUseCounts() map[string]int {
+	used := map[string]int{}
+	for _, alias := range []string{
+		"context",
+		"embed",
+		"errors",
+		"fmt",
+		"fs",
+		"gowdkactions",
+		"gowdkauth",
+		"gowdkcontracts",
+		"gowdkform",
+		"gowdkguard",
+		"gowdkhtml",
+		"gowdkpartial",
+		"gowdkratelimit",
+		"gowdkresponse",
+		"gowdkruntime",
+		"gowdkroute",
+		"gowdkssr",
+		"gowdkvalidation",
+		"http",
+		"httputil",
+		"neturl",
+		"os",
+		"path",
+		"strings",
+		"sync",
+		"utf8",
+	} {
+		used[alias] = 1
+	}
+	return used
+}
+
+func nextImportAlias(base string, used map[string]int) string {
+	used[base]++
+	if used[base] == 1 {
+		return base
+	}
+	return fmt.Sprintf("%s%d", base, used[base])
 }
 
 func safeImportAlias(value string) string {

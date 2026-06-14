@@ -1769,6 +1769,68 @@ var Config = gowdk.Config{
 	})
 }
 
+func TestDevRuntimeProcessRestartWaitsForPreviousAppExit(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "main.go")
+	writeCLIFile(t, source, `package main
+
+func main() {
+	select {}
+}
+`)
+	binary := filepath.Join(root, "app")
+	if os.PathSeparator == '\\' {
+		binary += ".exe"
+	}
+	build := exec.Command("go", "build", "-o", binary, source)
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build helper app: %v\n%s", err, output)
+	}
+
+	process := &devRuntimeProcess{
+		plan: devRuntime{Enabled: true, BinaryPath: binary},
+		addr: "127.0.0.1:0",
+	}
+	if err := process.restart(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(process.stop)
+	first := activeDevRuntimeCommand(t, process)
+
+	if err := process.restart(); err != nil {
+		t.Fatal(err)
+	}
+	if first.ProcessState == nil {
+		t.Fatal("expected restart to wait for the previous app process to exit")
+	}
+	second := activeDevRuntimeCommand(t, process)
+	if second == first {
+		t.Fatal("expected restart to launch a new app process")
+	}
+
+	process.stop()
+	if second.ProcessState == nil {
+		t.Fatal("expected stop to wait for the active app process to exit")
+	}
+	process.mu.Lock()
+	active := process.cmd
+	waitDone := process.waitDone
+	process.mu.Unlock()
+	if active != nil || waitDone != nil {
+		t.Fatalf("expected stopped process state to be cleared, got cmd=%v waitDone=%v", active, waitDone)
+	}
+}
+
+func activeDevRuntimeCommand(t *testing.T, process *devRuntimeProcess) *exec.Cmd {
+	t.Helper()
+	process.mu.Lock()
+	defer process.mu.Unlock()
+	if process.cmd == nil {
+		t.Fatal("expected active dev runtime command")
+	}
+	return process.cmd
+}
+
 func TestParsePreviewOptions(t *testing.T) {
 	options, err := parsePreviewOptions([]string{"--addr=127.0.0.1:9090", "--hot", "--out", "preview-dist", "home.page.gwdk"})
 	if err != nil {

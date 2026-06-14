@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cssbruno/gowdk/internal/appgen"
@@ -146,9 +147,11 @@ type devRuntime struct {
 }
 
 type devRuntimeProcess struct {
-	plan devRuntime
-	addr string
-	cmd  *exec.Cmd
+	plan     devRuntime
+	addr     string
+	mu       sync.Mutex
+	cmd      *exec.Cmd
+	waitDone chan error
 }
 
 func (process *devRuntimeProcess) restart() error {
@@ -160,23 +163,53 @@ func (process *devRuntimeProcess) restart() error {
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("start generated app: %w", err)
 	}
+	waitDone := make(chan error, 1)
+	process.mu.Lock()
 	process.cmd = command
-	go func() {
-		if err := command.Wait(); err != nil && process.cmd == command {
-			fmt.Fprintln(os.Stderr, err)
-		}
-	}()
+	process.waitDone = waitDone
+	process.mu.Unlock()
+	go process.wait(command, waitDone)
 	return nil
 }
 
 func (process *devRuntimeProcess) stop() {
-	if process.cmd == nil || process.cmd.Process == nil {
+	command, waitDone := process.activeCommand()
+	if command == nil || command.Process == nil {
 		return
 	}
-	if err := process.cmd.Process.Kill(); err != nil {
+	if err := command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		fmt.Fprintln(os.Stderr, err)
 	}
+	if waitDone != nil {
+		<-waitDone
+	}
+}
+
+func (process *devRuntimeProcess) activeCommand() (*exec.Cmd, <-chan error) {
+	process.mu.Lock()
+	defer process.mu.Unlock()
+	command := process.cmd
+	waitDone := process.waitDone
 	process.cmd = nil
+	process.waitDone = nil
+	return command, waitDone
+}
+
+func (process *devRuntimeProcess) wait(command *exec.Cmd, waitDone chan<- error) {
+	err := command.Wait()
+	waitDone <- err
+
+	process.mu.Lock()
+	active := process.cmd == command
+	if active {
+		process.cmd = nil
+		process.waitDone = nil
+	}
+	process.mu.Unlock()
+
+	if err != nil && active {
+		fmt.Fprintln(os.Stderr, err)
+	}
 }
 
 func parseDevOptions(args []string) (devOptions, error) {

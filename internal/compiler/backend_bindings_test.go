@@ -449,11 +449,23 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 	}}}
 
 	ir := app.program(gowdk.Config{})
-	if err := DiscoverGoEndpoints(&ir); err != nil {
+	if err := DiscoverGoEndpoints(gowdk.Config{}, &ir); err != nil {
 		t.Fatal(err)
 	}
 	if len(ir.GoEndpoints) != 2 {
 		t.Fatalf("expected two Go comment endpoints, got %#v", ir.GoEndpoints)
+	}
+	for _, endpoint := range ir.Endpoints {
+		switch endpoint.Symbol {
+		case "Login":
+			if !endpoint.CSRF {
+				t.Fatalf("expected discovered action endpoint to default to CSRF protected: %#v", endpoint)
+			}
+		case "Session":
+			if endpoint.CSRF {
+				t.Fatalf("expected discovered API endpoint not to be CSRF protected: %#v", endpoint)
+			}
+		}
 	}
 	if err := ValidateProgram(gowdk.Config{}, ir); err != nil {
 		t.Fatal(err)
@@ -517,7 +529,7 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 			}}}
 
 			ir := app.program(gowdk.Config{})
-			err := DiscoverGoEndpoints(&ir)
+			err := DiscoverGoEndpoints(gowdk.Config{}, &ir)
 			if err == nil {
 				t.Fatal("expected malformed endpoint comment diagnostic")
 			}
@@ -562,11 +574,47 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 	}}}
 
 	ir := app.program(gowdk.Config{})
-	if err := DiscoverGoEndpoints(&ir); err != nil {
+	if err := DiscoverGoEndpoints(gowdk.Config{}, &ir); err != nil {
 		t.Fatal(err)
 	}
 	if len(ir.GoEndpoints) != 1 || ir.GoEndpoints[0].Route != "/api/session" {
 		t.Fatalf("expected only the valid GOWDK endpoint, got %#v", ir.GoEndpoints)
+	}
+}
+
+func TestDiscoverGoEndpointCommentsHonorsDisabledCSRF(t *testing.T) {
+	root := t.TempDir()
+	writeCompilerTestModule(t, root)
+	writeCompilerTestFile(t, filepath.Join(root, "handlers.go"), `package api
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+//gowdk:act POST /login
+func Login(context.Context) (response.Response, error) {
+	return response.Response{}, nil
+}
+`)
+	app := appFixture{Pages: []gwdkir.Page{{
+		ID:     "home",
+		Source: filepath.Join(root, "home.page.gwdk"),
+		Route:  "/",
+		Guards: []string{"public"},
+		Blocks: gwdkir.Blocks{View: true, ViewBody: "<main>Home</main>"},
+	}}}
+	config := gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{Disabled: true}}}
+
+	ir := app.program(config)
+	if err := DiscoverGoEndpoints(config, &ir); err != nil {
+		t.Fatal(err)
+	}
+	for _, endpoint := range ir.Endpoints {
+		if endpoint.Symbol == "Login" && endpoint.CSRF {
+			t.Fatalf("expected discovered action endpoint to honor disabled CSRF: %#v", endpoint)
+		}
 	}
 }
 

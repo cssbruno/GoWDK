@@ -39,7 +39,7 @@ func ValidateBackendBindingPolicyIR(config gowdk.Config, ir gwdkir.Program) erro
 	if len(diagnostics) == 0 {
 		return nil
 	}
-	return ValidationErrors(diagnostics)
+	return normalizeValidationErrors(diagnostics)
 }
 
 func programDeclaresBackendEndpoints(ir gwdkir.Program) bool {

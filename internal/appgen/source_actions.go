@@ -682,7 +682,7 @@ func boundActionFieldDecodeStmts(index int, field source.BackendInputField) []as
 			},
 		}
 	default:
-		panic("unsupported backend input field kind: " + string(fieldType.Kind))
+		panic(fmt.Sprintf("unsupported backend input field type %q for %s.%s", field.Type, field.FieldName, field.FormName))
 	}
 }
 

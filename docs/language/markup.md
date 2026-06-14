@@ -225,7 +225,8 @@ Rejected URL forms:
 
 - Active-content or ambiguous schemes such as `javascript:`, `vbscript:`, and
   `data:`.
-- Protocol-relative URLs such as `//example.com/app.js`.
+- Protocol-relative and browser-normalized host-relative URLs such as
+  `//example.com/app.js` or `/\example.com/app.js`.
 - URL values containing control characters.
 
 The policy applies to literal URL attributes and to values resolved through

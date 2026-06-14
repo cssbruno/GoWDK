@@ -81,6 +81,7 @@ type openAPISchema struct {
 
 type openAPIGOWDKExtension struct {
 	Kind           string   `json:"kind"`
+	Route          string   `json:"route,omitempty"`
 	Source         string   `json:"source,omitempty"`
 	PageID         string   `json:"pageId,omitempty"`
 	Symbol         string   `json:"symbol,omitempty"`
@@ -162,6 +163,7 @@ func addOpenAPIEndpointOperation(paths map[string]openAPIPath, components map[st
 		Responses:   endpointResponses(components, string(endpoint.Kind), ""),
 		XGOWDK: openAPIGOWDKExtension{
 			Kind:           string(endpoint.Kind),
+			Route:          endpoint.Path,
 			Source:         endpoint.SourceFile,
 			PageID:         endpoint.PageID,
 			Symbol:         endpoint.Symbol,
@@ -192,6 +194,7 @@ func addOpenAPIContractOperation(paths map[string]openAPIPath, components map[st
 		Responses:   endpointResponses(components, kind, ref.Result),
 		XGOWDK: openAPIGOWDKExtension{
 			Kind:          kind,
+			Route:         ref.Path,
 			Source:        ref.Source,
 			PageID:        ref.OwnerID,
 			Symbol:        ref.Name,

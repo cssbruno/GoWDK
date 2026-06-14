@@ -1,4 +1,4 @@
-package echo
+package chi
 
 import (
 	"net/http"
@@ -7,7 +7,7 @@ import (
 
 	gowdkadapters "github.com/cssbruno/gowdk/runtime/adapters"
 	"github.com/cssbruno/gowdk/runtime/adapters/internal/conformance"
-	echoframework "github.com/labstack/echo/v5"
+	chiframework "github.com/go-chi/chi/v5"
 )
 
 const openAPISpec = `{
@@ -28,14 +28,14 @@ const emptyOpenAPISpec = `{
 }`
 
 func TestHandlerWrapsHTTPHandler(t *testing.T) {
-	engine := echoframework.New()
-	Mount(engine, "/*", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	router := chiframework.NewRouter()
+	Mount(router, "/", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		context, ok := Context(request.Context())
 		if !ok {
-			t.Fatal("expected Echo context")
+			t.Fatal("expected chi context")
 		}
-		writer.Header().Set("X-GOWDK-Test", "echo")
-		writer.Header().Set("X-GOWDK-Route", context.Path())
+		writer.Header().Set("X-GOWDK-Test", "chi")
+		writer.Header().Set("X-GOWDK-Route", context.RoutePattern())
 		_, _ = writer.Write([]byte(request.Method + " " + request.URL.Path))
 	}))
 
@@ -49,40 +49,56 @@ func TestHandlerWrapsHTTPHandler(t *testing.T) {
 	} {
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(test.method, test.path, nil)
-		engine.ServeHTTP(recorder, request)
+		router.ServeHTTP(recorder, request)
 
 		if recorder.Code != http.StatusOK || recorder.Body.String() != test.method+" "+test.path {
 			t.Fatalf("unexpected response for %s %s: %d %q", test.method, test.path, recorder.Code, recorder.Body.String())
 		}
-		if recorder.Header().Get("X-GOWDK-Test") != "echo" {
+		if recorder.Header().Get("X-GOWDK-Test") != "chi" {
 			t.Fatalf("expected wrapped handler header, got %#v", recorder.Header())
-		}
-		if recorder.Header().Get("X-GOWDK-Route") != "/*" {
-			t.Fatalf("expected attached Echo context route, got %#v", recorder.Header())
 		}
 	}
 }
 
 func TestMountOpenAPIConformance(t *testing.T) {
 	conformance.AssertOpenAPIConformance(t, []byte(openAPISpec), "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
-		engine := echoframework.New()
-		err := MountOpenAPI(engine, []byte(openAPISpec), handler, WithPrefix(prefix))
-		return engine, err
+		router := chiframework.NewRouter()
+		err := MountOpenAPI(router, []byte(openAPISpec), handler, WithPrefix(prefix))
+		return router, err
 	})
 }
 
 func TestMountOpenAPIFallbackConformance(t *testing.T) {
 	conformance.AssertEmptyOpenAPIFallback(t, []byte(emptyOpenAPISpec), "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
-		engine := echoframework.New()
-		err := MountOpenAPI(engine, []byte(emptyOpenAPISpec), handler, WithPrefix(prefix))
-		return engine, err
+		router := chiframework.NewRouter()
+		err := MountOpenAPI(router, []byte(emptyOpenAPISpec), handler, WithPrefix(prefix))
+		return router, err
 	})
 }
 
 func TestMountOpenAPIRestRouteConformance(t *testing.T) {
 	conformance.AssertOpenAPIRestRoute(t, "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
-		engine := echoframework.New()
-		err := MountRoutes(engine, routes, handler, WithPrefix(prefix))
-		return engine, err
+		router := chiframework.NewRouter()
+		err := MountRoutes(router, routes, handler, WithPrefix(prefix))
+		return router, err
 	})
+}
+
+func TestMountRoutesMatchesRestParam(t *testing.T) {
+	router := chiframework.NewRouter()
+	err := MountRoutes(router, []gowdkadapters.Route{
+		{Method: http.MethodGet, Path: "/files/{path...}"},
+	}, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = writer.Write([]byte("matched"))
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/files/one/two", nil)
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || recorder.Body.String() != "matched" {
+		t.Fatalf("unexpected response for rest route: status=%d body=%q", recorder.Code, recorder.Body.String())
+	}
 }

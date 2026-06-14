@@ -153,10 +153,10 @@ func ValidateBackendRoutePath(value string) error {
 	if value == "" {
 		return fmt.Errorf("endpoint path must not be empty")
 	}
-	if !strings.HasPrefix(value, "/") {
+	if value[0] != '/' {
 		return fmt.Errorf("endpoint path %q must be a local absolute path", value)
 	}
-	if strings.HasPrefix(value, "//") {
+	if len(value) > 1 && (value[1] == '/' || value[1] == '\\') {
 		return fmt.Errorf("endpoint path %q must not be protocol-relative", value)
 	}
 	if strings.Contains(value, "\\") {
@@ -186,10 +186,10 @@ func ValidateBackendRoutePattern(value string) error {
 	if value == "" {
 		return fmt.Errorf("endpoint path must not be empty")
 	}
-	if !strings.HasPrefix(value, "/") {
+	if value[0] != '/' {
 		return fmt.Errorf("endpoint path %q must be a local absolute path", value)
 	}
-	if strings.HasPrefix(value, "//") {
+	if len(value) > 1 && (value[1] == '/' || value[1] == '\\') {
 		return fmt.Errorf("endpoint path %q must not be protocol-relative", value)
 	}
 	if strings.Contains(value, "\\") {

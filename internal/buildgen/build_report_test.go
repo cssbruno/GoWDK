@@ -184,6 +184,16 @@ func TestBuildEmitsSPANavigationRuntimeForInternalLinks(t *testing.T) {
 	}
 }
 
+func TestInternalNavigationHrefRejectsAmbiguousRootURLs(t *testing.T) {
+	for _, href := range []string{"//example.com/docs", `/\example.com\docs`} {
+		t.Run(href, func(t *testing.T) {
+			if isInternalNavigationHref(href) {
+				t.Fatalf("href %q was classified as internal navigation", href)
+			}
+		})
+	}
+}
+
 func TestBuildWritesPageMetadataToSPAHTMLHead(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{

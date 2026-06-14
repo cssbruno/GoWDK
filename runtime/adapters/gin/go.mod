@@ -2,7 +2,12 @@ module github.com/cssbruno/gowdk/runtime/adapters/gin
 
 go 1.26.4
 
-require github.com/gin-gonic/gin v1.12.0
+require (
+	github.com/cssbruno/gowdk v0.3.0
+	github.com/gin-gonic/gin v1.12.0
+)
+
+replace github.com/cssbruno/gowdk => ../../..
 
 require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
@@ -31,7 +36,7 @@ require (
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )

@@ -236,7 +236,13 @@ func canonicalTrailingSlashPath(requestPath string) (string, bool) {
 	if requestPath == "" || requestPath == "/" || !strings.HasSuffix(requestPath, "/") {
 		return "", false
 	}
+	if len(requestPath) > 1 && (requestPath[1] == '/' || requestPath[1] == '\\') {
+		return "", false
+	}
 	canonical := path.Clean("/" + requestPath)
+	if len(canonical) > 1 && (canonical[1] == '/' || canonical[1] == '\\') {
+		return "", false
+	}
 	if canonical == requestPath {
 		return "", false
 	}
@@ -285,7 +291,13 @@ func safeRedirectPath(request *http.Request) string {
 	if target == "" {
 		target = "/"
 	}
+	if len(target) == 0 || target[0] != '/' || (len(target) > 1 && (target[1] == '/' || target[1] == '\\')) {
+		return "/"
+	}
 	if parsed.RawQuery != "" {
+		if strings.ContainsAny(parsed.RawQuery, "\r\n") {
+			return "/"
+		}
 		target += "?" + parsed.RawQuery
 	}
 	return target

@@ -61,7 +61,7 @@ tooling contracts may change before a stable release.
 - Framework comparison docs as core positioning.
 - Mandatory full-page SSR or full-page hydration.
 - User-written JavaScript as the normal app contract.
-- Mandatory Tailwind, npm, Gin, Echo, Fiber, Redis, NATS, or another optional
+- Mandatory Tailwind, npm, Chi, Gin, Echo, Fiber, Redis, NATS, or another optional
   framework/tool dependency.
 - Replacing backend authorization with generated page guards.
 

@@ -94,8 +94,9 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 		"//go:embed app",
 		"func Handler() (http.Handler, error)",
 		"func ServeMux() (*http.ServeMux, error)",
+		"func RegisterMiddleware(middleware gowdkruntime.Middleware)",
 		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
-		`mux.Handle("/", gowdkruntime.Handler{`,
+		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{`,
 		`Identity: gowdkruntime.InstanceIdentity(),`,
 		`Assets: gowdkruntime.LoadAssetManifest(root),`,
 		`ErrorPages: gowdkruntime.LoadErrorPages(root),`,
@@ -873,13 +874,14 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`errors`,
+		`"errors"`,
 		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
-		`os`,
+		`"os"`,
 		`strings`,
+		`func RegisterMiddleware(middleware gowdkruntime.Middleware)`,
 		`if err := validateEnvContract(); err != nil {`,
 		`backendRouter, err := newBackendRouter()`,
-		`mux.Handle("/", backendRouter)`,
+		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(backendRouter, registeredMiddlewares()...))`,
 		`func validateEnvContract() error`,
 		`value := os.Getenv("GOWDK_TEST_DATABASE_URL")`,
 		`missing = append(missing, "GOWDK_TEST_DATABASE_URL is required but is not set")`,
@@ -899,6 +901,83 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 	}
 	if strings.Contains(source, `func backend(response http.ResponseWriter, request *http.Request) bool`) {
 		t.Fatalf("expected backend-only app to use BackendRouter instead of generated backend dispatcher:\n%s", source)
+	}
+}
+
+func TestGenerateRenamesBackendAliasReservedByGeneratedRuntime(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		PageID:     "newsletter",
+		ActionName: "Subscribe",
+		Method:     "POST",
+		Route:      "/newsletter",
+		Binding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/sync",
+			PackageName:  "sync",
+			FunctionName: "Subscribe",
+			Signature:    source.BackendSignatureAction0,
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frontendSource := string(payload)
+	for _, expected := range []string{
+		`sync2 "example.com/app/sync"`,
+		`"sync"`,
+		`result, err := sync2.Subscribe(ctx)`,
+		`middlewareMu sync.RWMutex`,
+	} {
+		if !strings.Contains(frontendSource, expected) {
+			t.Fatalf("expected generated app source to contain %q:\n%s", expected, frontendSource)
+		}
+	}
+	if strings.Contains(frontendSource, `sync "example.com/app/sync"`) {
+		t.Fatalf("backend import must not overwrite generated sync import:\n%s", frontendSource)
+	}
+
+	backendResult, err := GenerateBackendWithOptions(filepath.Join(root, "generated-backend"), Options{APIs: []APIEndpoint{{
+		PageID:  "status",
+		APIName: "Health",
+		Method:  "GET",
+		Route:   "/api/health",
+		Binding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/sync",
+			PackageName:  "sync",
+			FunctionName: "Health",
+			Signature:    source.BackendSignatureAPI,
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	backendPayload, err := os.ReadFile(backendResult.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backendSource := string(backendPayload)
+	for _, expected := range []string{
+		`sync2 "example.com/app/sync"`,
+		`"sync"`,
+		`result, err := sync2.Health(ctx, request)`,
+		`middlewareMu sync.RWMutex`,
+	} {
+		if !strings.Contains(backendSource, expected) {
+			t.Fatalf("expected generated backend app source to contain %q:\n%s", expected, backendSource)
+		}
+	}
+	if strings.Contains(backendSource, `sync "example.com/app/sync"`) {
+		t.Fatalf("backend-only import must not overwrite generated sync import:\n%s", backendSource)
 	}
 }
 
@@ -929,7 +1008,7 @@ func TestGenerateBackendAppWiresSecurityHeaders(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`"strings"`,
-		`mux.Handle("/", http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {`,
+		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {`,
 		`for name, value := range map[string]string{"X-Frame-Options": "DENY"} {`,
 		`if strings.TrimSpace(name) == "" {`,
 		`response.Header().Set(name, value)`,

@@ -1,6 +1,7 @@
 package appgen
 
 import (
+	"path"
 	"sort"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
@@ -336,7 +337,67 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			})
 		}
 	}
+	reserveGeneratedBackendAdapterAliases(&ir)
 	return ir
+}
+
+func reserveGeneratedBackendAdapterAliases(ir *BackendAdapterIR) {
+	paths := map[string]string{}
+	for _, call := range ir.Calls {
+		if call.ImportPath != "" && call.Alias != "" {
+			paths[call.ImportPath] = call.Alias
+		}
+	}
+	for _, exposure := range ir.ContractExposures {
+		if exposure.ImportPath != "" && exposure.ImportAlias != "" {
+			paths[exposure.ImportPath] = exposure.ImportAlias
+		}
+	}
+	if len(paths) == 0 {
+		return
+	}
+	importPaths := make([]string, 0, len(paths))
+	for importPath := range paths {
+		importPaths = append(importPaths, importPath)
+	}
+	sort.Strings(importPaths)
+	used := generatedImportAliasUseCounts()
+	aliases := map[string]string{}
+	for _, importPath := range importPaths {
+		base := safeImportAlias(paths[importPath])
+		if base == "" {
+			base = safeImportAlias(path.Base(importPath))
+		}
+		if base == "" {
+			base = "feature"
+		}
+		aliases[importPath] = nextImportAlias(base, used)
+	}
+	for index := range ir.Actions {
+		if alias := aliases[ir.Actions[index].Binding.ImportPath]; alias != "" {
+			ir.Actions[index].BackendAlias = alias
+		}
+	}
+	for index := range ir.APIs {
+		if alias := aliases[ir.APIs[index].Binding.ImportPath]; alias != "" {
+			ir.APIs[index].BackendAlias = alias
+		}
+	}
+	for index := range ir.Fragments {
+		if alias := aliases[ir.Fragments[index].Binding.ImportPath]; alias != "" {
+			ir.Fragments[index].BackendAlias = alias
+		}
+	}
+	for index := range ir.Calls {
+		if alias := aliases[ir.Calls[index].ImportPath]; alias != "" {
+			ir.Calls[index].Alias = alias
+		}
+	}
+	for index := range ir.ContractExposures {
+		if alias := aliases[ir.ContractExposures[index].ImportPath]; alias != "" {
+			ir.ContractExposures[index].ImportAlias = alias
+		}
+	}
 }
 
 func (ir BackendAdapterIR) HasRegistrations() bool {

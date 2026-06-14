@@ -264,7 +264,7 @@ func newIncrementalDependencyIndex(app gwdkanalysis.Sources) (incrementalDepende
 
 func pageComponentDependencies(page gwdkir.Page, components map[string]gwdkir.Component, layouts map[string]gwdkir.Layout) map[string]bool {
 	seen := map[string]bool{}
-	collectComponentDependenciesFromView(page.Package, page.Uses, page.Blocks.ViewBody, components, seen)
+	collectComponentDependenciesFromView(page.Package, page.Uses, page.Blocks.ViewBody, page.Blocks.ViewNodes, components, seen)
 	for _, ref := range page.Layouts {
 		if layout, ok := resolvePageLayoutDependency(page.Package, page.Uses, ref, layouts); ok {
 			collectLayoutComponentDependencies(layout, layouts, components, map[string]bool{}, seen)
@@ -273,10 +273,16 @@ func pageComponentDependencies(page gwdkir.Page, components map[string]gwdkir.Co
 	return seen
 }
 
-func collectComponentDependenciesFromView(ownerPackage string, uses []gwdkir.Use, viewBody string, components map[string]gwdkir.Component, seen map[string]bool) {
-	refs, err := view.ComponentReferences(viewBody)
-	if err != nil {
-		return
+func collectComponentDependenciesFromView(ownerPackage string, uses []gwdkir.Use, viewBody string, viewNodes []view.Node, components map[string]gwdkir.Component, seen map[string]bool) {
+	var refs []string
+	if len(viewNodes) > 0 {
+		refs = view.ComponentReferencesFromNodes(viewNodes)
+	} else {
+		var err error
+		refs, err = view.ComponentReferences(viewBody)
+		if err != nil {
+			return
+		}
 	}
 	for _, ref := range refs {
 		if component, ok := resolveComponentRef(ownerPackage, uses, ref, components); ok {
@@ -291,7 +297,7 @@ func collectLayoutComponentDependencies(layout gwdkir.Layout, layouts map[string
 		return
 	}
 	seenLayouts[key] = true
-	collectComponentDependenciesFromView(layout.Package, layout.Uses, layout.Blocks.ViewBody, components, seenComponents)
+	collectComponentDependenciesFromView(layout.Package, layout.Uses, layout.Blocks.ViewBody, layout.Blocks.ViewNodes, components, seenComponents)
 	for _, ref := range layout.Layouts {
 		if parent, ok := resolveLayoutDependency(layout.Package, layout.Uses, ref, layouts); ok {
 			collectLayoutComponentDependencies(parent, layouts, components, seenLayouts, seenComponents)
@@ -305,9 +311,15 @@ func collectComponentDependencies(component gwdkir.Component, components map[str
 		return
 	}
 	seen[key] = true
-	refs, err := view.ComponentReferences(component.Blocks.ViewBody)
-	if err != nil {
-		return
+	var refs []string
+	if len(component.Blocks.ViewNodes) > 0 {
+		refs = view.ComponentReferencesFromNodes(component.Blocks.ViewNodes)
+	} else {
+		var err error
+		refs, err = view.ComponentReferences(component.Blocks.ViewBody)
+		if err != nil {
+			return
+		}
 	}
 	for _, ref := range refs {
 		if child, ok := resolveComponentRef(component.Package, component.Uses, ref, components); ok {

@@ -7,12 +7,33 @@ GOWDK's current hook model is small and `net/http`-first.
 | Extension point | Type | Scope |
 | --- | --- | --- |
 | Generated app handler | `http.Handler` | Wrap with normal Go middleware in app startup. |
+| Generated app middleware | `runtime/app.Middleware` | Register ordered app-wide middleware before building the generated handler. |
 | Guards | `runtime/guard.Registry`, `runtime/auth.Provider` | Generated action, API, fragment, and SSR routes with `guard`. |
 | Rate limiting | `*ratelimit.Limiter` | Generated action, API, fragment, SSR, and split-backend proxy routes when the addon is enabled. |
 | Handler context | `context.Context` | User handlers read request metadata, raw route params, and typed route params through `runtime/app` helpers. |
 
 Generated apps expose `Handler() (http.Handler, error)` and
-`ServeMux() (*http.ServeMux, error)`. App-owned startup code can wrap the
+`ServeMux() (*http.ServeMux, error)`. They also expose
+`RegisterMiddleware(runtime/app.Middleware)` for app-owned middleware that
+should wrap the full generated app dispatch chain:
+
+```go
+gowdkapp.RegisterMiddleware(func(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+	})
+})
+handler, err := gowdkapp.Handler()
+if err != nil {
+	panic(err)
+}
+http.ListenAndServe(":8080", handler)
+```
+
+Register middleware before calling `Handler()` or `ServeMux()`. Middleware runs
+in registration order; a middleware that does not call `next` owns the response
+and skips generated headers, metrics, static serving, and request-time route
+dispatch for that request. App-owned startup code can still wrap the returned
 handler with ordinary middleware:
 
 ```go
@@ -160,6 +181,9 @@ Generated request-time routes call the registered limiter before guards and
 user handler logic. If no limiter is registered, requests continue.
 
 ## Ordering
+
+App-wide middleware registered with `RegisterMiddleware` wraps the entire
+generated handler before the route-time sequence below.
 
 Current generated request-time order:
 

@@ -125,10 +125,12 @@ stable.
 Generated apps expose ordinary `net/http` entry points:
 
 ```go
+gowdkapp.RegisterMiddleware(middleware)
 handler, err := gowdkapp.Handler()
 mux, err := gowdkapp.ServeMux()
 ```
 
-Wrap those with app-owned middleware in startup code. Generated route rewriting,
-response transformation hooks, and fetch/navigation interception hooks are not
-part of the current contract.
+Register app-wide middleware before calling `Handler()` or `ServeMux()`, or
+wrap the returned handler in startup code. Generated route rewriting, response
+transformation hooks, and fetch/navigation interception hooks are not part of
+the current contract.

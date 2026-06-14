@@ -112,8 +112,10 @@ var Config = gowdk.Config{
 }
 ```
 
-The CLI parses this file as a literal config subset and does not execute user Go code. Non-literal
-values are ignored in the current subset.
+The CLI first parses this file as a literal config subset. Unknown top-level
+`gowdk.Config` fields are rejected instead of silently ignored. When a supported
+field contains non-literal Go that the subset cannot reduce safely, the loader
+falls back to the executable config bridge described below.
 
 Addon constructors outside the built-in AST subset are loaded through a small
 Go helper that imports the config package. That means addon packages are normal

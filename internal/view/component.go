@@ -214,9 +214,15 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 		ids: ctx.ids,
 	}
 	childCtx.stack[identity] = true
-	body, err := render(component.Body, childCtx)
-	if err != nil {
-		return err
+	var body string
+	var renderErr error
+	if len(component.Nodes) > 0 {
+		body, renderErr = renderParsedNodes(component.Nodes, childCtx)
+	} else {
+		body, renderErr = render(component.Body, childCtx)
+	}
+	if renderErr != nil {
+		return renderErr
 	}
 	if component.StateJSON != "" || component.HandlersJSON != "" || mode != "" || len(component.Emits) > 0 || len(component.Exports) > 0 || len(propExpressions) > 0 {
 		if mode == "" {

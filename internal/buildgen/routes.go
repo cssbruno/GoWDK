@@ -39,7 +39,7 @@ func pageOutputArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page
 	}
 	artifacts := make([]plannedArtifact, 0, len(outputs))
 	for _, output := range outputs {
-		buildData, err := parseBuildData(page.Blocks.BuildBody, output.data, page.Imports, page.Blocks.GoBlocks, page.Source)
+		buildData, err := parseBuildDataFromBlocks(page.Blocks, output.data, page.Imports, page.Source)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
@@ -69,7 +69,7 @@ func pageOutputs(page gwdkir.Page) ([]pageOutput, error) {
 		return []pageOutput{{route: page.Route}}, nil
 	}
 
-	declarations, err := parsePathDeclarations(page.Blocks.PathsBody)
+	declarations, err := parsePathDeclarationsFromBlocks(page.Blocks)
 	if err != nil {
 		return nil, err
 	}

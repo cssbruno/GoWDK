@@ -167,6 +167,26 @@ view {
 	}
 }
 
+func TestParseSyntaxRejectsDuplicateLiteralRecordField(t *testing.T) {
+	_, err := ParseSyntax([]byte(`page duplicate
+route "/duplicate"
+
+build {
+  => { title: "Home", title: "Again" }
+}
+
+view {
+  <main>Duplicate</main>
+}
+`))
+	if err == nil {
+		t.Fatal("expected duplicate literal record field error")
+	}
+	if !strings.Contains(err.Error(), `duplicate literal record field "title"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestParseSyntaxReadsGoBlocks(t *testing.T) {
 	file, err := ParseSyntax([]byte(`package pages
 page home

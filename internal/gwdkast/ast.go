@@ -230,8 +230,10 @@ type FragmentEndpoint struct {
 
 // LiteralRecord is a first-slice paths/build return record.
 type LiteralRecord struct {
-	Fields map[string]string
-	Span   source.SourceSpan
+	Fields      map[string]string
+	Expressions map[string]string
+	FieldOrder  []string
+	Span        source.SourceSpan
 }
 
 // BuildCall is a first-slice imported build data function call.

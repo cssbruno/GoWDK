@@ -444,6 +444,9 @@ func pageComponents(page gwdkir.Page) []string {
 	if !page.Blocks.View || page.Blocks.ViewBody == "" {
 		return nil
 	}
+	if len(page.Blocks.ViewNodes) > 0 {
+		return view.ComponentReferencesFromNodes(page.Blocks.ViewNodes)
+	}
 	components, err := view.ComponentReferences(page.Blocks.ViewBody)
 	if err != nil {
 		return nil
@@ -454,6 +457,9 @@ func pageComponents(page gwdkir.Page) []string {
 func pageDependencies(page gwdkir.Page) view.Dependencies {
 	if !page.Blocks.View || page.Blocks.ViewBody == "" {
 		return view.Dependencies{}
+	}
+	if len(page.Blocks.ViewNodes) > 0 {
+		return view.ViewDependenciesFromNodes(page.Blocks.ViewNodes)
 	}
 	dependencies, err := view.ViewDependencies(page.Blocks.ViewBody)
 	if err != nil {

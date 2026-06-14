@@ -32,6 +32,8 @@ type LoginInput struct {
 	Remember bool `+"`form:\"remember\"`"+`
 	Age int `+"`form:\"age\"`"+`
 	Score uint64 `+"`form:\"score\"`"+`
+	Code byte `+"`form:\"code\"`"+`
+	Letter rune `+"`form:\"letter\"`"+`
 	Internal string `+"`form:\"-\"`"+`
 	ignored string
 }
@@ -110,7 +112,7 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 	assertBinding(t, bindings["LoginPtr"], source.BackendBindingBound, source.BackendSignatureActionFormPtr, "LoginInput", true)
 	assertBinding(t, bindings["Raw"], source.BackendBindingBound, source.BackendSignatureActionValues, "", false)
 	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
-	assertInputFields(t, bindings["Login"].InputFields, "Email:email:string,Tags:tag:[]string,Remember:remember:bool,Age:age:int,Score:score:uint64")
+	assertInputFields(t, bindings["Login"].InputFields, "Email:email:string,Tags:tag:[]string,Remember:remember:bool,Age:age:int,Score:score:uint64,Code:code:byte,Letter:letter:rune")
 	if got := bindings["Broken"]; got.Status != source.BackendBindingUnsupportedSignature {
 		t.Fatalf("expected Broken unsupported signature, got %#v", got)
 	}

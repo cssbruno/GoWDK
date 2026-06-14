@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -73,6 +75,150 @@ func TestHandlerWritesConfiguredSecurityHeaders(t *testing.T) {
 	}
 	if got := recorder.Header().Values("X-Frame-Options"); len(got) != 1 {
 		t.Fatalf("expected one canonical frame header value, got %#v", got)
+	}
+}
+
+func TestHandlerRunsMiddlewaresInOrder(t *testing.T) {
+	type contextKey struct{}
+	var events []string
+	handler := Handler{
+		Root:     fstest.MapFS{},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Backend: func(response http.ResponseWriter, request *http.Request) bool {
+			if request.URL.Path != "/api" {
+				return false
+			}
+			events = append(events, request.Context().Value(contextKey{}).(string))
+			response.WriteHeader(http.StatusNoContent)
+			return true
+		},
+		Middlewares: []Middleware{
+			func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+					events = append(events, "outer before")
+					ctx := context.WithValue(request.Context(), contextKey{}, "context value")
+					next.ServeHTTP(response, request.WithContext(ctx))
+					events = append(events, "outer after")
+				})
+			},
+			func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+					events = append(events, "inner before")
+					next.ServeHTTP(response, request)
+					events = append(events, "inner after")
+				})
+			},
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	expected := []string{"outer before", "inner before", "context value", "inner after", "outer after"}
+	if strings.Join(events, "|") != strings.Join(expected, "|") {
+		t.Fatalf("unexpected middleware order: %#v", events)
+	}
+}
+
+func TestHandlerMiddlewareCanShortCircuit(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html": {Data: []byte("<main>Home</main>")},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Middlewares: []Middleware{
+			func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+					response.WriteHeader(http.StatusTeapot)
+					_, _ = response.Write([]byte("intercepted"))
+				})
+			},
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusTeapot {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if recorder.Body.String() != "intercepted" {
+		t.Fatalf("unexpected body: %q", recorder.Body.String())
+	}
+	if recorder.Header().Get("X-GOWDK-App") != "" {
+		t.Fatalf("short-circuited middleware should own the response, got app header %q", recorder.Header().Get("X-GOWDK-App"))
+	}
+}
+
+func TestHandlerCachesMiddlewareChain(t *testing.T) {
+	var constructed atomic.Int32
+	handler := Handler{
+		Root:     fstest.MapFS{},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Backend: func(response http.ResponseWriter, request *http.Request) bool {
+			if request.URL.Path != "/api" {
+				return false
+			}
+			response.WriteHeader(http.StatusNoContent)
+			return true
+		},
+		Middlewares: []Middleware{
+			func(next http.Handler) http.Handler {
+				constructed.Add(1)
+				return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+					next.ServeHTTP(response, request)
+				})
+			},
+		},
+	}
+	var wait sync.WaitGroup
+	for range 20 {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, "/api", nil)
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusNoContent {
+				t.Errorf("unexpected status: %d", recorder.Code)
+			}
+		}()
+	}
+	wait.Wait()
+	if constructed.Load() != 1 {
+		t.Fatalf("middleware should be constructed once, got %d", constructed.Load())
+	}
+}
+
+func TestApplyMiddlewaresSkipsNilAndRejectsNilHandler(t *testing.T) {
+	called := false
+	handler := ApplyMiddlewares(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		called = true
+		response.WriteHeader(http.StatusNoContent)
+	}), nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+	if !called || recorder.Code != http.StatusNoContent {
+		t.Fatalf("nil middleware should be skipped, called=%v status=%d", called, recorder.Code)
+	}
+
+	handler = ApplyMiddlewares(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		t.Fatal("next handler should not run after nil middleware result")
+	}), func(next http.Handler) http.Handler {
+		return nil
+	})
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected nil middleware result to fail closed, got %d", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "gowdk middleware returned nil handler") {
+		t.Fatalf("unexpected nil middleware response: %q", recorder.Body.String())
 	}
 }
 

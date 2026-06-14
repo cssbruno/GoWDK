@@ -223,10 +223,13 @@ func applyPageSyntaxBlock(page *gwdkir.Page, block gwdkast.Block) {
 	case "paths":
 		page.Blocks.Paths = true
 		page.Blocks.PathsBody = block.Body
+		page.Blocks.PathsRecords = lowerSyntaxLiteralRecords(block.Records)
 		page.Blocks.Spans.Paths = block.Span
 	case "build":
 		page.Blocks.Build = true
 		page.Blocks.BuildBody = block.Body
+		page.Blocks.BuildRecords = lowerSyntaxLiteralRecords(block.Records)
+		page.Blocks.BuildCall = lowerSyntaxBuildCall(block.Call)
 		page.Blocks.Spans.Build = block.Span
 	case "load":
 		page.Blocks.Load = true
@@ -246,12 +249,44 @@ func applyPageSyntaxBlock(page *gwdkir.Page, block gwdkast.Block) {
 	case "view":
 		page.Blocks.View = true
 		page.Blocks.ViewBody = block.Body
+		page.Blocks.ViewNodes = append(page.Blocks.ViewNodes[:0], block.View...)
 		page.Blocks.Spans.View = block.Span
 		page.Blocks.Spans.ViewBodyStart = block.BodyStart
 	case "style":
 		page.Blocks.StyleBody = block.StyleBody
 		page.Blocks.Style = strings.TrimSpace(block.StyleBody) != ""
 	}
+}
+
+func lowerSyntaxLiteralRecords(in []gwdkast.LiteralRecord) []gwdkir.LiteralRecord {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]gwdkir.LiteralRecord, 0, len(in))
+	for _, record := range in {
+		fields := make(map[string]string, len(record.Fields))
+		for name, value := range record.Fields {
+			fields[name] = value
+		}
+		expressions := make(map[string]string, len(record.Expressions))
+		for name, value := range record.Expressions {
+			expressions[name] = value
+		}
+		out = append(out, gwdkir.LiteralRecord{
+			Fields:      fields,
+			Expressions: expressions,
+			FieldOrder:  append([]string(nil), record.FieldOrder...),
+			Span:        record.Span,
+		})
+	}
+	return out
+}
+
+func lowerSyntaxBuildCall(call *gwdkast.BuildCall) *gwdkir.BuildCall {
+	if call == nil {
+		return nil
+	}
+	return &gwdkir.BuildCall{Alias: call.Alias, Function: call.Function, Span: call.Span}
 }
 
 func sourceLineText(src []byte, lineNumber int) string {

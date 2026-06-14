@@ -10,7 +10,7 @@ import (
 )
 
 func appendContractReferences(program *gwdkir.Program, template gwdkir.Template) {
-	refs, err := view.ContractReferences(template.Body)
+	refs, err := templateContractReferences(template)
 	if err != nil {
 		program.Diagnostics = append(program.Diagnostics, gwdkir.Diagnostic{
 			Code:    "contract_reference_parse_error",
@@ -59,6 +59,13 @@ func appendContractReferences(program *gwdkir.Program, template gwdkir.Template)
 			Span:        templateOffsetSpan(template, ref.Start, ref.End),
 		})
 	}
+}
+
+func templateContractReferences(template gwdkir.Template) ([]view.ContractReference, error) {
+	if len(template.Nodes) > 0 {
+		return view.ContractReferencesFromNodes(template.Nodes)
+	}
+	return view.ContractReferences(template.Body)
 }
 
 func routeHasDynamicParams(route string) bool {

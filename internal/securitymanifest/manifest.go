@@ -294,9 +294,13 @@ func readSourceAsset(asset gwdkir.Asset) (string, bool) {
 func rawHTMLSinks(ir gwdkir.Program) []RawHTMLSink {
 	var sinks []RawHTMLSink
 	for _, template := range ir.Templates {
-		nodes, err := view.Parse(template.Body)
-		if err != nil {
-			continue
+		nodes := template.Nodes
+		if len(nodes) == 0 {
+			var err error
+			nodes, err = view.Parse(template.Body)
+			if err != nil {
+				continue
+			}
 		}
 		sinks = append(sinks, rawHTMLSinksForNodes(nodes, template)...)
 	}

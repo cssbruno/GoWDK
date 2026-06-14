@@ -45,7 +45,11 @@ file.
 into a versioned `internal/gwdkir.Program`. The IR models packages, source
 files, page routes, backend endpoints from `.gwdk` declarations or explicit Go
 comments, templates, client behavior, source-selected assets, and
-generated-output plans. Build, memory build, incremental SPA build, SSR
+generated-output plans. `gwdkir.Blocks` retains source bodies for spans and
+compatibility, but the parser-lowered handoff also carries parsed `view {}`
+nodes, ordered literal `paths {}`/`build {}` records, and imported build-data
+call metadata; downstream passes should consume those typed fields before
+falling back to raw bodies. Build, memory build, incremental SPA build, SSR
 artifact, generated app planning, route reports, LSP metadata, and the public
 `gowdk manifest` report consume `internal/gwdkir.Program`. Route and asset
 manifests are generated output artifacts, not compiler handoff records.

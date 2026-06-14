@@ -24,7 +24,24 @@ const maxAPIBodyBytes int64 = 1 << 20
 
 //go:embed app
 var embeddedFiles embed.FS
+var (
+	middlewareMu sync.RWMutex
+	middlewares  []gowdkruntime.Middleware
+)
 
+func RegisterMiddleware(middleware gowdkruntime.Middleware) {
+	if middleware == nil {
+		return
+	}
+	middlewareMu.Lock()
+	defer middlewareMu.Unlock()
+	middlewares = append(middlewares, middleware)
+}
+func registeredMiddlewares() []gowdkruntime.Middleware {
+	middlewareMu.RLock()
+	defer middlewareMu.RUnlock()
+	return append([]gowdkruntime.Middleware(nil), middlewares...)
+}
 func Handler() (http.Handler, error) {
 	return ServeMux()
 }
@@ -44,7 +61,7 @@ func ServeMux() (*http.ServeMux, error) {
 		return nil, err
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/", gowdkruntime.Handler{Root: root, Identity: gowdkruntime.InstanceIdentity(), Assets: gowdkruntime.LoadAssetManifest(root), ErrorPages: gowdkruntime.LoadErrorPages(root), Backend: backendRouter.HandlerFunc(), CSRF: csrfTokenSource, SSRExact: ssrExact, SSRDynamic: ssrDynamic, RequestTimeout: gowdkruntime.DefaultRequestTimeout})
+	mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{Root: root, Identity: gowdkruntime.InstanceIdentity(), Assets: gowdkruntime.LoadAssetManifest(root), ErrorPages: gowdkruntime.LoadErrorPages(root), Backend: backendRouter.HandlerFunc(), CSRF: csrfTokenSource, SSRExact: ssrExact, SSRDynamic: ssrDynamic, RequestTimeout: gowdkruntime.DefaultRequestTimeout}, registeredMiddlewares()...))
 	return mux, nil
 }
 func action(response http.ResponseWriter, request *http.Request) bool {

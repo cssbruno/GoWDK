@@ -11,13 +11,18 @@ func backendRuntimeImportSource(options Options) string {
 }
 
 func backendRuntimeImportMap(options Options) map[string]string {
-	imports := map[string]string{}
+	imports := map[string]string{
+		"gowdkruntime": "github.com/cssbruno/gowdk/runtime/app",
+		"sync":         "sync",
+	}
 	adapter := backendAdapterIR(options)
 	contractExposures := adapter.ContractExposures
 	routableContracts := routableContractExposures(contractExposures)
 	executableContracts := executableContractExposures(contractExposures)
-	if hasBackendRoutes(options) {
-		imports["gowdkruntime"] = "github.com/cssbruno/gowdk/runtime/app"
+	if envRuntimeValidationRequired(options.Config.Env) {
+		imports["errors"] = "errors"
+		imports["os"] = "os"
+		imports["strings"] = "strings"
 	}
 	if securityHeadersExpr(options) != nil {
 		imports["strings"] = "strings"

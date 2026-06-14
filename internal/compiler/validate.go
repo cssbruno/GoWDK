@@ -4,18 +4,19 @@ import (
 	"fmt"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/diagnostics"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
 // Severity classifies a diagnostic as a hard error or a non-fatal warning.
-type Severity int
+type Severity = diagnostics.Severity
 
 const (
 	// SeverityError is the default: it fails the build.
-	SeverityError Severity = iota
+	SeverityError = diagnostics.SeverityError
 	// SeverityWarning is surfaced to the author but does not fail the build.
-	SeverityWarning
+	SeverityWarning = diagnostics.SeverityWarning
 )
 
 type ValidationError struct {
@@ -78,7 +79,7 @@ func asError(report ValidationErrors) error {
 
 func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) ValidationErrors {
 	if err := gwdkir.CheckInvariants(ir); err != nil {
-		return ValidationErrors{{Message: fmt.Sprintf("internal compiler error: %v", err)}}
+		return normalizeValidationErrors([]ValidationError{{Message: fmt.Sprintf("internal compiler error: %v", err)}})
 	}
 	var diagnostics ValidationErrors
 	diagnostics = append(diagnostics, validateIRDiagnostics(ir.Diagnostics)...)
@@ -106,7 +107,7 @@ func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) Val
 	for _, page := range ir.Pages {
 		diagnostics = append(diagnostics, ValidatePage(config, page)...)
 	}
-	return diagnostics
+	return normalizeValidationErrors(diagnostics)
 }
 
 func validateIRDiagnostics(items []gwdkir.Diagnostic) []ValidationError {

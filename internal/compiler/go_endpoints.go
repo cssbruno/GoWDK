@@ -33,7 +33,7 @@ func DiscoverGoEndpoints(config gowdk.Config, ir *gwdkir.Program) error {
 		diagnostics = append(diagnostics, found...)
 	}
 	if len(diagnostics) > 0 {
-		return ValidationErrors(diagnostics)
+		return normalizeValidationErrors(diagnostics)
 	}
 	sort.Slice(endpoints, func(i, j int) bool {
 		if endpoints[i].Source == endpoints[j].Source {

@@ -199,7 +199,7 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 	}
 	diagnostics = append(diagnostics, validatePageCSS(page)...)
 
-	return diagnostics
+	return normalizeValidationErrors(diagnostics)
 }
 
 func validatePageGuards(page gwdkir.Page) []ValidationError {

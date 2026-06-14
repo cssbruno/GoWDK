@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cssbruno/gowdk/runtime/asset"
@@ -74,6 +75,9 @@ type Handler struct {
 	// user Go (actions, contracts, SSR) sees ctx.Done() instead of running
 	// unbounded and pinning a goroutine. Zero disables the deadline.
 	RequestTimeout time.Duration
+
+	middlewareOnce    sync.Once
+	middlewareHandler http.Handler
 }
 
 // DefaultRequestTimeout is the per-request handler deadline applied to
@@ -140,15 +144,26 @@ func middlewareErrorHandler(message string) http.Handler {
 	})
 }
 
-func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if len(handler.Middlewares) > 0 {
-		ApplyMiddlewares(http.HandlerFunc(handler.serveHTTP), handler.Middlewares...).ServeHTTP(response, request)
+func (handler *Handler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if handler == nil {
+		middlewareErrorHandler("gowdk handler is nil").ServeHTTP(response, request)
 		return
 	}
-	handler.serveHTTP(response, request)
+	handler.middlewareChain().ServeHTTP(response, request)
 }
 
-func (handler Handler) serveHTTP(response http.ResponseWriter, request *http.Request) {
+func (handler *Handler) middlewareChain() http.Handler {
+	handler.middlewareOnce.Do(func() {
+		next := http.Handler(http.HandlerFunc(handler.serveHTTP))
+		if len(handler.Middlewares) > 0 {
+			next = ApplyMiddlewares(next, handler.Middlewares...)
+		}
+		handler.middlewareHandler = next
+	})
+	return handler.middlewareHandler
+}
+
+func (handler *Handler) serveHTTP(response http.ResponseWriter, request *http.Request) {
 	metrics := handler.Metrics
 	metrics.recordRequest()
 	if handler.RequestTimeout > 0 {

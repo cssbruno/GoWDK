@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -150,6 +152,46 @@ func TestHandlerMiddlewareCanShortCircuit(t *testing.T) {
 	}
 	if recorder.Header().Get("X-GOWDK-App") != "" {
 		t.Fatalf("short-circuited middleware should own the response, got app header %q", recorder.Header().Get("X-GOWDK-App"))
+	}
+}
+
+func TestHandlerCachesMiddlewareChain(t *testing.T) {
+	var constructed atomic.Int32
+	handler := Handler{
+		Root:     fstest.MapFS{},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Backend: func(response http.ResponseWriter, request *http.Request) bool {
+			if request.URL.Path != "/api" {
+				return false
+			}
+			response.WriteHeader(http.StatusNoContent)
+			return true
+		},
+		Middlewares: []Middleware{
+			func(next http.Handler) http.Handler {
+				constructed.Add(1)
+				return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+					next.ServeHTTP(response, request)
+				})
+			},
+		},
+	}
+	var wait sync.WaitGroup
+	for range 20 {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, "/api", nil)
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusNoContent {
+				t.Errorf("unexpected status: %d", recorder.Code)
+			}
+		}()
+	}
+	wait.Wait()
+	if constructed.Load() != 1 {
+		t.Fatalf("middleware should be constructed once, got %d", constructed.Load())
 	}
 }
 

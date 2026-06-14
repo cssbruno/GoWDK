@@ -52,7 +52,7 @@ func ServeMux() (*http.ServeMux, error) {
 		return nil, err
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/", gowdkruntime.ApplyMiddlewares(gowdkruntime.Handler{Root: root, Identity: gowdkruntime.InstanceIdentity(), Assets: gowdkruntime.LoadAssetManifest(root), ErrorPages: gowdkruntime.LoadErrorPages(root), Backend: backendRouter.HandlerFunc(), SSRExact: ssrExact, SSRDynamic: ssrDynamic, RequestTimeout: gowdkruntime.DefaultRequestTimeout}, registeredMiddlewares()...))
+	mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{Root: root, Identity: gowdkruntime.InstanceIdentity(), Assets: gowdkruntime.LoadAssetManifest(root), ErrorPages: gowdkruntime.LoadErrorPages(root), Backend: backendRouter.HandlerFunc(), SSRExact: ssrExact, SSRDynamic: ssrDynamic, RequestTimeout: gowdkruntime.DefaultRequestTimeout}, registeredMiddlewares()...))
 	return mux, nil
 }
 func action(response http.ResponseWriter, request *http.Request) bool {

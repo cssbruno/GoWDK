@@ -393,10 +393,10 @@ func serveMuxDecl(options Options, embedded bool) ast.Decl {
 	if embedded {
 		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), &ast.CallExpr{
 			Fun: sel("gowdkruntime", "ApplyMiddlewares"),
-			Args: []ast.Expr{&ast.CompositeLit{
+			Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{
 				Type: sel("gowdkruntime", "Handler"),
 				Elts: embeddedHandlerFields(options),
-			}, call(id("registeredMiddlewares"))},
+			}}, call(id("registeredMiddlewares"))},
 			Ellipsis: token.Pos(1),
 		})))
 	} else {

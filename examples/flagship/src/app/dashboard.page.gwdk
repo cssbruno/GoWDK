@@ -1,0 +1,41 @@
+package flagship
+
+page dashboard
+route "/dashboard"
+guard auth.required
+css flagship
+
+act Logout POST "/logout"
+
+load {
+  => { dashboard.title, dashboard.email, dashboard.expires, dashboard.queueDepth }
+}
+
+view {
+  <main class="shell dashboard">
+    <nav class="top-nav">
+      <a href="/">Home</a>
+      <a href="/hybrid">Hybrid</a>
+      <form g:post={Logout}>
+        <button>Log out</button>
+      </form>
+    </nav>
+
+    <section class="hero">
+      <p class="eyebrow">SSR load</p>
+      <h1>{dashboard.title}</h1>
+      <p>Signed in as {dashboard.email}. Session expires {dashboard.expires}.</p>
+    </section>
+
+    <section class="metric-row">
+      <article>
+        <span>Queue depth</span>
+        <strong>{dashboard.queueDepth}</strong>
+      </article>
+      <article>
+        <span>Render lane</span>
+        <strong>request time</strong>
+      </article>
+    </section>
+  </main>
+}

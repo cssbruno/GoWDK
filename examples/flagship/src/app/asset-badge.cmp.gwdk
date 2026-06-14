@@ -1,0 +1,14 @@
+package flagship
+
+component AssetBadge
+asset "./badge.svg"
+
+props {
+  label string
+}
+
+view {
+  <figure class="asset-badge">
+    <figcaption>{label}</figcaption>
+  </figure>
+}

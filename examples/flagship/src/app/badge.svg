@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="GOWDK badge">
+  <rect width="96" height="96" rx="18" fill="#0f172a"/>
+  <path d="M24 30h48v10H36v16h24v10H24z" fill="#38bdf8"/>
+  <path d="M48 50h24v16H48z" fill="#f59e0b"/>
+</svg>

@@ -1,0 +1,102 @@
+package flagship
+
+import content "github.com/cssbruno/gowdk/examples/flagship/src/data"
+import workflow "github.com/cssbruno/gowdk/examples/flagship/src/contracts"
+
+page home
+route "/"
+guard public
+css flagship
+
+act Login POST "/login"
+act RefreshSummary POST "/summary"
+api Status GET "/api/status"
+
+fragment Summary GET "/fragments/summary" "#summary" {
+  <section id="summary" class="summary-fragment">
+    <h2>Standalone fragment</h2>
+    <p>This fragment can be requested independently or replaced by the partial form.</p>
+  </section>
+}
+
+build {
+  => content.HomeCopyForBuild()
+}
+
+view {
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      <p>{tagline}</p>
+      <nav class="hero-actions">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/hybrid">Hybrid</a>
+        <a href="/api/status">API status</a>
+      </nav>
+    </section>
+
+    <section class="surface-grid">
+      <article>
+        <h2>Build data</h2>
+        <p>{buildNote}</p>
+      </article>
+      <article>
+        <h2>Actions and APIs</h2>
+        <p>Forms and JSON endpoints are generated, but Go owns the request behavior.</p>
+      </article>
+      <article>
+        <h2>Fragments</h2>
+        <p>Partial updates return explicit server fragments instead of full-page SSR.</p>
+      </article>
+    </section>
+
+    <section class="workbench">
+      <div>
+        <h2>Session action</h2>
+        <form class="stack-form" g:post={Login}>
+          <label>Email <input name="email" type="email" required value="demo@example.com" /></label>
+          <label>Password <input name="password" type="password" required minlength="8" value="demo-password" /></label>
+          <button>Sign in</button>
+        </form>
+      </div>
+
+      <div>
+        <h2>Partial update</h2>
+        <form class="stack-form" g:post={RefreshSummary} g:target="#summary" g:swap="innerHTML">
+          <label>Topic <input name="topic" required minlength="3" value="compiler" /></label>
+          <button>Refresh summary</button>
+        </form>
+        <section id="summary" class="summary-fragment">
+          <h2>Compiler summary</h2>
+          <p>Initial markup came from the build output.</p>
+        </section>
+      </div>
+    </section>
+
+    <section class="workbench">
+      <div>
+        <h2>Island state</h2>
+        <Counter g:island="wasm" />
+      </div>
+      <div>
+        <h2>Component asset</h2>
+        <AssetBadge label="Component asset emitted with the build" />
+      </div>
+    </section>
+
+    <section class="workbench">
+      <div>
+        <h2>Command contract</h2>
+        <form class="stack-form" method="post" action="/workflow/start" g:command="workflow.StartWorkflow">
+          <label>Name <input name="name" required value="morning-review" /></label>
+          <button>Start workflow</button>
+        </form>
+      </div>
+      <section g:query="workflow.GetDashboardSnapshot">
+        <h2>Query contract</h2>
+        <p>The generated adapter exposes dashboard snapshot data as JSON.</p>
+      </section>
+    </section>
+  </main>
+}

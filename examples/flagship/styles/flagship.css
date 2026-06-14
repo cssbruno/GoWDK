@@ -1,0 +1,198 @@
+:root {
+  color: #17202a;
+  background: #f5f7fb;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f5f7fb;
+  color: #17202a;
+}
+
+a {
+  color: #075985;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.shell {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0 48px;
+}
+
+.top-nav,
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.top-nav {
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.hero {
+  padding: 42px 0 34px;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.hero h1 {
+  max-width: 760px;
+  margin: 0;
+  font-size: 48px;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.hero p {
+  max-width: 760px;
+  color: #475569;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: #b45309;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hero-actions a,
+button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #17202a;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hero-actions a {
+  background: #fff;
+  color: #17202a;
+}
+
+.surface-grid,
+.workbench,
+.metric-row {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.surface-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.workbench,
+.metric-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+article,
+.workbench > div,
+.workbench > section,
+.metric-row article,
+.counter,
+.asset-badge,
+.summary-fragment {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 18px;
+}
+
+h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+p {
+  line-height: 1.55;
+}
+
+.stack-form {
+  display: grid;
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-weight: 700;
+}
+
+input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.counter {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.counter p,
+.counter strong {
+  margin: 0;
+}
+
+.counter strong,
+.metric-row strong {
+  color: #0f766e;
+  font-size: 28px;
+}
+
+.asset-badge {
+  min-height: 112px;
+  display: grid;
+  align-items: end;
+  background:
+    linear-gradient(135deg, rgba(56, 189, 248, 0.16), rgba(245, 158, 11, 0.16)),
+    #fff;
+}
+
+.dashboard .hero,
+.hybrid .hero {
+  border-bottom-color: #94a3b8;
+}
+
+@media (max-width: 820px) {
+  .surface-grid,
+  .workbench,
+  .metric-row,
+  .counter {
+    grid-template-columns: 1fr;
+  }
+
+  .hero h1 {
+    font-size: 36px;
+  }
+}

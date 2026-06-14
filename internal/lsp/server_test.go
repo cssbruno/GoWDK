@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cssbruno/gowdk"
 )
@@ -306,6 +307,63 @@ func TestServerReturnsDefinitionForWorkspaceComponentFile(t *testing.T) {
 	}
 	assertResponseID(t, messages[2], float64(2))
 	assertLocation(t, messages[2], componentURI, 2, 0)
+}
+
+func TestServerWorkspaceComponentCacheRefreshesWhenDiskComponentChanges(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "gowdk.config.go"), []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pagePath := filepath.Join(root, "pages", "app.page.gwdk")
+	componentPath := filepath.Join(root, "components", "runtime-card.cmp.gwdk")
+	if err := os.MkdirAll(filepath.Dir(pagePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(componentPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pageSource := "package demo\n\npage app\nroute \"/\"\n\nview {\n  <main><RuntimeCard /></main>\n}\n"
+	firstComponentSource := "package demo\n\ncomponent RuntimeCard\n\nview {\n  <section></section>\n}\n"
+	secondComponentSource := "package demo\n\n\ncomponent RuntimeCard\n\nview {\n  <section></section>\n}\n"
+	if err := os.WriteFile(pagePath, []byte(pageSource), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(componentPath, []byte(firstComponentSource), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	doc := document{URI: fileURI(pagePath), Path: pagePath, Version: 1, Text: pageSource}
+	server.documents[doc.URI] = doc
+
+	first, ok := server.resolveComponentDefinition(doc, "RuntimeCard")
+	if !ok {
+		t.Fatal("expected initial workspace component definition")
+	}
+	if got := lspRangeFromSourceSpan(first.Span, first.Text).Start.Line; got != 2 {
+		t.Fatalf("expected initial component definition on line 2, got %d", got)
+	}
+	firstCacheKey := server.workspaceComponentCache.key
+
+	if err := os.WriteFile(componentPath, []byte(secondComponentSource), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		second, ok := server.resolveComponentDefinition(doc, "RuntimeCard")
+		if !ok {
+			t.Fatal("expected refreshed workspace component definition")
+		}
+		line := lspRangeFromSourceSpan(second.Span, second.Text).Start.Line
+		if line == 3 && server.workspaceComponentCache.key != firstCacheKey {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected component cache refresh to line 3, got line %d with cache key %q", line, server.workspaceComponentCache.key)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func TestServerReturnsDefinitionForOpenGoHandlerSymbols(t *testing.T) {

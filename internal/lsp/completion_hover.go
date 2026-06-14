@@ -1,6 +1,11 @@
 package lsp
 
 import (
+	"crypto/sha256"
+	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
@@ -96,6 +101,11 @@ func (server *Server) projectHoverItems(currentURI string) []completionItem {
 }
 
 func (server *Server) openProjectIR() (gwdkir.Program, map[string]document) {
+	key := server.openProjectIRCacheKey()
+	if server.projectCache.key == key {
+		return server.projectCache.ir, cloneDocumentsBySource(server.projectCache.docsBySource)
+	}
+
 	var sources gwdkanalysis.Sources
 	docsBySource := map[string]document{}
 	for _, doc := range server.documents {
@@ -124,5 +134,35 @@ func (server *Server) openProjectIR() (gwdkir.Program, map[string]document) {
 			docsBySource[layout.Source] = doc
 		}
 	}
-	return gwdkanalysis.BuildProgram(server.config, sources), docsBySource
+	ir := gwdkanalysis.BuildProgram(server.config, sources)
+	server.projectCache = projectIRCache{
+		key:          key,
+		ir:           ir,
+		docsBySource: cloneDocumentsBySource(docsBySource),
+	}
+	return ir, docsBySource
+}
+
+func (server *Server) openProjectIRCacheKey() string {
+	parts := make([]string, 0, len(server.documents))
+	for _, doc := range server.documents {
+		if !strings.HasSuffix(doc.Path, ".gwdk") {
+			continue
+		}
+		sum := sha256.Sum256([]byte(doc.Text))
+		parts = append(parts, fmt.Sprintf("%s\x00%s\x00%d\x00%x", doc.URI, doc.Path, doc.Version, sum))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "\x01")
+}
+
+func cloneDocumentsBySource(docs map[string]document) map[string]document {
+	if len(docs) == 0 {
+		return map[string]document{}
+	}
+	clone := make(map[string]document, len(docs))
+	for source, doc := range docs {
+		clone[source] = doc
+	}
+	return clone
 }

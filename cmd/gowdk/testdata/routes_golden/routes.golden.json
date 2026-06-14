@@ -50,6 +50,7 @@
       "guards": [
         "public"
       ],
+      "csrf": true,
       "pageId": "newsletter",
       "handler": "actions.NewsletterSubscribe",
       "bindingStatus": "missing",

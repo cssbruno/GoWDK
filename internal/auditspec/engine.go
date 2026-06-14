@@ -237,7 +237,7 @@ func evalEndpoint(endpoint securitymanifest.EndpointEntry, policy Policy) []Find
 				}
 				findings = append(findings, finding(csrfRule, policy, endpointTarget(endpoint), endpoint.Source,
 					fmt.Sprintf("%s endpoint %s does not enforce CSRF", endpoint.Kind, endpoint.ID),
-					"Enable Build.CSRF.Enabled, or override the matching baseline policy in a *.audit.gwdk file."))
+					"Remove Build.CSRF.Disabled, or override the matching baseline policy in a *.audit.gwdk file."))
 			}
 		case RuleRequireAnyGuard:
 			if endpoint.DefaultDeny {

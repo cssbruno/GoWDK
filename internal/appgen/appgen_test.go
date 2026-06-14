@@ -22,6 +22,15 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
+func csrfDisabledConfig() gowdk.Config {
+	return gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{Disabled: true}}}
+}
+
+func withCSRFDisabled(config gowdk.Config) gowdk.Config {
+	config.Build.CSRF.Disabled = true
+	return config
+}
+
 func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -177,7 +186,7 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 					Enabled: true,
 					Headers: map[string]string{"X-Frame-Options": "DENY"},
 				},
-				CSRF: gowdk.CSRFConfig{Enabled: true, SecretEnv: "GOWDK_TEST_CSRF_SECRET"},
+				CSRF: gowdk.CSRFConfig{SecretEnv: "GOWDK_TEST_CSRF_SECRET"},
 			},
 		},
 		Actions: []ActionEndpoint{{
@@ -193,6 +202,15 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 				PageID: "home",
 				Render: gowdk.SPA,
 				Guards: []string{"public"},
+			}},
+			Endpoints: []gwdkir.Endpoint{{
+				Kind:   gwdkir.EndpointAction,
+				Method: http.MethodPost,
+				Path:   "/submit",
+				PageID: "home",
+				Symbol: "Submit",
+				Guards: []string{"public"},
+				CSRF:   true,
 			}},
 			AuditSpecs: []gwdkir.AuditSpec{{
 				Source: "security.audit.gwdk",
@@ -213,7 +231,7 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 	for _, expected := range []string{
 		"package gowdkapp",
 		"func TestGOWDKAuditGeneratedSecurityPosture(t *testing.T)",
-		`t.Setenv("GOWDK_TEST_CSRF_SECRET", "gowdk-audit-test")`,
+		`t.Setenv("GOWDK_TEST_CSRF_SECRET", "gowdk-audit-test-csrf-secret-32-bytes")`,
 		`t.Setenv("GOWDK_TEST_DATABASE_URL", "gowdk-audit-test")`,
 		`t.Setenv("GOWDK_TEST_REGION", "gowdk-audit-test")`,
 		"handler, err := Handler()",
@@ -982,7 +1000,6 @@ func TestGenerateSplitFrontendProxyKeepsBackendAdaptersRemote(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		ProxyBackend: true,
 		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
-			Enabled:   true,
 			SecretEnv: "GOWDK_TEST_CSRF_SECRET",
 			Insecure:  true,
 		}}},
@@ -1030,7 +1047,7 @@ func TestGenerateSplitFrontendProxyKeepsBackendAdaptersRemote(t *testing.T) {
 	}
 }
 
-func TestGenerateWiresCSRFWhenEnabled(t *testing.T) {
+func TestGenerateWiresCSRFByDefault(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
@@ -1038,7 +1055,6 @@ func TestGenerateWiresCSRFWhenEnabled(t *testing.T) {
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
-			Enabled:    true,
 			SecretEnv:  "GOWDK_TEST_CSRF_SECRET",
 			CookieName: "csrf",
 			FieldName:  "_csrf",
@@ -1065,7 +1081,9 @@ func TestGenerateWiresCSRFWhenEnabled(t *testing.T) {
 		`errors`,
 		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
 		`CSRF: csrfTokenSource,`,
-		`csrfTokenSource, err := newCSRF()`,
+		`var csrfTokenSource *gowdkactions.CSRF`,
+		`var csrfErr error`,
+		`csrfTokenSource, csrfErr = newCSRF()`,
 		`csrfValidator = csrfTokenSource`,
 		`var csrfValidator gowdkactions.CSRFValidator`,
 		`func newCSRF() (*gowdkactions.CSRF, error)`,
@@ -1081,6 +1099,42 @@ func TestGenerateWiresCSRFWhenEnabled(t *testing.T) {
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateSkipsCSRFWhenDisabled(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), `<main><form method="post" action="/newsletter"><input name="email"></form></main>`)
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: csrfDisabledConfig(),
+		Actions: []ActionEndpoint{{
+			PageID:      "newsletter",
+			ActionName:  "Subscribe",
+			Route:       "/newsletter",
+			InputFields: []string{"email"},
+			Redirect:    "/newsletter?ok=1",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, unexpected := range []string{
+		`CSRF: csrfTokenSource,`,
+		`csrfTokenSource, csrfErr = newCSRF()`,
+		`func newCSRF() (*gowdkactions.CSRF, error)`,
+		`err := csrfValidator.Validate(request)`,
+	} {
+		if strings.Contains(source, unexpected) {
+			t.Fatalf("disabled CSRF should not emit %q:\n%s", unexpected, source)
 		}
 	}
 }
@@ -1109,7 +1163,6 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
-			Enabled:    true,
 			SecretEnv:  "GOWDK_TEST_CSRF_SECRET",
 			CookieName: "csrf",
 			FieldName:  "_csrf",
@@ -1129,7 +1182,9 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 	for _, expected := range []string{
 		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
 		`CSRF: csrfTokenSource,`,
-		`csrfTokenSource, err := newCSRF()`,
+		`var csrfTokenSource *gowdkactions.CSRF`,
+		`var csrfErr error`,
+		`csrfTokenSource, csrfErr = newCSRF()`,
 		`csrfValidator = csrfTokenSource`,
 		`var csrfValidator gowdkactions.CSRFValidator`,
 		`func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler`,
@@ -1944,6 +1999,57 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
 		}
 	}
+}
+
+func TestGenerateInjectsCSRFIntoSSRForms(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
+			SecretEnv: "GOWDK_TEST_CSRF_SECRET",
+			Insecure:  true,
+		}}},
+		Actions: []ActionEndpoint{{
+			PageID:      "newsletter",
+			ActionName:  "Subscribe",
+			Route:       "/newsletter",
+			InputFields: []string{"email"},
+			Redirect:    "/newsletter?ok=1",
+		}},
+		SSR: []SSRRoute{{
+			PageID: "newsletter",
+			Route:  "/newsletter",
+			Guards: []string{"public"},
+			HTML:   `<main><form method="post" action="/newsletter"><input name="email"></form></main>`,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`var csrfTokenSource *gowdkactions.CSRF`,
+		`htmlBytes, csrfOK := gowdkruntime.CSRFInjectHTML(response, request, []byte(html), csrfTokenSource)`,
+		`if !csrfOK {`,
+		`html = string(htmlBytes)`,
+		`gowdkresponse.WriteNoStoreHTML(response, request, html)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected SSR CSRF source to contain %q:\n%s", expected, source)
+		}
+	}
+	assertSourceOrder(t, source,
+		`html := "<main><form method=\"post\" action=\"/newsletter\"><input name=\"email\"></form></main>"`,
+		`gowdkruntime.CSRFInjectHTML(response, request, []byte(html), csrfTokenSource)`,
+		`gowdkresponse.WriteNoStoreHTML(response, request, html)`,
+	)
 }
 
 func TestGenerateWritesSSRCachePolicy(t *testing.T) {
@@ -3963,6 +4069,7 @@ func TestGeneratedBinaryHandlesEndpointErrorsAndMissingErrorPage(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "500.html"), "<main>Fallback 500</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: csrfDisabledConfig(),
 		Actions: []ActionEndpoint{{
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
@@ -4172,7 +4279,7 @@ func TestGeneratedBinaryContractFallbacksAreExplicitNoStore(t *testing.T) {
 		OwnerKind: gwdkir.SourcePage,
 		OwnerID:   "patients",
 	}}}
-	if _, err := GenerateWithOptions(outputDir, appDir, Options{IR: program}); err != nil {
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := BuildBinary(appDir, binaryPath); err != nil {
@@ -4236,7 +4343,7 @@ func TestGeneratedBinaryServesPageAndExecutesContractQuery(t *testing.T) {
 		OwnerKind:   gwdkir.SourcePage,
 		OwnerID:     "patients",
 	}}}
-	if _, err := GenerateWithOptions(outputDir, appDir, Options{IR: program}); err != nil {
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
 		t.Fatal(err)
 	}
 	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
@@ -4338,7 +4445,7 @@ func TestGeneratedBinaryCommandContractUsesRegisteredEventSink(t *testing.T) {
 		OwnerKind:   gwdkir.SourcePage,
 		OwnerID:     "patients",
 	}}}
-	if _, err := GenerateWithOptions(outputDir, appDir, Options{IR: program}); err != nil {
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
 		t.Fatal(err)
 	}
 	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
@@ -4481,7 +4588,7 @@ func TestGeneratedBinaryContractAdaptersReturnJSONErrors(t *testing.T) {
 			OwnerID:     "patients",
 		},
 	}}
-	if _, err := GenerateWithOptions(outputDir, appDir, Options{IR: program}); err != nil {
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
 		t.Fatal(err)
 	}
 	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
@@ -4643,7 +4750,7 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 	}
 }
 
-func TestGeneratedBinaryContractCommandCSRFReturnsJSONError(t *testing.T) {
+func TestGeneratedBinaryContractCommandCSRFReturnsJSONErrorByDefault(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
@@ -4667,7 +4774,6 @@ func TestGeneratedBinaryContractCommandCSRFReturnsJSONError(t *testing.T) {
 	}}}
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
-			Enabled:   true,
 			SecretEnv: "GOWDK_TEST_CSRF_SECRET",
 			Insecure:  true,
 		}}},
@@ -4746,6 +4852,7 @@ func TestGeneratedBinaryRegisteredGuardsAllowRequestTimeRoutes(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: csrfDisabledConfig(),
 		Actions: []ActionEndpoint{{
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
@@ -4979,7 +5086,7 @@ func TestGeneratedBinaryAppliesRegisteredRateLimiter(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{
-		Config: gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ratelimit", gowdk.FeatureRateLimit)}},
+		Config: withCSRFDisabled(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ratelimit", gowdk.FeatureRateLimit)}}),
 		Actions: []ActionEndpoint{{
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
@@ -5241,7 +5348,7 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	binaryPath := filepath.Join(root, "site")
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
-	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), Actions: []ActionEndpoint{{
 		PageID:           "newsletter",
 		ActionName:       "Subscribe",
 		Route:            "/newsletter",
@@ -5402,7 +5509,7 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	}
 }
 
-func TestGeneratedBinaryValidatesCSRFWhenEnabled(t *testing.T) {
+func TestGeneratedBinaryValidatesCSRFByDefault(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
@@ -5411,7 +5518,6 @@ func TestGeneratedBinaryValidatesCSRFWhenEnabled(t *testing.T) {
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
-			Enabled:   true,
 			SecretEnv: "GOWDK_TEST_CSRF_SECRET",
 			Insecure:  true,
 		}}},
@@ -5491,6 +5597,94 @@ func TestGeneratedBinaryValidatesCSRFWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestGeneratedBinaryInjectsCSRFIntoSSRForms(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
+			SecretEnv: "GOWDK_TEST_CSRF_SECRET",
+			Insecure:  true,
+		}}},
+		Actions: []ActionEndpoint{{
+			PageID:      "newsletter",
+			ActionName:  "Subscribe",
+			Route:       "/newsletter",
+			InputFields: []string{"email"},
+			Redirect:    "/newsletter?ok=1",
+		}},
+		SSR: []SSRRoute{{
+			PageID: "newsletter",
+			Route:  "/newsletter",
+			Guards: []string{"public"},
+			HTML:   `<main><form method="post" action="/newsletter"><input name="email"></form></main>`,
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(),
+		"GOWDK_ADDR="+addr,
+		"GOWDK_TEST_CSRF_SECRET="+strings.Repeat("s", 32),
+	)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, headers, err := waitForHTTPResponse("http://" + addr + "/newsletter")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := hiddenInputValue(body, "_gowdk_csrf")
+	if token == "" {
+		t.Fatalf("expected SSR form csrf token, got %s", body)
+	}
+	cookie := cookieHeader(headers.Get("Set-Cookie"))
+	if !strings.HasPrefix(cookie, "gowdk-csrf=") {
+		t.Fatalf("expected csrf cookie, got %q", headers.Get("Set-Cookie"))
+	}
+	if cache := headers.Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store on csrf-personalized SSR HTML, got %q", cache)
+	}
+
+	response, err := waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected missing csrf token to return 403, got %d: %s", response.StatusCode, payload)
+	}
+
+	response, err = waitForHTTPStatusWithHeaders("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com", map[string]string{
+		"Cookie":       cookie,
+		"X-GOWDK-CSRF": token,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected valid csrf POST to return 303, got %d", response.StatusCode)
+	}
+}
+
 func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -5498,7 +5692,7 @@ func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
 	binaryPath := filepath.Join(root, "site")
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
-	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), Actions: []ActionEndpoint{{
 		PageID:      "patients",
 		ActionName:  "Refresh",
 		Route:       "/patients",
@@ -5887,7 +6081,7 @@ func TestGeneratedBinaryDoesNotValidateRequiredFieldsWithoutValidMetadata(t *tes
 	binaryPath := filepath.Join(root, "site")
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
-	if _, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), Actions: []ActionEndpoint{{
 		PageID:         "newsletter",
 		ActionName:     "Subscribe",
 		Route:          "/newsletter",

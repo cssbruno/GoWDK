@@ -246,6 +246,10 @@ result, events, err := contracts.CaptureCommandEvents[CreatePatient, CreatePatie
 Each captured `EventEnvelope` contains a stable event ID, event category, Go
 type name, and typed value. Capturing does not run event subscribers.
 
+For tests, `runtime/testkit` wraps this path with an in-memory registry helper
+and typed event assertions. See `docs/reference/testing.md` and
+`examples/contracts/patients/contracts_test.go`.
+
 For dependency-free outbox integration, implement the small `Outbox` interface:
 
 ```go

@@ -27,6 +27,47 @@ gate the audit report; it builds a temporary generated app and runs
 `go test ./gowdkapp` against the generated app's real `Handler()`. Failed
 expectations are reported as `audit_test_failed`.
 
+## Endpoint Handler Tests
+
+Use `runtime/testkit` for table-driven generated-handler checks when a test can
+import a generated app handler or an adapter under test:
+
+```go
+testkit.Run(t, handler, []testkit.Scenario{{
+    Name:       "search API",
+    Method:     http.MethodGet,
+    Path:       "/api/search?q=go",
+    WantStatus: http.StatusOK,
+}})
+```
+
+Keep user domain logic in ordinary Go unit tests. Use generated-handler tests
+for route existence, method behavior, CSRF/body-limit responses, fragment
+headers, and generated adapter wiring.
+
+## Contract Event Tests
+
+Use the in-memory contract helpers when a command should emit backend-owned
+events:
+
+```go
+registry := testkit.ContractRegistry(Register)
+result, events := testkit.CaptureCommandEvents[CreatePatient, CreatePatientResult](
+    t,
+    registry,
+    CreatePatient{Name: "Ada"},
+)
+
+testkit.AssertEmitted[PatientCreated](t, events, contracts.DomainEvent, func(event PatientCreated) {
+    if event.ID != result.ID {
+        t.Fatalf("event ID = %q, want %q", event.ID, result.ID)
+    }
+})
+```
+
+The repository example is
+`examples/contracts/patients/contracts_test.go`.
+
 ## Browser Smoke
 
 For generated apps, keep the first browser smoke test narrow:

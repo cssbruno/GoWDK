@@ -8,6 +8,7 @@ type Manifest struct {
 	Files   map[string]string `json:"files"`
 	Hashes  map[string]string `json:"hashes,omitempty"`
 	Cache   map[string]string `json:"cache,omitempty"`
+	Sizes   map[string]int64  `json:"sizes,omitempty"`
 }
 
 // Resolve returns the emitted path for a logical asset name.
@@ -32,6 +33,15 @@ func (manifest Manifest) CachePolicy(name string) string {
 		return ""
 	}
 	return manifest.Cache[name]
+}
+
+// SizeBytes returns the generated asset byte size recorded for a logical asset
+// name, or zero when the manifest has no size metadata for that asset.
+func (manifest Manifest) SizeBytes(name string) int64 {
+	if manifest.Sizes == nil {
+		return 0
+	}
+	return manifest.Sizes[name]
 }
 
 // URL returns the browser-facing URL for a logical asset name.

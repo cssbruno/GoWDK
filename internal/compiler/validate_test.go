@@ -1421,6 +1421,38 @@ func TestValidateManifestRejectsMissingGoTypedComponentType(t *testing.T) {
 	}
 }
 
+func TestValidateManifestRejectsReservedActiveExportName(t *testing.T) {
+	app := appFixture{Components: []gwdkir.Component{{
+		Package: "components",
+		Name:    "Toggle",
+		Source:  "components/toggle.cmp.gwdk",
+		Props:   []gwdkir.Prop{{Name: "active", Type: "bool"}},
+		Exports: []gwdkir.Export{{
+			Name: "active",
+			Type: "bool",
+			Span: testSourceSpan(8, 3, 8, 14),
+		}},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<p>{active}</p>`,
+		},
+	}}}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected reserved export diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	diagnostic := firstDiagnostic(diagnostics, "component_contract_error")
+	if diagnostic == nil {
+		t.Fatalf("missing component_contract_error diagnostic: %#v", diagnostics)
+	}
+	if !strings.Contains(diagnostic.Message, `export "active" uses reserved name "active"`) {
+		t.Fatalf("unexpected reserved export diagnostic: %#v", diagnostic)
+	}
+	assertSourceSpan(t, diagnostic.Span, 8, 3, 8, 14)
+}
+
 func TestValidateManifestAllowsClientFunctionEventCall(t *testing.T) {
 	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",

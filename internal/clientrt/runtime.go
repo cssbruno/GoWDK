@@ -30,6 +30,11 @@ const runtimeSource = `(function () {
       return;
     }
 
+    if (!validateFormBeforePartialSubmit(form, target)) {
+      event.preventDefault();
+      return;
+    }
+
     event.preventDefault();
     form.setAttribute('aria-busy', 'true');
     var focused = focusTarget(document.activeElement);
@@ -89,13 +94,37 @@ const runtimeSource = `(function () {
     }
   }
 
+  function validateFormBeforePartialSubmit(form, target) {
+    if (typeof form.checkValidity !== 'function' || form.checkValidity()) {
+      return true;
+    }
+    form.dispatchEvent(new CustomEvent('gowdk:validation-blocked', {
+      detail: { form: form, target: target }
+    }));
+    if (typeof form.reportValidity === 'function') {
+      form.reportValidity();
+    }
+    return false;
+  }
+
   document.addEventListener('submit', submitPartial);
   document.addEventListener('click', navigateLink);
+  document.addEventListener('mouseover', prefetchLink);
+  document.addEventListener('mouseout', cancelHoverPrefetch);
+  document.addEventListener('focusin', prefetchLink);
+  document.addEventListener('touchstart', prefetchLink, { passive: true });
   if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('popstate', function () {
       loadDocument(window.location.href, false, null);
     });
   }
+
+  var prefetchedDocuments = {};
+  var prefetchOrder = [];
+  var prefetchLimit = 8;
+  var hoverPrefetchDelay = 65;
+  var hoverPrefetchTimer = 0;
+  var hoverPrefetchURL = '';
 
   async function navigateLink(event) {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
@@ -136,6 +165,88 @@ const runtimeSource = `(function () {
     }
   }
 
+  function prefetchTarget(event) {
+    var link = event.target && event.target.closest && event.target.closest('a[href]');
+    if (!link || link.target || link.hasAttribute('download')) {
+      return '';
+    }
+    var url;
+    try {
+      url = new URL(link.href, window.location.href);
+    } catch (error) {
+      return '';
+    }
+    if (!isNavigableURL(url)) {
+      return '';
+    }
+    if (url.hash && url.pathname === window.location.pathname && url.search === window.location.search) {
+      return '';
+    }
+    return url.href;
+  }
+
+  function prefetchLink(event) {
+    var href = prefetchTarget(event);
+    if (!href) {
+      return;
+    }
+    // Pointer hovers are noisy and often incidental, so wait a beat before
+    // spending a request; focus and touch are deliberate, so prefetch at once.
+    if (event.type === 'mouseover') {
+      if (href === hoverPrefetchURL) {
+        return;
+      }
+      cancelHoverPrefetch();
+      hoverPrefetchURL = href;
+      hoverPrefetchTimer = setTimeout(function () {
+        hoverPrefetchTimer = 0;
+        hoverPrefetchURL = '';
+        prefetchDocument(href).catch(function () {});
+      }, hoverPrefetchDelay);
+      return;
+    }
+    prefetchDocument(href).catch(function () {});
+  }
+
+  function cancelHoverPrefetch() {
+    if (hoverPrefetchTimer) {
+      clearTimeout(hoverPrefetchTimer);
+      hoverPrefetchTimer = 0;
+    }
+    hoverPrefetchURL = '';
+  }
+
+  function prefetchDocument(url) {
+    if (!prefetchedDocuments[url]) {
+      prefetchedDocuments[url] = fetchDocument(url, true).catch(function (error) {
+        forgetPrefetched(url);
+        throw error;
+      });
+      rememberPrefetched(url);
+    }
+    return prefetchedDocuments[url];
+  }
+
+  // rememberPrefetched bounds the prefetch cache so a long session that hovers
+  // many links cannot retain an unbounded set of full documents in memory.
+  function rememberPrefetched(url) {
+    prefetchOrder.push(url);
+    while (prefetchOrder.length > prefetchLimit) {
+      var oldest = prefetchOrder.shift();
+      if (oldest !== url) {
+        delete prefetchedDocuments[oldest];
+      }
+    }
+  }
+
+  function forgetPrefetched(url) {
+    delete prefetchedDocuments[url];
+    var index = prefetchOrder.indexOf(url);
+    if (index !== -1) {
+      prefetchOrder.splice(index, 1);
+    }
+  }
+
   async function partialRequestError(response) {
     var body = '';
     try {
@@ -161,58 +272,93 @@ const runtimeSource = `(function () {
   }
 
   async function loadDocument(url, push, source) {
-    var response = await fetch(url, {
-      headers: {
-        'Accept': 'text/html',
-        'X-GOWDK-Navigate': '1'
+    setNavigationBusy(true, source);
+    try {
+      var fetched = prefetchedDocuments[url]
+        ? await prefetchedDocuments[url]
+        : await fetchDocument(url, false);
+      forgetPrefetched(url);
+      if (!fetched || !fetched.html) {
+        window.location.href = url;
+        return;
       }
+      var next = new DOMParser().parseFromString(fetched.html, 'text/html');
+      if (!next || !next.body) {
+        window.location.href = url;
+        return;
+      }
+      var focused = focusTarget(document.activeElement);
+      if (typeof window !== 'undefined' && window.__gowdkDestroyIslands) {
+        window.__gowdkDestroyIslands(document.body, false);
+      }
+      var previousScripts = scriptSources(document);
+      document.title = next.title || document.title;
+      document.head.innerHTML = next.head ? next.head.innerHTML : '';
+      document.body.innerHTML = next.body.innerHTML;
+      await activateNewScripts(previousScripts);
+      if (push && window.history && window.history.pushState) {
+        window.history.pushState({}, document.title, url);
+      }
+      if (typeof window !== 'undefined' && window.__gowdkStores && window.__gowdkStores.hydrate) {
+        window.__gowdkStores.hydrate();
+      }
+      if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
+        window.__gowdkMountIslands();
+      }
+      if (typeof window !== 'undefined' && window.__gowdkMountClientGoBlocks) {
+        window.__gowdkMountClientGoBlocks();
+      }
+      restoreFocus(focused);
+      if (window.location.hash) {
+        var target = document.getElementById(window.location.hash.slice(1));
+        if (target && target.scrollIntoView) {
+          target.scrollIntoView();
+        }
+      } else if (window.scrollTo) {
+        window.scrollTo(0, 0);
+      }
+      document.dispatchEvent(new CustomEvent('gowdk:after-navigate', {
+        detail: { url: url, source: source || null }
+      }));
+    } finally {
+      setNavigationBusy(false, source);
+    }
+  }
+
+  async function fetchDocument(url, prefetch) {
+    var headers = {
+      'Accept': 'text/html'
+    };
+    headers[prefetch ? 'X-GOWDK-Prefetch' : 'X-GOWDK-Navigate'] = '1';
+    var response = await fetch(url, {
+      headers: headers,
+      credentials: 'same-origin'
     });
     if (!response.ok) {
       throw new Error('navigation request failed with status ' + response.status);
     }
     var type = response.headers && response.headers.get && response.headers.get('Content-Type') || '';
     if (type && type.indexOf('text/html') === -1) {
-      window.location.href = url;
-      return;
+      return null;
     }
     var html = await response.text();
-    var next = new DOMParser().parseFromString(html, 'text/html');
-    if (!next || !next.body) {
-      window.location.href = url;
+    return { html: html };
+  }
+
+  function setNavigationBusy(active, source) {
+    if (!document.documentElement) {
       return;
     }
-    var focused = focusTarget(document.activeElement);
-    if (typeof window !== 'undefined' && window.__gowdkDestroyIslands) {
-      window.__gowdkDestroyIslands(document.body, false);
+    if (active) {
+      document.documentElement.setAttribute('data-gowdk-navigating', 'true');
+      document.dispatchEvent(new CustomEvent('gowdk:navigate-start', {
+        detail: { source: source || null }
+      }));
+      return;
     }
-    var previousScripts = scriptSources(document);
-    document.title = next.title || document.title;
-    document.head.innerHTML = next.head ? next.head.innerHTML : '';
-    document.body.innerHTML = next.body.innerHTML;
-    await activateNewScripts(previousScripts);
-    if (push && window.history && window.history.pushState) {
-      window.history.pushState({}, document.title, url);
-    }
-    if (typeof window !== 'undefined' && window.__gowdkStores && window.__gowdkStores.hydrate) {
-      window.__gowdkStores.hydrate();
-    }
-    if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
-      window.__gowdkMountIslands();
-    }
-    if (typeof window !== 'undefined' && window.__gowdkMountClientGoBlocks) {
-      window.__gowdkMountClientGoBlocks();
-    }
-    restoreFocus(focused);
-    if (window.location.hash) {
-      var target = document.getElementById(window.location.hash.slice(1));
-      if (target && target.scrollIntoView) {
-        target.scrollIntoView();
-      }
-    } else if (window.scrollTo) {
-      window.scrollTo(0, 0);
-    }
-    document.dispatchEvent(new CustomEvent('gowdk:after-navigate', {
-      detail: { url: url, source: source || null }
+    document.documentElement.removeAttribute('data-gowdk-navigating');
+    document.dispatchEvent(new CustomEvent('gowdk:navigate-end', {
+      detail: { source: source || null }
     }));
   }
 

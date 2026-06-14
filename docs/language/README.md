@@ -22,10 +22,10 @@ interpolation in views, Go-typed component props/state contracts, first-slice
 generated JavaScript islands for stateful components, component-level `wasm`
 island asset emission, formatting, diagnostics, manifest output, build output
 for simple SPA pages/components, generated partial fragment responses for
-embedded apps, and LSP/editor integration. It does not yet parse non-string
-inline props, full typed action semantics, API request/response bodies, broad
-local client-side reactivity, or full semantic/type analysis outside the
-component contract and inline package-go-block slices.
+embedded apps, and LSP/editor integration. It does not yet implement full typed
+action semantics, API request/response
+bodies, broad local client-side reactivity, or full semantic/type analysis
+outside the component contract and inline package-go-block slices.
 
 ## Current Files
 

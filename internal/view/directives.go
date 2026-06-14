@@ -66,6 +66,10 @@ func isSupportedDirectiveName(name string) bool {
 	return supportedMessageDirectives[name]
 }
 
+func isComponentBindDirective(name string) bool {
+	return name == "g:bind" || strings.HasPrefix(name, "g:bind:")
+}
+
 // unsupportedDirectiveMessage is the canonical unsupported_markup_directive
 // message for a g: attribute outside the owned directive contract. Deferred
 // construct families get explicit guidance instead of a generic rejection.

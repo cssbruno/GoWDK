@@ -6,10 +6,26 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
+
+// islandWASMExecGoVersion reports the Go toolchain version that supplies
+// wasm_exec.js. It reads $GOROOT/VERSION -- the same GOROOT that
+// islandWASMExecArtifact reads wasm_exec.js from -- so the reported version
+// matches the emitted glue even when this binary was compiled by a different
+// toolchain. It falls back to the build version when VERSION is unreadable.
+func islandWASMExecGoVersion() string {
+	if contents, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "VERSION")); err == nil {
+		line, _, _ := strings.Cut(strings.TrimSpace(string(contents)), "\n")
+		if line = strings.TrimSpace(line); line != "" {
+			return line
+		}
+	}
+	return runtime.Version()
+}
 
 func islandWASMLoaderArtifact(outputDir, componentName string) plannedAssetArtifact {
 	assetPath := islandWASMLoaderAssetPath(componentName)

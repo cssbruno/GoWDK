@@ -38,6 +38,43 @@ view {
 	}
 }
 
+func TestCheckFilesRejectsReservedActiveComponentExport(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "toggle.cmp.gwdk")
+	writeGWDK(t, path, `package components
+
+component Toggle
+props {
+  active bool
+}
+exports {
+  active bool
+}
+
+view {
+  <p>{active}</p>
+}
+`)
+
+	_, diagnostics := CheckFiles(gowdk.Config{}, []string{path})
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected reserved export diagnostic")
+	}
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %#v", diagnostics)
+	}
+	diagnostic := diagnostics[0]
+	if diagnostic.Code != "component_contract_error" {
+		t.Fatalf("expected component_contract_error, got %#v", diagnostic)
+	}
+	if !strings.Contains(diagnostic.Message, `export "active" uses reserved name "active"`) {
+		t.Fatalf("unexpected diagnostic message: %#v", diagnostic)
+	}
+	if diagnostic.Pos.Line != 8 || diagnostic.Pos.Column != 3 {
+		t.Fatalf("expected export diagnostic at line 8, got %#v", diagnostic.Pos)
+	}
+}
+
 func TestCheckSourceValidatesUnsavedBuffer(t *testing.T) {
 	_, diagnostics := CheckSource(gowdk.Config{}, "untitled.gwdk", []byte(`package app
 
@@ -737,7 +774,7 @@ func TestParseComponentSourceReportsTypedParserDiagnostic(t *testing.T) {
 
 component Badge
 props {
-  Count int
+  Count time
 }
 
 view {
@@ -755,7 +792,7 @@ view {
 	}
 	if diagnostic.Range == nil ||
 		diagnostic.Range.Start.Line != 5 || diagnostic.Range.Start.Column != 3 ||
-		diagnostic.Range.End.Line != 5 || diagnostic.Range.End.Column != 12 {
+		diagnostic.Range.End.Line != 5 || diagnostic.Range.End.Column != 13 {
 		t.Fatalf("unexpected component diagnostic range: %#v", diagnostic.Range)
 	}
 }

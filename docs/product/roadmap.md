@@ -129,6 +129,10 @@ level, the current baseline already includes:
 - shared backend routing primitives in `runtime/app`, runtime action/API
   adapter helpers, one generated backend hook, request body limits, and no-store
   defaults for request-time responses;
+- typed backend adapter IR driving generated action/API/fragment/contract route
+  registrations, backend imports, split frontend proxy route matching,
+  backend-only route presence, guard/rate-limit/CSRF endpoint checks, and
+  generated `501` fallback metadata;
 - first-slice action/API execution, partial fragment responses, dynamic
   standalone fragment routes, and concrete or dynamic request-time SSR pages
   with declared `load {}` fields through buildgen, appgen, `runtime/app`, and
@@ -163,7 +167,7 @@ are stable.
 | 5 | Unified endpoint metadata | Actions and APIs normalize into one framework-neutral endpoint model containing source, kind, package path, package name, symbol, method, path, signature kind, input type, source span, and binding status. Route metadata remains limited to static, SPA, SSR, and hybrid page routes. |
 | 6 | Endpoint discovery policy | Optional Go endpoint comments such as `//gowdk:act POST /login` and `//gowdk:api GET /api/session` can feed the same endpoint model. The compiler never auto-discovers endpoints by function name and never scans Gin/Echo/Fiber route registration as a source of truth. Conflicts are hard diagnostics. |
 | 7 | Binding severity policy | Missing or unsupported handlers can remain non-fatal in dev/migration mode, but strict production builds fail unless an explicit stub flag allows `501` output. Feature packages are documented as not importing generated app output. |
-| 8 | Generated adapter IR | Backend adapter generation is driven by typed IR for imports, endpoint registrations, request decoding, handler calls, response writing, and `501` fallbacks. One-binary, split frontend proxy, and backend-only app generation consume the same metadata. |
+| 8 | Generated adapter IR | Implemented. Backend adapter generation is driven by typed IR for imports, endpoint registrations, request decoding, handler calls, response writing, and `501` fallbacks. One-binary, split frontend proxy, and backend-only app generation consume the same backend metadata. |
 | 9 | Go AST generation cleanup | API handlers, backend route registration, app shells, embed wiring, split app code, and remaining generated Go move to `go/ast`/`go/printer` plus `go/format`. Hardcoded line writing and source snippets are banned except for documented temporary exceptions. |
 | 10 | Secure actions and forms | Generated action adapters wire CSRF token generation and validation, define token exposure, invalid-CSRF status/body shape, submit-button intent handling, validation fragment patterns, and production-safe action/API docs. |
 | 11 | Guards and runtime context | Generated guards work for SSR, actions, and APIs. The request context helper contract is documented around `context.Context`, `app.Request(ctx)`, `app.Params(ctx)`, `app.CSRF(ctx)`, and `app.Session(ctx)`, or the project deliberately switches to an explicit app context. |

@@ -141,6 +141,14 @@ func cloneValues(input map[string]string) map[string]string {
 	return output
 }
 
+func cloneActionInputFields(input map[string][]ActionInputField) map[string][]ActionInputField {
+	output := map[string][]ActionInputField{}
+	for key, fields := range input {
+		output[key] = append([]ActionInputField(nil), fields...)
+	}
+	return output
+}
+
 func mergeValues(base map[string]string, overlay map[string]string) map[string]string {
 	out := cloneValues(base)
 	for key, value := range overlay {
@@ -172,7 +180,7 @@ func evalComputedValues(computeds []clientlang.Computed, values map[string]strin
 	return stringsOut, valuesOut, nil
 }
 
-func componentStateJSON(stateJSON string, props map[string]string, computed map[string]any) (string, error) {
+func componentStateJSON(stateJSON string, props map[string]any, computed map[string]any) (string, error) {
 	if stateJSON == "" && len(props) == 0 && len(computed) == 0 {
 		return "", nil
 	}

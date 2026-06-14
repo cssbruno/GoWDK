@@ -301,19 +301,23 @@ func validateClientGoBlockWASMImports(page gwdkir.Page, sourcePath string) error
 }
 
 func validateClientGoBlockWASMExports(page gwdkir.Page, contents []byte) error {
-	exports, err := wasmExportNames(contents)
+	exports, err := wasmExportFunctionSignatures(contents)
 	if err != nil {
 		return clientGoBlockDiagnosticError(page, "client_go_block_wasm_export_error", err)
 	}
 	required := clientGoBlockMountExportName(page)
-	if !exports[required] {
+	signature, ok := exports[required]
+	if !ok {
 		return clientGoBlockDiagnosticError(page, "client_go_block_wasm_export_error", fmt.Errorf("missing required WASM export: %s", required))
+	}
+	if !signature.isGOWDKABI() {
+		return clientGoBlockDiagnosticError(page, "client_go_block_wasm_export_error", fmt.Errorf("WASM export %s must have signature func() uint32", required))
 	}
 	return nil
 }
 
 func validateWASMIslandExports(component gwdkir.Component, packagePath string, contents []byte) error {
-	exports, err := wasmExportNames(contents)
+	exports, err := wasmExportFunctionSignatures(contents)
 	if err != nil {
 		return wasmIslandDiagnosticError(component, "wasm_package_export_error", packagePath, err)
 	}
@@ -324,20 +328,37 @@ func validateWASMIslandExports(component gwdkir.Component, packagePath string, c
 	}
 	var missing []string
 	for _, name := range required {
-		if !exports[name] {
+		if _, ok := exports[name]; !ok {
 			missing = append(missing, name)
 		}
 	}
 	if len(missing) > 0 {
 		return wasmIslandDiagnosticError(component, "wasm_package_export_error", packagePath, fmt.Errorf("missing required WASM exports: %s", strings.Join(missing, ", ")))
 	}
+	for _, name := range required {
+		if !exports[name].isGOWDKABI() {
+			return wasmIslandDiagnosticError(component, "wasm_package_export_error", packagePath, fmt.Errorf("WASM export %s must have signature func() uint32", name))
+		}
+	}
 	return nil
 }
 
-func wasmExportNames(contents []byte) (map[string]bool, error) {
+type wasmFunctionSignature struct {
+	Params  []byte
+	Results []byte
+}
+
+func (signature wasmFunctionSignature) isGOWDKABI() bool {
+	return len(signature.Params) == 0 && len(signature.Results) == 1 && signature.Results[0] == 0x7f
+}
+
+func wasmExportFunctionSignatures(contents []byte) (map[string]wasmFunctionSignature, error) {
 	if len(contents) < 8 || !bytes.Equal(contents[:4], wasmMagic) {
 		return nil, fmt.Errorf("invalid WASM module")
 	}
+	var types []wasmFunctionSignature
+	var functionTypeIndexes []uint32
+	exportIndexes := map[string]uint32{}
 	offset := 8
 	for offset < len(contents) {
 		sectionID := contents[offset]
@@ -351,41 +372,231 @@ func wasmExportNames(contents []byte) (map[string]bool, error) {
 		if sectionEnd < offset || sectionEnd > len(contents) {
 			return nil, fmt.Errorf("invalid WASM section length")
 		}
-		if sectionID != 7 {
-			offset = sectionEnd
-			continue
+		switch sectionID {
+		case 1:
+			parsed, err := parseWASMTypeSection(contents[offset:sectionEnd])
+			if err != nil {
+				return nil, err
+			}
+			types = parsed
+		case 2:
+			parsed, err := parseWASMImportFunctionTypes(contents[offset:sectionEnd])
+			if err != nil {
+				return nil, err
+			}
+			functionTypeIndexes = append(functionTypeIndexes, parsed...)
+		case 3:
+			parsed, err := parseWASMFunctionSection(contents[offset:sectionEnd])
+			if err != nil {
+				return nil, err
+			}
+			functionTypeIndexes = append(functionTypeIndexes, parsed...)
+		case 7:
+			parsed, err := parseWASMExportFunctions(contents[offset:sectionEnd])
+			if err != nil {
+				return nil, err
+			}
+			exportIndexes = parsed
 		}
-		exports := map[string]bool{}
-		count, cursor, ok := readWASMVarUint32(contents, offset)
-		if !ok {
-			return nil, fmt.Errorf("invalid WASM export count")
-		}
-		for range count {
-			nameLen, next, ok := readWASMVarUint32(contents, cursor)
-			if !ok {
-				return nil, fmt.Errorf("invalid WASM export name length")
-			}
-			cursor = next
-			nameEnd := cursor + int(nameLen)
-			if nameEnd < cursor || nameEnd > sectionEnd {
-				return nil, fmt.Errorf("invalid WASM export name")
-			}
-			name := string(contents[cursor:nameEnd])
-			cursor = nameEnd
-			if cursor >= sectionEnd {
-				return nil, fmt.Errorf("invalid WASM export descriptor")
-			}
-			cursor++
-			_, next, ok = readWASMVarUint32(contents, cursor)
-			if !ok {
-				return nil, fmt.Errorf("invalid WASM export index")
-			}
-			cursor = next
-			exports[name] = true
-		}
-		return exports, nil
+		offset = sectionEnd
 	}
-	return map[string]bool{}, nil
+	exports := map[string]wasmFunctionSignature{}
+	for name, functionIndex := range exportIndexes {
+		if int(functionIndex) >= len(functionTypeIndexes) {
+			return nil, fmt.Errorf("invalid WASM export function index")
+		}
+		typeIndex := functionTypeIndexes[functionIndex]
+		if int(typeIndex) >= len(types) {
+			return nil, fmt.Errorf("invalid WASM function type index")
+		}
+		exports[name] = types[typeIndex]
+	}
+	return exports, nil
+}
+
+func parseWASMTypeSection(contents []byte) ([]wasmFunctionSignature, error) {
+	count, cursor, ok := readWASMVarUint32(contents, 0)
+	if !ok {
+		return nil, fmt.Errorf("invalid WASM type count")
+	}
+	types := make([]wasmFunctionSignature, 0, count)
+	for range count {
+		if cursor >= len(contents) || contents[cursor] != 0x60 {
+			return nil, fmt.Errorf("invalid WASM function type")
+		}
+		cursor++
+		params, next, err := readWASMValueTypes(contents, cursor, "param")
+		if err != nil {
+			return nil, err
+		}
+		cursor = next
+		results, next, err := readWASMValueTypes(contents, cursor, "result")
+		if err != nil {
+			return nil, err
+		}
+		cursor = next
+		types = append(types, wasmFunctionSignature{Params: params, Results: results})
+	}
+	return types, nil
+}
+
+func readWASMValueTypes(contents []byte, offset int, label string) ([]byte, int, error) {
+	count, cursor, ok := readWASMVarUint32(contents, offset)
+	if !ok {
+		return nil, offset, fmt.Errorf("invalid WASM %s count", label)
+	}
+	end := cursor + int(count)
+	if end < cursor || end > len(contents) {
+		return nil, offset, fmt.Errorf("invalid WASM %s types", label)
+	}
+	values := append([]byte(nil), contents[cursor:end]...)
+	return values, end, nil
+}
+
+func parseWASMImportFunctionTypes(contents []byte) ([]uint32, error) {
+	count, cursor, ok := readWASMVarUint32(contents, 0)
+	if !ok {
+		return nil, fmt.Errorf("invalid WASM import count")
+	}
+	var functionTypeIndexes []uint32
+	var err error
+	for range count {
+		cursor, err = skipWASMName(contents, cursor)
+		if err != nil {
+			return nil, err
+		}
+		cursor, err = skipWASMName(contents, cursor)
+		if err != nil {
+			return nil, err
+		}
+		if cursor >= len(contents) {
+			return nil, fmt.Errorf("invalid WASM import descriptor")
+		}
+		kind := contents[cursor]
+		cursor++
+		switch kind {
+		case 0x00:
+			typeIndex, next, ok := readWASMVarUint32(contents, cursor)
+			if !ok {
+				return nil, fmt.Errorf("invalid WASM import function type")
+			}
+			functionTypeIndexes = append(functionTypeIndexes, typeIndex)
+			cursor = next
+		case 0x01:
+			cursor, err = skipWASMTableType(contents, cursor)
+			if err != nil {
+				return nil, err
+			}
+		case 0x02:
+			cursor, err = skipWASMLimits(contents, cursor)
+			if err != nil {
+				return nil, err
+			}
+		case 0x03:
+			cursor, err = skipWASMGlobalType(contents, cursor)
+			if err != nil {
+				return nil, err
+			}
+		default:
+			return nil, fmt.Errorf("invalid WASM import kind")
+		}
+	}
+	return functionTypeIndexes, nil
+}
+
+func parseWASMFunctionSection(contents []byte) ([]uint32, error) {
+	count, cursor, ok := readWASMVarUint32(contents, 0)
+	if !ok {
+		return nil, fmt.Errorf("invalid WASM function count")
+	}
+	typeIndexes := make([]uint32, 0, count)
+	for range count {
+		typeIndex, next, ok := readWASMVarUint32(contents, cursor)
+		if !ok {
+			return nil, fmt.Errorf("invalid WASM function type index")
+		}
+		typeIndexes = append(typeIndexes, typeIndex)
+		cursor = next
+	}
+	return typeIndexes, nil
+}
+
+func parseWASMExportFunctions(contents []byte) (map[string]uint32, error) {
+	count, cursor, ok := readWASMVarUint32(contents, 0)
+	if !ok {
+		return nil, fmt.Errorf("invalid WASM export count")
+	}
+	exports := map[string]uint32{}
+	for range count {
+		name, next, err := readWASMName(contents, cursor)
+		if err != nil {
+			return nil, err
+		}
+		cursor = next
+		if cursor >= len(contents) {
+			return nil, fmt.Errorf("invalid WASM export descriptor")
+		}
+		kind := contents[cursor]
+		cursor++
+		index, next, ok := readWASMVarUint32(contents, cursor)
+		if !ok {
+			return nil, fmt.Errorf("invalid WASM export index")
+		}
+		cursor = next
+		if kind == 0x00 {
+			exports[name] = index
+		}
+	}
+	return exports, nil
+}
+
+func readWASMName(contents []byte, offset int) (string, int, error) {
+	nameLen, cursor, ok := readWASMVarUint32(contents, offset)
+	if !ok {
+		return "", offset, fmt.Errorf("invalid WASM name length")
+	}
+	nameEnd := cursor + int(nameLen)
+	if nameEnd < cursor || nameEnd > len(contents) {
+		return "", offset, fmt.Errorf("invalid WASM name")
+	}
+	return string(contents[cursor:nameEnd]), nameEnd, nil
+}
+
+func skipWASMName(contents []byte, offset int) (int, error) {
+	_, next, err := readWASMName(contents, offset)
+	return next, err
+}
+
+func skipWASMTableType(contents []byte, offset int) (int, error) {
+	if offset >= len(contents) {
+		return offset, fmt.Errorf("invalid WASM table type")
+	}
+	return skipWASMLimits(contents, offset+1)
+}
+
+func skipWASMLimits(contents []byte, offset int) (int, error) {
+	tag, cursor, ok := readWASMVarUint32(contents, offset)
+	if !ok {
+		return offset, fmt.Errorf("invalid WASM limits")
+	}
+	_, cursor, ok = readWASMVarUint32(contents, cursor)
+	if !ok {
+		return offset, fmt.Errorf("invalid WASM limits minimum")
+	}
+	if tag == 0x01 || tag == 0x03 {
+		_, cursor, ok = readWASMVarUint32(contents, cursor)
+		if !ok {
+			return offset, fmt.Errorf("invalid WASM limits maximum")
+		}
+	}
+	return cursor, nil
+}
+
+func skipWASMGlobalType(contents []byte, offset int) (int, error) {
+	if offset+2 > len(contents) {
+		return offset, fmt.Errorf("invalid WASM global type")
+	}
+	return offset + 2, nil
 }
 
 func readWASMVarUint32(contents []byte, offset int) (uint32, int, bool) {

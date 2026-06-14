@@ -9,6 +9,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestBuildLowersGPostDirectiveForActionPage(t *testing.T) {
@@ -38,6 +39,49 @@ func TestBuildLowersGPostDirectiveForActionPage(t *testing.T) {
 	output := string(payload)
 	if !strings.Contains(output, `<form method="post" action="/signup"><input name="email"></form>`) {
 		t.Fatalf("expected lowered g:post form in output:\n%s", output)
+	}
+}
+
+func TestBuildSynthesizesActionInputAttrsFromBindingFields(t *testing.T) {
+	outputDir := t.TempDir()
+	ir := gwdkir.Program{Version: gwdkir.Version, Pages: []gwdkir.Page{{
+		ID:     "signup",
+		Route:  "/signup",
+		Render: gowdk.Action,
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<form g:post={Submit}><input name="age" /><input name="score" /></form>`,
+			Actions:  []gwdkir.Action{{Name: "Submit"}},
+		},
+	}}, Endpoints: []gwdkir.Endpoint{{
+		Kind:   gwdkir.EndpointAction,
+		Source: gwdkir.EndpointSourceGOWDK,
+		PageID: "signup",
+		Symbol: "Submit",
+		Method: "POST",
+		Path:   "/signup",
+		Binding: gwdkir.Binding{InputFields: []source.BackendInputField{
+			{FieldName: "Age", FormName: "age", Type: "uint8"},
+			{FieldName: "Score", FormName: "score", Type: "int16"},
+		}},
+	}}}
+
+	_, err := BuildFromIR(gowdk.Config{}, ir, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "signup", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, want := range []string{
+		`<input name="age" type="number" inputmode="numeric" min="0" max="255">`,
+		`<input name="score" type="number" inputmode="numeric" min="-32768" max="32767">`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("expected %q in output:\n%s", want, output)
+		}
 	}
 }
 

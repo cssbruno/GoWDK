@@ -2,18 +2,37 @@ package compiler
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"strings"
 )
 
 func validateComponentGoContracts(components []gwdkir.Component) []ValidationError {
 	var diagnostics []ValidationError
 	for _, component := range components {
 		diagnostics = append(diagnostics, validateComponentGoContract(component)...)
+	}
+	return diagnostics
+}
+
+func validateComponentExports(components []gwdkir.Component) []ValidationError {
+	var diagnostics []ValidationError
+	for _, component := range components {
+		for _, export := range component.Exports {
+			if export.Name != gwdkir.ComponentExportActiveFlag {
+				continue
+			}
+			diagnostics = append(diagnostics, ValidationError{
+				Code:          "component_contract_error",
+				ComponentName: component.Name,
+				Source:        component.Source,
+				Span:          firstSpan(export.Span, component.Blocks.Spans.Exports, component.Span),
+				Message:       fmt.Sprintf("component %s export %q uses reserved name %q; the exports payload reserves it for the mount flag", component.Name, export.Name, gwdkir.ComponentExportActiveFlag),
+			})
+		}
 	}
 	return diagnostics
 }
@@ -82,7 +101,7 @@ func resolveComponentContracts(component gwdkir.Component) (componentContracts, 
 	}
 	for _, prop := range component.Props {
 		contracts.Props[prop.Name] = true
-		contracts.PropTypes[prop.Name] = clientlang.TypeString
+		contracts.PropTypes[prop.Name] = clientlang.NormalizeType(prop.Type)
 	}
 
 	var diagnostics []ValidationError

@@ -278,9 +278,11 @@ type WASMContract struct {
 }
 
 type Prop struct {
-	Name string
-	Type string
-	Span source.SourceSpan
+	Name       string
+	Type       string
+	Default    string
+	DefaultSet bool
+	Span       source.SourceSpan
 }
 
 type Export struct {
@@ -288,6 +290,10 @@ type Export struct {
 	Type string
 	Span source.SourceSpan
 }
+
+// ComponentExportActiveFlag is reserved in generated exports payloads for the
+// island mount-state flag.
+const ComponentExportActiveFlag = "active"
 
 type Emit struct {
 	Name   string

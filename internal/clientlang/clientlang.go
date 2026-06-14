@@ -376,6 +376,7 @@ type Bootstrap struct {
 	Handlers map[string]Handler `json:"handlers,omitempty"`
 	Helpers  map[string]Helper  `json:"helpers,omitempty"`
 	Emits    map[string]Emit    `json:"emits,omitempty"`
+	Exports  []string           `json:"exports,omitempty"`
 	Stores   []string           `json:"stores,omitempty"`
 	Mount    []string           `json:"mount,omitempty"`
 	Destroy  []string           `json:"destroy,omitempty"`

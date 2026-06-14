@@ -9,13 +9,7 @@ import (
 func newBackendRouterDecl(adapter BackendAdapterIR) *ast.FuncDecl {
 	routes := []ast.Expr{}
 	for _, registration := range adapter.Registrations {
-		var method ast.Expr = stringLit(registration.Method)
-		if registration.Kind == BackendEndpointAction && registration.Method == "POST" {
-			method = sel("http", "MethodPost")
-		} else if registration.Kind == BackendEndpointFragment && registration.Method == "GET" {
-			method = sel("http", "MethodGet")
-		}
-		routes = append(routes, backendRouteExpr(method, registration.Kind, registration.Path, id(registration.Handler)))
+		routes = append(routes, backendRouteExpr(backendRegistrationMethodExpr(registration), registration.Kind, registration.Path, id(registration.Handler)))
 	}
 	for _, exposure := range routableContractExposures(adapter.ContractExposures) {
 		method := contractExposureMethodExpr(exposure)
@@ -32,6 +26,17 @@ func newBackendRouterDecl(adapter BackendAdapterIR) *ast.FuncDecl {
 		{Type: &ast.StarExpr{X: sel("gowdkruntime", "BackendRouter")}},
 		{Type: id("error")},
 	}, stmts)
+}
+
+func backendRegistrationMethodExpr(registration BackendEndpointRegistration) ast.Expr {
+	switch {
+	case registration.Kind == BackendEndpointAction && registration.Method == "POST":
+		return sel("http", "MethodPost")
+	case registration.Kind == BackendEndpointFragment && registration.Method == "GET":
+		return sel("http", "MethodGet")
+	default:
+		return stringLit(registration.Method)
+	}
 }
 
 func contractRouteHandlerExpr(exposure BackendContractExposure) ast.Expr {
@@ -93,7 +98,7 @@ func backendProxySource(options Options) (string, error) {
 	}
 	return printActionDecls([]ast.Decl{
 		backendProxyDecl(false),
-		isBackendRouteDecl(options),
+		isBackendRouteDecl(backendAdapterIR(options)),
 	})
 }
 
@@ -137,48 +142,45 @@ func backendProxyDecl(rateLimit bool) *ast.FuncDecl {
 	return funcDecl("backendProxy", actionParams(), boolResults(), stmts)
 }
 
-func isBackendRouteDecl(options Options) *ast.FuncDecl {
+func isBackendRouteDecl(adapter BackendAdapterIR) *ast.FuncDecl {
 	clauses := []ast.Stmt{}
-	for _, action := range sortedActionEndpoints(options.Actions) {
-		clauses = append(clauses, &ast.CaseClause{
-			List: []ast.Expr{backendRouteCond(sel("http", "MethodPost"), action.Route)},
-			Body: []ast.Stmt{returnBool(true)},
-		})
-	}
-	for _, api := range sortedAPIEndpoints(options.APIs) {
-		clauses = append(clauses, &ast.CaseClause{
-			List: []ast.Expr{backendRouteCond(stringLit(api.Method), api.Route)},
-			Body: []ast.Stmt{returnBool(true)},
-		})
-	}
-	for _, fragment := range sortedFragmentEndpoints(options.Fragments) {
-		if fragmentRouteIsDynamic(fragment) {
+	for _, registration := range adapter.Registrations {
+		if registration.Dynamic {
 			continue
 		}
 		clauses = append(clauses, &ast.CaseClause{
-			List: []ast.Expr{backendRouteCond(stringLit(fragment.Method), fragment.Route)},
+			List: []ast.Expr{backendRouteCond(backendRegistrationMethodExpr(registration), registration.Path)},
 			Body: []ast.Stmt{returnBool(true)},
 		})
 	}
-	for _, exposure := range routableContractExposures(backendAdapterIR(options).ContractExposures) {
+	for _, exposure := range routableContractExposures(adapter.ContractExposures) {
+		if exposure.Endpoint.Dynamic {
+			continue
+		}
 		clauses = append(clauses, &ast.CaseClause{
 			List: []ast.Expr{backendRouteCond(contractExposureMethodExpr(exposure), exposure.Endpoint.Path)},
 			Body: []ast.Stmt{returnBool(true)},
 		})
 	}
 	body := []ast.Stmt{}
-	if fragmentsUseDynamicRoutes(options.Fragments) {
+	if adapter.HasDynamicRoutes() {
 		body = append(body, define([]ast.Expr{id("rawRequestPath")}, id("requestPath")))
 	}
 	body = append(body,
 		assign([]ast.Expr{id("requestPath")}, call(sel("path", "Clean"), &ast.BinaryExpr{X: stringLit("/"), Op: token.ADD, Y: id("requestPath")})),
 		&ast.SwitchStmt{Body: &ast.BlockStmt{List: clauses}},
 	)
-	for _, fragment := range sortedFragmentEndpoints(options.Fragments) {
-		if !fragmentRouteIsDynamic(fragment) {
+	for _, registration := range adapter.Registrations {
+		if !registration.Dynamic {
 			continue
 		}
-		body = append(body, backendDynamicRouteIfStmt(stringLit(fragment.Method), fragment.Route))
+		body = append(body, backendDynamicRouteIfStmt(backendRegistrationMethodExpr(registration), registration.Path))
+	}
+	for _, exposure := range routableContractExposures(adapter.ContractExposures) {
+		if !exposure.Endpoint.Dynamic {
+			continue
+		}
+		body = append(body, backendDynamicRouteIfStmt(contractExposureMethodExpr(exposure), exposure.Endpoint.Path))
 	}
 	body = append(body, returnBool(false))
 	return funcDecl("isBackendRoute", []*ast.Field{

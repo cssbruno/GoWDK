@@ -8,11 +8,9 @@ import (
 )
 
 func generatedUsesRateLimit(options Options) bool {
+	adapter := backendAdapterIR(options)
 	return options.Config.HasFeature(gowdk.FeatureRateLimit) &&
-		(len(options.Actions) > 0 ||
-			len(options.APIs) > 0 ||
-			len(options.Fragments) > 0 ||
-			len(routableContractExposures(backendAdapterIR(options).ContractExposures)) > 0 ||
+		(adapter.HasRegistrations() ||
 			len(options.SSR) > 0)
 }
 

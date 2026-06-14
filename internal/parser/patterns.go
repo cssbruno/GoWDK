@@ -288,14 +288,22 @@ func parseAPIBlockLine(line string) []string {
 }
 
 func parsePropLine(line string) []string {
-	tokens := syntaxTokens(line)
+	raw := strings.TrimSpace(line)
+	left, defaultValue, hasDefault := strings.Cut(raw, "=")
+	if hasDefault {
+		defaultValue = strings.TrimSpace(defaultValue)
+		if defaultValue == "" {
+			return nil
+		}
+	}
+	tokens := syntaxTokens(left)
 	if len(tokens) != 2 || !isIdentifierToken(tokens[0]) || !isIdentifierToken(tokens[1]) {
 		return nil
 	}
 	if !isStrictIdent(tokens[0].Lexeme) || !isStrictIdent(tokens[1].Lexeme) {
 		return nil
 	}
-	return []string{line, tokens[0].Lexeme, tokens[1].Lexeme}
+	return []string{line, tokens[0].Lexeme, tokens[1].Lexeme, defaultValue}
 }
 
 func parseEmitLine(line string) []string {

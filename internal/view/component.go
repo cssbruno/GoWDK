@@ -86,11 +86,32 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 	if mode == "" {
 		mode = component.DefaultIsland
 	}
-	props := map[string]string{}
+	props := cloneValues(component.PropDefaults)
+	propValues := map[string]any{}
+	for prop, value := range props {
+		typed, err := typedComponentPropString(prop, value, component.PropType(prop))
+		if err != nil {
+			return err
+		}
+		propValues[prop] = typed
+	}
 	propExpressions := map[string]string{}
 	taintedValues := map[string]bool{}
+	providedProps := map[string]string{}
 	var parentListeners []parentComponentListener
 	for _, attr := range node.Attrs {
+		if attr.Spread {
+			expanded, err := componentSpreadProps(ctx, component)
+			if err != nil {
+				return fmt.Errorf("component %s: %w", node.Name, err)
+			}
+			for _, spreadAttr := range expanded {
+				if err := applyComponentPropAttr(ctx, component, node.Name, spreadAttr, props, propValues, propExpressions, taintedValues, providedProps); err != nil {
+					return err
+				}
+			}
+			continue
+		}
 		if strings.HasPrefix(attr.Name, "g:") {
 			if attr.Name == "g:island" {
 				continue
@@ -100,27 +121,35 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 				if err != nil {
 					return err
 				}
-				parentListeners = append(parentListeners, listener)
+				merged, err := addParentListener(parentListeners, listener)
+				if err != nil {
+					return fmt.Errorf("component %s %w", node.Name, err)
+				}
+				parentListeners = merged
 				continue
 			}
 			if attr.Name == "g:event" {
 				return fmt.Errorf("component %s must not declare g:event; domain and integration events are backend-owned facts", node.Name)
 			}
+			if strings.HasPrefix(attr.Name, "g:bind:") {
+				listener, err := applyComponentBinding(ctx, component, node.Name, attr, props, propValues, propExpressions, taintedValues, providedProps)
+				if err != nil {
+					return err
+				}
+				merged, err := addParentListener(parentListeners, listener)
+				if err != nil {
+					return fmt.Errorf("component %s %w", node.Name, err)
+				}
+				parentListeners = merged
+				continue
+			}
+			if attr.Name == "g:bind" {
+				return fmt.Errorf("component %s uses unsupported bind target %q; component bindings must use g:bind:<exportedState>", node.Name, attr.Name)
+			}
 			return fmt.Errorf("component %s uses unsupported directive attribute %q", node.Name, attr.Name)
 		}
-		if attr.Boolean {
-			return fmt.Errorf("component %s prop %q requires a string value", node.Name, attr.Name)
-		}
-		value, tainted, err := interpolateValue(ctx, attr.Value)
-		if err != nil {
+		if err := applyComponentPropAttr(ctx, component, node.Name, attr, props, propValues, propExpressions, taintedValues, providedProps); err != nil {
 			return err
-		}
-		props[attr.Name] = value
-		if attr.Expression {
-			propExpressions[attr.Name] = expressionAttrSource(attr.Value)
-		}
-		if tainted {
-			taintedValues[attr.Name] = true
 		}
 	}
 	for _, prop := range component.Props {
@@ -129,7 +158,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 		}
 	}
 	for prop := range props {
-		if !component.HasProp(prop) {
+		if !component.HasProp(prop) && !component.HasStateField(prop) {
 			return fmt.Errorf("component %s does not declare prop %q", node.Name, prop)
 		}
 	}
@@ -164,9 +193,11 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 		values:       values,
 		tainted:      taintedValues,
 		actions:      ctx.actions,
+		actionFields: ctx.actionFields,
 		stack:        cloneStack(ctx.stack),
 		slotHTML:     slotHTML,
 		slots:        slots,
+		propFields:   boolSet(component.Props),
 		stateFields:  boolSet(keys(component.State)),
 		readFields:   boolSet(keys(values)),
 		bindFields:   boolSet(keys(bindValues)),
@@ -182,7 +213,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 	if err != nil {
 		return err
 	}
-	if component.StateJSON != "" || component.HandlersJSON != "" || mode != "" || len(component.Emits) > 0 || len(propExpressions) > 0 {
+	if component.StateJSON != "" || component.HandlersJSON != "" || mode != "" || len(component.Emits) > 0 || len(component.Exports) > 0 || len(propExpressions) > 0 {
 		if mode == "" {
 			mode = "js"
 		}
@@ -192,6 +223,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 			Mode:            mode,
 			Body:            body,
 			Props:           props,
+			PropValues:      propValues,
 			PropExpressions: propExpressions,
 			ComputedValues:  computedValues,
 			ParentListeners: parentListeners,
@@ -207,6 +239,7 @@ type componentIslandRender struct {
 	Mode            string
 	Body            string
 	Props           map[string]string
+	PropValues      map[string]any
 	PropExpressions map[string]string
 	ComputedValues  map[string]any
 	ParentListeners []parentComponentListener
@@ -217,7 +250,7 @@ func renderComponentIsland(out *renderOutput, island componentIslandRender) erro
 	if err != nil {
 		return err
 	}
-	stateJSON, err := componentStateJSON(island.Component.StateJSON, island.Props, island.ComputedValues)
+	stateJSON, err := componentStateJSON(island.Component.StateJSON, island.PropValues, island.ComputedValues)
 	if err != nil {
 		return err
 	}
@@ -252,6 +285,234 @@ func componentPropExpressionsJSON(propExpressions map[string]string) (string, er
 	return string(payload), nil
 }
 
+func applyComponentBinding(ctx *renderContext, component Component, callName string, attr Attr, props map[string]string, propValues map[string]any, propExpressions map[string]string, taintedValues map[string]bool, providedProps map[string]string) (parentComponentListener, error) {
+	if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+		return parentComponentListener{}, fmt.Errorf("%s requires a parent state field", attr.Name)
+	}
+	target := strings.TrimPrefix(attr.Name, "g:bind:")
+	if target == "" || target == attr.Name {
+		return parentComponentListener{}, fmt.Errorf("component %s uses unsupported bind target %q", callName, attr.Name)
+	}
+	exportType, ok := component.Exports[target]
+	if !ok {
+		return parentComponentListener{}, fmt.Errorf("component %s bind target %q must be declared in exports", callName, target)
+	}
+	if !component.HasStateField(target) {
+		return parentComponentListener{}, fmt.Errorf("component %s bind target %q must be declared in state", callName, target)
+	}
+	parentField := expressionAttrSource(attr.Value)
+	parentType, err := validateIslandSymbol(parentField, ctx.writeSymbols())
+	if err != nil {
+		return parentComponentListener{}, fmt.Errorf("%s: %w", attr.Name, err)
+	}
+	if parentType != clientlang.TypeUnknown && exportType != clientlang.TypeUnknown && parentType != exportType && !compatibleNumericType(exportType, parentType) {
+		return parentComponentListener{}, fmt.Errorf("component %s bind target %q exports %s but parent field %q is %s", callName, target, exportType, parentField, parentType)
+	}
+	if previous, exists := providedProps[target]; exists {
+		return parentComponentListener{}, fmt.Errorf("component %s prop %q is provided more than once by %s and %s", callName, target, previous, attr.Name)
+	}
+	providedProps[target] = attr.Name
+	bindingAttr := Attr{Name: target, Value: "{" + parentField + "}", Expression: true}
+	value, typedValue, _, err := componentPropValue(ctx, bindingAttr, exportType)
+	if err != nil {
+		return parentComponentListener{}, err
+	}
+	props[target] = value
+	propValues[target] = typedValue
+	propExpressions[target] = parentField
+	if ctx.tainted[parentField] {
+		taintedValues[target] = true
+	}
+	return parentComponentListener{
+		Event:      "exports",
+		Expression: parentField + " = event." + target,
+	}, nil
+}
+
+func applyComponentPropAttr(ctx *renderContext, component Component, callName string, attr Attr, props map[string]string, propValues map[string]any, propExpressions map[string]string, taintedValues map[string]bool, providedProps map[string]string) error {
+	propName, sourceName, err := componentPropTarget(component, callName, attr)
+	if err != nil {
+		return err
+	}
+	if previous, exists := providedProps[propName]; exists {
+		return fmt.Errorf("component %s prop %q is provided more than once by %s and %s", callName, propName, previous, sourceName)
+	}
+	providedProps[propName] = sourceName
+	propType := component.PropType(propName)
+	if attr.Boolean && sourceName == propName {
+		if propType != clientlang.TypeBool {
+			return fmt.Errorf("component %s prop %q requires a value", callName, propName)
+		}
+		props[propName] = "true"
+		propValues[propName] = true
+		return nil
+	}
+	if attr.Boolean {
+		attr = Attr{Name: propName, Value: "{" + sourceName + "}", Expression: true}
+	}
+	value, typedValue, tainted, err := componentPropValue(ctx, Attr{Name: propName, Value: attr.Value, Boolean: attr.Boolean, Expression: attr.Expression}, propType)
+	if err != nil {
+		return err
+	}
+	props[propName] = value
+	propValues[propName] = typedValue
+	if attr.Expression {
+		propExpressions[propName] = expressionAttrSource(attr.Value)
+	}
+	if tainted {
+		taintedValues[propName] = true
+	}
+	return nil
+}
+
+func (ctx *renderContext) writeSymbols() map[string]clientlang.ValueType {
+	if len(ctx.stateTypes) > 0 {
+		return ctx.stateTypes
+	}
+	return boolFieldSymbols(ctx.bindFields)
+}
+
+// addParentListener appends a parent listener, merging it into an existing
+// listener for the same event instead of rejecting it. This lets a component
+// bind several exported state fields at once (multiple g:bind:<export>) or pair
+// a g:on:exports handler with bindings: their expressions are joined and run as
+// ordered statements in the browser. Different event modifiers are rejected
+// because a single data-gowdk-parent-event-* attribute cannot preserve separate
+// listener timing for each merged expression.
+func addParentListener(listeners []parentComponentListener, next parentComponentListener) ([]parentComponentListener, error) {
+	for i, existing := range listeners {
+		if existing.Event != next.Event {
+			continue
+		}
+		if existing.Modifiers != next.Modifiers {
+			return listeners, fmt.Errorf("declares incompatible modifiers for parent event %q", next.Event)
+		}
+		existing.Expression = existing.Expression + "; " + next.Expression
+		listeners[i] = existing
+		return listeners, nil
+	}
+	return append(listeners, next), nil
+}
+
+func componentPropTarget(component Component, callName string, attr Attr) (string, string, error) {
+	propName := attr.Name
+	sourceName := attr.Name
+	if strings.Contains(attr.Name, ":") {
+		left, right, ok := strings.Cut(attr.Name, ":")
+		if !ok || strings.TrimSpace(left) == "" || strings.TrimSpace(right) == "" || strings.Contains(right, ":") {
+			return "", "", fmt.Errorf("component %s prop rename %q must use target:alias", callName, attr.Name)
+		}
+		propName = left
+		sourceName = right
+	}
+	if !component.HasProp(propName) {
+		return "", "", fmt.Errorf("component %s does not declare prop %q", callName, propName)
+	}
+	return propName, sourceName, nil
+}
+
+func componentSpreadProps(ctx *renderContext, component Component) ([]Attr, error) {
+	if len(ctx.propFields) == 0 {
+		return nil, fmt.Errorf("spread source props is not available outside a component prop scope")
+	}
+	var attrs []Attr
+	for _, prop := range component.Props {
+		if !ctx.propFields[prop] {
+			continue
+		}
+		if _, ok := ctx.values[prop]; !ok {
+			continue
+		}
+		attrs = append(attrs, Attr{Name: prop, Value: "{" + prop + "}", Expression: true, Spread: true})
+	}
+	if len(attrs) == 0 {
+		return nil, fmt.Errorf("spread source props has no fields matching component %s", component.Name)
+	}
+	return attrs, nil
+}
+
+func componentPropValue(ctx *renderContext, attr Attr, propType clientlang.ValueType) (string, any, bool, error) {
+	if propType == clientlang.TypeUnknown {
+		propType = clientlang.TypeString
+	}
+	if propType == clientlang.TypeString {
+		value, tainted, err := interpolateValue(ctx, attr.Value)
+		if err != nil {
+			return "", nil, false, err
+		}
+		return value, value, tainted, nil
+	}
+	if !attr.Expression && strings.Contains(attr.Value, "{") {
+		return "", nil, false, fmt.Errorf("prop %q with type %s requires a scalar literal or expression", attr.Name, propType)
+	}
+	source := strings.TrimSpace(attr.Value)
+	if attr.Expression {
+		source = expressionAttrSource(source)
+	}
+	if source == "" {
+		return "", nil, false, fmt.Errorf("prop %q with type %s requires a scalar literal or expression", attr.Name, propType)
+	}
+	value, err := clientlang.EvalValue(source, ctx.values)
+	if err != nil {
+		return "", nil, false, fmt.Errorf("prop %q: %w", attr.Name, err)
+	}
+	typed, err := coerceComponentPropValue(attr.Name, value, propType)
+	if err != nil {
+		return "", nil, false, err
+	}
+	scalar, ok := scalarString(typed)
+	if !ok {
+		return "", nil, false, fmt.Errorf("prop %q with type %s must resolve to a scalar value", attr.Name, propType)
+	}
+	return scalar, typed, false, nil
+}
+
+func coerceComponentPropValue(name string, value any, propType clientlang.ValueType) (any, error) {
+	switch propType {
+	case clientlang.TypeBool:
+		typed, ok := value.(bool)
+		if !ok {
+			return nil, fmt.Errorf("prop %q expects bool, got %T", name, value)
+		}
+		return typed, nil
+	case clientlang.TypeInt:
+		switch typed := value.(type) {
+		case int:
+			return typed, nil
+		case float64:
+			asInt := int(typed)
+			if float64(asInt) == typed {
+				return asInt, nil
+			}
+		}
+		return nil, fmt.Errorf("prop %q expects int, got %T", name, value)
+	case clientlang.TypeFloat:
+		switch typed := value.(type) {
+		case int:
+			return float64(typed), nil
+		case float64:
+			return typed, nil
+		}
+		return nil, fmt.Errorf("prop %q expects float, got %T", name, value)
+	default:
+		return nil, fmt.Errorf("prop %q uses unsupported type %s", name, propType)
+	}
+}
+
+func typedComponentPropString(name string, value string, propType clientlang.ValueType) (any, error) {
+	if propType == clientlang.TypeUnknown {
+		propType = clientlang.TypeString
+	}
+	if propType == clientlang.TypeString {
+		return value, nil
+	}
+	typed, err := clientlang.EvalValue(value, nil)
+	if err != nil {
+		return nil, fmt.Errorf("prop %q default: %w", name, err)
+	}
+	return coerceComponentPropValue(name, typed, propType)
+}
+
 func writeParentComponentListenerAttrs(out *renderOutput, listener parentComponentListener) {
 	out.write(gowhtml.Attr("data-gowdk-parent-on-"+listener.Event, listener.Expression))
 	out.write(gowhtml.Attr("data-gowdk-parent-event-"+listener.Event, listener.Modifiers))
@@ -273,7 +534,18 @@ func (node ComponentCall) parentListener(attr Attr, component Component, ctx *re
 	}
 	event, ok := component.Emits[directive.Event]
 	if !ok {
-		return parentComponentListener{}, fmt.Errorf("component %s does not emit event %q", node.Name, directive.Event)
+		if directive.Event != "exports" || len(component.Exports) == 0 {
+			return parentComponentListener{}, fmt.Errorf("component %s does not emit event %q", node.Name, directive.Event)
+		}
+		readSymbols := mergeClientSymbols(ctx.readSymbols(), exportPayloadSymbols(component.Exports))
+		if err := ValidateIslandEventExpressionTypedWithFunctions(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil); err != nil {
+			return parentComponentListener{}, fmt.Errorf("%s: %w", attr.Name, err)
+		}
+		return parentComponentListener{
+			Event:      directive.Event,
+			Expression: attr.Value,
+			Modifiers:  directive.RuntimeOptions(),
+		}, nil
 	}
 	readSymbols := mergeClientSymbols(ctx.readSymbols(), eventPayloadSymbols(event))
 	if err := ValidateIslandEventExpressionTypedWithFunctions(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil); err != nil {
@@ -284,6 +556,20 @@ func (node ComponentCall) parentListener(attr Attr, component Component, ctx *re
 		Expression: attr.Value,
 		Modifiers:  directive.RuntimeOptions(),
 	}, nil
+}
+
+func exportPayloadSymbols(exports map[string]clientlang.ValueType) map[string]clientlang.ValueType {
+	out := map[string]clientlang.ValueType{
+		"event":        clientlang.TypeObject,
+		"event.active": clientlang.TypeBool,
+	}
+	for name, typ := range exports {
+		if typ == clientlang.TypeUnknown {
+			typ = clientlang.TypeString
+		}
+		out["event."+name] = typ
+	}
+	return out
 }
 
 func eventPayloadSymbols(event clientlang.Emit) map[string]clientlang.ValueType {

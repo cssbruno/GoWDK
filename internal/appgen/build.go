@@ -27,12 +27,14 @@ func BuildBinary(appDir, binaryPath string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(absBinary), 0o755); err != nil {
 		return "", err
 	}
-	if err := tidyGeneratedApp(absApp, nil); err != nil {
+	goEnv := generatedAppGoEnv(nil)
+	if err := tidyGeneratedApp(absApp, goEnv); err != nil {
 		return "", err
 	}
 
 	command := exec.Command("go", "build", "-buildvcs=false", "-o", absBinary, "./cmd/server")
 	command.Dir = absApp
+	command.Env = goEnv
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("go build generated app failed: %w\n%s", err, strings.TrimSpace(string(output)))
@@ -59,7 +61,7 @@ func BuildWASM(appDir, wasmPath string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(absWASM), 0o755); err != nil {
 		return "", err
 	}
-	wasmEnv := append(buildEnvWithout(os.Environ(), "GOOS", "GOARCH"), "GOOS=js", "GOARCH=wasm")
+	wasmEnv := append(generatedAppGoEnv(buildEnvWithout(os.Environ(), "GOOS", "GOARCH")), "GOOS=js", "GOARCH=wasm")
 	if err := tidyGeneratedApp(absApp, wasmEnv); err != nil {
 		return "", err
 	}
@@ -85,6 +87,13 @@ func tidyGeneratedApp(appDir string, env []string) error {
 		return fmt.Errorf("go mod tidy generated app failed: %w\n%s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+func generatedAppGoEnv(env []string) []string {
+	if env == nil {
+		env = os.Environ()
+	}
+	return append(buildEnvWithout(env, "GOWORK"), "GOWORK=off")
 }
 
 func buildEnvWithout(env []string, names ...string) []string {

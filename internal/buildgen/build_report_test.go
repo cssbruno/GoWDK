@@ -313,6 +313,100 @@ func TestBuildMemoryReturnsSPAArtifactsWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestBuildMemoryRejectsEmptyOutputDir(t *testing.T) {
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "home",
+		Route: "/",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+		},
+	}}}
+
+	_, err := BuildMemory(gowdk.Config{}, app, "")
+	if err == nil || !strings.Contains(err.Error(), "build output directory is required") {
+		t.Fatalf("expected empty outputDir rejection, got %v", err)
+	}
+}
+
+func TestBuildMemoryWithOptionsDoesNotRequireOutputDir(t *testing.T) {
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "home",
+		Route: "/",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main><h1>Memory only</h1></main>`,
+		},
+	}}}
+
+	result, err := BuildMemoryWithOptions(gowdk.Config{}, app, MemoryBuildOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RouteManifestPath != routeManifestFile {
+		t.Fatalf("expected relative route manifest path, got %q", result.RouteManifestPath)
+	}
+	if result.AssetManifestPath != assetManifestFile {
+		t.Fatalf("expected relative asset manifest path, got %q", result.AssetManifestPath)
+	}
+	if result.OpenAPIPath != openAPIFile {
+		t.Fatalf("expected relative OpenAPI path, got %q", result.OpenAPIPath)
+	}
+	if result.BuildReportPath != buildReportFile {
+		t.Fatalf("expected relative build report path, got %q", result.BuildReportPath)
+	}
+	expectedSecurityManifestPath := filepath.Join(".gowdk", "reports", "root", securityManifestFile)
+	if result.SecurityManifestPath != expectedSecurityManifestPath {
+		t.Fatalf("expected virtual security manifest path %q, got %q", expectedSecurityManifestPath, result.SecurityManifestPath)
+	}
+	if result.Report.OutputDir != "." {
+		t.Fatalf("expected virtual output base '.', got %q", result.Report.OutputDir)
+	}
+	if result.Artifacts[0].Path != "index.html" {
+		t.Fatalf("expected virtual page artifact path, got %q", result.Artifacts[0].Path)
+	}
+	if !strings.Contains(string(result.Files["index.html"]), "Memory only") {
+		t.Fatalf("expected rendered HTML in memory result: %s", result.Files["index.html"])
+	}
+	if _, err := os.Stat(filepath.Join(cwd, "index.html")); !os.IsNotExist(err) {
+		t.Fatalf("memory build with virtual output base should not write page artifact, stat error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cwd, ".gowdk")); !os.IsNotExist(err) {
+		t.Fatalf("memory build with virtual output base should not write reports, stat error = %v", err)
+	}
+}
+
+func TestBuildMemoryWithOptionsUsesVirtualOutputBase(t *testing.T) {
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "home",
+		Route: "/",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+		},
+	}}}
+
+	result, err := BuildMemoryWithOptions(gowdk.Config{}, app, MemoryBuildOptions{OutputBase: filepath.Join("virtual", "site")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RouteManifestPath != filepath.Join("virtual", "site", routeManifestFile) {
+		t.Fatalf("expected route manifest under virtual base, got %q", result.RouteManifestPath)
+	}
+	if result.Artifacts[0].Path != filepath.Join("virtual", "site", "index.html") {
+		t.Fatalf("expected page artifact under virtual base, got %q", result.Artifacts[0].Path)
+	}
+	expectedSecurityManifestPath := filepath.Join("virtual", ".gowdk", "reports", "site", securityManifestFile)
+	if result.SecurityManifestPath != expectedSecurityManifestPath {
+		t.Fatalf("expected virtual security manifest path %q, got %q", expectedSecurityManifestPath, result.SecurityManifestPath)
+	}
+	if _, ok := result.Files["index.html"]; !ok {
+		t.Fatalf("expected served file key to remain relative to the virtual base: %#v", result.Files)
+	}
+}
+
 func TestBuildRemovesStaleServedSecurityManifest(t *testing.T) {
 	outputDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(outputDir, securityManifestFile), []byte(`{"stale":true}`), 0o644); err != nil {

@@ -85,38 +85,136 @@ func TestRenderWithComponentsRejectsRecursiveComponentCycle(t *testing.T) {
 	}
 }
 
-func TestRenderWithComponentsRejectsRestSpreadProps(t *testing.T) {
+func TestRenderWithComponentsExpandsSpreadProps(t *testing.T) {
+	got, err := RenderWithComponents(`<Parent title="GOWDK" />`, map[string]Component{
+		"Parent": {Name: "Parent", Props: []string{"title"}, Body: `<Hero {...props} />`},
+		"Hero":   {Name: "Hero", Props: []string{"title"}, Body: `<h1>{title}</h1>`},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-component="Hero"`,
+		`data-gowdk-props="{&#34;title&#34;:&#34;title&#34;}"`,
+		`<h1><span data-gowdk-bind="title" data-gowdk-binding-text="b1">GOWDK</span></h1>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in spread prop output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsRejectsSpreadPropsOutsideComponentPropScope(t *testing.T) {
 	_, err := RenderWithComponents(`<Hero {...props} />`, map[string]Component{
 		"Hero": {Name: "Hero", Props: []string{"title"}, Body: `<h1>{title}</h1>`},
 	})
 	if err == nil {
-		t.Fatal("expected rest/spread prop error")
+		t.Fatal("expected spread scope error")
 	}
-	if !strings.Contains(err.Error(), "rest/spread props are not supported") {
+	if !strings.Contains(err.Error(), "spread source props is not available") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestRenderWithComponentsRejectsPropRenaming(t *testing.T) {
-	_, err := RenderWithComponents(`<Hero title:heading="GOWDK" />`, map[string]Component{
+func TestRenderWithComponentsExpandsPropRenaming(t *testing.T) {
+	got, err := RenderWithComponents(`<Hero title:heading="GOWDK" />`, map[string]Component{
 		"Hero": {Name: "Hero", Props: []string{"title"}, Body: `<h1>{title}</h1>`},
 	})
-	if err == nil {
-		t.Fatal("expected prop renaming error")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "prop renaming is not supported") {
+	if got != `<h1>GOWDK</h1>` {
+		t.Fatalf("unexpected renamed prop output: %s", got)
+	}
+}
+
+func TestRenderWithComponentsExpandsPropRenamingShorthand(t *testing.T) {
+	got, err := RenderWithComponents(`<Parent heading="GOWDK" />`, map[string]Component{
+		"Parent": {Name: "Parent", Props: []string{"heading"}, Body: `<Hero title:heading />`},
+		"Hero":   {Name: "Hero", Props: []string{"title"}, Body: `<h1>{title}</h1>`},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-component="Hero"`,
+		`data-gowdk-props="{&#34;title&#34;:&#34;heading&#34;}"`,
+		`<h1><span data-gowdk-bind="title" data-gowdk-binding-text="b1">GOWDK</span></h1>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in renamed prop output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsRejectsPropCollision(t *testing.T) {
+	_, err := RenderWithComponents(`<Parent title="GOWDK" />`, map[string]Component{
+		"Parent": {Name: "Parent", Props: []string{"title"}, Body: `<Hero {...props} title="Override" />`},
+		"Hero":   {Name: "Hero", Props: []string{"title"}, Body: `<h1>{title}</h1>`},
+	})
+	if err == nil {
+		t.Fatal("expected prop collision error")
+	}
+	if !strings.Contains(err.Error(), `prop "title" is provided more than once`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestRenderWithComponentsRejectsBindableChildState(t *testing.T) {
-	_, err := RenderWithComponents(`<Child g:bind:value={SelectedID} />`, map[string]Component{
-		"Child": {Name: "Child", Props: []string{"value"}, Body: `<p>{value}</p>`},
+func TestRenderWithComponentsWiresBindableChildState(t *testing.T) {
+	got, err := RenderWithComponents(`<Parent />`, map[string]Component{
+		"Parent": {
+			Name:       "Parent",
+			State:      map[string]string{"SelectedID": "first"},
+			StateJSON:  `{"SelectedID":"first"}`,
+			StateTypes: map[string]clientlang.ValueType{"SelectedID": clientlang.TypeString},
+			Body:       `<Child g:bind:selected={SelectedID} />`,
+		},
+		"Child": {
+			Name:         "Child",
+			State:        map[string]string{"selected": ""},
+			StateJSON:    `{"selected":""}`,
+			StateTypes:   map[string]clientlang.ValueType{"selected": clientlang.TypeString},
+			Exports:      map[string]clientlang.ValueType{"selected": clientlang.TypeString},
+			HandlersJSON: `{"exports":["selected"]}`,
+			Body:         `<p>{selected}</p>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-component="Child"`,
+		`data-gowdk-state="{&#34;selected&#34;:&#34;first&#34;}"`,
+		`data-gowdk-props="{&#34;selected&#34;:&#34;SelectedID&#34;}"`,
+		`data-gowdk-parent-on-exports="SelectedID = event.selected"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in bind output:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWithComponentsRejectsBindableChildStateWithoutExport(t *testing.T) {
+	_, err := RenderWithComponents(`<Parent />`, map[string]Component{
+		"Parent": {
+			Name:       "Parent",
+			State:      map[string]string{"SelectedID": "first"},
+			StateJSON:  `{"SelectedID":"first"}`,
+			StateTypes: map[string]clientlang.ValueType{"SelectedID": clientlang.TypeString},
+			Body:       `<Child g:bind:selected={SelectedID} />`,
+		},
+		"Child": {
+			Name:       "Child",
+			State:      map[string]string{"selected": ""},
+			StateJSON:  `{"selected":""}`,
+			StateTypes: map[string]clientlang.ValueType{"selected": clientlang.TypeString},
+			Body:       `<p>{selected}</p>`,
+		},
 	})
 	if err == nil {
-		t.Fatal("expected bindable child state error")
+		t.Fatal("expected missing bind export error")
 	}
-	if !strings.Contains(err.Error(), "bindable child state is not supported") {
+	if !strings.Contains(err.Error(), `bind target "selected" must be declared in exports`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -1747,6 +1845,19 @@ func TestComponentCallUsagesMarksReactiveProps(t *testing.T) {
 	}
 	if usages[1].Component != "Child" || !usages[1].ReactiveProps {
 		t.Fatalf("expected child reactive prop usage, got %#v", usages[1])
+	}
+}
+
+func TestComponentCallUsagesMarksSpreadPropsReactive(t *testing.T) {
+	usages, err := ComponentCallUsages(`<Parent><Child {...props} /></Parent>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(usages) != 2 {
+		t.Fatalf("unexpected component usages: %#v", usages)
+	}
+	if usages[1].Component != "Child" || !usages[1].ReactiveProps {
+		t.Fatalf("expected spread props to be reactive, got %#v", usages[1])
 	}
 }
 

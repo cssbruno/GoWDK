@@ -64,6 +64,9 @@ func collectComponentCallUsages(nodes []Node, usages *[]ComponentCallUsage) erro
 
 func (node ComponentCall) hasReactiveProps() bool {
 	for _, attr := range node.Attrs {
+		if attr.Spread {
+			return true
+		}
 		if strings.HasPrefix(attr.Name, "g:") {
 			continue
 		}

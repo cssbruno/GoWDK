@@ -165,10 +165,18 @@ func (parser *parser) componentCall(name string, start int) (ComponentCall, erro
 		case parser.done():
 			return ComponentCall{}, parser.errorf("unterminated <%s> component tag", name)
 		default:
-			if parser.startsWith("{...") || parser.startsWith("...") {
-				return ComponentCall{}, parser.errorf("component rest/spread props are not supported; pass declared props explicitly")
+			if parser.startsWith("{...") {
+				attr, err := parser.componentSpreadAttr()
+				if err != nil {
+					return ComponentCall{}, err
+				}
+				attrs = append(attrs, attr)
+				continue
 			}
-			attr, err := parser.attr()
+			if parser.startsWith("...") {
+				return ComponentCall{}, parser.errorf("component spread props must use {...props}")
+			}
+			attr, err := parser.componentAttr()
 			if err != nil {
 				return ComponentCall{}, err
 			}
@@ -177,7 +185,35 @@ func (parser *parser) componentCall(name string, start int) (ComponentCall, erro
 	}
 }
 
+func (parser *parser) componentSpreadAttr() (Attr, error) {
+	start := parser.index
+	if !parser.consume("{...") {
+		return Attr{}, parser.errorf("component spread props must use {...props}")
+	}
+	parser.skipSpace()
+	source, err := parser.name()
+	if err != nil {
+		return Attr{}, err
+	}
+	parser.skipSpace()
+	if !parser.consume("}") {
+		return Attr{}, parser.errorf("component spread props must use {...props}")
+	}
+	if source != "props" {
+		return Attr{}, parser.errorf("component spread props only support {...props} in this build slice")
+	}
+	return Attr{Name: source, Spread: true, Start: start, End: parser.index}, nil
+}
+
 func (parser *parser) attr() (Attr, error) {
+	return parser.attrWithOptions(false)
+}
+
+func (parser *parser) componentAttr() (Attr, error) {
+	return parser.attrWithOptions(true)
+}
+
+func (parser *parser) attrWithOptions(allowComponentBind bool) (Attr, error) {
 	if attr, ok, err := parser.shorthandAttr(); ok || err != nil {
 		return attr, err
 	}
@@ -189,7 +225,7 @@ func (parser *parser) attr() (Attr, error) {
 	if !isAttrName(name) {
 		return Attr{}, parser.errorf("unsupported attribute name %q", name)
 	}
-	if strings.HasPrefix(name, "g:") && !isSupportedDirectiveName(name) {
+	if strings.HasPrefix(name, "g:") && !isSupportedDirectiveName(name) && !(allowComponentBind && isComponentBindDirective(name)) {
 		return Attr{}, parser.errorf("%s", unsupportedDirectiveMessage(name))
 	}
 

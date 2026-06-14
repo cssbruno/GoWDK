@@ -1116,7 +1116,14 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
       });
     };
     root.addEventListener("gowdk:props", async (event) => {
-      Object.assign(state, event.detail || {});
+      const nextProps = event.detail || {};
+      let changed = false;
+      Object.keys(nextProps).forEach((name) => {
+        if (Object.is(state[name], nextProps[name])) return;
+        state[name] = nextProps[name];
+        changed = true;
+      });
+      if (!changed) return;
       recomputeComputed(state, computeds, helpers);
       await settleEffects();
       recomputeComputed(state, computeds, helpers);

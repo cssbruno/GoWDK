@@ -708,6 +708,118 @@ func TestBuildEmitsTypedExportRuntimeForJSIsland(t *testing.T) {
 	}
 }
 
+func TestBuildEmitsBindableChildStateRuntimeForJSIsland(t *testing.T) {
+	outputDir := t.TempDir()
+	parent := textComponent()
+	parent.Name = "Parent"
+	parent.Source = "components/parent.cmp.gwdk"
+	parent.Blocks.ViewBody = `<Option g:bind:Query={Query} />`
+	option := textComponent()
+	option.Name = "Option"
+	option.Source = "components/option.cmp.gwdk"
+	option.Exports = []gwdkir.Export{{Name: "Query", Type: "string"}}
+	option.Blocks.ViewBody = `<input g:bind:value={Query} />`
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "picker",
+			Route: "/picker",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Parent /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{parent, option},
+	}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	optionJS := filepath.Join(outputDir, "assets", "gowdk", "islands", "Option.js")
+	if !hasAssetArtifact(result.AssetArtifacts, optionJS) {
+		t.Fatalf("expected Option.js asset, got %#v", result.AssetArtifacts)
+	}
+	html := readFile(t, filepath.Join(outputDir, "picker", "index.html"))
+	for _, expected := range []string{
+		`data-gowdk-parent-on-exports="Query = event.Query"`,
+		`data-gowdk-props="{&#34;Query&#34;:&#34;Query&#34;}"`,
+		`data-gowdk-client="{&#34;exports&#34;:[&#34;Query&#34;]}`,
+		`data-gowdk-bind-value="Query"`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in bindable child state page:\n%s", expected, html)
+		}
+	}
+	js := readFile(t, optionJS)
+	for _, expected := range []string{
+		`root.addEventListener("gowdk:props"`,
+		`if (!changed) return;`,
+		`dispatchComponentExports(root, exportNames, state, true);`,
+		`dispatchComponentExports(root, exportNames, state, false);`,
+	} {
+		if !strings.Contains(js, expected) {
+			t.Fatalf("expected %q in generated bindable state runtime:\n%s", expected, js)
+		}
+	}
+}
+
+func TestJSIslandBindableChildStateInBrowser(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	chromium, err := lookupChromium()
+	if err != nil {
+		t.Skip(err)
+	}
+	requireNodePlaywright(t, node)
+
+	outputDir := t.TempDir()
+	parent := textComponent()
+	parent.Name = "Parent"
+	parent.Source = "components/parent.cmp.gwdk"
+	parent.Blocks.ViewBody = `<section><button id="parent-set" g:on:click={Query = "parent"}>{Query}</button><Option g:bind:Query={Query} /></section>`
+	option := textComponent()
+	option.Name = "Option"
+	option.Source = "components/option.cmp.gwdk"
+	option.Exports = []gwdkir.Export{{Name: "Query", Type: "string"}}
+	option.Blocks.ViewBody = `<label><input id="child-input" g:bind:value={Query} /></label><span id="child-query">{Query}</span>`
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "picker",
+			Route: "/picker",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Parent /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{parent, option},
+	}
+
+	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.FileServer(http.Dir(outputDir)))
+	defer server.Close()
+
+	script := filepath.Join(t.TempDir(), "gowdk-bindable-child-state-browser-test.cjs")
+	if err := os.WriteFile(script, []byte(jsIslandBindableChildStateBrowserHarness()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, script, server.URL, chromium)
+	command.Dir = mustWorkingDir(t)
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("browser JS bindable child state test timed out:\n%s", output)
+	}
+	if err != nil {
+		t.Fatalf("browser JS bindable child state test failed: %v\n%s", err, output)
+	}
+}
+
 func TestBuildRejectsTypedExportWithoutLocalSymbol(t *testing.T) {
 	outputDir := t.TempDir()
 	component := textComponent()
@@ -782,7 +894,7 @@ func TestBuildEmitsReactiveComponentPropRuntimeForJSIsland(t *testing.T) {
 	for _, expected := range []string{
 		`syncChildProps(root, state, helpers)`,
 		`root.addEventListener("gowdk:props"`,
-		`Object.assign(state, event.detail || {});`,
+		`if (!changed) return;`,
 		`ownsNode(root, node)`,
 	} {
 		if !strings.Contains(js, expected) {
@@ -2538,6 +2650,72 @@ async function waitForText(page, selector, expected) {
   assert.deepEqual(consoleErrors, []);
   await browser.close();
 })().catch(async (error) => {
+  console.error(error && error.stack || error);
+  process.exit(1);
+});
+`
+}
+
+func jsIslandBindableChildStateBrowserHarness() string {
+	return `
+"use strict";
+
+const assert = require("node:assert/strict");
+const nodeModule = require("node:module");
+
+const baseURL = process.argv[2];
+const executablePath = process.argv[3];
+const { chromium } = nodeModule.createRequire(process.cwd() + "/gowdk-test.js")("playwright");
+let page;
+
+async function waitForText(page, selector, expected) {
+  await page.waitForFunction(({ selector, expected }) => {
+    return document.querySelector(selector)?.textContent === expected;
+  }, { selector, expected });
+}
+
+async function waitForInput(page, selector, expected) {
+  await page.waitForFunction(({ selector, expected }) => {
+    return document.querySelector(selector)?.value === expected;
+  }, { selector, expected });
+}
+
+(async () => {
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+    args: ["--no-sandbox"]
+  });
+  page = await browser.newPage();
+  page.setDefaultTimeout(5000);
+  const consoleErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("GOWDK")) consoleErrors.push(message.text());
+  });
+
+  await page.goto(baseURL + "/picker/", { waitUntil: "networkidle" });
+  await waitForText(page, "#parent-set", "initial");
+  await waitForText(page, "#child-query", "initial");
+  await waitForInput(page, "#child-input", "initial");
+
+  await page.fill("#child-input", "child");
+  await waitForText(page, "#parent-set", "child");
+  await waitForText(page, "#child-query", "child");
+
+  await page.click("#parent-set");
+  await waitForText(page, "#parent-set", "parent");
+  await waitForText(page, "#child-query", "parent");
+  await waitForInput(page, "#child-input", "parent");
+
+  await page.goto("about:blank");
+  assert.deepEqual(consoleErrors, []);
+  await browser.close();
+})().catch(async (error) => {
+  if (page) {
+    try {
+      console.error(await page.content());
+    } catch (_) {}
+  }
   console.error(error && error.stack || error);
   process.exit(1);
 });

@@ -97,8 +97,21 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 	}
 	propExpressions := map[string]string{}
 	taintedValues := map[string]bool{}
+	providedProps := map[string]string{}
 	var parentListeners []parentComponentListener
 	for _, attr := range node.Attrs {
+		if attr.Spread {
+			expanded, err := componentSpreadProps(ctx, component)
+			if err != nil {
+				return fmt.Errorf("component %s: %w", node.Name, err)
+			}
+			for _, spreadAttr := range expanded {
+				if err := applyComponentPropAttr(ctx, component, node.Name, spreadAttr, props, propValues, propExpressions, taintedValues, providedProps); err != nil {
+					return err
+				}
+			}
+			continue
+		}
 		if strings.HasPrefix(attr.Name, "g:") {
 			if attr.Name == "g:island" {
 				continue
@@ -108,43 +121,33 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 				if err != nil {
 					return err
 				}
+				if hasParentListener(parentListeners, listener.Event) {
+					return fmt.Errorf("component %s declares multiple parent listeners for event %q", node.Name, listener.Event)
+				}
 				parentListeners = append(parentListeners, listener)
 				continue
 			}
 			if attr.Name == "g:event" {
 				return fmt.Errorf("component %s must not declare g:event; domain and integration events are backend-owned facts", node.Name)
 			}
-			if strings.HasPrefix(attr.Name, "g:bind:") || attr.Name == "g:bind" {
-				return fmt.Errorf("component %s bindable child state is not supported; use typed emits plus parent-owned state", node.Name)
+			if strings.HasPrefix(attr.Name, "g:bind:") {
+				listener, err := applyComponentBinding(ctx, component, node.Name, attr, props, propValues, propExpressions, taintedValues, providedProps)
+				if err != nil {
+					return err
+				}
+				if hasParentListener(parentListeners, listener.Event) {
+					return fmt.Errorf("component %s declares multiple parent listeners for event %q", node.Name, listener.Event)
+				}
+				parentListeners = append(parentListeners, listener)
+				continue
+			}
+			if attr.Name == "g:bind" {
+				return fmt.Errorf("component %s uses unsupported bind target %q; component bindings must use g:bind:<exportedState>", node.Name, attr.Name)
 			}
 			return fmt.Errorf("component %s uses unsupported directive attribute %q", node.Name, attr.Name)
 		}
-		if strings.Contains(attr.Name, ":") {
-			return fmt.Errorf("component %s prop renaming is not supported; pass declared prop %q directly", node.Name, strings.Split(attr.Name, ":")[0])
-		}
-		if !component.HasProp(attr.Name) {
-			return fmt.Errorf("component %s does not declare prop %q", node.Name, attr.Name)
-		}
-		propType := component.PropType(attr.Name)
-		if attr.Boolean {
-			if propType != clientlang.TypeBool {
-				return fmt.Errorf("component %s prop %q requires a value", node.Name, attr.Name)
-			}
-			props[attr.Name] = "true"
-			propValues[attr.Name] = true
-			continue
-		}
-		value, typedValue, tainted, err := componentPropValue(ctx, attr, propType)
-		if err != nil {
+		if err := applyComponentPropAttr(ctx, component, node.Name, attr, props, propValues, propExpressions, taintedValues, providedProps); err != nil {
 			return err
-		}
-		props[attr.Name] = value
-		propValues[attr.Name] = typedValue
-		if attr.Expression {
-			propExpressions[attr.Name] = expressionAttrSource(attr.Value)
-		}
-		if tainted {
-			taintedValues[attr.Name] = true
 		}
 	}
 	for _, prop := range component.Props {
@@ -153,7 +156,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 		}
 	}
 	for prop := range props {
-		if !component.HasProp(prop) {
+		if !component.HasProp(prop) && !component.HasStateField(prop) {
 			return fmt.Errorf("component %s does not declare prop %q", node.Name, prop)
 		}
 	}
@@ -192,6 +195,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 		stack:        cloneStack(ctx.stack),
 		slotHTML:     slotHTML,
 		slots:        slots,
+		propFields:   boolSet(component.Props),
 		stateFields:  boolSet(keys(component.State)),
 		readFields:   boolSet(keys(values)),
 		bindFields:   boolSet(keys(bindValues)),
@@ -277,6 +281,139 @@ func componentPropExpressionsJSON(propExpressions map[string]string) (string, er
 		return "", err
 	}
 	return string(payload), nil
+}
+
+func applyComponentBinding(ctx *renderContext, component Component, callName string, attr Attr, props map[string]string, propValues map[string]any, propExpressions map[string]string, taintedValues map[string]bool, providedProps map[string]string) (parentComponentListener, error) {
+	if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+		return parentComponentListener{}, fmt.Errorf("%s requires a parent state field", attr.Name)
+	}
+	target := strings.TrimPrefix(attr.Name, "g:bind:")
+	if target == "" || target == attr.Name {
+		return parentComponentListener{}, fmt.Errorf("component %s uses unsupported bind target %q", callName, attr.Name)
+	}
+	exportType, ok := component.Exports[target]
+	if !ok {
+		return parentComponentListener{}, fmt.Errorf("component %s bind target %q must be declared in exports", callName, target)
+	}
+	if !component.HasStateField(target) {
+		return parentComponentListener{}, fmt.Errorf("component %s bind target %q must be declared in state", callName, target)
+	}
+	parentField := expressionAttrSource(attr.Value)
+	parentType, err := validateIslandSymbol(parentField, ctx.writeSymbols())
+	if err != nil {
+		return parentComponentListener{}, fmt.Errorf("%s: %w", attr.Name, err)
+	}
+	if parentType != clientlang.TypeUnknown && exportType != clientlang.TypeUnknown && parentType != exportType && !compatibleNumericType(exportType, parentType) {
+		return parentComponentListener{}, fmt.Errorf("component %s bind target %q exports %s but parent field %q is %s", callName, target, exportType, parentField, parentType)
+	}
+	if previous, exists := providedProps[target]; exists {
+		return parentComponentListener{}, fmt.Errorf("component %s prop %q is provided more than once by %s and %s", callName, target, previous, attr.Name)
+	}
+	providedProps[target] = attr.Name
+	bindingAttr := Attr{Name: target, Value: "{" + parentField + "}", Expression: true}
+	value, typedValue, _, err := componentPropValue(ctx, bindingAttr, exportType)
+	if err != nil {
+		return parentComponentListener{}, err
+	}
+	props[target] = value
+	propValues[target] = typedValue
+	propExpressions[target] = parentField
+	if ctx.tainted[parentField] {
+		taintedValues[target] = true
+	}
+	return parentComponentListener{
+		Event:      "exports",
+		Expression: parentField + " = event." + target,
+	}, nil
+}
+
+func applyComponentPropAttr(ctx *renderContext, component Component, callName string, attr Attr, props map[string]string, propValues map[string]any, propExpressions map[string]string, taintedValues map[string]bool, providedProps map[string]string) error {
+	propName, sourceName, err := componentPropTarget(component, callName, attr)
+	if err != nil {
+		return err
+	}
+	if previous, exists := providedProps[propName]; exists {
+		return fmt.Errorf("component %s prop %q is provided more than once by %s and %s", callName, propName, previous, sourceName)
+	}
+	providedProps[propName] = sourceName
+	propType := component.PropType(propName)
+	if attr.Boolean && sourceName == propName {
+		if propType != clientlang.TypeBool {
+			return fmt.Errorf("component %s prop %q requires a value", callName, propName)
+		}
+		props[propName] = "true"
+		propValues[propName] = true
+		return nil
+	}
+	if attr.Boolean {
+		attr = Attr{Name: propName, Value: "{" + sourceName + "}", Expression: true}
+	}
+	value, typedValue, tainted, err := componentPropValue(ctx, Attr{Name: propName, Value: attr.Value, Boolean: attr.Boolean, Expression: attr.Expression}, propType)
+	if err != nil {
+		return err
+	}
+	props[propName] = value
+	propValues[propName] = typedValue
+	if attr.Expression {
+		propExpressions[propName] = expressionAttrSource(attr.Value)
+	}
+	if tainted {
+		taintedValues[propName] = true
+	}
+	return nil
+}
+
+func (ctx *renderContext) writeSymbols() map[string]clientlang.ValueType {
+	if len(ctx.stateTypes) > 0 {
+		return ctx.stateTypes
+	}
+	return boolFieldSymbols(ctx.bindFields)
+}
+
+func hasParentListener(listeners []parentComponentListener, event string) bool {
+	for _, listener := range listeners {
+		if listener.Event == event {
+			return true
+		}
+	}
+	return false
+}
+
+func componentPropTarget(component Component, callName string, attr Attr) (string, string, error) {
+	propName := attr.Name
+	sourceName := attr.Name
+	if strings.Contains(attr.Name, ":") {
+		left, right, ok := strings.Cut(attr.Name, ":")
+		if !ok || strings.TrimSpace(left) == "" || strings.TrimSpace(right) == "" || strings.Contains(right, ":") {
+			return "", "", fmt.Errorf("component %s prop rename %q must use target:alias", callName, attr.Name)
+		}
+		propName = left
+		sourceName = right
+	}
+	if !component.HasProp(propName) {
+		return "", "", fmt.Errorf("component %s does not declare prop %q", callName, propName)
+	}
+	return propName, sourceName, nil
+}
+
+func componentSpreadProps(ctx *renderContext, component Component) ([]Attr, error) {
+	if len(ctx.propFields) == 0 {
+		return nil, fmt.Errorf("spread source props is not available outside a component prop scope")
+	}
+	var attrs []Attr
+	for _, prop := range component.Props {
+		if !ctx.propFields[prop] {
+			continue
+		}
+		if _, ok := ctx.values[prop]; !ok {
+			continue
+		}
+		attrs = append(attrs, Attr{Name: prop, Value: "{" + prop + "}", Expression: true, Spread: true})
+	}
+	if len(attrs) == 0 {
+		return nil, fmt.Errorf("spread source props has no fields matching component %s", component.Name)
+	}
+	return attrs, nil
 }
 
 func componentPropValue(ctx *renderContext, attr Attr, propType clientlang.ValueType) (string, any, bool, error) {

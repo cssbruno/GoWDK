@@ -12,6 +12,7 @@ type Attr struct {
 	Value      string
 	Boolean    bool
 	Expression bool
+	Spread     bool
 	Start      int
 	End        int
 }
@@ -53,6 +54,18 @@ func (component Component) HasProp(name string) bool {
 		if prop == name {
 			return true
 		}
+	}
+	return false
+}
+
+// HasStateField reports whether a component declares local browser state with
+// the given name.
+func (component Component) HasStateField(name string) bool {
+	if _, ok := component.State[name]; ok {
+		return true
+	}
+	if _, ok := component.StateTypes[name]; ok {
+		return true
 	}
 	return false
 }

@@ -205,6 +205,47 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 	}
 }
 
+func TestGeneratedAuditTestInstallsNativeRBACActorProvider(t *testing.T) {
+	source, err := GeneratedAuditTestSource(Options{
+		SSR: []SSRRoute{{
+			Route:  "/admin",
+			Guards: []string{"role:admin"},
+		}},
+		IR: &gwdkir.Program{
+			Routes: []gwdkir.Route{{
+				Kind:   gwdkir.RouteSSR,
+				Method: "GET",
+				Path:   "/admin",
+				PageID: "admin",
+				Render: gowdk.SSR,
+				Guards: []string{"role:admin"},
+			}},
+			AuditSpecs: []gwdkir.AuditSpec{{
+				Source: "security.audit.gwdk",
+				Tests: []gwdkir.AuditTest{{
+					Name: "admin",
+					Body: `expect GET "/admin" as "role:admin" status 200`,
+				}},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := string(source)
+	for _, expected := range []string{
+		`gowdkauth "github.com/cssbruno/gowdk/runtime/auth"`,
+		`"strings"`,
+		`RegisterAuthProvider(gowdkauth.ProviderFunc`,
+		`strings.TrimPrefix(actor, "role:")`,
+		`"X-GOWDK-Audit-Actor": "role:admin"`,
+	} {
+		if !strings.Contains(payload, expected) {
+			t.Fatalf("expected generated audit test to contain %q:\n%s", expected, payload)
+		}
+	}
+}
+
 func TestGeneratePreservesUnchangedFilesAndRemovesStaleSPAFiles(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

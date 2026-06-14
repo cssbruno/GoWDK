@@ -26,6 +26,7 @@ type auditScenario struct {
 	Name       string
 	Method     string
 	Path       string
+	Actor      string
 	WantStatus int
 	WantHeader map[string]string
 }
@@ -60,16 +61,21 @@ func auditTestSource(packageName string, mode auditTestMode, config gowdk.Config
 	if len(scenarios) == 0 {
 		return nil, nil
 	}
+	usesActor := auditScenariosUseActor(scenarios)
+	installAuthProvider := mode == auditTestGeneratedApp && usesActor && auditManifestUsesNativeGuards(manifest)
 
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "package %s\n\n", packageName)
-	writeAuditTestImports(&builder, mode)
+	writeAuditTestImports(&builder, mode, installAuthProvider)
 	builder.WriteString("\n")
 	builder.WriteString("func TestGOWDKAuditGeneratedSecurityPosture(t *testing.T) {\n")
 	switch mode {
 	case auditTestGeneratedApp:
 		builder.WriteString("\thandler, err := Handler()\n")
 		builder.WriteString("\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n")
+		if installAuthProvider {
+			writeGeneratedAuditAuthProvider(&builder)
+		}
 	case auditTestStandalone:
 		writeStandaloneAuditHandler(&builder, config, manifest)
 	}
@@ -87,20 +93,58 @@ func auditTestSource(packageName string, mode auditTestMode, config gowdk.Config
 	return formatted, nil
 }
 
-func writeAuditTestImports(builder *strings.Builder, mode auditTestMode) {
+func writeAuditTestImports(builder *strings.Builder, mode auditTestMode, usesActor bool) {
 	builder.WriteString("import (\n")
 	builder.WriteString("\t\"net/http\"\n")
+	if mode == auditTestGeneratedApp && usesActor {
+		builder.WriteString("\t\"strings\"\n")
+	}
 	builder.WriteString("\t\"testing\"\n")
 	if mode == auditTestStandalone {
 		builder.WriteString("\t\"testing/fstest\"\n")
 	}
 	builder.WriteString("\n")
+	if mode == auditTestGeneratedApp && usesActor {
+		builder.WriteString("\tgowdkauth \"github.com/cssbruno/gowdk/runtime/auth\"\n")
+	}
 	if mode == auditTestStandalone {
 		builder.WriteString("\tgowdkruntime \"github.com/cssbruno/gowdk/runtime/app\"\n")
 		builder.WriteString("\truntimeasset \"github.com/cssbruno/gowdk/runtime/asset\"\n")
 	}
 	builder.WriteString("\tgowdktestkit \"github.com/cssbruno/gowdk/runtime/testkit\"\n")
 	builder.WriteString(")\n")
+}
+
+func auditScenariosUseActor(scenarios []auditScenario) bool {
+	for _, scenario := range scenarios {
+		if strings.TrimSpace(scenario.Actor) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func auditManifestUsesNativeGuards(manifest securitymanifest.SecurityManifest) bool {
+	for _, route := range manifest.Routes {
+		if auditGuardsUseNativeRBAC(route.Guards) {
+			return true
+		}
+	}
+	for _, endpoint := range manifest.Endpoints {
+		if auditGuardsUseNativeRBAC(endpoint.Guards) {
+			return true
+		}
+	}
+	return false
+}
+
+func auditGuardsUseNativeRBAC(guards []string) bool {
+	for _, guard := range guards {
+		if strings.HasPrefix(guard, "role:") || strings.HasPrefix(guard, "permission:") {
+			return true
+		}
+	}
+	return false
 }
 
 func auditTestScenarios(config gowdk.Config, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]auditScenario, error) {
@@ -223,6 +267,7 @@ func auditDeclaredTestScenarios(specs []gwdkir.AuditSpec) ([]auditScenario, erro
 						Name:       name,
 						Method:     strings.ToUpper(statusMatch[1]),
 						Path:       statusMatch[2],
+						Actor:      statusMatch[3],
 						WantStatus: status,
 					})
 					continue
@@ -243,6 +288,22 @@ func auditDeclaredTestScenarios(specs []gwdkir.AuditSpec) ([]auditScenario, erro
 		}
 	}
 	return scenarios, nil
+}
+
+func writeGeneratedAuditAuthProvider(builder *strings.Builder) {
+	builder.WriteString("\tRegisterAuthProvider(gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {\n")
+	builder.WriteString("\t\tactor := strings.TrimSpace(request.Header.Get(\"X-GOWDK-Audit-Actor\"))\n")
+	builder.WriteString("\t\tswitch {\n")
+	builder.WriteString("\t\tcase actor == \"\" || actor == \"anonymous\":\n")
+	builder.WriteString("\t\t\treturn nil, nil\n")
+	builder.WriteString("\t\tcase strings.HasPrefix(actor, \"role:\"):\n")
+	builder.WriteString("\t\t\treturn &gowdkauth.Principal{ID: \"audit\", Roles: []string{strings.TrimPrefix(actor, \"role:\")}}, nil\n")
+	builder.WriteString("\t\tcase strings.HasPrefix(actor, \"permission:\"):\n")
+	builder.WriteString("\t\t\treturn &gowdkauth.Principal{ID: \"audit\", Permissions: []string{strings.TrimPrefix(actor, \"permission:\")}}, nil\n")
+	builder.WriteString("\t\tdefault:\n")
+	builder.WriteString("\t\t\treturn &gowdkauth.Principal{ID: \"audit\", Roles: []string{actor}}, nil\n")
+	builder.WriteString("\t\t}\n")
+	builder.WriteString("\t}))\n")
 }
 
 func writeStandaloneAuditHandler(builder *strings.Builder, config gowdk.Config, manifest securitymanifest.SecurityManifest) {
@@ -338,6 +399,11 @@ func writeAuditScenario(builder *strings.Builder, scenario auditScenario) {
 	fmt.Fprintf(builder, "\t\t\tName: %s,\n", strconv.Quote(scenario.Name))
 	fmt.Fprintf(builder, "\t\t\tMethod: %s,\n", auditMethodExpr(scenario.Method))
 	fmt.Fprintf(builder, "\t\t\tPath: %s,\n", strconv.Quote(path.Clean("/"+scenario.Path)))
+	if strings.TrimSpace(scenario.Actor) != "" {
+		builder.WriteString("\t\t\tHeaders: map[string]string{\n")
+		fmt.Fprintf(builder, "\t\t\t\t%s: %s,\n", strconv.Quote("X-GOWDK-Audit-Actor"), strconv.Quote(strings.TrimSpace(scenario.Actor)))
+		builder.WriteString("\t\t\t},\n")
+	}
 	if scenario.WantStatus != 0 {
 		fmt.Fprintf(builder, "\t\t\tWantStatus: %s,\n", auditStatusExpr(scenario.WantStatus))
 	}

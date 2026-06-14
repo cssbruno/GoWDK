@@ -1,13 +1,10 @@
 #!/usr/bin/env sh
 set -eu
 
-cat <<'EOF'
-.
-runtime/adapters/chi
-runtime/adapters/echo
-runtime/adapters/fiber
-runtime/adapters/gin
-runtime/contracts/natsbroker
-runtime/contracts/redisstream
-runtime/contracts/websocketfanout
-EOF
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+printf '%s\n' "."
+find "${repo_root}/runtime" -mindepth 2 -name go.mod -print |
+	sed "s#^${repo_root}/##" |
+	sed 's#/go.mod$##' |
+	sort

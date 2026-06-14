@@ -663,16 +663,17 @@ func boundActionDecoderDecl(action BackendActionAdapter) *ast.FuncDecl {
 
 func boundActionFieldDecodeStmts(index int, field source.BackendInputField) []ast.Stmt {
 	value := id(fmtFieldValueName(index))
-	switch field.Type {
-	case "string":
+	fieldType := source.MustBackendInputFieldType(field.Type)
+	switch fieldType.Kind {
+	case source.BackendInputFieldKindString:
 		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "String"), id("values"), stringLit(field.FormName)), value)
-	case "bool":
+	case source.BackendInputFieldKindBool:
 		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "Bool"), id("values"), stringLit(field.FormName)), value)
-	case "int", "int8", "int16", "int32", "int64":
-		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "Int"), id("values"), stringLit(field.FormName), intLit(inputIntegerBitSize(field.Type))), convertIfNeeded(field.Type, value))
-	case "uint", "uint8", "uint16", "uint32", "uint64":
-		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "Uint"), id("values"), stringLit(field.FormName), intLit(inputIntegerBitSize(field.Type))), convertIfNeeded(field.Type, value))
-	case "[]string":
+	case source.BackendInputFieldKindSignedInt:
+		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "Int"), id("values"), stringLit(field.FormName), intLit(fieldType.BitSize)), convertIfNeeded(field.Type, value))
+	case source.BackendInputFieldKindUnsignedInt:
+		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "Uint"), id("values"), stringLit(field.FormName), intLit(fieldType.BitSize)), convertIfNeeded(field.Type, value))
+	case source.BackendInputFieldKindStringSlice:
 		return []ast.Stmt{
 			define([]ast.Expr{value}, call(sel("gowdkform", "Strings"), id("values"), stringLit(field.FormName))),
 			&ast.IfStmt{
@@ -681,7 +682,7 @@ func boundActionFieldDecodeStmts(index int, field source.BackendInputField) []as
 			},
 		}
 	default:
-		return nil
+		panic("unsupported backend input field kind: " + string(fieldType.Kind))
 	}
 }
 
@@ -703,26 +704,12 @@ func fmtFieldValueName(index int) string {
 	return "field" + strconv.Itoa(index)
 }
 
-func inputIntegerBitSize(value string) int {
-	switch value {
-	case "int8", "uint8":
-		return 8
-	case "int16", "uint16":
-		return 16
-	case "int32", "uint32":
-		return 32
-	case "int64", "uint64":
-		return 64
-	default:
-		return 0
-	}
-}
-
 func convertIfNeeded(goType string, value ast.Expr) ast.Expr {
-	if goType == "string" || goType == "bool" || goType == "[]string" {
+	fieldType := source.MustBackendInputFieldType(goType)
+	if fieldType.Kind == source.BackendInputFieldKindString || fieldType.Kind == source.BackendInputFieldKindBool || fieldType.Kind == source.BackendInputFieldKindStringSlice {
 		return value
 	}
-	return call(id(goType), value)
+	return call(id(fieldType.Name), value)
 }
 
 func actionDecoderName(action BackendActionAdapter) string {

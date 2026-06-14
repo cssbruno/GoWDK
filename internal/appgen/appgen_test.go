@@ -1413,6 +1413,25 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 	}
 }
 
+func TestBoundActionDecoderRejectsUnsupportedInputFieldType(t *testing.T) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("expected unsupported backend input field type panic")
+		}
+		message, ok := recovered.(string)
+		if !ok || !strings.Contains(message, "unsupported backend input field type: float64") {
+			t.Fatalf("unexpected panic: %v", recovered)
+		}
+	}()
+
+	boundActionFieldDecodeStmts(0, source.BackendInputField{
+		FieldName: "Score",
+		FormName:  "score",
+		Type:      "float64",
+	})
+}
+
 func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

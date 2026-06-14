@@ -279,20 +279,19 @@ func objectSchemaFromFields(fields []source.BackendInputField) openAPISchema {
 }
 
 func schemaForGoType(goType string) openAPISchema {
-	switch strings.TrimSpace(goType) {
-	case "bool":
+	fieldType := source.MustBackendInputFieldType(goType)
+	switch fieldType.Kind {
+	case source.BackendInputFieldKindBool:
 		return openAPISchema{Type: "boolean"}
-	case "int", "int8", "int16", "int32", "int64":
+	case source.BackendInputFieldKindSignedInt, source.BackendInputFieldKindUnsignedInt:
 		return openAPISchema{Type: "integer", Format: "int64"}
-	case "uint", "uint8", "uint16", "uint32", "uint64":
-		return openAPISchema{Type: "integer", Format: "int64"}
-	case "float32", "float64":
-		return openAPISchema{Type: "number"}
-	case "[]string":
+	case source.BackendInputFieldKindStringSlice:
 		item := openAPISchema{Type: "string"}
 		return openAPISchema{Type: "array", Items: &item}
-	default:
+	case source.BackendInputFieldKindString:
 		return openAPISchema{Type: "string"}
+	default:
+		panic("unsupported backend input field kind: " + string(fieldType.Kind))
 	}
 }
 

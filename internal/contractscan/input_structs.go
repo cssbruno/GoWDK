@@ -189,12 +189,10 @@ func contractStructTagValue(tag string, key string) (string, bool, error) {
 
 func contractInputFieldType(expression ast.Expr) (string, bool) {
 	if ident, ok := expression.(*ast.Ident); ok {
-		switch ident.Name {
-		case "string", "bool", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
-			return ident.Name, true
-		default:
-			return "", false
+		if fieldType, ok := source.LookupBackendInputFieldType(ident.Name); ok {
+			return fieldType.Name, true
 		}
+		return "", false
 	}
 	array, ok := expression.(*ast.ArrayType)
 	if !ok || array.Len != nil {
@@ -204,5 +202,5 @@ func contractInputFieldType(expression ast.Expr) (string, bool) {
 	if !ok || ident.Name != "string" {
 		return "", false
 	}
-	return "[]string", true
+	return source.BackendInputTypeStringSlice, true
 }

@@ -218,20 +218,19 @@ func asyncAPIObjectSchema(fields []source.BackendInputField) asyncAPISchema {
 }
 
 func asyncAPISchemaForGoType(goType string) asyncAPISchema {
-	switch strings.TrimSpace(goType) {
-	case "bool":
+	fieldType := source.MustBackendInputFieldType(goType)
+	switch fieldType.Kind {
+	case source.BackendInputFieldKindBool:
 		return asyncAPISchema{Type: "boolean"}
-	case "int", "int8", "int16", "int32", "int64":
+	case source.BackendInputFieldKindSignedInt, source.BackendInputFieldKindUnsignedInt:
 		return asyncAPISchema{Type: "integer", Format: "int64"}
-	case "uint", "uint8", "uint16", "uint32", "uint64":
-		return asyncAPISchema{Type: "integer", Format: "int64"}
-	case "float32", "float64":
-		return asyncAPISchema{Type: "number"}
-	case "[]string":
+	case source.BackendInputFieldKindStringSlice:
 		item := asyncAPISchema{Type: "string"}
 		return asyncAPISchema{Type: "array", Items: &item}
-	default:
+	case source.BackendInputFieldKindString:
 		return asyncAPISchema{Type: "string"}
+	default:
+		panic("unsupported backend input field kind: " + string(fieldType.Kind))
 	}
 }
 

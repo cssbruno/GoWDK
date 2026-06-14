@@ -340,7 +340,7 @@ const (
 type BackendInputField struct {
 	FieldName string
 	FormName  string
-	Type      string
+	Type      string // canonical value from LookupBackendInputFieldType
 }
 
 // BackendBinding describes the Go handler selected for a backend block (a page

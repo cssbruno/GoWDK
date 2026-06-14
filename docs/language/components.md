@@ -264,11 +264,20 @@ page store.
 Imported Go structs are the stable typed prop path for richer contracts.
 Inline props can declare static scalar defaults with `name type = literal`.
 Defaults are used when a caller omits the prop and are overridden by explicit
-caller values. There is no rest/spread prop syntax, prop renaming syntax, or
-implicit global prop lookup in the current contract.
-Rest/spread-looking component calls such as `<Hero {...props} />` and
-renaming-looking props such as `title:heading="..."` are rejected; pass each
-declared prop explicitly.
+caller values.
+
+Advanced prop forwarding stays inside the typed compiler contract:
+
+- `{...props}` may be used inside a component that declares props. It forwards
+  only same-named props that the child component also declares; it does not
+  expose an arbitrary prop bag or global lookup.
+- `target:source` maps a differently named caller prop into a declared child
+  prop. Without a value, `target:source` forwards `{source}`. With a value, such
+  as `target:source={Expr}` or `target:source="literal"`, the value is used for
+  `target` while `source` names the caller-side source for diagnostics.
+- Explicit props, spreads, and renames cannot provide the same target prop more
+  than once. Unknown target props and unsupported spread sources fail before
+  output is written.
 
 State is component-local UI state. A `state Type = Init()` declaration runs the
 no-argument Go init function at build time for SPA/static output and serializes
@@ -276,9 +285,14 @@ the JSON-compatible initial value into the component island. State is visible to
 the browser and must not carry secrets, trusted authorization state, database
 state, or server validation results that the server still needs to enforce.
 
-Bindable child state is not stable as a parent/child contract. Parent-child
-coordination should use typed emits plus parent-owned state, or server actions
-for trusted behavior. Component-call `g:bind:*` is rejected with that guidance.
+Bindable child state is supported on component calls with
+`g:bind:<ExportedState>={ParentState}`. The target must be a child state field,
+must be declared in `exports`, and must have a scalar type compatible with the
+parent state field. Generated JavaScript sends the parent value down through
+reactive props and listens for the child's typed `exports` event to write the
+new child value back to parent state. Bound state is still local UI state: it is
+not trusted input, server state, auth state, validation, business logic, route
+truth, or cache policy.
 
 Computed values are read-only derived state. They can depend on props, state,
 and other computed values. The compiler builds a dependency graph for declared
@@ -398,8 +412,8 @@ backend handlers.
 
 Not implemented yet:
 
-- Rest/spread props, prop renaming, supported recursive component rendering,
-  supported dynamic component selection, and bindable child state.
+- Supported recursive component rendering and supported dynamic component
+  selection.
 - Full runtime validation for user browser logic in WASM islands beyond
   required export, browser import, and patch-operation checks.
 - Wiring generated Go component packages into the generated app layout.

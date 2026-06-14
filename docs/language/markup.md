@@ -133,6 +133,9 @@ Implemented today:
 - Local form bindings can be used inside normal `g:post` action forms. Binding
   listeners do not add submit interception; the action form still posts through
   its lowered `method` and `action`.
+- Component-call bindings use the component contract described in
+  [components.md](components.md): `g:bind:<ExportedState>={ParentState}` binds
+  parent UI state to an exported child state field.
 - Reactive expression attributes on safe non-URL attributes inside stateful
   components, such as `disabled={Open}` and `aria-expanded={Open}`. Boolean
   HTML attributes are toggled as attributes; scalar and ARIA attributes are

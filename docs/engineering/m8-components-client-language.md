@@ -8,12 +8,18 @@ status.
 ## Implemented Slices
 
 - Component props: scalar literal props, imported Go struct props, scalar
-  defaults, and generated render tests cover #17, #93, and #94.
+  defaults, same-named `{...props}` forwarding, `target:source` prop renaming,
+  collision diagnostics, and generated render tests cover #17, #93, #94, and
+  #368.
 - Slots: default, named, and scoped slots are the supported reusable-markup
   primitive; first-class snippet/render values remain deferred. This covers #16
   and #95.
 - Events and exports: typed child-to-parent emits and typed component exports
   are generated client contracts with teardown behavior, covering #96 and #369.
+- Bindable child state: component `g:bind:<ExportedState>={ParentState}`
+  requires an exported child state field, syncs parent-to-child through reactive
+  props, syncs child-to-parent through typed exports, avoids prop/export echo
+  loops, and has generated-output plus browser coverage. This covers #365.
 - Client reactivity: component state, computed values, dependency ordering,
   cycle diagnostics, lifecycle/effect cleanup, safe refs, form bindings,
   `g:if`, `g:for`, keyed list updates, list built-ins, and bounded async helpers
@@ -35,18 +41,12 @@ status.
 
 ## Explicit Deferrals
 
-- Rest/spread props and prop renaming are not part of the current prop contract.
-  Calls that look like spread or renaming syntax are rejected; callers must pass
-  declared props explicitly. This closes #368 as an intentional deferral.
 - Component recursion is rejected, including direct and transitive cycles, to
   avoid unbounded build-time rendering. This closes #366 as an intentional
   policy.
 - Dynamic component selection is rejected; component calls must name a compiler
   known component directly or through an explicit `use` alias. This closes #367
   as an intentional policy.
-- Bindable child state is rejected on component calls. Parent/child
-  coordination uses typed emits, typed exports, parent-owned state, or server
-  actions for trusted behavior. This closes #365 as an intentional deferral.
 
 ## Verification Surface
 

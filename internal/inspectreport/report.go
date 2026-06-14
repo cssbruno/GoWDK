@@ -191,16 +191,20 @@ func templateNode(template gwdkir.Template) Node {
 			"ownerId", template.OwnerID,
 		),
 	}
-	nodes, err := view.Parse(template.Body)
-	if err != nil {
-		node.Children = append(node.Children, Node{
-			ID:     nodeID(node.ID, "parse-error"),
-			Kind:   "parse-error",
-			Name:   err.Error(),
-			Source: template.Source,
-			Span:   sourceSpan(template.Span),
-		})
-		return node
+	nodes := template.Nodes
+	if len(nodes) == 0 {
+		var err error
+		nodes, err = view.Parse(template.Body)
+		if err != nil {
+			node.Children = append(node.Children, Node{
+				ID:     nodeID(node.ID, "parse-error"),
+				Kind:   "parse-error",
+				Name:   err.Error(),
+				Source: template.Source,
+				Span:   sourceSpan(template.Span),
+			})
+			return node
+		}
 	}
 	node.Children = append(node.Children, viewNodes(template, nodes, node.ID)...)
 	return node

@@ -614,34 +614,96 @@ func parseLiteralRecords(body []syntaxBodyLine) ([]LiteralRecord, error) {
 		if match == nil {
 			return nil, lineDiagnosticError(DiagnosticUnsupportedLiteralRecord, raw.Line, raw.Text, "unsupported literal record syntax %q", line)
 		}
-		fields, err := parseLiteralRecordFields(match[1])
+		fields, expressions, order, err := parseLiteralRecordFields(match[1])
 		if err != nil {
 			return nil, fmt.Errorf("line %d: %w", raw.Line, err)
 		}
-		records = append(records, LiteralRecord{Fields: fields, Span: sourceLineSpan(raw.Line, raw.Text)})
+		records = append(records, LiteralRecord{Fields: fields, Expressions: expressions, FieldOrder: order, Span: sourceLineSpan(raw.Line, raw.Text)})
 	}
 	return records, nil
 }
 
-func parseLiteralRecordFields(body string) (map[string]string, error) {
+func parseLiteralRecordFields(body string) (map[string]string, map[string]string, []string, error) {
 	fields := map[string]string{}
-	for _, part := range strings.Split(body, ",") {
+	expressions := map[string]string{}
+	var order []string
+	parts, err := splitLiteralRecordFields(body)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
 		name, value, ok := strings.Cut(part, ":")
 		if !ok {
-			return nil, fmt.Errorf("literal record field %q must use name: \"value\"", part)
+			return nil, nil, nil, fmt.Errorf("literal record field %q must use name: \"value\"", part)
 		}
 		name = strings.TrimSpace(name)
-		value = trimQuotes(value)
-		if name == "" {
-			return nil, fmt.Errorf("literal record field name is required")
+		value = strings.TrimSpace(value)
+		if !isStrictIdent(name) {
+			return nil, nil, nil, fmt.Errorf("invalid literal record field name %q", name)
 		}
-		fields[name] = value
+		if _, exists := expressions[name]; exists {
+			return nil, nil, nil, fmt.Errorf("duplicate literal record field %q", name)
+		}
+		fields[name] = literalRecordFieldValue(value)
+		expressions[name] = value
+		order = append(order, name)
 	}
+	return fields, expressions, order, nil
+}
+
+func splitLiteralRecordFields(body string) ([]string, error) {
+	var fields []string
+	start := 0
+	depth := 0
+	inString := false
+	escaped := false
+	for index, char := range body {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if inString {
+			switch char {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+		switch char {
+		case '"':
+			inString = true
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth > 0 {
+				continue
+			}
+			fields = append(fields, body[start:index])
+			start = index + 1
+		}
+	}
+	if inString {
+		return nil, fmt.Errorf("unterminated string")
+	}
+	fields = append(fields, body[start:])
 	return fields, nil
+}
+
+func literalRecordFieldValue(value string) string {
+	if unquoted, err := strconv.Unquote(value); err == nil {
+		return unquoted
+	}
+	return trimQuotes(value)
 }
 
 func parseSyntaxProps(body []syntaxBodyLine) ([]Prop, error) {

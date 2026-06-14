@@ -188,7 +188,7 @@ func safeScriptAssetName(scriptPath string) string {
 	return name
 }
 
-func scopedScriptHrefs(page gwdkir.Page, viewSource string, components map[string]view.Component) ([]string, error) {
+func scopedScriptHrefs(page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) ([]string, error) {
 	seen := map[string]bool{}
 	var scripts []string
 	add := func(href string) {
@@ -208,7 +208,7 @@ func scopedScriptHrefs(page gwdkir.Page, viewSource string, components map[strin
 		}
 		add("/" + pageScopedJSLogicalPath(page.ID, name))
 	}
-	componentHrefs, err := scopedComponentScriptHrefs(page, viewSource, components)
+	componentHrefs, err := scopedComponentScriptHrefs(page, viewSource, viewNodes, components)
 	if err != nil {
 		return nil, err
 	}
@@ -218,8 +218,8 @@ func scopedScriptHrefs(page gwdkir.Page, viewSource string, components map[strin
 	return scripts, nil
 }
 
-func scopedComponentScriptHrefs(page gwdkir.Page, viewSource string, components map[string]view.Component) ([]string, error) {
-	usages, err := recursiveViewComponentCallUsages(viewSource, components, page.Package, componentUses(page.Uses))
+func scopedComponentScriptHrefs(page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) ([]string, error) {
+	usages, err := recursiveViewComponentCallUsagesForView(viewSource, viewNodes, components, page.Package, componentUses(page.Uses))
 	if err != nil {
 		return nil, err
 	}

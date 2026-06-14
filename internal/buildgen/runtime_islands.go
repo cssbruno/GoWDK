@@ -20,7 +20,7 @@ func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allCompone
 		if err != nil {
 			return nil, fmt.Errorf("compose island view source for page %q: %w", page.ID, err)
 		}
-		usages, err := recursiveComponentCallUsages(source, components, page.Package, componentUses(page.Uses), manifestComponentResolver)
+		usages, err := recursiveComponentCallUsagesForView(source, composedPageViewNodes(page), components, page.Package, componentUses(page.Uses), manifestComponentResolver)
 		if err != nil {
 			return nil, fmt.Errorf("resolve island components for page %q: %w", page.ID, err)
 		}
@@ -69,7 +69,11 @@ func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allCompone
 }
 
 func islandScriptHrefs(source string, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]string, error) {
-	usages, err := recursiveComponentCallUsages(source, components, ownerPackage, uses, viewComponentResolver)
+	return islandScriptHrefsForView(source, nil, components, ownerPackage, uses)
+}
+
+func islandScriptHrefsForView(source string, nodes []view.Node, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]string, error) {
+	usages, err := recursiveComponentCallUsagesForView(source, nodes, components, ownerPackage, uses, viewComponentResolver)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +119,7 @@ func viewComponentRuntimeMode(explicit string, component view.Component) string 
 
 type componentResolver[T any] struct {
 	Body     func(T) string
+	Nodes    func(T) []view.Node
 	Identity func(T) string
 	Package  func(T) string
 	Uses     func(T) map[string]string
@@ -127,6 +132,7 @@ type resolvedComponentCallUsage[T any] struct {
 
 var viewComponentResolver = componentResolver[view.Component]{
 	Body:     func(component view.Component) string { return component.Body },
+	Nodes:    func(component view.Component) []view.Node { return component.Nodes },
 	Identity: func(component view.Component) string { return component.Identity() },
 	Package:  func(component view.Component) string { return component.Package },
 	Uses:     func(component view.Component) map[string]string { return component.Uses },
@@ -134,23 +140,42 @@ var viewComponentResolver = componentResolver[view.Component]{
 
 var manifestComponentResolver = componentResolver[gwdkir.Component]{
 	Body:     func(component gwdkir.Component) string { return component.Blocks.ViewBody },
+	Nodes:    func(component gwdkir.Component) []view.Node { return component.Blocks.ViewNodes },
 	Identity: manifestComponentIdentity,
 	Package:  func(component gwdkir.Component) string { return component.Package },
 	Uses:     func(component gwdkir.Component) map[string]string { return componentUses(component.Uses) },
 }
 
 func recursiveViewComponentCallUsages(source string, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]resolvedComponentCallUsage[view.Component], error) {
-	return recursiveComponentCallUsages(source, components, ownerPackage, uses, viewComponentResolver)
+	return recursiveViewComponentCallUsagesForView(source, nil, components, ownerPackage, uses)
+}
+
+func recursiveViewComponentCallUsagesForView(source string, nodes []view.Node, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]resolvedComponentCallUsage[view.Component], error) {
+	return recursiveComponentCallUsagesForView(source, nodes, components, ownerPackage, uses, viewComponentResolver)
 }
 
 func recursiveComponentCallUsages[T any](source string, components map[string]T, ownerPackage string, uses map[string]string, resolver componentResolver[T]) ([]resolvedComponentCallUsage[T], error) {
+	return recursiveComponentCallUsagesForView(source, nil, components, ownerPackage, uses, resolver)
+}
+
+func recursiveComponentCallUsagesForView[T any](source string, nodes []view.Node, components map[string]T, ownerPackage string, uses map[string]string, resolver componentResolver[T]) ([]resolvedComponentCallUsage[T], error) {
 	var usages []resolvedComponentCallUsage[T]
 	visiting := map[string]bool{}
-	var walk func(string, string, map[string]string) error
-	walk = func(source string, ownerPackage string, uses map[string]string) error {
-		direct, err := view.ComponentCallUsages(source)
-		if err != nil {
-			return err
+	var walk func(string, []view.Node, string, map[string]string) error
+	walk = func(source string, nodes []view.Node, ownerPackage string, uses map[string]string) error {
+		var direct []view.ComponentCallUsage
+		if len(nodes) > 0 {
+			var err error
+			direct, err = view.ComponentCallUsagesFromNodes(nodes)
+			if err != nil {
+				return err
+			}
+		} else {
+			var err error
+			direct, err = view.ComponentCallUsages(source)
+			if err != nil {
+				return err
+			}
 		}
 		for _, usage := range direct {
 			component, ok := lookupComponent(components, usage.Component, ownerPackage, uses)
@@ -163,14 +188,14 @@ func recursiveComponentCallUsages[T any](source string, components map[string]T,
 				continue
 			}
 			visiting[identity] = true
-			if err := walk(resolver.Body(component), resolver.Package(component), resolver.Uses(component)); err != nil {
+			if err := walk(resolver.Body(component), resolver.Nodes(component), resolver.Package(component), resolver.Uses(component)); err != nil {
 				return err
 			}
 			delete(visiting, identity)
 		}
 		return nil
 	}
-	if err := walk(source, ownerPackage, uses); err != nil {
+	if err := walk(source, nodes, ownerPackage, uses); err != nil {
 		return nil, err
 	}
 	return usages, nil

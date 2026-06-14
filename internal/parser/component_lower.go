@@ -115,6 +115,7 @@ func applyComponentSyntaxBlock(src []byte, component *gwdkir.Component, block gw
 	case "view":
 		component.Blocks.View = true
 		component.Blocks.ViewBody = block.Body
+		component.Blocks.ViewNodes = append(component.Blocks.ViewNodes[:0], block.View...)
 		component.Blocks.Spans.View = block.Span
 		component.Blocks.Spans.ViewBodyStart = block.BodyStart
 	case "style":

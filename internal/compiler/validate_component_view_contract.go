@@ -11,15 +11,21 @@ import (
 )
 
 func validateComponentViewContract(component gwdkir.Component, ctx componentValidationContext) []ValidationError {
-	viewRefs, err := componentViewReferences(component.Blocks.ViewBody)
-	if err != nil {
-		return []ValidationError{{
-			Code:          "component_field_error",
-			ComponentName: component.Name,
-			Source:        component.Source,
-			Span:          firstSpan(component.Blocks.Spans.View, component.Span),
-			Message:       fmt.Sprintf("component %s view is invalid: %v", component.Name, err),
-		}}
+	var viewRefs componentViewRefs
+	if len(component.Blocks.ViewNodes) > 0 {
+		viewRefs = componentViewReferencesFromNodes(component.Blocks.ViewBody, component.Blocks.ViewNodes)
+	} else {
+		var err error
+		viewRefs, err = componentViewReferences(component.Blocks.ViewBody)
+		if err != nil {
+			return []ValidationError{{
+				Code:          "component_field_error",
+				ComponentName: component.Name,
+				Source:        component.Source,
+				Span:          firstSpan(component.Blocks.Spans.View, component.Span),
+				Message:       fmt.Sprintf("component %s view is invalid: %v", component.Name, err),
+			}}
+		}
 	}
 
 	helperFuncs := helperExprFunctions(ctx.Helpers)

@@ -585,7 +585,7 @@ func cssSources(ir gwdkir.Program) []gowdk.CSSSource {
 			Path:       page.Source,
 			Kind:       "page",
 			Name:       page.ID,
-			CSSClasses: cssClassesFromViewBody(page.Blocks.ViewBody),
+			CSSClasses: cssClassesFromViewBlocks(page.Blocks),
 		})
 	}
 	for _, component := range ir.Components {
@@ -593,10 +593,17 @@ func cssSources(ir gwdkir.Program) []gowdk.CSSSource {
 			Path:       component.Source,
 			Kind:       "component",
 			Name:       component.Name,
-			CSSClasses: cssClassesFromViewBody(component.Blocks.ViewBody),
+			CSSClasses: cssClassesFromViewBlocks(component.Blocks),
 		})
 	}
 	return sources
+}
+
+func cssClassesFromViewBlocks(blocks gwdkir.Blocks) []string {
+	if len(blocks.ViewNodes) > 0 {
+		return view.ViewDependenciesFromNodes(blocks.ViewNodes).CSSClasses
+	}
+	return cssClassesFromViewBody(blocks.ViewBody)
 }
 
 func cssClassesFromViewBody(body string) []string {

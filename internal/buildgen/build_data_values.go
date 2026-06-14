@@ -115,11 +115,18 @@ func buildFieldValue(expr ast.Expr, routeParams map[string]string, data map[stri
 	if !ok || !isLiteralName(key.Name) {
 		return "", buildValue{}, fmt.Errorf("invalid build field name")
 	}
-	value, err := buildValueFromExpr(kv.Value, routeParams, data)
-	if err != nil {
-		return "", buildValue{}, fmt.Errorf("build field %s: %w", key.Name, err)
+	return buildFieldValueFromParts(key.Name, kv.Value, routeParams, data)
+}
+
+func buildFieldValueFromParts(name string, expr ast.Expr, routeParams map[string]string, data map[string]buildValue) (string, buildValue, error) {
+	if !isLiteralName(name) {
+		return "", buildValue{}, fmt.Errorf("invalid build field name")
 	}
-	return key.Name, value, nil
+	value, err := buildValueFromExpr(expr, routeParams, data)
+	if err != nil {
+		return "", buildValue{}, fmt.Errorf("build field %s: %w", name, err)
+	}
+	return name, value, nil
 }
 
 func buildValueFromExpr(expr ast.Expr, routeParams map[string]string, data map[string]buildValue) (buildValue, error) {

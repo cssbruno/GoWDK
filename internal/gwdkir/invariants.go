@@ -93,6 +93,9 @@ func CheckInvariants(program Program) error {
 
 	for _, template := range program.Templates {
 		reportOwnerReference("template", template.OwnerKind, template.OwnerID, pages, components, layouts, report)
+		if len(template.Nodes) > 0 && strings.TrimSpace(template.Body) == "" {
+			report("template %s %q has parsed nodes but empty body", template.OwnerKind, template.OwnerID)
+		}
 	}
 
 	for _, asset := range program.Assets {

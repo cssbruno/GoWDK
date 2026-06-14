@@ -190,20 +190,24 @@ func buildDataGoBindings(page gwdkir.Page) []goBindingJSON {
 	if !page.Blocks.Build {
 		return nil
 	}
-	ref, ok, err := parseGoBindingBuildDataCall(page.Blocks.BuildBody)
-	if err != nil {
-		return []goBindingJSON{{
-			Kind:       "build",
-			Source:     page.Source,
-			SourceSpan: endpointSourceSpanJSON(page.Blocks.Spans.Build),
-			Package:    page.Package,
-			PageID:     page.ID,
-			Status:     "invalid",
-			Message:    err.Error(),
-		}}
-	}
+	ref, ok := goBindingBuildDataCall(page)
 	if !ok {
-		return nil
+		var err error
+		ref, ok, err = parseGoBindingBuildDataCall(page.Blocks.BuildBody)
+		if err != nil {
+			return []goBindingJSON{{
+				Kind:       "build",
+				Source:     page.Source,
+				SourceSpan: endpointSourceSpanJSON(page.Blocks.Spans.Build),
+				Package:    page.Package,
+				PageID:     page.ID,
+				Status:     "invalid",
+				Message:    err.Error(),
+			}}
+		}
+		if !ok {
+			return nil
+		}
 	}
 	binding := goBindingJSON{
 		Kind:           "build",
@@ -238,6 +242,16 @@ func buildDataGoBindings(page gwdkir.Page) []goBindingJSON {
 	binding.PackagePath = importPath
 	binding.PackageName = page.Package
 	return []goBindingJSON{binding}
+}
+
+func goBindingBuildDataCall(page gwdkir.Page) (goBindingBuildCallRef, bool) {
+	if page.Blocks.BuildCall == nil {
+		return goBindingBuildCallRef{}, false
+	}
+	return goBindingBuildCallRef{
+		Alias:    page.Blocks.BuildCall.Alias,
+		Function: page.Blocks.BuildCall.Function,
+	}, true
 }
 
 type goBindingBuildCallRef struct {

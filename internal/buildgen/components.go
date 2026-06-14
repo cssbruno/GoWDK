@@ -96,6 +96,7 @@ func buildComponents(components []gwdkir.Component) (map[string]view.Component, 
 			Exports:       exports,
 			Computed:      computeds,
 			Body:          component.Blocks.ViewBody,
+			Nodes:         append([]view.Node(nil), component.Blocks.ViewNodes...),
 		}
 		registry[key] = compiled
 		if component.Package == "" {

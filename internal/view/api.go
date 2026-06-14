@@ -39,6 +39,7 @@ type Component struct {
 	Exports       map[string]clientlang.ValueType
 	Computed      []clientlang.Computed
 	Body          string
+	Nodes         []Node
 }
 
 // InlineScript records browser module code declared directly inside a component
@@ -206,7 +207,17 @@ type QueryReference struct {
 // RenderWithOptions renders a view markup fragment with component support,
 // interpolation data, and page-scoped action endpoints.
 func RenderWithOptions(source string, components map[string]Component, data map[string]string, options Options) (string, error) {
-	return render(source, renderContext{
+	nodes, err := Parse(source)
+	if err != nil {
+		return "", err
+	}
+	return RenderNodesWithOptions(nodes, components, data, options)
+}
+
+// RenderNodesWithOptions renders an already-parsed view fragment with component
+// support, interpolation data, and page-scoped action endpoints.
+func RenderNodesWithOptions(nodes []Node, components map[string]Component, data map[string]string, options Options) (string, error) {
+	return renderParsedNodes(nodes, renderContext{
 		renderComponentContext: renderComponentContext{
 			components:   components,
 			ownerPackage: options.Package,
@@ -249,6 +260,12 @@ func ViewDependencies(source string) (Dependencies, error) {
 	if err != nil {
 		return Dependencies{}, err
 	}
+	return ViewDependenciesFromNodes(nodes), nil
+}
+
+// ViewDependenciesFromNodes returns direct literal asset and style references
+// from an already-parsed view fragment.
+func ViewDependenciesFromNodes(nodes []Node) Dependencies {
 	assets := map[string]bool{}
 	classes := map[string]bool{}
 	styles := map[string]bool{}
@@ -257,7 +274,7 @@ func ViewDependencies(source string) (Dependencies, error) {
 		Assets:          sortedKeys(assets),
 		CSSClasses:      sortedKeys(classes),
 		StyleAttributes: sortedKeys(styles),
-	}, nil
+	}
 }
 
 // ActionFormSchema returns direct literal HTML controls grouped by g:post action
@@ -268,6 +285,12 @@ func ActionFormSchema(source string) (map[string][]ActionFormField, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ActionFormSchemaFromNodes(nodes)
+}
+
+// ActionFormSchemaFromNodes returns direct literal HTML controls grouped by
+// g:post action name from an already-parsed view fragment.
+func ActionFormSchemaFromNodes(nodes []Node) (map[string][]ActionFormField, error) {
 	fields := map[string]map[string]ActionFormField{}
 	if err := collectActionFormFields(nodes, fields); err != nil {
 		return nil, err
@@ -293,8 +316,18 @@ func ComponentReferences(source string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return componentReferenceNames(refs), nil
+}
+
+// ComponentReferencesFromNodes returns unique component names directly
+// referenced by an already-parsed view fragment.
+func ComponentReferencesFromNodes(nodes []Node) []string {
+	return componentReferenceNames(ComponentReferenceSpansFromNodes(nodes))
+}
+
+func componentReferenceNames(refs []ComponentReference) []string {
 	if len(refs) == 0 {
-		return nil, nil
+		return nil
 	}
 	names := map[string]bool{}
 	for _, ref := range refs {
@@ -305,7 +338,7 @@ func ComponentReferences(source string) ([]string, error) {
 		out = append(out, name)
 	}
 	sort.Strings(out)
-	return out, nil
+	return out
 }
 
 // ComponentReferenceSpans returns component calls directly referenced by a view
@@ -315,12 +348,18 @@ func ComponentReferenceSpans(source string) ([]ComponentReference, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ComponentReferenceSpansFromNodes(nodes), nil
+}
+
+// ComponentReferenceSpansFromNodes returns component calls from an already-
+// parsed view fragment, preserving source offsets for diagnostics.
+func ComponentReferenceSpansFromNodes(nodes []Node) []ComponentReference {
 	var refs []ComponentReference
 	collectComponentReferences(nodes, &refs)
 	if len(refs) == 0 {
-		return nil, nil
+		return nil
 	}
-	return refs, nil
+	return refs
 }
 
 // ComponentIslandUsages returns component calls that explicitly set g:island.
@@ -329,6 +368,12 @@ func ComponentIslandUsages(source string) ([]ComponentIslandUsage, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ComponentIslandUsagesFromNodes(nodes)
+}
+
+// ComponentIslandUsagesFromNodes returns component calls that explicitly set
+// g:island in an already-parsed view fragment.
+func ComponentIslandUsagesFromNodes(nodes []Node) ([]ComponentIslandUsage, error) {
 	var usages []ComponentIslandUsage
 	if err := collectComponentIslandUsages(nodes, &usages); err != nil {
 		return nil, err
@@ -342,6 +387,12 @@ func ComponentCallUsages(source string) ([]ComponentCallUsage, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ComponentCallUsagesFromNodes(nodes)
+}
+
+// ComponentCallUsagesFromNodes returns component calls with optional g:island
+// metadata from an already-parsed view fragment.
+func ComponentCallUsagesFromNodes(nodes []Node) ([]ComponentCallUsage, error) {
 	var usages []ComponentCallUsage
 	if err := collectComponentCallUsages(nodes, &usages); err != nil {
 		return nil, err
@@ -356,6 +407,13 @@ func CommandReferences(source string) ([]CommandReference, error) {
 	if err != nil {
 		return nil, err
 	}
+	return CommandReferencesFromNodes(nodes)
+}
+
+// CommandReferencesFromNodes returns package-qualified command references
+// declared by g:command on direct form elements in an already-parsed view
+// fragment.
+func CommandReferencesFromNodes(nodes []Node) ([]CommandReference, error) {
 	var refs []CommandReference
 	if err := collectCommandReferences(nodes, &refs); err != nil {
 		return nil, err
@@ -370,6 +428,12 @@ func QueryReferences(source string) ([]QueryReference, error) {
 	if err != nil {
 		return nil, err
 	}
+	return QueryReferencesFromNodes(nodes)
+}
+
+// QueryReferencesFromNodes returns package-qualified query references declared
+// by g:query on direct HTML elements in an already-parsed view fragment.
+func QueryReferencesFromNodes(nodes []Node) ([]QueryReference, error) {
 	var refs []QueryReference
 	if err := collectQueryReferences(nodes, &refs); err != nil {
 		return nil, err
@@ -384,6 +448,13 @@ func ContractReferences(source string) ([]ContractReference, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ContractReferencesFromNodes(nodes)
+}
+
+// ContractReferencesFromNodes returns package-qualified command and query
+// references declared by GOWDK view directives in an already-parsed view
+// fragment.
+func ContractReferencesFromNodes(nodes []Node) ([]ContractReference, error) {
 	var refs []ContractReference
 	if err := collectContractReferences(nodes, &refs); err != nil {
 		return nil, err

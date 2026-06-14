@@ -65,6 +65,15 @@ view {
 	if page.Blocks.ViewBody != "<main>\n    <h1>Post</h1>\n  </main>" {
 		t.Fatalf("unexpected view body: %q", page.Blocks.ViewBody)
 	}
+	if len(page.Blocks.PathsRecords) != 2 || page.Blocks.PathsRecords[0].Fields["slug"] != "hello-gowdk" || page.Blocks.PathsRecords[1].Fields["slug"] != "compile-first" {
+		t.Fatalf("expected typed paths records, got %#v", page.Blocks.PathsRecords)
+	}
+	if len(page.Blocks.BuildRecords) != 1 || page.Blocks.BuildRecords[0].Expressions["title"] != `"SPA post"` || page.Blocks.BuildRecords[0].FieldOrder[0] != "title" {
+		t.Fatalf("expected typed build record expressions, got %#v", page.Blocks.BuildRecords)
+	}
+	if len(page.Blocks.ViewNodes) != 1 {
+		t.Fatalf("expected parsed view nodes, got %#v", page.Blocks.ViewNodes)
+	}
 	if page.Layouts[1] != "blog" {
 		t.Fatalf("expected blog layout, got %#v", page.Layouts)
 	}

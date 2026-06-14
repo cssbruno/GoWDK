@@ -14,7 +14,7 @@ func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
 	bindings := irBindingsByEndpoint(ir.Endpoints)
 	var endpoints []ActionEndpoint
 	for _, page := range ir.Pages {
-		fieldsByAction, err := view.ActionFormSchema(page.Blocks.ViewBody)
+		fieldsByAction, err := actionFormSchemaFromBlocks(page.Blocks)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
@@ -70,6 +70,13 @@ func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
 		return nil, err
 	}
 	return endpoints, nil
+}
+
+func actionFormSchemaFromBlocks(blocks gwdkir.Blocks) (map[string][]view.ActionFormField, error) {
+	if len(blocks.ViewNodes) > 0 {
+		return view.ActionFormSchemaFromNodes(blocks.ViewNodes)
+	}
+	return view.ActionFormSchema(blocks.ViewBody)
 }
 
 func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
@@ -170,6 +177,7 @@ func fragmentComponentsFromIR(components []gwdkir.Component) map[string]view.Com
 			PropDefaults: irPropDefaults(component.Props),
 			Exports:      irExportTypes(component.Exports),
 			Body:         component.Blocks.ViewBody,
+			Nodes:        append([]view.Node(nil), component.Blocks.ViewNodes...),
 		}
 		addFragmentComponent(out, compiled)
 	}

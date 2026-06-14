@@ -38,6 +38,8 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 - Handle `initialize`, `initialized`, `shutdown`, and `exit`.
 - Accept full-document `textDocument/didOpen`, `textDocument/didChange`, `textDocument/didSave`, and `textDocument/didClose` notifications.
 - Publish diagnostics using the current GOWDK parser and validation rules.
+- Publish project-linked `g:command` and `g:query` binding diagnostics for dirty
+  buffers when a workspace root can be found.
 - Return whole-document formatting edits using `gowdk fmt` behavior.
 - Return keyword completions for metadata declarations, render modes, blocks, and `g:` directives.
 - Return project completions for open-document components, layouts, guards,
@@ -71,6 +73,9 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 
 - [x] `gowdk lsp` starts and answers an LSP `initialize` request.
 - [x] Opening an invalid `.gwdk` buffer publishes diagnostics without requiring the buffer to be saved.
+- [x] Opening a `.gwdk` buffer with a missing, invalid, or non-web-role
+      `g:command`/`g:query` reference publishes the linked contract diagnostic
+      on the directive source range.
 - [x] `textDocument/formatting` returns a replacement edit matching `gowdk fmt`.
 - [x] `textDocument/completion` returns the same language keywords exposed by editor tooling.
 - [x] `textDocument/completion` returns open-project symbols for components,

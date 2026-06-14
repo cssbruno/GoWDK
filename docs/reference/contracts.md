@@ -808,7 +808,10 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Form-local `g:command` references and element-local `g:query` references
   include exact source line and column in IR and build reports.
 - Missing, invalid, or non-web-only command/query references produce
-  `contract_reference_*` diagnostics in `gowdk check` and stop CLI builds.
+  `contract_reference_*` diagnostics in `gowdk check`, in LSP dirty-buffer
+  diagnostics, and stop CLI builds. Diagnostic suggestions point to
+  `gowdk contracts list` and `gowdk contracts graph` when scanned registration
+  state needs inspection.
 - Generated fallback contract routes that remain in appgen for allowed
   non-bound modes return explicit HTTP 501 no-store responses.
 - Other contract diagnostics do not all have exact source spans yet.

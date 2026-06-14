@@ -8,7 +8,7 @@ Language support for `.gwdk` files.
 - Language configuration for comments, brackets, and folding.
 - Diagnostics through `gowdk check --json`.
 - Formatting through `gowdk fmt`.
-- Standard Language Server Protocol support is available through `gowdk lsp` for editors that prefer LSP integration.
+- Standard Language Server Protocol support is available through `gowdk lsp` for editors that prefer LSP integration, including dirty-buffer `g:command`/`g:query` binding diagnostics when a project root is available.
 - Keyword completions for metadata declarations, render modes, blocks, client-island
   constructs, and `g:`/class/style directives, plus project-aware route,
   layout, component, and CSS completions in route strings, `layout` values,

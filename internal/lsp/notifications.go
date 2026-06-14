@@ -75,7 +75,7 @@ func (server *Server) publishDiagnostics(doc document) []byte {
 	if !strings.HasSuffix(doc.Path, ".gwdk") {
 		return publishDiagnostics(doc.URI, nil)
 	}
-	_, diagnostics := lang.CheckSource(server.config, doc.Path, []byte(doc.Text))
+	_, diagnostics := lang.CheckSourceWithOptions(server.config, doc.Path, []byte(doc.Text), lang.CheckOptions{ProjectRoot: configuredWorkspaceRootForPath(doc.Path)})
 	items := make([]diagnostic, 0, len(diagnostics))
 	for _, item := range diagnostics {
 		items = append(items, diagnosticFromLang(item, doc.URI, doc.Text))

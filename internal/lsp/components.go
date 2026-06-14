@@ -226,6 +226,16 @@ func (server *Server) openDocumentByPath(filePath string) (document, bool) {
 }
 
 func workspaceRootForPath(filePath string) string {
+	if root := configuredWorkspaceRootForPath(filePath); root != "" {
+		return root
+	}
+	if strings.TrimSpace(filePath) == "" {
+		return ""
+	}
+	return filepath.Dir(filePath)
+}
+
+func configuredWorkspaceRootForPath(filePath string) string {
 	if strings.TrimSpace(filePath) == "" {
 		return ""
 	}
@@ -240,7 +250,7 @@ func workspaceRootForPath(filePath string) string {
 		}
 		dir = parent
 	}
-	return filepath.Dir(filePath)
+	return ""
 }
 
 func shouldSkipWorkspaceDir(name string) bool {

@@ -405,13 +405,6 @@ func backendContractImports(exposures []BackendContractExposure) map[string]stri
 	return imports
 }
 
-func hasRoutableContractReferences(options Options) bool {
-	if options.IR == nil {
-		return false
-	}
-	return len(routableContractExposures(backendAdapterIR(options).ContractExposures)) > 0
-}
-
 func contractHandlerName(exposure BackendContractExposure) string {
 	return string(exposure.Endpoint.Kind) +
 		source.ExportedIdentifier(exposure.OwnerID, "Contract") +

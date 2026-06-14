@@ -9,6 +9,9 @@ import (
 
 type BackendAdapterIR struct {
 	Registrations     []BackendEndpointRegistration
+	Actions           []BackendActionAdapter
+	APIs              []BackendAPIAdapter
+	Fragments         []BackendFragmentAdapter
 	ContractExposures []BackendContractExposure
 	Decoders          []BackendDecoder
 	Calls             []BackendHandlerCall
@@ -33,6 +36,57 @@ type BackendEndpointRegistration struct {
 	Handler string
 	PageID  string
 	Name    string
+	Guards  []string
+	Dynamic bool
+}
+
+type BackendActionAdapter struct {
+	Endpoint         BackendEndpointRegistration
+	PageID           string
+	ActionName       string
+	Method           string
+	Route            string
+	Guards           []string
+	InputName        string
+	InputType        string
+	InputFields      []string
+	RequiredFields   []string
+	RequiredMessages map[string]string
+	ValidationRules  []ActionValidationRule
+	ValidatesInput   bool
+	Redirect         string
+	Fragments        []ActionFragment
+	ErrorPage        string
+	Binding          source.BackendBinding
+	BackendAlias     string
+}
+
+type BackendAPIAdapter struct {
+	Endpoint     BackendEndpointRegistration
+	PageID       string
+	APIName      string
+	Method       string
+	Route        string
+	Guards       []string
+	ErrorPage    string
+	Binding      source.BackendBinding
+	BackendAlias string
+}
+
+type BackendFragmentAdapter struct {
+	Endpoint     BackendEndpointRegistration
+	PageID       string
+	FragmentName string
+	Method       string
+	Route        string
+	RouteParams  []source.RouteParam
+	Target       string
+	HTML         string
+	Package      string
+	Uses         map[string]string
+	Guards       []string
+	Binding      source.BackendBinding
+	BackendAlias string
 }
 
 type BackendDecoder struct {
@@ -43,11 +97,12 @@ type BackendDecoder struct {
 }
 
 type BackendHandlerCall struct {
-	Endpoint  BackendEndpointRegistration
-	Alias     string
-	Function  string
-	Signature source.BackendSignatureKind
-	InputType string
+	Endpoint   BackendEndpointRegistration
+	Alias      string
+	ImportPath string
+	Function   string
+	Signature  source.BackendSignatureKind
+	InputType  string
 }
 
 type BackendResponse struct {
@@ -93,8 +148,31 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			Handler: "action",
 			PageID:  action.PageID,
 			Name:    action.ActionName,
+			Guards:  append([]string(nil), action.Guards...),
+			Dynamic: backendRouteIsDynamic(action.Route),
+		}
+		actionAdapter := BackendActionAdapter{
+			Endpoint:         endpoint,
+			PageID:           action.PageID,
+			ActionName:       action.ActionName,
+			Method:           action.Method,
+			Route:            action.Route,
+			Guards:           append([]string(nil), action.Guards...),
+			InputName:        action.InputName,
+			InputType:        action.InputType,
+			InputFields:      append([]string(nil), action.InputFields...),
+			RequiredFields:   append([]string(nil), action.RequiredFields...),
+			RequiredMessages: copyStringMap(action.RequiredMessages),
+			ValidationRules:  append([]ActionValidationRule(nil), action.ValidationRules...),
+			ValidatesInput:   action.ValidatesInput,
+			Redirect:         action.Redirect,
+			Fragments:        append([]ActionFragment(nil), action.Fragments...),
+			ErrorPage:        action.ErrorPage,
+			Binding:          action.Binding,
+			BackendAlias:     action.BackendAlias,
 		}
 		ir.Registrations = append(ir.Registrations, endpoint)
+		ir.Actions = append(ir.Actions, actionAdapter)
 		if action.InputType != "" || action.Binding.InputType != "" {
 			decoder := BackendDecoder{
 				Endpoint: endpoint,
@@ -102,20 +180,21 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				Fields:   append([]string(nil), action.InputFields...),
 			}
 			if action.Binding.Status == source.BackendBindingBound && action.Binding.InputType != "" {
-				decoder.Function = boundActionDecoderName(action)
+				decoder.Function = boundActionDecoderName(actionAdapter)
 				decoder.Input = action.Binding.InputType
 			} else if action.InputType != "" {
-				decoder.Function = actionDecoderName(action)
+				decoder.Function = actionDecoderName(actionAdapter)
 			}
 			ir.Decoders = append(ir.Decoders, decoder)
 		}
 		if action.Binding.Status == source.BackendBindingBound {
 			ir.Calls = append(ir.Calls, BackendHandlerCall{
-				Endpoint:  endpoint,
-				Alias:     action.BackendAlias,
-				Function:  action.Binding.FunctionName,
-				Signature: action.Binding.Signature,
-				InputType: action.Binding.InputType,
+				Endpoint:   endpoint,
+				Alias:      action.BackendAlias,
+				ImportPath: action.Binding.ImportPath,
+				Function:   action.Binding.FunctionName,
+				Signature:  action.Binding.Signature,
+				InputType:  action.Binding.InputType,
 			})
 		}
 		if action.Binding.Status != "" && action.Binding.Status != source.BackendBindingBound {
@@ -140,14 +219,29 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			Handler: "api",
 			PageID:  api.PageID,
 			Name:    api.APIName,
+			Guards:  append([]string(nil), api.Guards...),
+			Dynamic: backendRouteIsDynamic(api.Route),
+		}
+		apiAdapter := BackendAPIAdapter{
+			Endpoint:     endpoint,
+			PageID:       api.PageID,
+			APIName:      api.APIName,
+			Method:       api.Method,
+			Route:        api.Route,
+			Guards:       append([]string(nil), api.Guards...),
+			ErrorPage:    api.ErrorPage,
+			Binding:      api.Binding,
+			BackendAlias: api.BackendAlias,
 		}
 		ir.Registrations = append(ir.Registrations, endpoint)
+		ir.APIs = append(ir.APIs, apiAdapter)
 		if api.Binding.Status == source.BackendBindingBound {
 			ir.Calls = append(ir.Calls, BackendHandlerCall{
-				Endpoint:  endpoint,
-				Alias:     api.BackendAlias,
-				Function:  api.Binding.FunctionName,
-				Signature: api.Binding.Signature,
+				Endpoint:   endpoint,
+				Alias:      api.BackendAlias,
+				ImportPath: api.Binding.ImportPath,
+				Function:   api.Binding.FunctionName,
+				Signature:  api.Binding.Signature,
 			})
 		}
 		if api.Binding.Status != "" && api.Binding.Status != source.BackendBindingBound {
@@ -167,8 +261,42 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			Handler: "fragment",
 			PageID:  fragment.PageID,
 			Name:    fragment.FragmentName,
+			Guards:  append([]string(nil), fragment.Guards...),
+			Dynamic: backendRouteIsDynamic(fragment.Route),
+		}
+		fragmentAdapter := BackendFragmentAdapter{
+			Endpoint:     endpoint,
+			PageID:       fragment.PageID,
+			FragmentName: fragment.FragmentName,
+			Method:       fragment.Method,
+			Route:        fragment.Route,
+			RouteParams:  append([]source.RouteParam(nil), fragment.RouteParams...),
+			Target:       fragment.Target,
+			HTML:         fragment.HTML,
+			Package:      fragment.Package,
+			Uses:         copyStringMap(fragment.Uses),
+			Guards:       append([]string(nil), fragment.Guards...),
+			Binding:      fragment.Binding,
+			BackendAlias: fragment.BackendAlias,
 		}
 		ir.Registrations = append(ir.Registrations, endpoint)
+		ir.Fragments = append(ir.Fragments, fragmentAdapter)
+		if fragment.Binding.Status == source.BackendBindingBound {
+			ir.Calls = append(ir.Calls, BackendHandlerCall{
+				Endpoint:   endpoint,
+				Alias:      fragment.BackendAlias,
+				ImportPath: fragment.Binding.ImportPath,
+				Function:   fragment.Binding.FunctionName,
+				Signature:  fragment.Binding.Signature,
+			})
+		}
+		if fragment.Binding.Status != "" && fragment.Binding.Status != source.BackendBindingBound {
+			ir.Fallbacks = append(ir.Fallbacks, BackendFallback{
+				Endpoint: endpoint,
+				Status:   fragment.Binding.Status,
+				Message:  fragment.Binding.Message,
+			})
+		}
 		ir.Responses = append(ir.Responses, BackendResponse{
 			Endpoint: endpoint,
 			NoStore:  true,
@@ -184,6 +312,8 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				Handler: string(ref.Kind),
 				PageID:  ref.OwnerID,
 				Name:    ref.Name,
+				Guards:  append([]string(nil), ref.Guards...),
+				Dynamic: backendRouteIsDynamic(ref.Path),
 			}
 			ir.ContractExposures = append(ir.ContractExposures, BackendContractExposure{
 				Endpoint:    endpoint,
@@ -213,6 +343,55 @@ func (ir BackendAdapterIR) HasRegistrations() bool {
 	return len(ir.Registrations) > 0 || len(routableContractExposures(ir.ContractExposures)) > 0
 }
 
+func (ir BackendAdapterIR) HasEndpointKind(kind BackendEndpointKind) bool {
+	for _, registration := range ir.Registrations {
+		if registration.Kind == kind {
+			return true
+		}
+	}
+	for _, exposure := range routableContractExposures(ir.ContractExposures) {
+		if exposure.Endpoint.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func (ir BackendAdapterIR) HasDynamicRoutes() bool {
+	for _, registration := range ir.Registrations {
+		if registration.Dynamic {
+			return true
+		}
+	}
+	for _, exposure := range routableContractExposures(ir.ContractExposures) {
+		if exposure.Endpoint.Dynamic {
+			return true
+		}
+	}
+	return false
+}
+
+func (ir BackendAdapterIR) GuardNames() []string {
+	var guards []string
+	for _, registration := range ir.Registrations {
+		guards = append(guards, registration.Guards...)
+	}
+	for _, exposure := range routableContractExposures(ir.ContractExposures) {
+		guards = append(guards, exposure.Guards...)
+	}
+	return guards
+}
+
+func (ir BackendAdapterIR) BackendImports() map[string]string {
+	imports := map[string]string{}
+	for _, call := range ir.Calls {
+		if call.ImportPath != "" && call.Alias != "" {
+			imports[call.ImportPath] = call.Alias
+		}
+	}
+	return imports
+}
+
 func backendContractEndpointKind(kind gwdkir.ContractKind) BackendEndpointKind {
 	switch kind {
 	case gwdkir.ContractQuery:
@@ -236,5 +415,20 @@ func sortedContractReferences(refs []gwdkir.ContractReference) []gwdkir.Contract
 		}
 		return out[i].Name < out[j].Name
 	})
+	return out
+}
+
+func backendRouteIsDynamic(route string) bool {
+	return len(ssrRoutePatternParams(route)) > 0
+}
+
+func copyStringMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
 	return out
 }

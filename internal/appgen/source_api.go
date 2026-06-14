@@ -8,10 +8,10 @@ import (
 )
 
 func apiHandlerSource(apis []APIEndpoint) (string, error) {
-	return printActionDecls([]ast.Decl{apiFuncDecl(sortedAPIEndpoints(apis), false)})
+	return printActionDecls([]ast.Decl{apiFuncDecl(backendAdapterIR(Options{APIs: apis}).APIs, false)})
 }
 
-func apiFuncDecl(apis []APIEndpoint, rateLimit bool) *ast.FuncDecl {
+func apiFuncDecl(apis []BackendAPIAdapter, rateLimit bool) *ast.FuncDecl {
 	if len(apis) == 0 {
 		return funcDecl("api", actionParams(), boolResults(), []ast.Stmt{returnBool(false)})
 	}
@@ -39,7 +39,7 @@ func apiFuncDecl(apis []APIEndpoint, rateLimit bool) *ast.FuncDecl {
 	})
 }
 
-func apiCaseExpr(api APIEndpoint) ast.Expr {
+func apiCaseExpr(api BackendAPIAdapter) ast.Expr {
 	return &ast.BinaryExpr{
 		X: &ast.BinaryExpr{
 			X:  selExpr(id("request"), "Method"),
@@ -55,7 +55,7 @@ func apiCaseExpr(api APIEndpoint) ast.Expr {
 	}
 }
 
-func apiCaseStmts(api APIEndpoint, rateLimit bool) []ast.Stmt {
+func apiCaseStmts(api BackendAPIAdapter, rateLimit bool) []ast.Stmt {
 	stmts := endpointContextStmts("api", api.PageID, api.APIName, api.Method, api.Route, api.ErrorPage)
 	if api.ErrorPage != "" {
 		stmts = append(stmts, endpointPanicBoundaryStmt())
@@ -83,7 +83,7 @@ func apiCaseStmts(api APIEndpoint, rateLimit bool) []ast.Stmt {
 	return stmts
 }
 
-func apisUseErrorPages(apis []APIEndpoint) bool {
+func apisUseErrorPages(apis []BackendAPIAdapter) bool {
 	for _, api := range apis {
 		if api.ErrorPage != "" {
 			return true

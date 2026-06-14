@@ -8,10 +8,7 @@ import (
 )
 
 func generatedUsesGuards(options Options) bool {
-	if endpointsUseRuntimeGuards(options.Actions, options.APIs, options.Fragments) {
-		return true
-	}
-	if contractExposuresUseRuntimeGuards(backendAdapterIR(options).ContractExposures) {
+	if adapterUsesRuntimeGuards(backendAdapterIR(options)) {
 		return true
 	}
 	for _, route := range options.SSR {
@@ -22,32 +19,8 @@ func generatedUsesGuards(options Options) bool {
 	return false
 }
 
-func endpointsUseRuntimeGuards(actions []ActionEndpoint, apis []APIEndpoint, fragments []FragmentEndpoint) bool {
-	for _, action := range actions {
-		if len(runtimeGuardNames(action.Guards)) > 0 {
-			return true
-		}
-	}
-	for _, api := range apis {
-		if len(runtimeGuardNames(api.Guards)) > 0 {
-			return true
-		}
-	}
-	for _, fragment := range fragments {
-		if len(runtimeGuardNames(fragment.Guards)) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
-func contractExposuresUseRuntimeGuards(exposures []BackendContractExposure) bool {
-	for _, exposure := range routableContractExposures(exposures) {
-		if len(runtimeGuardNames(exposure.Guards)) > 0 {
-			return true
-		}
-	}
-	return false
+func adapterUsesRuntimeGuards(adapter BackendAdapterIR) bool {
+	return len(runtimeGuardNames(adapter.GuardNames())) > 0
 }
 
 func guardDecls(options Options) []ast.Decl {
@@ -170,19 +143,7 @@ func generatedUsesNativeRBACGuards(options Options) bool {
 }
 
 func generatedGuardNames(options Options) []string {
-	var guards []string
-	for _, action := range options.Actions {
-		guards = append(guards, action.Guards...)
-	}
-	for _, api := range options.APIs {
-		guards = append(guards, api.Guards...)
-	}
-	for _, fragment := range options.Fragments {
-		guards = append(guards, fragment.Guards...)
-	}
-	for _, exposure := range routableContractExposures(backendAdapterIR(options).ContractExposures) {
-		guards = append(guards, exposure.Guards...)
-	}
+	guards := backendAdapterIR(options).GuardNames()
 	for _, route := range options.SSR {
 		guards = append(guards, route.Guards...)
 	}

@@ -594,9 +594,11 @@ Every 0.x minor release must have:
 - [ ] Log restart reason, rebuild timing, generated files changed, and
   generated binary rebuilds.
 - [ ] Document backend proxy mode, `--app`, `preview`, and `--hot`.
-- [ ] Add dev tests for no-op rebuilds, component changes, layout changes, CSS
-  changes, config changes, backend process restarts, failed rebuild recovery,
-  and generated app dev flow.
+- [x] Add dev tests for no-op rebuilds, component changes, layout changes, CSS
+  changes, config changes, backend process restarts, and generated app dev
+  planning.
+- [ ] Add dev tests for failed rebuild recovery and generated app dev flow
+  smoke.
 - [ ] Add LSP exact source-range diagnostics once spans are complete.
 - [ ] Add go-to-definition for components, layouts, Go handlers, Go build
   functions, CSS inputs, and assets.

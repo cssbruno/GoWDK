@@ -11,6 +11,7 @@ The command:
   or infers an output directory;
 - serves build output for SPA/static development;
 - polls explicit or discovered `.gwdk`, CSS, and config inputs;
+- compares watched input content hashes and skips no-op rebuild ticks;
 - prints changed, added, and removed input paths when a rebuild starts;
 - injects a small server-sent-events live-reload script into served HTML;
 - shows a browser overlay for rebuild compiler/build failures with diagnostic
@@ -42,6 +43,10 @@ These changes use the full build path:
 When build flags include `--timings`, incremental rebuilds update the timings
 sidecar with counters for input changes, affected pages, component/layout/page
 changes, files written, and identical writes skipped.
+
+The dev loop stores a watched-input snapshot in the output directory. A later
+poll tick can reuse that snapshot when the source set and output are still
+present, which avoids reloading config and rewalking the tree on no-op ticks.
 
 ## HMR
 

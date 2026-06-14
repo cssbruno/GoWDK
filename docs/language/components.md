@@ -290,9 +290,12 @@ Bindable child state is supported on component calls with
 must be declared in `exports`, and must have a scalar type compatible with the
 parent state field. Generated JavaScript sends the parent value down through
 reactive props and listens for the child's typed `exports` event to write the
-new child value back to parent state. Bound state is still local UI state: it is
-not trusted input, server state, auth state, validation, business logic, route
-truth, or cache policy.
+new child value back to parent state. A single component call may bind several
+exported fields at once; the generated assignments share the one `exports`
+listener and run as ordered statements. A component may not export a field named
+`active`, which the exports payload reserves for the mount-state flag. Bound
+state is still local UI state: it is not trusted input, server state, auth state,
+validation, business logic, route truth, or cache policy.
 
 Computed values are read-only derived state. They can depend on props, state,
 and other computed values. The compiler builds a dependency graph for declared

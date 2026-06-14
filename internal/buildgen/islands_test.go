@@ -701,6 +701,10 @@ func TestBuildEmitsTypedExportRuntimeForJSIsland(t *testing.T) {
 		`if (event === "exports" && node.__gowdkExports)`,
 		`dispatchComponentExports(root, exportNames, state, true);`,
 		`dispatchComponentExports(root, exportNames, state, false);`,
+		// Parent-event expressions run as ordered statements so a component can
+		// carry several g:bind:<export> assignments on the single exports event.
+		`function splitStatements(source)`,
+		`await applyStatements(splitStatements(attr.value), state, handlers, helpers, eventScope, refs, computeds, asyncTokens, root, emitEvents);`,
 	} {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated typed export runtime:\n%s", expected, js)
@@ -842,6 +846,31 @@ func TestBuildRejectsTypedExportWithoutLocalSymbol(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `export "Missing" must reference a declared prop, state field, or computed value`) {
 		t.Fatalf("unexpected export error: %v", err)
+	}
+}
+
+func TestBuildRejectsReservedActiveExportName(t *testing.T) {
+	outputDir := t.TempDir()
+	component := textComponent()
+	component.Exports = []gwdkir.Export{{Name: "active", Type: "bool"}}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "home",
+			Route: "/",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Search /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{component},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected reserved export name error")
+	}
+	if !strings.Contains(err.Error(), `export "active" uses reserved name "active"`) {
+		t.Fatalf("unexpected reserved export error: %v", err)
 	}
 }
 

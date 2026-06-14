@@ -240,6 +240,12 @@ func componentEmits(component gwdkir.Component) map[string]clientlang.Emit {
 	return out
 }
 
+// componentExportActiveFlag is the reserved key the generated island runtime
+// writes into every exports payload to report mount/unmount state
+// (dispatchComponentExports in island_js_source.go). A component may not export
+// a field with this name or it would clobber the flag and be mistyped.
+const componentExportActiveFlag = "active"
+
 func componentExports(component gwdkir.Component, propTypes map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, computeds []clientlang.Computed) (map[string]clientlang.ValueType, []string, []string) {
 	if len(component.Exports) == 0 {
 		return nil, nil, nil
@@ -255,6 +261,10 @@ func componentExports(component gwdkir.Component, propTypes map[string]clientlan
 	for _, export := range component.Exports {
 		if seen[export.Name] {
 			failures = append(failures, fmt.Sprintf("component %s declares duplicate export %q", component.Name, export.Name))
+			continue
+		}
+		if export.Name == componentExportActiveFlag {
+			failures = append(failures, fmt.Sprintf("component %s export %q uses reserved name %q; the exports payload reserves it for the mount flag", component.Name, export.Name, componentExportActiveFlag))
 			continue
 		}
 		seen[export.Name] = true

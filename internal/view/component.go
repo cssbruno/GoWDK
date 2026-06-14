@@ -121,10 +121,11 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 				if err != nil {
 					return err
 				}
-				if hasParentListener(parentListeners, listener.Event) {
-					return fmt.Errorf("component %s declares multiple parent listeners for event %q", node.Name, listener.Event)
+				merged, err := addParentListener(parentListeners, listener)
+				if err != nil {
+					return fmt.Errorf("component %s %w", node.Name, err)
 				}
-				parentListeners = append(parentListeners, listener)
+				parentListeners = merged
 				continue
 			}
 			if attr.Name == "g:event" {
@@ -135,10 +136,11 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 				if err != nil {
 					return err
 				}
-				if hasParentListener(parentListeners, listener.Event) {
-					return fmt.Errorf("component %s declares multiple parent listeners for event %q", node.Name, listener.Event)
+				merged, err := addParentListener(parentListeners, listener)
+				if err != nil {
+					return fmt.Errorf("component %s %w", node.Name, err)
 				}
-				parentListeners = append(parentListeners, listener)
+				parentListeners = merged
 				continue
 			}
 			if attr.Name == "g:bind" {
@@ -370,13 +372,29 @@ func (ctx *renderContext) writeSymbols() map[string]clientlang.ValueType {
 	return boolFieldSymbols(ctx.bindFields)
 }
 
-func hasParentListener(listeners []parentComponentListener, event string) bool {
-	for _, listener := range listeners {
-		if listener.Event == event {
-			return true
+// addParentListener appends a parent listener, merging it into an existing
+// listener for the same event instead of rejecting it. This lets a component
+// bind several exported state fields at once (multiple g:bind:<export>) or pair
+// a g:on:exports handler with bindings: their expressions are joined and run as
+// ordered statements in the browser. Conflicting non-empty event modifiers are
+// rejected because a single data-gowdk-parent-event-* attribute cannot carry
+// both.
+func addParentListener(listeners []parentComponentListener, next parentComponentListener) ([]parentComponentListener, error) {
+	for i, existing := range listeners {
+		if existing.Event != next.Event {
+			continue
 		}
+		if existing.Modifiers != "" && next.Modifiers != "" && existing.Modifiers != next.Modifiers {
+			return listeners, fmt.Errorf("declares conflicting modifiers for parent event %q", next.Event)
+		}
+		existing.Expression = existing.Expression + "; " + next.Expression
+		if existing.Modifiers == "" {
+			existing.Modifiers = next.Modifiers
+		}
+		listeners[i] = existing
+		return listeners, nil
 	}
-	return false
+	return append(listeners, next), nil
 }
 
 func componentPropTarget(component Component, callName string, attr Attr) (string, string, error) {

@@ -446,6 +446,39 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
     return args;
   }
 
+  function splitStatements(source) {
+    source = (source || "").trim();
+    if (!source) return [];
+    const statements = [];
+    let start = 0;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < source.length; i++) {
+      const char = source[i];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (inString) {
+        if (char === "\\") escaped = true;
+        else if (char === "\"") inString = false;
+        continue;
+      }
+      if (char === "\"") inString = true;
+      else if (char === "(" || char === "[" || char === "{") depth++;
+      else if (char === ")" || char === "]" || char === "}") depth--;
+      else if (char === ";" && depth === 0) {
+        const piece = source.slice(start, i).trim();
+        if (piece) statements.push(piece);
+        start = i + 1;
+      }
+    }
+    const tail = source.slice(start).trim();
+    if (tail) statements.push(tail);
+    return statements;
+  }
+
   function emitComponentEvent(root, emitEvents, name, args, state, scope, helpers) {
     const event = emitEvents && emitEvents[name];
     if (!event) return;
@@ -1040,7 +1073,7 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
               const eventScope = Object.create(null);
               eventScope.event = customEvent.detail || {};
               try {
-                await applyExpression(attr.value, state, handlers, helpers, eventScope, refs, computeds, asyncTokens, root, emitEvents);
+                await applyStatements(splitStatements(attr.value), state, handlers, helpers, eventScope, refs, computeds, asyncTokens, root, emitEvents);
               } catch (error) {
                 if (error !== staleAsyncResult) recordAsyncError(state, error);
               } finally {

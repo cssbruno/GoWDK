@@ -194,6 +194,36 @@ func TestRenderWithComponentsWiresBindableChildState(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsWiresMultipleBindableChildState(t *testing.T) {
+	got, err := RenderWithComponents(`<Parent />`, map[string]Component{
+		"Parent": {
+			Name:       "Parent",
+			State:      map[string]string{"SelectedID": "first", "Label": "x"},
+			StateJSON:  `{"SelectedID":"first","Label":"x"}`,
+			StateTypes: map[string]clientlang.ValueType{"SelectedID": clientlang.TypeString, "Label": clientlang.TypeString},
+			Body:       `<Child g:bind:selected={SelectedID} g:bind:label={Label} />`,
+		},
+		"Child": {
+			Name:         "Child",
+			State:        map[string]string{"selected": "", "label": ""},
+			StateJSON:    `{"selected":"","label":""}`,
+			StateTypes:   map[string]clientlang.ValueType{"selected": clientlang.TypeString, "label": clientlang.TypeString},
+			Exports:      map[string]clientlang.ValueType{"selected": clientlang.TypeString, "label": clientlang.TypeString},
+			HandlersJSON: `{"exports":["selected","label"]}`,
+			Body:         `<p>{selected}{label}</p>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Both bindings collapse into the single exports event as ordered
+	// statements, in attribute order; the runtime runs them via applyStatements.
+	want := `data-gowdk-parent-on-exports="SelectedID = event.selected; Label = event.label"`
+	if !strings.Contains(got, want) {
+		t.Fatalf("expected %q in multi-bind output:\n%s", want, got)
+	}
+}
+
 func TestRenderWithComponentsRejectsBindableChildStateWithoutExport(t *testing.T) {
 	_, err := RenderWithComponents(`<Parent />`, map[string]Component{
 		"Parent": {

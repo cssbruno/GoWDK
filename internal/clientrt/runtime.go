@@ -110,6 +110,7 @@ const runtimeSource = `(function () {
   document.addEventListener('submit', submitPartial);
   document.addEventListener('click', navigateLink);
   document.addEventListener('mouseover', prefetchLink);
+  document.addEventListener('mouseout', cancelHoverPrefetch);
   document.addEventListener('focusin', prefetchLink);
   document.addEventListener('touchstart', prefetchLink, { passive: true });
   if (typeof window !== 'undefined' && window.addEventListener) {
@@ -119,6 +120,11 @@ const runtimeSource = `(function () {
   }
 
   var prefetchedDocuments = {};
+  var prefetchOrder = [];
+  var prefetchLimit = 8;
+  var hoverPrefetchDelay = 65;
+  var hoverPrefetchTimer = 0;
+  var hoverPrefetchURL = '';
 
   async function navigateLink(event) {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
@@ -159,34 +165,86 @@ const runtimeSource = `(function () {
     }
   }
 
-  function prefetchLink(event) {
+  function prefetchTarget(event) {
     var link = event.target && event.target.closest && event.target.closest('a[href]');
     if (!link || link.target || link.hasAttribute('download')) {
-      return;
+      return '';
     }
     var url;
     try {
       url = new URL(link.href, window.location.href);
     } catch (error) {
-      return;
+      return '';
     }
     if (!isNavigableURL(url)) {
-      return;
+      return '';
     }
     if (url.hash && url.pathname === window.location.pathname && url.search === window.location.search) {
+      return '';
+    }
+    return url.href;
+  }
+
+  function prefetchLink(event) {
+    var href = prefetchTarget(event);
+    if (!href) {
       return;
     }
-    prefetchDocument(url.href).catch(function () {});
+    // Pointer hovers are noisy and often incidental, so wait a beat before
+    // spending a request; focus and touch are deliberate, so prefetch at once.
+    if (event.type === 'mouseover') {
+      if (href === hoverPrefetchURL) {
+        return;
+      }
+      cancelHoverPrefetch();
+      hoverPrefetchURL = href;
+      hoverPrefetchTimer = setTimeout(function () {
+        hoverPrefetchTimer = 0;
+        hoverPrefetchURL = '';
+        prefetchDocument(href).catch(function () {});
+      }, hoverPrefetchDelay);
+      return;
+    }
+    prefetchDocument(href).catch(function () {});
+  }
+
+  function cancelHoverPrefetch() {
+    if (hoverPrefetchTimer) {
+      clearTimeout(hoverPrefetchTimer);
+      hoverPrefetchTimer = 0;
+    }
+    hoverPrefetchURL = '';
   }
 
   function prefetchDocument(url) {
     if (!prefetchedDocuments[url]) {
       prefetchedDocuments[url] = fetchDocument(url, true).catch(function (error) {
-        delete prefetchedDocuments[url];
+        forgetPrefetched(url);
         throw error;
       });
+      rememberPrefetched(url);
     }
     return prefetchedDocuments[url];
+  }
+
+  // rememberPrefetched bounds the prefetch cache so a long session that hovers
+  // many links cannot retain an unbounded set of full documents in memory.
+  function rememberPrefetched(url) {
+    prefetchOrder.push(url);
+    while (prefetchOrder.length > prefetchLimit) {
+      var oldest = prefetchOrder.shift();
+      if (oldest !== url) {
+        delete prefetchedDocuments[oldest];
+      }
+    }
+  }
+
+  function forgetPrefetched(url) {
+    delete prefetchedDocuments[url];
+    var index = prefetchOrder.indexOf(url);
+    if (index !== -1) {
+      prefetchOrder.splice(index, 1);
+    }
   }
 
   async function partialRequestError(response) {
@@ -219,7 +277,7 @@ const runtimeSource = `(function () {
       var fetched = prefetchedDocuments[url]
         ? await prefetchedDocuments[url]
         : await fetchDocument(url, false);
-      delete prefetchedDocuments[url];
+      forgetPrefetched(url);
       if (!fetched || !fetched.html) {
         window.location.href = url;
         return;

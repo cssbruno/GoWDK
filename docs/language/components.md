@@ -65,7 +65,9 @@ Implemented today:
   `<Counter g:island="wasm" />` when a call-site override is needed. If the
   component has no `wasm` package, GOWDK still emits the first-slice
   placeholder module plus loader shape for that explicit call.
-- Duplicate component names are rejected during compiler validation.
+- Duplicate component names are rejected within the same GOWDK package during
+  compiler validation. Components in different packages may share a name and
+  must be referenced through the calling package's `use` alias.
 - Redundant component implementations are rejected during compiler validation
   with `redundant_component_implementation`, even when their names differ.
 - Component `css` declarations are parsed, lowered into compiler metadata,

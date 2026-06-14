@@ -1,6 +1,6 @@
 (() => {
   const component = "__GOWDK_COMPONENT__";
-  const selector = "gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]";
+  const selector = "gowdk-island[data-gowdk-component-id=\"" + component + "\"][data-gowdk-runtime=\"js\"],gowdk-island:not([data-gowdk-component-id])[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]";
   const booleanAttrs = new Set(["allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "defer", "disabled", "formnovalidate", "hidden", "inert", "ismap", "loop", "multiple", "muted", "nomodule", "novalidate", "open", "readonly", "required", "reversed", "selected"]);
   const staleAsyncResult = Symbol("gowdk stale async result");
   const bindingTable = Object.freeze([

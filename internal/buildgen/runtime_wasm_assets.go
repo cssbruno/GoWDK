@@ -76,7 +76,7 @@ func clientGoBlock(page gwdkir.Page) (gwdkir.GoBlock, bool) {
 }
 
 func islandWASMArtifact(outputDir string, component gwdkir.Component) (plannedAssetArtifact, error) {
-	assetPath := islandWASMAssetPath(component.Name)
+	assetPath := islandWASMAssetPath(component.Package, component.Name)
 	contents := []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}
 	if strings.TrimSpace(component.WASM.Package) != "" {
 		wasm, err := buildWASMIslandPackage(component)

@@ -27,11 +27,11 @@ func islandWASMExecGoVersion() string {
 	return runtime.Version()
 }
 
-func islandWASMLoaderArtifact(outputDir, componentName string) plannedAssetArtifact {
-	assetPath := islandWASMLoaderAssetPath(componentName)
+func islandWASMLoaderArtifact(outputDir string, component gwdkir.Component) plannedAssetArtifact {
+	assetPath := islandWASMLoaderAssetPath(component.Package, component.Name)
 	return plannedAssetArtifact{
 		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
-		contents:      []byte(islandWASMLoaderSource(componentName)),
+		contents:      []byte(islandWASMLoaderSource(component)),
 	}
 }
 
@@ -55,16 +55,16 @@ func islandWASMExecArtifact(outputDir string) (plannedAssetArtifact, error) {
 	}, nil
 }
 
-func islandJSAssetPath(componentName string) string {
-	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".js")
+func islandJSAssetPath(packageName, componentName string) string {
+	return islandComponentAssetPath(packageName, componentName, ".js")
 }
 
-func islandWASMAssetPath(componentName string) string {
-	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".wasm")
+func islandWASMAssetPath(packageName, componentName string) string {
+	return islandComponentAssetPath(packageName, componentName, ".wasm")
 }
 
-func islandWASMLoaderAssetPath(componentName string) string {
-	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".wasm.js")
+func islandWASMLoaderAssetPath(packageName, componentName string) string {
+	return islandComponentAssetPath(packageName, componentName, ".wasm.js")
 }
 
 func clientGoBlockWASMAssetPath(page gwdkir.Page) string {
@@ -79,12 +79,31 @@ func islandWASMExecAssetPath() string {
 	return path.Join(islandRuntimeDir, "wasm_exec.js")
 }
 
-func islandJSSourceMapAssetPath(componentName string) string {
-	return path.Join(islandRuntimeDir, componentAssetName(componentName)+".js.map")
+func islandJSSourceMapAssetPath(packageName, componentName string) string {
+	return islandComponentAssetPath(packageName, componentName, ".js.map")
 }
 
 func componentAssetName(componentName string) string {
 	return source.ExportedIdentifier(componentName, "Component")
+}
+
+func islandComponentAssetPath(packageName, componentName, suffix string) string {
+	componentPart := componentAssetName(componentName)
+	if strings.TrimSpace(packageName) == "" {
+		return path.Join(islandRuntimeDir, componentPart+suffix)
+	}
+	packagePart := safeCSSPathPart(packageName)
+	if packagePart == "" {
+		packagePart = "_"
+	}
+	return path.Join(islandRuntimeDir, packagePart, componentPart+suffix)
+}
+
+func islandComponentID(packageName, componentName string) string {
+	if strings.TrimSpace(packageName) == "" {
+		return componentName
+	}
+	return packageName + "." + componentName
 }
 
 func clientGoBlockAssetName(page gwdkir.Page) string {

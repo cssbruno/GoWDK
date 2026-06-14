@@ -200,13 +200,13 @@ func TestBuildExpandsImportedGOWDKPackageComponent(t *testing.T) {
 	for _, expected := range []string{
 		`<section><gowdk-island data-gowdk-component="Badge"`,
 		`<strong><span data-gowdk-bind="label" data-gowdk-binding-text="b1">GOWDK</span></strong>`,
-		`<script src="/assets/gowdk/islands/Badge.js" defer></script>`,
+		`<script src="/assets/gowdk/islands/components/Badge.js" defer></script>`,
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected %q in imported component output: %s", expected, output)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(outputDir, "assets", "gowdk", "islands", "Badge.js")); err != nil {
+	if _, err := os.Stat(filepath.Join(outputDir, "assets", "gowdk", "islands", "components", "Badge.js")); err != nil {
 		t.Fatalf("expected imported child island asset: %v", err)
 	}
 	if strings.Contains(output, "ui.Hero.js") {
@@ -261,13 +261,13 @@ func TestBuildExpandsComponentScopedGOWDKPackageUse(t *testing.T) {
 	for _, expected := range []string{
 		`<section><gowdk-island data-gowdk-component="Badge"`,
 		`<strong><span data-gowdk-bind="label" data-gowdk-binding-text="b1">GOWDK</span></strong>`,
-		`<script src="/assets/gowdk/islands/Badge.js" defer></script>`,
+		`<script src="/assets/gowdk/islands/icons/Badge.js" defer></script>`,
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected %q in component-scoped use output: %s", expected, output)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(outputDir, "assets", "gowdk", "islands", "Badge.js")); err != nil {
+	if _, err := os.Stat(filepath.Join(outputDir, "assets", "gowdk", "islands", "icons", "Badge.js")); err != nil {
 		t.Fatalf("expected component-scoped child island asset: %v", err)
 	}
 	if strings.Contains(output, "icons.Badge.js") {

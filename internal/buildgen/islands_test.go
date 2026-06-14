@@ -64,7 +64,8 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 	}
 	js := readFile(t, jsPath)
 	if !strings.Contains(js, `data-gowdk-runtime=\"js\"`) ||
-		!strings.Contains(js, `const selector = "gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]";`) ||
+		!strings.Contains(js, `gowdk-island[data-gowdk-component-id=\"" + component + "\"][data-gowdk-runtime=\"js\"]`) ||
+		!strings.Contains(js, `gowdk-island:not([data-gowdk-component-id])[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]`) ||
 		!strings.Contains(js, "\n  function parseExpression(source)") ||
 		!strings.Contains(js, `applyExpression`) ||
 		!strings.Contains(js, `window.__gowdkMountIslands`) ||
@@ -379,7 +380,7 @@ func TestIslandJSSourceMapMappingsUseComponentSpans(t *testing.T) {
 }`
 	component.Blocks.Spans.Client = source.SourceSpan{Start: source.SourcePosition{Line: 7, Column: 1}, End: source.SourcePosition{Line: 7, Column: 9}}
 	component.Blocks.Spans.View = source.SourceSpan{Start: source.SourcePosition{Line: 13, Column: 1}, End: source.SourcePosition{Line: 13, Column: 7}}
-	source := islandJSSource(component.Name, true)
+	source := islandJSSource(component, true)
 
 	var sourceMap struct {
 		Mappings string `json:"mappings"`
@@ -2883,6 +2884,77 @@ func TestBuildAllowsJSAndWASMIslandsOnSamePage(t *testing.T) {
 	} {
 		if !strings.Contains(html, expected) {
 			t.Fatalf("expected %q in mixed island page:\n%s", expected, html)
+		}
+	}
+}
+
+func TestBuildScopesIslandAssetsByComponentPackage(t *testing.T) {
+	outputDir := t.TempDir()
+	marketing := counterComponent()
+	marketing.Package = "marketing"
+	account := gwdkir.Component{
+		Package: "account",
+		Name:    "Counter",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<button>Account</button>`,
+		},
+	}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "same-name",
+			Route:   "/same-name",
+			Uses: []gwdkir.Use{
+				{Alias: "m", Package: "marketing"},
+				{Alias: "a", Package: "account"},
+			},
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><m.Counter /><a.Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{marketing, account},
+	}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedAssets := []string{
+		filepath.Join(outputDir, "assets", "gowdk", "islands", "marketing", "Counter.js"),
+		filepath.Join(outputDir, "assets", "gowdk", "islands", "marketing", "Counter.js.map"),
+		filepath.Join(outputDir, "assets", "gowdk", "islands", "account", "Counter.wasm"),
+		filepath.Join(outputDir, "assets", "gowdk", "islands", "account", "Counter.wasm.js"),
+	}
+	for _, path := range expectedAssets {
+		if !hasAssetArtifact(result.AssetArtifacts, path) {
+			t.Fatalf("expected package-scoped island asset %s, got %#v", path, result.AssetArtifacts)
+		}
+	}
+	html := readFile(t, filepath.Join(outputDir, "same-name", "index.html"))
+	for _, expected := range []string{
+		`<script src="/assets/gowdk/islands/account/Counter.wasm.js" defer></script>`,
+		`<script src="/assets/gowdk/islands/marketing/Counter.js" defer></script>`,
+		`data-gowdk-component="Counter" data-gowdk-island="i1" data-gowdk-runtime="js" data-gowdk-component-id="marketing.Counter"`,
+		`data-gowdk-component="Counter" data-gowdk-island="i2" data-gowdk-runtime="wasm" data-gowdk-component-id="account.Counter"`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in package-scoped island page:\n%s", expected, html)
+		}
+	}
+	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "marketing", "Counter.js"))
+	if !strings.Contains(js, `const component = "marketing.Counter";`) {
+		t.Fatalf("expected JS island runtime to select package-qualified component id:\n%s", js)
+	}
+	loader := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "account", "Counter.wasm.js"))
+	for _, expected := range []string{
+		`const component = "Counter";`,
+		`const componentID = "account.Counter";`,
+		`const wasmPath = "/assets/gowdk/islands/account/Counter.wasm";`,
+	} {
+		if !strings.Contains(loader, expected) {
+			t.Fatalf("expected %q in package-scoped WASM loader:\n%s", expected, loader)
 		}
 	}
 }

@@ -76,8 +76,10 @@ Lifecycle ABI:
 
 Asset strategy:
 
-- Component WASM stays at `assets/gowdk/islands/<Component>.wasm`.
-- The loader stays at `assets/gowdk/islands/<Component>.wasm.js`.
+- Component WASM is emitted at
+  `assets/gowdk/islands/<package>/<Component>.wasm`.
+- The loader is emitted at
+  `assets/gowdk/islands/<package>/<Component>.wasm.js`.
 - Declared Go WASM packages ship `assets/gowdk/islands/wasm_exec.js` from the
   Go toolchain used for the build; the build report records that Go version on
   the `asset_size` event for the runtime asset.

@@ -65,6 +65,7 @@ func ClientGoBlockWASMLoaderSource(options ClientGoBlockWASMLoaderOptions) strin
 // component WASM island loader template.
 type WASMIslandLoaderOptions struct {
 	Component    string
+	ComponentID  string
 	ABIVersion   string
 	WASMPath     string
 	WASMExecPath string
@@ -72,8 +73,13 @@ type WASMIslandLoaderOptions struct {
 
 // WASMIslandLoaderSource returns the generated WASM island host loader.
 func WASMIslandLoaderSource(options WASMIslandLoaderOptions) string {
+	componentID := options.ComponentID
+	if componentID == "" {
+		componentID = options.Component
+	}
 	source := assetSource("wasm_island_loader.js")
 	source = replaceQuotedPlaceholder(source, "__GOWDK_COMPONENT__", options.Component)
+	source = replaceQuotedPlaceholder(source, "__GOWDK_COMPONENT_ID__", componentID)
 	source = replaceQuotedPlaceholder(source, "__GOWDK_ABI_VERSION__", options.ABIVersion)
 	source = replaceQuotedPlaceholder(source, "__GOWDK_WASM_PATH__", options.WASMPath)
 	source = replaceQuotedPlaceholder(source, "__GOWDK_WASM_EXEC_PATH__", options.WASMExecPath)

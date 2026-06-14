@@ -46,8 +46,11 @@ func TestManifestURL(t *testing.T) {
 	manifest := Manifest{
 		Version: 1,
 		Files: map[string]string{
-			"app.css":      "assets/app.css",
-			"absolute.css": "/assets/absolute.css",
+			"app.css":                "assets/app.css",
+			"absolute.css":           "/assets/absolute.css",
+			"protocol-relative.css":  "//assets/protocol.css",
+			"slash-backslash.css":    `/\assets\slash.css`,
+			"backslash-relative.css": `\assets\relative.css`,
 		},
 	}
 
@@ -56,6 +59,15 @@ func TestManifestURL(t *testing.T) {
 	}
 	if got := manifest.URL("absolute.css"); got != "/assets/absolute.css" {
 		t.Fatalf("expected absolute asset URL to be preserved, got %q", got)
+	}
+	if got := manifest.URL("protocol-relative.css"); got != "/assets/protocol.css" {
+		t.Fatalf("expected protocol-relative asset URL to be normalized, got %q", got)
+	}
+	if got := manifest.URL("slash-backslash.css"); got != "/assets/slash.css" {
+		t.Fatalf("expected slash-backslash asset URL to be normalized, got %q", got)
+	}
+	if got := manifest.URL("backslash-relative.css"); got != "/assets/relative.css" {
+		t.Fatalf("expected backslash-relative asset URL to be normalized, got %q", got)
 	}
 	if got := manifest.URL("missing.css"); got != "" {
 		t.Fatalf("expected missing asset URL to be empty, got %q", got)

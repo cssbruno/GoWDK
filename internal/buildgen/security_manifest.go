@@ -50,6 +50,18 @@ func securityManifestPath(outputDir string) (string, error) {
 	return filepath.Join(filepath.Dir(cleanOutput), ".gowdk", "reports", outputName, securityManifestFile), nil
 }
 
+func memorySecurityManifestPath(outputBase string, diskOutputPath bool) (string, error) {
+	if diskOutputPath {
+		return securityManifestPath(outputBase)
+	}
+	cleanOutput := filepath.Clean(outputBase)
+	outputName := filepath.Base(cleanOutput)
+	if outputName == "" || outputName == "." || outputName == string(filepath.Separator) {
+		outputName = "root"
+	}
+	return filepath.Join(filepath.Dir(cleanOutput), ".gowdk", "reports", outputName, securityManifestFile), nil
+}
+
 func removeServedSecurityManifest(outputDir string) error {
 	servedPath := filepath.Join(outputDir, securityManifestFile)
 	if err := os.Remove(servedPath); err != nil && !os.IsNotExist(err) {

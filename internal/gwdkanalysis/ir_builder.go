@@ -185,7 +185,7 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 			Path:          path,
 			Cache:         endpointNoStoreCache,
 			Guards:        append([]string(nil), page.Guards...),
-			CSRF:          builder.config.Build.CSRF.Enabled,
+			CSRF:          builder.config.Build.CSRF.EnabledForGeneratedEndpoints(),
 			ErrorPage:     action.ErrorPage,
 			DynamicParams: routeParams(path),
 			RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(path)),
@@ -366,7 +366,7 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
 		Method:        endpointMethod(endpoint.Method, defaultMethod),
 		Path:          endpoint.Route,
 		Cache:         endpointNoStoreCache,
-		CSRF:          builder.config.Build.CSRF.Enabled && kind == gwdkir.EndpointAction,
+		CSRF:          builder.config.Build.CSRF.EnabledForGeneratedEndpoints() && kind == gwdkir.EndpointAction,
 		DynamicParams: routeParams(endpoint.Route),
 		RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(endpoint.Route)),
 		SourceFile:    endpoint.Source,
@@ -382,11 +382,11 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
 // Program.GoEndpoints and normalized into Program.Endpoints, which is then
 // re-sorted with the same ordering BuildIR produces so post-build discovery
 // yields the same program as build-time discovery.
-func AddStandaloneEndpoints(program *gwdkir.Program, endpoints []gwdkir.GoEndpoint) {
+func AddStandaloneEndpoints(config gowdk.Config, program *gwdkir.Program, endpoints []gwdkir.GoEndpoint) {
 	if len(endpoints) == 0 {
 		return
 	}
-	builder := irBuilder{program: *program}
+	builder := irBuilder{config: config, program: *program}
 	for _, endpoint := range endpoints {
 		builder.addStandaloneEndpoint(endpoint)
 	}

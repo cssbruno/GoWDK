@@ -217,21 +217,22 @@ func RenderWithOptions(source string, components map[string]Component, data map[
 // RenderNodesWithOptions renders an already-parsed view fragment with component
 // support, interpolation data, and page-scoped action endpoints.
 func RenderNodesWithOptions(nodes []Node, components map[string]Component, data map[string]string, options Options) (string, error) {
-	bindingSeq := 0
-	islandSeq := 0
 	return renderParsedNodes(nodes, renderContext{
-		components:   components,
-		ownerPackage: options.Package,
-		uses:         cloneValues(options.Uses),
-		values:       cloneValues(data),
-		actions:      cloneValues(options.Actions),
-		actionFields: cloneActionInputFields(options.ActionInputFields),
-		stack:        map[string]bool{},
-		stateFields:  map[string]bool{},
-		readFields:   map[string]bool{},
-		bindFields:   map[string]bool{},
-		bindingSeq:   &bindingSeq,
-		islandSeq:    &islandSeq,
+		renderComponentContext: renderComponentContext{
+			components:   components,
+			ownerPackage: options.Package,
+			uses:         cloneValues(options.Uses),
+			stack:        map[string]bool{},
+		},
+		renderDataContext: renderDataContext{
+			values:       cloneValues(data),
+			actions:      cloneValues(options.Actions),
+			actionFields: cloneActionInputFields(options.ActionInputFields),
+			stateFields:  map[string]bool{},
+			readFields:   map[string]bool{},
+			bindFields:   map[string]bool{},
+		},
+		ids: &renderIDAllocator{},
 	})
 }
 

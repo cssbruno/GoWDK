@@ -325,7 +325,7 @@ func CheckFilesWithOptions(config gowdk.Config, paths []string, options CheckOpt
 		return CheckResult{}, diagnostics
 	}
 	result := CheckResult{IR: gwdkanalysis.BuildProgram(config, sources)}
-	if err := compiler.DiscoverGoEndpoints(&result.IR); err != nil {
+	if err := compiler.DiscoverGoEndpoints(config, &result.IR); err != nil {
 		diagnostics = append(diagnostics, compilerDiagnostics(err, result.IR)...)
 		return result, diagnostics
 	}

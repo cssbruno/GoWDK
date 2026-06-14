@@ -186,27 +186,32 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 		bindValues = mergeValues(bindValues, props)
 	}
 	childCtx := renderContext{
-		components:   ctx.components,
-		ownerPackage: component.Package,
-		uses:         component.Uses,
-		scopeIDs:     append([]string(nil), component.ScopeIDs...),
-		values:       values,
-		tainted:      taintedValues,
-		actions:      ctx.actions,
-		actionFields: ctx.actionFields,
-		stack:        cloneStack(ctx.stack),
-		slotHTML:     slotHTML,
-		slots:        slots,
-		propFields:   boolSet(component.Props),
-		stateFields:  boolSet(keys(component.State)),
-		readFields:   boolSet(keys(values)),
-		bindFields:   boolSet(keys(bindValues)),
-		handlers:     component.Handlers,
-		stateTypes:   component.StateTypes,
-		refs:         component.Refs,
-		emits:        component.Emits,
-		bindingSeq:   ctx.bindingSeq,
-		islandSeq:    ctx.islandSeq,
+		renderComponentContext: renderComponentContext{
+			components:   ctx.components,
+			ownerPackage: component.Package,
+			uses:         component.Uses,
+			stack:        cloneStack(ctx.stack),
+			slotHTML:     slotHTML,
+			slots:        slots,
+			scopeIDs:     append([]string(nil), component.ScopeIDs...),
+		},
+		renderDataContext: renderDataContext{
+			values:       values,
+			tainted:      taintedValues,
+			actions:      ctx.actions,
+			actionFields: ctx.actionFields,
+			propFields:   boolSet(component.Props),
+			stateFields:  boolSet(keys(component.State)),
+			readFields:   boolSet(keys(values)),
+			bindFields:   boolSet(keys(bindValues)),
+		},
+		renderClientContext: renderClientContext{
+			handlers:   component.Handlers,
+			stateTypes: component.StateTypes,
+			refs:       component.Refs,
+			emits:      component.Emits,
+		},
+		ids: ctx.ids,
 	}
 	childCtx.stack[identity] = true
 	var body string

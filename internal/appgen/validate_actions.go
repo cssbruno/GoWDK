@@ -229,10 +229,10 @@ func validateActionEndpointPath(value string) error {
 }
 
 func validateActionRedirect(value string) error {
-	if !strings.HasPrefix(value, "/") {
+	if value == "" || value[0] != '/' {
 		return fmt.Errorf("redirect %q must be a local absolute path", value)
 	}
-	if strings.HasPrefix(value, "//") {
+	if len(value) > 1 && (value[1] == '/' || value[1] == '\\') {
 		return fmt.Errorf("redirect %q must not be protocol-relative", value)
 	}
 	// Browsers normalize "\" to "/" before navigating, so "/\evil.com" is

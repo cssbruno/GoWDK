@@ -1282,8 +1282,8 @@ fn SwapFirstTwo() {
 	}
 	html := readFile(t, filepath.Join(outputDir, "list", "index.html"))
 	for _, expected := range []string{
-		`<template data-gowdk-for="l1" data-gowdk-binding-list="b2" data-gowdk-for-var="item" data-gowdk-for-source="Items" data-gowdk-for-key="item.ID" data-gowdk-for-index-var="i"`,
-		`data-gowdk-for-template="&lt;li data-gowdk-for-item=&#34;l1&#34; data-gowdk-key-value=&#34;{{item.ID}}&#34;&gt;&lt;button data-gowdk-on-click=&#34;remove(Items, i)&#34; data-gowdk-binding-on-click=&#34;b1&#34;&gt;{{i}}: {{item.Name}}&lt;/button&gt;&lt;/li&gt;"`,
+		`<template data-gowdk-for="l1" data-gowdk-binding-list="b2" data-gowdk-for-var="item" data-gowdk-for-source="Items" data-gowdk-for-key="item.ID" data-gowdk-for-index-var="i">`,
+		`<li data-gowdk-for-item="l1" data-gowdk-key-value="{{item.ID}}"><button data-gowdk-on-click="remove(Items, i)" data-gowdk-binding-on-click="b1">{{i}}: {{item.Name}}</button></li></template>`,
 		`<li data-gowdk-for-item="l1" data-gowdk-key-value="first"><button data-gowdk-on-click="remove(Items, i)" data-gowdk-binding-on-click="b3">0: first</button></li>`,
 		`<li data-gowdk-for-item="l1" data-gowdk-key-value="second"><button data-gowdk-on-click="remove(Items, i)" data-gowdk-binding-on-click="b4">1: second</button></li>`,
 		`data-gowdk-on-click="AddItem()"`,
@@ -1313,7 +1313,8 @@ fn SwapFirstTwo() {
 		`const rerender = () => {`,
 		`const scheduleRender = () => {`,
 		`data-gowdk-bound-on-`,
-		`interpolateTemplate(template, state, scope, helpers)`,
+		`cloneListTemplate(marker, state, scope, helpers)`,
+		`interpolateTemplateNode(fresh, state, scope, helpers);`,
 		`renderListLoops(root, state, helpers, bindings);`,
 		`scheduleRender();`,
 	} {

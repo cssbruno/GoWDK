@@ -117,9 +117,9 @@ readiness claim:
 - Cap action/API request body size before form or JSON decoding; generated
   apps default to 1 MiB and can override action/API caps with
   `Build.BodyLimits`.
-- Enable `Build.CSRF.Enabled` for generated action handlers and provide a
-  stable `GOWDK_CSRF_SECRET` or configured `Build.CSRF.SecretEnv` value in each
-  runtime environment.
+- Do not set `Build.CSRF.Disabled` for production generated action or command
+  handlers. Provide a stable `GOWDK_CSRF_SECRET` or configured
+  `Build.CSRF.SecretEnv` value in each runtime environment.
 - Return explicit method-not-allowed responses for unsupported methods.
 - Serve app assets with deterministic cache headers.
 - Avoid public debug endpoints by default.

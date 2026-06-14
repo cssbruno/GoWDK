@@ -84,7 +84,7 @@ func validateSingleURLAttrValue(name, value string) error {
 	if containsURLControl(value) {
 		return fmt.Errorf("unsafe URL in %q attribute: control characters are not allowed", name)
 	}
-	if strings.HasPrefix(value, "//") {
+	if len(value) > 1 && value[0] == '/' && (value[1] == '/' || value[1] == '\\') {
 		return fmt.Errorf("unsafe URL in %q attribute: protocol-relative URLs are not supported", name)
 	}
 	if scheme, ok := explicitURLScheme(value); ok && !safeURLScheme(scheme) {

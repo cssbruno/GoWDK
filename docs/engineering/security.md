@@ -18,8 +18,9 @@ Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as com
 
 ## GOWDK-Specific Security Rules
 
-- Generated actions and command endpoints must enable `Build.CSRF.Enabled` and
-  set a stable CSRF secret before production use.
+- Generated actions and command endpoints enable CSRF by default. Production
+  configs must not set `Build.CSRF.Disabled`, and every runtime environment must
+  provide a stable CSRF secret.
 - Generated form decoders must validate expected fields and avoid mass assignment.
 - Generated action forms must reject direct file inputs and multipart posts.
   Uploads are user-owned API/server behavior with explicit size, storage,

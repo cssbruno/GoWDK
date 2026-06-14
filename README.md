@@ -248,8 +248,9 @@ and APIs, configurable through `Build.BodyLimits`), server
 read/header/write/idle timeouts, and a per-request handler deadline; recovered
 panics return a generic no-store 500 and are logged server-side with secret
 redaction; ordinary returned 5xx errors use generic client messages unless the
-app sets an explicit `response.HandlerError` message; CSRF is opt-in with a 403
-invalid-token contract; redirects are validated against a safe allowlist (local
+app sets an explicit `response.HandlerError` message; generated action and
+command POSTs enable CSRF by default with a fail-closed secret requirement and a
+403 invalid-token contract; redirects are validated against a safe allowlist (local
 paths only, no protocol-relative or CRLF, same-origin referer); and diagnostics
 redact secrets quoted from source.
 Still hardening: full auth/session, multipart uploads, and the broader

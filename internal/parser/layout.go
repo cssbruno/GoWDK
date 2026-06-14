@@ -69,6 +69,7 @@ func applyLayoutSyntaxBlock(src []byte, layout *gwdkir.Layout, block gwdkast.Blo
 	case "view":
 		layout.Blocks.View = true
 		layout.Blocks.ViewBody = block.Body
+		layout.Blocks.ViewNodes = append(layout.Blocks.ViewNodes[:0], block.View...)
 		layout.Blocks.Spans.View = block.Span
 		layout.Blocks.Spans.ViewBodyStart = block.BodyStart
 	case "style":

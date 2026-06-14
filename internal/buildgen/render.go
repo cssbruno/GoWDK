@@ -41,12 +41,13 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
-	if err := validateViewParamReferences(page, viewSource); err != nil {
+	viewNodes := composedPageViewNodes(page)
+	if err := validateViewParamReferences(page, viewSource, viewNodes); err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
 
 	pageComponents := componentRegistryForPage(page, components)
-	body, err := view.RenderWithOptions(viewSource, pageComponents, data, view.Options{
+	body, err := renderPageView(viewSource, viewNodes, pageComponents, data, view.Options{
 		Actions:           actionRoutes(page, data),
 		ActionInputFields: actionFields,
 		Package:           page.Package,
@@ -58,11 +59,25 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
-	scripts, err := pageScripts(config, page, viewSource, pageComponents, policy)
+	scripts, err := pageScripts(config, page, viewSource, viewNodes, pageComponents, policy)
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
 	return document(config, page, body, stylesheets, storeSeeds, scripts), nil
+}
+
+func composedPageViewNodes(page gwdkir.Page) []view.Node {
+	if len(page.Layouts) > 0 || len(page.Blocks.ViewNodes) == 0 {
+		return nil
+	}
+	return page.Blocks.ViewNodes
+}
+
+func renderPageView(source string, nodes []view.Node, components map[string]view.Component, data map[string]string, options view.Options) (string, error) {
+	if len(nodes) > 0 {
+		return view.RenderNodesWithOptions(nodes, components, data, options)
+	}
+	return view.RenderWithOptions(source, components, data, options)
 }
 
 func composePageViewSource(page gwdkir.Page, layouts map[string]gwdkir.Layout) (string, error) {
@@ -154,10 +169,16 @@ func composeLayoutSource(layout gwdkir.Layout, child string) (string, error) {
 	return layout.Blocks.ViewBody[:match[0]] + child + layout.Blocks.ViewBody[match[1]:], nil
 }
 
-func validateViewParamReferences(page gwdkir.Page, source string) error {
-	refs, err := view.ParamReferences(source)
-	if err != nil {
-		return err
+func validateViewParamReferences(page gwdkir.Page, source string, nodes []view.Node) error {
+	var refs []string
+	if len(nodes) > 0 {
+		refs = view.ParamReferencesFromNodes(nodes)
+	} else {
+		var err error
+		refs, err = view.ParamReferences(source)
+		if err != nil {
+			return err
+		}
 	}
 	if len(refs) == 0 {
 		return nil
@@ -187,9 +208,9 @@ func actionRoutes(page gwdkir.Page, data map[string]string) map[string]string {
 	return routes
 }
 
-func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, components map[string]view.Component, policy renderModePolicy) ([]gowdk.Script, error) {
+func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component, policy renderModePolicy) ([]gowdk.Script, error) {
 	scripts := append([]gowdk.Script{}, nonEmptyScripts(config.Build.Scripts)...)
-	hrefs, err := scopedScriptHrefs(page, viewSource, components)
+	hrefs, err := scopedScriptHrefs(page, viewSource, viewNodes, components)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +220,7 @@ func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, compo
 	if policy != renderModeSPA {
 		return scripts, nil
 	}
-	usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewSource, components)
+	usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewSource, viewNodes, components)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +230,7 @@ func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, compo
 	if len(page.Stores) > 0 {
 		scripts = append(scripts, gowdk.Script{Src: storeRuntimeHref})
 	}
-	islandScripts, err := islandScriptHrefs(viewSource, components, page.Package, componentUses(page.Uses))
+	islandScripts, err := islandScriptHrefsForView(viewSource, viewNodes, components, page.Package, componentUses(page.Uses))
 	if err != nil {
 		return nil, err
 	}
@@ -229,27 +250,30 @@ func pageUsesPartialRuntime(page gwdkir.Page, viewSource string) bool {
 	return len(page.Blocks.Actions) > 0
 }
 
-func pageUsesSPANavigationRuntime(config gowdk.Config, page gwdkir.Page, viewSource string, components map[string]view.Component) (bool, error) {
+func pageUsesSPANavigationRuntime(config gowdk.Config, page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) (bool, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if mode != gowdk.SPA && mode != gowdk.Action {
 		return false, nil
 	}
-	if viewSourceHasInternalLink(viewSource) {
+	if viewHasInternalLink(viewSource, viewNodes) {
 		return true, nil
 	}
-	usages, err := recursiveViewComponentCallUsages(viewSource, components, page.Package, componentUses(page.Uses))
+	usages, err := recursiveViewComponentCallUsagesForView(viewSource, viewNodes, components, page.Package, componentUses(page.Uses))
 	if err != nil {
 		return false, err
 	}
 	for _, usage := range usages {
-		if viewSourceHasInternalLink(usage.component.Body) {
+		if viewHasInternalLink(usage.component.Body, usage.component.Nodes) {
 			return true, nil
 		}
 	}
 	return false, nil
 }
 
-func viewSourceHasInternalLink(source string) bool {
+func viewHasInternalLink(source string, nodes []view.Node) bool {
+	if len(nodes) > 0 {
+		return nodesHaveInternalLink(nodes)
+	}
 	nodes, err := view.Parse(source)
 	if err != nil {
 		return false

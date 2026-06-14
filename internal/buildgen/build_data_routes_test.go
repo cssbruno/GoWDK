@@ -72,6 +72,49 @@ func TestBuildRendersLiteralBuildData(t *testing.T) {
 	}
 }
 
+func TestBuildUsesTypedPathAndBuildRecords(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "post",
+			Route: "/blog/{slug}",
+			Blocks: gwdkir.Blocks{
+				Paths: true,
+				PathsRecords: []gwdkir.LiteralRecord{{
+					Fields: map[string]string{"slug": "typed"},
+				}},
+				Build: true,
+				BuildRecords: []gwdkir.LiteralRecord{{
+					Fields: map[string]string{
+						"title": "Typed",
+						"copy":  "Typed route",
+					},
+					Expressions: map[string]string{
+						"title": `"Typed"`,
+						"copy":  `title + " route"`,
+					},
+					FieldOrder: []string{"title", "copy"},
+				}},
+				View:     true,
+				ViewBody: `<main data-slug="{slug}"><h1>{title}</h1><p>{copy}</p></main>`,
+			},
+		}},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "blog", "typed", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	if !strings.Contains(output, `<main data-slug="typed"><h1>Typed</h1><p>Typed route</p></main>`) {
+		t.Fatalf("expected typed path/build records in output:\n%s", output)
+	}
+}
+
 func TestBuildRejectsInvalidBuildDataBeforeWriting(t *testing.T) {
 	tests := []struct {
 		name      string

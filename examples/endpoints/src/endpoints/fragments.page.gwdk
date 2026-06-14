@@ -1,0 +1,67 @@
+package endpoints
+
+page endpoints.fragments
+route "/endpoints/fragments"
+guard public
+
+act RefreshInventory POST "/endpoints/fragments/list"
+act UpdateInventoryRow POST "/endpoints/fragments/row"
+act OpenModal POST "/endpoints/fragments/modal"
+act RefreshDashboardCard POST "/endpoints/fragments/card"
+
+fragment InlineValidation GET "/fragments/inline-validation" "#inline-validation" {
+  <section id="inline-validation">
+    <p>Static inline validation fragment.</p>
+  </section>
+}
+
+fragment InventoryRow GET "/fragments/rows/{id:int}" "#inventory" {
+  <tr><td>Static item</td><td>ready</td></tr>
+}
+
+fragment InventoryList GET "/fragments/list" "#inventory" {
+  <tbody id="inventory"><tr><td>Static list</td><td>ready</td></tr></tbody>
+}
+
+fragment ModalBody GET "/fragments/modal" "#modal-body" {
+  <section id="modal-body"><p>Static modal body.</p></section>
+}
+
+fragment DashboardCard GET "/fragments/dashboard-card" "#dashboard-card" {
+  <article id="dashboard-card"><h2>Static card</h2><p>Ready.</p></article>
+}
+
+view {
+  <main>
+    <h1>Fragment cookbook</h1>
+
+    <section id="inline-validation">
+      <p>Inline validation target.</p>
+    </section>
+
+    <form g:post={RefreshInventory} g:target="#inventory" g:swap="outerHTML">
+      <button>Refresh inventory list</button>
+    </form>
+
+    <form g:post={UpdateInventoryRow} g:target="#inventory" g:swap="innerHTML">
+      <label>Item <input name="item" required value="Keyboard" /></label>
+      <button>Update row</button>
+    </form>
+
+    <table>
+      <tbody id="inventory">
+        <tr><td>Keyboard</td><td>draft</td></tr>
+      </tbody>
+    </table>
+
+    <form g:post={OpenModal} g:target="#modal-body" g:swap="innerHTML">
+      <button>Open modal body</button>
+    </form>
+    <section id="modal-body"><p>Modal is closed.</p></section>
+
+    <form g:post={RefreshDashboardCard} g:target="#dashboard-card" g:swap="outerHTML">
+      <button>Refresh dashboard card</button>
+    </form>
+    <article id="dashboard-card"><h2>Dashboard card</h2><p>Initial value.</p></article>
+  </main>
+}

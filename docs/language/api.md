@@ -103,6 +103,12 @@ The optional endpoint-local `error` suffix selects a generated HTML error page
 for API panics before response headers are written. Returned handler errors
 still follow normal `runtime/response.Response` behavior.
 
+## Examples
+
+`examples/endpoints/src/endpoints/api.page.gwdk` declares session, search, JSON CRUD, and
+webhook endpoints. `examples/endpoints/src/endpoints/handlers.go` keeps validation, JSON
+decoding, response shape, and webhook policy in normal Go handlers.
+
 APIs declared on guarded pages share the generated app guard hooks with SSR
 pages and actions. Custom guards require `GOWDKGuardRegistry`; native RBAC guard
 IDs such as `role:admin` and `permission:reports.read` require

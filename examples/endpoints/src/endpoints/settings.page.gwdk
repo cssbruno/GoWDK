@@ -1,0 +1,29 @@
+package endpoints
+
+page endpoints.settings
+route "/endpoints/settings"
+guard public
+
+act SaveSettings POST "/endpoints/settings"
+act ResetSettings POST "/endpoints/settings/reset"
+
+view {
+  <main>
+    <h1>Settings actions</h1>
+    <p>Both forms return server fragments for the settings result region.</p>
+
+    <form g:post={SaveSettings} g:target="#settings-result" g:swap="innerHTML">
+      <label>Theme <input name="theme" required value="dark" /></label>
+      <label>Email updates <input name="email" value="weekly" /></label>
+      <button>Save settings</button>
+    </form>
+
+    <form g:post={ResetSettings} g:target="#settings-result" g:swap="innerHTML">
+      <button>Reset settings</button>
+    </form>
+
+    <section id="settings-result">
+      <p>Settings have not changed.</p>
+    </section>
+  </main>
+}

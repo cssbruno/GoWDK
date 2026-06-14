@@ -255,6 +255,9 @@ Generated action and web-command handlers validate CSRF tokens by default before
 generated decoding or user handlers run. Missing or invalid tokens return HTTP
 403 with `invalid csrf token` and `Cache-Control: no-store`.
 
+For a broader runnable action cookbook, see `examples/endpoints/src/endpoints/contact.page.gwdk`
+and `examples/endpoints/src/endpoints/settings.page.gwdk`.
+
 ## API Routes
 
 API endpoint metadata is parsed, appears in route plans, and can bind to
@@ -293,6 +296,9 @@ The compiler discovers Go endpoint comments only in selected source packages,
 does not infer endpoints from function names, and does not scan framework route
 registrations. If a Go comment endpoint and a `.gwdk` endpoint declare the same
 method/path pair, validation fails with a route conflict diagnostic.
+
+For session, search, JSON CRUD, and webhook API examples, see
+`examples/endpoints/src/endpoints/api.page.gwdk`.
 
 ## SSR Routes
 
@@ -347,6 +353,9 @@ present. Decode errors name the param and expected type without echoing the raw
 request value. Generated typed SSR and fragment bindings return `400` for
 invalid typed route params and `404` for missing route params before guards,
 page rendering, or fragment hooks run.
+
+For standalone fragment and action-driven partial examples, see
+`examples/endpoints/src/endpoints/fragments.page.gwdk`.
 
 Endpoint user code can read generated endpoint metadata with
 `runtime/app.Endpoint(ctx)`. This is the stable accessor for action, API, and

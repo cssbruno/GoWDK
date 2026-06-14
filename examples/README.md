@@ -21,6 +21,7 @@ even when explicit `.gwdk` files are passed.
 | `actions/newsletter.page.gwdk` | Action-form syntax example with `g:post` and imported component markup. | `go run ./cmd/gowdk check examples/actions/newsletter.page.gwdk examples/components/base/button.cmp.gwdk examples/components/base/text-field.cmp.gwdk` |
 | `login/` | Integrated auth-feature GWDK login with generated frontend binary plus feature-owned Go backend binary. | `cd examples/login && make serve` |
 | `flagship/` | Full-stack native GOWDK vertical slice with static output, endpoints, fragments, SSR load, contracts, islands, CSS/assets, guards, rate limiting, and one generated binary. | `cd examples/flagship && make build` |
+| `endpoints/` | Endpoint cookbook with action redirects, validation fragments, partial responses, APIs, JSON CRUD, webhooks, and standalone fragments. | `cd examples/endpoints && make build` |
 | `partials/patients-fragment.page.gwdk` | Partial/server fragment metadata example with `fragment`, `g:target`, and `g:swap`. | `go run ./cmd/gowdk manifest examples/partials/patients-fragment.page.gwdk` |
 | `api/status.page.gwdk` | API route metadata example with a named `GET` endpoint. | `go run ./cmd/gowdk routes examples/api/status.page.gwdk` |
 | `ssr/simple-ssr.page.gwdk` | Simple generated SSR page without `load {}`. | `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/ssr/simple-ssr.page.gwdk` |
@@ -86,6 +87,16 @@ make check
 make routes
 make build
 test -x bin/flagship
+```
+
+Build the endpoint examples cookbook:
+
+```sh
+cd examples/endpoints
+make check
+make routes
+make build
+test -x bin/endpoints
 ```
 
 Build the current simple generated SSR page:

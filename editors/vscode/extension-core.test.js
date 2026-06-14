@@ -216,6 +216,44 @@ test('missingExecutableMessage explains missing GOWDK CLI resolution', () => {
   );
 });
 
+test('diagnosticCodeForMessage recognizes editor setup failures', () => {
+  assert.equal(
+    core.diagnosticCodeForMessage('gowdk.config.go is required; run gowdk init before validating .gwdk files.'),
+    'missing_gowdk_config'
+  );
+  assert.equal(
+    core.diagnosticCodeForMessage('Missing GOWDK binary. Install gowdk, add it to PATH, or set gowdk.cliPath.'),
+    'missing_gowdk_binary'
+  );
+  assert.equal(
+    core.diagnosticCodeForMessage('Missing Go binary. Install Go, fix PATH, or set gowdk.cliPath to a built GOWDK binary.'),
+    'missing_go_binary'
+  );
+  assert.equal(
+    core.diagnosticCodeForMessage('missing_ssr_addon: add ssr.Addon() to config'),
+    'missing_ssr_addon'
+  );
+  assert.equal(core.diagnosticCodeForMessage('plain compiler error'), '');
+});
+
+test('quickFixesForDiagnostic returns setup actions without editing config implicitly', () => {
+  assert.deepEqual(core.quickFixesForDiagnostic({ code: 'missing_gowdk_config' }), [
+    { title: 'Create gowdk.config.go', command: 'gowdk.createConfig', preferred: true },
+    { title: 'Open config docs', command: 'gowdk.openConfigDocs', preferred: false }
+  ]);
+  assert.deepEqual(core.quickFixesForDiagnostic({ code: 'missing_ssr_addon' }), [
+    { title: 'Enable SSR validation setting', command: 'gowdk.enableSsrAddon', preferred: true },
+    { title: 'Open SSR docs', command: 'gowdk.openSsrDocs', preferred: false }
+  ]);
+  assert.deepEqual(core.quickFixesForDiagnostic({
+    message: 'Missing GOWDK binary. Install gowdk, add it to PATH, or set gowdk.cliPath.'
+  }).map((fix) => fix.command), [
+    'gowdk.openCliPathSetting',
+    'gowdk.openInstallDocs'
+  ]);
+  assert.deepEqual(core.quickFixesForDiagnostic({ code: 'missing_view_block' }), []);
+});
+
 test('completionContext detects view interpolation data fields', () => {
   assert.equal(core.completionContext('  <h1>{tit'), 'dataField');
   assert.equal(core.completionContext('  <Page title="{user.na'), 'dataField');

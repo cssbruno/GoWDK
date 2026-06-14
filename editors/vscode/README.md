@@ -46,7 +46,12 @@ Saved-file diagnostics, dirty-buffer diagnostics, manifest metadata, and the
 site map require `gowdk.config.go` in the workspace, matching the CLI. The
 extension passes `--config <workspace>/gowdk.config.go` so source
 include/exclude globs and module-aware discovery stay consistent. Without
-config, diagnostics report that the project must be initialized first.
+config, diagnostics report that the project must be initialized first and offer
+quick fixes to create `gowdk.config.go` or open the config reference. Setup
+diagnostics also offer quick fixes for `gowdk.cliPath` and SSR validation
+settings. The extension does not edit an existing user config unless the user
+explicitly runs the create-config action, and SSR addon guidance opens docs or
+updates the editor validation setting only.
 
 ## Development
 

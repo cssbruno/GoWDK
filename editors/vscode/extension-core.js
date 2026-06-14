@@ -132,6 +132,51 @@ function missingExecutableMessage(invocation = {}, error = {}) {
   return `Missing GOWDK binary: ${command}. Update gowdk.cliPath or fix PATH.`;
 }
 
+function diagnosticCodeForMessage(message) {
+  const text = String(message || '');
+  if (/gowdk\.config\.go is required/i.test(text)) {
+    return 'missing_gowdk_config';
+  }
+  if (/missing configured GOWDK binary|missing GOWDK binary/i.test(text)) {
+    return 'missing_gowdk_binary';
+  }
+  if (/missing Go binary/i.test(text)) {
+    return 'missing_go_binary';
+  }
+  if (/missing_ssr_addon|SSR addon/i.test(text)) {
+    return 'missing_ssr_addon';
+  }
+  return '';
+}
+
+function quickFixesForDiagnostic(diagnostic = {}) {
+  const code = diagnosticCodeForMessage(diagnostic.message) || String(diagnostic.code || '');
+  switch (code) {
+    case 'missing_gowdk_binary':
+    case 'missing_go_binary':
+      return [
+        quickFix('Set gowdk.cliPath', 'gowdk.openCliPathSetting', true),
+        quickFix('Open GOWDK install docs', 'gowdk.openInstallDocs', false)
+      ];
+    case 'missing_gowdk_config':
+      return [
+        quickFix('Create gowdk.config.go', 'gowdk.createConfig', true),
+        quickFix('Open config docs', 'gowdk.openConfigDocs', false)
+      ];
+    case 'missing_ssr_addon':
+      return [
+        quickFix('Enable SSR validation setting', 'gowdk.enableSsrAddon', true),
+        quickFix('Open SSR docs', 'gowdk.openSsrDocs', false)
+      ];
+    default:
+      return [];
+  }
+}
+
+function quickFix(title, command, preferred) {
+  return { title, command, preferred };
+}
+
 function isGOWDKSourceDir(dir) {
   if (!dir || !fs.existsSync(path.join(dir, 'cmd', 'gowdk'))) {
     return false;
@@ -1753,6 +1798,7 @@ module.exports = {
   cssCompletionEntries,
   cssFileEntries,
   definitionTarget,
+  diagnosticCodeForMessage,
   diagnosticPosition,
   diagnosticRange,
   diagnosticSeverity,
@@ -1776,6 +1822,7 @@ module.exports = {
   projectPages,
   projectCompletionEntries,
   projectCommandArgs,
+  quickFixesForDiagnostic,
   renameEditsForSource,
   semanticTokens,
   siteMapHTML,

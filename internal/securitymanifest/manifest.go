@@ -14,6 +14,7 @@ package securitymanifest
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -201,18 +202,35 @@ func configuredHeaders(config gowdk.Config) []ConfiguredHeader {
 	if !config.Build.SecurityHeaders.Enabled || len(config.Build.SecurityHeaders.Headers) == 0 {
 		return []ConfiguredHeader{}
 	}
-	names := make([]string, 0, len(config.Build.SecurityHeaders.Headers))
+	type candidate struct {
+		key  string
+		name string
+	}
+	candidates := make([]candidate, 0, len(config.Build.SecurityHeaders.Headers))
 	for name := range config.Build.SecurityHeaders.Headers {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
-		names = append(names, name)
+		candidates = append(candidates, candidate{
+			key:  strings.ToLower(name),
+			name: http.CanonicalHeaderKey(name),
+		})
 	}
-	sort.Strings(names)
-	headers := make([]ConfiguredHeader, 0, len(names))
-	for _, name := range names {
-		headers = append(headers, ConfiguredHeader{Name: name})
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].key != candidates[j].key {
+			return candidates[i].key < candidates[j].key
+		}
+		return candidates[i].name < candidates[j].name
+	})
+	seen := map[string]bool{}
+	headers := make([]ConfiguredHeader, 0, len(candidates))
+	for _, candidate := range candidates {
+		if seen[candidate.key] {
+			continue
+		}
+		seen[candidate.key] = true
+		headers = append(headers, ConfiguredHeader{Name: candidate.name})
 	}
 	return headers
 }

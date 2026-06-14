@@ -126,6 +126,7 @@ func TestGenerateWiresSecurityHeadersWhenConfigured(t *testing.T) {
 					Headers: map[string]string{
 						"Content-Security-Policy": "default-src 'self'",
 						"X-Frame-Options":         "DENY",
+						"x-frame-options":         "DENY",
 					},
 				},
 			},
@@ -146,6 +147,12 @@ func TestGenerateWiresSecurityHeadersWhenConfigured(t *testing.T) {
 		if !strings.Contains(string(payload), expected) {
 			t.Fatalf("expected generated app to contain %q:\n%s", expected, payload)
 		}
+	}
+	if count := strings.Count(string(payload), `"X-Frame-Options": "DENY"`); count != 1 {
+		t.Fatalf("expected generated app to canonicalize duplicate frame headers once, got %d:\n%s", count, payload)
+	}
+	if strings.Contains(string(payload), `"x-frame-options"`) {
+		t.Fatalf("expected generated app to canonicalize lowercase frame header:\n%s", payload)
 	}
 }
 
@@ -258,6 +265,70 @@ func TestStandaloneAuditTestRejectsActorScenarios(t *testing.T) {
 	}
 	if !strings.Contains(string(source), `"X-GOWDK-Audit-Actor": "role:admin"`) {
 		t.Fatalf("expected generated-app actor scenario, got:\n%s", source)
+	}
+}
+
+func TestStandaloneAuditTestRejectsEndpointExpectations(t *testing.T) {
+	specs := []gwdkir.AuditSpec{{
+		Source: "security.audit.gwdk",
+		Tests: []gwdkir.AuditTest{{
+			Name: "submit",
+			Body: `expect POST "/submit" status 303`,
+		}},
+	}}
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{{
+			ID:     "Submit",
+			Kind:   "action",
+			Method: http.MethodPost,
+			Path:   "/submit",
+		}},
+	}
+	if _, err := StandaloneAuditTestSource(gowdk.Config{}, manifest, specs); err == nil || !strings.Contains(err.Error(), `targets action endpoint Submit`) {
+		t.Fatalf("expected standalone audit emit to reject action expectation, got %v", err)
+	}
+	if _, err := auditTestSource("gowdkapp", auditTestGeneratedApp, gowdk.Config{}, manifest, specs); err != nil {
+		t.Fatalf("expected generated-app audit test to accept action expectation: %v", err)
+	}
+}
+
+func TestStandaloneAuditTestRejectsDynamicEndpointExpectations(t *testing.T) {
+	specs := []gwdkir.AuditSpec{{
+		Source: "security.audit.gwdk",
+		Tests: []gwdkir.AuditTest{{
+			Name: "post",
+			Body: `expect GET "/posts/42" status 200`,
+		}},
+	}}
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{{
+			ID:     "Show",
+			Kind:   "api",
+			Method: http.MethodGet,
+			Path:   "/posts/{id:int}",
+		}},
+	}
+	if _, err := StandaloneAuditTestSource(gowdk.Config{}, manifest, specs); err == nil || !strings.Contains(err.Error(), `targets api endpoint Show`) {
+		t.Fatalf("expected standalone audit emit to reject dynamic API expectation, got %v", err)
+	}
+}
+
+func TestAuditSecurityHeadersCanonicalizesCaseVariants(t *testing.T) {
+	headers := auditSecurityHeaders(gowdk.Config{Build: gowdk.BuildConfig{
+		SecurityHeaders: gowdk.SecurityHeadersConfig{
+			Enabled: true,
+			Headers: map[string]string{
+				" content-security-policy ": "default-src 'self'",
+				"X-Frame-Options":           "DENY",
+				"x-frame-options":           "DENY",
+			},
+		},
+	}})
+	if len(headers) != 2 {
+		t.Fatalf("expected two canonical audit header expectations, got %#v", headers)
+	}
+	if headers[0].Name != "Content-Security-Policy" || headers[1].Name != "X-Frame-Options" {
+		t.Fatalf("expected canonical sorted audit header names, got %#v", headers)
 	}
 }
 

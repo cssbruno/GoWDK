@@ -150,6 +150,26 @@ func TestEvaluateDeduplicatesFindingsAcrossExtendingPolicies(t *testing.T) {
 	}
 }
 
+func TestFrontendRawHTMLAllowlistSuppressesBaselineFinding(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Frontend: securitymanifest.FrontendSurface{
+			RawHTMLSinks: []securitymanifest.RawHTMLSink{
+				{OwnerKind: "page", OwnerID: "home", Field: "TrustedHTML", Source: "home.page.gwdk:12"},
+			},
+		},
+	}
+	declared := []Policy{{
+		Name:      "browser_hardening",
+		Source:    "security.audit.gwdk:3",
+		Extends:   []string{"baseline.frontend"},
+		Selectors: []Selector{{Raw: "frontend", Kind: SelectorFrontend}},
+		Rules:     []Rule{{Kind: RuleAllowRawHTML, Value: "home:TrustedHTML"}},
+	}}
+	if got := codes(Evaluate(manifest, ComposeBaseline(declared)))["audit_raw_html_sink"]; got != 0 {
+		t.Fatalf("expected declared allowlist to suppress baseline raw HTML finding, got %d", got)
+	}
+}
+
 func TestComposeBaselineLetsDeclaredPolicyOverrideBuiltin(t *testing.T) {
 	policies := ComposeBaseline([]Policy{{
 		Name:      "baseline.frontend",

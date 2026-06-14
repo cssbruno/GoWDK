@@ -45,7 +45,7 @@ const (
 	// RuleNoSecretsInBundle forbids secret-shaped values in embedded output.
 	RuleNoSecretsInBundle RuleKind = "no_secrets_in_bundle"
 	// RuleDenyRawHTMLSinks reports every raw-HTML sink not allowlisted by a
-	// RuleAllowRawHTML rule in the same resolved policy.
+	// RuleAllowRawHTML rule in any resolved frontend policy.
 	RuleDenyRawHTMLSinks RuleKind = "deny_raw_html_sinks"
 	// RuleAllowRawHTML allowlists one raw-HTML sink (source:field); every sink
 	// not allowlisted is reported.

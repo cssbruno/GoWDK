@@ -286,6 +286,36 @@ test admin {
 	}
 }
 
+func TestAuditCommandRunProvidesCustomGuardHooks(t *testing.T) {
+	root := t.TempDir()
+	config := writeAuditCLIConfigWithSSR(t, root)
+	writeCLITestModule(t, root, "example.com/gowdk-audit-run-custom-guard")
+	pagePath := filepath.Join(root, "admin.page.gwdk")
+	writeCLIFile(t, pagePath, `package app
+
+page admin
+route "/admin"
+guard auth.required
+
+go ssr {
+}
+
+view {
+  <main>Admin</main>
+}
+`)
+
+	_, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--config", config, "--run", pagePath})
+	})
+	if err != nil {
+		t.Fatalf("expected generated app audit tests with custom guard to pass: %v\nstderr:\n%s", err, stderr)
+	}
+	if !strings.Contains(stderr, "audit generated app tests passed:") {
+		t.Fatalf("expected generated app audit test pass message, got %q", stderr)
+	}
+}
+
 func TestAuditCommandReportsRuntimeAuditTestFailure(t *testing.T) {
 	root := t.TempDir()
 	config := writeMinimalCLIConfig(t, root)

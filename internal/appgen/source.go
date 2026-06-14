@@ -7,6 +7,7 @@ import (
 	"go/format"
 	"go/printer"
 	"go/token"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -448,35 +449,65 @@ func securityHeadersExpr(options Options) ast.Expr {
 	if !options.Config.Build.SecurityHeaders.Enabled || len(options.Config.Build.SecurityHeaders.Headers) == 0 {
 		return nil
 	}
-	names := make([]string, 0, len(options.Config.Build.SecurityHeaders.Headers))
-	values := map[string]string{}
-	seen := map[string]bool{}
-	for name, value := range options.Config.Build.SecurityHeaders.Headers {
-		clean := strings.TrimSpace(name)
-		if clean == "" {
-			continue
-		}
-		if !seen[clean] {
-			names = append(names, clean)
-			seen[clean] = true
-		}
-		values[clean] = value
-	}
-	if len(names) == 0 {
+	headers := normalizedSecurityHeaders(options.Config.Build.SecurityHeaders.Headers)
+	if len(headers) == 0 {
 		return nil
 	}
-	sort.Strings(names)
-	elts := make([]ast.Expr, 0, len(names))
-	for _, name := range names {
+	elts := make([]ast.Expr, 0, len(headers))
+	for _, header := range headers {
 		elts = append(elts, &ast.KeyValueExpr{
-			Key:   stringLit(name),
-			Value: stringLit(values[name]),
+			Key:   stringLit(header.Name),
+			Value: stringLit(header.Value),
 		})
 	}
 	return &ast.CompositeLit{
 		Type: &ast.MapType{Key: id("string"), Value: id("string")},
 		Elts: elts,
 	}
+}
+
+type normalizedSecurityHeader struct {
+	Name  string
+	Value string
+}
+
+func normalizedSecurityHeaders(headers map[string]string) []normalizedSecurityHeader {
+	type candidate struct {
+		key   string
+		name  string
+		value string
+	}
+	candidates := make([]candidate, 0, len(headers))
+	for name, value := range headers {
+		clean := strings.TrimSpace(name)
+		if clean == "" {
+			continue
+		}
+		candidates = append(candidates, candidate{
+			key:   strings.ToLower(clean),
+			name:  http.CanonicalHeaderKey(clean),
+			value: value,
+		})
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].key != candidates[j].key {
+			return candidates[i].key < candidates[j].key
+		}
+		if candidates[i].name != candidates[j].name {
+			return candidates[i].name < candidates[j].name
+		}
+		return candidates[i].value < candidates[j].value
+	})
+	seen := map[string]bool{}
+	out := make([]normalizedSecurityHeader, 0, len(candidates))
+	for _, candidate := range candidates {
+		if seen[candidate.key] {
+			continue
+		}
+		seen[candidate.key] = true
+		out = append(out, normalizedSecurityHeader{Name: candidate.name, Value: candidate.value})
+	}
+	return out
 }
 
 // deniedPageRoutes returns the concrete (non-dynamic) page routes that declared

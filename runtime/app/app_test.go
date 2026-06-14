@@ -54,6 +54,7 @@ func TestHandlerWritesConfiguredSecurityHeaders(t *testing.T) {
 		SecurityHeaders: map[string]string{
 			"Content-Security-Policy": "default-src 'self'",
 			"X-Frame-Options":         "DENY",
+			"x-frame-options":         "DENY",
 		},
 	}
 	recorder := httptest.NewRecorder()
@@ -69,6 +70,9 @@ func TestHandlerWritesConfiguredSecurityHeaders(t *testing.T) {
 	}
 	if got := recorder.Header().Get("X-Frame-Options"); got != "DENY" {
 		t.Fatalf("unexpected frame header: %q", got)
+	}
+	if got := recorder.Header().Values("X-Frame-Options"); len(got) != 1 {
+		t.Fatalf("expected one canonical frame header value, got %#v", got)
 	}
 }
 

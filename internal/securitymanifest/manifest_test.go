@@ -86,6 +86,7 @@ func TestBuildPopulatesFrontendAuditSurface(t *testing.T) {
 		Headers: map[string]string{
 			"X-Content-Type-Options":  "nosniff",
 			"Content-Security-Policy": "default-src 'self'",
+			"content-security-policy": "default-src 'self'",
 		},
 	}}}
 	ir := gwdkir.Program{

@@ -13,6 +13,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/securitymanifest"
+	gowdkroute "github.com/cssbruno/gowdk/runtime/route"
 )
 
 type auditTestMode string
@@ -217,7 +218,7 @@ func auditTestScenarios(mode auditTestMode, config gowdk.Config, manifest securi
 		})
 	}
 
-	testScenarios, err := auditDeclaredTestScenarios(mode, specs)
+	testScenarios, err := auditDeclaredTestScenarios(mode, manifest, specs)
 	if err != nil {
 		return nil, err
 	}
@@ -234,29 +235,15 @@ func auditSecurityHeaders(config gowdk.Config) []auditHeaderExpectation {
 	if !config.Build.SecurityHeaders.Enabled || len(config.Build.SecurityHeaders.Headers) == 0 {
 		return nil
 	}
-	values := map[string]string{}
-	names := make([]string, 0, len(config.Build.SecurityHeaders.Headers))
-	seen := map[string]bool{}
-	for name, value := range config.Build.SecurityHeaders.Headers {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
-		values[name] = value
-		if !seen[name] {
-			names = append(names, name)
-			seen[name] = true
-		}
-	}
-	sort.Strings(names)
-	headers := make([]auditHeaderExpectation, 0, len(names))
-	for _, name := range names {
-		headers = append(headers, auditHeaderExpectation{Name: name, Value: values[name]})
+	normalized := normalizedSecurityHeaders(config.Build.SecurityHeaders.Headers)
+	headers := make([]auditHeaderExpectation, 0, len(normalized))
+	for _, header := range normalized {
+		headers = append(headers, auditHeaderExpectation{Name: header.Name, Value: header.Value})
 	}
 	return headers
 }
 
-func auditDeclaredTestScenarios(mode auditTestMode, specs []gwdkir.AuditSpec) ([]auditScenario, error) {
+func auditDeclaredTestScenarios(mode auditTestMode, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]auditScenario, error) {
 	var scenarios []auditScenario
 	for _, spec := range specs {
 		for _, test := range spec.Tests {
@@ -272,6 +259,8 @@ func auditDeclaredTestScenarios(mode auditTestMode, specs []gwdkir.AuditSpec) ([
 					if err != nil {
 						return nil, fmt.Errorf("%s:%d: invalid audit test status %q", spec.Source, test.Span.Start.Line+lineIndex+1, statusMatch[4])
 					}
+					method := strings.ToUpper(statusMatch[1])
+					requestPath := statusMatch[2]
 					// The standalone harness installs no auth provider and only
 					// models static serving, default-deny, and headers, so it
 					// cannot enforce role/permission guards. An actor expectation
@@ -281,14 +270,19 @@ func auditDeclaredTestScenarios(mode auditTestMode, specs []gwdkir.AuditSpec) ([
 					if mode == auditTestStandalone && statusMatch[3] != "" {
 						return nil, fmt.Errorf("%s:%d: audit test actor %q requires the generated-app audit test (%s, emitted by gowdk build or run by gowdk audit --run); standalone audit tests cannot enforce role or permission guards", spec.Source, test.Span.Start.Line+lineIndex+1, statusMatch[3], auditTestFileName)
 					}
-					name := test.Name + " " + strings.ToUpper(statusMatch[1]) + " " + statusMatch[2]
+					if mode == auditTestStandalone {
+						if endpoint, ok := auditStandaloneEndpointExpectation(manifest, method, requestPath); ok {
+							return nil, fmt.Errorf("%s:%d: audit test expectation %s %q targets %s endpoint %s and requires the generated-app audit test (%s, emitted by gowdk build or run by gowdk audit --run); standalone audit tests do not install Backend, Action, API, fragment, or contract callbacks", spec.Source, test.Span.Start.Line+lineIndex+1, method, requestPath, endpoint.Kind, endpoint.ID, auditTestFileName)
+						}
+					}
+					name := test.Name + " " + method + " " + requestPath
 					if statusMatch[3] != "" {
 						name += " as " + statusMatch[3]
 					}
 					scenarios = append(scenarios, auditScenario{
 						Name:       name,
-						Method:     strings.ToUpper(statusMatch[1]),
-						Path:       statusMatch[2],
+						Method:     method,
+						Path:       requestPath,
 						Actor:      statusMatch[3],
 						WantStatus: status,
 					})
@@ -310,6 +304,36 @@ func auditDeclaredTestScenarios(mode auditTestMode, specs []gwdkir.AuditSpec) ([
 		}
 	}
 	return scenarios, nil
+}
+
+func auditStandaloneEndpointExpectation(manifest securitymanifest.SecurityManifest, method string, requestPath string) (securitymanifest.EndpointEntry, bool) {
+	method = strings.ToUpper(strings.TrimSpace(method))
+	requestPath = path.Clean("/" + requestPath)
+	for _, endpoint := range manifest.Endpoints {
+		if strings.TrimSpace(endpoint.Method) == "" || strings.TrimSpace(endpoint.Path) == "" {
+			continue
+		}
+		if !strings.EqualFold(endpoint.Method, method) {
+			continue
+		}
+		if auditEndpointPathMatches(endpoint.Path, requestPath) {
+			return endpoint, true
+		}
+	}
+	return securitymanifest.EndpointEntry{}, false
+}
+
+func auditEndpointPathMatches(endpointPath string, requestPath string) bool {
+	endpointPath = path.Clean("/" + endpointPath)
+	requestPath = path.Clean("/" + requestPath)
+	if endpointPath == requestPath {
+		return true
+	}
+	if strings.Contains(endpointPath, "{") {
+		_, ok := gowdkroute.Match(endpointPath, requestPath)
+		return ok
+	}
+	return false
 }
 
 func writeGeneratedAuditEnvSeeds(builder *strings.Builder, config gowdk.Config) {

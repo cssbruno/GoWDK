@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -551,13 +552,53 @@ func (handler Handler) writeIdentityHeaders(response http.ResponseWriter) {
 }
 
 func (handler Handler) writeSecurityHeaders(response http.ResponseWriter) {
-	for name, value := range handler.SecurityHeaders {
-		name = strings.TrimSpace(name)
-		if name == "" {
+	for _, header := range canonicalSecurityHeaders(handler.SecurityHeaders) {
+		response.Header().Set(header.Name, header.Value)
+	}
+}
+
+type canonicalSecurityHeader struct {
+	Name  string
+	Value string
+}
+
+func canonicalSecurityHeaders(headers map[string]string) []canonicalSecurityHeader {
+	type candidate struct {
+		key   string
+		name  string
+		value string
+	}
+	candidates := make([]candidate, 0, len(headers))
+	for name, value := range headers {
+		clean := strings.TrimSpace(name)
+		if clean == "" {
 			continue
 		}
-		response.Header().Set(name, value)
+		candidates = append(candidates, candidate{
+			key:   strings.ToLower(clean),
+			name:  http.CanonicalHeaderKey(clean),
+			value: value,
+		})
 	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].key != candidates[j].key {
+			return candidates[i].key < candidates[j].key
+		}
+		if candidates[i].name != candidates[j].name {
+			return candidates[i].name < candidates[j].name
+		}
+		return candidates[i].value < candidates[j].value
+	})
+	seen := map[string]bool{}
+	out := make([]canonicalSecurityHeader, 0, len(candidates))
+	for _, candidate := range candidates {
+		if seen[candidate.key] {
+			continue
+		}
+		seen[candidate.key] = true
+		out = append(out, canonicalSecurityHeader{Name: candidate.name, Value: candidate.value})
+	}
+	return out
 }
 
 func (handler Handler) health(response http.ResponseWriter) {

@@ -237,19 +237,32 @@ func runGeneratedAppAuditTests(options cliOptions, ir gwdkir.Program) (string, s
 }
 
 func writeGeneratedAppAuditRunHooks(appDir string, ir gwdkir.Program) error {
-	if !auditProgramUsesNativeRBACGuards(ir) {
+	usesNativeRBAC := auditProgramUsesNativeRBACGuards(ir)
+	customGuards := auditProgramCustomGuardIDs(ir)
+	if !usesNativeRBAC && len(customGuards) == 0 {
 		return nil
 	}
 	hookPath := filepath.Join(appDir, "gowdkapp", "gowdk_audit_hooks_test.go")
-	return os.WriteFile(hookPath, []byte(`package gowdkapp
+	var builder strings.Builder
+	builder.WriteString("package gowdkapp\n\n")
+	builder.WriteString("import (\n")
+	if usesNativeRBAC {
+		builder.WriteString("\t\"net/http\"\n")
+		builder.WriteString("\t\"strings\"\n")
+	}
+	if usesNativeRBAC && len(customGuards) > 0 {
+		builder.WriteString("\n")
+	}
+	if usesNativeRBAC {
+		builder.WriteString("\tgowdkauth \"github.com/cssbruno/gowdk/runtime/auth\"\n")
+	}
+	if len(customGuards) > 0 {
+		builder.WriteString("\tgowdkguard \"github.com/cssbruno/gowdk/runtime/guard\"\n")
+	}
+	builder.WriteString(")\n")
 
-import (
-	"net/http"
-	"strings"
-
-	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
-)
-
+	if usesNativeRBAC {
+		builder.WriteString(`
 func GOWDKAuthProvider() gowdkauth.Provider {
 	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
 		actor := strings.TrimSpace(request.Header.Get("X-GOWDK-Audit-Actor"))
@@ -265,7 +278,21 @@ func GOWDKAuthProvider() gowdkauth.Provider {
 		}
 	})
 }
-`), 0o644)
+`)
+	}
+	if len(customGuards) > 0 {
+		if usesNativeRBAC {
+			builder.WriteString("\n")
+		}
+		builder.WriteString("func GOWDKGuardRegistry() gowdkguard.Registry {\n")
+		builder.WriteString("\treturn gowdkguard.Registry{\n")
+		for _, guard := range customGuards {
+			fmt.Fprintf(&builder, "\t\t%q: func(gowdkguard.Context) error { return nil },\n", guard)
+		}
+		builder.WriteString("\t}\n")
+		builder.WriteString("}\n")
+	}
+	return os.WriteFile(hookPath, []byte(builder.String()), 0o644)
 }
 
 func auditProgramUsesNativeRBACGuards(ir gwdkir.Program) bool {
@@ -290,6 +317,35 @@ func auditProgramUsesNativeRBACGuards(ir gwdkir.Program) bool {
 		}
 	}
 	return false
+}
+
+func auditProgramCustomGuardIDs(ir gwdkir.Program) []string {
+	seen := map[string]bool{}
+	var guards []string
+	add := func(names []string) {
+		for _, name := range names {
+			name = strings.TrimSpace(name)
+			if name == "" || name == "public" || auditGuardsUseNativeRBAC([]string{name}) || seen[name] {
+				continue
+			}
+			seen[name] = true
+			guards = append(guards, name)
+		}
+	}
+	for _, page := range ir.Pages {
+		add(page.Guards)
+	}
+	for _, route := range ir.Routes {
+		add(route.Guards)
+	}
+	for _, endpoint := range ir.Endpoints {
+		add(endpoint.Guards)
+	}
+	for _, ref := range ir.ContractRefs {
+		add(ref.Guards)
+	}
+	sort.Strings(guards)
+	return guards
 }
 
 func auditGuardsUseNativeRBAC(guards []string) bool {

@@ -27,6 +27,7 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 	findings := append([]Finding(nil), resolutionFindings...)
 
 	matchedAnything := map[string]bool{}
+	frontendRawHTMLAllowlist := rawHTMLAllowlist(resolved)
 
 	for _, endpoint := range manifest.Endpoints {
 		for _, policy := range resolved {
@@ -53,7 +54,7 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 			continue
 		}
 		matchedAnything[policy.Name] = true
-		findings = append(findings, evalFrontend(manifest.Frontend, policy)...)
+		findings = append(findings, evalFrontend(manifest.Frontend, policy, frontendRawHTMLAllowlist)...)
 	}
 
 	findings = append(findings, unmatchedSelectorFindings(resolved, matchedAnything)...)
@@ -295,7 +296,7 @@ func evalRoute(route securitymanifest.RouteEntry, policy Policy) []Finding {
 	return findings
 }
 
-func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy) []Finding {
+func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy, rawHTMLAllowlist map[string]bool) []Finding {
 	var findings []Finding
 	for _, rule := range policy.Rules {
 		switch rule.Kind {
@@ -318,30 +319,23 @@ func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy) []Fin
 					"Declare guard public for an intentionally public page, or add a protective guard."))
 			}
 		case RuleDenyRawHTMLSinks:
-			findings = append(findings, evalRawHTMLSinks(surface, policy, rule)...)
+			findings = append(findings, evalRawHTMLSinks(surface, policy, rule, rawHTMLAllowlist)...)
 		case RuleAllowRawHTML:
-			// Handled by evalRawHTMLSinks against the full allowlist below.
+			// Handled by evalRawHTMLSinks against the resolved frontend allowlist.
 		}
 	}
 	return findings
 }
 
 // evalRawHTMLSinks reports raw-HTML sinks that are not allowlisted by any
-// RuleAllowRawHTML rule on the matched frontend policy.
-func evalRawHTMLSinks(surface securitymanifest.FrontendSurface, policy Policy, rule Rule) []Finding {
+// RuleAllowRawHTML rule on any resolved frontend policy.
+func evalRawHTMLSinks(surface securitymanifest.FrontendSurface, policy Policy, rule Rule, allow map[string]bool) []Finding {
 	if len(surface.RawHTMLSinks) == 0 {
 		return nil
 	}
-	allow := map[string]bool{}
-	for _, rule := range policy.Rules {
-		if rule.Kind == RuleAllowRawHTML {
-			allow[rule.Value] = true
-		}
-	}
 	var findings []Finding
 	for _, sink := range surface.RawHTMLSinks {
-		key := sink.Source
-		if allow[key] || allow[sink.OwnerID+":"+sink.Field] {
+		if rawHTMLSinkAllowed(allow, sink) {
 			continue
 		}
 		findings = append(findings, finding(rule, policy, "frontend", sink.Source,
@@ -349,6 +343,55 @@ func evalRawHTMLSinks(surface securitymanifest.FrontendSurface, policy Policy, r
 			"Render escaped output, or add the sink to the policy raw-HTML allowlist."))
 	}
 	return findings
+}
+
+func rawHTMLAllowlist(policies []Policy) map[string]bool {
+	allow := map[string]bool{}
+	for _, policy := range policies {
+		if !policy.hasFrontendSelector() {
+			continue
+		}
+		for _, rule := range policy.Rules {
+			if rule.Kind != RuleAllowRawHTML {
+				continue
+			}
+			addRawHTMLAllowlistValue(allow, rule.Value)
+		}
+	}
+	if len(allow) == 0 {
+		return nil
+	}
+	return allow
+}
+
+func addRawHTMLAllowlistValue(allow map[string]bool, value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	allow[value] = true
+	if owner, field, ok := strings.Cut(value, ":"); ok {
+		owner = strings.TrimSpace(owner)
+		field = strings.Trim(strings.TrimSpace(field), "{}")
+		if owner != "" && field != "" {
+			allow[owner+":"+field] = true
+		}
+	}
+}
+
+func rawHTMLSinkAllowed(allow map[string]bool, sink securitymanifest.RawHTMLSink) bool {
+	if len(allow) == 0 {
+		return false
+	}
+	if allow[strings.TrimSpace(sink.Source)] {
+		return true
+	}
+	field := strings.TrimSpace(sink.Field)
+	if allow[sink.OwnerID+":"+field] {
+		return true
+	}
+	normalizedField := strings.Trim(field, "{}")
+	return normalizedField != field && allow[sink.OwnerID+":"+normalizedField]
 }
 
 func finding(rule Rule, policy Policy, target, source, message, remediation string) Finding {

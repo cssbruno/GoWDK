@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -204,9 +203,6 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 }
 
 func validatePageGuards(page gwdkir.Page) []ValidationError {
-	if !validateSourceBackedPageGuards(page) {
-		return nil
-	}
 	if len(page.Guards) == 0 {
 		// A guardless page route is denied (403) at request time, so warning is
 		// enough. But act/api/fragment endpoints derived from the page inherit
@@ -259,7 +255,7 @@ func validatePageGuards(page gwdkir.Page) []ValidationError {
 }
 
 func validateProtectedPageGuardRender(page gwdkir.Page, mode gowdk.RenderMode) []ValidationError {
-	if !validateSourceBackedPageGuards(page) || !isBuildTimeRoute(mode, page) || !hasProtectedPageGuard(page) {
+	if !isBuildTimeRoute(mode, page) || !hasProtectedPageGuard(page) {
 		return nil
 	}
 	return []ValidationError{{
@@ -269,16 +265,6 @@ func validateProtectedPageGuardRender(page gwdkir.Page, mode gowdk.RenderMode) [
 		Span:    firstNamedSpan(page.Spans.Guard, firstSpan(page.Spans.Page, page.Spans.Route)),
 		Message: fmt.Sprintf("%s declares protected guard IDs on a build-time page route. Add load {} or go ssr {} with the SSR addon so frontend page access is request-time guarded, or use guard public for an intentionally public page", page.ID),
 	}}
-}
-
-func validateSourceBackedPageGuards(page gwdkir.Page) bool {
-	if strings.TrimSpace(page.Source) == "" {
-		return false
-	}
-	if _, err := os.Stat(page.Source); err != nil {
-		return false
-	}
-	return true
 }
 
 func pageDeclaresBackendEndpoints(page gwdkir.Page) bool {

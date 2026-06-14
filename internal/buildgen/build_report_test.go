@@ -356,7 +356,7 @@ func TestBuildReportIncludesContractReferences(t *testing.T) {
 		Package: "pages",
 		ID:      "patients",
 		Route:   "/patients",
-		Guards:  []string{"public", "auth.required"},
+		Guards:  []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main><form method="post" action="/patients" g:command="patients.CreatePatient"><input name="name" /></form></main>`,
@@ -383,7 +383,7 @@ func TestBuildReportIncludesContractReferences(t *testing.T) {
 	if event.Data["method"] != "POST" || event.Data["path"] != "/patients" {
 		t.Fatalf("unexpected command method/path: %#v", event.Data)
 	}
-	if event.Data["guards"] != "public,auth.required" {
+	if event.Data["guards"] != "public" {
 		t.Fatalf("unexpected command guards: %#v", event.Data)
 	}
 }

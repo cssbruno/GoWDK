@@ -688,6 +688,25 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 	}
 }
 
+func TestBoundActionFieldDecodePanicsOnUnsupportedFieldType(t *testing.T) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("expected unsupported backend input field type panic")
+		}
+		message, ok := recovered.(string)
+		if !ok || !strings.Contains(message, `unsupported backend input field type "float64"`) {
+			t.Fatalf("unexpected panic: %v", recovered)
+		}
+	}()
+
+	_ = boundActionFieldDecodeStmts(0, source.BackendInputField{
+		FieldName: "Amount",
+		FormName:  "amount",
+		Type:      "float64",
+	})
+}
+
 func TestGenerateWritesDerivedCommandContractBackendRoute(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -2402,8 +2421,9 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{
 		{
-			ID:    "newsletter",
-			Route: "/newsletter",
+			ID:     "newsletter",
+			Route:  "/newsletter",
+			Guards: []string{"public"},
 			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<form g:post={Subscribe}><input name="email" required /></form>`,

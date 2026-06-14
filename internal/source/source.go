@@ -343,6 +343,59 @@ type BackendInputField struct {
 	Type      string
 }
 
+// BackendInputFieldTypeSupported reports whether goType is a form-decoder type
+// supported by compiler validation and generated action decoders.
+func BackendInputFieldTypeSupported(goType string) bool {
+	switch goType {
+	case "string", "bool",
+		"int", "int8", "int16", "int32", "int64",
+		"uint", "uint8", "uint16", "uint32", "uint64",
+		"[]string":
+		return true
+	default:
+		return false
+	}
+}
+
+// BackendInputFieldSignedInteger reports whether goType uses the signed integer
+// form decoder.
+func BackendInputFieldSignedInteger(goType string) bool {
+	switch goType {
+	case "int", "int8", "int16", "int32", "int64":
+		return true
+	default:
+		return false
+	}
+}
+
+// BackendInputFieldUnsignedInteger reports whether goType uses the unsigned
+// integer form decoder.
+func BackendInputFieldUnsignedInteger(goType string) bool {
+	switch goType {
+	case "uint", "uint8", "uint16", "uint32", "uint64":
+		return true
+	default:
+		return false
+	}
+}
+
+// BackendInputFieldIntegerBitSize returns the explicit bit size passed to form
+// integer decoders. Zero means the platform-sized int or uint type.
+func BackendInputFieldIntegerBitSize(goType string) int {
+	switch goType {
+	case "int8", "uint8":
+		return 8
+	case "int16", "uint16":
+		return 16
+	case "int32", "uint32":
+		return 32
+	case "int64", "uint64":
+		return 64
+	default:
+		return 0
+	}
+}
+
 // BackendBinding describes the Go handler selected for a backend block (a page
 // load, act, api, or fragment block, or a standalone Go endpoint).
 type BackendBinding struct {

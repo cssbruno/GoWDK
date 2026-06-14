@@ -412,6 +412,16 @@ func TestHandlerRedirectsTrailingSlashPreservingQuery(t *testing.T) {
 	}
 }
 
+func TestCanonicalTrailingSlashPathRejectsAmbiguousRootPath(t *testing.T) {
+	for _, requestPath := range []string{"//evil.example/", `/\evil.example/`} {
+		t.Run(requestPath, func(t *testing.T) {
+			if canonical, ok := canonicalTrailingSlashPath(requestPath); ok {
+				t.Fatalf("canonicalTrailingSlashPath(%q) = %q, want no redirect", requestPath, canonical)
+			}
+		})
+	}
+}
+
 func TestHandlerDoesNotRedirectRootPath(t *testing.T) {
 	handler := Handler{
 		Root:     fstest.MapFS{"index.html": {Data: []byte("<main>Home</main>")}},
@@ -742,6 +752,25 @@ func TestHandlerAcknowledgesCookie(t *testing.T) {
 		if !strings.Contains(setCookie, expected) {
 			t.Fatalf("expected Set-Cookie to contain %q, got %q", expected, setCookie)
 		}
+	}
+}
+
+func TestHandlerCookieAckRejectsProtocolRelativeRefererPath(t *testing.T) {
+	handler := Handler{
+		Root:     fstest.MapFS{},
+		Identity: Identity{AppID: "app", ModuleName: "app", InstanceID: "app-1"},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "https://gowdk.test/_gowdk/cookie-ack/", nil)
+	request.Header.Set("Referer", "https://gowdk.test//evil.example/path?tab=deploy")
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusSeeOther {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if location := recorder.Header().Get("Location"); location != "/" {
+		t.Fatalf("unexpected redirect location: %q", location)
 	}
 }
 

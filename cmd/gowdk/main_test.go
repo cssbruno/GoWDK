@@ -3879,6 +3879,7 @@ view {
 		Route:          "/newsletter",
 		Cache:          "no-store",
 		Guards:         []string{"public"},
+		CSRF:           true,
 		PageID:         "newsletter",
 		Handler:        "actions.NewsletterSubscribe",
 		BindingStatus:  "missing",
@@ -3904,9 +3905,6 @@ func TestEndpointsCommandPrintsEndpointMetadataOnly(t *testing.T) {
 import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
-	Build: gowdk.BuildConfig{
-		CSRF: gowdk.CSRFConfig{Enabled: true},
-	},
 }
 `)
 	writeCLIFile(t, page, `package app
@@ -4385,9 +4383,6 @@ replace github.com/cssbruno/gowdk => %s
 import "github.com/cssbruno/gowdk"
 
 var Config = gowdk.Config{
-	Build: gowdk.BuildConfig{
-		CSRF: gowdk.CSRFConfig{Enabled: true},
-	},
 }
 `)
 	writeCLIFile(t, page, `package pages
@@ -5034,6 +5029,7 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 		Route:          "/patients",
 		Cache:          "no-store",
 		Guards:         []string{"public"},
+		CSRF:           true,
 		PageID:         "patients",
 		Handler:        "contracts.command.patients.CreatePatient",
 		Contract: &contractBindingJSON{
@@ -5119,6 +5115,7 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 		Route:          "/patients",
 		Cache:          "no-store",
 		Guards:         []string{"public"},
+		CSRF:           true,
 		PageID:         "patients",
 		Handler:        "contracts.command.patients.CreatePatient",
 		Contract: &contractBindingJSON{
@@ -5584,7 +5581,17 @@ func TestBuildCommandBuildsActionBinaryReturns501ForMissingHandler(t *testing.T)
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "app")
 	binaryPath := filepath.Join(root, "site")
-	config := writeMinimalCLIConfig(t, root)
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		CSRF: gowdk.CSRFConfig{Disabled: true},
+	},
+}
+`)
 	writeCLIFile(t, page, `package app
 
 page newsletter
@@ -5732,7 +5739,11 @@ replace github.com/cssbruno/gowdk => %s
 
 import "github.com/cssbruno/gowdk"
 
-var Config = gowdk.Config{}
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		CSRF: gowdk.CSRFConfig{Disabled: true},
+	},
+}
 `)
 	writeCLIFile(t, filepath.Join(root, "features", "auth", "auth.page.gwdk"), `package auth
 

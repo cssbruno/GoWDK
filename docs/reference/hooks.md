@@ -203,5 +203,5 @@ Current generated request-time order:
 - No generated response transform hook.
 - No generated fetch/navigation interception hook.
 - No custom GOWDK context type; user code receives `context.Context`.
-- No framework-specific middleware in generated core. Echo, Gin, and Fiber
+- No framework-specific middleware in generated core. Chi, Echo, Gin, and Fiber
   adapters wrap the same `http.Handler`.

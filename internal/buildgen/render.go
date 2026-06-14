@@ -285,7 +285,7 @@ func isInternalNavigationHref(value string) bool {
 	if value == "" || strings.ContainsAny(value, "{}") {
 		return false
 	}
-	return strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "//")
+	return value[0] == '/' && !(len(value) > 1 && (value[1] == '/' || value[1] == '\\'))
 }
 
 type pageStoreSeed struct {

@@ -93,7 +93,7 @@ These are the durable rules. Changing them should require an ADR.
 11. Actions, APIs, and fragments can work without full-page request rendering.
 12. SSR is an integrated non-default request-time page-rendering lane.
 13. One-binary deploy must work with and without request-time page rendering.
-14. Core stays `net/http` compatible; Gin, Echo, Fiber, and similar frameworks
+14. Core stays `net/http` compatible; Chi, Gin, Echo, Fiber, and similar frameworks
     are optional adapters, not core dependencies.
 15. CSS and styling tooling are addon-driven; Tailwind is optional.
 16. Normal app flows should not require user-written JavaScript.
@@ -165,7 +165,7 @@ are stable.
 | 3 | Source import semantics | Cross-package component calls have explicit page/component-scoped `use` semantics. Layouts, stores, and assets have explicit `use` semantics or are rejected with clear diagnostics. Qualified layout references are either implemented or intentionally deferred with documented diagnostics. |
 | 4 | Build-time data and diagnostics | Build data moves beyond the first literal/imported no-argument subset. Same-package build functions are either supported or documented as intentionally unsupported. Parser, route, view, component, client, package, and build errors have useful spans and suggestions. |
 | 5 | Unified endpoint metadata | Actions and APIs normalize into one framework-neutral endpoint model containing source, kind, package path, package name, symbol, method, path, signature kind, input type, source span, and binding status. Route metadata remains limited to static, SPA, SSR, and hybrid page routes. |
-| 6 | Endpoint discovery policy | Optional Go endpoint comments such as `//gowdk:act POST /login` and `//gowdk:api GET /api/session` can feed the same endpoint model. The compiler never auto-discovers endpoints by function name and never scans Gin/Echo/Fiber route registration as a source of truth. Conflicts are hard diagnostics. |
+| 6 | Endpoint discovery policy | Optional Go endpoint comments such as `//gowdk:act POST /login` and `//gowdk:api GET /api/session` can feed the same endpoint model. The compiler never auto-discovers endpoints by function name and never scans Chi/Gin/Echo/Fiber route registration as a source of truth. Conflicts are hard diagnostics. |
 | 7 | Binding severity policy | Missing or unsupported handlers can remain non-fatal in dev/migration mode, but strict production builds fail unless an explicit stub flag allows `501` output. Feature packages are documented as not importing generated app output. |
 | 8 | Generated adapter IR | Implemented. Backend adapter generation is driven by typed IR for imports, endpoint registrations, request decoding, handler calls, response writing, and `501` fallbacks. One-binary, split frontend proxy, and backend-only app generation consume the same backend metadata. |
 | 9 | Go AST generation cleanup | API handlers, backend route registration, app shells, embed wiring, split app code, and remaining generated Go move to `go/ast`/`go/printer` plus `go/format`. Hardcoded line writing and source snippets are banned except for documented temporary exceptions. |
@@ -178,7 +178,7 @@ are stable.
 | 16 | Components and client language | Components gain real `g:if` mount/unmount, richer expression props, child-to-parent events, bindable state, typed exports, named/scoped slots, scoped CSS/assets, a documented component contract, a proper reactive dependency graph, predictable batching, and cycle diagnostics. |
 | 17 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Component-level WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
 | 18 | CSS, assets, and packaging | External addon loading is hardened, richer page-aware CSS processor contracts are stable, and Tailwind/CSS deployment docs stay explicit that external tooling is user-installed. Implemented CSS asset hashing, component CSS scope/hash metadata, component non-CSS asset emission, and binary cache policy remain stable. Module selection remains artifact packaging, not runtime module orchestration. |
-| 19 | Framework adapters | GOWDK Runtime remains `net/http` first. Optional Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; generated code stays framework-neutral by default. |
+| 19 | Framework adapters | GOWDK Runtime remains `net/http` first. Optional Chi, Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; Chi/Echo/Gin can mount routes from generated OpenAPI metadata, and generated code stays framework-neutral by default. |
 | 20 | Dev and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, richer LSP completions, and editor navigation are added. |
 | 21 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
 
@@ -272,7 +272,7 @@ without making any minor version a production-readiness target.
 - Making browser JavaScript the app contract.
 - Generating user domain logic, services, stores, auth, storage, or business
   validation.
-- Requiring npm, Tailwind, Gin, Echo, Fiber, or another framework in the
+- Requiring npm, Tailwind, Chi, Gin, Echo, Fiber, or another framework in the
   repository core.
 - Making WASM islands the default component runtime.
 - Treating folder placement as route truth.

@@ -1,12 +1,17 @@
 # Addons Reference
 
-Addons currently register feature IDs with the compiler. The config loader
-parses built-in addon constructors from `gowdk.config.go` through the Go AST
-when possible. If an addon constructor comes from another importable Go module,
-the loader uses an executable config bridge so GitHub-hosted addons can return
-real `gowdk.Addon` values. CSS processors can run during SPA builds, and addon
-go block consumers can validate targeted `.gwdk` go blocks and emit generated
-app files.
+Addons register feature IDs with the compiler. Core framework capabilities
+such as SSR, actions, APIs, auth, DB, contracts, and rate limiting are fixed
+GOWDK-owned features; enabling their feature IDs selects compiler and generator
+logic in GOWDK itself. External addon behavior is limited to documented public
+interfaces: `gowdk.CSSProcessor` for build-time CSS output and
+`gowdk.GoBlockConsumer` for targeted `go addon.<name> {}` blocks.
+
+The config loader parses built-in addon constructors from `gowdk.config.go`
+through the Go AST when possible. If an addon constructor comes from another
+importable Go module, the loader uses an executable config bridge so
+GitHub-hosted addons can return real `gowdk.Addon` values and preserve supported
+extension interfaces.
 
 Current feature IDs:
 
@@ -19,6 +24,8 @@ Current feature IDs:
 - `css`
 - `ratelimit`
 - `contracts`
+- `auth`
+- `db`
 
 Current packages:
 
@@ -33,6 +40,8 @@ Current packages:
 - `addons/tailwind`
 - `addons/ratelimit`
 - `addons/contracts`
+- `addons/auth`
+- `addons/db`
 
 `addons/static` is the build-time static page output boundary. `addons/spa`
 remains available for existing configs and static-first SPA navigation; both
@@ -50,6 +59,11 @@ gowdk add ssr actions partial
 `<name>.Addon()` to a literal `Config.Addons` list. It skips constructors that
 are already present, including aliased imports. It does not install external Go
 modules or discover third-party addons.
+
+`gowdk.NewAddon(name, features...)` creates a marker addon for feature checks.
+It does not by itself make the compiler, app generator, or runtime call
+third-party code; implement `CSSProcessor` or `GoBlockConsumer` when the addon
+needs behavior.
 
 The current compiler validator checks whether SSR is enabled when a page uses
 `load {}` or `go ssr {}`. SPA builds invoke addons that implement
@@ -124,7 +138,12 @@ For a `.gwdk` block like `go addon.contracts {}`, the addon named
 targets the addon accepts. `ValidateGoBlock` can return addon-owned diagnostics.
 `GeneratedGo` can return files relative to the generated app directory; `.go`
 files are formatted before writing. File paths must stay relative to the
-generated app directory.
+generated app directory. The AST config loader and executable config bridge both
+preserve this interface; external addons are not downgraded to inert feature
+markers when they implement `GoBlockConsumer`. If `go addon.<name> {}` targets
+an enabled addon that does not implement `GoBlockConsumer`, or whose
+`GoBlockTargets` does not include the exact target, `gowdk check` and builds
+fail with `unsupported_addon_go_block_target`.
 
 `addons/tailwind` is an experimental Tailwind v4 CSS processor wrapper around
 the standalone CLI. When `Options.Command` is omitted it uses `tailwindcss` from

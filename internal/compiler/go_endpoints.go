@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
@@ -19,7 +20,7 @@ import (
 // DiscoverGoEndpoints merges optional //gowdk:act and //gowdk:api comments
 // from selected feature-package Go files into the program as standalone Go
 // endpoints.
-func DiscoverGoEndpoints(ir *gwdkir.Program) error {
+func DiscoverGoEndpoints(config gowdk.Config, ir *gwdkir.Program) error {
 	dirs := endpointSourceDirs(*ir)
 	if len(dirs) == 0 {
 		return nil
@@ -32,7 +33,7 @@ func DiscoverGoEndpoints(ir *gwdkir.Program) error {
 		diagnostics = append(diagnostics, found...)
 	}
 	if len(diagnostics) > 0 {
-		return ValidationErrors(diagnostics)
+		return normalizeValidationErrors(diagnostics)
 	}
 	sort.Slice(endpoints, func(i, j int) bool {
 		if endpoints[i].Source == endpoints[j].Source {
@@ -40,7 +41,7 @@ func DiscoverGoEndpoints(ir *gwdkir.Program) error {
 		}
 		return endpoints[i].Source < endpoints[j].Source
 	})
-	gwdkanalysis.AddStandaloneEndpoints(ir, endpoints)
+	gwdkanalysis.AddStandaloneEndpoints(config, ir, endpoints)
 	return nil
 }
 

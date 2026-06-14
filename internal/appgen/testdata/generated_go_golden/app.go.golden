@@ -3,14 +3,17 @@ package gowdkapp
 import (
 	"context"
 	"embed"
+	"errors"
 	patients "example.com/app/contracts/patients"
 	newsletter "example.com/app/newsletter"
+	gowdkactions "github.com/cssbruno/gowdk/addons/actions"
 	gowdkruntime "github.com/cssbruno/gowdk/runtime/app"
 	gowdkcontracts "github.com/cssbruno/gowdk/runtime/contracts"
 	gowdkform "github.com/cssbruno/gowdk/runtime/form"
 	gowdkresponse "github.com/cssbruno/gowdk/runtime/response"
 	"io/fs"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 	"sync"
@@ -47,12 +50,18 @@ func ServeMux() (*http.ServeMux, error) {
 	if err != nil {
 		return nil, err
 	}
+	var csrfErr error
+	csrfTokenSource, csrfErr = newCSRF()
+	if csrfErr != nil {
+		return nil, csrfErr
+	}
+	csrfValidator = csrfTokenSource
 	backendRouter, err := newBackendRouter()
 	if err != nil {
 		return nil, err
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{Root: root, Identity: gowdkruntime.InstanceIdentity(), Assets: gowdkruntime.LoadAssetManifest(root), ErrorPages: gowdkruntime.LoadErrorPages(root), Backend: backendRouter.HandlerFunc(), SSRExact: ssrExact, SSRDynamic: ssrDynamic, RequestTimeout: gowdkruntime.DefaultRequestTimeout}, registeredMiddlewares()...))
+	mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{Root: root, Identity: gowdkruntime.InstanceIdentity(), Assets: gowdkruntime.LoadAssetManifest(root), ErrorPages: gowdkruntime.LoadErrorPages(root), Backend: backendRouter.HandlerFunc(), CSRF: csrfTokenSource, SSRExact: ssrExact, SSRDynamic: ssrDynamic, RequestTimeout: gowdkruntime.DefaultRequestTimeout}, registeredMiddlewares()...))
 	return mux, nil
 }
 func action(response http.ResponseWriter, request *http.Request) bool {
@@ -69,6 +78,12 @@ func action(response http.ResponseWriter, request *http.Request) bool {
 			}
 			gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid form")
 			return true
+		}
+		if csrfValidator != nil {
+			if err := csrfValidator.Validate(request); err != nil {
+				gowdkresponse.WriteNoStoreError(response, http.StatusForbidden, "invalid csrf token")
+				return true
+			}
 		}
 		values := gowdkform.FromURLValues(request.PostForm)
 		if decodedValues, err := gowdkform.DecodeExpected(values, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "email"}, {Name: "tag"}, {Name: "age"}, {Name: "remember"}}}); err != nil {
@@ -143,6 +158,12 @@ func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.R
 			}
 			gowdkresponse.WriteNoStoreJSONError(response, http.StatusBadRequest, "invalid form")
 			return true
+		}
+		if csrfValidator != nil {
+			if err := csrfValidator.Validate(request); err != nil {
+				gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "invalid csrf token")
+				return true
+			}
 		}
 		values := gowdkform.FromURLValues(request.PostForm)
 		input, err := decodeContractPatientsCreatePatientInput(values)
@@ -270,6 +291,17 @@ func RunContractEventWorkerWithSeenStore(ctx context.Context, source gowdkcontra
 func newBackendRouter() (*gowdkruntime.BackendRouter, error) {
 	contractRegistry := NewContractRegistry()
 	return gowdkruntime.NewBackendRouter(gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}, gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/patients", Kind: "command", Handler: commandPatientsCreatePatientPOSTPatients(contractRegistry)}, gowdkruntime.BackendRoute{Method: http.MethodGet, Path: "/patients", Kind: "query", Handler: queryPatientsGetPatientPageGETPatients(contractRegistry)})
+}
+
+var csrfTokenSource *gowdkactions.CSRF
+var csrfValidator gowdkactions.CSRFValidator
+
+func newCSRF() (*gowdkactions.CSRF, error) {
+	secret := strings.TrimSpace(os.Getenv("GOWDK_CSRF_SECRET"))
+	if secret == "" {
+		return nil, errors.New("GOWDK_CSRF_SECRET is required when generated CSRF is enabled")
+	}
+	return gowdkactions.NewCSRF(gowdkactions.CSRFOptions{Secret: []byte(secret)})
 }
 func ssrExact(response http.ResponseWriter, request *http.Request) (handled bool) {
 	switch request.URL.Path {

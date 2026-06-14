@@ -107,8 +107,10 @@ runtime environment variables owned by your deployment platform.
 ## CSRF Secret Rotation
 
 Generated CSRF currently validates tokens with one active signing secret from
-`Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`. There is no multi-key grace
-period yet.
+`Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`. CSRF is enabled by default for
+generated action and web-command POSTs; generated apps fail closed at startup if
+those endpoints are present and the secret is absent. There is no multi-key
+grace period yet.
 
 Rotate CSRF secrets as a coordinated deploy:
 
@@ -423,8 +425,9 @@ Generated binaries currently support:
 - No-store panic boundaries for generated SSR, action, and API request-time
   lanes.
 - First-slice same-page POST action redirects.
-- CSRF-wired generated action handlers when `Build.CSRF.Enabled` is set and
-  the configured secret environment variable is present.
+- CSRF-wired generated action handlers when the configured secret environment
+  variable is present. CSRF is enabled by default unless `Build.CSRF.Disabled`
+  is set.
 - First-slice required-field validation for directly declared form controls.
 - First-slice partial action fragment responses.
 - Standalone concrete and dynamic fragment routes with raw and typed route

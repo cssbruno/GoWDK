@@ -17,7 +17,46 @@ mux, err := gowdkapp.ServeMux()
 `Handler()` returns `http.Handler`. `ServeMux()` returns the concrete
 `*http.ServeMux`.
 
+Route-aware framework adapters can also consume the generated `openapi.json`
+report:
+
+```go
+openAPI, err := os.ReadFile("dist/site/openapi.json")
+if err != nil {
+	log.Fatal(err)
+}
+```
+
+Use `WithPrefix("/app")` when the host framework serves the generated GOWDK app
+below a prefix. The adapter registers host-framework routes under that prefix
+and strips it before dispatching to the generated handler, so the generated
+router still sees the original GOWDK paths. The adapter also keeps a generated
+handler fallback mounted for page and asset routes that are not listed in
+OpenAPI, and rewrites same-origin root-relative `Location` headers and generated
+HTML URLs under the prefix.
+
+When publishing the generated OpenAPI report for a prefixed mount, rewrite its
+server URL with the dependency-free helper:
+
+```go
+import gowdkadapters "github.com/cssbruno/gowdk/runtime/adapters"
+
+prefixedSpec, err := gowdkadapters.OpenAPIWithServerURL(openAPI, "/app")
+```
+
 ## Chi
+
+The Chi adapter is a nested optional module. Add it only when the application
+uses Chi:
+
+```sh
+go get github.com/cssbruno/gowdk/runtime/adapters/chi
+```
+
+```go
+import gowdkchi "github.com/cssbruno/gowdk/runtime/adapters/chi"
+import "github.com/go-chi/chi/v5"
+```
 
 ```go
 gowdkHandler, err := gowdkapp.Handler()
@@ -26,7 +65,9 @@ if err != nil {
 }
 
 router := chi.NewRouter()
-router.Mount("/", gowdkHandler)
+if err := gowdkchi.MountOpenAPI(router, openAPI, gowdkHandler, gowdkchi.WithPrefix("/app")); err != nil {
+	log.Fatal(err)
+}
 ```
 
 ## Echo
@@ -48,7 +89,9 @@ if err != nil {
 }
 
 app := echo.New()
-gowdkecho.Mount(app, "/*", gowdkHandler)
+if err := gowdkecho.MountOpenAPI(app, openAPI, gowdkHandler, gowdkecho.WithPrefix("/app")); err != nil {
+	log.Fatal(err)
+}
 ```
 
 Code reached by the generated handler can read the active Echo context when the
@@ -77,7 +120,9 @@ if err != nil {
 }
 
 engine := gin.Default()
-gowdkgin.Mount(engine, "/*path", gowdkHandler)
+if err := gowdkgin.MountOpenAPI(engine, openAPI, gowdkHandler, gowdkgin.WithPrefix("/app")); err != nil {
+	log.Fatal(err)
+}
 ```
 
 Code reached by the generated handler can read the active Gin context when the
@@ -86,6 +131,10 @@ app is mounted through this adapter:
 ```go
 ginContext, ok := gowdkgin.Context(ctx)
 ```
+
+Gin rejects ambiguous route patterns such as two same-method dynamic routes that
+could match the same request. `MountOpenAPI` returns a mount-time error naming
+the conflicting GOWDK routes instead of letting Gin panic during registration.
 
 ## Fiber
 
@@ -136,3 +185,10 @@ Framework context accessors are integration escape hatches for applications
 that intentionally opt into a framework adapter. GOWDK route declarations,
 handler binding, CSRF, fragments, APIs, and SSR behavior still use the generated
 `net/http` request flow as the source of truth.
+
+Adapters register host-framework routes from generated metadata only; they do
+not move generated protections into framework middleware. Keep middleware order
+simple: framework recovery, request logging, and app-owned auth can wrap the
+mounted routes, but do not duplicate generated request body limits, CSRF checks,
+panic boundaries, or response writing unless the app deliberately replaces that
+policy and tests the final stack.

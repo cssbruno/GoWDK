@@ -681,7 +681,7 @@ func TestValidatePageRejectsSSRWithoutAddon(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	diagnostics := ValidatePage(gowdk.Config{}, page)
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %d", len(diagnostics))
 	}
@@ -705,7 +705,7 @@ func TestValidatePageWarnsOnMissingGuard(t *testing.T) {
 		Blocks: gwdkir.Blocks{View: true},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	diagnostics := ValidatePage(gowdk.Config{}, irGuardlessPage(page))
 	var guard *ValidationError
 	for i := range diagnostics {
 		if diagnostics[i].Code == "missing_page_guard" {
@@ -739,7 +739,7 @@ func TestValidatePageErrorsOnGuardlessBackendEndpoints(t *testing.T) {
 		},
 	}
 
-	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	diagnostics := ValidatePage(gowdk.Config{}, irGuardlessPage(page))
 	var guard *ValidationError
 	for i := range diagnostics {
 		if diagnostics[i].Code == "missing_page_guard" {
@@ -755,6 +755,31 @@ func TestValidatePageErrorsOnGuardlessBackendEndpoints(t *testing.T) {
 	// The derived act/api/fragment endpoints would be public, so the build fails.
 	if !ValidationErrors(diagnostics).HasErrors() {
 		t.Fatalf("guardless page with endpoints should fail the build: %#v", diagnostics)
+	}
+}
+
+func TestValidatePageErrorsOnGuardlessBackendEndpointsWithoutSourcePath(t *testing.T) {
+	page := gwdkir.Page{
+		ID:    "signup",
+		Route: "/signup",
+		Blocks: gwdkir.Blocks{
+			View:    true,
+			Actions: []gwdkir.Action{{Name: "Submit"}},
+		},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{}, page)
+	var guard *ValidationError
+	for i := range diagnostics {
+		if diagnostics[i].Code == "missing_page_guard" {
+			guard = &diagnostics[i]
+		}
+	}
+	if guard == nil {
+		t.Fatalf("missing missing_page_guard diagnostic: %#v", diagnostics)
+	}
+	if guard.Severity != SeverityError {
+		t.Fatalf("guardless page with endpoints should be an error, got severity %v", guard.Severity)
 	}
 }
 
@@ -786,6 +811,22 @@ func TestValidatePageRejectsProtectedGuardOnBuildTimePage(t *testing.T) {
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Source: sourcePath,
+		Guards: []string{"auth.required"},
+		Render: gowdk.SPA,
+		Blocks: gwdkir.Blocks{View: true},
+	}
+
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(page))
+	if !hasDiagnosticCode(diagnostics, "guard_requires_request_render") {
+		t.Fatalf("missing guard_requires_request_render diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidatePageRejectsProtectedGuardOnBuildTimePageWithMissingSourceFile(t *testing.T) {
+	page := gwdkir.Page{
+		ID:     "dashboard",
+		Route:  "/dashboard",
+		Source: filepath.Join(t.TempDir(), "missing.page.gwdk"),
 		Guards: []string{"auth.required"},
 		Render: gowdk.SPA,
 		Blocks: gwdkir.Blocks{View: true},
@@ -4791,9 +4832,33 @@ func TestValidateManifestAllowsKnownAddonGoBlockTarget(t *testing.T) {
 		},
 	}}}
 
-	err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("contracts", gowdk.FeatureContracts)}}, app)
+	err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{compilerGoBlockAddon{}}}, app)
 	if err != nil {
 		t.Fatalf("expected known addon target to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsMarkerAddonGoBlockTarget(t *testing.T) {
+	app := appFixture{Pages: []gwdkir.Page{{
+		ID:      "home",
+		Package: "pages",
+		Route:   "/",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+			GoBlocks: []gwdkir.GoBlock{{
+				Target: "addon.contracts",
+				Body:   `func RegisterContracts() {}`,
+			}},
+		},
+	}}}
+
+	err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("contracts", gowdk.FeatureContracts)}}, app)
+	if err == nil {
+		t.Fatal("expected marker addon go block target error")
+	}
+	if !strings.Contains(err.Error(), `does not implement gowdk.GoBlockConsumer`) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -4986,12 +5051,16 @@ type appFixture struct {
 }
 
 func (app appFixture) program(config gowdk.Config) gwdkir.Program {
+	pages := append([]gwdkir.Page(nil), app.Pages...)
+	for index := range pages {
+		pages[index] = publicTestPage(pages[index])
+	}
 	ir := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{
-		Pages:      app.Pages,
+		Pages:      pages,
 		Components: app.Components,
 		Layouts:    app.Layouts,
 	})
-	gwdkanalysis.AddStandaloneEndpoints(&ir, app.Endpoints)
+	gwdkanalysis.AddStandaloneEndpoints(config, &ir, app.Endpoints)
 	gwdkanalysis.AttachBackendBindings(&ir, app.BackendBindings)
 	return ir
 }
@@ -5004,7 +5073,22 @@ func validateManifest(config gowdk.Config, app appFixture) error {
 // path so page-level validator tests assert against exactly what the build
 // pipeline validates.
 func irPage(page gwdkir.Page) gwdkir.Page {
-	program := appFixture{Pages: []gwdkir.Page{page}}.program(gowdk.Config{})
+	return lowerTestPage(publicTestPage(page))
+}
+
+func irGuardlessPage(page gwdkir.Page) gwdkir.Page {
+	return lowerTestPage(page)
+}
+
+func publicTestPage(page gwdkir.Page) gwdkir.Page {
+	if len(page.Guards) == 0 {
+		page.Guards = []string{"public"}
+	}
+	return page
+}
+
+func lowerTestPage(page gwdkir.Page) gwdkir.Page {
+	program := gwdkanalysis.BuildProgram(gowdk.Config{}, gwdkanalysis.Sources{Pages: []gwdkir.Page{page}})
 	if len(program.Pages) != 1 {
 		panic(fmt.Sprintf("irPage: expected 1 IR page, got %d", len(program.Pages)))
 	}

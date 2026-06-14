@@ -290,7 +290,13 @@ func canonicalTrailingSlashPath(requestPath string) (string, bool) {
 	if requestPath == "" || requestPath == "/" || !strings.HasSuffix(requestPath, "/") {
 		return "", false
 	}
+	if len(requestPath) > 1 && (requestPath[1] == '/' || requestPath[1] == '\\') {
+		return "", false
+	}
 	canonical := path.Clean("/" + requestPath)
+	if len(canonical) > 1 && (canonical[1] == '/' || canonical[1] == '\\') {
+		return "", false
+	}
 	if canonical == requestPath {
 		return "", false
 	}
@@ -339,7 +345,13 @@ func safeRedirectPath(request *http.Request) string {
 	if target == "" {
 		target = "/"
 	}
+	if len(target) == 0 || target[0] != '/' || (len(target) > 1 && (target[1] == '/' || target[1] == '\\')) {
+		return "/"
+	}
 	if parsed.RawQuery != "" {
+		if strings.ContainsAny(parsed.RawQuery, "\r\n") {
+			return "/"
+		}
 		target += "?" + parsed.RawQuery
 	}
 	return target
@@ -361,6 +373,15 @@ func (handler Handler) csrfAwarePayload(response http.ResponseWriter, request *h
 	if handler.CSRF == nil || request.Method != http.MethodGet || !strings.HasSuffix(name, ".html") {
 		return payload, true
 	}
+	return CSRFInjectHTML(response, request, payload, handler.CSRF)
+}
+
+// CSRFInjectHTML injects a hidden CSRF token into HTML POST forms. It returns
+// false after writing a no-store 500 response when token generation fails.
+func CSRFInjectHTML(response http.ResponseWriter, request *http.Request, payload []byte, source CSRFTokenSource) ([]byte, bool) {
+	if source == nil || request.Method != http.MethodGet {
+		return payload, true
+	}
 	matches := formStartTagRanges(payload)
 	if len(matches) == 0 {
 		return payload, true
@@ -377,14 +398,14 @@ func (handler Handler) csrfAwarePayload(response http.ResponseWriter, request *h
 			continue
 		}
 		if token == "" {
-			generated, err := handler.CSRF.Token(response, request)
+			generated, err := source.Token(response, request)
 			if err != nil {
 				response.Header().Set("Cache-Control", "no-store")
 				http.Error(response, "csrf token unavailable", http.StatusInternalServerError)
 				return nil, false
 			}
 			token = generated
-			hidden = csrfHiddenInput(handler.CSRF.FieldName(), token)
+			hidden = csrfHiddenInput(source.FieldName(), token)
 			response.Header().Set("Cache-Control", "no-store")
 		}
 		builder.Write(payload[cursor:match[1]])

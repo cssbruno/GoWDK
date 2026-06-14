@@ -416,7 +416,7 @@ func writeStandaloneAuditHandler(builder *strings.Builder, config gowdk.Config, 
 	}
 	builder.WriteString("\t\t},\n")
 	builder.WriteString("\t\tIdentity: gowdkruntime.Identity{AppID: \"audit\", ModuleName: \"audit\", InstanceID: \"audit-test\"},\n")
-	builder.WriteString("\t\tAssets: runtimeasset.Manifest{Version: 1, Files: map[string]string{}},\n")
+	builder.WriteString("\t\tAssets: runtimeasset.Manifest{Version: runtimeasset.ManifestVersion, Files: map[string]string{}},\n")
 	if headers := auditSecurityHeaders(config); len(headers) > 0 {
 		builder.WriteString("\t\tSecurityHeaders: map[string]string{\n")
 		for _, header := range headers {

@@ -22,6 +22,7 @@ type AssetArtifact struct {
 	Hash        string
 	CachePolicy string
 	SizeBytes   int64
+	Obfuscated  bool
 }
 
 type Result struct {
@@ -68,11 +69,13 @@ type plannedCSSArtifact struct {
 
 type plannedAssetArtifact struct {
 	AssetArtifact
-	contents []byte
+	contents             []byte
+	obfuscationCandidate bool
 }
 
 type buildPlan struct {
-	pages  []plannedArtifact
-	css    []plannedCSSArtifact
-	assets []plannedAssetArtifact
+	pages        []plannedArtifact
+	css          []plannedCSSArtifact
+	assets       []plannedAssetArtifact
+	obfuscations []assetObfuscationRecord
 }

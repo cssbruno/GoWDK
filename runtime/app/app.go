@@ -106,10 +106,10 @@ func LoadAssetManifest(root fs.FS) asset.Manifest {
 	var manifest asset.Manifest
 	payload, err := fs.ReadFile(root, "gowdk-assets.json")
 	if err != nil {
-		return asset.Manifest{Version: 1, Files: map[string]string{}}
+		return asset.Manifest{Version: asset.ManifestVersion, Files: map[string]string{}}
 	}
 	if err := json.Unmarshal(payload, &manifest); err != nil {
-		return asset.Manifest{Version: 1, Files: map[string]string{}}
+		return asset.Manifest{Version: asset.ManifestVersion, Files: map[string]string{}}
 	}
 	if manifest.Files == nil {
 		manifest.Files = map[string]string{}

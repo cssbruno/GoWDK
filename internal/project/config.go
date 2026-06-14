@@ -495,6 +495,8 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 			build.Output = parseString(keyValue.Value)
 		case "Mode":
 			build.Mode = parseBuildMode(keyValue.Value)
+		case "ObfuscateAssets":
+			build.ObfuscateAssets = parseBool(keyValue.Value)
 		case "Head":
 			build.Head = parseHeadConfig(keyValue.Value)
 		case "CSRF":

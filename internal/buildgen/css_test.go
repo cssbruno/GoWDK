@@ -442,7 +442,7 @@ func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 	if err := json.Unmarshal(assetManifestPayload, &assets); err != nil {
 		t.Fatal(err)
 	}
-	if assets.Version != 1 || assets.Resolve("assets/app.css") != emittedRel {
+	if assets.Version != runtimeasset.ManifestVersion || assets.Resolve("assets/app.css") != emittedRel {
 		t.Fatalf("unexpected asset manifest: %s", assetManifestPayload)
 	}
 	if hash := assets.Hash("assets/app.css"); !strings.HasPrefix(hash, "sha256:") {

@@ -111,8 +111,10 @@ Implemented today:
   `gowdk-assets.json`, include the component registration source span, and are
   linked from the stub JS with `sourceMappingURL`.
   `Build.Mode: gowdk.Production` omits those debug source map artifacts and
-  comments and compacts generated island JavaScript by trimming
-  formatting-only whitespace.
+  comments and compacts generated island JavaScript. `Build.ObfuscateAssets`
+  or `gowdk build --obfuscate-assets` enables stronger deterministic
+  minification/identifier shortening for compiler-owned generated browser
+  JavaScript in production builds.
 - Generated build output emits package-scoped island assets:
   `assets/gowdk/islands/<package>/<Component>.js` stubs for generated
   JavaScript islands, and `assets/gowdk/islands/<package>/<Component>.wasm` plus
@@ -359,7 +361,7 @@ as `/blog/hello-gowdk`.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "files": {
     "assets/app.css": "assets/app.7ada5a1234b1.css"
   },
@@ -372,19 +374,24 @@ as `/blog/hello-gowdk`.
   "cache": {
     "assets/app.css": "public, max-age=31536000, immutable",
     "index.html": "public, max-age=120"
+  },
+  "obfuscated": {
+    "assets/gowdk/gowdk.js": true
   }
 }
 ```
 
 The `files` map resolves logical asset names to slash-separated paths relative
 to the selected output directory. `hashes` records SHA-256 content hashes for
-generated assets, `sizes` records generated asset byte counts, and `cache`
-records the HTTP cache policy generated binaries should apply when serving
-generated assets or route HTML files. The current implementation records CSS
-files emitted by CSS processors, generated page CSS files, partial runtime
-assets, generated island runtime assets, generated island source maps, WASM
-island assets, and page-level `cache` policies for generated SPA HTML. It does
-not record configured stylesheet URLs that were not written by the build.
+generated assets, `sizes` records generated asset byte counts, `cache` records
+the HTTP cache policy generated binaries should apply when serving generated
+assets or route HTML files, and `obfuscated` marks compiler-owned generated
+browser assets transformed by production asset obfuscation. The current
+implementation records CSS files emitted by CSS processors, generated page CSS
+files, partial runtime assets, generated island runtime assets, generated
+island source maps, WASM island assets, and page-level `cache` policies for
+generated SPA HTML. It does not record configured stylesheet URLs that were not
+written by the build.
 
 ## Current Build Report
 

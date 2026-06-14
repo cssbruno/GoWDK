@@ -290,8 +290,9 @@ func islandSharedRuntimeArtifact(outputDir string, includeSourceMap bool) planne
 		source = compactGeneratedJSSource(source)
 	}
 	return plannedAssetArtifact{
-		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
-		contents:      []byte(source),
+		AssetArtifact:        AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
+		contents:             []byte(source),
+		obfuscationCandidate: true,
 	}
 }
 
@@ -302,8 +303,9 @@ func islandJSArtifact(outputDir string, component gwdkir.Component, includeSourc
 		source = compactGeneratedJSSource(source)
 	}
 	return plannedAssetArtifact{
-		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
-		contents:      []byte(source),
+		AssetArtifact:        AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
+		contents:             []byte(source),
+		obfuscationCandidate: true,
 	}
 }
 

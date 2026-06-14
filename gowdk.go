@@ -161,6 +161,7 @@ type BuildConfig struct {
 	Output              string
 	Mode                BuildMode
 	Assets              AssetMode
+	ObfuscateAssets     bool
 	Head                HeadConfig
 	CSRF                CSRFConfig
 	SecurityHeaders     SecurityHeadersConfig
@@ -294,6 +295,12 @@ const (
 // debugging metadata.
 func (config BuildConfig) DebugAssets() bool {
 	return config.Mode != Production
+}
+
+// ObfuscatesAssets reports whether compiler-owned generated browser assets
+// should be transformed for production output.
+func (config BuildConfig) ObfuscatesAssets() bool {
+	return config.ObfuscateAssets
 }
 
 // RenderMode describes where full-page HTML is produced.

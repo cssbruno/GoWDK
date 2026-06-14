@@ -4,7 +4,7 @@ import "testing"
 
 func TestManifestResolve(t *testing.T) {
 	manifest := Manifest{
-		Version: 1,
+		Version: ManifestVersion,
 		Files: map[string]string{
 			"assets/app.css": "assets/app.css",
 		},
@@ -16,6 +16,9 @@ func TestManifestResolve(t *testing.T) {
 		},
 		Sizes: map[string]int64{
 			"assets/app.css": 42,
+		},
+		Obfuscated: map[string]bool{
+			"assets/app.css": true,
 		},
 	}
 
@@ -37,6 +40,12 @@ func TestManifestResolve(t *testing.T) {
 	if got := manifest.SizeBytes("missing.css"); got != 0 {
 		t.Fatalf("expected missing asset size to be zero, got %d", got)
 	}
+	if !manifest.IsObfuscated("assets/app.css") {
+		t.Fatal("expected obfuscated asset marker")
+	}
+	if (Manifest{}).IsObfuscated("assets/app.css") {
+		t.Fatal("expected nil manifest obfuscation marker to be false")
+	}
 	if got := (Manifest{}).Resolve("assets/app.css"); got != "" {
 		t.Fatalf("expected nil manifest to resolve empty, got %q", got)
 	}
@@ -44,7 +53,7 @@ func TestManifestResolve(t *testing.T) {
 
 func TestManifestURL(t *testing.T) {
 	manifest := Manifest{
-		Version: 1,
+		Version: ManifestVersion,
 		Files: map[string]string{
 			"app.css":                "assets/app.css",
 			"absolute.css":           "/assets/absolute.css",

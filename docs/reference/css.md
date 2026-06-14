@@ -250,7 +250,7 @@ Processor-emitted CSS files are recorded in `gowdk-assets.json`:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "files": {
     "assets/app.css": "assets/app.7ada5a1234b1.css"
   },

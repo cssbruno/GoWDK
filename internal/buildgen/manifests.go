@@ -143,6 +143,7 @@ func assetManifestPayload(outputDir string, pageArtifacts []Artifact, cssArtifac
 	hashes := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
 	cache := make(map[string]string, len(pageArtifacts)+len(cssArtifacts)+len(assetArtifacts))
 	sizes := make(map[string]int64, len(cssArtifacts)+len(assetArtifacts))
+	obfuscated := make(map[string]bool, len(assetArtifacts))
 	for _, artifact := range pageArtifacts {
 		if artifact.CachePolicy == "" {
 			continue
@@ -190,9 +191,13 @@ func assetManifestPayload(outputDir string, pageArtifacts []Artifact, cssArtifac
 			sizes[logical] = artifact.SizeBytes
 			sizes[rel] = artifact.SizeBytes
 		}
+		if artifact.Obfuscated {
+			obfuscated[logical] = true
+			obfuscated[rel] = true
+		}
 	}
 
-	manifest := runtimeasset.Manifest{Version: 1, Files: files}
+	manifest := runtimeasset.Manifest{Version: runtimeasset.ManifestVersion, Files: files}
 	if len(hashes) > 0 {
 		manifest.Hashes = hashes
 	}
@@ -201,6 +206,9 @@ func assetManifestPayload(outputDir string, pageArtifacts []Artifact, cssArtifac
 	}
 	if len(sizes) > 0 {
 		manifest.Sizes = sizes
+	}
+	if len(obfuscated) > 0 {
+		manifest.Obfuscated = obfuscated
 	}
 	payload, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {

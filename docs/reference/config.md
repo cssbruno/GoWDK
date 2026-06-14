@@ -293,13 +293,16 @@ runtime-specific security controls.
 ## Build
 
 `BuildConfig.Output`, `BuildConfig.Mode`, `BuildConfig.Assets`,
+`BuildConfig.ObfuscateAssets`,
 `BuildConfig.Head`, `BuildConfig.CSRF`, `BuildConfig.SecurityHeaders`, `BuildConfig.BodyLimits`,
 `BuildConfig.AllowMissingBackend`, `BuildConfig.Stylesheets`,
 `BuildConfig.Scripts`, and `BuildConfig.Targets` are target build settings.
 Current `gowdk build` reads literal `Build.Output`, `Build.Mode`,
-`Build.Head`, `Build.CSRF`, `Build.SecurityHeaders`, `Build.BodyLimits`,
-`Build.AllowMissingBackend`, `Build.Stylesheets`, `Build.Scripts`, and `Build.Targets` from
-`gowdk.config.go`; `--out` overrides `Build.Output` for ad hoc builds.
+`Build.ObfuscateAssets`, `Build.Head`, `Build.CSRF`,
+`Build.SecurityHeaders`, `Build.BodyLimits`, `Build.AllowMissingBackend`,
+`Build.Stylesheets`, `Build.Scripts`, and `Build.Targets` from
+`gowdk.config.go`; `--out` overrides `Build.Output` for ad hoc builds and
+`--obfuscate-assets` overrides `Build.Mode` to production for that build.
 `BuildConfig.Assets` remains planned.
 
 `Build.Targets` declares repeatable module-to-output packaging:
@@ -309,6 +312,7 @@ type BuildConfig struct {
 	Output              string
 	Mode                gowdk.BuildMode
 	Assets              gowdk.AssetMode
+	ObfuscateAssets     bool
 	Head                gowdk.HeadConfig
 	CSRF                gowdk.CSRFConfig
 	SecurityHeaders     gowdk.SecurityHeadersConfig
@@ -366,8 +370,18 @@ type BuildTargetConfig struct {
 `Mode` controls development metadata in generated frontend artifacts. The
 default omitted mode behaves like `gowdk.Development` and emits JavaScript
 island source maps. Set `Mode: gowdk.Production` to omit `.js.map` artifacts and
-`sourceMappingURL` comments and to compact generated island JavaScript by
-trimming formatting-only whitespace.
+`sourceMappingURL` comments and to compact generated island JavaScript.
+
+`ObfuscateAssets` is a production-only optimization/hardening switch for
+compiler-owned generated browser JavaScript such as the SPA/partial runtime,
+store runtime, island runtime/stubs, and WASM loader glue. It uses deterministic
+minification/identifier shortening, disables generated source maps through
+production mode, records transformed assets in `gowdk-assets.json`, and writes
+`asset_obfuscation` / `asset_obfuscated` build-report events. It is not a
+security boundary and does not replace server-side auth, guards, CSRF,
+validation, or handler authorization. Configs that set `ObfuscateAssets: true`
+must also set `Mode: gowdk.Production`; the CLI flag `--obfuscate-assets`
+sets both for the current build.
 
 Production mode also requires explicitly declared `act` and `api` endpoints to
 bind to supported same-package Go handlers. Missing or unsupported handlers fail

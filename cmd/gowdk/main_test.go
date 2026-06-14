@@ -2606,6 +2606,64 @@ view {
 	}
 }
 
+func TestBuildCommandObfuscateAssetsFlag(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
+
+page home
+route "/"
+
+view {
+  <main><a href="/docs">Docs</a></main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "docs.page.gwdk"), `package app
+
+page docs
+route "/docs"
+
+view {
+  <main>Docs</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build", "--config", config, "--obfuscate-assets", "--out", outputDir, "home.page.gwdk", "docs.page.gwdk"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	payload, err := os.ReadFile(filepath.Join(outputDir, "gowdk-assets.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var assets runtimeasset.Manifest
+	if err := json.Unmarshal(payload, &assets); err != nil {
+		t.Fatal(err)
+	}
+	if assets.Version != runtimeasset.ManifestVersion {
+		t.Fatalf("expected asset manifest version %d, got %d", runtimeasset.ManifestVersion, assets.Version)
+	}
+	if !assets.IsObfuscated("assets/gowdk/gowdk.js") {
+		t.Fatalf("expected obfuscation metadata in manifest: %s", payload)
+	}
+	reportPayload, err := os.ReadFile(filepath.Join(outputDir, "gowdk-build-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(reportPayload), `"kind": "asset_obfuscated"`) {
+		t.Fatalf("expected asset obfuscation event in report:\n%s", reportPayload)
+	}
+}
+
 func TestBuildCommandBuildsActionExampleWithImportedComponents(t *testing.T) {
 	repoRoot, err := filepath.Abs("../..")
 	if err != nil {

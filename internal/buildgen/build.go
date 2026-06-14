@@ -71,6 +71,7 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 			"assets": fmt.Sprint(len(planned.assets)),
 		},
 	})
+	reportAssetObfuscation(reporter, config.Build.ObfuscateAssets, planned.obfuscations)
 	reportSkippedPrerenderPages(reporter, config, ir)
 
 	result := Result{
@@ -263,6 +264,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 			"assets": fmt.Sprint(len(planned.assets)),
 		},
 	})
+	reportAssetObfuscation(reporter, config.Build.ObfuscateAssets, planned.obfuscations)
 	reportSkippedPrerenderPages(reporter, config, ir)
 
 	result := MemoryResult{
@@ -524,12 +526,18 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 		return Result{}, reporter.fail("plan", err)
 	}
 	runtime = append(componentAssets, append(scopedJS, runtime...)...)
+	var obfuscations []assetObfuscationRecord
+	runtime, obfuscations, err = applyAssetObfuscation(config, outputDir, runtime)
+	if err != nil {
+		return Result{}, reporter.fail("plan", err)
+	}
 	reporter.info("plan", "artifacts_planned", "incremental artifacts planned", BuildEvent{
 		Data: map[string]string{
 			"css":    fmt.Sprint(len(css.assets)),
 			"assets": fmt.Sprint(len(runtime)),
 		},
 	})
+	reportAssetObfuscation(reporter, config.Build.ObfuscateAssets, obfuscations)
 
 	result := Result{
 		Artifacts:      make([]Artifact, 0, len(ir.Pages)),
@@ -884,5 +892,9 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	}
 	assets := append(componentAssets, scopedJS...)
 	assets = append(assets, runtime...)
-	return buildPlan{pages: planned, css: css.assets, assets: assets}, nil
+	assets, obfuscations, err := applyAssetObfuscation(config, outputDir, assets)
+	if err != nil {
+		return buildPlan{}, err
+	}
+	return buildPlan{pages: planned, css: css.assets, assets: assets, obfuscations: obfuscations}, nil
 }

@@ -163,7 +163,7 @@ SPA builds also write `gowdk-assets.json` in the selected output directory:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "files": {
     "assets/app.css": "assets/app.7ada5a1234b1.css"
   }
@@ -177,4 +177,6 @@ selected output directory; generated CSS is minified and emitted with
 content-hashed filenames. The `cache` map may include route HTML paths such as
 `index.html` without adding those route files to `files`; when a page declares
 `revalidate`, the recorded cache policy includes the generated
-`stale-while-revalidate=<seconds>` directive.
+`stale-while-revalidate=<seconds>` directive. The optional `obfuscated` map
+marks compiler-owned generated browser assets transformed by production asset
+obfuscation.

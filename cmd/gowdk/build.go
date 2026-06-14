@@ -21,7 +21,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
+const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
 
 func build(args []string) error {
 	started := time.Now()
@@ -584,6 +584,10 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		case arg == "--allow-missing-backend":
 			plan.Options.AllowMissingBackend = true
 			plan.Options.Config.Build.AllowMissingBackend = true
+		case arg == "--obfuscate-assets":
+			plan.Options.ObfuscateAssets = true
+			plan.Options.Config.Build.ObfuscateAssets = true
+			plan.Options.Config.Build.Mode = gowdk.Production
 		case arg == "--out":
 			i++
 			if i >= len(args) {

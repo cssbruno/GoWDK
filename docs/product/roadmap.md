@@ -119,7 +119,8 @@ level, the current baseline already includes:
   assets, route manifests, asset manifests, build reports, generated app
   output, non-served security posture reports, embedded assets, local binaries,
   generated Docker contexts for one-binary deploys, WASM deploy artifacts,
-  optional sitemap/robots output, and a polling dev server with live reload;
+  optional sitemap/robots output, optional production generated-asset
+  obfuscation, and a polling dev server with live reload;
 - component discovery, imported props/state contracts, slots, generated
   JavaScript islands, component-level WASM island assets, and a first-slice client
   language for local component behavior;

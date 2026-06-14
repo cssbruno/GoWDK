@@ -70,6 +70,7 @@ var Config = gowdk.Config{
 	Build: gowdk.BuildConfig{
 		Output: "dist/site",
 		Mode: gowdk.Production,
+		ObfuscateAssets: true,
 		Head: gowdk.HeadConfig{
 			SiteName: "Example",
 			Favicon: "/favicon.ico",
@@ -185,6 +186,9 @@ var Config = gowdk.Config{
 	}
 	if config.Build.Mode != gowdk.Production {
 		t.Fatalf("unexpected build mode: %q", config.Build.Mode)
+	}
+	if !config.Build.ObfuscateAssets {
+		t.Fatal("expected ObfuscateAssets to be parsed")
 	}
 	if config.Build.Head.SiteName != "Example" || config.Build.Head.Favicon != "/favicon.ico" || config.Build.Head.Image != "https://example.com/social.png" || config.Build.Head.TwitterCard != "summary_large_image" {
 		t.Fatalf("unexpected build head config: %#v", config.Build.Head)

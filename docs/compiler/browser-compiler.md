@@ -153,5 +153,7 @@ Build: gowdk.BuildConfig{
 ```
 
 Development mode emits JavaScript island source maps. Production mode omits
-`.js.map` artifacts and `sourceMappingURL` comments and trims formatting-only
-whitespace from generated island JavaScript.
+`.js.map` artifacts and `sourceMappingURL` comments and compacts generated
+island JavaScript. `Build.ObfuscateAssets` or `gowdk build --obfuscate-assets`
+enables stronger deterministic minification/identifier shortening for
+compiler-owned generated browser JavaScript in production builds.

@@ -28,7 +28,7 @@ gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
 gowdk list commands|queries|events|jobs [--json] [dir]
-gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
+gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk preview [--addr <addr>] [--hot] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
@@ -87,6 +87,12 @@ gowdk lsp [--ssr]
   contract references, invalid contract handler signatures, and duplicate
   command owners.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
+- `--obfuscate-assets`: supported by `build` and forwarded by `dev`; enables
+  deterministic production obfuscation/minification for compiler-owned
+  generated browser JavaScript, forces `Build.Mode` to `gowdk.Production` for
+  that build, records transformed assets in `gowdk-assets.json`, and writes
+  `asset_obfuscation` / `asset_obfuscated` build-report events. This is an
+  optimization/hardening option, not a security boundary.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
 - `--module`: supported by `check`, `doctor`, `audit`, `manifest`, `sitemap`, `routes`,
   `endpoints`, `inspect`, `generate stubs`, and `build`; may be repeated or

@@ -102,7 +102,7 @@ func TestBuildWritesSPAHTMLForSimpleRoute(t *testing.T) {
 	if err := json.Unmarshal(assetManifestPayload, &assets); err != nil {
 		t.Fatal(err)
 	}
-	if assets.Version != 1 || len(assets.Files) != 0 {
+	if assets.Version != runtimeasset.ManifestVersion || len(assets.Files) != 0 {
 		t.Fatalf("unexpected asset manifest: %s", assetManifestPayload)
 	}
 
@@ -309,7 +309,7 @@ func TestBuildMemoryReturnsSPAArtifactsWithoutWriting(t *testing.T) {
 	if !strings.Contains(string(result.Files[routeManifestFile]), `"route": "/"`) {
 		t.Fatalf("expected route manifest in memory result: %s", result.Files[routeManifestFile])
 	}
-	if !strings.Contains(string(result.Files[assetManifestFile]), `"version": 1`) {
+	if !strings.Contains(string(result.Files[assetManifestFile]), `"version": 2`) {
 		t.Fatalf("expected asset manifest in memory result: %s", result.Files[assetManifestFile])
 	}
 	if !strings.Contains(string(result.Files[buildReportFile]), `"mode": "memory"`) {

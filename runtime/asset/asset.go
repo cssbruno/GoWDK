@@ -2,13 +2,17 @@ package asset
 
 import "strings"
 
+// ManifestVersion is the current gowdk-assets.json schema version.
+const ManifestVersion = 2
+
 // Manifest maps logical asset names to emitted paths.
 type Manifest struct {
-	Version int               `json:"version"`
-	Files   map[string]string `json:"files"`
-	Hashes  map[string]string `json:"hashes,omitempty"`
-	Cache   map[string]string `json:"cache,omitempty"`
-	Sizes   map[string]int64  `json:"sizes,omitempty"`
+	Version    int               `json:"version"`
+	Files      map[string]string `json:"files"`
+	Hashes     map[string]string `json:"hashes,omitempty"`
+	Cache      map[string]string `json:"cache,omitempty"`
+	Sizes      map[string]int64  `json:"sizes,omitempty"`
+	Obfuscated map[string]bool   `json:"obfuscated,omitempty"`
 }
 
 // Resolve returns the emitted path for a logical asset name.
@@ -42,6 +46,15 @@ func (manifest Manifest) SizeBytes(name string) int64 {
 		return 0
 	}
 	return manifest.Sizes[name]
+}
+
+// IsObfuscated reports whether a logical asset name was emitted through the
+// production generated-asset obfuscation lane.
+func (manifest Manifest) IsObfuscated(name string) bool {
+	if manifest.Obfuscated == nil {
+		return false
+	}
+	return manifest.Obfuscated[name]
 }
 
 // URL returns the browser-facing URL for a logical asset name.

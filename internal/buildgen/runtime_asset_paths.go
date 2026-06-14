@@ -30,16 +30,18 @@ func islandWASMExecGoVersion() string {
 func islandWASMLoaderArtifact(outputDir string, component gwdkir.Component) plannedAssetArtifact {
 	assetPath := islandWASMLoaderAssetPath(component.Package, component.Name)
 	return plannedAssetArtifact{
-		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
-		contents:      []byte(islandWASMLoaderSource(component)),
+		AssetArtifact:        AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
+		contents:             []byte(islandWASMLoaderSource(component)),
+		obfuscationCandidate: true,
 	}
 }
 
 func clientGoBlockWASMLoaderArtifact(outputDir string, page gwdkir.Page) plannedAssetArtifact {
 	assetPath := clientGoBlockWASMLoaderAssetPath(page)
 	return plannedAssetArtifact{
-		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
-		contents:      []byte(clientGoBlockWASMLoaderSource(page)),
+		AssetArtifact:        AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
+		contents:             []byte(clientGoBlockWASMLoaderSource(page)),
+		obfuscationCandidate: true,
 	}
 }
 

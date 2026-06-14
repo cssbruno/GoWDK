@@ -3106,6 +3106,19 @@ func TestBuildWASMCompilesGeneratedApp(t *testing.T) {
 	}
 }
 
+func TestGeneratedAppGoEnvDisablesParentWorkspace(t *testing.T) {
+	env := generatedAppGoEnv([]string{"PATH=/bin", "GOWORK=/repo/go.work", "GOOS=linux"})
+	if !containsString(env, "PATH=/bin") || !containsString(env, "GOOS=linux") {
+		t.Fatalf("expected unrelated env vars to be preserved: %#v", env)
+	}
+	if containsString(env, "GOWORK=/repo/go.work") {
+		t.Fatalf("expected parent GOWORK to be removed: %#v", env)
+	}
+	if !containsString(env, "GOWORK=off") {
+		t.Fatalf("expected generated app builds to disable workspace mode: %#v", env)
+	}
+}
+
 func TestGeneratedBinaryServesEmbeddedSPAHTML(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -3650,6 +3663,51 @@ func TestModuleSourceToleratesUndeterminedAppModuleWithoutLocalImports(t *testin
 	}
 	if !strings.Contains(source, "module gowdk-generated-app") {
 		t.Fatalf("expected a valid generated go.mod, got:\n%s", source)
+	}
+}
+
+func TestParseCurrentAppModuleSelectsWorkspaceModule(t *testing.T) {
+	output := []byte(`{
+	"Path": "example.com/root",
+	"Main": true,
+	"Dir": "/repo",
+	"GoMod": "/repo/go.mod"
+}
+{
+	"Path": "example.com/root/adapter",
+	"Main": true,
+	"Dir": "/repo/runtime/adapter",
+	"GoMod": "/repo/runtime/adapter/go.mod"
+}
+`)
+
+	info, err := parseCurrentAppModule(output, "/repo/runtime/adapter/go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Path != "example.com/root/adapter" || info.Dir != "/repo/runtime/adapter" {
+		t.Fatalf("expected adapter module, got %#v", info)
+	}
+}
+
+func TestParseCurrentAppModuleRejectsAmbiguousWorkspaceOutput(t *testing.T) {
+	output := []byte(`{
+	"Path": "example.com/root",
+	"Main": true,
+	"Dir": "/repo",
+	"GoMod": "/repo/go.mod"
+}
+{
+	"Path": "example.com/root/adapter",
+	"Main": true,
+	"Dir": "/repo/runtime/adapter",
+	"GoMod": "/repo/runtime/adapter/go.mod"
+}
+`)
+
+	_, err := parseCurrentAppModule(output, "/other/go.mod")
+	if err == nil || !strings.Contains(err.Error(), "workspace modules") {
+		t.Fatalf("expected ambiguous workspace output error, got %v", err)
 	}
 }
 

@@ -1,12 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-cat <<'EOF'
-.
-runtime/adapters/echo
-runtime/adapters/fiber
-runtime/adapters/gin
-runtime/contracts/natsbroker
-runtime/contracts/redisstream
-runtime/contracts/websocketfanout
-EOF
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+(cd "${repo_root}" && go work edit -json) |
+	sed -n 's/^[[:space:]]*"DiskPath": "\(.*\)".*/\1/p' |
+	sed 's#^\./##'

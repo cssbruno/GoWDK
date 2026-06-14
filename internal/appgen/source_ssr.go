@@ -8,7 +8,9 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func ssrHandlerSource(routes []SSRRoute) (string, error) {
+func ssrHandlerSource(routes []SSRRoute) (source string, err error) {
+	defer recoverGeneratedIdentifierError(&err)
+
 	sorted := sortedSSRRoutes(routes)
 	return printActionDecls([]ast.Decl{
 		ssrExactDecl(sorted, false, false),

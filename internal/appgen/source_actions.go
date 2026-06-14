@@ -14,7 +14,9 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func actionHandlerSource(actions []ActionEndpoint, csrf bool) (string, error) {
+func actionHandlerSource(actions []ActionEndpoint, csrf bool) (source string, err error) {
+	defer recoverGeneratedIdentifierError(&err)
+
 	sorted := backendAdapterIR(Options{Actions: actions}).Actions
 	decls := []ast.Decl{actionFuncDecl(sorted, csrf, false)}
 	if len(sorted) > 0 {
@@ -873,7 +875,7 @@ func call(fun ast.Expr, args ...ast.Expr) *ast.CallExpr {
 
 func sel(parts ...string) ast.Expr {
 	if len(parts) == 0 {
-		return id("")
+		panic(generatedIdentifierError{message: "generated Go selector requires at least one identifier"})
 	}
 	var expr ast.Expr = id(parts[0])
 	for _, part := range parts[1:] {
@@ -891,6 +893,9 @@ func keyValue(key string, value ast.Expr) ast.Expr {
 }
 
 func id(name string) *ast.Ident {
+	if !token.IsIdentifier(name) || token.Lookup(name).IsKeyword() {
+		panic(generatedIdentifierError{message: fmt.Sprintf("invalid generated Go identifier %q", name)})
+	}
 	return ast.NewIdent(name)
 }
 

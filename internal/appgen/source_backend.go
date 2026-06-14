@@ -92,7 +92,9 @@ func sortAPIEndpoints(apis []APIEndpoint) {
 	})
 }
 
-func backendProxySource(options Options) (string, error) {
+func backendProxySource(options Options) (source string, err error) {
+	defer recoverGeneratedIdentifierError(&err)
+
 	if !options.ProxyBackend || !hasBackendRoutes(options) {
 		return "", nil
 	}

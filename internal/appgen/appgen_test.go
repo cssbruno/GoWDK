@@ -1842,6 +1842,56 @@ func TestAppShellSourceEmitterDoesNotUseRawTemplates(t *testing.T) {
 	}
 }
 
+func TestActionHandlerSourceReturnsInvalidGeneratedIdentifierError(t *testing.T) {
+	_, err := actionHandlerSource([]ActionEndpoint{invalidGeneratedIdentifierActionEndpoint()}, false)
+	assertInvalidGeneratedIdentifierError(t, err)
+}
+
+func TestGenerateWithOptionsReturnsInvalidGeneratedIdentifierError(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "Login", "index.html"), "<main>Login</main>")
+
+	_, err := GenerateWithOptions(outputDir, appDir, Options{
+		Actions: []ActionEndpoint{invalidGeneratedIdentifierActionEndpoint()},
+	})
+	assertInvalidGeneratedIdentifierError(t, err)
+}
+
+func invalidGeneratedIdentifierActionEndpoint() ActionEndpoint {
+	return ActionEndpoint{
+		PageID:       "Login",
+		ActionName:   "Login",
+		Method:       http.MethodPost,
+		Route:        "/Login",
+		BackendAlias: "auth",
+		Binding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/auth",
+			PackageName:  "auth",
+			FunctionName: "Login",
+			Signature:    source.BackendSignatureActionForm,
+			InputType:    "LoginInput",
+			InputFields: []source.BackendInputField{{
+				FieldName: "Email-Address",
+				FormName:  "email",
+				Type:      "string",
+			}},
+		},
+	}
+}
+
+func assertInvalidGeneratedIdentifierError(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected invalid generated identifier error")
+	}
+	if !strings.Contains(err.Error(), `invalid generated Go identifier "Email-Address"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestGeneratedPackageSourceIsGoFormatted(t *testing.T) {
 	source, err := appPackageSource(Options{IR: &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
 		Kind:        gwdkir.ContractCommand,

@@ -25,7 +25,9 @@ func Generate(outputDir, appDir string) (Result, error) {
 }
 
 // GenerateWithOptions writes a self-contained Go app that embeds outputDir.
-func GenerateWithOptions(outputDir, appDir string, options Options) (Result, error) {
+func GenerateWithOptions(outputDir, appDir string, options Options) (result Result, err error) {
+	defer recoverGeneratedIdentifierError(&err)
+
 	if strings.TrimSpace(outputDir) == "" {
 		return Result{}, fmt.Errorf("build output directory is required")
 	}
@@ -142,7 +144,9 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (Result, err
 
 // GenerateBackendWithOptions writes a generated Go app that serves only
 // request-time backend routes for feature-bound actions and APIs.
-func GenerateBackendWithOptions(appDir string, options Options) (Result, error) {
+func GenerateBackendWithOptions(appDir string, options Options) (result Result, err error) {
+	defer recoverGeneratedIdentifierError(&err)
+
 	if strings.TrimSpace(appDir) == "" {
 		return Result{}, fmt.Errorf("generated backend app directory is required")
 	}

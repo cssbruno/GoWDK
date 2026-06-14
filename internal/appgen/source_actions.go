@@ -663,7 +663,10 @@ func boundActionDecoderDecl(action BackendActionAdapter) *ast.FuncDecl {
 
 func boundActionFieldDecodeStmts(index int, field source.BackendInputField) []ast.Stmt {
 	value := id(fmtFieldValueName(index))
-	fieldType := source.MustBackendInputFieldType(field.Type)
+	fieldType, ok := source.LookupBackendInputFieldType(field.Type)
+	if !ok {
+		panic(fmt.Sprintf("unsupported backend input field type %q for %s.%s", field.Type, field.FieldName, field.FormName))
+	}
 	switch fieldType.Kind {
 	case source.BackendInputFieldKindString:
 		return boundActionScalarFieldDecodeStmts(value, field, call(sel("gowdkform", "String"), id("values"), stringLit(field.FormName)), value)

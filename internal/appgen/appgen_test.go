@@ -1500,7 +1500,7 @@ func TestBoundActionDecoderRejectsUnsupportedInputFieldType(t *testing.T) {
 			t.Fatal("expected unsupported backend input field type panic")
 		}
 		message, ok := recovered.(string)
-		if !ok || !strings.Contains(message, "unsupported backend input field type: float64") {
+		if !ok || !strings.Contains(message, `unsupported backend input field type "float64"`) {
 			t.Fatalf("unexpected panic: %v", recovered)
 		}
 	}()

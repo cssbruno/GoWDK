@@ -100,6 +100,15 @@ func assetArtifactByLogicalPath(t *testing.T, artifacts []AssetArtifact, logical
 	return AssetArtifact{}
 }
 
+func sharedIslandRuntimePath(outputDir string) string {
+	return filepath.Join(outputDir, "assets", "gowdk", "islands", "island.js")
+}
+
+func readSharedIslandRuntime(t *testing.T, outputDir string) string {
+	t.Helper()
+	return readFile(t, sharedIslandRuntimePath(outputDir))
+}
+
 func mustRelativePath(t *testing.T, base string, path string) string {
 	t.Helper()
 	rel, err := filepath.Rel(base, path)

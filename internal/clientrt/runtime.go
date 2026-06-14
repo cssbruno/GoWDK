@@ -31,13 +31,25 @@ type IslandJSOptions struct {
 	DestroyFunction string
 }
 
-// IslandJSSource returns the generated JavaScript island runtime for one component.
+// IslandRuntimeSource returns the shared generated JavaScript island runtime.
+func IslandRuntimeSource() string {
+	return assetSource("island.js")
+}
+
+// IslandJSSource returns the generated JavaScript island registration stub for
+// one component.
 func IslandJSSource(options IslandJSOptions) string {
-	source := assetSource("island.js")
-	source = replaceQuotedPlaceholder(source, "__GOWDK_COMPONENT__", options.Component)
-	source = strings.ReplaceAll(source, "__GOWDK_MOUNT_FUNCTION__", options.MountFunction)
-	source = strings.ReplaceAll(source, "__GOWDK_DESTROY_FUNCTION__", options.DestroyFunction)
-	return source
+	return replaceQuotedPlaceholder(`(() => {
+  const component = "__GOWDK_COMPONENT__";
+  const register = window.__gowdkRegisterJSIsland;
+  if (typeof register === "function") {
+    register(component);
+    return;
+  }
+  const registry = window.__gowdkIslandRegistry || (window.__gowdkIslandRegistry = { components: Object.create(null), roots: new WeakMap() });
+  registry.components[component] = true;
+})();
+`, "__GOWDK_COMPONENT__", options.Component)
 }
 
 // ClientGoBlockWASMLoaderOptions names the per-page values inserted into the

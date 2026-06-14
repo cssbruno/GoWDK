@@ -154,9 +154,9 @@ func TestRuntimeTemplatesReplacePlaceholders(t *testing.T) {
 		}
 	}
 	if !strings.Contains(rendered[0], `const component = "Counter";`) ||
-		!strings.Contains(rendered[0], `async function mountCounterIsland(scope)`) ||
-		!strings.Contains(rendered[0], `async function destroyCounterIsland()`) {
-		t.Fatalf("rendered island runtime did not include component-specific names:\n%s", rendered[0])
+		!strings.Contains(rendered[0], `window.__gowdkRegisterJSIsland`) ||
+		!strings.Contains(rendered[0], `registry.components[component] = true`) {
+		t.Fatalf("rendered island stub did not include component registration:\n%s", rendered[0])
 	}
 	if !strings.Contains(rendered[1], `const mountExport = "GOWDKMountHome";`) {
 		t.Fatalf("rendered page WASM loader did not include mount export:\n%s", rendered[1])
@@ -167,11 +167,7 @@ func TestRuntimeTemplatesReplacePlaceholders(t *testing.T) {
 }
 
 func TestIslandRuntimeClonesTemplateDOM(t *testing.T) {
-	source := IslandJSSource(IslandJSOptions{
-		Component:       "Nested",
-		MountFunction:   "mountNestedIsland",
-		DestroyFunction: "destroyNestedIsland",
-	})
+	source := IslandRuntimeSource()
 	for _, forbidden := range []string{
 		`data-gowdk-for-template`,
 		`holder.innerHTML`,

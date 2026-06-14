@@ -19,8 +19,9 @@ to inspect.
 
 Stateful components use generated JavaScript islands by default. A component
 with `state <alias>.<Type> = <alias>.<Init>()` renders initial state at build
-time and emits `assets/gowdk/islands/<package>/<Component>.js` when a page
-calls it without an island override.
+time and emits the shared `assets/gowdk/islands/island.js` runtime plus a
+package-scoped `assets/gowdk/islands/<package>/<Component>.js` registration stub
+when a page calls it without an island override.
 
 WASM is declared on the component with `wasm <package>`. Normal calls to that
 component emit `assets/gowdk/islands/<package>/Counter.wasm` and

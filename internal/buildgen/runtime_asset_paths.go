@@ -59,6 +59,10 @@ func islandJSAssetPath(packageName, componentName string) string {
 	return islandComponentAssetPath(packageName, componentName, ".js")
 }
 
+func islandSharedRuntimeAssetPath() string {
+	return path.Join(islandRuntimeDir, "island.js")
+}
+
 func islandWASMAssetPath(packageName, componentName string) string {
 	return islandComponentAssetPath(packageName, componentName, ".wasm")
 }

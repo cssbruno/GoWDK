@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/clientrt"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/view"
 )
@@ -45,6 +46,7 @@ func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allCompone
 				addAsset(planned, islandWASMLoaderArtifact(outputDir, component))
 			case "":
 				if componentNeedsJSIsland(component) || usage.call.ReactiveProps {
+					addAsset(planned, islandSharedRuntimeArtifact(outputDir, includeSourceMaps))
 					addAsset(planned, islandJSArtifact(outputDir, component, includeSourceMaps))
 					if includeSourceMaps {
 						addAsset(planned, islandJSSourceMapArtifact(outputDir, component))
@@ -78,7 +80,8 @@ func islandScriptHrefsForView(source string, nodes []view.Node, components map[s
 		return nil, err
 	}
 	seen := map[string]bool{}
-	var scripts []string
+	needsSharedRuntime := false
+	var stubs []string
 	for _, usage := range usages {
 		href := ""
 		component := usage.component
@@ -87,6 +90,7 @@ func islandScriptHrefsForView(source string, nodes []view.Node, components map[s
 			href = "/" + islandWASMLoaderAssetPath(component.Package, component.Name)
 		case "":
 			if component.StateJSON != "" || component.HandlersJSON != "" || len(component.Emits) > 0 || len(component.Exports) > 0 || usage.call.ReactiveProps {
+				needsSharedRuntime = true
 				href = "/" + islandJSAssetPath(component.Package, component.Name)
 			}
 		}
@@ -94,10 +98,13 @@ func islandScriptHrefsForView(source string, nodes []view.Node, components map[s
 			continue
 		}
 		seen[href] = true
-		scripts = append(scripts, href)
+		stubs = append(stubs, href)
 	}
-	sort.Strings(scripts)
-	return scripts, nil
+	sort.Strings(stubs)
+	if needsSharedRuntime {
+		return append([]string{"/" + islandSharedRuntimeAssetPath()}, stubs...), nil
+	}
+	return stubs, nil
 }
 
 func manifestComponentRuntimeMode(explicit string, component gwdkir.Component) string {
@@ -274,6 +281,18 @@ func dedupeAssetArtifacts(artifacts []plannedAssetArtifact) []plannedAssetArtifa
 		out = append(out, seen[path])
 	}
 	return out
+}
+
+func islandSharedRuntimeArtifact(outputDir string, includeSourceMap bool) plannedAssetArtifact {
+	assetPath := islandSharedRuntimeAssetPath()
+	source := clientrt.IslandRuntimeSource()
+	if !includeSourceMap {
+		source = compactGeneratedJSSource(source)
+	}
+	return plannedAssetArtifact{
+		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
+		contents:      []byte(source),
+	}
 }
 
 func islandJSArtifact(outputDir string, component gwdkir.Component, includeSourceMap bool) plannedAssetArtifact {

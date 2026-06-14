@@ -65,7 +65,8 @@ view {
 ```
 
 The compiler validates a small Go-like client subset and emits browser
-JavaScript under `assets/gowdk/islands/`.
+JavaScript under `assets/gowdk/islands/`: one shared `island.js` runtime plus
+small package-scoped component registration stubs.
 
 Supported island syntax is documented in `docs/language/syntax.md`,
 `docs/language/markup.md`, and `docs/language/components.md`. The subset

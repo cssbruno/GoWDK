@@ -1,6 +1,5 @@
 (() => {
-  const component = "__GOWDK_COMPONENT__";
-  const selector = "gowdk-island[data-gowdk-component-id=\"" + component + "\"][data-gowdk-runtime=\"js\"],gowdk-island:not([data-gowdk-component-id])[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]";
+  const selectorFor = (component) => "gowdk-island[data-gowdk-component-id=\"" + component + "\"][data-gowdk-runtime=\"js\"],gowdk-island:not([data-gowdk-component-id])[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]";
   const booleanAttrs = new Set(["allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "defer", "disabled", "formnovalidate", "hidden", "inert", "ismap", "loop", "multiple", "muted", "nomodule", "novalidate", "open", "readonly", "required", "reversed", "selected"]);
   const staleAsyncResult = Symbol("gowdk stale async result");
   const bindingTable = Object.freeze([
@@ -15,7 +14,7 @@
   ]);
   const registry = window.__gowdkIslandRegistry || (window.__gowdkIslandRegistry = { components: Object.create(null), roots: new WeakMap() });
   window.__gowdkMountIslands = () => {
-    Object.keys(registry.components).forEach((name) => registry.components[name](document));
+    Object.keys(registry.components).forEach((name) => mountComponentIsland(name, document));
   };
   window.__gowdkDestroyIslands = (scope, includeRoot) => {
     scope = scope || document;
@@ -922,7 +921,6 @@
 
   function render(root, state, helpers, bindings) {
     renderListLoops(root, state, helpers, bindings);
-    bindings = collectBindings(root);
     renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true });
     bindings = collectBindings(root);
     updateBindings(root, state, helpers, bindings);
@@ -930,9 +928,9 @@
     return bindings;
   }
 
-  async function __GOWDK_MOUNT_FUNCTION__(scope) {
+  async function mountComponentIsland(component, scope) {
     scope = scope || document;
-    scope.querySelectorAll(selector).forEach(async (root) => {
+    scope.querySelectorAll(selectorFor(component)).forEach(async (root) => {
     if (root.getAttribute("data-gowdk-mounted") === "js") return;
     root.setAttribute("data-gowdk-mounted", "js");
     const state = JSON.parse(root.getAttribute("data-gowdk-state") || "{}");
@@ -1171,7 +1169,7 @@
     await applyStatements(mountStatements, state, handlers, helpers, null, refs, computeds, asyncTokens, root, emitEvents);
     await settleEffects();
     recomputeComputed(state, computeds, helpers);
-    const destroyIsland = async function __GOWDK_DESTROY_FUNCTION__() {
+    const destroyIsland = async function destroyComponentIsland() {
       if (root.getAttribute("data-gowdk-mounted") !== "js") return;
       root.removeAttribute("data-gowdk-mounted");
       registry.roots.delete(root);
@@ -1190,6 +1188,12 @@
   });
   }
 
-  registry.components[component] = __GOWDK_MOUNT_FUNCTION__;
-  __GOWDK_MOUNT_FUNCTION__(document);
+  function registerComponentIsland(component) {
+    if (!component) return;
+    registry.components[component] = true;
+    mountComponentIsland(component, document);
+  }
+
+  window.__gowdkRegisterJSIsland = registerComponentIsland;
+  window.__gowdkMountIslands();
 })();

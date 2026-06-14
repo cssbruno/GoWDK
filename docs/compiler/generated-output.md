@@ -84,33 +84,34 @@ Implemented today:
   `internal/clientrt/assets/` and embedded with `go:embed`; generated output
   helpers only perform narrow placeholder substitution for component names,
   page IDs, asset paths, and WASM export names.
-- Generated build output emits
-  `assets/gowdk/islands/<package>/<Component>.js` for stateful component
+- Generated build output emits one shared JavaScript island runtime at
+  `assets/gowdk/islands/island.js` plus small package-scoped registration stubs
+  such as `assets/gowdk/islands/<package>/<Component>.js` for stateful component
   instances that use the default generated JavaScript island runtime. Island
-  roots carry compiler-owned `data-gowdk-island` markers plus a package-qualified
-  component id, and generated island assets register idempotent browser mount
-  hooks for initial load and partial-swap remounts plus destroy hooks for
-  islands removed by partial swaps. The generated JavaScript is scoped to matching
-  `<gowdk-island>` roots rather than hydrating the full page. Generated island
-  assets carry a compact binding descriptor table and update collected bindings
-  through per-binding functions for text, form values, checked state, classes,
-  styles, attributes, conditionals, and lists; keyed list updates reuse
+  roots carry compiler-owned `data-gowdk-island` markers plus a
+  package-qualified component id, and the shared runtime registers idempotent
+  browser mount hooks for initial load and partial-swap remounts plus destroy
+  hooks for islands removed by partial swaps. The generated JavaScript is scoped
+  to matching `<gowdk-island>` roots rather than hydrating the full page. The
+  shared runtime carries a compact binding descriptor table and updates collected
+  bindings through per-binding functions for text, form values, checked state,
+  classes, styles, attributes, conditionals, and lists; keyed list updates reuse
   existing DOM nodes by `g:key` and remove stale keyed nodes.
 - Page store seed JSON embedded in compiler-owned
   `<script type="application/json">` tags escapes literal `<` as `\u003c`, so
   store data cannot terminate the script element or enter HTML escaped-script
   parser states.
-- In the default development build mode, generated JavaScript island assets are
+- In the default development build mode, generated JavaScript island stubs are
   accompanied by `assets/gowdk/islands/<package>/<Component>.js.map` source map
   files that reference the component `.gwdk` source, are recorded in
-  `gowdk-assets.json`, include first-slice component/client/view source span
-  anchors, and are linked from the JS with `sourceMappingURL`.
+  `gowdk-assets.json`, include the component registration source span, and are
+  linked from the stub JS with `sourceMappingURL`.
   `Build.Mode: gowdk.Production` omits those debug source map artifacts and
   comments and compacts generated island JavaScript by trimming
   formatting-only whitespace.
 - Generated build output emits package-scoped island assets:
-  `assets/gowdk/islands/<package>/<Component>.js` for generated JavaScript
-  islands, and `assets/gowdk/islands/<package>/<Component>.wasm` plus
+  `assets/gowdk/islands/<package>/<Component>.js` stubs for generated
+  JavaScript islands, and `assets/gowdk/islands/<package>/<Component>.wasm` plus
   `assets/gowdk/islands/<package>/<Component>.wasm.js` for normal calls to
   components that declare `wasm <package>` or explicit call-site overrides that
   set `g:island="wasm"`. When the component declares `wasm <package>`, GOWDK

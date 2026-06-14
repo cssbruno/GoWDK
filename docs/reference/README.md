@@ -14,6 +14,7 @@ Reference docs describe current command and data contracts.
 - `testing.md`: scaffolded smoke tests, browser smoke, accessibility, and performance checks.
 - `contracts.md`: current runtime contract registry and planned compiler integration.
 - `css.md`: current CSS extension point.
+- `images.md`: image optimization patterns and current non-goals.
 - `manifest.md`: current manifest JSON.
 - `addons.md`: current addon feature registration.
 - `diagnostics.md`: current diagnostic output.

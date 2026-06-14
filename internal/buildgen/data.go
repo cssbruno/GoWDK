@@ -19,16 +19,18 @@ func parsePathDeclarationsFromBlocks(blocks gwdkir.Blocks) ([]map[string]string,
 	}
 	declarations := make([]map[string]string, 0, len(blocks.PathsRecords))
 	for index, record := range blocks.PathsRecords {
-		if len(record.Fields) == 0 {
+		names := literalRecordFieldOrder(record)
+		if len(names) == 0 {
 			return nil, fmt.Errorf("paths line %d: literal declaration must include values", index+1)
 		}
-		params := make(map[string]string, len(record.Fields))
-		for name, value := range record.Fields {
+		params := make(map[string]string, len(names))
+		for _, name := range names {
 			if !isLiteralName(name) {
 				return nil, fmt.Errorf("paths line %d: invalid path param name %q", index+1, name)
 			}
-			if value == "" {
-				return nil, fmt.Errorf("paths line %d: path param %s: value must not be empty", index+1, name)
+			value, err := parsePathString(literalRecordExpression(record, name))
+			if err != nil {
+				return nil, fmt.Errorf("paths line %d: path param %s: %w", index+1, name, err)
 			}
 			params[name] = value
 		}

@@ -115,6 +115,37 @@ func TestBuildUsesTypedPathAndBuildRecords(t *testing.T) {
 	}
 }
 
+func TestBuildRejectsNonStringTypedPathRecordValuesBeforeWriting(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "blog.post",
+		Route: "/blog/{slug}",
+		Blocks: gwdkir.Blocks{
+			Paths: true,
+			PathsRecords: []gwdkir.LiteralRecord{{
+				Fields:      map[string]string{"slug": `field("title")`},
+				Expressions: map[string]string{"slug": `field("title")`},
+				FieldOrder:  []string{"slug"},
+			}},
+			View:     true,
+			ViewBody: `<main>Post</main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected build error")
+	}
+	if !strings.Contains(err.Error(), `path param slug: value must be a string literal`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if entries, err := os.ReadDir(outputDir); err != nil {
+		t.Fatal(err)
+	} else if len(entries) != 0 {
+		t.Fatalf("expected no partial output, got %#v", entries)
+	}
+}
+
 func TestBuildRejectsInvalidBuildDataBeforeWriting(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -289,6 +289,10 @@ type Export struct {
 	Span source.SourceSpan
 }
 
+// ComponentExportActiveFlag is reserved in generated exports payloads for the
+// island mount-state flag.
+const ComponentExportActiveFlag = "active"
+
 type Emit struct {
 	Name   string
 	Params []EmitParam

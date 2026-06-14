@@ -45,8 +45,14 @@ func TestSourceEmitsSPANavigationRuntime(t *testing.T) {
 	for _, expected := range []string{
 		`document.addEventListener('click', navigateLink)`,
 		`document.addEventListener('mouseover', prefetchLink)`,
+		`document.addEventListener('mouseout', cancelHoverPrefetch)`,
 		`document.addEventListener('focusin', prefetchLink)`,
 		`document.addEventListener('touchstart', prefetchLink, { passive: true })`,
+		// Hover prefetch waits a beat (cancelable) and the cache stays bounded.
+		`hoverPrefetchTimer = setTimeout(`,
+		`function cancelHoverPrefetch()`,
+		`function rememberPrefetched(url)`,
+		`while (prefetchOrder.length > prefetchLimit)`,
 		`window.addEventListener('popstate'`,
 		`event.target.closest && event.target.closest('a[href]')`,
 		`X-GOWDK-Navigate`,

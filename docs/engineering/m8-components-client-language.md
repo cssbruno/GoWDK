@@ -28,7 +28,9 @@ status.
   persistence, shape invalidation, and SPA-navigation hydration cover #19.
 - SPA navigation: internal-link interception, route shell fetch/swap, prefetch,
   scroll/focus restoration, loading/error events, and asset-size reporting cover
-  #370.
+  #370. Hover prefetch waits a short, cancelable delay before issuing a request
+  (focus and touch prefetch immediately), and the prefetch cache is bounded so a
+  long session that hovers many links cannot retain unbounded documents.
 - Generated form validation: direct literal action inputs receive derivable
   numeric HTML attributes and partial form POSTs run browser pre-validation
   before network submission, covering #174. Server validation remains

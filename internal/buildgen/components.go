@@ -257,6 +257,10 @@ func componentExports(component gwdkir.Component, propTypes map[string]clientlan
 			failures = append(failures, fmt.Sprintf("component %s declares duplicate export %q", component.Name, export.Name))
 			continue
 		}
+		if export.Name == gwdkir.ComponentExportActiveFlag {
+			failures = append(failures, fmt.Sprintf("component %s export %q uses reserved name %q; the exports payload reserves it for the mount flag", component.Name, export.Name, gwdkir.ComponentExportActiveFlag))
+			continue
+		}
 		seen[export.Name] = true
 		expected := clientlang.NormalizeType(export.Type)
 		if expected == clientlang.TypeUnknown || expected == clientlang.TypeArray || expected == clientlang.TypeObject {

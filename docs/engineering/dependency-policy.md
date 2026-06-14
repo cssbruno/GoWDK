@@ -55,11 +55,16 @@ readiness.
   file outbox, memory broker, and SSE stay in the root module. Applications opt
   in.
 
-Nested optional modules that import the root GOWDK module should require the
-current released `github.com/cssbruno/gowdk` version and keep a local
-`replace github.com/cssbruno/gowdk => ../../..` for repository tests. Update
-those required versions when cutting a release that changes root runtime APIs
-used by nested modules.
+Nested optional modules are intentionally not listed in a checked-in root
+`go.work`; ordinary root `go test ./...` and `go build ./cmd/gowdk` should stay
+outside workspace mode so optional framework and broker dependencies do not
+enter the root module graph. `scripts/go-modules.sh` discovers the root module
+plus nested runtime modules for multi-module CI gates.
+Nested optional modules that import the root GOWDK module should still require
+the current released `github.com/cssbruno/gowdk` version and keep a local
+`replace github.com/cssbruno/gowdk => ../../..` for repository tests outside
+workspace mode. Update those required versions when cutting a release that
+changes root runtime APIs used by nested modules.
 - Optional CSS/tool adapters: `addons/tailwind`; it shells out to a user-owned
   Tailwind executable and does not download Tailwind during normal builds.
 - Test/dev only: workflow Node checks and VS Code packaging scripts.

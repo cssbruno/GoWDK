@@ -1,10 +1,12 @@
 package appgen
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,8 +64,9 @@ func moduleSource(options Options) (string, error) {
 }
 
 type appModuleInfo struct {
-	Path string
-	Dir  string
+	Path  string
+	Dir   string
+	GoMod string
 }
 
 func currentAppModule() (appModuleInfo, error) {
@@ -72,10 +75,44 @@ func currentAppModule() (appModuleInfo, error) {
 	if err != nil {
 		return appModuleInfo{}, goListModuleError(err)
 	}
-	var info appModuleInfo
-	if err := json.Unmarshal(output, &info); err != nil {
-		return appModuleInfo{}, fmt.Errorf("parse go list -m output: %w", err)
+	goModOutput, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		return appModuleInfo{}, goListModuleError(err)
 	}
+	return parseCurrentAppModule(output, strings.TrimSpace(string(goModOutput)))
+}
+
+func parseCurrentAppModule(output []byte, currentGoMod string) (appModuleInfo, error) {
+	decoder := json.NewDecoder(bytes.NewReader(output))
+	var modules []appModuleInfo
+	for {
+		var info appModuleInfo
+		if err := decoder.Decode(&info); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return appModuleInfo{}, fmt.Errorf("parse go list -m output: %w", err)
+		}
+		modules = append(modules, info)
+	}
+	if len(modules) == 0 {
+		return appModuleInfo{}, fmt.Errorf("go list -m did not report a main module path and directory")
+	}
+	if currentGoMod != "" && currentGoMod != os.DevNull {
+		cleanCurrentGoMod := filepath.Clean(currentGoMod)
+		for _, info := range modules {
+			if filepath.Clean(info.GoMod) == cleanCurrentGoMod {
+				return validateAppModuleInfo(info)
+			}
+		}
+	}
+	if len(modules) == 1 {
+		return validateAppModuleInfo(modules[0])
+	}
+	return appModuleInfo{}, fmt.Errorf("go list -m reported %d workspace modules but none matched current go.mod %q", len(modules), currentGoMod)
+}
+
+func validateAppModuleInfo(info appModuleInfo) (appModuleInfo, error) {
 	if strings.TrimSpace(info.Path) == "" || strings.TrimSpace(info.Dir) == "" {
 		return appModuleInfo{}, fmt.Errorf("go list -m did not report a main module path and directory")
 	}

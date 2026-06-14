@@ -281,6 +281,8 @@ wire in with `gowdk add <addon>` (see `gowdk add --list`):
 
 Heavier integrations (Tailwind, Redis, NATS, WebSocket fanout) live in nested
 optional modules so the root module's dependency graph stays small.
+Addon discovery beyond built-ins remains docs/registry-first; the current
+policy is in [Addons](docs/reference/addons.md#discovery-policy).
 
 ## Development
 

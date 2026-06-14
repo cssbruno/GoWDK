@@ -659,6 +659,7 @@ Every 0.x minor release must have:
   from the repo automatically.
 - [x] Define the docs-first playground onboarding path, sandbox rules, and
   export contract.
+- [x] Document addon discovery policy before registry-backed CLI discovery.
 - [ ] Add website current release badge, experimental warning, what works today,
   known gaps, cookbook, examples index, runnable snippets, generated output
   preview, route manifest preview, build report preview, and website link

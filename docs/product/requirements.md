@@ -90,7 +90,7 @@ implemented.
 | WASM islands | Keep browser-side Go explicit and separate from backend handlers; improve ABI docs, validation, and examples. | Partial — component-level WASM islands have a versioned `gowdk-wasm-island-v1` ABI, required export and signature validation, browser-unsafe import diagnostics, loader/browser tests, and `wasm_exec.js` size/version reporting; richer user-code runtime validation and examples remain deferred. |
 | PWA/offline | Keep service workers and PWA behavior optional and documentation-first; no hidden offline/cache defaults. | Planned |
 | Images | Document image optimization patterns first; optional integrations may emit assets or metadata without turning core into an image pipeline. | Planned |
-| Addon discovery | Start with repository/website docs or registry metadata; add CLI discovery only after addon versioning, trust, and compatibility rules exist. | Planned |
+| Addon discovery | Start with repository/website docs or registry metadata; add CLI discovery only after addon versioning, trust, and compatibility rules exist. | Partial — the [addon discovery policy](../reference/addons.md#discovery-policy) limits `gowdk add --list` to built-ins, keeps external addons explicit through Go imports, and blocks registry-backed CLI discovery until metadata, trust, and compatibility checks are defined in [#422](https://github.com/cssbruno/GoWDK/issues/422). |
 | Performance profiling | Document measurement for build time, output size, generated JS size, SSR/action latency, binary size, and cache behavior before adding automation. | Partial |
 | Migration guides | Core docs avoid migration-guide positioning during 0.x hardening. Native GOWDK concepts, examples, and diagnostics come first. | Intentionally out of scope |
 

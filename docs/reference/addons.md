@@ -60,6 +60,30 @@ gowdk add ssr actions partial
 are already present, including aliased imports. It does not install external Go
 modules or discover third-party addons.
 
+## Discovery Policy
+
+Current addon discovery is intentionally narrow:
+
+- `gowdk add --list` prints only built-in addons that the CLI can wire safely.
+- Repository docs are the source of truth for documented external addons.
+- External addons are resolved by normal Go module tooling after the app imports
+  and configures them explicitly.
+- Website or registry metadata may list addons, but it must not install,
+  execute, or trust addon code.
+
+Do not add remote CLI discovery until registry metadata can describe the addon
+name, Go module path, package path, owner, source repository, license,
+experimental/deprecated status, supported GOWDK versions or feature contracts,
+implemented public interfaces, required external tools, network or process
+behavior, and security notes.
+
+Until that metadata, trust policy, and compatibility check exist, GOWDK must not
+scan GitHub or module proxies for addons, execute unknown constructors to build
+a list, download hidden dependencies, auto-add external modules, or enable an
+external addon that is not already present in project Go code. The follow-up for
+registry-backed website and CLI discovery is
+[#422](https://github.com/cssbruno/GoWDK/issues/422).
+
 `gowdk.NewAddon(name, features...)` creates a marker addon for feature checks.
 It does not by itself make the compiler, app generator, or runtime call
 third-party code; implement `CSSProcessor` or `GoBlockConsumer` when the addon

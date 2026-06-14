@@ -2164,6 +2164,53 @@ func TestWASMIslandLoaderRunsInBrowser(t *testing.T) {
 	}
 }
 
+func TestWASMIslandLoaderReportsInvalidPatchInBrowser(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	chromium, err := lookupChromium()
+	if err != nil {
+		t.Skip(err)
+	}
+	requireNodePlaywright(t, node)
+
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{counterComponent()},
+	}
+	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.FileServer(http.Dir(outputDir)))
+	defer server.Close()
+
+	script := filepath.Join(t.TempDir(), "gowdk-invalid-wasm-patch-browser-test.cjs")
+	if err := os.WriteFile(script, []byte(wasmIslandInvalidPatchBrowserHarness()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, script, server.URL, chromium)
+	command.Dir = mustWorkingDir(t)
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("browser invalid wasm patch test timed out:\n%s", output)
+	}
+	if err != nil {
+		t.Fatalf("browser invalid wasm patch test failed: %v\n%s", err, output)
+	}
+}
+
 func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
 	packageDir := writeWASMIslandPackage(t, "main", requiredWASMExportsSource("Counter"))
 	outputDir := t.TempDir()
@@ -2837,6 +2884,64 @@ async function waitForCall(calls, kind) {
   assert.equal(destroy.payload.abiVersion, "gowdk-wasm-island-v1");
   assert.equal(destroy.payload.component, "Counter");
   assert.deepEqual(consoleErrors, []);
+  await browser.close();
+})().catch(async (error) => {
+  console.error(error && error.stack || error);
+  process.exit(1);
+});
+`
+}
+
+func wasmIslandInvalidPatchBrowserHarness() string {
+	return `
+"use strict";
+
+const assert = require("node:assert/strict");
+const nodeModule = require("node:module");
+
+const baseURL = process.argv[2];
+const executablePath = process.argv[3];
+const { chromium } = nodeModule.createRequire(process.cwd() + "/gowdk-test.js")("playwright");
+
+async function waitForRejectedPatch(consoleErrors) {
+  const started = Date.now();
+  while (Date.now() - started < 5000) {
+    if (consoleErrors.some((text) => text.includes("GOWDK WASM island rejected patch") && text.includes("replaceDocument"))) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("timed out waiting for rejected patch console error; got " + JSON.stringify(consoleErrors));
+}
+
+(async () => {
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+    args: ["--no-sandbox"]
+  });
+  const page = await browser.newPage();
+  const consoleErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("GOWDK")) consoleErrors.push(message.text());
+  });
+  await page.addInitScript(() => {
+    const exports = {
+      GOWDKMountCounter() {
+        return [{ type: "replaceDocument", target: "b2", value: "<main>bad</main>" }];
+      },
+      GOWDKHandleCounter() {
+        return [];
+      },
+      GOWDKDestroyCounter() {
+        return [];
+      }
+    };
+    WebAssembly.instantiateStreaming = async () => ({ instance: { exports } });
+    WebAssembly.instantiate = async () => ({ instance: { exports } });
+  });
+
+  await page.goto(baseURL + "/counter/", { waitUntil: "networkidle" });
+  await waitForRejectedPatch(consoleErrors);
+  assert.equal(await page.textContent("[data-gowdk-binding-text='b2']"), "1");
   await browser.close();
 })().catch(async (error) => {
   console.error(error && error.stack || error);

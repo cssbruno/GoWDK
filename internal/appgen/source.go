@@ -20,6 +20,7 @@ func appPackageSource(options Options) (string, error) {
 		direct.Actions = nil
 		direct.APIs = nil
 		direct.Fragments = nil
+		direct.IR = nil
 	}
 	imports := runtimeImportMap(options)
 	imports["embed"] = "embed"
@@ -85,7 +86,7 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["context"] = "context"
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
 	}
-	if len(executableCommandContractExposures(contractExposures)) > 0 {
+	if len(executableCommandContractExposures(executableContracts)) > 0 {
 		imports["sync"] = "sync"
 	}
 	if contractExposuresUseForm(executableContracts) {
@@ -250,6 +251,10 @@ func backendShellDecls(options Options) []ast.Decl {
 
 func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	adapter := backendAdapterIR(direct)
+	csrfOptions := direct
+	if full.ProxyBackend {
+		csrfOptions = full
+	}
 	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
 	decls = append(decls, apiFuncDecl(adapter.APIs, generatedUsesRateLimit(direct)))
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(direct)))
@@ -266,8 +271,8 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	if full.ProxyBackend {
 		decls = append(decls, backendProxyDecl(generatedUsesRateLimit(full)), isBackendRouteDecl(backendAdapterIR(full)))
 	}
-	if csrfEnabled(direct) {
-		decls = append(decls, csrfValidatorVarDecl(), csrfNewFuncDecl(direct.Config.Build.CSRF))
+	if csrfEnabled(csrfOptions) {
+		decls = append(decls, csrfValidatorVarDecl(), csrfNewFuncDecl(csrfOptions.Config.Build.CSRF))
 	}
 	decls = append(decls, rateLimitDecls(full)...)
 	decls = append(decls, guardDecls(full)...)

@@ -57,10 +57,12 @@ gowdk lsp [--ssr]
   It exits non-zero when any error-severity finding exists, so it can gate CI.
   `--json` prints the posture manifest plus findings and a summary. Every finding
   carries a diagnostic code; run `gowdk explain <code>` for details.
-  `--emit-tests` writes a readable `gowdk_audit_test.go` file (or the path from
-  `--emit-tests=<file>`) that drives `runtime/app` through `runtime/testkit`.
-  `--run` generates and executes the same audit test source with `go test`; a
-  failed expectation is reported as `audit_test_failed`.
+  `--emit-tests` writes a readable standalone `gowdk_audit_test.go` file (or the
+  path from `--emit-tests=<file>`) that drives a `runtime/app` posture harness
+  through `runtime/testkit`. `--run` builds a temporary generated app from the
+  same validated IR and runs the generated app's audit test with
+  `go test ./gowdkapp`; a failed expectation is reported as
+  `audit_test_failed`.
   `gowdk build` also writes the posture alone to a non-served
   `.gowdk/reports/<output-name>/gowdk-security.json` path outside the selected
   output directory.
@@ -244,9 +246,9 @@ where its non-zero exit on error findings gates the pipeline. The posture alone
 is also emitted as `gowdk-security.json` by `gowdk build`, but outside the
 selected output directory in a non-served `.gowdk/reports/<output-name>/` path.
 Declared `*.audit.gwdk` policies are discovered with the rest of the source
-set. `--emit-tests` writes a committable standalone `_test.go`; `--run` writes
-a temporary `_test.go`, executes `go test` from the project root, and folds
-failures back into the audit report.
+set. `--emit-tests` writes a committable standalone `_test.go`; `--run` builds a
+temporary generated app, executes `go test ./gowdkapp`, and folds failures back
+into the audit report.
 
 `--wasm` produces a Go `js/wasm` compile artifact from the generated app. This
 is a deploy artifact for hosts that can run Go WebAssembly; it is separate from

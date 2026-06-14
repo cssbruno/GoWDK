@@ -1,6 +1,8 @@
 package securitymanifest
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
@@ -74,6 +76,11 @@ func TestBuildProjectsRoutesAndEndpoints(t *testing.T) {
 }
 
 func TestBuildPopulatesFrontendAuditSurface(t *testing.T) {
+	root := t.TempDir()
+	componentPath := filepath.Join(root, "card.cmp.gwdk")
+	if err := os.WriteFile(filepath.Join(root, "config.json"), []byte(`api_key=live_sk_abc123`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	config := gowdk.Config{Build: gowdk.BuildConfig{SecurityHeaders: gowdk.SecurityHeadersConfig{
 		Enabled: true,
 		Headers: map[string]string{
@@ -93,6 +100,7 @@ func TestBuildPopulatesFrontendAuditSurface(t *testing.T) {
 		}},
 		Assets: []gwdkir.Asset{
 			{Kind: gwdkir.AssetFile, Source: "card.cmp.gwdk", Path: ".env", Span: source.SourceSpan{Start: source.SourcePosition{Line: 4, Column: 1}}},
+			{Kind: gwdkir.AssetFile, Source: componentPath, Path: "./config.json", Span: source.SourceSpan{Start: source.SourcePosition{Line: 5, Column: 1}}},
 			{Kind: gwdkir.AssetJS, Source: "home.page.gwdk", Inline: `const token = "secret";`, Span: source.SourceSpan{Start: source.SourcePosition{Line: 5, Column: 1}}},
 		},
 		Templates: []gwdkir.Template{{
@@ -110,12 +118,24 @@ func TestBuildPopulatesFrontendAuditSurface(t *testing.T) {
 	if got := manifest.Frontend.ConfiguredHeaders; len(got) != 2 || got[0].Name != "Content-Security-Policy" || got[1].Name != "X-Content-Type-Options" {
 		t.Fatalf("expected sorted configured headers, got %#v", got)
 	}
-	if got := manifest.Frontend.BundleSecrets; len(got) != 3 {
-		t.Fatalf("expected three bundle secret findings, got %#v", got)
+	if got := manifest.Frontend.BundleSecrets; len(got) != 4 {
+		t.Fatalf("expected four bundle secret findings, got %#v", got)
+	}
+	if !hasBundleLeak(manifest.Frontend.BundleSecrets, componentPath+":5", "file-asset:secret-key-value") {
+		t.Fatalf("expected source-selected file asset content secret finding, got %#v", manifest.Frontend.BundleSecrets)
 	}
 	if got := manifest.Frontend.RawHTMLSinks; len(got) != 1 || got[0].OwnerID != "home" || got[0].Field != "TrustedHTML" || got[0].Source != "home.page.gwdk:12" {
 		t.Fatalf("expected raw HTML sink source, got %#v", got)
 	}
+}
+
+func hasBundleLeak(leaks []BundleLeak, source string, kind string) bool {
+	for _, leak := range leaks {
+		if leak.Source == source && leak.Kind == kind {
+			return true
+		}
+	}
+	return false
 }
 
 func TestBuildHonorsConfiguredBodyLimits(t *testing.T) {

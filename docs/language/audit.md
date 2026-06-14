@@ -75,8 +75,9 @@ Raw HTML allowlist values match either the exact source reference reported by
 ## Tests
 
 `test {}` blocks become generated Go tests. `gowdk audit --emit-tests` writes a
-readable `gowdk_audit_test.go`; `gowdk audit --run` generates and runs the same
-source with `go test`.
+readable standalone `gowdk_audit_test.go`; `gowdk audit --run` builds a
+temporary generated app and runs its generated `gowdkapp/gowdk_audit_test.go`
+with `go test ./gowdkapp`.
 
 Supported expectations:
 
@@ -86,16 +87,16 @@ expect GET "/dashboard" as "role:admin" status 200
 expect header "X-Frame-Options" "DENY"
 ```
 
-Status expectations drive the generated handler through `runtime/testkit`.
-Header expectations check the runtime health endpoint so header policy can be
-verified without depending on a specific page route.
+Status expectations drive the handler through `runtime/testkit`. Header
+expectations check the runtime health endpoint so header policy can be verified
+without depending on a specific page route.
 
 Actor expectations (`as "role:..."` / `as "permission:..."`) require the
-generated-app audit test that `gowdk build` emits, because only that test runs
-against the real guard pipeline. `gowdk audit --emit-tests` and `--run` build a
-standalone harness that models static serving, default-deny, and headers but
-installs no auth provider, so they reject actor expectations rather than pass or
-fail them for the wrong reason.
+generated-app audit test that `gowdk build --app` emits or `gowdk audit --run`
+runs, because only that test exercises the real guard pipeline. The standalone
+file from `gowdk audit --emit-tests` models static serving, default-deny, and
+headers but installs no auth provider, so it rejects actor expectations rather
+than pass or fail them for the wrong reason.
 
 ## Built-In Baseline
 

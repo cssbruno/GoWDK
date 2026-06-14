@@ -48,9 +48,21 @@ func GeneratedAuditTestSource(options Options) ([]byte, error) {
 
 // StandaloneAuditTestSource returns a committable audit test file that drives
 // runtime/app directly from the derived posture. The CLI uses this for
-// `gowdk audit --emit-tests` and temporary `--run` checks.
+// `gowdk audit --emit-tests`; `gowdk audit --run` generates a temporary app and
+// runs the generated-app audit test instead.
 func StandaloneAuditTestSource(config gowdk.Config, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]byte, error) {
 	return auditTestSource("gowdkaudit_test", auditTestStandalone, config, manifest, specs)
+}
+
+// StandaloneAuditTestSourceWithPackage returns standalone audit test source
+// using packageName. It exists so the CLI can emit into a directory that
+// already has Go files without creating a mixed-package test setup.
+func StandaloneAuditTestSourceWithPackage(packageName string, config gowdk.Config, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]byte, error) {
+	packageName = strings.TrimSpace(packageName)
+	if packageName == "" {
+		packageName = "gowdkaudit_test"
+	}
+	return auditTestSource(packageName, auditTestStandalone, config, manifest, specs)
 }
 
 func auditTestSource(packageName string, mode auditTestMode, config gowdk.Config, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]byte, error) {
@@ -71,6 +83,7 @@ func auditTestSource(packageName string, mode auditTestMode, config gowdk.Config
 	builder.WriteString("func TestGOWDKAuditGeneratedSecurityPosture(t *testing.T) {\n")
 	switch mode {
 	case auditTestGeneratedApp:
+		writeGeneratedAuditEnvSeeds(&builder, config)
 		builder.WriteString("\thandler, err := Handler()\n")
 		builder.WriteString("\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n")
 		if installAuthProvider {
@@ -266,7 +279,7 @@ func auditDeclaredTestScenarios(mode auditTestMode, specs []gwdkir.AuditSpec) ([
 					// and steer the author to the generated-app audit test, which
 					// runs against the real guard pipeline.
 					if mode == auditTestStandalone && statusMatch[3] != "" {
-						return nil, fmt.Errorf("%s:%d: audit test actor %q requires the generated-app audit test (%s, emitted by gowdk build); gowdk audit --run cannot enforce role or permission guards", spec.Source, test.Span.Start.Line+lineIndex+1, statusMatch[3], auditTestFileName)
+						return nil, fmt.Errorf("%s:%d: audit test actor %q requires the generated-app audit test (%s, emitted by gowdk build or run by gowdk audit --run); standalone audit tests cannot enforce role or permission guards", spec.Source, test.Span.Start.Line+lineIndex+1, statusMatch[3], auditTestFileName)
 					}
 					name := test.Name + " " + strings.ToUpper(statusMatch[1]) + " " + statusMatch[2]
 					if statusMatch[3] != "" {
@@ -297,6 +310,40 @@ func auditDeclaredTestScenarios(mode auditTestMode, specs []gwdkir.AuditSpec) ([
 		}
 	}
 	return scenarios, nil
+}
+
+func writeGeneratedAuditEnvSeeds(builder *strings.Builder, config gowdk.Config) {
+	for _, name := range auditRequiredEnvNames(config) {
+		fmt.Fprintf(builder, "\tt.Setenv(%s, %s)\n", strconv.Quote(name), strconv.Quote("gowdk-audit-test"))
+	}
+}
+
+func auditRequiredEnvNames(config gowdk.Config) []string {
+	seen := map[string]bool{}
+	var names []string
+	add := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	for _, variable := range config.Env.Vars {
+		if variable.Required && strings.TrimSpace(variable.Default) == "" {
+			add(variable.Name)
+		}
+	}
+	for _, secret := range config.Env.Secrets {
+		if secret.Required {
+			add(secret.Name)
+		}
+	}
+	if config.Build.CSRF.Enabled {
+		add(config.Build.CSRF.SecretEnvName())
+	}
+	sort.Strings(names)
+	return names
 }
 
 func writeGeneratedAuditAuthProvider(builder *strings.Builder) {

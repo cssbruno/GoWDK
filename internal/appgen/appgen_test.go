@@ -157,13 +157,27 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: gowdk.Config{
+			Env: gowdk.EnvConfig{
+				Vars: []gowdk.EnvVar{
+					{Name: "GOWDK_TEST_REGION", Required: true},
+				},
+				Secrets: []gowdk.SecretEnv{
+					{Name: "GOWDK_TEST_DATABASE_URL", Required: true},
+				},
+			},
 			Build: gowdk.BuildConfig{
 				SecurityHeaders: gowdk.SecurityHeadersConfig{
 					Enabled: true,
 					Headers: map[string]string{"X-Frame-Options": "DENY"},
 				},
+				CSRF: gowdk.CSRFConfig{Enabled: true, SecretEnv: "GOWDK_TEST_CSRF_SECRET"},
 			},
 		},
+		Actions: []ActionEndpoint{{
+			PageID:     "home",
+			ActionName: "Submit",
+			Route:      "/submit",
+		}},
 		IR: &gwdkir.Program{
 			Routes: []gwdkir.Route{{
 				Kind:   gwdkir.RouteSPA,
@@ -192,6 +206,9 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 	for _, expected := range []string{
 		"package gowdkapp",
 		"func TestGOWDKAuditGeneratedSecurityPosture(t *testing.T)",
+		`t.Setenv("GOWDK_TEST_CSRF_SECRET", "gowdk-audit-test")`,
+		`t.Setenv("GOWDK_TEST_DATABASE_URL", "gowdk-audit-test")`,
+		`t.Setenv("GOWDK_TEST_REGION", "gowdk-audit-test")`,
 		"handler, err := Handler()",
 		`Name:       "route serves /"`,
 		`WantStatus: http.StatusOK`,
@@ -215,7 +232,7 @@ func TestStandaloneAuditTestRejectsActorScenarios(t *testing.T) {
 		}},
 	}}
 	// The standalone harness cannot enforce role/permission guards, so emitting
-	// an actor scenario for gowdk audit --run must fail loudly rather than
+	// an actor scenario as a standalone test must fail loudly rather than
 	// produce a test that passes or fails for the wrong reason.
 	if _, err := StandaloneAuditTestSource(gowdk.Config{}, securitymanifest.SecurityManifest{}, specs); err == nil {
 		t.Fatal("expected standalone audit emit to reject actor scenarios")
@@ -766,6 +783,48 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 	}
 	if strings.Contains(source, `func backend(response http.ResponseWriter, request *http.Request) bool`) {
 		t.Fatalf("expected backend-only app to use BackendRouter instead of generated backend dispatcher:\n%s", source)
+	}
+}
+
+func TestGenerateBackendAppWiresSecurityHeaders(t *testing.T) {
+	appDir := filepath.Join(t.TempDir(), "generated-backend")
+
+	result, err := GenerateBackendWithOptions(appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{
+			SecurityHeaders: gowdk.SecurityHeadersConfig{
+				Enabled: true,
+				Headers: map[string]string{"X-Frame-Options": "DENY"},
+			},
+		}},
+		APIs: []APIEndpoint{{
+			PageID:  "status",
+			APIName: "Health",
+			Method:  "GET",
+			Route:   "/api/health",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`"strings"`,
+		`mux.Handle("/", http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {`,
+		`for name, value := range map[string]string{"X-Frame-Options": "DENY"} {`,
+		`if strings.TrimSpace(name) == "" {`,
+		`response.Header().Set(name, value)`,
+		`backendRouter.ServeHTTP(response, request)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated backend app source to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, `mux.Handle("/", backendRouter)`) {
+		t.Fatalf("backend-only app with configured security headers should wrap the router:\n%s", source)
 	}
 }
 

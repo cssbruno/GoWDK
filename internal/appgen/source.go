@@ -595,10 +595,44 @@ func customErrorPagePaths(options Options) []string {
 }
 
 func backendOnlyHandlerExpr(options Options) ast.Expr {
+	handler := backendOnlyBaseHandlerExpr(options)
+	if headers := securityHeadersExpr(options); headers != nil {
+		return call(sel("http", "HandlerFunc"), backendOnlySecurityHeadersHandlerFunc(handler, headers))
+	}
+	return handler
+}
+
+func backendOnlyBaseHandlerExpr(options Options) ast.Expr {
 	if hasBackendRoutes(options) {
 		return id("backendRouter")
 	}
 	return call(sel("http", "HandlerFunc"), backendOnlyHandlerFunc())
+}
+
+func backendOnlySecurityHeadersHandlerFunc(handler ast.Expr, headers ast.Expr) ast.Expr {
+	return &ast.FuncLit{
+		Type: &ast.FuncType{Params: &ast.FieldList{List: actionParams()}},
+		Body: block(
+			&ast.RangeStmt{
+				Key:   id("name"),
+				Value: id("value"),
+				Tok:   token.DEFINE,
+				X:     headers,
+				Body: block(
+					&ast.IfStmt{
+						Cond: &ast.BinaryExpr{
+							X:  call(sel("strings", "TrimSpace"), id("name")),
+							Op: token.EQL,
+							Y:  stringLit(""),
+						},
+						Body: block(&ast.BranchStmt{Tok: token.CONTINUE}),
+					},
+					exprStmt(call(selExpr(call(selExpr(id("response"), "Header")), "Set"), id("name"), id("value"))),
+				),
+			},
+			exprStmt(call(selExpr(handler, "ServeHTTP"), id("response"), id("request"))),
+		),
+	}
 }
 
 func backendOnlyHandlerFunc() ast.Expr {

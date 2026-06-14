@@ -178,6 +178,10 @@ func TestAuditCommandEmitsStandaloneAuditTests(t *testing.T) {
 	root := t.TempDir()
 	config := writeAuditCLIConfigWithSecurityHeaders(t, root)
 	writeCLITestModule(t, root, "example.com/gowdk-audit-emit")
+	writeCLIFile(t, filepath.Join(root, "model.go"), `package app
+
+type Model struct{}
+`)
 	pagePath := filepath.Join(root, "home.page.gwdk")
 	writeCLIFile(t, pagePath, `package app
 
@@ -204,7 +208,7 @@ view {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
-		"package gowdkaudit_test",
+		"package app_test",
 		`gowdktestkit "github.com/cssbruno/gowdk/runtime/testkit"`,
 		`Root: fstest.MapFS{`,
 		`SecurityHeaders: map[string]string{`,
@@ -238,8 +242,9 @@ view {
 	if err != nil {
 		t.Fatalf("expected generated audit tests to pass: %v", err)
 	}
-	if !strings.Contains(stderr, "audit tests passed:") {
-		t.Fatalf("expected audit test pass message, got %q", stderr)
+	if !strings.Contains(stderr, "audit generated app tests passed:") ||
+		!strings.Contains(stderr, filepath.Join("gowdkapp", "gowdk_audit_test.go")) {
+		t.Fatalf("expected generated app audit test pass message, got %q", stderr)
 	}
 }
 

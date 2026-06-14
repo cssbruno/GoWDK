@@ -61,7 +61,8 @@ only from the diagnostic registry, so the baseline never hardcodes severity.
 - The baseline is the gates already written in `security.md`, made executable —
   not new hidden policy.
 - Integration tests are emitted as readable `_test.go` files the user owns; the
-  `--run` convenience generates-and-runs them but writes the same readable file.
+  generated app audit test is the runtime truth. The `--run` convenience builds
+  a temporary generated app and runs that app's generated audit test.
 
 ## Acceptance Criteria
 
@@ -84,8 +85,9 @@ only from the diagnostic registry, so the baseline never hardcodes severity.
   + CLI tests.
 - **Phase 2 (shipped):** the four frontend audits as baseline rules.
 - **Phase 3 (shipped):** the `*.audit.gwdk` file kind and declared composable policies.
-- **Phase 4 (shipped):** `runtime/testkit`, generated `_test.go`, `--emit-tests`/`--run`,
-  and the `runtime/app` security-header capability.
+- **Phase 4 (shipped):** `runtime/testkit`, generated `_test.go`,
+  standalone `--emit-tests`, generated-app `--run`, and the `runtime/app`
+  security-header capability.
 
 ## Issue Alignment
 

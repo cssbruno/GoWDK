@@ -3,13 +3,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/appgen"
 	"github.com/cssbruno/gowdk/internal/auditspec"
+	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/diagnostics"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
@@ -84,7 +88,7 @@ func audit(args []string) error {
 	manifest := securitymanifest.Build(options.Config, ir)
 	declared := auditspec.PoliciesFromIR(ir.AuditSpecs)
 	findings := auditspec.Evaluate(manifest, auditspec.ComposeBaseline(declared))
-	testFindings, err := handleAuditTests(auditOptions, options, manifest, ir.AuditSpecs)
+	testFindings, err := handleAuditTests(auditOptions, options, ir, manifest)
 	if err != nil {
 		return err
 	}
@@ -130,23 +134,24 @@ func parseAuditCommandOptions(args []string) (auditCommandOptions, []string, err
 	return options, projectArgs, nil
 }
 
-func handleAuditTests(auditOptions auditCommandOptions, options cliOptions, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]auditspec.Finding, error) {
+func handleAuditTests(auditOptions auditCommandOptions, options cliOptions, ir gwdkir.Program, manifest securitymanifest.SecurityManifest) ([]auditspec.Finding, error) {
 	if !auditOptions.EmitTests && !auditOptions.RunTests {
 		return nil, nil
 	}
-	source, err := appgen.StandaloneAuditTestSource(options.Config, manifest, specs)
-	if err != nil {
-		return nil, err
-	}
-	if len(source) == 0 {
-		return nil, nil
-	}
 
-	testPath := auditOptions.TestPath
-	if !filepath.IsAbs(testPath) {
-		testPath = filepath.Join(options.ProjectRoot, testPath)
-	}
 	if auditOptions.EmitTests {
+		testPath := auditOptions.TestPath
+		if !filepath.IsAbs(testPath) {
+			testPath = filepath.Join(options.ProjectRoot, testPath)
+		}
+		packageName := standaloneAuditPackageName(filepath.Dir(testPath))
+		source, err := appgen.StandaloneAuditTestSourceWithPackage(packageName, options.Config, manifest, ir.AuditSpecs)
+		if err != nil {
+			return nil, err
+		}
+		if len(source) == 0 {
+			return nil, nil
+		}
 		if err := os.MkdirAll(filepath.Dir(testPath), 0o755); err != nil {
 			return nil, err
 		}
@@ -160,30 +165,11 @@ func handleAuditTests(auditOptions auditCommandOptions, options cliOptions, mani
 		return nil, nil
 	}
 
-	runPath := testPath
-	removeAfterRun := false
-	if !auditOptions.EmitTests {
-		temp, err := os.CreateTemp(options.ProjectRoot, "gowdk_audit_*_test.go")
-		if err != nil {
-			return nil, err
-		}
-		runPath = temp.Name()
-		removeAfterRun = true
-		if _, err := temp.Write(source); err != nil {
-			_ = temp.Close()
-			return nil, err
-		}
-		if err := temp.Close(); err != nil {
-			return nil, err
-		}
-	}
-	if removeAfterRun {
-		defer os.Remove(runPath)
-	}
-
-	output, err := runAuditTestFile(options.ProjectRoot, runPath)
+	runPath, output, err := runGeneratedAppAuditTests(options, ir)
 	if err == nil {
-		fmt.Fprintf(os.Stderr, "audit tests passed: %s\n", runPath)
+		if runPath != "" {
+			fmt.Fprintf(os.Stderr, "audit generated app tests passed: %s\n", runPath)
+		}
 		return nil, nil
 	}
 	return []auditspec.Finding{{
@@ -192,13 +178,64 @@ func handleAuditTests(auditOptions auditCommandOptions, options cliOptions, mani
 		Target:      "runtime",
 		Source:      runPath,
 		Message:     "generated audit integration tests failed",
-		Remediation: "Run go test on the emitted audit test file, then update runtime behavior or policy expectations.",
+		Remediation: "Run gowdk audit --run locally, then update generated runtime behavior or policy expectations.",
 	}}, writeAuditRunOutput(output)
 }
 
-func runAuditTestFile(projectRoot, testPath string) (string, error) {
-	command := exec.Command("go", "test", testPath)
-	command.Dir = projectRoot
+func standaloneAuditPackageName(dir string) string {
+	packages, err := parser.ParseDir(token.NewFileSet(), dir, func(info os.FileInfo) bool {
+		name := info.Name()
+		return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
+	}, parser.PackageClauseOnly)
+	if err != nil || len(packages) == 0 {
+		return "gowdkaudit_test"
+	}
+	names := make([]string, 0, len(packages))
+	for name := range packages {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names[0] + "_test"
+}
+
+func runGeneratedAppAuditTests(options cliOptions, ir gwdkir.Program) (string, string, error) {
+	source, err := appgen.GeneratedAuditTestSource(appgen.Options{
+		AutoRoutes: true,
+		Config:     options.Config,
+		IR:         &ir,
+	})
+	if err != nil || len(source) == 0 {
+		return "", "", err
+	}
+
+	tempRoot, err := os.MkdirTemp("", "gowdk-audit-run-*")
+	if err != nil {
+		return "", "", err
+	}
+	defer os.RemoveAll(tempRoot)
+
+	outputDir := filepath.Join(tempRoot, "output")
+	appDir := filepath.Join(tempRoot, "app")
+	if _, err := buildgen.BuildFromValidatedIR(options.Config, ir, outputDir); err != nil {
+		return "", "", err
+	}
+	app, err := appgen.GenerateWithOptions(outputDir, appDir, appgen.Options{
+		AutoRoutes: true,
+		Config:     options.Config,
+		IR:         &ir,
+	})
+	if err != nil {
+		return "", "", err
+	}
+
+	testPath := filepath.Join(app.AppDir, "gowdkapp", "gowdk_audit_test.go")
+	output, err := runGeneratedAppTestPackage(app.AppDir)
+	return testPath, output, err
+}
+
+func runGeneratedAppTestPackage(appDir string) (string, error) {
+	command := exec.Command("go", "test", "./gowdkapp")
+	command.Dir = appDir
 	output, err := command.CombinedOutput()
 	return string(output), err
 }

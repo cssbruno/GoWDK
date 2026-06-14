@@ -14,6 +14,7 @@ package securitymanifest
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -232,6 +233,15 @@ func bundleLeaks(ir gwdkir.Program) []BundleLeak {
 					Kind:   "inline-asset:" + kind,
 				})
 			}
+		case asset.Kind == gwdkir.AssetFile && asset.Path != "":
+			if contents, ok := readSourceAsset(asset); ok {
+				if kind, ok := securitytext.FirstSecretKind(contents); ok {
+					leaks = append(leaks, BundleLeak{
+						Source: sourceRef(asset.Source, asset.Span),
+						Kind:   "file-asset:" + kind,
+					})
+				}
+			}
 		}
 	}
 	for _, page := range ir.Pages {
@@ -246,6 +256,21 @@ func bundleLeaks(ir gwdkir.Program) []BundleLeak {
 		}
 	}
 	return leaks
+}
+
+func readSourceAsset(asset gwdkir.Asset) (string, bool) {
+	if strings.TrimSpace(asset.Path) == "" || filepath.IsAbs(asset.Path) {
+		return "", false
+	}
+	baseDir := "."
+	if strings.TrimSpace(asset.Source) != "" {
+		baseDir = filepath.Dir(filepath.FromSlash(asset.Source))
+	}
+	payload, err := os.ReadFile(filepath.Clean(filepath.Join(baseDir, filepath.FromSlash(asset.Path))))
+	if err != nil {
+		return "", false
+	}
+	return string(payload), true
 }
 
 func rawHTMLSinks(ir gwdkir.Program) []RawHTMLSink {

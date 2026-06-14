@@ -45,9 +45,19 @@ view {
 
 func TestAuditCommandFlagsMissingCSRFAndExitsNonZero(t *testing.T) {
 	root := t.TempDir()
-	config := writeMinimalCLIConfig(t, root)
-	// writeCLIFile injects `guard public`, and the minimal config leaves CSRF
-	// disabled, so the action endpoint must trip audit_action_missing_csrf.
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		CSRF: gowdk.CSRFConfig{Disabled: true},
+	},
+}
+`)
+	// writeCLIFile injects `guard public`; the explicit CSRF opt-out should
+	// trip audit_action_missing_csrf.
 	writeCLIFile(t, filepath.Join(root, "signup.page.gwdk"), `package app
 
 page signup
@@ -85,6 +95,39 @@ view {
 	}
 	if !found {
 		t.Fatalf("expected audit_action_missing_csrf finding, got %#v", report.Findings)
+	}
+}
+
+func TestAuditCommandTreatsActionCSRFAsEnabledByDefault(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, filepath.Join(root, "signup.page.gwdk"), `package app
+
+page signup
+route "/signup"
+
+act Submit POST "/submit"
+
+view {
+  <main>Sign up</main>
+}
+`)
+
+	stdout, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--json", "--config", config, filepath.Join(root, "signup.page.gwdk")})
+	})
+	if err != nil {
+		t.Fatalf("expected default CSRF action posture to pass audit: %v", err)
+	}
+
+	var report auditReport
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("expected JSON audit output, got %q: %v", stdout, err)
+	}
+	for _, finding := range report.Findings {
+		if finding.Code == "audit_action_missing_csrf" {
+			t.Fatalf("did not expect missing-CSRF finding with default config: %#v", report.Findings)
+		}
 	}
 }
 

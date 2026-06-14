@@ -103,9 +103,9 @@ func (node Element) renderFor(ctx *renderContext, out *renderOutput, loop ForDir
 		out.write(`" data-gowdk-for-index-var="`)
 		out.write(gowhtml.Escape(loop.IndexVar))
 	}
-	out.write(`" data-gowdk-for-template="`)
-	out.write(gowhtml.Escape(template.string()))
-	out.write(`"></template>`)
+	out.write(`">`)
+	out.write(template.string())
+	out.write(`</template>`)
 	seenKeys := map[string]bool{}
 	for index, item := range items {
 		itemCtx, err := ctx.loopContext(loop, keyExpr, group, item, index)
@@ -298,30 +298,37 @@ func (ctx *renderContext) loopContext(loop ForDirective, keyExpr, group string, 
 }
 
 func (ctx *renderContext) nextLoopGroup() string {
-	if ctx.loopSeq == nil {
-		seq := 0
-		ctx.loopSeq = &seq
-	}
-	*ctx.loopSeq = *ctx.loopSeq + 1
-	return fmt.Sprintf("l%d", *ctx.loopSeq)
+	return ctx.idAllocator().nextLoopGroup()
 }
 
 func (ctx *renderContext) nextBindingID() string {
-	if ctx.bindingSeq == nil {
-		seq := 0
-		ctx.bindingSeq = &seq
-	}
-	*ctx.bindingSeq = *ctx.bindingSeq + 1
-	return fmt.Sprintf("b%d", *ctx.bindingSeq)
+	return ctx.idAllocator().nextBindingID()
 }
 
 func (ctx *renderContext) nextIslandID() string {
-	if ctx.islandSeq == nil {
-		seq := 0
-		ctx.islandSeq = &seq
+	return ctx.idAllocator().nextIslandID()
+}
+
+func (ctx *renderContext) idAllocator() *renderIDAllocator {
+	if ctx.ids == nil {
+		ctx.ids = &renderIDAllocator{}
 	}
-	*ctx.islandSeq = *ctx.islandSeq + 1
-	return fmt.Sprintf("i%d", *ctx.islandSeq)
+	return ctx.ids
+}
+
+func (ids *renderIDAllocator) nextLoopGroup() string {
+	ids.loop++
+	return fmt.Sprintf("l%d", ids.loop)
+}
+
+func (ids *renderIDAllocator) nextBindingID() string {
+	ids.binding++
+	return fmt.Sprintf("b%d", ids.binding)
+}
+
+func (ids *renderIDAllocator) nextIslandID() string {
+	ids.island++
+	return fmt.Sprintf("i%d", ids.island)
 }
 
 func (ctx *renderContext) loopKeyValue(expr string) string {

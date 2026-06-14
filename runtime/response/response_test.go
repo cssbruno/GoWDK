@@ -195,6 +195,20 @@ func TestWriteHTMLUsesExplicitCachePolicy(t *testing.T) {
 	}
 }
 
+func TestWriteHTMLPreservesExistingNoStore(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	recorder.Header().Set("Cache-Control", "no-store")
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	if err := WriteHTML(recorder, request, "<main>SSR</main>", "public, max-age=60"); err != nil {
+		t.Fatal(err)
+	}
+
+	if cacheControl := recorder.Header().Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
 func TestWriteHTMLDefaultsToNoStore(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/", nil)

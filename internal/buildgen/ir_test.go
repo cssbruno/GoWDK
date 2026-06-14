@@ -124,3 +124,31 @@ func TestBuildMemoryFromIRCollectsArtifacts(t *testing.T) {
 		t.Fatalf("expected generated page content, got:\n%s", result.Files["index.html"])
 	}
 }
+
+func TestBuildMemoryFromIRWithOptionsDoesNotRequireOutputDir(t *testing.T) {
+	config := gowdk.Config{}
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		Source:  "pages/home.page.gwdk",
+		Package: "pages",
+		ID:      "home",
+		Route:   "/",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+		},
+	}}}
+
+	result, err := BuildMemoryFromIRWithOptions(config, gwdkanalysis.BuildProgram(config, app), MemoryBuildOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Report.OutputDir != "." {
+		t.Fatalf("expected virtual output base '.', got %q", result.Report.OutputDir)
+	}
+	if result.RouteManifestPath != routeManifestFile {
+		t.Fatalf("expected relative route manifest path, got %q", result.RouteManifestPath)
+	}
+	if !strings.Contains(string(result.Files["index.html"]), "<main>Home</main>") {
+		t.Fatalf("expected generated page content, got:\n%s", result.Files["index.html"])
+	}
+}

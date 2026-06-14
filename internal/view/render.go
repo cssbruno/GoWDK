@@ -13,17 +13,8 @@ func render(source string, ctx renderContext) (string, error) {
 	if err := validateFragmentTargetReferences(nodes); err != nil {
 		return "", err
 	}
-	if ctx.loopSeq == nil {
-		seq := 0
-		ctx.loopSeq = &seq
-	}
-	if ctx.bindingSeq == nil {
-		seq := 0
-		ctx.bindingSeq = &seq
-	}
-	if ctx.islandSeq == nil {
-		seq := 0
-		ctx.islandSeq = &seq
+	if ctx.ids == nil {
+		ctx.ids = &renderIDAllocator{}
 	}
 	return renderNodes(nodes, &ctx)
 }

@@ -43,8 +43,8 @@ emitted.
 
 - URL-bearing attributes reject active-content schemes such as `javascript:`,
   `vbscript:`, and `data:`.
-- URL-bearing attributes reject protocol-relative URLs such as
-  `//example.com`.
+- URL-bearing attributes reject protocol-relative and browser-normalized
+  host-relative URLs such as `//example.com` or `/\example.com`.
 - URL-bearing attributes reject control characters.
 - Safe local, fragment, query, relative, `http`, `https`, `mailto`, and `tel`
   URLs remain supported.

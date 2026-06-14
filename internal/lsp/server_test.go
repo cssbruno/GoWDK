@@ -18,7 +18,7 @@ import (
 func TestServerHandlesInitializeDiagnosticsFormattingCompletionAndShutdown(t *testing.T) {
 	uri := "file:///tmp/bad.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\npage bad\nroute \"/bad\"\n\nview {\n<h1>Bad</h1>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\npage bad\nroute \"/bad\"\nguard public\n\nview {\n<h1>Bad</h1>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/formatting","params":{"textDocument":{"uri":"`+uri+`"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/completion","params":{"textDocument":{"uri":"`+uri+`"},"position":{"line":0,"character":0}}}`) +
 		framed(`{"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}`) +
@@ -54,7 +54,7 @@ func TestServerHandlesInitializeDiagnosticsFormattingCompletionAndShutdown(t *te
 		t.Fatalf("expected one formatting edit, got %#v", edits)
 	}
 	edit := edits[0].(map[string]any)
-	if edit["newText"] != "package app\n\npage bad\nroute \"/bad\"\n\nview {\n  <h1>Bad</h1>\n}\n" {
+	if edit["newText"] != "package app\n\npage bad\nroute \"/bad\"\nguard public\n\nview {\n  <h1>Bad</h1>\n}\n" {
 		t.Fatalf("unexpected formatted text: %#v", edit["newText"])
 	}
 

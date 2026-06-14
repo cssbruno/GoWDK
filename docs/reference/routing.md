@@ -251,9 +251,9 @@ markup.
 Malformed `//gowdk:` comments, unknown endpoint kinds, and missing method or
 path fields fail with `malformed_go_endpoint_comment`.
 
-When `Build.CSRF.Enabled` is set, generated action handlers validate CSRF
-tokens before generated decoding or user handlers run. Missing or invalid
-tokens return HTTP 403 with `invalid csrf token` and `Cache-Control: no-store`.
+Generated action and web-command handlers validate CSRF tokens by default before
+generated decoding or user handlers run. Missing or invalid tokens return HTTP
+403 with `invalid csrf token` and `Cache-Control: no-store`.
 
 ## API Routes
 

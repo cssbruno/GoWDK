@@ -179,16 +179,36 @@ func finalizeAssetArtifact(artifact *plannedAssetArtifact) {
 
 func BuildMemory(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (MemoryResult, error) {
 	ir := gwdkanalysis.BuildProgram(config, sources)
-	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir)
+	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, true)
+}
+
+// BuildMemoryWithOptions plans SPA build artifacts without requiring a real
+// output directory. Empty MemoryBuildOptions.OutputBase defaults to ".".
+func BuildMemoryWithOptions(config gowdk.Config, sources gwdkanalysis.Sources, options MemoryBuildOptions) (MemoryResult, error) {
+	ir := gwdkanalysis.BuildProgram(config, sources)
+	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), memoryOutputBase(options), false)
 }
 
 // BuildMemoryFromIR plans SPA build artifacts from normalized compiler IR
 // without writing them to disk.
 func BuildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (MemoryResult, error) {
-	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir)
+	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, true)
 }
 
-func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, outputDir string) (MemoryResult, error) {
+// BuildMemoryFromIRWithOptions is BuildMemoryWithOptions for orchestrators
+// that already have normalized compiler IR.
+func BuildMemoryFromIRWithOptions(config gowdk.Config, ir gwdkir.Program, options MemoryBuildOptions) (MemoryResult, error) {
+	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), memoryOutputBase(options), false)
+}
+
+func memoryOutputBase(options MemoryBuildOptions) string {
+	if strings.TrimSpace(options.OutputBase) == "" {
+		return "."
+	}
+	return options.OutputBase
+}
+
+func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, outputDir string, requireOutputDir bool) (MemoryResult, error) {
 	reporter := newBuildReporter("memory", outputDir)
 	reporter.info("start", "build_started", "in-memory SPA build started", BuildEvent{
 		Data: map[string]string{
@@ -197,7 +217,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 			"layouts":    fmt.Sprint(len(ir.Layouts)),
 		},
 	})
-	if strings.TrimSpace(outputDir) == "" {
+	if requireOutputDir && strings.TrimSpace(outputDir) == "" {
 		return MemoryResult{}, reporter.fail("validate", fmt.Errorf("build output directory is required"))
 	}
 	if err := compiler.ValidateProgram(config, ir); err != nil {
@@ -235,7 +255,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 		},
 		Files: map[string][]byte{},
 	}
-	manifestPath, err := securityManifestPath(outputDir)
+	manifestPath, err := memorySecurityManifestPath(outputDir, requireOutputDir)
 	if err != nil {
 		return MemoryResult{}, reporter.fail("manifest", err)
 	}

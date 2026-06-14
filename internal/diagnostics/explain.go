@@ -216,7 +216,7 @@ guard public
 	"audit_action_missing_csrf": {
 		Details: "gowdk audit derives an action endpoint that decodes a request body without CSRF enforcement. The built-in security baseline (and any require csrf policy) treats this as an error because action POSTs are cross-site-forgeable.",
 		NextSteps: []string{
-			"Set Build.CSRF.Enabled and a runtime CSRF secret so generated actions validate tokens before decoding.",
+			"Remove Build.CSRF.Disabled and provide a runtime CSRF secret so generated actions validate tokens before decoding.",
 			"Override the built-in baseline.actions policy in a *.audit.gwdk file if the endpoint is intentionally exempt.",
 		},
 	},
@@ -244,7 +244,7 @@ guard public
 	"audit_command_missing_csrf": {
 		Details: "gowdk audit derives a generated command endpoint that accepts a state-changing web request without CSRF enforcement. The built-in security baseline treats this as an error because command POSTs are cross-site-forgeable in the same way as action POSTs.",
 		NextSteps: []string{
-			"Set Build.CSRF.Enabled and a runtime CSRF secret so generated command endpoints validate tokens before decoding.",
+			"Remove Build.CSRF.Disabled and provide a runtime CSRF secret so generated command endpoints validate tokens before decoding.",
 			"Override the built-in baseline.contract_commands policy in a *.audit.gwdk file if the endpoint is intentionally exempt.",
 		},
 	},

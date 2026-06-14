@@ -18,6 +18,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/securitymanifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -202,6 +203,44 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 		if !strings.Contains(string(payload), expected) {
 			t.Fatalf("expected generated audit test to contain %q:\n%s", expected, payload)
 		}
+	}
+}
+
+func TestStandaloneAuditTestRejectsActorScenarios(t *testing.T) {
+	specs := []gwdkir.AuditSpec{{
+		Source: "security.audit.gwdk",
+		Tests: []gwdkir.AuditTest{{
+			Name: "admin",
+			Body: `expect GET "/admin" as "role:admin" status 200`,
+		}},
+	}}
+	// The standalone harness cannot enforce role/permission guards, so emitting
+	// an actor scenario for gowdk audit --run must fail loudly rather than
+	// produce a test that passes or fails for the wrong reason.
+	if _, err := StandaloneAuditTestSource(gowdk.Config{}, securitymanifest.SecurityManifest{}, specs); err == nil {
+		t.Fatal("expected standalone audit emit to reject actor scenarios")
+	}
+	// The generated-app path runs against the real guard pipeline, so the same
+	// actor scenario is supported there.
+	source, err := GeneratedAuditTestSource(Options{
+		SSR: []SSRRoute{{Route: "/admin", Guards: []string{"role:admin"}}},
+		IR: &gwdkir.Program{
+			Routes: []gwdkir.Route{{
+				Kind:   gwdkir.RouteSSR,
+				Method: "GET",
+				Path:   "/admin",
+				PageID: "admin",
+				Render: gowdk.SSR,
+				Guards: []string{"role:admin"},
+			}},
+			AuditSpecs: specs,
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected generated-app actor test to succeed: %v", err)
+	}
+	if !strings.Contains(string(source), `"X-GOWDK-Audit-Actor": "role:admin"`) {
+		t.Fatalf("expected generated-app actor scenario, got:\n%s", source)
 	}
 }
 

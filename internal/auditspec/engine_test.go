@@ -104,6 +104,52 @@ func TestPolicyRequireHeaderUsesConfiguredHeaders(t *testing.T) {
 	}
 }
 
+func TestDeclaredRequireCSRFResolvesCodeByEndpointKind(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{
+			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"auth.required"}, CSRF: false},
+			{ID: "patients.CreatePatient", Kind: "command", Method: "POST", Path: "/patients", Guards: []string{"auth.required"}, CSRF: false},
+		},
+	}
+	// A declared require csrf rule leaves Code empty (as the parser now does), so
+	// the engine resolves the kind-appropriate code for each matched endpoint.
+	policies := []Policy{{
+		Name:      "csrf_everywhere",
+		Source:    "security.audit.gwdk:1",
+		Selectors: []Selector{{Raw: "act:*", Kind: SelectorEndpoint}, {Raw: "command:*", Kind: SelectorEndpoint}},
+		Rules:     []Rule{{Kind: RuleRequireCSRF}},
+	}}
+	got := codes(Evaluate(manifest, policies))
+	if got["audit_action_missing_csrf"] != 1 {
+		t.Fatalf("expected one action CSRF finding, got %#v", got)
+	}
+	if got["audit_command_missing_csrf"] != 1 {
+		t.Fatalf("expected one command CSRF finding, got %#v", got)
+	}
+}
+
+func TestEvaluateDeduplicatesFindingsAcrossExtendingPolicies(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Frontend: securitymanifest.FrontendSurface{
+			RawHTMLSinks: []securitymanifest.RawHTMLSink{
+				{OwnerKind: "page", OwnerID: "home", Field: "{TrustedHTML}", Source: "home.page.gwdk:12"},
+			},
+		},
+	}
+	// browser_hardening extends baseline.frontend (which already denies raw HTML)
+	// and denies raw HTML again, so the same sink is evaluated three times.
+	declared := []Policy{{
+		Name:      "browser_hardening",
+		Source:    "security.audit.gwdk:3",
+		Extends:   []string{"baseline.frontend"},
+		Selectors: []Selector{{Raw: "frontend", Kind: SelectorFrontend}},
+		Rules:     []Rule{{Kind: RuleDenyRawHTMLSinks, Code: "audit_raw_html_sink"}},
+	}}
+	if got := codes(Evaluate(manifest, ComposeBaseline(declared)))["audit_raw_html_sink"]; got != 1 {
+		t.Fatalf("expected one deduped raw HTML finding, got %d", got)
+	}
+}
+
 func TestComposeBaselineLetsDeclaredPolicyOverrideBuiltin(t *testing.T) {
 	policies := ComposeBaseline([]Policy{{
 		Name:      "baseline.frontend",

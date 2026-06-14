@@ -54,7 +54,7 @@ func StandaloneAuditTestSource(config gowdk.Config, manifest securitymanifest.Se
 }
 
 func auditTestSource(packageName string, mode auditTestMode, config gowdk.Config, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]byte, error) {
-	scenarios, err := auditTestScenarios(config, manifest, specs)
+	scenarios, err := auditTestScenarios(mode, config, manifest, specs)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func auditGuardsUseNativeRBAC(guards []string) bool {
 	return false
 }
 
-func auditTestScenarios(config gowdk.Config, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]auditScenario, error) {
+func auditTestScenarios(mode auditTestMode, config gowdk.Config, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]auditScenario, error) {
 	var scenarios []auditScenario
 	routes := append([]securitymanifest.RouteEntry(nil), manifest.Routes...)
 	sort.SliceStable(routes, func(i, j int) bool {
@@ -204,7 +204,7 @@ func auditTestScenarios(config gowdk.Config, manifest securitymanifest.SecurityM
 		})
 	}
 
-	testScenarios, err := auditDeclaredTestScenarios(specs)
+	testScenarios, err := auditDeclaredTestScenarios(mode, specs)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func auditSecurityHeaders(config gowdk.Config) []auditHeaderExpectation {
 	return headers
 }
 
-func auditDeclaredTestScenarios(specs []gwdkir.AuditSpec) ([]auditScenario, error) {
+func auditDeclaredTestScenarios(mode auditTestMode, specs []gwdkir.AuditSpec) ([]auditScenario, error) {
 	var scenarios []auditScenario
 	for _, spec := range specs {
 		for _, test := range spec.Tests {
@@ -258,6 +258,15 @@ func auditDeclaredTestScenarios(specs []gwdkir.AuditSpec) ([]auditScenario, erro
 					status, err := strconv.Atoi(statusMatch[4])
 					if err != nil {
 						return nil, fmt.Errorf("%s:%d: invalid audit test status %q", spec.Source, test.Span.Start.Line+lineIndex+1, statusMatch[4])
+					}
+					// The standalone harness installs no auth provider and only
+					// models static serving, default-deny, and headers, so it
+					// cannot enforce role/permission guards. An actor expectation
+					// there would pass or fail for the wrong reason, so refuse it
+					// and steer the author to the generated-app audit test, which
+					// runs against the real guard pipeline.
+					if mode == auditTestStandalone && statusMatch[3] != "" {
+						return nil, fmt.Errorf("%s:%d: audit test actor %q requires the generated-app audit test (%s, emitted by gowdk build); gowdk audit --run cannot enforce role or permission guards", spec.Source, test.Span.Start.Line+lineIndex+1, statusMatch[3], auditTestFileName)
 					}
 					name := test.Name + " " + strings.ToUpper(statusMatch[1]) + " " + statusMatch[2]
 					if statusMatch[3] != "" {
@@ -291,6 +300,8 @@ func auditDeclaredTestScenarios(specs []gwdkir.AuditSpec) ([]auditScenario, erro
 }
 
 func writeGeneratedAuditAuthProvider(builder *strings.Builder) {
+	builder.WriteString("\tpreviousAuditAuthProvider := authProvider\n")
+	builder.WriteString("\tt.Cleanup(func() { authProvider = previousAuditAuthProvider })\n")
 	builder.WriteString("\tRegisterAuthProvider(gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {\n")
 	builder.WriteString("\t\tactor := strings.TrimSpace(request.Header.Get(\"X-GOWDK-Audit-Actor\"))\n")
 	builder.WriteString("\t\tswitch {\n")

@@ -249,7 +249,9 @@ func parseAuditRequireRule(tokens []syntax.Token, lineNumber int, rawLine string
 	switch tokens[1].Lexeme {
 	case "csrf":
 		rule.Kind = "require_csrf"
-		rule.Code = "audit_action_missing_csrf"
+		// Leave Code empty so the engine resolves a kind-appropriate code per
+		// matched endpoint (action vs command). An explicit `as <code>` still
+		// overrides this in finishAuditRule.
 		return finishAuditRule(rule, tokens[2:], lineNumber)
 	case "guard":
 		if len(tokens) < 3 {

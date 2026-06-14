@@ -217,7 +217,7 @@ guard public
 		Details: "gowdk audit derives an action endpoint that decodes a request body without CSRF enforcement. The built-in security baseline (and any require csrf policy) treats this as an error because action POSTs are cross-site-forgeable.",
 		NextSteps: []string{
 			"Set Build.CSRF.Enabled and a runtime CSRF secret so generated actions validate tokens before decoding.",
-			"Use an audit policy waiver with a documented reason if the endpoint is intentionally exempt.",
+			"Override the built-in baseline.actions policy in a *.audit.gwdk file if the endpoint is intentionally exempt.",
 		},
 	},
 	"audit_api_public_by_omission": {
@@ -235,7 +235,7 @@ guard public
 		},
 	},
 	"audit_client_route_unguarded": {
-		Details: "A client or SPA route is not covered by the generated default-deny registry, so static hosting could serve it without the 403 gate. The static-export caveat in docs/language/guards.md applies.",
+		Details: "A client or SPA route declares no guard, so it is protected only by the generated runtime default-deny gate (HTTP 403). Under pure static hosting that gate is absent and the route's HTML could be served. The static-export caveat in docs/language/guards.md applies.",
 		NextSteps: []string{
 			"State the route's access with guard public or a protective guard so it joins the deny registry.",
 			"Serve the route through the generated Go server, which enforces the deny registry.",
@@ -245,7 +245,7 @@ guard public
 		Details: "gowdk audit derives a generated command endpoint that accepts a state-changing web request without CSRF enforcement. The built-in security baseline treats this as an error because command POSTs are cross-site-forgeable in the same way as action POSTs.",
 		NextSteps: []string{
 			"Set Build.CSRF.Enabled and a runtime CSRF secret so generated command endpoints validate tokens before decoding.",
-			"Use an audit policy waiver with a documented reason if the endpoint is intentionally exempt.",
+			"Override the built-in baseline.contract_commands policy in a *.audit.gwdk file if the endpoint is intentionally exempt.",
 		},
 	},
 	"audit_guardless_endpoint_page": {
@@ -280,7 +280,7 @@ guard public
 		Details: "A target route or endpoint is public (guard public or no protective guard) but a policy deny public rule forbids public access for its selector.",
 		NextSteps: []string{
 			"Add a protective guard to the target so it is no longer public.",
-			"Narrow the policy selector or add a waiver if the target is intentionally public.",
+			"Narrow the policy selector if the target is intentionally public.",
 		},
 	},
 	"audit_raw_html_sink": {

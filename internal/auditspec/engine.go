@@ -57,7 +57,25 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 	}
 
 	findings = append(findings, unmatchedSelectorFindings(resolved, matchedAnything)...)
-	return findings
+	return dedupeFindings(findings)
+}
+
+// dedupeFindings drops findings that are identical except for the policy that
+// raised them, so a policy that extends a baseline policy does not re-report the
+// same sink, route, or endpoint twice. The first occurrence wins, which keeps
+// the baseline attribution because ComposeBaseline lists baseline policies first.
+func dedupeFindings(findings []Finding) []Finding {
+	seen := make(map[string]bool, len(findings))
+	out := findings[:0]
+	for _, finding := range findings {
+		key := finding.Code + "\x00" + finding.Target + "\x00" + finding.Source + "\x00" + finding.Message
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, finding)
+	}
+	return out
 }
 
 // resolve expands extends so each policy carries its full rule set, and reports
@@ -212,9 +230,13 @@ func evalEndpoint(endpoint securitymanifest.EndpointEntry, policy Policy) []Find
 		switch rule.Kind {
 		case RuleRequireCSRF:
 			if !endpoint.CSRF {
-				findings = append(findings, finding(rule, policy, endpointTarget(endpoint), endpoint.Source,
+				csrfRule := rule
+				if csrfRule.Code == "" {
+					csrfRule.Code = csrfCodeForKind(endpoint.Kind)
+				}
+				findings = append(findings, finding(csrfRule, policy, endpointTarget(endpoint), endpoint.Source,
 					fmt.Sprintf("%s endpoint %s does not enforce CSRF", endpoint.Kind, endpoint.ID),
-					"Enable Build.CSRF.Enabled, or waive the rule with a documented reason."))
+					"Enable Build.CSRF.Enabled, or override the matching baseline policy in a *.audit.gwdk file."))
 			}
 		case RuleRequireAnyGuard:
 			if endpoint.DefaultDeny {
@@ -340,6 +362,16 @@ func finding(rule Rule, policy Policy, target, source, message, remediation stri
 		Source:      source,
 		Remediation: remediation,
 	}
+}
+
+// csrfCodeForKind resolves the diagnostic code for a CSRF requirement when a
+// declared rule did not pin one, so a command endpoint reports the command code
+// rather than the action code.
+func csrfCodeForKind(kind string) string {
+	if kind == "command" {
+		return "audit_command_missing_csrf"
+	}
+	return "audit_action_missing_csrf"
 }
 
 func endpointTarget(endpoint securitymanifest.EndpointEntry) string {

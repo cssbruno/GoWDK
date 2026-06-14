@@ -90,6 +90,13 @@ Status expectations drive the generated handler through `runtime/testkit`.
 Header expectations check the runtime health endpoint so header policy can be
 verified without depending on a specific page route.
 
+Actor expectations (`as "role:..."` / `as "permission:..."`) require the
+generated-app audit test that `gowdk build` emits, because only that test runs
+against the real guard pipeline. `gowdk audit --emit-tests` and `--run` build a
+standalone harness that models static serving, default-deny, and headers but
+installs no auth provider, so they reject actor expectations rather than pass or
+fail them for the wrong reason.
+
 ## Built-In Baseline
 
 `gowdk audit` always composes declared policies with the built-in baseline.

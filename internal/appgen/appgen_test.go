@@ -2,6 +2,7 @@ package appgen
 
 import (
 	"context"
+	"flag"
 	"go/format"
 	"io"
 	"net"
@@ -21,6 +22,8 @@ import (
 	"github.com/cssbruno/gowdk/internal/securitymanifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
+
+var updateGolden = flag.Bool("update", false, "update appgen golden files")
 
 func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 	root := t.TempDir()
@@ -786,6 +789,11 @@ func TestGeneratedGoMatchesGoldenFixture(t *testing.T) {
 	}
 
 	goldenPath := filepath.FromSlash("testdata/generated_go_golden/app.go.golden")
+	if *updateGolden {
+		if err := os.WriteFile(goldenPath, actual, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	expected, err := os.ReadFile(goldenPath)
 	if err != nil {
 		t.Fatal(err)

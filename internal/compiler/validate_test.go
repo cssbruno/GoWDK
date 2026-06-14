@@ -12,10 +12,74 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/internal/diagnostics"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
+
+func TestCompilerDiagnosticSeverityMatchesRegistryDefaults(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "home.page.gwdk")
+	if err := os.WriteFile(sourcePath, []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := gwdkir.Page{
+		ID:     "home",
+		Route:  "/",
+		Source: sourcePath,
+		Blocks: gwdkir.Blocks{View: true},
+	}
+	diagnosticsReport := ValidatePage(gowdk.Config{}, irPage(page))
+	var guardWarning *ValidationError
+	for i := range diagnosticsReport {
+		if diagnosticsReport[i].Code == "missing_page_guard" {
+			guardWarning = &diagnosticsReport[i]
+			break
+		}
+	}
+	if guardWarning == nil {
+		t.Fatalf("missing missing_page_guard diagnostic: %#v", diagnosticsReport)
+	}
+	assertCompilerSeverityMatchesRegistry(t, *guardWarning)
+
+	ssrPage := gwdkir.Page{
+		ID:     "dashboard",
+		Route:  "/dashboard",
+		Render: gowdk.SSR,
+		Guards: []string{"public"},
+		Blocks: gwdkir.Blocks{View: true},
+	}
+	diagnosticsReport = ValidatePage(gowdk.Config{}, irPage(ssrPage))
+	var missingSSR *ValidationError
+	for i := range diagnosticsReport {
+		if diagnosticsReport[i].Code == "missing_ssr_addon" {
+			missingSSR = &diagnosticsReport[i]
+			break
+		}
+	}
+	if missingSSR == nil {
+		t.Fatalf("missing missing_ssr_addon diagnostic: %#v", diagnosticsReport)
+	}
+	assertCompilerSeverityMatchesRegistry(t, *missingSSR)
+}
+
+func assertCompilerSeverityMatchesRegistry(t *testing.T, diagnostic ValidationError) {
+	t.Helper()
+	expected, ok := diagnostics.DefaultSeverity(diagnostic.Code)
+	if !ok {
+		t.Fatalf("diagnostic %q is not registered", diagnostic.Code)
+	}
+	if got := registrySeverity(diagnostic.Severity); got != expected {
+		t.Fatalf("diagnostic %q severity drifted from registry: got %s, want %s", diagnostic.Code, got, expected)
+	}
+}
+
+func registrySeverity(severity Severity) diagnostics.Severity {
+	if severity == SeverityWarning {
+		return diagnostics.SeverityWarning
+	}
+	return diagnostics.SeverityError
+}
 
 func TestValidateManifestRejectsMissingPackageDeclaration(t *testing.T) {
 	root := t.TempDir()

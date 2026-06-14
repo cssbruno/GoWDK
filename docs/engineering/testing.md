@@ -96,6 +96,9 @@ must pass `--config <file>`.
 - `cmd/gowdk` and `internal/appgen` tests cover generated embedded app
   source, binary compilation, WASM artifact compilation, live binary HTTP
   serving, and first-slice action redirect routing.
+- Update the generated app golden with
+  `go test ./internal/appgen -run TestGeneratedGoMatchesGoldenFixture -update`
+  when an intentional generated Go change lands.
 - `internal/buildgen` and `internal/appgen` tests cover preserving unchanged
   generated file modification times so local dev loops do not retrigger on
   identical output.

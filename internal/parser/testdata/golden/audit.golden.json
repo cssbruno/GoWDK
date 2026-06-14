@@ -1,0 +1,179 @@
+{
+  "package": "security",
+  "policies": [
+    {
+      "Name": "admin",
+      "Extends": [
+        "baseline.api"
+      ],
+      "Applies": [
+        {
+          "Selector": "/admin/**",
+          "Span": {
+            "Start": {
+              "Line": 4,
+              "Column": 3,
+              "Offset": 0
+            },
+            "End": {
+              "Line": 4,
+              "Column": 20,
+              "Offset": 0
+            }
+          }
+        }
+      ],
+      "Rules": [
+        {
+          "Kind": "require_guard",
+          "Value": "role:admin",
+          "Code": "audit_required_guard_missing",
+          "Span": {
+            "Start": {
+              "Line": 5,
+              "Column": 3,
+              "Offset": 0
+            },
+            "End": {
+              "Line": 5,
+              "Column": 29,
+              "Offset": 0
+            }
+          }
+        },
+        {
+          "Kind": "deny_public",
+          "Value": "",
+          "Code": "audit_public_not_allowed",
+          "Span": {
+            "Start": {
+              "Line": 6,
+              "Column": 3,
+              "Offset": 0
+            },
+            "End": {
+              "Line": 6,
+              "Column": 14,
+              "Offset": 0
+            }
+          }
+        },
+        {
+          "Kind": "max_body",
+          "Value": "256kb",
+          "Code": "audit_max_body_exceeds_policy",
+          "Span": {
+            "Start": {
+              "Line": 7,
+              "Column": 3,
+              "Offset": 0
+            },
+            "End": {
+              "Line": 7,
+              "Column": 27,
+              "Offset": 0
+            }
+          }
+        },
+        {
+          "Kind": "require_header",
+          "Value": "Content-Security-Policy",
+          "Code": "audit_headers_missing",
+          "Span": {
+            "Start": {
+              "Line": 8,
+              "Column": 3,
+              "Offset": 0
+            },
+            "End": {
+              "Line": 8,
+              "Column": 43,
+              "Offset": 0
+            }
+          }
+        },
+        {
+          "Kind": "no_secrets_in_bundle",
+          "Value": "",
+          "Code": "audit_bundle_secret",
+          "Span": {
+            "Start": {
+              "Line": 9,
+              "Column": 3,
+              "Offset": 0
+            },
+            "End": {
+              "Line": 9,
+              "Column": 31,
+              "Offset": 0
+            }
+          }
+        },
+        {
+          "Kind": "deny_raw_html_sinks",
+          "Value": "",
+          "Code": "audit_raw_html_sink",
+          "Span": {
+            "Start": {
+              "Line": 10,
+              "Column": 3,
+              "Offset": 0
+            },
+            "End": {
+              "Line": 10,
+              "Column": 16,
+              "Offset": 0
+            }
+          }
+        },
+        {
+          "Kind": "allow_raw_html",
+          "Value": "home:TrustedHTML",
+          "Code": "",
+          "Span": {
+            "Start": {
+              "Line": 11,
+              "Column": 3,
+              "Offset": 0
+            },
+            "End": {
+              "Line": 11,
+              "Column": 36,
+              "Offset": 0
+            }
+          }
+        }
+      ],
+      "Span": {
+        "Start": {
+          "Line": 3,
+          "Column": 1,
+          "Offset": 0
+        },
+        "End": {
+          "Line": 3,
+          "Column": 38,
+          "Offset": 0
+        }
+      }
+    }
+  ],
+  "tests": [
+    {
+      "Name": "admin_forbidden",
+      "Body": "expect GET \"/admin\" as \"anonymous\" status 403",
+      "Span": {
+        "Start": {
+          "Line": 14,
+          "Column": 1,
+          "Offset": 0
+        },
+        "End": {
+          "Line": 14,
+          "Column": 23,
+          "Offset": 0
+        }
+      }
+    }
+  ]
+}

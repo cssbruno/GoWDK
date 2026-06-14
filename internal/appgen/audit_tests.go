@@ -1,0 +1,399 @@
+package appgen
+
+import (
+	"fmt"
+	"go/format"
+	"net/http"
+	"path"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/securitymanifest"
+)
+
+type auditTestMode string
+
+const (
+	auditTestGeneratedApp auditTestMode = "generated-app"
+	auditTestStandalone   auditTestMode = "standalone"
+)
+
+type auditScenario struct {
+	Name       string
+	Method     string
+	Path       string
+	WantStatus int
+	WantHeader map[string]string
+}
+
+var (
+	auditExpectStatusPattern = regexp.MustCompile(`^expect\s+([A-Za-z]+)\s+"([^"]+)"(?:\s+as\s+"([^"]+)")?\s+status\s+([0-9]{3})$`)
+	auditExpectHeaderPattern = regexp.MustCompile(`^expect\s+header\s+"([^"]+)"\s+"([^"]+)"$`)
+)
+
+// GeneratedAuditTestSource returns the generated-app audit test file source for
+// options. It returns nil when there is no IR-backed posture to exercise.
+func GeneratedAuditTestSource(options Options) ([]byte, error) {
+	if options.IR == nil {
+		return nil, nil
+	}
+	manifest := securitymanifest.Build(options.Config, *options.IR)
+	return auditTestSource("gowdkapp", auditTestGeneratedApp, options.Config, manifest, options.IR.AuditSpecs)
+}
+
+// StandaloneAuditTestSource returns a committable audit test file that drives
+// runtime/app directly from the derived posture. The CLI uses this for
+// `gowdk audit --emit-tests` and temporary `--run` checks.
+func StandaloneAuditTestSource(config gowdk.Config, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]byte, error) {
+	return auditTestSource("gowdkaudit_test", auditTestStandalone, config, manifest, specs)
+}
+
+func auditTestSource(packageName string, mode auditTestMode, config gowdk.Config, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]byte, error) {
+	scenarios, err := auditTestScenarios(config, manifest, specs)
+	if err != nil {
+		return nil, err
+	}
+	if len(scenarios) == 0 {
+		return nil, nil
+	}
+
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "package %s\n\n", packageName)
+	writeAuditTestImports(&builder, mode)
+	builder.WriteString("\n")
+	builder.WriteString("func TestGOWDKAuditGeneratedSecurityPosture(t *testing.T) {\n")
+	switch mode {
+	case auditTestGeneratedApp:
+		builder.WriteString("\thandler, err := Handler()\n")
+		builder.WriteString("\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n")
+	case auditTestStandalone:
+		writeStandaloneAuditHandler(&builder, config, manifest)
+	}
+	builder.WriteString("\tgowdktestkit.Run(t, handler, []gowdktestkit.Scenario{\n")
+	for _, scenario := range scenarios {
+		writeAuditScenario(&builder, scenario)
+	}
+	builder.WriteString("\t})\n")
+	builder.WriteString("}\n")
+
+	formatted, err := format.Source([]byte(builder.String()))
+	if err != nil {
+		return nil, fmt.Errorf("format generated audit tests: %w", err)
+	}
+	return formatted, nil
+}
+
+func writeAuditTestImports(builder *strings.Builder, mode auditTestMode) {
+	builder.WriteString("import (\n")
+	builder.WriteString("\t\"net/http\"\n")
+	builder.WriteString("\t\"testing\"\n")
+	if mode == auditTestStandalone {
+		builder.WriteString("\t\"testing/fstest\"\n")
+	}
+	builder.WriteString("\n")
+	if mode == auditTestStandalone {
+		builder.WriteString("\tgowdkruntime \"github.com/cssbruno/gowdk/runtime/app\"\n")
+		builder.WriteString("\truntimeasset \"github.com/cssbruno/gowdk/runtime/asset\"\n")
+	}
+	builder.WriteString("\tgowdktestkit \"github.com/cssbruno/gowdk/runtime/testkit\"\n")
+	builder.WriteString(")\n")
+}
+
+func auditTestScenarios(config gowdk.Config, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]auditScenario, error) {
+	var scenarios []auditScenario
+	routes := append([]securitymanifest.RouteEntry(nil), manifest.Routes...)
+	sort.SliceStable(routes, func(i, j int) bool {
+		if routes[i].Route != routes[j].Route {
+			return routes[i].Route < routes[j].Route
+		}
+		return routes[i].PageID < routes[j].PageID
+	})
+
+	postEndpoints := map[string]bool{}
+	for _, endpoint := range manifest.Endpoints {
+		if strings.EqualFold(endpoint.Method, http.MethodPost) && endpoint.Path != "" {
+			postEndpoints[path.Clean("/"+endpoint.Path)] = true
+		}
+	}
+
+	for _, route := range routes {
+		routePath := path.Clean("/" + route.Route)
+		if !isConcreteAuditRoute(routePath) {
+			continue
+		}
+		if route.DefaultDeny {
+			scenarios = append(scenarios, auditScenario{
+				Name:       "default-deny " + routePath,
+				Method:     http.MethodGet,
+				Path:       routePath,
+				WantStatus: http.StatusForbidden,
+			})
+		} else if !strings.EqualFold(route.Render, string(gowdk.SSR)) {
+			scenarios = append(scenarios, auditScenario{
+				Name:       "route serves " + routePath,
+				Method:     http.MethodGet,
+				Path:       routePath,
+				WantStatus: http.StatusOK,
+			})
+		}
+		if !postEndpoints[routePath] {
+			scenarios = append(scenarios, auditScenario{
+				Name:       "method denied " + routePath,
+				Method:     http.MethodPost,
+				Path:       routePath,
+				WantStatus: http.StatusMethodNotAllowed,
+			})
+		}
+	}
+
+	for _, header := range auditSecurityHeaders(config) {
+		scenarios = append(scenarios, auditScenario{
+			Name:       "security header " + header.Name,
+			Method:     http.MethodGet,
+			Path:       "/_gowdk/health",
+			WantStatus: http.StatusOK,
+			WantHeader: map[string]string{header.Name: header.Value},
+		})
+	}
+
+	testScenarios, err := auditDeclaredTestScenarios(specs)
+	if err != nil {
+		return nil, err
+	}
+	scenarios = append(scenarios, testScenarios...)
+	return scenarios, nil
+}
+
+type auditHeaderExpectation struct {
+	Name  string
+	Value string
+}
+
+func auditSecurityHeaders(config gowdk.Config) []auditHeaderExpectation {
+	if !config.Build.SecurityHeaders.Enabled || len(config.Build.SecurityHeaders.Headers) == 0 {
+		return nil
+	}
+	values := map[string]string{}
+	names := make([]string, 0, len(config.Build.SecurityHeaders.Headers))
+	seen := map[string]bool{}
+	for name, value := range config.Build.SecurityHeaders.Headers {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		values[name] = value
+		if !seen[name] {
+			names = append(names, name)
+			seen[name] = true
+		}
+	}
+	sort.Strings(names)
+	headers := make([]auditHeaderExpectation, 0, len(names))
+	for _, name := range names {
+		headers = append(headers, auditHeaderExpectation{Name: name, Value: values[name]})
+	}
+	return headers
+}
+
+func auditDeclaredTestScenarios(specs []gwdkir.AuditSpec) ([]auditScenario, error) {
+	var scenarios []auditScenario
+	for _, spec := range specs {
+		for _, test := range spec.Tests {
+			lines := strings.Split(test.Body, "\n")
+			for lineIndex, raw := range lines {
+				line := strings.TrimSpace(raw)
+				if line == "" || strings.HasPrefix(line, "//") {
+					continue
+				}
+				statusMatch := auditExpectStatusPattern.FindStringSubmatch(line)
+				if statusMatch != nil {
+					status, err := strconv.Atoi(statusMatch[4])
+					if err != nil {
+						return nil, fmt.Errorf("%s:%d: invalid audit test status %q", spec.Source, test.Span.Start.Line+lineIndex+1, statusMatch[4])
+					}
+					name := test.Name + " " + strings.ToUpper(statusMatch[1]) + " " + statusMatch[2]
+					if statusMatch[3] != "" {
+						name += " as " + statusMatch[3]
+					}
+					scenarios = append(scenarios, auditScenario{
+						Name:       name,
+						Method:     strings.ToUpper(statusMatch[1]),
+						Path:       statusMatch[2],
+						WantStatus: status,
+					})
+					continue
+				}
+				headerMatch := auditExpectHeaderPattern.FindStringSubmatch(line)
+				if headerMatch != nil {
+					scenarios = append(scenarios, auditScenario{
+						Name:       test.Name + " header " + headerMatch[1],
+						Method:     http.MethodGet,
+						Path:       "/_gowdk/health",
+						WantStatus: http.StatusOK,
+						WantHeader: map[string]string{headerMatch[1]: headerMatch[2]},
+					})
+					continue
+				}
+				return nil, fmt.Errorf("%s:%d: unsupported audit test expectation %q", spec.Source, test.Span.Start.Line+lineIndex+1, line)
+			}
+		}
+	}
+	return scenarios, nil
+}
+
+func writeStandaloneAuditHandler(builder *strings.Builder, config gowdk.Config, manifest securitymanifest.SecurityManifest) {
+	builder.WriteString("\thandler := gowdkruntime.Handler{\n")
+	builder.WriteString("\t\tRoot: fstest.MapFS{\n")
+	for _, file := range auditStandaloneFiles(manifest) {
+		fmt.Fprintf(builder, "\t\t\t%s: {Data: []byte(%s)},\n", strconv.Quote(file), strconv.Quote("<main>GOWDK audit</main>"))
+	}
+	builder.WriteString("\t\t},\n")
+	builder.WriteString("\t\tIdentity: gowdkruntime.Identity{AppID: \"audit\", ModuleName: \"audit\", InstanceID: \"audit-test\"},\n")
+	builder.WriteString("\t\tAssets: runtimeasset.Manifest{Version: 1, Files: map[string]string{}},\n")
+	if headers := auditSecurityHeaders(config); len(headers) > 0 {
+		builder.WriteString("\t\tSecurityHeaders: map[string]string{\n")
+		for _, header := range headers {
+			fmt.Fprintf(builder, "\t\t\t%s: %s,\n", strconv.Quote(header.Name), strconv.Quote(header.Value))
+		}
+		builder.WriteString("\t\t},\n")
+	}
+	if denied := auditDeniedRoutes(manifest); len(denied) > 0 {
+		builder.WriteString("\t\tDenied: map[string]bool{\n")
+		for _, route := range denied {
+			fmt.Fprintf(builder, "\t\t\t%s: true,\n", strconv.Quote(route))
+		}
+		builder.WriteString("\t\t},\n")
+	}
+	if patterns := auditDeniedRoutePatterns(manifest); len(patterns) > 0 {
+		builder.WriteString("\t\tDeniedPatterns: []string{\n")
+		for _, route := range patterns {
+			fmt.Fprintf(builder, "\t\t\t%s,\n", strconv.Quote(route))
+		}
+		builder.WriteString("\t\t},\n")
+	}
+	builder.WriteString("\t}\n")
+}
+
+func auditStandaloneFiles(manifest securitymanifest.SecurityManifest) []string {
+	seen := map[string]bool{}
+	var files []string
+	for _, route := range manifest.Routes {
+		routePath := path.Clean("/" + route.Route)
+		if !isConcreteAuditRoute(routePath) {
+			continue
+		}
+		file := auditRouteFile(routePath)
+		if seen[file] {
+			continue
+		}
+		seen[file] = true
+		files = append(files, file)
+	}
+	sort.Strings(files)
+	return files
+}
+
+func auditRouteFile(route string) string {
+	route = path.Clean("/" + route)
+	if route == "/" {
+		return "index.html"
+	}
+	return strings.TrimPrefix(route, "/") + "/index.html"
+}
+
+func auditDeniedRoutes(manifest securitymanifest.SecurityManifest) []string {
+	var routes []string
+	for _, route := range manifest.Routes {
+		routePath := path.Clean("/" + route.Route)
+		if route.DefaultDeny && isConcreteAuditRoute(routePath) {
+			routes = append(routes, routePath)
+		}
+	}
+	sort.Strings(routes)
+	return routes
+}
+
+func auditDeniedRoutePatterns(manifest securitymanifest.SecurityManifest) []string {
+	var routes []string
+	for _, route := range manifest.Routes {
+		routePath := path.Clean("/" + route.Route)
+		if route.DefaultDeny && !isConcreteAuditRoute(routePath) {
+			routes = append(routes, routePath)
+		}
+	}
+	sort.Strings(routes)
+	return routes
+}
+
+func isConcreteAuditRoute(route string) bool {
+	return !strings.Contains(route, "{") && !strings.Contains(route, "}")
+}
+
+func writeAuditScenario(builder *strings.Builder, scenario auditScenario) {
+	builder.WriteString("\t\t{\n")
+	fmt.Fprintf(builder, "\t\t\tName: %s,\n", strconv.Quote(scenario.Name))
+	fmt.Fprintf(builder, "\t\t\tMethod: %s,\n", auditMethodExpr(scenario.Method))
+	fmt.Fprintf(builder, "\t\t\tPath: %s,\n", strconv.Quote(path.Clean("/"+scenario.Path)))
+	if scenario.WantStatus != 0 {
+		fmt.Fprintf(builder, "\t\t\tWantStatus: %s,\n", auditStatusExpr(scenario.WantStatus))
+	}
+	if len(scenario.WantHeader) > 0 {
+		builder.WriteString("\t\t\tWantHeader: map[string]string{\n")
+		names := make([]string, 0, len(scenario.WantHeader))
+		for name := range scenario.WantHeader {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			fmt.Fprintf(builder, "\t\t\t\t%s: %s,\n", strconv.Quote(name), strconv.Quote(scenario.WantHeader[name]))
+		}
+		builder.WriteString("\t\t\t},\n")
+	}
+	builder.WriteString("\t\t},\n")
+}
+
+func auditMethodExpr(method string) string {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodGet:
+		return "http.MethodGet"
+	case http.MethodHead:
+		return "http.MethodHead"
+	case http.MethodPost:
+		return "http.MethodPost"
+	case http.MethodPut:
+		return "http.MethodPut"
+	case http.MethodPatch:
+		return "http.MethodPatch"
+	case http.MethodDelete:
+		return "http.MethodDelete"
+	default:
+		return strconv.Quote(strings.ToUpper(strings.TrimSpace(method)))
+	}
+}
+
+func auditStatusExpr(status int) string {
+	switch status {
+	case http.StatusOK:
+		return "http.StatusOK"
+	case http.StatusNoContent:
+		return "http.StatusNoContent"
+	case http.StatusSeeOther:
+		return "http.StatusSeeOther"
+	case http.StatusBadRequest:
+		return "http.StatusBadRequest"
+	case http.StatusForbidden:
+		return "http.StatusForbidden"
+	case http.StatusNotFound:
+		return "http.StatusNotFound"
+	case http.StatusMethodNotAllowed:
+		return "http.StatusMethodNotAllowed"
+	case http.StatusInternalServerError:
+		return "http.StatusInternalServerError"
+	default:
+		return strconv.Itoa(status)
+	}
+}

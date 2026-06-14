@@ -291,12 +291,12 @@ runtime-specific security controls.
 ## Build
 
 `BuildConfig.Output`, `BuildConfig.Mode`, `BuildConfig.Assets`,
-`BuildConfig.Head`, `BuildConfig.CSRF`, `BuildConfig.BodyLimits`,
+`BuildConfig.Head`, `BuildConfig.CSRF`, `BuildConfig.SecurityHeaders`, `BuildConfig.BodyLimits`,
 `BuildConfig.AllowMissingBackend`, `BuildConfig.Stylesheets`,
 `BuildConfig.Scripts`, and `BuildConfig.Targets` are target build settings.
 Current `gowdk build` reads literal `Build.Output`, `Build.Mode`,
-`Build.Head`, `Build.CSRF`, `Build.BodyLimits`, `Build.AllowMissingBackend`,
-`Build.Stylesheets`, `Build.Scripts`, and `Build.Targets` from
+`Build.Head`, `Build.CSRF`, `Build.SecurityHeaders`, `Build.BodyLimits`,
+`Build.AllowMissingBackend`, `Build.Stylesheets`, `Build.Scripts`, and `Build.Targets` from
 `gowdk.config.go`; `--out` overrides `Build.Output` for ad hoc builds.
 `BuildConfig.Assets` remains planned.
 
@@ -309,6 +309,7 @@ type BuildConfig struct {
 	Assets              gowdk.AssetMode
 	Head                gowdk.HeadConfig
 	CSRF                gowdk.CSRFConfig
+	SecurityHeaders     gowdk.SecurityHeadersConfig
 	BodyLimits          gowdk.BodyLimitsConfig
 	AllowMissingBackend bool
 	Stylesheets         []gowdk.Stylesheet
@@ -330,6 +331,11 @@ type CSRFConfig struct {
 	FieldName  string
 	HeaderName string
 	Insecure   bool
+}
+
+type SecurityHeadersConfig struct {
+	Enabled bool
+	Headers map[string]string
 }
 
 type BodyLimitsConfig struct {
@@ -386,6 +392,14 @@ generated decoding or user handlers run. Invalid or missing tokens return HTTP
 flag, uses the default cookie name `gowdk-csrf` instead of
 `__Host-gowdk-csrf`, and rejects explicit `__Host-`/`__Secure-` cookie names
 because browsers require those prefixes to be Secure.
+
+`SecurityHeaders` controls additional headers written by generated app
+handlers. When `Enabled` is true, each entry in `Headers` is passed to
+`runtime/app` and emitted on every generated response path, including health
+checks and generated errors. Use it for app-owned headers such as
+`X-Content-Type-Options`, `Referrer-Policy`, `Content-Security-Policy`, and
+`X-Frame-Options`. Keep TLS-boundary headers such as `Strict-Transport-Security`
+at the HTTPS edge unless the generated app is directly responsible for TLS.
 
 `BodyLimits` controls generated request body caps in bytes. Omitted or
 non-positive values use the default 1 MiB cap. `ActionBytes` applies to

@@ -284,38 +284,39 @@ func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy) []Fin
 					"Move the secret to a runtime environment variable, or exclude the file from embedded output."))
 			}
 		case RuleRequireHeader:
-			if !containsGuard(surface.ConfiguredHeaders, rule.Value) {
-				findings = append(findings, finding(rule, policy, "frontend", "",
+			if !containsHeader(surface.ConfiguredHeaders, rule.Value) {
+				findings = append(findings, finding(rule, policy, "frontend", policy.Source,
 					fmt.Sprintf("generated app does not declare required response header %q", rule.Value),
 					"Enable Build.SecurityHeaders and configure the header."))
 			}
+		case RuleRequireClientRouteGuards:
+			for _, route := range surface.UnguardedRoutes {
+				findings = append(findings, finding(rule, policy, "route:"+route.Route, route.Source,
+					fmt.Sprintf("client route %s is guardless and relies on generated default-deny handling", route.Route),
+					"Declare guard public for an intentionally public page, or add a protective guard."))
+			}
+		case RuleDenyRawHTMLSinks:
+			findings = append(findings, evalRawHTMLSinks(surface, policy, rule)...)
 		case RuleAllowRawHTML:
 			// Handled by evalRawHTMLSinks against the full allowlist below.
 		}
 	}
-	findings = append(findings, evalRawHTMLSinks(surface, policy)...)
 	return findings
 }
 
 // evalRawHTMLSinks reports raw-HTML sinks that are not allowlisted by any
 // RuleAllowRawHTML rule on the matched frontend policy.
-func evalRawHTMLSinks(surface securitymanifest.FrontendSurface, policy Policy) []Finding {
+func evalRawHTMLSinks(surface securitymanifest.FrontendSurface, policy Policy, rule Rule) []Finding {
 	if len(surface.RawHTMLSinks) == 0 {
 		return nil
 	}
 	allow := map[string]bool{}
-	guards := false
 	for _, rule := range policy.Rules {
 		if rule.Kind == RuleAllowRawHTML {
-			guards = true
 			allow[rule.Value] = true
 		}
 	}
-	if !guards {
-		return nil
-	}
 	var findings []Finding
-	rule := Rule{Kind: RuleAllowRawHTML, Code: "audit_raw_html_sink"}
 	for _, sink := range surface.RawHTMLSinks {
 		key := sink.Source
 		if allow[key] || allow[sink.OwnerID+":"+sink.Field] {
@@ -352,6 +353,16 @@ func routeTarget(route securitymanifest.RouteEntry) string {
 func containsGuard(guards []string, want string) bool {
 	for _, guard := range guards {
 		if guard == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsHeader(headers []securitymanifest.ConfiguredHeader, want string) bool {
+	want = strings.TrimSpace(want)
+	for _, header := range headers {
+		if strings.EqualFold(strings.TrimSpace(header.Name), want) {
 			return true
 		}
 	}

@@ -163,6 +163,7 @@ type BuildConfig struct {
 	Assets              AssetMode
 	Head                HeadConfig
 	CSRF                CSRFConfig
+	SecurityHeaders     SecurityHeadersConfig
 	BodyLimits          BodyLimitsConfig
 	AllowMissingBackend bool
 	Stylesheets         []Stylesheet
@@ -177,6 +178,14 @@ type HeadConfig struct {
 	Favicon     string
 	Image       string
 	TwitterCard string
+}
+
+// SecurityHeadersConfig declares generated runtime response headers. Audit
+// policy can require these headers statically, and generated audit tests can
+// verify that the handler emits them.
+type SecurityHeadersConfig struct {
+	Enabled bool
+	Headers map[string]string
 }
 
 const DefaultCSRFSecretEnv = "GOWDK_CSRF_SECRET"

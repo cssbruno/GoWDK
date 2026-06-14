@@ -18,6 +18,13 @@ GOWDK_BIN=/path/to/gowdk go test ./tests
 `gowdk build --out <tempdir>` from the project root and asserts that
 `index.html` exists.
 
+## Audit Tests
+
+Use `gowdk audit --emit-tests` to write a readable `gowdk_audit_test.go` file
+that drives `runtime/app` through `runtime/testkit`. Use
+`gowdk audit --run` in CI when runtime behavior should gate the audit report;
+failed expectations are reported as `audit_test_failed`.
+
 ## Browser Smoke
 
 For generated apps, keep the first browser smoke test narrow:

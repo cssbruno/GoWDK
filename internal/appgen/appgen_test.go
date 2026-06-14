@@ -111,6 +111,100 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 	}
 }
 
+func TestGenerateWiresSecurityHeadersWhenConfigured(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{
+			Build: gowdk.BuildConfig{
+				SecurityHeaders: gowdk.SecurityHeadersConfig{
+					Enabled: true,
+					Headers: map[string]string{
+						"Content-Security-Policy": "default-src 'self'",
+						"X-Frame-Options":         "DENY",
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`SecurityHeaders: map[string]string{`,
+		`"Content-Security-Policy": "default-src 'self'",`,
+		`"X-Frame-Options": "DENY"`,
+	} {
+		if !strings.Contains(string(payload), expected) {
+			t.Fatalf("expected generated app to contain %q:\n%s", expected, payload)
+		}
+	}
+}
+
+func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{
+			Build: gowdk.BuildConfig{
+				SecurityHeaders: gowdk.SecurityHeadersConfig{
+					Enabled: true,
+					Headers: map[string]string{"X-Frame-Options": "DENY"},
+				},
+			},
+		},
+		IR: &gwdkir.Program{
+			Routes: []gwdkir.Route{{
+				Kind:   gwdkir.RouteSPA,
+				Method: "GET",
+				Path:   "/",
+				PageID: "home",
+				Render: gowdk.SPA,
+				Guards: []string{"public"},
+			}},
+			AuditSpecs: []gwdkir.AuditSpec{{
+				Source: "security.audit.gwdk",
+				Tests: []gwdkir.AuditTest{{
+					Name: "home",
+					Body: `expect GET "/" status 200`,
+				}},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(result.AppDir, auditTestFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"package gowdkapp",
+		"func TestGOWDKAuditGeneratedSecurityPosture(t *testing.T)",
+		"handler, err := Handler()",
+		`Name:       "route serves /"`,
+		`WantStatus: http.StatusOK`,
+		`Name:       "security header X-Frame-Options"`,
+		`WantHeader: map[string]string{`,
+		`"X-Frame-Options": "DENY"`,
+		`Name:       "home GET /"`,
+	} {
+		if !strings.Contains(string(payload), expected) {
+			t.Fatalf("expected generated audit test to contain %q:\n%s", expected, payload)
+		}
+	}
+}
+
 func TestGeneratePreservesUnchangedFilesAndRemovesStaleSPAFiles(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

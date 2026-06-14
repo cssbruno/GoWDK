@@ -424,6 +424,9 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 		keyValue("ErrorPages", errorPagesExpr(options)),
 		keyValue("Backend", backend),
 	}
+	if headers := securityHeadersExpr(options); headers != nil {
+		fields = append(fields, keyValue("SecurityHeaders", headers))
+	}
 	if csrfEnabled(options) {
 		fields = append(fields, keyValue("CSRF", id("csrfTokenSource")))
 	}
@@ -439,6 +442,41 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 		fields = append(fields, keyValue("DeniedPatterns", patterns))
 	}
 	return fields
+}
+
+func securityHeadersExpr(options Options) ast.Expr {
+	if !options.Config.Build.SecurityHeaders.Enabled || len(options.Config.Build.SecurityHeaders.Headers) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(options.Config.Build.SecurityHeaders.Headers))
+	values := map[string]string{}
+	seen := map[string]bool{}
+	for name, value := range options.Config.Build.SecurityHeaders.Headers {
+		clean := strings.TrimSpace(name)
+		if clean == "" {
+			continue
+		}
+		if !seen[clean] {
+			names = append(names, clean)
+			seen[clean] = true
+		}
+		values[clean] = value
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	sort.Strings(names)
+	elts := make([]ast.Expr, 0, len(names))
+	for _, name := range names {
+		elts = append(elts, &ast.KeyValueExpr{
+			Key:   stringLit(name),
+			Value: stringLit(values[name]),
+		})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.MapType{Key: id("string"), Value: id("string")},
+		Elts: elts,
+	}
 }
 
 // deniedPageRoutes returns the concrete (non-dynamic) page routes that declared

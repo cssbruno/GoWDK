@@ -133,9 +133,10 @@ level, the current baseline already includes:
   standalone fragment routes, and concrete or dynamic request-time SSR pages
   with declared `load {}` fields through buildgen, appgen, `runtime/app`, and
   `runtime/route`.
-- first-slice `gowdk audit` posture and baseline policy evaluation for
-  routes, backend endpoints, and command/query contract web endpoints, with
-  registry-backed findings and CI-friendly JSON output.
+- `gowdk audit` posture and policy evaluation for routes, backend endpoints,
+  command/query contract web endpoints, and frontend audit surfaces, with
+  declared `*.audit.gwdk` policies, generated runtime audit tests,
+  registry-backed findings, and CI-friendly JSON output.
 
 Do not roadmap those completed slices as future work. Future work should
 stabilize their contracts, remove generation debt, and fill the missing

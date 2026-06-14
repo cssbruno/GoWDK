@@ -63,9 +63,10 @@ and remediation; run `gowdk explain <code>` for details.
 `gowdk audit` is a standalone command. `gowdk build` never runs it, so it cannot
 fail a build implicitly; run it on demand or in CI, where its non-zero exit on
 error findings gates the pipeline. It is the auditable, human- and
-LLM-readable view of how close generated output is to these gates. Later M8
-phases add frontend audits, declared `*.audit.gwdk` policies, and an
-integration-test runner.
+LLM-readable view of how close generated output is to these gates. The audit
+also reads declared `*.audit.gwdk` policies, checks frontend risks such as
+bundle secrets and raw-HTML sinks, and can emit or run readable runtime tests
+with `gowdk audit --emit-tests` and `gowdk audit --run`.
 
 ## Security Review Triggers
 

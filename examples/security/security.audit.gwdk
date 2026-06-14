@@ -1,0 +1,12 @@
+package security
+
+policy browser_hardening extends "baseline.frontend" {
+  match "frontend"
+  require header "X-Frame-Options"
+  require header "Content-Security-Policy"
+  deny raw_html
+}
+
+test headers {
+  expect header "X-Frame-Options" "DENY"
+}

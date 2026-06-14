@@ -27,6 +27,25 @@ ident       = letterOrUnderscore (letter | digit | "_")*
 blockName   = letterOrUnderscore (letter | digit | "_" | "." | "-")*
 ```
 
+Audit policy files use the `*.audit.gwdk` suffix and a separate top-level
+grammar:
+
+```text
+auditFile    = (blank | comment | packageDecl | policyDecl | testDecl)*
+policyDecl   = "policy" whitespace+ ident (whitespace+ "extends" whitespace+ ident ("," whitespace* ident)*)? whitespace* "{"
+policyLine   = applyLine | requireLine | denyLine | allowLine
+applyLine    = ("match" | "apply" whitespace+ "to") whitespace+ string
+requireLine  = "require" whitespace+ ("csrf" | "guard" whitespace+ value | "header" whitespace+ string | "max_body" whitespace+ value | "no_secrets_in_bundle") (whitespace+ "as" whitespace+ value)?
+denyLine     = "deny" whitespace+ ("public" | "raw_html") (whitespace+ "as" whitespace+ value)?
+allowLine    = "allow" whitespace+ "raw_html" whitespace+ value
+testDecl     = "test" whitespace+ ident whitespace* "{"
+testLine     = "expect" whitespace+ method whitespace+ string (whitespace+ "as" whitespace+ string)? whitespace+ "status" whitespace+ statusCode
+             | "expect" whitespace+ "header" whitespace+ string whitespace+ string
+value        = ident | string
+method       = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE"
+statusCode   = digit digit digit
+```
+
 The parser currently scans each trimmed line independently. It records
 declarations and captures raw body text for `paths {}`, `build {}`, `load {}`,
 `go {}`, `go target {}`, `view {}`, and `style {}` blocks until their

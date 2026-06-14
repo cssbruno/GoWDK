@@ -70,9 +70,9 @@ only from the diagnostic registry, so the baseline never hardcodes severity.
 - [x] `gowdk audit` applies the baseline, cites findings by code + `file:line`,
       and exits non-zero on error findings.
 - [x] New `audit_*` / `policy_*` codes are registered and `gowdk explain`-able.
-- [ ] Frontend audits (secret leak, route-guard coverage, headers/CSP, raw-HTML).
-- [ ] `*.audit.gwdk` parser → IR → composable policy engine (`extends`, selectors).
-- [ ] `test {}` blocks → generated `httptest` tests; `gowdk audit --emit-tests`
+- [x] Frontend audits (secret leak, route-guard coverage, headers/CSP, raw-HTML).
+- [x] `*.audit.gwdk` parser → IR → composable policy engine (`extends`, selectors).
+- [x] `test {}` blocks → generated `httptest` tests; `gowdk audit --emit-tests`
       and `--run`; `runtime/app` security-header capability.
 
 ## Delivery Phases
@@ -82,9 +82,9 @@ only from the diagnostic registry, so the baseline never hardcodes severity.
   `internal/securitymanifest` (IR → posture); `gowdk audit` with the baseline;
   `gowdk-security.json` at build time outside the served output directory. Unit
   + CLI tests.
-- **Phase 2:** the four frontend audits as baseline rules.
-- **Phase 3:** the `*.audit.gwdk` file kind and declared composable policies.
-- **Phase 4:** `runtime/testkit`, generated `_test.go`, `--emit-tests`/`--run`,
+- **Phase 2 (shipped):** the four frontend audits as baseline rules.
+- **Phase 3 (shipped):** the `*.audit.gwdk` file kind and declared composable policies.
+- **Phase 4 (shipped):** `runtime/testkit`, generated `_test.go`, `--emit-tests`/`--run`,
   and the `runtime/app` security-header capability.
 
 ## Issue Alignment
@@ -97,8 +97,9 @@ from IR metadata), and diagnostics issues #328/#255/#107/#109.
 
 ```sh
 go build ./cmd/gowdk
-go test ./internal/securitymanifest ./internal/auditspec ./cmd/gowdk ./internal/diagnostics
+go test ./internal/securitymanifest ./internal/auditspec ./internal/parser ./internal/lang ./internal/appgen ./runtime/app ./runtime/testkit ./cmd/gowdk ./internal/diagnostics
 go run ./cmd/gowdk audit --json --config gowdk.config.go
+go run ./cmd/gowdk audit --emit-tests --run --config gowdk.config.go
 go run ./cmd/gowdk explain audit_api_public_by_omission
 go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk \
   examples/pages/hero.cmp.gwdk && test -f /tmp/.gowdk/reports/gowdk-build/gowdk-security.json

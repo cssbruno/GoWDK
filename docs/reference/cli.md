@@ -23,7 +23,7 @@ gowdk inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--module <na
 gowdk generate stubs [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...]
-gowdk audit [--config <file>] [--module <name>] [--ssr] [--json] [files...]
+gowdk audit [--config <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...]
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
@@ -57,6 +57,10 @@ gowdk lsp [--ssr]
   It exits non-zero when any error-severity finding exists, so it can gate CI.
   `--json` prints the posture manifest plus findings and a summary. Every finding
   carries a diagnostic code; run `gowdk explain <code>` for details.
+  `--emit-tests` writes a readable `gowdk_audit_test.go` file (or the path from
+  `--emit-tests=<file>`) that drives `runtime/app` through `runtime/testkit`.
+  `--run` generates and executes the same audit test source with `go test`; a
+  failed expectation is reported as `audit_test_failed`.
   `gowdk build` also writes the posture alone to a non-served
   `.gowdk/reports/<output-name>/gowdk-security.json` path outside the selected
   output directory.
@@ -114,6 +118,7 @@ go run ./cmd/gowdk explain missing_ssr_addon
 go run ./cmd/gowdk explain --json spa_dynamic_route_missing_paths
 go run ./cmd/gowdk audit --config gowdk.config.go
 go run ./cmd/gowdk audit --json --ssr --config gowdk.config.go
+go run ./cmd/gowdk audit --emit-tests --run --config gowdk.config.go
 go run ./cmd/gowdk doctor
 go run ./cmd/gowdk doctor --json
 go run ./cmd/gowdk doctor --module frontend --ssr
@@ -181,7 +186,7 @@ generated outputs. The target's intermediate build output is inferred as
 `--force` is passed. The `minimal` template skips the starter component and
 writes only the config, `.gitignore`, one page, and one CSS file.
 
-`check`, `manifest`, `sitemap`, `routes`, `build`, and `dev` require a config
+`check`, `audit`, `manifest`, `sitemap`, `routes`, `build`, and `dev` require a config
 file before they compile or validate `.gwdk` code. By default they load
 `gowdk.config.go` from the current directory; `--config <file>` can point at a
 different config for project examples or one-off checks.
@@ -238,6 +243,10 @@ so it cannot fail a build implicitly; run it on demand or wire it into CI,
 where its non-zero exit on error findings gates the pipeline. The posture alone
 is also emitted as `gowdk-security.json` by `gowdk build`, but outside the
 selected output directory in a non-served `.gowdk/reports/<output-name>/` path.
+Declared `*.audit.gwdk` policies are discovered with the rest of the source
+set. `--emit-tests` writes a committable standalone `_test.go`; `--run` writes
+a temporary `_test.go`, executes `go test` from the project root, and folds
+failures back into the audit report.
 
 `--wasm` produces a Go `js/wasm` compile artifact from the generated app. This
 is a deploy artifact for hosts that can run Go WebAssembly; it is separate from

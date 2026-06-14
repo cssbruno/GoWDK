@@ -57,6 +57,74 @@ func TestBaselinePassesWhenPostureIsSound(t *testing.T) {
 	}
 }
 
+func TestBaselineFlagsFrontendAuditFindings(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Frontend: securitymanifest.FrontendSurface{
+			UnguardedRoutes: []securitymanifest.UnguardedRoute{{Route: "/draft", Source: "draft.page.gwdk:4"}},
+			BundleSecrets:   []securitymanifest.BundleLeak{{Kind: "unsafe-asset:.env", Source: "card.cmp.gwdk:4"}},
+			RawHTMLSinks:    []securitymanifest.RawHTMLSink{{OwnerKind: "page", OwnerID: "home", Field: "{TrustedHTML}", Source: "home.page.gwdk:12"}},
+		},
+	}
+	findings := Evaluate(manifest, Baseline())
+	got := codes(findings)
+	if got["audit_bundle_secret"] != 1 {
+		t.Fatalf("expected one bundle secret finding, got %#v", got)
+	}
+	if got["audit_client_route_unguarded"] != 1 {
+		t.Fatalf("expected one client route finding, got %#v", got)
+	}
+	if got["audit_raw_html_sink"] != 1 {
+		t.Fatalf("expected one raw HTML finding, got %#v", got)
+	}
+	for _, finding := range findings {
+		if finding.Source == "" {
+			t.Fatalf("frontend finding should include a source: %#v", finding)
+		}
+	}
+}
+
+func TestPolicyRequireHeaderUsesConfiguredHeaders(t *testing.T) {
+	policy := Policy{
+		Name:      "headers",
+		Source:    "security.audit.gwdk:3",
+		Selectors: []Selector{{Raw: "frontend", Kind: SelectorFrontend}},
+		Rules:     []Rule{{Kind: RuleRequireHeader, Value: "Content-Security-Policy", Code: "audit_headers_missing"}},
+	}
+	missing := securitymanifest.SecurityManifest{Frontend: securitymanifest.FrontendSurface{
+		ConfiguredHeaders: []securitymanifest.ConfiguredHeader{{Name: "X-Content-Type-Options"}},
+	}}
+	if got := codes(Evaluate(missing, []Policy{policy})); got["audit_headers_missing"] != 1 {
+		t.Fatalf("expected missing header finding, got %#v", got)
+	}
+	present := securitymanifest.SecurityManifest{Frontend: securitymanifest.FrontendSurface{
+		ConfiguredHeaders: []securitymanifest.ConfiguredHeader{{Name: "content-security-policy"}},
+	}}
+	if findings := Evaluate(present, []Policy{policy}); len(findings) != 0 {
+		t.Fatalf("expected configured header to satisfy policy, got %#v", findings)
+	}
+}
+
+func TestComposeBaselineLetsDeclaredPolicyOverrideBuiltin(t *testing.T) {
+	policies := ComposeBaseline([]Policy{{
+		Name:      "baseline.frontend",
+		Selectors: []Selector{{Raw: "frontend", Kind: SelectorFrontend}},
+		Rules:     []Rule{{Kind: RuleRequireHeader, Value: "Content-Security-Policy", Code: "audit_headers_missing"}},
+	}})
+	for _, policy := range policies {
+		if policy.Name != "baseline.frontend" {
+			continue
+		}
+		if policy.Builtin {
+			t.Fatalf("declared override should replace builtin baseline.frontend: %#v", policy)
+		}
+		if len(policy.Rules) != 1 || policy.Rules[0].Kind != RuleRequireHeader {
+			t.Fatalf("unexpected overridden frontend policy: %#v", policy)
+		}
+		return
+	}
+	t.Fatalf("baseline.frontend missing from composed policies: %#v", policies)
+}
+
 func TestSeverityComesFromRegistry(t *testing.T) {
 	manifest := securitymanifest.SecurityManifest{
 		Endpoints: []securitymanifest.EndpointEntry{

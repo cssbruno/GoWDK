@@ -64,6 +64,13 @@ var Config = gowdk.Config{
 			HeaderName: "X-Example-CSRF",
 			Insecure: true,
 		},
+		SecurityHeaders: gowdk.SecurityHeadersConfig{
+			Enabled: true,
+			Headers: map[string]string{
+				"Content-Security-Policy": "default-src 'self'",
+				"X-Content-Type-Options": "nosniff",
+			},
+		},
 		BodyLimits: gowdk.BodyLimitsConfig{
 			ActionBytes: 2097152,
 			APIBytes: 524288,
@@ -163,6 +170,9 @@ var Config = gowdk.Config{
 	}
 	if !config.Build.CSRF.Enabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
 		t.Fatalf("unexpected build csrf config: %#v", config.Build.CSRF)
+	}
+	if !config.Build.SecurityHeaders.Enabled || config.Build.SecurityHeaders.Headers["Content-Security-Policy"] != "default-src 'self'" || config.Build.SecurityHeaders.Headers["X-Content-Type-Options"] != "nosniff" {
+		t.Fatalf("unexpected security headers config: %#v", config.Build.SecurityHeaders)
 	}
 	if config.Build.BodyLimits.ActionBytes != 2097152 || config.Build.BodyLimits.APIBytes != 524288 {
 		t.Fatalf("unexpected body limits config: %#v", config.Build.BodyLimits)

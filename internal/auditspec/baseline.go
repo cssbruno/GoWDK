@@ -70,6 +70,8 @@ func Baseline() []Policy {
 			},
 			Rules: []Rule{
 				{Kind: RuleNoSecretsInBundle, Code: "audit_bundle_secret"},
+				{Kind: RuleRequireClientRouteGuards, Code: "audit_client_route_unguarded"},
+				{Kind: RuleDenyRawHTMLSinks, Code: "audit_raw_html_sink"},
 			},
 		},
 	}

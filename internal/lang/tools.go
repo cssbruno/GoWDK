@@ -25,6 +25,7 @@ const (
 	FileKindComponent FileKind = "component"
 	FileKindLayout    FileKind = "layout"
 	FileKindAsset     FileKind = "asset"
+	FileKindAudit     FileKind = "audit"
 )
 
 // ParseFile reads and parses one .gwdk file.
@@ -165,6 +166,13 @@ func ParseBuildFiles(paths []string) (gwdkanalysis.Sources, Diagnostics) {
 			continue
 		}
 		switch ClassifySource(path, source) {
+		case FileKindAudit:
+			audit, fileDiagnostics := ParseAuditSource(path, source)
+			diagnostics = append(diagnostics, fileDiagnostics...)
+			if !fileDiagnostics.HasErrors() {
+				app.AuditSpecs = append(app.AuditSpecs, audit)
+			}
+			continue
 		case FileKindComponent:
 			component, fileDiagnostics := ParseComponentSource(path, source)
 			diagnostics = append(diagnostics, fileDiagnostics...)
@@ -227,9 +235,29 @@ func ParseComponentSource(path string, source []byte) (gwdkir.Component, Diagnos
 	return component, diagnostics
 }
 
+// ParseAuditSource parses one in-memory *.audit.gwdk source buffer.
+func ParseAuditSource(path string, source []byte) (gwdkir.AuditSpec, Diagnostics) {
+	_, diagnostics := Lex(string(source))
+	for i := range diagnostics {
+		diagnostics[i].File = path
+	}
+	if diagnostics.HasErrors() {
+		return gwdkir.AuditSpec{}, diagnostics
+	}
+
+	audit, err := parser.ParseAuditFile(path, source)
+	if err != nil {
+		diagnostics = append(diagnostics, parserDiagnostics(path, source, err)...)
+	}
+	return audit, diagnostics
+}
+
 // ClassifySource classifies a .gwdk source file using current file-kind rules.
 func ClassifySource(path string, source []byte) FileKind {
 	base := filepath.Base(path)
+	if strings.HasSuffix(base, ".audit.gwdk") {
+		return FileKindAudit
+	}
 	if strings.HasSuffix(base, ".cmp.gwdk") {
 		return FileKindComponent
 	}
@@ -245,6 +273,8 @@ func ClassifySource(path string, source []byte) FileKind {
 			continue
 		}
 		switch {
+		case isMetadataDeclaration(text, "policy"):
+			return FileKindAudit
 		case isMetadataDeclaration(text, "page"):
 			return FileKindPage
 		case isMetadataDeclaration(text, "component"):
@@ -354,6 +384,13 @@ func contractScanDiagnostics(scanDiagnostics []contractscan.Diagnostic) Diagnost
 // CheckSource parses and validates one in-memory .gwdk source buffer.
 func CheckSource(config gowdk.Config, path string, source []byte) (gwdkir.Page, Diagnostics) {
 	switch ClassifySource(path, source) {
+	case FileKindAudit:
+		audit, diagnostics := ParseAuditSource(path, source)
+		if diagnostics.HasErrors() {
+			return gwdkir.Page{}, diagnostics
+		}
+		_ = gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{AuditSpecs: []gwdkir.AuditSpec{audit}})
+		return gwdkir.Page{}, diagnostics
 	case FileKindComponent:
 		component, diagnostics := ParseComponentSource(path, source)
 		if diagnostics.HasErrors() {

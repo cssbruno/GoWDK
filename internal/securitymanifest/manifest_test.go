@@ -50,7 +50,7 @@ func TestBuildProjectsRoutesAndEndpoints(t *testing.T) {
 		t.Fatalf("source with a span line should be file:line, got %q", home.Source)
 	}
 
-	if got := manifest.Frontend.UnguardedRoutes; len(got) != 1 || got[0] != "/draft" {
+	if got := manifest.Frontend.UnguardedRoutes; len(got) != 1 || got[0].Route != "/draft" {
 		t.Fatalf("expected /draft in unguardedRoutes, got %#v", got)
 	}
 
@@ -70,6 +70,51 @@ func TestBuildProjectsRoutesAndEndpoints(t *testing.T) {
 	}
 	if submit.Source != "signup.page.gwdk:8" {
 		t.Fatalf("Submit source should be file:line, got %q", submit.Source)
+	}
+}
+
+func TestBuildPopulatesFrontendAuditSurface(t *testing.T) {
+	config := gowdk.Config{Build: gowdk.BuildConfig{SecurityHeaders: gowdk.SecurityHeadersConfig{
+		Enabled: true,
+		Headers: map[string]string{
+			"X-Content-Type-Options":  "nosniff",
+			"Content-Security-Policy": "default-src 'self'",
+		},
+	}}}
+	ir := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Source: "home.page.gwdk",
+			ID:     "home",
+			Blocks: gwdkir.Blocks{
+				Build:     true,
+				BuildBody: `=> { api_key: "live_sk_abc123" }`,
+				Spans:     gwdkir.BlockSpans{Build: source.SourceSpan{Start: source.SourcePosition{Line: 9, Column: 1}}},
+			},
+		}},
+		Assets: []gwdkir.Asset{
+			{Kind: gwdkir.AssetFile, Source: "card.cmp.gwdk", Path: ".env", Span: source.SourceSpan{Start: source.SourcePosition{Line: 4, Column: 1}}},
+			{Kind: gwdkir.AssetJS, Source: "home.page.gwdk", Inline: `const token = "secret";`, Span: source.SourceSpan{Start: source.SourcePosition{Line: 5, Column: 1}}},
+		},
+		Templates: []gwdkir.Template{{
+			OwnerKind: gwdkir.SourcePage,
+			OwnerID:   "home",
+			Source:    "home.page.gwdk",
+			Body:      `<main><div g:html={TrustedHTML}></div></main>`,
+			BodyStart: source.SourcePosition{Line: 12, Column: 1},
+			Span:      source.SourceSpan{Start: source.SourcePosition{Line: 11, Column: 1}},
+		}},
+	}
+
+	manifest := Build(config, ir)
+
+	if got := manifest.Frontend.ConfiguredHeaders; len(got) != 2 || got[0].Name != "Content-Security-Policy" || got[1].Name != "X-Content-Type-Options" {
+		t.Fatalf("expected sorted configured headers, got %#v", got)
+	}
+	if got := manifest.Frontend.BundleSecrets; len(got) != 3 {
+		t.Fatalf("expected three bundle secret findings, got %#v", got)
+	}
+	if got := manifest.Frontend.RawHTMLSinks; len(got) != 1 || got[0].OwnerID != "home" || got[0].Field != "TrustedHTML" || got[0].Source != "home.page.gwdk:12" {
+		t.Fatalf("expected raw HTML sink source, got %#v", got)
 	}
 }
 

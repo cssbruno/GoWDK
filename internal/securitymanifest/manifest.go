@@ -14,11 +14,17 @@ package securitymanifest
 
 import (
 	"fmt"
+	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/safeasset"
+	"github.com/cssbruno/gowdk/internal/securitytext"
 	"github.com/cssbruno/gowdk/internal/source"
+	"github.com/cssbruno/gowdk/internal/view"
 )
 
 // SchemaVersion is the gowdk-security.json schema version.
@@ -75,13 +81,20 @@ type ContractEntry struct {
 }
 
 // FrontendSurface describes the build-time / client-facing security surface.
-// Phase 1 populates UnguardedRoutes from route posture; the remaining fields are
-// enriched by the frontend audits.
+// Policy evaluation consumes these posture facts without deciding whether they
+// are acceptable here.
 type FrontendSurface struct {
-	UnguardedRoutes   []string      `json:"unguardedRoutes"`
-	BundleSecrets     []BundleLeak  `json:"bundleSecrets"`
-	RawHTMLSinks      []RawHTMLSink `json:"rawHtmlSinks"`
-	ConfiguredHeaders []string      `json:"configuredHeaders"`
+	UnguardedRoutes   []UnguardedRoute   `json:"unguardedRoutes"`
+	BundleSecrets     []BundleLeak       `json:"bundleSecrets"`
+	RawHTMLSinks      []RawHTMLSink      `json:"rawHtmlSinks"`
+	ConfiguredHeaders []ConfiguredHeader `json:"configuredHeaders"`
+}
+
+// UnguardedRoute records one client-visible route that relies on generated
+// default-deny handling because the source declared no guard.
+type UnguardedRoute struct {
+	Route  string `json:"route"`
+	Source string `json:"source,omitempty"`
 }
 
 // BundleLeak records a secret-shaped value found in embedded output or
@@ -99,6 +112,11 @@ type RawHTMLSink struct {
 	Source    string `json:"source"`
 }
 
+// ConfiguredHeader records one header configured for generated runtime output.
+type ConfiguredHeader struct {
+	Name string `json:"name"`
+}
+
 // Build projects validated IR into a SecurityManifest. It reuses
 // compiler.BuildRouteMetadataFromIR so the posture matches the CLI routes and
 // endpoints reports exactly.
@@ -107,11 +125,12 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	manifest := SecurityManifest{
 		Version:       SchemaVersion,
 		GeneratedFrom: "ir",
-		Frontend:      FrontendSurface{ConfiguredHeaders: []string{}},
+		Frontend:      FrontendSurface{ConfiguredHeaders: configuredHeaders(config)},
 	}
 
-	var unguarded []string
+	var unguarded []UnguardedRoute
 	for _, route := range metadata.Routes {
+		routeSource := sourceRef(route.Source, route.SourceSpan)
 		entry := RouteEntry{
 			PageID:      route.PageID,
 			Route:       route.Route,
@@ -121,11 +140,11 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 			Guards:      append([]string(nil), route.Guards...),
 			Public:      hasPublicGuard(route.Guards),
 			DefaultDeny: len(route.Guards) == 0,
-			Source:      sourceRef(route.Source, route.SourceSpan),
+			Source:      routeSource,
 		}
 		manifest.Routes = append(manifest.Routes, entry)
 		if entry.DefaultDeny {
-			unguarded = append(unguarded, route.Route)
+			unguarded = append(unguarded, UnguardedRoute{Route: route.Route, Source: routeSource})
 		}
 	}
 
@@ -154,8 +173,10 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	}
 
 	manifest.Frontend.UnguardedRoutes = unguarded
+	manifest.Frontend.BundleSecrets = bundleLeaks(ir)
+	manifest.Frontend.RawHTMLSinks = rawHTMLSinks(ir)
 	if manifest.Frontend.UnguardedRoutes == nil {
-		manifest.Frontend.UnguardedRoutes = []string{}
+		manifest.Frontend.UnguardedRoutes = []UnguardedRoute{}
 	}
 	if manifest.Frontend.BundleSecrets == nil {
 		manifest.Frontend.BundleSecrets = []BundleLeak{}
@@ -173,6 +194,115 @@ func hasPublicGuard(guards []string) bool {
 		}
 	}
 	return false
+}
+
+func configuredHeaders(config gowdk.Config) []ConfiguredHeader {
+	if !config.Build.SecurityHeaders.Enabled || len(config.Build.SecurityHeaders.Headers) == 0 {
+		return []ConfiguredHeader{}
+	}
+	names := make([]string, 0, len(config.Build.SecurityHeaders.Headers))
+	for name := range config.Build.SecurityHeaders.Headers {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	headers := make([]ConfiguredHeader, 0, len(names))
+	for _, name := range names {
+		headers = append(headers, ConfiguredHeader{Name: name})
+	}
+	return headers
+}
+
+func bundleLeaks(ir gwdkir.Program) []BundleLeak {
+	var leaks []BundleLeak
+	for _, asset := range ir.Assets {
+		switch {
+		case asset.Path != "" && safeasset.UnsafeEmbeddedFile(asset.Path):
+			leaks = append(leaks, BundleLeak{
+				Source: sourceRef(asset.Source, asset.Span),
+				Kind:   "unsafe-asset:" + filepath.Base(filepath.ToSlash(asset.Path)),
+			})
+		case asset.Inline != "":
+			if kind, ok := securitytext.FirstSecretKind(asset.Inline); ok {
+				leaks = append(leaks, BundleLeak{
+					Source: sourceRef(asset.Source, asset.Span),
+					Kind:   "inline-asset:" + kind,
+				})
+			}
+		}
+	}
+	for _, page := range ir.Pages {
+		if !page.Blocks.Build {
+			continue
+		}
+		if kind, ok := securitytext.FirstSecretKind(page.Blocks.BuildBody); ok {
+			leaks = append(leaks, BundleLeak{
+				Source: sourceRef(page.Source, page.Blocks.Spans.Build),
+				Kind:   "build-data:" + kind,
+			})
+		}
+	}
+	return leaks
+}
+
+func rawHTMLSinks(ir gwdkir.Program) []RawHTMLSink {
+	var sinks []RawHTMLSink
+	for _, template := range ir.Templates {
+		nodes, err := view.Parse(template.Body)
+		if err != nil {
+			continue
+		}
+		sinks = append(sinks, rawHTMLSinksForNodes(nodes, template)...)
+	}
+	return sinks
+}
+
+func rawHTMLSinksForNodes(nodes []view.Node, template gwdkir.Template) []RawHTMLSink {
+	var sinks []RawHTMLSink
+	var walk func([]view.Node)
+	walk = func(nodes []view.Node) {
+		for _, node := range nodes {
+			switch typed := node.(type) {
+			case view.Element:
+				for _, attr := range typed.Attrs {
+					if attr.Name != "g:html" {
+						continue
+					}
+					sinks = append(sinks, RawHTMLSink{
+						OwnerKind: string(template.OwnerKind),
+						OwnerID:   template.OwnerID,
+						Field:     strings.TrimSpace(attr.Value),
+						Source:    sourceRef(template.Source, templateOffsetSpan(template, attr.Start)),
+					})
+				}
+				walk(typed.Children)
+			case view.ComponentCall:
+				walk(typed.Children)
+			}
+		}
+	}
+	walk(nodes)
+	return sinks
+}
+
+func templateOffsetSpan(template gwdkir.Template, offset int) source.SourceSpan {
+	line := template.BodyStart.Line
+	if line <= 0 {
+		line = template.Span.Start.Line
+	}
+	if line <= 0 {
+		return template.Span
+	}
+	if offset > 0 && offset <= len(template.Body) {
+		line += strings.Count(template.Body[:offset], "\n")
+	}
+	return source.SourceSpan{
+		Start: source.SourcePosition{Line: line, Column: 1},
+		End:   source.SourcePosition{Line: line, Column: 2},
+	}
 }
 
 func endpointID(endpoint compiler.EndpointBinding) string {

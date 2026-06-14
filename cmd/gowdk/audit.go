@@ -4,18 +4,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/appgen"
 	"github.com/cssbruno/gowdk/internal/auditspec"
+	"github.com/cssbruno/gowdk/internal/diagnostics"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/securitymanifest"
 )
 
-const auditUsage = "usage: gowdk audit [--config <file>] [--module <name>] [--ssr] [--json] [files...]"
+const auditUsage = "usage: gowdk audit [--config <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...]"
 
 // auditReport is the gowdk audit result: the derived security posture plus the
-// findings from evaluating the built-in baseline (and, later, declared
-// policies) against it.
+// findings from evaluating the built-in baseline and declared policies against
+// it.
 type auditReport struct {
 	Version  int                               `json:"version"`
 	Status   string                            `json:"status"`
@@ -33,6 +38,12 @@ type auditSummary struct {
 	Info      int `json:"info"`
 }
 
+type auditCommandOptions struct {
+	EmitTests bool
+	RunTests  bool
+	TestPath  string
+}
+
 type auditExitError struct {
 	errors int
 }
@@ -48,7 +59,11 @@ func (auditExitError) SilentCLIError() {}
 // build never runs it, so it can never fail a build implicitly. It exits
 // non-zero when any error-severity finding exists so it can gate CI.
 func audit(args []string) error {
-	options, paths, err := loadCommandInputs(args, "audit", true)
+	auditOptions, projectArgs, err := parseAuditCommandOptions(args)
+	if err != nil {
+		return err
+	}
+	options, paths, err := loadCommandInputs(projectArgs, "audit", true)
 	if err != nil {
 		return err
 	}
@@ -67,7 +82,13 @@ func audit(args []string) error {
 	}
 
 	manifest := securitymanifest.Build(options.Config, ir)
-	findings := auditspec.Evaluate(manifest, auditspec.Baseline())
+	declared := auditspec.PoliciesFromIR(ir.AuditSpecs)
+	findings := auditspec.Evaluate(manifest, auditspec.ComposeBaseline(declared))
+	testFindings, err := handleAuditTests(auditOptions, options, manifest, ir.AuditSpecs)
+	if err != nil {
+		return err
+	}
+	findings = append(findings, testFindings...)
 	auditspec.SortFindings(findings)
 	report := buildAuditReport(manifest, findings)
 
@@ -85,6 +106,116 @@ func audit(args []string) error {
 		return auditExitError{errors: report.Summary.Errors}
 	}
 	return nil
+}
+
+func parseAuditCommandOptions(args []string) (auditCommandOptions, []string, error) {
+	options := auditCommandOptions{TestPath: "gowdk_audit_test.go"}
+	var projectArgs []string
+	for _, arg := range args {
+		switch {
+		case arg == "--emit-tests":
+			options.EmitTests = true
+		case strings.HasPrefix(arg, "--emit-tests="):
+			options.EmitTests = true
+			options.TestPath = strings.TrimSpace(strings.TrimPrefix(arg, "--emit-tests="))
+			if options.TestPath == "" {
+				return options, nil, fmt.Errorf(auditUsage)
+			}
+		case arg == "--run":
+			options.RunTests = true
+		default:
+			projectArgs = append(projectArgs, arg)
+		}
+	}
+	return options, projectArgs, nil
+}
+
+func handleAuditTests(auditOptions auditCommandOptions, options cliOptions, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]auditspec.Finding, error) {
+	if !auditOptions.EmitTests && !auditOptions.RunTests {
+		return nil, nil
+	}
+	source, err := appgen.StandaloneAuditTestSource(options.Config, manifest, specs)
+	if err != nil {
+		return nil, err
+	}
+	if len(source) == 0 {
+		return nil, nil
+	}
+
+	testPath := auditOptions.TestPath
+	if !filepath.IsAbs(testPath) {
+		testPath = filepath.Join(options.ProjectRoot, testPath)
+	}
+	if auditOptions.EmitTests {
+		if err := os.MkdirAll(filepath.Dir(testPath), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(testPath, source, 0o644); err != nil {
+			return nil, err
+		}
+		fmt.Fprintf(os.Stderr, "wrote audit tests: %s\n", testPath)
+	}
+
+	if !auditOptions.RunTests {
+		return nil, nil
+	}
+
+	runPath := testPath
+	removeAfterRun := false
+	if !auditOptions.EmitTests {
+		temp, err := os.CreateTemp(options.ProjectRoot, "gowdk_audit_*_test.go")
+		if err != nil {
+			return nil, err
+		}
+		runPath = temp.Name()
+		removeAfterRun = true
+		if _, err := temp.Write(source); err != nil {
+			_ = temp.Close()
+			return nil, err
+		}
+		if err := temp.Close(); err != nil {
+			return nil, err
+		}
+	}
+	if removeAfterRun {
+		defer os.Remove(runPath)
+	}
+
+	output, err := runAuditTestFile(options.ProjectRoot, runPath)
+	if err == nil {
+		fmt.Fprintf(os.Stderr, "audit tests passed: %s\n", runPath)
+		return nil, nil
+	}
+	return []auditspec.Finding{{
+		Code:        "audit_test_failed",
+		Severity:    auditDiagnosticSeverity("audit_test_failed"),
+		Target:      "runtime",
+		Source:      runPath,
+		Message:     "generated audit integration tests failed",
+		Remediation: "Run go test on the emitted audit test file, then update runtime behavior or policy expectations.",
+	}}, writeAuditRunOutput(output)
+}
+
+func runAuditTestFile(projectRoot, testPath string) (string, error) {
+	command := exec.Command("go", "test", testPath)
+	command.Dir = projectRoot
+	output, err := command.CombinedOutput()
+	return string(output), err
+}
+
+func writeAuditRunOutput(output string) error {
+	output = strings.TrimSpace(output)
+	if output != "" {
+		fmt.Fprintln(os.Stderr, output)
+	}
+	return nil
+}
+
+func auditDiagnosticSeverity(code string) diagnostics.Severity {
+	if severity, ok := diagnostics.DefaultSeverity(code); ok {
+		return severity
+	}
+	return diagnostics.SeverityError
 }
 
 func buildAuditReport(manifest securitymanifest.SecurityManifest, findings []auditspec.Finding) auditReport {

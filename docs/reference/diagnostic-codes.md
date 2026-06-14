@@ -166,8 +166,8 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `audit_runtime_mismatch`, `audit_test_failed`, `policy_duplicate_name`,
   `policy_extends_cycle`, `policy_unknown_extends`,
   `policy_unknown_selector`, `policy_selector_matched_nothing`. These are
-  experimental; some are emitted by later M8 phases (frontend audits,
-  declared policies, and the `--run` test runner).
+  experimental and emitted by `gowdk audit`, declared audit policies, or the
+  optional runtime audit test runner.
 
 ## Adding A Code
 

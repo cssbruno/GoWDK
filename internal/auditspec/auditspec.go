@@ -39,8 +39,14 @@ const (
 	// RuleRequireHeader requires the app to be configured to emit a response
 	// header.
 	RuleRequireHeader RuleKind = "require_header"
+	// RuleRequireClientRouteGuards reports client-visible routes that rely on
+	// default-deny because the source declared no guard.
+	RuleRequireClientRouteGuards RuleKind = "require_client_route_guards"
 	// RuleNoSecretsInBundle forbids secret-shaped values in embedded output.
 	RuleNoSecretsInBundle RuleKind = "no_secrets_in_bundle"
+	// RuleDenyRawHTMLSinks reports every raw-HTML sink not allowlisted by a
+	// RuleAllowRawHTML rule in the same resolved policy.
+	RuleDenyRawHTMLSinks RuleKind = "deny_raw_html_sinks"
 	// RuleAllowRawHTML allowlists one raw-HTML sink (source:field); every sink
 	// not allowlisted is reported.
 	RuleAllowRawHTML RuleKind = "allow_raw_html"

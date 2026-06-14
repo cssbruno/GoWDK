@@ -167,8 +167,8 @@ security posture: every route, backend endpoint, and contract with its guards,
 CSRF state, body limit, public/default-deny classification, and source
 location, plus a `frontend` surface block. Like the route and asset manifests,
 it is pure data — it never evaluates policy. `gowdk audit` reads this same
-posture and applies the security baseline (and, in later M8 phases, declared
-policies) to produce findings.
+posture and applies the security baseline plus declared `*.audit.gwdk` policies
+to produce findings.
 
 ```json
 {
@@ -198,8 +198,10 @@ policies) to produce findings.
 }
 ```
 
-`version` is the security manifest schema version. The `frontend` block is
-populated by the frontend audits in later M8 phases.
+`version` is the security manifest schema version. The `frontend` block records
+client-visible routes that rely on generated default-deny handling, secret-like
+embedded assets or build-time values, raw `g:html` sinks, and configured
+security response header names.
 
 ## Planned Manifest Work
 

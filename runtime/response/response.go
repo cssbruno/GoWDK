@@ -257,6 +257,9 @@ func WriteNoStoreHTML(writer http.ResponseWriter, request *http.Request, body st
 func WriteHTML(writer http.ResponseWriter, request *http.Request, body string, cacheControl string) error {
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	cacheControl = strings.TrimSpace(cacheControl)
+	if existing := strings.TrimSpace(writer.Header().Get("Cache-Control")); strings.EqualFold(existing, "no-store") {
+		cacheControl = existing
+	}
 	if cacheControl == "" {
 		cacheControl = "no-store"
 	}

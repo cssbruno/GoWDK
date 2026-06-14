@@ -4991,7 +4991,7 @@ func (app appFixture) program(config gowdk.Config) gwdkir.Program {
 		Components: app.Components,
 		Layouts:    app.Layouts,
 	})
-	gwdkanalysis.AddStandaloneEndpoints(&ir, app.Endpoints)
+	gwdkanalysis.AddStandaloneEndpoints(config, &ir, app.Endpoints)
 	gwdkanalysis.AttachBackendBindings(&ir, app.BackendBindings)
 	return ir
 }

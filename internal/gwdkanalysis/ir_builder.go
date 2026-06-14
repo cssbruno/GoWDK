@@ -378,11 +378,11 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
 // Program.GoEndpoints and normalized into Program.Endpoints, which is then
 // re-sorted with the same ordering BuildIR produces so post-build discovery
 // yields the same program as build-time discovery.
-func AddStandaloneEndpoints(program *gwdkir.Program, endpoints []gwdkir.GoEndpoint) {
+func AddStandaloneEndpoints(config gowdk.Config, program *gwdkir.Program, endpoints []gwdkir.GoEndpoint) {
 	if len(endpoints) == 0 {
 		return
 	}
-	builder := irBuilder{program: *program}
+	builder := irBuilder{config: config, program: *program}
 	for _, endpoint := range endpoints {
 		builder.addStandaloneEndpoint(endpoint)
 	}

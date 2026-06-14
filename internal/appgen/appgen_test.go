@@ -231,7 +231,7 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 	for _, expected := range []string{
 		"package gowdkapp",
 		"func TestGOWDKAuditGeneratedSecurityPosture(t *testing.T)",
-		`t.Setenv("GOWDK_TEST_CSRF_SECRET", "gowdk-audit-test")`,
+		`t.Setenv("GOWDK_TEST_CSRF_SECRET", "gowdk-audit-test-csrf-secret-32-bytes")`,
 		`t.Setenv("GOWDK_TEST_DATABASE_URL", "gowdk-audit-test")`,
 		`t.Setenv("GOWDK_TEST_REGION", "gowdk-audit-test")`,
 		"handler, err := Handler()",
@@ -1081,7 +1081,9 @@ func TestGenerateWiresCSRFByDefault(t *testing.T) {
 		`errors`,
 		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
 		`CSRF: csrfTokenSource,`,
-		`csrfTokenSource, err := newCSRF()`,
+		`var csrfTokenSource *gowdkactions.CSRF`,
+		`var csrfErr error`,
+		`csrfTokenSource, csrfErr = newCSRF()`,
 		`csrfValidator = csrfTokenSource`,
 		`var csrfValidator gowdkactions.CSRFValidator`,
 		`func newCSRF() (*gowdkactions.CSRF, error)`,
@@ -1127,7 +1129,7 @@ func TestGenerateSkipsCSRFWhenDisabled(t *testing.T) {
 	source := string(payload)
 	for _, unexpected := range []string{
 		`CSRF: csrfTokenSource,`,
-		`csrfTokenSource, err := newCSRF()`,
+		`csrfTokenSource, csrfErr = newCSRF()`,
 		`func newCSRF() (*gowdkactions.CSRF, error)`,
 		`err := csrfValidator.Validate(request)`,
 	} {
@@ -1180,7 +1182,9 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 	for _, expected := range []string{
 		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
 		`CSRF: csrfTokenSource,`,
-		`csrfTokenSource, err := newCSRF()`,
+		`var csrfTokenSource *gowdkactions.CSRF`,
+		`var csrfErr error`,
+		`csrfTokenSource, csrfErr = newCSRF()`,
 		`csrfValidator = csrfTokenSource`,
 		`var csrfValidator gowdkactions.CSRFValidator`,
 		`func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler`,
@@ -1995,6 +1999,57 @@ func TestGenerateWritesSSRHandler(t *testing.T) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
 		}
 	}
+}
+
+func TestGenerateInjectsCSRFIntoSSRForms(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
+			SecretEnv: "GOWDK_TEST_CSRF_SECRET",
+			Insecure:  true,
+		}}},
+		Actions: []ActionEndpoint{{
+			PageID:      "newsletter",
+			ActionName:  "Subscribe",
+			Route:       "/newsletter",
+			InputFields: []string{"email"},
+			Redirect:    "/newsletter?ok=1",
+		}},
+		SSR: []SSRRoute{{
+			PageID: "newsletter",
+			Route:  "/newsletter",
+			Guards: []string{"public"},
+			HTML:   `<main><form method="post" action="/newsletter"><input name="email"></form></main>`,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`var csrfTokenSource *gowdkactions.CSRF`,
+		`htmlBytes, csrfOK := gowdkruntime.CSRFInjectHTML(response, request, []byte(html), csrfTokenSource)`,
+		`if !csrfOK {`,
+		`html = string(htmlBytes)`,
+		`gowdkresponse.WriteNoStoreHTML(response, request, html)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected SSR CSRF source to contain %q:\n%s", expected, source)
+		}
+	}
+	assertSourceOrder(t, source,
+		`html := "<main><form method=\"post\" action=\"/newsletter\"><input name=\"email\"></form></main>"`,
+		`gowdkruntime.CSRFInjectHTML(response, request, []byte(html), csrfTokenSource)`,
+		`gowdkresponse.WriteNoStoreHTML(response, request, html)`,
+	)
 }
 
 func TestGenerateWritesSSRCachePolicy(t *testing.T) {
@@ -5539,6 +5594,94 @@ func TestGeneratedBinaryValidatesCSRFByDefault(t *testing.T) {
 	}
 	if response.Header.Get("Location") != "/newsletter?ok=1" {
 		t.Fatalf("unexpected redirect location: %q", response.Header.Get("Location"))
+	}
+}
+
+func TestGeneratedBinaryInjectsCSRFIntoSSRForms(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
+			SecretEnv: "GOWDK_TEST_CSRF_SECRET",
+			Insecure:  true,
+		}}},
+		Actions: []ActionEndpoint{{
+			PageID:      "newsletter",
+			ActionName:  "Subscribe",
+			Route:       "/newsletter",
+			InputFields: []string{"email"},
+			Redirect:    "/newsletter?ok=1",
+		}},
+		SSR: []SSRRoute{{
+			PageID: "newsletter",
+			Route:  "/newsletter",
+			Guards: []string{"public"},
+			HTML:   `<main><form method="post" action="/newsletter"><input name="email"></form></main>`,
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(),
+		"GOWDK_ADDR="+addr,
+		"GOWDK_TEST_CSRF_SECRET="+strings.Repeat("s", 32),
+	)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, headers, err := waitForHTTPResponse("http://" + addr + "/newsletter")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := hiddenInputValue(body, "_gowdk_csrf")
+	if token == "" {
+		t.Fatalf("expected SSR form csrf token, got %s", body)
+	}
+	cookie := cookieHeader(headers.Get("Set-Cookie"))
+	if !strings.HasPrefix(cookie, "gowdk-csrf=") {
+		t.Fatalf("expected csrf cookie, got %q", headers.Get("Set-Cookie"))
+	}
+	if cache := headers.Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store on csrf-personalized SSR HTML, got %q", cache)
+	}
+
+	response, err := waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected missing csrf token to return 403, got %d: %s", response.StatusCode, payload)
+	}
+
+	response, err = waitForHTTPStatusWithHeaders("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com", map[string]string{
+		"Cookie":       cookie,
+		"X-GOWDK-CSRF": token,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected valid csrf POST to return 303, got %d", response.StatusCode)
 	}
 }
 

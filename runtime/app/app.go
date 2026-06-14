@@ -307,6 +307,15 @@ func (handler Handler) csrfAwarePayload(response http.ResponseWriter, request *h
 	if handler.CSRF == nil || request.Method != http.MethodGet || !strings.HasSuffix(name, ".html") {
 		return payload, true
 	}
+	return CSRFInjectHTML(response, request, payload, handler.CSRF)
+}
+
+// CSRFInjectHTML injects a hidden CSRF token into HTML POST forms. It returns
+// false after writing a no-store 500 response when token generation fails.
+func CSRFInjectHTML(response http.ResponseWriter, request *http.Request, payload []byte, source CSRFTokenSource) ([]byte, bool) {
+	if source == nil || request.Method != http.MethodGet {
+		return payload, true
+	}
 	matches := formStartTagRanges(payload)
 	if len(matches) == 0 {
 		return payload, true
@@ -323,14 +332,14 @@ func (handler Handler) csrfAwarePayload(response http.ResponseWriter, request *h
 			continue
 		}
 		if token == "" {
-			generated, err := handler.CSRF.Token(response, request)
+			generated, err := source.Token(response, request)
 			if err != nil {
 				response.Header().Set("Cache-Control", "no-store")
 				http.Error(response, "csrf token unavailable", http.StatusInternalServerError)
 				return nil, false
 			}
 			token = generated
-			hidden = csrfHiddenInput(handler.CSRF.FieldName(), token)
+			hidden = csrfHiddenInput(source.FieldName(), token)
 			response.Header().Set("Cache-Control", "no-store")
 		}
 		builder.Write(payload[cursor:match[1]])

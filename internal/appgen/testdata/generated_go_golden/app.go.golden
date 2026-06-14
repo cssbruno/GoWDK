@@ -33,9 +33,10 @@ func ServeMux() (*http.ServeMux, error) {
 	if err != nil {
 		return nil, err
 	}
-	csrfTokenSource, err := newCSRF()
-	if err != nil {
-		return nil, err
+	var csrfErr error
+	csrfTokenSource, csrfErr = newCSRF()
+	if csrfErr != nil {
+		return nil, csrfErr
 	}
 	csrfValidator = csrfTokenSource
 	backendRouter, err := newBackendRouter()
@@ -275,6 +276,7 @@ func newBackendRouter() (*gowdkruntime.BackendRouter, error) {
 	return gowdkruntime.NewBackendRouter(gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}, gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/patients", Kind: "command", Handler: commandPatientsCreatePatientPOSTPatients(contractRegistry)}, gowdkruntime.BackendRoute{Method: http.MethodGet, Path: "/patients", Kind: "query", Handler: queryPatientsGetPatientPageGETPatients(contractRegistry)})
 }
 
+var csrfTokenSource *gowdkactions.CSRF
 var csrfValidator gowdkactions.CSRFValidator
 
 func newCSRF() (*gowdkactions.CSRF, error) {

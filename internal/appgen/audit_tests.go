@@ -336,9 +336,20 @@ func auditEndpointPathMatches(endpointPath string, requestPath string) bool {
 	return false
 }
 
+const generatedAuditEnvSeed = "gowdk-audit-test"
+const generatedAuditCSRFSecretSeed = "gowdk-audit-test-csrf-secret-32-bytes"
+
 func writeGeneratedAuditEnvSeeds(builder *strings.Builder, config gowdk.Config, manifest securitymanifest.SecurityManifest) {
+	csrfSecretName := ""
+	if auditManifestHasCSRFProtectedEndpoint(manifest) {
+		csrfSecretName = config.Build.CSRF.SecretEnvName()
+	}
 	for _, name := range auditRequiredEnvNames(config, manifest) {
-		fmt.Fprintf(builder, "\tt.Setenv(%s, %s)\n", strconv.Quote(name), strconv.Quote("gowdk-audit-test"))
+		value := generatedAuditEnvSeed
+		if name == csrfSecretName {
+			value = generatedAuditCSRFSecretSeed
+		}
+		fmt.Fprintf(builder, "\tt.Setenv(%s, %s)\n", strconv.Quote(name), strconv.Quote(value))
 	}
 }
 

@@ -587,27 +587,47 @@
     }
   }
 
-  function escapeHTML(value) {
-    return String(value).replace(/[&<>"']/g, (char) => {
-      if (char === "&") return "&amp;";
-      if (char === "<") return "&lt;";
-      if (char === ">") return "&gt;";
-      if (char === "\"") return "&quot;";
-      return "&#39;";
-    });
-  }
-
-  function interpolateTemplate(template, state, scope, helpers) {
+  function interpolateTemplateValue(template, state, scope, helpers) {
     return template.replace(/\{\{([^{}]+)\}\}/g, (_match, expr) => {
       const value = valueOf(expr, state, scope, helpers);
-      return value == null ? "" : escapeHTML(value);
+      return value == null ? "" : String(value);
     });
   }
 
-  function firstTemplateElement(html) {
-    const holder = document.createElement("template");
-    holder.innerHTML = html.trim();
-    return holder.content.firstElementChild;
+  function interpolateTemplateNode(node, state, scope, helpers) {
+    if (node.nodeType === 3) {
+      if (node.nodeValue && node.nodeValue.indexOf("{{") >= 0) {
+        node.nodeValue = interpolateTemplateValue(node.nodeValue, state, scope, helpers);
+      }
+      return;
+    }
+    if (node.nodeType !== 1) return;
+    Array.from(node.attributes).forEach((attr) => {
+      if (attr.value.indexOf("{{") >= 0) node.setAttribute(attr.name, interpolateTemplateValue(attr.value, state, scope, helpers));
+    });
+    if (node.content) Array.from(node.content.childNodes).forEach((child) => interpolateTemplateNode(child, state, scope, helpers));
+    Array.from(node.childNodes).forEach((child) => interpolateTemplateNode(child, state, scope, helpers));
+  }
+
+  function cloneListTemplate(marker, state, scope, helpers) {
+    const source = marker.content && marker.content.firstElementChild;
+    if (!source) return null;
+    const fresh = source.cloneNode(true);
+    interpolateTemplateNode(fresh, state, scope, helpers);
+    return fresh;
+  }
+
+  function childNodesEqual(target, source) {
+    if (target.childNodes.length !== source.childNodes.length) return false;
+    for (let index = 0; index < target.childNodes.length; index++) {
+      if (!target.childNodes[index].isEqualNode(source.childNodes[index])) return false;
+    }
+    return true;
+  }
+
+  function replaceChildNodes(target, source) {
+    while (target.firstChild) target.removeChild(target.firstChild);
+    Array.from(source.childNodes).forEach((child) => target.appendChild(child.cloneNode(true)));
   }
 
   function syncElement(target, source) {
@@ -617,7 +637,7 @@
     Array.from(source.attributes).forEach((attr) => {
       if (target.getAttribute(attr.name) !== attr.value) target.setAttribute(attr.name, attr.value);
     });
-    if (target.innerHTML !== source.innerHTML) target.innerHTML = source.innerHTML;
+    if (!childNodesEqual(target, source)) replaceChildNodes(target, source);
   }
 
   function matchingNodes(container, selector) {
@@ -748,7 +768,6 @@
       const indexName = marker.getAttribute("data-gowdk-for-index-var");
       const source = marker.getAttribute("data-gowdk-for-source");
       const keyExpr = marker.getAttribute("data-gowdk-for-key");
-      const template = marker.getAttribute("data-gowdk-for-template") || "";
       const items = valueOf(source, state, null, helpers);
       const existing = new Map();
       let cursor = marker.nextSibling;
@@ -767,7 +786,7 @@
         scope.index = index;
         if (indexName) scope[indexName] = index;
         const key = String(valueOf(keyExpr, state, scope, helpers) ?? "");
-        const fresh = firstTemplateElement(interpolateTemplate(template, state, scope, helpers));
+        const fresh = cloneListTemplate(marker, state, scope, helpers);
         if (!fresh) return;
         renderConditionals(fresh, state, scope, helpers);
         const reused = existing.get(key);

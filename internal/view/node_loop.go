@@ -103,9 +103,9 @@ func (node Element) renderFor(ctx *renderContext, out *renderOutput, loop ForDir
 		out.write(`" data-gowdk-for-index-var="`)
 		out.write(gowhtml.Escape(loop.IndexVar))
 	}
-	out.write(`" data-gowdk-for-template="`)
-	out.write(gowhtml.Escape(template.string()))
-	out.write(`"></template>`)
+	out.write(`">`)
+	out.write(template.string())
+	out.write(`</template>`)
 	seenKeys := map[string]bool{}
 	for index, item := range items {
 		itemCtx, err := ctx.loopContext(loop, keyExpr, group, item, index)

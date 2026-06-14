@@ -6,6 +6,7 @@
   const mountExport = "GOWDKMount" + component;
   const handleExport = "GOWDKHandle" + component;
   const destroyExport = "GOWDKDestroy" + component;
+  const bindingTargetAttributes = ["data-gowdk-binding-text", "data-gowdk-binding-if", "data-gowdk-binding-list", "data-gowdk-binding-value", "data-gowdk-binding-checked"];
   const roots = document.querySelectorAll("gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"wasm\"]");
   if (roots.length === 0 || typeof WebAssembly === "undefined") return;
 
@@ -83,8 +84,14 @@
 
   function targetByBinding(root, id) {
     if (!id) return null;
-    const escaped = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : String(id).replace(/"/g, "\\\"");
-    return root.querySelector("[data-gowdk-binding-text=\"" + escaped + "\"], [data-gowdk-binding-if=\"" + escaped + "\"], [data-gowdk-binding-list=\"" + escaped + "\"], [data-gowdk-binding-value=\"" + escaped + "\"], [data-gowdk-binding-checked=\"" + escaped + "\"]");
+    const expected = String(id);
+    for (const attr of bindingTargetAttributes) {
+      const nodes = matchingNodes(root, "[" + attr + "]");
+      for (const node of nodes) {
+        if (node.getAttribute(attr) === expected) return node;
+      }
+    }
+    return null;
   }
 
   function applyPatch(root, patch) {

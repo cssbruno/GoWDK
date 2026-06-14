@@ -165,3 +165,56 @@ func TestRuntimeTemplatesReplacePlaceholders(t *testing.T) {
 		t.Fatalf("rendered WASM island loader did not include ABI version:\n%s", rendered[2])
 	}
 }
+
+func TestIslandRuntimeClonesTemplateDOM(t *testing.T) {
+	source := IslandJSSource(IslandJSOptions{
+		Component:       "Nested",
+		MountFunction:   "mountNestedIsland",
+		DestroyFunction: "destroyNestedIsland",
+	})
+	for _, forbidden := range []string{
+		`data-gowdk-for-template`,
+		`holder.innerHTML`,
+		`firstTemplateElement`,
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("island runtime must not reparse list template text via %q:\n%s", forbidden, source)
+		}
+	}
+	for _, expected := range []string{
+		`function cloneListTemplate(marker, state, scope, helpers)`,
+		`const source = marker.content && marker.content.firstElementChild;`,
+		`if (node.content) Array.from(node.content.childNodes).forEach`,
+		`interpolateTemplateNode(fresh, state, scope, helpers);`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected island runtime to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestWASMIslandLoaderFindsBindingsWithoutDynamicSelectors(t *testing.T) {
+	source := WASMIslandLoaderSource(WASMIslandLoaderOptions{
+		Component:    "Counter",
+		ABIVersion:   "gowdk-wasm-island-v1",
+		WASMPath:     "/assets/gowdk/islands/Counter.wasm",
+		WASMExecPath: "/assets/gowdk/islands/wasm_exec.js",
+	})
+	for _, forbidden := range []string{
+		`CSS.escape`,
+		`querySelector("[data-gowdk-binding-text=\"`,
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("WASM island loader must not build binding selectors from patch ids via %q:\n%s", forbidden, source)
+		}
+	}
+	for _, expected := range []string{
+		`const bindingTargetAttributes = ["data-gowdk-binding-text", "data-gowdk-binding-if", "data-gowdk-binding-list", "data-gowdk-binding-value", "data-gowdk-binding-checked"];`,
+		`const nodes = matchingNodes(root, "[" + attr + "]");`,
+		`if (node.getAttribute(attr) === expected) return node;`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected WASM island loader to find binding targets without dynamic selector escaping:\n%s", source)
+		}
+	}
+}

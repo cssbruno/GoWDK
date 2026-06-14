@@ -347,7 +347,7 @@ function normalizePath(value) {
 
 function siteMapHTML(siteMap, root) {
   const pages = siteMapPages(siteMap).slice().sort((a, b) => String(a.route || '').localeCompare(String(b.route || '')));
-  const routes = pages.map((page) => pageCard(page, root)).join('');
+  const routes = pages.map((page) => pageCard(page, root, siteMap)).join('');
   const spaCount = pages.filter((page) => page.render === 'spa').length;
   const ssrCount = pages.filter((page) => page.render === 'ssr').length;
   return `<!doctype html>
@@ -408,6 +408,20 @@ function siteMapHTML(siteMap, root) {
       height: 16px;
       stroke: currentColor;
     }
+    .node-link {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      display: inline;
+      font: inherit;
+      padding: 0;
+      text-align: left;
+    }
+    .node-link:hover {
+      text-decoration: underline;
+    }
     .grid {
       display: grid;
       gap: 10px;
@@ -442,6 +456,9 @@ function siteMapHTML(siteMap, root) {
       font-size: 11px;
       color: var(--vscode-badge-foreground);
       background: var(--vscode-badge-background);
+    }
+    button.pill {
+      display: inline-flex;
     }
     .file {
       color: var(--vscode-descriptionForeground);
@@ -478,6 +495,14 @@ function siteMapHTML(siteMap, root) {
     document.querySelectorAll('[data-open]').forEach((button) => {
       button.addEventListener('click', () => vscode.postMessage({ type: 'open', file: button.dataset.open }));
     });
+    document.querySelectorAll('[data-definition-file]').forEach((button) => {
+      button.addEventListener('click', () => vscode.postMessage({
+        type: 'definition',
+        file: button.dataset.definitionFile,
+        line: Number(button.dataset.definitionLine || 0),
+        column: Number(button.dataset.definitionColumn || 0)
+      }));
+    });
     document.querySelectorAll('[data-move]').forEach((button) => {
       button.addEventListener('click', () => vscode.postMessage({ type: 'move', file: button.dataset.move }));
     });
@@ -486,7 +511,7 @@ function siteMapHTML(siteMap, root) {
 </html>`;
 }
 
-function pageCard(page, root) {
+function pageCard(page, root, metadata = {}) {
   const rel = path.relative(root, page.source || '').replace(/\\/g, '/');
   const blocks = Object.entries(page.blocks || {})
     .filter(([key, value]) => key !== 'actions' && key !== 'apis' && value)
@@ -497,29 +522,107 @@ function pageCard(page, root) {
   const components = page.components || [];
   const assets = page.assets || [];
   const tags = [
-    page.render,
-    ...blocks,
-    ...actions.map((name) => `act:${name}`),
-    ...apis.map((name) => `api:${name}`),
-    ...(page.layouts || []).map((layout) => `layout:${layout}`),
-    ...css.map((name) => `css:${name}`)
+    { label: page.render },
+    ...blocks.map((block) => ({
+      label: block,
+      target: definitionTargetForNode({ kind: 'block', value: block, pageId: page.id }, metadata) || sourceLocation(page)
+    })),
+    ...actions.map((name) => ({
+      label: `act:${name}`,
+      target: definitionTargetForNode({ kind: 'endpoint', endpointKind: 'action', value: name, pageId: page.id }, metadata) || sourceLocation(page)
+    })),
+    ...apis.map((name) => ({
+      label: `api:${name}`,
+      target: definitionTargetForNode({ kind: 'endpoint', endpointKind: 'api', value: name, pageId: page.id }, metadata) || sourceLocation(page)
+    })),
+    ...(page.layouts || []).map((layout) => ({
+      label: `layout:${layout}`,
+      target: definitionTargetForNode({ kind: 'layout', value: layout, pageId: page.id }, metadata)
+    })),
+    ...css.map((name) => ({
+      label: `css:${name}`,
+      target: definitionTargetForNode({ kind: 'css', value: name, pageId: page.id }, metadata)
+    }))
   ].filter(Boolean);
   const details = [
-    css.length ? `CSS: ${css.join(', ')}` : '',
-    components.length ? `Components: ${components.join(', ')}` : '',
-    assets.length ? `Assets: ${assets.join(', ')}` : ''
+    css.length ? detailNodeList('CSS', css.map((name) => ({
+      label: name,
+      target: definitionTargetForNode({ kind: 'css', value: name, pageId: page.id }, metadata)
+    }))) : '',
+    components.length ? detailNodeList('Components', components.map((name) => ({
+      label: name,
+      target: definitionTargetForNode({ kind: 'component', value: name, pageId: page.id }, metadata)
+    }))) : '',
+    pageContractRefs(page).length ? detailNodeList('Contracts', pageContractRefs(page).map((contract) => ({
+      label: contract.label,
+      target: definitionTargetForNode({ kind: 'contract', value: contract.value, pageId: page.id }, metadata) || sourceLocation(page)
+    }))) : '',
+    assets.length ? `Assets: ${escapeHTML(assets.join(', '))}` : ''
   ].filter(Boolean);
   return `<section class="page">
-    <div class="route">${escapeHTML(page.route || '(missing route)')}</div>
+    <div class="route">${nodeLink(page.route || '(missing route)', definitionTargetForNode({ kind: 'route', value: page.route, pageId: page.id }, metadata) || sourceLocation(page), 'node-link route-link')}</div>
     <div class="flow">${escapeHTML(pageFlow(page))}</div>
-    <div class="meta">${tags.map((tag) => `<span class="pill">${escapeHTML(tag)}</span>`).join('')}</div>
+    <div class="meta">${tags.map((tag) => chipNode(tag.label, tag.target)).join('')}</div>
     <div class="file">${escapeHTML(page.id)} · ${escapeHTML(rel || page.source || '')}</div>
-    ${details.length ? `<div class="details">${details.map((item) => `<div>${escapeHTML(item)}</div>`).join('')}</div>` : ''}
+    ${details.length ? `<div class="details">${details.map((item) => `<div>${item}</div>`).join('')}</div>` : ''}
     <div class="actions">
       <button class="icon-button" data-open="${escapeAttr(page.source)}" title="Open Page File" aria-label="Open Page File">${iconSVG('open')}</button>
       <button class="icon-button secondary" data-move="${escapeAttr(page.source)}" title="Move File" aria-label="Move File">${iconSVG('move')}</button>
     </div>
   </section>`;
+}
+
+function detailNodeList(label, nodes) {
+  return `${escapeHTML(label)}: ${nodes.map((node) => nodeLink(node.label, node.target)).join(', ')}`;
+}
+
+function chipNode(label, target) {
+  if (!label) {
+    return '';
+  }
+  if (!target) {
+    return `<span class="pill">${escapeHTML(label)}</span>`;
+  }
+  return nodeLink(label, target, 'pill node-link');
+}
+
+function nodeLink(label, target, className = 'node-link') {
+  if (!target || !target.file) {
+    return escapeHTML(label);
+  }
+  return `<button class="${escapeAttr(className)}" ${definitionTargetAttrs(target)} title="Open source">${escapeHTML(label)}</button>`;
+}
+
+function definitionTargetAttrs(target) {
+  const line = target.line === undefined || target.line === null ? 0 : target.line;
+  const column = target.column === undefined || target.column === null ? 0 : target.column;
+  return [
+    `data-definition-file="${escapeAttr(target.file)}"`,
+    `data-definition-line="${escapeAttr(String(line))}"`,
+    `data-definition-column="${escapeAttr(String(column))}"`
+  ].join(' ');
+}
+
+function pageContractRefs(page = {}) {
+  const refs = [];
+  for (const item of page.imports || []) {
+    if (item.alias) {
+      refs.push({ label: item.alias, value: item.alias });
+    }
+  }
+  for (const store of page.stores || []) {
+    collectContractRef(refs, store.type || store.Type);
+    collectContractRef(refs, store.init || store.Init);
+  }
+  return uniqueBy(refs, (item) => item.label);
+}
+
+function collectContractRef(refs, ref) {
+  const label = formatGoRef(ref);
+  if (!label) {
+    return;
+  }
+  refs.push({ label, value: ref.name || ref.Name || ref.alias || ref.Alias || label });
 }
 
 function iconSVG(name) {
@@ -1027,6 +1130,35 @@ function hoverMarkdown(token, metadata = {}, context = {}) {
   return '';
 }
 
+function definitionTargetForNode(node = {}, metadata = {}, context = {}) {
+  const kind = String(node.kind || '');
+  const value = String(node.value || node.symbol || node.route || node.id || '');
+  const pages = projectPages(metadata);
+  if (kind === 'page') {
+    const page = pageByIDOrRoute(pages, value, node.pageId);
+    return sourceLocation(page);
+  }
+  if (kind === 'route') {
+    const route = String(node.route || value);
+    const page = pages.find((item) => item.route === route) || pageByIDOrRoute(pages, '', node.pageId);
+    return sourceLocation(page);
+  }
+  if (kind === 'endpoint' || kind === 'action' || kind === 'api') {
+    return endpointDefinitionTarget(node, metadata, pages);
+  }
+  if (kind === 'block') {
+    const page = pageByIDOrRoute(pages, '', node.pageId);
+    return sourceLocation(page);
+  }
+  if (kind === 'contract' || kind === 'goContract') {
+    const goContract = projectGoContracts(metadata).find((item) => item.name === value || item.alias === value);
+    if (goContract) {
+      return sourceLocation(goContract);
+    }
+  }
+  return definitionTarget(value, metadata, context);
+}
+
 function definitionTarget(token, metadata = {}, context = {}) {
   const value = String(token || '');
   if (!value) {
@@ -1037,6 +1169,10 @@ function definitionTarget(token, metadata = {}, context = {}) {
   const page = pages.find((item) => item.id === value);
   if (page && page.source) {
     return { file: page.source, line: 0, column: 0 };
+  }
+  const routePage = pages.find((item) => item.route === value);
+  if (routePage && routePage.source) {
+    return sourceLocation(routePage);
   }
   const component = manifest.components && manifest.components[value];
   if (component && component.source) {
@@ -1058,6 +1194,10 @@ function definitionTarget(token, metadata = {}, context = {}) {
   if (layout && layout.source) {
     return { file: layout.source, line: 0, column: 0 };
   }
+  const endpoint = endpointDefinitionTarget({ value }, metadata, pages);
+  if (endpoint) {
+    return endpoint;
+  }
   for (const item of pages) {
     if (!item.source) {
       continue;
@@ -1076,6 +1216,112 @@ function definitionTarget(token, metadata = {}, context = {}) {
     return { file: cssDefinition.file, line: 0, column: 0 };
   }
   return undefined;
+}
+
+function endpointDefinitionTarget(node = {}, metadata = {}, pages = projectPages(metadata)) {
+  const value = String(node.value || node.symbol || '');
+  const pageID = String(node.pageId || node.pageID || '');
+  const endpointKind = String(node.endpointKind || (node.kind === 'action' || node.kind === 'api' ? node.kind : ''));
+  const endpoints = [
+    ...(((metadata.siteMap || {}).endpoints) || []),
+    ...(metadata.endpoints || [])
+  ];
+  for (const endpoint of endpoints) {
+    if (!endpointMatchesNode(endpoint, value, pageID, endpointKind, node)) {
+      continue;
+    }
+    const target = sourceLocation(endpoint);
+    if (target) {
+      return target;
+    }
+    const page = pageByIDOrRoute(pages, '', endpoint.pageId || endpoint.pageID || pageID);
+    if (page) {
+      return sourceLocation(page);
+    }
+  }
+  for (const page of pages) {
+    if (pageID && page.id !== pageID) {
+      continue;
+    }
+    const actions = (page.blocks && page.blocks.actions) || [];
+    const apis = (page.blocks && page.blocks.apis) || [];
+    if ((!endpointKind || endpointKind === 'action') && actions.includes(value)) {
+      return sourceLocation(page);
+    }
+    if ((!endpointKind || endpointKind === 'api') && apis.includes(value)) {
+      return sourceLocation(page);
+    }
+  }
+  return undefined;
+}
+
+function endpointMatchesNode(endpoint = {}, value, pageID, endpointKind, node = {}) {
+  if (pageID && endpoint.pageId !== pageID && endpoint.pageID !== pageID) {
+    return false;
+  }
+  if (endpointKind && endpoint.kind !== endpointKind) {
+    return false;
+  }
+  if (node.method && endpoint.method !== node.method) {
+    return false;
+  }
+  if (node.route && endpoint.route !== node.route) {
+    return false;
+  }
+  if (!value) {
+    return true;
+  }
+  return endpoint.symbol === value ||
+    endpoint.blockName === value ||
+    endpoint.name === value ||
+    endpoint.handler === value ||
+    endpoint.functionName === value;
+}
+
+function pageByIDOrRoute(pages = [], value = '', pageID = '') {
+  if (pageID) {
+    const page = pages.find((item) => item.id === pageID);
+    if (page) {
+      return page;
+    }
+  }
+  return pages.find((item) => item.id === value || item.route === value);
+}
+
+function sourceLocation(item = {}) {
+  const file = item && (item.source || item.file);
+  if (!file) {
+    return undefined;
+  }
+  const directLine = numericValue(item.line);
+  const directColumn = numericValue(item.column);
+  if (directLine !== undefined || directColumn !== undefined) {
+    return {
+      file,
+      line: Math.max(directLine || 0, 0),
+      column: Math.max(directColumn || 0, 0)
+    };
+  }
+  const span = item.sourceSpan || item.SourceSpan || item.span || item.Span;
+  const start = span && (span.start || span.Start);
+  const spanLine = numericValue(start && (start.line || start.Line));
+  const spanColumn = numericValue(start && (start.column || start.Column));
+  if (spanLine !== undefined || spanColumn !== undefined) {
+    return {
+      file,
+      line: Math.max((spanLine || 1) - 1, 0),
+      column: Math.max((spanColumn || 1) - 1, 0)
+    };
+  }
+  return fileLocation(file);
+}
+
+function numericValue(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
 }
 
 function symbolReferences(token, metadata = {}, options = {}) {
@@ -1950,6 +2196,7 @@ module.exports = {
   cssCompletionEntries,
   cssFileEntries,
   definitionTarget,
+  definitionTargetForNode,
   diagnosticCodeForMessage,
   diagnosticPosition,
   diagnosticRange,

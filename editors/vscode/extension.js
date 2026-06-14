@@ -543,6 +543,9 @@ async function showSiteMap(context) {
       if (message.type === 'open') {
         await openFile(message.file);
       }
+      if (message.type === 'definition') {
+        await openSourceTarget(message);
+      }
       if (message.type === 'move') {
         await moveFile(message.file);
         await refreshSiteMap(panel, root);
@@ -654,6 +657,21 @@ async function loadCSSFiles(document) {
 async function openFile(file) {
   const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
   await vscode.window.showTextDocument(document, { preview: false });
+}
+
+async function openSourceTarget(target = {}) {
+  if (!target.file) {
+    return;
+  }
+  const document = await vscode.workspace.openTextDocument(vscode.Uri.file(target.file));
+  const editor = await vscode.window.showTextDocument(document, { preview: false });
+  const line = Math.max(Number(target.line) || 0, 0);
+  const column = Math.max(Number(target.column) || 0, 0);
+  const safeLine = Math.min(line, Math.max(document.lineCount - 1, 0));
+  const safeColumn = Math.min(column, document.lineAt(safeLine).text.length);
+  const position = new vscode.Position(safeLine, safeColumn);
+  editor.selection = new vscode.Selection(position, position);
+  editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
 }
 
 function openDocs(file) {

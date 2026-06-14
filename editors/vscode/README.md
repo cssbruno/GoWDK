@@ -30,7 +30,9 @@ Language support for `.gwdk` files.
 - Dedicated GOWDK Activity Bar page hierarchy for movable `.gwdk` page files.
 - Source Outline view that groups pages by their actual workspace directories.
 - Larger site-map visualizer webview for scanning route flow, CSS selections,
-  component usage, assets, and file layout.
+  component usage, assets, and file layout. Route, endpoint, and contract nodes
+  open the best available source location, falling back to the owning file until
+  exact compiler spans are available.
 - Move-file action from the site map so a page can be reorganized without changing its declared route.
 
 The page hierarchy is generated from `gowdk sitemap` route metadata. It follows

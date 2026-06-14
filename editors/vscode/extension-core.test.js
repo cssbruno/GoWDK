@@ -446,6 +446,8 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
         layouts: ['shell'],
         css: ['default', 'forms'],
         components: ['AdminPanel'],
+        imports: [{ alias: 'ui', path: 'example.com/app/ui' }],
+        stores: [{ name: 'cart', type: { alias: 'ui', name: 'CartState' } }],
         assets: ['/assets/admin.png'],
         artifacts: []
       },
@@ -468,9 +470,15 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
   assert.match(html, /layout:shell/);
   assert.match(html, /css:forms/);
   assert.match(html, /Components: AdminPanel/);
+  assert.match(html, /Contracts: .*ui\.CartState/);
   assert.match(html, /Assets: \/assets\/admin\.png/);
   assert.match(html, /GET \/&lt;home&gt; -&gt; spa -&gt; index\.html/);
   assert.match(html, /POST act:save/);
+  assert.match(html, /<button class="node-link route-link" [^>]*>\/z-admin<\/button>/);
+  assert.match(html, /data-definition-file="\/workspace\/admin\.page\.gwdk"/);
+  assert.match(html, /data-definition-line="0"/);
+  assert.match(html, />act:save<\/button>/);
+  assert.match(html, />api:data<\/button>/);
 });
 
 test('completionEntries include expected language constructs', () => {
@@ -683,6 +691,7 @@ test('definitionTarget resolves project symbols to owning source files', () => {
   const metadata = symbolMetadata();
 
   assert.deepEqual(core.definitionTarget('home', metadata), { file: '/workspace/home.page.gwdk', line: 0, column: 0 });
+  assert.deepEqual(core.definitionTarget('/', metadata), { file: '/workspace/home.page.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('Hero', metadata), { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('select', metadata), { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('forms', metadata), { file: '/workspace/styles/forms.css', line: 0, column: 0 });
@@ -692,6 +701,48 @@ test('definitionTarget resolves project symbols to owning source files', () => {
   assert.deepEqual(core.definitionTarget('CartState', metadata), { file: '/workspace/home.page.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('HeroState', metadata), { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 });
   assert.equal(core.definitionTarget('missing', metadata), undefined);
+});
+
+test('definitionTargetForNode resolves map route endpoint and contract nodes', () => {
+  const metadata = symbolMetadata();
+
+  assert.deepEqual(core.definitionTargetForNode({ kind: 'route', value: '/', pageId: 'home' }, metadata), {
+    file: '/workspace/home.page.gwdk',
+    line: 0,
+    column: 0
+  });
+  assert.deepEqual(core.definitionTargetForNode({ kind: 'endpoint', endpointKind: 'action', value: 'submit', pageId: 'home' }, metadata), {
+    file: '/workspace/home.page.gwdk',
+    line: 0,
+    column: 0
+  });
+  assert.deepEqual(core.definitionTargetForNode({ kind: 'endpoint', endpointKind: 'api', value: 'health', pageId: 'home' }, metadata), {
+    file: '/workspace/home.page.gwdk',
+    line: 0,
+    column: 0
+  });
+  assert.deepEqual(core.definitionTargetForNode({ kind: 'contract', value: 'CartState', pageId: 'home' }, metadata), {
+    file: '/workspace/home.page.gwdk',
+    line: 0,
+    column: 0
+  });
+});
+
+test('definitionTargetForNode uses exact endpoint span metadata when available', () => {
+  const metadata = symbolMetadata();
+  metadata.siteMap.endpoints = [{
+    kind: 'api',
+    symbol: 'health',
+    pageId: 'home',
+    source: '/workspace/handlers.go',
+    sourceSpan: { Start: { Line: 12, Column: 3 } }
+  }];
+
+  assert.deepEqual(core.definitionTargetForNode({ kind: 'endpoint', endpointKind: 'api', value: 'health', pageId: 'home' }, metadata), {
+    file: '/workspace/handlers.go',
+    line: 11,
+    column: 2
+  });
 });
 
 test('symbolReferences finds project metadata references at file granularity', () => {

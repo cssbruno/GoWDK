@@ -23,11 +23,13 @@ const (
 	BackendInputTypeInt16       = "int16"
 	BackendInputTypeInt32       = "int32"
 	BackendInputTypeInt64       = "int64"
+	BackendInputTypeRune        = "rune"
 	BackendInputTypeUint        = "uint"
 	BackendInputTypeUint8       = "uint8"
 	BackendInputTypeUint16      = "uint16"
 	BackendInputTypeUint32      = "uint32"
 	BackendInputTypeUint64      = "uint64"
+	BackendInputTypeByte        = "byte"
 	BackendInputTypeStringSlice = "[]string"
 )
 
@@ -47,11 +49,13 @@ var backendInputFieldTypes = map[string]BackendInputFieldTypeInfo{
 	BackendInputTypeInt16:       {Name: BackendInputTypeInt16, Kind: BackendInputFieldKindSignedInt, BitSize: 16},
 	BackendInputTypeInt32:       {Name: BackendInputTypeInt32, Kind: BackendInputFieldKindSignedInt, BitSize: 32},
 	BackendInputTypeInt64:       {Name: BackendInputTypeInt64, Kind: BackendInputFieldKindSignedInt, BitSize: 64},
+	BackendInputTypeRune:        {Name: BackendInputTypeRune, Kind: BackendInputFieldKindSignedInt, BitSize: 32},
 	BackendInputTypeUint:        {Name: BackendInputTypeUint, Kind: BackendInputFieldKindUnsignedInt},
 	BackendInputTypeUint8:       {Name: BackendInputTypeUint8, Kind: BackendInputFieldKindUnsignedInt, BitSize: 8},
 	BackendInputTypeUint16:      {Name: BackendInputTypeUint16, Kind: BackendInputFieldKindUnsignedInt, BitSize: 16},
 	BackendInputTypeUint32:      {Name: BackendInputTypeUint32, Kind: BackendInputFieldKindUnsignedInt, BitSize: 32},
 	BackendInputTypeUint64:      {Name: BackendInputTypeUint64, Kind: BackendInputFieldKindUnsignedInt, BitSize: 64},
+	BackendInputTypeByte:        {Name: BackendInputTypeByte, Kind: BackendInputFieldKindUnsignedInt, BitSize: 8},
 	BackendInputTypeStringSlice: {Name: BackendInputTypeStringSlice, Kind: BackendInputFieldKindStringSlice},
 }
 

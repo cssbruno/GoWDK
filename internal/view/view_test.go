@@ -18,6 +18,26 @@ func TestRenderSPAEscapesTextAndAttributes(t *testing.T) {
 	}
 }
 
+func TestRenderIDAllocatorIsSharedAcrossContextCopies(t *testing.T) {
+	var ctx renderContext
+	if got := ctx.nextBindingID(); got != "b1" {
+		t.Fatalf("expected first binding id b1, got %q", got)
+	}
+	child := ctx
+	if got := child.nextBindingID(); got != "b2" {
+		t.Fatalf("expected copied context to continue binding ids at b2, got %q", got)
+	}
+	if got := ctx.nextBindingID(); got != "b3" {
+		t.Fatalf("expected parent context to observe child allocation and continue at b3, got %q", got)
+	}
+	if got := child.nextLoopGroup(); got != "l1" {
+		t.Fatalf("expected independent first loop group l1, got %q", got)
+	}
+	if got := ctx.nextIslandID(); got != "i1" {
+		t.Fatalf("expected independent first island id i1, got %q", got)
+	}
+}
+
 func TestRenderSPADecodesSourceTextEntitiesBeforeEscaping(t *testing.T) {
 	got, err := RenderSPA(`<pre><code>expected=&#34;$(awk &#39;$2 == &#34;gowdk-darwin-amd64&#34; &#123; print $1 &#125;&#39;)&#34;
 Project &lt;file&gt; stays literal.</code></pre>`)

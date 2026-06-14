@@ -27,7 +27,7 @@ func ValidateContractReferences(refs []gwdkir.ContractReference) error {
 	if len(diagnostics) == 0 {
 		return nil
 	}
-	return ValidationErrors(diagnostics)
+	return normalizeValidationErrors(diagnostics)
 }
 
 func contractReferenceAllowsWeb(ref gwdkir.ContractReference) bool {

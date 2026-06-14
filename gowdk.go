@@ -190,14 +190,23 @@ type SecurityHeadersConfig struct {
 
 const DefaultCSRFSecretEnv = "GOWDK_CSRF_SECRET"
 
-// CSRFConfig controls generated action CSRF token wiring.
+// CSRFConfig controls generated action and command CSRF token wiring.
 type CSRFConfig struct {
 	Enabled    bool
+	Disabled   bool
 	SecretEnv  string
 	CookieName string
 	FieldName  string
 	HeaderName string
 	Insecure   bool
+}
+
+// EnabledForGeneratedEndpoints reports whether generated state-changing
+// endpoints should emit CSRF token injection and validation. CSRF is on by
+// default; Disabled is the explicit opt-out. Enabled is retained for older
+// configs that already set it.
+func (config CSRFConfig) EnabledForGeneratedEndpoints() bool {
+	return !config.Disabled
 }
 
 // SecretEnvName returns the environment variable used by generated apps to

@@ -328,6 +328,7 @@ type HeadConfig struct {
 
 type CSRFConfig struct {
 	Enabled    bool
+	Disabled   bool
 	SecretEnv  string
 	CookieName string
 	FieldName  string
@@ -384,12 +385,15 @@ document. Use page or component `js "./file.js"`, `js "./file.ts"`, or inline
 `js {}` declarations when a browser module should be emitted and linked only
 where that page/component is used.
 
-`CSRF` controls generated action CSRF wiring. When `Enabled` is true, generated
-apps require a signing secret from `SecretEnv` or `GOWDK_CSRF_SECRET`, inject a
-hidden token field into served HTML POST forms, and validate action POSTs before
-generated decoding or user handlers run. Invalid or missing tokens return HTTP
-403 with `invalid csrf token` and `Cache-Control: no-store`. `CookieName`,
-`FieldName`, and `HeaderName` override the generated token transport names.
+`CSRF` controls generated action and web-command CSRF wiring. CSRF is enabled by
+default for generated state-changing form endpoints. Generated apps require a
+signing secret from `SecretEnv` or `GOWDK_CSRF_SECRET`, inject a hidden token
+field into served HTML POST forms, and validate POSTs before generated decoding
+or user handlers run. Invalid or missing tokens return HTTP 403 with
+`invalid csrf token` and `Cache-Control: no-store`. Set `Disabled: true` only
+for an intentional non-production/test opt-out. `Enabled` is retained for older
+configs but is no longer required. `CookieName`, `FieldName`, and `HeaderName`
+override the generated token transport names.
 `Insecure` is for local HTTP development only: it disables the Secure cookie
 flag, uses the default cookie name `gowdk-csrf` instead of
 `__Host-gowdk-csrf`, and rejects explicit `__Host-`/`__Secure-` cookie names
@@ -501,8 +505,8 @@ If `Addons` contains a constructor outside that AST-only subset, the loader
 uses an executable config bridge: it creates a temporary helper inside the
 project module, imports the config package as normal Go, and reads the resulting
 `gowdk.Config`. That allows addons from other modules, including GitHub-hosted
-addons, to participate through the regular `gowdk.Addon` and
-`gowdk.CSSProcessor` interfaces:
+addons, to participate through the regular `gowdk.Addon`,
+`gowdk.CSSProcessor`, and `gowdk.GoBlockConsumer` interfaces:
 
 ```go
 import (

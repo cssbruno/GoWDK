@@ -77,6 +77,7 @@ var Config = gowdk.Config{
 		},
 		CSRF: gowdk.CSRFConfig{
 			Enabled: true,
+			Disabled: true,
 			SecretEnv: "EXAMPLE_CSRF_SECRET",
 			CookieName: "__Host-example-csrf",
 			FieldName: "_example_csrf",
@@ -187,7 +188,7 @@ var Config = gowdk.Config{
 	if config.Build.Head.SiteName != "Example" || config.Build.Head.Favicon != "/favicon.ico" || config.Build.Head.Image != "https://example.com/social.png" || config.Build.Head.TwitterCard != "summary_large_image" {
 		t.Fatalf("unexpected build head config: %#v", config.Build.Head)
 	}
-	if !config.Build.CSRF.Enabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
+	if !config.Build.CSRF.Enabled || !config.Build.CSRF.Disabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
 		t.Fatalf("unexpected build csrf config: %#v", config.Build.CSRF)
 	}
 	if !config.Build.SecurityHeaders.Enabled || config.Build.SecurityHeaders.Headers["Content-Security-Policy"] != "default-src 'self'" || config.Build.SecurityHeaders.Headers["X-Content-Type-Options"] != "nosniff" {
@@ -580,6 +581,8 @@ require (
 	writeTestFile(t, filepath.Join(root, "external", "gowdk-brand", "brand.go"), `package brand
 
 import (
+	"strconv"
+
 	"github.com/cssbruno/gowdk"
 	"github.com/example/gowdk-theme"
 )
@@ -607,13 +610,62 @@ func (addon) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
 		Stylesheets: []gowdk.Stylesheet{{Href: "/assets/brand.css"}},
 	}, nil
 }
+
+func (addon) GoBlockTargets() []string {
+	return []string{"addon.brand"}
+}
+
+func (addon) ValidateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
+	if target.Body == "reject" {
+		return []gowdk.GoBlockDiagnostic{{
+			Code:    "brand_rejected",
+			Message: target.OwnerKind + " rejected during " + string(context.Render),
+		}}
+	}
+	return nil
+}
+
+func (addon) GeneratedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
+	return []gowdk.GoBlockFile{{
+		Path:   "brand/" + target.OwnerID + ".go",
+		Source: "package brand\n\nconst Render = " + strconv.Quote(string(context.Render)) + "\n",
+	}}, nil
+}
 `)
 	writeTestFile(t, filepath.Join(root, "addons", "marker", "marker.go"), `package marker
 
 import "github.com/cssbruno/gowdk"
 
+type addon struct{}
+
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("marker", gowdk.Feature("marker"))
+	return addon{}
+}
+
+func (addon) Name() string {
+	return "marker"
+}
+
+func (addon) Features() []gowdk.Feature {
+	return []gowdk.Feature{gowdk.Feature("marker")}
+}
+
+func (addon) GoBlockTargets() []string {
+	return []string{"addon.marker"}
+}
+
+func (addon) ValidateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
+	return []gowdk.GoBlockDiagnostic{{
+		Code:    "marker_seen",
+		Message: target.Target + " " + target.OwnerPackage,
+	}}
+}
+
+func (addon) GeneratedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
+	return []gowdk.GoBlockFile{{
+		Path:   "marker/generated.go",
+		Source: "package marker\n",
+	}}, nil
 }
 `)
 	path := filepath.Join(root, DefaultConfigFile)
@@ -663,6 +715,20 @@ var Config = gowdk.Config{
 	if _, ok := config.Addons[1].(gowdk.CSSProcessor); ok {
 		t.Fatalf("expected non-css external addon proxy not to implement CSSProcessor, got %T", config.Addons[1])
 	}
+	brandConsumer, ok := config.Addons[0].(gowdk.GoBlockConsumer)
+	if !ok {
+		t.Fatalf("expected css external addon proxy to preserve GoBlockConsumer, got %T", config.Addons[0])
+	}
+	markerConsumer, ok := config.Addons[1].(gowdk.GoBlockConsumer)
+	if !ok {
+		t.Fatalf("expected non-css external addon proxy to preserve GoBlockConsumer, got %T", config.Addons[1])
+	}
+	if targets := brandConsumer.GoBlockTargets(); len(targets) != 1 || targets[0] != "addon.brand" {
+		t.Fatalf("unexpected brand go block targets: %#v", targets)
+	}
+	if targets := markerConsumer.GoBlockTargets(); len(targets) != 1 || targets[0] != "addon.marker" {
+		t.Fatalf("unexpected marker go block targets: %#v", targets)
+	}
 	result, err := processor.ProcessCSS(gowdk.CSSContext{OutputDir: "dist/site"})
 	if err != nil {
 		t.Fatal(err)
@@ -672,6 +738,39 @@ var Config = gowdk.Config{
 	}
 	if len(result.Stylesheets) != 1 || result.Stylesheets[0].Href != "/assets/brand.css" {
 		t.Fatalf("unexpected stylesheets: %#v", result.Stylesheets)
+	}
+	diagnostics := brandConsumer.ValidateGoBlock(gowdk.GoBlockTarget{
+		Target:    "addon.brand",
+		OwnerKind: "page",
+		OwnerID:   "home",
+		Body:      "reject",
+	}, gowdk.GoBlockContext{Render: gowdk.SSR})
+	if len(diagnostics) != 1 || diagnostics[0].Code != "brand_rejected" || diagnostics[0].Message != "page rejected during ssr" {
+		t.Fatalf("unexpected brand diagnostics: %#v", diagnostics)
+	}
+	files, err := brandConsumer.GeneratedGo(gowdk.GoBlockTarget{
+		Target:  "addon.brand",
+		OwnerID: "home",
+	}, gowdk.GoBlockContext{Render: gowdk.Hybrid})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0].Path != "brand/home.go" || !strings.Contains(files[0].Source, `const Render = "hybrid"`) {
+		t.Fatalf("unexpected brand generated files: %#v", files)
+	}
+	markerDiagnostics := markerConsumer.ValidateGoBlock(gowdk.GoBlockTarget{
+		Target:       "addon.marker",
+		OwnerPackage: "pages",
+	}, gowdk.GoBlockContext{})
+	if len(markerDiagnostics) != 1 || markerDiagnostics[0].Code != "marker_seen" || markerDiagnostics[0].Message != "addon.marker pages" {
+		t.Fatalf("unexpected marker diagnostics: %#v", markerDiagnostics)
+	}
+	markerFiles, err := markerConsumer.GeneratedGo(gowdk.GoBlockTarget{Target: "addon.marker"}, gowdk.GoBlockContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(markerFiles) != 1 || markerFiles[0].Path != "marker/generated.go" {
+		t.Fatalf("unexpected marker generated files: %#v", markerFiles)
 	}
 }
 

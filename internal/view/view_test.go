@@ -18,6 +18,26 @@ func TestRenderSPAEscapesTextAndAttributes(t *testing.T) {
 	}
 }
 
+func TestRenderIDAllocatorIsSharedAcrossContextCopies(t *testing.T) {
+	var ctx renderContext
+	if got := ctx.nextBindingID(); got != "b1" {
+		t.Fatalf("expected first binding id b1, got %q", got)
+	}
+	child := ctx
+	if got := child.nextBindingID(); got != "b2" {
+		t.Fatalf("expected copied context to continue binding ids at b2, got %q", got)
+	}
+	if got := ctx.nextBindingID(); got != "b3" {
+		t.Fatalf("expected parent context to observe child allocation and continue at b3, got %q", got)
+	}
+	if got := child.nextLoopGroup(); got != "l1" {
+		t.Fatalf("expected independent first loop group l1, got %q", got)
+	}
+	if got := ctx.nextIslandID(); got != "i1" {
+		t.Fatalf("expected independent first island id i1, got %q", got)
+	}
+}
+
 func TestRenderSPADecodesSourceTextEntitiesBeforeEscaping(t *testing.T) {
 	got, err := RenderSPA(`<pre><code>expected=&#34;$(awk &#39;$2 == &#34;gowdk-darwin-amd64&#34; &#123; print $1 &#125;&#39;)&#34;
 Project &lt;file&gt; stays literal.</code></pre>`)
@@ -931,8 +951,8 @@ func TestRenderWithComponentsLowersGForList(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`<template data-gowdk-for="l1" data-gowdk-binding-list="b1" data-gowdk-for-var="item" data-gowdk-for-source="Items" data-gowdk-for-key="item.ID"`,
-		`data-gowdk-for-template="&lt;li data-gowdk-for-item=&#34;l1&#34; data-gowdk-key-value=&#34;{{item.ID}}&#34;&gt;{{item.Name}}&lt;/li&gt;"`,
+		`<template data-gowdk-for="l1" data-gowdk-binding-list="b1" data-gowdk-for-var="item" data-gowdk-for-source="Items" data-gowdk-for-key="item.ID">`,
+		`<li data-gowdk-for-item="l1" data-gowdk-key-value="{{item.ID}}">{{item.Name}}</li></template>`,
 		`<li data-gowdk-for-item="l1" data-gowdk-key-value="first">first</li>`,
 		`<li data-gowdk-for-item="l1" data-gowdk-key-value="second">second</li>`,
 	} {
@@ -1469,6 +1489,11 @@ func TestRenderSPARejectsUnsafeLiteralMarkup(t *testing.T) {
 			message: "protocol-relative URLs are not supported",
 		},
 		{
+			name:    "slash backslash action",
+			source:  `<form action="/\\example.com/post"></form>`,
+			message: "protocol-relative URLs are not supported",
+		},
+		{
 			name:    "control character url",
 			source:  `<a href="java\nscript:alert(1)">Bad</a>`,
 			message: "control characters are not allowed",
@@ -1526,6 +1551,11 @@ func TestRenderWithDataRejectsInterpolatedUnsafeURLAttributes(t *testing.T) {
 		{
 			name:    "protocol relative",
 			url:     "//example.com/post",
+			message: "protocol-relative URLs are not supported",
+		},
+		{
+			name:    "slash backslash",
+			url:     `/\example.com/post`,
 			message: "protocol-relative URLs are not supported",
 		},
 		{

@@ -47,6 +47,13 @@ type MemoryResult struct {
 	Files map[string][]byte
 }
 
+// MemoryBuildOptions controls path metadata for in-memory builds.
+type MemoryBuildOptions struct {
+	// OutputBase is a virtual output root used for artifact path metadata.
+	// Empty defaults to "." and never requires a real directory on disk.
+	OutputBase string
+}
+
 type plannedArtifact struct {
 	Artifact
 	contents []byte

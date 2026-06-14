@@ -2,7 +2,6 @@ package appgen
 
 import (
 	"context"
-	"fmt"
 	"go/format"
 	"io"
 	"net"
@@ -1657,45 +1656,54 @@ func TestAppShellSourceEmitterDoesNotUseRawTemplates(t *testing.T) {
 	}
 }
 
-func TestGeneratedGoIdentifierHelperRejectsInvalidNames(t *testing.T) {
-	for _, name := range []string{"", "1handler", "handler-name", "type"} {
-		t.Run(name, func(t *testing.T) {
-			expectGeneratedIdentifierPanic(t, "invalid generated Go identifier", func() {
-				_ = id(name)
-			})
-		})
+func TestActionHandlerSourceReturnsInvalidGeneratedIdentifierError(t *testing.T) {
+	_, err := actionHandlerSource([]ActionEndpoint{invalidGeneratedIdentifierActionEndpoint()}, false)
+	assertInvalidGeneratedIdentifierError(t, err)
+}
+
+func TestGenerateWithOptionsReturnsInvalidGeneratedIdentifierError(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "Login", "index.html"), "<main>Login</main>")
+
+	_, err := GenerateWithOptions(outputDir, appDir, Options{
+		Actions: []ActionEndpoint{invalidGeneratedIdentifierActionEndpoint()},
+	})
+	assertInvalidGeneratedIdentifierError(t, err)
+}
+
+func invalidGeneratedIdentifierActionEndpoint() ActionEndpoint {
+	return ActionEndpoint{
+		PageID:       "Login",
+		ActionName:   "Login",
+		Method:       http.MethodPost,
+		Route:        "/Login",
+		BackendAlias: "auth",
+		Binding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/auth",
+			PackageName:  "auth",
+			FunctionName: "Login",
+			Signature:    source.BackendSignatureActionForm,
+			InputType:    "LoginInput",
+			InputFields: []source.BackendInputField{{
+				FieldName: "Email-Address",
+				FormName:  "email",
+				Type:      "string",
+			}},
+		},
 	}
 }
 
-func TestGeneratedGoSelectorHelperRejectsEmptySelectors(t *testing.T) {
-	expectGeneratedIdentifierPanic(t, "selector requires at least one identifier", func() {
-		_ = sel()
-	})
-}
-
-func TestBoundActionDecoderRejectsInvalidGeneratedInputFieldIdentifier(t *testing.T) {
-	expectGeneratedIdentifierPanic(t, "invalid generated Go identifier", func() {
-		_ = boundActionFieldDecodeStmts(0, source.BackendInputField{
-			FieldName: "Email-Address",
-			FormName:  "email",
-			Type:      "string",
-		})
-	})
-}
-
-func expectGeneratedIdentifierPanic(t *testing.T, want string, fn func()) {
+func assertInvalidGeneratedIdentifierError(t *testing.T, err error) {
 	t.Helper()
-	defer func() {
-		recovered := recover()
-		if recovered == nil {
-			t.Fatalf("expected panic containing %q", want)
-		}
-		message := fmt.Sprint(recovered)
-		if !strings.Contains(message, want) {
-			t.Fatalf("panic = %q, want containing %q", message, want)
-		}
-	}()
-	fn()
+	if err == nil {
+		t.Fatal("expected invalid generated identifier error")
+	}
+	if !strings.Contains(err.Error(), `invalid generated Go identifier "Email-Address"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestGeneratedPackageSourceIsGoFormatted(t *testing.T) {

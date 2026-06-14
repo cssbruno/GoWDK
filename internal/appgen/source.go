@@ -15,7 +15,9 @@ import (
 	"github.com/cssbruno/gowdk"
 )
 
-func appPackageSource(options Options) (string, error) {
+func appPackageSource(options Options) (source string, err error) {
+	defer recoverGeneratedIdentifierError(&err)
+
 	direct := options
 	if options.ProxyBackend {
 		direct.Actions = nil
@@ -715,7 +717,9 @@ func csrfEnabled(options Options) bool {
 	return options.Config.Build.CSRF.Enabled && (adapter.HasEndpointKind(BackendEndpointAction) || contractExposuresParseForm(executableContractExposures(adapter.ContractExposures)))
 }
 
-func csrfHelperSource(options Options) (string, error) {
+func csrfHelperSource(options Options) (source string, err error) {
+	defer recoverGeneratedIdentifierError(&err)
+
 	if !csrfEnabled(options) {
 		return "", nil
 	}

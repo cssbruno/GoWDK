@@ -7,7 +7,9 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func apiHandlerSource(apis []APIEndpoint) (string, error) {
+func apiHandlerSource(apis []APIEndpoint) (source string, err error) {
+	defer recoverGeneratedIdentifierError(&err)
+
 	return printActionDecls([]ast.Decl{apiFuncDecl(backendAdapterIR(Options{APIs: apis}).APIs, false)})
 }
 

@@ -224,6 +224,33 @@ func TestRenderWithComponentsWiresMultipleBindableChildState(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsRejectsBindingMergedWithModifiedExportsListener(t *testing.T) {
+	_, err := RenderWithComponents(`<Parent />`, map[string]Component{
+		"Parent": {
+			Name:       "Parent",
+			State:      map[string]string{"SelectedID": "first", "Seen": "false"},
+			StateJSON:  `{"SelectedID":"first","Seen":false}`,
+			StateTypes: map[string]clientlang.ValueType{"SelectedID": clientlang.TypeString, "Seen": clientlang.TypeBool},
+			Body:       `<Child g:bind:selected={SelectedID} g:on:exports.once={Seen = event.active} />`,
+		},
+		"Child": {
+			Name:         "Child",
+			State:        map[string]string{"selected": ""},
+			StateJSON:    `{"selected":""}`,
+			StateTypes:   map[string]clientlang.ValueType{"selected": clientlang.TypeString},
+			Exports:      map[string]clientlang.ValueType{"selected": clientlang.TypeString},
+			HandlersJSON: `{"exports":["selected"]}`,
+			Body:         `<p>{selected}</p>`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected modifier merge error")
+	}
+	if !strings.Contains(err.Error(), `incompatible modifiers for parent event "exports"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRenderWithComponentsRejectsBindableChildStateWithoutExport(t *testing.T) {
 	_, err := RenderWithComponents(`<Parent />`, map[string]Component{
 		"Parent": {

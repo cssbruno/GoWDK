@@ -376,21 +376,18 @@ func (ctx *renderContext) writeSymbols() map[string]clientlang.ValueType {
 // listener for the same event instead of rejecting it. This lets a component
 // bind several exported state fields at once (multiple g:bind:<export>) or pair
 // a g:on:exports handler with bindings: their expressions are joined and run as
-// ordered statements in the browser. Conflicting non-empty event modifiers are
-// rejected because a single data-gowdk-parent-event-* attribute cannot carry
-// both.
+// ordered statements in the browser. Different event modifiers are rejected
+// because a single data-gowdk-parent-event-* attribute cannot preserve separate
+// listener timing for each merged expression.
 func addParentListener(listeners []parentComponentListener, next parentComponentListener) ([]parentComponentListener, error) {
 	for i, existing := range listeners {
 		if existing.Event != next.Event {
 			continue
 		}
-		if existing.Modifiers != "" && next.Modifiers != "" && existing.Modifiers != next.Modifiers {
-			return listeners, fmt.Errorf("declares conflicting modifiers for parent event %q", next.Event)
+		if existing.Modifiers != next.Modifiers {
+			return listeners, fmt.Errorf("declares incompatible modifiers for parent event %q", next.Event)
 		}
 		existing.Expression = existing.Expression + "; " + next.Expression
-		if existing.Modifiers == "" {
-			existing.Modifiers = next.Modifiers
-		}
 		listeners[i] = existing
 		return listeners, nil
 	}

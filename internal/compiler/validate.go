@@ -86,6 +86,7 @@ func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) Val
 	diagnostics = append(diagnostics, validateUniquePages(ir.Pages)...)
 	diagnostics = append(diagnostics, validateUniqueComponents(ir.Components)...)
 	diagnostics = append(diagnostics, validateComponentEmits(ir.Components)...)
+	diagnostics = append(diagnostics, validateComponentExports(ir.Components)...)
 	diagnostics = append(diagnostics, validateComponentGoContracts(ir.Components)...)
 	diagnostics = append(diagnostics, validateComponentStoreUses(ir.Pages, ir.Components)...)
 	diagnostics = append(diagnostics, validatePersistedStoreConflicts(ir.Pages)...)

@@ -442,7 +442,7 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
         route: '/z-admin',
         render: 'ssr',
         source: '/workspace/admin.page.gwdk',
-        blocks: { load: true, view: true, actions: ['save'], apis: ['data'] },
+        blocks: { load: true, view: true, actions: ['save'], apis: ['data'], fragments: ['panel'] },
         layouts: ['shell'],
         css: ['default', 'forms'],
         components: ['AdminPanel'],
@@ -459,6 +459,70 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
         blocks: { view: true },
         artifacts: [{ kind: 'html', path: 'index.html' }]
       }
+    ],
+    routes: [
+      {
+        kind: 'spa',
+        method: 'GET',
+        route: '/<home>',
+        pageId: '<home>',
+        source: '/workspace/home.page.gwdk',
+        sourceSpan: { start: { line: 4, column: 1 } }
+      },
+      {
+        kind: 'ssr',
+        method: 'GET',
+        route: '/z-admin',
+        pageId: 'admin',
+        source: '/workspace/admin.page.gwdk',
+        sourceSpan: { start: { line: 5, column: 1 } }
+      },
+      {
+        kind: 'hybrid',
+        method: 'GET',
+        route: '/z-admin/hybrid',
+        pageId: 'admin',
+        source: '/workspace/admin.page.gwdk'
+      }
+    ],
+    endpoints: [
+      {
+        kind: 'action',
+        method: 'POST',
+        route: '/z-admin/save',
+        pageId: 'admin',
+        symbol: 'save',
+        bindingStatus: 'missing',
+        source: '/workspace/admin.page.gwdk'
+      },
+      {
+        kind: 'api',
+        method: 'GET',
+        route: '/api/data',
+        pageId: 'admin',
+        symbol: 'data',
+        bindingStatus: 'bound',
+        source: '/workspace/admin.page.gwdk'
+      },
+      {
+        kind: 'fragment',
+        method: 'GET',
+        route: '/z-admin/panel',
+        pageId: 'admin',
+        symbol: 'panel',
+        bindingStatus: 'unsupported_signature',
+        source: '/workspace/admin.page.gwdk'
+      },
+      {
+        kind: 'command',
+        endpointSource: 'contract',
+        method: 'POST',
+        route: '/z-admin',
+        pageId: 'admin',
+        symbol: 'ui.Save',
+        source: '/workspace/admin.page.gwdk',
+        contract: { name: 'ui.Save', kind: 'command', status: 'unknown' }
+      }
     ]
   }, '/workspace');
 
@@ -471,9 +535,17 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
   assert.match(html, /css:forms/);
   assert.match(html, /Components: AdminPanel/);
   assert.match(html, /Contracts: .*ui\.CartState/);
+  assert.match(html, /Routes: .*GET \/z-admin ssr \[partial\]/);
+  assert.match(html, /Routes: .*GET \/z-admin\/hybrid hybrid \[planned\]/);
+  assert.match(html, /Routes: .*GET \/&lt;home&gt; spa \[implemented\]/);
+  assert.match(html, /Endpoints: .*POST \/z-admin\/save action:save \[missing\]/);
+  assert.match(html, /Endpoints: .*GET \/api\/data api:data \[implemented\]/);
+  assert.match(html, /Endpoints: .*GET \/z-admin\/panel fragment:panel \[unsupported\]/);
+  assert.match(html, /Endpoints: .*POST \/z-admin command:ui\.Save \[partial\]/);
   assert.match(html, /Assets: \/assets\/admin\.png/);
   assert.match(html, /GET \/&lt;home&gt; -&gt; spa -&gt; index\.html/);
   assert.match(html, /POST act:save/);
+  assert.match(html, /FRAGMENT panel/);
   assert.match(html, /<button class="node-link route-link" [^>]*>\/z-admin<\/button>/);
   assert.match(html, /data-definition-file="\/workspace\/admin\.page\.gwdk"/);
   assert.match(html, /data-definition-line="0"/);

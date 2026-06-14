@@ -518,9 +518,13 @@ function pageCard(page, root, metadata = {}) {
     .map(([key]) => key);
   const actions = (page.blocks && page.blocks.actions) || [];
   const apis = (page.blocks && page.blocks.apis) || [];
+  const fragments = (page.blocks && page.blocks.fragments) || [];
   const css = page.css || [];
   const components = page.components || [];
   const assets = page.assets || [];
+  const routeNodes = routeNodesForPage(page, metadata);
+  const endpointNodes = endpointNodesForPage(page, metadata);
+  const contractRefs = pageContractRefs(page);
   const tags = [
     { label: page.render },
     ...blocks.map((block) => ({
@@ -535,6 +539,10 @@ function pageCard(page, root, metadata = {}) {
       label: `api:${name}`,
       target: definitionTargetForNode({ kind: 'endpoint', endpointKind: 'api', value: name, pageId: page.id }, metadata) || sourceLocation(page)
     })),
+    ...fragments.map((name) => ({
+      label: `fragment:${name}`,
+      target: definitionTargetForNode({ kind: 'endpoint', endpointKind: 'fragment', value: name, pageId: page.id }, metadata) || sourceLocation(page)
+    })),
     ...(page.layouts || []).map((layout) => ({
       label: `layout:${layout}`,
       target: definitionTargetForNode({ kind: 'layout', value: layout, pageId: page.id }, metadata)
@@ -545,6 +553,8 @@ function pageCard(page, root, metadata = {}) {
     }))
   ].filter(Boolean);
   const details = [
+    routeNodes.length ? detailNodeList('Routes', routeNodes) : '',
+    endpointNodes.length ? detailNodeList('Endpoints', endpointNodes) : '',
     css.length ? detailNodeList('CSS', css.map((name) => ({
       label: name,
       target: definitionTargetForNode({ kind: 'css', value: name, pageId: page.id }, metadata)
@@ -553,7 +563,7 @@ function pageCard(page, root, metadata = {}) {
       label: name,
       target: definitionTargetForNode({ kind: 'component', value: name, pageId: page.id }, metadata)
     }))) : '',
-    pageContractRefs(page).length ? detailNodeList('Contracts', pageContractRefs(page).map((contract) => ({
+    contractRefs.length ? detailNodeList('Contracts', contractRefs.map((contract) => ({
       label: contract.label,
       target: definitionTargetForNode({ kind: 'contract', value: contract.value, pageId: page.id }, metadata) || sourceLocation(page)
     }))) : '',
@@ -574,6 +584,160 @@ function pageCard(page, root, metadata = {}) {
 
 function detailNodeList(label, nodes) {
   return `${escapeHTML(label)}: ${nodes.map((node) => nodeLink(node.label, node.target)).join(', ')}`;
+}
+
+function routeNodesForPage(page = {}, metadata = {}) {
+  const routes = siteMapRouteEntries(metadata).filter((route) => routeBelongsToPage(route, page));
+  if (routes.length > 0) {
+    return routes.map((route) => ({
+      label: routeNodeLabel(route),
+      target: sourceLocation(route) || definitionTargetForNode({ kind: 'route', value: route.route, pageId: route.pageId || route.pageID || page.id }, metadata) || sourceLocation(page)
+    }));
+  }
+  if (!page.route) {
+    return [];
+  }
+  return [{
+    label: routeNodeLabel({
+      kind: page.render || 'spa',
+      method: 'GET',
+      route: page.route,
+      pageId: page.id
+    }),
+    target: definitionTargetForNode({ kind: 'route', value: page.route, pageId: page.id }, metadata) || sourceLocation(page)
+  }];
+}
+
+function endpointNodesForPage(page = {}, metadata = {}) {
+  const endpoints = siteMapEndpointEntries(metadata).filter((endpoint) => endpointBelongsToPage(endpoint, page));
+  if (endpoints.length > 0) {
+    return endpoints.map((endpoint) => ({
+      label: endpointNodeLabel(endpoint),
+      target: sourceLocation(endpoint) || endpointFallbackTarget(endpoint, page, metadata)
+    }));
+  }
+  const blocks = page.blocks || {};
+  return [
+    ...(blocks.actions || []).map((name) => fallbackEndpointNode(page, metadata, 'action', name, 'POST')),
+    ...(blocks.apis || []).map((name) => fallbackEndpointNode(page, metadata, 'api', name, 'API')),
+    ...(blocks.fragments || []).map((name) => fallbackEndpointNode(page, metadata, 'fragment', name, 'GET'))
+  ];
+}
+
+function fallbackEndpointNode(page, metadata, kind, name, method) {
+  return {
+    label: endpointNodeLabel({
+      kind,
+      method,
+      symbol: name,
+      route: '',
+      bindingStatus: ''
+    }),
+    target: definitionTargetForNode({ kind: 'endpoint', endpointKind: kind, value: name, pageId: page.id }, metadata) || sourceLocation(page)
+  };
+}
+
+function siteMapRouteEntries(metadata = {}) {
+  return [
+    ...(((metadata.siteMap || {}).routes) || []),
+    ...(metadata.routes || [])
+  ];
+}
+
+function siteMapEndpointEntries(metadata = {}) {
+  return [
+    ...(((metadata.siteMap || {}).endpoints) || []),
+    ...(metadata.endpoints || [])
+  ];
+}
+
+function routeBelongsToPage(route = {}, page = {}) {
+  const pageID = route.pageId || route.pageID;
+  if (pageID && page.id) {
+    return pageID === page.id;
+  }
+  return Boolean(route.route && page.route && route.route === page.route);
+}
+
+function endpointBelongsToPage(endpoint = {}, page = {}) {
+  const pageID = endpoint.pageId || endpoint.pageID;
+  if (pageID && page.id) {
+    return pageID === page.id;
+  }
+  return Boolean(endpoint.route && page.route && endpoint.route === page.route);
+}
+
+function routeNodeLabel(route = {}) {
+  return [
+    route.method || 'GET',
+    route.route || '(missing route)',
+    route.kind || 'route',
+    `[${routeStatus(route)}]`
+  ].join(' ');
+}
+
+function endpointNodeLabel(endpoint = {}) {
+  return [
+    endpoint.method || endpointMethodFallback(endpoint.kind),
+    endpoint.route || '',
+    `${endpoint.kind || 'endpoint'}:${endpointName(endpoint)}`,
+    `[${endpointStatus(endpoint)}]`
+  ].filter(Boolean).join(' ');
+}
+
+function endpointName(endpoint = {}) {
+  return endpoint.symbol ||
+    endpoint.name ||
+    (endpoint.contract && endpoint.contract.name) ||
+    endpoint.handler ||
+    '(unnamed)';
+}
+
+function endpointFallbackTarget(endpoint, page, metadata) {
+  return definitionTargetForNode({
+    kind: 'endpoint',
+    endpointKind: endpoint.kind,
+    value: endpointName(endpoint),
+    pageId: endpoint.pageId || endpoint.pageID || page.id,
+    route: endpoint.route,
+    method: endpoint.method
+  }, metadata) || sourceLocation(page);
+}
+
+function endpointMethodFallback(kind) {
+  if (kind === 'action' || kind === 'command') {
+    return 'POST';
+  }
+  return 'GET';
+}
+
+function routeStatus(route = {}) {
+  switch (route.kind) {
+    case 'static':
+    case 'spa':
+      return 'implemented';
+    case 'ssr':
+      return 'partial';
+    case 'hybrid':
+      return 'planned';
+    default:
+      return 'partial';
+  }
+}
+
+function endpointStatus(endpoint = {}) {
+  const status = endpoint.bindingStatus || endpoint.status || (endpoint.contract && endpoint.contract.status) || '';
+  switch (status) {
+    case 'bound':
+      return 'implemented';
+    case 'missing':
+      return 'missing';
+    case 'unsupported_signature':
+    case 'invalid':
+      return 'unsupported';
+    default:
+      return 'partial';
+  }
 }
 
 function chipNode(label, target) {
@@ -646,9 +810,11 @@ function pageFlow(page) {
   const steps = [`GET ${route}`, render, output];
   const actions = (page.blocks && page.blocks.actions) || [];
   const apis = (page.blocks && page.blocks.apis) || [];
+  const fragments = (page.blocks && page.blocks.fragments) || [];
   const sideEffects = [
     ...actions.map((name) => `POST act:${name}`),
-    ...apis.map((name) => `API ${name || '(unnamed)'}`)
+    ...apis.map((name) => `API ${name || '(unnamed)'}`),
+    ...fragments.map((name) => `FRAGMENT ${name || '(unnamed)'}`)
   ];
   return sideEffects.length ? `${steps.join(' -> ')} | ${sideEffects.join(' | ')}` : steps.join(' -> ');
 }

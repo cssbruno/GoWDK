@@ -151,8 +151,10 @@ Fields:
 The site-map command emits broader editor-facing JSON that includes source
 paths, dynamic route params, block presence, and the normalized route graph.
 The route graph adds `routes` entries for page/file routes and `endpoints`
-entries for action/API declarations, including method, path, page ID, symbol,
-package, and backend binding summary fields.
+entries for action, API, fragment, and command/query contract declarations.
+Route and endpoint entries include method, path, page ID, source path, source
+span when known, package, handler, status/binding summary fields, and contract
+binding details for command/query references.
 
 `gowdk build` also writes a separate SPA route manifest named
 `gowdk-routes.json` in the selected output directory. That generated file records

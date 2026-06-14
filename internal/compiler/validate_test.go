@@ -4791,9 +4791,33 @@ func TestValidateManifestAllowsKnownAddonGoBlockTarget(t *testing.T) {
 		},
 	}}}
 
-	err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("contracts", gowdk.FeatureContracts)}}, app)
+	err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{compilerGoBlockAddon{}}}, app)
 	if err != nil {
 		t.Fatalf("expected known addon target to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsMarkerAddonGoBlockTarget(t *testing.T) {
+	app := appFixture{Pages: []gwdkir.Page{{
+		ID:      "home",
+		Package: "pages",
+		Route:   "/",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+			GoBlocks: []gwdkir.GoBlock{{
+				Target: "addon.contracts",
+				Body:   `func RegisterContracts() {}`,
+			}},
+		},
+	}}}
+
+	err := validateManifest(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("contracts", gowdk.FeatureContracts)}}, app)
+	if err == nil {
+		t.Fatal("expected marker addon go block target error")
+	}
+	if !strings.Contains(err.Error(), `does not implement gowdk.GoBlockConsumer`) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

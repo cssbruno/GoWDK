@@ -227,10 +227,79 @@ func runGeneratedAppAuditTests(options cliOptions, ir gwdkir.Program) (string, s
 	if err != nil {
 		return "", "", err
 	}
+	if err := writeGeneratedAppAuditRunHooks(app.AppDir, ir); err != nil {
+		return "", "", err
+	}
 
 	testPath := filepath.Join(app.AppDir, "gowdkapp", "gowdk_audit_test.go")
 	output, err := runGeneratedAppTestPackage(app.AppDir)
 	return testPath, output, err
+}
+
+func writeGeneratedAppAuditRunHooks(appDir string, ir gwdkir.Program) error {
+	if !auditProgramUsesNativeRBACGuards(ir) {
+		return nil
+	}
+	hookPath := filepath.Join(appDir, "gowdkapp", "gowdk_audit_hooks_test.go")
+	return os.WriteFile(hookPath, []byte(`package gowdkapp
+
+import (
+	"net/http"
+	"strings"
+
+	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
+)
+
+func GOWDKAuthProvider() gowdkauth.Provider {
+	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
+		actor := strings.TrimSpace(request.Header.Get("X-GOWDK-Audit-Actor"))
+		switch {
+		case actor == "" || actor == "anonymous":
+			return nil, nil
+		case strings.HasPrefix(actor, "role:"):
+			return &gowdkauth.Principal{ID: "audit", Roles: []string{strings.TrimPrefix(actor, "role:")}}, nil
+		case strings.HasPrefix(actor, "permission:"):
+			return &gowdkauth.Principal{ID: "audit", Permissions: []string{strings.TrimPrefix(actor, "permission:")}}, nil
+		default:
+			return &gowdkauth.Principal{ID: "audit", Roles: []string{actor}}, nil
+		}
+	})
+}
+`), 0o644)
+}
+
+func auditProgramUsesNativeRBACGuards(ir gwdkir.Program) bool {
+	for _, page := range ir.Pages {
+		if auditGuardsUseNativeRBAC(page.Guards) {
+			return true
+		}
+	}
+	for _, route := range ir.Routes {
+		if auditGuardsUseNativeRBAC(route.Guards) {
+			return true
+		}
+	}
+	for _, endpoint := range ir.Endpoints {
+		if auditGuardsUseNativeRBAC(endpoint.Guards) {
+			return true
+		}
+	}
+	for _, ref := range ir.ContractRefs {
+		if auditGuardsUseNativeRBAC(ref.Guards) {
+			return true
+		}
+	}
+	return false
+}
+
+func auditGuardsUseNativeRBAC(guards []string) bool {
+	for _, guard := range guards {
+		guard = strings.TrimSpace(guard)
+		if strings.HasPrefix(guard, "role:") || strings.HasPrefix(guard, "permission:") {
+			return true
+		}
+	}
+	return false
 }
 
 func runGeneratedAppTestPackage(appDir string) (string, error) {

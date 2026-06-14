@@ -248,6 +248,44 @@ view {
 	}
 }
 
+func TestAuditCommandRunSupportsActorExpectationsAgainstGeneratedApp(t *testing.T) {
+	root := t.TempDir()
+	config := writeAuditCLIConfigWithSSR(t, root)
+	writeCLITestModule(t, root, "example.com/gowdk-audit-run-actor")
+	pagePath := filepath.Join(root, "admin.page.gwdk")
+	writeCLIFile(t, pagePath, `package app
+
+page admin
+route "/admin"
+guard role:admin
+
+go ssr {
+}
+
+view {
+  <main>Admin</main>
+}
+`)
+	auditPath := filepath.Join(root, "security.audit.gwdk")
+	writeCLIFile(t, auditPath, `package app
+
+test admin {
+  expect GET "/admin" as "role:admin" status 200
+  expect GET "/admin" as "anonymous" status 403
+}
+`)
+
+	_, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--config", config, "--run", pagePath, auditPath})
+	})
+	if err != nil {
+		t.Fatalf("expected generated app audit actor tests to pass: %v\nstderr:\n%s", err, stderr)
+	}
+	if !strings.Contains(stderr, "audit generated app tests passed:") {
+		t.Fatalf("expected generated app audit test pass message, got %q", stderr)
+	}
+}
+
 func TestAuditCommandReportsRuntimeAuditTestFailure(t *testing.T) {
 	root := t.TempDir()
 	config := writeMinimalCLIConfig(t, root)
@@ -307,6 +345,23 @@ var Config = gowdk.Config{
 			},
 		},
 	},
+}
+`)
+	return path
+}
+
+func writeAuditCLIConfigWithSSR(t *testing.T, root string) string {
+	t.Helper()
+	path := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, path, `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/ssr"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{ssr.Addon()},
 }
 `)
 	return path

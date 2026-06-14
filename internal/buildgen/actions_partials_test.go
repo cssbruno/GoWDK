@@ -44,7 +44,7 @@ func TestBuildLowersGPostDirectiveForActionPage(t *testing.T) {
 
 func TestBuildSynthesizesActionInputAttrsFromBindingFields(t *testing.T) {
 	outputDir := t.TempDir()
-	ir := gwdkir.Program{Version: gwdkir.Version, Pages: []gwdkir.Page{{
+	ir := gwdkir.Program{Pages: []gwdkir.Page{{
 		ID:     "signup",
 		Route:  "/signup",
 		Render: gowdk.Action,

@@ -9,7 +9,6 @@ import (
 
 func TestActionEndpointsFromIR(t *testing.T) {
 	ir := gwdkir.Program{
-		Version: gwdkir.Version,
 		Pages: []gwdkir.Page{{
 			ID:    "newsletter",
 			Route: "/newsletter",
@@ -61,7 +60,6 @@ func TestActionEndpointsFromIR(t *testing.T) {
 
 func TestAPIEndpointsFromIR(t *testing.T) {
 	endpoints, err := apiEndpointsFromIR(gwdkir.Program{
-		Version: gwdkir.Version,
 		Pages: []gwdkir.Page{{
 			ID:    "status",
 			Route: "/status",
@@ -80,7 +78,6 @@ func TestAPIEndpointsFromIR(t *testing.T) {
 
 func TestFragmentEndpointsFromIR(t *testing.T) {
 	endpoints, err := fragmentEndpointsFromIR(gwdkir.Program{
-		Version: gwdkir.Version,
 		Components: []gwdkir.Component{{
 			Name:    "PatientCard",
 			Package: "components",
@@ -127,7 +124,6 @@ func TestFragmentEndpointsFromIR(t *testing.T) {
 
 func TestFragmentEndpointsFromIRPopulatesRouteParams(t *testing.T) {
 	endpoints, err := fragmentEndpointsFromIR(gwdkir.Program{
-		Version: gwdkir.Version,
 		Pages: []gwdkir.Page{{
 			ID:    "patients",
 			Route: "/patients",
@@ -162,7 +158,6 @@ func TestFragmentEndpointsFromIRPopulatesRouteParams(t *testing.T) {
 
 func TestStandaloneGoEndpointsFromIR(t *testing.T) {
 	ir := gwdkir.Program{
-		Version: gwdkir.Version,
 		Endpoints: []gwdkir.Endpoint{
 			{
 				Kind:   gwdkir.EndpointAction,

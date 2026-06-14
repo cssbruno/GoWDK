@@ -64,9 +64,6 @@ func BuildTree(ir gwdkir.Program) TreeReport {
 		ID:   "program",
 		Kind: "program",
 		Name: "GOWDK Program",
-		Props: map[string]any{
-			"irVersion": ir.Version,
-		},
 	}
 	packages := append([]gwdkir.Package(nil), ir.Packages...)
 	sort.Slice(packages, func(i, j int) bool { return packages[i].Name < packages[j].Name })

@@ -439,7 +439,6 @@ func TestBuildReportIncludesQueryContractReferences(t *testing.T) {
 func TestBuildReportIncludesBoundContractReferenceRoles(t *testing.T) {
 	outputDir := t.TempDir()
 	result, err := BuildFromIR(gowdk.Config{}, gwdkir.Program{
-		Version: gwdkir.Version,
 		Pages: []gwdkir.Page{{
 			Source: "pages/patients.page.gwdk",
 			ID:     "patients",

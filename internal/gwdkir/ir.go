@@ -7,11 +7,8 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-const Version = 1
-
 // Program is the normalized compiler IR produced from analyzed .gwdk sources.
 type Program struct {
-	Version         int
 	Packages        []Package
 	Pages           []Page
 	Components      []Component
@@ -25,7 +22,6 @@ type Program struct {
 	ClientBehaviors []ClientBehavior
 	Assets          []Asset
 	Diagnostics     []Diagnostic
-	Generated       GeneratedOutput
 }
 
 // Diagnostic records an author-facing problem found while assembling IR.
@@ -553,22 +549,3 @@ const (
 	AssetFile AssetKind = "asset"
 	AssetWASM AssetKind = "wasm"
 )
-
-// GeneratedOutput is the stable planning shape for generated artifacts.
-type GeneratedOutput struct {
-	GoPackages []GeneratedGoPackage
-	Files      []GeneratedFile
-}
-
-type GeneratedGoPackage struct {
-	Name    string
-	Path    string
-	Purpose string
-	Imports []Import
-}
-
-type GeneratedFile struct {
-	Path    string
-	Kind    string
-	OwnerID string
-}

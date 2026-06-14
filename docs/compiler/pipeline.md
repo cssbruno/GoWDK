@@ -42,13 +42,14 @@ boundaries so one syntax error does not hide later declarations in the same
 file.
 
 `internal/gwdkanalysis` assembles parsed page, component, and layout records
-into a versioned `internal/gwdkir.Program`. The IR models packages, source
+into `internal/gwdkir.Program`. The IR models packages, source
 files, page routes, backend endpoints from `.gwdk` declarations or explicit Go
 comments, templates, client behavior, source-selected assets, and
-generated-output plans. Build, memory build, incremental SPA build, SSR
+asset scope/hash metadata. Build, memory build, incremental SPA build, SSR
 artifact, generated app planning, route reports, LSP metadata, and the public
-`gowdk manifest` report consume `internal/gwdkir.Program`. Route and asset
-manifests are generated output artifacts, not compiler handoff records.
+`gowdk manifest` report consume `internal/gwdkir.Program` and own their output
+planning separately. Route and asset manifests are generated output artifacts,
+not compiler handoff records.
 Generated app Go, backend adapter Go, build-data helper Go, and starter config
 Go are constructed as Go ASTs, printed, and formatted before use or write.
 

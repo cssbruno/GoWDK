@@ -7,19 +7,15 @@ import (
 
 // CheckInvariants reports structural defects in a Program that indicate a
 // compiler bug rather than an authoring error. The checks only assert what IR
-// construction guarantees regardless of source validity: version stamping,
-// deterministic ordering, closed enum values, and cross-slice references that
-// the builder creates together (routes to pages, templates and assets to their
-// owners). Authoring problems such as duplicate page IDs or conflicting routes
-// are user-facing diagnostics owned by the compiler validators, not invariants.
+// construction guarantees regardless of source validity: deterministic
+// ordering, closed enum values, and cross-slice references that the builder
+// creates together (routes to pages, templates and assets to their owners).
+// Authoring problems such as duplicate page IDs or conflicting routes are
+// user-facing diagnostics owned by the compiler validators, not invariants.
 func CheckInvariants(program Program) error {
 	var violations []string
 	report := func(format string, args ...any) {
 		violations = append(violations, fmt.Sprintf(format, args...))
-	}
-
-	if program.Version != Version {
-		report("program version is %d, expected %d", program.Version, Version)
 	}
 
 	pages := make(map[string]bool, len(program.Pages))

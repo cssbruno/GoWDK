@@ -134,7 +134,6 @@ func TestBuildRouteMetadataMapsHybridWithLoadToHybridRoute(t *testing.T) {
 
 func TestBuildRouteMetadataFromIR(t *testing.T) {
 	metadata := BuildRouteMetadataFromIR(gowdk.Config{}, gwdkir.Program{
-		Version: gwdkir.Version,
 		Routes: []gwdkir.Route{
 			{Kind: gwdkir.RouteSPA, Method: "GET", Path: "/newsletter", PageID: "newsletter", Render: gowdk.SPA},
 			{Kind: gwdkir.RouteSSR, Method: "GET", Path: "/dashboard", PageID: "dashboard", Render: gowdk.SSR},

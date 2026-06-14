@@ -4241,7 +4241,6 @@ view {
 	}
 
 	var report struct {
-		Version  int `json:"Version"`
 		Packages []struct {
 			Name  string `json:"Name"`
 			Files []struct {
@@ -4280,9 +4279,6 @@ view {
 	}
 	if err := json.Unmarshal([]byte(output), &report); err != nil {
 		t.Fatalf("invalid inspect ir JSON: %v\n%s", err, output)
-	}
-	if report.Version != 1 {
-		t.Fatalf("unexpected IR version: %d", report.Version)
 	}
 	if len(report.Pages) != 1 || report.Pages[0].ID != "newsletter" || report.Pages[0].Route != "/newsletter" {
 		t.Fatalf("unexpected page IR: %#v", report.Pages)

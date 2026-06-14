@@ -7,7 +7,6 @@ import (
 
 func validProgram() Program {
 	return Program{
-		Version:    Version,
 		Packages:   []Package{{Name: "main"}, {Name: "shop"}},
 		Pages:      []Page{{ID: "home", Package: "main", Route: "/"}},
 		Components: []Component{{Name: "ProductCard", Package: "shop"}},
@@ -46,7 +45,7 @@ func TestCheckInvariantsAcceptsValidProgram(t *testing.T) {
 }
 
 func TestCheckInvariantsAcceptsEmptyProgram(t *testing.T) {
-	if err := CheckInvariants(Program{Version: Version}); err != nil {
+	if err := CheckInvariants(Program{}); err != nil {
 		t.Fatalf("CheckInvariants() = %v, want nil", err)
 	}
 }
@@ -57,11 +56,6 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 		corrupt func(*Program)
 		want    string
 	}{
-		{
-			name:    "wrong version",
-			corrupt: func(p *Program) { p.Version = 0 },
-			want:    "program version is 0",
-		},
 		{
 			name:    "duplicate package",
 			corrupt: func(p *Program) { p.Packages = []Package{{Name: "main"}, {Name: "main"}} },
@@ -188,13 +182,13 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 
 func TestCheckInvariantsJoinsAllViolations(t *testing.T) {
 	program := validProgram()
-	program.Version = 0
 	program.Routes[0].PageID = "ghost"
+	program.Assets[0].OwnerID = "ghost"
 	err := CheckInvariants(program)
 	if err == nil {
 		t.Fatal("CheckInvariants() = nil, want error")
 	}
-	for _, want := range []string{"program version is 0", `unknown page "ghost"`} {
+	for _, want := range []string{`route "/" references unknown page "ghost"`, `asset "home.css" references unknown owner "ghost"`} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("CheckInvariants() = %q, want error containing %q", err, want)
 		}

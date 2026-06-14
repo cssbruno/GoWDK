@@ -2596,7 +2596,12 @@ func TestGenerateAutoRoutesRequiresIR(t *testing.T) {
 
 func TestGenerateBackendAutoRoutesRejectsInvalidIR(t *testing.T) {
 	appDir := filepath.Join(t.TempDir(), "generated-backend")
-	invalidIR := &gwdkir.Program{}
+	invalidIR := &gwdkir.Program{Routes: []gwdkir.Route{{
+		Kind:   gwdkir.RouteSPA,
+		Method: "GET",
+		Path:   "/",
+		PageID: "missing",
+	}}}
 
 	_, err := GenerateBackendWithOptions(appDir, Options{AutoRoutes: true, IR: invalidIR})
 	if err == nil || !strings.Contains(err.Error(), "invalid compiler IR: invalid IR") {
@@ -3659,7 +3664,7 @@ func TestGenerateWritesAddonGoBlockConsumerFiles(t *testing.T) {
 	appDir := filepath.Join(root, "generated-app")
 	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
-	program := gwdkir.Program{Version: gwdkir.Version, Pages: []gwdkir.Page{{
+	program := gwdkir.Program{Pages: []gwdkir.Page{{
 		ID:      "patients",
 		Package: "pages",
 		Source:  "patients.page.gwdk",

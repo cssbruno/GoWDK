@@ -278,6 +278,7 @@ wire in with `gowdk add <addon>` (see `gowdk add --list`):
 | `embed` | Embed build output into the binary |
 | `partial` | Fragment/partial responses |
 | `ratelimit` | Request-time rate limiting |
+| `seo` | Build-time sitemap.xml and robots.txt output |
 | `ssr` | Server-side rendering |
 
 Heavier integrations (Tailwind, Redis, NATS, WebSocket fanout) live in nested

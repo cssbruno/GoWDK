@@ -348,12 +348,36 @@ const (
 	FeatureContracts Feature = "contracts"
 	FeatureAuth      Feature = "auth"
 	FeatureDB        Feature = "db"
+	FeatureSEO       Feature = "seo"
 )
 
 // Addon is the minimal contract every optional GOWDK capability implements.
 type Addon interface {
 	Name() string
 	Features() []Feature
+}
+
+// SEOURL describes one additional URL that an SEO addon can add to the
+// generated sitemap. Loc may be absolute or root-relative.
+type SEOURL struct {
+	Loc        string
+	LastMod    string
+	ChangeFreq string
+	Priority   string
+}
+
+// SEOOptions configures build-time sitemap.xml and robots.txt emission.
+type SEOOptions struct {
+	BaseURL          string
+	Disallow         []string
+	ExtraURLs        []SEOURL
+	ExtraURLProvider func() []SEOURL `json:"-"`
+}
+
+// SEOProvider is implemented by addons that can supply build-time SEO output
+// options to the compiler.
+type SEOProvider interface {
+	SEOOptions() SEOOptions
 }
 
 // GoBlockConsumer is an optional addon extension point for targeted go blocks

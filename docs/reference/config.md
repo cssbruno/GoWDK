@@ -461,17 +461,18 @@ under `/assets/gowdk/`.
 ## Addons
 
 `Addons` registers optional features such as spa, actions, partial, SSR, API,
-embed, CSS, and rate limiting. Current validation uses SSR feature registration
-for render-mode checks, and SPA builds invoke addons that implement
-`gowdk.CSSProcessor`.
+embed, CSS, rate limiting, contracts, auth, DB, and SEO output. Current
+validation uses SSR feature registration for render-mode checks, and SPA builds
+invoke addons that implement `gowdk.CSSProcessor` or `gowdk.SEOProvider`.
 
 Use `gowdk add --list` to print built-in addon names, and `gowdk add <name>` to
 insert the canonical import and `<name>.Addon()` constructor into
 `gowdk.config.go`. The command rewrites literal `Config.Addons` lists only; if
 `Addons` is computed by Go code, edit the config manually.
 
-The literal config loader recognizes built-in no-argument addon constructors
-when they are imported from their canonical package paths:
+The literal config loader recognizes built-in addon constructors when they are
+imported from their canonical package paths. Most are no-argument constructors;
+`addons/seo` also accepts the literal SEO options subset:
 
 ```go
 import (
@@ -481,6 +482,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/embed"
 	"github.com/cssbruno/gowdk/addons/partial"
 	"github.com/cssbruno/gowdk/addons/ratelimit"
+	"github.com/cssbruno/gowdk/addons/seo"
 	"github.com/cssbruno/gowdk/addons/spa"
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/addons/static"
@@ -497,6 +499,9 @@ var Config = gowdk.Config{
 		embed.Addon(),
 		css.Addon(),
 		ratelimit.Addon(),
+		seo.Addon(seo.Options{
+			BaseURL: "https://example.com",
+		}),
 	},
 }
 ```
@@ -506,7 +511,8 @@ uses an executable config bridge: it creates a temporary helper inside the
 project module, imports the config package as normal Go, and reads the resulting
 `gowdk.Config`. That allows addons from other modules, including GitHub-hosted
 addons, to participate through the regular `gowdk.Addon`,
-`gowdk.CSSProcessor`, and `gowdk.GoBlockConsumer` interfaces:
+`gowdk.CSSProcessor`, `gowdk.SEOProvider`, and `gowdk.GoBlockConsumer`
+interfaces:
 
 ```go
 import (

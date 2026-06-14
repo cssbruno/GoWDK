@@ -30,6 +30,8 @@ type Result struct {
 	AssetArtifacts       []AssetArtifact
 	RouteManifestPath    string
 	AssetManifestPath    string
+	SitemapPath          string
+	RobotsPath           string
 	OpenAPIPath          string
 	SecurityManifestPath string
 	BuildReportPath      string

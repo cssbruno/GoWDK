@@ -246,6 +246,12 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	if result.AssetManifestPath != "" {
 		fmt.Println(result.AssetManifestPath)
 	}
+	if result.SitemapPath != "" {
+		fmt.Println(result.SitemapPath)
+	}
+	if result.RobotsPath != "" {
+		fmt.Println(result.RobotsPath)
+	}
 	if result.OpenAPIPath != "" {
 		fmt.Println(result.OpenAPIPath)
 	}

@@ -54,7 +54,7 @@ jobs:
 
       - name: Check example files
         run: |
-          examples="examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk"
+          examples="examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk"
           go run ./cmd/gowdk check --ssr $examples
           go run ./cmd/gowdk manifest --ssr $examples
           go run ./cmd/gowdk sitemap --ssr $examples
@@ -97,6 +97,15 @@ jobs:
           rm -rf /tmp/gowdk-css-build
           go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk
           grep -F '<link rel="stylesheet" href="/assets/site.css">' /tmp/gowdk-css-build/styled/index.html
+
+      - name: Smoke build SEO addon output
+        run: |
+          rm -rf /tmp/gowdk-seo-build
+          go run ./cmd/gowdk build --config examples/seo/gowdk.config.go --out /tmp/gowdk-seo-build examples/seo/*.gwdk
+          test -f /tmp/gowdk-seo-build/sitemap.xml
+          test -f /tmp/gowdk-seo-build/robots.txt
+          grep -F 'https://example.com/blog/hello-gowdk' /tmp/gowdk-seo-build/sitemap.xml
+          grep -F 'Sitemap: https://example.com/sitemap.xml' /tmp/gowdk-seo-build/robots.txt
 
       - name: Smoke build embedded binary example
         run: |

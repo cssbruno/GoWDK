@@ -15,6 +15,7 @@ Reference docs describe current command and data contracts.
 - `contracts.md`: current runtime contract registry and planned compiler integration.
 - `css.md`: current CSS extension point.
 - `images.md`: image optimization patterns and current non-goals.
+- `seo.md`: optional sitemap.xml and robots.txt emission.
 - `manifest.md`: current manifest JSON.
 - `addons.md`: current addon feature registration.
 - `diagnostics.md`: current diagnostic output.

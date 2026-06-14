@@ -4,8 +4,9 @@ Addons register feature IDs with the compiler. Core framework capabilities
 such as SSR, actions, APIs, auth, DB, contracts, and rate limiting are fixed
 GOWDK-owned features; enabling their feature IDs selects compiler and generator
 logic in GOWDK itself. External addon behavior is limited to documented public
-interfaces: `gowdk.CSSProcessor` for build-time CSS output and
-`gowdk.GoBlockConsumer` for targeted `go addon.<name> {}` blocks.
+interfaces: `gowdk.CSSProcessor` for build-time CSS output,
+`gowdk.SEOProvider` for build-time SEO files, and `gowdk.GoBlockConsumer` for
+targeted `go addon.<name> {}` blocks.
 
 The config loader parses built-in addon constructors from `gowdk.config.go`
 through the Go AST when possible. If an addon constructor comes from another
@@ -26,6 +27,7 @@ Current feature IDs:
 - `contracts`
 - `auth`
 - `db`
+- `seo`
 
 Current packages:
 
@@ -42,6 +44,7 @@ Current packages:
 - `addons/contracts`
 - `addons/auth`
 - `addons/db`
+- `addons/seo`
 
 `addons/static` is the build-time static page output boundary. `addons/spa`
 remains available for existing configs and static-first SPA navigation; both
@@ -62,16 +65,17 @@ modules or discover third-party addons.
 
 `gowdk.NewAddon(name, features...)` creates a marker addon for feature checks.
 It does not by itself make the compiler, app generator, or runtime call
-third-party code; implement `CSSProcessor` or `GoBlockConsumer` when the addon
-needs behavior.
+third-party code; implement `CSSProcessor`, `SEOProvider`, or
+`GoBlockConsumer` when the addon needs behavior.
 
 The current compiler validator checks whether SSR is enabled when a page uses
 `load {}` or `go ssr {}`. SPA builds invoke addons that implement
-`gowdk.CSSProcessor`. Generated app builds invoke configured addons that
-implement `gowdk.GoBlockConsumer` for `go addon.<name> {}` blocks.
+`gowdk.CSSProcessor` or `gowdk.SEOProvider`. Generated app builds invoke
+configured addons that implement `gowdk.GoBlockConsumer` for
+`go addon.<name> {}` blocks.
 
-The literal config loader recognizes no-argument constructors for these
-built-ins:
+The literal config loader recognizes no-argument constructors for most
+built-ins and the literal SEO options subset for `addons/seo`:
 
 ```go
 Addons: []gowdk.Addon{
@@ -85,6 +89,7 @@ Addons: []gowdk.Addon{
 	css.Addon(),
 	ratelimit.Addon(),
 	contracts.Addon(),
+	seo.Addon(seo.Options{}),
 }
 ```
 
@@ -159,6 +164,10 @@ Redis-backed store adapter. It does not add a Redis client dependency or choose
 an application policy automatically. When `ratelimit.Addon()` is enabled and a
 generated app has action, API, fragment, SSR, or split-backend proxy routes, the
 generated package exposes `RegisterRateLimiter(*ratelimit.Limiter)`.
+
+`addons/seo` emits `sitemap.xml` and `robots.txt` at build time. It requires
+`seo.Options.BaseURL`, includes static and `paths {}`-expanded SPA routes, and
+records request-time route exclusions in the build report. See [seo.md](seo.md).
 
 ```go
 store := ratelimit.NewInMemoryStore(ratelimit.InMemoryOptions{})

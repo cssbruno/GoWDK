@@ -1439,6 +1439,7 @@ func TestAddCommandListsKnownAddons(t *testing.T) {
 		"embed",
 		"partial",
 		"ratelimit",
+		"seo",
 		"ssr",
 		"static",
 	} {
@@ -1478,6 +1479,43 @@ var Config = gowdk.Config{}
 	for _, expected := range []string{
 		`"github.com/cssbruno/gowdk/addons/ssr"`,
 		"Addons: []gowdk.Addon{ssr.Addon()}",
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected updated config to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestAddCommandWiresSEOAddonWithOptions(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "seo", "--config", config})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `added addon "seo"`) {
+		t.Fatalf("expected add confirmation, got:\n%s", stdout)
+	}
+	payload, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`"github.com/cssbruno/gowdk/addons/seo"`,
+		"Addons: []gowdk.Addon{seo.Addon(seo.Options{})}",
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected updated config to contain %q:\n%s", expected, source)

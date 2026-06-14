@@ -26,6 +26,7 @@ type addonSpec struct {
 	ImportPath string
 	Package    string
 	Summary    string
+	Options    string
 }
 
 // addonRegistry lists the addons `gowdk add <name>` understands. Each maps to a
@@ -85,6 +86,13 @@ var addonRegistry = map[string]addonSpec{
 		ImportPath: "github.com/cssbruno/gowdk/addons/ratelimit",
 		Package:    "ratelimit",
 		Summary:    "request-time rate limiting",
+	},
+	"seo": {
+		Name:       "seo",
+		ImportPath: "github.com/cssbruno/gowdk/addons/seo",
+		Package:    "seo",
+		Summary:    "build-time sitemap.xml and robots.txt output",
+		Options:    "Options",
 	},
 	"ssr": {
 		Name:       "ssr",
@@ -264,6 +272,12 @@ func appendAddon(configLit *ast.CompositeLit, spec addonSpec) error {
 		X:   ast.NewIdent(spec.Package),
 		Sel: ast.NewIdent("Addon"),
 	}}
+	if spec.Options != "" {
+		call.Args = []ast.Expr{&ast.CompositeLit{Type: &ast.SelectorExpr{
+			X:   ast.NewIdent(spec.Package),
+			Sel: ast.NewIdent(spec.Options),
+		}}}
+	}
 
 	if field, ok := addonsField(configLit); ok {
 		if literal, ok := field.Value.(*ast.CompositeLit); ok {

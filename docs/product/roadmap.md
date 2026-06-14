@@ -118,8 +118,8 @@ level, the current baseline already includes:
   imported, same-package, and default `go {}` build data subsets, layouts, components, CSS
   assets, route manifests, asset manifests, build reports, generated app
   output, non-served security posture reports, embedded assets, local binaries,
-  generated Docker contexts for one-binary deploys, WASM deploy artifacts, and a
-  polling dev server with live reload;
+  generated Docker contexts for one-binary deploys, WASM deploy artifacts,
+  optional sitemap/robots output, and a polling dev server with live reload;
 - component discovery, imported props/state contracts, slots, generated
   JavaScript islands, component-level WASM island assets, and a first-slice client
   language for local component behavior;
@@ -263,10 +263,10 @@ without making any minor version a production-readiness target.
   generated Docker contexts, richer platform manifests, and rollback before any
   production-ready claim.
 - P2 ecosystem polish is owned by optional docs, examples, website pages, or
-  CLI generators: addon discovery, performance
-  profiling, migration guides, image guidance, and PWA/offline guidance must
-  not add mandatory npm, framework, or platform dependencies to the repository
-  core.
+  CLI generators: addon discovery, performance profiling, migration guides,
+  image guidance, SEO metadata beyond sitemap/robots, and PWA/offline guidance
+  must not add mandatory npm, framework, or platform dependencies to the
+  repository core.
 
 ## Non-Goals For Repository Core
 

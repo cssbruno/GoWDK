@@ -117,6 +117,28 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 	}
 	result.RouteManifestPath = manifestPath
 	reporter.info("manifest", "route_manifest_written", "route manifest written", BuildEvent{Path: eventPath(outputDir, manifestPath)})
+	seoPlan, err := planSEOArtifacts(config, ir, result.Artifacts)
+	if err != nil {
+		return Result{}, reporter.fail("seo", err)
+	}
+	reportSEOExclusions(reporter, seoPlan.Exclusions)
+	sitemapPath, robotsPath, sitemapWrote, robotsWrote, err := writeSEOArtifacts(outputDir, seoPlan)
+	if err != nil {
+		return Result{}, reporter.fail("seo", err)
+	}
+	if sitemapPath != "" {
+		recordWriteStat(&result, sitemapWrote)
+		result.SitemapPath = sitemapPath
+		reporter.info("seo", "sitemap_written", "sitemap written", BuildEvent{
+			Path: eventPath(outputDir, sitemapPath),
+			Data: map[string]string{"urls": fmt.Sprint(len(seoPlan.URLs))},
+		})
+	}
+	if robotsPath != "" {
+		recordWriteStat(&result, robotsWrote)
+		result.RobotsPath = robotsPath
+		reporter.info("seo", "robots_written", "robots.txt written", BuildEvent{Path: eventPath(outputDir, robotsPath)})
+	}
 	assetManifestPath, err := writeAssetManifest(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)
@@ -300,6 +322,22 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	}
 	result.Files[routeManifestFile] = routeManifest
 	reporter.info("manifest", "route_manifest_collected", "route manifest collected", BuildEvent{Path: routeManifestFile})
+	seoPlan, err := planSEOArtifacts(config, ir, result.Artifacts)
+	if err != nil {
+		return MemoryResult{}, reporter.fail("seo", err)
+	}
+	reportSEOExclusions(reporter, seoPlan.Exclusions)
+	if seoPlan.Enabled {
+		result.SitemapPath = filepath.Join(outputDir, sitemapFile)
+		result.RobotsPath = filepath.Join(outputDir, robotsFile)
+		result.Files[sitemapFile] = seoPlan.Sitemap
+		result.Files[robotsFile] = seoPlan.Robots
+		reporter.info("seo", "sitemap_collected", "sitemap collected", BuildEvent{
+			Path: sitemapFile,
+			Data: map[string]string{"urls": fmt.Sprint(len(seoPlan.URLs))},
+		})
+		reporter.info("seo", "robots_collected", "robots.txt collected", BuildEvent{Path: robotsFile})
+	}
 	assetManifest, err := assetManifestPayload(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return MemoryResult{}, reporter.fail("manifest", err)
@@ -592,6 +630,28 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	}
 	result.RouteManifestPath = manifestPath
 	reporter.info("manifest", "route_manifest_written", "route manifest written", BuildEvent{Path: eventPath(outputDir, manifestPath)})
+	seoPlan, err := planSEOArtifacts(config, ir, result.Artifacts)
+	if err != nil {
+		return Result{}, reporter.fail("seo", err)
+	}
+	reportSEOExclusions(reporter, seoPlan.Exclusions)
+	sitemapPath, robotsPath, sitemapWrote, robotsWrote, err := writeSEOArtifacts(outputDir, seoPlan)
+	if err != nil {
+		return Result{}, reporter.fail("seo", err)
+	}
+	if sitemapPath != "" {
+		recordWriteStat(&result, sitemapWrote)
+		result.SitemapPath = sitemapPath
+		reporter.info("seo", "sitemap_written", "sitemap written", BuildEvent{
+			Path: eventPath(outputDir, sitemapPath),
+			Data: map[string]string{"urls": fmt.Sprint(len(seoPlan.URLs))},
+		})
+	}
+	if robotsPath != "" {
+		recordWriteStat(&result, robotsWrote)
+		result.RobotsPath = robotsPath
+		reporter.info("seo", "robots_written", "robots.txt written", BuildEvent{Path: eventPath(outputDir, robotsPath)})
+	}
 	assetManifestPath, err := writeAssetManifest(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)

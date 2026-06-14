@@ -20,6 +20,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/embed"
 	"github.com/cssbruno/gowdk/addons/partial"
 	"github.com/cssbruno/gowdk/addons/ratelimit"
+	"github.com/cssbruno/gowdk/addons/seo"
 	"github.com/cssbruno/gowdk/addons/spa"
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/addons/static"
@@ -890,6 +891,10 @@ func parseAddons(expression ast.Expr, imports map[string]string) ([]gowdk.Addon,
 			addons = append(addons, addon)
 			continue
 		}
+		if addon, ok := parseSEOAddon(element, imports); ok {
+			addons = append(addons, addon)
+			continue
+		}
 		if addon, ok := parseTailwindAddon(element, imports); ok {
 			addons = append(addons, addon)
 			continue
@@ -931,6 +936,8 @@ func parseBuiltInAddon(expression ast.Expr, imports map[string]string) (gowdk.Ad
 		return partial.Addon(), true
 	case ratelimit.ImportPath:
 		return ratelimit.Addon(), true
+	case seo.ImportPath:
+		return seo.Addon(), true
 	case spa.ImportPath:
 		return spa.Addon(), true
 	case ssr.ImportPath:
@@ -940,6 +947,136 @@ func parseBuiltInAddon(expression ast.Expr, imports map[string]string) (gowdk.Ad
 	default:
 		return nil, false
 	}
+}
+
+func parseSEOAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon, bool) {
+	call, ok := expression.(*ast.CallExpr)
+	if !ok {
+		return nil, false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Addon" {
+		return nil, false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	if !ok || imports[packageName.Name] != seo.ImportPath {
+		return nil, false
+	}
+	if len(call.Args) > 1 {
+		return nil, false
+	}
+	if len(call.Args) == 0 {
+		return seo.Addon(), true
+	}
+
+	options, ok := parseSEOOptions(call.Args[0], imports)
+	if !ok {
+		return nil, false
+	}
+	return seo.Addon(options), true
+}
+
+func parseSEOOptions(expression ast.Expr, imports map[string]string) (seo.Options, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok || !isSEOOptionsType(literal.Type, imports) {
+		return seo.Options{}, false
+	}
+
+	var options seo.Options
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "BaseURL":
+			options.BaseURL = parseString(keyValue.Value)
+		case "Disallow":
+			options.Disallow = parseStringList(keyValue.Value)
+		case "ExtraURLs":
+			values, ok := parseSEOURLList(keyValue.Value, imports)
+			if !ok {
+				return seo.Options{}, false
+			}
+			options.ExtraURLs = values
+		default:
+			return seo.Options{}, false
+		}
+	}
+	return options, true
+}
+
+func isSEOOptionsType(expression ast.Expr, imports map[string]string) bool {
+	selector, ok := expression.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Options" {
+		return false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	return ok && imports[packageName.Name] == seo.ImportPath
+}
+
+func parseSEOURLList(expression ast.Expr, imports map[string]string) ([]gowdk.SEOURL, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil, false
+	}
+	var urls []gowdk.SEOURL
+	for _, element := range literal.Elts {
+		url, ok := parseSEOURL(element, imports)
+		if !ok {
+			return nil, false
+		}
+		urls = append(urls, url)
+	}
+	return urls, true
+}
+
+func parseSEOURL(expression ast.Expr, imports map[string]string) (gowdk.SEOURL, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok || !isSEOURLType(literal.Type, imports) {
+		return gowdk.SEOURL{}, false
+	}
+
+	var url gowdk.SEOURL
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "Loc":
+			url.Loc = parseString(keyValue.Value)
+		case "LastMod":
+			url.LastMod = parseString(keyValue.Value)
+		case "ChangeFreq":
+			url.ChangeFreq = parseString(keyValue.Value)
+		case "Priority":
+			url.Priority = parseString(keyValue.Value)
+		default:
+			return gowdk.SEOURL{}, false
+		}
+	}
+	return url, true
+}
+
+func isSEOURLType(expression ast.Expr, imports map[string]string) bool {
+	if expression == nil {
+		return true
+	}
+	selector, ok := expression.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "URL" {
+		return false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	return ok && imports[packageName.Name] == seo.ImportPath
 }
 
 func parseTailwindAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon, bool) {

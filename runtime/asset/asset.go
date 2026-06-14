@@ -50,8 +50,6 @@ func (manifest Manifest) URL(name string) string {
 	if resolved == "" {
 		return ""
 	}
-	if strings.HasPrefix(resolved, "/") {
-		return resolved
-	}
-	return "/" + strings.TrimLeft(resolved, "/")
+	resolved = strings.ReplaceAll(resolved, `\`, "/")
+	return "/" + strings.TrimLeft(resolved, `/\`)
 }

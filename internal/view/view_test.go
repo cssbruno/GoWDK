@@ -1469,6 +1469,11 @@ func TestRenderSPARejectsUnsafeLiteralMarkup(t *testing.T) {
 			message: "protocol-relative URLs are not supported",
 		},
 		{
+			name:    "slash backslash action",
+			source:  `<form action="/\\example.com/post"></form>`,
+			message: "protocol-relative URLs are not supported",
+		},
+		{
 			name:    "control character url",
 			source:  `<a href="java\nscript:alert(1)">Bad</a>`,
 			message: "control characters are not allowed",
@@ -1526,6 +1531,11 @@ func TestRenderWithDataRejectsInterpolatedUnsafeURLAttributes(t *testing.T) {
 		{
 			name:    "protocol relative",
 			url:     "//example.com/post",
+			message: "protocol-relative URLs are not supported",
+		},
+		{
+			name:    "slash backslash",
+			url:     `/\example.com/post`,
 			message: "protocol-relative URLs are not supported",
 		},
 		{

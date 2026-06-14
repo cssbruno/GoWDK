@@ -2800,7 +2800,7 @@ func TestGenerateRejectsUnsafeActionRedirect(t *testing.T) {
 		{redirect: "https://example.com", message: "must be a local absolute path"},
 		{redirect: "//example.com", message: "must not be protocol-relative"},
 		{redirect: "/login\nSet-Cookie: bad=true", message: "must not contain newlines"},
-		{redirect: `/\evil.com`, message: "must not contain backslashes"},
+		{redirect: `/\evil.com`, message: "must not be protocol-relative"},
 		{redirect: `\\evil.com`, message: "must be a local absolute path"},
 		{redirect: `/foo\..\\evil.com`, message: "must not contain backslashes"},
 	}

@@ -103,6 +103,6 @@ must pass `--config <file>`.
   route manifest refreshes, and stale route output cleanup.
 - `internal/project` tests cover literal `gowdk.config.go` parsing for source
   discovery, module source groups, build output, and build targets.
-- Nested optional adapter modules cover Echo, Fiber, Gin, Redis Streams, NATS,
-  and WebSocket integration packages without adding those third-party
+- Nested optional adapter modules cover Chi, Echo, Fiber, Gin, Redis Streams,
+  NATS, and WebSocket integration packages without adding those third-party
   dependencies to the root module graph.

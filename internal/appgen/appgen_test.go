@@ -1496,6 +1496,8 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 					{FieldName: "Tags", FormName: "tag", Type: "[]string"},
 					{FieldName: "Age", FormName: "age", Type: "int"},
 					{FieldName: "Remember", FormName: "remember", Type: "bool"},
+					{FieldName: "Code", FormName: "code", Type: "byte"},
+					{FieldName: "Letter", FormName: "letter", Type: "rune"},
 				},
 			},
 		},
@@ -1549,6 +1551,10 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 		`input.Age = int(field2)`,
 		`field3, ok, err := gowdkform.Bool(values, "remember")`,
 		`input.Remember = field3`,
+		`field4, ok, err := gowdkform.Uint(values, "code", 8)`,
+		`input.Code = byte(field4)`,
+		`field5, ok, err := gowdkform.Int(values, "letter", 32)`,
+		`input.Letter = rune(field5)`,
 		`input, err := decodeLoginLoginBoundInput(values)`,
 		`ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "action", PageID: "Login", Name: "Login", Method: "POST", Path: "/Login"})`,
 		`result, err := auth.Login(ctx, input)`,
@@ -1572,6 +1578,25 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 	if strings.Contains(source, `gowdkpartial "github.com/cssbruno/gowdk/addons/partial"`) {
 		t.Fatalf("bound action fragments must not import partial helpers when generated partial branches are not emitted:\n%s", source)
 	}
+}
+
+func TestBoundActionDecoderRejectsUnsupportedInputFieldType(t *testing.T) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("expected unsupported backend input field type panic")
+		}
+		message, ok := recovered.(string)
+		if !ok || !strings.Contains(message, `unsupported backend input field type "float64"`) {
+			t.Fatalf("unexpected panic: %v", recovered)
+		}
+	}()
+
+	boundActionFieldDecodeStmts(0, source.BackendInputField{
+		FieldName: "Score",
+		FormName:  "score",
+		Type:      "float64",
+	})
 }
 
 func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) {

@@ -499,8 +499,8 @@ If `Addons` contains a constructor outside that AST-only subset, the loader
 uses an executable config bridge: it creates a temporary helper inside the
 project module, imports the config package as normal Go, and reads the resulting
 `gowdk.Config`. That allows addons from other modules, including GitHub-hosted
-addons, to participate through the regular `gowdk.Addon` and
-`gowdk.CSSProcessor` interfaces:
+addons, to participate through the regular `gowdk.Addon`,
+`gowdk.CSSProcessor`, and `gowdk.GoBlockConsumer` interfaces:
 
 ```go
 import (

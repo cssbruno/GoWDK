@@ -3690,6 +3690,35 @@ func TestGenerateWritesAddonGoBlockConsumerFiles(t *testing.T) {
 	}
 }
 
+func TestGenerateRejectsUnsupportedAddonGoBlockTarget(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	program := gwdkir.Program{Version: gwdkir.Version, Pages: []gwdkir.Page{{
+		ID:      "patients",
+		Package: "pages",
+		Source:  "patients.page.gwdk",
+		Route:   "/patients",
+		Blocks: gwdkir.Blocks{GoBlocks: []gwdkir.GoBlock{{
+			Target: "addon.contracts",
+			Body:   `func RegisterContracts() {}`,
+		}}},
+	}}}
+
+	_, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("contracts", gowdk.FeatureContracts)}},
+		IR:     &program,
+	})
+	if err == nil {
+		t.Fatal("expected unsupported addon go block target error")
+	}
+	if !strings.Contains(err.Error(), "requires an enabled addon implementing gowdk.GoBlockConsumer") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 type appgenGoBlockAddon struct{}
 
 func (addon appgenGoBlockAddon) Name() string {

@@ -7,6 +7,7 @@ import (
 	"go/format"
 	"go/printer"
 	"go/token"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -430,6 +431,9 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 		keyValue("ErrorPages", errorPagesExpr(options)),
 		keyValue("Backend", backend),
 	}
+	if headers := securityHeadersExpr(options); headers != nil {
+		fields = append(fields, keyValue("SecurityHeaders", headers))
+	}
 	if csrfEnabled(options) {
 		fields = append(fields, keyValue("CSRF", id("csrfTokenSource")))
 	}
@@ -445,6 +449,71 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 		fields = append(fields, keyValue("DeniedPatterns", patterns))
 	}
 	return fields
+}
+
+func securityHeadersExpr(options Options) ast.Expr {
+	if !options.Config.Build.SecurityHeaders.Enabled || len(options.Config.Build.SecurityHeaders.Headers) == 0 {
+		return nil
+	}
+	headers := normalizedSecurityHeaders(options.Config.Build.SecurityHeaders.Headers)
+	if len(headers) == 0 {
+		return nil
+	}
+	elts := make([]ast.Expr, 0, len(headers))
+	for _, header := range headers {
+		elts = append(elts, &ast.KeyValueExpr{
+			Key:   stringLit(header.Name),
+			Value: stringLit(header.Value),
+		})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.MapType{Key: id("string"), Value: id("string")},
+		Elts: elts,
+	}
+}
+
+type normalizedSecurityHeader struct {
+	Name  string
+	Value string
+}
+
+func normalizedSecurityHeaders(headers map[string]string) []normalizedSecurityHeader {
+	type candidate struct {
+		key   string
+		name  string
+		value string
+	}
+	candidates := make([]candidate, 0, len(headers))
+	for name, value := range headers {
+		clean := strings.TrimSpace(name)
+		if clean == "" {
+			continue
+		}
+		candidates = append(candidates, candidate{
+			key:   strings.ToLower(clean),
+			name:  http.CanonicalHeaderKey(clean),
+			value: value,
+		})
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].key != candidates[j].key {
+			return candidates[i].key < candidates[j].key
+		}
+		if candidates[i].name != candidates[j].name {
+			return candidates[i].name < candidates[j].name
+		}
+		return candidates[i].value < candidates[j].value
+	})
+	seen := map[string]bool{}
+	out := make([]normalizedSecurityHeader, 0, len(candidates))
+	for _, candidate := range candidates {
+		if seen[candidate.key] {
+			continue
+		}
+		seen[candidate.key] = true
+		out = append(out, normalizedSecurityHeader{Name: candidate.name, Value: candidate.value})
+	}
+	return out
 }
 
 // deniedPageRoutes returns the concrete (non-dynamic) page routes that declared
@@ -564,10 +633,44 @@ func customErrorPagePaths(options Options) []string {
 }
 
 func backendOnlyHandlerExpr(options Options) ast.Expr {
+	handler := backendOnlyBaseHandlerExpr(options)
+	if headers := securityHeadersExpr(options); headers != nil {
+		return call(sel("http", "HandlerFunc"), backendOnlySecurityHeadersHandlerFunc(handler, headers))
+	}
+	return handler
+}
+
+func backendOnlyBaseHandlerExpr(options Options) ast.Expr {
 	if hasBackendRoutes(options) {
 		return id("backendRouter")
 	}
 	return call(sel("http", "HandlerFunc"), backendOnlyHandlerFunc())
+}
+
+func backendOnlySecurityHeadersHandlerFunc(handler ast.Expr, headers ast.Expr) ast.Expr {
+	return &ast.FuncLit{
+		Type: &ast.FuncType{Params: &ast.FieldList{List: actionParams()}},
+		Body: block(
+			&ast.RangeStmt{
+				Key:   id("name"),
+				Value: id("value"),
+				Tok:   token.DEFINE,
+				X:     headers,
+				Body: block(
+					&ast.IfStmt{
+						Cond: &ast.BinaryExpr{
+							X:  call(sel("strings", "TrimSpace"), id("name")),
+							Op: token.EQL,
+							Y:  stringLit(""),
+						},
+						Body: block(&ast.BranchStmt{Tok: token.CONTINUE}),
+					},
+					exprStmt(call(selExpr(call(selExpr(id("response"), "Header")), "Set"), id("name"), id("value"))),
+				),
+			},
+			exprStmt(call(selExpr(handler, "ServeHTTP"), id("response"), id("request"))),
+		),
+	}
 }
 
 func backendOnlyHandlerFunc() ast.Expr {

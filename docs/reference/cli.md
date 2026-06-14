@@ -23,6 +23,7 @@ gowdk inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--module <na
 gowdk generate stubs [--config <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...]
+gowdk audit [--config <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...]
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
@@ -41,7 +42,7 @@ gowdk lsp [--ssr]
 - `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
 - `--list`: supported by `add`; prints built-in addon names the command can wire.
-- `--json`: supported by `check`, `doctor`, `explain`, `inspect`, `contracts`, `graph`, `trace`, and `list`; prints
+- `--json`: supported by `check`, `doctor`, `audit`, `explain`, `inspect`, `contracts`, `graph`, `trace`, and `list`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available. `gowdk check --json` uses diagnostic
   schema version `1`. `gowdk inspect` emits JSON by default; `--json` is
@@ -50,12 +51,27 @@ gowdk lsp [--ssr]
   diagnostics are present.
 - `gowdk doctor --json`: prints a versioned health report with overall status,
   summary counts, environment metadata, and check records.
+- `gowdk audit`: derives the security posture from validated IR, evaluates the
+  built-in security baseline against it, and reports findings. It is a separate
+  command — `gowdk build` never runs it — so it cannot fail a build implicitly.
+  It exits non-zero when any error-severity finding exists, so it can gate CI.
+  `--json` prints the posture manifest plus findings and a summary. Every finding
+  carries a diagnostic code; run `gowdk explain <code>` for details.
+  `--emit-tests` writes a readable standalone `gowdk_audit_test.go` file (or the
+  path from `--emit-tests=<file>`) that drives a `runtime/app` posture harness
+  through `runtime/testkit`. `--run` builds a temporary generated app from the
+  same validated IR and runs the generated app's audit test with
+  `go test ./gowdkapp`; a failed expectation is reported as
+  `audit_test_failed`.
+  `gowdk build` also writes the posture alone to a non-served
+  `.gowdk/reports/<output-name>/gowdk-security.json` path outside the selected
+  output directory.
 - `--write`: supported by `fmt`; overwrites formatted files.
 - `--dry-run`: supported by `fix`; prints files with available registered fixes
   without writing changes.
 - `--code`: supported by `fix`; limits rewrites to one diagnostic code that has
   a registered fix.
-- `--config`: supported by `add`, `check`, `doctor`, `manifest`, `sitemap`,
+- `--config`: supported by `add`, `check`, `doctor`, `audit`, `manifest`, `sitemap`,
   `routes`, `endpoints`, `inspect`, `generate stubs`, and `build`; selects the
   config file. Compile commands load a literal config subset from the given
   path instead of the required default `gowdk.config.go`.
@@ -72,7 +88,7 @@ gowdk lsp [--ssr]
   command owners.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
-- `--module`: supported by `check`, `doctor`, `manifest`, `sitemap`, `routes`,
+- `--module`: supported by `check`, `doctor`, `audit`, `manifest`, `sitemap`, `routes`,
   `endpoints`, `inspect`, `generate stubs`, and `build`; may be repeated or
   comma-separated, and limits discovery to selected configured modules when no
   explicit file list is passed.
@@ -102,6 +118,9 @@ go run ./cmd/gowdk fix --dry-run --code old_action_block_syntax --config gowdk.c
 go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk
 go run ./cmd/gowdk explain missing_ssr_addon
 go run ./cmd/gowdk explain --json spa_dynamic_route_missing_paths
+go run ./cmd/gowdk audit --config gowdk.config.go
+go run ./cmd/gowdk audit --json --ssr --config gowdk.config.go
+go run ./cmd/gowdk audit --emit-tests --run --config gowdk.config.go
 go run ./cmd/gowdk doctor
 go run ./cmd/gowdk doctor --json
 go run ./cmd/gowdk doctor --module frontend --ssr
@@ -169,7 +188,7 @@ generated outputs. The target's intermediate build output is inferred as
 `--force` is passed. The `minimal` template skips the starter component and
 writes only the config, `.gitignore`, one page, and one CSS file.
 
-`check`, `manifest`, `sitemap`, `routes`, `build`, and `dev` require a config
+`check`, `audit`, `manifest`, `sitemap`, `routes`, `build`, and `dev` require a config
 file before they compile or validate `.gwdk` code. By default they load
 `gowdk.config.go` from the current directory; `--config <file>` can point at a
 different config for project examples or one-off checks.
@@ -213,6 +232,23 @@ discovery, language validation, route metadata construction, and relevant
 optional tools such as Tailwind or Node. Missing config and language failures
 are errors. Missing optional tools are warnings when the project appears to use
 them. The command exits non-zero only when at least one check is an error.
+
+`audit` reports the security posture, not the environment. It derives a
+declarative posture from validated IR — every route, backend endpoint, and
+contract with its guards, CSRF state, body limit, and source location — and
+evaluates the built-in security baseline against it. The baseline encodes the
+production-readiness gates from `docs/engineering/security.md` (for example:
+actions and commands must enforce CSRF, APIs must not be public by omission).
+Findings carry a diagnostic code, a `file:line`, and remediation; run
+`gowdk explain <code>` for details. `audit` never runs as part of `gowdk build`,
+so it cannot fail a build implicitly; run it on demand or wire it into CI,
+where its non-zero exit on error findings gates the pipeline. The posture alone
+is also emitted as `gowdk-security.json` by `gowdk build`, but outside the
+selected output directory in a non-served `.gowdk/reports/<output-name>/` path.
+Declared `*.audit.gwdk` policies are discovered with the rest of the source
+set. `--emit-tests` writes a committable standalone `_test.go`; `--run` builds a
+temporary generated app, executes `go test ./gowdkapp`, and folds failures back
+into the audit report.
 
 `--wasm` produces a Go `js/wasm` compile artifact from the generated app. This
 is a deploy artifact for hosts that can run Go WebAssembly; it is separate from

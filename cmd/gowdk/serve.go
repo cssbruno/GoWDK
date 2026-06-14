@@ -267,6 +267,9 @@ func outputFilePath(root, requestPath string) (string, bool) {
 
 func outputCandidatePath(root, candidate string) (string, bool) {
 	rel := strings.TrimPrefix(path.Clean("/"+candidate), "/")
+	if unsafeServedOutputFile(rel) {
+		return "", false
+	}
 	filePath := filepath.Join(root, filepath.FromSlash(rel))
 	relative, err := filepath.Rel(root, filePath)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
@@ -284,4 +287,8 @@ func outputCandidatePath(root, candidate string) (string, bool) {
 		return "", false
 	}
 	return filePath, true
+}
+
+func unsafeServedOutputFile(rel string) bool {
+	return strings.EqualFold(path.Base(filepath.ToSlash(rel)), "gowdk-security.json")
 }

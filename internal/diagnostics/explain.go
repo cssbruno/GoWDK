@@ -213,6 +213,135 @@ guard public
 			"Deferred behavior (transitions, document targets, DOM actions) belongs to CSS, page metadata, or future addon contracts.",
 		},
 	},
+	"audit_action_missing_csrf": {
+		Details: "gowdk audit derives an action endpoint that decodes a request body without CSRF enforcement. The built-in security baseline (and any require csrf policy) treats this as an error because action POSTs are cross-site-forgeable.",
+		NextSteps: []string{
+			"Set Build.CSRF.Enabled and a runtime CSRF secret so generated actions validate tokens before decoding.",
+			"Override the built-in baseline.actions policy in a *.audit.gwdk file if the endpoint is intentionally exempt.",
+		},
+	},
+	"audit_api_public_by_omission": {
+		Details: "An API endpoint inherits no protective guard, so it would be callable without authorization. The baseline forbids public-by-omission APIs; access must be stated, not granted by omission.",
+		NextSteps: []string{
+			"Add a guard such as guard permission:resource.read to the page that declares the API endpoint.",
+			"Add guard public only when the API is intentionally unauthenticated, and confirm the policy allows it.",
+		},
+	},
+	"audit_bundle_secret": {
+		Details: "The embedded build output or literal build-time data contains a value that matches a secret-shaped pattern (for example an env file, a private key, or a token). Secrets must not ship inside generated artifacts.",
+		NextSteps: []string{
+			"Move the secret to a runtime environment variable and read it in Go, not at build time.",
+			"Exclude the offending file from the embedded asset set.",
+		},
+	},
+	"audit_client_route_unguarded": {
+		Details: "A client or SPA route declares no guard, so it is protected only by the generated runtime default-deny gate (HTTP 403). Under pure static hosting that gate is absent and the route's HTML could be served. The static-export caveat in docs/language/guards.md applies.",
+		NextSteps: []string{
+			"State the route's access with guard public or a protective guard so it joins the deny registry.",
+			"Serve the route through the generated Go server, which enforces the deny registry.",
+		},
+	},
+	"audit_command_missing_csrf": {
+		Details: "gowdk audit derives a generated command endpoint that accepts a state-changing web request without CSRF enforcement. The built-in security baseline treats this as an error because command POSTs are cross-site-forgeable in the same way as action POSTs.",
+		NextSteps: []string{
+			"Set Build.CSRF.Enabled and a runtime CSRF secret so generated command endpoints validate tokens before decoding.",
+			"Override the built-in baseline.contract_commands policy in a *.audit.gwdk file if the endpoint is intentionally exempt.",
+		},
+	},
+	"audit_guardless_endpoint_page": {
+		Details: "A page that declares backend endpoints has no guard. Actions, fragments, commands, queries, and APIs would be publicly callable even when the page GET route is denied, which contradicts default-deny.",
+		NextSteps: []string{
+			"Add a guard to the page so its derived endpoints inherit it.",
+			"Use guard public only when every derived endpoint is intentionally unauthenticated.",
+		},
+	},
+	"audit_headers_missing": {
+		Details: "An audit policy requires a security response header (for example Content-Security-Policy) but the generated app is not configured to emit it. This is a static-posture warning; runtime verification is a separate error.",
+		NextSteps: []string{
+			"Enable Build.SecurityHeaders and configure the required header in gowdk.config.go.",
+			"Remove the require header rule if the header is owned by an upstream proxy.",
+		},
+	},
+	"audit_headers_runtime_missing": {
+		Details: "gowdk audit --run started the generated app and a required security response header was absent from a served response. The runtime contradicts the declared posture.",
+		NextSteps: []string{
+			"Confirm Build.SecurityHeaders emits the header on the served route and fragment responses.",
+			"Check for middleware or a reverse proxy stripping the header in the run environment.",
+		},
+	},
+	"audit_max_body_exceeds_policy": {
+		Details: "An endpoint's configured request body limit is larger than the maximum a policy allows. Oversized limits widen the denial-of-service surface.",
+		NextSteps: []string{
+			"Lower Build.BodyLimits (or the per-target limit) to the policy maximum.",
+			"Raise the policy max_body rule if the larger limit is intentional and justified.",
+		},
+	},
+	"audit_public_not_allowed": {
+		Details: "A target route or endpoint is public (guard public or no protective guard) but a policy deny public rule forbids public access for its selector.",
+		NextSteps: []string{
+			"Add a protective guard to the target so it is no longer public.",
+			"Narrow the policy selector if the target is intentionally public.",
+		},
+	},
+	"audit_raw_html_sink": {
+		Details: "A view renders raw, unescaped HTML through g:html (or an equivalent raw sink). Raw sinks are an XSS surface and must be explicitly allowlisted so each one is a reviewed decision.",
+		NextSteps: []string{
+			"Render escaped interpolation instead of g:html when raw HTML is not required.",
+			"Add the sink (source:field) to the policy raw-HTML allowlist when raw output is intentional and the input is trusted.",
+		},
+	},
+	"audit_required_guard_missing": {
+		Details: "A policy requires a role or permission guard (for example require role:admin) on the selected target, but the target does not declare it. The static posture does not satisfy the declared permission.",
+		NextSteps: []string{
+			"Add the required guard ID to the matched page so its routes and endpoints inherit it.",
+			"Adjust the policy selector or required guard if the rule is too broad.",
+		},
+	},
+	"audit_runtime_mismatch": {
+		Details: "gowdk audit --run observed runtime behavior that contradicts the declared static posture (for example a route that should be denied returned a success status).",
+		NextSteps: []string{
+			"Reconcile the generated handler behavior with the declared guard, CSRF, or limit metadata.",
+			"File the mismatch with the route or endpoint ID reported by the finding.",
+		},
+	},
+	"audit_test_failed": {
+		Details: "An audit integration test expectation declared in a *.audit.gwdk file did not hold when run against the generated app.",
+		NextSteps: []string{
+			"Inspect the reported request, expected value, and actual value to locate the divergence.",
+			"Fix the handler, the guard configuration, or the test expectation as appropriate.",
+		},
+	},
+	"policy_duplicate_name": {
+		Details: "Two audit policies declare the same name. Policy names must be unique so extends and override resolution is unambiguous.",
+		NextSteps: []string{
+			"Rename one of the conflicting policies.",
+		},
+	},
+	"policy_extends_cycle": {
+		Details: "An audit policy extends chain forms a cycle (for example A extends B and B extends A), so composition cannot be resolved.",
+		NextSteps: []string{
+			"Break the cycle so the extends graph is acyclic.",
+		},
+	},
+	"policy_selector_matched_nothing": {
+		Details: "An audit policy selector matched no routes or endpoints. The rule has no effect, which often signals a typo or a stale selector.",
+		NextSteps: []string{
+			"Check the selector glob or kind against gowdk routes and gowdk endpoints output.",
+			"Remove the policy or rule if the target no longer exists.",
+		},
+	},
+	"policy_unknown_extends": {
+		Details: "An audit policy extends a policy name that is not defined in any loaded *.audit.gwdk file or the built-in baseline.",
+		NextSteps: []string{
+			"Define the referenced policy, or correct the extends name.",
+		},
+	},
+	"policy_unknown_selector": {
+		Details: "An audit policy uses a selector form gowdk audit does not recognize. Supported forms are route globs (for example /admin/**) and kind selectors (act:*, api:*, fragment:*, and contract kinds).",
+		NextSteps: []string{
+			"Use a supported selector form from docs/language/audit.md.",
+		},
+	},
 	"public_guard_exclusive": {
 		Details: "The public guard means no protected guard should run for that page, so it cannot be mixed with other guard IDs.",
 		NextSteps: []string{

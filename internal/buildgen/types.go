@@ -25,15 +25,16 @@ type AssetArtifact struct {
 }
 
 type Result struct {
-	Artifacts         []Artifact
-	CSSArtifacts      []CSSArtifact
-	AssetArtifacts    []AssetArtifact
-	RouteManifestPath string
-	AssetManifestPath string
-	OpenAPIPath       string
-	BuildReportPath   string
-	Report            BuildReport
-	WriteStats        WriteStats
+	Artifacts            []Artifact
+	CSSArtifacts         []CSSArtifact
+	AssetArtifacts       []AssetArtifact
+	RouteManifestPath    string
+	AssetManifestPath    string
+	OpenAPIPath          string
+	SecurityManifestPath string
+	BuildReportPath      string
+	Report               BuildReport
+	WriteStats           WriteStats
 }
 
 type WriteStats struct {

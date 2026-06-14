@@ -183,9 +183,10 @@ on forwarded IP, host, or scheme values.
 
 ## Security Headers
 
-Generated binaries do not currently install a global security-header middleware.
-Set edge security headers in the reverse proxy or app-owned middleware before
-making request-time routes public:
+Generated binaries can emit configured response headers through
+`Build.SecurityHeaders`. Edge or app-owned middleware can still add deployment
+headers that belong at the proxy/TLS boundary. Before making request-time routes
+public, configure the generated app, reverse proxy, or app middleware for:
 
 - `X-Content-Type-Options: nosniff`.
 - `Referrer-Policy: strict-origin-when-cross-origin` for most sites, or

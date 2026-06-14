@@ -19,6 +19,9 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	if hasBackendRoutes(options) {
 		imports["gowdkruntime"] = "github.com/cssbruno/gowdk/runtime/app"
 	}
+	if securityHeadersExpr(options) != nil {
+		imports["strings"] = "strings"
+	}
 	if len(adapter.Registrations) > 0 || len(routableContracts) > 0 {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 	}

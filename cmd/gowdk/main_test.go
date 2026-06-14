@@ -453,6 +453,10 @@ view {
 	if !strings.Contains(stdout, reportPath) {
 		t.Fatalf("expected stdout to include build report path %q, got:\n%s", reportPath, stdout)
 	}
+	securityPath := filepath.Join(root, ".gowdk", "reports", "dist", "gowdk-security.json")
+	if !strings.Contains(stdout, securityPath) {
+		t.Fatalf("expected stdout to include security report path %q, got:\n%s", securityPath, stdout)
+	}
 	if !strings.Contains(stderr, "gowdk build report (build):") {
 		t.Fatalf("expected debug report header on stderr, got:\n%s", stderr)
 	}
@@ -461,6 +465,12 @@ view {
 	}
 	if _, err := os.Stat(reportPath); err != nil {
 		t.Fatalf("expected build report artifact: %v", err)
+	}
+	if _, err := os.Stat(securityPath); err != nil {
+		t.Fatalf("expected external security report artifact: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "gowdk-security.json")); !os.IsNotExist(err) {
+		t.Fatalf("security report must not be written to served output root, stat err=%v", err)
 	}
 }
 
@@ -5866,6 +5876,18 @@ func TestOutputFileHandlerDoesNotListDirectories(t *testing.T) {
 
 	response := httptest.NewRecorder()
 	outputFileHandler(root).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/assets/", nil))
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d with body %s", response.Code, response.Body.String())
+	}
+}
+
+func TestOutputFileHandlerDoesNotServeSecurityManifest(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk-security.json"), `{"endpoints":[{"path":"/admin"}]}`)
+
+	response := httptest.NewRecorder()
+	outputFileHandler(root).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/gowdk-security.json", nil))
 
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d with body %s", response.Code, response.Body.String())

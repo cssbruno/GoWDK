@@ -230,6 +230,9 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	if result.OpenAPIPath != "" {
 		fmt.Println(result.OpenAPIPath)
 	}
+	if result.SecurityManifestPath != "" {
+		fmt.Println(result.SecurityManifestPath)
+	}
 	var asyncAPIPath string
 	if err := timings.measure("asyncapi_report", func() error {
 		var writeErr error

@@ -44,6 +44,7 @@ outside the component contract and inline package-go-block slices.
   route output.
 - `actions.md`: action status and planned typed action behavior.
 - `api.md`: API block status and planned handler behavior.
+- `audit.md`: `*.audit.gwdk` policy and generated audit test syntax.
 - `partials.md`: partial update status and planned fragment behavior.
 - `forms.md`: form submission, progressive enhancement, validation, and
   invalidation boundaries.
@@ -67,5 +68,6 @@ guard public
 The page ID derives from the filename unless `page` is present.
 
 Component files are supported as explicit or discovered `gowdk build` inputs
-with `component`. Layout files are also supported. Separate island file kinds
-are planned.
+with `component`. Layout files are also supported. `*.audit.gwdk` files are a
+separate audit policy/test kind consumed by `gowdk audit`; they do not generate
+pages. Separate island file kinds are planned.

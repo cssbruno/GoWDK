@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/safeasset"
 )
 
 func validateDirectories(outputDir, appDir string) error {
@@ -78,47 +79,11 @@ func copyOutputFiles(sourceRoot, targetRoot string) ([]string, error) {
 }
 
 func unsafeEmbeddedDirectory(rel string) bool {
-	base := path.Base(filepath.ToSlash(rel))
-	switch base {
-	case ".git", ".hg", ".svn", "node_modules", "tmp", "temp", ".tmp", "private", ".private", "secrets", ".secrets":
-		return true
-	default:
-		return false
-	}
+	return safeasset.UnsafeEmbeddedDirectory(rel)
 }
 
 func unsafeEmbeddedFile(rel string) bool {
-	rel = filepath.ToSlash(rel)
-	base := path.Base(rel)
-	normalizedBase := strings.ToLower(base)
-	ext := path.Ext(normalizedBase)
-	switch {
-	case normalizedBase == ".env" || strings.HasPrefix(normalizedBase, ".env."):
-		return true
-	case normalizedBase == ".npmrc" || normalizedBase == ".netrc":
-		return true
-	case privateKeyFile(normalizedBase):
-		return true
-	case ext == ".map" || ext == ".gwdk" || ext == ".go":
-		return true
-	case ext == ".tmp" || ext == ".temp" || strings.HasSuffix(normalizedBase, "~"):
-		return true
-	case ext == ".key" || ext == ".pem" || ext == ".p12" || ext == ".pfx":
-		return true
-	case strings.HasSuffix(normalizedBase, ".swp") || strings.HasSuffix(normalizedBase, ".swo"):
-		return true
-	default:
-		return false
-	}
-}
-
-func privateKeyFile(base string) bool {
-	switch base {
-	case "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519":
-		return true
-	default:
-		return false
-	}
+	return safeasset.UnsafeEmbeddedFile(rel)
 }
 
 func copyFile(sourcePath, targetPath string) error {

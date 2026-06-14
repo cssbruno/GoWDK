@@ -79,7 +79,10 @@ func emittedDiagnosticCodes(t *testing.T) map[string]bool {
 		}
 		if entry.IsDir() {
 			switch entry.Name() {
-			case ".git", "dist", "node_modules":
+			case ".git", ".claude", "dist", "node_modules":
+				// Skip tooling state and nested git worktrees (for example
+				// .claude/worktrees/*) so the completeness scan only sees this
+				// checkout's source, not a sibling worktree's diagnostic codes.
 				return filepath.SkipDir
 			}
 			return nil

@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -39,17 +40,18 @@ type Identity struct {
 
 // Handler serves embedded generated output plus optional action and SSR hooks.
 type Handler struct {
-	Root       fs.FS
-	Identity   Identity
-	Assets     asset.Manifest
-	Backend    HandlerFunc
-	Action     HandlerFunc
-	API        HandlerFunc
-	CSRF       CSRFTokenSource
-	ErrorPages ErrorPages
-	Metrics    *Metrics
-	SSRExact   HandlerFunc
-	SSRDynamic HandlerFunc
+	Root            fs.FS
+	Identity        Identity
+	SecurityHeaders map[string]string
+	Assets          asset.Manifest
+	Backend         HandlerFunc
+	Action          HandlerFunc
+	API             HandlerFunc
+	CSRF            CSRFTokenSource
+	ErrorPages      ErrorPages
+	Metrics         *Metrics
+	SSRExact        HandlerFunc
+	SSRDynamic      HandlerFunc
 
 	// Denied holds concrete page routes that declared no guard. Such a page is
 	// not public by default: its GET/HEAD route returns 403 until the author
@@ -115,6 +117,7 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 		defer cancel()
 		request = request.WithContext(ctx)
 	}
+	handler.writeSecurityHeaders(response)
 	handler.writeIdentityHeaders(response)
 	if len(handler.ErrorPages.NotFound) > 0 || len(handler.ErrorPages.InternalServerError) > 0 || len(handler.ErrorPages.Custom) > 0 {
 		request = request.WithContext(withErrorPages(request.Context(), handler.ErrorPages))
@@ -548,6 +551,56 @@ func (handler Handler) writeIdentityHeaders(response http.ResponseWriter) {
 	response.Header().Set("X-GOWDK-Instance-ID", handler.Identity.InstanceID)
 }
 
+func (handler Handler) writeSecurityHeaders(response http.ResponseWriter) {
+	for _, header := range canonicalSecurityHeaders(handler.SecurityHeaders) {
+		response.Header().Set(header.Name, header.Value)
+	}
+}
+
+type canonicalSecurityHeader struct {
+	Name  string
+	Value string
+}
+
+func canonicalSecurityHeaders(headers map[string]string) []canonicalSecurityHeader {
+	type candidate struct {
+		key   string
+		name  string
+		value string
+	}
+	candidates := make([]candidate, 0, len(headers))
+	for name, value := range headers {
+		clean := strings.TrimSpace(name)
+		if clean == "" {
+			continue
+		}
+		candidates = append(candidates, candidate{
+			key:   strings.ToLower(clean),
+			name:  http.CanonicalHeaderKey(clean),
+			value: value,
+		})
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].key != candidates[j].key {
+			return candidates[i].key < candidates[j].key
+		}
+		if candidates[i].name != candidates[j].name {
+			return candidates[i].name < candidates[j].name
+		}
+		return candidates[i].value < candidates[j].value
+	})
+	seen := map[string]bool{}
+	out := make([]canonicalSecurityHeader, 0, len(candidates))
+	for _, candidate := range candidates {
+		if seen[candidate.key] {
+			continue
+		}
+		seen[candidate.key] = true
+		out = append(out, canonicalSecurityHeader{Name: candidate.name, Value: candidate.value})
+	}
+	return out
+}
+
 func (handler Handler) health(response http.ResponseWriter) {
 	response.Header().Set("Content-Type", "application/json")
 	payload := map[string]any{
@@ -590,6 +643,9 @@ func readSPAFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
 	if name == "" {
 		name = "index.html"
 	}
+	if unsafeSPAFile(name) {
+		return nil, nil, false
+	}
 	info, err := fs.Stat(root, name)
 	if err != nil {
 		return nil, nil, false
@@ -606,4 +662,8 @@ func readSPAFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
 		return nil, nil, false
 	}
 	return payload, info, true
+}
+
+func unsafeSPAFile(name string) bool {
+	return strings.EqualFold(path.Base(name), "gowdk-security.json")
 }

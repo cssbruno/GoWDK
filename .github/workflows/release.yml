@@ -40,6 +40,7 @@ jobs:
         run: |
           go version
           go env GOVERSION
+          scripts/check-root-deps.sh
           scripts/test-go-modules.sh
           scripts/vulncheck-go-modules.sh
           go build ./cmd/gowdk

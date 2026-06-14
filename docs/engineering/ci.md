@@ -6,6 +6,7 @@ the fastest pre-handoff gate.
 ## Baseline Jobs
 
 - `scripts/test-go-modules.sh`
+- `scripts/check-root-deps.sh`
 - `scripts/vulncheck-go-modules.sh`
 - `go build ./cmd/gowdk`
 - `node --check editors/vscode/extension.js`
@@ -14,6 +15,7 @@ the fastest pre-handoff gate.
 - Example smoke checks:
 
   ```sh
+  scripts/check-root-deps.sh
   scripts/vulncheck-go-modules.sh
   go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
   go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk

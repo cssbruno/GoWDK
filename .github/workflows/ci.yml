@@ -34,6 +34,7 @@ jobs:
         run: |
           go version
           go env GOVERSION
+          scripts/check-root-deps.sh
           scripts/test-go-modules.sh
 
       - name: Check reachable Go vulnerabilities

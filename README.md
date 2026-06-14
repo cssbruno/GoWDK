@@ -290,6 +290,12 @@ Run the full Go test gate, including nested optional adapter modules:
 scripts/test-go-modules.sh
 ```
 
+Check the root module's direct dependency allowlist and optional adapter split:
+
+```sh
+scripts/check-root-deps.sh
+```
+
 Run the root module only:
 
 ```sh

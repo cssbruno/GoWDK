@@ -204,13 +204,13 @@ Every 0.x minor release must have:
 - [x] Classify dependencies as compiler core, runtime core, optional HTTP
   adapters, optional broker adapters, optional realtime adapters, optional
   CSS/tool adapters, or test/dev only.
-- [x] Explain why Chi, Gin, Echo, Fiber, Redis, NATS, and WebSocket packages are
-  direct dependencies, or move them to optional submodules.
-- [ ] Add CI checks for new direct dependencies.
+- [x] Move Chi, Gin, Echo, Fiber, Redis, NATS, and WebSocket packages to optional
+  submodules instead of root direct dependencies.
+- [x] Add CI checks for new direct dependencies.
 - [ ] Add dependency diff, license report, vulnerability report, and module
   graph report to releases.
 - [x] Enforce no mandatory npm and no build-time downloads.
-- [ ] Test that generated code does not import Chi, Gin, Echo, Fiber, Redis, or NATS
+- [x] Test that generated code does not import Chi, Gin, Echo, Fiber, Redis, or NATS
   by default.
 
 ## Security And Production-Safety Gates

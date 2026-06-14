@@ -15,6 +15,7 @@ Use Go's standard test runner.
 
 ```sh
 scripts/test-go-modules.sh
+scripts/check-root-deps.sh
 go test ./...
 scripts/vulncheck-go-modules.sh
 go build ./cmd/gowdk
@@ -41,6 +42,7 @@ must pass `--config <file>`.
 | Area | Command | When |
 | --- | --- | --- |
 | Go packages | `scripts/test-go-modules.sh` | Every code change; includes the root module and nested optional adapter modules. |
+| Root dependency surface | `scripts/check-root-deps.sh` | Dependency-policy changes, CI, and release-style verification. |
 | Root Go packages | `go test ./...` | Core compiler/runtime changes when optional adapter modules are not relevant. |
 | Go vulnerability scan | `scripts/vulncheck-go-modules.sh` | Release-style checks and dependency changes. |
 | CLI build | `go build ./cmd/gowdk` | CLI, compiler, runtime, addon, or release changes. |

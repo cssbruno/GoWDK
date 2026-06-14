@@ -80,6 +80,7 @@ func TestCheckSourceValidatesUnsavedBuffer(t *testing.T) {
 
 page post
 route "/blog/{slug}"
+guard public
 
 view {
 }

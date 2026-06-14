@@ -5,8 +5,27 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	gowdkadapters "github.com/cssbruno/gowdk/runtime/adapters"
+	"github.com/cssbruno/gowdk/runtime/adapters/internal/conformance"
 	echoframework "github.com/labstack/echo/v5"
 )
+
+const openAPISpec = `{
+  "openapi": "3.1.0",
+  "servers": [{"url": "/app"}],
+  "paths": {
+    "/": {"get": {"responses": {"200": {"description": "OK"}}}},
+    "/api/status": {"get": {"responses": {"200": {"description": "OK"}}}},
+    "/patients": {"post": {"responses": {"200": {"description": "OK"}}}},
+    "/patients/{id}": {"get": {"responses": {"200": {"description": "OK"}}}}
+  }
+}`
+
+const emptyOpenAPISpec = `{
+  "openapi": "3.1.0",
+  "servers": [{"url": "/app"}],
+  "paths": {}
+}`
 
 func TestHandlerWrapsHTTPHandler(t *testing.T) {
 	engine := echoframework.New()
@@ -42,4 +61,28 @@ func TestHandlerWrapsHTTPHandler(t *testing.T) {
 			t.Fatalf("expected attached Echo context route, got %#v", recorder.Header())
 		}
 	}
+}
+
+func TestMountOpenAPIConformance(t *testing.T) {
+	conformance.AssertOpenAPIConformance(t, []byte(openAPISpec), "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
+		engine := echoframework.New()
+		err := MountOpenAPI(engine, []byte(openAPISpec), handler, WithPrefix(prefix))
+		return engine, err
+	})
+}
+
+func TestMountOpenAPIFallbackConformance(t *testing.T) {
+	conformance.AssertEmptyOpenAPIFallback(t, []byte(emptyOpenAPISpec), "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
+		engine := echoframework.New()
+		err := MountOpenAPI(engine, []byte(emptyOpenAPISpec), handler, WithPrefix(prefix))
+		return engine, err
+	})
+}
+
+func TestMountOpenAPIRestRouteConformance(t *testing.T) {
+	conformance.AssertOpenAPIRestRoute(t, "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
+		engine := echoframework.New()
+		err := MountRoutes(engine, routes, handler, WithPrefix(prefix))
+		return engine, err
+	})
 }

@@ -45,10 +45,10 @@ readiness.
   and `golang.org/x/tools/go/packages` for Go package loading during endpoint
   binding inspection.
 - Runtime core: standard library plus repository packages under `runtime/`.
-- Optional HTTP adapters: `runtime/adapters/echo`, `runtime/adapters/gin`, and
-  `runtime/adapters/fiber`; each adapter is a nested Go module so framework
-  dependencies do not enter the root module graph. Generated code remains
-  `net/http` first by default.
+- Optional HTTP adapters: `runtime/adapters/chi`, `runtime/adapters/echo`,
+  `runtime/adapters/gin`, and `runtime/adapters/fiber`; each framework adapter
+  is a nested Go module so framework dependencies do not enter the root module
+  graph. Generated code remains `net/http` first by default.
 - Optional broker/realtime adapters: Redis Streams, NATS, SSE, and WebSocket
   packages under `runtime/contracts`; concrete Redis Streams, NATS, and
   WebSocket adapters are nested Go modules. Dependency-free adapters such as

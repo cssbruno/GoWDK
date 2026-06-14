@@ -368,7 +368,7 @@ responses for partial requests.
 Current generated binary limitations: it serves embedded build output files for
 the selected build output and local POST endpoints for the supported action
 subset, including form input decoder wrappers, required-field validation, CSRF
-validation when `Build.CSRF.Enabled` is set, action fragment responses for
+validation by default for generated action/command POSTs, action fragment responses for
 `X-GOWDK-Partial` requests, standalone fragment routes, feature-bound API
 handlers, guards, and concrete or dynamic SSR pages rendered from `view {}`
 and literal or imported `build {}` data. Hybrid pages use the same generated

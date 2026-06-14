@@ -179,31 +179,9 @@ func ssrRoutes(artifacts []buildgen.SSRArtifact) []SSRRoute {
 			HasLoad:          artifact.HasLoad,
 			LoadBinding:      artifact.LoadBinding,
 			HTML:             artifact.HTML,
-			Replacements:     ssrReplacements(artifact.Replacements),
-			LoadReplacements: ssrLoadReplacements(artifact.LoadReplacements),
+			Replacements:     append([]SSRReplacement(nil), artifact.Replacements...),
+			LoadReplacements: append([]SSRLoadReplacement(nil), artifact.LoadReplacements...),
 		})
 	}
 	return routes
-}
-
-func ssrReplacements(replacements []buildgen.SSRReplacement) []SSRReplacement {
-	out := make([]SSRReplacement, 0, len(replacements))
-	for _, replacement := range replacements {
-		out = append(out, SSRReplacement{
-			Param:       replacement.Param,
-			Placeholder: replacement.Placeholder,
-		})
-	}
-	return out
-}
-
-func ssrLoadReplacements(replacements []buildgen.SSRLoadReplacement) []SSRLoadReplacement {
-	out := make([]SSRLoadReplacement, 0, len(replacements))
-	for _, replacement := range replacements {
-		out = append(out, SSRLoadReplacement{
-			Path:        replacement.Path,
-			Placeholder: replacement.Placeholder,
-		})
-	}
-	return out
 }

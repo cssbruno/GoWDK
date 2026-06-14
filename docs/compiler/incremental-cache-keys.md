@@ -20,7 +20,7 @@ Each key is a stable hash over the fields that affect the next compiler phase:
   generated output.
 - Toolchain key: Go version, GOOS/GOARCH, build tags, and compiler feature
   gates that can change package loading or generated code.
-- IR key: versioned `gwdkir.Program` records that downstream generators consume,
+- IR key: stable `gwdkir.Program` records that downstream generators consume,
   excluding diagnostics ordering noise and runtime-only secrets.
 - Output-plan key: generated route, asset, CSS, app, backend, WASM, and binary
   plans plus the generator version that owns their shape.

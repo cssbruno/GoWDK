@@ -27,7 +27,7 @@ type Sources struct {
 func BuildProgram(config gowdk.Config, sources Sources) gwdkir.Program {
 	builder := irBuilder{
 		config:   config,
-		program:  gwdkir.Program{Version: gwdkir.Version},
+		program:  gwdkir.Program{},
 		packages: map[string]*gwdkir.Package{},
 	}
 

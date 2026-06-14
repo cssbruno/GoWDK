@@ -80,7 +80,13 @@ func TestBuildFromIRWritesArtifacts(t *testing.T) {
 }
 
 func TestBuildFromValidatedIRChecksInvariants(t *testing.T) {
-	_, err := BuildFromValidatedIR(gowdk.Config{}, gwdkir.Program{}, t.TempDir())
+	invalidIR := gwdkir.Program{Routes: []gwdkir.Route{{
+		Kind:   gwdkir.RouteSPA,
+		Method: "GET",
+		Path:   "/",
+		PageID: "missing",
+	}}}
+	_, err := BuildFromValidatedIR(gowdk.Config{}, invalidIR, t.TempDir())
 	if err == nil {
 		t.Fatal("expected invalid IR error")
 	}

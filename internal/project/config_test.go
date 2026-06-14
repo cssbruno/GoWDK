@@ -7,12 +7,31 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/tailwind"
 )
+
+func TestSupportedConfigLiteralFieldsMatchConfigStruct(t *testing.T) {
+	supported := supportedConfigLiteralFields()
+	actual := map[string]bool{}
+	configType := reflect.TypeOf(gowdk.Config{})
+	for index := 0; index < configType.NumField(); index++ {
+		field := configType.Field(index)
+		actual[field.Name] = true
+		if !supported[field.Name] {
+			t.Fatalf("Config field %q is not handled by the literal config parser", field.Name)
+		}
+	}
+	for field := range supported {
+		if !actual[field] {
+			t.Fatalf("literal config parser supports unknown Config field %q", field)
+		}
+	}
+}
 
 func TestLoadConfigFileReadsLiteralSourceAndBuildFields(t *testing.T) {
 	root := t.TempDir()
@@ -359,6 +378,30 @@ var Config = gowdk.Config{
 	}
 	if config.Build.Output != "dist/site" {
 		t.Fatalf("expected executable config to load output, got %q", config.Build.Output)
+	}
+}
+
+func TestLoadConfigFileRejectsUnknownLiteralConfigField(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	AppName: "Example",
+	Experimental: true,
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadConfigFile(path)
+	if err == nil {
+		t.Fatal("expected unknown Config field error")
+	}
+	if !strings.Contains(err.Error(), `unsupported Config field "Experimental"`) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

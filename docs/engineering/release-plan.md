@@ -585,12 +585,14 @@ Every 0.x minor release must have:
 - [ ] Improve JSON output for `check`, `routes`, `manifest`, and `sitemap`.
 - [ ] Add build timing, binary size, generated file, stale cleanup, strict mode,
   stub mode, debug mode, and machine-readable build report schema docs.
-- [ ] Add browser error overlay to `gowdk dev`.
-- [ ] Show compiler errors, generated Go build errors, and dev-only runtime
-  panics in the browser.
-- [ ] Keep last successful build clearly visible.
-- [ ] Log restart reason, changed files, rebuild timing, generated files
-  changed, and generated binary rebuilds.
+- [x] Add browser error overlay to `gowdk dev`.
+- [x] Show compiler errors and generated Go build errors in the browser.
+- [ ] Show dev-only runtime panics in the browser after the generated-app
+  runtime bridge exists.
+- [x] Keep last successful build clearly visible.
+- [x] Log changed files for failed dev rebuilds.
+- [ ] Log restart reason, rebuild timing, generated files changed, and
+  generated binary rebuilds.
 - [ ] Document backend proxy mode, `--app`, `preview`, and `--hot`.
 - [ ] Add dev tests for no-op rebuilds, component changes, layout changes, CSS
   changes, config changes, backend process restarts, failed rebuild recovery,
@@ -733,7 +735,7 @@ Start with these in order:
 - [ ] Build flagship full-stack native GOWDK example.
 - [ ] Build deployment-shaped example.
 - [ ] Add native cookbook.
-- [ ] Add browser dev error overlay.
+- [x] Add browser dev error overlay.
 - [ ] Add VS Code quick fix for creating a missing Go handler.
 - [ ] Add performance/build timing report.
 

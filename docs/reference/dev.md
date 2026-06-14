@@ -51,6 +51,10 @@ full-page live reload with last-good-output serving.
 Local island state preservation is also not a current contract. Add it only
 after GOWDK has a stable component/client dependency graph.
 
+Generated-app runtime overlay delivery, dev-only runtime panic surfacing, and
+component-aware HMR are tracked in
+[#424](https://github.com/cssbruno/GoWDK/issues/424).
+
 ## Browser Overlay
 
 For plain SPA/static dev serving, rebuild compiler/build failures are printed
@@ -71,7 +75,8 @@ The overlay is removed on the next successful rebuild and page reload.
 Generated app runtime mode keeps runtime stdout/stderr attached to the terminal.
 Browser overlay delivery there is limited by the generated app process serving
 the HTTP traffic, so generated-app runtime errors remain terminal-first until a
-runtime browser bridge exists.
+runtime browser bridge exists. See
+[#424](https://github.com/cssbruno/GoWDK/issues/424).
 
 ## File Watching
 

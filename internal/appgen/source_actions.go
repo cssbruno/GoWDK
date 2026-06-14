@@ -883,7 +883,7 @@ func call(fun ast.Expr, args ...ast.Expr) *ast.CallExpr {
 
 func sel(parts ...string) ast.Expr {
 	if len(parts) == 0 {
-		return id("")
+		panic("generated Go selector requires at least one identifier")
 	}
 	var expr ast.Expr = id(parts[0])
 	for _, part := range parts[1:] {
@@ -901,6 +901,9 @@ func keyValue(key string, value ast.Expr) ast.Expr {
 }
 
 func id(name string) *ast.Ident {
+	if !token.IsIdentifier(name) {
+		panic(fmt.Sprintf("invalid generated Go identifier %q", name))
+	}
 	return ast.NewIdent(name)
 }
 

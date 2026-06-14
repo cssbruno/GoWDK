@@ -2,6 +2,7 @@ package appgen
 
 import (
 	"context"
+	"fmt"
 	"go/format"
 	"io"
 	"net"
@@ -1654,6 +1655,47 @@ func TestAppShellSourceEmitterDoesNotUseRawTemplates(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestGeneratedGoIdentifierHelperRejectsInvalidNames(t *testing.T) {
+	for _, name := range []string{"", "1handler", "handler-name", "type"} {
+		t.Run(name, func(t *testing.T) {
+			expectGeneratedIdentifierPanic(t, "invalid generated Go identifier", func() {
+				_ = id(name)
+			})
+		})
+	}
+}
+
+func TestGeneratedGoSelectorHelperRejectsEmptySelectors(t *testing.T) {
+	expectGeneratedIdentifierPanic(t, "selector requires at least one identifier", func() {
+		_ = sel()
+	})
+}
+
+func TestBoundActionDecoderRejectsInvalidGeneratedInputFieldIdentifier(t *testing.T) {
+	expectGeneratedIdentifierPanic(t, "invalid generated Go identifier", func() {
+		_ = boundActionFieldDecodeStmts(0, source.BackendInputField{
+			FieldName: "Email-Address",
+			FormName:  "email",
+			Type:      "string",
+		})
+	})
+}
+
+func expectGeneratedIdentifierPanic(t *testing.T, want string, fn func()) {
+	t.Helper()
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatalf("expected panic containing %q", want)
+		}
+		message := fmt.Sprint(recovered)
+		if !strings.Contains(message, want) {
+			t.Fatalf("panic = %q, want containing %q", message, want)
+		}
+	}()
+	fn()
 }
 
 func TestGeneratedPackageSourceIsGoFormatted(t *testing.T) {

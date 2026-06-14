@@ -35,14 +35,15 @@ even when explicit `.gwdk` files are passed.
 | `components/base/base-components.page.gwdk` | Source-level base component examples for `Button`, `TextField`, and `Card`. | `go run ./cmd/gowdk build --out /tmp/gowdk-base-components examples/components/base/*.gwdk` |
 | `components/css/scoped-card.page.gwdk` | Component-local `css` metadata example. | `go run ./cmd/gowdk check examples/components/css/*.gwdk` |
 | `components/assets/asset-badge.page.gwdk` | Component-local `asset` metadata and emitted asset manifest example. | `go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk` |
+| `components/wasm/abi-counter.page.gwdk` | Component-level WASM island ABI example with a browser Go package. | `go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk` |
 
 Check all current examples with SSR validation enabled:
 
 ```sh
-go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
 ```
 
 Build the current simple page:
@@ -168,6 +169,16 @@ go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/a
 test -f /tmp/gowdk-component-assets/components/assets/index.html
 grep -F '"assets/gowdk/components/componentassets/AssetBadge/badge.svg"' /tmp/gowdk-component-assets/gowdk-assets.json
 grep -F 'assets/gowdk/components/componentassets/AssetBadge/badge.' /tmp/gowdk-component-assets/gowdk-assets.json
+```
+
+Build the component-level WASM island ABI example:
+
+```sh
+go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk
+test -f /tmp/gowdk-wasm-island/components/wasm/index.html
+test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm
+test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm.js
+test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/wasm_exec.js
 ```
 
 ## Current Limitations

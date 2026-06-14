@@ -138,6 +138,9 @@ Normal calls to a component with `wasm` use the WASM island runtime. If a
 component is called with `g:island="wasm"` and no `wasm` package is declared,
 GOWDK emits the current placeholder module plus loader shape.
 
+See `examples/components/wasm/` for a runnable component-level WASM ABI example
+that emits the component `.wasm`, host loader, and `wasm_exec.js` assets.
+
 ## Production Mode
 
 `Build.Mode` affects generated island assets:

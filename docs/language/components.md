@@ -242,6 +242,9 @@ view {
 }
 ```
 
+See `examples/components/wasm/` for a runnable component-level WASM island ABI
+example with the required browser Go exports.
+
 ```gwdk
 view {
   <Counter />
@@ -414,6 +417,11 @@ ships Go's browser `wasm_exec.js` runtime asset for declared Go WASM packages,
 passes `gowdk-wasm-island-v1` payloads to component WASM exports, and keeps DOM
 mutation in the generated host loader. WASM islands are not a replacement for
 backend handlers.
+
+The runnable ABI example in `examples/components/wasm/` builds a component
+WASM asset, per-component host loader, and `wasm_exec.js` from a browser Go
+package with the required `GOWDKMount<Component>`,
+`GOWDKHandle<Component>`, and `GOWDKDestroy<Component>` exports.
 
 Not implemented yet:
 

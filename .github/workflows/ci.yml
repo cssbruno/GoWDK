@@ -54,7 +54,7 @@ jobs:
 
       - name: Check example files
         run: |
-          examples="examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk"
+          examples="examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk"
           go run ./cmd/gowdk check --ssr $examples
           go run ./cmd/gowdk manifest --ssr $examples
           go run ./cmd/gowdk sitemap --ssr $examples
@@ -128,3 +128,12 @@ jobs:
           test -f /tmp/gowdk-component-assets/components/assets/index.html
           grep -F '"assets/gowdk/components/componentassets/AssetBadge/badge.svg"' /tmp/gowdk-component-assets/gowdk-assets.json
           grep -F 'assets/gowdk/components/componentassets/AssetBadge/badge.' /tmp/gowdk-component-assets/gowdk-assets.json
+
+      - name: Smoke build WASM island example output
+        run: |
+          rm -rf /tmp/gowdk-wasm-island
+          go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk
+          test -f /tmp/gowdk-wasm-island/components/wasm/index.html
+          test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm
+          test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm.js
+          test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/wasm_exec.js

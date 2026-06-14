@@ -1,0 +1,10 @@
+package componentwasm
+
+component WasmCounter
+wasm ./examples/components/wasm/browser/counter
+
+view {
+  <button type="button">
+    WASM ABI counter
+  </button>
+}

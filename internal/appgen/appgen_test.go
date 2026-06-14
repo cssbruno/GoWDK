@@ -831,13 +831,14 @@ func TestGeneratedGoMatchesGoldenFixture(t *testing.T) {
 		if err := os.WriteFile(goldenPath, actual, 0o644); err != nil {
 			t.Fatal(err)
 		}
+		return
 	}
 	expected, err := os.ReadFile(goldenPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(actual) != string(expected) {
-		t.Fatalf("generated Go golden mismatch (update %s if intentional)\nexpected:\n%s\nactual:\n%s", goldenPath, expected, actual)
+		t.Fatalf("generated Go golden mismatch (run go test ./internal/appgen -run TestGeneratedGoMatchesGoldenFixture -update if intentional)\nexpected:\n%s\nactual:\n%s", expected, actual)
 	}
 }
 

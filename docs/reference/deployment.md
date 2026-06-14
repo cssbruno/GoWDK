@@ -86,6 +86,32 @@ Single-binary deploy is the primary GOWDK differentiator. Prefer this path when
 the app needs generated actions, APIs, partial fragments, guards, CSRF, SSR, or
 embedded assets in one artifact.
 
+## Process Lifecycle And Logs
+
+The generated `cmd/server` entrypoint is intentionally small: it constructs the
+generated `net/http` handler, reads `GOWDK_ADDR`, installs the documented
+`http.Server` timeout and header limits, logs startup, and exits on
+`ListenAndServe` failure. It does not install signal handling or a custom
+graceful-shutdown supervisor.
+
+Apps that need graceful drain behavior should use the generated package from
+app-owned startup code:
+
+```go
+handler, err := gowdkapp.Handler()
+if err != nil {
+	return err
+}
+server := &http.Server{Addr: ":8080", Handler: handler}
+```
+
+Use ordinary Go signal handling around that server and call
+`server.Shutdown(ctx)` with the app's timeout policy. Request logging,
+structured logs, route logging, OpenTelemetry instrumentation, compression, and
+optional ETags are also app-owned middleware or reverse-proxy concerns. GOWDK
+keeps generated panic responses generic and redacts secret-like text from
+generated panic logs.
+
 ## Docker
 
 `gowdk build --docker` emits a `Dockerfile` and `.dockerignore` beside the

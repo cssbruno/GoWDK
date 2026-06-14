@@ -931,8 +931,8 @@ func TestRenderWithComponentsLowersGForList(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`<template data-gowdk-for="l1" data-gowdk-binding-list="b1" data-gowdk-for-var="item" data-gowdk-for-source="Items" data-gowdk-for-key="item.ID"`,
-		`data-gowdk-for-template="&lt;li data-gowdk-for-item=&#34;l1&#34; data-gowdk-key-value=&#34;{{item.ID}}&#34;&gt;{{item.Name}}&lt;/li&gt;"`,
+		`<template data-gowdk-for="l1" data-gowdk-binding-list="b1" data-gowdk-for-var="item" data-gowdk-for-source="Items" data-gowdk-for-key="item.ID">`,
+		`<li data-gowdk-for-item="l1" data-gowdk-key-value="{{item.ID}}">{{item.Name}}</li></template>`,
 		`<li data-gowdk-for-item="l1" data-gowdk-key-value="first">first</li>`,
 		`<li data-gowdk-for-item="l1" data-gowdk-key-value="second">second</li>`,
 	} {

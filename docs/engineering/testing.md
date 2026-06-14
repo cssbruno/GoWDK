@@ -82,9 +82,10 @@ must pass `--config <file>`.
 - `internal/lang` golden tests cover the IR-derived manifest JSON render/path/guard/action output.
 - `internal/compiler` tests cover route metadata for SPA/SSR routes, endpoint
   metadata for actions/APIs, and missing SSR addon rejection.
-- `internal/clientrt` tests cover the emitted partial-update runtime source and
-  run a dependency-free Node DOM harness for innerHTML and outerHTML swaps when
-  `node` is available.
+- `internal/clientrt` tests cover the embedded framework browser runtime source
+  files, render the placeholder templates, run `node --check` for those `.js`
+  files when `node` is available, and run a dependency-free Node DOM harness for
+  innerHTML and outerHTML swaps.
 - `internal/lsp` tests cover initialize, diagnostics, formatting, completion,
   hover, component and open-Go go-to-definition, references, semantic tokens,
   code actions, shutdown, and exit protocol behavior.

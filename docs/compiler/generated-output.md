@@ -76,6 +76,10 @@ Implemented today:
   `required` fields when the action declares `valid(input)?`.
 - Generated build output emits `assets/gowdk/gowdk.js` only for pages that use
   partial form metadata with fragment-producing actions.
+- Framework-owned browser runtime sources are authored as `.js` files under
+  `internal/clientrt/assets/` and embedded with `go:embed`; generated output
+  helpers only perform narrow placeholder substitution for component names,
+  page IDs, asset paths, and WASM export names.
 - Generated build output emits `assets/gowdk/islands/<Component>.js` for
   stateful component instances that use the default generated JavaScript island
   runtime. Island roots carry compiler-owned `data-gowdk-island` markers, and

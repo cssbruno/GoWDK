@@ -138,10 +138,11 @@ func optionsUsesModuleImports(options Options, modulePath string) bool {
 // blocks.
 func appBackendImportPaths(options Options) map[string]bool {
 	paths := map[string]bool{}
-	for importPath := range backendImports(options.Actions, options.APIs, options.Fragments, options.SSR) {
+	adapter := backendAdapterIR(options)
+	for importPath := range backendImports(adapter, options.SSR) {
 		paths[importPath] = true
 	}
-	for importPath := range backendContractImports(executableContractExposures(backendAdapterIR(options).ContractExposures)) {
+	for importPath := range backendContractImports(executableContractExposures(adapter.ContractExposures)) {
 		paths[importPath] = true
 	}
 	for importPath := range inlineGoBlockImports(options.IR) {

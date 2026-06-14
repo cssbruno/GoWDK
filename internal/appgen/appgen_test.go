@@ -593,6 +593,137 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 	}
 }
 
+func TestGenerateSplitFrontendProxyMatchesAdapterRoutes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		ProxyBackend: true,
+		Actions: []ActionEndpoint{{
+			PageID:     "newsletter",
+			ActionName: "Subscribe",
+			Method:     "POST",
+			Route:      "/newsletter",
+		}},
+		APIs: []APIEndpoint{{
+			PageID:  "status",
+			APIName: "Health",
+			Method:  "GET",
+			Route:   "/api/health",
+		}},
+		Fragments: []FragmentEndpoint{{
+			PageID:       "patients",
+			FragmentName: "List",
+			Method:       "GET",
+			Route:        "/patients/{id}/list",
+			Target:       "#patients",
+			HTML:         "<section>Patients</section>",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`Backend: backendProxy,`,
+		`func isBackendRoute(method string, requestPath string) bool`,
+		`method == http.MethodPost && requestPath == "/newsletter"`,
+		`method == "GET" && requestPath == "/api/health"`,
+		`rawRequestPath := requestPath`,
+		`gowdkroute.Match("/patients/{id}/list", rawRequestPath)`,
+		`"net/http/httputil"`,
+		`neturl "net/url"`,
+		`gowdkroute "github.com/cssbruno/gowdk/runtime/route"`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated split frontend source to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, `func newBackendRouter()`) {
+		t.Fatalf("split frontend proxy should not build a local backend router:\n%s", source)
+	}
+}
+
+func TestGenerateSplitFrontendProxyKeepsBackendAdaptersRemote(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), `<main><form method="post" action="/patients"></form></main>`)
+
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
+		Kind:        gwdkir.ContractCommand,
+		Name:        "patients.CreatePatient",
+		ImportAlias: "patients",
+		ImportPath:  "gowdk-generated-app/patients",
+		Type:        "CreatePatient",
+		Result:      "CreatePatientResult",
+		Method:      http.MethodPost,
+		Path:        "/patients",
+		Status:      gwdkir.ContractBindingBound,
+		Handler:     "HandleCreatePatient",
+		Register:    "Register",
+		OwnerKind:   gwdkir.SourcePage,
+		OwnerID:     "patients",
+	}}}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		ProxyBackend: true,
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
+			Enabled:   true,
+			SecretEnv: "GOWDK_TEST_CSRF_SECRET",
+			Insecure:  true,
+		}}},
+		Actions: []ActionEndpoint{{
+			PageID:     "newsletter",
+			ActionName: "Subscribe",
+			Method:     http.MethodPost,
+			Route:      "/newsletter",
+		}},
+		IR: program,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`Backend: backendProxy,`,
+		`CSRF: csrfTokenSource,`,
+		`func newCSRF() (*gowdkactions.CSRF, error)`,
+		`func isBackendRoute(method string, requestPath string) bool`,
+		`method == http.MethodPost && requestPath == "/newsletter"`,
+		`method == http.MethodPost && requestPath == "/patients"`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated split frontend source to contain %q:\n%s", expected, source)
+		}
+	}
+	for _, unexpected := range []string{
+		`func newBackendRouter()`,
+		`func commandPatientsCreatePatientPOSTPatients`,
+		`NewContractRegistry`,
+		`patients.CreatePatient`,
+		`gowdkcontracts`,
+	} {
+		if strings.Contains(source, unexpected) {
+			t.Fatalf("split frontend proxy should not emit local backend contract code %q:\n%s", unexpected, source)
+		}
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestGenerateWiresCSRFWhenEnabled(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

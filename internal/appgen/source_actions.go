@@ -15,7 +15,7 @@ import (
 )
 
 func actionHandlerSource(actions []ActionEndpoint, csrf bool) (string, error) {
-	sorted := sortedActionEndpoints(actions)
+	sorted := backendAdapterIR(Options{Actions: actions}).Actions
 	decls := []ast.Decl{actionFuncDecl(sorted, csrf, false)}
 	if len(sorted) > 0 {
 		decls = append(decls, actionRequestPathDecl())
@@ -38,7 +38,7 @@ func printActionDecls(decls []ast.Decl) (string, error) {
 	return formatGoDeclSnippet(buffer.String())
 }
 
-func actionsUseValidation(actions []ActionEndpoint) bool {
+func actionsUseValidation(actions []BackendActionAdapter) bool {
 	for _, action := range actions {
 		if actionsUseActionValidation(action) {
 			return true
@@ -47,7 +47,7 @@ func actionsUseValidation(actions []ActionEndpoint) bool {
 	return false
 }
 
-func actionsUseLengthValidation(actions []ActionEndpoint) bool {
+func actionsUseLengthValidation(actions []BackendActionAdapter) bool {
 	for _, action := range actions {
 		if !actionsUseActionValidation(action) {
 			continue
@@ -61,11 +61,11 @@ func actionsUseLengthValidation(actions []ActionEndpoint) bool {
 	return false
 }
 
-func actionsUseActionValidation(action ActionEndpoint) bool {
+func actionsUseActionValidation(action BackendActionAdapter) bool {
 	return action.Binding.Status != source.BackendBindingMissing && action.Binding.Status != source.BackendBindingUnsupportedSignature && action.ValidatesInput
 }
 
-func actionsUseForm(actions []ActionEndpoint) bool {
+func actionsUseForm(actions []BackendActionAdapter) bool {
 	for _, action := range actions {
 		if action.Binding.Status != source.BackendBindingMissing && action.Binding.Status != source.BackendBindingUnsupportedSignature && actionNeedsValues(action) {
 			return true
@@ -74,7 +74,7 @@ func actionsUseForm(actions []ActionEndpoint) bool {
 	return false
 }
 
-func actionsUseFragments(actions []ActionEndpoint) bool {
+func actionsUseFragments(actions []BackendActionAdapter) bool {
 	for _, action := range actions {
 		if actionUsesPartialAddon(action) {
 			return true
@@ -83,11 +83,11 @@ func actionsUseFragments(actions []ActionEndpoint) bool {
 	return false
 }
 
-func actionUsesPartialAddon(action ActionEndpoint) bool {
+func actionUsesPartialAddon(action BackendActionAdapter) bool {
 	return action.Binding.Status == "" && len(action.Fragments) > 0
 }
 
-func actionsParseForm(actions []ActionEndpoint) bool {
+func actionsParseForm(actions []BackendActionAdapter) bool {
 	for _, action := range actions {
 		if action.Binding.Status != source.BackendBindingMissing && action.Binding.Status != source.BackendBindingUnsupportedSignature {
 			return true
@@ -107,7 +107,18 @@ func sortedActionEndpoints(actions []ActionEndpoint) []ActionEndpoint {
 	return sorted
 }
 
-func actionNeedsValues(action ActionEndpoint) bool {
+func sortedActionAdapters(actions []BackendActionAdapter) []BackendActionAdapter {
+	sorted := append([]BackendActionAdapter(nil), actions...)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Route == sorted[j].Route {
+			return sorted[i].ActionName < sorted[j].ActionName
+		}
+		return sorted[i].Route < sorted[j].Route
+	})
+	return sorted
+}
+
+func actionNeedsValues(action BackendActionAdapter) bool {
 	if action.Binding.Status != source.BackendBindingBound {
 		return true
 	}
@@ -117,7 +128,7 @@ func actionNeedsValues(action ActionEndpoint) bool {
 	return action.Binding.Signature != source.BackendSignatureAction0
 }
 
-func actionFuncDecl(actions []ActionEndpoint, csrf bool, rateLimit bool) *ast.FuncDecl {
+func actionFuncDecl(actions []BackendActionAdapter, csrf bool, rateLimit bool) *ast.FuncDecl {
 	if len(actions) == 0 {
 		return funcDecl("action", actionParams(), boolResults(), []ast.Stmt{returnBool(false)})
 	}
@@ -152,8 +163,8 @@ func actionRequestPathDecl() *ast.FuncDecl {
 	})
 }
 
-func actionCaseStmts(action ActionEndpoint, csrf bool, rateLimit bool) []ast.Stmt {
-	stmts := endpointContextStmts("action", action.PageID, action.ActionName, actionMethod(action), action.Route, action.ErrorPage)
+func actionCaseStmts(action BackendActionAdapter, csrf bool, rateLimit bool) []ast.Stmt {
+	stmts := endpointContextStmts("action", action.PageID, action.ActionName, actionAdapterMethod(action), action.Route, action.ErrorPage)
 	if action.ErrorPage != "" {
 		stmts = append(stmts, endpointPanicBoundaryStmt())
 	}
@@ -226,7 +237,7 @@ func actionParseFormStmtsWithErrors(csrf bool, jsonErrors bool) []ast.Stmt {
 	return stmts
 }
 
-func actionInputDecodeStmts(action ActionEndpoint) []ast.Stmt {
+func actionInputDecodeStmts(action BackendActionAdapter) []ast.Stmt {
 	if action.Binding.Status == source.BackendBindingBound {
 		return boundActionInputDecodeStmts(action)
 	}
@@ -245,7 +256,7 @@ func actionInputDecodeStmts(action ActionEndpoint) []ast.Stmt {
 	return stmts
 }
 
-func boundActionInputDecodeStmts(action ActionEndpoint) []ast.Stmt {
+func boundActionInputDecodeStmts(action BackendActionAdapter) []ast.Stmt {
 	switch action.Binding.Signature {
 	case source.BackendSignatureAction0:
 		if action.ValidatesInput {
@@ -273,7 +284,7 @@ func boundActionInputDecodeStmts(action ActionEndpoint) []ast.Stmt {
 	}
 }
 
-func expectedValuesStmts(action ActionEndpoint) []ast.Stmt {
+func expectedValuesStmts(action BackendActionAdapter) []ast.Stmt {
 	return []ast.Stmt{&ast.IfStmt{
 		Init: define([]ast.Expr{id("decodedValues"), id("err")}, call(sel("gowdkform", "DecodeExpected"), id("values"), formSchemaExpr(action.InputFields))),
 		Cond: notNil("err"),
@@ -285,7 +296,7 @@ func expectedValuesStmts(action ActionEndpoint) []ast.Stmt {
 	}}
 }
 
-func actionRequiredValidationStmts(action ActionEndpoint) []ast.Stmt {
+func actionRequiredValidationStmts(action BackendActionAdapter) []ast.Stmt {
 	stmts := []ast.Stmt{
 		define([]ast.Expr{id("validation")}, &ast.CompositeLit{Type: sel("gowdkvalidation", "Result")}),
 	}
@@ -389,7 +400,7 @@ func actionValidationMessage(custom string, fallback string) string {
 	return custom
 }
 
-func boundActionResultStmts(action ActionEndpoint) []ast.Stmt {
+func boundActionResultStmts(action BackendActionAdapter) []ast.Stmt {
 	args := []ast.Expr{id("ctx")}
 	switch action.Binding.Signature {
 	case source.BackendSignatureAction0:
@@ -414,6 +425,14 @@ func boundActionResultStmts(action ActionEndpoint) []ast.Stmt {
 }
 
 func actionMethod(action ActionEndpoint) string {
+	method := strings.ToUpper(strings.TrimSpace(action.Method))
+	if method == "" {
+		return "POST"
+	}
+	return method
+}
+
+func actionAdapterMethod(action BackendActionAdapter) string {
 	method := strings.ToUpper(strings.TrimSpace(action.Method))
 	if method == "" {
 		return "POST"
@@ -456,7 +475,7 @@ func endpointMetadataExpr(kind, pageID, name, method, route, errorPage string) a
 	}
 }
 
-func actionsUseErrorPages(actions []ActionEndpoint) bool {
+func actionsUseErrorPages(actions []BackendActionAdapter) bool {
 	for _, action := range actions {
 		if action.ErrorPage != "" {
 			return true
@@ -479,7 +498,7 @@ func endpointPanicBoundaryStmt() ast.Stmt {
 	})}
 }
 
-func actionPartialBranchStmts(action ActionEndpoint) []ast.Stmt {
+func actionPartialBranchStmts(action BackendActionAdapter) []ast.Stmt {
 	body := []ast.Stmt{}
 	if len(action.Fragments) == 0 {
 		body = append(body,
@@ -545,7 +564,7 @@ func fragmentResponseStmts(fragment ActionFragment) []ast.Stmt {
 	}
 }
 
-func actionResultStmts(action ActionEndpoint) []ast.Stmt {
+func actionResultStmts(action BackendActionAdapter) []ast.Stmt {
 	if strings.TrimSpace(action.Redirect) == "" {
 		return []ast.Stmt{
 			setNoStoreHeaderStmt(),
@@ -555,7 +574,7 @@ func actionResultStmts(action ActionEndpoint) []ast.Stmt {
 	return []ast.Stmt{writeNoStoreHTTPStmt(call(sel("gowdkresponse", "RedirectTo"), stringLit(action.Redirect)))}
 }
 
-func actionDecoderDecls(actions []ActionEndpoint) []ast.Decl {
+func actionDecoderDecls(actions []BackendActionAdapter) []ast.Decl {
 	var decls []ast.Decl
 	for _, inputType := range uniqueInputTypes(actions) {
 		decls = append(decls, &ast.GenDecl{
@@ -584,7 +603,7 @@ func actionDecoderDecls(actions []ActionEndpoint) []ast.Decl {
 	return decls
 }
 
-func valuesActionDecoderDecl(action ActionEndpoint) *ast.FuncDecl {
+func valuesActionDecoderDecl(action BackendActionAdapter) *ast.FuncDecl {
 	inputType := action.InputType
 	return funcDecl(actionDecoderName(action), []*ast.Field{
 		{Names: []*ast.Ident{id("values")}, Type: sel("gowdkform", "Values")},
@@ -607,7 +626,7 @@ func valuesActionDecoderDecl(action ActionEndpoint) *ast.FuncDecl {
 	})
 }
 
-func uniqueInputTypes(actions []ActionEndpoint) []string {
+func uniqueInputTypes(actions []BackendActionAdapter) []string {
 	seen := map[string]bool{}
 	var types []string
 	for _, action := range actions {
@@ -621,14 +640,14 @@ func uniqueInputTypes(actions []ActionEndpoint) []string {
 	return types
 }
 
-func actionUsesBoundInputDecoder(action ActionEndpoint) bool {
+func actionUsesBoundInputDecoder(action BackendActionAdapter) bool {
 	if action.Binding.Status != source.BackendBindingBound {
 		return false
 	}
 	return action.Binding.Signature == source.BackendSignatureActionForm || action.Binding.Signature == source.BackendSignatureActionFormPtr
 }
 
-func boundActionDecoderDecl(action ActionEndpoint) *ast.FuncDecl {
+func boundActionDecoderDecl(action BackendActionAdapter) *ast.FuncDecl {
 	inputType := sel(action.BackendAlias, action.Binding.InputType)
 	stmts := []ast.Stmt{
 		define([]ast.Expr{id("input")}, &ast.CompositeLit{Type: inputType}),
@@ -706,11 +725,11 @@ func convertIfNeeded(goType string, value ast.Expr) ast.Expr {
 	return call(id(goType), value)
 }
 
-func actionDecoderName(action ActionEndpoint) string {
+func actionDecoderName(action BackendActionAdapter) string {
 	return "decode" + source.ExportedIdentifier(action.PageID, "Action") + source.ExportedIdentifier(action.ActionName, "Action") + "Input"
 }
 
-func boundActionDecoderName(action ActionEndpoint) string {
+func boundActionDecoderName(action BackendActionAdapter) string {
 	return "decode" + source.ExportedIdentifier(action.PageID, "Action") + source.ExportedIdentifier(action.ActionName, "Action") + "BoundInput"
 }
 

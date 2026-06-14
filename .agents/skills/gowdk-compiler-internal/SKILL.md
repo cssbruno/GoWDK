@@ -20,11 +20,12 @@ intentionally, never as a side effect.
   the `internal/lang/tools.go` editor path validates before binding).
 - IR root type: `gwdkir.Program` (Pages, Components, Layouts, Routes with
   `RouteStatic`/`RouteSPA`/`RouteSSR`/`RouteHybrid`, Endpoints, GoEndpoints,
-  Templates, ContractRefs, ClientBehaviors, Assets, Diagnostics, Generated).
+  Templates, ContractRefs, ClientBehaviors, Assets, Diagnostics).
 - Structural invariants: `CheckInvariants(program)` in
-  `internal/gwdkir/invariants.go` — version stamping, deterministic ordering,
-  closed enums, cross-slice references. It does NOT cover user-facing problems
-  (duplicates/conflicts); those belong in `internal/compiler` validators.
+  `internal/gwdkir/invariants.go` — deterministic ordering, closed enums,
+  cross-slice references, and required template bodies. It does NOT cover
+  user-facing problems (duplicates/conflicts); those belong in
+  `internal/compiler` validators.
 - Diagnostics registry: `internal/diagnostics/registry.go`, single
   `Registry = []Code{...}` with snake_case codes, `Area`,
   `Stability{Stable,Experimental,Addon}`, `Severity{Error,Warning,Info}`,

@@ -642,12 +642,14 @@ Every 0.x minor release must have:
 - [ ] Add docs link check, Markdown lint, generated output determinism check,
   release dry run, release artifact smoke workflow, nightly extended examples,
   nightly fuzz/benchmark where practical, and branch protection once stable.
-- [ ] Expand operations docs for static-only deploy, one-binary deploy, split
+- [x] Expand operations docs for static-only deploy, one-binary deploy, split
   frontend/backend deploy, backend-only deploy, Docker, systemd, Caddy, Nginx,
   environment variables, secrets, CSRF secrets, logs, metrics, health,
   readiness, graceful shutdown, cache/CDN, binary rollback, artifact layout,
   backup/restore as user responsibility, incident response as user
   responsibility, dependency update policy, and observability TODOs.
+- [ ] Add optional deployment recipe generators for Docker, systemd, reverse
+  proxy, static-host, and split frontend/backend starting points.
 - [ ] Add performance benchmarks for cold build, incremental build, dev rebuild,
   generated binary startup, static route latency, SSR latency, action latency,
   API latency, fragment latency, memory, binary size, generated JS size,

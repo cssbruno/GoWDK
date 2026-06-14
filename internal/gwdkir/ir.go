@@ -21,6 +21,7 @@ type Program struct {
 	GoEndpoints     []GoEndpoint
 	Templates       []Template
 	ContractRefs    []ContractReference
+	AuditSpecs      []AuditSpec
 	ClientBehaviors []ClientBehavior
 	Assets          []Asset
 	Diagnostics     []Diagnostic
@@ -60,6 +61,7 @@ const (
 	SourcePage      SourceKind = "page"
 	SourceComponent SourceKind = "component"
 	SourceLayout    SourceKind = "layout"
+	SourceAudit     SourceKind = "audit"
 )
 
 // Import records a Go package import used by analyzed source.
@@ -476,6 +478,46 @@ const (
 	ContractBindingMissing ContractBindingStatus = "missing"
 	ContractBindingInvalid ContractBindingStatus = "invalid"
 )
+
+// AuditSpec is the normalized IR for one *.audit.gwdk source.
+type AuditSpec struct {
+	Source   string
+	Package  string
+	Policies []AuditPolicy
+	Tests    []AuditTest
+	Span     source.SourceSpan
+}
+
+// AuditPolicy declares a composable policy that can extend other policies and
+// apply rules to selectors.
+type AuditPolicy struct {
+	Name    string
+	Extends []string
+	Applies []AuditApply
+	Rules   []AuditRule
+	Span    source.SourceSpan
+}
+
+// AuditApply records one selector applied to a declared policy.
+type AuditApply struct {
+	Selector string
+	Span     source.SourceSpan
+}
+
+// AuditRule records one declared policy rule.
+type AuditRule struct {
+	Kind  string
+	Value string
+	Code  string
+	Span  source.SourceSpan
+}
+
+// AuditTest preserves a declared test block for Phase 4 runtime verification.
+type AuditTest struct {
+	Name string
+	Body string
+	Span source.SourceSpan
+}
 
 // ClientBehavior records a compiler-owned client block. The body is retained
 // until the client language has a dedicated full AST.

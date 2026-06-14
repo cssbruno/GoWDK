@@ -131,6 +131,12 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 	}
 	result.OpenAPIPath = openAPIPath
 	reporter.info("report", "openapi_written", "OpenAPI report written", BuildEvent{Path: eventPath(outputDir, openAPIPath)})
+	securityManifestPath, err := writeSecurityManifest(outputDir, config, ir)
+	if err != nil {
+		return Result{}, reporter.fail("manifest", err)
+	}
+	result.SecurityManifestPath = securityManifestPath
+	reporter.info("manifest", "security_manifest_written", "security manifest written", BuildEvent{Path: eventPath(outputDir, securityManifestPath)})
 	reporter.info("complete", "build_complete", "SPA build completed", BuildEvent{
 		Data: map[string]string{
 			"pages":  fmt.Sprint(len(result.Artifacts)),
@@ -229,6 +235,11 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 		},
 		Files: map[string][]byte{},
 	}
+	manifestPath, err := securityManifestPath(outputDir)
+	if err != nil {
+		return MemoryResult{}, reporter.fail("manifest", err)
+	}
+	result.SecurityManifestPath = manifestPath
 	for _, artifact := range planned.css {
 		rel, err := relativeOutputPath(outputDir, artifact.Path)
 		if err != nil {
@@ -283,6 +294,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	}
 	result.Files[openAPIFile] = openAPI
 	reporter.info("report", "openapi_collected", "OpenAPI report collected", BuildEvent{Path: openAPIFile})
+	reporter.info("manifest", "security_manifest_planned", "security manifest planned outside served output", BuildEvent{Path: eventPath(outputDir, result.SecurityManifestPath)})
 	reporter.info("complete", "build_complete", "in-memory SPA build completed", BuildEvent{
 		Data: map[string]string{
 			"pages":  fmt.Sprint(len(result.Artifacts)),
@@ -574,6 +586,12 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	}
 	result.OpenAPIPath = openAPIPath
 	reporter.info("report", "openapi_written", "OpenAPI report written", BuildEvent{Path: eventPath(outputDir, openAPIPath)})
+	securityManifestPath, err := writeSecurityManifest(outputDir, config, ir)
+	if err != nil {
+		return Result{}, reporter.fail("manifest", err)
+	}
+	result.SecurityManifestPath = securityManifestPath
+	reporter.info("manifest", "security_manifest_written", "security manifest written", BuildEvent{Path: eventPath(outputDir, securityManifestPath)})
 	reporter.info("complete", "build_complete", "incremental SPA build completed", BuildEvent{
 		Data: map[string]string{
 			"pages":        fmt.Sprint(len(result.Artifacts)),

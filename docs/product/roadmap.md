@@ -117,8 +117,8 @@ level, the current baseline already includes:
 - build-time SPA output for simple pages, dynamic `paths {}` subsets, literal,
   imported, same-package, and default `go {}` build data subsets, layouts, components, CSS
   assets, route manifests, asset manifests, build reports, generated app
-  output, embedded assets, local binaries, WASM deploy artifacts, and a polling
-  dev server with live reload;
+  output, non-served security posture reports, embedded assets, local binaries,
+  WASM deploy artifacts, and a polling dev server with live reload;
 - component discovery, imported props/state contracts, slots, generated
   JavaScript islands, component-level WASM island assets, and a first-slice client
   language for local component behavior;
@@ -133,6 +133,10 @@ level, the current baseline already includes:
   standalone fragment routes, and concrete or dynamic request-time SSR pages
   with declared `load {}` fields through buildgen, appgen, `runtime/app`, and
   `runtime/route`.
+- `gowdk audit` posture and policy evaluation for routes, backend endpoints,
+  command/query contract web endpoints, and frontend audit surfaces, with
+  declared `*.audit.gwdk` policies, generated runtime audit tests,
+  registry-backed findings, and CI-friendly JSON output.
 
 Do not roadmap those completed slices as future work. Future work should
 stabilize their contracts, remove generation debt, and fill the missing

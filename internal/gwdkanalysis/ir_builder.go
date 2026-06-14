@@ -15,6 +15,7 @@ type Sources struct {
 	Pages      []gwdkir.Page
 	Components []gwdkir.Component
 	Layouts    []gwdkir.Layout
+	AuditSpecs []gwdkir.AuditSpec
 }
 
 // BuildProgram assembles the stable compiler IR from parsed IR records:
@@ -37,6 +38,9 @@ func BuildProgram(config gowdk.Config, sources Sources) gwdkir.Program {
 	}
 	for _, layout := range sources.Layouts {
 		builder.addLayout(layout)
+	}
+	for _, audit := range sources.AuditSpecs {
+		builder.addAuditSpec(audit)
 	}
 
 	builder.finishPackages()
@@ -63,6 +67,12 @@ func (builder *irBuilder) ensurePackage(name string, src string) *gwdkir.Package
 		pkg.SourceDirs = append(pkg.SourceDirs, dir)
 	}
 	return pkg
+}
+
+func (builder *irBuilder) addAuditSpec(audit gwdkir.AuditSpec) {
+	builder.program.AuditSpecs = append(builder.program.AuditSpecs, audit)
+	pkg := builder.ensurePackage(audit.Package, audit.Source)
+	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: audit.Source, Kind: gwdkir.SourceAudit, Package: audit.Package, Name: filepath.Base(audit.Source), Span: audit.Span})
 }
 
 func (builder *irBuilder) addPage(page gwdkir.Page) {

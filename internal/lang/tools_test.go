@@ -435,6 +435,8 @@ func TestClassifySourceUsesCurrentFileKindRules(t *testing.T) {
 		{"root.gwdk", "layout root", FileKindLayout},
 		{"root.layout.gwdk", "layout root", FileKindLayout},
 		{"images.asset.gwdk", "asset images", FileKindAsset},
+		{"security.audit.gwdk", "policy frontend {", FileKindAudit},
+		{"security.gwdk", "policy frontend {", FileKindAudit},
 	}
 
 	for _, tc := range cases {

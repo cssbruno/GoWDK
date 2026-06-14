@@ -1,0 +1,16 @@
+package security
+
+policy admin extends "baseline.api" {
+  match "/admin/**"
+  require guard "role:admin"
+  deny public
+  require max_body "256kb"
+  require header "Content-Security-Policy"
+  require no_secrets_in_bundle
+  deny raw_html
+  allow raw_html "home:TrustedHTML"
+}
+
+test admin_forbidden {
+  expect GET "/admin" as "anonymous" status 403
+}

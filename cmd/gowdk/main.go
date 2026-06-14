@@ -64,6 +64,8 @@ func run(args []string) error {
 		return explainDiagnostic(args[1:])
 	case "doctor":
 		return doctor(args[1:])
+	case "audit":
+		return audit(args[1:])
 	case "contracts":
 		return contractsReport(args[1:])
 	case "graph":
@@ -126,6 +128,7 @@ func usage() {
 	fmt.Println("  generate stubs [--config <file>] [--module <name>] [--ssr] [files...] write missing action/API Go handler stubs")
 	fmt.Println("  explain [--json] <diagnostic-code> explain a diagnostic code and next steps")
 	fmt.Println("  doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health")
+	fmt.Println("  audit [--config <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...] check security posture and optional runtime tests")
 	fmt.Println("  contracts [--json] [dir]  print Go contract registration metadata")
 	fmt.Println("  graph [--json] [dir]      print command/event contract graph")
 	fmt.Println("  trace <contract> [--json] [dir] print one command/query/event/job contract trace")

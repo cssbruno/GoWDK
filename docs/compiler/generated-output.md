@@ -259,6 +259,9 @@ requests, applies `http.Server` defaults of `ReadHeaderTimeout: 5s`,
 `MaxHeaderBytes: 1 MiB`, maps extensionless routes to nested `index.html`
 files, and does not list directories. It exposes `/_gowdk/health` and adds
 `X-GOWDK-App`, `X-GOWDK-Module`, and `X-GOWDK-Instance-ID` headers to responses.
+When `Build.SecurityHeaders.Enabled` is true, generated apps also pass the
+configured header map into `runtime/app` so every response path emits those
+headers.
 Request-time action/API/fragment dispatch registers generated backend routes with
 `runtime/app.BackendRouter` and passes the router hook into `runtime/app`.
 Generated action/API body caps default to 1 MiB and use `Build.BodyLimits`

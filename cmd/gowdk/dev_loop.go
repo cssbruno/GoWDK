@@ -124,6 +124,9 @@ func buildIncrementalSPA(args []string, change inputChange) (bool, error) {
 	if result.AssetManifestPath != "" {
 		fmt.Println(result.AssetManifestPath)
 	}
+	if result.SecurityManifestPath != "" {
+		fmt.Println(result.SecurityManifestPath)
+	}
 	if result.BuildReportPath != "" {
 		fmt.Println(result.BuildReportPath)
 	}

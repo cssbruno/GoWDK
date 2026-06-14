@@ -39,17 +39,18 @@ type Identity struct {
 
 // Handler serves embedded generated output plus optional action and SSR hooks.
 type Handler struct {
-	Root       fs.FS
-	Identity   Identity
-	Assets     asset.Manifest
-	Backend    HandlerFunc
-	Action     HandlerFunc
-	API        HandlerFunc
-	CSRF       CSRFTokenSource
-	ErrorPages ErrorPages
-	Metrics    *Metrics
-	SSRExact   HandlerFunc
-	SSRDynamic HandlerFunc
+	Root            fs.FS
+	Identity        Identity
+	SecurityHeaders map[string]string
+	Assets          asset.Manifest
+	Backend         HandlerFunc
+	Action          HandlerFunc
+	API             HandlerFunc
+	CSRF            CSRFTokenSource
+	ErrorPages      ErrorPages
+	Metrics         *Metrics
+	SSRExact        HandlerFunc
+	SSRDynamic      HandlerFunc
 
 	// Denied holds concrete page routes that declared no guard. Such a page is
 	// not public by default: its GET/HEAD route returns 403 until the author
@@ -115,6 +116,7 @@ func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Req
 		defer cancel()
 		request = request.WithContext(ctx)
 	}
+	handler.writeSecurityHeaders(response)
 	handler.writeIdentityHeaders(response)
 	if len(handler.ErrorPages.NotFound) > 0 || len(handler.ErrorPages.InternalServerError) > 0 || len(handler.ErrorPages.Custom) > 0 {
 		request = request.WithContext(withErrorPages(request.Context(), handler.ErrorPages))
@@ -548,6 +550,16 @@ func (handler Handler) writeIdentityHeaders(response http.ResponseWriter) {
 	response.Header().Set("X-GOWDK-Instance-ID", handler.Identity.InstanceID)
 }
 
+func (handler Handler) writeSecurityHeaders(response http.ResponseWriter) {
+	for name, value := range handler.SecurityHeaders {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		response.Header().Set(name, value)
+	}
+}
+
 func (handler Handler) health(response http.ResponseWriter) {
 	response.Header().Set("Content-Type", "application/json")
 	payload := map[string]any{
@@ -590,6 +602,9 @@ func readSPAFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
 	if name == "" {
 		name = "index.html"
 	}
+	if unsafeSPAFile(name) {
+		return nil, nil, false
+	}
 	info, err := fs.Stat(root, name)
 	if err != nil {
 		return nil, nil, false
@@ -606,4 +621,8 @@ func readSPAFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
 		return nil, nil, false
 	}
 	return payload, info, true
+}
+
+func unsafeSPAFile(name string) bool {
+	return strings.EqualFold(path.Base(name), "gowdk-security.json")
 }

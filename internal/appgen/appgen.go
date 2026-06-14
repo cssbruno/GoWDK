@@ -14,6 +14,7 @@ const (
 	serverDirName     = "cmd/server"
 	appOutputDirName  = appPackageDirName + "/app"
 	appFileName       = appPackageDirName + "/app.go"
+	auditTestFileName = appPackageDirName + "/gowdk_audit_test.go"
 	mainFileName      = serverDirName + "/main.go"
 	modFileName       = "go.mod"
 )
@@ -97,6 +98,18 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (Result, err
 		return Result{}, err
 	}
 	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), appSource); err != nil {
+		return Result{}, err
+	}
+	auditTestSource, err := GeneratedAuditTestSource(options)
+	if err != nil {
+		return Result{}, err
+	}
+	auditTestPath := filepath.Join(absApp, auditTestFileName)
+	if len(auditTestSource) > 0 {
+		if err := writeFileIfChanged(auditTestPath, auditTestSource); err != nil {
+			return Result{}, err
+		}
+	} else if err := os.Remove(auditTestPath); err != nil && !os.IsNotExist(err) {
 		return Result{}, err
 	}
 	scriptFiles, err := writeInlineGoBlockFiles(absApp, options)

@@ -18,6 +18,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/securitymanifest"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -111,6 +112,196 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 	}
 }
 
+func TestGenerateWiresSecurityHeadersWhenConfigured(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{
+			Build: gowdk.BuildConfig{
+				SecurityHeaders: gowdk.SecurityHeadersConfig{
+					Enabled: true,
+					Headers: map[string]string{
+						"Content-Security-Policy": "default-src 'self'",
+						"X-Frame-Options":         "DENY",
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`SecurityHeaders: map[string]string{`,
+		`"Content-Security-Policy": "default-src 'self'",`,
+		`"X-Frame-Options": "DENY"`,
+	} {
+		if !strings.Contains(string(payload), expected) {
+			t.Fatalf("expected generated app to contain %q:\n%s", expected, payload)
+		}
+	}
+}
+
+func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{
+			Env: gowdk.EnvConfig{
+				Vars: []gowdk.EnvVar{
+					{Name: "GOWDK_TEST_REGION", Required: true},
+				},
+				Secrets: []gowdk.SecretEnv{
+					{Name: "GOWDK_TEST_DATABASE_URL", Required: true},
+				},
+			},
+			Build: gowdk.BuildConfig{
+				SecurityHeaders: gowdk.SecurityHeadersConfig{
+					Enabled: true,
+					Headers: map[string]string{"X-Frame-Options": "DENY"},
+				},
+				CSRF: gowdk.CSRFConfig{Enabled: true, SecretEnv: "GOWDK_TEST_CSRF_SECRET"},
+			},
+		},
+		Actions: []ActionEndpoint{{
+			PageID:     "home",
+			ActionName: "Submit",
+			Route:      "/submit",
+		}},
+		IR: &gwdkir.Program{
+			Routes: []gwdkir.Route{{
+				Kind:   gwdkir.RouteSPA,
+				Method: "GET",
+				Path:   "/",
+				PageID: "home",
+				Render: gowdk.SPA,
+				Guards: []string{"public"},
+			}},
+			AuditSpecs: []gwdkir.AuditSpec{{
+				Source: "security.audit.gwdk",
+				Tests: []gwdkir.AuditTest{{
+					Name: "home",
+					Body: `expect GET "/" status 200`,
+				}},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(result.AppDir, auditTestFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"package gowdkapp",
+		"func TestGOWDKAuditGeneratedSecurityPosture(t *testing.T)",
+		`t.Setenv("GOWDK_TEST_CSRF_SECRET", "gowdk-audit-test")`,
+		`t.Setenv("GOWDK_TEST_DATABASE_URL", "gowdk-audit-test")`,
+		`t.Setenv("GOWDK_TEST_REGION", "gowdk-audit-test")`,
+		"handler, err := Handler()",
+		`Name:       "route serves /"`,
+		`WantStatus: http.StatusOK`,
+		`Name:       "security header X-Frame-Options"`,
+		`WantHeader: map[string]string{`,
+		`"X-Frame-Options": "DENY"`,
+		`Name:       "home GET /"`,
+	} {
+		if !strings.Contains(string(payload), expected) {
+			t.Fatalf("expected generated audit test to contain %q:\n%s", expected, payload)
+		}
+	}
+}
+
+func TestStandaloneAuditTestRejectsActorScenarios(t *testing.T) {
+	specs := []gwdkir.AuditSpec{{
+		Source: "security.audit.gwdk",
+		Tests: []gwdkir.AuditTest{{
+			Name: "admin",
+			Body: `expect GET "/admin" as "role:admin" status 200`,
+		}},
+	}}
+	// The standalone harness cannot enforce role/permission guards, so emitting
+	// an actor scenario as a standalone test must fail loudly rather than
+	// produce a test that passes or fails for the wrong reason.
+	if _, err := StandaloneAuditTestSource(gowdk.Config{}, securitymanifest.SecurityManifest{}, specs); err == nil {
+		t.Fatal("expected standalone audit emit to reject actor scenarios")
+	}
+	// The generated-app path runs against the real guard pipeline, so the same
+	// actor scenario is supported there.
+	source, err := GeneratedAuditTestSource(Options{
+		SSR: []SSRRoute{{Route: "/admin", Guards: []string{"role:admin"}}},
+		IR: &gwdkir.Program{
+			Routes: []gwdkir.Route{{
+				Kind:   gwdkir.RouteSSR,
+				Method: "GET",
+				Path:   "/admin",
+				PageID: "admin",
+				Render: gowdk.SSR,
+				Guards: []string{"role:admin"},
+			}},
+			AuditSpecs: specs,
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected generated-app actor test to succeed: %v", err)
+	}
+	if !strings.Contains(string(source), `"X-GOWDK-Audit-Actor": "role:admin"`) {
+		t.Fatalf("expected generated-app actor scenario, got:\n%s", source)
+	}
+}
+
+func TestGeneratedAuditTestInstallsNativeRBACActorProvider(t *testing.T) {
+	source, err := GeneratedAuditTestSource(Options{
+		SSR: []SSRRoute{{
+			Route:  "/admin",
+			Guards: []string{"role:admin"},
+		}},
+		IR: &gwdkir.Program{
+			Routes: []gwdkir.Route{{
+				Kind:   gwdkir.RouteSSR,
+				Method: "GET",
+				Path:   "/admin",
+				PageID: "admin",
+				Render: gowdk.SSR,
+				Guards: []string{"role:admin"},
+			}},
+			AuditSpecs: []gwdkir.AuditSpec{{
+				Source: "security.audit.gwdk",
+				Tests: []gwdkir.AuditTest{{
+					Name: "admin",
+					Body: `expect GET "/admin" as "role:admin" status 200`,
+				}},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := string(source)
+	for _, expected := range []string{
+		`gowdkauth "github.com/cssbruno/gowdk/runtime/auth"`,
+		`"strings"`,
+		`RegisterAuthProvider(gowdkauth.ProviderFunc`,
+		`strings.TrimPrefix(actor, "role:")`,
+		`"X-GOWDK-Audit-Actor": "role:admin"`,
+	} {
+		if !strings.Contains(payload, expected) {
+			t.Fatalf("expected generated audit test to contain %q:\n%s", expected, payload)
+		}
+	}
+}
+
 func TestGeneratePreservesUnchangedFilesAndRemovesStaleSPAFiles(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -185,6 +376,7 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "keys", "id_ed25519"), "private key")
 	writeTestFile(t, filepath.Join(outputDir, "keys", "ID_RSA"), "private key")
 	writeTestFile(t, filepath.Join(outputDir, ".npmrc"), "//registry.example/:_authToken=secret")
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-security.json"), `{"endpoints":[{"path":"/admin"}]}`)
 	writeTestFile(t, filepath.Join(outputDir, "assets", "scratch.tmp"), "temporary")
 	writeTestFile(t, filepath.Join(outputDir, "assets", "app.css"), "body{}")
 
@@ -205,6 +397,7 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 		filepath.Join(result.OutputDir, "tmp", "asset.css"),
 		filepath.Join(result.OutputDir, "private", "notes.txt"),
 		filepath.Join(result.OutputDir, "secrets", "config.json"),
+		filepath.Join(result.OutputDir, "gowdk-security.json"),
 		filepath.Join(result.OutputDir, "keys", "server.key"),
 		filepath.Join(result.OutputDir, "keys", "server.pem"),
 		filepath.Join(result.OutputDir, "keys", "server-upper.PEM"),
@@ -590,6 +783,48 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 	}
 	if strings.Contains(source, `func backend(response http.ResponseWriter, request *http.Request) bool`) {
 		t.Fatalf("expected backend-only app to use BackendRouter instead of generated backend dispatcher:\n%s", source)
+	}
+}
+
+func TestGenerateBackendAppWiresSecurityHeaders(t *testing.T) {
+	appDir := filepath.Join(t.TempDir(), "generated-backend")
+
+	result, err := GenerateBackendWithOptions(appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{
+			SecurityHeaders: gowdk.SecurityHeadersConfig{
+				Enabled: true,
+				Headers: map[string]string{"X-Frame-Options": "DENY"},
+			},
+		}},
+		APIs: []APIEndpoint{{
+			PageID:  "status",
+			APIName: "Health",
+			Method:  "GET",
+			Route:   "/api/health",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`"strings"`,
+		`mux.Handle("/", http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {`,
+		`for name, value := range map[string]string{"X-Frame-Options": "DENY"} {`,
+		`if strings.TrimSpace(name) == "" {`,
+		`response.Header().Set(name, value)`,
+		`backendRouter.ServeHTTP(response, request)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated backend app source to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, `mux.Handle("/", backendRouter)`) {
+		t.Fatalf("backend-only app with configured security headers should wrap the router:\n%s", source)
 	}
 }
 

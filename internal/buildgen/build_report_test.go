@@ -42,6 +42,16 @@ func TestBuildWritesSPAHTMLForSimpleRoute(t *testing.T) {
 	if result.BuildReportPath != filepath.Join(outputDir, buildReportFile) {
 		t.Fatalf("expected build report path, got %q", result.BuildReportPath)
 	}
+	expectedSecurityManifestPath, err := securityManifestPath(outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SecurityManifestPath != expectedSecurityManifestPath {
+		t.Fatalf("expected external security manifest path %q, got %q", expectedSecurityManifestPath, result.SecurityManifestPath)
+	}
+	if strings.HasPrefix(result.SecurityManifestPath, outputDir+string(filepath.Separator)) {
+		t.Fatalf("security manifest must not live under served output dir: %q", result.SecurityManifestPath)
+	}
 	if result.Report.Version != 1 || result.Report.Mode != "build" {
 		t.Fatalf("unexpected build report: %#v", result.Report)
 	}
@@ -106,6 +116,17 @@ func TestBuildWritesSPAHTMLForSimpleRoute(t *testing.T) {
 	}
 	if report.Mode != "build" || !hasBuildReportEvent(report, "complete", "build_complete") {
 		t.Fatalf("unexpected build report payload: %s", reportPayload)
+	}
+
+	securityPayload, err := os.ReadFile(result.SecurityManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(securityPayload), `"generatedFrom": "ir"`) {
+		t.Fatalf("expected security manifest payload, got:\n%s", securityPayload)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, securityManifestFile)); !os.IsNotExist(err) {
+		t.Fatalf("security manifest must not be written to served output root, stat err=%v", err)
 	}
 }
 
@@ -257,6 +278,13 @@ func TestBuildMemoryReturnsSPAArtifactsWithoutWriting(t *testing.T) {
 	if result.BuildReportPath != filepath.Join(outputDir, buildReportFile) {
 		t.Fatalf("expected build report path, got %q", result.BuildReportPath)
 	}
+	expectedSecurityManifestPath, err := securityManifestPath(outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SecurityManifestPath != expectedSecurityManifestPath {
+		t.Fatalf("expected external security manifest path %q, got %q", expectedSecurityManifestPath, result.SecurityManifestPath)
+	}
 	if result.Report.Version != 1 || result.Report.Mode != "memory" {
 		t.Fatalf("unexpected memory build report: %#v", result.Report)
 	}
@@ -276,6 +304,38 @@ func TestBuildMemoryReturnsSPAArtifactsWithoutWriting(t *testing.T) {
 	}
 	if !strings.Contains(string(result.Files[buildReportFile]), `"mode": "memory"`) {
 		t.Fatalf("expected build report in memory result: %s", result.Files[buildReportFile])
+	}
+	if _, ok := result.Files[securityManifestFile]; ok {
+		t.Fatalf("security manifest must not be returned as a served memory output file")
+	}
+	if _, err := os.Stat(result.SecurityManifestPath); !os.IsNotExist(err) {
+		t.Fatalf("memory build should not write the external security manifest, stat error = %v", err)
+	}
+}
+
+func TestBuildRemovesStaleServedSecurityManifest(t *testing.T) {
+	outputDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outputDir, securityManifestFile), []byte(`{"stale":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "home",
+		Route: "/",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+		},
+	}}}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, securityManifestFile)); !os.IsNotExist(err) {
+		t.Fatalf("expected stale served security manifest to be removed, stat err=%v", err)
+	}
+	if _, err := os.Stat(result.SecurityManifestPath); err != nil {
+		t.Fatalf("expected external security manifest to be written: %v", err)
 	}
 }
 

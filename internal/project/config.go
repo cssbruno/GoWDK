@@ -483,6 +483,8 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 			build.Head = parseHeadConfig(keyValue.Value)
 		case "CSRF":
 			build.CSRF = parseCSRFConfig(keyValue.Value)
+		case "SecurityHeaders":
+			build.SecurityHeaders = parseSecurityHeadersConfig(keyValue.Value)
 		case "BodyLimits":
 			build.BodyLimits = parseBodyLimitsConfig(keyValue.Value)
 		case "AllowMissingBackend":
@@ -496,6 +498,32 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 		}
 	}
 	return build
+}
+
+func parseSecurityHeadersConfig(expression ast.Expr) gowdk.SecurityHeadersConfig {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return gowdk.SecurityHeadersConfig{}
+	}
+
+	var headers gowdk.SecurityHeadersConfig
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch key.Name {
+		case "Enabled":
+			headers.Enabled = parseBool(keyValue.Value)
+		case "Headers":
+			headers.Headers = parseStringMap(keyValue.Value)
+		}
+	}
+	return headers
 }
 
 func parseBodyLimitsConfig(expression ast.Expr) gowdk.BodyLimitsConfig {
@@ -671,6 +699,30 @@ func parseBuildTarget(expression ast.Expr) gowdk.BuildTargetConfig {
 		}
 	}
 	return target
+}
+
+func parseStringMap(expression ast.Expr) map[string]string {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil
+	}
+	values := map[string]string{}
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key := parseString(keyValue.Key)
+		value := parseString(keyValue.Value)
+		if key == "" {
+			continue
+		}
+		values[key] = value
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	return values
 }
 
 func parseStylesheets(expression ast.Expr) []gowdk.Stylesheet {

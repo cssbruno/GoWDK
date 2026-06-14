@@ -164,6 +164,51 @@ such as `index.html`; those route entries do not need to appear in `files`.
 Configured stylesheet links are not included unless GOWDK emits the referenced
 file.
 
+## Current Security Manifest
+
+`gowdk build` also writes `gowdk-security.json` as a non-served report outside
+the selected output directory, under a sibling
+`.gowdk/reports/<output-name>/` directory. It is a declarative, IR-derived
+security posture: every route, backend endpoint, and contract with its guards,
+CSRF state, body limit, public/default-deny classification, and source
+location, plus a `frontend` surface block. Like the route and asset manifests,
+it is pure data — it never evaluates policy. `gowdk audit` reads this same
+posture and applies the security baseline plus declared `*.audit.gwdk` policies
+to produce findings.
+
+```json
+{
+  "version": 1,
+  "generatedFrom": "ir",
+  "endpoints": [
+    {
+      "id": "Submit",
+      "kind": "action",
+      "method": "POST",
+      "path": "/submit",
+      "guards": ["public"],
+      "csrf": false,
+      "bodyLimitBytes": 1048576,
+      "public": true,
+      "defaultDeny": false,
+      "pageId": "signup",
+      "source": "signup.page.gwdk:8"
+    }
+  ],
+  "frontend": {
+    "unguardedRoutes": [],
+    "bundleSecrets": [],
+    "rawHtmlSinks": [],
+    "configuredHeaders": []
+  }
+}
+```
+
+`version` is the security manifest schema version. The `frontend` block records
+client-visible routes that rely on generated default-deny handling, secret-like
+embedded assets or build-time values, raw `g:html` sinks, and configured
+security response header names.
+
 ## Planned Manifest Work
 
 Future manifest versions need full action/API metadata, transitive

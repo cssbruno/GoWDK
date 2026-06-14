@@ -44,6 +44,34 @@ func TestHandlerServesAppIndexAndIdentityHeaders(t *testing.T) {
 	}
 }
 
+func TestHandlerWritesConfiguredSecurityHeaders(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html": {Data: []byte("<main>Home</main>")},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+		SecurityHeaders: map[string]string{
+			"Content-Security-Policy": "default-src 'self'",
+			"X-Frame-Options":         "DENY",
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if got := recorder.Header().Get("Content-Security-Policy"); got != "default-src 'self'" {
+		t.Fatalf("unexpected CSP header: %q", got)
+	}
+	if got := recorder.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Fatalf("unexpected frame header: %q", got)
+	}
+}
+
 func TestHandlerDeniesGuardlessRouteWith403(t *testing.T) {
 	handler := Handler{
 		Root: fstest.MapFS{
@@ -175,6 +203,24 @@ func TestHandlerAppliesAssetManifestCachePolicy(t *testing.T) {
 	}
 	if cache := recorder.Header().Get("Cache-Control"); cache != "public, max-age=31536000, immutable" {
 		t.Fatalf("expected manifest cache policy, got %q", cache)
+	}
+}
+
+func TestHandlerDoesNotServeSecurityManifest(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"gowdk-security.json": {Data: []byte(`{"endpoints":[{"path":"/admin"}]}`)},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/gowdk-security.json", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d with body %s", recorder.Code, recorder.Body.String())
 	}
 }
 

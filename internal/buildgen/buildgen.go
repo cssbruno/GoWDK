@@ -13,6 +13,8 @@ const assetManifestFile = "gowdk-assets.json"
 
 const buildReportFile = "gowdk-build-report.json"
 
+const securityManifestFile = "gowdk-security.json"
+
 const immutableAssetCachePolicy = "public, max-age=31536000, immutable"
 
 // noCacheAssetCachePolicy forces revalidation (via ETag/ModTime) for assets

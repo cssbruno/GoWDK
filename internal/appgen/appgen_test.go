@@ -82,8 +82,9 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 		"//go:embed app",
 		"func Handler() (http.Handler, error)",
 		"func ServeMux() (*http.ServeMux, error)",
+		"func RegisterMiddleware(middleware gowdkruntime.Middleware)",
 		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
-		`mux.Handle("/", gowdkruntime.Handler{`,
+		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(gowdkruntime.Handler{`,
 		`Identity: gowdkruntime.InstanceIdentity(),`,
 		`Assets: gowdkruntime.LoadAssetManifest(root),`,
 		`ErrorPages: gowdkruntime.LoadErrorPages(root),`,
@@ -828,13 +829,14 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`errors`,
+		`"errors"`,
 		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
-		`os`,
+		`"os"`,
 		`strings`,
+		`func RegisterMiddleware(middleware gowdkruntime.Middleware)`,
 		`if err := validateEnvContract(); err != nil {`,
 		`backendRouter, err := newBackendRouter()`,
-		`mux.Handle("/", backendRouter)`,
+		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(backendRouter, registeredMiddlewares()...))`,
 		`func validateEnvContract() error`,
 		`value := os.Getenv("GOWDK_TEST_DATABASE_URL")`,
 		`missing = append(missing, "GOWDK_TEST_DATABASE_URL is required but is not set")`,
@@ -884,7 +886,7 @@ func TestGenerateBackendAppWiresSecurityHeaders(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`"strings"`,
-		`mux.Handle("/", http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {`,
+		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {`,
 		`for name, value := range map[string]string{"X-Frame-Options": "DENY"} {`,
 		`if strings.TrimSpace(name) == "" {`,
 		`response.Header().Set(name, value)`,

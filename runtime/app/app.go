@@ -25,6 +25,9 @@ import (
 // wrote a response.
 type HandlerFunc func(http.ResponseWriter, *http.Request) bool
 
+// Middleware wraps the generated app handler chain.
+type Middleware func(http.Handler) http.Handler
+
 // CSRFTokenSource generates tokens for generated action forms.
 type CSRFTokenSource interface {
 	Token(http.ResponseWriter, *http.Request) (string, error)
@@ -43,6 +46,7 @@ type Handler struct {
 	Root            fs.FS
 	Identity        Identity
 	SecurityHeaders map[string]string
+	Middlewares     []Middleware
 	Assets          asset.Manifest
 	Backend         HandlerFunc
 	Action          HandlerFunc
@@ -109,7 +113,42 @@ func LoadAssetManifest(root fs.FS) asset.Manifest {
 	return manifest
 }
 
+// ApplyMiddlewares wraps next with middlewares in declaration order. The first
+// middleware in the slice runs first for each request.
+func ApplyMiddlewares(next http.Handler, middlewares ...Middleware) http.Handler {
+	if next == nil {
+		next = middlewareErrorHandler("gowdk middleware chain missing handler")
+	}
+	for index := len(middlewares) - 1; index >= 0; index-- {
+		middleware := middlewares[index]
+		if middleware == nil {
+			continue
+		}
+		wrapped := middleware(next)
+		if wrapped == nil {
+			next = middlewareErrorHandler("gowdk middleware returned nil handler")
+			continue
+		}
+		next = wrapped
+	}
+	return next
+}
+
+func middlewareErrorHandler(message string) http.Handler {
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		http.Error(response, message, http.StatusInternalServerError)
+	})
+}
+
 func (handler Handler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if len(handler.Middlewares) > 0 {
+		ApplyMiddlewares(http.HandlerFunc(handler.serveHTTP), handler.Middlewares...).ServeHTTP(response, request)
+		return
+	}
+	handler.serveHTTP(response, request)
+}
+
+func (handler Handler) serveHTTP(response http.ResponseWriter, request *http.Request) {
 	metrics := handler.Metrics
 	metrics.recordRequest()
 	if handler.RequestTimeout > 0 {

@@ -150,7 +150,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
 	if diagnostics.HasErrors() {
-		return fmt.Errorf("build failed")
+		return newDevDiagnosticError("build failed", devOverlayDiagnosticsFromLang(diagnostics))
 	}
 	var ir gwdkir.Program
 	timings.measure("ir_assembly", func() error {
@@ -186,7 +186,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		fmt.Fprintln(os.Stderr, prefix+diagnostic.Error())
 	}
 	if report.HasErrors() {
-		return fmt.Errorf("build failed")
+		return newDevDiagnosticError("build failed", devOverlayDiagnosticsFromCompiler(report))
 	}
 	var contractReport contractscan.Report
 	if err := timings.measure("contract_validation", func() error {
@@ -199,6 +199,10 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		return compiler.ValidateContractReferences(ir.ContractRefs)
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		var report compiler.ValidationErrors
+		if errors.As(err, &report) {
+			return newDevDiagnosticError("build failed", devOverlayDiagnosticsFromCompiler(report))
+		}
 		return fmt.Errorf("build failed")
 	}
 

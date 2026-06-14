@@ -13,7 +13,9 @@ The command:
 - polls explicit or discovered `.gwdk`, CSS, and config inputs;
 - prints changed, added, and removed input paths when a rebuild starts;
 - injects a small server-sent-events live-reload script into served HTML;
-- shows a browser overlay for rebuild compiler/build failures;
+- shows a browser overlay for rebuild compiler/build failures with diagnostic
+  code, source range, last-good build time, and changed-file context when
+  available;
 - keeps serving the last successful output when rebuilds fail.
 
 When `--app <dir>` or a selected target has `App`, `dev` also builds the
@@ -53,13 +55,23 @@ after GOWDK has a stable component/client dependency graph.
 
 For plain SPA/static dev serving, rebuild compiler/build failures are printed
 to the terminal and sent to the browser over the existing live-reload event
-stream. The injected script shows a fixed overlay with the failure text while
-the last successful output continues to serve. The overlay is removed on the
-next successful rebuild and page reload.
+stream. The injected script shows a fixed overlay while the last successful
+output continues to serve.
+
+The overlay includes, when available:
+
+- diagnostic code, severity, message, source file, and source range;
+- last successful build time;
+- files that triggered the failed rebuild;
+- generated route/endpoint attribution when the failing build report carries
+  that metadata.
+
+The overlay is removed on the next successful rebuild and page reload.
 
 Generated app runtime mode keeps runtime stdout/stderr attached to the terminal.
 Browser overlay delivery there is limited by the generated app process serving
-the HTTP traffic.
+the HTTP traffic, so generated-app runtime errors remain terminal-first until a
+runtime browser bridge exists.
 
 ## File Watching
 

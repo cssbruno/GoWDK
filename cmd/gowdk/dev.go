@@ -38,10 +38,12 @@ func dev(args []string) error {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
+	lastSuccessfulBuild := time.Now()
 	if state.runtime.Enabled || previous == nil || !devInputCacheFresh(absDir, previous) {
 		if err := buildLoaded(state.plan, 0); err != nil {
 			return err
 		}
+		lastSuccessfulBuild = time.Now()
 		if tracker, err := newDevInputTracker(state.plan); err == nil {
 			state.tracker = tracker
 			previous, err = state.snapshot()
@@ -58,6 +60,7 @@ func dev(args []string) error {
 		}
 	} else {
 		fmt.Printf("Dev cache hit: inputs unchanged for %s\n", absDir)
+		lastSuccessfulBuild = devLastSuccessfulBuildTime(absDir, lastSuccessfulBuild)
 	}
 
 	var reload *liveReloadBroker
@@ -97,12 +100,15 @@ func dev(args []string) error {
 	} else {
 		fmt.Printf("Serving %s at http://%s\n", absDir, options.Addr)
 	}
+	notifyBuildError := func(err error, change inputChange) {
+		reload.notifyData("build-error", devOverlayErrorEventData(err, change, lastSuccessfulBuild))
+	}
 	for {
 		time.Sleep(options.Interval)
 		current, err := state.snapshot()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			reload.notifyData("build-error", err.Error())
+			notifyBuildError(err, inputChange{})
 			continue
 		}
 		if current.same(previous) {
@@ -113,7 +119,7 @@ func dev(args []string) error {
 			next, err := newDevBuildState(rawBuildArgs)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
-				reload.notifyData("build-error", err.Error())
+				notifyBuildError(err, change)
 				continue
 			}
 			state = next
@@ -121,7 +127,7 @@ func dev(args []string) error {
 			current, err = state.snapshot()
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
-				reload.notifyData("build-error", err.Error())
+				notifyBuildError(err, change)
 				continue
 			}
 			change = current.diff(previous)
@@ -134,7 +140,7 @@ func dev(args []string) error {
 		_, err = buildDevChangeLoaded(state.plan, change, true)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			reload.notifyData("build-error", err.Error())
+			notifyBuildError(err, change)
 			continue
 		}
 		if process != nil {
@@ -149,15 +155,16 @@ func dev(args []string) error {
 			}
 			if _, err := appgen.BuildBinary(state.runtime.AppDir, state.runtime.BinaryPath); err != nil {
 				fmt.Fprintln(os.Stderr, err)
-				reload.notifyData("build-error", err.Error())
+				notifyBuildError(err, change)
 				continue
 			}
 			if err := process.restart(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
-				reload.notifyData("build-error", err.Error())
+				notifyBuildError(err, change)
 				continue
 			}
 		}
+		lastSuccessfulBuild = time.Now()
 		if tracker, err := newDevInputTracker(state.plan); err == nil {
 			state.tracker = tracker
 			if refreshed, err := state.snapshot(); err == nil {

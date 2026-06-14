@@ -92,7 +92,7 @@ func buildIncrementalSPALoaded(plan buildOptions, change inputChange) (bool, err
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
 	if diagnostics.HasErrors() {
-		return true, fmt.Errorf("build failed")
+		return true, newDevDiagnosticError("build failed", devOverlayDiagnosticsFromLang(diagnostics))
 	}
 
 	incrementalPlan, incremental := changedIncrementalSPAPages(app, change.Changed)

@@ -809,6 +809,18 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
     });
   }
 
+  function dispatchComponentExports(root, exportNames, state, active) {
+    if (!Array.isArray(exportNames) || exportNames.length === 0) return;
+    const payload = Object.create(null);
+    payload.active = Boolean(active);
+    exportNames.forEach((name) => {
+      payload[name] = active ? state[name] : null;
+    });
+    root.__gowdkExports = payload;
+    root.dispatchEvent(new CustomEvent("exports", { detail: payload, bubbles: true }));
+    root.dispatchEvent(new CustomEvent("gowdk:exports", { detail: payload, bubbles: true }));
+  }
+
   function updateTextBindings(bindings, state) {
     bindings.text.forEach(({ node, field }) => {
       node.textContent = state[field] == null ? "" : String(state[field]);
@@ -886,10 +898,11 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
     root.setAttribute("data-gowdk-mounted", "js");
     const state = JSON.parse(root.getAttribute("data-gowdk-state") || "{}");
     const client = JSON.parse(root.getAttribute("data-gowdk-client") || "{}");
-    const hasEnvelope = Boolean(client.handlers || client.helpers || client.emits || client.stores || client.mount || client.destroy || client.effects || client.computed);
+    const hasEnvelope = Boolean(client.handlers || client.helpers || client.emits || client.exports || client.stores || client.mount || client.destroy || client.effects || client.computed);
     const handlers = hasEnvelope ? (client.handlers || {}) : client;
     const helpers = client.helpers || {};
     const emitEvents = client.emits || {};
+    const exportNames = client.exports || [];
     const storeNames = Array.isArray(client.stores) ? client.stores : [];
     const storeRegistry = window.__gowdkStores;
     const mountStatements = client.mount || [];
@@ -947,6 +960,7 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
       bindings = render(root, state, helpers, bindings);
       bindInteractiveNodes();
       syncChildProps(root, state, helpers);
+      dispatchComponentExports(root, exportNames, state, true);
       publishStores();
     };
     let renderScheduled = false;
@@ -1052,6 +1066,13 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
               invoke(customEvent);
             };
             node.addEventListener(event, listener, { once: modifiers.once, capture: modifiers.capture });
+            if (event === "exports" && node.__gowdkExports) {
+              listener({
+                detail: node.__gowdkExports,
+                preventDefault() {},
+                stopPropagation() {}
+              });
+            }
             return;
           }
           if (!owned) return;
@@ -1095,7 +1116,14 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
       });
     };
     root.addEventListener("gowdk:props", async (event) => {
-      Object.assign(state, event.detail || {});
+      const nextProps = event.detail || {};
+      let changed = false;
+      Object.keys(nextProps).forEach((name) => {
+        if (Object.is(state[name], nextProps[name])) return;
+        state[name] = nextProps[name];
+        changed = true;
+      });
+      if (!changed) return;
       recomputeComputed(state, computeds, helpers);
       await settleEffects();
       recomputeComputed(state, computeds, helpers);
@@ -1108,6 +1136,7 @@ func islandJSSource(componentName string, includeSourceMap bool) string {
       if (root.getAttribute("data-gowdk-mounted") !== "js") return;
       root.removeAttribute("data-gowdk-mounted");
       registry.roots.delete(root);
+      dispatchComponentExports(root, exportNames, state, false);
       storeUnsubscribers.forEach((unsubscribe) => unsubscribe());
       if (destroyStatements.length > 0) {
         await runAllEffectCleanups();

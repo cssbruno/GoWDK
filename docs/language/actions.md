@@ -177,6 +177,11 @@ Current form behavior is intentionally narrow and literal-analysis driven:
   route.
 - Field inference reads direct `input`, `textarea`, `select`, and named submit
   controls with literal `name` attributes.
+- When bound Go action input metadata is available, direct literal numeric
+  `<input name="...">` controls can receive missing browser attributes derived
+  from integer field types: `type="number"`, `inputmode="numeric"`, unsigned
+  `min="0"`, and sized integer `min`/`max` bounds. Existing author attributes
+  are preserved.
 - Named submit controls such as `<button name="intent" value="save">` and
   `<input type="submit" name="intent">` are treated as explicit submit-intent
   fields before unknown-field rejection. Non-submitting controls such as

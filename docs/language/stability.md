@@ -91,6 +91,9 @@ Supported exact-name directives (the closed set in
 | `g:ref` | Partial | Client reference. |
 | `g:slot` | Partial | Named/scoped slot. |
 
+Component calls also accept `g:bind:<ExportedState>` for exported child state
+fields. HTML elements remain limited to `g:bind:value` and `g:bind:checked`.
+
 Planned directives are rejected. They currently surface as the generic
 `parse_error` rather than the intended `unsupported_markup_directive` code; that
 code lands when markup rejections carry their own code (see

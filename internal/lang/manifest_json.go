@@ -92,8 +92,10 @@ type routeParamJSON struct {
 }
 
 type propJSON struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Default    string `json:"default,omitempty"`
+	DefaultSet bool   `json:"defaultSet,omitempty"`
 }
 
 type emitJSON struct {
@@ -523,7 +525,7 @@ func propsJSON(props []gwdkir.Prop) []propJSON {
 	}
 	out := make([]propJSON, 0, len(props))
 	for _, prop := range props {
-		out = append(out, propJSON{Name: prop.Name, Type: prop.Type})
+		out = append(out, propJSON{Name: prop.Name, Type: prop.Type, Default: prop.Default, DefaultSet: prop.DefaultSet})
 	}
 	return out
 }

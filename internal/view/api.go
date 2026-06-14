@@ -12,6 +12,7 @@ type Attr struct {
 	Value      string
 	Boolean    bool
 	Expression bool
+	Spread     bool
 	Start      int
 	End        int
 }
@@ -26,6 +27,8 @@ type Component struct {
 	ScopeIDs      []string
 	DefaultIsland string
 	Props         []string
+	PropTypes     map[string]clientlang.ValueType
+	PropDefaults  map[string]string
 	State         map[string]string
 	StateJSON     string
 	Handlers      map[string]clientlang.Handler
@@ -33,6 +36,7 @@ type Component struct {
 	StateTypes    map[string]clientlang.ValueType
 	Refs          map[string]clientlang.Ref
 	Emits         map[string]clientlang.Emit
+	Exports       map[string]clientlang.ValueType
 	Computed      []clientlang.Computed
 	Body          string
 }
@@ -52,6 +56,32 @@ func (component Component) HasProp(name string) bool {
 		}
 	}
 	return false
+}
+
+// HasStateField reports whether a component declares local browser state with
+// the given name.
+func (component Component) HasStateField(name string) bool {
+	if _, ok := component.State[name]; ok {
+		return true
+	}
+	if _, ok := component.StateTypes[name]; ok {
+		return true
+	}
+	return false
+}
+
+// PropType returns the declared scalar type for a prop. Components constructed
+// by older tests only populate Props; those props remain string-typed.
+func (component Component) PropType(name string) clientlang.ValueType {
+	if component.PropTypes != nil {
+		if typ, ok := component.PropTypes[name]; ok && typ != clientlang.TypeUnknown {
+			return typ
+		}
+	}
+	if component.HasProp(name) {
+		return clientlang.TypeString
+	}
+	return clientlang.TypeUnknown
 }
 
 // Parse parses a view markup fragment.
@@ -86,9 +116,17 @@ func RenderWithData(source string, components map[string]Component, data map[str
 
 // Options configures view rendering.
 type Options struct {
-	Actions map[string]string
-	Package string
-	Uses    map[string]string
+	Actions           map[string]string
+	ActionInputFields map[string][]ActionInputField
+	Package           string
+	Uses              map[string]string
+}
+
+// ActionInputField describes Go action input metadata available while rendering
+// literal controls inside a g:post form.
+type ActionInputField struct {
+	FormName string
+	Type     string
 }
 
 // ActionFormField describes one direct literal form field for a g:post action.
@@ -176,6 +214,7 @@ func RenderWithOptions(source string, components map[string]Component, data map[
 		uses:         cloneValues(options.Uses),
 		values:       cloneValues(data),
 		actions:      cloneValues(options.Actions),
+		actionFields: cloneActionInputFields(options.ActionInputFields),
 		stack:        map[string]bool{},
 		stateFields:  map[string]bool{},
 		readFields:   map[string]bool{},

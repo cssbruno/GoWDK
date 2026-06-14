@@ -73,6 +73,8 @@ class Element extends EventTarget {
     this.method = '';
     this.action = '';
     this.replacedWith = '';
+    this.valid = true;
+    this.reported = false;
   }
   closest(selector) {
     if (selector === 'form[data-gowdk-target]' && this.tagName === 'FORM' && this.dataset.gowdkTarget) {
@@ -88,6 +90,16 @@ class Element extends EventTarget {
   }
   removeAttribute(name) {
     delete this.attributes[name];
+  }
+  hasAttribute(name) {
+    return Object.prototype.hasOwnProperty.call(this.attributes, name);
+  }
+  checkValidity() {
+    return this.valid;
+  }
+  reportValidity() {
+    this.reported = true;
+    return this.valid;
   }
   focus() {
     document.activeElement = this;
@@ -168,10 +180,12 @@ document.byID.email = input;
 document.activeElement = input;
 
 let request;
+let requestCount = 0;
 let swap = 'innerHTML';
 let fail = false;
 let reload = false;
 global.fetch = async function(url, options) {
+  requestCount++;
   request = { url, options };
   if (fail) {
     return {
@@ -212,6 +226,23 @@ async function submit() {
   form.addEventListener('gowdk:after-swap', event => {
     afterSwap = event.detail;
   });
+
+  let validationBlocked;
+  form.addEventListener('gowdk:validation-blocked', event => {
+    validationBlocked = event.detail;
+  });
+  form.valid = false;
+  request = null;
+  const invalid = await submit();
+  assert.equal(invalid.defaultPrevented, true);
+  assert.equal(request, null);
+  assert.equal(requestCount, 0);
+  assert.equal(form.reported, true);
+  assert.equal(validationBlocked.form, form);
+  assert.equal(validationBlocked.target, target);
+  assert.equal(form.attributes['aria-busy'], undefined);
+  form.valid = true;
+  form.reported = false;
 
   const inner = await submit();
   assert.equal(inner.defaultPrevented, true);

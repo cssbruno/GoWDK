@@ -68,12 +68,14 @@ Current support:
 - `internal/clientrt` emits a small `gowdk.js` runtime that enhances
   `form[data-gowdk-target]` submissions, sends `X-GOWDK-Partial`,
   `X-GOWDK-Target`, and `X-GOWDK-Swap`, applies `innerHTML` or `outerHTML`
-  swaps, dispatches `gowdk:before-request`, `gowdk:after-swap`, and
-  `gowdk:request-error`, and toggles `aria-busy` on the form while the request
-  is pending. Failed enhanced requests include `status`, `body`, and `response`
-  in the `gowdk:request-error` detail when an HTTP response exists. It restores
-  focus by matching the active element's `id` or `name` after the swap when
-  possible. Before a swap, it calls the generated island
+  swaps, dispatches `gowdk:before-request`, `gowdk:validation-blocked`,
+  `gowdk:after-swap`, and `gowdk:request-error`, and toggles `aria-busy` on the
+  form while the request is pending. Browser constraint validation blocks
+  invalid enhanced submissions before the partial request is sent. Failed
+  enhanced requests include `status`, `body`, and `response` in the
+  `gowdk:request-error` detail when an HTTP response exists. It restores focus
+  by matching the active element's `id` or `name` after the swap when possible.
+  Before a swap, it calls the generated island
   destroy hook when present for islands being replaced; after the swap, it calls
   the generated island mount hook so newly inserted JavaScript islands can
   attach.

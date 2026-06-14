@@ -64,7 +64,11 @@ func componentPropsFingerprint(component gwdkir.Component) string {
 	}
 	props := make([]string, 0, len(component.Props))
 	for _, prop := range component.Props {
-		props = append(props, prop.Name+":"+prop.Type)
+		defaultValue := ""
+		if prop.DefaultSet {
+			defaultValue = "=" + prop.Default
+		}
+		props = append(props, prop.Name+":"+prop.Type+defaultValue)
 	}
 	sort.Strings(props)
 	return "inline:" + strings.Join(props, ",")

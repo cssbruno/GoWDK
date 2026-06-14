@@ -112,10 +112,12 @@ Implemented today:
   exports fails the build. Components without `wasm` keep the minimal
   placeholder module for the loader-shape slice and do not ship `wasm_exec.js`.
   The loader discovers matching island roots, builds the ADR-defined bootstrap
-  object from state, props, emits, refs, and binding metadata, calls
-  component-scoped WASM exports when present, captures host DOM events, and
-  applies the supported validated patch commands for text, visibility,
-  attribute, class, style, and emitted-event updates.
+  object from ABI version `gowdk-wasm-island-v1`, state, props, emits, refs,
+  and binding metadata, calls component-scoped WASM exports when present,
+  captures host DOM events, and applies the supported validated patch commands
+  for text, visibility, attribute, class, style, and emitted-event updates. The
+  build report records the Go toolchain version used for generated
+  `wasm_exec.js` runtime assets.
 - Generated apps can serve concrete and dynamic SSR pages in the supported
   generated request-time slice. Dynamic route params are substituted into
   generated SSR placeholders with request-time HTML escaping. Declared
@@ -336,6 +338,9 @@ as `/blog/hello-gowdk`.
   "hashes": {
     "assets/app.css": "sha256:..."
   },
+  "sizes": {
+    "assets/app.css": 1204
+  },
   "cache": {
     "assets/app.css": "public, max-age=31536000, immutable",
     "index.html": "public, max-age=120"
@@ -345,11 +350,12 @@ as `/blog/hello-gowdk`.
 
 The `files` map resolves logical asset names to slash-separated paths relative
 to the selected output directory. `hashes` records SHA-256 content hashes for
-generated assets, and `cache` records the HTTP cache policy generated binaries
-should apply when serving generated assets or route HTML files. The current
-implementation records CSS files emitted by CSS processors, generated page CSS
-files, partial runtime assets, generated island runtime assets, generated island
-source maps, and page-level `cache` policies for generated SPA HTML. It does
+generated assets, `sizes` records generated asset byte counts, and `cache`
+records the HTTP cache policy generated binaries should apply when serving
+generated assets or route HTML files. The current implementation records CSS
+files emitted by CSS processors, generated page CSS files, partial runtime
+assets, generated island runtime assets, generated island source maps, WASM
+island assets, and page-level `cache` policies for generated SPA HTML. It does
 not record configured stylesheet URLs that were not written by the build.
 
 ## Current Build Report

@@ -141,7 +141,7 @@ func lowerSyntaxGoFuncRef(ref gwdkast.GoFuncRef) gwdkir.GoRef {
 func lowerSyntaxProps(in []gwdkast.Prop) []gwdkir.Prop {
 	out := make([]gwdkir.Prop, 0, len(in))
 	for _, item := range in {
-		out = append(out, gwdkir.Prop{Name: item.Name, Type: item.Type, Span: item.Span})
+		out = append(out, gwdkir.Prop{Name: item.Name, Type: item.Type, Default: item.Default, DefaultSet: item.DefaultSet, Span: item.Span})
 	}
 	return out
 }

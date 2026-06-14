@@ -461,6 +461,34 @@ func TestBuildReportIncludesCachePolicySummary(t *testing.T) {
 			t.Fatalf("expected cache policy data %s=%q, got %#v", key, expected, event.Data)
 		}
 	}
+	if len(result.AssetArtifacts) != 1 {
+		t.Fatalf("expected one generated asset, got %#v", result.AssetArtifacts)
+	}
+	runtimeAsset := result.AssetArtifacts[0]
+	if runtimeAsset.SizeBytes <= 0 {
+		t.Fatalf("expected generated runtime asset size, got %#v", runtimeAsset)
+	}
+	sizeEvent := findBuildReportEvent(result.Report, "report", "asset_size")
+	if sizeEvent == nil {
+		t.Fatalf("missing asset_size event in %#v", result.Report.Events)
+	}
+	if sizeEvent.Path != clientRuntimeAssetPath {
+		t.Fatalf("expected runtime asset size path %q, got %#v", clientRuntimeAssetPath, sizeEvent)
+	}
+	if sizeEvent.Data["kind"] != "javascript" || sizeEvent.Data["bytes"] == "" || sizeEvent.Data["hash"] == "" {
+		t.Fatalf("unexpected asset_size data: %#v", sizeEvent.Data)
+	}
+	payload, err := os.ReadFile(result.AssetManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest runtimeasset.Manifest
+	if err := json.Unmarshal(payload, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if got := manifest.SizeBytes(clientRuntimeAssetPath); got != runtimeAsset.SizeBytes {
+		t.Fatalf("expected manifest runtime asset size %d, got %d", runtimeAsset.SizeBytes, got)
+	}
 }
 
 func TestBuildReportIncludesBackendBindingEndpointMetadata(t *testing.T) {

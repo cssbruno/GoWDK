@@ -105,7 +105,8 @@ tries a direct WASM instantiate path and falls back to Go runtime imports when a
 compiled Go module needs them.
 
 Declared browser-side Go packages must produce a browser WASM module and export
-the component-scoped ABI entrypoints:
+the component-scoped ABI entrypoints with the current `func() uint32`
+signature:
 
 ```go
 //go:wasmexport GOWDKMountCounter
@@ -118,9 +119,10 @@ func GOWDKHandleCounter() uint32 { return 0 }
 func GOWDKDestroyCounter() uint32 { return 0 }
 ```
 
-The generated loader passes a bootstrap object containing component name, state,
-props, emits, refs, and compiler-owned binding metadata. Returned patch lists
-may use `setText`, `setAttr`, `removeAttr`, `toggleClass`, `setStyle`,
+The generated loader passes a `gowdk-wasm-island-v1` bootstrap object containing
+component name, state, props, emits, refs, and compiler-owned binding metadata.
+Event and destroy payloads carry the same ABI version. Returned patch lists may
+use `setText`, `setAttr`, `removeAttr`, `toggleClass`, `setStyle`,
 `setHidden`, `replaceList`, and `emit`; unsupported patch operations are
 rejected with a console error. Missing required exports and startup failures are
 reported to the browser console instead of silently disabling the island.

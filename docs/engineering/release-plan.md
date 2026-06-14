@@ -507,7 +507,7 @@ Every 0.x minor release must have:
   struct prop support as contracts become stable.
 - [ ] Add prop validation diagnostics.
 - [ ] Add named slots and scoped slots only when syntax is stable.
-- [ ] Add child-to-parent events, typed event payloads, bindable state, mount,
+- [x] Add child-to-parent events, typed event payloads, bindable state, mount,
   update, cleanup, real `g:if`, `g:for`, keyed `g:for`, keyed DOM updates,
   recursion policy, and dynamic component policy.
 - [ ] Add component snapshot and browser behavior tests.

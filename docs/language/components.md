@@ -5,7 +5,9 @@ The first component slice is implemented for SPA build output.
 Implemented today:
 
 - Explicit or discovered `.cmp.gwdk` build inputs with `component Name`.
-- Optional `props { name string }` declarations.
+- Optional `props { name string }` declarations, including scalar default
+  literals such as `props { count int = 0 }`.
+- Inline scalar props with `string`, `int`, `float`, and `bool` types.
 - Component-local Go imports using normal module import paths, such as
   `import ui "github.com/acme/app/ui"`.
 - Typed props contracts that reference imported Go structs, such as
@@ -141,6 +143,8 @@ component Row
 
 props {
   label string
+  count int = 0
+  active bool = false
 }
 
 view {
@@ -187,11 +191,24 @@ view {
 }
 ```
 
-Typed exports are metadata today:
+Typed exports declare local component values that a parent can observe through
+the generated `exports` event:
 
 ```gwdk
 exports {
-  selectedID string
+  SelectedID string
+}
+
+view {
+  <button g:on:click={SelectedID = "first"}>{SelectedID}</button>
+}
+```
+
+Parent components can listen with `g:on:exports`:
+
+```gwdk
+view {
+  <Picker g:on:exports={CurrentID = event.SelectedID} />
 }
 ```
 
@@ -237,17 +254,30 @@ files import normal Go packages for typed contracts and build-time helpers.
 GOWDK `use` declarations import discovered `.gwdk` source packages; today that
 contract is implemented for qualified component calls.
 
-Props are caller-provided inputs. Inline `props {}` declarations are string-only
-in the current slice, while imported Go struct contracts can provide typed
-props metadata. Parent calls can pass literal strings and the implemented
-build-data interpolation subset. Props are read-only to `client {}` code; mutable
-browser state belongs in `state` or in an explicit page store.
+Props are caller-provided inputs. Inline `props {}` declarations support scalar
+`string`, `int`, `float`, and `bool` types. Parent calls pass quoted string
+props, scalar literal expressions for numbers and booleans, or expression
+values from the implemented build-data subset. Props are read-only to
+`client {}` code; mutable browser state belongs in `state` or in an explicit
+page store.
 
-Imported Go structs are the stable typed prop path today. Non-string inline
-props are planned, but inline `props {}` blocks currently accept only `string`.
-Defaults should be expressed in normal Go init/build data or by rendering a
-fallback in the component `view {}`. There is no rest/spread prop syntax, prop
-renaming syntax, or implicit global prop lookup in the current contract.
+Imported Go structs are the stable typed prop path for richer contracts.
+Inline props can declare static scalar defaults with `name type = literal`.
+Defaults are used when a caller omits the prop and are overridden by explicit
+caller values.
+
+Advanced prop forwarding stays inside the typed compiler contract:
+
+- `{...props}` may be used inside a component that declares props. It forwards
+  only same-named props that the child component also declares; it does not
+  expose an arbitrary prop bag or global lookup.
+- `target:source` maps a differently named caller prop into a declared child
+  prop. Without a value, `target:source` forwards `{source}`. With a value, such
+  as `target:source={Expr}` or `target:source="literal"`, the value is used for
+  `target` while `source` names the caller-side source for diagnostics.
+- Explicit props, spreads, and renames cannot provide the same target prop more
+  than once. Unknown target props and unsupported spread sources fail before
+  output is written.
 
 State is component-local UI state. A `state Type = Init()` declaration runs the
 no-argument Go init function at build time for SPA/static output and serializes
@@ -255,9 +285,14 @@ the JSON-compatible initial value into the component island. State is visible to
 the browser and must not carry secrets, trusted authorization state, database
 state, or server validation results that the server still needs to enforce.
 
-Bindable child state is not stable as a parent/child contract. Parent-child
-coordination should use typed emits plus parent-owned state, or server actions
-for trusted behavior.
+Bindable child state is supported on component calls with
+`g:bind:<ExportedState>={ParentState}`. The target must be a child state field,
+must be declared in `exports`, and must have a scalar type compatible with the
+parent state field. Generated JavaScript sends the parent value down through
+reactive props and listens for the child's typed `exports` event to write the
+new child value back to parent state. Bound state is still local UI state: it is
+not trusted input, server state, auth state, validation, business logic, route
+truth, or cache policy.
 
 Computed values are read-only derived state. They can depend on props, state,
 and other computed values. The compiler builds a dependency graph for declared
@@ -327,11 +362,13 @@ component that reads a persisted store still declares a matching `state` shape.
 Invalid scopes are reported but not auto-fixed, because choosing `local` vs
 `session` is a deliberate decision.
 
-Exports are typed component metadata today. They document values a component
-intends to expose, but parent pages/components do not yet have a stable runtime
-API for consuming exported component values. Until that contract is generated
-and documented, use props, typed emits, stores, actions, or build/load data for
-actual data flow.
+Exports must reference a declared prop, state field, or computed value and the
+declared type must match that local symbol. Generated JavaScript islands emit
+an `exports` event with `event.active == true` after mount and updates, plus a
+`gowdk:exports` DOM event for direct integrations. Before unmount, the runtime
+emits the same events with `event.active == false` and exported values set to
+`null`, so parent code can clear local handles. Exports are local UI handles;
+they are not server state, trusted input, or a replacement for backend actions.
 
 Slots are the reusable-markup primitive. A default slot uses `<slot />`, named
 slots use `<slot name="name">`, and scoped slots pass scalar values through
@@ -339,8 +376,9 @@ slot props plus caller-side `let:` bindings. GOWDK does not currently have a
 separate snippet/render value model.
 
 Recursive component rendering is rejected to prevent unbounded build-time
-rendering. Dynamic component selection is deferred; component calls must name a
-known component directly or through an explicit `use` alias.
+rendering; direct and transitive cycles fail before output is written. Dynamic
+component selection is rejected; component calls must name a known component
+directly or through an explicit `use` alias.
 
 `client {}` is a compiler-owned UI language, not arbitrary JavaScript. The
 supported handlers, helpers, lifecycle blocks, effects, refs, list built-ins,
@@ -368,17 +406,16 @@ to that component use the WASM island runtime by default. The referenced package
 is browser-side Go compiled for `GOOS=js GOARCH=wasm` with server and process
 packages rejected. GOWDK validates the required component-scoped ABI entrypoints,
 ships Go's browser `wasm_exec.js` runtime asset for declared Go WASM packages,
-and keeps DOM mutation in the generated host loader. WASM islands are not a
-replacement for backend handlers.
+passes `gowdk-wasm-island-v1` payloads to component WASM exports, and keeps DOM
+mutation in the generated host loader. WASM islands are not a replacement for
+backend handlers.
 
 Not implemented yet:
 
-- Non-string props in inline `props {}` blocks.
-- Stable parent consumption of typed `exports {}` values.
-- Rest/spread props, prop renaming, recursive component rendering, dynamic
-  component selection, and bindable child state.
-- Full runtime validation for user browser logic in WASM islands, including
-  required Go/JS entrypoint registration and export checks.
+- Supported recursive component rendering and supported dynamic component
+  selection.
+- Full runtime validation for user browser logic in WASM islands beyond
+  required export, browser import, and patch-operation checks.
 - Wiring generated Go component packages into the generated app layout.
 - Cross-package store and asset use syntax.
 - Emitting and rewriting component-scoped CSS and component-level assets from

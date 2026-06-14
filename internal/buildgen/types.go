@@ -13,6 +13,7 @@ type CSSArtifact struct {
 	LogicalHref string
 	Hash        string
 	CachePolicy string
+	SizeBytes   int64
 }
 
 type AssetArtifact struct {
@@ -20,6 +21,7 @@ type AssetArtifact struct {
 	LogicalPath string
 	Hash        string
 	CachePolicy string
+	SizeBytes   int64
 }
 
 type Result struct {

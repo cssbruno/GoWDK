@@ -9,9 +9,12 @@ type renderContext struct {
 	values       map[string]string
 	tainted      map[string]bool
 	actions      map[string]string
+	actionFields map[string][]ActionInputField
+	formAction   string
 	stack        map[string]bool
 	slotHTML     string
 	slots        map[string]slotContent
+	propFields   map[string]bool
 	stateFields  map[string]bool
 	readFields   map[string]bool
 	bindFields   map[string]bool

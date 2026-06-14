@@ -58,6 +58,7 @@ var Config = gowdk.Config{
 		},
 		CSRF: gowdk.CSRFConfig{
 			Enabled: true,
+			Disabled: true,
 			SecretEnv: "EXAMPLE_CSRF_SECRET",
 			CookieName: "__Host-example-csrf",
 			FieldName: "_example_csrf",
@@ -168,7 +169,7 @@ var Config = gowdk.Config{
 	if config.Build.Head.SiteName != "Example" || config.Build.Head.Favicon != "/favicon.ico" || config.Build.Head.Image != "https://example.com/social.png" || config.Build.Head.TwitterCard != "summary_large_image" {
 		t.Fatalf("unexpected build head config: %#v", config.Build.Head)
 	}
-	if !config.Build.CSRF.Enabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
+	if !config.Build.CSRF.Enabled || !config.Build.CSRF.Disabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
 		t.Fatalf("unexpected build csrf config: %#v", config.Build.CSRF)
 	}
 	if !config.Build.SecurityHeaders.Enabled || config.Build.SecurityHeaders.Headers["Content-Security-Policy"] != "default-src 'self'" || config.Build.SecurityHeaders.Headers["X-Content-Type-Options"] != "nosniff" {

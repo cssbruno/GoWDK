@@ -87,12 +87,13 @@ Current behavior:
   uses a non-prefixed `gowdk-csrf` cookie because browsers reject `__Host-`
   cookies without Secure. Normal builds do not expose a no-op CSRF validator;
   package tests keep their no-op helper in `_test.go`.
-- `Build.CSRF.Enabled` wires generated CSRF token generation and validation for
-  generated action adapters. Generated apps read the signing secret from
-  `Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`, inject a hidden token field into
-  served HTML POST forms, validate action POSTs before generated decoding or
-  user handlers run, and return HTTP 403 with `invalid csrf token` plus
-  `Cache-Control: no-store` for missing or invalid tokens.
+- Generated action adapters wire CSRF token generation and validation by
+  default. Generated apps read the signing secret from `Build.CSRF.SecretEnv` or
+  `GOWDK_CSRF_SECRET`, inject a hidden token field into served HTML POST forms,
+  validate action POSTs before generated decoding or user handlers run, and
+  return HTTP 403 with `invalid csrf token` plus `Cache-Control: no-store` for
+  missing or invalid tokens. Set `Build.CSRF.Disabled: true` only for an
+  intentional non-production/test opt-out.
 - Field inference currently reads direct `input`, `textarea`, `select`, and
   named submit controls with literal `name` attributes; fields hidden inside
   component calls are not inferred yet.
@@ -117,8 +118,8 @@ Current behavior:
 
 The current compiler-generated same-package action binding can decode direct
 literal form fields into exported same-package user input structs for supported
-typed action signatures and can wire generated CSRF when `Build.CSRF.Enabled`
-is set. Generated validation failures return HTTP 422 for normal requests; for
+typed action signatures and wires generated CSRF by default. Generated
+validation failures return HTTP 422 for normal requests; for
 partial requests with `X-GOWDK-Partial` and `X-GOWDK-Target`, generated handlers
 return an escaped `runtime/response.ValidationFragment` for the target instead.
 Generated `pattern` checks use GOWDK's anchored form-pattern subset: literals,
@@ -130,9 +131,9 @@ through `runtime/response.Response`.
 
 ## Production Notes
 
-- Enable `Build.CSRF.Enabled` for generated app deployments that accept action
-  POSTs, and provide a stable runtime secret through `Build.CSRF.SecretEnv` or
-  `GOWDK_CSRF_SECRET`.
+- Do not set `Build.CSRF.Disabled` for production generated app deployments
+  that accept action POSTs. Provide a stable runtime secret through
+  `Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`.
 - Keep authentication, backend authorization, business validation, persistence,
   service calls, redirects, HTML, JSON, and fragment decisions in normal Go handlers.
   Generated adapters decode the request and write the returned

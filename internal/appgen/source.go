@@ -712,7 +712,7 @@ func importSpecSource(imports map[string]string) string {
 
 func csrfEnabled(options Options) bool {
 	adapter := backendAdapterIR(options)
-	return options.Config.Build.CSRF.Enabled && (adapter.HasEndpointKind(BackendEndpointAction) || contractExposuresParseForm(executableContractExposures(adapter.ContractExposures)))
+	return options.Config.Build.CSRF.EnabledForGeneratedEndpoints() && (adapter.HasEndpointKind(BackendEndpointAction) || contractExposuresParseForm(executableContractExposures(adapter.ContractExposures)))
 }
 
 func csrfHelperSource(options Options) (string, error) {

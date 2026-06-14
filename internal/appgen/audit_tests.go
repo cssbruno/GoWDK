@@ -84,7 +84,7 @@ func auditTestSource(packageName string, mode auditTestMode, config gowdk.Config
 	builder.WriteString("func TestGOWDKAuditGeneratedSecurityPosture(t *testing.T) {\n")
 	switch mode {
 	case auditTestGeneratedApp:
-		writeGeneratedAuditEnvSeeds(&builder, config)
+		writeGeneratedAuditEnvSeeds(&builder, config, manifest)
 		builder.WriteString("\thandler, err := Handler()\n")
 		builder.WriteString("\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n")
 		if installAuthProvider {
@@ -336,13 +336,13 @@ func auditEndpointPathMatches(endpointPath string, requestPath string) bool {
 	return false
 }
 
-func writeGeneratedAuditEnvSeeds(builder *strings.Builder, config gowdk.Config) {
-	for _, name := range auditRequiredEnvNames(config) {
+func writeGeneratedAuditEnvSeeds(builder *strings.Builder, config gowdk.Config, manifest securitymanifest.SecurityManifest) {
+	for _, name := range auditRequiredEnvNames(config, manifest) {
 		fmt.Fprintf(builder, "\tt.Setenv(%s, %s)\n", strconv.Quote(name), strconv.Quote("gowdk-audit-test"))
 	}
 }
 
-func auditRequiredEnvNames(config gowdk.Config) []string {
+func auditRequiredEnvNames(config gowdk.Config, manifest securitymanifest.SecurityManifest) []string {
 	seen := map[string]bool{}
 	var names []string
 	add := func(name string) {
@@ -363,11 +363,20 @@ func auditRequiredEnvNames(config gowdk.Config) []string {
 			add(secret.Name)
 		}
 	}
-	if config.Build.CSRF.Enabled {
+	if auditManifestHasCSRFProtectedEndpoint(manifest) {
 		add(config.Build.CSRF.SecretEnvName())
 	}
 	sort.Strings(names)
 	return names
+}
+
+func auditManifestHasCSRFProtectedEndpoint(manifest securitymanifest.SecurityManifest) bool {
+	for _, endpoint := range manifest.Endpoints {
+		if endpoint.CSRF {
+			return true
+		}
+	}
+	return false
 }
 
 func writeGeneratedAuditAuthProvider(builder *strings.Builder) {

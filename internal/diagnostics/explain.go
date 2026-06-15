@@ -237,6 +237,13 @@ guard public
 			"Override the built-in baseline.actions policy in a *.audit.gwdk file if the endpoint is intentionally exempt.",
 		},
 	},
+	"audit_api_missing_csrf": {
+		Details: "gowdk audit derives a state-changing API endpoint without CSRF enforcement. The built-in security baseline treats unsafe browser-reachable API methods as cross-site-forgeable unless another policy explicitly overrides that posture.",
+		NextSteps: []string{
+			"Remove Build.CSRF.Disabled and provide a runtime CSRF secret so generated state-changing APIs validate tokens before user handlers run.",
+			"Override the built-in baseline.api policy in a *.audit.gwdk file only when the API uses another cross-site request strategy.",
+		},
+	},
 	"audit_api_public_by_omission": {
 		Details: "An API endpoint inherits no protective guard, so it would be callable without authorization. The baseline forbids public-by-omission APIs; access must be stated, not granted by omission.",
 		NextSteps: []string{

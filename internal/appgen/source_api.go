@@ -4,16 +4,17 @@ import (
 	"go/ast"
 	"go/token"
 
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func apiHandlerSource(apis []APIEndpoint) (source string, err error) {
 	defer recoverGeneratedIdentifierError(&err)
 
-	return printActionDecls([]ast.Decl{apiFuncDecl(backendAdapterIR(Options{APIs: apis}).APIs, false)})
+	return printActionDecls([]ast.Decl{apiFuncDecl(backendAdapterIR(Options{APIs: apis}).APIs, false, false)})
 }
 
-func apiFuncDecl(apis []BackendAPIAdapter, rateLimit bool) *ast.FuncDecl {
+func apiFuncDecl(apis []BackendAPIAdapter, csrf bool, rateLimit bool) *ast.FuncDecl {
 	if len(apis) == 0 {
 		return funcDecl("api", actionParams(), boolResults(), []ast.Stmt{returnBool(false)})
 	}
@@ -25,7 +26,7 @@ func apiFuncDecl(apis []BackendAPIAdapter, rateLimit bool) *ast.FuncDecl {
 	for _, api := range apis {
 		clauses = append(clauses, &ast.CaseClause{
 			List: []ast.Expr{apiCaseExpr(api)},
-			Body: apiCaseStmts(api, rateLimit),
+			Body: apiCaseStmts(api, csrf && gwdkir.HTTPMethodRequiresCSRF(api.Method), rateLimit),
 		})
 	}
 	clauses = append(clauses, &ast.CaseClause{Body: []ast.Stmt{returnBool(false)}})
@@ -57,7 +58,7 @@ func apiCaseExpr(api BackendAPIAdapter) ast.Expr {
 	}
 }
 
-func apiCaseStmts(api BackendAPIAdapter, rateLimit bool) []ast.Stmt {
+func apiCaseStmts(api BackendAPIAdapter, csrf bool, rateLimit bool) []ast.Stmt {
 	if endpointDeniedByOmission(api.Guards) {
 		return denyByOmissionStmts()
 	}
@@ -72,6 +73,7 @@ func apiCaseStmts(api BackendAPIAdapter, rateLimit bool) []ast.Stmt {
 		stmts = append(stmts, returnBool(true))
 		return stmts
 	}
+	stmts = append(stmts, apiCSRFStmts(csrf)...)
 	stmts = append(stmts,
 		assign([]ast.Expr{selExpr(id("request"), "Body")}, call(sel("http", "MaxBytesReader"), id("response"), selExpr(id("request"), "Body"), id("maxAPIBodyBytes"))),
 		define([]ast.Expr{id("result"), id("err")}, call(sel(api.BackendAlias, api.Binding.FunctionName), id("ctx"), id("request"))),
@@ -86,6 +88,23 @@ func apiCaseStmts(api BackendAPIAdapter, rateLimit bool) []ast.Stmt {
 		returnBool(true),
 	)
 	return stmts
+}
+
+func apiCSRFStmts(csrf bool) []ast.Stmt {
+	if !csrf {
+		return nil
+	}
+	return []ast.Stmt{&ast.IfStmt{
+		Cond: notNil("csrfValidator"),
+		Body: block(&ast.IfStmt{
+			Init: define([]ast.Expr{id("err")}, call(selExpr(id("csrfValidator"), "Validate"), id("request"))),
+			Cond: notNil("err"),
+			Body: block(
+				writeNoStoreJSONErrorStmt(sel("http", "StatusForbidden"), "invalid csrf token"),
+				returnBool(true),
+			),
+		}),
+	}}
 }
 
 func apisUseErrorPages(apis []BackendAPIAdapter) bool {

@@ -200,7 +200,8 @@ type SecurityHeadersConfig struct {
 
 const DefaultCSRFSecretEnv = "GOWDK_CSRF_SECRET"
 
-// CSRFConfig controls generated action and command CSRF token wiring.
+// CSRFConfig controls generated CSRF token wiring for browser-reachable
+// state-changing endpoints.
 type CSRFConfig struct {
 	Enabled    bool
 	Disabled   bool

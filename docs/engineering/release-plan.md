@@ -220,8 +220,9 @@ Every 0.x minor release must have:
 - [x] Replace outdated "planned but not complete" wording with precise
   "first slice exists, not production enforcement" wording.
 - [x] List implemented first slices: generated action decoding, unexpected
-  field rejection, direct literal request-shape validation, opt-in CSRF,
-  configurable action/API body caps, generated `http.Server` timeout defaults,
+  field rejection, direct literal request-shape validation, default generated
+  CSRF for state-changing endpoints, configurable action/API body caps,
+  generated `http.Server` timeout defaults,
   `MaxHeaderBytes`, safe local redirect slice, guard execution slice, SSR panic
   boundaries, and no-store request-time responses.
 - [x] List incomplete production areas: auth/session policy, full guard

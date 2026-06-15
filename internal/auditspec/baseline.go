@@ -38,6 +38,7 @@ func Baseline() []Policy {
 				{Raw: "api:*", Kind: SelectorEndpoint},
 			},
 			Rules: []Rule{
+				{Kind: RuleRequireCSRF, Code: "audit_api_missing_csrf"},
 				{Kind: RuleRequireAnyGuard, Code: "audit_api_public_by_omission"},
 			},
 		},

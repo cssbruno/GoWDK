@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/diagnostics"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/securitymanifest"
 )
 
@@ -230,11 +231,14 @@ func evalEndpoint(endpoint securitymanifest.EndpointEntry, policy Policy) []Find
 	for _, rule := range policy.Rules {
 		switch rule.Kind {
 		case RuleRequireCSRF:
+			csrfRule := rule
+			if csrfRule.Code == "" {
+				csrfRule.Code = csrfCodeForKind(endpoint.Kind)
+			}
+			if policy.Builtin && endpoint.Kind == "api" && csrfRule.Code == "audit_api_missing_csrf" && !gwdkir.HTTPMethodRequiresCSRF(endpoint.Method) {
+				continue
+			}
 			if !endpoint.CSRF {
-				csrfRule := rule
-				if csrfRule.Code == "" {
-					csrfRule.Code = csrfCodeForKind(endpoint.Kind)
-				}
 				findings = append(findings, finding(csrfRule, policy, endpointTarget(endpoint), endpoint.Source,
 					fmt.Sprintf("%s endpoint %s does not enforce CSRF", endpoint.Kind, endpoint.ID),
 					"Remove Build.CSRF.Disabled, or override the matching baseline policy in a *.audit.gwdk file."))
@@ -411,10 +415,14 @@ func finding(rule Rule, policy Policy, target, source, message, remediation stri
 // declared rule did not pin one, so a command endpoint reports the command code
 // rather than the action code.
 func csrfCodeForKind(kind string) string {
-	if kind == "command" {
+	switch kind {
+	case "api":
+		return "audit_api_missing_csrf"
+	case "command":
 		return "audit_command_missing_csrf"
+	default:
+		return "audit_action_missing_csrf"
 	}
-	return "audit_action_missing_csrf"
 }
 
 func endpointTarget(endpoint securitymanifest.EndpointEntry) string {

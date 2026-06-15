@@ -21,7 +21,7 @@ jobs:
         include:
           - os: ubuntu-latest
             asset: gowdk-linux-amd64
-          - os: macos-13
+          - os: macos-15-intel
             asset: gowdk-darwin-amd64
           - os: macos-14
             asset: gowdk-darwin-arm64

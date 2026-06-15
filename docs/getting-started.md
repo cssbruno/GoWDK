@@ -11,7 +11,7 @@ app binary, and run it locally.
 
 ## Install The CLI
 
-Install the latest visible GitHub release, including 0.x pre-releases:
+Install the latest visible GitHub release:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh | sh
@@ -21,7 +21,7 @@ gowdk version
 Pin the current CLI release or install into a user-writable directory:
 
 ```sh
-GOWDK_VERSION=v0.3.0 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+GOWDK_VERSION=v0.5.0 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
 ```
 
@@ -96,7 +96,7 @@ Direct artifact names:
 Manual Linux install:
 
 ```sh
-version=v0.3.0
+version=v0.5.0
 curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-linux-amd64"
 curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt"
 grep ' gowdk-linux-amd64$' checksums.txt | sha256sum -c -
@@ -109,7 +109,7 @@ gowdk version
 Manual macOS Intel install:
 
 ```sh
-version=v0.3.0
+version=v0.5.0
 curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-darwin-amd64"
 curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt"
 expected="$(awk '$2 == "gowdk-darwin-amd64" { print $1 }' checksums.txt)"
@@ -124,7 +124,7 @@ gowdk version
 Manual macOS ARM install:
 
 ```sh
-version=v0.3.0
+version=v0.5.0
 curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-darwin-arm64"
 curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt"
 expected="$(awk '$2 == "gowdk-darwin-arm64" { print $1 }' checksums.txt)"
@@ -139,7 +139,7 @@ gowdk version
 Manual Windows install from PowerShell:
 
 ```powershell
-$version = "v0.3.0"
+$version = "v0.5.0"
 Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-windows-amd64.exe" -OutFile "gowdk.exe"
 Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt" -OutFile "checksums.txt"
 $expected = (Select-String -Path checksums.txt -Pattern "gowdk-windows-amd64.exe").Line.Split(" ")[0]
@@ -158,7 +158,7 @@ Install the VS Code extension package from a release when a `.vsix` is
 published:
 
 ```sh
-code --install-extension gowdk-vscode-0.3.0.vsix
+code --install-extension gowdk-vscode-0.5.0.vsix
 ```
 
 ## Build From Source

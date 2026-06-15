@@ -1,19 +1,20 @@
 # Release
 
-GOWDK is currently pre-release compiler/runtime scaffolding. Release packaging
-automation lives in `.github/workflows/release.yml` and creates visible
-pre-releases with downloadable assets from `v*` tags or a manual workflow
-dispatch. VS Code Marketplace publishing lives in
+GOWDK is currently experimental 0.x compiler/runtime software. Release
+packaging automation lives in `.github/workflows/release.yml` and creates
+visible normal GitHub releases with downloadable assets from `v*` tags or a
+manual workflow dispatch. VS Code Marketplace publishing lives in
 `.github/workflows/vscode-extension-publish.yml`.
 
-The current CLI version is `0.3.0`, but this is not a production-readiness
+The current CLI version is `0.5.0`, but this is not a production-readiness
 claim. It identifies the current development line while the compiler, generated
-runtime, and docs continue through the 0.x line. Public release notes must
-call the build experimental until the release gates below are satisfied.
+runtime, and docs continue through the 0.x line. Public release notes must keep
+the build experimental and not production-ready until the 1.0 release gates are
+satisfied.
 
-Use `docs/engineering/v0.2-release-checklist.md` for the current Public Truth
-and Release Trust checklist.
-Use `docs/engineering/release-notes-v0.3.md` as the draft v0.3 release notes.
+Use `docs/engineering/v0.2-release-checklist.md` for the historical v0.2
+Public Truth and Release Trust checklist.
+Use `docs/engineering/release-notes-v0.5.md` as the draft v0.5 release notes.
 Use `docs/engineering/release-plan.md` for the open-ended 0.x hardening
 checklist. It does not make any minor version a production-readiness target.
 Use `.github/release-note-template.md` for future 0.x release bodies.
@@ -44,12 +45,11 @@ Patch-release changes belong in `CHANGELOG.md` and the selected release notes.
 No current release should be described as production-ready. Before tagging a
 public release, confirm:
 
-- The GitHub release is marked as a pre-release.
 - The release body starts with "Experimental 0.x release" and "Not
   production-ready."
 - README, requirements, architecture, examples, generated-output docs, and
   release notes clearly separate implemented, partial, and planned behavior.
-- Version and release notes are reflected in the visible pre-release.
+- Version and release notes are reflected in the visible GitHub release.
 - CI workflow is passing.
 - Release artifact list is still accurate.
 - GitHub artifact attestations are enabled for release artifacts.
@@ -90,14 +90,14 @@ After those gates pass on the release commit, run the release workflow manually
 for the current CLI line or push the corresponding tag:
 
 ```sh
-gh workflow run release.yml -f version=v0.3.0
+gh workflow run release.yml -f version=v0.5.0
 ```
 
 After the release workflow completes, smoke the published artifacts for each
 supported OS artifact:
 
 ```sh
-gh workflow run release-smoke.yml -f version=v0.3.0
+gh workflow run release-smoke.yml -f version=v0.5.0
 ```
 
 ## Artifacts
@@ -108,21 +108,20 @@ gh workflow run release-smoke.yml -f version=v0.3.0
 - `gowdk-darwin-arm64`
 - `gowdk-windows-amd64.exe`
 - `checksums.txt`
-- `gowdk-vscode-0.3.0.vsix`
+- `gowdk-vscode-0.5.0.vsix`
 
 ## Install Script
 
 `scripts/install.sh` installs the latest visible published GitHub release by
-default, including 0.x pre-releases. It selects the current operating system
-and architecture, downloads `checksums.txt`, verifies that the matching CLI
-artifact exists for the current platform before binary download, verifies the
-binary SHA-256, and writes `gowdk` into `GOWDK_INSTALL_DIR` or
-`/usr/local/bin`.
+default. It selects the current operating system and architecture, downloads
+`checksums.txt`, verifies that the matching CLI artifact exists for the current
+platform before binary download, verifies the binary SHA-256, and writes
+`gowdk` into `GOWDK_INSTALL_DIR` or `/usr/local/bin`.
 
 Pinned install:
 
 ```sh
-GOWDK_VERSION=v0.3.0 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+GOWDK_VERSION=v0.5.0 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
 ```
 
@@ -143,7 +142,7 @@ gh attestation verify <artifact> -R <owner>/<repo>
 ## Extension Publishing
 
 The release workflow packages the extension into a `.vsix` named from
-`editors/vscode/package.json`, currently `gowdk-vscode-0.3.0.vsix`.
+`editors/vscode/package.json`, currently `gowdk-vscode-0.5.0.vsix`.
 Marketplace publishing is handled by the `Publish VS Code Extension` workflow.
 It is manual-only so CLI/runtime releases do not accidentally republish an
 extension version that already exists on the Marketplace.

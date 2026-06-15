@@ -155,7 +155,7 @@ jobs:
           files: dist/*
           fail_on_unmatched_files: true
           draft: false
-          prerelease: true
+          prerelease: false
 
       - name: Verify release assets
         env:

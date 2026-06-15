@@ -3,7 +3,7 @@
 GOWDK <version> is an experimental 0.x compiler/runtime release.
 
 Not production-ready. Public syntax, generated output, runtime packages, and
-tooling contracts may change before a stable release.
+tooling contracts may change before 1.0.
 
 ## Implemented
 
@@ -90,7 +90,7 @@ code --install-extension gowdk-vscode-<version>.vsix
 ## Release Metadata Checks
 
 - [ ] Release is visible and has all expected download assets.
-- [ ] Release is marked pre-release.
+- [ ] Release is visible and is not marked as a draft.
 - [ ] Release body starts with experimental and not-production-ready warnings.
 - [ ] Release body includes known gaps.
 - [ ] Release body includes checksum and attestation instructions.

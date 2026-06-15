@@ -1,9 +1,20 @@
 # Changelog
 
 GOWDK is experimental 0.x software. Public syntax, generated output, runtime
-packages, and tooling contracts may change before a stable release.
+packages, and tooling contracts may change before 1.0.
 
 ## Unreleased
+
+No changes yet.
+
+## v0.5.0 - 2026-06-15
+
+### Changed
+
+- `gowdk version` and the VS Code extension metadata now report `0.5.0`.
+- GitHub release automation now publishes the selected 0.x tag as a normal
+  visible release instead of marking it as a GitHub pre-release. Release notes
+  and docs still keep the experimental 0.x and not-production-ready warnings.
 
 ### Implemented
 

@@ -101,8 +101,8 @@ Every 0.x minor release must have:
 - [ ] Checksums and artifact attestation instructions in release notes.
 - [ ] A release checklist link in release notes.
 - [ ] A "no production claim" check before publishing.
-- [ ] Draft and pre-release GitHub release settings unless the release policy is
-  deliberately changed.
+- [ ] Normal GitHub release settings for v0.5.0 and later, unless release
+  policy deliberately changes again.
 
 ## Public Truth
 
@@ -139,7 +139,7 @@ Every 0.x minor release must have:
 
 ## README And Getting Started
 
-- [ ] Keep the pre-release warning near the top.
+- [ ] Keep the experimental 0.x warning near the top.
 - [ ] Add "experimental 0.x" wording near the top.
 - [ ] Add "public contracts may change" near the install section.
 - [ ] Move "What works today," "What is partial," and "What is planned" higher.
@@ -742,7 +742,8 @@ helpers in [#122](https://github.com/cssbruno/GOWDK/issues/122).
 
 Start with these in order:
 
-- [x] Verify release metadata shows experimental/pre-release correctly.
+- [x] Verify release metadata shows experimental/non-production-ready wording
+  correctly.
 - [x] Open public issue backlog.
 - [x] Add `0.x Hardening` project board.
 - [x] Update website install docs for release binaries.

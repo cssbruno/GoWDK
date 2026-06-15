@@ -14,7 +14,7 @@ func TestSinkRecordsSnapshotWithProvider(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	sink := NewSinkWithProvider(sdktrace.NewTracerProvider(
 		sdktrace.WithSpanProcessor(recorder),
-		sdktrace.WithIDGenerator(snapshotIDGenerator{}),
+		sdktrace.WithIDGenerator(SnapshotIDGenerator{}),
 	))
 	now := time.Now().UTC()
 	snapshot := gowdktrace.Snapshot{

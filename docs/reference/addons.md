@@ -26,6 +26,7 @@ Current feature IDs:
 - `ratelimit`
 - `contracts`
 - `realtime`
+- `observability`
 - `auth`
 - `db`
 - `seo`
@@ -44,6 +45,7 @@ Current packages:
 - `addons/ratelimit`
 - `addons/contracts`
 - `addons/realtime`
+- `addons/observability`
 - `addons/auth`
 - `addons/db`
 - `addons/seo`
@@ -52,12 +54,14 @@ Current packages:
 remains available for existing configs and static-first SPA navigation; both
 enable the existing `spa` feature ID.
 
-Use `gowdk add --list` to print the built-in names the CLI can wire into
+Use `gowdk add --list` to print the addable built-in names the CLI can wire into
 `gowdk.config.go`:
 
 ```sh
 gowdk add --list
-gowdk add ssr actions partial realtime
+gowdk add --list --registry
+gowdk add --list --registry --json
+gowdk add ssr actions partial realtime observability
 gowdk add seo --base-url https://example.com
 ```
 
@@ -69,27 +73,53 @@ modules or discover third-party addons. `gowdk add seo` also requires
 
 ## Discovery Policy
 
-Current addon discovery is intentionally narrow:
+Current addon discovery is intentionally narrow and metadata-first:
 
 - `gowdk add --list` prints only built-in addons that the CLI can wire safely.
+- `gowdk add --list --registry` prints the checked-in addon registry metadata.
+- `gowdk add --list --registry --json` prints the same metadata as JSON so
+  docs and website tooling can render entries without importing or executing
+  addon code.
 - Repository docs are the source of truth for documented external addons.
 - External addons are resolved by normal Go module tooling after the app imports
   and configures them explicitly.
-- Website or registry metadata may list addons, but it must not install,
-  execute, or trust addon code.
+- Registry metadata may list addons, but it must not install, execute, or trust
+  addon code.
 
-Do not add remote CLI discovery until registry metadata can describe the addon
-name, Go module path, package path, owner, source repository, license,
-experimental/deprecated status, supported GOWDK versions or feature contracts,
-implemented public interfaces, required external tools, network or process
-behavior, and security notes.
+The machine-readable registry lives in `internal/addonregistry/registry.json`.
+Each entry must describe:
+
+- `name`, `summary`, and `description`;
+- `kind`: `built-in` or `documented-external`;
+- `lifecycle`: `stable`, `experimental`, or `deprecated`;
+- `compatibility`: `compatible`, `incompatible`, or `unknown`;
+- `minGOWDK` and optional `maxGOWDK`;
+- `modulePath`, `packagePath`, and `importPath`;
+- `owner`, `sourceRepository`, `license`, and `documentation`;
+- enabled `features`;
+- implemented `publicInterfaces`, such as `gowdk.Addon`,
+  `gowdk.CSSProcessor`, `gowdk.SEOProvider`, or `gowdk.GoBlockConsumer`;
+- `requiredExternalTools`;
+- `networkBehavior`, `processBehavior`, and `securityNotes`;
+- `trust.level` and `trust.notes`;
+- `constructor.addable`, `constructor.package`, `constructor.function`, and
+  optional constructor option metadata.
+
+`constructor.addable` is intentionally separate from registry visibility. A
+registry entry can be visible to docs and CLI discovery while still requiring
+manual Go-module setup. Documented external addons must not be addable by
+`gowdk add`; users import and configure them through normal Go module tooling.
+The bundled registry currently contains built-in entries only, plus addable and
+non-addable built-in distinctions such as `addons/tailwind`. The schema and CLI
+table are ready for documented external, deprecated, and incompatible entries
+when the project has real entries to publish.
 
 Until that metadata, trust policy, and compatibility check exist, GOWDK must not
 scan GitHub or module proxies for addons, execute unknown constructors to build
 a list, download hidden dependencies, auto-add external modules, or enable an
-external addon that is not already present in project Go code. The follow-up for
-registry-backed website and CLI discovery is
-[#422](https://github.com/cssbruno/GoWDK/issues/422).
+external addon that is not already present in project Go code. Remote registry
+sync and automatic compatibility enforcement remain out of scope for the local
+registry slice.
 
 `gowdk.NewAddon(name, features...)` creates a marker addon for feature checks.
 It does not by itself make the compiler, app generator, or runtime call
@@ -117,11 +147,12 @@ Addons: []gowdk.Addon{
 	embed.Addon(),
 	css.Addon(),
 	db.Addon(),
-	ratelimit.Addon(),
-	contracts.Addon(),
-	seo.Addon(seo.Options{
-		BaseURL: "https://example.com",
-	}),
+		ratelimit.Addon(),
+		contracts.Addon(),
+		observability.Addon(),
+		seo.Addon(seo.Options{
+			BaseURL: "https://example.com",
+		}),
 	realtime.Addon(),
 }
 ```
@@ -141,6 +172,12 @@ Use dependency-free `runtime/contracts/sse` through `realtime.NewSSE` for
 one-way browser notifications, or opt into the nested
 `runtime/contracts/websocketfanout` module when the app needs WebSocket
 sessions. See `docs/reference/realtime.md`.
+
+`addons/observability` registers the generated trace instrumentation feature.
+Debug builds wire route, endpoint, guard, browser navigation, and island spans
+to the dependency-free `runtime/trace` collector and local viewer. Optional OTLP
+export is isolated in the nested `runtime/trace/otel` module. See
+`docs/reference/observability.md`.
 
 ## Auth Addon
 

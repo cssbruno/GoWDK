@@ -28,7 +28,7 @@
     form.setAttribute('aria-busy', 'true');
     var focused = focusTarget(document.activeElement);
     try {
-      var response = await fetch(form.getAttribute('action') || window.location.href, {
+      var response = await traceFetch(form.getAttribute('action') || window.location.href, {
         method: (form.getAttribute('method') || 'POST').toUpperCase(),
         body: new FormData(form),
         headers: {
@@ -36,7 +36,7 @@
           'X-GOWDK-Target': form.dataset.gowdkTarget,
           'X-GOWDK-Swap': form.dataset.gowdkSwap || ''
         }
-      });
+      }, { name: 'partial submit', lane: 'fragment' });
       if (!response.ok) {
         throw await partialRequestError(response);
       }
@@ -105,7 +105,10 @@
   var hoverPrefetchURL = '';
   var realtimeEventsPath = '/_gowdk/realtime/events';
   var realtimeSource = null;
+  var traceEndpoint = '/_gowdk/traces/browser';
+  var traceStack = [];
 
+  installTraceBridge();
   document.addEventListener('submit', submitPartial);
   document.addEventListener('click', navigateLink);
   document.addEventListener('mouseover', prefetchLink);
@@ -324,10 +327,10 @@
       'Accept': 'text/html'
     };
     headers[prefetch ? 'X-GOWDK-Prefetch' : 'X-GOWDK-Navigate'] = '1';
-    var response = await fetch(url, {
+    var response = await traceFetch(url, {
       headers: headers,
       credentials: 'same-origin'
-    });
+    }, { name: prefetch ? 'prefetch document' : 'navigate document', lane: 'nav' });
     if (!response.ok) {
       throw new Error('navigation request failed with status ' + response.status);
     }
@@ -454,6 +457,180 @@
       realtimeSource.close();
     }
     realtimeSource = null;
+  }
+
+  function installTraceBridge() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.__gowdkTrace = {
+      enabled: traceEnabled,
+      start: startTraceSpan,
+      end: endTraceSpan,
+      traceparent: function () {
+        var ctx = activeTraceContext();
+        if (!ctx) {
+          if (!traceEnabled()) {
+            return '';
+          }
+          return '00-' + traceHex(16) + '-' + traceHex(8) + '-01';
+        }
+        return '00-' + ctx.traceId + '-' + ctx.spanId + '-01';
+      },
+      fetch: traceFetch
+    };
+  }
+
+  function traceEnabled() {
+    return !!(typeof window !== 'undefined' && (
+      window.__gowdkTraceEnabled ||
+      document.documentElement && document.documentElement.hasAttribute('data-gowdk-trace')
+    ));
+  }
+
+  function traceHex(bytes) {
+    var data = new Uint8Array(bytes);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(data);
+    } else {
+      for (var i = 0; i < data.length; i++) {
+        data[i] = Math.floor(Math.random() * 256);
+      }
+    }
+    var value = '';
+    for (var j = 0; j < data.length; j++) {
+      value += data[j].toString(16).padStart(2, '0');
+    }
+    return /^0+$/.test(value) ? traceHex(bytes) : value;
+  }
+
+  function traceContextFromHeader(header) {
+    var parts = String(header || '').split('-');
+    if (parts.length < 4 || parts[0] !== '00' || !/^[0-9a-f]{32}$/.test(parts[1]) || !/^[0-9a-f]{16}$/.test(parts[2])) {
+      return null;
+    }
+    return { traceId: parts[1], spanId: parts[2], sampled: parts[3] !== '00' };
+  }
+
+  function traceparentFor(span) {
+    if (!span) {
+      return '';
+    }
+    return '00-' + span.traceId + '-' + span.spanId + '-01';
+  }
+
+  function activeTraceContext() {
+    if (traceStack.length > 0) {
+      var active = traceStack[traceStack.length - 1];
+      return { traceId: active.traceId, spanId: active.spanId, sampled: true };
+    }
+    if (typeof window !== 'undefined' && window.__gowdkTraceparent) {
+      return traceContextFromHeader(window.__gowdkTraceparent);
+    }
+    return null;
+  }
+
+  function startTraceSpan(name, lane, attrs) {
+    if (!traceEnabled()) {
+      return null;
+    }
+    var parent = activeTraceContext();
+    var span = {
+      traceId: parent ? parent.traceId : traceHex(16),
+      spanId: traceHex(8),
+      parentSpanId: parent ? parent.spanId : '',
+      name: name || 'browser',
+      surface: 'frontend',
+      lane: lane || 'user',
+      attributes: attrs || [],
+      events: [],
+      status: { code: 'unset' },
+      startTime: new Date().toISOString()
+    };
+    traceStack.push(span);
+    return span;
+  }
+
+  function endTraceSpan(span, status, message) {
+    if (!span) {
+      return;
+    }
+    for (var index = traceStack.length - 1; index >= 0; index--) {
+      if (traceStack[index] === span) {
+        traceStack.splice(index, 1);
+        break;
+      }
+    }
+    span.endTime = new Date().toISOString();
+    span.durationNs = Math.max(0, Math.round((Date.parse(span.endTime) - Date.parse(span.startTime)) * 1000000));
+    span.status = { code: status || 'ok', message: message || '' };
+    postTraceSpan(span);
+  }
+
+  function postTraceSpan(span) {
+    if (!traceEnabled()) {
+      return;
+    }
+    var payload = JSON.stringify(span);
+    try {
+      if (navigator.sendBeacon && navigator.sendBeacon(traceEndpoint, new Blob([payload], { type: 'application/json' }))) {
+        return;
+      }
+    } catch (error) {}
+    try {
+      fetch(traceEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(function () {});
+    } catch (error) {}
+  }
+
+  function traceInputURL(url) {
+    if (typeof Request !== 'undefined' && url instanceof Request) {
+      return url.url || '';
+    }
+    if (url && typeof url === 'object' && typeof url.url === 'string') {
+      return url.url;
+    }
+    return url;
+  }
+
+  function traceInputHeaders(url, options) {
+    if (options && options.headers) {
+      return options.headers;
+    }
+    if (url && typeof url === 'object' && url.headers) {
+      return url.headers;
+    }
+    return {};
+  }
+
+  function sameOriginURL(url) {
+    try {
+      return new URL(traceInputURL(url), window.location.href).origin === window.location.origin;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async function traceFetch(url, options, meta) {
+    if (!traceEnabled()) {
+      return fetch(url, options);
+    }
+    var span = startTraceSpan(meta && meta.name || 'fetch', meta && meta.lane || 'api', [
+      { key: 'url.path', value: String(url || '') }
+    ]);
+    var traced = Object.assign({}, options || {});
+    if (sameOriginURL(url)) {
+      var headers = new Headers(traceInputHeaders(url, traced));
+      headers.set('traceparent', traceparentFor(span));
+      traced.headers = headers;
+    }
+    try {
+      var response = await fetch(url, traced);
+      endTraceSpan(span, response.ok ? 'ok' : 'error', response.ok ? '' : 'HTTP ' + response.status);
+      return response;
+    } catch (error) {
+      endTraceSpan(span, 'error', error && error.message || String(error || 'fetch failed'));
+      throw error;
+    }
   }
 
   function hasRealtimeRegions() {

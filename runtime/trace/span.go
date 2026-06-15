@@ -30,6 +30,9 @@ type Span struct {
 
 // Start starts a span using the default tracer unless WithTracer is supplied.
 func Start(ctx context.Context, name string, options ...StartOption) (context.Context, *Span) {
+	if tracer, ok := TracerFromContext(ctx); ok {
+		return tracer.Start(ctx, name, options...)
+	}
 	return defaultTracer.Start(ctx, name, options...)
 }
 
@@ -133,6 +136,15 @@ func (span *Span) TraceContext() TraceContext {
 	span.mu.Lock()
 	defer span.mu.Unlock()
 	return TraceContext{TraceID: span.traceID, SpanID: span.spanID, Sampled: true}
+}
+
+func (span *Span) tracerRef() *Tracer {
+	if span == nil {
+		return nil
+	}
+	span.mu.Lock()
+	defer span.mu.Unlock()
+	return span.tracer
 }
 
 // Snapshot returns an immutable copy of the span's current state.

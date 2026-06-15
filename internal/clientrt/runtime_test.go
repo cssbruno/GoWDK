@@ -110,6 +110,37 @@ func TestSourceEmitsRealtimePatchRuntime(t *testing.T) {
 	}
 }
 
+func TestSourceTraceBridgeKeepsDisabledTraceparentEmpty(t *testing.T) {
+	source := string(Source())
+	for _, expected := range []string{
+		`if (!traceEnabled()) {
+            return '';
+          }`,
+		`return '00-' + traceHex(16) + '-' + traceHex(8) + '-01';`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected runtime source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestSourceTraceFetchNormalizesRequestInputs(t *testing.T) {
+	source := string(Source())
+	for _, expected := range []string{
+		`function traceInputURL(url)`,
+		`typeof Request !== 'undefined' && url instanceof Request`,
+		`return url.url || '';`,
+		`return new URL(traceInputURL(url), window.location.href).origin === window.location.origin;`,
+		`function traceInputHeaders(url, options)`,
+		`url && typeof url === 'object' && url.headers`,
+		`var headers = new Headers(traceInputHeaders(url, traced));`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected runtime source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestFilename(t *testing.T) {
 	if Filename != "gowdk.js" {
 		t.Fatalf("unexpected runtime filename %q", Filename)

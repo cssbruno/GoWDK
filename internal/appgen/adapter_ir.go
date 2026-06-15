@@ -39,6 +39,8 @@ type BackendEndpointRegistration struct {
 	Name    string
 	Guards  []string
 	Dynamic bool
+	Source  string
+	Span    source.SourceSpan
 }
 
 type BackendActionAdapter struct {
@@ -137,6 +139,7 @@ type BackendContractExposure struct {
 	OwnerID     string
 	Package     string
 	Source      string
+	Span        source.SourceSpan
 }
 
 func backendAdapterIR(options Options) BackendAdapterIR {
@@ -151,6 +154,8 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			Name:    action.ActionName,
 			Guards:  append([]string(nil), action.Guards...),
 			Dynamic: backendRouteIsDynamic(action.Route),
+			Source:  action.Source,
+			Span:    action.SourceSpan,
 		}
 		actionAdapter := BackendActionAdapter{
 			Endpoint:         endpoint,
@@ -222,6 +227,8 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			Name:    api.APIName,
 			Guards:  append([]string(nil), api.Guards...),
 			Dynamic: backendRouteIsDynamic(api.Route),
+			Source:  api.Source,
+			Span:    api.SourceSpan,
 		}
 		apiAdapter := BackendAPIAdapter{
 			Endpoint:     endpoint,
@@ -264,6 +271,8 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			Name:    fragment.FragmentName,
 			Guards:  append([]string(nil), fragment.Guards...),
 			Dynamic: backendRouteIsDynamic(fragment.Route),
+			Source:  fragment.Source,
+			Span:    fragment.SourceSpan,
 		}
 		fragmentAdapter := BackendFragmentAdapter{
 			Endpoint:     endpoint,
@@ -315,6 +324,8 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				Name:    ref.Name,
 				Guards:  append([]string(nil), ref.Guards...),
 				Dynamic: backendRouteIsDynamic(ref.Path),
+				Source:  ref.Source,
+				Span:    ref.Span,
 			}
 			ir.ContractExposures = append(ir.ContractExposures, BackendContractExposure{
 				Endpoint:    endpoint,
@@ -334,6 +345,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 				OwnerID:     ref.OwnerID,
 				Package:     ref.Package,
 				Source:      ref.Source,
+				Span:        ref.Span,
 			})
 		}
 	}

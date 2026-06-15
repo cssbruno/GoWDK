@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -70,11 +71,7 @@ func dev(args []string) error {
 	defer serve.close()
 
 	fmt.Printf("Dev server polling GOWDK inputs every %s\n", options.Interval)
-	if state.runtime.Enabled {
-		fmt.Printf("Running generated app %s at http://%s\n", state.runtime.BinaryPath, options.Addr)
-	} else {
-		fmt.Printf("Serving %s at http://%s\n", absDir, options.Addr)
-	}
+	fmt.Println(devStartupLine(state, absDir, options.Addr, serve.runtimeAddr()))
 	notifyBuildError := func(err error, change inputChange) {
 		serve.notifyBuildError(err, change, lastSuccessfulBuild)
 	}
@@ -143,6 +140,7 @@ func dev(args []string) error {
 		}
 		absDir = buildAbsDir
 		lastSuccessfulBuild = time.Now()
+		fmt.Println(devRebuildCompleteLine(state, absDir, options.Addr, serve.runtimeAddr()))
 		if tracker, err := newDevInputTracker(state.plan); err == nil {
 			state.tracker = tracker
 			if refreshed, err := state.snapshot(); err == nil {
@@ -156,7 +154,7 @@ func dev(args []string) error {
 		if err := writeDevInputCache(absDir, previous); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		}
-		serve.notifyReload()
+		serve.notifyReloadForChange(state, change)
 	}
 }
 
@@ -266,20 +264,29 @@ func (serve *devServeState) useStatic(absDir string) {
 }
 
 func (serve *devServeState) useRuntime(runtime devRuntime) error {
-	startingRuntime := serve.process == nil || serve.server != nil
-	if startingRuntime {
-		fmt.Println("Live reload is not available for app targets; reload the browser manually after each rebuild.")
-	}
 	if _, err := appgen.BuildBinary(runtime.AppDir, runtime.BinaryPath); err != nil {
 		return err
 	}
-	if serve.server != nil {
+	if serve.server != nil && serve.process == nil {
 		stopDevStaticServer(serve.server)
 		serve.server = nil
 		serve.staticDir = ""
 	}
+	if serve.server == nil {
+		targetAddr, err := freeDevRuntimeAddr()
+		if err != nil {
+			return err
+		}
+		serve.server = startDevRuntimeProxy(serve.addr, targetAddr, serve.reload)
+		serve.staticDir = ""
+		if serve.process == nil {
+			serve.process = &devRuntimeProcess{addr: targetAddr}
+		} else {
+			serve.process.addr = targetAddr
+		}
+	}
 	if serve.process == nil {
-		serve.process = &devRuntimeProcess{plan: runtime, addr: serve.addr}
+		return fmt.Errorf("dev runtime proxy did not initialize")
 	} else if serve.process.plan != runtime {
 		serve.process.stop()
 		serve.process.plan = runtime
@@ -292,9 +299,28 @@ func (serve *devServeState) notifyBuildError(err error, change inputChange, last
 }
 
 func (serve *devServeState) notifyReload() {
-	if serve.server != nil {
-		serve.reload.notify("reload")
+	serve.reload.notify("reload")
+}
+
+func (serve *devServeState) notifyReloadForChange(state devBuildState, change inputChange) {
+	if state.runtime.Enabled {
+		serve.notifyReload()
+		return
 	}
+	if payload, ok := devComponentHMRPayloadLoaded(state.plan, change); ok {
+		serve.reload.notifyData("component-hmr", payload)
+		return
+	}
+	serve.notifyReload()
+}
+
+func (serve *devServeState) runtimeAddr() string {
+	if serve.process == nil {
+		return ""
+	}
+	serve.process.mu.Lock()
+	defer serve.process.mu.Unlock()
+	return serve.process.addr
 }
 
 func (serve *devServeState) close() {
@@ -327,10 +353,40 @@ func startDevStaticServer(addr, absDir string, reload *liveReloadBroker) *http.S
 	return server
 }
 
+func startDevRuntimeProxy(addr, targetAddr string, reload *liveReloadBroker) *http.Server {
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           devRuntimeProxyHandler(targetAddr, reload),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			fmt.Fprintln(os.Stderr, err)
+		}
+	}()
+	return server
+}
+
 func stopDevStaticServer(server *http.Server) {
 	if err := server.Close(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Fprintln(os.Stderr, err)
 	}
+}
+
+func freeDevRuntimeAddr() (string, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	addr := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		return "", err
+	}
+	return addr, nil
 }
 
 type devRuntimeProcess struct {
@@ -397,6 +453,27 @@ func (process *devRuntimeProcess) wait(command *exec.Cmd, waitDone chan<- error)
 	if err != nil && active {
 		fmt.Fprintln(os.Stderr, err)
 	}
+}
+
+func devStartupLine(state devBuildState, absDir string, publicAddr string, runtimeAddr string) string {
+	if state.runtime.Enabled {
+		return devRuntimeProxyLine("Generated app runtime", state.runtime, publicAddr, runtimeAddr)
+	}
+	return fmt.Sprintf("Static dev server: serving %s at http://%s", absDir, publicAddr)
+}
+
+func devRebuildCompleteLine(state devBuildState, absDir string, publicAddr string, runtimeAddr string) string {
+	if state.runtime.Enabled {
+		return devRuntimeProxyLine("Dev rebuild complete: generated app restarted", state.runtime, publicAddr, runtimeAddr)
+	}
+	return fmt.Sprintf("Dev rebuild complete: static output refreshed at %s", absDir)
+}
+
+func devRuntimeProxyLine(prefix string, runtime devRuntime, publicAddr string, runtimeAddr string) string {
+	if runtimeAddr == "" {
+		return fmt.Sprintf("%s: proxy http://%s -> generated app (binary %s)", prefix, publicAddr, runtime.BinaryPath)
+	}
+	return fmt.Sprintf("%s: proxy http://%s -> http://%s (binary %s)", prefix, publicAddr, runtimeAddr, runtime.BinaryPath)
 }
 
 func parseDevOptions(args []string) (devOptions, error) {

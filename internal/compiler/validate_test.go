@@ -1146,6 +1146,49 @@ func TestValidateManifestRejectsInvalidTypedUseStoreType(t *testing.T) {
 	}
 }
 
+func TestValidateManifestRejectsTypedUseConflictingWithLocalState(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "shop",
+			ID:      "shop",
+			Route:   "/shop",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []gwdkir.Store{{
+				Name: "cart",
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+			}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Shop</main>`},
+		}},
+		Components: []gwdkir.Component{{
+			Package: "shop",
+			Name:    "CartBadge",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			// Local state's Count is a string; the used store's CounterState
+			// declares Count as int. The overlap must be rejected, not silently
+			// overwritten.
+			State: gwdkir.StateContract{
+				Type: gwdkir.GoRef{Alias: "ui", Name: "StringCountState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewStringCountState"},
+			},
+			Blocks: gwdkir.Blocks{
+				Client:     true,
+				ClientBody: `use cart ui.CounterState`,
+				View:       true,
+				ViewBody:   `<span>{Count}</span>`,
+			},
+		}},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected diagnostic for store/state field type mismatch")
+	}
+	if !hasDiagnosticCode(err.(ValidationErrors), "component_client_error") || !strings.Contains(err.Error(), `field "Count"`) {
+		t.Fatalf("unexpected diagnostics: %v", err)
+	}
+}
+
 func TestValidateManifestAllowsClearOfUsedStore(t *testing.T) {
 	app := appFixture{
 		Pages: []gwdkir.Page{{
@@ -2475,6 +2518,9 @@ func TestValidateManifestRejectsUnboundUsedDOMRef(t *testing.T) {
 fn FocusSearch() {
   searchInput.Focus()
 }`,
+			Spans: gwdkir.BlockSpans{
+				Client: testSourceSpan(10, 1, 14, 2),
+			},
 			View:     true,
 			ViewBody: `<button g:on:click={FocusSearch()}>Focus</button>`,
 		},
@@ -2488,6 +2534,8 @@ fn FocusSearch() {
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
+	diagnostic := firstDiagnostic(diagnostics, "component_client_error")
+	assertSourceSpan(t, diagnostic.Span, 14, 1, 14, 2)
 }
 
 func TestValidateManifestAllowsGIfBoolExpression(t *testing.T) {

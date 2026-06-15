@@ -19,6 +19,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/css"
 	"github.com/cssbruno/gowdk/addons/db"
 	"github.com/cssbruno/gowdk/addons/embed"
+	"github.com/cssbruno/gowdk/addons/observability"
 	"github.com/cssbruno/gowdk/addons/partial"
 	"github.com/cssbruno/gowdk/addons/ratelimit"
 	"github.com/cssbruno/gowdk/addons/realtime"
@@ -679,7 +680,7 @@ func parseBuildTargets(expression ast.Expr) []gowdk.BuildTargetConfig {
 	var targets []gowdk.BuildTargetConfig
 	for _, element := range literal.Elts {
 		target := parseBuildTarget(element)
-		if target.Name == "" && len(target.Modules) == 0 && target.Output == "" && target.App == "" && target.Binary == "" && target.WASM == "" && target.BackendApp == "" && target.BackendBinary == "" {
+		if target.Name == "" && len(target.Modules) == 0 && target.Output == "" && target.App == "" && target.Binary == "" && target.WASM == "" && target.BackendApp == "" && target.BackendBinary == "" && len(target.DeployRecipes) == 0 {
 			continue
 		}
 		targets = append(targets, target)
@@ -720,6 +721,8 @@ func parseBuildTarget(expression ast.Expr) gowdk.BuildTargetConfig {
 			target.BackendApp = parseString(keyValue.Value)
 		case "BackendBinary":
 			target.BackendBinary = parseString(keyValue.Value)
+		case "DeployRecipes":
+			target.DeployRecipes = parseStringList(keyValue.Value)
 		}
 	}
 	return target
@@ -938,6 +941,8 @@ func parseBuiltInAddon(expression ast.Expr, imports map[string]string) (gowdk.Ad
 		return db.Addon(), true
 	case embed.ImportPath:
 		return embed.Addon(), true
+	case observability.ImportPath:
+		return observability.Addon(), true
 	case partial.ImportPath:
 		return partial.Addon(), true
 	case ratelimit.ImportPath:

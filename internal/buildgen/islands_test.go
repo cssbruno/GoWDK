@@ -1408,7 +1408,7 @@ func TestBuildEmitsGoishConditionalExpressionsForJSIsland(t *testing.T) {
 	for _, expected := range []string{
 		`parseConditional()`,
 		`if (this.match("ident", "if"))`,
-		`return Boolean(evalExpression(expr.cond, state, scope, helpers, stack))`,
+		`return requireBool("if", evalExpression(expr.cond, state, scope, helpers, stack))`,
 	} {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated JS island runtime:\n%s", expected, js)

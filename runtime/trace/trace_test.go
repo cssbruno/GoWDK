@@ -197,6 +197,17 @@ func TestAlwaysOffSamplerDoesNotAllocateSpanOrContext(t *testing.T) {
 	}
 }
 
+func TestRejectedDynamicSamplerDoesNotReturnTracerContext(t *testing.T) {
+	tracer := trace.NewTracer(trace.WithSampler(denySampler{}))
+	ctx, span := tracer.Start(context.Background(), "sampled-out", trace.WithLane(trace.LaneRoute))
+	if span != nil {
+		t.Fatal("rejected sampler should not allocate a span")
+	}
+	if _, ok := trace.TracerFromContext(ctx); ok {
+		t.Fatal("rejected sampler returned a context carrying a tracer")
+	}
+}
+
 func BenchmarkStartAlwaysOff(b *testing.B) {
 	tracer := trace.NewTracer(trace.WithSampler(trace.AlwaysOff()))
 	ctx := context.Background()
@@ -205,6 +216,12 @@ func BenchmarkStartAlwaysOff(b *testing.B) {
 		_, span := tracer.Start(ctx, "sampled-out")
 		span.End()
 	}
+}
+
+type denySampler struct{}
+
+func (denySampler) Sample(trace.SamplingContext) bool {
+	return false
 }
 
 type recordingExporter struct {

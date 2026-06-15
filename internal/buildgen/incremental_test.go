@@ -140,6 +140,60 @@ func TestBuildIncrementalRendersOnlyChangedPageSources(t *testing.T) {
 	}
 }
 
+func TestBuildIncrementalSourcePathAssemblesBackendBindings(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	source := filepath.Join(root, "newsletter.page.gwdk")
+	moduleRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "go.mod"), `module example.com/gowdk-incremental-bindings
+
+go 1.26.4
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+filepath.ToSlash(moduleRoot)+`
+`)
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		Source:  source,
+		Package: "app",
+		ID:      "newsletter",
+		Route:   "/newsletter",
+		Guards:  []string{"public"},
+		Blocks: gwdkir.Blocks{
+			Actions: []gwdkir.Action{{Name: "Subscribe", Method: "POST", Route: "/newsletter"}},
+			GoBlocks: []gwdkir.GoBlock{{Body: `import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+func Subscribe(context.Context) (response.Response, error) {
+	return response.RedirectTo("/thanks"), nil
+}`}},
+			View:     true,
+			ViewBody: `<main>Newsletter</main>`,
+		},
+	}}}
+
+	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+	result, err := BuildIncremental(gowdk.Config{}, app, outputDir, []string{source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := findBuildReportEvent(result.Report, "bind", "backend_binding")
+	if event == nil {
+		t.Fatalf("missing backend binding event in %#v", result.Report.Events)
+	}
+	if event.Data["block"] != "Subscribe" || event.Data["status"] != "bound" {
+		t.Fatalf("expected bound Subscribe event, got %#v", event)
+	}
+}
+
 func TestBuildIncrementalFromIRRendersChangedPageSources(t *testing.T) {
 	outputDir := t.TempDir()
 	source := filepath.Join(t.TempDir(), "home.page.gwdk")

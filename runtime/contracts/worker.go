@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log"
 	"time"
+
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
 // ErrEventSourceClosed tells RunEventWorker that the source drained cleanly.
@@ -56,6 +58,7 @@ type EventWorkerOption func(*eventWorkerOptions)
 
 type eventWorkerOptions struct {
 	backoff EventWorkerBackoff
+	seen    SeenStore
 }
 
 // WithEventWorkerBackoff sets the retry delay policy used after EventSource
@@ -63,6 +66,15 @@ type eventWorkerOptions struct {
 func WithEventWorkerBackoff(backoff EventWorkerBackoff) EventWorkerOption {
 	return func(options *eventWorkerOptions) {
 		options.backoff = backoff
+	}
+}
+
+// WithEventWorkerSeenStore skips duplicate event IDs already present in seen.
+// Duplicate-only batches are acknowledged without invoking subscribers. A nil
+// seen store preserves the default at-least-once worker behavior.
+func WithEventWorkerSeenStore(seen SeenStore) EventWorkerOption {
+	return func(options *eventWorkerOptions) {
+		options.seen = seen
 	}
 }
 
@@ -94,13 +106,13 @@ func RunEventWorkerWithOptions(ctx context.Context, registry *Registry, source E
 // through Nack are logged via WorkerLogger and the worker keeps consuming;
 // it only stops when ctx ends, the source closes, or Ack/Nack fail.
 func RunEventWorkerForRole(ctx context.Context, registry *Registry, role Role, source EventSource) error {
-	return runEventWorkerForRole(ctx, registry, role, source, nil)
+	return RunEventWorkerForRoleWithOptions(ctx, registry, role, source)
 }
 
 // RunEventWorkerForRoleWithOptions reads batches for role with explicit worker
 // options such as retry backoff.
 func RunEventWorkerForRoleWithOptions(ctx context.Context, registry *Registry, role Role, source EventSource, options ...EventWorkerOption) error {
-	return runEventWorkerForRole(ctx, registry, role, source, nil, options...)
+	return runEventWorkerForRole(ctx, registry, role, source, options...)
 }
 
 // RunEventWorkerWithSeenStore reads worker-role batches and skips duplicate
@@ -120,16 +132,16 @@ func RunEventWorkerWithSeenStoreAndOptions(ctx context.Context, registry *Regist
 // event IDs already present in seen. A nil seen store preserves the default
 // at-least-once worker behavior.
 func RunEventWorkerForRoleWithSeenStore(ctx context.Context, registry *Registry, role Role, source EventSource, seen SeenStore) error {
-	return runEventWorkerForRole(ctx, registry, role, source, seen)
+	return RunEventWorkerForRoleWithOptions(ctx, registry, role, source, WithEventWorkerSeenStore(seen))
 }
 
 // RunEventWorkerForRoleWithSeenStoreAndOptions reads batches for role with a
 // seen store and explicit worker options such as retry backoff.
 func RunEventWorkerForRoleWithSeenStoreAndOptions(ctx context.Context, registry *Registry, role Role, source EventSource, seen SeenStore, options ...EventWorkerOption) error {
-	return runEventWorkerForRole(ctx, registry, role, source, seen, options...)
+	return RunEventWorkerForRoleWithOptions(ctx, registry, role, source, append([]EventWorkerOption{WithEventWorkerSeenStore(seen)}, options...)...)
 }
 
-func runEventWorkerForRole(ctx context.Context, registry *Registry, role Role, source EventSource, seen SeenStore, optionFns ...EventWorkerOption) error {
+func runEventWorkerForRole(ctx context.Context, registry *Registry, role Role, source EventSource, optionFns ...EventWorkerOption) error {
 	if source == nil {
 		return Error{Kind: ErrNilHandler, Message: "event source cannot be nil"}
 	}
@@ -149,7 +161,12 @@ func runEventWorkerForRole(ctx context.Context, registry *Registry, role Role, s
 			}
 			return err
 		}
-		result, err := dispatchEventBatch(ctx, registry, role, batch, seen)
+		_, receiveSpan := startContractSpan(ctx, string(ObservationWorkerReceiveEventBatch),
+			gowdktrace.LaneJob,
+			map[string]any{"gowdk.contract.role": string(role), "gowdk.event.count": len(batch.Events)},
+		)
+		finishContractSpan(receiveSpan, nil)
+		result, err := dispatchEventBatch(ctx, registry, role, batch, options.seen)
 		if err != nil {
 			return err
 		}

@@ -7,14 +7,16 @@ import (
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
+	"github.com/cssbruno/gowdk/internal/viewparse"
+	"github.com/cssbruno/gowdk/internal/viewvalidation"
 )
 
 func validateComponentListDirectives(component gwdkir.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction) []ValidationError {
 	nodes := component.Blocks.ViewNodes
 	if len(nodes) == 0 {
 		var err error
-		nodes, err = view.Parse(component.Blocks.ViewBody)
+		nodes, err = viewparse.Parse(component.Blocks.ViewBody)
 		if err != nil {
 			return nil
 		}
@@ -42,24 +44,24 @@ type spannedMessage struct {
 	Span    source.SourceSpan
 }
 
-func validateListNodes(nodes []view.Node, component gwdkir.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
+func validateListNodes(nodes []viewmodel.Node, component gwdkir.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
 	for _, node := range nodes {
 		switch typed := node.(type) {
-		case view.Element:
+		case viewmodel.Element:
 			if loopAttr, hasLoop := elementForDirective(typed); hasLoop {
 				validateListElement(typed, loopAttr, component, symbols, stateTypes, handlers, helpers, messages)
 				continue
 			}
 			validateListNodes(typed.Children, component, symbols, stateTypes, handlers, helpers, messages)
-		case view.ComponentCall:
+		case viewmodel.ComponentCall:
 			validateListNodes(typed.Children, component, symbols, stateTypes, handlers, helpers, messages)
 		}
 	}
 }
 
-func validateListElement(element view.Element, loopAttr view.Attr, component gwdkir.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
+func validateListElement(element viewmodel.Element, loopAttr viewmodel.Attr, component gwdkir.Component, symbols map[string]clientlang.ValueType, stateTypes map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
 	loopSpan := viewBodyNeedleSpan(component, loopAttr.Value)
-	loop, err := view.ParseForDirective(loopAttr.Value)
+	loop, err := viewparse.ParseForDirective(loopAttr.Value)
 	if err != nil {
 		*messages = append(*messages, spannedMessage{Message: err.Error(), Span: loopSpan})
 		return
@@ -91,17 +93,17 @@ func validateListElement(element view.Element, loopAttr view.Attr, component gwd
 	validateLoopElementBody(element, loopSymbols, stateTypes, handlers, helpers, messages)
 }
 
-func validateLoopSubtree(node view.Node, readSymbols map[string]clientlang.ValueType, writeSymbols map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
+func validateLoopSubtree(node viewmodel.Node, readSymbols map[string]clientlang.ValueType, writeSymbols map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
 	switch typed := node.(type) {
-	case view.Text:
+	case viewmodel.Text:
 		validateInterpolations(typed.Value, readSymbols, messages)
-	case view.Element:
+	case viewmodel.Element:
 		if loopAttr, hasLoop := elementForDirective(typed); hasLoop {
 			validateListElement(typed, loopAttr, gwdkir.Component{}, readSymbols, writeSymbols, handlers, helpers, messages)
 			return
 		}
 		validateLoopElementBody(typed, readSymbols, writeSymbols, handlers, helpers, messages)
-	case view.ComponentCall:
+	case viewmodel.ComponentCall:
 		for _, attr := range typed.Attrs {
 			if strings.HasPrefix(attr.Name, "g:") {
 				continue
@@ -114,18 +116,18 @@ func validateLoopSubtree(node view.Node, readSymbols map[string]clientlang.Value
 	}
 }
 
-func validateLoopElementBody(element view.Element, readSymbols map[string]clientlang.ValueType, writeSymbols map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
+func validateLoopElementBody(element viewmodel.Element, readSymbols map[string]clientlang.ValueType, writeSymbols map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {
 	for _, attr := range element.Attrs {
 		if attr.Name == "g:for" || attr.Name == "g:key" {
 			continue
 		}
 		switch {
 		case strings.HasPrefix(attr.Name, "g:on:"):
-			if err := view.ValidateIslandEventExpressionTypedWithFunctions(attr.Value, readSymbols, writeSymbols, handlers, helpers); err != nil {
+			if err := clientlang.ValidateIslandEventExpressionTypedWithFunctions(attr.Value, readSymbols, writeSymbols, handlers, helpers); err != nil {
 				*messages = append(*messages, spannedMessage{Message: fmt.Sprintf("%s=%q is invalid: %v", attr.Name, attr.Value, err)})
 			}
 		case attr.Name == "g:if" || attr.Name == "g:else-if":
-			if err := view.ValidateIslandBoolExpressionTyped(strings.TrimSpace(attr.Value), readSymbols); err != nil {
+			if err := clientlang.ValidateIslandBoolExpressionTyped(strings.TrimSpace(attr.Value), readSymbols); err != nil {
 				*messages = append(*messages, spannedMessage{Message: fmt.Sprintf("%s=%q is invalid: %v", attr.Name, attr.Value, err)})
 			}
 		case attr.Name == "g:bind:value":
@@ -138,17 +140,17 @@ func validateLoopElementBody(element view.Element, readSymbols map[string]client
 			}
 		case strings.HasPrefix(attr.Name, "class:"):
 			expr := expressionAttrSource(attr.Value)
-			if err := view.ValidateClassToggleExpressionTyped(attr.Name, expr, readSymbols); err != nil {
+			if err := viewvalidation.ValidateClassToggleExpressionTyped(attr.Name, expr, readSymbols); err != nil {
 				*messages = append(*messages, spannedMessage{Message: fmt.Sprintf("%s=%q is invalid: %v", attr.Name, expr, err)})
 			}
 		case strings.HasPrefix(attr.Name, "style:"):
 			expr := expressionAttrSource(attr.Value)
-			if err := view.ValidateStyleBindingExpressionTyped(attr.Name, expr, readSymbols); err != nil {
+			if err := viewvalidation.ValidateStyleBindingExpressionTyped(attr.Name, expr, readSymbols); err != nil {
 				*messages = append(*messages, spannedMessage{Message: fmt.Sprintf("%s=%q is invalid: %v", attr.Name, expr, err)})
 			}
 		case attr.Expression:
 			expr := expressionAttrSource(attr.Value)
-			if err := view.ValidateReactiveAttrExpressionTyped(attr.Name, expr, readSymbols); err != nil {
+			if err := viewvalidation.ValidateReactiveAttrExpressionTyped(attr.Name, expr, readSymbols); err != nil {
 				*messages = append(*messages, spannedMessage{Message: fmt.Sprintf("%s=%q is invalid: %v", attr.Name, expr, err)})
 			}
 		default:

@@ -13,6 +13,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewanalysis"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 
@@ -197,10 +198,10 @@ func composeLayoutSource(layout gwdkir.Layout, child string) (string, error) {
 func validateViewParamReferences(page gwdkir.Page, source string, nodes []view.Node) error {
 	var refs []string
 	if len(nodes) > 0 {
-		refs = view.ParamReferencesFromNodes(nodes)
+		refs = viewanalysis.ParamReferencesFromNodes(nodes)
 	} else {
 		var err error
-		refs, err = view.ParamReferences(source)
+		refs, err = viewanalysis.ParamReferences(source)
 		if err != nil {
 			return err
 		}
@@ -306,10 +307,10 @@ func viewHasRealtimeSubscription(source string, nodes []view.Node) bool {
 		return false
 	}
 	if len(nodes) > 0 {
-		refs, err := view.SubscriptionReferencesFromNodes(nodes)
+		refs, err := viewanalysis.SubscriptionReferencesFromNodes(nodes)
 		return err == nil && len(refs) > 0
 	}
-	refs, err := view.SubscriptionReferences(source)
+	refs, err := viewanalysis.SubscriptionReferences(source)
 	return err == nil && len(refs) > 0
 }
 
@@ -320,12 +321,12 @@ func viewHasInvalidatedQuery(source string, nodes []view.Node, queryTypeNames ma
 	if !strings.Contains(source, "g:query") && len(nodes) == 0 {
 		return false
 	}
-	var refs []view.QueryReference
+	var refs []viewanalysis.QueryReference
 	var err error
 	if len(nodes) > 0 {
-		refs, err = view.QueryReferencesFromNodes(nodes)
+		refs, err = viewanalysis.QueryReferencesFromNodes(nodes)
 	} else {
-		refs, err = view.QueryReferences(source)
+		refs, err = viewanalysis.QueryReferences(source)
 	}
 	if err != nil {
 		return false
@@ -569,8 +570,12 @@ func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []
 	}
 	head = append(head, "</head>")
 
+	htmlAttrs := ""
+	if config.HasFeature(gowdk.FeatureObservability) && config.Build.DebugAssets() {
+		htmlAttrs += " data-gowdk-trace"
+	}
 	return "<!doctype html>\n" +
-		"<html>\n" +
+		"<html" + htmlAttrs + ">\n" +
 		strings.Join(head, "\n") + "\n" +
 		"<body>\n" +
 		body + "\n" +

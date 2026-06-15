@@ -175,7 +175,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 | --- | --- |
 | `gowdk generate stubs` | Write conservative missing action/API Go handler stubs next to their owning source package |
 | `gowdk contracts` / `graph` / `trace` / `list` | Print contract registration metadata, the command/event graph, a single contract trace, or filtered lists of commands/queries/events/jobs |
-| `gowdk add <addon>` | Wire an optional addon into `gowdk.config.go` (`add --list` to see all; `add seo` requires `--base-url`) |
+| `gowdk add <addon>` | Wire an optional addon into `gowdk.config.go` (`add --list` for addable built-ins, `add --list --registry` for metadata; `add seo` requires `--base-url`) |
 | `gowdk lsp` | Start the language server over stdio |
 
 ## Design
@@ -239,11 +239,11 @@ This table describes the current demoable 0.x slice. Status levels:
 | CSS/assets | Works, contract unstable | CSS processors, page CSS, scoped component CSS, component assets, asset manifests, content-hashed filenames, optional production obfuscation for compiler-owned JS, and optional Tailwind wrapper exist. | CSS processor contracts and optional dependency boundaries need hardening. | [CSS](docs/reference/css.md) | [CSS](examples/css/styled.page.gwdk) |
 | One-binary output | Works, contract unstable | `gowdk build --app --bin` can generate and compile an embedded Go server for supported SPA/backend/SSR slices, `--docker` emits a minimal non-root Docker context beside the binary, and CI starts the embed example binary to verify health plus embedded page serving. | Runtime operations, richer Docker target config, and split/backend-only deploys are still expanding. | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) |
 | Generated app WASM | Early | `gowdk build --app --wasm` compiles the generated app into a Go `js/wasm` deploy artifact, and CI verifies the emitted module header. | Host runtime/loader integration is deploy-platform owned; this is separate from component-level WASM islands. | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) |
-| Contracts | Works, contract unstable | Runtime contracts support typed queries, commands, events, jobs, role filtering, local dispatch, file outbox, broker/fanout adapters, worker replay with dedup/backoff hooks, contract graph/trace/list commands, generated `g:command`/`g:query` web adapters, and explicit domain-event to query invalidation metadata. | Separate worker/cron binary generators, managed deployment recipes, and editor-first contract visualization remain planned platform tooling. | [Contracts](docs/reference/contracts.md) | [Runtime contracts](runtime/contracts) |
+| Contracts | Works, contract unstable | Runtime contracts support typed queries, commands, events, jobs, role filtering, local dispatch, file outbox, broker/fanout adapters, worker replay with dedup/backoff hooks, contract graph/trace/list commands, generated `g:command`/`g:query` web adapters, and explicit domain-event to query invalidation metadata. | Separate worker/cron binary generators and editor-first contract visualization remain planned platform tooling. | [Contracts](docs/reference/contracts.md) | [Runtime contracts](runtime/contracts) |
 | Realtime | Works, contract unstable | `FeatureRealtime` and `addons/realtime` provide opt-in presentation-event fanout packaging, dependency-free SSE helpers, nested WebSocket transport docs, compiler-validated `g:subscribe` metadata, generated subscription-filtered guarded SSE fanout, bounded SSE retry/drop behavior, a bounded generated client patch loop for query-owned regions, generated `gowdk.query.invalidate` events, and current-document refresh for non-subscribed invalidated query regions. | Custom retry/backoff/replay, active session-change stream revocation, richer patch shapes, fragment/API-specific query execution, and route-specific refresh endpoints remain hardening work. | [Realtime](docs/reference/realtime.md) | [SSE](runtime/contracts/sse) |
-| Tracing | Early | `runtime/trace` provides dependency-free W3C trace IDs, `traceparent` propagation, context spans, GOWDK surface/lane metadata, console/JSONL/ring/multi/exporter sinks, always-on/off and ratio sampling, and a JSON/SSE in-process collector. | Generated app auto-instrumentation, durable storage, browser viewer, and concrete OTLP transport remain planned follow-up work. | [Tracing](docs/reference/tracing.md) | [Runtime trace](runtime/trace) |
-| Security audit | Early | `gowdk audit` derives an IR-backed posture for routes, endpoints, contracts, and frontend surface risks; evaluates the built-in baseline plus declared `*.audit.gwdk` policies; exits non-zero on error findings; can emit/run generated audit tests; and `gowdk build` writes the posture to a non-served report path. | The audit DSL and generated tests cover the M8 slice; broader auth/session ownership, richer role fixtures, and deeper browser/data-flow analysis remain app-owned or planned. | [Security](docs/engineering/security.md) | [Spec](docs/product/security-audit-spec.md) |
-| Dev server | Works | `gowdk dev` polls inputs, skips no-op rebuilds, serves or runs generated output, live-reloads browsers, shows a browser overlay with diagnostic codes/source spans/changed-file context, and keeps serving the last successful output. | Generated-app runtime browser overlay delivery and component HMR are intentionally deferred. | [Dev](docs/reference/dev.md) | [Getting started](docs/getting-started.md) |
+| Observability | Early | `runtime/trace` provides dependency-free W3C trace IDs, context spans, sampling, sinks, source refs, `traceparent` propagation, a local JSON/SSE collector, and a self-contained viewer. `addons/observability` enables debug-only generated backend/frontend/island tracing, and `runtime/trace/otel` provides an optional nested OTLP bridge. | Durable production storage, hosted analysis, and production sampling policy remain app-owned. | [Observability](docs/reference/observability.md) | [Runtime trace](runtime/trace) |
+| Security audit | Early | `gowdk audit` derives an IR-backed posture for routes, endpoints, contracts, and frontend surface risks; evaluates the built-in baseline plus declared `*.audit.gwdk` policies; exits non-zero on error findings; can emit/run generated audit tests; and `gowdk build` runs the same baseline, blocking production builds on error findings unless `--allow-insecure` is set. | The audit DSL and generated tests cover the M8 slice; broader auth/session ownership, richer role fixtures, and deeper browser/data-flow analysis remain app-owned or planned. | [Security](docs/engineering/security.md) | [Spec](docs/product/security-audit-spec.md) |
+| Dev server | Works | `gowdk dev` polls inputs, skips no-op rebuilds, serves or runs generated output through a dev-only proxy when runtime mode is needed, live-reloads browsers, shows a browser overlay with diagnostic codes/source spans/changed-file context, and hot-swaps matching JS island component roots. | Dev-only runtime panic surfacing, state-preserving/broader HMR, and richer editor integration remain planned. | [Dev](docs/reference/dev.md) | [Getting started](docs/getting-started.md) |
 | Editor/LSP | Works | The VS Code extension and dependency-free LSP provide diagnostics, formatting, completions, hover, outline, semantic tokens, definitions, references, site-map visualization, project-aware navigation, and editor-visible `g:command`/`g:query` binding diagnostics for supported paths. | Richer quick fixes and route/endpoint/contract map polish are planned. | [Language server](docs/product/language-server.md) | [VS Code](editors/vscode) |
 
 Security note: request-time features are still 0.x, but the core request-time
@@ -268,8 +268,9 @@ tracking in the
 ## Addons
 
 The runtime core stays dependency-light; everything optional is an addon you
-wire in with `gowdk add <addon>` (see `gowdk add --list`; SEO also needs
-`gowdk add seo --base-url https://example.com`):
+wire in with `gowdk add <addon>`. Use `gowdk add --list` for addable built-ins
+and `gowdk add --list --registry` for registry metadata; SEO also needs
+`gowdk add seo --base-url https://example.com`:
 
 | Addon | What it adds |
 | --- | --- |
@@ -290,7 +291,9 @@ wire in with `gowdk add <addon>` (see `gowdk add --list`; SEO also needs
 SSE fanout stays dependency-free in the root module. Heavier integrations
 (Tailwind, Redis, NATS, WebSocket fanout) live in nested optional modules so
 the root module's dependency graph stays small.
-Addon discovery beyond built-ins remains docs/registry-first; the current
+Addon discovery beyond addable built-ins remains metadata-first:
+`gowdk add --list --registry` prints the local registry, and external addon
+installation stays explicit through normal Go module imports. The current
 policy is in [Addons](docs/reference/addons.md#discovery-policy).
 
 ## Development
@@ -329,6 +332,8 @@ reviewable test diff rather than a silent behavior change.
 
 - [Getting started](docs/getting-started.md)
 - [Native learning path](docs/learning/native.md)
+- [Native cookbook](docs/cookbook/README.md)
+- [Reference index](docs/reference/README.md)
 - [Playground onboarding and sandboxing](docs/product/playground.md)
 - [Changelog](CHANGELOG.md)
 - [0.x improvement checklist](docs/engineering/release-plan.md)

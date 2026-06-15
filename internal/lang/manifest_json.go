@@ -8,7 +8,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewanalysis"
 )
 
 // ManifestSchemaVersion is the current gowdk manifest JSON schema version.
@@ -445,25 +445,25 @@ func pageComponents(page gwdkir.Page) []string {
 		return nil
 	}
 	if len(page.Blocks.ViewNodes) > 0 {
-		return view.ComponentReferencesFromNodes(page.Blocks.ViewNodes)
+		return viewanalysis.ComponentReferencesFromNodes(page.Blocks.ViewNodes)
 	}
-	components, err := view.ComponentReferences(page.Blocks.ViewBody)
+	components, err := viewanalysis.ComponentReferences(page.Blocks.ViewBody)
 	if err != nil {
 		return nil
 	}
 	return components
 }
 
-func pageDependencies(page gwdkir.Page) view.Dependencies {
+func pageDependencies(page gwdkir.Page) viewanalysis.Dependencies {
 	if !page.Blocks.View || page.Blocks.ViewBody == "" {
-		return view.Dependencies{}
+		return viewanalysis.Dependencies{}
 	}
 	if len(page.Blocks.ViewNodes) > 0 {
-		return view.ViewDependenciesFromNodes(page.Blocks.ViewNodes)
+		return viewanalysis.ViewDependenciesFromNodes(page.Blocks.ViewNodes)
 	}
-	dependencies, err := view.ViewDependencies(page.Blocks.ViewBody)
+	dependencies, err := viewanalysis.ViewDependencies(page.Blocks.ViewBody)
 	if err != nil {
-		return view.Dependencies{}
+		return viewanalysis.Dependencies{}
 	}
 	return dependencies
 }

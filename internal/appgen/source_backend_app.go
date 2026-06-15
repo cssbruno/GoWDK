@@ -41,6 +41,9 @@ func backendRuntimeImportMap(options Options) map[string]string {
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
 		imports["gowdkrealtime"] = "github.com/cssbruno/gowdk/addons/realtime"
 	}
+	if generatedObservabilityEnabled(options) {
+		imports["gowdktrace"] = "github.com/cssbruno/gowdk/runtime/trace"
+	}
 	if generatedRealtimeStreamUsesRouteMatching(options) {
 		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 		imports["neturl"] = "net/url"

@@ -3,6 +3,8 @@ package contracts
 import (
 	"context"
 	"fmt"
+
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
 // RegisterDomainEvent registers a subscriber for a backend-owned domain event.
@@ -100,6 +102,7 @@ func PublishEventsToBroker(ctx context.Context, broker Broker, events []EventEnv
 	if len(events) == 0 {
 		return nil
 	}
+	events = eventsWithTraceparent(ctx, events)
 	return broker.PublishEvents(ctx, events)
 }
 
@@ -112,6 +115,7 @@ func SendPresentationEventsToFanout(ctx context.Context, fanout PresentationFano
 	if len(presentation) == 0 {
 		return nil
 	}
+	presentation = eventsWithTraceparent(ctx, presentation)
 	return fanout.SendPresentationEvents(ctx, presentation)
 }
 
@@ -209,6 +213,13 @@ func publishEnvelopesForRole(ctx context.Context, registry *Registry, events []E
 }
 
 func publishEnvelopeForRole(ctx context.Context, registry *Registry, event EventEnvelope, role Role) error {
+	ctx = contextWithEventTraceparent(ctx, event)
+	ctx, span := startContractSpan(ctx, string(ObservationPublishEvent),
+		gowdktrace.LaneContract,
+		map[string]any{"gowdk.contract.kind": string(Event), "gowdk.contract.type": event.Type, "gowdk.event.category": string(event.Category), "gowdk.event.id": event.ID, "gowdk.contract.role": string(role)},
+	)
+	var spanErr error
+	defer func() { finishContractSpan(span, spanErr) }()
 	key := eventKey{category: event.Category, event: event.Type}
 	entries := registry.eventEntries(key)
 	for index, entry := range entries {
@@ -216,18 +227,21 @@ func publishEnvelopeForRole(ctx context.Context, registry *Registry, event Event
 			continue
 		}
 		if entry.dispatch == nil {
-			return unsupportedHandlerError(Event, key.event)
+			spanErr = unsupportedHandlerError(Event, key.event)
+			return spanErr
 		}
 		if err := entry.dispatch(ctx, event.Value); err != nil {
 			if Is(err, ErrUnsupportedHandler) {
+				spanErr = err
 				return err
 			}
-			return Error{
+			spanErr = Error{
 				Kind:     ErrSubscriberFailed,
 				Contract: key.event,
 				Message:  fmt.Sprintf("%s event subscriber %d for %s failed: %v", key.category, index, key.event, err),
 				Cause:    err,
 			}
+			return spanErr
 		}
 	}
 	return nil
@@ -268,10 +282,26 @@ func dispatchEvent[E any](ctx context.Context, registry *Registry, category Even
 
 func dispatchEventForRole[E any](ctx context.Context, registry *Registry, category EventCategory, event E, role Role) error {
 	return publishEnvelopeForRole(ctx, registry, EventEnvelope{
-		Category: category,
-		Type:     typeName[E](),
-		Value:    event,
+		TraceParent: traceparentFromContext(ctx),
+		Category:    category,
+		Type:        typeName[E](),
+		Value:       event,
 	}, role)
+}
+
+func eventsWithTraceparent(ctx context.Context, events []EventEnvelope) []EventEnvelope {
+	traceparent := traceparentFromContext(ctx)
+	if traceparent == "" {
+		return events
+	}
+	out := make([]EventEnvelope, len(events))
+	copy(out, events)
+	for index := range out {
+		if out[index].TraceParent == "" {
+			out[index].TraceParent = traceparent
+		}
+	}
+	return out
 }
 
 func (registry *Registry) eventEntries(key eventKey) []eventEntry {

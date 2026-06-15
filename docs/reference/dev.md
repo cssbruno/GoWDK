@@ -21,8 +21,23 @@ The command:
 
 When `--app <dir>` or a selected target has `App`, `dev` also builds the
 generated app, compiles a local binary, starts it with `GOWDK_ADDR`, and
-restarts that process after successful rebuilds. Runtime stdout and stderr stay
-attached to the terminal.
+restarts that process after successful rebuilds. The generated app runs on an
+internal loopback port behind a dev-only proxy at the requested `--addr`, so
+HTML responses get the same live-reload and build-error overlay bridge as
+plain SPA/static dev serving. Runtime stdout and stderr stay attached to the
+terminal.
+
+Terminal startup output uses stable wording for the serving mode:
+
+```text
+Static dev server: serving <output-dir> at http://<addr>
+Generated app runtime: proxy http://<addr> -> http://<internal-addr> (binary <path>)
+```
+
+`<addr>` is the public dev address. `<internal-addr>` is the loopback address
+assigned to the generated app process through `GOWDK_ADDR`; it is an
+implementation detail for local dev proxying and should not be used in deploy
+docs.
 
 ## Rebuild Scope
 
@@ -48,16 +63,38 @@ The dev loop stores a watched-input snapshot in the output directory. A later
 poll tick can reuse that snapshot when the source set and output are still
 present, which avoids reloading config and rewalking the tree on no-op ticks.
 
+On each detected change, terminal output starts with stable change-summary
+wording:
+
+```text
+Change detected at <RFC3339 timestamp>: <n> changed, <n> added, <n> removed
+  changed: <path>
+  added: <path>
+  removed: <path>
+```
+
+After a successful rebuild, the loop prints one of:
+
+```text
+Dev rebuild complete: static output refreshed at <output-dir>
+Dev rebuild complete: generated app restarted: proxy http://<addr> -> http://<internal-addr> (binary <path>)
+```
+
 ## HMR
 
-Component-level HMR is not part of the current contract. The P0 baseline is
-full-page live reload with last-good-output serving.
+`gowdk dev` supports conservative component-aware HMR for generated JavaScript
+islands in plain SPA/static serving. When a changed component source maps to the
+current page and the browser can find matching `<gowdk-island>` roots, the dev
+bridge fetches the fresh document, swaps those island roots, remounts islands,
+and emits `gowdk:component-hmr`.
 
-Local island state preservation is also not a current contract. Add it only
-after GOWDK has a stable component/client dependency graph.
+The dev bridge falls back to full-page reload for page changes, layout changes,
+source-set changes, generated app/runtime mode, WASM islands, and component
+changes that do not have a matching island boundary on the current page. Local
+island state preservation is not a current contract.
 
-Generated-app runtime overlay delivery, dev-only runtime panic surfacing, and
-component-aware HMR are tracked in
+Generated-app rebuild overlay delivery now uses the dev-only proxy bridge.
+Dev-only runtime panic surfacing and broader component HMR remain tracked in
 [#424](https://github.com/cssbruno/GoWDK/issues/424).
 
 ## Browser Overlay
@@ -77,11 +114,11 @@ The overlay includes, when available:
 
 The overlay is removed on the next successful rebuild and page reload.
 
-Generated app runtime mode keeps runtime stdout/stderr attached to the terminal.
-Browser overlay delivery there is limited by the generated app process serving
-the HTTP traffic, so generated-app runtime errors remain terminal-first until a
-runtime browser bridge exists. See
-[#424](https://github.com/cssbruno/GoWDK/issues/424).
+Generated app runtime mode keeps runtime stdout/stderr attached to the terminal
+and serves browser traffic through the dev-only proxy bridge. Rebuild failures
+from generated app compilation are sent to the same browser overlay. Runtime
+panics and request-time handler failures remain terminal-first unless they are
+already surfaced through the generated app's normal safe HTTP response.
 
 ## File Watching
 

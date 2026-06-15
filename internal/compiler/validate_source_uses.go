@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewanalysis"
 )
 
 func validateGOWDKUses(app gwdkir.Program, crossFile bool) []ValidationError {
@@ -137,7 +137,7 @@ func validatePageQualifiedComponentRefs(page gwdkir.Page, usesByAlias map[string
 	if !page.Blocks.View || strings.TrimSpace(page.Blocks.ViewBody) == "" {
 		return nil
 	}
-	refs, err := view.ComponentReferenceSpans(page.Blocks.ViewBody)
+	refs, err := viewanalysis.ComponentReferenceSpans(page.Blocks.ViewBody)
 	if err != nil {
 		return []ValidationError{{
 			Code:    "view_parse_error",
@@ -215,7 +215,7 @@ func validateComponentQualifiedComponentRefs(component gwdkir.Component, usesByA
 	if !component.Blocks.View || strings.TrimSpace(component.Blocks.ViewBody) == "" {
 		return nil
 	}
-	refs, err := view.ComponentReferenceSpans(component.Blocks.ViewBody)
+	refs, err := viewanalysis.ComponentReferenceSpans(component.Blocks.ViewBody)
 	if err != nil {
 		return []ValidationError{{
 			Code:          "view_parse_error",

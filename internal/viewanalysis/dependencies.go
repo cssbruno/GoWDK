@@ -1,14 +1,41 @@
-package view
+package viewanalysis
 
 import (
 	"sort"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/viewmodel"
+	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
-func collectViewDependencies(nodes []Node, assets, classes, styles map[string]bool) {
+// ViewDependencies returns direct literal asset and style references from a
+// view markup fragment. Interpolated and external URLs are not reported.
+func ViewDependencies(source string) (Dependencies, error) {
+	nodes, err := viewparse.Parse(source)
+	if err != nil {
+		return Dependencies{}, err
+	}
+	return ViewDependenciesFromNodes(nodes), nil
+}
+
+// ViewDependenciesFromNodes returns direct literal asset and style references
+// from an already-parsed view fragment.
+func ViewDependenciesFromNodes(nodes []viewmodel.Node) Dependencies {
+	assets := map[string]bool{}
+	classes := map[string]bool{}
+	styles := map[string]bool{}
+	collectViewDependencies(nodes, assets, classes, styles)
+	return Dependencies{
+		Assets:          sortedKeys(assets),
+		CSSClasses:      sortedKeys(classes),
+		StyleAttributes: sortedKeys(styles),
+	}
+}
+
+func collectViewDependencies(nodes []viewmodel.Node, assets, classes, styles map[string]bool) {
 	for _, node := range nodes {
 		switch typed := node.(type) {
-		case Element:
+		case viewmodel.Element:
 			for _, attr := range typed.Attrs {
 				switch attr.Name {
 				case "class":
@@ -29,7 +56,7 @@ func collectViewDependencies(nodes []Node, assets, classes, styles map[string]bo
 				}
 			}
 			collectViewDependencies(typed.Children, assets, classes, styles)
-		case ComponentCall:
+		case viewmodel.ComponentCall:
 			collectViewDependencies(typed.Children, assets, classes, styles)
 		}
 	}

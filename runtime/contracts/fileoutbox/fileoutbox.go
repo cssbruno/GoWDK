@@ -26,6 +26,7 @@ type Decoder = contracts.EventDecoder
 type Record struct {
 	ID            string                  `json:"id"`
 	EventID       string                  `json:"eventId,omitempty"`
+	TraceParent   string                  `json:"traceparent,omitempty"`
 	StoredAt      time.Time               `json:"storedAt"`
 	Category      contracts.EventCategory `json:"category"`
 	Type          string                  `json:"type"`
@@ -136,12 +137,13 @@ func (store *Store) StoreEvents(ctx context.Context, events []contracts.EventEnv
 			return err
 		}
 		records = append(records, Record{
-			ID:       newRecordID(),
-			EventID:  event.ID,
-			StoredAt: store.now().UTC(),
-			Category: event.Category,
-			Type:     event.Type,
-			Value:    value,
+			ID:          newRecordID(),
+			EventID:     event.ID,
+			TraceParent: event.TraceParent,
+			StoredAt:    store.now().UTC(),
+			Category:    event.Category,
+			Type:        event.Type,
+			Value:       value,
 		})
 	}
 	return store.writeRecordsLocked(records)
@@ -253,10 +255,11 @@ func (store *Store) decodeRecordsLocked(records []Record) ([]contracts.EventEnve
 			eventID = record.ID
 		}
 		events = append(events, contracts.EventEnvelope{
-			ID:       eventID,
-			Category: record.Category,
-			Type:     record.Type,
-			Value:    value,
+			ID:          eventID,
+			TraceParent: record.TraceParent,
+			Category:    record.Category,
+			Type:        record.Type,
+			Value:       value,
 		})
 	}
 	return events, decoded, failed, failure

@@ -11,6 +11,29 @@
   const roots = document.querySelectorAll("gowdk-island[data-gowdk-component-id=\"" + componentID + "\"][data-gowdk-runtime=\"wasm\"],gowdk-island:not([data-gowdk-component-id])[data-gowdk-component=\"" + componentID + "\"][data-gowdk-runtime=\"wasm\"]");
   if (roots.length === 0 || typeof WebAssembly === "undefined") return;
 
+  function tracedFetch(url, options, name) {
+    if (window.__gowdkTrace && window.__gowdkTrace.fetch) {
+      return window.__gowdkTrace.fetch(url, options || {}, { name: name || "wasm island fetch", lane: "island" });
+    }
+    return fetch(url, options);
+  }
+
+  function traceStart(name) {
+    if (window.__gowdkTrace && window.__gowdkTrace.enabled && window.__gowdkTrace.enabled()) {
+      return window.__gowdkTrace.start(name, "island");
+    }
+    return null;
+  }
+
+  function traceEnd(span, status, message) {
+    if (window.__gowdkTrace && window.__gowdkTrace.end) window.__gowdkTrace.end(span, status || "ok", message || "");
+  }
+
+  function currentTraceparent() {
+    if (window.__gowdkTrace && window.__gowdkTrace.traceparent) return window.__gowdkTrace.traceparent();
+    return "";
+  }
+
   function parseJSON(value, fallback) {
     try {
       return JSON.parse(value || "");
@@ -185,12 +208,12 @@
   async function instantiateWithImports(imports) {
     if (WebAssembly.instantiateStreaming) {
       try {
-        return await WebAssembly.instantiateStreaming(fetch(wasmPath), imports);
+        return await WebAssembly.instantiateStreaming(tracedFetch(wasmPath, {}, "wasm island module"), imports);
       } catch (_error) {
         // Fall through for servers that do not serve application/wasm yet.
       }
     }
-    const response = await fetch(wasmPath);
+    const response = await tracedFetch(wasmPath, {}, "wasm island module");
     const bytes = await response.arrayBuffer();
     return WebAssembly.instantiate(bytes, imports);
   }
@@ -219,21 +242,31 @@
       if (typeof console !== "undefined") console.error("GOWDK WASM island missing exports", missing.join(", "));
       return;
     }
+    const islandRegistry = window.__gowdkIslandRegistry || (window.__gowdkIslandRegistry = { components: Object.create(null), roots: new WeakMap() });
     roots.forEach((root) => {
       const registry = window.__gowdkStores;
       const names = storeNamesFor(root);
-      // Guards the write-back path while the island is being re-rendered in
-      // response to an external store change, so mirroring another island's
-      // update does not echo straight back into the registry.
+      // applyingStoreUpdate guards the write-back path while this island is being
+      // re-rendered in response to an external store change, so mirroring another
+      // island's update does not echo straight back into the registry.
       let applyingStoreUpdate = false;
+      // publishingStores guards this island's own subscription while it writes a
+      // store, so its own write-back does not re-invoke mount on itself (other
+      // islands subscribed to the same store are still notified).
+      let publishingStores = false;
       const processResult = (result) => {
         const normalized = normalizeResult(result);
         if (normalized.stores && registry && !applyingStoreUpdate) {
-          names.forEach((name) => {
-            if (Object.prototype.hasOwnProperty.call(normalized.stores, name)) {
-              registry.set(name, normalized.stores[name]);
-            }
-          });
+          publishingStores = true;
+          try {
+            names.forEach((name) => {
+              if (Object.prototype.hasOwnProperty.call(normalized.stores, name)) {
+                registry.set(name, normalized.stores[name]);
+              }
+            });
+          } finally {
+            publishingStores = false;
+          }
         }
         applyPatches(root, normalized.patches);
       };
@@ -245,32 +278,56 @@
           if (!attr.name.startsWith("data-gowdk-binding-on-")) return;
           const event = attr.name.slice("data-gowdk-binding-on-".length);
           node.addEventListener(event, (domEvent) => {
-            processResult(callExport(exports, handleExport, {
-              abiVersion,
-              component,
-              event,
-              binding: attr.value,
-              detail: { value: domEvent && domEvent.target ? domEvent.target.value : undefined },
-              state: mergedState(root)
-            }));
+            const span = traceStart("wasm island " + event);
+            try {
+              processResult(callExport(exports, handleExport, {
+                abiVersion,
+                component,
+                event,
+                binding: attr.value,
+                traceparent: currentTraceparent(),
+                detail: { value: domEvent && domEvent.target ? domEvent.target.value : undefined },
+                state: mergedState(root),
+                stores: names
+              }));
+              traceEnd(span, "ok");
+            } catch (error) {
+              traceEnd(span, "error", error && error.message || String(error || "wasm island event failed"));
+              throw error;
+            }
           });
         });
       });
+      const unsubscribes = [];
       if (registry && names.length > 0) {
         names.forEach((name) => {
-          registry.subscribe(name, () => {
+          unsubscribes.push(registry.subscribe(name, () => {
+            // Skip our own write-back; only re-render for external changes.
+            if (publishingStores) return;
             applyingStoreUpdate = true;
             try {
               processResult(callExport(exports, mountExport, bootstrap(root)));
             } finally {
               applyingStoreUpdate = false;
             }
-          });
+          }));
         });
       }
-      window.addEventListener("pagehide", () => {
-        processResult(callExport(exports, destroyExport, { abiVersion, component, state: mergedState(root) }));
-      }, { once: true });
+      // cleanup runs once on page unload (pagehide) and on SPA navigation teardown
+      // (__gowdkDestroyIslands looks the root up in the shared island registry). It
+      // unsubscribes the store listeners so a detached root no longer re-renders on
+      // later store changes, then runs the destroy export.
+      let destroyed = false;
+      const cleanup = () => {
+        if (destroyed) return;
+        destroyed = true;
+        unsubscribes.forEach((unsubscribe) => {
+          if (typeof unsubscribe === "function") unsubscribe();
+        });
+        processResult(callExport(exports, destroyExport, { abiVersion, component, state: mergedState(root), stores: names }));
+      };
+      islandRegistry.roots.set(root, cleanup);
+      window.addEventListener("pagehide", cleanup, { once: true });
     });
   }).catch((error) => {
     if (typeof console !== "undefined") console.error("GOWDK WASM island failed to start", component, error);

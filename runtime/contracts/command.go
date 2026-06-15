@@ -1,6 +1,10 @@
 package contracts
 
-import "context"
+import (
+	"context"
+
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
+)
 
 // RegisterCommand registers one command owner. A command can have exactly one
 // owner handler.
@@ -24,12 +28,12 @@ func ExecuteCommandForRole[C, R any](ctx context.Context, registry *Registry, ro
 }
 
 func executeCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, error) {
-	result, recorder, err := runCommand[C, R](ctx, registry, command, role)
+	result, recorder, dispatchCtx, err := runCommand[C, R](ctx, registry, command, role)
 	if err != nil {
 		var zero R
 		return zero, err
 	}
-	if err := recorder.dispatchForRole(ctx, registry, role); err != nil {
+	if err := recorder.dispatchForRole(dispatchCtx, registry, role); err != nil {
 		var zero R
 		return zero, err
 	}
@@ -49,12 +53,12 @@ func CaptureCommandEventsForRole[C, R any](ctx context.Context, registry *Regist
 }
 
 func captureCommandEvents[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, []EventEnvelope, error) {
-	result, recorder, err := runCommand[C, R](ctx, registry, command, role)
+	result, recorder, dispatchCtx, err := runCommand[C, R](ctx, registry, command, role)
 	if err != nil {
 		var zero R
 		return zero, nil, err
 	}
-	return result, recorder.envelopes(), nil
+	return result, recorder.envelopes(dispatchCtx), nil
 }
 
 // ExecuteCommandToOutbox runs a command and stores emitted events in outbox
@@ -141,25 +145,36 @@ func executeCommandToPresentationFanout[C, R any](ctx context.Context, registry 
 	return result, nil
 }
 
-func runCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, *eventRecorder, error) {
+func runCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, *eventRecorder, context.Context, error) {
 	var zero R
+	contract := typeName[C]()
+	ctx, span := startContractSpan(ctx, string(ObservationExecuteCommand),
+		gowdktrace.LaneContract,
+		map[string]any{"gowdk.contract.kind": string(Command), "gowdk.contract.type": contract, "gowdk.contract.role": string(role)},
+	)
+	var spanErr error
+	defer func() { finishContractSpan(span, spanErr) }()
 	entry, ok := registry.command(typeName[C]())
 	if !ok {
-		return zero, nil, missingHandlerError(Command, typeName[C]())
+		spanErr = missingHandlerError(Command, contract)
+		return zero, nil, ctx, missingHandlerError(Command, typeName[C]())
 	}
 	if !roleMayExecute(entry.roles, role) {
-		return zero, nil, roleNotAllowedError(Command, typeName[C](), role)
+		spanErr = roleNotAllowedError(Command, contract, role)
+		return zero, nil, ctx, spanErr
 	}
 	handler, ok := entry.handler.(CommandHandler[C, R])
 	if !ok {
-		return zero, nil, unsupportedHandlerError(Command, typeName[C]())
+		spanErr = unsupportedHandlerError(Command, contract)
+		return zero, nil, ctx, spanErr
 	}
 	commandCtx, recorder := withRecorder(ctx)
 	result, err := handler(commandCtx, command)
 	if err != nil {
-		return zero, nil, err
+		spanErr = err
+		return zero, nil, commandCtx, err
 	}
-	return result, recorder, nil
+	return result, recorder, ctx, nil
 }
 
 func (registry *Registry) registerCommand(command, result string, handler any, roles []Role) error {

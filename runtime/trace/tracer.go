@@ -84,6 +84,7 @@ func (tracer *Tracer) Start(ctx context.Context, name string, options ...StartOp
 	if cfg.tracer.sampler != nil && !cfg.tracer.sampler.Sample(samplingContext) {
 		return ctx, nil
 	}
+	ctx = ContextWithTracer(ctx, cfg.tracer)
 	span := &Span{
 		tracer:     cfg.tracer,
 		traceID:    traceID,

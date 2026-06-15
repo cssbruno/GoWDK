@@ -64,8 +64,9 @@ const exportsObj = {
     handlePayloads.push(payload);
     return { patches: [], stores: { cart: { Count: payload.state.Count + 1, Open: payload.state.Open } } };
   },
-  GOWDKDestroyCounter() { return []; }
+  GOWDKDestroyCounter(payload) { destroyPayloads.push(payload); return []; }
 };
+const destroyPayloads = [];
 
 const registry = {
   store: { cart: { Count: 5, Open: false } },
@@ -73,10 +74,17 @@ const registry = {
   sets: [],
   get(name) { return Object.assign({}, this.store[name] || {}); },
   set(name, value) { this.store[name] = Object.assign({}, this.store[name] || {}, value || {}); this.sets.push(name); this.notify(name); },
-  subscribe(name, fn) { (this.listeners[name] = this.listeners[name] || []).push(fn); return () => {}; },
+  subscribe(name, fn) { (this.listeners[name] = this.listeners[name] || []).push(fn); return () => { this.listeners[name] = (this.listeners[name] || []).filter((item) => item !== fn); }; },
   notify(name) { (this.listeners[name] || []).slice().forEach((fn) => fn(this.get(name))); }
 };
 
+const eventHandlers = {};
+const clickNode = {
+  attributes: [{ name: "data-gowdk-binding-on-click", value: "b1" }],
+  getAttribute() { return null; },
+  closest() { return root; },
+  addEventListener(event, fn) { eventHandlers[event] = fn; }
+};
 const root = {
   attrs: {
     "data-gowdk-component-id": "Counter",
@@ -88,7 +96,7 @@ const root = {
   getAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attrs, name) ? this.attrs[name] : null; },
   matches() { return false; },
   closest() { return root; },
-  querySelectorAll() { return []; },
+  querySelectorAll(selector) { return selector === "*" ? [clickNode] : []; },
   addEventListener() {},
   dispatchEvent() {}
 };
@@ -121,6 +129,16 @@ new Function(loaderSrc)();
   // WRITE: the mount result's stores map was written back to the registry.
   assert.ok(registry.sets.includes("cart"), "returned store state was written back (write)");
 
+  // SELF-TRIGGER GUARD: a handler that writes its own store must not re-invoke
+  // mount on itself via its own subscription, even though the write notifies.
+  const mountsBeforeClick = mountPayloads.length;
+  assert.equal(typeof eventHandlers.click, "function", "the loader wired the click handler");
+  eventHandlers.click({ target: { value: undefined } });
+  for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.equal(handlePayloads.length, 1, "the handle export ran for the click");
+  assert.equal(registry.store.cart.Count, 6, "the handler wrote its store value back");
+  assert.equal(mountPayloads.length, mountsBeforeClick, "the island's own store write does not re-invoke its mount");
+
   // SYNC: an external store change re-invokes the island, and the re-render does
   // not echo back into the registry (guarded write-back).
   const setsBefore = registry.sets.length;
@@ -130,6 +148,19 @@ new Function(loaderSrc)();
   assert.equal(mountPayloads.length, 2, "external store change re-invoked mount (sync)");
   assert.equal(mountPayloads[1].state.Count, 9, "re-render saw the updated store value");
   assert.equal(registry.sets.length, setsBefore, "store-driven re-render does not echo back into the registry");
+
+  // TEARDOWN: the loader registers a per-root cleanup in the shared island
+  // registry (used by SPA navigation teardown). Running it unsubscribes the store
+  // listener so later store changes no longer re-invoke the detached island.
+  const cleanup = global.window.__gowdkIslandRegistry.roots.get(root);
+  assert.equal(typeof cleanup, "function", "loader registered a cleanup in the island registry");
+  cleanup();
+  assert.equal(destroyPayloads.length, 1, "cleanup runs the destroy export");
+  const mountsAfterCleanup = mountPayloads.length;
+  registry.store.cart = { Count: 11, Open: false };
+  registry.notify("cart");
+  for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.equal(mountPayloads.length, mountsAfterCleanup, "after teardown a store change no longer re-invokes the island");
 
   console.log("OK");
 })().catch((error) => { console.error(error && error.stack || error); process.exit(1); });

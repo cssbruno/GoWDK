@@ -259,7 +259,7 @@ func (config BodyLimitsConfig) APILimitBytes() int64 {
 
 // BuildTargetConfig declares one configured build target. Modules selects the
 // configured source modules compiled into Output, App, Binary, WASM, BackendApp,
-// and BackendBinary.
+// BackendBinary, and optional deployment recipes.
 type BuildTargetConfig struct {
 	Name          string
 	Modules       []string
@@ -269,6 +269,7 @@ type BuildTargetConfig struct {
 	WASM          string
 	BackendApp    string
 	BackendBinary string
+	DeployRecipes []string
 }
 
 // CSSConfig controls discovered CSS inputs and page CSS output.
@@ -355,19 +356,20 @@ func (mode RenderMode) IsBuildTime() bool {
 type Feature string
 
 const (
-	FeatureSPA       Feature = "spa"
-	FeatureActions   Feature = "actions"
-	FeaturePartial   Feature = "partial"
-	FeatureSSR       Feature = "ssr"
-	FeatureAPI       Feature = "api"
-	FeatureEmbed     Feature = "embed"
-	FeatureCSS       Feature = "css"
-	FeatureRateLimit Feature = "ratelimit"
-	FeatureContracts Feature = "contracts"
-	FeatureRealtime  Feature = "realtime"
-	FeatureAuth      Feature = "auth"
-	FeatureDB        Feature = "db"
-	FeatureSEO       Feature = "seo"
+	FeatureSPA           Feature = "spa"
+	FeatureActions       Feature = "actions"
+	FeaturePartial       Feature = "partial"
+	FeatureSSR           Feature = "ssr"
+	FeatureAPI           Feature = "api"
+	FeatureEmbed         Feature = "embed"
+	FeatureCSS           Feature = "css"
+	FeatureRateLimit     Feature = "ratelimit"
+	FeatureContracts     Feature = "contracts"
+	FeatureRealtime      Feature = "realtime"
+	FeatureAuth          Feature = "auth"
+	FeatureDB            Feature = "db"
+	FeatureSEO           Feature = "seo"
+	FeatureObservability Feature = "observability"
 )
 
 // Addon is the minimal contract every optional GOWDK capability implements.

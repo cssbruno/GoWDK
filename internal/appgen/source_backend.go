@@ -4,16 +4,18 @@ import (
 	"go/ast"
 	"go/token"
 	"sort"
+
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func newBackendRouterDecl(adapter BackendAdapterIR) *ast.FuncDecl {
+func newBackendRouterDecl(adapter BackendAdapterIR, trace bool) *ast.FuncDecl {
 	routes := []ast.Expr{}
 	for _, registration := range adapter.Registrations {
-		routes = append(routes, backendRouteExpr(backendRegistrationMethodExpr(registration), registration.Kind, registration.Path, id(registration.Handler)))
+		routes = append(routes, backendRouteExpr(registration, backendRegistrationMethodExpr(registration), id(registration.Handler), trace))
 	}
 	for _, exposure := range routableContractExposures(adapter.ContractExposures) {
 		method := contractExposureMethodExpr(exposure)
-		routes = append(routes, backendRouteExpr(method, exposure.Endpoint.Kind, exposure.Endpoint.Path, contractRouteHandlerExpr(exposure)))
+		routes = append(routes, backendRouteExpr(exposure.Endpoint, method, contractRouteHandlerExpr(exposure), trace))
 	}
 	stmts := []ast.Stmt{}
 	if len(executableContractExposures(adapter.ContractExposures)) > 0 {
@@ -58,14 +60,36 @@ func contractExposureMethodExpr(exposure BackendContractExposure) ast.Expr {
 	}
 }
 
-func backendRouteExpr(method ast.Expr, kind BackendEndpointKind, route string, handler ast.Expr) ast.Expr {
+func backendRouteExpr(registration BackendEndpointRegistration, method ast.Expr, handler ast.Expr, trace bool) ast.Expr {
+	elts := []ast.Expr{
+		keyValue("Method", method),
+		keyValue("Path", stringLit(registration.Path)),
+		keyValue("Kind", stringLit(string(registration.Kind))),
+		keyValue("Handler", handler),
+	}
+	if trace {
+		if source := traceSourceRefExpr(registration.Source, string(registration.Kind), registration.PageID, registration.Span); source != nil {
+			elts = append(elts, keyValue("Source", source))
+		}
+	}
 	return &ast.CompositeLit{
 		Type: sel("gowdkruntime", "BackendRoute"),
+		Elts: elts,
+	}
+}
+
+func traceSourceRefExpr(sourcePath, ownerKind, ownerID string, span source.SourceSpan) ast.Expr {
+	if sourcePath == "" && span.Start.Line <= 0 && ownerKind == "" && ownerID == "" {
+		return nil
+	}
+	return &ast.CompositeLit{
+		Type: sel("gowdktrace", "SourceRef"),
 		Elts: []ast.Expr{
-			keyValue("Method", method),
-			keyValue("Path", stringLit(route)),
-			keyValue("Kind", stringLit(string(kind))),
-			keyValue("Handler", handler),
+			keyValue("File", stringLit(sourcePath)),
+			keyValue("Line", intLit(span.Start.Line)),
+			keyValue("Column", intLit(span.Start.Column)),
+			keyValue("OwnerKind", stringLit(ownerKind)),
+			keyValue("OwnerID", stringLit(ownerID)),
 		},
 	}
 }
@@ -99,12 +123,12 @@ func backendProxySource(options Options) (source string, err error) {
 		return "", nil
 	}
 	return printActionDecls([]ast.Decl{
-		backendProxyDecl(false),
+		backendProxyDecl(false, generatedObservabilityEnabled(options)),
 		isBackendRouteDecl(backendAdapterIR(options)),
 	})
 }
 
-func backendProxyDecl(rateLimit bool) *ast.FuncDecl {
+func backendProxyDecl(rateLimit bool, trace bool) *ast.FuncDecl {
 	stmts := []ast.Stmt{
 		&ast.IfStmt{
 			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(id("isBackendRoute"), selExpr(id("request"), "Method"), selExpr(selExpr(id("request"), "URL"), "Path"))},
@@ -138,6 +162,22 @@ func backendProxyDecl(rateLimit bool) *ast.FuncDecl {
 			),
 		},
 		define([]ast.Expr{id("proxy")}, call(sel("httputil", "NewSingleHostReverseProxy"), id("target"))),
+	)
+	if trace {
+		stmts = append(stmts,
+			define([]ast.Expr{id("proxyDirector")}, selExpr(id("proxy"), "Director")),
+			assign([]ast.Expr{selExpr(id("proxy"), "Director")}, &ast.FuncLit{
+				Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{
+					{Names: []*ast.Ident{id("outbound")}, Type: &ast.StarExpr{X: sel("http", "Request")}},
+				}}},
+				Body: block(
+					exprStmt(call(id("proxyDirector"), id("outbound"))),
+					exprStmt(call(sel("gowdktrace", "Inject"), selExpr(id("request"), "Context"), selExpr(id("outbound"), "Header"))),
+				),
+			}),
+		)
+	}
+	stmts = append(stmts,
 		exprStmt(call(selExpr(id("proxy"), "ServeHTTP"), id("response"), id("request"))),
 		returnBool(true),
 	)

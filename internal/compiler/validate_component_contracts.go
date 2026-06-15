@@ -53,7 +53,7 @@ type componentValidationContext struct {
 	Handlers      map[string]clientlang.Handler
 	Helpers       map[string]clientlang.Helper
 	Refs          map[string]clientlang.Ref
-	UsedRefs      map[string]bool
+	UsedRefs      map[string]source.SourceSpan
 }
 
 func validateComponentGoContract(component gwdkir.Component) []ValidationError {
@@ -168,7 +168,31 @@ func resolveComponentStoreFields(component gwdkir.Component, contracts *componen
 			})
 			continue
 		}
-		addResolvedFields(contracts.State, contracts.StateTypes, resolved)
+		// Merge the store's fields into state scope. A field that already exists
+		// (from a local state declaration kept for SSR, or an earlier store) with
+		// an incompatible type is a contract error rather than a silent overwrite:
+		// otherwise client statements would type-check against the store type while
+		// the island is seeded and bound as the local type.
+		for _, field := range resolved.Fields {
+			normalized := clientlang.NormalizeType(field.Type)
+			if existing, ok := contracts.StateTypes[field.Name]; ok && existing != normalized && !compatibleNumericType(existing, normalized) {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:          "component_client_error",
+					ComponentName: component.Name,
+					Source:        component.Source,
+					Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+					Message:       fmt.Sprintf("component %s field %q is %s in its state but %s in used store %q; give them the same type or drop the local state declaration", component.Name, field.Name, existing, normalized, use.Name),
+				})
+				continue
+			}
+			contracts.State[field.Name] = true
+			contracts.StateTypes[field.Name] = normalized
+		}
+		for field, typ := range resolved.FieldTypes {
+			if _, ok := contracts.StateTypes[field]; !ok {
+				contracts.StateTypes[field] = clientlang.NormalizeType(typ)
+			}
+		}
 	}
 	return diagnostics
 }

@@ -118,9 +118,10 @@ level, the current baseline already includes:
   imported, same-package, and default `go {}` build data subsets, layouts, components, CSS
   assets, route manifests, asset manifests, build reports, generated app
   output, non-served security posture reports, embedded assets, local binaries,
-  generated Docker contexts for one-binary deploys, WASM deploy artifacts,
-  optional sitemap/robots output, optional production generated-asset
-  obfuscation, and a polling dev server with live reload;
+  generated Docker contexts for one-binary deploys, optional deployment recipe
+  files, WASM deploy artifacts, optional sitemap/robots output, optional
+  production generated-asset obfuscation, and a polling dev server with live
+  reload;
 - component discovery, imported props/state contracts, slots, generated
   JavaScript islands, component-level WASM island assets, and a first-slice client
   language for local component behavior;
@@ -150,8 +151,10 @@ level, the current baseline already includes:
   declared `*.audit.gwdk` policies, generated runtime audit tests,
   registry-backed findings, and CI-friendly JSON output.
 - dependency-free `runtime/trace` primitives for W3C trace IDs,
-  `traceparent` propagation, context spans, sinks, sampling, and local JSON/SSE
-  trace collection before generated app auto-instrumentation.
+  `traceparent` propagation, context spans, sinks, sampling, local JSON/SSE
+  trace collection, browser span ingest, a self-contained viewer, debug-gated
+  generated app instrumentation through `addons/observability`, contract/event
+  propagation, and nested-module OTLP export.
 
 Do not roadmap those completed slices as future work. Future work should
 stabilize their contracts, remove generation debt, and fill the missing
@@ -190,8 +193,8 @@ are stable.
 | 17 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Component-level WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
 | 18 | CSS, assets, and packaging | External addon loading is hardened, richer page-aware CSS processor contracts are stable, and Tailwind/CSS deployment docs stay explicit that external tooling is user-installed. Implemented CSS asset hashing, component CSS scope/hash metadata, component non-CSS asset emission, and binary cache policy remain stable. Module selection remains artifact packaging, not runtime module orchestration. |
 | 19 | Framework adapters | GOWDK Runtime remains `net/http` first. Optional Chi, Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; Chi/Echo/Gin can mount routes from generated OpenAPI metadata, and generated code stays framework-neutral by default. |
-| 20 | Dev and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR, skip unchanged rebuilds, cache watched input state, and show SPA/static browser rebuild failures with diagnostic codes, source ranges, last-good build time, and changed files. Backend process restart/proxy behavior is decided. Deploy previews, component-aware HMR, generated-app runtime browser overlay delivery, richer LSP completions, and editor navigation are added; runtime overlay delivery and component HMR are tracked in [#424](https://github.com/cssbruno/GoWDK/issues/424). |
-| 21 | Observability | Generated apps can opt into GOWDK trace spans across route, guard, handler, SSR, action, API, fragment, contract, job, island, nav, and user lanes while keeping the root runtime dependency-free. The first `runtime/trace` primitives are implemented; generated instrumentation, durable trace storage, browser trace UI, and concrete OTLP transport are planned follow-up work. |
+| 20 | Dev and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR, skip unchanged rebuilds, cache watched input state, show SPA/static and generated-app rebuild failures with diagnostic codes, source ranges, last-good build time, and changed files, and hot-swap changed JS island component roots when the current page has matching island boundaries. Generated app runtime mode now uses a dev-only proxy for browser overlay delivery and live reload after generated-app restarts. Dev-only runtime panic surfacing, state-preserving/broader component HMR, richer LSP completions, and editor navigation remain tracked in [#424](https://github.com/cssbruno/GoWDK/issues/424). |
+| 21 | Observability | Partial. Generated apps can opt into GOWDK trace spans across route, guard, handler, SSR, action, API, fragment, contract, job, island, nav, and user lanes while keeping the root runtime dependency-free. `runtime/trace`, `addons/observability`, a local viewer, contract/event propagation, browser propagation, WASM island bridge reuse, and nested-module OTLP HTTP export are implemented. Durable trace storage, hosted analysis, and production sampling/access policy remain app-owned hardening work. |
 | 22 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
 
 ## Candidate Release Order
@@ -271,10 +274,10 @@ without making any minor version a production-readiness target.
 - Stronger editor tooling.
 - Production operations docs must cover secrets, CSRF rotation, reverse
   proxies, cache/CDN policy, health checks, metrics, logging, binary deploy,
-  generated Docker contexts, richer platform manifests, and rollback before any
-  production-ready claim.
+  generated Docker contexts, opt-in deployment recipe starters, richer platform
+  manifests, and rollback before any production-ready claim.
 - P2 ecosystem polish is owned by optional docs, examples, website pages, or
-  CLI generators: playground onboarding, addon discovery, performance
+  CLI generators: playground onboarding/export, addon discovery, performance
   profiling, migration guides, image guidance, SEO metadata beyond
   sitemap/robots, and PWA/offline guidance must not add mandatory npm,
   framework, hosted execution, or platform dependencies to the repository core.
@@ -294,7 +297,10 @@ without making any minor version a production-readiness target.
 ## Planning Sources
 
 - `docs/product/requirements.md`: requirement status.
-- `docs/product/playground.md`: docs-first playground and sandboxing contract.
+- `docs/product/playground.md`: playground onboarding, sandboxing, export, and
+  opt-in local execution contract.
+- `docs/product/playground-hosted-execution-spec.md`: playground sandbox/export
+  feature spec.
 - `docs/product/contract-runtime-spec.md`: milestone-14 contract runtime
   closure criteria.
 - `docs/product/observability-tracing-spec.md`: runtime trace primitives and

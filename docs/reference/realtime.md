@@ -287,6 +287,7 @@ Each presentation event is written as one text JSON `contracts.EventEnvelope`.
 
 ```sh
 go run ./cmd/gowdk add --list
+go run ./cmd/gowdk add --list --registry
 go test ./runtime/contracts/sse
 go test ./internal/appgen -run 'TestGenerateGuardsRealtimeStreamForSubscribedPages|TestGeneratedBinaryRealtimeStreamGuardDenialClosesStream'
 (cd runtime/contracts/websocketfanout && go test ./...)

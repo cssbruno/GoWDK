@@ -53,16 +53,18 @@ func (recorder *eventRecorder) dispatch(ctx context.Context, registry *Registry)
 	return nil
 }
 
-func (recorder *eventRecorder) envelopes() []EventEnvelope {
+func (recorder *eventRecorder) envelopes(ctx context.Context) []EventEnvelope {
 	if len(recorder.events) == 0 {
 		return nil
 	}
 	envelopes := make([]EventEnvelope, 0, len(recorder.events))
+	traceparent := traceparentFromContext(ctx)
 	for _, event := range recorder.events {
 		envelopes = append(envelopes, EnsureEventID(EventEnvelope{
-			Category: event.category,
-			Type:     event.eventType,
-			Value:    event.value,
+			TraceParent: traceparent,
+			Category:    event.category,
+			Type:        event.eventType,
+			Value:       event.value,
 		}))
 	}
 	return envelopes

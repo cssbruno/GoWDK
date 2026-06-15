@@ -2,22 +2,25 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	goformat "go/format"
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"io"
 	"net/url"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/addonregistry"
 	"github.com/cssbruno/gowdk/internal/project"
 )
 
-const addUsage = "usage: gowdk add <addon> [--config <file>] [--base-url <url>] | gowdk add --list"
+const addUsage = "usage: gowdk add <addon> [--config <file>] [--base-url <url>] | gowdk add --list [--registry] [--json]"
 
 // addonSpec describes a built-in addon that `gowdk add` can wire into a
 // project's gowdk.config.go. The selector package name is the import alias used
@@ -129,11 +132,18 @@ func addAddon(args []string) error {
 	configPath := project.DefaultConfigFile
 	var options addCommandOptions
 	var names []string
+	list := false
+	registryList := false
+	jsonOutput := false
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
 		switch {
 		case arg == "--list":
-			return listAddons()
+			list = true
+		case arg == "--registry":
+			registryList = true
+		case arg == "--json":
+			jsonOutput = true
 		case arg == "--config":
 			if index+1 >= len(args) {
 				return fmt.Errorf("%s\n--config requires a value", addUsage)
@@ -160,6 +170,18 @@ func addAddon(args []string) error {
 		}
 	}
 
+	if list {
+		if len(names) > 0 {
+			return fmt.Errorf("%s\n--list cannot be combined with addon names", addUsage)
+		}
+		return listAddons(registryList, jsonOutput)
+	}
+	if registryList {
+		return fmt.Errorf("%s\n--registry is only supported with --list", addUsage)
+	}
+	if jsonOutput {
+		return fmt.Errorf("%s\n--json is only supported with --list", addUsage)
+	}
 	if len(names) == 0 {
 		return fmt.Errorf("%s\nrun `gowdk add --list` to see available addons", addUsage)
 	}
@@ -236,7 +258,37 @@ func addAddon(args []string) error {
 	return nil
 }
 
-func listAddons() error {
+func listAddons(registryList bool, jsonOutput bool) error {
+	registry, err := addonregistry.Bundled()
+	if err != nil {
+		return err
+	}
+	if registryList {
+		if jsonOutput {
+			payload, err := json.MarshalIndent(registry, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(payload))
+			return nil
+		}
+		writeAddonRegistryList(os.Stdout, registry.Addons)
+		return nil
+	}
+	if jsonOutput {
+		var addable []addonregistry.Entry
+		for _, entry := range registry.Addons {
+			if entry.Constructor.Addable {
+				addable = append(addable, entry)
+			}
+		}
+		payload, err := json.MarshalIndent(addable, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(payload))
+		return nil
+	}
 	names := make([]string, 0, len(addonRegistry))
 	for name := range addonRegistry {
 		names = append(names, name)
@@ -247,6 +299,18 @@ func listAddons() error {
 		fmt.Printf("  %-12s %s\n", name, addonRegistry[name].Summary)
 	}
 	return nil
+}
+
+func writeAddonRegistryList(writer io.Writer, entries []addonregistry.Entry) {
+	fmt.Fprintln(writer, "Addon registry (metadata only; external installation stays explicit):")
+	fmt.Fprintf(writer, "  %-14s %-19s %-12s %-13s %-5s %s\n", "NAME", "KIND", "LIFECYCLE", "COMPAT", "ADD", "SUMMARY")
+	for _, entry := range entries {
+		addable := "no"
+		if entry.Constructor.Addable {
+			addable = "yes"
+		}
+		fmt.Fprintf(writer, "  %-14s %-19s %-12s %-13s %-5s %s\n", entry.Name, entry.Kind, entry.Lifecycle, entry.Compatibility, addable, entry.Summary)
+	}
 }
 
 // findConfigLiteral returns the composite literal for `var Config = ...`.

@@ -5,7 +5,8 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
+	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
 type reactiveAttrExpr struct {
@@ -71,14 +72,14 @@ type componentViewRefs struct {
 }
 
 func componentViewReferences(source string) (componentViewRefs, error) {
-	nodes, err := view.Parse(source)
+	nodes, err := viewparse.Parse(source)
 	if err != nil {
 		return componentViewRefs{}, err
 	}
 	return componentViewReferencesFromNodes(source, nodes), nil
 }
 
-func componentViewReferencesFromNodes(source string, nodes []view.Node) componentViewRefs {
+func componentViewReferencesFromNodes(source string, nodes []viewmodel.Node) componentViewRefs {
 	refs := componentViewRefs{Fields: map[string]bool{}}
 	collectComponentViewReferences(source, nodes, &refs)
 	return refs
@@ -121,7 +122,7 @@ func interpolationExpressions(value string) ([]string, error) {
 	return expressions, nil
 }
 
-func loopSymbols(symbols map[string]clientlang.ValueType, loop view.ForDirective) map[string]clientlang.ValueType {
+func loopSymbols(symbols map[string]clientlang.ValueType, loop viewparse.ForDirective) map[string]clientlang.ValueType {
 	out := mergeTypeSymbols(nil, symbols)
 	itemType := out[loop.Collection+"[]"]
 	if itemType == "" {
@@ -140,16 +141,16 @@ func loopSymbols(symbols map[string]clientlang.ValueType, loop view.ForDirective
 	return out
 }
 
-func elementForDirective(element view.Element) (view.Attr, bool) {
+func elementForDirective(element viewmodel.Element) (viewmodel.Attr, bool) {
 	for _, attr := range element.Attrs {
 		if attr.Name == "g:for" {
 			return attr, true
 		}
 	}
-	return view.Attr{}, false
+	return viewmodel.Attr{}, false
 }
 
-func elementKeyExpression(element view.Element) (string, bool) {
+func elementKeyExpression(element viewmodel.Element) (string, bool) {
 	for _, attr := range element.Attrs {
 		if attr.Name == "g:key" {
 			return strings.TrimSpace(attr.Value), true
@@ -158,14 +159,14 @@ func elementKeyExpression(element view.Element) (string, bool) {
 	return "", false
 }
 
-func collectComponentViewReferences(source string, nodes []view.Node, refs *componentViewRefs) {
+func collectComponentViewReferences(source string, nodes []viewmodel.Node, refs *componentViewRefs) {
 	for _, node := range nodes {
 		switch typed := node.(type) {
-		case view.Text:
+		case viewmodel.Text:
 			collectSimpleInterpolationRefs(typed.Value, typed.Start, refs)
-		case view.Element:
+		case viewmodel.Element:
 			if loop, ok := elementForDirective(typed); ok {
-				if parsed, err := view.ParseForDirective(loop.Value); err == nil {
+				if parsed, err := viewparse.ParseForDirective(loop.Value); err == nil {
 					for _, field := range expressionFields(parsed.Collection) {
 						addFieldRef(refs, field, loop.Start, loop.End)
 					}
@@ -176,7 +177,7 @@ func collectComponentViewReferences(source string, nodes []view.Node, refs *comp
 				if strings.HasPrefix(attr.Name, "g:on:") {
 					exprStart, exprEnd := attrValueOffset(source, attr, strings.TrimSpace(attr.Value))
 					refs.Events = append(refs.Events, eventExpr{Name: attr.Name, Expression: strings.TrimSpace(attr.Value), Start: exprStart, End: exprEnd})
-					for _, field := range view.IslandExpressionFields(attr.Value) {
+					for _, field := range clientlang.IslandExpressionFields(attr.Value) {
 						if isDOMEventScopeField(field) {
 							continue
 						}
@@ -262,7 +263,7 @@ func collectComponentViewReferences(source string, nodes []view.Node, refs *comp
 				collectSimpleAttrInterpolationRefs(source, attr, refs)
 			}
 			collectComponentViewReferences(source, typed.Children, refs)
-		case view.ComponentCall:
+		case viewmodel.ComponentCall:
 			for _, attr := range typed.Attrs {
 				if strings.HasPrefix(attr.Name, "g:") {
 					continue
@@ -279,7 +280,7 @@ func addFieldRef(refs *componentViewRefs, name string, start int, end int) {
 	refs.FieldRefs = append(refs.FieldRefs, fieldRef{Name: name, Start: start, End: end})
 }
 
-func attrValueOffset(source string, attr view.Attr, value string) (int, int) {
+func attrValueOffset(source string, attr viewmodel.Attr, value string) (int, int) {
 	if value == "" {
 		return attr.Start, attr.End
 	}
@@ -296,7 +297,7 @@ func attrValueOffset(source string, attr view.Attr, value string) (int, int) {
 	return start, start + len([]rune(value))
 }
 
-func collectSimpleAttrInterpolationRefs(source string, attr view.Attr, refs *componentViewRefs) {
+func collectSimpleAttrInterpolationRefs(source string, attr viewmodel.Attr, refs *componentViewRefs) {
 	start, _ := attrValueOffset(source, attr, attr.Value)
 	collectSimpleInterpolationRefs(attr.Value, start, refs)
 }
@@ -330,7 +331,7 @@ func isValueBindableElement(name string) bool {
 	}
 }
 
-func literalAttrValue(attrs []view.Attr, name string) string {
+func literalAttrValue(attrs []viewmodel.Attr, name string) string {
 	for _, attr := range attrs {
 		if attr.Name == name && !attr.Boolean && !attr.Expression {
 			return strings.TrimSpace(attr.Value)

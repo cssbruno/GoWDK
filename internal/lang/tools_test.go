@@ -9,6 +9,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestCheckFilesValidatesRenderRules(t *testing.T) {
@@ -73,6 +74,64 @@ view {
 	if diagnostic.Pos.Line != 8 || diagnostic.Pos.Column != 3 {
 		t.Fatalf("expected export diagnostic at line 8, got %#v", diagnostic.Pos)
 	}
+}
+
+func TestCheckFilesEnrichesIRBeforeValidation(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "newsletter.page.gwdk")
+	moduleRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeGWDK(t, filepath.Join(root, "go.mod"), `module example.com/gowdk-lang-check
+
+go 1.26.4
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+filepath.ToSlash(moduleRoot)+`
+`)
+	writeGWDK(t, path, `package app
+
+page newsletter
+route "/newsletter"
+guard public
+
+act Subscribe POST "/newsletter"
+
+go {
+  import (
+    "context"
+
+    "github.com/cssbruno/gowdk/runtime/response"
+  )
+
+  func Subscribe(context.Context) (response.Response, error) {
+    return response.RedirectTo("/thanks"), nil
+  }
+}
+
+view {
+  <main>Newsletter</main>
+}
+`)
+
+	result, diagnostics := CheckFiles(gowdk.Config{}, []string{path})
+	if diagnostics.HasErrors() {
+		t.Fatal(diagnostics)
+	}
+	for _, binding := range result.Bindings {
+		if binding.BlockName == "Subscribe" {
+			if binding.Status != source.BackendBindingBound {
+				t.Fatalf("expected Subscribe to be bound, got %#v", binding)
+			}
+			if binding.Signature == "" {
+				t.Fatalf("expected Subscribe signature metadata, got %#v", binding)
+			}
+			return
+		}
+	}
+	t.Fatalf("missing Subscribe binding in %#v", result.Bindings)
 }
 
 func TestCheckSourceValidatesUnsavedBuffer(t *testing.T) {

@@ -2,12 +2,14 @@ package compiler
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewparse"
+	"github.com/cssbruno/gowdk/internal/viewvalidation"
 )
 
 func validateComponentViewContract(component gwdkir.Component, ctx componentValidationContext) []ValidationError {
@@ -70,7 +72,7 @@ func validateUnknownViewFields(component gwdkir.Component, ctx componentValidati
 func validateViewEventExpressions(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs, helperFuncs map[string]clientlang.ExprFunction, emits map[string]clientlang.Emit) []ValidationError {
 	var diagnostics []ValidationError
 	for _, eventExpr := range viewRefs.Events {
-		if _, err := view.ParseEventDirective(eventExpr.Name); err != nil {
+		if _, err := viewparse.ParseEventDirective(eventExpr.Name); err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_field_error",
 				ComponentName: component.Name,
@@ -80,8 +82,8 @@ func validateViewEventExpressions(component gwdkir.Component, ctx componentValid
 			})
 			continue
 		}
-		readSymbols := mergeClientSymbols(ctx.SymbolTypes, view.DOMEventSymbols())
-		if err := view.ValidateIslandEventExpressionTypedWithEvents(eventExpr.Expression, readSymbols, ctx.StateTypes, ctx.Handlers, helperFuncs, emits); err != nil {
+		readSymbols := mergeClientSymbols(ctx.SymbolTypes, viewvalidation.DOMEventSymbols())
+		if err := clientlang.ValidateIslandEventExpressionTypedWithEvents(eventExpr.Expression, readSymbols, ctx.StateTypes, ctx.Handlers, helperFuncs, emits); err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_field_error",
 				ComponentName: component.Name,
@@ -108,7 +110,7 @@ func mergeClientSymbols(left, right map[string]clientlang.ValueType) map[string]
 func validateViewBooleanExpressions(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
 	var diagnostics []ValidationError
 	for _, expr := range viewRefs.Bools {
-		if err := view.ValidateIslandBoolExpressionTyped(expr.Value, ctx.SymbolTypes); err != nil {
+		if err := clientlang.ValidateIslandBoolExpressionTyped(expr.Value, ctx.SymbolTypes); err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_field_error",
 				ComponentName: component.Name,
@@ -124,7 +126,7 @@ func validateViewBooleanExpressions(component gwdkir.Component, ctx componentVal
 func validateViewAttributeExpressions(component gwdkir.Component, ctx componentValidationContext, viewRefs componentViewRefs) []ValidationError {
 	var diagnostics []ValidationError
 	for _, attrExpr := range viewRefs.Attrs {
-		if err := view.ValidateReactiveAttrExpressionTyped(attrExpr.Name, attrExpr.Expression, ctx.SymbolTypes); err != nil {
+		if err := viewvalidation.ValidateReactiveAttrExpressionTyped(attrExpr.Name, attrExpr.Expression, ctx.SymbolTypes); err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_field_error",
 				ComponentName: component.Name,
@@ -135,7 +137,7 @@ func validateViewAttributeExpressions(component gwdkir.Component, ctx componentV
 		}
 	}
 	for _, toggle := range viewRefs.ClassToggles {
-		if err := view.ValidateClassToggleExpressionTyped(toggle.Name, toggle.Expression, ctx.SymbolTypes); err != nil {
+		if err := viewvalidation.ValidateClassToggleExpressionTyped(toggle.Name, toggle.Expression, ctx.SymbolTypes); err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_field_error",
 				ComponentName: component.Name,
@@ -146,7 +148,7 @@ func validateViewAttributeExpressions(component gwdkir.Component, ctx componentV
 		}
 	}
 	for _, binding := range viewRefs.StyleBindings {
-		if err := view.ValidateStyleBindingExpressionTyped(binding.Name, binding.Expression, ctx.SymbolTypes); err != nil {
+		if err := viewvalidation.ValidateStyleBindingExpressionTyped(binding.Name, binding.Expression, ctx.SymbolTypes); err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_field_error",
 				ComponentName: component.Name,
@@ -225,18 +227,30 @@ func validateViewRefBinds(component gwdkir.Component, ctx componentValidationCon
 		}
 		boundRefs[refName.Name] = true
 	}
-	for refName := range ctx.UsedRefs {
+	for _, refName := range sortedUsedRefNames(ctx.UsedRefs) {
 		if !boundRefs[refName] {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_client_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+				Span:          firstSpan(ctx.UsedRefs[refName], component.Blocks.Spans.Client, component.Span),
 				Message:       fmt.Sprintf("component %s DOM ref %q is used but not bound with g:ref", component.Name, refName),
 			})
 		}
 	}
 	return diagnostics
+}
+
+func sortedUsedRefNames(refs map[string]source.SourceSpan) []string {
+	if len(refs) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(refs))
+	for name := range refs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func componentFieldError(component gwdkir.Component, message string) ValidationError {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cssbruno/gowdk/internal/addonregistry"
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
@@ -1452,6 +1454,102 @@ func TestAddCommandListsKnownAddons(t *testing.T) {
 	}
 }
 
+func TestAddCommandListsRegistryMetadata(t *testing.T) {
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "--list", "--registry"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	for _, expected := range []string{
+		"Addon registry (metadata only",
+		"KIND",
+		"LIFECYCLE",
+		"COMPAT",
+		"actions",
+		"built-in",
+		"stable",
+		"compatible",
+		"tailwind",
+		"experimental",
+		"no",
+	} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("expected %q in registry list:\n%s", expected, stdout)
+		}
+	}
+}
+
+func TestAddCommandListsRegistryJSON(t *testing.T) {
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "--list", "--registry", "--json"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	var decoded addonregistry.Registry
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("expected registry JSON, got %q: %v", stdout, err)
+	}
+	var found bool
+	for _, entry := range decoded.Addons {
+		if entry.Name == "seo" && entry.Constructor.Addable && entry.Constructor.OptionsCLI == "--base-url" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected SEO registry metadata in JSON: %#v", decoded.Addons)
+	}
+}
+
+func TestAddonRegistryListDistinguishesDiscoveryCategories(t *testing.T) {
+	var builder strings.Builder
+	writeAddonRegistryList(&builder, []addonregistry.Entry{
+		{
+			Name:          "builtin",
+			Kind:          "built-in",
+			Lifecycle:     "stable",
+			Compatibility: "compatible",
+			Summary:       "builtin addon",
+			Constructor:   addonregistry.Constructor{Addable: true},
+		},
+		{
+			Name:          "external",
+			Kind:          "documented-external",
+			Lifecycle:     "experimental",
+			Compatibility: "compatible",
+			Summary:       "external addon",
+		},
+		{
+			Name:          "old",
+			Kind:          "built-in",
+			Lifecycle:     "deprecated",
+			Compatibility: "incompatible",
+			Summary:       "old addon",
+		},
+	})
+	output := builder.String()
+	for _, expected := range []string{
+		"built-in",
+		"documented-external",
+		"experimental",
+		"deprecated",
+		"incompatible",
+		"yes",
+		"no",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in registry list:\n%s", expected, output)
+		}
+	}
+}
+
 func TestAddCommandWiresAddonIntoConfig(t *testing.T) {
 	root := t.TempDir()
 	config := filepath.Join(root, "gowdk.config.go")
@@ -1873,6 +1971,25 @@ var Config = gowdk.Config{
 	})
 }
 
+func TestDevStartupAndRebuildLogLinesDescribeStaticAndRuntimeModes(t *testing.T) {
+	staticState := devBuildState{}
+	staticDir := filepath.Join("tmp", "gowdk-build")
+	if got := devStartupLine(staticState, staticDir, "127.0.0.1:8080", ""); got != "Static dev server: serving "+staticDir+" at http://127.0.0.1:8080" {
+		t.Fatalf("unexpected static startup line: %q", got)
+	}
+	if got := devRebuildCompleteLine(staticState, staticDir, "127.0.0.1:8080", ""); got != "Dev rebuild complete: static output refreshed at "+staticDir {
+		t.Fatalf("unexpected static rebuild line: %q", got)
+	}
+
+	runtimeState := devBuildState{runtime: devRuntime{Enabled: true, BinaryPath: filepath.Join("dist", ".gowdk", "dev", "app")}}
+	if got := devStartupLine(runtimeState, staticDir, "127.0.0.1:8080", "127.0.0.1:39001"); got != "Generated app runtime: proxy http://127.0.0.1:8080 -> http://127.0.0.1:39001 (binary "+runtimeState.runtime.BinaryPath+")" {
+		t.Fatalf("unexpected runtime startup line: %q", got)
+	}
+	if got := devRebuildCompleteLine(runtimeState, staticDir, "127.0.0.1:8080", "127.0.0.1:39002"); got != "Dev rebuild complete: generated app restarted: proxy http://127.0.0.1:8080 -> http://127.0.0.1:39002 (binary "+runtimeState.runtime.BinaryPath+")" {
+		t.Fatalf("unexpected runtime rebuild line: %q", got)
+	}
+}
+
 func TestDevRuntimeProcessRestartWaitsForPreviousAppExit(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "main.go")
@@ -1996,8 +2113,8 @@ func main() {
 	if err := serve.useRuntime(runtime); err != nil {
 		t.Fatal(err)
 	}
-	if serve.server != nil || serve.staticDir != "" {
-		t.Fatalf("expected static server to stop after runtime transition, got server=%v dir=%q", serve.server, serve.staticDir)
+	if serve.server == nil || serve.staticDir != "" {
+		t.Fatalf("expected runtime proxy server after runtime transition, got server=%v dir=%q", serve.server, serve.staticDir)
 	}
 	if serve.process == nil {
 		t.Fatal("expected runtime process to start after runtime transition")
@@ -2005,10 +2122,25 @@ func main() {
 	if serve.process.plan != runtime {
 		t.Fatalf("unexpected runtime plan: %#v", serve.process.plan)
 	}
-	activeDevRuntimeCommand(t, serve.process)
+	command := activeDevRuntimeCommand(t, serve.process)
+	if serve.process.addr == serve.addr || serve.process.addr == "" {
+		t.Fatalf("expected generated app to use an internal runtime address, got %q", serve.process.addr)
+	}
+	if !hasEnvValue(command.Env, "GOWDK_ADDR="+serve.process.addr) {
+		t.Fatalf("expected generated app GOWDK_ADDR=%q, env=%#v", serve.process.addr, command.Env)
+	}
 	if _, err := os.Stat(binaryPath); err != nil {
 		t.Fatalf("expected runtime binary to be built: %v", err)
 	}
+}
+
+func hasEnvValue(env []string, value string) bool {
+	for _, item := range env {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 func activeDevRuntimeCommand(t *testing.T, process *devRuntimeProcess) *exec.Cmd {
@@ -2049,6 +2181,143 @@ func TestPreviewBuildArgsInjectsOutput(t *testing.T) {
 	if strings.Join(args, " ") != "--out custom home.page.gwdk" {
 		t.Fatalf("unexpected explicit preview build args: %#v", args)
 	}
+}
+
+func TestPlaygroundPolicyPrintsSandboxDefaults(t *testing.T) {
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"playground", "policy", "--json"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	var decoded struct {
+		HostedExecutionEnabled bool `json:"hostedExecutionEnabled"`
+		Limits                 struct {
+			MaxFiles int `json:"maxFiles"`
+		} `json:"limits"`
+		Environment []string `json:"environment"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("expected playground policy JSON, got %q: %v", stdout, err)
+	}
+	if decoded.HostedExecutionEnabled || decoded.Limits.MaxFiles == 0 {
+		t.Fatalf("unexpected playground policy: %#v", decoded)
+	}
+	if !strings.Contains(stdout, "GOPROXY=off") {
+		t.Fatalf("expected network-disabled Go environment in policy:\n%s", stdout)
+	}
+}
+
+func TestPlaygroundExportArchivesSourceProjectOnly(t *testing.T) {
+	root := t.TempDir()
+	writeMinimalPlaygroundProject(t, root)
+	writeCLIFile(t, filepath.Join(root, ".env"), "SECRET=value")
+	writeCLIFile(t, filepath.Join(root, ".gowdk", "app", "main.go"), "package main\n")
+	writeCLIFile(t, filepath.Join(root, "dist", "index.html"), "<html></html>")
+	archivePath := filepath.Join(t.TempDir(), "project.zip")
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"playground", "export", "--dir", root, "--out", archivePath, "--json"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	var decoded struct {
+		Archive string `json:"archive"`
+		Files   []struct {
+			Path string `json:"path"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("expected export JSON, got %q: %v", stdout, err)
+	}
+	if decoded.Archive != archivePath {
+		t.Fatalf("unexpected archive path: %#v", decoded)
+	}
+	reader, err := zip.OpenReader(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	var names []string
+	for _, file := range reader.File {
+		names = append(names, file.Name)
+	}
+	joined := strings.Join(names, ",")
+	for _, expected := range []string{"gowdk.config.go", "src/pages/home.page.gwdk", "styles/global.css"} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("expected %s in playground archive: %#v", expected, names)
+		}
+	}
+	for _, forbidden := range []string{".env", ".gowdk", "dist"} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("did not expect %s in playground archive: %#v", forbidden, names)
+		}
+	}
+}
+
+func TestPlaygroundRunRequiresExplicitExecutionOptIn(t *testing.T) {
+	root := t.TempDir()
+	writeMinimalPlaygroundProject(t, root)
+	err := run([]string{"playground", "run", "--dir", root, "--out", filepath.Join(t.TempDir(), "dist")})
+	if err == nil || !strings.Contains(err.Error(), "disabled by default") {
+		t.Fatalf("expected disabled playground execution error, got %v", err)
+	}
+}
+
+func TestPlaygroundRunBuildsFromStagedWorkspace(t *testing.T) {
+	root := t.TempDir()
+	writeMinimalPlaygroundProject(t, root)
+	outputDir := filepath.Join(t.TempDir(), "dist")
+	stdout, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"playground", "run", "--dir", root, "--out", outputDir, "--allow-hosted-execution"})
+	})
+	if err != nil {
+		t.Fatalf("playground run failed: %v\n%s", err, stdout)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "index.html")); err != nil {
+		t.Fatalf("expected playground output index.html: %v\n%s", err, stdout)
+	}
+	if _, err := os.Stat(filepath.Join(root, "dist", "index.html")); !os.IsNotExist(err) {
+		t.Fatalf("playground run should not write generated output into source root, err=%v", err)
+	}
+}
+
+func writeMinimalPlaygroundProject(t *testing.T, root string) {
+	t.Helper()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{
+		Include: []string{"src/**/*.gwdk"},
+	},
+	CSS: gowdk.CSSConfig{
+		Include: []string{"styles/**/*.css"},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "src", "pages", "home.page.gwdk"), `package app
+
+route "/"
+guard public
+css default
+
+view {
+  <main>Hello playground</main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "styles", "global.css"), `body {
+  font-family: system-ui, sans-serif;
+}
+`)
 }
 
 func TestDevInputCacheFreshRequiresMatchingSnapshotAndOutput(t *testing.T) {
@@ -2576,6 +2845,123 @@ view {
 	}
 	if _, ok := timings.Counters["files_written"]; !ok {
 		t.Fatalf("expected incremental write counters, got %#v", timings.Counters)
+	}
+}
+
+func TestDevComponentHMRPayloadUsesLayoutComponentDependencies(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	layout := filepath.Join(root, "root.layout.gwdk")
+	component := filepath.Join(root, "brand.cmp.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page home
+route "/"
+layout root
+
+view {
+  <main>Home</main>
+}
+`)
+	writeCLIFile(t, layout, `package app
+
+view {
+  <section><Brand /><slot /></section>
+}
+`)
+	writeCLIFile(t, component, `package app
+
+component Brand
+
+client {
+  func Toggle() {}
+}
+
+view {
+  <button g:on:click={Toggle()}>Brand</button>
+}
+`)
+
+	plan, err := loadBuildOptions([]string{"--config", config, "--out", outputDir, page, layout, component})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, ok := devComponentHMRPayloadLoaded(plan, inputChange{Changed: []string{component}})
+	if !ok {
+		t.Fatal("expected component HMR payload for layout component dependency")
+	}
+	var decoded devComponentHMRPayload
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		t.Fatalf("invalid HMR payload JSON: %v\n%s", err, payload)
+	}
+	if len(decoded.Components) != 1 || decoded.Components[0].Name != "Brand" || decoded.Components[0].ID != "app.Brand" {
+		t.Fatalf("unexpected HMR components: %#v", decoded.Components)
+	}
+	if strings.Join(decoded.Routes, ",") != "/" {
+		t.Fatalf("unexpected HMR routes: %#v", decoded.Routes)
+	}
+	if decoded.Generated == "" {
+		t.Fatalf("expected generated timestamp in payload: %#v", decoded)
+	}
+}
+
+func TestDevComponentHMRFallsBackForChangedPageAndKeepsStaleRouteCleanup(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page home
+route "/old"
+
+view {
+  <main>Old</main>
+}
+`)
+	args := []string{"--config", config, "--out", outputDir, page}
+	if err := build(args); err != nil {
+		t.Fatal(err)
+	}
+	oldPath := filepath.Join(outputDir, "old", "index.html")
+	if _, err := os.Stat(oldPath); err != nil {
+		t.Fatal(err)
+	}
+
+	writeCLIFile(t, page, `package app
+
+page home
+route "/new"
+
+view {
+  <main>New</main>
+}
+`)
+	plan, err := loadBuildOptions(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload, ok := devComponentHMRPayloadLoaded(plan, inputChange{Changed: []string{page}}); ok {
+		t.Fatalf("expected changed page to fall back to reload, got HMR payload %s", payload)
+	}
+	used, err := buildIncrementalSPA(args, inputChange{Changed: []string{page}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !used {
+		t.Fatal("expected incremental SPA build to handle changed page route")
+	}
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Fatalf("expected old route output to be removed, stat err: %v", err)
+	}
+	newPayload, err := os.ReadFile(filepath.Join(outputDir, "new", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(newPayload), "New") {
+		t.Fatalf("expected new route output:\n%s", newPayload)
 	}
 }
 
@@ -3299,6 +3685,7 @@ var Config = gowdk.Config{
 				Output: "dist/public",
 				App: ".gowdk/public",
 				Binary: "bin/public",
+				DeployRecipes: []string{"static"},
 			},
 			{
 				Name: "admin-api",
@@ -3346,6 +3733,7 @@ view {
 
 	for _, path := range []string{
 		filepath.Join(root, "dist", "public", "index.html"),
+		filepath.Join(root, "dist", "public", "deploy", "static-host.md"),
 		filepath.Join(root, ".gowdk", "public", "gowdkapp", "app", "index.html"),
 		filepath.Join(root, "bin", "public"),
 		filepath.Join(root, "dist", "admin-api", "admin", "index.html"),
@@ -5786,6 +6174,105 @@ view {
 	}
 }
 
+func TestBuildCommandEmitsStaticDeployRecipe(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page home
+route "/"
+
+view {
+  <main>Static recipe</main>
+}
+`)
+
+	stdout, err := captureCLIStdout(t, func() error {
+		return run([]string{"build", "--config", config, "--out", outputDir, "--deploy-recipe", "static", page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recipePath := filepath.Join(outputDir, "deploy", "static-host.md")
+	payload, err := os.ReadFile(recipePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"starting point, not a production guarantee",
+		outputDir,
+		"gowdk serve --dir",
+		"domains, TLS, CDN policy",
+	} {
+		if !strings.Contains(string(payload), expected) {
+			t.Fatalf("expected static recipe to contain %q:\n%s", expected, payload)
+		}
+	}
+	if !strings.Contains(stdout, recipePath) {
+		t.Fatalf("expected stdout to include %s, got:\n%s", recipePath, stdout)
+	}
+	reportPayload, err := os.ReadFile(filepath.Join(outputDir, "gowdk-build-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"deploy_recipe_written", "static", recipePath} {
+		if !strings.Contains(string(reportPayload), filepath.ToSlash(expected)) {
+			t.Fatalf("expected build report to contain %q:\n%s", expected, reportPayload)
+		}
+	}
+}
+
+func TestWriteDeploymentRecipesEmitsBinaryAndSplitRecipes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	binaryPath := filepath.Join(root, "bin", "site")
+	backendBinaryPath := filepath.Join(root, "bin", "backend")
+
+	artifacts, err := writeDeploymentRecipes(deploymentRecipeRequest{
+		OutputDir:         outputDir,
+		BinaryPath:        binaryPath,
+		BackendBinaryPath: backendBinaryPath,
+		Recipes:           []string{"systemd", "caddy", "nginx", "split"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 4 {
+		t.Fatalf("expected four recipe artifacts, got %#v", artifacts)
+	}
+	for _, path := range []string{
+		filepath.Join(root, "bin", "gowdk-site.service"),
+		filepath.Join(root, "bin", "Caddyfile"),
+		filepath.Join(root, "bin", "nginx.gowdk.conf"),
+		filepath.Join(outputDir, "deploy", "split-frontend-backend.md"),
+	} {
+		payload, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("expected recipe %s: %v", path, err)
+		}
+		for _, expected := range []string{"Starting point", "secret"} {
+			if !strings.Contains(strings.ToLower(string(payload)), strings.ToLower(expected)) {
+				t.Fatalf("expected %s to contain %q:\n%s", path, expected, payload)
+			}
+		}
+	}
+}
+
+func TestDeploymentRecipesRejectUnknownAndUnsupportedShapes(t *testing.T) {
+	if _, err := normalizeDeploymentRecipes([]string{"kubernetes"}); err == nil || !strings.Contains(err.Error(), "unsupported deploy recipe") {
+		t.Fatalf("expected unknown recipe rejection, got %v", err)
+	}
+	if _, err := writeDeploymentRecipes(deploymentRecipeRequest{Recipes: []string{"systemd"}, OutputDir: "dist"}); err == nil || !strings.Contains(err.Error(), "requires --bin") {
+		t.Fatalf("expected systemd shape rejection, got %v", err)
+	}
+	if _, err := writeDeploymentRecipes(deploymentRecipeRequest{Recipes: []string{"split"}, OutputDir: "dist"}); err == nil || !strings.Contains(err.Error(), "requires --out") {
+		t.Fatalf("expected split shape rejection, got %v", err)
+	}
+}
+
 func TestBuildCommandBuildsRunnableEmbeddedBinary(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "home.page.gwdk")
@@ -6532,6 +7019,8 @@ func TestLiveReloadFileHandlerInjectsScript(t *testing.T) {
 	for _, expected := range []string{
 		`__gowdk-error-overlay`,
 		`events.addEventListener("build-error"`,
+		`events.addEventListener("component-hmr"`,
+		`fetchFreshDocument`,
 		`GOWDK build failed`,
 	} {
 		if !strings.Contains(body, expected) {
@@ -6540,6 +7029,37 @@ func TestLiveReloadFileHandlerInjectsScript(t *testing.T) {
 	}
 	if strings.Index(body, "<script>") > strings.Index(body, "</body>") {
 		t.Fatalf("expected script before body close:\n%s", body)
+	}
+}
+
+func TestDevRuntimeProxyHandlerInjectsScript(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/" {
+			http.NotFound(w, request)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, `<!doctype html><html><body><main>Generated app</main></body></html>`)
+	}))
+	defer upstream.Close()
+
+	targetAddr := strings.TrimPrefix(upstream.URL, "http://")
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+	devRuntimeProxyHandler(targetAddr, newLiveReloadBroker()).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d with body %s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, expected := range []string{
+		`<main>Generated app</main>`,
+		`new EventSource("/__gowdk/reload")`,
+		`__gowdk-error-overlay`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected proxied HTML to contain %q:\n%s", expected, body)
+		}
 	}
 }
 

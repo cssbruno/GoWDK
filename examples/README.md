@@ -9,6 +9,12 @@ Run these commands from the repository root. The root `gowdk.config.go` is part
 of the example smoke setup and is required by project-level compiler commands,
 even when explicit `.gwdk` files are passed.
 
+For task-oriented recipes, use the
+[Native Cookbook](../docs/cookbook/README.md). For command, config, routing,
+generated output, and runtime contracts, use the
+[Reference Index](../docs/reference/README.md). This file stays focused on
+example inventory and verification commands.
+
 ## Current Examples
 
 | File | Purpose | Command |

@@ -618,6 +618,8 @@ Every 0.x minor release must have:
   runtime bridge exists.
 - [x] Keep last successful build clearly visible.
 - [x] Log changed files for failed dev rebuilds.
+- [x] Document backend dev proxy behavior and stabilize terminal wording for
+  runtime proxy startup plus generated-app restart after rebuild.
 - [ ] Log restart reason, rebuild timing, generated files changed, and
   generated binary rebuilds.
 - [ ] Document backend proxy mode, `--app`, `preview`, and `--hot`.
@@ -679,7 +681,7 @@ Every 0.x minor release must have:
   readiness, graceful shutdown, cache/CDN, binary rollback, artifact layout,
   backup/restore as user responsibility, incident response as user
   responsibility, dependency update policy, and observability TODOs.
-- [ ] Add optional deployment recipe generators for Docker, systemd, reverse
+- [x] Add optional deployment recipe generators for Docker, systemd, reverse
   proxy, static-host, and split frontend/backend starting points.
 - [ ] Add performance benchmarks for cold build, incremental build, dev rebuild,
   generated binary startup, static route latency, SSR latency, action latency,
@@ -692,7 +694,10 @@ Every 0.x minor release must have:
   from the repo automatically.
 - [x] Define the docs-first playground onboarding path, sandbox rules, and
   export contract.
+- [x] Add local playground policy, source export, and opt-in staged build CLI
+  bridge for future hosted execution.
 - [x] Document addon discovery policy before registry-backed CLI discovery.
+- [x] Add checked-in addon registry metadata and gated CLI discovery output.
 - [ ] Add website current release badge, experimental warning, what works today,
   known gaps, cookbook, examples index, runnable snippets, generated output
   preview, route manifest preview, build report preview, and website link
@@ -763,7 +768,7 @@ Start with these in order:
 - [ ] Add request timeout, header limit, and body limit support.
 - [ ] Build flagship full-stack native GOWDK example.
 - [ ] Build deployment-shaped example.
-- [ ] Add native cookbook.
+- [x] Add native cookbook.
 - [x] Add browser dev error overlay.
 - [ ] Add VS Code quick fix for creating a missing Go handler.
 - [ ] Add performance/build timing report.

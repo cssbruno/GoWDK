@@ -7,8 +7,10 @@ GOWDK currently supports three practical output shapes:
 - A local-platform binary or Go `js/wasm` artifact from the generated app.
 
 Deployment orchestration is user-owned. GOWDK can emit a minimal Docker context
-for one-binary deploys, but it does not generate Kubernetes manifests, platform
-adapters, or CDN configuration.
+for one-binary deploys and optional starter recipes for common static, process,
+reverse-proxy, and split frontend/backend shapes, but it does not generate
+Kubernetes manifests, platform adapters, secrets, TLS policy, storage,
+backups, incident response, rollout logic, or CDN configuration.
 
 | Shape | Use When | Current Command Surface |
 | --- | --- | --- |
@@ -18,10 +20,32 @@ adapters, or CDN configuration.
 | Backend-only | A generated backend route app is deployed behind another frontend. | `gowdk build --backend-app <dir> --backend-bin <file>` |
 | Go WASM artifact | A host can execute a Go `js/wasm` generated app artifact. | `gowdk build --out <dir> --app <dir> --wasm <file>` |
 
-Optional deployment recipe generators are planned in
-[#423](https://github.com/cssbruno/GoWDK/issues/423). Until then, copy these
-recipes into app-owned infrastructure and review every environment-specific
-setting.
+## Optional Recipes
+
+`gowdk build --deploy-recipe <name>` emits starter deployment files after the
+selected build artifacts are written. The flag may be repeated or
+comma-separated:
+
+```sh
+gowdk build --out dist/site --deploy-recipe static
+gowdk build --out dist/site --app .gowdk/app --bin bin/site --deploy-recipe systemd,caddy
+gowdk build --out dist/site --backend-app .gowdk/backend --backend-bin bin/backend --deploy-recipe split
+```
+
+Supported recipes:
+
+| Recipe | Requires | Output |
+| --- | --- | --- |
+| `static` | `--out` | `<out>/deploy/static-host.md` |
+| `systemd` | `--bin` or `--backend-bin` | `<binary-dir>/gowdk-<binary>.service` |
+| `caddy` | `--bin` or `--backend-bin` | `<binary-dir>/Caddyfile` |
+| `nginx` | `--bin` or `--backend-bin` | `<binary-dir>/nginx.gowdk.conf` |
+| `split` | `--out` and `--backend-bin` | `<out>/deploy/split-frontend-backend.md` |
+
+Recipes are starting points, not production guarantees. Review every
+environment-specific setting before using them. Keep domains, TLS, CDN policy,
+secrets, storage, backups, health checks beyond `/_gowdk/health`, and rollout
+strategy in app-owned infrastructure.
 
 ## Build Output Files
 
@@ -221,7 +245,14 @@ binary and the previous CSRF secret.
 
 ## systemd
 
-Run the single binary under systemd when deploying to a Linux VM:
+Generate a starter unit beside a compiled frontend or backend binary:
+
+```sh
+gowdk build --out dist/site --app .gowdk/app --bin bin/site --deploy-recipe systemd
+```
+
+The generated `<binary-dir>/gowdk-<binary>.service` is a starting point for a
+Linux VM. A typical unit shape is:
 
 ```ini
 [Unit]
@@ -249,6 +280,12 @@ permissions, or the host secret manager. Do not commit them to the repository.
 
 Generated binaries speak plain HTTP. Put TLS, HTTP/2, compression, and public
 host routing in a normal reverse proxy.
+
+Generate starter proxy snippets beside a compiled frontend or backend binary:
+
+```sh
+gowdk build --out dist/site --app .gowdk/app --bin bin/site --deploy-recipe caddy --deploy-recipe nginx
+```
 
 Caddy:
 
@@ -523,6 +560,22 @@ gowdk build --target admin
 ```
 
 Use distinct `Output` and `App` directories for separate binaries.
+
+Configured build targets can also request deployment recipes:
+
+```go
+Build: gowdk.BuildConfig{
+	Targets: []gowdk.BuildTargetConfig{
+		{
+			Name: "site",
+			Output: "dist/site",
+			App: ".gowdk/site",
+			Binary: "bin/site",
+			DeployRecipes: []string{"systemd", "caddy"},
+		},
+	},
+}
+```
 
 ## WASM Deploy Artifact
 

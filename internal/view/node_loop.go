@@ -4,23 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/cssbruno/gowdk/internal/clientlang"
+	"github.com/cssbruno/gowdk/internal/viewparse"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
 	"strconv"
 	"strings"
 )
 
-type Node interface {
-	render(*renderContext, *renderOutput) error
-}
-
-// Text is escaped text content.
-type Text struct {
-	Value string
-	Start int
-	End   int
-}
-
-func (node Text) render(ctx *renderContext, out *renderOutput) error {
+func renderTextNode(node Text, ctx *renderContext, out *renderOutput) error {
 	if ctx.templateLoop == nil {
 		if field, ok := islandTextBinding(node.Value); ok && ctx.bindFields[field] {
 			value, _, err := interpolateValue(ctx, node.Value)
@@ -40,53 +30,27 @@ func (node Text) render(ctx *renderContext, out *renderOutput) error {
 	return renderText(ctx, out, node.Value)
 }
 
-// ForDirective is a parsed g:for declaration.
-type ForDirective struct {
-	Var        string
-	IndexVar   string
-	Collection string
-}
+type ForDirective = viewparse.ForDirective
 
 // ParseForDirective parses a g:for value such as "item in Items" or
 // "item, i in Items".
 func ParseForDirective(source string) (ForDirective, error) {
-	match := forDirectivePattern.FindStringSubmatch(strings.TrimSpace(source))
-	if match == nil {
-		return ForDirective{}, fmt.Errorf("g:for must use \"item in Items\" or \"item, i in Items\" syntax")
-	}
-	item := strings.TrimSpace(match[1])
-	if !isIdentifier(item) {
-		return ForDirective{}, fmt.Errorf("g:for item name %q is invalid", item)
-	}
-	index := strings.TrimSpace(match[2])
-	if index != "" {
-		if !isIdentifier(index) {
-			return ForDirective{}, fmt.Errorf("g:for index name %q is invalid", index)
-		}
-		if index == item {
-			return ForDirective{}, fmt.Errorf("g:for item and index names must differ")
-		}
-	}
-	collection := strings.TrimSpace(match[3])
-	if collection == "" {
-		return ForDirective{}, fmt.Errorf("g:for collection expression is empty")
-	}
-	return ForDirective{Var: item, IndexVar: index, Collection: collection}, nil
+	return viewparse.ParseForDirective(source)
 }
 
-func (node Element) renderFor(ctx *renderContext, out *renderOutput, loop ForDirective, keyExpr string) error {
+func renderForElement(node Element, ctx *renderContext, out *renderOutput, loop ForDirective, keyExpr string) error {
 	items, err := loopItems(loop.Collection, ctx.values)
 	if err != nil {
 		return fmt.Errorf("g:for: %w", err)
 	}
 	group := ctx.nextLoopGroup()
-	templateNode := node.withoutAttrs("g:for", "g:key")
+	templateNode := elementWithoutAttrs(node, "g:for", "g:key")
 	templateCtx := *ctx
 	templateCtx.templateLoop = &templateLoopRender{}
 	templateCtx.loopItem = &loopItemRender{Group: group, KeyExpr: keyExpr}
 	templateCtx.readFields = boolSet(keysFromTypes(ctx.loopSymbols(loop)))
 	var template renderOutput
-	if err := templateNode.render(&templateCtx, &template); err != nil {
+	if err := renderElement(templateNode, &templateCtx, &template); err != nil {
 		return err
 	}
 	out.write(`<template data-gowdk-for="`)
@@ -119,14 +83,14 @@ func (node Element) renderFor(ctx *renderContext, out *renderOutput, loop ForDir
 			}
 			seenKeys[key] = true
 		}
-		if err := templateNode.render(&itemCtx, out); err != nil {
+		if err := renderElement(templateNode, &itemCtx, out); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (node Element) forDirective(ctx *renderContext) (ForDirective, string, bool, error) {
+func elementForDirective(node Element, ctx *renderContext) (ForDirective, string, bool, error) {
 	var loop ForDirective
 	var keyExpr string
 	hasFor := false
@@ -180,7 +144,7 @@ func (node Element) forDirective(ctx *renderContext) (ForDirective, string, bool
 	return loop, keyExpr, true, nil
 }
 
-func (node Element) withoutAttrs(names ...string) Element {
+func elementWithoutAttrs(node Element, names ...string) Element {
 	removed := map[string]bool{}
 	for _, name := range names {
 		removed[name] = true

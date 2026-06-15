@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -122,6 +125,49 @@ func liveReloadFileHandler(root string, reload *liveReloadBroker) http.Handler {
 	})
 }
 
+func devRuntimeProxyHandler(targetAddr string, reload *liveReloadBroker) http.Handler {
+	target, err := url.Parse("http://" + targetAddr)
+	if err != nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		})
+	}
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	originalDirector := proxy.Director
+	proxy.Director = func(request *http.Request) {
+		originalDirector(request)
+		request.Header.Del("Accept-Encoding")
+	}
+	proxy.ModifyResponse = func(response *http.Response) error {
+		if response.Request == nil ||
+			response.Request.Method != http.MethodGet ||
+			response.StatusCode != http.StatusOK ||
+			response.Header.Get("Content-Encoding") != "" ||
+			!strings.Contains(strings.ToLower(response.Header.Get("Content-Type")), "text/html") {
+			return nil
+		}
+		body, err := io.ReadAll(response.Body)
+		if closeErr := response.Body.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			return err
+		}
+		body = injectLiveReloadScript(body)
+		response.Body = io.NopCloser(bytes.NewReader(body))
+		response.ContentLength = int64(len(body))
+		response.Header.Set("Content-Length", fmt.Sprint(len(body)))
+		return nil
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/__gowdk/reload" {
+			reload.serve(w, request)
+			return
+		}
+		proxy.ServeHTTP(w, request)
+	})
+}
+
 func injectLiveReloadScript(html []byte) []byte {
 	const script = `<script>
 (() => {
@@ -152,6 +198,7 @@ func injectLiveReloadScript(html []byte) []byte {
     if (Number.isNaN(date.getTime())) return value;
     return date.toLocaleString();
   };
+  const selectorValue = (value) => String(value || "").replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
   const formatDiagnostic = (diagnostic) => {
     const tags = [];
     if (diagnostic.code) tags.push("[" + diagnostic.code + "]");
@@ -195,12 +242,91 @@ func injectLiveReloadScript(html []byte) []byte {
     addSection(lines, "Runtime attribution", [payload.route ? "route " + payload.route : "", payload.endpoint ? "endpoint " + payload.endpoint : ""]);
     overlay.textContent = lines.join("\n").trimEnd();
   };
+  const pathMatchesRoute = (route, pathname) => {
+    route = String(route || "");
+    pathname = String(pathname || "/");
+    if (!route) return false;
+    if (route === pathname) return true;
+    const routeParts = route.split("/").filter(Boolean);
+    const pathParts = pathname.split("/").filter(Boolean);
+    let index = 0;
+    for (; index < routeParts.length; index++) {
+      const part = routeParts[index];
+      if (/^\{[^}]+\.\.\.\}$/.test(part)) return index < pathParts.length;
+      if (index >= pathParts.length) return false;
+      if (/^\{[^}]+\}$/.test(part)) continue;
+      if (part !== pathParts[index]) return false;
+    }
+    return index === pathParts.length;
+  };
+  const componentSelectors = (component) => {
+    const id = selectorValue(component && component.id);
+    const name = selectorValue(component && component.name);
+    const selectors = [];
+    if (id) selectors.push('gowdk-island[data-gowdk-component-id="' + id + '"]');
+    if (name) selectors.push('gowdk-island:not([data-gowdk-component-id])[data-gowdk-component="' + name + '"]');
+    return selectors.join(",");
+  };
+  const fetchFreshDocument = async () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("__gowdk_hmr", Date.now().toString());
+    const response = await fetch(url.href, { headers: { "Accept": "text/html", "X-GOWDK-HMR": "1" }, cache: "no-store" });
+    if (!response.ok) throw new Error("HMR document fetch failed with status " + response.status);
+    const type = response.headers.get("Content-Type") || "";
+    if (type && !type.includes("text/html")) throw new Error("HMR document fetch did not return HTML");
+    return new DOMParser().parseFromString(await response.text(), "text/html");
+  };
+  const applyComponentHMR = async (payload) => {
+    payload = typeof payload === "string" ? parsePayload(payload) : (payload || {});
+    const components = Array.isArray(payload.components) ? payload.components : [];
+    const routes = Array.isArray(payload.routes) ? payload.routes : [];
+    const routeAffected = routes.some((route) => pathMatchesRoute(route, window.location.pathname));
+    const hasCurrentRoot = components.some((component) => {
+      const selector = componentSelectors(component);
+      return selector && document.querySelector(selector);
+    });
+    if (!routeAffected && !hasCurrentRoot) return;
+    let next;
+    try {
+      next = await fetchFreshDocument();
+    } catch (_) {
+      window.location.reload();
+      return;
+    }
+    let replaced = 0;
+    for (const component of components) {
+      const selector = componentSelectors(component);
+      if (!selector) continue;
+      const currentRoots = Array.from(document.querySelectorAll(selector));
+      const nextRoots = Array.from(next.querySelectorAll(selector));
+      if (currentRoots.length === 0 || nextRoots.length < currentRoots.length) continue;
+      currentRoots.forEach((root, index) => {
+        const replacement = nextRoots[index] && nextRoots[index].cloneNode(true);
+        if (!replacement || !root.parentNode) return;
+        if (typeof window.__gowdkDestroyIslands === "function") window.__gowdkDestroyIslands(root, true);
+        root.parentNode.replaceChild(replacement, root);
+        replaced++;
+      });
+    }
+    if (replaced === 0) {
+      window.location.reload();
+      return;
+    }
+    if (window.__gowdkStores && typeof window.__gowdkStores.hydrate === "function") window.__gowdkStores.hydrate();
+    if (typeof window.__gowdkMountIslands === "function") window.__gowdkMountIslands();
+    if (typeof window.__gowdkMountClientGoBlocks === "function") window.__gowdkMountClientGoBlocks();
+    document.dispatchEvent(new CustomEvent("gowdk:component-hmr", { detail: payload }));
+  };
   const events = new EventSource("/__gowdk/reload");
   events.addEventListener("reload", () => {
     removeOverlay();
     window.location.reload();
   });
   events.addEventListener("build-error", (event) => showOverlay(parsePayload(event.data)));
+  events.addEventListener("component-hmr", (event) => {
+    removeOverlay();
+    applyComponentHMR(parsePayload(event.data)).catch(() => window.location.reload());
+  });
 })();
 </script>`
 	lower := strings.ToLower(string(html))

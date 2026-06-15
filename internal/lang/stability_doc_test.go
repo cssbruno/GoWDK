@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
 var backtickedToken = regexp.MustCompile("`([^`]+)`")
@@ -33,7 +33,7 @@ func TestStabilityRegistryCoversCodeConstructs(t *testing.T) {
 		}
 	}
 
-	for _, directive := range view.SupportedDirectiveNames() {
+	for _, directive := range viewparse.SupportedDirectiveNames() {
 		if _, ok := registry[directive]; !ok {
 			t.Errorf("supported g: directive %q has no stability entry", directive)
 		}

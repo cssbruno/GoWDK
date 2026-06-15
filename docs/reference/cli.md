@@ -10,7 +10,7 @@ development.
 gowdk version
 gowdk init [--force] [--tests] [--template <site|minimal>] [dir]
 gowdk add <addon> [--config <file>] [--base-url <url>]
-gowdk add --list
+gowdk add --list [--registry] [--json]
 gowdk tokens <file.gwdk>
 gowdk fmt [--write] <files>
 gowdk check [--config <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...]
@@ -28,10 +28,13 @@ gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
 gowdk list commands|queries|events|jobs [--json] [dir]
-gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
+gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk preview [--addr <addr>] [--hot] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
+gowdk playground policy [--json]
+gowdk playground export --dir <project> --out <project.zip> [--json]
+gowdk playground run --dir <project> --out <dir> --allow-hosted-execution
 gowdk lsp [--ssr]
 ```
 
@@ -41,11 +44,14 @@ gowdk lsp [--ssr]
 - `--force`: supported by `init`; overwrites starter files that already exist.
 - `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
-- `--list`: supported by `add`; prints built-in addon names the command can wire.
+- `--list`: supported by `add`; prints addable built-in addon names the command can wire.
+- `--registry`: supported by `add --list`; prints checked-in addon registry
+  metadata, including built-in/documented-external kind, lifecycle,
+  compatibility, and whether `gowdk add` can wire it.
 - `--base-url`: supported by `add seo`; writes the required
   `seo.Options.BaseURL` value. The value must be an absolute `http` or
   `https` URL.
-- `--json`: supported by `check`, `doctor`, `audit`, `explain`, `inspect`, `contracts`, `graph`, `trace`, and `list`; prints
+- `--json`: supported by `check`, `doctor`, `audit`, `explain`, `inspect`, `contracts`, `graph`, `trace`, `list`, `playground policy`, and `playground export`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available. `gowdk check --json` uses diagnostic
   schema version `1`. `gowdk inspect` emits JSON by default; `--json` is
@@ -55,9 +61,8 @@ gowdk lsp [--ssr]
 - `gowdk doctor --json`: prints a versioned health report with overall status,
   summary counts, environment metadata, and check records.
 - `gowdk audit`: derives the security posture from validated IR, evaluates the
-  built-in security baseline against it, and reports findings. It is a separate
-  command — `gowdk build` never runs it — so it cannot fail a build implicitly.
-  It exits non-zero when any error-severity finding exists, so it can gate CI.
+  built-in security baseline against it, and reports findings. It exits non-zero
+  when any error-severity finding exists, so it can gate CI.
   `--json` prints the posture manifest plus findings and a summary. Every finding
   carries a diagnostic code; run `gowdk explain <code>` for details.
   `--emit-tests` writes a readable standalone `gowdk_audit_test.go` file (or the
@@ -66,9 +71,10 @@ gowdk lsp [--ssr]
   same validated IR and runs the generated app's audit test with
   `go test ./gowdkapp`; a failed expectation is reported as
   `audit_test_failed`.
-  `gowdk build` also writes the posture alone to a non-served
-  `.gowdk/reports/<output-name>/gowdk-security.json` path outside the selected
-  output directory.
+  `gowdk build` runs the same baseline gate, blocks production builds on
+  error-severity findings unless `--allow-insecure` is set, and writes the
+  posture alone to a non-served `.gowdk/reports/<output-name>/gowdk-security.json`
+  path outside the selected output directory.
 - `--write`: supported by `fmt`; overwrites formatted files.
 - `--dry-run`: supported by `fix`; prints files with available registered fixes
   without writing changes.
@@ -102,7 +108,7 @@ gowdk lsp [--ssr]
   `endpoints`, `inspect`, `generate stubs`, and `build`; may be repeated or
   comma-separated, and limits discovery to selected configured modules when no
   explicit file list is passed.
-- `--out`: supported by `build`; selects the output directory and overrides `Build.Output`.
+- `--out`: supported by `build`; selects the output directory and overrides `Build.Output`. `playground export` uses `--out` as the archive path. `playground run` uses `--out` as the generated output directory and never writes build output into the source project.
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
 - `--docker`: supported by `build`; requires `--bin` and emits `Dockerfile`
@@ -111,13 +117,18 @@ gowdk lsp [--ssr]
 - `--docker-base`: supported by `build` with `--docker`; selects
   `distroless` or `scratch`. The default is `distroless`. `scratch` requires a
   statically linked Linux ELF binary.
+- `--deploy-recipe`: supported by `build`; may be repeated or comma-separated
+  and emits optional starter deployment recipes. Supported values are `static`,
+  `systemd`, `caddy`, `nginx`, and `split`. Recipes are starting points and do
+  not own secrets, domains, TLS, storage, backups, CDN policy, or rollout logic.
 - `--wasm`: supported by `build`; requires `--app` and compiles the generated app with `GOOS=js GOARCH=wasm go build -o <file>`.
 - `--backend-app`: supported by `build`; writes generated backend-only Go app source for feature-bound action/API endpoints.
 - `--backend-bin`: supported by `build`; requires `--backend-app` and compiles the generated backend app with `go build -o <file>`.
 - `--addr`: supported by `dev`, `preview`, and `serve`; selects the listen address and defaults to `127.0.0.1:8080`.
 - `--interval`: supported by `dev`; sets the polling interval, such as `500ms`, `1s`, or `2s`.
 - `--hot`: supported by `preview`; runs the dev loop against the preview output instead of serving a one-shot build.
-- `--dir`: supported by `serve`; selects the generated build output directory.
+- `--dir`: supported by `serve`; selects the generated build output directory. `playground export` and `playground run` use `--dir` as the source project directory and require a `gowdk.config.go` file there.
+- `--allow-hosted-execution`: supported by `playground run`; explicitly opts into the local sandbox build bridge. Without it, playground execution fails closed because hosted execution is disabled by default.
 
 ## Examples
 
@@ -126,6 +137,8 @@ go run ./cmd/gowdk init --template site my-site
 go run ./cmd/gowdk init --tests --template site my-tested-site
 go run ./cmd/gowdk init --template minimal my-minimal-site
 go run ./cmd/gowdk add --list
+go run ./cmd/gowdk add --list --registry
+go run ./cmd/gowdk add --list --registry --json
 go run ./cmd/gowdk add ssr actions partial
 go run ./cmd/gowdk add seo --base-url https://example.com
 go run ./cmd/gowdk check examples/pages/home.page.gwdk
@@ -162,6 +175,8 @@ go run ./cmd/gowdk dev --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app
 go run ./cmd/gowdk build --module frontend --module backend --out /tmp/gowdk-build
 go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 GOOS=linux CGO_ENABLED=0 gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site --docker examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
+go run ./cmd/gowdk build --out /tmp/gowdk-build --deploy-recipe static examples/pages/home.page.gwdk
+go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site --deploy-recipe systemd,caddy examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --wasm /tmp/gowdk-site.wasm examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 go run ./cmd/gowdk build --module admin --out dist/admin --app .gowdk/admin --bin bin/admin
 go run ./cmd/gowdk build --module admin --out dist/admin --app .gowdk/admin --wasm bin/admin.wasm
@@ -170,6 +185,9 @@ go run ./cmd/gowdk build --target admin
 go run ./cmd/gowdk dev --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 go run ./cmd/gowdk dev --target admin --addr 127.0.0.1:8090
 go run ./cmd/gowdk serve --dir /tmp/gowdk-build
+go run ./cmd/gowdk playground policy --json
+go run ./cmd/gowdk playground export --dir my-site --out /tmp/my-site.zip
+go run ./cmd/gowdk playground run --dir my-site --out /tmp/my-site-dist --allow-hosted-execution
 ```
 
 `init` creates a buildable starter project in the selected directory, or the
@@ -259,11 +277,11 @@ production-readiness gates from `docs/engineering/security.md` (for example:
 actions, commands, and state-changing APIs must enforce CSRF, and APIs must not
 be public by omission).
 Findings carry a diagnostic code, a `file:line`, and remediation; run
-`gowdk explain <code>` for details. `audit` never runs as part of `gowdk build`,
-so it cannot fail a build implicitly; run it on demand or wire it into CI,
-where its non-zero exit on error findings gates the pipeline. The posture alone
-is also emitted as `gowdk-security.json` by `gowdk build`, but outside the
-selected output directory in a non-served `.gowdk/reports/<output-name>/` path.
+`gowdk explain <code>` for details. `gowdk build` runs the same baseline gate
+before writing output: production builds fail on error-severity findings unless
+`--allow-insecure` is set, while non-production builds warn. The posture alone is
+also emitted as `gowdk-security.json` by `gowdk build`, but outside the selected
+output directory in a non-served `.gowdk/reports/<output-name>/` path.
 Declared `*.audit.gwdk` policies are discovered with the rest of the source
 set. `--emit-tests` writes a committable standalone `_test.go`; `--run` builds a
 temporary generated app, executes `go test ./gowdkapp`, and folds failures back
@@ -342,6 +360,15 @@ web command/query contract references where those surfaces exist. Records
 include source, package, expected symbol, package path when known, method/path
 for request-time handlers, binding status, signature/input metadata, message,
 and a suggested next step for missing or unsupported bindings.
+
+`gowdk playground policy` prints the sandbox contract used by local and future
+hosted playground execution. `gowdk playground export` creates a normal source
+project archive and omits generated `.gowdk/`, `dist/`, `bin/`, `gowdk_cache/`,
+dependency vendor folders, local env files, private keys, temp files, and
+generated reports. `gowdk playground run` stages the same allowed files into a
+disposable workspace, uses isolated Go caches with `GOPROXY=off`,
+`GOSUMDB=off`, and `GOWORK=off`, and requires `--allow-hosted-execution` before
+running a build.
 
 `gowdk generate stubs` writes missing action/API handler stubs to
 `gowdk_stubs.go` beside the owning source package. It refuses to overwrite an

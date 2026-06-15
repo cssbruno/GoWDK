@@ -26,7 +26,8 @@ import (
 	"github.com/cssbruno/gowdk/internal/safeasset"
 	"github.com/cssbruno/gowdk/internal/securitytext"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
+	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
 // SchemaVersion is the gowdk-security.json schema version.
@@ -297,7 +298,7 @@ func rawHTMLSinks(ir gwdkir.Program) []RawHTMLSink {
 		nodes := template.Nodes
 		if len(nodes) == 0 {
 			var err error
-			nodes, err = view.Parse(template.Body)
+			nodes, err = viewparse.Parse(template.Body)
 			if err != nil {
 				continue
 			}
@@ -307,13 +308,13 @@ func rawHTMLSinks(ir gwdkir.Program) []RawHTMLSink {
 	return sinks
 }
 
-func rawHTMLSinksForNodes(nodes []view.Node, template gwdkir.Template) []RawHTMLSink {
+func rawHTMLSinksForNodes(nodes []viewmodel.Node, template gwdkir.Template) []RawHTMLSink {
 	var sinks []RawHTMLSink
-	var walk func([]view.Node)
-	walk = func(nodes []view.Node) {
+	var walk func([]viewmodel.Node)
+	walk = func(nodes []viewmodel.Node) {
 		for _, node := range nodes {
 			switch typed := node.(type) {
-			case view.Element:
+			case viewmodel.Element:
 				for _, attr := range typed.Attrs {
 					if attr.Name != "g:html" {
 						continue
@@ -326,7 +327,7 @@ func rawHTMLSinksForNodes(nodes []view.Node, template gwdkir.Template) []RawHTML
 					})
 				}
 				walk(typed.Children)
-			case view.ComponentCall:
+			case viewmodel.ComponentCall:
 				walk(typed.Children)
 			}
 		}

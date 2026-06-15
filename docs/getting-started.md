@@ -178,6 +178,10 @@ go run ./cmd/gowdk version
 
 Use the built binary when running commands from outside this repository.
 
+For focused recipes after the first app, use the
+[Native Cookbook](cookbook/README.md). For command and data contracts, use the
+[Reference Index](reference/README.md).
+
 ## Create An App
 
 With `gowdk` on `PATH`:
@@ -287,7 +291,13 @@ CSS/assets, actions, validation, CSRF, APIs, fragments, SSR, guards,
 database-owned Go code, one-binary deploys, Caddy, diagnostics, tests,
 Tailwind, and WASM islands, use the [Native Learning Path](learning/native.md).
 For website-style onboarding and hosted execution constraints, use the
-[Playground Onboarding and Sandboxing](product/playground.md) contract.
+[Playground Onboarding and Sandboxing](product/playground.md) contract. The
+local bridge commands are:
+
+```sh
+gowdk playground policy
+gowdk playground export --dir . --out /tmp/gowdk-project.zip
+```
 
 Dynamic SPA routes work when literal `paths {}` entries are present:
 

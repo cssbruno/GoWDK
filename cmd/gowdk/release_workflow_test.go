@@ -46,6 +46,7 @@ func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 	releaseText := readWorkflow(t, "../../.github/workflows/release.yml")
 	smokeText := readWorkflow(t, "../../.github/workflows/release-smoke.yml")
 	cacheText := readWorkflow(t, "../../.github/workflows/cache-maintenance.yml")
+	exampleReportText := readWorkflow(t, "../../scripts/check-example-reports.sh")
 
 	for _, expected := range []string{
 		"go version",
@@ -58,12 +59,20 @@ func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 		"draft: false",
 		"prerelease: true",
 		"Verify release assets",
+		"scripts/check-example-reports.sh --extended",
+	} {
+		if !strings.Contains(releaseText, expected) {
+			t.Fatalf("expected %q in release.yml:\n%s", expected, releaseText)
+		}
+	}
+
+	for _, expected := range []string{
 		"gowdk endpoints",
 		"inspect tree",
 		"inspect endpoint-graph",
 	} {
-		if !strings.Contains(releaseText, expected) {
-			t.Fatalf("expected %q in release.yml:\n%s", expected, releaseText)
+		if !strings.Contains(exampleReportText, expected) {
+			t.Fatalf("expected %q in check-example-reports.sh:\n%s", expected, exampleReportText)
 		}
 	}
 

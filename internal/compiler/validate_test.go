@@ -2275,6 +2275,9 @@ func TestValidateManifestRejectsUnboundUsedDOMRef(t *testing.T) {
 fn FocusSearch() {
   searchInput.Focus()
 }`,
+			Spans: gwdkir.BlockSpans{
+				Client: testSourceSpan(10, 1, 14, 2),
+			},
 			View:     true,
 			ViewBody: `<button g:on:click={FocusSearch()}>Focus</button>`,
 		},
@@ -2288,6 +2291,8 @@ fn FocusSearch() {
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
+	diagnostic := firstDiagnostic(diagnostics, "component_client_error")
+	assertSourceSpan(t, diagnostic.Span, 14, 1, 14, 2)
 }
 
 func TestValidateManifestAllowsGIfBoolExpression(t *testing.T) {

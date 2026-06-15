@@ -32,7 +32,6 @@ var (
 	literalRecordPattern    = linePattern{parse: parseLiteralRecordLine}
 	syntaxBlockPattern      = linePattern{parse: parseSyntaxBlockLine}
 	goBlockPattern          = linePattern{parse: parseGoBlockLine}
-	routeParamPattern       = routeParamPatternScanner{}
 )
 
 type linePattern struct {
@@ -595,40 +594,4 @@ func decodeStringLiteral(lexeme string) string {
 		builder.WriteByte(ch)
 	}
 	return builder.String()
-}
-
-type routeParamPatternScanner struct{}
-
-func (routeParamPatternScanner) FindAllStringSubmatchIndex(route string, _ int) [][]int {
-	var matches [][]int
-	for index := 0; index < len(route); index++ {
-		if route[index] != '{' {
-			continue
-		}
-		end := strings.IndexByte(route[index:], '}')
-		if end < 0 {
-			continue
-		}
-		end += index
-		body := route[index+1 : end]
-		colon := strings.IndexByte(body, ':')
-		name := body
-		paramType := ""
-		if colon >= 0 {
-			name = body[:colon]
-			paramType = body[colon+1:]
-		}
-		if !isStrictIdent(name) || (paramType != "" && !isStrictIdent(paramType)) {
-			continue
-		}
-		match := []int{index, end + 1, index + 1, index + 1 + len(name), -1, -1}
-		if colon >= 0 {
-			typeStart := index + 1 + colon + 1
-			match[4] = typeStart
-			match[5] = typeStart + len(paramType)
-		}
-		matches = append(matches, match)
-		index = end
-	}
-	return matches
 }

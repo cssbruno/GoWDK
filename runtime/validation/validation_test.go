@@ -77,4 +77,23 @@ func TestValidatePatternRejectsUnsupportedOperators(t *testing.T) {
 	if err := ValidatePattern(`(?=a)`); err == nil {
 		t.Fatal("expected unsupported lookahead pattern to fail")
 	}
+	if err := ValidatePattern(`(?P<name>a)`); err == nil {
+		t.Fatal("expected unsupported named capture pattern to fail")
+	}
+	if err := ValidatePattern(`a+?`); err == nil {
+		t.Fatal("expected unsupported lazy quantifier pattern to fail")
+	}
+	if err := ValidatePattern(`[\D]`); err == nil {
+		t.Fatal("expected unsupported class shorthand pattern to fail")
+	}
+}
+
+func TestMatchPatternTreatsInnerAnchorsAsLiterals(t *testing.T) {
+	got, err := MatchPattern(`a$b`, "a$b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got {
+		t.Fatal("expected inner $ to match literally")
+	}
 }

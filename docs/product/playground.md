@@ -1,8 +1,9 @@
 # Playground Onboarding and Sandboxing
 
-Status: partial docs-first contract. Hosted execution is not part of the
-repository core today. Follow-up implementation is tracked in
-[#421](https://github.com/cssbruno/GoWDK/issues/421).
+Status: partial implementation. Local policy inspection, source export, and
+opt-in sandboxed local execution are implemented in `gowdk playground`. Hosted
+website execution remains optional and must follow the same contract before it
+can run user code.
 
 ## Current Safe Path
 
@@ -17,6 +18,34 @@ go run ./cmd/gowdk preview --out /tmp/gowdk-preview \
 
 For a broader path, use [Native Learning Path](../learning/native.md) and the
 full-stack [flagship example](../../examples/flagship/README.md).
+
+## Playground CLI
+
+Inspect the sandbox policy:
+
+```sh
+gowdk playground policy
+gowdk playground policy --json
+```
+
+Export a normal source project archive:
+
+```sh
+gowdk playground export --dir my-site --out /tmp/my-site.zip
+gowdk playground export --dir my-site --out /tmp/my-site.zip --json
+```
+
+Run a local sandbox build only when the caller explicitly opts into execution:
+
+```sh
+gowdk playground run --dir my-site --out /tmp/my-site-dist \
+  --allow-hosted-execution
+```
+
+`run` stages allowed files into a disposable workspace, writes output only to
+the requested `--out` directory, and uses an isolated Go cache environment with
+`GOPROXY=off`, `GOSUMDB=off`, and `GOWORK=off`. This is a local bridge for
+website playground infrastructure, not a production hosting service.
 
 ## Website Onboarding
 
@@ -35,13 +64,16 @@ execution.
 
 ## Hosted Execution Rules
 
-If a hosted playground is added later, it must be optional and sandboxed:
+Hosted playground execution is disabled by default. If a hosted runner is added,
+it must:
 
 - run each session in an isolated disposable environment;
 - mount an empty workspace with no repository secrets or host credentials;
 - set CPU, memory, process, file count, output size, and wall-clock limits;
 - disable outbound network by default;
-- pin the GOWDK version used by the session;
+- keep Go dependency resolution offline with `GOPROXY=off` and `GOSUMDB=off`
+  unless a future policy explicitly allows a pinned mirror;
+- pin the GOWDK binary version used by the session;
 - allow only documented optional tools, and never download hidden dependencies
   during ordinary builds;
 - redact logs and reject environment variables that look like secrets;
@@ -52,13 +84,18 @@ If a hosted playground is added later, it must be optional and sandboxed:
 
 ## Export Contract
 
-An exported playground project should be a normal GOWDK app:
+An exported playground project is a normal GOWDK app:
 
 - includes `gowdk.config.go` and source files;
-- omits generated `.gowdk/`, `dist/`, `bin/`, secrets, and local env files;
+- omits generated `.gowdk/`, `dist/`, `bin/`, `gowdk_cache/`, dependency
+  vendor folders, secrets, private files, local env files, temp files, and
+  generated reports;
 - builds locally with documented commands such as `gowdk build`, `gowdk dev`,
   or `gowdk preview`;
 - does not rely on hosted-only APIs.
+
+The export command enforces size limits: 128 files, 256 KiB per file, and
+2 MiB total source input by default.
 
 ## Non-Goals
 

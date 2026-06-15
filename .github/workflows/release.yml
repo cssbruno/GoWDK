@@ -48,14 +48,7 @@ jobs:
           node --check editors/vscode/extension.js
           node --check editors/vscode/extension-core.js
           node --test editors/vscode/*.test.js
-          examples="examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk"
-          go run ./cmd/gowdk check --ssr $examples
-          go run ./cmd/gowdk manifest --ssr $examples
-          go run ./cmd/gowdk sitemap --ssr $examples
-          go run ./cmd/gowdk routes --ssr $examples
-          go run ./cmd/gowdk endpoints --ssr $examples
-          go run ./cmd/gowdk inspect tree --json --ssr $examples
-          go run ./cmd/gowdk inspect endpoint-graph --json --ssr $examples
+          sh scripts/check-example-reports.sh --extended
           (
             set -euxo pipefail
             cd examples/login

@@ -38,47 +38,10 @@ func BuildFromValidatedIR(config gowdk.Config, ir gwdkir.Program, outputDir stri
 }
 
 func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, outputDir string, validate bool) (Result, error) {
-	reporter := newBuildReporter("build", outputDir)
-	reporter.info("start", "build_started", "SPA build started", BuildEvent{
-		Data: map[string]string{
-			"pages":      fmt.Sprint(len(ir.Pages)),
-			"components": fmt.Sprint(len(ir.Components)),
-			"layouts":    fmt.Sprint(len(ir.Layouts)),
-		},
-	})
-	if strings.TrimSpace(outputDir) == "" {
-		return Result{}, reporter.fail("validate", fmt.Errorf("build output directory is required"))
-	}
-	if validate {
-		if err := compiler.ValidateProgram(config, ir); err != nil {
-			return Result{}, reporter.fail("validate", err)
-		}
-	} else if err := gwdkir.CheckInvariants(ir); err != nil {
-		return Result{}, reporter.fail("validate", fmt.Errorf("internal compiler error: %w", err))
-	}
-	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
-	reportBackendBindings(reporter, backendBindings)
-	reportContractReferences(reporter, ir.ContractRefs)
-	reportRealtimeSubscriptions(reporter, ir.RealtimeSubscriptions)
-	reportQueryInvalidations(reporter, ir.QueryInvalidations)
-	reportQueryInvalidations(reporter, ir.QueryInvalidations)
-	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
-		return Result{}, reporter.fail("bind", err)
-	}
-
-	planned, err := planFromIR(config, ir, outputDir)
+	reporter, planned, err := prepareBuildPlan("build", "SPA build started", outputDir, config, ir, backendBindings, validate, true)
 	if err != nil {
-		return Result{}, reporter.fail("plan", err)
+		return Result{}, err
 	}
-	reporter.info("plan", "artifacts_planned", "app artifacts planned", BuildEvent{
-		Data: map[string]string{
-			"pages":  fmt.Sprint(len(planned.pages)),
-			"css":    fmt.Sprint(len(planned.css)),
-			"assets": fmt.Sprint(len(planned.assets)),
-		},
-	})
-	reportAssetObfuscation(reporter, config.Build.ObfuscateAssets, planned.obfuscations)
-	reportSkippedPrerenderPages(reporter, config, ir)
 
 	result := Result{
 		Artifacts:      make([]Artifact, 0, len(planned.pages)),
@@ -244,42 +207,10 @@ func memoryOutputBase(options MemoryBuildOptions) string {
 }
 
 func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, outputDir string, requireOutputDir bool) (MemoryResult, error) {
-	reporter := newBuildReporter("memory", outputDir)
-	reporter.info("start", "build_started", "in-memory SPA build started", BuildEvent{
-		Data: map[string]string{
-			"pages":      fmt.Sprint(len(ir.Pages)),
-			"components": fmt.Sprint(len(ir.Components)),
-			"layouts":    fmt.Sprint(len(ir.Layouts)),
-		},
-	})
-	if requireOutputDir && strings.TrimSpace(outputDir) == "" {
-		return MemoryResult{}, reporter.fail("validate", fmt.Errorf("build output directory is required"))
-	}
-	if err := compiler.ValidateProgram(config, ir); err != nil {
-		return MemoryResult{}, reporter.fail("validate", err)
-	}
-	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
-	reportBackendBindings(reporter, backendBindings)
-	reportContractReferences(reporter, ir.ContractRefs)
-	reportRealtimeSubscriptions(reporter, ir.RealtimeSubscriptions)
-	reportQueryInvalidations(reporter, ir.QueryInvalidations)
-	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
-		return MemoryResult{}, reporter.fail("bind", err)
-	}
-
-	planned, err := planFromIR(config, ir, outputDir)
+	reporter, planned, err := prepareBuildPlan("memory", "in-memory SPA build started", outputDir, config, ir, backendBindings, true, requireOutputDir)
 	if err != nil {
-		return MemoryResult{}, reporter.fail("plan", err)
+		return MemoryResult{}, err
 	}
-	reporter.info("plan", "artifacts_planned", "app artifacts planned", BuildEvent{
-		Data: map[string]string{
-			"pages":  fmt.Sprint(len(planned.pages)),
-			"css":    fmt.Sprint(len(planned.css)),
-			"assets": fmt.Sprint(len(planned.assets)),
-		},
-	})
-	reportAssetObfuscation(reporter, config.Build.ObfuscateAssets, planned.obfuscations)
-	reportSkippedPrerenderPages(reporter, config, ir)
 
 	result := MemoryResult{
 		Result: Result{
@@ -384,6 +315,50 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	}
 	result.Files[buildReportFile] = buildReport
 	return result, nil
+}
+
+func prepareBuildPlan(kind string, startMessage string, outputDir string, config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, validate bool, requireOutputDir bool) (*buildReporter, buildPlan, error) {
+	reporter := newBuildReporter(kind, outputDir)
+	reporter.info("start", "build_started", startMessage, BuildEvent{
+		Data: map[string]string{
+			"pages":      fmt.Sprint(len(ir.Pages)),
+			"components": fmt.Sprint(len(ir.Components)),
+			"layouts":    fmt.Sprint(len(ir.Layouts)),
+		},
+	})
+	if requireOutputDir && strings.TrimSpace(outputDir) == "" {
+		return reporter, buildPlan{}, reporter.fail("validate", fmt.Errorf("build output directory is required"))
+	}
+	if validate {
+		if err := compiler.ValidateProgram(config, ir); err != nil {
+			return reporter, buildPlan{}, reporter.fail("validate", err)
+		}
+	} else if err := gwdkir.CheckInvariants(ir); err != nil {
+		return reporter, buildPlan{}, reporter.fail("validate", fmt.Errorf("internal compiler error: %w", err))
+	}
+	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
+	reportBackendBindings(reporter, backendBindings)
+	reportContractReferences(reporter, ir.ContractRefs)
+	reportRealtimeSubscriptions(reporter, ir.RealtimeSubscriptions)
+	reportQueryInvalidations(reporter, ir.QueryInvalidations)
+	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
+		return reporter, buildPlan{}, reporter.fail("bind", err)
+	}
+
+	planned, err := planFromIR(config, ir, outputDir)
+	if err != nil {
+		return reporter, buildPlan{}, reporter.fail("plan", err)
+	}
+	reporter.info("plan", "artifacts_planned", "app artifacts planned", BuildEvent{
+		Data: map[string]string{
+			"pages":  fmt.Sprint(len(planned.pages)),
+			"css":    fmt.Sprint(len(planned.css)),
+			"assets": fmt.Sprint(len(planned.assets)),
+		},
+	})
+	reportAssetObfuscation(reporter, config.Build.ObfuscateAssets, planned.obfuscations)
+	reportSkippedPrerenderPages(reporter, config, ir)
+	return reporter, planned, nil
 }
 
 func reportBackendBindings(reporter *buildReporter, bindings []source.BackendBinding) {
@@ -597,16 +572,20 @@ func reportQueryInvalidations(reporter *buildReporter, invalidations []gwdkir.Qu
 }
 
 func BuildIncremental(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string, changedPageSources []string) (Result, error) {
-	return buildIncrementalFromIR(config, gwdkanalysis.BuildProgram(config, sources), outputDir, changedPageSources)
+	ir, bindings, err := compiler.AssembleProgram(config, sources)
+	if err != nil {
+		return Result{}, err
+	}
+	return buildIncrementalFromIR(config, ir, bindings, outputDir, changedPageSources)
 }
 
 // BuildIncrementalFromIR incrementally renders changed SPA page outputs from
 // normalized compiler IR.
 func BuildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
-	return buildIncrementalFromIR(config, ir, outputDir, changedPageSources)
+	return buildIncrementalFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, changedPageSources)
 }
 
-func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
+func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, outputDir string, changedPageSources []string) (Result, error) {
 	reporter := newBuildReporter("incremental", outputDir)
 	reporter.info("start", "build_started", "incremental SPA build started", BuildEvent{
 		Data: map[string]string{
@@ -621,6 +600,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 		return Result{}, reporter.fail("validate", err)
 	}
 	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
+	reportBackendBindings(reporter, backendBindings)
 	reportContractReferences(reporter, ir.ContractRefs)
 	reportRealtimeSubscriptions(reporter, ir.RealtimeSubscriptions)
 	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
@@ -825,7 +805,11 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 }
 
 func plan(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (buildPlan, error) {
-	return planFromIR(config, gwdkanalysis.BuildProgram(config, sources), outputDir)
+	ir, _, err := compiler.AssembleProgram(config, sources)
+	if err != nil {
+		return buildPlan{}, err
+	}
+	return planFromIR(config, ir, outputDir)
 }
 
 // reportSkippedPrerenderPages records a build-report event for every

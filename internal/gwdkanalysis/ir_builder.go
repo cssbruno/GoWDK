@@ -8,7 +8,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
 )
 
 // Sources are the parsed IR records one program is assembled from.
@@ -19,11 +19,11 @@ type Sources struct {
 	AuditSpecs []gwdkir.AuditSpec
 }
 
-// BuildProgram assembles the stable compiler IR from parsed IR records:
-// routes, templates, assets, endpoints, and package groupings are derived
-// here. Standalone Go endpoint discovery and backend handler binding enrich
-// the returned program afterwards (compiler.DiscoverGoEndpoints /
-// compiler.BindBackendHandlers).
+// BuildProgram assembles the base stable compiler IR from parsed IR records:
+// routes, templates, assets, endpoints, and package groupings are derived here.
+// Source-taking compiler and codegen callers should use compiler.AssembleProgram
+// so standalone Go endpoint discovery and backend handler binding run in the
+// canonical order before downstream validation or output planning.
 func BuildProgram(config gowdk.Config, sources Sources) gwdkir.Program {
 	builder := irBuilder{
 		config:   config,
@@ -122,7 +122,7 @@ func (builder *irBuilder) addPageTemplate(page gwdkir.Page) {
 		Guards:    append([]string(nil), page.Guards...),
 		Imports:   append([]gwdkir.Import(nil), page.Imports...),
 		Body:      page.Blocks.ViewBody,
-		Nodes:     append([]view.Node(nil), page.Blocks.ViewNodes...),
+		Nodes:     append([]viewmodel.Node(nil), page.Blocks.ViewNodes...),
 		Span:      page.Blocks.Spans.View,
 		BodyStart: page.Blocks.Spans.ViewBodyStart,
 	}
@@ -325,7 +325,7 @@ func (builder *irBuilder) addComponentTemplate(component gwdkir.Component) {
 		Source:    component.Source,
 		Imports:   append([]gwdkir.Import(nil), component.Imports...),
 		Body:      component.Blocks.ViewBody,
-		Nodes:     append([]view.Node(nil), component.Blocks.ViewNodes...),
+		Nodes:     append([]viewmodel.Node(nil), component.Blocks.ViewNodes...),
 		Span:      component.Blocks.Spans.View,
 		BodyStart: component.Blocks.Spans.ViewBodyStart,
 	})
@@ -344,7 +344,7 @@ func (builder *irBuilder) addLayout(layout gwdkir.Layout) {
 		Package:   layout.Package,
 		Source:    layout.Source,
 		Body:      layout.Blocks.ViewBody,
-		Nodes:     append([]view.Node(nil), layout.Blocks.ViewNodes...),
+		Nodes:     append([]viewmodel.Node(nil), layout.Blocks.ViewNodes...),
 		Span:      layout.Blocks.Spans.View,
 		BodyStart: layout.Blocks.Spans.ViewBodyStart,
 	})

@@ -53,7 +53,7 @@ type componentValidationContext struct {
 	Handlers      map[string]clientlang.Handler
 	Helpers       map[string]clientlang.Helper
 	Refs          map[string]clientlang.Ref
-	UsedRefs      map[string]bool
+	UsedRefs      map[string]source.SourceSpan
 }
 
 func validateComponentGoContract(component gwdkir.Component) []ValidationError {

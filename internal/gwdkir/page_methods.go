@@ -2,7 +2,6 @@ package gwdkir
 
 import (
 	"sort"
-	"strings"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/source"
@@ -103,63 +102,5 @@ func (page Page) TypedRouteParams() []source.RouteParam {
 // the form /path/{name}, /path/{name:type}, or /path/{name...}. Rest params
 // are always string-typed.
 func RouteParamsFromPath(route string) []source.RouteParam {
-	var params []source.RouteParam
-	for index := 0; index < len(route); index++ {
-		if route[index] != '{' {
-			continue
-		}
-		end := strings.IndexByte(route[index:], '}')
-		if end < 0 {
-			continue
-		}
-		end += index
-		body := route[index+1 : end]
-		name, paramType, ok := splitRouteParamBody(body)
-		if ok {
-			params = append(params, source.RouteParam{Name: name, Type: paramType})
-		}
-		index = end
-	}
-	return params
-}
-
-func splitRouteParamBody(body string) (string, string, bool) {
-	name := body
-	paramType := "string"
-	hasType := false
-	if before, after, ok := strings.Cut(body, ":"); ok {
-		name = before
-		paramType = after
-		hasType = true
-	}
-	if rest := strings.HasSuffix(name, "..."); rest {
-		// Rest params are string-typed only; a typed rest param is invalid.
-		if hasType {
-			return "", "", false
-		}
-		name = strings.TrimSuffix(name, "...")
-		paramType = "string"
-	}
-	if !isRouteIdent(name) || !isRouteIdent(paramType) {
-		return "", "", false
-	}
-	return name, paramType, true
-}
-
-func isRouteIdent(value string) bool {
-	if value == "" {
-		return false
-	}
-	for index, r := range value {
-		if index == 0 {
-			if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
-				return false
-			}
-			continue
-		}
-		if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
-			return false
-		}
-	}
-	return true
+	return source.RouteParamsFromPath(route)
 }

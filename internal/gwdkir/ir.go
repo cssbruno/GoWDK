@@ -5,7 +5,7 @@ package gwdkir
 import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
 )
 
 // Program is the normalized compiler IR produced from analyzed .gwdk sources.
@@ -138,7 +138,7 @@ type Blocks struct {
 	GoBlocks     []GoBlock
 	View         bool
 	ViewBody     string
-	ViewNodes    []view.Node `json:"-"`
+	ViewNodes    []viewmodel.Node `json:"-"`
 	Style        bool
 	StyleBody    string
 	Actions      []Action
@@ -452,7 +452,7 @@ type Template struct {
 	Guards    []string
 	Imports   []Import
 	Body      string
-	Nodes     []view.Node `json:"-"`
+	Nodes     []viewmodel.Node `json:"-"`
 	Span      source.SourceSpan
 	BodyStart source.SourcePosition
 }

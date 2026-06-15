@@ -20,8 +20,9 @@ Generated development builds mount the local trace viewer at:
 
 The viewer is off unless the addon is enabled and `Build.DebugAssets()` is true
 (`Build.Mode != gowdk.Production`). Outside dev, generated apps mount the viewer
-behind `runtime/app.LocalTraceAccess`, which only allows loopback clients unless
-the app supplies a stricter `TraceAccess` function.
+behind `runtime/app.LocalTraceAccess`, which only allows direct localhost or
+loopback requests and rejects forwarded reverse-proxy requests unless the app
+supplies an explicit `TraceAccess` function.
 
 Current generated instrumentation:
 

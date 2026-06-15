@@ -259,7 +259,7 @@ func (config BodyLimitsConfig) APILimitBytes() int64 {
 
 // BuildTargetConfig declares one configured build target. Modules selects the
 // configured source modules compiled into Output, App, Binary, WASM, BackendApp,
-// and BackendBinary.
+// BackendBinary, and optional deployment recipes.
 type BuildTargetConfig struct {
 	Name          string
 	Modules       []string
@@ -269,6 +269,7 @@ type BuildTargetConfig struct {
 	WASM          string
 	BackendApp    string
 	BackendBinary string
+	DeployRecipes []string
 }
 
 // CSSConfig controls discovered CSS inputs and page CSS output.

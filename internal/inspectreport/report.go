@@ -10,7 +10,8 @@ import (
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
+	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
 type SourcePosition struct {
@@ -191,7 +192,7 @@ func templateNode(template gwdkir.Template) Node {
 	nodes := template.Nodes
 	if len(nodes) == 0 {
 		var err error
-		nodes, err = view.Parse(template.Body)
+		nodes, err = viewparse.Parse(template.Body)
 		if err != nil {
 			node.Children = append(node.Children, Node{
 				ID:     nodeID(node.ID, "parse-error"),
@@ -207,12 +208,12 @@ func templateNode(template gwdkir.Template) Node {
 	return node
 }
 
-func viewNodes(template gwdkir.Template, nodes []view.Node, parentID string) []Node {
+func viewNodes(template gwdkir.Template, nodes []viewmodel.Node, parentID string) []Node {
 	out := make([]Node, 0, len(nodes))
 	for index, raw := range nodes {
 		childID := nodeID(parentID, fmt.Sprint(index))
 		switch typed := raw.(type) {
-		case view.Element:
+		case viewmodel.Element:
 			node := Node{
 				ID:     childID,
 				Kind:   "element",
@@ -226,7 +227,7 @@ func viewNodes(template gwdkir.Template, nodes []view.Node, parentID string) []N
 			}
 			node.Children = append(node.Children, viewNodes(template, typed.Children, childID)...)
 			out = append(out, node)
-		case view.ComponentCall:
+		case viewmodel.ComponentCall:
 			node := Node{
 				ID:     childID,
 				Kind:   "component-call",
@@ -240,7 +241,7 @@ func viewNodes(template gwdkir.Template, nodes []view.Node, parentID string) []N
 			}
 			node.Children = append(node.Children, viewNodes(template, typed.Children, childID)...)
 			out = append(out, node)
-		case view.Text:
+		case viewmodel.Text:
 			name := strings.TrimSpace(typed.Value)
 			if name == "" {
 				continue
@@ -671,7 +672,7 @@ func viewPositionAt(body string, start source.SourcePosition, offset int) Source
 	return SourcePosition{Line: line, Column: column}
 }
 
-func attrsProps(attrs []view.Attr) map[string]string {
+func attrsProps(attrs []viewmodel.Attr) map[string]string {
 	out := map[string]string{}
 	for _, attr := range attrs {
 		if strings.HasPrefix(attr.Name, "g:") {
@@ -689,7 +690,7 @@ func attrsProps(attrs []view.Attr) map[string]string {
 	return out
 }
 
-func directiveNames(attrs []view.Attr) []string {
+func directiveNames(attrs []viewmodel.Attr) []string {
 	var out []string
 	for _, attr := range attrs {
 		if strings.HasPrefix(attr.Name, "g:") {

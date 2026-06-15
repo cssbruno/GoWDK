@@ -12,11 +12,13 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/buildgen"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/discover"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewanalysis"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
 )
 
 func buildDevChange(args []string, change inputChange, allowIncremental bool) (bool, error) {
@@ -104,10 +106,14 @@ func buildIncrementalSPALoaded(plan buildOptions, change inputChange) (bool, err
 	timings.counter("incremental_layout_changes", incrementalPlan.LayoutChanges)
 	timings.counter("incremental_affected_pages", len(incrementalPlan.PageSources))
 	var ir gwdkir.Program
-	timings.measure("ir_assembly", func() error {
-		ir = gwdkanalysis.BuildProgram(options.Config, app)
-		return nil
-	})
+	if err := timings.measure("ir_assembly", func() error {
+		var assembleErr error
+		ir, _, assembleErr = compiler.AssembleProgram(options.Config, app)
+		return assembleErr
+	}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return true, fmt.Errorf("build failed")
+	}
 	var result buildgen.Result
 	if err := timings.measure("output_plan_writes", func() error {
 		var buildErr error
@@ -187,6 +193,7 @@ type incrementalSPAChangePlan struct {
 	PageChanges      int
 	ComponentChanges int
 	LayoutChanges    int
+	ComponentKeys    []string
 }
 
 func changedIncrementalSPAPages(app gwdkanalysis.Sources, changedPaths []string) (incrementalSPAChangePlan, bool) {
@@ -211,6 +218,7 @@ func changedIncrementalSPAPages(app gwdkanalysis.Sources, changedPaths []string)
 				affected[source] = true
 			}
 			plan.ComponentChanges++
+			plan.ComponentKeys = append(plan.ComponentKeys, key)
 			continue
 		}
 		if key, ok := index.layoutsBySource[abs]; ok {
@@ -223,7 +231,108 @@ func changedIncrementalSPAPages(app gwdkanalysis.Sources, changedPaths []string)
 		return incrementalSPAChangePlan{}, false
 	}
 	plan.PageSources = sortedKeys(affected)
+	sort.Strings(plan.ComponentKeys)
 	return plan, true
+}
+
+type devComponentHMRPayload struct {
+	Components []devComponentHMREntry `json:"components"`
+	Routes     []string               `json:"routes"`
+	Generated  string                 `json:"generated"`
+}
+
+type devComponentHMREntry struct {
+	Name string `json:"name"`
+	ID   string `json:"id,omitempty"`
+}
+
+func devComponentHMRPayloadLoaded(plan buildOptions, change inputChange) (string, bool) {
+	if len(change.Added) > 0 || len(change.Removed) > 0 || len(change.Changed) == 0 {
+		return "", false
+	}
+	if plan.shouldBuildConfiguredTargets() {
+		return "", false
+	}
+	if strings.TrimSpace(plan.AppDir) != "" || strings.TrimSpace(plan.BinaryPath) != "" || strings.TrimSpace(plan.WASMPath) != "" || strings.TrimSpace(plan.BackendAppDir) != "" || strings.TrimSpace(plan.BackendBinaryPath) != "" {
+		return "", false
+	}
+	if inputChangeTouchesConfig(change, plan.ConfigPath) {
+		return "", false
+	}
+
+	options := plan.Options
+	outputDir := plan.OutputDir
+	paths := append([]string(nil), plan.Paths...)
+	if outputDir == "" {
+		outputDir = options.Config.Build.Output
+	}
+	if outputDir == "" {
+		return "", false
+	}
+	options.Config.Build.Output = outputDir
+	if len(paths) == 0 {
+		discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames, options.ProjectRoot)
+		if err != nil || len(discovered) == 0 {
+			return "", false
+		}
+		paths = discovered
+	}
+
+	app, diagnostics := lang.ParseBuildFiles(paths)
+	if diagnostics.HasErrors() {
+		return "", false
+	}
+	incrementalPlan, incremental := changedIncrementalSPAPages(app, change.Changed)
+	if !incremental || incrementalPlan.ComponentChanges == 0 || incrementalPlan.PageChanges != 0 || incrementalPlan.LayoutChanges != 0 {
+		return "", false
+	}
+
+	componentsByKey := map[string]gwdkir.Component{}
+	for _, component := range app.Components {
+		componentsByKey[sourceComponentKey(component.Package, component.Name)] = component
+	}
+	pagesBySource := map[string]gwdkir.Page{}
+	for _, page := range app.Pages {
+		pagesBySource[page.Source] = page
+	}
+
+	var payload devComponentHMRPayload
+	for _, key := range incrementalPlan.ComponentKeys {
+		component, ok := componentsByKey[key]
+		if !ok {
+			return "", false
+		}
+		entry := devComponentHMREntry{
+			Name: component.Name,
+			ID:   component.Name,
+		}
+		if component.Package != "" {
+			entry.ID = component.Package + "." + component.Name
+		}
+		payload.Components = append(payload.Components, entry)
+	}
+	seenRoutes := map[string]bool{}
+	for _, source := range incrementalPlan.PageSources {
+		page, ok := pagesBySource[source]
+		if !ok || strings.TrimSpace(page.Route) == "" || seenRoutes[page.Route] {
+			continue
+		}
+		seenRoutes[page.Route] = true
+		payload.Routes = append(payload.Routes, page.Route)
+	}
+	sort.Slice(payload.Components, func(i, j int) bool {
+		if payload.Components[i].ID == payload.Components[j].ID {
+			return payload.Components[i].Name < payload.Components[j].Name
+		}
+		return payload.Components[i].ID < payload.Components[j].ID
+	})
+	sort.Strings(payload.Routes)
+	payload.Generated = time.Now().Format(time.RFC3339Nano)
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "", false
+	}
+	return string(encoded), len(payload.Components) > 0 && len(payload.Routes) > 0
 }
 
 type incrementalDependencyIndex struct {
@@ -293,13 +402,13 @@ func pageComponentDependencies(page gwdkir.Page, components map[string]gwdkir.Co
 	return seen
 }
 
-func collectComponentDependenciesFromView(ownerPackage string, uses []gwdkir.Use, viewBody string, viewNodes []view.Node, components map[string]gwdkir.Component, seen map[string]bool) {
+func collectComponentDependenciesFromView(ownerPackage string, uses []gwdkir.Use, viewBody string, viewNodes []viewmodel.Node, components map[string]gwdkir.Component, seen map[string]bool) {
 	var refs []string
 	if len(viewNodes) > 0 {
-		refs = view.ComponentReferencesFromNodes(viewNodes)
+		refs = viewanalysis.ComponentReferencesFromNodes(viewNodes)
 	} else {
 		var err error
-		refs, err = view.ComponentReferences(viewBody)
+		refs, err = viewanalysis.ComponentReferences(viewBody)
 		if err != nil {
 			return
 		}
@@ -333,10 +442,10 @@ func collectComponentDependencies(component gwdkir.Component, components map[str
 	seen[key] = true
 	var refs []string
 	if len(component.Blocks.ViewNodes) > 0 {
-		refs = view.ComponentReferencesFromNodes(component.Blocks.ViewNodes)
+		refs = viewanalysis.ComponentReferencesFromNodes(component.Blocks.ViewNodes)
 	} else {
 		var err error
-		refs, err = view.ComponentReferences(component.Blocks.ViewBody)
+		refs, err = viewanalysis.ComponentReferences(component.Blocks.ViewBody)
 		if err != nil {
 			return
 		}

@@ -74,21 +74,44 @@ LSP slice lives in
 - `gowdk explain` plain text and JSON output.
 - `gowdk check --json` diagnostics with 1-based positions and exclusive range
   end columns.
+- Exact source ranges for high-value editor diagnostics that already have
+  parser or IR spans: parser diagnostics, route declarations and params,
+  action/API/fragment declarations, contract references, realtime
+  subscriptions, component view bindings, component client statements,
+  unbound DOM ref usage, missing image alt warnings, duplicate `use` aliases,
+  layout references, and backend binding diagnostics.
 - Warning policy through `gowdk check --warnings-as-errors`.
 - Registry-backed `gowdk fix` rewrites and matching LSP quick fixes.
 - LSP diagnostics, formatting, completions, hover, open-document definitions,
   references, code actions, and full-document semantic tokens.
 - CLI route and sitemap reports derived from compiler IR.
 
-## Unsupported Or Planned
+## Exact-Range Gap List
 
 - Parser diagnostics still use broad `parse_error` until recovery has stable,
   specific codes.
-- Not every compiler diagnostic has a precise range yet; missing spans should
-  move toward parser-recorded source spans as each compiler lane hardens.
-- Markup contract families currently surface through `view_parse_error` in
-  compiler output even when `unsupported_markup_syntax` and
-  `unsupported_markup_directive` document the stable families.
+- Some aggregate diagnostics still point at an owner declaration because the
+  problem is across multiple declarations rather than one token: cyclic layout
+  inheritance, ambiguous dynamic route families, persisted store schema/scope
+  conflicts, duplicate route method/path conflicts, and duplicate page,
+  component, or layout identities. These should keep related locations where a
+  prior declaration is known.
+- Go package and type-check diagnostics use `go/token` positions when the Go
+  toolchain provides them. Package-level failures without a precise Go
+  position may still point at the owning `.gwdk` import, state, props, or block
+  declaration.
+- Addon-provided `GoBlockDiagnostic` values can only be exact when the addon
+  returns source offset metadata. Until that interface grows, addon diagnostics
+  point at the owning `go addon.<name> {}` block.
+- Markup contract families currently surface through parser or view validation
+  ranges when available, but broader recovery and direct emitted family codes
+  remain planned for unsupported markup syntax/directive families.
+- Contract scan diagnostics for sibling Go registrations use scanner-provided
+  file/line/column data; they do not guess ranges in `.gwdk` editors when the
+  invalid source is a `.go` file.
+
+## Unsupported Or Planned
+
 - LSP navigation is limited to open editor documents and supported compiler
   metadata. Workspace-wide route/type navigation remains planned.
 - Route/type navigation must use `.gwdk` declarations, compiler IR, and normal

@@ -6,7 +6,7 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewanalysis"
 )
 
 func appendContractReferences(program *gwdkir.Program, template gwdkir.Template) {
@@ -32,7 +32,7 @@ func appendContractReferences(program *gwdkir.Program, template gwdkir.Template)
 					Span:    templateOffsetSpan(template, ref.Start, ref.End),
 					Message: fmt.Sprintf("%s %s must declare an explicit route on dynamic page route %q", irContractReferenceKind(ref.Kind), ref.Name, template.Route),
 				})
-			} else if ref.Kind == view.ContractReferenceQuery {
+			} else if ref.Kind == viewanalysis.ContractReferenceQuery {
 				method = "GET"
 			} else if method == "" {
 				method = "POST"
@@ -95,18 +95,18 @@ func appendRealtimeSubscriptions(program *gwdkir.Program, template gwdkir.Templa
 	}
 }
 
-func templateContractReferences(template gwdkir.Template) ([]view.ContractReference, error) {
+func templateContractReferences(template gwdkir.Template) ([]viewanalysis.ContractReference, error) {
 	if len(template.Nodes) > 0 {
-		return view.ContractReferencesFromNodes(template.Nodes)
+		return viewanalysis.ContractReferencesFromNodes(template.Nodes)
 	}
-	return view.ContractReferences(template.Body)
+	return viewanalysis.ContractReferences(template.Body)
 }
 
-func templateSubscriptionReferences(template gwdkir.Template) ([]view.SubscriptionReference, error) {
+func templateSubscriptionReferences(template gwdkir.Template) ([]viewanalysis.SubscriptionReference, error) {
 	if len(template.Nodes) > 0 {
-		return view.SubscriptionReferencesFromNodes(template.Nodes)
+		return viewanalysis.SubscriptionReferencesFromNodes(template.Nodes)
 	}
-	return view.SubscriptionReferences(template.Body)
+	return viewanalysis.SubscriptionReferences(template.Body)
 }
 
 func routeHasDynamicParams(route string) bool {
@@ -133,9 +133,9 @@ func contractReferenceImportPath(imports []gwdkir.Import, alias string) string {
 	return ""
 }
 
-func irContractReferenceKind(kind view.ContractReferenceKind) gwdkir.ContractKind {
+func irContractReferenceKind(kind viewanalysis.ContractReferenceKind) gwdkir.ContractKind {
 	switch kind {
-	case view.ContractReferenceQuery:
+	case viewanalysis.ContractReferenceQuery:
 		return gwdkir.ContractQuery
 	default:
 		return gwdkir.ContractCommand

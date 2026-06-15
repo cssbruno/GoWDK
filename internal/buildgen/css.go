@@ -12,6 +12,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/discover"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewanalysis"
 )
 
 type cssPlan struct {
@@ -638,7 +639,7 @@ func cssSources(ir gwdkir.Program) []gowdk.CSSSource {
 
 func cssClassesFromViewBlocks(blocks gwdkir.Blocks) []string {
 	if len(blocks.ViewNodes) > 0 {
-		return view.ViewDependenciesFromNodes(blocks.ViewNodes).CSSClasses
+		return viewanalysis.ViewDependenciesFromNodes(blocks.ViewNodes).CSSClasses
 	}
 	return cssClassesFromViewBody(blocks.ViewBody)
 }
@@ -647,7 +648,7 @@ func cssClassesFromViewBody(body string) []string {
 	if strings.TrimSpace(body) == "" {
 		return nil
 	}
-	dependencies, err := view.ViewDependencies(body)
+	dependencies, err := viewanalysis.ViewDependencies(body)
 	if err != nil {
 		return nil
 	}

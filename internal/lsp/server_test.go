@@ -160,6 +160,47 @@ func TestServerPublishesComponentClientDiagnostics(t *testing.T) {
 	assertResponseID(t, messages[2], float64(2))
 }
 
+func TestServerPublishesUnboundDOMRefDiagnosticAtClientStatement(t *testing.T) {
+	uri := "file:///tmp/search.cmp.gwdk"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent Search\n\nclient {\n  ref searchInput HTMLInputElement\n\n  fn FocusSearch() {\n    searchInput.Focus()\n  }\n}\n\nview {\n  <button g:on:click={FocusSearch()}>Focus</button>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 3 {
+		t.Fatalf("expected 3 output messages, got %d", len(messages))
+	}
+	params := messages[1]["params"].(map[string]any)
+	diagnostics := params["diagnostics"].([]any)
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one unbound ref diagnostic, got %#v", diagnostics)
+	}
+	diagnostic := diagnostics[0].(map[string]any)
+	if diagnostic["code"] != "component_client_error" {
+		t.Fatalf("expected component_client_error code, got %#v", diagnostic)
+	}
+	if message := diagnostic["message"].(string); !strings.Contains(message, `DOM ref "searchInput" is used but not bound`) {
+		t.Fatalf("unexpected diagnostic message: %q", message)
+	}
+	diagnosticRange := diagnostic["range"].(map[string]any)
+	start := diagnosticRange["start"].(map[string]any)
+	end := diagnosticRange["end"].(map[string]any)
+	if start["line"] != float64(8) || start["character"] != float64(0) ||
+		end["line"] != float64(8) || end["character"] != float64(1) {
+		t.Fatalf("expected DOM ref use statement range, got %#v", diagnosticRange)
+	}
+
+	assertResponseID(t, messages[2], float64(2))
+}
+
 func TestServerPublishesContractReferenceDiagnostics(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "gowdk.config.go"), []byte("package app\n"), 0o644); err != nil {

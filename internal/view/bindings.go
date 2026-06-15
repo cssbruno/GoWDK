@@ -12,7 +12,7 @@ type styleBinding struct {
 	Expression string
 }
 
-func (node Element) styleBindings(ctx *renderContext) ([]styleBinding, error) {
+func elementStyleBindings(node Element, ctx *renderContext) ([]styleBinding, error) {
 	var bindings []styleBinding
 	for _, attr := range node.Attrs {
 		if !isStyleBindingAttr(attr.Name) {
@@ -35,7 +35,7 @@ func (node Element) styleBindings(ctx *renderContext) ([]styleBinding, error) {
 	return bindings, nil
 }
 
-func (node Element) initialStyleValue(ctx *renderContext, bindings []styleBinding) (string, error) {
+func elementInitialStyleValue(node Element, ctx *renderContext, bindings []styleBinding) (string, error) {
 	var declarations []string
 	for _, attr := range node.Attrs {
 		if attr.Name != "style" || attr.Boolean || strings.TrimSpace(attr.Value) == "" {
@@ -110,7 +110,7 @@ type classToggle struct {
 	Expression string
 }
 
-func (node Element) classToggles(ctx *renderContext) ([]classToggle, error) {
+func elementClassToggles(node Element, ctx *renderContext) ([]classToggle, error) {
 	var toggles []classToggle
 	for _, attr := range node.Attrs {
 		if !isClassToggleAttr(attr.Name) {
@@ -132,7 +132,7 @@ func (node Element) classToggles(ctx *renderContext) ([]classToggle, error) {
 	return toggles, nil
 }
 
-func (node Element) initialClassValue(ctx *renderContext, toggles []classToggle) string {
+func elementInitialClassValue(node Element, ctx *renderContext, toggles []classToggle) string {
 	var classes []string
 	for _, attr := range node.Attrs {
 		if attr.Name != "class" || attr.Boolean {
@@ -171,7 +171,7 @@ func classToggleName(name string) string {
 	return strings.TrimSpace(strings.TrimPrefix(name, "class:"))
 }
 
-func (node Element) valueBinding(ctx *renderContext) (string, error) {
+func elementValueBinding(node Element, ctx *renderContext) (string, error) {
 	field := ""
 	for _, attr := range node.Attrs {
 		if attr.Name != "g:bind:value" {
@@ -190,8 +190,8 @@ func (node Element) valueBinding(ctx *renderContext) (string, error) {
 		if err := validateIslandField(field, ctx.stateFields); err != nil {
 			return "", fmt.Errorf("g:bind:value: %w", err)
 		}
-		if node.Name == "input" && node.SPAInputType("radio") {
-			if _, ok, err := node.SPAAttrInterpolated(ctx, "value"); err != nil {
+		if node.Name == "input" && elementSPAInputType(node, "radio") {
+			if _, ok, err := elementSPAAttrInterpolated(node, ctx, "value"); err != nil {
 				return "", err
 			} else if !ok {
 				return "", fmt.Errorf("g:bind:value on radio <input> requires a literal value attribute")
@@ -199,7 +199,7 @@ func (node Element) valueBinding(ctx *renderContext) (string, error) {
 		}
 		typ := ctx.stateTypes[field]
 		if typ == clientlang.TypeInt || typ == clientlang.TypeFloat {
-			if node.Name != "input" || !node.SPAInputType("number") {
+			if node.Name != "input" || !elementSPAInputType(node, "number") {
 				return "", fmt.Errorf("g:bind:value numeric target %q requires <input type=\"number\">", field)
 			}
 		}
@@ -234,7 +234,7 @@ func validateDOMRef(name string, refs map[string]clientlang.Ref) error {
 	return nil
 }
 
-func (node Element) checkedBinding(ctx *renderContext) (string, error) {
+func elementCheckedBinding(node Element, ctx *renderContext) (string, error) {
 	field := ""
 	for _, attr := range node.Attrs {
 		if attr.Name != "g:bind:checked" {
@@ -243,7 +243,7 @@ func (node Element) checkedBinding(ctx *renderContext) (string, error) {
 		if field != "" {
 			return "", fmt.Errorf("element declares multiple g:bind:checked directives")
 		}
-		if node.Name != "input" || !node.SPAInputType("checkbox") {
+		if node.Name != "input" || !elementSPAInputType(node, "checkbox") {
 			return "", fmt.Errorf("g:bind:checked is only supported on checkbox <input> in this build slice")
 		}
 		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
@@ -257,7 +257,7 @@ func (node Element) checkedBinding(ctx *renderContext) (string, error) {
 	return field, nil
 }
 
-func (node Element) SPAInputType(value string) bool {
+func elementSPAInputType(node Element, value string) bool {
 	for _, attr := range node.Attrs {
 		if attr.Name != "type" || attr.Boolean {
 			continue
@@ -283,8 +283,8 @@ type postDirectives struct {
 	Swap           string
 }
 
-func (node Element) postDirectives(ctx *renderContext) (postDirectives, error) {
-	directives, err := node.directiveValues()
+func elementPostDirectives(node Element, ctx *renderContext) (postDirectives, error) {
+	directives, err := elementDirectiveValues(node)
 	if err != nil {
 		return postDirectives{}, err
 	}
@@ -308,15 +308,15 @@ func (node Element) postDirectives(ctx *renderContext) (postDirectives, error) {
 	return directives, nil
 }
 
-func (node Element) postActionName() (string, error) {
-	directives, err := node.directiveValues()
+func elementPostActionName(node Element) (string, error) {
+	directives, err := elementDirectiveValues(node)
 	if err != nil {
 		return "", err
 	}
 	return directives.Action, nil
 }
 
-func (node Element) directiveValues() (postDirectives, error) {
+func elementDirectiveValues(node Element) (postDirectives, error) {
 	var directives postDirectives
 	for _, attr := range node.Attrs {
 		if !strings.HasPrefix(attr.Name, "g:") {

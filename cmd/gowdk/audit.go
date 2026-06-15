@@ -201,11 +201,7 @@ func standaloneAuditPackageName(dir string) string {
 }
 
 func runGeneratedAppAuditTests(options cliOptions, ir gwdkir.Program) (string, string, error) {
-	source, err := appgen.GeneratedAuditTestSource(appgen.Options{
-		AutoRoutes: true,
-		Config:     options.Config,
-		IR:         &ir,
-	})
+	source, err := appgen.GeneratedAuditTestSource(appgen.OptionsFromIR(options.Config, &ir))
 	if err != nil || len(source) == 0 {
 		return "", "", err
 	}
@@ -221,11 +217,7 @@ func runGeneratedAppAuditTests(options cliOptions, ir gwdkir.Program) (string, s
 	if _, err := buildgen.BuildFromValidatedIR(options.Config, ir, outputDir); err != nil {
 		return "", "", err
 	}
-	app, err := appgen.GenerateWithOptions(outputDir, appDir, appgen.Options{
-		AutoRoutes: true,
-		Config:     options.Config,
-		IR:         &ir,
-	})
+	app, err := appgen.GenerateWithOptions(outputDir, appDir, appgen.OptionsFromIR(options.Config, &ir))
 	if err != nil {
 		return "", "", err
 	}

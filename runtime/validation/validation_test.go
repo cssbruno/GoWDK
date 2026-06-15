@@ -1,6 +1,9 @@
 package validation
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestResultOK(t *testing.T) {
 	if !(Result{}).OK() {
@@ -76,5 +79,58 @@ func TestMatchPattern(t *testing.T) {
 func TestValidatePatternRejectsUnsupportedOperators(t *testing.T) {
 	if err := ValidatePattern(`(?=a)`); err == nil {
 		t.Fatal("expected unsupported lookahead pattern to fail")
+	}
+	if err := ValidatePattern(`(?P<name>a)`); err == nil {
+		t.Fatal("expected unsupported named capture pattern to fail")
+	}
+	if err := ValidatePattern(`a+?`); err == nil {
+		t.Fatal("expected unsupported lazy quantifier pattern to fail")
+	}
+	if err := ValidatePattern(`[\D]`); err == nil {
+		t.Fatal("expected unsupported class shorthand pattern to fail")
+	}
+}
+
+func TestMatchPatternTreatsInnerAnchorsAsLiterals(t *testing.T) {
+	got, err := MatchPattern(`a$b`, "a$b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got {
+		t.Fatal("expected inner $ to match literally")
+	}
+}
+
+func TestMatchPatternSupportsLongRepeatQuantifiers(t *testing.T) {
+	if err := ValidatePattern(`[A-Za-z0-9]{2048}`); err != nil {
+		t.Fatalf("validate long exact repeat: %v", err)
+	}
+	got, err := MatchPattern(`[A-Za-z0-9]{2048}`, strings.Repeat("A", 2048))
+	if err != nil {
+		t.Fatalf("match long exact repeat: %v", err)
+	}
+	if !got {
+		t.Fatal("expected 2048-character value to match")
+	}
+	got, err = MatchPattern(`[A-Za-z0-9]{2048}`, strings.Repeat("A", 2047))
+	if err != nil {
+		t.Fatalf("match short exact repeat: %v", err)
+	}
+	if got {
+		t.Fatal("expected 2047-character value not to match")
+	}
+	got, err = MatchPattern(`(?:cat|dog){1001,1002}`, strings.Repeat("cat", 1002))
+	if err != nil {
+		t.Fatalf("match long grouped repeat: %v", err)
+	}
+	if !got {
+		t.Fatal("expected grouped repeat to match")
+	}
+	got, err = MatchPattern(`a{1001,}`, strings.Repeat("a", 1200))
+	if err != nil {
+		t.Fatalf("match long open repeat: %v", err)
+	}
+	if !got {
+		t.Fatal("expected open repeat to match")
 	}
 }

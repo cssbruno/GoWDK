@@ -5,7 +5,8 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
+	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
 func accessibilityDiagnostics(ir gwdkir.Program) Diagnostics {
@@ -32,7 +33,7 @@ func viewAccessibilityDiagnostics(file string, blocks gwdkir.Blocks) Diagnostics
 	nodes := blocks.ViewNodes
 	if len(nodes) == 0 {
 		var err error
-		nodes, err = view.Parse(blocks.ViewBody)
+		nodes, err = viewparse.Parse(blocks.ViewBody)
 		if err != nil {
 			return nil
 		}
@@ -40,9 +41,9 @@ func viewAccessibilityDiagnostics(file string, blocks gwdkir.Blocks) Diagnostics
 	return imageAltDiagnostics(file, blocks.ViewBody, blocks.Spans.ViewBodyStart, nodes)
 }
 
-func imageAltDiagnostics(file string, body string, bodyStart source.SourcePosition, nodes []view.Node) Diagnostics {
+func imageAltDiagnostics(file string, body string, bodyStart source.SourcePosition, nodes []viewmodel.Node) Diagnostics {
 	var diagnostics Diagnostics
-	walkViewNodes(nodes, func(element view.Element) {
+	walkViewNodes(nodes, func(element viewmodel.Element) {
 		if element.Name != "img" || imageHasAlt(element.Attrs) {
 			return
 		}
@@ -61,19 +62,19 @@ func imageAltDiagnostics(file string, body string, bodyStart source.SourcePositi
 	return diagnostics
 }
 
-func walkViewNodes(nodes []view.Node, visit func(view.Element)) {
+func walkViewNodes(nodes []viewmodel.Node, visit func(viewmodel.Element)) {
 	for _, node := range nodes {
 		switch typed := node.(type) {
-		case view.Element:
+		case viewmodel.Element:
 			visit(typed)
 			walkViewNodes(typed.Children, visit)
-		case view.ComponentCall:
+		case viewmodel.ComponentCall:
 			walkViewNodes(typed.Children, visit)
 		}
 	}
 }
 
-func imageHasAlt(attrs []view.Attr) bool {
+func imageHasAlt(attrs []viewmodel.Attr) bool {
 	for _, attr := range attrs {
 		if attr.Name == "alt" && !attr.Boolean {
 			return true

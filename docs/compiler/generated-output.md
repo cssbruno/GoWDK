@@ -12,6 +12,10 @@ Implemented today:
 - `gowdk-assets.json` records generated app assets such as CSS files emitted
   by CSS processors, generated page CSS files, the partial-update client
   runtime when needed, and route HTML cache metadata.
+- `sitemap.xml` and `robots.txt` are emitted only when `addons/seo` is enabled.
+  The sitemap includes public static and `paths {}`-expanded SPA routes plus
+  configured extra URLs; request-time and guardless default-denied pages are
+  excluded and listed in the build report.
 - `gowdk-build-report.json` records build-output generator validation, planning,
   write, manifest, cleanup, and completion events for every successful disk
   build.
@@ -28,10 +32,11 @@ Implemented today:
   Page `js "./file.ts"` declarations are transformed to `.js` files in the same
   directory. Inline page `js {}` blocks emit deterministic files such as
   `inline-gowdk.js`.
-- Component `css` files are emitted as scoped CSS assets, linked from
-  generated pages, content-hashed, recorded in `gowdk-assets.json`, and served
-  with immutable cache headers by generated binaries. Component `style {}` CSS
-  is emitted through the same scoped CSS path.
+- Component `css` files are emitted as scoped CSS assets, linked from pages
+  whose composed view recursively calls the component, content-hashed, recorded
+  in `gowdk-assets.json`, and served with immutable cache headers by generated
+  binaries. Component `style {}` CSS is emitted through the same scoped CSS
+  path.
 - Component `js "./file.js"` declarations are copied under
   `assets/gowdk/components/<package>/<component>/` and linked only from pages
   that use the component. Component `js "./file.ts"` declarations are
@@ -92,34 +97,40 @@ Implemented today:
   `internal/clientrt/assets/` and embedded with `go:embed`; generated output
   helpers only perform narrow placeholder substitution for component names,
   page IDs, asset paths, and WASM export names.
-- Generated build output emits `assets/gowdk/islands/<Component>.js` for
-  stateful component instances that use the default generated JavaScript island
-  runtime. Island roots carry compiler-owned `data-gowdk-island` markers, and
-  generated island assets register idempotent browser mount hooks for initial
-  load and partial-swap remounts plus destroy hooks for islands removed by
-  partial swaps. The generated JavaScript is scoped to matching
-  `<gowdk-island>` roots rather than hydrating the full page. Generated island
-  assets carry a compact binding descriptor table and update collected bindings
-  through per-binding functions for text, form values, checked state, classes,
-  styles, attributes, conditionals, and lists; keyed list updates reuse
+- Generated build output emits one shared JavaScript island runtime at
+  `assets/gowdk/islands/island.js` plus small package-scoped registration stubs
+  such as `assets/gowdk/islands/<package>/<Component>.js` for stateful component
+  instances that use the default generated JavaScript island runtime. Island
+  roots carry compiler-owned `data-gowdk-island` markers plus a
+  package-qualified component id, and the shared runtime registers idempotent
+  browser mount hooks for initial load and partial-swap remounts plus destroy
+  hooks for islands removed by partial swaps. The generated JavaScript is scoped
+  to matching `<gowdk-island>` roots rather than hydrating the full page. The
+  shared runtime carries a compact binding descriptor table and updates collected
+  bindings through per-binding functions for text, form values, checked state,
+  classes, styles, attributes, conditionals, and lists; keyed list updates reuse
   existing DOM nodes by `g:key` and remove stale keyed nodes.
 - Page store seed JSON embedded in compiler-owned
   `<script type="application/json">` tags escapes literal `<` as `\u003c`, so
   store data cannot terminate the script element or enter HTML escaped-script
   parser states.
-- In the default development build mode, generated JavaScript island assets are
-  accompanied by `assets/gowdk/islands/<Component>.js.map` source map files
-  that reference the component `.gwdk` source, are recorded in
-  `gowdk-assets.json`, include first-slice component/client/view source span
-  anchors, and are linked from the JS with `sourceMappingURL`.
+- In the default development build mode, generated JavaScript island stubs are
+  accompanied by `assets/gowdk/islands/<package>/<Component>.js.map` source map
+  files that reference the component `.gwdk` source, are recorded in
+  `gowdk-assets.json`, include the component registration source span, and are
+  linked from the stub JS with `sourceMappingURL`.
   `Build.Mode: gowdk.Production` omits those debug source map artifacts and
-  comments and compacts generated island JavaScript by trimming
-  formatting-only whitespace.
-- Generated build output emits `assets/gowdk/islands/<Component>.wasm` plus
-  `assets/gowdk/islands/<Component>.wasm.js` for normal calls to components
-  that declare `wasm <package>`, and for explicit call-site overrides that set
-  `g:island="wasm"`. When the component declares `wasm <package>`, GOWDK runs
-  `GOOS=js GOARCH=wasm go build` for that package and writes the compiled
+  comments and compacts generated island JavaScript. `Build.ObfuscateAssets`
+  or `gowdk build --obfuscate-assets` enables stronger deterministic
+  minification/identifier shortening for compiler-owned generated browser
+  JavaScript in production builds.
+- Generated build output emits package-scoped island assets:
+  `assets/gowdk/islands/<package>/<Component>.js` stubs for generated
+  JavaScript islands, and `assets/gowdk/islands/<package>/<Component>.wasm` plus
+  `assets/gowdk/islands/<package>/<Component>.wasm.js` for normal calls to
+  components that declare `wasm <package>` or explicit call-site overrides that
+  set `g:island="wasm"`. When the component declares `wasm <package>`, GOWDK
+  runs `GOOS=js GOARCH=wasm go build` for that package and writes the compiled
   browser WASM module to the component asset path plus
   `assets/gowdk/islands/wasm_exec.js` for Go's browser runtime imports. Local
   packages are checked for browser-safe imports before build; server, process,
@@ -184,6 +195,9 @@ Implemented today:
   component-level `asset` files. Generated CSS is minified and emitted with
   content-hashed filenames. Component `asset` files are emitted with
   content-hashed filenames under `assets/gowdk/components/`.
+- CSS link order is deterministic: configured global links, processor global
+  links, processor page-specific links, generated page CSS, layout CSS, then
+  scoped component CSS for components used by the page.
 - Generated embedded apps skip local environment files, source maps, source
   files, VCS/dependency directories, and common temporary artifacts when copying
   build output into the embedded app.
@@ -257,6 +271,8 @@ The target output can include:
       index.html
       gowdk-routes.json
       gowdk-assets.json
+      sitemap.xml        # only with addons/seo
+      robots.txt         # only with addons/seo
       gowdk-build-report.json
   cmd/
     server/
@@ -354,7 +370,7 @@ as `/blog/hello-gowdk`.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "files": {
     "assets/app.css": "assets/app.7ada5a1234b1.css"
   },
@@ -367,19 +383,24 @@ as `/blog/hello-gowdk`.
   "cache": {
     "assets/app.css": "public, max-age=31536000, immutable",
     "index.html": "public, max-age=120"
+  },
+  "obfuscated": {
+    "assets/gowdk/gowdk.js": true
   }
 }
 ```
 
 The `files` map resolves logical asset names to slash-separated paths relative
 to the selected output directory. `hashes` records SHA-256 content hashes for
-generated assets, `sizes` records generated asset byte counts, and `cache`
-records the HTTP cache policy generated binaries should apply when serving
-generated assets or route HTML files. The current implementation records CSS
-files emitted by CSS processors, generated page CSS files, partial runtime
-assets, generated island runtime assets, generated island source maps, WASM
-island assets, and page-level `cache` policies for generated SPA HTML. It does
-not record configured stylesheet URLs that were not written by the build.
+generated assets, `sizes` records generated asset byte counts, `cache` records
+the HTTP cache policy generated binaries should apply when serving generated
+assets or route HTML files, and `obfuscated` marks compiler-owned generated
+browser assets transformed by production asset obfuscation. The current
+implementation records CSS files emitted by CSS processors, generated page CSS
+files, partial runtime assets, generated island runtime assets, generated
+island source maps, WASM island assets, and page-level `cache` policies for
+generated SPA HTML. It does not record configured stylesheet URLs that were not
+written by the build.
 
 ## Current Build Report
 

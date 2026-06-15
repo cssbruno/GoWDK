@@ -1,0 +1,12 @@
+package componentwasm
+
+page component.wasm
+route "/components/wasm"
+guard public
+
+view {
+  <main>
+    <h1>WASM island ABI</h1>
+    <WasmCounter />
+  </main>
+}

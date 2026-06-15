@@ -28,12 +28,14 @@ type executableConfig struct {
 }
 
 type executableAddonDetails struct {
-	Index           int             `json:"index"`
-	Name            string          `json:"name"`
-	Features        []gowdk.Feature `json:"features"`
-	CSSProcessor    bool            `json:"cssProcessor"`
-	GoBlockConsumer bool            `json:"goBlockConsumer"`
-	GoBlockTargets  []string        `json:"goBlockTargets,omitempty"`
+	Index           int              `json:"index"`
+	Name            string           `json:"name"`
+	Features        []gowdk.Feature  `json:"features"`
+	CSSProcessor    bool             `json:"cssProcessor"`
+	GoBlockConsumer bool             `json:"goBlockConsumer"`
+	GoBlockTargets  []string         `json:"goBlockTargets,omitempty"`
+	SEOProvider     bool             `json:"seoProvider"`
+	SEOOptions      gowdk.SEOOptions `json:"seoOptions,omitempty"`
 }
 
 type executableCSSResponse struct {
@@ -67,6 +69,8 @@ type executableAddon struct {
 	name           string
 	features       []gowdk.Feature
 	goBlockTargets []string
+	seoProvider    bool
+	seoOptions     gowdk.SEOOptions
 }
 
 type executableCSSAddon struct {
@@ -107,6 +111,8 @@ func loadExecutableConfig(configPath string) (gowdk.Config, error) {
 			name:           addon.Name,
 			features:       append([]gowdk.Feature(nil), addon.Features...),
 			goBlockTargets: append([]string(nil), addon.GoBlockTargets...),
+			seoProvider:    addon.SEOProvider,
+			seoOptions:     cloneExecutableSEOOptions(addon.SEOOptions),
 		}
 		switch {
 		case addon.CSSProcessor && addon.GoBlockConsumer:
@@ -128,6 +134,17 @@ func (addon executableAddon) Name() string {
 
 func (addon executableAddon) Features() []gowdk.Feature {
 	return append([]gowdk.Feature(nil), addon.features...)
+}
+
+func (addon executableAddon) SEOOptions() gowdk.SEOOptions {
+	return cloneExecutableSEOOptions(addon.seoOptions)
+}
+
+func cloneExecutableSEOOptions(options gowdk.SEOOptions) gowdk.SEOOptions {
+	options.Disallow = append([]string(nil), options.Disallow...)
+	options.ExtraURLs = append([]gowdk.SEOURL(nil), options.ExtraURLs...)
+	options.ExtraURLProvider = nil
+	return options
 }
 
 func (addon executableCSSAddon) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
@@ -371,6 +388,8 @@ type executableAddonDetails struct {
 	CSSProcessor    bool            ` + "`json:\"cssProcessor\"`" + `
 	GoBlockConsumer bool            ` + "`json:\"goBlockConsumer\"`" + `
 	GoBlockTargets  []string        ` + "`json:\"goBlockTargets,omitempty\"`" + `
+	SEOProvider     bool            ` + "`json:\"seoProvider\"`" + `
+	SEOOptions      gowdk.SEOOptions ` + "`json:\"seoOptions,omitempty\"`" + `
 }
 
 type executableCSSResponse struct {
@@ -442,9 +461,14 @@ func writeConfig() {
 	for index, addon := range config.Addons {
 		_, cssProcessor := addon.(gowdk.CSSProcessor)
 		goBlockConsumer, hasGoBlockConsumer := addon.(gowdk.GoBlockConsumer)
+		seoProvider, hasSEOProvider := addon.(gowdk.SEOProvider)
 		var goBlockTargets []string
 		if hasGoBlockConsumer {
 			goBlockTargets = goBlockConsumer.GoBlockTargets()
+		}
+		var seoOptions gowdk.SEOOptions
+		if hasSEOProvider {
+			seoOptions = seoProvider.SEOOptions()
 		}
 		wire.Addons = append(wire.Addons, executableAddonDetails{
 			Index:           index,
@@ -453,6 +477,8 @@ func writeConfig() {
 			CSSProcessor:    cssProcessor,
 			GoBlockConsumer: hasGoBlockConsumer,
 			GoBlockTargets:  goBlockTargets,
+			SEOProvider:     hasSEOProvider,
+			SEOOptions:      seoOptions,
 		})
 	}
 	writeJSON(wire)

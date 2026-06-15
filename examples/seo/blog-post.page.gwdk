@@ -1,0 +1,17 @@
+package seoexample
+
+page seo.blog
+route "/seo/blog/{slug}"
+guard public
+
+paths {
+  => { slug: "hello-gowdk" }
+  => { slug: "compile-first" }
+}
+
+view {
+  <main>
+    <h1>SEO dynamic route</h1>
+    <p>Dynamic SPA paths are included in sitemap.xml.</p>
+  </main>
+}

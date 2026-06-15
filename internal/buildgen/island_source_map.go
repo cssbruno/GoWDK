@@ -26,14 +26,14 @@ func islandJSSourceMap(component gwdkir.Component, generatedSource string) []byt
 	content := componentSourceMapContent(component)
 	payload, err := json.MarshalIndent(jsSourceMap{
 		Version:        3,
-		File:           path.Base(islandJSAssetPath(component.Name)),
+		File:           path.Base(islandJSAssetPath(component.Package, component.Name)),
 		Sources:        []string{source},
 		SourcesContent: []string{content},
 		Names:          []string{},
 		Mappings:       sourceMapMappings(component, generatedSource),
 	}, "", "  ")
 	if err != nil {
-		return []byte(`{"version":3,"file":"` + path.Base(islandJSAssetPath(component.Name)) + `","sources":[],"names":[],"mappings":""}`)
+		return []byte(`{"version":3,"file":"` + path.Base(islandJSAssetPath(component.Package, component.Name)) + `","sources":[],"names":[],"mappings":""}`)
 	}
 	return append(payload, '\n')
 }

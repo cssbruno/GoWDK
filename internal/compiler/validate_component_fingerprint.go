@@ -11,14 +11,15 @@ import (
 )
 
 func validateRedundantComponents(components []gwdkir.Component) []ValidationError {
-	seenNames := map[string]bool{}
+	seenIdentities := map[string]bool{}
 	seen := map[string]gwdkir.Component{}
 	var diagnostics []ValidationError
 	for _, component := range components {
-		if component.Name == "" || seenNames[component.Name] {
+		identity := componentIdentityKey(component.Package, component.Name)
+		if component.Name == "" || seenIdentities[identity] {
 			continue
 		}
-		seenNames[component.Name] = true
+		seenIdentities[identity] = true
 		fingerprint := componentFingerprint(component)
 		if fingerprint == "" {
 			continue

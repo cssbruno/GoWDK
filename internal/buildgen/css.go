@@ -26,7 +26,7 @@ type cssInput struct {
 	contents []byte
 }
 
-func planCSS(config gowdk.Config, ir gwdkir.Program, outputDir string) (cssPlan, []string) {
+func planCSS(config gowdk.Config, ir gwdkir.Program, outputDir string, components map[string]view.Component, layouts map[string]gwdkir.Layout) (cssPlan, []string) {
 	planned := cssPlan{pageStylesheets: map[string][]gowdk.Stylesheet{}}
 	var failures []string
 	seen := map[string]bool{}
@@ -96,7 +96,11 @@ func planCSS(config gowdk.Config, ir gwdkir.Program, outputDir string) (cssPlan,
 	componentCSS, componentStylesheets, componentFailures := planComponentCSS(ir.Components, outputDir, seen)
 	failures = append(failures, componentFailures...)
 	planned.assets = append(planned.assets, componentCSS...)
-	planned.stylesheets = append(planned.stylesheets, componentStylesheets...)
+	componentPageStylesheets, componentPageFailures := planComponentCSSStylesheetsByPage(ir.Pages, components, layouts, componentStylesheets)
+	failures = append(failures, componentPageFailures...)
+	for pageID, stylesheets := range componentPageStylesheets {
+		planned.pageStylesheets[pageID] = append(planned.pageStylesheets[pageID], stylesheets...)
+	}
 	failures = append(failures, finalizeCSSPlan(outputDir, &planned)...)
 	return planned, failures
 }
@@ -249,11 +253,12 @@ func planLayoutStyleCSS(pages []gwdkir.Page, layouts []gwdkir.Layout, outputDir 
 	return assets, stylesheets, failures
 }
 
-func planComponentCSS(components []gwdkir.Component, outputDir string, seenAssets map[string]bool) ([]plannedCSSArtifact, []gowdk.Stylesheet, []string) {
+func planComponentCSS(components []gwdkir.Component, outputDir string, seenAssets map[string]bool) ([]plannedCSSArtifact, map[string][]gowdk.Stylesheet, []string) {
 	var assets []plannedCSSArtifact
-	var stylesheets []gowdk.Stylesheet
+	stylesheets := map[string][]gowdk.Stylesheet{}
 	var failures []string
 	for _, component := range components {
+		identity := manifestComponentIdentity(component)
 		for _, cssPath := range component.CSS {
 			sourcePath, err := componentCSSSourcePath(component.Source, cssPath)
 			if err != nil {
@@ -283,7 +288,7 @@ func planComponentCSS(components []gwdkir.Component, outputDir string, seenAsset
 				CSSArtifact: CSSArtifact{Path: outputPath, LogicalPath: logicalPath, LogicalHref: logicalHref},
 				contents:    scopeComponentCSS(contents, scopeID),
 			})
-			stylesheets = append(stylesheets, gowdk.Stylesheet{Href: logicalHref})
+			stylesheets[identity] = append(stylesheets[identity], gowdk.Stylesheet{Href: logicalHref})
 		}
 		style := strings.TrimSpace(component.Blocks.StyleBody)
 		if style == "" {
@@ -307,9 +312,41 @@ func planComponentCSS(components []gwdkir.Component, outputDir string, seenAsset
 			CSSArtifact: CSSArtifact{Path: outputPath, LogicalPath: logicalPath, LogicalHref: logicalHref},
 			contents:    scopeComponentCSS([]byte(style), scopeID),
 		})
-		stylesheets = append(stylesheets, gowdk.Stylesheet{Href: logicalHref})
+		stylesheets[identity] = append(stylesheets[identity], gowdk.Stylesheet{Href: logicalHref})
 	}
 	return assets, stylesheets, failures
+}
+
+func planComponentCSSStylesheetsByPage(pages []gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, componentStylesheets map[string][]gowdk.Stylesheet) (map[string][]gowdk.Stylesheet, []string) {
+	pageStylesheets := map[string][]gowdk.Stylesheet{}
+	if len(componentStylesheets) == 0 {
+		return pageStylesheets, nil
+	}
+	var failures []string
+	for _, page := range pages {
+		viewSource, err := composePageViewSource(page, layouts)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", page.ID, err))
+			continue
+		}
+		pageComponents := componentRegistryForPage(page, components)
+		usages, err := recursiveViewComponentCallUsagesForView(viewSource, composedPageViewNodes(page), pageComponents, page.Package, componentUses(page.Uses))
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", page.ID, err))
+			continue
+		}
+		seen := map[string]bool{}
+		for _, usage := range usages {
+			for _, stylesheet := range componentStylesheets[usage.component.Identity()] {
+				if seen[stylesheet.Href] {
+					continue
+				}
+				seen[stylesheet.Href] = true
+				pageStylesheets[page.ID] = append(pageStylesheets[page.ID], stylesheet)
+			}
+		}
+	}
+	return pageStylesheets, failures
 }
 
 func componentCSSSourcePath(componentSource string, cssPath string) (string, error) {

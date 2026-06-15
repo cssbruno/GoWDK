@@ -150,7 +150,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 | Command | What it does |
 | --- | --- |
 | `gowdk init` | Scaffold a starter project (`--template site\|minimal`, `--tests`) |
-| `gowdk build` | Compile `.gwdk` into static output, a generated Go app, or a single binary (`--out`, `--app`, `--bin`, `--wasm`, backend variants) |
+| `gowdk build` | Compile `.gwdk` into static output, a generated Go app, a single binary, optional Docker files, or WASM (`--out`, `--app`, `--bin`, `--docker`, `--wasm`, backend variants) |
 | `gowdk dev` | Build, serve, rebuild on change, live-reload browsers, show an error overlay |
 | `gowdk preview` | Build and serve a local deploy preview |
 | `gowdk serve` | Serve already-generated build output |
@@ -175,7 +175,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 | --- | --- |
 | `gowdk generate stubs` | Write conservative missing action/API Go handler stubs next to their owning source package |
 | `gowdk contracts` / `graph` / `trace` / `list` | Print contract registration metadata, the command/event graph, a single contract trace, or filtered lists of commands/queries/events/jobs |
-| `gowdk add <addon>` | Wire an optional addon into `gowdk.config.go` (`add --list` to see all) |
+| `gowdk add <addon>` | Wire an optional addon into `gowdk.config.go` (`add --list` to see all; `add seo` requires `--base-url`) |
 | `gowdk lsp` | Start the language server over stdio |
 
 ## Design
@@ -186,7 +186,8 @@ observable from the CLI (`tokens`, `check`, `inspect ir`, `inspect tree`,
 `inspect endpoint-graph`, `manifest`), and the
 generators emit three kinds of output from the same IR: static HTML/CSS/asset
 bundles, generated Go adapters (`net/http` routes, form decoders, guards), and
-browser islands (JS and Go `js/wasm`, with source maps). Diagnostics come from
+browser islands (JS and Go `js/wasm`, with source maps in development and
+optional production obfuscation for compiler-owned JS). Diagnostics come from
 a central registry with stable codes — `gowdk explain <code>` documents each
 one, and error output redacts secrets quoted from source.
 
@@ -234,9 +235,10 @@ This table describes the current demoable 0.x slice. Status levels:
 | SSR | Works, contract unstable | Pages with `load {}` or `go ssr {}` can build request-time handlers when the SSR addon is enabled. | Typed route-param accessors, lifecycle docs, and error/cache contracts need more hardening. | [SSR](docs/language/ssr.md) | [SSR](examples/ssr/simple-ssr.page.gwdk) |
 | Hybrid | Early | Hybrid request-time route metadata and generated request-time pages exist for the supported slice. | The public hybrid source contract, streaming, and data refresh policy are not stable. | [Hybrid](docs/language/hybrid.md) | [Hybrid](examples/ssr/hybrid-static.page.gwdk) |
 | Components | Works, contract unstable | Components support imported contracts, slots, scoped CSS/assets, first local client behavior, and generated island assets. Page stores can opt into localStorage/sessionStorage persistence with `persist "local"`/`persist "session"`. | Non-string props, richer slots/events, real `g:if`/`g:for`, lifecycle cleanup, dependency diagnostics, and store persistence for WASM islands are planned. | [Components](docs/language/components.md) | [Components](examples/components/base/base-components.page.gwdk) |
-| WASM islands | Early | Component-level `wasm` and page-level `go client {}` can emit Go `js/wasm` browser assets for supported fixtures. | ABI docs, size reporting, runtime validation, and browser behavior coverage need hardening. | [Components](docs/language/components.md) | [Test fixture](testfixture/islands/islands.go) |
-| CSS/assets | Works, contract unstable | CSS processors, page CSS, scoped component CSS, component assets, asset manifests, content-hashed filenames, and optional Tailwind wrapper exist. | CSS processor contracts and optional dependency boundaries need hardening. | [CSS](docs/reference/css.md) | [CSS](examples/css/styled.page.gwdk) |
-| One-binary output | Works, contract unstable | `gowdk build --app --bin` can generate and compile an embedded Go server for supported SPA/backend/SSR slices. | Optional deployment generators and artifact smoke coverage are still expanding. | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) |
+| WASM islands | Early | Component-level `wasm` and page-level `go client {}` emit Go `js/wasm` browser assets for supported fixtures; build-time validation checks browser-safe imports and ABI exports, and browser tests cover mount, event, patch, emit, destroy, and invalid patch rejection. | User-code runtime validation beyond the current patch contract remains planned. | [Components](docs/language/components.md) | [WASM example](examples/components/wasm/README.md) |
+| CSS/assets | Works, contract unstable | CSS processors, page CSS, scoped component CSS, component assets, asset manifests, content-hashed filenames, optional production obfuscation for compiler-owned JS, and optional Tailwind wrapper exist. | CSS processor contracts and optional dependency boundaries need hardening. | [CSS](docs/reference/css.md) | [CSS](examples/css/styled.page.gwdk) |
+| One-binary output | Works, contract unstable | `gowdk build --app --bin` can generate and compile an embedded Go server for supported SPA/backend/SSR slices, `--docker` emits a minimal non-root Docker context beside the binary, and CI starts the embed example binary to verify health plus embedded page serving. | Runtime operations, richer Docker target config, and split/backend-only deploys are still expanding. | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) |
+| Generated app WASM | Early | `gowdk build --app --wasm` compiles the generated app into a Go `js/wasm` deploy artifact, and CI verifies the emitted module header. | Host runtime/loader integration is deploy-platform owned; this is separate from component-level WASM islands. | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) |
 | Contracts | Works, contract unstable | Runtime contracts support typed queries, commands, events, jobs, role filtering, local dispatch, file outbox, broker/fanout adapters, contract graph/trace/list commands, and generated `g:command`/`g:query` web adapters. | Split worker/cron generation, retry policy, managed deployment recipes, and editor-first contract visualization remain planned. | [Contracts](docs/reference/contracts.md) | [Runtime contracts](runtime/contracts) |
 | Realtime | Works, contract unstable | `FeatureRealtime` and `addons/realtime` provide opt-in presentation-event fanout packaging, dependency-free SSE helpers, nested WebSocket transport docs, compiler-validated `g:subscribe` metadata, generated subscription-filtered guarded SSE fanout, bounded SSE retry/drop behavior, a bounded generated client patch loop for query-owned regions, and a live contracts example. | Custom retry/backoff/replay, active session-change stream revocation, richer patch shapes, and richer examples remain M14 work. | [Realtime](docs/reference/realtime.md) | [SSE](runtime/contracts/sse) |
 | Security audit | Early | `gowdk audit` derives an IR-backed posture for routes, endpoints, contracts, and frontend surface risks; evaluates the built-in baseline plus declared `*.audit.gwdk` policies; exits non-zero on error findings; can emit/run generated audit tests; and `gowdk build` writes the posture to a non-served report path. | The audit DSL and generated tests cover the M8 slice; broader auth/session ownership, richer role fixtures, and deeper browser/data-flow analysis remain app-owned or planned. | [Security](docs/engineering/security.md) | [Spec](docs/product/security-audit-spec.md) |
@@ -265,7 +267,8 @@ tracking in the
 ## Addons
 
 The runtime core stays dependency-light; everything optional is an addon you
-wire in with `gowdk add <addon>` (see `gowdk add --list`):
+wire in with `gowdk add <addon>` (see `gowdk add --list`; SEO also needs
+`gowdk add seo --base-url https://example.com`):
 
 | Addon | What it adds |
 | --- | --- |
@@ -278,6 +281,7 @@ wire in with `gowdk add <addon>` (see `gowdk add --list`):
 | `embed` | Embed build output into the binary |
 | `partial` | Fragment/partial responses |
 | `ratelimit` | Request-time rate limiting |
+| `seo` | Build-time sitemap.xml and robots.txt output |
 | `realtime` | Browser presentation-event fanout over SSE or WebSocket |
 | `ssr` | Server-side rendering |
 | `static` | Build-time static page output |
@@ -294,6 +298,12 @@ Run the full Go test gate, including nested optional adapter modules:
 
 ```sh
 scripts/test-go-modules.sh
+```
+
+Check the root module's direct dependency allowlist and optional adapter split:
+
+```sh
+scripts/check-root-deps.sh
 ```
 
 Run the root module only:

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -1440,6 +1441,7 @@ func TestAddCommandListsKnownAddons(t *testing.T) {
 		"embed",
 		"partial",
 		"ratelimit",
+		"seo",
 		"realtime",
 		"ssr",
 		"static",
@@ -1484,6 +1486,68 @@ var Config = gowdk.Config{}
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected updated config to contain %q:\n%s", expected, source)
 		}
+	}
+}
+
+func TestAddCommandWiresSEOAddonWithOptions(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "seo", "--base-url", "https://example.com", "--config", config})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `added addon "seo"`) {
+		t.Fatalf("expected add confirmation, got:\n%s", stdout)
+	}
+	payload, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`"github.com/cssbruno/gowdk/addons/seo"`,
+		`Addons: []gowdk.Addon{seo.Addon(seo.Options{BaseURL: "https://example.com"})}`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected updated config to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestAddCommandRejectsSEOAddonWithoutBaseURL(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+
+	_, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "seo", "--config", config})
+	})
+	if err == nil || !strings.Contains(err.Error(), "gowdk add seo requires --base-url <url>") {
+		t.Fatalf("expected missing SEO base URL error, got %v", err)
+	}
+	payload, readErr := os.ReadFile(config)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if strings.Contains(string(payload), "seo.Addon") {
+		t.Fatalf("seo addon should not be written on missing base URL:\n%s", payload)
 	}
 }
 
@@ -2883,6 +2947,64 @@ view {
 	}
 	if _, err := os.Stat(filepath.Join(root, "public", "ignored", "index.html")); !os.IsNotExist(err) {
 		t.Fatalf("expected configured exclude to skip ignored page, stat err: %v", err)
+	}
+}
+
+func TestBuildCommandObfuscateAssetsFlag(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	outputDir := filepath.Join(root, "dist")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
+
+page home
+route "/"
+
+view {
+  <main><a href="/docs">Docs</a></main>
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "docs.page.gwdk"), `package app
+
+page docs
+route "/docs"
+
+view {
+  <main>Docs</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build", "--config", config, "--obfuscate-assets", "--out", outputDir, "home.page.gwdk", "docs.page.gwdk"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	payload, err := os.ReadFile(filepath.Join(outputDir, "gowdk-assets.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var assets runtimeasset.Manifest
+	if err := json.Unmarshal(payload, &assets); err != nil {
+		t.Fatal(err)
+	}
+	if assets.Version != runtimeasset.ManifestVersion {
+		t.Fatalf("expected asset manifest version %d, got %d", runtimeasset.ManifestVersion, assets.Version)
+	}
+	if !assets.IsObfuscated("assets/gowdk/gowdk.js") {
+		t.Fatalf("expected obfuscation metadata in manifest: %s", payload)
+	}
+	reportPayload, err := os.ReadFile(filepath.Join(outputDir, "gowdk-build-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(reportPayload), `"kind": "asset_obfuscated"`) {
+		t.Fatalf("expected asset obfuscation event in report:\n%s", reportPayload)
 	}
 }
 
@@ -5545,6 +5667,122 @@ func TestBuildCommandBinRequiresGeneratedApp(t *testing.T) {
 	}
 	if err := run([]string{"build", "--out", t.TempDir(), "--app", filepath.Join(t.TempDir(), "app"), "--wasm="}); err == nil {
 		t.Fatal("expected empty --wasm to fail")
+	}
+}
+
+func TestBuildCommandDockerRequiresBinary(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+
+	err := run([]string{"build", "--config", config, "--out", t.TempDir(), "--app", filepath.Join(t.TempDir(), "app"), "--docker"})
+	if err == nil {
+		t.Fatal("expected --docker without --bin to fail")
+	}
+	if !strings.Contains(err.Error(), "--docker requires --bin") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBuildCommandDockerBaseRequiresDocker(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+
+	err := run([]string{"build", "--config", config, "--out", t.TempDir(), "--app", filepath.Join(t.TempDir(), "app"), "--bin", filepath.Join(t.TempDir(), "site"), "--docker-base", "scratch"})
+	if err == nil {
+		t.Fatal("expected --docker-base without --docker to fail")
+	}
+	if !strings.Contains(err.Error(), "--docker-base requires --docker") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateDockerBinary(t *testing.T) {
+	if err := validateDockerBinary(dockerBaseDistroless, dockerBinaryInfo{ELF: false, Static: true}); err == nil || !strings.Contains(err.Error(), "Linux ELF binary") {
+		t.Fatalf("expected non-ELF rejection, got %v", err)
+	}
+	if err := validateDockerBinary(dockerBaseScratch, dockerBinaryInfo{ELF: true, Static: false}); err == nil || !strings.Contains(err.Error(), "statically linked") {
+		t.Fatalf("expected scratch static-link rejection, got %v", err)
+	}
+	if err := validateDockerBinary(dockerBaseScratch, dockerBinaryInfo{ELF: true, Static: true}); err != nil {
+		t.Fatalf("expected static ELF scratch binary to pass: %v", err)
+	}
+}
+
+func TestBuildCommandEmitsDockerArtifacts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("linux cross-compiled test binary path handling is covered on Unix CI")
+	}
+	t.Setenv("GOOS", "linux")
+	t.Setenv("CGO_ENABLED", "0")
+
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "app")
+	binaryPath := filepath.Join(root, "bin", "site")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page home
+route "/"
+
+view {
+  <main>Dockerized</main>
+}
+`)
+
+	stdout, err := captureCLIStdout(t, func() error {
+		return run([]string{"build", "--config", config, "--out", outputDir, "--app", appDir, "--bin", binaryPath, "--docker", page})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dockerfilePath := filepath.Join(root, "bin", "Dockerfile")
+	dockerignorePath := filepath.Join(root, "bin", ".dockerignore")
+	for _, path := range []string{binaryPath, dockerfilePath, dockerignorePath} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected %s to exist: %v", path, err)
+		}
+		if !strings.Contains(stdout, path) {
+			t.Fatalf("expected stdout to include %s, got:\n%s", path, stdout)
+		}
+	}
+
+	dockerfile, err := os.ReadFile(dockerfilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"FROM gcr.io/distroless/base-debian12",
+		`COPY ["site", "/app/site"]`,
+		"ENV GOWDK_ADDR=0.0.0.0:8080",
+		"USER nonroot:nonroot",
+		`ENTRYPOINT ["/app/site"]`,
+	} {
+		if !strings.Contains(string(dockerfile), expected) {
+			t.Fatalf("expected Dockerfile to contain %q:\n%s", expected, dockerfile)
+		}
+	}
+
+	dockerignore, err := os.ReadFile(dockerignorePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"*", "!Dockerfile", "!.dockerignore", "!site"} {
+		if !strings.Contains(string(dockerignore), expected) {
+			t.Fatalf("expected .dockerignore to contain %q:\n%s", expected, dockerignore)
+		}
+	}
+
+	reportPayload, err := os.ReadFile(filepath.Join(outputDir, "gowdk-build-report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"binary_built", "dockerfile_written", "dockerignore_written", dockerfilePath, dockerignorePath} {
+		if !strings.Contains(string(reportPayload), filepath.ToSlash(expected)) {
+			t.Fatalf("expected build report to contain %q:\n%s", expected, reportPayload)
+		}
 	}
 }
 

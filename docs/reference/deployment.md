@@ -6,8 +6,9 @@ GOWDK currently supports three practical output shapes:
 - A generated Go app from `gowdk build --out --app`.
 - A local-platform binary or Go `js/wasm` artifact from the generated app.
 
-Deployment orchestration is user-owned. GOWDK does not generate containers,
-Kubernetes manifests, platform adapters, or CDN configuration.
+Deployment orchestration is user-owned. GOWDK can emit a minimal Docker context
+for one-binary deploys, but it does not generate Kubernetes manifests, platform
+adapters, or CDN configuration.
 
 | Shape | Use When | Current Command Surface |
 | --- | --- | --- |
@@ -66,6 +67,12 @@ Run the binary:
 
 ```sh
 ./bin/site
+```
+
+Smoke-test a known generated route from the repository root:
+
+```sh
+GOWDK_SMOKE_ADDR=127.0.0.1:18085 scripts/smoke-generated-binary.sh bin/site /
 ```
 
 The generated app embeds the selected build output and serves it through
@@ -127,27 +134,66 @@ Backend-only output does not serve static pages. Pair it with static output, a
 frontend binary, or a non-GOWDK frontend only when route ownership is explicit
 and the frontend knows where generated endpoints live.
 
+## Process Lifecycle And Logs
+
+The generated `cmd/server` entrypoint is intentionally small: it constructs the
+generated `net/http` handler, reads `GOWDK_ADDR`, installs the documented
+`http.Server` timeout and header limits, logs startup, and exits on
+`ListenAndServe` failure. It does not install signal handling or a custom
+graceful-shutdown supervisor.
+
+Apps that need graceful drain behavior should use the generated package from
+app-owned startup code:
+
+```go
+handler, err := gowdkapp.Handler()
+if err != nil {
+	return err
+}
+server := &http.Server{Addr: ":8080", Handler: handler}
+```
+
+Use ordinary Go signal handling around that server and call
+`server.Shutdown(ctx)` with the app's timeout policy. Request logging,
+structured logs, route logging, OpenTelemetry instrumentation, compression, and
+optional ETags are also app-owned middleware or reverse-proxy concerns. GOWDK
+keeps generated panic responses generic and redacts secret-like text from
+generated panic logs.
+
 ## Docker
 
-GOWDK does not generate Dockerfiles. A minimal container can copy a compiled
-binary:
+`gowdk build --docker` emits a `Dockerfile` and `.dockerignore` beside the
+compiled `--bin` artifact:
+
+```sh
+GOOS=linux CGO_ENABLED=0 gowdk build --out dist/site --app .gowdk/app --bin bin/site --docker
+cd bin
+docker build -t my-gowdk-site .
+docker run --rm -p 8080:8080 my-gowdk-site
+```
+
+The default Dockerfile uses a distroless base:
 
 ```dockerfile
 FROM gcr.io/distroless/base-debian12
 WORKDIR /app
-COPY bin/site /app/site
+COPY ["site", "/app/site"]
 ENV GOWDK_ADDR=0.0.0.0:8080
 EXPOSE 8080
+USER nonroot:nonroot
 ENTRYPOINT ["/app/site"]
 ```
 
-Build the binary before the image:
+Use `--docker-base scratch` only with a statically linked Linux binary:
 
 ```sh
-gowdk build --out dist/site --app .gowdk/app --bin bin/site
-docker build -t my-gowdk-site .
-docker run --rm -p 8080:8080 my-gowdk-site
+GOOS=linux CGO_ENABLED=0 gowdk build --out dist/site --app .gowdk/app --bin bin/site --docker --docker-base scratch
 ```
+
+`--docker` requires `--bin`; it packages the generated app binary and does not
+build or push an image. `--docker-base scratch` rejects dynamically linked ELF
+binaries, and all Dockerfile generation rejects non-ELF binaries with guidance
+to build with `GOOS=linux`.
 
 Pass app secrets, CSRF secrets, database URLs, and service credentials as
 runtime environment variables owned by your deployment platform.
@@ -486,9 +532,16 @@ Use distinct `Output` and `App` directories for separate binaries.
 gowdk build --out dist/site --app .gowdk/app --wasm bin/site.wasm
 ```
 
+Smoke-test the emitted module header:
+
+```sh
+scripts/smoke-generated-wasm.sh bin/site.wasm
+```
+
 This is a Go `js/wasm` deploy artifact for runtimes that can execute that
 artifact. It is separate from browser island assets emitted for component-level
-`wasm` declarations.
+`wasm` declarations. GOWDK does not emit a generic host runtime or loader for
+this deploy artifact; that integration belongs to the selected deploy platform.
 
 ## Addons
 

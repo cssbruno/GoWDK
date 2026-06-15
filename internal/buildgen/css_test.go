@@ -442,7 +442,7 @@ func TestBuildInvokesCSSProcessorAndWritesAssets(t *testing.T) {
 	if err := json.Unmarshal(assetManifestPayload, &assets); err != nil {
 		t.Fatal(err)
 	}
-	if assets.Version != 1 || assets.Resolve("assets/app.css") != emittedRel {
+	if assets.Version != runtimeasset.ManifestVersion || assets.Resolve("assets/app.css") != emittedRel {
 		t.Fatalf("unexpected asset manifest: %s", assetManifestPayload)
 	}
 	if hash := assets.Hash("assets/app.css"); !strings.HasPrefix(hash, "sha256:") {
@@ -568,6 +568,108 @@ func TestBuildEmitsScopedComponentCSSWithManifestAndCacheHeaders(t *testing.T) {
 	if cache := recorder.Header().Get("Cache-Control"); cache != immutableAssetCachePolicy {
 		t.Fatalf("expected generated binary cache header, got %q", cache)
 	}
+}
+
+func TestBuildLinksComponentCSSOnlyOnUsingPages(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	if err := os.MkdirAll("components", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "components", "card.css"), ".card { color: red; }\n")
+	writeFile(t, filepath.Join(root, "components", "badge.css"), ".badge { color: blue; }\n")
+	writeFile(t, filepath.Join(root, "components", "unused.css"), ".unused { color: gray; }\n")
+	outputDir := filepath.Join(root, "dist")
+
+	card := gwdkir.Component{
+		Package: "components",
+		Source:  "components/card.cmp.gwdk",
+		Name:    "Card",
+		CSS:     []string{"./card.css"},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<section class="card"><Badge /></section>`,
+		},
+	}
+	badge := gwdkir.Component{
+		Package: "components",
+		Source:  "components/badge.cmp.gwdk",
+		Name:    "Badge",
+		CSS:     []string{"./badge.css"},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<span class="badge">Badge</span>`,
+		},
+	}
+	unused := gwdkir.Component{
+		Package: "components",
+		Source:  "components/unused.cmp.gwdk",
+		Name:    "Unused",
+		CSS:     []string{"./unused.css"},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<aside class="unused">Unused</aside>`,
+		},
+	}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{
+			{
+				Package: "components",
+				ID:      "home",
+				Route:   "/",
+				Blocks: gwdkir.Blocks{
+					View:     true,
+					ViewBody: `<main><Card /></main>`,
+				},
+			},
+			{
+				Package: "components",
+				ID:      "plain",
+				Route:   "/plain",
+				Blocks: gwdkir.Blocks{
+					View:     true,
+					ViewBody: `<main>Plain</main>`,
+				},
+			},
+		},
+		Components: []gwdkir.Component{card, badge, unused},
+	}
+
+	result, err := Build(gowdk.Config{CSS: gowdk.CSSConfig{Include: []string{DisableCSSDiscovery}}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cardHref := componentCSSHref(t, outputDir, result.CSSArtifacts, card, "./card.css")
+	badgeHref := componentCSSHref(t, outputDir, result.CSSArtifacts, badge, "./badge.css")
+
+	home := readFile(t, filepath.Join(outputDir, "index.html"))
+	for _, href := range []string{cardHref, badgeHref} {
+		if !strings.Contains(home, `<link rel="stylesheet" href="`+href+`">`) {
+			t.Fatalf("expected component stylesheet %q on home page:\n%s", href, home)
+		}
+	}
+	if strings.Contains(home, "/Unused/") {
+		t.Fatalf("did not expect unused component CSS on home page:\n%s", home)
+	}
+
+	plain := readFile(t, filepath.Join(outputDir, "plain", "index.html"))
+	for _, href := range []string{cardHref, badgeHref} {
+		if strings.Contains(plain, href) {
+			t.Fatalf("did not expect component stylesheet %q on plain page:\n%s", href, plain)
+		}
+	}
+	if strings.Contains(plain, "/Unused/") {
+		t.Fatalf("did not expect unused component CSS on plain page:\n%s", plain)
+	}
+}
+
+func componentCSSHref(t *testing.T, outputDir string, artifacts []CSSArtifact, component gwdkir.Component, cssPath string) string {
+	t.Helper()
+	hashKey := cssscope.HashKey("component", component.Package, component.Name, component.Source, cssPath)
+	scopeID := cssscope.ScopeID(hashKey)
+	logicalPath := componentCSSLogicalPath(irComponent(component), scopeID)
+	artifact := cssArtifactByLogicalPath(t, artifacts, logicalPath)
+	return "/" + filepath.ToSlash(mustRelativePath(t, outputDir, artifact.Path))
 }
 
 func TestRewriteCSSKeyframesRewritesAnimationNamesOnly(t *testing.T) {

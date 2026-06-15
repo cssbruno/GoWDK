@@ -20,6 +20,7 @@ Run these gates before release packaging.
 ```sh
 go list -m all
 go list -m -json all
+scripts/check-root-deps.sh
 scripts/test-go-modules.sh
 scripts/vulncheck-go-modules.sh
 ```
@@ -36,14 +37,22 @@ have reachable standard-library vulnerabilities. Local release verification
 should use the same or newer Go patch version before trusting `govulncheck`
 output.
 
-Add automated dependency and license checks to CI before claiming production
-readiness.
+CI runs `scripts/check-root-deps.sh` to keep root direct dependencies on an
+explicit allowlist and to fail if known optional framework, broker, or realtime
+modules enter the root graph. Add automated dependency, size, and license
+reports before claiming production readiness.
 
 ## Current Dependency Classification
 
 - Compiler core: standard library plus repository packages under `internal/`,
   and `golang.org/x/tools/go/packages` for Go package loading during endpoint
   binding inspection.
+- Root direct third-party modules: `github.com/evanw/esbuild` for CSS/script
+  bundling and `golang.org/x/tools` for Go package loading. Any addition must
+  update `scripts/check-root-deps.sh` and this policy, or move behind a nested
+  optional module.
+- Remaining intentional root dependency debt is limited to those two direct
+  modules plus their required indirect modules in `go.mod`.
 - Runtime core: standard library plus repository packages under `runtime/`.
 - Optional HTTP adapters: `runtime/adapters/chi`, `runtime/adapters/echo`,
   `runtime/adapters/gin`, and `runtime/adapters/fiber`; each framework adapter

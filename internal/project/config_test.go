@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/seo"
 	"github.com/cssbruno/gowdk/addons/tailwind"
 )
 
@@ -69,6 +70,7 @@ var Config = gowdk.Config{
 	Build: gowdk.BuildConfig{
 		Output: "dist/site",
 		Mode: gowdk.Production,
+		ObfuscateAssets: true,
 		Head: gowdk.HeadConfig{
 			SiteName: "Example",
 			Favicon: "/favicon.ico",
@@ -184,6 +186,9 @@ var Config = gowdk.Config{
 	}
 	if config.Build.Mode != gowdk.Production {
 		t.Fatalf("unexpected build mode: %q", config.Build.Mode)
+	}
+	if !config.Build.ObfuscateAssets {
+		t.Fatal("expected ObfuscateAssets to be parsed")
 	}
 	if config.Build.Head.SiteName != "Example" || config.Build.Head.Favicon != "/favicon.ico" || config.Build.Head.Image != "https://example.com/social.png" || config.Build.Head.TwitterCard != "summary_large_image" {
 		t.Fatalf("unexpected build head config: %#v", config.Build.Head)
@@ -480,6 +485,7 @@ import (
 	partialaddon "github.com/cssbruno/gowdk/addons/partial"
 	rl "github.com/cssbruno/gowdk/addons/ratelimit"
 	realtimeaddon "github.com/cssbruno/gowdk/addons/realtime"
+	seoaddon "github.com/cssbruno/gowdk/addons/seo"
 	spaaddon "github.com/cssbruno/gowdk/addons/spa"
 	ssraddon "github.com/cssbruno/gowdk/addons/ssr"
 	staticaddon "github.com/cssbruno/gowdk/addons/static"
@@ -495,6 +501,7 @@ var Config = gowdk.Config{
 		partialaddon.Addon(),
 		rl.Addon(),
 		realtimeaddon.Addon(),
+		seoaddon.Addon(),
 		spaaddon.Addon(),
 		ssraddon.Addon(),
 		staticaddon.Addon(),
@@ -508,11 +515,11 @@ var Config = gowdk.Config{
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Addons) != 11 {
+	if len(config.Addons) != 12 {
 		t.Fatalf("unexpected addons: %#v", config.Addons)
 	}
-	if config.Addons[10].Name() != "static" {
-		t.Fatalf("expected static addon, got %#v", config.Addons[10])
+	if config.Addons[11].Name() != "static" {
+		t.Fatalf("expected static addon, got %#v", config.Addons[11])
 	}
 	for _, feature := range []gowdk.Feature{
 		gowdk.FeatureActions,
@@ -523,6 +530,7 @@ var Config = gowdk.Config{
 		gowdk.FeaturePartial,
 		gowdk.FeatureRateLimit,
 		gowdk.FeatureRealtime,
+		gowdk.FeatureSEO,
 		gowdk.FeatureSPA,
 		gowdk.FeatureSSR,
 	} {
@@ -551,12 +559,19 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	contractsaddon "github.com/cssbruno/gowdk/addons/contracts"
+	seoaddon "github.com/cssbruno/gowdk/addons/seo"
 )
 
 var Config = gowdk.Config{
 	AppName: os.Getenv("GOWDK_TEST_APP_NAME"),
 	Addons: []gowdk.Addon{
 		contractsaddon.Addon(),
+		seoaddon.Addon(seoaddon.Options{
+			BaseURL: "https://example.com",
+			ExtraURLProvider: func() []gowdk.SEOURL {
+				return []gowdk.SEOURL{{Loc: "/feed.xml"}}
+			},
+		}),
 	},
 }
 `)
@@ -572,6 +587,113 @@ var Config = gowdk.Config{
 	}
 	if !config.HasFeature(gowdk.FeatureContracts) {
 		t.Fatalf("expected executable config to keep contracts addon, got %#v", config.Addons)
+	}
+	if !config.HasFeature(gowdk.FeatureSEO) {
+		t.Fatalf("expected executable config to keep seo addon, got %#v", config.Addons)
+	}
+	provider, ok := config.Addons[1].(gowdk.SEOProvider)
+	if !ok {
+		t.Fatalf("expected executable seo addon to preserve SEOProvider, got %T", config.Addons[1])
+	}
+	options := provider.SEOOptions()
+	if options.BaseURL != "https://example.com" || len(options.ExtraURLs) != 1 || options.ExtraURLs[0].Loc != "/feed.xml" {
+		t.Fatalf("unexpected executable seo options: %#v", options)
+	}
+}
+
+func TestLoadConfigFileReadsSEOAddonOptions(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	seoaddon "github.com/cssbruno/gowdk/addons/seo"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		seoaddon.Addon(seoaddon.Options{
+			BaseURL: "https://example.com/docs",
+			Disallow: []string{"/admin", "/drafts"},
+			ExtraURLs: []seoaddon.URL{
+				{Loc: "/rss.xml", LastMod: "2026-06-14", ChangeFreq: "daily", Priority: "0.8"},
+			},
+		}),
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !config.HasFeature(gowdk.FeatureSEO) {
+		t.Fatal("expected parsed config to enable SEO")
+	}
+	provider, ok := config.Addons[0].(gowdk.SEOProvider)
+	if !ok {
+		t.Fatalf("expected SEOProvider, got %T", config.Addons[0])
+	}
+	options := provider.SEOOptions()
+	if options.BaseURL != "https://example.com/docs" || len(options.Disallow) != 2 {
+		t.Fatalf("unexpected SEO options: %#v", options)
+	}
+	if len(options.ExtraURLs) != 1 || options.ExtraURLs[0].Loc != "/rss.xml" || options.ExtraURLs[0].Priority != "0.8" {
+		t.Fatalf("unexpected SEO extra URLs: %#v", options.ExtraURLs)
+	}
+}
+
+func TestLoadConfigFileFallsBackForDynamicSEOOptions(t *testing.T) {
+	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+`)
+	path := filepath.Join(root, DefaultConfigFile)
+	writeTestFile(t, path, `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	seoaddon "github.com/cssbruno/gowdk/addons/seo"
+)
+
+func siteURL() string {
+	return "https://dynamic.example.com/docs"
+}
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		seoaddon.Addon(seoaddon.Options{
+			BaseURL: siteURL(),
+			Disallow: []string{"/admin"},
+		}),
+	},
+}
+`)
+	tidyTestModule(t, root)
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !config.HasFeature(gowdk.FeatureSEO) {
+		t.Fatal("expected executable config to enable SEO")
+	}
+	provider, ok := config.Addons[0].(gowdk.SEOProvider)
+	if !ok {
+		t.Fatalf("expected SEOProvider, got %T", config.Addons[0])
+	}
+	options := provider.SEOOptions()
+	if options.BaseURL != "https://dynamic.example.com/docs" || len(options.Disallow) != 1 || options.Disallow[0] != "/admin" {
+		t.Fatalf("unexpected executable SEO options: %#v", options)
 	}
 }
 
@@ -860,6 +982,33 @@ func TestParseTailwindAddonRejectsRemovedDownloadOptions(t *testing.T) {
 
 	if addon, ok := parseTailwindAddon(expression, map[string]string{"tw": tailwind.ImportPath}); ok {
 		t.Fatalf("expected removed download options to require normal Go validation, got %#v", addon)
+	}
+}
+
+func TestParseSEOAddonRejectsUnknownOptions(t *testing.T) {
+	expression, err := parser.ParseExpr(`seoaddon.Addon(seoaddon.Options{
+		BaseURL: "https://example.com",
+		SitemapLimit: 100,
+	})`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if addon, ok := parseSEOAddon(expression, map[string]string{"seoaddon": seo.ImportPath}); ok {
+		t.Fatalf("expected unknown SEO option to require normal Go validation, got %#v", addon)
+	}
+}
+
+func TestParseSEOAddonRejectsDynamicOptionValues(t *testing.T) {
+	expression, err := parser.ParseExpr(`seoaddon.Addon(seoaddon.Options{
+		BaseURL: siteURL(),
+	})`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if addon, ok := parseSEOAddon(expression, map[string]string{"seoaddon": seo.ImportPath}); ok {
+		t.Fatalf("expected dynamic SEO option to require executable config loading, got %#v", addon)
 	}
 }
 

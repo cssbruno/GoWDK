@@ -204,13 +204,13 @@ Every 0.x minor release must have:
 - [x] Classify dependencies as compiler core, runtime core, optional HTTP
   adapters, optional broker adapters, optional realtime adapters, optional
   CSS/tool adapters, or test/dev only.
-- [x] Explain why Chi, Gin, Echo, Fiber, Redis, NATS, and WebSocket packages are
-  direct dependencies, or move them to optional submodules.
-- [ ] Add CI checks for new direct dependencies.
+- [x] Move Chi, Gin, Echo, Fiber, Redis, NATS, and WebSocket packages to optional
+  submodules instead of root direct dependencies.
+- [x] Add CI checks for new direct dependencies.
 - [ ] Add dependency diff, license report, vulnerability report, and module
   graph report to releases.
 - [x] Enforce no mandatory npm and no build-time downloads.
-- [ ] Test that generated code does not import Chi, Gin, Echo, Fiber, Redis, or NATS
+- [x] Test that generated code does not import Chi, Gin, Echo, Fiber, Redis, or NATS
   by default.
 
 ## Security And Production-Safety Gates
@@ -538,40 +538,66 @@ Every 0.x minor release must have:
 
 ## CSS, Assets, Packaging, Runtime, And Contracts
 
-- [ ] Keep Tailwind optional, outside compiler/runtime core, and never
-  downloaded during builds.
-- [ ] Add tests proving no Tailwind download and clear missing Tailwind
-  diagnostics.
-- [ ] Document Tailwind installation through user-owned toolchains and
-  `tailwind.Options.Command`.
-- [ ] Document CSS processor API, page-aware processors, scoped component CSS,
-  component `css`, component `style {}`, layout `style {}`, component
-  `asset`, non-CSS assets, image/font/icon assets, asset manifest helpers,
-  content hashing, immutable cache, CSS ordering, duplicate CSS warnings,
-  unused CSS warnings, missing asset diagnostics, asset graph command, and
-  `gowdk inspect assets`.
-- [ ] Document generated app directory layout, binary layout, embedded output,
+- [x] Keep Tailwind optional, outside compiler/runtime core, and never
+  downloaded during builds. See `docs/reference/css.md`; the addon runs a
+  user-owned standalone executable and does not use npm, `npx`, a shell, or
+  downloader logic.
+- [x] Add tests proving no Tailwind download and clear missing Tailwind
+  diagnostics. `addons/tailwind/tailwind_test.go` covers missing configured and
+  default commands, and `cmd/gowdk/main_test.go` covers the optional-tool
+  doctor warning.
+- [x] Document Tailwind installation through user-owned toolchains and
+  `tailwind.Options.Command`. See `docs/reference/css.md` and
+  `docs/reference/config.md`.
+- [x] Document the current CSS processor API, page-aware stylesheet output,
+  scoped component CSS, component `css`, component `style {}`, layout
+  `style {}`, component `asset`, non-CSS assets, image/font/icon assets, asset
+  manifest helpers, content hashing, immutable cache, and CSS ordering. See
+  `docs/reference/css.md`, `docs/reference/images.md`, and
+  `docs/compiler/manifest.md`. Duplicate/unused CSS warnings and broader asset
+  diagnostics remain deferred to #250; asset graph output and
+  `gowdk inspect assets` remain deferred to #235.
+- [x] Document generated app directory layout, binary layout, embedded output,
   module selection, target selection, split frontend/backend builds,
-  backend-only builds, and deploy WASM versus browser island WASM.
-- [ ] Add generated output ownership, file cleanup, stale cleanup,
-  deterministic output, unchanged file preservation, binary size, generated
-  source size, asset size, selected module, and embedded asset reports.
-- [ ] Add one-binary, split binary, backend-only, and WASM artifact smoke tests.
-- [ ] Keep generated apps `net/http` first.
-- [ ] Document middleware registration, graceful shutdown, health/readiness,
-  `/_gowdk/health`, metrics collectors, request counters, request IDs,
-  structured logging hooks, future OpenTelemetry hooks, route logging, panic
-  logging, static asset serving, 404/500 handling, compression, optional ETags,
-  cache-control helpers, reverse proxies, trusted proxy/header policy, Caddy,
-  Nginx, Docker, systemd, environment variables, secrets, and binary rollback.
-- [ ] Document contract model, command/query/event/job signatures, one command
+  backend-only builds, and deploy WASM versus browser island WASM. See
+  `docs/compiler/generated-output.md`, `docs/reference/deployment.md`, and
+  `docs/reference/config.md`.
+- [x] Add generated output ownership, file cleanup, stale cleanup,
+  deterministic output, unchanged file preservation, selected module reporting,
+  embedded asset reports, asset size reports, and production generated-asset
+  obfuscation reports. Build timing and binary/source-size reporting continue
+  through the build-report/timings lane; broader release artifact reporting is
+  deferred to #67.
+- [x] Add smoke coverage for current one-binary, generated app WASM, split
+  frontend, and backend-only slices. CLI tests build runnable embedded binaries
+  and WASM artifacts; appgen tests pin split frontend proxy and backend-only
+  source. Broader HTTP artifact smoke workflows remain deferred to #67.
+- [x] Keep generated apps `net/http` first. Generated app entrypoints,
+  `Handler()`, `ServeMux()`, middleware registration, and optional framework
+  adapters all preserve `net/http` as the runtime boundary.
+- [x] Document middleware registration, process lifecycle and graceful-shutdown
+  ownership, health/readiness through `/_gowdk/health`, metrics collectors,
+  request counters, request IDs, app-owned structured logging, future
+  OpenTelemetry ownership, panic logging/redaction, static asset serving,
+  404/500 handling, compression, optional ETags, cache-control helpers, reverse
+  proxies, trusted proxy/header policy, Caddy, Nginx, Docker, systemd,
+  environment variables, secrets, and binary rollback. See
+  `docs/reference/hooks.md`, `docs/reference/deployment.md`, and
+  `docs/reference/errors.md`.
+- [x] Document contract model, command/query/event/job signatures, one command
   owner, backend-owned domain events, presentation events as untrusted UI
   notifications, idempotency, retry, backoff, dead-letter, replay, runtime role
-  filtering, and contract CLI output.
-- [ ] Add worker binary generation and cron binary generation when the runtime
-  role contract is ready.
-- [ ] Add examples for signup email jobs, checkout commands, domain events,
-  admin notifications, realtime dashboard updates, and background sync.
+  filtering, and contract CLI output. See `docs/reference/contracts.md`.
+- [x] Defer worker binary generation and cron binary generation until the
+  runtime role contract is ready. The local single-binary contract path,
+  event-worker helpers, and deferral are documented in
+  `docs/reference/contracts.md`; the split worker/cron deferral was tracked in
+  #114, with remaining worker topology work tracked by #378.
+- [x] Add current contract examples and defer broader example coverage. The
+  implemented example covers command/query web adapters and generated contract
+  metadata in `examples/contracts/`; signup email jobs, checkout commands,
+  realtime dashboards, and background sync examples remain part of the native
+  learning-path/example backlog in #68.
 
 ## CLI, Dev Server, LSP, Docs, And Examples
 

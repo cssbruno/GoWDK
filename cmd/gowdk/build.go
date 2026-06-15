@@ -21,7 +21,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
+const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
 
 func build(args []string) error {
 	started := time.Now()
@@ -48,6 +48,8 @@ type buildRequest struct {
 	WASMPath          string
 	BackendAppDir     string
 	BackendBinaryPath string
+	Docker            bool
+	DockerBase        string
 	Modules           []string
 	Paths             []string
 	TimingsPath       string
@@ -61,6 +63,8 @@ type buildOptions struct {
 	WASMPath          string
 	BackendAppDir     string
 	BackendBinaryPath string
+	Docker            bool
+	DockerBase        string
 	ConfigPath        string
 	TargetNames       []string
 	ModuleNames       []string
@@ -78,7 +82,7 @@ func loadBuildOptions(args []string) (buildOptions, error) {
 		return buildOptions{}, err
 	}
 	if len(plan.TargetNames) > 0 && plan.hasAdHocArgs() {
-		return buildOptions{}, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --wasm, --backend-app, --backend-bin, or explicit files")
+		return buildOptions{}, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --docker, --docker-base, --wasm, --backend-app, --backend-bin, or explicit files")
 	}
 	return plan, nil
 }
@@ -91,6 +95,8 @@ func (plan buildOptions) request() buildRequest {
 		WASMPath:          plan.WASMPath,
 		BackendAppDir:     plan.BackendAppDir,
 		BackendBinaryPath: plan.BackendBinaryPath,
+		Docker:            plan.Docker,
+		DockerBase:        plan.DockerBase,
 		Modules:           plan.ModuleNames,
 		Paths:             plan.Paths,
 		TimingsPath:       plan.TimingsPath,
@@ -98,15 +104,28 @@ func (plan buildOptions) request() buildRequest {
 }
 
 func (plan buildOptions) hasAdHocArgs() bool {
-	return hasAdHocBuildArgs(plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.ModuleNames, plan.Paths)
+	return hasAdHocBuildArgs(plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.Docker, plan.DockerBase, plan.ModuleNames, plan.Paths)
 }
 
 func (plan buildOptions) shouldBuildConfiguredTargets() bool {
-	return shouldBuildConfiguredTargets(plan.Options.Config, plan.TargetNames, plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.ModuleNames, plan.Paths)
+	return shouldBuildConfiguredTargets(plan.Options.Config, plan.TargetNames, plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.Docker, plan.DockerBase, plan.ModuleNames, plan.Paths)
 }
 
 func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRecorder) error {
 	outputDir := request.OutputDir
+	if strings.TrimSpace(request.DockerBase) != "" && !request.Docker {
+		return fmt.Errorf("gowdk build --docker-base requires --docker")
+	}
+	if request.Docker && strings.TrimSpace(request.BinaryPath) == "" {
+		return fmt.Errorf("gowdk build --docker requires --bin <file>")
+	}
+	if request.Docker {
+		base, err := normalizeDockerBase(request.DockerBase)
+		if err != nil {
+			return err
+		}
+		request.DockerBase = base
+	}
 	if strings.TrimSpace(request.BinaryPath) != "" && strings.TrimSpace(request.AppDir) == "" {
 		return fmt.Errorf("gowdk build --bin requires --app <dir>")
 	}
@@ -238,6 +257,12 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	if result.AssetManifestPath != "" {
 		fmt.Println(result.AssetManifestPath)
 	}
+	if result.SitemapPath != "" {
+		fmt.Println(result.SitemapPath)
+	}
+	if result.RobotsPath != "" {
+		fmt.Println(result.RobotsPath)
+	}
 	if result.OpenAPIPath != "" {
 		fmt.Println(result.OpenAPIPath)
 	}
@@ -264,6 +289,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	wasmPath := request.WASMPath
 	backendAppDir := request.BackendAppDir
 	backendBinaryPath := request.BackendBinaryPath
+	var buildReportEvents []buildgen.BuildEvent
 	if strings.TrimSpace(appDir) != "" {
 		var app appgen.Result
 		if err := timings.measure("app_generation", func() error {
@@ -291,6 +317,45 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				return err
 			}
 			fmt.Println(built)
+			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
+				Level:   buildgen.BuildEventInfo,
+				Stage:   "package",
+				Kind:    "binary_built",
+				Message: "compiled generated app binary",
+				Path:    filepath.ToSlash(built),
+			})
+			if request.Docker {
+				var artifacts dockerArtifacts
+				if err := timings.measure("docker_artifacts", func() error {
+					var dockerErr error
+					artifacts, dockerErr = writeDockerArtifacts(built, request.DockerBase)
+					return dockerErr
+				}); err != nil {
+					return err
+				}
+				fmt.Println(artifacts.DockerfilePath)
+				fmt.Println(artifacts.DockerignorePath)
+				buildReportEvents = append(buildReportEvents,
+					buildgen.BuildEvent{
+						Level:   buildgen.BuildEventInfo,
+						Stage:   "package",
+						Kind:    "dockerfile_written",
+						Message: "wrote Dockerfile for generated app binary",
+						Path:    filepath.ToSlash(artifacts.DockerfilePath),
+						Data: map[string]string{
+							"base":          artifacts.Base,
+							"runtimeBinary": artifacts.RuntimeBinaryPath,
+						},
+					},
+					buildgen.BuildEvent{
+						Level:   buildgen.BuildEventInfo,
+						Stage:   "package",
+						Kind:    "dockerignore_written",
+						Message: "wrote Docker build context ignore file",
+						Path:    filepath.ToSlash(artifacts.DockerignorePath),
+					},
+				)
+			}
 		}
 		if strings.TrimSpace(wasmPath) != "" {
 			var built string
@@ -303,6 +368,9 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			}
 			fmt.Println(built)
 		}
+	}
+	if err := appendBuildReportEvents(result.BuildReportPath, buildReportEvents...); err != nil {
+		return err
 	}
 	if strings.TrimSpace(backendAppDir) != "" {
 		var app appgen.Result
@@ -338,7 +406,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	return nil
 }
 
-func shouldBuildConfiguredTargets(config gowdk.Config, targetNames []string, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, moduleNames, paths []string) bool {
+func shouldBuildConfiguredTargets(config gowdk.Config, targetNames []string, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, docker bool, dockerBase string, moduleNames, paths []string) bool {
 	if len(targetNames) > 0 {
 		return true
 	}
@@ -351,17 +419,21 @@ func shouldBuildConfiguredTargets(config gowdk.Config, targetNames []string, out
 		strings.TrimSpace(wasmPath) == "" &&
 		strings.TrimSpace(backendAppDir) == "" &&
 		strings.TrimSpace(backendBinaryPath) == "" &&
+		!docker &&
+		strings.TrimSpace(dockerBase) == "" &&
 		len(moduleNames) == 0 &&
 		len(paths) == 0
 }
 
-func hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, moduleNames, paths []string) bool {
+func hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, docker bool, dockerBase string, moduleNames, paths []string) bool {
 	return strings.TrimSpace(outputDir) != "" ||
 		strings.TrimSpace(appDir) != "" ||
 		strings.TrimSpace(binaryPath) != "" ||
 		strings.TrimSpace(wasmPath) != "" ||
 		strings.TrimSpace(backendAppDir) != "" ||
 		strings.TrimSpace(backendBinaryPath) != "" ||
+		docker ||
+		strings.TrimSpace(dockerBase) != "" ||
 		len(moduleNames) > 0 ||
 		len(paths) > 0
 }
@@ -523,6 +595,10 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		case arg == "--allow-missing-backend":
 			plan.Options.AllowMissingBackend = true
 			plan.Options.Config.Build.AllowMissingBackend = true
+		case arg == "--obfuscate-assets":
+			plan.Options.ObfuscateAssets = true
+			plan.Options.Config.Build.ObfuscateAssets = true
+			plan.Options.Config.Build.Mode = gowdk.Production
 		case arg == "--out":
 			i++
 			if i >= len(args) {
@@ -558,6 +634,22 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 			plan.BinaryPath = arg[len("--bin="):]
 			if strings.TrimSpace(plan.BinaryPath) == "" {
 				return buildOptions{}, fmt.Errorf("binary output path is required")
+			}
+		case arg == "--docker":
+			plan.Docker = true
+		case arg == "--docker-base":
+			i++
+			if i >= len(args) {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.DockerBase = args[i]
+			if strings.TrimSpace(plan.DockerBase) == "" {
+				return buildOptions{}, fmt.Errorf("Docker base is required")
+			}
+		case strings.HasPrefix(arg, "--docker-base="):
+			plan.DockerBase = strings.TrimPrefix(arg, "--docker-base=")
+			if strings.TrimSpace(plan.DockerBase) == "" {
+				return buildOptions{}, fmt.Errorf("Docker base is required")
 			}
 		case arg == "--wasm":
 			i++

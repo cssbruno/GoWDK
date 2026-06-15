@@ -274,6 +274,9 @@ func renderComponentIsland(out *renderOutput, island componentIslandRender) erro
 	out.write(gowhtml.Attr("data-gowdk-component", island.Component.Name))
 	out.write(gowhtml.Attr("data-gowdk-island", island.IslandID))
 	out.write(gowhtml.Attr("data-gowdk-runtime", island.Mode))
+	if identity := island.Component.Identity(); identity != island.Component.Name {
+		out.write(gowhtml.Attr("data-gowdk-component-id", identity))
+	}
 	out.write(gowhtml.Attr("data-gowdk-state", stateJSON))
 	out.write(gowhtml.Attr("data-gowdk-client", island.Component.HandlersJSON))
 	out.write(gowhtml.Attr("data-gowdk-props", propsJSON))

@@ -26,8 +26,9 @@ func clientRuntimeArtifacts(config gowdk.Config, ir gwdkir.Program, outputDir st
 		}
 		if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation || usesRealtime {
 			return []plannedAssetArtifact{{
-				AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath))},
-				contents:      clientrt.Source(),
+				AssetArtifact:        AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath))},
+				contents:             clientrt.Source(),
+				obfuscationCandidate: true,
 			}}, nil
 		}
 	}
@@ -59,8 +60,9 @@ func storeRuntimeArtifacts(pages []gwdkir.Page, outputDir string) []plannedAsset
 	for _, page := range pages {
 		if len(page.Stores) > 0 {
 			return []plannedAssetArtifact{{
-				AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(storeRuntimeAssetPath))},
-				contents:      []byte(storeRuntimeSource()),
+				AssetArtifact:        AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(storeRuntimeAssetPath))},
+				contents:             []byte(storeRuntimeSource()),
+				obfuscationCandidate: true,
 			}}
 		}
 	}

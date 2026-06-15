@@ -48,7 +48,7 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 
 	components, componentFailures := buildComponents(ir.Components)
 	layouts, layoutFailures := buildLayouts(ir.Layouts)
-	css, cssFailures := planCSS(config, ir, outputDir)
+	css, cssFailures := planCSS(config, ir, outputDir, components, layouts)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
 	actionFields := pageActionInputFields(ir)

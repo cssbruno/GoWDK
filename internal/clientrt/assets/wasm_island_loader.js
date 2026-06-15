@@ -1,5 +1,6 @@
 (() => {
   const component = "__GOWDK_COMPONENT__";
+  const componentID = "__GOWDK_COMPONENT_ID__";
   const abiVersion = "__GOWDK_ABI_VERSION__";
   const wasmPath = "__GOWDK_WASM_PATH__";
   const wasmExecPath = "__GOWDK_WASM_EXEC_PATH__";
@@ -7,7 +8,7 @@
   const handleExport = "GOWDKHandle" + component;
   const destroyExport = "GOWDKDestroy" + component;
   const bindingTargetAttributes = ["data-gowdk-binding-text", "data-gowdk-binding-if", "data-gowdk-binding-list", "data-gowdk-binding-value", "data-gowdk-binding-checked"];
-  const roots = document.querySelectorAll("gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"wasm\"]");
+  const roots = document.querySelectorAll("gowdk-island[data-gowdk-component-id=\"" + componentID + "\"][data-gowdk-runtime=\"wasm\"],gowdk-island:not([data-gowdk-component-id])[data-gowdk-component=\"" + componentID + "\"][data-gowdk-runtime=\"wasm\"]");
   if (roots.length === 0 || typeof WebAssembly === "undefined") return;
 
   function parseJSON(value, fallback) {

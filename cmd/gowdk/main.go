@@ -115,7 +115,7 @@ func usage() {
 	fmt.Println("Commands:")
 	fmt.Println("  version [--json]         print CLI version")
 	fmt.Println("  init [--force] [--tests] [--template <site|minimal>] [dir] scaffold a starter GOWDK project")
-	fmt.Println("  add <addon> [--config <file>] | add --list  wire an addon into gowdk.config.go")
+	fmt.Println("  add <addon> [--config <file>] [--base-url <url>] | add --list  wire an addon into gowdk.config.go")
 	fmt.Println("  tokens <file.gwdk>       print language tokens")
 	fmt.Println("  fmt [--write] <files>    format .gwdk files")
 	fmt.Println("  check [--config <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...] parse and validate .gwdk files")
@@ -133,7 +133,7 @@ func usage() {
 	fmt.Println("  graph [--json] [dir]      print command/event contract graph")
 	fmt.Println("  trace <contract> [--json] [dir] print one command/query/event/job contract trace")
 	fmt.Println("  list commands|queries|events|jobs [--json] [dir] print filtered contract metadata")
-	fmt.Println("  build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
+	fmt.Println("  build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
 	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload")
 	fmt.Println("  preview [--addr <addr>] [--hot] [build flags...] build and serve a local deploy preview")
 	fmt.Println("  serve --dir <dir> [--addr <addr>] serve generated build output locally")
@@ -146,6 +146,7 @@ type cliOptions struct {
 	JSON                bool
 	Debug               bool
 	AllowMissingBackend bool
+	ObfuscateAssets     bool
 	WarningsAsErrors    bool
 }
 

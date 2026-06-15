@@ -65,7 +65,8 @@ view {
 ```
 
 The compiler validates a small Go-like client subset and emits browser
-JavaScript under `assets/gowdk/islands/`.
+JavaScript under `assets/gowdk/islands/`: one shared `island.js` runtime plus
+small package-scoped component registration stubs.
 
 Supported island syntax is documented in `docs/language/syntax.md`,
 `docs/language/markup.md`, and `docs/language/components.md`. The subset
@@ -137,6 +138,9 @@ Normal calls to a component with `wasm` use the WASM island runtime. If a
 component is called with `g:island="wasm"` and no `wasm` package is declared,
 GOWDK emits the current placeholder module plus loader shape.
 
+See `examples/components/wasm/` for a runnable component-level WASM ABI example
+that emits the component `.wasm`, host loader, and `wasm_exec.js` assets.
+
 ## Production Mode
 
 `Build.Mode` affects generated island assets:
@@ -149,5 +153,7 @@ Build: gowdk.BuildConfig{
 ```
 
 Development mode emits JavaScript island source maps. Production mode omits
-`.js.map` artifacts and `sourceMappingURL` comments and trims formatting-only
-whitespace from generated island JavaScript.
+`.js.map` artifacts and `sourceMappingURL` comments and compacts generated
+island JavaScript. `Build.ObfuscateAssets` or `gowdk build --obfuscate-assets`
+enables stronger deterministic minification/identifier shortening for
+compiler-owned generated browser JavaScript in production builds.

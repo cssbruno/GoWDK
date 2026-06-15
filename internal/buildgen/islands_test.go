@@ -45,6 +45,10 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 	}
 	jsPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js")
 	jsMapPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js.map")
+	sharedJSPath := sharedIslandRuntimePath(outputDir)
+	if !hasAssetArtifact(result.AssetArtifacts, sharedJSPath) {
+		t.Fatalf("expected shared island runtime asset, got %#v", result.AssetArtifacts)
+	}
 	if !hasAssetArtifact(result.AssetArtifacts, jsPath) {
 		t.Fatalf("expected Counter.js asset, got %#v", result.AssetArtifacts)
 	}
@@ -53,6 +57,7 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 	}
 	html := readFile(t, filepath.Join(outputDir, "counter", "index.html"))
 	for _, expected := range []string{
+		`<script src="/assets/gowdk/islands/island.js" defer></script>`,
 		`<script src="/assets/gowdk/islands/Counter.js" defer></script>`,
 		`<gowdk-island data-gowdk-component="Counter" data-gowdk-island="i1" data-gowdk-runtime="js"`,
 		`data-gowdk-on-click="Count++"`,
@@ -62,20 +67,26 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 			t.Fatalf("expected %q in island page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, jsPath)
+	js := readSharedIslandRuntime(t, outputDir)
 	if !strings.Contains(js, `data-gowdk-runtime=\"js\"`) ||
-		!strings.Contains(js, `const selector = "gowdk-island[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]";`) ||
+		!strings.Contains(js, `gowdk-island[data-gowdk-component-id=\"" + component + "\"][data-gowdk-runtime=\"js\"]`) ||
+		!strings.Contains(js, `gowdk-island:not([data-gowdk-component-id])[data-gowdk-component=\"" + component + "\"][data-gowdk-runtime=\"js\"]`) ||
 		!strings.Contains(js, "\n  function parseExpression(source)") ||
 		!strings.Contains(js, `applyExpression`) ||
 		!strings.Contains(js, `window.__gowdkMountIslands`) ||
 		!strings.Contains(js, `window.__gowdkDestroyIslands`) ||
-		!strings.Contains(js, `async function mountCounterIsland(scope)`) ||
-		!strings.Contains(js, `async function destroyCounterIsland()`) ||
-		!strings.Contains(js, `registry.components[component] = mountCounterIsland`) ||
+		!strings.Contains(js, `async function mountComponentIsland(component, scope)`) ||
+		!strings.Contains(js, `async function destroyComponentIsland()`) ||
+		!strings.Contains(js, `window.__gowdkRegisterJSIsland = registerComponentIsland`) ||
 		!strings.Contains(js, `registry.roots`) ||
-		!strings.Contains(js, `data-gowdk-mounted`) ||
-		!strings.Contains(js, `//# sourceMappingURL=Counter.js.map`) {
+		!strings.Contains(js, `data-gowdk-mounted`) {
 		t.Fatalf("expected generated JS island runtime, got:\n%s", js)
+	}
+	stub := readFile(t, jsPath)
+	if !strings.Contains(stub, `const component = "Counter";`) ||
+		!strings.Contains(stub, `window.__gowdkRegisterJSIsland`) ||
+		!strings.Contains(stub, `//# sourceMappingURL=Counter.js.map`) {
+		t.Fatalf("expected component registration stub, got:\n%s", stub)
 	}
 	for _, unexpected := range []string{
 		`document.body.innerHTML`,
@@ -88,6 +99,9 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 	assetManifestPayload := readFile(t, filepath.Join(outputDir, assetManifestFile))
 	if !strings.Contains(assetManifestPayload, `"assets/gowdk/islands/Counter.js": "assets/gowdk/islands/Counter.js"`) {
 		t.Fatalf("expected island JS in asset manifest:\n%s", assetManifestPayload)
+	}
+	if !strings.Contains(assetManifestPayload, `"assets/gowdk/islands/island.js": "assets/gowdk/islands/island.js"`) {
+		t.Fatalf("expected shared island runtime in asset manifest:\n%s", assetManifestPayload)
 	}
 	if !strings.Contains(assetManifestPayload, `"assets/gowdk/islands/Counter.js.map": "assets/gowdk/islands/Counter.js.map"`) {
 		t.Fatalf("expected island JS source map in asset manifest:\n%s", assetManifestPayload)
@@ -204,7 +218,7 @@ fn Add() {
 			t.Fatalf("expected %q in store runtime:\n%s", expected, storeJS)
 		}
 	}
-	islandJS := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	islandJS := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`const storeNames = Array.isArray(client.stores) ? client.stores : [];`,
 		`Object.assign(state, storeRegistry.get(name));`,
@@ -379,7 +393,7 @@ func TestIslandJSSourceMapMappingsUseComponentSpans(t *testing.T) {
 }`
 	component.Blocks.Spans.Client = source.SourceSpan{Start: source.SourcePosition{Line: 7, Column: 1}, End: source.SourcePosition{Line: 7, Column: 9}}
 	component.Blocks.Spans.View = source.SourceSpan{Start: source.SourcePosition{Line: 13, Column: 1}, End: source.SourcePosition{Line: 13, Column: 7}}
-	source := islandJSSource(component.Name, true)
+	source := islandJSSource(component, true)
 
 	var sourceMap struct {
 		Mappings string `json:"mappings"`
@@ -392,25 +406,9 @@ func TestIslandJSSourceMapMappingsUseComponentSpans(t *testing.T) {
 	}
 
 	mappings := decodeSourceMapMappings(t, sourceMap.Mappings)
-	mountLine := generatedLineContaining(t, source, `async function mountCounterIsland(scope)`)
-	applyStatementsLine := generatedLineContaining(t, source, `async function applyStatements(`)
-	bindingTableLine := generatedLineContaining(t, source, `const bindingTable = Object.freeze(`)
-	updateBindingsLine := generatedLineContaining(t, source, `function updateBindings(root, state, helpers, bindings)`)
-	renderLine := generatedLineContaining(t, source, `function render(root, state, helpers, bindings)`)
-	if mappings[mountLine].SourceLine != 7 || mappings[mountLine].SourceColumn != 1 {
-		t.Fatalf("expected mount function to map to client span, got %#v", mappings[mountLine])
-	}
-	if mappings[applyStatementsLine].SourceLine != 7 || mappings[applyStatementsLine].SourceColumn != 1 {
-		t.Fatalf("expected statement runtime to map to client span, got %#v", mappings[applyStatementsLine])
-	}
-	if mappings[bindingTableLine].SourceLine != 13 || mappings[bindingTableLine].SourceColumn != 1 {
-		t.Fatalf("expected binding table to map to view span, got %#v", mappings[bindingTableLine])
-	}
-	if mappings[updateBindingsLine].SourceLine != 13 || mappings[updateBindingsLine].SourceColumn != 1 {
-		t.Fatalf("expected binding updater to map to view span, got %#v", mappings[updateBindingsLine])
-	}
-	if mappings[renderLine].SourceLine != 13 || mappings[renderLine].SourceColumn != 1 {
-		t.Fatalf("expected render function to map to view span, got %#v", mappings[renderLine])
+	componentLine := generatedLineContaining(t, source, `const component = "Counter";`)
+	if mappings[componentLine].SourceLine != 2 || mappings[componentLine].SourceColumn != 1 {
+		t.Fatalf("expected component registration stub to map to component span, got %#v", mappings[componentLine])
 	}
 }
 
@@ -522,7 +520,7 @@ func TestBuildProductionModeOmitsJSIslandSourceMaps(t *testing.T) {
 	if hasAssetArtifact(result.AssetArtifacts, jsMapPath) {
 		t.Fatalf("did not expect Counter.js.map asset in production mode: %#v", result.AssetArtifacts)
 	}
-	js := readFile(t, jsPath)
+	js := readSharedIslandRuntime(t, outputDir)
 	if strings.Contains(js, `sourceMappingURL`) {
 		t.Fatalf("did not expect sourceMappingURL in production JS:\n%s", js)
 	}
@@ -579,7 +577,7 @@ func TestBuildEmitsClientFunctionHandlersForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in island page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, jsPath)
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`data-gowdk-client`,
 		`nextScope[param] = valueOf(args[index] || "", state, scope, helpers);`,
@@ -638,7 +636,7 @@ func TestBuildEmitsComponentEventRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in component event page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, optionJS)
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`new CustomEvent(name, { detail: payload, bubbles: true })`,
 		`data-gowdk-parent-on-`,
@@ -691,7 +689,7 @@ func TestBuildEmitsTypedExportRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in typed export page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, optionJS)
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`function dispatchComponentExports(root, exportNames, state, active)`,
 		`payload.active = Boolean(active);`,
@@ -754,7 +752,7 @@ func TestBuildEmitsBindableChildStateRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in bindable child state page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, optionJS)
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`root.addEventListener("gowdk:props"`,
 		`if (!changed) return;`,
@@ -919,7 +917,7 @@ func TestBuildEmitsReactiveComponentPropRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in reactive prop page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, previewJS)
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`syncChildProps(root, state, helpers)`,
 		`root.addEventListener("gowdk:props"`,
@@ -974,7 +972,7 @@ fn Add() {
 			t.Fatalf("expected %q in island page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, jsPath)
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`function callHelper(name, args, state, helpers, stack)`,
 		`return callHelper(expr.name, args, state, helpers, stack);`,
@@ -1016,7 +1014,7 @@ func TestBuildEmitsEventModifierRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in island page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`function eventModifiers(source)`,
 		`if (modifiers.prevent) domEvent.preventDefault();`,
@@ -1076,7 +1074,7 @@ on destroy {
 			t.Fatalf("expected %q in island page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`const mountStatements = client.mount || [];`,
 		`const destroyStatements = client.destroy || [];`,
@@ -1087,7 +1085,7 @@ on destroy {
 		`await runEffectCleanup(effect);`,
 		`effectCleanups[effect.field] = effect.cleanup || null;`,
 		`await applyStatements(mountStatements, state, handlers, helpers, null, refs, computeds, asyncTokens, root, emitEvents);`,
-		`const destroyIsland = async function destroyCounterIsland() {`,
+		`const destroyIsland = async function destroyComponentIsland() {`,
 		`registry.roots.delete(root);`,
 		`registry.roots.set(root, destroyIsland);`,
 		`await runAllEffectCleanups();`,
@@ -1135,7 +1133,7 @@ fn FocusSearch() {
 			t.Fatalf("expected %q in island page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Search.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`root.querySelectorAll("[data-gowdk-ref]")`,
 		`refs[node.getAttribute("data-gowdk-ref")] = node;`,
@@ -1182,7 +1180,7 @@ func TestBuildEmitsGIfRuntimeUpdatesForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in island page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`function conditionalRecords(root, options)`,
 		`document.createComment("gowdk-if:" + id)`,
@@ -1231,7 +1229,7 @@ func TestBuildEmitsNestedAndIndexExpressionsForJSIsland(t *testing.T) {
 	if strings.Contains(html, `data-gowdk-if="User.Open`) && strings.Contains(html, ` hidden`) {
 		t.Fatalf("expected initial nested condition to render visible:\n%s", html)
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Nested.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, forbidden := range []string{`with (env)`, `Function("env"`} {
 		if strings.Contains(js, forbidden) {
 			t.Fatalf("did not expect dynamic expression evaluation %q in generated JS:\n%s", forbidden, js)
@@ -1293,7 +1291,7 @@ fn SwapFirstTwo() {
 			t.Fatalf("expected %q in g:for page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Nested.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`function renderListLoops(root, state, helpers, bindings)`,
 		`function updateBindings(root, state, helpers, bindings)`,
@@ -1359,7 +1357,7 @@ func TestBuildEmitsFilterListBindingForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in filter page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Filter.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`lower(value)`,
 		`contains(value, query)`,
@@ -1406,7 +1404,7 @@ func TestBuildEmitsGoishConditionalExpressionsForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in conditional island page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`parseConditional()`,
 		`if (this.match("ident", "if"))`,
@@ -1438,7 +1436,7 @@ func TestBuildEmitsDOMEventScopeForJSIsland(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Search.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`function domEventScope(domEvent)`,
 		`value: target.value == null ? "" : String(target.value)`,
@@ -1492,7 +1490,7 @@ fn Toggle() {
 			t.Fatalf("expected %q in computed island page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`function recomputeComputed(state, computeds, helpers)`,
 		`state[computed.name] = valueOf(computed.expr, state, null, helpers);`,
@@ -1589,7 +1587,7 @@ fn SetCount() {
 			t.Fatalf("expected %q in built-in island page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Nested.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`const builtins = Object.freeze({`,
 		`len(value) {`,
@@ -1648,7 +1646,7 @@ func TestBuildEmitsAsyncFetchJSONRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in async island page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Nested.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`const staleAsyncResult = Symbol("gowdk stale async result");`,
 		`async function fetchJSON(url, signal)`,
@@ -1701,7 +1699,7 @@ func TestBuildEmitsValueBindingRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in binding page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Search.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`const bindingTable = Object.freeze([`,
 		`{ kind: "value", selector: "[data-gowdk-binding-value]", id: "data-gowdk-binding-value", field: "data-gowdk-bind-value" },`,
@@ -1780,7 +1778,7 @@ func TestBuildEmitsNumericValueBindingRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in numeric binding page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`const type = node.getAttribute("data-gowdk-bind-type") || "string";`,
 		`parseInt(node.value, 10)`,
@@ -1822,7 +1820,7 @@ func TestBuildEmitsRadioValueBindingRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in radio binding page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Search.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`node.checked = String(state[field] == null ? "" : state[field]) === node.value;`,
 		`node.tagName === "SELECT" || node.type === "radio" ? "change" : "input";`,
@@ -1864,7 +1862,7 @@ func TestBuildEmitsCheckedBindingRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in checked binding page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`{ kind: "checked", selector: "[data-gowdk-binding-checked]", id: "data-gowdk-binding-checked", field: "data-gowdk-bind-checked" },`,
 		`else if (spec.kind === "checked") bindings.checked.push({ id, node, field: node.getAttribute(spec.field) });`,
@@ -1907,7 +1905,7 @@ func TestBuildEmitsReactiveAttributeRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in reactive attr page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`data-gowdk-attr-`,
 		`booleanAttrs.has(name)`,
@@ -1948,7 +1946,7 @@ func TestBuildEmitsClassToggleRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in class toggle page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`data-gowdk-class-`,
 		`{ kind: "class", attrPrefix: "data-gowdk-binding-class-", valuePrefix: "data-gowdk-class-" },`,
@@ -1993,7 +1991,7 @@ func TestBuildEmitsStyleBindingRuntimeForJSIsland(t *testing.T) {
 			t.Fatalf("expected %q in style binding page:\n%s", expected, html)
 		}
 	}
-	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js"))
+	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`data-gowdk-style-`,
 		`{ kind: "style", attrPrefix: "data-gowdk-binding-style-", valuePrefix: "data-gowdk-style-", unitPrefix: "data-gowdk-style-unit-" },`,
@@ -2163,6 +2161,53 @@ func TestWASMIslandLoaderRunsInBrowser(t *testing.T) {
 	}
 	if err != nil {
 		t.Fatalf("browser wasm island test failed: %v\n%s", err, output)
+	}
+}
+
+func TestWASMIslandLoaderReportsInvalidPatchInBrowser(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	chromium, err := lookupChromium()
+	if err != nil {
+		t.Skip(err)
+	}
+	requireNodePlaywright(t, node)
+
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "counter",
+			Route: "/counter",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{counterComponent()},
+	}
+	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.FileServer(http.Dir(outputDir)))
+	defer server.Close()
+
+	script := filepath.Join(t.TempDir(), "gowdk-invalid-wasm-patch-browser-test.cjs")
+	if err := os.WriteFile(script, []byte(wasmIslandInvalidPatchBrowserHarness()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, script, server.URL, chromium)
+	command.Dir = mustWorkingDir(t)
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("browser invalid wasm patch test timed out:\n%s", output)
+	}
+	if err != nil {
+		t.Fatalf("browser invalid wasm patch test failed: %v\n%s", err, output)
 	}
 }
 
@@ -2847,6 +2892,64 @@ async function waitForCall(calls, kind) {
 `
 }
 
+func wasmIslandInvalidPatchBrowserHarness() string {
+	return `
+"use strict";
+
+const assert = require("node:assert/strict");
+const nodeModule = require("node:module");
+
+const baseURL = process.argv[2];
+const executablePath = process.argv[3];
+const { chromium } = nodeModule.createRequire(process.cwd() + "/gowdk-test.js")("playwright");
+
+async function waitForRejectedPatch(consoleErrors) {
+  const started = Date.now();
+  while (Date.now() - started < 5000) {
+    if (consoleErrors.some((text) => text.includes("GOWDK WASM island rejected patch") && text.includes("replaceDocument"))) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("timed out waiting for rejected patch console error; got " + JSON.stringify(consoleErrors));
+}
+
+(async () => {
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+    args: ["--no-sandbox"]
+  });
+  const page = await browser.newPage();
+  const consoleErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("GOWDK")) consoleErrors.push(message.text());
+  });
+  await page.addInitScript(() => {
+    const exports = {
+      GOWDKMountCounter() {
+        return [{ type: "replaceDocument", target: "b2", value: "<main>bad</main>" }];
+      },
+      GOWDKHandleCounter() {
+        return [];
+      },
+      GOWDKDestroyCounter() {
+        return [];
+      }
+    };
+    WebAssembly.instantiateStreaming = async () => ({ instance: { exports } });
+    WebAssembly.instantiate = async () => ({ instance: { exports } });
+  });
+
+  await page.goto(baseURL + "/counter/", { waitUntil: "networkidle" });
+  await waitForRejectedPatch(consoleErrors);
+  assert.equal(await page.textContent("[data-gowdk-binding-text='b2']"), "1");
+  await browser.close();
+})().catch(async (error) => {
+  console.error(error && error.stack || error);
+  process.exit(1);
+});
+`
+}
+
 func TestBuildAllowsJSAndWASMIslandsOnSamePage(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{
@@ -2883,6 +2986,139 @@ func TestBuildAllowsJSAndWASMIslandsOnSamePage(t *testing.T) {
 	} {
 		if !strings.Contains(html, expected) {
 			t.Fatalf("expected %q in mixed island page:\n%s", expected, html)
+		}
+	}
+}
+
+func TestBuildScopesIslandAssetsByComponentPackage(t *testing.T) {
+	outputDir := t.TempDir()
+	marketing := counterComponent()
+	marketing.Package = "marketing"
+	account := gwdkir.Component{
+		Package: "account",
+		Name:    "Counter",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<button>Account</button>`,
+		},
+	}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			Package: "pages",
+			ID:      "same-name",
+			Route:   "/same-name",
+			Uses: []gwdkir.Use{
+				{Alias: "m", Package: "marketing"},
+				{Alias: "a", Package: "account"},
+			},
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><m.Counter /><a.Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{marketing, account},
+	}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedAssets := []string{
+		filepath.Join(outputDir, "assets", "gowdk", "islands", "marketing", "Counter.js"),
+		filepath.Join(outputDir, "assets", "gowdk", "islands", "marketing", "Counter.js.map"),
+		filepath.Join(outputDir, "assets", "gowdk", "islands", "account", "Counter.wasm"),
+		filepath.Join(outputDir, "assets", "gowdk", "islands", "account", "Counter.wasm.js"),
+	}
+	for _, path := range expectedAssets {
+		if !hasAssetArtifact(result.AssetArtifacts, path) {
+			t.Fatalf("expected package-scoped island asset %s, got %#v", path, result.AssetArtifacts)
+		}
+	}
+	html := readFile(t, filepath.Join(outputDir, "same-name", "index.html"))
+	for _, expected := range []string{
+		`<script src="/assets/gowdk/islands/account/Counter.wasm.js" defer></script>`,
+		`<script src="/assets/gowdk/islands/marketing/Counter.js" defer></script>`,
+		`data-gowdk-component="Counter" data-gowdk-island="i1" data-gowdk-runtime="js" data-gowdk-component-id="marketing.Counter"`,
+		`data-gowdk-component="Counter" data-gowdk-island="i2" data-gowdk-runtime="wasm" data-gowdk-component-id="account.Counter"`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in package-scoped island page:\n%s", expected, html)
+		}
+	}
+	js := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "marketing", "Counter.js"))
+	if !strings.Contains(js, `const component = "marketing.Counter";`) {
+		t.Fatalf("expected JS island runtime to select package-qualified component id:\n%s", js)
+	}
+	loader := readFile(t, filepath.Join(outputDir, "assets", "gowdk", "islands", "account", "Counter.wasm.js"))
+	for _, expected := range []string{
+		`const component = "Counter";`,
+		`const componentID = "account.Counter";`,
+		`const wasmPath = "/assets/gowdk/islands/account/Counter.wasm";`,
+	} {
+		if !strings.Contains(loader, expected) {
+			t.Fatalf("expected %q in package-scoped WASM loader:\n%s", expected, loader)
+		}
+	}
+}
+
+func TestBuildSharesJSIslandRuntimeAcrossComponents(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "multi-islands",
+			Route: "/multi-islands",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter /><Search /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{counterComponent(), textComponent()},
+	}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sharedPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "island.js")
+	counterPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "Counter.js")
+	searchPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "Search.js")
+	for _, path := range []string{sharedPath, counterPath, searchPath} {
+		if !hasAssetArtifact(result.AssetArtifacts, path) {
+			t.Fatalf("expected shared-runtime island asset %s, got %#v", path, result.AssetArtifacts)
+		}
+	}
+	html := readFile(t, filepath.Join(outputDir, "multi-islands", "index.html"))
+	for _, expected := range []string{
+		`<script src="/assets/gowdk/islands/island.js" defer></script>`,
+		`<script src="/assets/gowdk/islands/Counter.js" defer></script>`,
+		`<script src="/assets/gowdk/islands/Search.js" defer></script>`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in shared-runtime island page:\n%s", expected, html)
+		}
+	}
+	if sharedIndex := strings.Index(html, `/assets/gowdk/islands/island.js`); sharedIndex < 0 {
+		t.Fatalf("expected shared island runtime in page:\n%s", html)
+	} else {
+		for _, href := range []string{`/assets/gowdk/islands/Counter.js`, `/assets/gowdk/islands/Search.js`} {
+			if stubIndex := strings.Index(html, href); stubIndex < 0 || stubIndex < sharedIndex {
+				t.Fatalf("expected shared island runtime before %s in page:\n%s", href, html)
+			}
+		}
+	}
+	shared := readFile(t, sharedPath)
+	if !strings.Contains(shared, `function parseExpression(source)`) ||
+		!strings.Contains(shared, `function mountComponentIsland(component, scope)`) ||
+		!strings.Contains(shared, `bindings = collectBindings(root);`) {
+		t.Fatalf("expected shared runtime implementation:\n%s", shared)
+	}
+	for _, path := range []string{counterPath, searchPath} {
+		stub := readFile(t, path)
+		if strings.Contains(stub, `function parseExpression(source)`) {
+			t.Fatalf("expected compact component registration stub, got full runtime in %s:\n%s", path, stub)
+		}
+		if !strings.Contains(stub, `window.__gowdkRegisterJSIsland`) {
+			t.Fatalf("expected component stub to register with shared runtime in %s:\n%s", path, stub)
 		}
 	}
 }

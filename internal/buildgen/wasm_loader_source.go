@@ -17,11 +17,12 @@ func clientGoBlockWASMLoaderSource(page gwdkir.Page) string {
 	})
 }
 
-func islandWASMLoaderSource(componentName string) string {
+func islandWASMLoaderSource(component gwdkir.Component) string {
 	return clientrt.WASMIslandLoaderSource(clientrt.WASMIslandLoaderOptions{
-		Component:    componentName,
+		Component:    component.Name,
+		ComponentID:  islandComponentID(component.Package, component.Name),
 		ABIVersion:   wasmIslandABIVersion,
-		WASMPath:     "/" + islandWASMAssetPath(componentName),
+		WASMPath:     "/" + islandWASMAssetPath(component.Package, component.Name),
 		WASMExecPath: "/" + islandWASMExecAssetPath(),
 	})
 }

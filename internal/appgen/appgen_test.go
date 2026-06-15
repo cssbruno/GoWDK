@@ -113,6 +113,7 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 	if strings.Contains(string(packagePayload), `github.com/cssbruno/gowdk/addons/ssr`) {
 		t.Fatalf("static-only generated app should not import SSR helpers:\n%s", packagePayload)
 	}
+	assertNoOptionalGeneratedAppDependencies(t, modulePayload, mainPayload, packagePayload)
 	for _, copiedRuntime := range []string{
 		"type SPAHandler struct",
 		"func loadAssetManifest",
@@ -122,6 +123,37 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 	} {
 		if strings.Contains(string(packagePayload), copiedRuntime) {
 			t.Fatalf("expected generated gowdkapp/app.go not to copy runtime helper %q:\n%s", copiedRuntime, packagePayload)
+		}
+	}
+}
+
+func assertNoOptionalGeneratedAppDependencies(t *testing.T, payloads ...[]byte) {
+	t.Helper()
+
+	forbidden := []string{
+		"github.com/cssbruno/gowdk/addons/tailwind",
+		"github.com/cssbruno/gowdk/runtime/adapters/chi",
+		"github.com/cssbruno/gowdk/runtime/adapters/echo",
+		"github.com/cssbruno/gowdk/runtime/adapters/fiber",
+		"github.com/cssbruno/gowdk/runtime/adapters/gin",
+		"github.com/cssbruno/gowdk/runtime/contracts/natsbroker",
+		"github.com/cssbruno/gowdk/runtime/contracts/redisstream",
+		"github.com/cssbruno/gowdk/runtime/contracts/websocketfanout",
+		"github.com/coder/websocket",
+		"github.com/gin-gonic/gin",
+		"github.com/go-chi/chi/v5",
+		"github.com/gofiber/fiber/v2",
+		"github.com/labstack/echo/v5",
+		"github.com/nats-io/nats.go",
+		"github.com/redis/go-redis/v9",
+	}
+
+	for _, payload := range payloads {
+		source := string(payload)
+		for _, dependency := range forbidden {
+			if strings.Contains(source, dependency) {
+				t.Fatalf("simple generated app should not import optional dependency %q:\n%s", dependency, source)
+			}
 		}
 	}
 }

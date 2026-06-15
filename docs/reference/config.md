@@ -293,13 +293,16 @@ runtime-specific security controls.
 ## Build
 
 `BuildConfig.Output`, `BuildConfig.Mode`, `BuildConfig.Assets`,
+`BuildConfig.ObfuscateAssets`,
 `BuildConfig.Head`, `BuildConfig.CSRF`, `BuildConfig.SecurityHeaders`, `BuildConfig.BodyLimits`,
 `BuildConfig.AllowMissingBackend`, `BuildConfig.Stylesheets`,
 `BuildConfig.Scripts`, and `BuildConfig.Targets` are target build settings.
 Current `gowdk build` reads literal `Build.Output`, `Build.Mode`,
-`Build.Head`, `Build.CSRF`, `Build.SecurityHeaders`, `Build.BodyLimits`,
-`Build.AllowMissingBackend`, `Build.Stylesheets`, `Build.Scripts`, and `Build.Targets` from
-`gowdk.config.go`; `--out` overrides `Build.Output` for ad hoc builds.
+`Build.ObfuscateAssets`, `Build.Head`, `Build.CSRF`,
+`Build.SecurityHeaders`, `Build.BodyLimits`, `Build.AllowMissingBackend`,
+`Build.Stylesheets`, `Build.Scripts`, and `Build.Targets` from
+`gowdk.config.go`; `--out` overrides `Build.Output` for ad hoc builds and
+`--obfuscate-assets` overrides `Build.Mode` to production for that build.
 `BuildConfig.Assets` remains planned.
 
 `Build.Targets` declares repeatable module-to-output packaging:
@@ -309,6 +312,7 @@ type BuildConfig struct {
 	Output              string
 	Mode                gowdk.BuildMode
 	Assets              gowdk.AssetMode
+	ObfuscateAssets     bool
 	Head                gowdk.HeadConfig
 	CSRF                gowdk.CSRFConfig
 	SecurityHeaders     gowdk.SecurityHeadersConfig
@@ -366,8 +370,18 @@ type BuildTargetConfig struct {
 `Mode` controls development metadata in generated frontend artifacts. The
 default omitted mode behaves like `gowdk.Development` and emits JavaScript
 island source maps. Set `Mode: gowdk.Production` to omit `.js.map` artifacts and
-`sourceMappingURL` comments and to compact generated island JavaScript by
-trimming formatting-only whitespace.
+`sourceMappingURL` comments and to compact generated island JavaScript.
+
+`ObfuscateAssets` is a production-only optimization/hardening switch for
+compiler-owned generated browser JavaScript such as the SPA/partial runtime,
+store runtime, island runtime/stubs, and WASM loader glue. It uses deterministic
+minification/identifier shortening, disables generated source maps through
+production mode, records transformed assets in `gowdk-assets.json`, and writes
+`asset_obfuscation` / `asset_obfuscated` build-report events. It is not a
+security boundary and does not replace server-side auth, guards, CSRF,
+validation, or handler authorization. Configs that set `ObfuscateAssets: true`
+must also set `Mode: gowdk.Production`; the CLI flag `--obfuscate-assets`
+sets both for the current build.
 
 Production mode also requires explicitly declared `act` and `api` endpoints to
 bind to supported same-package Go handlers. Missing or unsupported handlers fail
@@ -461,20 +475,24 @@ under `/assets/gowdk/`.
 ## Addons
 
 `Addons` registers optional features such as spa, actions, partial, SSR, API,
-embed, CSS, contracts, realtime, auth, DB helpers, and rate limiting. Current
-validation uses SSR feature registration for render-mode checks, and SPA builds
-invoke addons that implement `gowdk.CSSProcessor`.
+embed, CSS, contracts, realtime, auth, DB helpers, rate limiting, and SEO
+output. Current validation uses feature registration for render-mode,
+realtime, and other compiler checks; SPA builds invoke addons that implement
+`gowdk.CSSProcessor` or `gowdk.SEOProvider`.
 
 DB helper usage is ordinary Go code around `database/sql`; see [db.md](db.md)
 for migrations, transactions, readiness, and sqlc usage.
 
 Use `gowdk add --list` to print built-in addon names, and `gowdk add <name>` to
 insert the canonical import and `<name>.Addon()` constructor into
-`gowdk.config.go`. The command rewrites literal `Config.Addons` lists only; if
-`Addons` is computed by Go code, edit the config manually.
+`gowdk.config.go`. `gowdk add seo` requires `--base-url <url>` because SEO
+build output requires `seo.Options.BaseURL`. The command rewrites literal
+`Config.Addons` lists only; if `Addons` is computed by Go code, edit the config
+manually.
 
-The literal config loader recognizes built-in no-argument addon constructors
-when they are imported from their canonical package paths:
+The literal config loader recognizes built-in addon constructors when they are
+imported from their canonical package paths. Most are no-argument constructors;
+`addons/seo` also accepts the literal SEO options subset:
 
 ```go
 import (
@@ -488,6 +506,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/partial"
 	"github.com/cssbruno/gowdk/addons/ratelimit"
 	"github.com/cssbruno/gowdk/addons/realtime"
+	"github.com/cssbruno/gowdk/addons/seo"
 	"github.com/cssbruno/gowdk/addons/spa"
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/addons/static"
@@ -508,6 +527,9 @@ var Config = gowdk.Config{
 		db.Addon(),
 		ratelimit.Addon(),
 		realtime.Addon(),
+		seo.Addon(seo.Options{
+			BaseURL: "https://example.com",
+		}),
 	},
 }
 ```
@@ -517,7 +539,8 @@ uses an executable config bridge: it creates a temporary helper inside the
 project module, imports the config package as normal Go, and reads the resulting
 `gowdk.Config`. That allows addons from other modules, including GitHub-hosted
 addons, to participate through the regular `gowdk.Addon`,
-`gowdk.CSSProcessor`, and `gowdk.GoBlockConsumer` interfaces:
+`gowdk.CSSProcessor`, `gowdk.SEOProvider`, and `gowdk.GoBlockConsumer`
+interfaces:
 
 ```go
 import (

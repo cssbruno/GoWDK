@@ -72,6 +72,7 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 			"assets": fmt.Sprint(len(planned.assets)),
 		},
 	})
+	reportAssetObfuscation(reporter, config.Build.ObfuscateAssets, planned.obfuscations)
 	reportSkippedPrerenderPages(reporter, config, ir)
 
 	result := Result{
@@ -118,6 +119,28 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 	}
 	result.RouteManifestPath = manifestPath
 	reporter.info("manifest", "route_manifest_written", "route manifest written", BuildEvent{Path: eventPath(outputDir, manifestPath)})
+	seoPlan, err := planSEOArtifacts(config, ir, result.Artifacts)
+	if err != nil {
+		return Result{}, reporter.fail("seo", err)
+	}
+	reportSEOExclusions(reporter, seoPlan.Exclusions)
+	sitemapPath, robotsPath, sitemapWrote, robotsWrote, err := writeSEOArtifacts(outputDir, seoPlan)
+	if err != nil {
+		return Result{}, reporter.fail("seo", err)
+	}
+	if sitemapPath != "" {
+		recordWriteStat(&result, sitemapWrote)
+		result.SitemapPath = sitemapPath
+		reporter.info("seo", "sitemap_written", "sitemap written", BuildEvent{
+			Path: eventPath(outputDir, sitemapPath),
+			Data: map[string]string{"urls": fmt.Sprint(len(seoPlan.URLs))},
+		})
+	}
+	if robotsPath != "" {
+		recordWriteStat(&result, robotsWrote)
+		result.RobotsPath = robotsPath
+		reporter.info("seo", "robots_written", "robots.txt written", BuildEvent{Path: eventPath(outputDir, robotsPath)})
+	}
 	assetManifestPath, err := writeAssetManifest(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)
@@ -243,6 +266,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 			"assets": fmt.Sprint(len(planned.assets)),
 		},
 	})
+	reportAssetObfuscation(reporter, config.Build.ObfuscateAssets, planned.obfuscations)
 	reportSkippedPrerenderPages(reporter, config, ir)
 
 	result := MemoryResult{
@@ -302,6 +326,22 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	}
 	result.Files[routeManifestFile] = routeManifest
 	reporter.info("manifest", "route_manifest_collected", "route manifest collected", BuildEvent{Path: routeManifestFile})
+	seoPlan, err := planSEOArtifacts(config, ir, result.Artifacts)
+	if err != nil {
+		return MemoryResult{}, reporter.fail("seo", err)
+	}
+	reportSEOExclusions(reporter, seoPlan.Exclusions)
+	if seoPlan.Enabled {
+		result.SitemapPath = filepath.Join(outputDir, sitemapFile)
+		result.RobotsPath = filepath.Join(outputDir, robotsFile)
+		result.Files[sitemapFile] = seoPlan.Sitemap
+		result.Files[robotsFile] = seoPlan.Robots
+		reporter.info("seo", "sitemap_collected", "sitemap collected", BuildEvent{
+			Path: sitemapFile,
+			Data: map[string]string{"urls": fmt.Sprint(len(seoPlan.URLs))},
+		})
+		reporter.info("seo", "robots_collected", "robots.txt collected", BuildEvent{Path: robotsFile})
+	}
 	assetManifest, err := assetManifestPayload(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return MemoryResult{}, reporter.fail("manifest", err)
@@ -532,7 +572,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	changedPages := sourcePathSet(changedPageSources)
 	components, componentFailures := buildComponents(ir.Components)
 	layouts, layoutFailures := buildLayouts(ir.Layouts)
-	css, cssFailures := planCSS(config, ir, outputDir)
+	css, cssFailures := planCSS(config, ir, outputDir, components, layouts)
 	componentAssets, componentAssetFailures := planComponentFileAssets(ir.Assets, outputDir)
 	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
@@ -554,12 +594,18 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 		return Result{}, reporter.fail("plan", err)
 	}
 	runtime = append(componentAssets, append(scopedJS, runtime...)...)
+	var obfuscations []assetObfuscationRecord
+	runtime, obfuscations, err = applyAssetObfuscation(config, outputDir, runtime)
+	if err != nil {
+		return Result{}, reporter.fail("plan", err)
+	}
 	reporter.info("plan", "artifacts_planned", "incremental artifacts planned", BuildEvent{
 		Data: map[string]string{
 			"css":    fmt.Sprint(len(css.assets)),
 			"assets": fmt.Sprint(len(runtime)),
 		},
 	})
+	reportAssetObfuscation(reporter, config.Build.ObfuscateAssets, obfuscations)
 
 	result := Result{
 		Artifacts:      make([]Artifact, 0, len(ir.Pages)),
@@ -660,6 +706,28 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	}
 	result.RouteManifestPath = manifestPath
 	reporter.info("manifest", "route_manifest_written", "route manifest written", BuildEvent{Path: eventPath(outputDir, manifestPath)})
+	seoPlan, err := planSEOArtifacts(config, ir, result.Artifacts)
+	if err != nil {
+		return Result{}, reporter.fail("seo", err)
+	}
+	reportSEOExclusions(reporter, seoPlan.Exclusions)
+	sitemapPath, robotsPath, sitemapWrote, robotsWrote, err := writeSEOArtifacts(outputDir, seoPlan)
+	if err != nil {
+		return Result{}, reporter.fail("seo", err)
+	}
+	if sitemapPath != "" {
+		recordWriteStat(&result, sitemapWrote)
+		result.SitemapPath = sitemapPath
+		reporter.info("seo", "sitemap_written", "sitemap written", BuildEvent{
+			Path: eventPath(outputDir, sitemapPath),
+			Data: map[string]string{"urls": fmt.Sprint(len(seoPlan.URLs))},
+		})
+	}
+	if robotsPath != "" {
+		recordWriteStat(&result, robotsWrote)
+		result.RobotsPath = robotsPath
+		reporter.info("seo", "robots_written", "robots.txt written", BuildEvent{Path: eventPath(outputDir, robotsPath)})
+	}
 	assetManifestPath, err := writeAssetManifest(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)
@@ -844,7 +912,7 @@ func cachePolicyCounts(policies []string) string {
 func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (buildPlan, error) {
 	components, componentFailures := buildComponents(ir.Components)
 	layouts, layoutFailures := buildLayouts(ir.Layouts)
-	css, cssFailures := planCSS(config, ir, outputDir)
+	css, cssFailures := planCSS(config, ir, outputDir, components, layouts)
 	componentAssets, componentAssetFailures := planComponentFileAssets(ir.Assets, outputDir)
 	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
@@ -893,5 +961,9 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	}
 	assets := append(componentAssets, scopedJS...)
 	assets = append(assets, runtime...)
-	return buildPlan{pages: planned, css: css.assets, assets: assets}, nil
+	assets, obfuscations, err := applyAssetObfuscation(config, outputDir, assets)
+	if err != nil {
+		return buildPlan{}, err
+	}
+	return buildPlan{pages: planned, css: css.assets, assets: assets, obfuscations: obfuscations}, nil
 }

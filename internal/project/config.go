@@ -22,6 +22,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/partial"
 	"github.com/cssbruno/gowdk/addons/ratelimit"
 	"github.com/cssbruno/gowdk/addons/realtime"
+	"github.com/cssbruno/gowdk/addons/seo"
 	"github.com/cssbruno/gowdk/addons/spa"
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/addons/static"
@@ -498,6 +499,8 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 			build.Output = parseString(keyValue.Value)
 		case "Mode":
 			build.Mode = parseBuildMode(keyValue.Value)
+		case "ObfuscateAssets":
+			build.ObfuscateAssets = parseBool(keyValue.Value)
 		case "Head":
 			build.Head = parseHeadConfig(keyValue.Value)
 		case "CSRF":
@@ -894,6 +897,10 @@ func parseAddons(expression ast.Expr, imports map[string]string) ([]gowdk.Addon,
 			addons = append(addons, addon)
 			continue
 		}
+		if addon, ok := parseSEOAddon(element, imports); ok {
+			addons = append(addons, addon)
+			continue
+		}
 		if addon, ok := parseTailwindAddon(element, imports); ok {
 			addons = append(addons, addon)
 			continue
@@ -937,6 +944,8 @@ func parseBuiltInAddon(expression ast.Expr, imports map[string]string) (gowdk.Ad
 		return ratelimit.Addon(), true
 	case realtime.ImportPath:
 		return realtime.Addon(), true
+	case seo.ImportPath:
+		return seo.Addon(), true
 	case spa.ImportPath:
 		return spa.Addon(), true
 	case ssr.ImportPath:
@@ -946,6 +955,160 @@ func parseBuiltInAddon(expression ast.Expr, imports map[string]string) (gowdk.Ad
 	default:
 		return nil, false
 	}
+}
+
+func parseSEOAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon, bool) {
+	call, ok := expression.(*ast.CallExpr)
+	if !ok {
+		return nil, false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Addon" {
+		return nil, false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	if !ok || imports[packageName.Name] != seo.ImportPath {
+		return nil, false
+	}
+	if len(call.Args) > 1 {
+		return nil, false
+	}
+	if len(call.Args) == 0 {
+		return seo.Addon(), true
+	}
+
+	options, ok := parseSEOOptions(call.Args[0], imports)
+	if !ok {
+		return nil, false
+	}
+	return seo.Addon(options), true
+}
+
+func parseSEOOptions(expression ast.Expr, imports map[string]string) (seo.Options, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok || !isSEOOptionsType(literal.Type, imports) {
+		return seo.Options{}, false
+	}
+
+	var options seo.Options
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			return seo.Options{}, false
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			return seo.Options{}, false
+		}
+		switch key.Name {
+		case "BaseURL":
+			value, ok := parseLiteralString(keyValue.Value)
+			if !ok {
+				return seo.Options{}, false
+			}
+			options.BaseURL = value
+		case "Disallow":
+			values, ok := parseLiteralStringList(keyValue.Value)
+			if !ok {
+				return seo.Options{}, false
+			}
+			options.Disallow = values
+		case "ExtraURLs":
+			values, ok := parseSEOURLList(keyValue.Value, imports)
+			if !ok {
+				return seo.Options{}, false
+			}
+			options.ExtraURLs = values
+		default:
+			return seo.Options{}, false
+		}
+	}
+	return options, true
+}
+
+func isSEOOptionsType(expression ast.Expr, imports map[string]string) bool {
+	selector, ok := expression.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Options" {
+		return false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	return ok && imports[packageName.Name] == seo.ImportPath
+}
+
+func parseSEOURLList(expression ast.Expr, imports map[string]string) ([]gowdk.SEOURL, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil, false
+	}
+	var urls []gowdk.SEOURL
+	for _, element := range literal.Elts {
+		url, ok := parseSEOURL(element, imports)
+		if !ok {
+			return nil, false
+		}
+		urls = append(urls, url)
+	}
+	return urls, true
+}
+
+func parseSEOURL(expression ast.Expr, imports map[string]string) (gowdk.SEOURL, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok || !isSEOURLType(literal.Type, imports) {
+		return gowdk.SEOURL{}, false
+	}
+
+	var url gowdk.SEOURL
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			return gowdk.SEOURL{}, false
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			return gowdk.SEOURL{}, false
+		}
+		switch key.Name {
+		case "Loc":
+			value, ok := parseLiteralString(keyValue.Value)
+			if !ok {
+				return gowdk.SEOURL{}, false
+			}
+			url.Loc = value
+		case "LastMod":
+			value, ok := parseLiteralString(keyValue.Value)
+			if !ok {
+				return gowdk.SEOURL{}, false
+			}
+			url.LastMod = value
+		case "ChangeFreq":
+			value, ok := parseLiteralString(keyValue.Value)
+			if !ok {
+				return gowdk.SEOURL{}, false
+			}
+			url.ChangeFreq = value
+		case "Priority":
+			value, ok := parseLiteralString(keyValue.Value)
+			if !ok {
+				return gowdk.SEOURL{}, false
+			}
+			url.Priority = value
+		default:
+			return gowdk.SEOURL{}, false
+		}
+	}
+	return url, true
+}
+
+func isSEOURLType(expression ast.Expr, imports map[string]string) bool {
+	if expression == nil {
+		return true
+	}
+	selector, ok := expression.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "URL" {
+		return false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	return ok && imports[packageName.Name] == seo.ImportPath
 }
 
 func parseTailwindAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon, bool) {
@@ -1036,16 +1199,44 @@ func parseStringList(expression ast.Expr) []string {
 	return values
 }
 
-func parseString(expression ast.Expr) string {
-	literal, ok := expression.(*ast.BasicLit)
-	if !ok || literal.Kind != token.STRING {
-		return ""
+func parseLiteralStringList(expression ast.Expr) ([]string, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil, false
 	}
-	value, err := strconv.Unquote(literal.Value)
-	if err != nil {
+
+	var values []string
+	for _, element := range literal.Elts {
+		value, ok := parseLiteralString(element)
+		if !ok {
+			return nil, false
+		}
+		if value == "" {
+			continue
+		}
+		values = append(values, value)
+	}
+	return values, true
+}
+
+func parseString(expression ast.Expr) string {
+	value, ok := parseLiteralString(expression)
+	if !ok {
 		return ""
 	}
 	return value
+}
+
+func parseLiteralString(expression ast.Expr) (string, bool) {
+	literal, ok := expression.(*ast.BasicLit)
+	if !ok || literal.Kind != token.STRING {
+		return "", false
+	}
+	value, err := strconv.Unquote(literal.Value)
+	if err != nil {
+		return "", false
+	}
+	return value, true
 }
 
 func parseBool(expression ast.Expr) bool {

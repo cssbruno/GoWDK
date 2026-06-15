@@ -33,19 +33,21 @@ even when explicit `.gwdk` files are passed.
 | `contracts/patients.page.gwdk` | Local command/query contract web adapter plus realtime `g:subscribe` live-region example backed by normal Go registrations. | `go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk` |
 | `security/security.audit.gwdk` | Declared audit policy example that extends the frontend baseline and includes a generated header expectation. | `go run ./cmd/gowdk check examples/security/security.audit.gwdk` |
 | `embed/site.page.gwdk` | Standalone one-binary generated app example. | `go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk` |
+| `seo/` | SEO addon example that emits `sitemap.xml` and `robots.txt`. | `go run ./cmd/gowdk build --config examples/seo/gowdk.config.go --out /tmp/gowdk-seo-build examples/seo/*.gwdk` |
 | `css/styled.page.gwdk` | Configured stylesheet-link example. | `go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk` |
 | `tailwind/site.page.gwdk` | Tailwind v4 addon example using the standalone CLI. | `go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk` |
 | `components/base/base-components.page.gwdk` | Source-level base component examples for `Button`, `TextField`, and `Card`. | `go run ./cmd/gowdk build --out /tmp/gowdk-base-components examples/components/base/*.gwdk` |
 | `components/css/scoped-card.page.gwdk` | Component-local `css` metadata example. | `go run ./cmd/gowdk check examples/components/css/*.gwdk` |
 | `components/assets/asset-badge.page.gwdk` | Component-local `asset` metadata and emitted asset manifest example. | `go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk` |
+| `components/wasm/abi-counter.page.gwdk` | Component-level WASM island ABI example with a browser Go package. | `go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk` |
 
 Check all current examples with SSR validation enabled:
 
 ```sh
-go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
 ```
 
 Build the current simple page:
@@ -159,6 +161,24 @@ Build the one-binary generated app example:
 ```sh
 go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
 test -x /tmp/gowdk-embed-site
+GOWDK_SMOKE_ADDR=127.0.0.1:18085 scripts/smoke-generated-binary.sh /tmp/gowdk-embed-site /embed "Embedded GOWDK"
+```
+
+Build the SEO addon example:
+
+```sh
+go run ./cmd/gowdk build --config examples/seo/gowdk.config.go --out /tmp/gowdk-seo-build examples/seo/*.gwdk
+test -f /tmp/gowdk-seo-build/sitemap.xml
+test -f /tmp/gowdk-seo-build/robots.txt
+grep -F 'https://example.com/seo/blog/hello-gowdk' /tmp/gowdk-seo-build/sitemap.xml
+grep -F 'Sitemap: https://example.com/sitemap.xml' /tmp/gowdk-seo-build/robots.txt
+```
+
+Build the generated app WASM deploy artifact:
+
+```sh
+go run ./cmd/gowdk build --out /tmp/gowdk-wasm-build --app /tmp/gowdk-wasm-app --wasm /tmp/gowdk-site.wasm examples/embed/site.page.gwdk
+scripts/smoke-generated-wasm.sh /tmp/gowdk-site.wasm
 ```
 
 Build the CSS stylesheet-link example:
@@ -198,6 +218,16 @@ go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/a
 test -f /tmp/gowdk-component-assets/components/assets/index.html
 grep -F '"assets/gowdk/components/componentassets/AssetBadge/badge.svg"' /tmp/gowdk-component-assets/gowdk-assets.json
 grep -F 'assets/gowdk/components/componentassets/AssetBadge/badge.' /tmp/gowdk-component-assets/gowdk-assets.json
+```
+
+Build the component-level WASM island ABI example:
+
+```sh
+go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk
+test -f /tmp/gowdk-wasm-island/components/wasm/index.html
+test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm
+test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm.js
+test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/wasm_exec.js
 ```
 
 ## Current Limitations

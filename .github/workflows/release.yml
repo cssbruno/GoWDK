@@ -40,6 +40,7 @@ jobs:
         run: |
           go version
           go env GOVERSION
+          scripts/check-root-deps.sh
           scripts/test-go-modules.sh
           scripts/vulncheck-go-modules.sh
           go build ./cmd/gowdk
@@ -47,7 +48,7 @@ jobs:
           node --check editors/vscode/extension.js
           node --check editors/vscode/extension-core.js
           node --test editors/vscode/*.test.js
-          examples="examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk"
+          examples="examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk"
           go run ./cmd/gowdk check --ssr $examples
           go run ./cmd/gowdk manifest --ssr $examples
           go run ./cmd/gowdk sitemap --ssr $examples
@@ -78,6 +79,10 @@ jobs:
           rm -rf /tmp/gowdk-embed-build /tmp/gowdk-embed-app /tmp/gowdk-embed-site
           go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
           test -x /tmp/gowdk-embed-site
+          GOWDK_SMOKE_ADDR=127.0.0.1:18086 scripts/smoke-generated-binary.sh /tmp/gowdk-embed-site /embed "Embedded GOWDK"
+          rm -rf /tmp/gowdk-wasm-build /tmp/gowdk-wasm-app /tmp/gowdk-site.wasm
+          go run ./cmd/gowdk build --out /tmp/gowdk-wasm-build --app /tmp/gowdk-wasm-app --wasm /tmp/gowdk-site.wasm examples/embed/site.page.gwdk
+          scripts/smoke-generated-wasm.sh /tmp/gowdk-site.wasm
           rm -rf /tmp/gowdk-hybrid-build /tmp/gowdk-hybrid-app /tmp/gowdk-hybrid-site
           go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk
           test -x /tmp/gowdk-hybrid-site
@@ -90,6 +95,12 @@ jobs:
           test -f /tmp/gowdk-component-assets/components/assets/index.html
           grep -F '"assets/gowdk/components/componentassets/AssetBadge/badge.svg"' /tmp/gowdk-component-assets/gowdk-assets.json
           grep -F 'assets/gowdk/components/componentassets/AssetBadge/badge.' /tmp/gowdk-component-assets/gowdk-assets.json
+          rm -rf /tmp/gowdk-wasm-island
+          go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk
+          test -f /tmp/gowdk-wasm-island/components/wasm/index.html
+          test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm
+          test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm.js
+          test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/wasm_exec.js
 
       - name: Build CLI artifacts
         run: |

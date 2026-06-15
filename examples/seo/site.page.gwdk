@@ -1,0 +1,12 @@
+package seoexample
+
+page seo.home
+route "/seo"
+guard public
+
+view {
+  <main>
+    <h1>SEO example</h1>
+    <p>This build emits sitemap.xml and robots.txt.</p>
+  </main>
+}

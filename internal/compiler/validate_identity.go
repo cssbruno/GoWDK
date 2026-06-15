@@ -359,9 +359,10 @@ func validateUniqueComponents(components []gwdkir.Component) []ValidationError {
 		if component.Name == "" {
 			continue
 		}
-		first, exists := seen[component.Name]
+		key := componentIdentityKey(component.Package, component.Name)
+		first, exists := seen[key]
 		if !exists {
-			seen[component.Name] = component
+			seen[key] = component
 			continue
 		}
 		diagnostics = append(diagnostics, ValidationError{
@@ -379,6 +380,13 @@ func validateUniqueComponents(components []gwdkir.Component) []ValidationError {
 		})
 	}
 	return diagnostics
+}
+
+func componentIdentityKey(packageName, componentName string) string {
+	if packageName == "" {
+		return componentName
+	}
+	return packageName + "." + componentName
 }
 
 func validateComponentEmits(components []gwdkir.Component) []ValidationError {

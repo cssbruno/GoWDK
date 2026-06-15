@@ -136,6 +136,12 @@ func buildIncrementalSPALoaded(plan buildOptions, change inputChange) (bool, err
 	if result.AssetManifestPath != "" {
 		fmt.Println(result.AssetManifestPath)
 	}
+	if result.SitemapPath != "" {
+		fmt.Println(result.SitemapPath)
+	}
+	if result.RobotsPath != "" {
+		fmt.Println(result.RobotsPath)
+	}
 	if result.SecurityManifestPath != "" {
 		fmt.Println(result.SecurityManifestPath)
 	}

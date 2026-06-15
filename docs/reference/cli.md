@@ -9,7 +9,7 @@ development.
 ```sh
 gowdk version
 gowdk init [--force] [--tests] [--template <site|minimal>] [dir]
-gowdk add <addon> [--config <file>]
+gowdk add <addon> [--config <file>] [--base-url <url>]
 gowdk add --list
 gowdk tokens <file.gwdk>
 gowdk fmt [--write] <files>
@@ -28,7 +28,7 @@ gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
 gowdk list commands|queries|events|jobs [--json] [dir]
-gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
+gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk preview [--addr <addr>] [--hot] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
@@ -42,6 +42,9 @@ gowdk lsp [--ssr]
 - `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
 - `--list`: supported by `add`; prints built-in addon names the command can wire.
+- `--base-url`: supported by `add seo`; writes the required
+  `seo.Options.BaseURL` value. The value must be an absolute `http` or
+  `https` URL.
 - `--json`: supported by `check`, `doctor`, `audit`, `explain`, `inspect`, `contracts`, `graph`, `trace`, and `list`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available. `gowdk check --json` uses diagnostic
@@ -87,6 +90,12 @@ gowdk lsp [--ssr]
   contract references, invalid contract handler signatures, and duplicate
   command owners.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
+- `--obfuscate-assets`: supported by `build` and forwarded by `dev`; enables
+  deterministic production obfuscation/minification for compiler-owned
+  generated browser JavaScript, forces `Build.Mode` to `gowdk.Production` for
+  that build, records transformed assets in `gowdk-assets.json`, and writes
+  `asset_obfuscation` / `asset_obfuscated` build-report events. This is an
+  optimization/hardening option, not a security boundary.
 - `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
 - `--module`: supported by `check`, `doctor`, `audit`, `manifest`, `sitemap`, `routes`,
   `endpoints`, `inspect`, `generate stubs`, and `build`; may be repeated or
@@ -95,6 +104,12 @@ gowdk lsp [--ssr]
 - `--out`: supported by `build`; selects the output directory and overrides `Build.Output`.
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
+- `--docker`: supported by `build`; requires `--bin` and emits `Dockerfile`
+  plus `.dockerignore` beside the compiled binary. The generated Dockerfile
+  runs `/app/site` as a non-root user on port `8080`.
+- `--docker-base`: supported by `build` with `--docker`; selects
+  `distroless` or `scratch`. The default is `distroless`. `scratch` requires a
+  statically linked Linux ELF binary.
 - `--wasm`: supported by `build`; requires `--app` and compiles the generated app with `GOOS=js GOARCH=wasm go build -o <file>`.
 - `--backend-app`: supported by `build`; writes generated backend-only Go app source for feature-bound action/API endpoints.
 - `--backend-bin`: supported by `build`; requires `--backend-app` and compiles the generated backend app with `go build -o <file>`.
@@ -111,6 +126,7 @@ go run ./cmd/gowdk init --tests --template site my-tested-site
 go run ./cmd/gowdk init --template minimal my-minimal-site
 go run ./cmd/gowdk add --list
 go run ./cmd/gowdk add ssr actions partial
+go run ./cmd/gowdk add seo --base-url https://example.com
 go run ./cmd/gowdk check examples/pages/home.page.gwdk
 go run ./cmd/gowdk check --config gowdk.config.go
 go run ./cmd/gowdk check --warnings-as-errors --config gowdk.config.go
@@ -144,6 +160,7 @@ go run ./cmd/gowdk preview --out /tmp/gowdk-preview examples/pages/home.page.gwd
 go run ./cmd/gowdk dev --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app examples/ssr/simple-ssr.page.gwdk
 go run ./cmd/gowdk build --module frontend --module backend --out /tmp/gowdk-build
 go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
+GOOS=linux CGO_ENABLED=0 gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site --docker examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --wasm /tmp/gowdk-site.wasm examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 go run ./cmd/gowdk build --module admin --out dist/admin --app .gowdk/admin --bin bin/admin
 go run ./cmd/gowdk build --module admin --out dist/admin --app .gowdk/admin --wasm bin/admin.wasm

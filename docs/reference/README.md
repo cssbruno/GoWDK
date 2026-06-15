@@ -10,10 +10,13 @@ Reference docs describe current command and data contracts.
 - `hooks.md`: current middleware, guard, and rate-limit ordering.
 - `errors.md`: current error pages, panic boundaries, and cache policy.
 - `deployment.md`: current output shapes and operations recipes.
+- `pwa-offline.md`: optional user-owned service worker and manifest guidance.
 - `testing.md`: scaffolded smoke tests, browser smoke, accessibility, and performance checks.
 - `contracts.md`: current runtime contract registry and planned compiler integration.
 - `realtime.md`: current presentation-event fanout setup, SSE default, and WebSocket opt-in behavior.
 - `css.md`: current CSS extension point.
+- `images.md`: image optimization patterns and current non-goals.
+- `seo.md`: optional sitemap.xml and robots.txt emission.
 - `manifest.md`: current manifest JSON.
 - `addons.md`: current addon feature registration.
 - `diagnostics.md`: current diagnostic output.

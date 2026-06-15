@@ -19,6 +19,7 @@ func loadBuildConfig(options *cliOptions, configPath string) error {
 
 func loadProjectConfig(options *cliOptions, configPath string) error {
 	allowMissingBackend := options.AllowMissingBackend
+	obfuscateAssets := options.ObfuscateAssets
 	projectRoot, err := resolveProjectRoot(configPath)
 	if err != nil {
 		return err
@@ -31,9 +32,14 @@ func loadProjectConfig(options *cliOptions, configPath string) error {
 	if allowMissingBackend {
 		config.Build.AllowMissingBackend = true
 	}
+	if obfuscateAssets {
+		config.Build.ObfuscateAssets = true
+		config.Build.Mode = gowdk.Production
+	}
 	options.Config = config
 	options.ProjectRoot = projectRoot
 	options.AllowMissingBackend = allowMissingBackend
+	options.ObfuscateAssets = obfuscateAssets
 	return nil
 }
 

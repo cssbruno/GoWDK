@@ -54,12 +54,15 @@ readiness.
   WebSocket adapters are nested Go modules. Dependency-free adapters such as
   file outbox, memory broker, and SSE stay in the root module. Applications opt
   in.
+- Optional DB real-driver tests: `addons/db/sqlitetest` is a nested Go module
+  with a pure-Go SQLite driver used only to verify DB addon helpers against a
+  real `database/sql` driver. The root `addons/db` package imports no driver.
 
 Nested optional modules are intentionally not listed in a checked-in root
 `go.work`; ordinary root `go test ./...` and `go build ./cmd/gowdk` should stay
 outside workspace mode so optional framework and broker dependencies do not
 enter the root module graph. `scripts/go-modules.sh` discovers the root module
-plus nested runtime modules for multi-module CI gates.
+plus nested runtime and addon modules for multi-module CI gates.
 Nested optional modules that import the root GOWDK module should still require
 the current released `github.com/cssbruno/gowdk` version and keep a local
 `replace github.com/cssbruno/gowdk => ../../..` for repository tests outside

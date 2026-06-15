@@ -219,6 +219,15 @@ For generated actions, ordering matters:
 See `examples/auth-guard` for a small public-login and protected-dashboard
 flow.
 
+## DB Addon
+
+`addons/db` registers the database helper feature and provides thin
+`database/sql` plumbing: `Open`, readiness checks, `WithTx`, and ordered
+user-authored SQL migration application. It imports no SQL driver and owns no
+schema, query generation, repository abstraction, or domain logic. See
+`docs/reference/db.md` for the migration tracking contract and sqlc
+walkthrough.
+
 External addons use normal Go imports:
 
 ```go

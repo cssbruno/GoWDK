@@ -470,6 +470,9 @@
       traceparent: function () {
         var ctx = activeTraceContext();
         if (!ctx) {
+          if (!traceEnabled()) {
+            return '';
+          }
           return '00-' + traceHex(16) + '-' + traceHex(8) + '-01';
         }
         return '00-' + ctx.traceId + '-' + ctx.spanId + '-01';
@@ -579,9 +582,29 @@
     } catch (error) {}
   }
 
+  function traceInputURL(url) {
+    if (typeof Request !== 'undefined' && url instanceof Request) {
+      return url.url || '';
+    }
+    if (url && typeof url === 'object' && typeof url.url === 'string') {
+      return url.url;
+    }
+    return url;
+  }
+
+  function traceInputHeaders(url, options) {
+    if (options && options.headers) {
+      return options.headers;
+    }
+    if (url && typeof url === 'object' && url.headers) {
+      return url.headers;
+    }
+    return {};
+  }
+
   function sameOriginURL(url) {
     try {
-      return new URL(url, window.location.href).origin === window.location.origin;
+      return new URL(traceInputURL(url), window.location.href).origin === window.location.origin;
     } catch (error) {
       return false;
     }
@@ -596,7 +619,7 @@
     ]);
     var traced = Object.assign({}, options || {});
     if (sameOriginURL(url)) {
-      var headers = new Headers(traced.headers || {});
+      var headers = new Headers(traceInputHeaders(url, traced));
       headers.set('traceparent', traceparentFor(span));
       traced.headers = headers;
     }

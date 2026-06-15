@@ -14,6 +14,17 @@ func traceparentFromContext(ctx context.Context) string {
 	return gowdktrace.Traceparent(traceContext)
 }
 
+func traceOnlyContext(ctx context.Context) context.Context {
+	traceCtx := context.Background()
+	if tracer, ok := gowdktrace.TracerFromContext(ctx); ok {
+		traceCtx = gowdktrace.ContextWithTracer(traceCtx, tracer)
+	}
+	if traceContext, ok := gowdktrace.TraceContextFromContext(ctx); ok {
+		traceCtx = gowdktrace.ContextWithTraceContext(traceCtx, traceContext)
+	}
+	return traceCtx
+}
+
 func contextWithEventTraceparent(ctx context.Context, event EventEnvelope) context.Context {
 	if event.TraceParent == "" {
 		return ctx

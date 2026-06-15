@@ -32,13 +32,22 @@ func LocalTraceAccess(request *http.Request) bool {
 	if request == nil {
 		return false
 	}
-	if request.Header.Get("Forwarded") != "" || request.Header.Get("X-Forwarded-For") != "" || request.Header.Get("X-Real-IP") != "" {
+	if hasForwardedProxyHeader(request.Header) {
 		return false
 	}
 	if !loopbackHost(request.Host) {
 		return false
 	}
 	return loopbackHost(request.RemoteAddr)
+}
+
+func hasForwardedProxyHeader(header http.Header) bool {
+	for name := range header {
+		if strings.EqualFold(name, "Forwarded") || strings.EqualFold(name, "X-Real-IP") || strings.HasPrefix(strings.ToLower(name), "x-forwarded-") {
+			return true
+		}
+	}
+	return false
 }
 
 func loopbackHost(address string) bool {

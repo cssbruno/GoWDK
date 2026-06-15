@@ -33,7 +33,7 @@ func executeCommand[C, R any](ctx context.Context, registry *Registry, command C
 		var zero R
 		return zero, err
 	}
-	if err := recorder.dispatchForRole(commandCtx, registry, role); err != nil {
+	if err := recorder.dispatchForRole(traceOnlyContext(commandCtx), registry, role); err != nil {
 		var zero R
 		return zero, err
 	}

@@ -6,7 +6,7 @@ import (
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 
-func (node Element) writeActionInputAttrs(ctx *renderContext, out *renderOutput) {
+func writeActionInputAttrs(node Element, ctx *renderContext, out *renderOutput) {
 	if node.Name != "input" || ctx.formAction == "" {
 		return
 	}

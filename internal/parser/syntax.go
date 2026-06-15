@@ -10,7 +10,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkast"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
 type SyntaxFile = gwdkast.File
@@ -496,7 +496,7 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 	block.BodyStart = syntaxBodyStart(body)
 	switch block.Kind {
 	case "view":
-		nodes, err := view.Parse(block.Body)
+		nodes, err := viewparse.Parse(block.Body)
 		if err != nil {
 			return SyntaxBlock{}, fmt.Errorf("line %d: view body: %w", block.Span.Start.Line, err)
 		}

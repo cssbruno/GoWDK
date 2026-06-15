@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"strconv"
-	"strings"
 )
 
 func validateIslandField(field string, fields map[string]bool) error {
@@ -16,17 +15,6 @@ func validateIslandField(field string, fields map[string]bool) error {
 		return fmt.Errorf("unknown island field %q", field)
 	}
 	return nil
-}
-
-func validateIslandReadableValue(value string, fields map[string]bool) error {
-	value = strings.TrimSpace(value)
-	if isIslandScalarLiteral(value) {
-		return nil
-	}
-	if islandFieldPattern.MatchString(value) {
-		return validateIslandField(value, fields)
-	}
-	return fmt.Errorf("unsupported island value %q", value)
 }
 
 func validateIslandSymbol(field string, symbols map[string]clientlang.ValueType) (clientlang.ValueType, error) {
@@ -53,51 +41,12 @@ func boolFieldSymbols(fields map[string]bool) map[string]clientlang.ValueType {
 	return symbols
 }
 
-func firstHandlerMap(handlers []map[string]clientlang.Handler) map[string]clientlang.Handler {
-	if len(handlers) == 0 {
-		return nil
-	}
-	return handlers[0]
-}
-
-func handlerParamType(handler clientlang.Handler, index int) clientlang.ValueType {
-	if index < 0 || index >= len(handler.ParamTypes) {
-		return clientlang.TypeUnknown
-	}
-	return handler.ParamTypes[index]
-}
-
 func compatibleNumericType(actual, expected clientlang.ValueType) bool {
 	if actual == clientlang.TypeUnknown || expected == clientlang.TypeUnknown {
 		return true
 	}
 	return (actual == clientlang.TypeInt || actual == clientlang.TypeFloat) &&
 		(expected == clientlang.TypeInt || expected == clientlang.TypeFloat)
-}
-
-func isIslandScalarLiteral(value string) bool {
-	if value == "true" || value == "false" || value == "null" {
-		return true
-	}
-	if islandNumberPattern.MatchString(value) {
-		return true
-	}
-	if strings.HasPrefix(value, `"`) {
-		_, err := strconv.Unquote(value)
-		return err == nil
-	}
-	return false
-}
-
-func islandCallFields(call clientlang.Call) []string {
-	seen := map[string]bool{}
-	for _, arg := range call.Args {
-		arg = strings.TrimSpace(arg)
-		if islandFieldPattern.MatchString(arg) && !isIslandScalarLiteral(arg) {
-			seen[arg] = true
-		}
-	}
-	return sortedKeys(seen)
 }
 
 func islandTextBinding(value string) (string, bool) {

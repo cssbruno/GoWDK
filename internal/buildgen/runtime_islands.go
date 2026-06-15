@@ -10,6 +10,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/clientrt"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewanalysis"
 )
 
 func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allComponents []gwdkir.Component, outputDir string, layouts map[string]gwdkir.Layout) ([]plannedAssetArtifact, error) {
@@ -133,7 +134,7 @@ type componentResolver[T any] struct {
 }
 
 type resolvedComponentCallUsage[T any] struct {
-	call      view.ComponentCallUsage
+	call      viewanalysis.ComponentCallUsage
 	component T
 }
 
@@ -170,16 +171,16 @@ func recursiveComponentCallUsagesForView[T any](source string, nodes []view.Node
 	visiting := map[string]bool{}
 	var walk func(string, []view.Node, string, map[string]string) error
 	walk = func(source string, nodes []view.Node, ownerPackage string, uses map[string]string) error {
-		var direct []view.ComponentCallUsage
+		var direct []viewanalysis.ComponentCallUsage
 		if len(nodes) > 0 {
 			var err error
-			direct, err = view.ComponentCallUsagesFromNodes(nodes)
+			direct, err = viewanalysis.ComponentCallUsagesFromNodes(nodes)
 			if err != nil {
 				return err
 			}
 		} else {
 			var err error
-			direct, err = view.ComponentCallUsages(source)
+			direct, err = viewanalysis.ComponentCallUsages(source)
 			if err != nil {
 				return err
 			}

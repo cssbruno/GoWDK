@@ -1,17 +1,13 @@
 package view
 
+import "github.com/cssbruno/gowdk/internal/viewanalysis"
+
 func ParamReferences(source string) ([]string, error) {
-	nodes, err := Parse(source)
-	if err != nil {
-		return nil, err
-	}
-	return ParamReferencesFromNodes(nodes), nil
+	return viewanalysis.ParamReferences(source)
 }
 
 // ParamReferencesFromNodes returns unique param("name") route-param references
 // directly referenced by an already-parsed view fragment.
 func ParamReferencesFromNodes(nodes []Node) []string {
-	names := map[string]bool{}
-	collectParamReferences(nodes, names)
-	return sortedKeys(names)
+	return viewanalysis.ParamReferencesFromNodes(nodes)
 }

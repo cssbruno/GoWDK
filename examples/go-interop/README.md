@@ -38,3 +38,39 @@ test -f /tmp/gowdk-go-interop/go-imported/index.html
 
 Run the command from the repository root so the required root
 `gowdk.config.go` is loaded, or pass an explicit `--config <file>`.
+
+## Real-world slice: validation + structured logging
+
+`newsletter.go` shows a page delegating *serious* behavior to standard-library
+packages instead of inline or generated logic. `SubscriberDigestForBuild`:
+
+- parses and validates a raw subscriber list with **`net/mail`**
+  (`mail.ParseAddress`), so malformed entries are rejected by a real parser;
+- emits **`log/slog`** structured build logs to stderr, which GOWDK keeps
+  separate from the JSON build payload; and
+- returns a digest (`validCount`, `rejectedCount`, `sampleDomains`) that the
+  page interpolates — including integer fields, which render as strings.
+
+What is **real**: the `net/mail` validation, the `log/slog` logging, and the
+stderr/JSON separation are genuine.
+
+What is **mocked**: `rawSubscribers` is a hardcoded slice standing in for a real
+data source (a `database/sql`/`pgx` query, a CRM export, or a drained queue).
+Swap it for your data layer and the `.gwdk` build contract is unchanged.
+
+What is **omitted, on purpose**: this example uses only the standard library so
+it adds no production dependency. Demonstrating `database/sql`, `pgx`, `sqlc`,
+markdown, email-sending, image, or queue packages follows the same import +
+`build {}` pattern, but adding those would need a real dependency reviewed under
+[dependency-policy.md](../../docs/engineering/dependency-policy.md). The root
+module deliberately keeps its direct-dependency surface tiny.
+
+```sh
+go run ./cmd/gowdk check examples/go-interop/newsletter-digest.page.gwdk
+go run ./cmd/gowdk build --out /tmp/gowdk-newsletter examples/go-interop/newsletter-digest.page.gwdk
+grep -F 'Valid subscribers: 3' /tmp/gowdk-newsletter/go-newsletter/index.html
+```
+
+`gowdk check` over `examples/go-interop/*.gwdk` runs in CI
+(`scripts/check-example-reports.sh`), so this page is validated on every build
+and cannot silently rot.

@@ -17,6 +17,14 @@ packages, and tooling contracts may change before 1.0.
   `Registry.UnsupportedFor` check a CLI version against an entry's
   `minGOWDK`/`maxGOWDK` bounds (supported/unsupported/unknown) — with tests.
   Build-time auto-enforcement of the bound remains a deliberate follow-up.
+- **Real-world Go interop example (#329).** `examples/go-interop/newsletter.go`
+  + `newsletter-digest.page.gwdk` show a page delegating real behavior to the
+  standard library: subscriber addresses are validated with `net/mail` and the
+  build emits structured `log/slog` logs (kept separate from the JSON payload).
+  Integer build fields render correctly. The example is stdlib-only by design
+  (no new dependency) and the README documents what is real, mocked, and
+  intentionally omitted under the dependency policy. Covered by the
+  `examples/go-interop/*.gwdk` checks in `scripts/check-example-reports.sh`.
 
 ## v0.5.0 - 2026-06-15
 

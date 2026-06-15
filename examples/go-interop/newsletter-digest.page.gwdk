@@ -1,0 +1,21 @@
+package gointerop
+
+page go.newsletter
+route "/go-newsletter"
+guard public
+
+import interop "github.com/cssbruno/gowdk/examples/go-interop"
+
+build {
+  => interop.SubscriberDigestForBuild()
+}
+
+view {
+  <main>
+    <h1>{title}</h1>
+    <p>{tagline}</p>
+    <p>Valid subscribers: {validCount}</p>
+    <p>Rejected: {rejectedCount}</p>
+    <p>Domains: {sampleDomains}</p>
+  </main>
+}

@@ -30,10 +30,17 @@ feature package.
 
 ## Run
 
+This example fails closed: it refuses to authenticate unless you configure a
+signing secret and the demo password. The session cookie is `Secure` by
+default; over plain HTTP for local development you must opt out explicitly.
+
 From this directory:
 
 ```sh
 cd examples/login
+export GOWDK_LOGIN_SECRET="$(head -c 32 /dev/urandom | base64)"  # required, >=32 bytes
+export GOWDK_LOGIN_PASSWORD="demo-password"                      # required, no default
+export GOWDK_COOKIE_INSECURE=true                                # local HTTP only; omit in production
 make serve
 ```
 
@@ -42,12 +49,14 @@ Open `http://127.0.0.1:8090/`.
 Use:
 
 ```text
-email: demo@example.com
-password: demo-password
+email: demo@example.com           # override with GOWDK_LOGIN_EMAIL
+password: <GOWDK_LOGIN_PASSWORD>
 ```
 
 The generated app calls `auth.Login`, sets a signed HttpOnly SameSite session
 cookie, and redirects to `/dashboard`. `GET /api/session` calls `auth.Session`.
+A real app must set a unique, high-entropy `GOWDK_LOGIN_SECRET`, use real
+credentials, and leave the cookie `Secure` (serve over HTTPS).
 
 ## Split Mode
 

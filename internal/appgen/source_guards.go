@@ -118,6 +118,25 @@ func guardStmts(guards []string) []ast.Stmt {
 	}}
 }
 
+// endpointDeniedByOmission reports whether an endpoint that declares the given
+// guards must be denied at request time because it declares no guard at all. An
+// endpoint that declares `guard public` (or any runtime guard) is not denied by
+// omission.
+func endpointDeniedByOmission(guards []string) bool {
+	return len(guards) == 0
+}
+
+// denyByOmissionStmts emits a fail-closed 403 for an endpoint that declares no
+// guard. It returns before any context, body parsing, or handler statements,
+// matching the SSR route lane (ssrRouteBodyStmts) and the DefaultDeny posture
+// reported in gowdk-security.json.
+func denyByOmissionStmts() []ast.Stmt {
+	return []ast.Stmt{
+		writeNoStoreErrorStmt(sel("http", "StatusForbidden"), "403 forbidden"),
+		returnBool(true),
+	}
+}
+
 func generatedUsesCustomGuards(options Options) bool {
 	for _, name := range generatedGuardNames(options) {
 		if auth.IsPublicGuard(name) {

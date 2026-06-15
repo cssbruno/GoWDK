@@ -121,6 +121,12 @@ type Options struct {
 	ActionInputFields map[string][]ActionInputField
 	Package           string
 	Uses              map[string]string
+	// Tainted names interpolation values that carry request-time,
+	// attacker-influenceable data (e.g. SSR load {} fields). Tainted values are
+	// rejected in URL-bearing, event-handler, style, and srcdoc attributes the
+	// same way route params are, so they cannot smuggle a javascript:/data: URL
+	// past HTML-text escaping.
+	Tainted map[string]bool
 }
 
 // ActionInputField describes Go action input metadata available while rendering
@@ -226,6 +232,7 @@ func RenderNodesWithOptions(nodes []Node, components map[string]Component, data 
 		},
 		renderDataContext: renderDataContext{
 			values:       cloneValues(data),
+			tainted:      cloneTaintSet(options.Tainted),
 			actions:      cloneValues(options.Actions),
 			actionFields: cloneActionInputFields(options.ActionInputFields),
 			stateFields:  map[string]bool{},

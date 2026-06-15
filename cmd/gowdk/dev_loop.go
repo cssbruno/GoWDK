@@ -794,9 +794,34 @@ func snapshotInputPaths(files, dirs []string) (inputSnapshot, error) {
 		if err != nil {
 			return nil, err
 		}
-		snapshot[abs] = fmt.Sprintf("dir:%d:%d", info.ModTime().UnixNano(), info.Size())
+		hash, err := snapshotDirectoryEntries(item)
+		if err != nil {
+			return nil, err
+		}
+		snapshot[abs] = hash
 	}
 	return snapshot, nil
+}
+
+func snapshotDirectoryEntries(path string) (string, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return "", err
+	}
+	parts := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		kind := "file"
+		switch {
+		case entry.IsDir():
+			kind = "dir"
+		case entry.Type()&os.ModeSymlink != 0:
+			kind = "symlink"
+		}
+		parts = append(parts, kind+"\x00"+entry.Name())
+	}
+	sort.Strings(parts)
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x01")))
+	return fmt.Sprintf("dir:%x", sum), nil
 }
 
 func uniqueInputPaths(paths []string) []string {

@@ -32,6 +32,10 @@ function activate(context) {
     siteMapTree.refresh();
     directoryOutline.refresh();
   };
+  const refreshProjectState = () => {
+    refreshProjectViews();
+    revalidateOpenGWDKDocuments(diagnostics, pending);
+  };
 
   context.subscriptions.push(diagnostics);
   context.subscriptions.push(vscode.window.registerTreeDataProvider('gowdk.siteMapTree', siteMapTree));
@@ -59,6 +63,12 @@ function activate(context) {
   context.subscriptions.push(cssWatcher.onDidCreate(refreshProjectViews));
   context.subscriptions.push(cssWatcher.onDidDelete(refreshProjectViews));
   context.subscriptions.push(cssWatcher.onDidChange(refreshProjectViews));
+
+  const configWatcher = vscode.workspace.createFileSystemWatcher('**/gowdk.config.go');
+  context.subscriptions.push(configWatcher);
+  context.subscriptions.push(configWatcher.onDidCreate(refreshProjectState));
+  context.subscriptions.push(configWatcher.onDidDelete(refreshProjectState));
+  context.subscriptions.push(configWatcher.onDidChange(refreshProjectState));
 
   context.subscriptions.push(vscode.languages.registerDocumentFormattingEditProvider(LANGUAGE_ID, {
     provideDocumentFormattingEdits(document) {
@@ -292,7 +302,9 @@ function activate(context) {
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('gowdk.createConfig', async (uri) => {
-    await createConfig(uri);
+    if (await createConfig(uri)) {
+      refreshProjectState();
+    }
   }));
 
   for (const document of vscode.workspace.textDocuments) {
@@ -314,6 +326,12 @@ function validateSoon(document, diagnostics, pending) {
     pending.delete(document.uri.toString());
     validateNow(document, diagnostics);
   }, 300));
+}
+
+function revalidateOpenGWDKDocuments(diagnostics, pending) {
+  for (const document of vscode.workspace.textDocuments) {
+    validateSoon(document, diagnostics, pending);
+  }
 }
 
 async function validateNow(document, diagnostics) {
@@ -682,13 +700,14 @@ async function createConfig(uri) {
   const root = commandProjectRoot(uri);
   if (!root) {
     vscode.window.showWarningMessage('Open a workspace folder before creating gowdk.config.go.');
-    return;
+    return false;
   }
   const configPath = path.join(root, 'gowdk.config.go');
   if (!fs.existsSync(configPath)) {
     await vscode.workspace.fs.writeFile(vscode.Uri.file(configPath), Buffer.from(defaultConfigSource(), 'utf8'));
   }
   await openFile(configPath);
+  return true;
 }
 
 function commandProjectRoot(uri) {

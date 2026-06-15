@@ -1821,6 +1821,92 @@ func main() {
 	}
 }
 
+func TestDevServeStateRebindsStaticOutputDir(t *testing.T) {
+	root := t.TempDir()
+	firstDir := filepath.Join(root, "dist-one")
+	secondDir := filepath.Join(root, "dist-two")
+	if err := os.MkdirAll(firstDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(secondDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	firstAbs, err := filepath.Abs(firstDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondAbs, err := filepath.Abs(secondDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	serve := newDevServeState("127.0.0.1:0")
+	t.Cleanup(serve.close)
+	serve.useStatic(firstAbs)
+	firstServer := serve.server
+	if firstServer == nil || serve.staticDir != firstAbs {
+		t.Fatalf("expected initial static server for %q, got server=%v dir=%q", firstAbs, firstServer, serve.staticDir)
+	}
+
+	serve.useStatic(firstAbs)
+	if serve.server != firstServer {
+		t.Fatal("expected unchanged static output dir to keep the existing server")
+	}
+
+	serve.useStatic(secondAbs)
+	if serve.server == nil || serve.staticDir != secondAbs {
+		t.Fatalf("expected rebound static server for %q, got server=%v dir=%q", secondAbs, serve.server, serve.staticDir)
+	}
+	if serve.server == firstServer {
+		t.Fatal("expected output dir change to replace the static server")
+	}
+}
+
+func TestDevServeStateStartsRuntimeAfterStaticMode(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	if err := os.MkdirAll(staticDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	appDir := filepath.Join(root, "app")
+	writeCLIFile(t, filepath.Join(appDir, "go.mod"), "module example.com/devapp\n\ngo 1.24\n")
+	writeCLIFile(t, filepath.Join(appDir, "cmd", "server", "main.go"), `package main
+
+func main() {
+	select {}
+}
+`)
+	binaryPath := filepath.Join(root, "bin", "devapp")
+	if os.PathSeparator == '\\' {
+		binaryPath += ".exe"
+	}
+
+	serve := newDevServeState("127.0.0.1:0")
+	t.Cleanup(serve.close)
+	serve.useStatic(staticDir)
+	if serve.server == nil {
+		t.Fatal("expected static server before runtime transition")
+	}
+
+	runtime := devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}
+	if err := serve.useRuntime(runtime); err != nil {
+		t.Fatal(err)
+	}
+	if serve.server != nil || serve.staticDir != "" {
+		t.Fatalf("expected static server to stop after runtime transition, got server=%v dir=%q", serve.server, serve.staticDir)
+	}
+	if serve.process == nil {
+		t.Fatal("expected runtime process to start after runtime transition")
+	}
+	if serve.process.plan != runtime {
+		t.Fatalf("unexpected runtime plan: %#v", serve.process.plan)
+	}
+	activeDevRuntimeCommand(t, serve.process)
+	if _, err := os.Stat(binaryPath); err != nil {
+		t.Fatalf("expected runtime binary to be built: %v", err)
+	}
+}
+
 func activeDevRuntimeCommand(t *testing.T, process *devRuntimeProcess) *exec.Cmd {
 	t.Helper()
 	process.mu.Lock()
@@ -2128,7 +2214,7 @@ view {
 		if err != nil {
 			t.Fatal(err)
 		}
-		absAbout, err := filepath.Abs(about)
+		absAbout, err := canonicalInputPath(about)
 		if err != nil {
 			t.Fatal(err)
 		}

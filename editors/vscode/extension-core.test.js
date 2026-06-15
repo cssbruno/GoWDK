@@ -216,6 +216,44 @@ test('missingExecutableMessage explains missing GOWDK CLI resolution', () => {
   );
 });
 
+test('diagnosticCodeForMessage recognizes editor setup failures', () => {
+  assert.equal(
+    core.diagnosticCodeForMessage('gowdk.config.go is required; run gowdk init before validating .gwdk files.'),
+    'missing_gowdk_config'
+  );
+  assert.equal(
+    core.diagnosticCodeForMessage('Missing GOWDK binary. Install gowdk, add it to PATH, or set gowdk.cliPath.'),
+    'missing_gowdk_binary'
+  );
+  assert.equal(
+    core.diagnosticCodeForMessage('Missing Go binary. Install Go, fix PATH, or set gowdk.cliPath to a built GOWDK binary.'),
+    'missing_go_binary'
+  );
+  assert.equal(
+    core.diagnosticCodeForMessage('missing_ssr_addon: add ssr.Addon() to config'),
+    'missing_ssr_addon'
+  );
+  assert.equal(core.diagnosticCodeForMessage('plain compiler error'), '');
+});
+
+test('quickFixesForDiagnostic returns setup actions without editing config implicitly', () => {
+  assert.deepEqual(core.quickFixesForDiagnostic({ code: 'missing_gowdk_config' }), [
+    { title: 'Create gowdk.config.go', command: 'gowdk.createConfig', preferred: true },
+    { title: 'Open config docs', command: 'gowdk.openConfigDocs', preferred: false }
+  ]);
+  assert.deepEqual(core.quickFixesForDiagnostic({ code: 'missing_ssr_addon' }), [
+    { title: 'Enable SSR validation setting', command: 'gowdk.enableSsrAddon', preferred: true },
+    { title: 'Open SSR docs', command: 'gowdk.openSsrDocs', preferred: false }
+  ]);
+  assert.deepEqual(core.quickFixesForDiagnostic({
+    message: 'Missing GOWDK binary. Install gowdk, add it to PATH, or set gowdk.cliPath.'
+  }).map((fix) => fix.command), [
+    'gowdk.openCliPathSetting',
+    'gowdk.openInstallDocs'
+  ]);
+  assert.deepEqual(core.quickFixesForDiagnostic({ code: 'missing_view_block' }), []);
+});
+
 test('completionContext detects view interpolation data fields', () => {
   assert.equal(core.completionContext('  <h1>{tit'), 'dataField');
   assert.equal(core.completionContext('  <Page title="{user.na'), 'dataField');
@@ -332,14 +370,14 @@ test('projectCompletionEntries returns data fields and hover explains origin', (
     ['title', 'build field string from interop.FeaturedCopyForBuild().']
   ]);
 
-  assert.equal(core.hoverMarkdown('title', metadata), [
-    '**GOWDK data field** `title`',
-    '',
-    'Lane: `build`',
-    'Type: `string`',
-    'From: `interop.FeaturedCopyForBuild()`',
-    'Go field: `Title`'
-  ].join('\n'));
+  const hover = core.hoverMarkdown('title', metadata);
+  assert.match(hover, /\*\*GOWDK data field\*\* `title`/);
+  assert.match(hover, /Lane: `build`/);
+  assert.match(hover, /Type: `string`/);
+  assert.match(hover, /From: `interop\.FeaturedCopyForBuild\(\)`/);
+  assert.match(hover, /Go field: `Title`/);
+  assert.match(hover, /Status: `partial`/);
+  assert.match(hover, /docs\/reference\/go-interop\.md/);
 });
 
 test('nearestProjectRoot finds nested GOWDK app roots inside broad workspaces', () => {
@@ -404,10 +442,12 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
         route: '/z-admin',
         render: 'ssr',
         source: '/workspace/admin.page.gwdk',
-        blocks: { load: true, view: true, actions: ['save'], apis: ['data'] },
+        blocks: { load: true, view: true, actions: ['save'], apis: ['data'], fragments: ['panel'] },
         layouts: ['shell'],
         css: ['default', 'forms'],
         components: ['AdminPanel'],
+        imports: [{ alias: 'ui', path: 'example.com/app/ui' }],
+        stores: [{ name: 'cart', type: { alias: 'ui', name: 'CartState' } }],
         assets: ['/assets/admin.png'],
         artifacts: []
       },
@@ -418,6 +458,70 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
         source: '/workspace/home.page.gwdk',
         blocks: { view: true },
         artifacts: [{ kind: 'html', path: 'index.html' }]
+      }
+    ],
+    routes: [
+      {
+        kind: 'spa',
+        method: 'GET',
+        route: '/<home>',
+        pageId: '<home>',
+        source: '/workspace/home.page.gwdk',
+        sourceSpan: { start: { line: 4, column: 1 } }
+      },
+      {
+        kind: 'ssr',
+        method: 'GET',
+        route: '/z-admin',
+        pageId: 'admin',
+        source: '/workspace/admin.page.gwdk',
+        sourceSpan: { start: { line: 5, column: 1 } }
+      },
+      {
+        kind: 'hybrid',
+        method: 'GET',
+        route: '/z-admin/hybrid',
+        pageId: 'admin',
+        source: '/workspace/admin.page.gwdk'
+      }
+    ],
+    endpoints: [
+      {
+        kind: 'action',
+        method: 'POST',
+        route: '/z-admin/save',
+        pageId: 'admin',
+        symbol: 'save',
+        bindingStatus: 'missing',
+        source: '/workspace/admin.page.gwdk'
+      },
+      {
+        kind: 'api',
+        method: 'GET',
+        route: '/api/data',
+        pageId: 'admin',
+        symbol: 'data',
+        bindingStatus: 'bound',
+        source: '/workspace/admin.page.gwdk'
+      },
+      {
+        kind: 'fragment',
+        method: 'GET',
+        route: '/z-admin/panel',
+        pageId: 'admin',
+        symbol: 'panel',
+        bindingStatus: 'unsupported_signature',
+        source: '/workspace/admin.page.gwdk'
+      },
+      {
+        kind: 'command',
+        endpointSource: 'contract',
+        method: 'POST',
+        route: '/z-admin',
+        pageId: 'admin',
+        symbol: 'ui.Save',
+        source: '/workspace/admin.page.gwdk',
+        contract: { name: 'ui.Save', kind: 'command', status: 'unknown' }
       }
     ]
   }, '/workspace');
@@ -430,9 +534,23 @@ test('siteMapHTML sorts pages and escapes route, source, and tag data', () => {
   assert.match(html, /layout:shell/);
   assert.match(html, /css:forms/);
   assert.match(html, /Components: AdminPanel/);
+  assert.match(html, /Contracts: .*ui\.CartState/);
+  assert.match(html, /Routes: .*GET \/z-admin ssr \[partial\]/);
+  assert.match(html, /Routes: .*GET \/z-admin\/hybrid hybrid \[planned\]/);
+  assert.match(html, /Routes: .*GET \/&lt;home&gt; spa \[implemented\]/);
+  assert.match(html, /Endpoints: .*POST \/z-admin\/save action:save \[missing\]/);
+  assert.match(html, /Endpoints: .*GET \/api\/data api:data \[implemented\]/);
+  assert.match(html, /Endpoints: .*GET \/z-admin\/panel fragment:panel \[unsupported\]/);
+  assert.match(html, /Endpoints: .*POST \/z-admin command:ui\.Save \[partial\]/);
   assert.match(html, /Assets: \/assets\/admin\.png/);
   assert.match(html, /GET \/&lt;home&gt; -&gt; spa -&gt; index\.html/);
   assert.match(html, /POST act:save/);
+  assert.match(html, /FRAGMENT panel/);
+  assert.match(html, /<button class="node-link route-link" [^>]*>\/z-admin<\/button>/);
+  assert.match(html, /data-definition-file="\/workspace\/admin\.page\.gwdk"/);
+  assert.match(html, /data-definition-line="0"/);
+  assert.match(html, />act:save<\/button>/);
+  assert.match(html, />api:data<\/button>/);
 });
 
 test('completionEntries include expected language constructs', () => {
@@ -619,7 +737,12 @@ test('hoverMarkdown describes project symbols from metadata', () => {
 	const metadata = symbolMetadata();
 
   assert.match(core.hoverMarkdown('home', metadata), /\*\*GOWDK page\*\* `home`/);
+  assert.match(core.hoverMarkdown('home', metadata), /Status: `partial`/);
+  assert.match(core.hoverMarkdown('home', metadata), /docs\/reference\/routing\.md/);
+  assert.match(core.hoverMarkdown('/', metadata), /\*\*GOWDK route\*\* `\/`/);
+  assert.match(core.hoverMarkdown('/', metadata), /Status: `implemented`/);
   assert.match(core.hoverMarkdown('Hero', metadata), /Props: `title string`/);
+  assert.match(core.hoverMarkdown('Hero', metadata), /Current limit: Component props, state, slots/);
   assert.match(core.hoverMarkdown('Hero', metadata), /State: `ui\.HeroState`/);
   assert.match(core.hoverMarkdown('Hero', metadata), /Emits: `select\(id string\)`/);
   assert.match(core.hoverMarkdown('select', metadata), /\*\*GOWDK component event\*\*/);
@@ -629,7 +752,10 @@ test('hoverMarkdown describes project symbols from metadata', () => {
   assert.match(core.hoverMarkdown('CartState', metadata), /\*\*GOWDK Go contract\*\* `CartState`/);
   assert.match(core.hoverMarkdown('ui', metadata), /Import alias: `ui`/);
   assert.match(core.hoverMarkdown('submit', metadata), /\*\*GOWDK action\*\*/);
+  assert.match(core.hoverMarkdown('submit', metadata), /docs\/language\/actions\.md/);
   assert.match(core.hoverMarkdown('health', metadata), /\*\*GOWDK API\*\*/);
+  assert.match(core.hoverMarkdown('hybrid', metadata), /Status: `planned`/);
+  assert.match(core.hoverMarkdown('script', metadata), /Status: `unsupported`/);
   assert.equal(core.hoverMarkdown('missing', metadata), '');
 });
 
@@ -637,6 +763,7 @@ test('definitionTarget resolves project symbols to owning source files', () => {
   const metadata = symbolMetadata();
 
   assert.deepEqual(core.definitionTarget('home', metadata), { file: '/workspace/home.page.gwdk', line: 0, column: 0 });
+  assert.deepEqual(core.definitionTarget('/', metadata), { file: '/workspace/home.page.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('Hero', metadata), { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('select', metadata), { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('forms', metadata), { file: '/workspace/styles/forms.css', line: 0, column: 0 });
@@ -646,6 +773,48 @@ test('definitionTarget resolves project symbols to owning source files', () => {
   assert.deepEqual(core.definitionTarget('CartState', metadata), { file: '/workspace/home.page.gwdk', line: 0, column: 0 });
   assert.deepEqual(core.definitionTarget('HeroState', metadata), { file: '/workspace/hero.cmp.gwdk', line: 0, column: 0 });
   assert.equal(core.definitionTarget('missing', metadata), undefined);
+});
+
+test('definitionTargetForNode resolves map route endpoint and contract nodes', () => {
+  const metadata = symbolMetadata();
+
+  assert.deepEqual(core.definitionTargetForNode({ kind: 'route', value: '/', pageId: 'home' }, metadata), {
+    file: '/workspace/home.page.gwdk',
+    line: 0,
+    column: 0
+  });
+  assert.deepEqual(core.definitionTargetForNode({ kind: 'endpoint', endpointKind: 'action', value: 'submit', pageId: 'home' }, metadata), {
+    file: '/workspace/home.page.gwdk',
+    line: 0,
+    column: 0
+  });
+  assert.deepEqual(core.definitionTargetForNode({ kind: 'endpoint', endpointKind: 'api', value: 'health', pageId: 'home' }, metadata), {
+    file: '/workspace/home.page.gwdk',
+    line: 0,
+    column: 0
+  });
+  assert.deepEqual(core.definitionTargetForNode({ kind: 'contract', value: 'CartState', pageId: 'home' }, metadata), {
+    file: '/workspace/home.page.gwdk',
+    line: 0,
+    column: 0
+  });
+});
+
+test('definitionTargetForNode uses exact endpoint span metadata when available', () => {
+  const metadata = symbolMetadata();
+  metadata.siteMap.endpoints = [{
+    kind: 'api',
+    symbol: 'health',
+    pageId: 'home',
+    source: '/workspace/handlers.go',
+    sourceSpan: { Start: { Line: 12, Column: 3 } }
+  }];
+
+  assert.deepEqual(core.definitionTargetForNode({ kind: 'endpoint', endpointKind: 'api', value: 'health', pageId: 'home' }, metadata), {
+    file: '/workspace/handlers.go',
+    line: 11,
+    column: 2
+  });
 });
 
 test('symbolReferences finds project metadata references at file granularity', () => {

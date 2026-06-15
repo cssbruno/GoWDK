@@ -129,6 +129,13 @@ quantifiers. GOWDK does not run user-defined domain validation or generate
 general fragment routes. Handlers can return redirects, fragments, HTML, or JSON
 through `runtime/response.Response`.
 
+## Examples
+
+- `examples/endpoints/src/endpoints/contact.page.gwdk` declares redirect and validation
+  fragment actions backed by `examples/endpoints/src/endpoints/handlers.go`.
+- `examples/endpoints/src/endpoints/settings.page.gwdk` declares save/reset actions that
+  return partial fragments for a settings result region.
+
 ## Production Notes
 
 - Do not set `Build.CSRF.Disabled` for production generated app deployments

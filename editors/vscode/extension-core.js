@@ -2,6 +2,85 @@ const fs = require('fs');
 const path = require('path');
 
 const GOWDK_MODULE_PATH = 'github.com/cssbruno/gowdk';
+const DOCS_BASE_URL = 'https://github.com/cssbruno/GoWDK/blob/main/';
+
+const SURFACE_STATUS = {
+  page: {
+    status: 'partial',
+    docs: 'docs/reference/routing.md',
+    limit: 'Full pages default to build-time SPA output; request-time page rendering is explicit with `load {}` or `go ssr {}`.'
+  },
+  route: {
+    status: 'implemented',
+    docs: 'docs/reference/routing.md',
+    limit: 'Routes are declared in source files; folder layout is not route truth.'
+  },
+  action: {
+    status: 'partial',
+    docs: 'docs/language/actions.md',
+    limit: 'Generated typed action adapters cover the supported form subset; uploads stay in user-owned API/server handlers.'
+  },
+  api: {
+    status: 'partial',
+    docs: 'docs/language/api.md',
+    limit: 'Generated API handlers currently target the documented response-helper signatures.'
+  },
+  component: {
+    status: 'partial',
+    docs: 'docs/language/components.md',
+    limit: 'Component props, state, slots, CSS/assets, client behavior, and WASM islands have first-slice support; recursive and dynamic component selection are rejected.'
+  },
+  componentEvent: {
+    status: 'partial',
+    docs: 'docs/language/components.md',
+    limit: 'Component events are local component metadata; backend-owned events use the contract runtime.'
+  },
+  layout: {
+    status: 'partial',
+    docs: 'docs/language/layouts.md',
+    limit: 'Layouts compose declared pages; request-aware layout behavior belongs to the SSR lane.'
+  },
+  css: {
+    status: 'partial',
+    docs: 'docs/reference/css.md',
+    limit: 'CSS processor support is addon-driven; Tailwind and external processors remain optional.'
+  },
+  store: {
+    status: 'partial',
+    docs: 'docs/language/components.md',
+    limit: 'Stores are page/island scoped; app-global stores remain deferred.'
+  },
+  goContract: {
+    status: 'partial',
+    docs: 'docs/reference/go-interop.md',
+    limit: 'Application behavior stays in normal Go; generated Go remains adapter glue.'
+  },
+  dataField: {
+    status: 'partial',
+    docs: 'docs/reference/go-interop.md',
+    limit: '`build {}` is build-time data; `load {}` is request-time data and requires SSR.'
+  },
+  spa: {
+    status: 'implemented',
+    docs: 'docs/reference/routing.md',
+    limit: 'SPA/build-time output is the default full-page lane.'
+  },
+  ssr: {
+    status: 'partial',
+    docs: 'docs/language/ssr.md',
+    limit: 'SSR is an integrated non-default request-time page lane gated by the SSR addon.'
+  },
+  hybrid: {
+    status: 'planned',
+    docs: 'docs/product/requirements.md',
+    limit: 'Hybrid route metadata exists internally; a stable source contract is still deferred.'
+  },
+  unsupported: {
+    status: 'unsupported',
+    docs: 'docs/product/requirements.md',
+    limit: 'This surface is intentionally outside the current GOWDK source contract.'
+  }
+};
 
 const SEMANTIC_TOKEN_TYPES = [
   'namespace',
@@ -132,6 +211,51 @@ function missingExecutableMessage(invocation = {}, error = {}) {
   return `Missing GOWDK binary: ${command}. Update gowdk.cliPath or fix PATH.`;
 }
 
+function diagnosticCodeForMessage(message) {
+  const text = String(message || '');
+  if (/gowdk\.config\.go is required/i.test(text)) {
+    return 'missing_gowdk_config';
+  }
+  if (/missing configured GOWDK binary|missing GOWDK binary/i.test(text)) {
+    return 'missing_gowdk_binary';
+  }
+  if (/missing Go binary/i.test(text)) {
+    return 'missing_go_binary';
+  }
+  if (/missing_ssr_addon|SSR addon/i.test(text)) {
+    return 'missing_ssr_addon';
+  }
+  return '';
+}
+
+function quickFixesForDiagnostic(diagnostic = {}) {
+  const code = diagnosticCodeForMessage(diagnostic.message) || String(diagnostic.code || '');
+  switch (code) {
+    case 'missing_gowdk_binary':
+    case 'missing_go_binary':
+      return [
+        quickFix('Set gowdk.cliPath', 'gowdk.openCliPathSetting', true),
+        quickFix('Open GOWDK install docs', 'gowdk.openInstallDocs', false)
+      ];
+    case 'missing_gowdk_config':
+      return [
+        quickFix('Create gowdk.config.go', 'gowdk.createConfig', true),
+        quickFix('Open config docs', 'gowdk.openConfigDocs', false)
+      ];
+    case 'missing_ssr_addon':
+      return [
+        quickFix('Enable SSR validation setting', 'gowdk.enableSsrAddon', true),
+        quickFix('Open SSR docs', 'gowdk.openSsrDocs', false)
+      ];
+    default:
+      return [];
+  }
+}
+
+function quickFix(title, command, preferred) {
+  return { title, command, preferred };
+}
+
 function isGOWDKSourceDir(dir) {
   if (!dir || !fs.existsSync(path.join(dir, 'cmd', 'gowdk'))) {
     return false;
@@ -223,7 +347,7 @@ function normalizePath(value) {
 
 function siteMapHTML(siteMap, root) {
   const pages = siteMapPages(siteMap).slice().sort((a, b) => String(a.route || '').localeCompare(String(b.route || '')));
-  const routes = pages.map((page) => pageCard(page, root)).join('');
+  const routes = pages.map((page) => pageCard(page, root, siteMap)).join('');
   const spaCount = pages.filter((page) => page.render === 'spa').length;
   const ssrCount = pages.filter((page) => page.render === 'ssr').length;
   return `<!doctype html>
@@ -284,6 +408,20 @@ function siteMapHTML(siteMap, root) {
       height: 16px;
       stroke: currentColor;
     }
+    .node-link {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      display: inline;
+      font: inherit;
+      padding: 0;
+      text-align: left;
+    }
+    .node-link:hover {
+      text-decoration: underline;
+    }
     .grid {
       display: grid;
       gap: 10px;
@@ -318,6 +456,9 @@ function siteMapHTML(siteMap, root) {
       font-size: 11px;
       color: var(--vscode-badge-foreground);
       background: var(--vscode-badge-background);
+    }
+    button.pill {
+      display: inline-flex;
     }
     .file {
       color: var(--vscode-descriptionForeground);
@@ -354,6 +495,14 @@ function siteMapHTML(siteMap, root) {
     document.querySelectorAll('[data-open]').forEach((button) => {
       button.addEventListener('click', () => vscode.postMessage({ type: 'open', file: button.dataset.open }));
     });
+    document.querySelectorAll('[data-definition-file]').forEach((button) => {
+      button.addEventListener('click', () => vscode.postMessage({
+        type: 'definition',
+        file: button.dataset.definitionFile,
+        line: Number(button.dataset.definitionLine || 0),
+        column: Number(button.dataset.definitionColumn || 0)
+      }));
+    });
     document.querySelectorAll('[data-move]').forEach((button) => {
       button.addEventListener('click', () => vscode.postMessage({ type: 'move', file: button.dataset.move }));
     });
@@ -362,40 +511,282 @@ function siteMapHTML(siteMap, root) {
 </html>`;
 }
 
-function pageCard(page, root) {
+function pageCard(page, root, metadata = {}) {
   const rel = path.relative(root, page.source || '').replace(/\\/g, '/');
   const blocks = Object.entries(page.blocks || {})
     .filter(([key, value]) => key !== 'actions' && key !== 'apis' && value)
     .map(([key]) => key);
   const actions = (page.blocks && page.blocks.actions) || [];
   const apis = (page.blocks && page.blocks.apis) || [];
+  const fragments = (page.blocks && page.blocks.fragments) || [];
   const css = page.css || [];
   const components = page.components || [];
   const assets = page.assets || [];
+  const routeNodes = routeNodesForPage(page, metadata);
+  const endpointNodes = endpointNodesForPage(page, metadata);
+  const contractRefs = pageContractRefs(page);
   const tags = [
-    page.render,
-    ...blocks,
-    ...actions.map((name) => `act:${name}`),
-    ...apis.map((name) => `api:${name}`),
-    ...(page.layouts || []).map((layout) => `layout:${layout}`),
-    ...css.map((name) => `css:${name}`)
+    { label: page.render },
+    ...blocks.map((block) => ({
+      label: block,
+      target: definitionTargetForNode({ kind: 'block', value: block, pageId: page.id }, metadata) || sourceLocation(page)
+    })),
+    ...actions.map((name) => ({
+      label: `act:${name}`,
+      target: definitionTargetForNode({ kind: 'endpoint', endpointKind: 'action', value: name, pageId: page.id }, metadata) || sourceLocation(page)
+    })),
+    ...apis.map((name) => ({
+      label: `api:${name}`,
+      target: definitionTargetForNode({ kind: 'endpoint', endpointKind: 'api', value: name, pageId: page.id }, metadata) || sourceLocation(page)
+    })),
+    ...fragments.map((name) => ({
+      label: `fragment:${name}`,
+      target: definitionTargetForNode({ kind: 'endpoint', endpointKind: 'fragment', value: name, pageId: page.id }, metadata) || sourceLocation(page)
+    })),
+    ...(page.layouts || []).map((layout) => ({
+      label: `layout:${layout}`,
+      target: definitionTargetForNode({ kind: 'layout', value: layout, pageId: page.id }, metadata)
+    })),
+    ...css.map((name) => ({
+      label: `css:${name}`,
+      target: definitionTargetForNode({ kind: 'css', value: name, pageId: page.id }, metadata)
+    }))
   ].filter(Boolean);
   const details = [
-    css.length ? `CSS: ${css.join(', ')}` : '',
-    components.length ? `Components: ${components.join(', ')}` : '',
-    assets.length ? `Assets: ${assets.join(', ')}` : ''
+    routeNodes.length ? detailNodeList('Routes', routeNodes) : '',
+    endpointNodes.length ? detailNodeList('Endpoints', endpointNodes) : '',
+    css.length ? detailNodeList('CSS', css.map((name) => ({
+      label: name,
+      target: definitionTargetForNode({ kind: 'css', value: name, pageId: page.id }, metadata)
+    }))) : '',
+    components.length ? detailNodeList('Components', components.map((name) => ({
+      label: name,
+      target: definitionTargetForNode({ kind: 'component', value: name, pageId: page.id }, metadata)
+    }))) : '',
+    contractRefs.length ? detailNodeList('Contracts', contractRefs.map((contract) => ({
+      label: contract.label,
+      target: definitionTargetForNode({ kind: 'contract', value: contract.value, pageId: page.id }, metadata) || sourceLocation(page)
+    }))) : '',
+    assets.length ? `Assets: ${escapeHTML(assets.join(', '))}` : ''
   ].filter(Boolean);
   return `<section class="page">
-    <div class="route">${escapeHTML(page.route || '(missing route)')}</div>
+    <div class="route">${nodeLink(page.route || '(missing route)', definitionTargetForNode({ kind: 'route', value: page.route, pageId: page.id }, metadata) || sourceLocation(page), 'node-link route-link')}</div>
     <div class="flow">${escapeHTML(pageFlow(page))}</div>
-    <div class="meta">${tags.map((tag) => `<span class="pill">${escapeHTML(tag)}</span>`).join('')}</div>
+    <div class="meta">${tags.map((tag) => chipNode(tag.label, tag.target)).join('')}</div>
     <div class="file">${escapeHTML(page.id)} · ${escapeHTML(rel || page.source || '')}</div>
-    ${details.length ? `<div class="details">${details.map((item) => `<div>${escapeHTML(item)}</div>`).join('')}</div>` : ''}
+    ${details.length ? `<div class="details">${details.map((item) => `<div>${item}</div>`).join('')}</div>` : ''}
     <div class="actions">
       <button class="icon-button" data-open="${escapeAttr(page.source)}" title="Open Page File" aria-label="Open Page File">${iconSVG('open')}</button>
       <button class="icon-button secondary" data-move="${escapeAttr(page.source)}" title="Move File" aria-label="Move File">${iconSVG('move')}</button>
     </div>
   </section>`;
+}
+
+function detailNodeList(label, nodes) {
+  return `${escapeHTML(label)}: ${nodes.map((node) => nodeLink(node.label, node.target)).join(', ')}`;
+}
+
+function routeNodesForPage(page = {}, metadata = {}) {
+  const routes = siteMapRouteEntries(metadata).filter((route) => routeBelongsToPage(route, page));
+  if (routes.length > 0) {
+    return routes.map((route) => ({
+      label: routeNodeLabel(route),
+      target: sourceLocation(route) || definitionTargetForNode({ kind: 'route', value: route.route, pageId: route.pageId || route.pageID || page.id }, metadata) || sourceLocation(page)
+    }));
+  }
+  if (!page.route) {
+    return [];
+  }
+  return [{
+    label: routeNodeLabel({
+      kind: page.render || 'spa',
+      method: 'GET',
+      route: page.route,
+      pageId: page.id
+    }),
+    target: definitionTargetForNode({ kind: 'route', value: page.route, pageId: page.id }, metadata) || sourceLocation(page)
+  }];
+}
+
+function endpointNodesForPage(page = {}, metadata = {}) {
+  const endpoints = siteMapEndpointEntries(metadata).filter((endpoint) => endpointBelongsToPage(endpoint, page));
+  if (endpoints.length > 0) {
+    return endpoints.map((endpoint) => ({
+      label: endpointNodeLabel(endpoint),
+      target: sourceLocation(endpoint) || endpointFallbackTarget(endpoint, page, metadata)
+    }));
+  }
+  const blocks = page.blocks || {};
+  return [
+    ...(blocks.actions || []).map((name) => fallbackEndpointNode(page, metadata, 'action', name, 'POST')),
+    ...(blocks.apis || []).map((name) => fallbackEndpointNode(page, metadata, 'api', name, 'API')),
+    ...(blocks.fragments || []).map((name) => fallbackEndpointNode(page, metadata, 'fragment', name, 'GET'))
+  ];
+}
+
+function fallbackEndpointNode(page, metadata, kind, name, method) {
+  return {
+    label: endpointNodeLabel({
+      kind,
+      method,
+      symbol: name,
+      route: '',
+      bindingStatus: ''
+    }),
+    target: definitionTargetForNode({ kind: 'endpoint', endpointKind: kind, value: name, pageId: page.id }, metadata) || sourceLocation(page)
+  };
+}
+
+function siteMapRouteEntries(metadata = {}) {
+  return [
+    ...(((metadata.siteMap || {}).routes) || []),
+    ...(metadata.routes || [])
+  ];
+}
+
+function siteMapEndpointEntries(metadata = {}) {
+  return [
+    ...(((metadata.siteMap || {}).endpoints) || []),
+    ...(metadata.endpoints || [])
+  ];
+}
+
+function routeBelongsToPage(route = {}, page = {}) {
+  const pageID = route.pageId || route.pageID;
+  if (pageID && page.id) {
+    return pageID === page.id;
+  }
+  return Boolean(route.route && page.route && route.route === page.route);
+}
+
+function endpointBelongsToPage(endpoint = {}, page = {}) {
+  const pageID = endpoint.pageId || endpoint.pageID;
+  if (pageID && page.id) {
+    return pageID === page.id;
+  }
+  return Boolean(endpoint.route && page.route && endpoint.route === page.route);
+}
+
+function routeNodeLabel(route = {}) {
+  return [
+    route.method || 'GET',
+    route.route || '(missing route)',
+    route.kind || 'route',
+    `[${routeStatus(route)}]`
+  ].join(' ');
+}
+
+function endpointNodeLabel(endpoint = {}) {
+  return [
+    endpoint.method || endpointMethodFallback(endpoint.kind),
+    endpoint.route || '',
+    `${endpoint.kind || 'endpoint'}:${endpointName(endpoint)}`,
+    `[${endpointStatus(endpoint)}]`
+  ].filter(Boolean).join(' ');
+}
+
+function endpointName(endpoint = {}) {
+  return endpoint.symbol ||
+    endpoint.name ||
+    (endpoint.contract && endpoint.contract.name) ||
+    endpoint.handler ||
+    '(unnamed)';
+}
+
+function endpointFallbackTarget(endpoint, page, metadata) {
+  return definitionTargetForNode({
+    kind: 'endpoint',
+    endpointKind: endpoint.kind,
+    value: endpointName(endpoint),
+    pageId: endpoint.pageId || endpoint.pageID || page.id,
+    route: endpoint.route,
+    method: endpoint.method
+  }, metadata) || sourceLocation(page);
+}
+
+function endpointMethodFallback(kind) {
+  if (kind === 'action' || kind === 'command') {
+    return 'POST';
+  }
+  return 'GET';
+}
+
+function routeStatus(route = {}) {
+  switch (route.kind) {
+    case 'static':
+    case 'spa':
+      return 'implemented';
+    case 'ssr':
+      return 'partial';
+    case 'hybrid':
+      return 'planned';
+    default:
+      return 'partial';
+  }
+}
+
+function endpointStatus(endpoint = {}) {
+  const status = endpoint.bindingStatus || endpoint.status || (endpoint.contract && endpoint.contract.status) || '';
+  switch (status) {
+    case 'bound':
+      return 'implemented';
+    case 'missing':
+      return 'missing';
+    case 'unsupported_signature':
+    case 'invalid':
+      return 'unsupported';
+    default:
+      return 'partial';
+  }
+}
+
+function chipNode(label, target) {
+  if (!label) {
+    return '';
+  }
+  if (!target) {
+    return `<span class="pill">${escapeHTML(label)}</span>`;
+  }
+  return nodeLink(label, target, 'pill node-link');
+}
+
+function nodeLink(label, target, className = 'node-link') {
+  if (!target || !target.file) {
+    return escapeHTML(label);
+  }
+  return `<button class="${escapeAttr(className)}" ${definitionTargetAttrs(target)} title="Open source">${escapeHTML(label)}</button>`;
+}
+
+function definitionTargetAttrs(target) {
+  const line = target.line === undefined || target.line === null ? 0 : target.line;
+  const column = target.column === undefined || target.column === null ? 0 : target.column;
+  return [
+    `data-definition-file="${escapeAttr(target.file)}"`,
+    `data-definition-line="${escapeAttr(String(line))}"`,
+    `data-definition-column="${escapeAttr(String(column))}"`
+  ].join(' ');
+}
+
+function pageContractRefs(page = {}) {
+  const refs = [];
+  for (const item of page.imports || []) {
+    if (item.alias) {
+      refs.push({ label: item.alias, value: item.alias });
+    }
+  }
+  for (const store of page.stores || []) {
+    collectContractRef(refs, store.type || store.Type);
+    collectContractRef(refs, store.init || store.Init);
+  }
+  return uniqueBy(refs, (item) => item.label);
+}
+
+function collectContractRef(refs, ref) {
+  const label = formatGoRef(ref);
+  if (!label) {
+    return;
+  }
+  refs.push({ label, value: ref.name || ref.Name || ref.alias || ref.Alias || label });
 }
 
 function iconSVG(name) {
@@ -419,9 +810,11 @@ function pageFlow(page) {
   const steps = [`GET ${route}`, render, output];
   const actions = (page.blocks && page.blocks.actions) || [];
   const apis = (page.blocks && page.blocks.apis) || [];
+  const fragments = (page.blocks && page.blocks.fragments) || [];
   const sideEffects = [
     ...actions.map((name) => `POST act:${name}`),
-    ...apis.map((name) => `API ${name || '(unnamed)'}`)
+    ...apis.map((name) => `API ${name || '(unnamed)'}`),
+    ...fragments.map((name) => `FRAGMENT ${name || '(unnamed)'}`)
   ];
   return sideEffects.length ? `${steps.join(' -> ')} | ${sideEffects.join(' | ')}` : steps.join(' -> ');
 }
@@ -719,13 +1112,69 @@ function cssInputMarkdown(name, metadata = {}) {
   if (name === 'none') {
     lines.push('', 'Built-in none disables GOWDK-managed page CSS and must be used alone.');
   }
-  return lines.join('\n');
+  return withSurfaceStatus(lines, 'css');
+}
+
+function languageSurfaceMarkdown(value) {
+  switch (value) {
+    case 'spa':
+      return withSurfaceStatus([`**GOWDK render mode** \`${value}\``], 'spa');
+    case 'ssr':
+      return withSurfaceStatus([`**GOWDK render mode** \`${value}\``], 'ssr');
+    case 'hybrid':
+      return withSurfaceStatus([`**GOWDK render mode** \`${value}\``], 'hybrid');
+    case 'load':
+      return withSurfaceStatus(['**GOWDK block** `load {}`'], 'ssr');
+    case 'paths':
+      return withSurfaceStatus(['**GOWDK block** `paths {}`'], 'route');
+    case 'script':
+      return withSurfaceStatus(['**GOWDK block** `script {}`'], 'unsupported');
+    default:
+      return '';
+  }
+}
+
+function withSurfaceStatus(lines, surface) {
+  const status = SURFACE_STATUS[surface];
+  if (!status) {
+    return formatHoverLines(lines);
+  }
+  const next = lines.slice();
+  next.push('', `Status: \`${status.status}\``);
+  if (status.docs) {
+    next.push(`Docs: [${status.docs}](${DOCS_BASE_URL}${status.docs})`);
+  }
+  if (status.limit) {
+    next.push(`Current limit: ${status.limit}`);
+  }
+  return formatHoverLines(next);
+}
+
+function formatHoverLines(lines) {
+  const compact = [];
+  for (const line of lines) {
+    if (!line) {
+      if (compact.length > 0 && compact[compact.length - 1] !== '') {
+        compact.push('');
+      }
+      continue;
+    }
+    compact.push(line);
+  }
+  while (compact[compact.length - 1] === '') {
+    compact.pop();
+  }
+  return compact.join('\n');
 }
 
 function hoverMarkdown(token, metadata = {}, context = {}) {
   const value = String(token || '');
   if (!value) {
     return '';
+  }
+  const languageSurface = languageSurfaceMarkdown(value);
+  if (languageSurface) {
+    return languageSurface;
   }
   const dataField = projectDataFields(metadata).find((field) => field.name === value);
   if (dataField) {
@@ -743,60 +1192,69 @@ function hoverMarkdown(token, metadata = {}, context = {}) {
     if (dataField.goField) {
       lines.push(`Go field: \`${escapeMarkdown(dataField.goField)}\``);
     }
-    return lines.join('\n');
+    return withSurfaceStatus(lines, 'dataField');
   }
   const pages = projectPages(metadata);
   const manifest = metadata.manifest || {};
   const page = pages.find((item) => item.id === value);
   if (page) {
-    return [
+    return withSurfaceStatus([
       `**GOWDK page** \`${escapeMarkdown(value)}\``,
       '',
       `Route: \`${escapeMarkdown(page.route || '')}\``,
       `Render: \`${escapeMarkdown(page.render || 'spa')}\``
-    ].join('\n');
+    ], 'page');
+  }
+  const routePage = pages.find((item) => item.route === value);
+  if (routePage) {
+    return withSurfaceStatus([
+      `**GOWDK route** \`${escapeMarkdown(value)}\``,
+      '',
+      routePage.id ? `Page: \`${escapeMarkdown(routePage.id)}\`` : '',
+      `Render: \`${escapeMarkdown(routePage.render || 'spa')}\``
+    ], 'route');
   }
   if (manifest.components && manifest.components[value]) {
     const component = manifest.components[value];
     const props = (component.props || []).map((prop) => `${prop.name} ${prop.type}`).join(', ');
     const emits = (component.emits || []).map(formatEmit).join(', ');
     const state = formatState(component.state);
-    return [
+    return withSurfaceStatus([
       `**GOWDK component** \`${escapeMarkdown(value)}\``,
       '',
       props ? `Props: \`${escapeMarkdown(props)}\`` : 'Props: none',
       state ? `State: \`${escapeMarkdown(state)}\`` : '',
       emits ? `Emits: \`${escapeMarkdown(emits)}\`` : ''
-    ].filter(Boolean).join('\n');
+    ], 'component');
   }
   const event = componentEvent(value, metadata, context);
   if (event) {
-    return [
+    return withSurfaceStatus([
       `**GOWDK component event** \`${escapeMarkdown(value)}\``,
       '',
       `Component: \`${escapeMarkdown(event.component)}\``,
       event.params.length ? `Payload: \`${escapeMarkdown(event.params.join(', '))}\`` : 'Payload: none'
-    ].join('\n');
+    ], 'componentEvent');
   }
   const store = projectStores(metadata).find((item) => item.name === value);
   if (store) {
-    return [
+    return withSurfaceStatus([
       `**GOWDK store** \`${escapeMarkdown(value)}\``,
       '',
       store.page ? `Page: \`${escapeMarkdown(store.page)}\`` : '',
       store.type ? `Type: \`${escapeMarkdown(store.type)}\`` : '',
       store.init ? `Init: \`${escapeMarkdown(store.init)}\`` : ''
-    ].filter(Boolean).join('\n');
+    ], 'store');
   }
   const goContract = projectGoContracts(metadata).find((item) => item.name === value || item.alias === value);
   if (goContract) {
-    return [
+    return withSurfaceStatus([
       `**GOWDK Go contract** \`${escapeMarkdown(value)}\``,
       '',
       goContract.alias ? `Import alias: \`${escapeMarkdown(goContract.alias)}\`` : '',
       goContract.path ? `Import path: \`${escapeMarkdown(goContract.path)}\`` : '',
       goContract.owner ? `Declared by: \`${escapeMarkdown(goContract.owner)}\`` : ''
-    ].filter(Boolean).join('\n');
+    ], 'goContract');
   }
   const layout = projectLayouts(metadata).find((item) => item.id === value);
   if (layout) {
@@ -811,7 +1269,7 @@ function hoverMarkdown(token, metadata = {}, context = {}) {
     if (layoutPages.length > 0) {
       lines.push(`Referenced by ${layoutPages.length} page${layoutPages.length === 1 ? '' : 's'}.`);
     }
-    return lines.join('\n');
+    return withSurfaceStatus(lines, 'layout');
   }
   const cssMarkdown = cssInputMarkdown(value, metadata);
   if (cssMarkdown) {
@@ -820,14 +1278,51 @@ function hoverMarkdown(token, metadata = {}, context = {}) {
   for (const item of pages) {
     const actions = (item.blocks && item.blocks.actions) || [];
     if (actions.includes(value)) {
-      return `**GOWDK action** \`${escapeMarkdown(value)}\`\n\nPage: \`${escapeMarkdown(item.id || '')}\``;
+      return withSurfaceStatus([
+        `**GOWDK action** \`${escapeMarkdown(value)}\``,
+        '',
+        `Page: \`${escapeMarkdown(item.id || '')}\``
+      ], 'action');
     }
     const apis = (item.blocks && item.blocks.apis) || [];
     if (apis.includes(value)) {
-      return `**GOWDK API** \`${escapeMarkdown(value)}\`\n\nPage: \`${escapeMarkdown(item.id || '')}\``;
+      return withSurfaceStatus([
+        `**GOWDK API** \`${escapeMarkdown(value)}\``,
+        '',
+        `Page: \`${escapeMarkdown(item.id || '')}\``
+      ], 'api');
     }
   }
   return '';
+}
+
+function definitionTargetForNode(node = {}, metadata = {}, context = {}) {
+  const kind = String(node.kind || '');
+  const value = String(node.value || node.symbol || node.route || node.id || '');
+  const pages = projectPages(metadata);
+  if (kind === 'page') {
+    const page = pageByIDOrRoute(pages, value, node.pageId);
+    return sourceLocation(page);
+  }
+  if (kind === 'route') {
+    const route = String(node.route || value);
+    const page = pages.find((item) => item.route === route) || pageByIDOrRoute(pages, '', node.pageId);
+    return sourceLocation(page);
+  }
+  if (kind === 'endpoint' || kind === 'action' || kind === 'api') {
+    return endpointDefinitionTarget(node, metadata, pages);
+  }
+  if (kind === 'block') {
+    const page = pageByIDOrRoute(pages, '', node.pageId);
+    return sourceLocation(page);
+  }
+  if (kind === 'contract' || kind === 'goContract') {
+    const goContract = projectGoContracts(metadata).find((item) => item.name === value || item.alias === value);
+    if (goContract) {
+      return sourceLocation(goContract);
+    }
+  }
+  return definitionTarget(value, metadata, context);
 }
 
 function definitionTarget(token, metadata = {}, context = {}) {
@@ -840,6 +1335,10 @@ function definitionTarget(token, metadata = {}, context = {}) {
   const page = pages.find((item) => item.id === value);
   if (page && page.source) {
     return { file: page.source, line: 0, column: 0 };
+  }
+  const routePage = pages.find((item) => item.route === value);
+  if (routePage && routePage.source) {
+    return sourceLocation(routePage);
   }
   const component = manifest.components && manifest.components[value];
   if (component && component.source) {
@@ -861,6 +1360,10 @@ function definitionTarget(token, metadata = {}, context = {}) {
   if (layout && layout.source) {
     return { file: layout.source, line: 0, column: 0 };
   }
+  const endpoint = endpointDefinitionTarget({ value }, metadata, pages);
+  if (endpoint) {
+    return endpoint;
+  }
   for (const item of pages) {
     if (!item.source) {
       continue;
@@ -879,6 +1382,112 @@ function definitionTarget(token, metadata = {}, context = {}) {
     return { file: cssDefinition.file, line: 0, column: 0 };
   }
   return undefined;
+}
+
+function endpointDefinitionTarget(node = {}, metadata = {}, pages = projectPages(metadata)) {
+  const value = String(node.value || node.symbol || '');
+  const pageID = String(node.pageId || node.pageID || '');
+  const endpointKind = String(node.endpointKind || (node.kind === 'action' || node.kind === 'api' ? node.kind : ''));
+  const endpoints = [
+    ...(((metadata.siteMap || {}).endpoints) || []),
+    ...(metadata.endpoints || [])
+  ];
+  for (const endpoint of endpoints) {
+    if (!endpointMatchesNode(endpoint, value, pageID, endpointKind, node)) {
+      continue;
+    }
+    const target = sourceLocation(endpoint);
+    if (target) {
+      return target;
+    }
+    const page = pageByIDOrRoute(pages, '', endpoint.pageId || endpoint.pageID || pageID);
+    if (page) {
+      return sourceLocation(page);
+    }
+  }
+  for (const page of pages) {
+    if (pageID && page.id !== pageID) {
+      continue;
+    }
+    const actions = (page.blocks && page.blocks.actions) || [];
+    const apis = (page.blocks && page.blocks.apis) || [];
+    if ((!endpointKind || endpointKind === 'action') && actions.includes(value)) {
+      return sourceLocation(page);
+    }
+    if ((!endpointKind || endpointKind === 'api') && apis.includes(value)) {
+      return sourceLocation(page);
+    }
+  }
+  return undefined;
+}
+
+function endpointMatchesNode(endpoint = {}, value, pageID, endpointKind, node = {}) {
+  if (pageID && endpoint.pageId !== pageID && endpoint.pageID !== pageID) {
+    return false;
+  }
+  if (endpointKind && endpoint.kind !== endpointKind) {
+    return false;
+  }
+  if (node.method && endpoint.method !== node.method) {
+    return false;
+  }
+  if (node.route && endpoint.route !== node.route) {
+    return false;
+  }
+  if (!value) {
+    return true;
+  }
+  return endpoint.symbol === value ||
+    endpoint.blockName === value ||
+    endpoint.name === value ||
+    endpoint.handler === value ||
+    endpoint.functionName === value;
+}
+
+function pageByIDOrRoute(pages = [], value = '', pageID = '') {
+  if (pageID) {
+    const page = pages.find((item) => item.id === pageID);
+    if (page) {
+      return page;
+    }
+  }
+  return pages.find((item) => item.id === value || item.route === value);
+}
+
+function sourceLocation(item = {}) {
+  const file = item && (item.source || item.file);
+  if (!file) {
+    return undefined;
+  }
+  const directLine = numericValue(item.line);
+  const directColumn = numericValue(item.column);
+  if (directLine !== undefined || directColumn !== undefined) {
+    return {
+      file,
+      line: Math.max(directLine || 0, 0),
+      column: Math.max(directColumn || 0, 0)
+    };
+  }
+  const span = item.sourceSpan || item.SourceSpan || item.span || item.Span;
+  const start = span && (span.start || span.Start);
+  const spanLine = numericValue(start && (start.line || start.Line));
+  const spanColumn = numericValue(start && (start.column || start.Column));
+  if (spanLine !== undefined || spanColumn !== undefined) {
+    return {
+      file,
+      line: Math.max((spanLine || 1) - 1, 0),
+      column: Math.max((spanColumn || 1) - 1, 0)
+    };
+  }
+  return fileLocation(file);
+}
+
+function numericValue(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
 }
 
 function symbolReferences(token, metadata = {}, options = {}) {
@@ -1753,6 +2362,8 @@ module.exports = {
   cssCompletionEntries,
   cssFileEntries,
   definitionTarget,
+  definitionTargetForNode,
+  diagnosticCodeForMessage,
   diagnosticPosition,
   diagnosticRange,
   diagnosticSeverity,
@@ -1776,6 +2387,7 @@ module.exports = {
   projectPages,
   projectCompletionEntries,
   projectCommandArgs,
+  quickFixesForDiagnostic,
   renameEditsForSource,
   semanticTokens,
   siteMapHTML,

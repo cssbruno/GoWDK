@@ -1,0 +1,28 @@
+package gowdkapp
+
+import (
+	"time"
+
+	gowdkratelimit "github.com/cssbruno/gowdk/addons/ratelimit"
+	flagship "github.com/cssbruno/gowdk/examples/flagship/src/app"
+	gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
+)
+
+func init() {
+	store := gowdkratelimit.NewInMemoryStore(gowdkratelimit.InMemoryOptions{})
+	limiter, err := gowdkratelimit.New(gowdkratelimit.Options{
+		Limit:  60,
+		Window: time.Minute,
+		Store:  store,
+	})
+	if err != nil {
+		panic(err)
+	}
+	RegisterRateLimiter(limiter)
+}
+
+func GOWDKGuardRegistry() gowdkguard.Registry {
+	return gowdkguard.Registry{
+		"auth.required": flagship.RequireSession,
+	}
+}

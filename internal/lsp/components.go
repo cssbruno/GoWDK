@@ -1,12 +1,13 @@
 package lsp
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
 	"github.com/cssbruno/gowdk/internal/source"
@@ -60,7 +61,10 @@ func (server *Server) ownerPackageAndUses(doc document) (string, map[string]stri
 }
 
 func (server *Server) componentDefinitions(doc document) map[string]componentDefinition {
-	definitions := server.workspaceComponentDefinitions(doc)
+	definitions := map[string]componentDefinition{}
+	for key, definition := range server.workspaceComponentDefinitions(doc) {
+		definitions[key] = definition
+	}
 	for key, definition := range server.openComponentDefinitions() {
 		definitions[key] = definition
 	}
@@ -69,12 +73,13 @@ func (server *Server) componentDefinitions(doc document) map[string]componentDef
 
 func (server *Server) openComponentDefinitions() map[string]componentDefinition {
 	definitions := map[string]componentDefinition{}
-	for _, doc := range server.documents {
-		if lang.ClassifySource(doc.Path, []byte(doc.Text)) != lang.FileKindComponent {
+	ir, docsBySource := server.openProjectIR()
+	for _, component := range ir.Components {
+		if component.Name == "" {
 			continue
 		}
-		component, diagnostics := lang.ParseComponentSource(doc.Path, []byte(doc.Text))
-		if diagnostics.HasErrors() || component.Name == "" {
+		doc, ok := docsBySource[component.Source]
+		if !ok {
 			continue
 		}
 		definition := componentDefinition{
@@ -98,7 +103,27 @@ func (server *Server) workspaceComponentDefinitions(doc document) map[string]com
 	if root == "" {
 		return definitions
 	}
+	if server.workspaceComponentCache.root == root && server.workspaceComponentCache.key != "" {
+		key := workspaceComponentCacheKey(server.workspaceComponentCache.files, server.workspaceComponentCache.dirs)
+		if key == server.workspaceComponentCache.key {
+			return cloneComponentDefinitions(server.workspaceComponentCache.definitions)
+		}
+	}
+	definitions, key, files, dirs := server.loadWorkspaceComponentDefinitions(root)
+	server.workspaceComponentCache = workspaceComponentDefinitionCache{
+		root:        root,
+		key:         key,
+		files:       files,
+		dirs:        dirs,
+		definitions: cloneComponentDefinitions(definitions),
+	}
+	return definitions
+}
+
+func (server *Server) loadWorkspaceComponentDefinitions(root string) (map[string]componentDefinition, string, []string, []string) {
+	definitions := map[string]componentDefinition{}
 	var paths []string
+	var dirs []string
 	payloads := map[string]string{}
 	_ = filepath.WalkDir(root, func(filePath string, entry os.DirEntry, err error) error {
 		if err != nil {
@@ -108,6 +133,7 @@ func (server *Server) workspaceComponentDefinitions(doc document) map[string]com
 			if shouldSkipWorkspaceDir(entry.Name()) && filePath != root {
 				return filepath.SkipDir
 			}
+			dirs = append(dirs, filePath)
 			return nil
 		}
 		if !strings.HasSuffix(filePath, ".gwdk") {
@@ -127,18 +153,20 @@ func (server *Server) workspaceComponentDefinitions(doc document) map[string]com
 		payloads[filePath] = string(payload)
 		return nil
 	})
+	sort.Strings(paths)
+	sort.Strings(dirs)
+	key := workspaceComponentCacheKey(paths, dirs)
 	if len(paths) == 0 {
-		return definitions
+		return definitions, key, paths, dirs
 	}
-	sources, _ := lang.ParseBuildFiles(paths)
-	ir := gwdkanalysis.BuildProgram(server.config, sources)
-	for _, component := range ir.Components {
-		if component.Name == "" {
+	for _, path := range paths {
+		component, diagnostics := lang.ParseComponentSource(path, []byte(payloads[path]))
+		if diagnostics.HasErrors() || component.Name == "" {
 			continue
 		}
 		definition := componentDefinition{
 			URI:     fileURI(component.Source),
-			Text:    payloads[component.Source],
+			Text:    payloads[path],
 			Package: component.Package,
 			Name:    component.Name,
 			Span:    component.Span,
@@ -148,7 +176,43 @@ func (server *Server) workspaceComponentDefinitions(doc document) map[string]com
 			definitions[componentDefinitionKey("", component.Name)] = definition
 		}
 	}
-	return definitions
+	return definitions, key, paths, dirs
+}
+
+func workspaceComponentCacheKey(files, dirs []string) string {
+	var parts []string
+	for _, file := range files {
+		info, err := os.Stat(file)
+		if err != nil {
+			parts = append(parts, "file:"+file+":missing")
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("file:%s:%d:%d", file, info.ModTime().UnixNano(), info.Size()))
+	}
+	for _, dir := range dirs {
+		info, err := os.Stat(dir)
+		if err != nil {
+			parts = append(parts, "dir:"+dir+":missing")
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("dir:%s:%d:%d", dir, info.ModTime().UnixNano(), info.Size()))
+	}
+	if len(parts) == 0 {
+		return "empty"
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "\x01")
+}
+
+func cloneComponentDefinitions(definitions map[string]componentDefinition) map[string]componentDefinition {
+	if len(definitions) == 0 {
+		return map[string]componentDefinition{}
+	}
+	clone := make(map[string]componentDefinition, len(definitions))
+	for key, definition := range definitions {
+		clone[key] = definition
+	}
+	return clone
 }
 
 func (server *Server) openDocumentByPath(filePath string) (document, bool) {
@@ -162,6 +226,16 @@ func (server *Server) openDocumentByPath(filePath string) (document, bool) {
 }
 
 func workspaceRootForPath(filePath string) string {
+	if root := configuredWorkspaceRootForPath(filePath); root != "" {
+		return root
+	}
+	if strings.TrimSpace(filePath) == "" {
+		return ""
+	}
+	return filepath.Dir(filePath)
+}
+
+func configuredWorkspaceRootForPath(filePath string) string {
 	if strings.TrimSpace(filePath) == "" {
 		return ""
 	}
@@ -176,7 +250,7 @@ func workspaceRootForPath(filePath string) string {
 		}
 		dir = parent
 	}
-	return filepath.Dir(filePath)
+	return ""
 }
 
 func shouldSkipWorkspaceDir(name string) bool {

@@ -23,6 +23,7 @@ func (server *Server) handleNotification(request rpcRequest) [][]byte {
 			Text:    params.TextDocument.Text,
 		}
 		server.documents[doc.URI] = doc
+		server.invalidateProjectCaches()
 		return singleMessage(server.publishDiagnostics(doc))
 	case "textDocument/didChange":
 		var params didChangeTextDocumentParams
@@ -38,6 +39,7 @@ func (server *Server) handleNotification(request rpcRequest) [][]byte {
 			doc.Text = params.ContentChanges[len(params.ContentChanges)-1].Text
 		}
 		server.documents[doc.URI] = doc
+		server.invalidateProjectCaches()
 		return singleMessage(server.publishDiagnostics(doc))
 	case "textDocument/didSave":
 		var params didSaveTextDocumentParams
@@ -53,6 +55,7 @@ func (server *Server) handleNotification(request rpcRequest) [][]byte {
 			doc.Text = *params.Text
 			server.documents[doc.URI] = doc
 		}
+		server.invalidateProjectCaches()
 		return singleMessage(server.publishDiagnostics(doc))
 	case "textDocument/didClose":
 		var params didCloseTextDocumentParams
@@ -61,6 +64,7 @@ func (server *Server) handleNotification(request rpcRequest) [][]byte {
 			return nil
 		}
 		delete(server.documents, params.TextDocument.URI)
+		server.invalidateProjectCaches()
 		return singleMessage(publishDiagnostics(params.TextDocument.URI, nil))
 	default:
 		return nil
@@ -71,7 +75,7 @@ func (server *Server) publishDiagnostics(doc document) []byte {
 	if !strings.HasSuffix(doc.Path, ".gwdk") {
 		return publishDiagnostics(doc.URI, nil)
 	}
-	_, diagnostics := lang.CheckSource(server.config, doc.Path, []byte(doc.Text))
+	_, diagnostics := lang.CheckSourceWithOptions(server.config, doc.Path, []byte(doc.Text), lang.CheckOptions{ProjectRoot: configuredWorkspaceRootForPath(doc.Path)})
 	items := make([]diagnostic, 0, len(diagnostics))
 	for _, item := range diagnostics {
 		items = append(items, diagnosticFromLang(item, doc.URI, doc.Text))

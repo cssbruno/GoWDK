@@ -1,0 +1,40 @@
+package flagship
+
+import content "github.com/cssbruno/gowdk/examples/flagship/src/data"
+
+page hybrid
+route "/hybrid"
+guard public
+css flagship
+go ssr {
+}
+
+build {
+  => content.HybridCopyForBuild()
+}
+
+view {
+  <main class="shell hybrid">
+    <nav class="top-nav">
+      <a href="/">Home</a>
+      <a href="/dashboard">Dashboard</a>
+    </nav>
+
+    <section class="hero">
+      <p class="eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      <p>{tagline}</p>
+    </section>
+
+    <section class="surface-grid">
+      <article>
+        <h2>Build-time shell</h2>
+        <p>{staticNote}</p>
+      </article>
+      <article>
+        <h2>Request-time lane</h2>
+        <p>The route is served through the SSR addon without page load data.</p>
+      </article>
+    </section>
+  </main>
+}

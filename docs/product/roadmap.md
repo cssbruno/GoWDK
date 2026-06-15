@@ -179,7 +179,7 @@ are stable.
 | 17 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Component-level WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
 | 18 | CSS, assets, and packaging | External addon loading is hardened, richer page-aware CSS processor contracts are stable, and Tailwind/CSS deployment docs stay explicit that external tooling is user-installed. Implemented CSS asset hashing, component CSS scope/hash metadata, component non-CSS asset emission, and binary cache policy remain stable. Module selection remains artifact packaging, not runtime module orchestration. |
 | 19 | Framework adapters | GOWDK Runtime remains `net/http` first. Optional Chi, Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; Chi/Echo/Gin can mount routes from generated OpenAPI metadata, and generated code stays framework-neutral by default. |
-| 20 | Dev and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, richer LSP completions, and editor navigation are added. |
+| 20 | Dev and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR, skip unchanged rebuilds, cache watched input state, and show SPA/static browser rebuild failures with diagnostic codes, source ranges, last-good build time, and changed files. Backend process restart/proxy behavior is decided. Deploy previews, component-aware HMR, generated-app runtime browser overlay delivery, richer LSP completions, and editor navigation are added; runtime overlay delivery and component HMR are tracked in [#424](https://github.com/cssbruno/GoWDK/issues/424). |
 | 21 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
 
 ## Candidate Release Order
@@ -261,10 +261,10 @@ without making any minor version a production-readiness target.
   proxies, cache/CDN policy, health checks, metrics, logging, binary deploy,
   and rollback before any production-ready claim.
 - P2 ecosystem polish is owned by optional docs, examples, website pages, or
-  CLI generators: addon discovery, performance
+  CLI generators: playground onboarding, addon discovery, performance
   profiling, migration guides, image guidance, and PWA/offline guidance must
-  not add mandatory npm, framework, or platform dependencies to the repository
-  core.
+  not add mandatory npm, framework, hosted execution, or platform dependencies
+  to the repository core.
 
 ## Non-Goals For Repository Core
 
@@ -281,5 +281,6 @@ without making any minor version a production-readiness target.
 ## Planning Sources
 
 - `docs/product/requirements.md`: requirement status.
+- `docs/product/playground.md`: docs-first playground and sandboxing contract.
 - `docs/engineering/architecture.md`: architecture and implemented boundaries.
 - `docs/engineering/release-plan.md`: open-ended 0.x hardening checklist.

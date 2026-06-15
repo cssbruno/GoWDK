@@ -11,9 +11,12 @@ The command:
   or infers an output directory;
 - serves build output for SPA/static development;
 - polls explicit or discovered `.gwdk`, CSS, and config inputs;
+- compares watched input content hashes and skips no-op rebuild ticks;
 - prints changed, added, and removed input paths when a rebuild starts;
 - injects a small server-sent-events live-reload script into served HTML;
-- shows a browser overlay for rebuild compiler/build failures;
+- shows a browser overlay for rebuild compiler/build failures with diagnostic
+  code, source range, last-good build time, and changed-file context when
+  available;
 - keeps serving the last successful output when rebuilds fail.
 
 When `--app <dir>` or a selected target has `App`, `dev` also builds the
@@ -41,6 +44,10 @@ When build flags include `--timings`, incremental rebuilds update the timings
 sidecar with counters for input changes, affected pages, component/layout/page
 changes, files written, and identical writes skipped.
 
+The dev loop stores a watched-input snapshot in the output directory. A later
+poll tick can reuse that snapshot when the source set and output are still
+present, which avoids reloading config and rewalking the tree on no-op ticks.
+
 ## HMR
 
 Component-level HMR is not part of the current contract. The P0 baseline is
@@ -49,17 +56,32 @@ full-page live reload with last-good-output serving.
 Local island state preservation is also not a current contract. Add it only
 after GOWDK has a stable component/client dependency graph.
 
+Generated-app runtime overlay delivery, dev-only runtime panic surfacing, and
+component-aware HMR are tracked in
+[#424](https://github.com/cssbruno/GoWDK/issues/424).
+
 ## Browser Overlay
 
 For plain SPA/static dev serving, rebuild compiler/build failures are printed
 to the terminal and sent to the browser over the existing live-reload event
-stream. The injected script shows a fixed overlay with the failure text while
-the last successful output continues to serve. The overlay is removed on the
-next successful rebuild and page reload.
+stream. The injected script shows a fixed overlay while the last successful
+output continues to serve.
+
+The overlay includes, when available:
+
+- diagnostic code, severity, message, source file, and source range;
+- last successful build time;
+- files that triggered the failed rebuild;
+- generated route/endpoint attribution when the failing build report carries
+  that metadata.
+
+The overlay is removed on the next successful rebuild and page reload.
 
 Generated app runtime mode keeps runtime stdout/stderr attached to the terminal.
 Browser overlay delivery there is limited by the generated app process serving
-the HTTP traffic.
+the HTTP traffic, so generated-app runtime errors remain terminal-first until a
+runtime browser bridge exists. See
+[#424](https://github.com/cssbruno/GoWDK/issues/424).
 
 ## File Watching
 

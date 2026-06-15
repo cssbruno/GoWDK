@@ -29,8 +29,12 @@ func build(args []string) error {
 	if err != nil {
 		return err
 	}
+	return buildLoaded(plan, time.Since(started))
+}
+
+func buildLoaded(plan buildOptions, configLoad time.Duration) error {
 	timings := newBuildTimingRecorder(plan.Timings)
-	timings.addDuration("config_load", time.Since(started))
+	timings.addDuration("config_load", configLoad)
 	if plan.shouldBuildConfiguredTargets() {
 		return buildConfiguredTargets(plan, timings)
 	}
@@ -146,7 +150,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
 	if diagnostics.HasErrors() {
-		return fmt.Errorf("build failed")
+		return newDevDiagnosticError("build failed", devOverlayDiagnosticsFromLang(diagnostics))
 	}
 	var ir gwdkir.Program
 	timings.measure("ir_assembly", func() error {
@@ -182,7 +186,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		fmt.Fprintln(os.Stderr, prefix+diagnostic.Error())
 	}
 	if report.HasErrors() {
-		return fmt.Errorf("build failed")
+		return newDevDiagnosticError("build failed", devOverlayDiagnosticsFromCompiler(report))
 	}
 	var contractReport contractscan.Report
 	if err := timings.measure("contract_validation", func() error {
@@ -195,6 +199,10 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		return compiler.ValidateContractReferences(ir.ContractRefs)
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		var report compiler.ValidationErrors
+		if errors.As(err, &report) {
+			return newDevDiagnosticError("build failed", devOverlayDiagnosticsFromCompiler(report))
+		}
 		return fmt.Errorf("build failed")
 	}
 

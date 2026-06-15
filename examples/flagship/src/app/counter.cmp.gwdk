@@ -1,0 +1,26 @@
+package flagship
+
+import ui "github.com/cssbruno/gowdk/examples/flagship/src/ui"
+
+component Counter
+
+state ui.CounterState = ui.NewCounterState()
+
+client {
+  func Increment() {
+    Count++
+  }
+
+  func Reset() {
+    Count = 0
+  }
+}
+
+view {
+  <section class="counter">
+    <p>{Label}</p>
+    <strong>{Count}</strong>
+    <button g:on:click={Increment()}>Increment</button>
+    <button g:on:click={Reset()}>Reset</button>
+  </section>
+}

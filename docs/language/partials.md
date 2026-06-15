@@ -80,6 +80,13 @@ Current support:
   the generated island mount hook so newly inserted JavaScript islands can
   attach.
 
+## Examples
+
+`examples/endpoints/src/endpoints/fragments.page.gwdk` demonstrates inline validation, table
+row update, list refresh, modal body update, dashboard card refresh, standalone
+fragment declarations, and action handlers that return explicit fragment
+responses from normal Go.
+
 ## Swap Modes
 
 The current swap modes are:

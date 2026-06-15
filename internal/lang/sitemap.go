@@ -30,36 +30,81 @@ type SiteMapPage struct {
 
 // SiteMapBlocks records which top-level source blocks are present.
 type SiteMapBlocks struct {
-	Paths   bool     `json:"paths"`
-	Build   bool     `json:"build"`
-	Load    bool     `json:"load"`
-	View    bool     `json:"view"`
-	Actions []string `json:"actions,omitempty"`
-	APIs    []string `json:"apis,omitempty"`
+	Paths     bool     `json:"paths"`
+	Build     bool     `json:"build"`
+	Load      bool     `json:"load"`
+	View      bool     `json:"view"`
+	Actions   []string `json:"actions,omitempty"`
+	APIs      []string `json:"apis,omitempty"`
+	Fragments []string `json:"fragments,omitempty"`
 }
 
 // SiteMapRoute describes one generated route graph entry.
 type SiteMapRoute struct {
-	Kind    compiler.RouteKind `json:"kind"`
-	Method  string             `json:"method"`
-	Route   string             `json:"route"`
-	PageID  string             `json:"pageId"`
-	Handler string             `json:"handler,omitempty"`
+	Kind          compiler.RouteKind `json:"kind"`
+	Method        string             `json:"method"`
+	Route         string             `json:"route"`
+	PageID        string             `json:"pageId"`
+	Package       string             `json:"package,omitempty"`
+	Render        gowdk.RenderMode   `json:"render,omitempty"`
+	Cache         string             `json:"cache,omitempty"`
+	DynamicParams []string           `json:"dynamicParams,omitempty"`
+	RouteParams   []routeParamJSON   `json:"routeParams,omitempty"`
+	Layouts       []string           `json:"layouts,omitempty"`
+	Guards        []string           `json:"guards,omitempty"`
+	Source        string             `json:"source,omitempty"`
+	SourceSpan    *sourceSpanJSON    `json:"sourceSpan,omitempty"`
+	Handler       string             `json:"handler,omitempty"`
 }
 
-// SiteMapEndpoint describes one generated action/API endpoint graph entry.
+// SiteMapEndpoint describes one generated endpoint graph entry.
 type SiteMapEndpoint struct {
-	Kind          compiler.EndpointKind       `json:"kind"`
-	Method        string                      `json:"method"`
-	Route         string                      `json:"route"`
-	PageID        string                      `json:"pageId"`
-	Symbol        string                      `json:"symbol,omitempty"`
-	Package       string                      `json:"package,omitempty"`
-	DynamicParams []string                    `json:"dynamicParams,omitempty"`
-	RouteParams   []routeParamJSON            `json:"routeParams,omitempty"`
-	BindingStatus source.BackendBindingStatus `json:"bindingStatus,omitempty"`
-	Signature     source.BackendSignatureKind `json:"signature,omitempty"`
-	InputType     string                      `json:"inputType,omitempty"`
+	Kind           compiler.EndpointKind       `json:"kind"`
+	EndpointSource string                      `json:"endpointSource,omitempty"`
+	Source         string                      `json:"source,omitempty"`
+	SourceSpan     *sourceSpanJSON             `json:"sourceSpan,omitempty"`
+	Method         string                      `json:"method"`
+	Route          string                      `json:"route"`
+	PageID         string                      `json:"pageId"`
+	Symbol         string                      `json:"symbol,omitempty"`
+	Package        string                      `json:"package,omitempty"`
+	PackagePath    string                      `json:"packagePath,omitempty"`
+	PackageName    string                      `json:"packageName,omitempty"`
+	Cache          string                      `json:"cache,omitempty"`
+	DynamicParams  []string                    `json:"dynamicParams,omitempty"`
+	RouteParams    []routeParamJSON            `json:"routeParams,omitempty"`
+	Guards         []string                    `json:"guards,omitempty"`
+	CSRF           bool                        `json:"csrf,omitempty"`
+	Handler        string                      `json:"handler,omitempty"`
+	BindingStatus  source.BackendBindingStatus `json:"bindingStatus,omitempty"`
+	BindingMessage string                      `json:"bindingMessage,omitempty"`
+	Signature      source.BackendSignatureKind `json:"signature,omitempty"`
+	InputType      string                      `json:"inputType,omitempty"`
+	Contract       *siteMapContractJSON        `json:"contract,omitempty"`
+}
+
+type siteMapContractJSON struct {
+	Name        string                       `json:"name"`
+	Kind        gwdkir.ContractKind          `json:"kind"`
+	Status      gwdkir.ContractBindingStatus `json:"status"`
+	Message     string                       `json:"message,omitempty"`
+	ImportAlias string                       `json:"importAlias,omitempty"`
+	ImportPath  string                       `json:"importPath,omitempty"`
+	Type        string                       `json:"type,omitempty"`
+	Result      string                       `json:"result,omitempty"`
+	Roles       []string                     `json:"roles,omitempty"`
+	Handler     string                       `json:"handler,omitempty"`
+	Register    string                       `json:"register,omitempty"`
+}
+
+type sourceSpanJSON struct {
+	Start sourcePositionJSON `json:"start"`
+	End   sourcePositionJSON `json:"end"`
+}
+
+type sourcePositionJSON struct {
+	Line   int `json:"line"`
+	Column int `json:"column"`
 }
 
 // BuildSiteMapFromIR converts stable compiler IR into the editor-facing site
@@ -82,12 +127,13 @@ func siteMapPages(config gowdk.Config, ir gwdkir.Program) []SiteMapPage {
 			Guard:         page.Guards,
 			DynamicParams: page.DynamicParams(),
 			Blocks: SiteMapBlocks{
-				Paths:   page.Blocks.Paths,
-				Build:   page.Blocks.Build,
-				Load:    page.Blocks.Load,
-				View:    page.Blocks.View,
-				Actions: actionNames(page.Blocks.Actions),
-				APIs:    apiNames(page.Blocks.APIs),
+				Paths:     page.Blocks.Paths,
+				Build:     page.Blocks.Build,
+				Load:      page.Blocks.Load,
+				View:      page.Blocks.View,
+				Actions:   actionNames(page.Blocks.Actions),
+				APIs:      apiNames(page.Blocks.APIs),
+				Fragments: fragmentEndpointNames(page.Blocks.Fragments),
 			},
 		})
 	}
@@ -150,11 +196,20 @@ func siteMapRoutes(routes []compiler.RouteBinding) []SiteMapRoute {
 	out := make([]SiteMapRoute, 0, len(routes))
 	for _, route := range routes {
 		out = append(out, SiteMapRoute{
-			Kind:    route.Kind,
-			Method:  route.Method,
-			Route:   route.Route,
-			PageID:  route.PageID,
-			Handler: route.Handler,
+			Kind:          route.Kind,
+			Method:        route.Method,
+			Route:         route.Route,
+			PageID:        route.PageID,
+			Package:       route.Package,
+			Render:        route.Render,
+			Cache:         route.Cache,
+			DynamicParams: append([]string(nil), route.DynamicParams...),
+			RouteParams:   routeParamsJSON(route.RouteParams),
+			Layouts:       append([]string(nil), route.Layouts...),
+			Guards:        append([]string(nil), route.Guards...),
+			Source:        route.Source,
+			SourceSpan:    siteMapSourceSpanJSON(route.SourceSpan),
+			Handler:       route.Handler,
 		})
 	}
 	return out
@@ -166,19 +221,55 @@ func siteMapEndpoints(endpoints []compiler.EndpointBinding) []SiteMapEndpoint {
 	}
 	out := make([]SiteMapEndpoint, 0, len(endpoints))
 	for _, endpoint := range endpoints {
-		out = append(out, SiteMapEndpoint{
-			Kind:          endpoint.Kind,
-			Method:        endpoint.Method,
-			Route:         endpoint.Route,
-			PageID:        endpoint.PageID,
-			Symbol:        endpoint.Symbol,
-			Package:       endpoint.Package,
-			DynamicParams: append([]string(nil), endpoint.DynamicParams...),
-			RouteParams:   routeParamsJSON(endpoint.RouteParams),
-			BindingStatus: endpoint.BindingStatus,
-			Signature:     endpoint.BindingSignature,
-			InputType:     endpoint.BindingInputType,
-		})
+		item := SiteMapEndpoint{
+			Kind:           endpoint.Kind,
+			EndpointSource: endpoint.EndpointSource,
+			Source:         endpoint.Source,
+			SourceSpan:     siteMapSourceSpanJSON(endpoint.SourceSpan),
+			Method:         endpoint.Method,
+			Route:          endpoint.Route,
+			PageID:         endpoint.PageID,
+			Symbol:         endpoint.Symbol,
+			Package:        endpoint.Package,
+			PackagePath:    endpoint.PackagePath,
+			PackageName:    endpoint.PackageName,
+			Cache:          endpoint.Cache,
+			DynamicParams:  append([]string(nil), endpoint.DynamicParams...),
+			RouteParams:    routeParamsJSON(endpoint.RouteParams),
+			Guards:         append([]string(nil), endpoint.Guards...),
+			CSRF:           endpoint.CSRF,
+			Handler:        endpoint.Handler,
+			BindingStatus:  endpoint.BindingStatus,
+			BindingMessage: endpoint.BindingMessage,
+			Signature:      endpoint.BindingSignature,
+			InputType:      endpoint.BindingInputType,
+		}
+		if endpoint.Contract.Name != "" {
+			item.Contract = &siteMapContractJSON{
+				Name:        endpoint.Contract.Name,
+				Kind:        endpoint.Contract.Kind,
+				Status:      endpoint.Contract.Status,
+				Message:     endpoint.Contract.Message,
+				ImportAlias: endpoint.Contract.ImportAlias,
+				ImportPath:  endpoint.Contract.ImportPath,
+				Type:        endpoint.Contract.Type,
+				Result:      endpoint.Contract.Result,
+				Roles:       append([]string(nil), endpoint.Contract.Roles...),
+				Handler:     endpoint.Contract.Handler,
+				Register:    endpoint.Contract.Register,
+			}
+		}
+		out = append(out, item)
 	}
 	return out
+}
+
+func siteMapSourceSpanJSON(span source.SourceSpan) *sourceSpanJSON {
+	if span.Start.Line <= 0 || span.Start.Column <= 0 || span.End.Line <= 0 || span.End.Column <= 0 {
+		return nil
+	}
+	return &sourceSpanJSON{
+		Start: sourcePositionJSON{Line: span.Start.Line, Column: span.Start.Column},
+		End:   sourcePositionJSON{Line: span.End.Line, Column: span.End.Column},
+	}
 }

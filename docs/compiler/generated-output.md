@@ -13,8 +13,9 @@ Implemented today:
   by CSS processors, generated page CSS files, the partial-update client
   runtime when needed, and route HTML cache metadata.
 - `sitemap.xml` and `robots.txt` are emitted only when `addons/seo` is enabled.
-  The sitemap includes static and `paths {}`-expanded SPA routes plus configured
-  extra URLs; request-time pages are excluded and listed in the build report.
+  The sitemap includes public static and `paths {}`-expanded SPA routes plus
+  configured extra URLs; request-time and guardless default-denied pages are
+  excluded and listed in the build report.
 - `gowdk-build-report.json` records build-output generator validation, planning,
   write, manifest, cleanup, and completion events for every successful disk
   build.

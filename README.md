@@ -175,7 +175,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 | --- | --- |
 | `gowdk generate stubs` | Write conservative missing action/API Go handler stubs next to their owning source package |
 | `gowdk contracts` / `graph` / `trace` / `list` | Print contract registration metadata, the command/event graph, a single contract trace, or filtered lists of commands/queries/events/jobs |
-| `gowdk add <addon>` | Wire an optional addon into `gowdk.config.go` (`add --list` to see all) |
+| `gowdk add <addon>` | Wire an optional addon into `gowdk.config.go` (`add --list` to see all; `add seo` requires `--base-url`) |
 | `gowdk lsp` | Start the language server over stdio |
 
 ## Design
@@ -267,7 +267,8 @@ tracking in the
 ## Addons
 
 The runtime core stays dependency-light; everything optional is an addon you
-wire in with `gowdk add <addon>` (see `gowdk add --list`):
+wire in with `gowdk add <addon>` (see `gowdk add --list`; SEO also needs
+`gowdk add seo --base-url https://example.com`):
 
 | Addon | What it adds |
 | --- | --- |

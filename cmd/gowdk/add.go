@@ -8,6 +8,7 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -16,7 +17,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/project"
 )
 
-const addUsage = "usage: gowdk add <addon> [--config <file>] | gowdk add --list"
+const addUsage = "usage: gowdk add <addon> [--config <file>] [--base-url <url>] | gowdk add --list"
 
 // addonSpec describes a built-in addon that `gowdk add` can wire into a
 // project's gowdk.config.go. The selector package name is the import alias used
@@ -27,6 +28,10 @@ type addonSpec struct {
 	Package    string
 	Summary    string
 	Options    string
+}
+
+type addCommandOptions struct {
+	SEOBaseURL string
 }
 
 // addonRegistry lists the addons `gowdk add <name>` understands. Each maps to a
@@ -116,6 +121,7 @@ var addonRegistry = map[string]addonSpec{
 
 func addAddon(args []string) error {
 	configPath := project.DefaultConfigFile
+	var options addCommandOptions
 	var names []string
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
@@ -130,6 +136,17 @@ func addAddon(args []string) error {
 			configPath = args[index]
 		case strings.HasPrefix(arg, "--config="):
 			configPath = strings.TrimPrefix(arg, "--config=")
+		case arg == "--base-url":
+			if index+1 >= len(args) {
+				return fmt.Errorf("%s\n--base-url requires a value", addUsage)
+			}
+			index++
+			options.SEOBaseURL = args[index]
+		case strings.HasPrefix(arg, "--base-url="):
+			options.SEOBaseURL = strings.TrimPrefix(arg, "--base-url=")
+			if options.SEOBaseURL == "" {
+				return fmt.Errorf("%s\n--base-url requires a value", addUsage)
+			}
 		case strings.HasPrefix(arg, "-"):
 			return fmt.Errorf("unknown add flag %q", arg)
 		default:
@@ -142,12 +159,19 @@ func addAddon(args []string) error {
 	}
 
 	specs := make([]addonSpec, 0, len(names))
+	addsSEO := false
 	for _, name := range names {
 		spec, ok := addonRegistry[name]
 		if !ok {
 			return fmt.Errorf("unknown addon %q\nrun `gowdk add --list` to see available addons", name)
 		}
+		if spec.Name == "seo" {
+			addsSEO = true
+		}
 		specs = append(specs, spec)
+	}
+	if options.SEOBaseURL != "" && !addsSEO {
+		return fmt.Errorf("--base-url is only supported with addon %q", "seo")
 	}
 
 	source, err := os.ReadFile(configPath)
@@ -175,8 +199,13 @@ func addAddon(args []string) error {
 			fmt.Printf("addon %q already present\n", spec.Name)
 			continue
 		}
+		if spec.Name == "seo" {
+			if err := validateSEOBaseURLForAdd(options.SEOBaseURL); err != nil {
+				return err
+			}
+		}
 		ensureImport(file, spec.ImportPath)
-		if err := appendAddon(configLit, spec); err != nil {
+		if err := appendAddon(configLit, spec, options); err != nil {
 			return err
 		}
 		added = append(added, spec.Name)
@@ -273,7 +302,7 @@ func addonPresent(configLit *ast.CompositeLit, file *ast.File, spec addonSpec) b
 
 // appendAddon adds `<package>.Addon()` to Config.Addons, creating the field
 // when it does not yet exist.
-func appendAddon(configLit *ast.CompositeLit, spec addonSpec) error {
+func appendAddon(configLit *ast.CompositeLit, spec addonSpec, options addCommandOptions) error {
 	call := &ast.CallExpr{Fun: &ast.SelectorExpr{
 		X:   ast.NewIdent(spec.Package),
 		Sel: ast.NewIdent("Addon"),
@@ -283,6 +312,17 @@ func appendAddon(configLit *ast.CompositeLit, spec addonSpec) error {
 			X:   ast.NewIdent(spec.Package),
 			Sel: ast.NewIdent(spec.Options),
 		}}}
+		if spec.Name == "seo" {
+			call.Args[0].(*ast.CompositeLit).Elts = []ast.Expr{
+				&ast.KeyValueExpr{
+					Key: ast.NewIdent("BaseURL"),
+					Value: &ast.BasicLit{
+						Kind:  token.STRING,
+						Value: strconv.Quote(strings.TrimSpace(options.SEOBaseURL)),
+					},
+				},
+			}
+		}
 	}
 
 	if field, ok := addonsField(configLit); ok {
@@ -303,6 +343,21 @@ func appendAddon(configLit *ast.CompositeLit, spec addonSpec) error {
 			Elts: []ast.Expr{call},
 		},
 	})
+	return nil
+}
+
+func validateSEOBaseURLForAdd(raw string) error {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return fmt.Errorf("gowdk add seo requires --base-url <url>")
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return fmt.Errorf("invalid --base-url %q: %w", raw, err)
+	}
+	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return fmt.Errorf("--base-url must be an absolute http or https URL")
+	}
 	return nil
 }
 

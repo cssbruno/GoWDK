@@ -47,8 +47,9 @@ func TestBuildEmitsSEOArtifactsWhenAddonEnabled(t *testing.T) {
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{
 		seoHomePage(),
 		{
-			ID:    "blog",
-			Route: "/blog/{slug}",
+			ID:     "blog",
+			Route:  "/blog/{slug}",
+			Guards: []string{"public"},
 			Blocks: gwdkir.Blocks{
 				Paths:     true,
 				PathsBody: `=> { slug: "hello-gowdk" }`,
@@ -109,6 +110,7 @@ func TestBuildReportListsSEORouteExclusions(t *testing.T) {
 			ID:     "dashboard",
 			Route:  "/dashboard",
 			Render: gowdk.SSR,
+			Guards: []string{"public"},
 			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main>Dashboard</main>`,
@@ -126,6 +128,43 @@ func TestBuildReportListsSEORouteExclusions(t *testing.T) {
 	}
 	if event.PageID != "dashboard" || event.Route != "/dashboard" || event.Data["reason"] != "request_time_rendering" || event.Data["mode"] != "ssr" {
 		t.Fatalf("unexpected SEO exclusion event: %#v", event)
+	}
+}
+
+func TestBuildExcludesGuardlessRoutesFromSEOSitemap(t *testing.T) {
+	outputDir := t.TempDir()
+	config := gowdk.Config{Addons: []gowdk.Addon{
+		seo.Addon(seo.Options{BaseURL: "https://example.com"}),
+	}}
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{
+		seoHomePage(),
+		{
+			ID:    "private",
+			Route: "/private",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main>Private</main>`,
+			},
+		},
+	}}
+
+	result, err := Build(config, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sitemap := readFile(t, result.SitemapPath)
+	if strings.Contains(sitemap, "https://example.com/private") {
+		t.Fatalf("guardless route must not be listed in sitemap:\n%s", sitemap)
+	}
+	if !strings.Contains(sitemap, "https://example.com/") {
+		t.Fatalf("expected public home route in sitemap:\n%s", sitemap)
+	}
+	event := findBuildReportEvent(result.Report, "seo", "seo_route_excluded")
+	if event == nil {
+		t.Fatalf("expected guardless SEO exclusion event in %#v", result.Report.Events)
+	}
+	if event.PageID != "private" || event.Route != "/private" || event.Data["reason"] != "guardless_route_denied" || event.Data["mode"] != "spa" {
+		t.Fatalf("unexpected guardless SEO exclusion event: %#v", event)
 	}
 }
 
@@ -163,8 +202,9 @@ func TestBuildRejectsSEOAddonWithoutBaseURL(t *testing.T) {
 
 func seoHomePage() gwdkir.Page {
 	return gwdkir.Page{
-		ID:    "home",
-		Route: "/",
+		ID:     "home",
+		Route:  "/",
+		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main>Home</main>`,

@@ -485,8 +485,10 @@ for migrations, transactions, readiness, and sqlc usage.
 
 Use `gowdk add --list` to print built-in addon names, and `gowdk add <name>` to
 insert the canonical import and `<name>.Addon()` constructor into
-`gowdk.config.go`. The command rewrites literal `Config.Addons` lists only; if
-`Addons` is computed by Go code, edit the config manually.
+`gowdk.config.go`. `gowdk add seo` requires `--base-url <url>` because SEO
+build output requires `seo.Options.BaseURL`. The command rewrites literal
+`Config.Addons` lists only; if `Addons` is computed by Go code, edit the config
+manually.
 
 The literal config loader recognizes built-in addon constructors when they are
 imported from their canonical package paths. Most are no-argument constructors;

@@ -5,6 +5,10 @@ It is disabled by default because sitemap URLs need site-level deploy policy.
 
 Configure it in `gowdk.config.go`:
 
+```sh
+gowdk add seo --base-url https://example.com
+```
+
 ```go
 package app
 
@@ -46,13 +50,15 @@ are joined onto it. If `BaseURL` includes a path such as
 
 `sitemap.xml` includes build-time-enumerable page routes:
 
-- static SPA/action pages;
-- dynamic SPA routes expanded from literal `paths {}` declarations;
+- public static SPA/action pages;
+- public dynamic SPA routes expanded from literal `paths {}` declarations;
 - optional `ExtraURLs`, which may be absolute URLs or root-relative paths.
 
 Request-time pages are not included because `gowdk build` cannot know their
-runtime URL set. The build report records one `seo_route_excluded` event for
-each excluded page, including a `reason` and render `mode`.
+runtime URL set. Guardless pages are also excluded because generated apps deny
+those routes until access is stated with `guard public` or a protective guard.
+The build report records one `seo_route_excluded` event for each excluded page,
+including a `reason` and render `mode`.
 
 `robots.txt` emits:
 

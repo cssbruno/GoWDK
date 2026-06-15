@@ -1500,7 +1500,7 @@ var Config = gowdk.Config{}
 `)
 
 	stdout, stderr, err := captureCLIOutput(t, func() error {
-		return run([]string{"add", "seo", "--config", config})
+		return run([]string{"add", "seo", "--base-url", "https://example.com", "--config", config})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1518,11 +1518,36 @@ var Config = gowdk.Config{}
 	source := string(payload)
 	for _, expected := range []string{
 		`"github.com/cssbruno/gowdk/addons/seo"`,
-		"Addons: []gowdk.Addon{seo.Addon(seo.Options{})}",
+		`Addons: []gowdk.Addon{seo.Addon(seo.Options{BaseURL: "https://example.com"})}`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected updated config to contain %q:\n%s", expected, source)
 		}
+	}
+}
+
+func TestAddCommandRejectsSEOAddonWithoutBaseURL(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+
+	_, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "seo", "--config", config})
+	})
+	if err == nil || !strings.Contains(err.Error(), "gowdk add seo requires --base-url <url>") {
+		t.Fatalf("expected missing SEO base URL error, got %v", err)
+	}
+	payload, readErr := os.ReadFile(config)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if strings.Contains(string(payload), "seo.Addon") {
+		t.Fatalf("seo addon should not be written on missing base URL:\n%s", payload)
 	}
 }
 

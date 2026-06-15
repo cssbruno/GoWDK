@@ -58,12 +58,14 @@ Use `gowdk add --list` to print the built-in names the CLI can wire into
 ```sh
 gowdk add --list
 gowdk add ssr actions partial realtime
+gowdk add seo --base-url https://example.com
 ```
 
 `gowdk add <name>` inserts the canonical addon import and appends
 `<name>.Addon()` to a literal `Config.Addons` list. It skips constructors that
 are already present, including aliased imports. It does not install external Go
-modules or discover third-party addons.
+modules or discover third-party addons. `gowdk add seo` also requires
+`--base-url` so the generated config can pass SEO build validation.
 
 ## Discovery Policy
 
@@ -117,7 +119,9 @@ Addons: []gowdk.Addon{
 	db.Addon(),
 	ratelimit.Addon(),
 	contracts.Addon(),
-	seo.Addon(seo.Options{}),
+	seo.Addon(seo.Options{
+		BaseURL: "https://example.com",
+	}),
 	realtime.Addon(),
 }
 ```
@@ -297,8 +301,9 @@ generated app has action, API, fragment, SSR, or split-backend proxy routes, the
 generated package exposes `RegisterRateLimiter(*ratelimit.Limiter)`.
 
 `addons/seo` emits `sitemap.xml` and `robots.txt` at build time. It requires
-`seo.Options.BaseURL`, includes static and `paths {}`-expanded SPA routes, and
-records request-time route exclusions in the build report. See [seo.md](seo.md).
+`seo.Options.BaseURL`, includes public static and `paths {}`-expanded SPA
+routes, and records request-time or default-denied route exclusions in the build
+report. See [seo.md](seo.md).
 
 ```go
 store := ratelimit.NewInMemoryStore(ratelimit.InMemoryOptions{})

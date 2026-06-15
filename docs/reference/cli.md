@@ -9,7 +9,7 @@ development.
 ```sh
 gowdk version
 gowdk init [--force] [--tests] [--template <site|minimal>] [dir]
-gowdk add <addon> [--config <file>]
+gowdk add <addon> [--config <file>] [--base-url <url>]
 gowdk add --list
 gowdk tokens <file.gwdk>
 gowdk fmt [--write] <files>
@@ -42,6 +42,9 @@ gowdk lsp [--ssr]
 - `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
 - `--list`: supported by `add`; prints built-in addon names the command can wire.
+- `--base-url`: supported by `add seo`; writes the required
+  `seo.Options.BaseURL` value. The value must be an absolute `http` or
+  `https` URL.
 - `--json`: supported by `check`, `doctor`, `audit`, `explain`, `inspect`, `contracts`, `graph`, `trace`, and `list`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available. `gowdk check --json` uses diagnostic
@@ -123,6 +126,7 @@ go run ./cmd/gowdk init --tests --template site my-tested-site
 go run ./cmd/gowdk init --template minimal my-minimal-site
 go run ./cmd/gowdk add --list
 go run ./cmd/gowdk add ssr actions partial
+go run ./cmd/gowdk add seo --base-url https://example.com
 go run ./cmd/gowdk check examples/pages/home.page.gwdk
 go run ./cmd/gowdk check --config gowdk.config.go
 go run ./cmd/gowdk check --warnings-as-errors --config gowdk.config.go

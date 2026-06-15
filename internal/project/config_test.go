@@ -646,6 +646,57 @@ var Config = gowdk.Config{
 	}
 }
 
+func TestLoadConfigFileFallsBackForDynamicSEOOptions(t *testing.T) {
+	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+`)
+	path := filepath.Join(root, DefaultConfigFile)
+	writeTestFile(t, path, `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	seoaddon "github.com/cssbruno/gowdk/addons/seo"
+)
+
+func siteURL() string {
+	return "https://dynamic.example.com/docs"
+}
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		seoaddon.Addon(seoaddon.Options{
+			BaseURL: siteURL(),
+			Disallow: []string{"/admin"},
+		}),
+	},
+}
+`)
+	tidyTestModule(t, root)
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !config.HasFeature(gowdk.FeatureSEO) {
+		t.Fatal("expected executable config to enable SEO")
+	}
+	provider, ok := config.Addons[0].(gowdk.SEOProvider)
+	if !ok {
+		t.Fatalf("expected SEOProvider, got %T", config.Addons[0])
+	}
+	options := provider.SEOOptions()
+	if options.BaseURL != "https://dynamic.example.com/docs" || len(options.Disallow) != 1 || options.Disallow[0] != "/admin" {
+		t.Fatalf("unexpected executable SEO options: %#v", options)
+	}
+}
+
 func TestLoadConfigFileReadsImportableExternalAddon(t *testing.T) {
 	root := t.TempDir()
 	repoRoot := repositoryRoot(t)
@@ -945,6 +996,19 @@ func TestParseSEOAddonRejectsUnknownOptions(t *testing.T) {
 
 	if addon, ok := parseSEOAddon(expression, map[string]string{"seoaddon": seo.ImportPath}); ok {
 		t.Fatalf("expected unknown SEO option to require normal Go validation, got %#v", addon)
+	}
+}
+
+func TestParseSEOAddonRejectsDynamicOptionValues(t *testing.T) {
+	expression, err := parser.ParseExpr(`seoaddon.Addon(seoaddon.Options{
+		BaseURL: siteURL(),
+	})`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if addon, ok := parseSEOAddon(expression, map[string]string{"seoaddon": seo.ImportPath}); ok {
+		t.Fatalf("expected dynamic SEO option to require executable config loading, got %#v", addon)
 	}
 }
 

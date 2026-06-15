@@ -10,6 +10,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
 )
 
 type seoPlan struct {
@@ -50,7 +51,8 @@ func planSEOArtifacts(config gowdk.Config, ir gwdkir.Program, artifacts []Artifa
 		return seoPlan{}, err
 	}
 
-	urls, err := sitemapURLs(base, artifacts, options.ExtraURLs)
+	publicPages := publicSEOPageIDs(ir)
+	urls, err := sitemapURLs(base, artifacts, options.ExtraURLs, publicPages)
 	if err != nil {
 		return seoPlan{}, err
 	}
@@ -65,7 +67,7 @@ func planSEOArtifacts(config gowdk.Config, ir gwdkir.Program, artifacts []Artifa
 		Sitemap:    sitemap,
 		Robots:     robots,
 		URLs:       urls,
-		Exclusions: seoExclusions(config, ir, artifacts),
+		Exclusions: seoExclusions(config, ir, artifacts, publicPages),
 	}, nil
 }
 
@@ -113,7 +115,7 @@ func parseSEOBaseURL(value string) (*url.URL, error) {
 	return parsed, nil
 }
 
-func sitemapURLs(base *url.URL, artifacts []Artifact, extra []gowdk.SEOURL) ([]sitemapURLEntry, error) {
+func sitemapURLs(base *url.URL, artifacts []Artifact, extra []gowdk.SEOURL, publicPages map[string]bool) ([]sitemapURLEntry, error) {
 	seen := map[string]bool{}
 	var urls []sitemapURLEntry
 	add := func(entry sitemapURLEntry) {
@@ -125,6 +127,9 @@ func sitemapURLs(base *url.URL, artifacts []Artifact, extra []gowdk.SEOURL) ([]s
 	}
 
 	for _, artifact := range artifacts {
+		if !publicPages[artifact.PageID] {
+			continue
+		}
 		add(sitemapURLEntry{Loc: absoluteSEOURL(base, artifact.Route)})
 	}
 	for _, candidate := range extra {
@@ -230,10 +235,31 @@ func cleanRobotDisallow(disallow []string) []string {
 	return values
 }
 
-func seoExclusions(config gowdk.Config, ir gwdkir.Program, artifacts []Artifact) []seoExclusion {
+func publicSEOPageIDs(ir gwdkir.Program) map[string]bool {
+	publicPages := map[string]bool{}
+	for _, page := range ir.Pages {
+		if pageHasPublicGuard(page) {
+			publicPages[page.ID] = true
+		}
+	}
+	return publicPages
+}
+
+func pageHasPublicGuard(page gwdkir.Page) bool {
+	for _, guard := range page.Guards {
+		if gowdkauth.IsPublicGuard(guard) {
+			return true
+		}
+	}
+	return false
+}
+
+func seoExclusions(config gowdk.Config, ir gwdkir.Program, artifacts []Artifact, publicPages map[string]bool) []seoExclusion {
 	included := map[string]bool{}
 	for _, artifact := range artifacts {
-		included[artifact.PageID] = true
+		if publicPages[artifact.PageID] {
+			included[artifact.PageID] = true
+		}
 	}
 
 	var excluded []seoExclusion
@@ -248,6 +274,20 @@ func seoExclusions(config gowdk.Config, ir gwdkir.Program, artifacts []Artifact)
 				PageID: page.ID,
 				Route:  page.Route,
 				Reason: "request_time_rendering",
+				Mode:   string(mode),
+			})
+		case len(page.Guards) == 0:
+			excluded = append(excluded, seoExclusion{
+				PageID: page.ID,
+				Route:  page.Route,
+				Reason: "guardless_route_denied",
+				Mode:   string(mode),
+			})
+		case !pageHasPublicGuard(page):
+			excluded = append(excluded, seoExclusion{
+				PageID: page.ID,
+				Route:  page.Route,
+				Reason: "non_public_route",
 				Mode:   string(mode),
 			})
 		case len(page.DynamicParams()) > 0 && !page.Blocks.Paths:

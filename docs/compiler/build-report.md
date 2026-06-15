@@ -76,7 +76,9 @@ Current report events include:
 - `sitemap_written` / `robots_written`: emitted when `addons/seo` writes
   `sitemap.xml` and `robots.txt`.
 - `seo_route_excluded`: emitted when `addons/seo` excludes a page from the
-  build-time sitemap, with `data.reason` and render `mode`.
+  build-time sitemap, with `data.reason` and render `mode`. Reasons include
+  request-time rendering, missing dynamic `paths {}`, and guardless routes that
+  the generated app denies by default.
 
 ## CLI Debug Output
 

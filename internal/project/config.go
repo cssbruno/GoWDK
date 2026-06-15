@@ -994,17 +994,25 @@ func parseSEOOptions(expression ast.Expr, imports map[string]string) (seo.Option
 	for _, element := range literal.Elts {
 		keyValue, ok := element.(*ast.KeyValueExpr)
 		if !ok {
-			continue
+			return seo.Options{}, false
 		}
 		key, ok := keyValue.Key.(*ast.Ident)
 		if !ok {
-			continue
+			return seo.Options{}, false
 		}
 		switch key.Name {
 		case "BaseURL":
-			options.BaseURL = parseString(keyValue.Value)
+			value, ok := parseLiteralString(keyValue.Value)
+			if !ok {
+				return seo.Options{}, false
+			}
+			options.BaseURL = value
 		case "Disallow":
-			options.Disallow = parseStringList(keyValue.Value)
+			values, ok := parseLiteralStringList(keyValue.Value)
+			if !ok {
+				return seo.Options{}, false
+			}
+			options.Disallow = values
 		case "ExtraURLs":
 			values, ok := parseSEOURLList(keyValue.Value, imports)
 			if !ok {
@@ -1053,21 +1061,37 @@ func parseSEOURL(expression ast.Expr, imports map[string]string) (gowdk.SEOURL, 
 	for _, element := range literal.Elts {
 		keyValue, ok := element.(*ast.KeyValueExpr)
 		if !ok {
-			continue
+			return gowdk.SEOURL{}, false
 		}
 		key, ok := keyValue.Key.(*ast.Ident)
 		if !ok {
-			continue
+			return gowdk.SEOURL{}, false
 		}
 		switch key.Name {
 		case "Loc":
-			url.Loc = parseString(keyValue.Value)
+			value, ok := parseLiteralString(keyValue.Value)
+			if !ok {
+				return gowdk.SEOURL{}, false
+			}
+			url.Loc = value
 		case "LastMod":
-			url.LastMod = parseString(keyValue.Value)
+			value, ok := parseLiteralString(keyValue.Value)
+			if !ok {
+				return gowdk.SEOURL{}, false
+			}
+			url.LastMod = value
 		case "ChangeFreq":
-			url.ChangeFreq = parseString(keyValue.Value)
+			value, ok := parseLiteralString(keyValue.Value)
+			if !ok {
+				return gowdk.SEOURL{}, false
+			}
+			url.ChangeFreq = value
 		case "Priority":
-			url.Priority = parseString(keyValue.Value)
+			value, ok := parseLiteralString(keyValue.Value)
+			if !ok {
+				return gowdk.SEOURL{}, false
+			}
+			url.Priority = value
 		default:
 			return gowdk.SEOURL{}, false
 		}
@@ -1175,16 +1199,44 @@ func parseStringList(expression ast.Expr) []string {
 	return values
 }
 
-func parseString(expression ast.Expr) string {
-	literal, ok := expression.(*ast.BasicLit)
-	if !ok || literal.Kind != token.STRING {
-		return ""
+func parseLiteralStringList(expression ast.Expr) ([]string, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil, false
 	}
-	value, err := strconv.Unquote(literal.Value)
-	if err != nil {
+
+	var values []string
+	for _, element := range literal.Elts {
+		value, ok := parseLiteralString(element)
+		if !ok {
+			return nil, false
+		}
+		if value == "" {
+			continue
+		}
+		values = append(values, value)
+	}
+	return values, true
+}
+
+func parseString(expression ast.Expr) string {
+	value, ok := parseLiteralString(expression)
+	if !ok {
 		return ""
 	}
 	return value
+}
+
+func parseLiteralString(expression ast.Expr) (string, bool) {
+	literal, ok := expression.(*ast.BasicLit)
+	if !ok || literal.Kind != token.STRING {
+		return "", false
+	}
+	value, err := strconv.Unquote(literal.Value)
+	if err != nil {
+		return "", false
+	}
+	return value, true
 }
 
 func parseBool(expression ast.Expr) bool {

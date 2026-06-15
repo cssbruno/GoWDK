@@ -1,0 +1,17 @@
+package gowdkapp
+
+import (
+	authguard "github.com/cssbruno/gowdk/examples/auth-guard/src/authguard"
+	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
+	gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
+)
+
+func GOWDKGuardRegistry() gowdkguard.Registry {
+	return gowdkguard.Registry{
+		"auth.required": authguard.RequireSession,
+	}
+}
+
+func GOWDKAuthProvider() gowdkauth.Provider {
+	return authguard.MustAuthProvider()
+}

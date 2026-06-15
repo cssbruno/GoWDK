@@ -1,0 +1,4 @@
+.gowdk/
+bin/
+dist/
+gowdk_cache/

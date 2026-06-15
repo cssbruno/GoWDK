@@ -76,6 +76,8 @@ func run(args []string) error {
 		return listContracts(args[1:])
 	case "build":
 		return build(args[1:])
+	case "clean":
+		return clean(args[1:])
 	case "dev":
 		return dev(args[1:])
 	case "preview":
@@ -136,6 +138,7 @@ func usage() {
 	fmt.Println("  trace <contract> [--json] [dir] print one command/query/event/job contract trace")
 	fmt.Println("  list commands|queries|events|jobs [--json] [dir] print filtered contract metadata")
 	fmt.Println("  build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
+	fmt.Println("  clean [--config <file>] [--target <name>] [--out <dir>] [--dry-run] [--json] remove configured build outputs")
 	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload")
 	fmt.Println("  preview [--addr <addr>] [--hot] [build flags...] build and serve a local deploy preview")
 	fmt.Println("  playground policy|export|run inspect sandbox policy, export projects, or run an opt-in sandbox build")

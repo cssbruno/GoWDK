@@ -1,6 +1,9 @@
 package validation
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestResultOK(t *testing.T) {
 	if !(Result{}).OK() {
@@ -60,6 +63,9 @@ func TestMatchPattern(t *testing.T) {
 		{`\w+@\w+[.]\w{2,4}`, "me@example.dev", true},
 		{`[\dA-F]+`, "19AF", true},
 		{`[\dA-F]+`, "19AG", false},
+		{`\b`, "b", true},
+		{`\q`, "q", true},
+		{`[A-F0-9]{1024}`, strings.Repeat("A", 1024), true},
 	}
 
 	for _, test := range tests {
@@ -79,6 +85,8 @@ func TestValidatePatternRejectsUnsupportedOperators(t *testing.T) {
 		`(?P<name>a)`,
 		`a+?`,
 		`[\D]`,
+		`\pL+`,
+		`[[:alpha:]]+`,
 	}
 	for _, test := range tests {
 		if err := ValidatePattern(test); err == nil {

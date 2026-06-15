@@ -301,12 +301,9 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		var app appgen.Result
 		if err := timings.measure("app_generation", func() error {
 			var appErr error
-			app, appErr = appgen.GenerateWithOptions(outputDir, appDir, appgen.Options{
-				AutoRoutes:   true,
-				Config:       options.Config,
-				IR:           &ir,
-				ProxyBackend: strings.TrimSpace(backendAppDir) != "",
-			})
+			appOptions := appgen.OptionsFromIR(options.Config, &ir)
+			appOptions.ProxyBackend = strings.TrimSpace(backendAppDir) != ""
+			app, appErr = appgen.GenerateWithOptions(outputDir, appDir, appOptions)
 			return appErr
 		}); err != nil {
 			return err
@@ -383,11 +380,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		var app appgen.Result
 		if err := timings.measure("backend_app_generation", func() error {
 			var appErr error
-			app, appErr = appgen.GenerateBackendWithOptions(backendAppDir, appgen.Options{
-				AutoRoutes: true,
-				Config:     options.Config,
-				IR:         &ir,
-			})
+			app, appErr = appgen.GenerateBackendWithOptions(backendAppDir, appgen.OptionsFromIR(options.Config, &ir))
 			return appErr
 		}); err != nil {
 			return err

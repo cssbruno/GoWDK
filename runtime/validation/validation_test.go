@@ -74,7 +74,37 @@ func TestMatchPattern(t *testing.T) {
 }
 
 func TestValidatePatternRejectsUnsupportedOperators(t *testing.T) {
-	if err := ValidatePattern(`(?=a)`); err == nil {
-		t.Fatal("expected unsupported lookahead pattern to fail")
+	tests := []string{
+		`(?=a)`,
+		`(?P<name>a)`,
+		`a+?`,
+		`[\D]`,
+	}
+	for _, test := range tests {
+		if err := ValidatePattern(test); err == nil {
+			t.Fatalf("expected unsupported pattern %q to fail", test)
+		}
+	}
+}
+
+func TestMatchPatternTreatsInnerAnchorsAsLiterals(t *testing.T) {
+	tests := []struct {
+		pattern string
+		value   string
+		want    bool
+	}{
+		{`a^b`, "a^b", true},
+		{`a^b`, "ab", false},
+		{`a$b`, "a$b", true},
+		{`a$b`, "ab", false},
+	}
+	for _, test := range tests {
+		got, err := MatchPattern(test.pattern, test.value)
+		if err != nil {
+			t.Fatalf("MatchPattern(%q, %q) error: %v", test.pattern, test.value, err)
+		}
+		if got != test.want {
+			t.Fatalf("MatchPattern(%q, %q) = %v, want %v", test.pattern, test.value, got, test.want)
+		}
 	}
 }

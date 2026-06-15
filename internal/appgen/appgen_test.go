@@ -1386,6 +1386,39 @@ func TestGenerateWiresEnvContractValidation(t *testing.T) {
 	}
 }
 
+func TestGenerateEnvContractEnforcesSecretMinBytes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Env: gowdk.EnvConfig{
+			Secrets: []gowdk.SecretEnv{
+				{Name: "GOWDK_TEST_SESSION_SECRET", Required: true, MinBytes: 32},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`value := strings.TrimSpace(os.Getenv("GOWDK_TEST_SESSION_SECRET"))`,
+		`missing = append(missing, "GOWDK_TEST_SESSION_SECRET is required but is not set")`,
+		`} else if len(value) < 32 {`,
+		`missing = append(missing, "GOWDK_TEST_SESSION_SECRET must be at least 32 bytes")`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated env contract to enforce the secret minimum %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

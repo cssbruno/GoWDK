@@ -467,6 +467,8 @@ func parseSecretEnv(expression ast.Expr) (gowdk.SecretEnv, bool, error) {
 			secret.Name = parseString(keyValue.Value)
 		case "Required":
 			secret.Required = parseBool(keyValue.Value)
+		case "MinBytes":
+			secret.MinBytes = int(parseInt64(keyValue.Value))
 		case "Default", "Value":
 			return gowdk.SecretEnv{}, false, fmt.Errorf("Env.Secrets entries cannot declare %s; secret values must come from the runtime environment", key.Name)
 		}

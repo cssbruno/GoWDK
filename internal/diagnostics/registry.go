@@ -159,6 +159,7 @@ var Registry = []Code{
 	{Code: "route_method_conflict", Area: "routing", Stability: StabilityStable, Severity: SeverityError, Summary: "two generated handlers claim the same method and route pattern"},
 	{Code: "secret_env_in_vars", Area: "config", Stability: StabilityStable, Severity: SeverityError, Summary: "secret-looking environment variable is declared as a normal variable"},
 	{Code: "secret_env_name_required", Area: "config", Stability: StabilityStable, Severity: SeverityError, Summary: "secret environment contract entry is missing a name"},
+	{Code: "short_secret", Area: "config", Stability: StabilityStable, Severity: SeverityError, Summary: "secret environment variable is shorter than its required minimum length"},
 	{Code: "spa_disabled", Area: "routing", Stability: StabilityExperimental, Severity: SeverityInfo, Summary: "SPA route binding is disabled for this generated route lane"},
 	{Code: "spa_dynamic_route_missing_paths", Area: "routing", Stability: StabilityStable, Severity: SeverityError, Summary: "dynamic SPA route is missing paths declarations"},
 	{Code: "ssr_disabled", Area: "routing", Stability: StabilityExperimental, Severity: SeverityInfo, Summary: "SSR route binding is disabled for this generated route lane"},

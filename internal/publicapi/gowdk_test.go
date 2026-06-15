@@ -100,6 +100,30 @@ func TestEnvConfigValidateReportsMissingRequiredNames(t *testing.T) {
 	}
 }
 
+func TestEnvConfigValidateRejectsShortSecret(t *testing.T) {
+	config := gowdk.EnvConfig{
+		Secrets: []gowdk.SecretEnv{
+			{Name: "GOWDK_TEST_SESSION_SECRET", Required: true, MinBytes: 32},
+		},
+	}
+
+	short := config.Validate(func(string) (string, bool) { return "too-short", true })
+	if short == nil || !strings.Contains(short.Error(), "GOWDK_TEST_SESSION_SECRET must be at least 32 bytes") {
+		t.Fatalf("expected short-secret error, got %v", short)
+	}
+
+	missing := config.Validate(func(string) (string, bool) { return "", true })
+	if missing == nil || !strings.Contains(missing.Error(), "GOWDK_TEST_SESSION_SECRET is required but is not set") {
+		t.Fatalf("expected missing-secret error, got %v", missing)
+	}
+
+	if err := config.Validate(func(string) (string, bool) {
+		return "0123456789ABCDEF0123456789ABCDEF", true
+	}); err != nil {
+		t.Fatalf("expected a 32-byte secret to pass, got %v", err)
+	}
+}
+
 func TestBuildConfigDebugAssets(t *testing.T) {
 	if !(gowdk.BuildConfig{}).DebugAssets() {
 		t.Fatal("expected omitted build mode to include debug assets")

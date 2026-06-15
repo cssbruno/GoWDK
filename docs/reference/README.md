@@ -12,6 +12,7 @@ Reference docs describe current command and data contracts.
 - `deployment.md`: current output shapes and operations recipes.
 - `testing.md`: scaffolded smoke tests, browser smoke, accessibility, and performance checks.
 - `contracts.md`: current runtime contract registry and planned compiler integration.
+- `realtime.md`: current presentation-event fanout setup, SSE default, and WebSocket opt-in behavior.
 - `css.md`: current CSS extension point.
 - `manifest.md`: current manifest JSON.
 - `addons.md`: current addon feature registration.

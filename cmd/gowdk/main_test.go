@@ -1433,11 +1433,14 @@ func TestAddCommandListsKnownAddons(t *testing.T) {
 		"Available addons:",
 		"actions",
 		"api",
+		"auth",
 		"contracts",
 		"css",
+		"db",
 		"embed",
 		"partial",
 		"ratelimit",
+		"realtime",
 		"ssr",
 		"static",
 	} {
@@ -1477,6 +1480,43 @@ var Config = gowdk.Config{}
 	for _, expected := range []string{
 		`"github.com/cssbruno/gowdk/addons/ssr"`,
 		"Addons: []gowdk.Addon{ssr.Addon()}",
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected updated config to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestAddCommandWiresRealtimeAddonIntoConfig(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "realtime", "--config", config})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `added addon "realtime"`) {
+		t.Fatalf("expected add confirmation, got:\n%s", stdout)
+	}
+	payload, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`"github.com/cssbruno/gowdk/addons/realtime"`,
+		"Addons: []gowdk.Addon{realtime.Addon()}",
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected updated config to contain %q:\n%s", expected, source)

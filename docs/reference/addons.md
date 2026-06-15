@@ -24,6 +24,7 @@ Current feature IDs:
 - `css`
 - `ratelimit`
 - `contracts`
+- `realtime`
 - `auth`
 - `db`
 
@@ -40,6 +41,7 @@ Current packages:
 - `addons/tailwind`
 - `addons/ratelimit`
 - `addons/contracts`
+- `addons/realtime`
 - `addons/auth`
 - `addons/db`
 
@@ -52,7 +54,7 @@ Use `gowdk add --list` to print the built-in names the CLI can wire into
 
 ```sh
 gowdk add --list
-gowdk add ssr actions partial
+gowdk add ssr actions partial realtime
 ```
 
 `gowdk add <name>` inserts the canonical addon import and appends
@@ -105,10 +107,13 @@ Addons: []gowdk.Addon{
 	partial.Addon(),
 	ssr.Addon(),
 	api.Addon(),
+	auth.Addon(),
 	embed.Addon(),
 	css.Addon(),
+	db.Addon(),
 	ratelimit.Addon(),
 	contracts.Addon(),
+	realtime.Addon(),
 }
 ```
 
@@ -120,6 +125,13 @@ integration and generated route plumbing; apps still choose their sink in Go
 with `RegisterContractEventSink`. See `docs/reference/contracts.md` for Redis,
 NATS, SSE, WebSocket, outbox, and composite sink examples. Split runtime
 binaries and retry backoff policy remain planned.
+
+`addons/realtime` registers the browser presentation-event fanout feature. It
+does not import the optional WebSocket transport dependency or patch the DOM.
+Use dependency-free `runtime/contracts/sse` through `realtime.NewSSE` for
+one-way browser notifications, or opt into the nested
+`runtime/contracts/websocketfanout` module when the app needs WebSocket
+sessions. See `docs/reference/realtime.md`.
 
 External addons use normal Go imports:
 

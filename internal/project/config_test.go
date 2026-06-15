@@ -450,6 +450,7 @@ import (
 	embedaddon "github.com/cssbruno/gowdk/addons/embed"
 	partialaddon "github.com/cssbruno/gowdk/addons/partial"
 	rl "github.com/cssbruno/gowdk/addons/ratelimit"
+	realtimeaddon "github.com/cssbruno/gowdk/addons/realtime"
 	spaaddon "github.com/cssbruno/gowdk/addons/spa"
 	ssraddon "github.com/cssbruno/gowdk/addons/ssr"
 	staticaddon "github.com/cssbruno/gowdk/addons/static"
@@ -464,6 +465,7 @@ var Config = gowdk.Config{
 		embedaddon.Addon(),
 		partialaddon.Addon(),
 		rl.Addon(),
+		realtimeaddon.Addon(),
 		spaaddon.Addon(),
 		ssraddon.Addon(),
 		staticaddon.Addon(),
@@ -477,11 +479,11 @@ var Config = gowdk.Config{
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Addons) != 10 {
+	if len(config.Addons) != 11 {
 		t.Fatalf("unexpected addons: %#v", config.Addons)
 	}
-	if config.Addons[9].Name() != "static" {
-		t.Fatalf("expected static addon, got %#v", config.Addons[9])
+	if config.Addons[10].Name() != "static" {
+		t.Fatalf("expected static addon, got %#v", config.Addons[10])
 	}
 	for _, feature := range []gowdk.Feature{
 		gowdk.FeatureActions,
@@ -491,6 +493,7 @@ var Config = gowdk.Config{
 		gowdk.FeatureEmbed,
 		gowdk.FeaturePartial,
 		gowdk.FeatureRateLimit,
+		gowdk.FeatureRealtime,
 		gowdk.FeatureSPA,
 		gowdk.FeatureSSR,
 	} {

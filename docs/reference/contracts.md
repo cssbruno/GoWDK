@@ -32,8 +32,9 @@ Addons: []gowdk.Addon{
 }
 ```
 
-The implemented runtime registry is currently independent from compiler
-integration.
+Enable `addons/realtime` alongside `addons/contracts` when the app wants an
+explicit config feature for browser presentation-event fanout. The implemented
+runtime registry is currently independent from compiler integration.
 
 Go does not support generic methods, so the API uses generic functions over a
 registry. Keep this shape while the repository targets Go 1.26; revisit it when
@@ -499,6 +500,7 @@ Dependency-free adapters:
   `EventSource` for tests, local development, and single-process apps.
 - `runtime/contracts/sse` provides an `http.Handler` and
   `PresentationFanout` for server-sent browser presentation events.
+  `addons/realtime` re-exports this dependency-free SSE hub as `NewSSE`.
 
 Optional broker and realtime adapters:
 
@@ -517,6 +519,9 @@ go get github.com/cssbruno/gowdk/runtime/contracts/redisstream
 go get github.com/cssbruno/gowdk/runtime/contracts/natsbroker
 go get github.com/cssbruno/gowdk/runtime/contracts/websocketfanout
 ```
+
+See `docs/reference/realtime.md` for the transport choice, config setup, and
+deployment caveats.
 
 ## Sink Recipes
 

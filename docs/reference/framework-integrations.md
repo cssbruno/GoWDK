@@ -103,8 +103,15 @@ echoContext, ok := gowdkecho.Context(ctx)
 
 ## Gin
 
+GOWDK does not recommend Gin for new GOWDK applications. Prefer the generated
+`net/http` handler directly, or use a smaller router such as Chi when the host
+application needs one. The Gin adapter remains available for existing Gin
+codebases and teams that deliberately choose Gin anyway. For background on the
+dependency weight, API surface, and migration cost concerns, see
+[this critique of Gin](https://eblog.fly.dev/ginbad.html).
+
 The Gin adapter is a nested optional module. Add it only when the application
-uses Gin:
+already uses Gin:
 
 ```sh
 go get github.com/cssbruno/gowdk/runtime/adapters/gin

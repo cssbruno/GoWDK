@@ -51,10 +51,11 @@ type (
 
 // EventEnvelope is a backend-owned event captured from a successful command.
 type EventEnvelope struct {
-	ID       string
-	Category EventCategory
-	Type     string
-	Value    any
+	ID          string
+	TraceParent string
+	Category    EventCategory
+	Type        string
+	Value       any
 }
 
 // QueryInvalidationPresentationEventType is the browser-facing presentation
@@ -81,10 +82,11 @@ type EventDecoder func(json.RawMessage) (any, error)
 // StoredEventEnvelope is the JSON transport shape shared by contract outbox
 // and broker adapters.
 type StoredEventEnvelope struct {
-	ID       string          `json:"id,omitempty"`
-	Category EventCategory   `json:"category"`
-	Type     string          `json:"type"`
-	Value    json.RawMessage `json:"value"`
+	ID          string          `json:"id,omitempty"`
+	TraceParent string          `json:"traceparent,omitempty"`
+	Category    EventCategory   `json:"category"`
+	Type        string          `json:"type"`
+	Value       json.RawMessage `json:"value"`
 }
 
 // JSONEventDecoder registers a generic JSON decoder for a contract event type.
@@ -106,7 +108,7 @@ func MarshalEventEnvelopeJSON(event EventEnvelope) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(StoredEventEnvelope{ID: event.ID, Category: event.Category, Type: event.Type, Value: value})
+	return json.Marshal(StoredEventEnvelope{ID: event.ID, TraceParent: event.TraceParent, Category: event.Category, Type: event.Type, Value: value})
 }
 
 // DecodeEventEnvelopeJSON decodes the shared JSON transport shape and uses a
@@ -125,7 +127,7 @@ func DecodeEventEnvelopeJSON(payload []byte, decoders map[string]EventDecoder) (
 		}
 		value = decoded
 	}
-	return EventEnvelope{ID: stored.ID, Category: stored.Category, Type: stored.Type, Value: value}, nil
+	return EventEnvelope{ID: stored.ID, TraceParent: stored.TraceParent, Category: stored.Category, Type: stored.Type, Value: value}, nil
 }
 
 // Outbox stores command-emitted events for durable delivery. Implementations

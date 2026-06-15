@@ -3,6 +3,9 @@
 `runtime/trace` is the first GOWDK Trace runtime slice. It is dependency-free
 and can be used from normal Go programs without generated app wiring.
 
+Use [Observability](observability.md) for generated app instrumentation,
+the local viewer, and optional OTLP export.
+
 ## Basic Usage
 
 ```go
@@ -65,7 +68,8 @@ Current sinks:
   overflow.
 - `MultiSink(...)`: sends spans to multiple sinks in order.
 - `ExporterSink(exporter)`: adapts an OTLP-like exporter interface.
-- `NewCollector(limit)`: sink plus local JSON/SSE HTTP handler.
+- `NewCollector(limit)`: sink plus local JSON/SSE HTTP handler and browser span
+  ingest.
 
 ## Collector
 
@@ -86,7 +90,9 @@ http.Handle("/_gowdk/traces", collector.Handler())
 ```
 
 `GET /_gowdk/traces/events` or a request with `Accept: text/event-stream`
-streams `event: gowdk-trace` messages for existing and future spans.
+streams `event: gowdk-trace` messages for existing and future spans. The viewer
+handler adds `GET /` for the self-contained UI and `POST /browser` for generated
+browser spans.
 
 ## Sampling
 
@@ -98,8 +104,8 @@ The disabled `AlwaysOff` path with no start options is allocation-free.
 
 ## Current Limits
 
-- Generated GOWDK app handlers are not auto-instrumented yet.
 - Collector storage is in-memory and process-local.
-- OTLP export is an interface/value shape only; concrete transport belongs in a
-  later optional module.
-
+- Generated app instrumentation is opt-in through `addons/observability` and
+  debug builds.
+- Concrete OTLP export lives in the nested `runtime/trace/otel` module so the
+  root module does not depend on OpenTelemetry.

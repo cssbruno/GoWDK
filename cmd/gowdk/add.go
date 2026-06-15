@@ -86,6 +86,12 @@ var addonRegistry = map[string]addonSpec{
 		Package:    "partial",
 		Summary:    "fragment/partial responses",
 	},
+	"observability": {
+		Name:       "observability",
+		ImportPath: "github.com/cssbruno/gowdk/addons/observability",
+		Package:    "observability",
+		Summary:    "generated app tracing, local collector, and trace viewer",
+	},
 	"ratelimit": {
 		Name:       "ratelimit",
 		ImportPath: "github.com/cssbruno/gowdk/addons/ratelimit",

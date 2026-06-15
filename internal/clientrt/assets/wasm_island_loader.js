@@ -11,6 +11,29 @@
   const roots = document.querySelectorAll("gowdk-island[data-gowdk-component-id=\"" + componentID + "\"][data-gowdk-runtime=\"wasm\"],gowdk-island:not([data-gowdk-component-id])[data-gowdk-component=\"" + componentID + "\"][data-gowdk-runtime=\"wasm\"]");
   if (roots.length === 0 || typeof WebAssembly === "undefined") return;
 
+  function tracedFetch(url, options, name) {
+    if (window.__gowdkTrace && window.__gowdkTrace.fetch) {
+      return window.__gowdkTrace.fetch(url, options || {}, { name: name || "wasm island fetch", lane: "island" });
+    }
+    return fetch(url, options);
+  }
+
+  function traceStart(name) {
+    if (window.__gowdkTrace && window.__gowdkTrace.enabled && window.__gowdkTrace.enabled()) {
+      return window.__gowdkTrace.start(name, "island");
+    }
+    return null;
+  }
+
+  function traceEnd(span, status, message) {
+    if (window.__gowdkTrace && window.__gowdkTrace.end) window.__gowdkTrace.end(span, status || "ok", message || "");
+  }
+
+  function currentTraceparent() {
+    if (window.__gowdkTrace && window.__gowdkTrace.traceparent) return window.__gowdkTrace.traceparent();
+    return "";
+  }
+
   function parseJSON(value, fallback) {
     try {
       return JSON.parse(value || "");
@@ -150,12 +173,12 @@
   async function instantiateWithImports(imports) {
     if (WebAssembly.instantiateStreaming) {
       try {
-        return await WebAssembly.instantiateStreaming(fetch(wasmPath), imports);
+        return await WebAssembly.instantiateStreaming(tracedFetch(wasmPath, {}, "wasm island module"), imports);
       } catch (_error) {
         // Fall through for servers that do not serve application/wasm yet.
       }
     }
-    const response = await fetch(wasmPath);
+    const response = await tracedFetch(wasmPath, {}, "wasm island module");
     const bytes = await response.arrayBuffer();
     return WebAssembly.instantiate(bytes, imports);
   }
@@ -193,13 +216,21 @@
           if (!attr.name.startsWith("data-gowdk-binding-on-")) return;
           const event = attr.name.slice("data-gowdk-binding-on-".length);
           node.addEventListener(event, (domEvent) => {
-            applyPatches(root, callExport(exports, handleExport, {
-              abiVersion,
-              component,
-              event,
-              binding: attr.value,
-              detail: { value: domEvent && domEvent.target ? domEvent.target.value : undefined }
-            }));
+            const span = traceStart("wasm island " + event);
+            try {
+              applyPatches(root, callExport(exports, handleExport, {
+                abiVersion,
+                component,
+                event,
+                binding: attr.value,
+                traceparent: currentTraceparent(),
+                detail: { value: domEvent && domEvent.target ? domEvent.target.value : undefined }
+              }));
+              traceEnd(span, "ok");
+            } catch (error) {
+              traceEnd(span, "error", error && error.message || String(error || "wasm island event failed"));
+              throw error;
+            }
           });
         });
       });

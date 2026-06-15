@@ -1,6 +1,10 @@
 package contracts
 
-import "context"
+import (
+	"context"
+
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
+)
 
 // RegisterCommand registers one command owner. A command can have exactly one
 // owner handler.
@@ -54,7 +58,7 @@ func captureCommandEvents[C, R any](ctx context.Context, registry *Registry, com
 		var zero R
 		return zero, nil, err
 	}
-	return result, recorder.envelopes(), nil
+	return result, recorder.envelopes(ctx), nil
 }
 
 // ExecuteCommandToOutbox runs a command and stores emitted events in outbox
@@ -143,20 +147,31 @@ func executeCommandToPresentationFanout[C, R any](ctx context.Context, registry 
 
 func runCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, *eventRecorder, error) {
 	var zero R
+	contract := typeName[C]()
+	ctx, span := startContractSpan(ctx, string(ObservationExecuteCommand),
+		gowdktrace.LaneContract,
+		map[string]any{"gowdk.contract.kind": string(Command), "gowdk.contract.type": contract, "gowdk.contract.role": string(role)},
+	)
+	var spanErr error
+	defer func() { finishContractSpan(span, spanErr) }()
 	entry, ok := registry.command(typeName[C]())
 	if !ok {
+		spanErr = missingHandlerError(Command, contract)
 		return zero, nil, missingHandlerError(Command, typeName[C]())
 	}
 	if !roleMayExecute(entry.roles, role) {
-		return zero, nil, roleNotAllowedError(Command, typeName[C](), role)
+		spanErr = roleNotAllowedError(Command, contract, role)
+		return zero, nil, spanErr
 	}
 	handler, ok := entry.handler.(CommandHandler[C, R])
 	if !ok {
-		return zero, nil, unsupportedHandlerError(Command, typeName[C]())
+		spanErr = unsupportedHandlerError(Command, contract)
+		return zero, nil, spanErr
 	}
 	commandCtx, recorder := withRecorder(ctx)
 	result, err := handler(commandCtx, command)
 	if err != nil {
+		spanErr = err
 		return zero, nil, err
 	}
 	return result, recorder, nil

@@ -10,6 +10,7 @@ import (
 	"github.com/cssbruno/gowdk/runtime/form"
 	"github.com/cssbruno/gowdk/runtime/response"
 	gowdkroute "github.com/cssbruno/gowdk/runtime/route"
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
 // DefaultActionBodyLimit is the generated action request body limit.
@@ -29,6 +30,7 @@ type BackendRoute struct {
 	Method  string
 	Path    string
 	Kind    string
+	Source  gowdktrace.SourceRef
 	Handler BackendHandler
 }
 
@@ -45,12 +47,15 @@ type backendRouteKey struct {
 
 type backendRouteEntry struct {
 	kind    string
+	path    string
+	source  gowdktrace.SourceRef
 	handler BackendHandler
 }
 
 type backendPatternRouteEntry struct {
 	key     backendRouteKey
 	kind    string
+	source  gowdktrace.SourceRef
 	handler BackendHandler
 }
 
@@ -58,7 +63,7 @@ type backendPatternRouteEntry struct {
 func NewBackendRouter(routes ...BackendRoute) (*BackendRouter, error) {
 	router := &BackendRouter{routes: map[backendRouteKey]backendRouteEntry{}}
 	for _, route := range routes {
-		if err := router.handle(route.Kind, route.Method, route.Path, route.Handler); err != nil {
+		if err := router.handle(route); err != nil {
 			return nil, err
 		}
 	}
@@ -67,48 +72,53 @@ func NewBackendRouter(routes ...BackendRoute) (*BackendRouter, error) {
 
 // Handle registers a backend route with a normalized method and path.
 func (router *BackendRouter) Handle(method string, routePath string, handler BackendHandler) error {
-	return router.handle("backend", method, routePath, handler)
+	return router.handle(BackendRoute{Kind: "backend", Method: method, Path: routePath, Handler: handler})
 }
 
-func (router *BackendRouter) handle(kind string, method string, routePath string, handler BackendHandler) error {
+func (router *BackendRouter) handle(route BackendRoute) error {
 	if router == nil {
 		return fmt.Errorf("backend router is nil")
 	}
 	if router.routes == nil {
 		router.routes = map[backendRouteKey]backendRouteEntry{}
 	}
-	method = strings.ToUpper(strings.TrimSpace(method))
+	method := strings.ToUpper(strings.TrimSpace(route.Method))
 	if method == "" {
 		return fmt.Errorf("backend route method is required")
 	}
-	if handler == nil {
-		return fmt.Errorf("backend route %s %s handler is required", method, routePath)
+	if route.Handler == nil {
+		return fmt.Errorf("backend route %s %s handler is required", method, route.Path)
 	}
-	key := backendRouteKey{method: method, path: normalizeBackendPath(routePath)}
+	kind := strings.ToLower(strings.TrimSpace(route.Kind))
+	if kind == "" {
+		kind = "backend"
+	}
+	key := backendRouteKey{method: method, path: normalizeBackendPath(route.Path)}
+	handler := BackendBoundary(kind, traceBackendRoute(kind, key.path, route.Source, route.Handler))
 	if backendRouteIsDynamic(key.path) {
-		for _, route := range router.patterns {
-			if route.key == key {
+		for _, existing := range router.patterns {
+			if existing.key == key {
 				return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
 			}
 		}
-		router.patterns = append(router.patterns, backendPatternRouteEntry{key: key, kind: strings.ToLower(strings.TrimSpace(kind)), handler: BackendBoundary(kind, handler)})
+		router.patterns = append(router.patterns, backendPatternRouteEntry{key: key, kind: kind, source: route.Source, handler: handler})
 		return nil
 	}
 	if _, exists := router.routes[key]; exists {
 		return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
 	}
-	router.routes[key] = backendRouteEntry{kind: strings.ToLower(strings.TrimSpace(kind)), handler: BackendBoundary(kind, handler)}
+	router.routes[key] = backendRouteEntry{kind: kind, path: key.path, source: route.Source, handler: handler}
 	return nil
 }
 
 // Action registers a generated POST action route.
 func (router *BackendRouter) Action(routePath string, handler BackendHandler) error {
-	return router.handle("action", http.MethodPost, routePath, handler)
+	return router.handle(BackendRoute{Kind: "action", Method: http.MethodPost, Path: routePath, Handler: handler})
 }
 
 // API registers a generated API route.
 func (router *BackendRouter) API(method string, routePath string, handler BackendHandler) error {
-	return router.handle("api", method, routePath, handler)
+	return router.handle(BackendRoute{Kind: "api", Method: method, Path: routePath, Handler: handler})
 }
 
 // Dispatch writes a route response when the request matches a backend route.
@@ -144,6 +154,61 @@ func (router *BackendRouter) dispatchPattern(writer http.ResponseWriter, request
 		return route.handler(writer, request)
 	}
 	return false
+}
+
+func traceBackendRoute(kind, routePath string, source gowdktrace.SourceRef, handler BackendHandler) BackendHandler {
+	if handler == nil {
+		return nil
+	}
+	lane := backendTraceLane(kind)
+	name := strings.TrimSpace(kind)
+	if name == "" {
+		name = "backend"
+	}
+	name += " " + routePath
+	return func(writer http.ResponseWriter, request *http.Request) bool {
+		if request == nil {
+			return handler(writer, request)
+		}
+		if _, ok := gowdktrace.TracerFromContext(request.Context()); !ok {
+			return handler(writer, request)
+		}
+		ctx, span := gowdktrace.Start(request.Context(), name,
+			gowdktrace.WithSurface(gowdktrace.SurfaceBackend),
+			gowdktrace.WithLane(lane),
+			gowdktrace.WithSource(source),
+			gowdktrace.WithAttributes(map[string]any{
+				gowdktrace.AttrHTTPRoute: routePath,
+				"gowdk.endpoint.kind":    kind,
+			}),
+		)
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				span.SetStatus(gowdktrace.StatusError, redactSecrets(strings.TrimSpace(fmt.Sprint(recovered))))
+				span.End()
+				panic(recovered)
+			}
+			span.SetStatus(gowdktrace.StatusOK, "")
+			span.End()
+		}()
+		handled := handler(writer, request.WithContext(ctx))
+		return handled
+	}
+}
+
+func backendTraceLane(kind string) gowdktrace.Lane {
+	switch kind {
+	case "action", "command":
+		return gowdktrace.LaneAction
+	case "api", "query":
+		return gowdktrace.LaneAPI
+	case "fragment":
+		return gowdktrace.LaneFragment
+	case "ssr":
+		return gowdktrace.LaneSSR
+	default:
+		return gowdktrace.LaneHandler
+	}
 }
 
 func backendRouteIsDynamic(routePath string) bool {

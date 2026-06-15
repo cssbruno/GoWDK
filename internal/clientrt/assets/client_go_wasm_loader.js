@@ -10,6 +10,13 @@
   };
   if (typeof WebAssembly === "undefined") return;
 
+  function tracedFetch(url, options, name) {
+    if (window.__gowdkTrace && window.__gowdkTrace.fetch) {
+      return window.__gowdkTrace.fetch(url, options || {}, { name: name || "client go wasm fetch", lane: "island" });
+    }
+    return fetch(url, options);
+  }
+
   function currentPageUsesScript() {
     const expected = new URL(loaderPath, window.location.href).href;
     return Array.prototype.some.call(document.querySelectorAll("script[src]"), (script) => script.src === expected);
@@ -31,10 +38,10 @@
   async function instantiate(go) {
     if (WebAssembly.instantiateStreaming) {
       try {
-        return await WebAssembly.instantiateStreaming(fetch(wasmPath), go.importObject);
+        return await WebAssembly.instantiateStreaming(tracedFetch(wasmPath, {}, "client go wasm module"), go.importObject);
       } catch (_error) {}
     }
-    const response = await fetch(wasmPath);
+    const response = await tracedFetch(wasmPath, {}, "client go wasm module");
     const bytes = await response.arrayBuffer();
     return WebAssembly.instantiate(bytes, go.importObject);
   }

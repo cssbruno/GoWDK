@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log"
 	"time"
+
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
 // ErrEventSourceClosed tells RunEventWorker that the source drained cleanly.
@@ -149,6 +151,11 @@ func runEventWorkerForRole(ctx context.Context, registry *Registry, role Role, s
 			}
 			return err
 		}
+		_, receiveSpan := startContractSpan(ctx, string(ObservationWorkerReceiveEventBatch),
+			gowdktrace.LaneJob,
+			map[string]any{"gowdk.contract.role": string(role), "gowdk.event.count": len(batch.Events)},
+		)
+		finishContractSpan(receiveSpan, nil)
 		result, err := dispatchEventBatch(ctx, registry, role, batch, seen)
 		if err != nil {
 			return err

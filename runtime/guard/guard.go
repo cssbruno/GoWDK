@@ -1,10 +1,12 @@
 package guard
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/cssbruno/gowdk/runtime/auth"
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
 // Func authorizes one generated request-time route or endpoint access check.
@@ -29,11 +31,28 @@ func RunGuardsWithAuth(ctx Context, names []string, registry Registry, provider 
 		if guard == nil {
 			return fmt.Errorf("guard %q is not registered", name)
 		}
+		guardCtx, span := startGuardTrace(ctx, name)
+		ctx.Context = guardCtx
 		if err := guard(ctx); err != nil {
+			span.SetStatus(gowdktrace.StatusError, err.Error())
+			span.End()
 			return fmt.Errorf("guard %q failed: %w", name, err)
 		}
+		span.SetStatus(gowdktrace.StatusOK, "")
+		span.End()
 	}
 	return nil
+}
+
+func startGuardTrace(ctx Context, name string) (context.Context, *gowdktrace.Span) {
+	if _, ok := gowdktrace.TracerFromContext(ctx.Context); !ok {
+		return ctx.Context, nil
+	}
+	return gowdktrace.Start(ctx.Context, "guard "+name,
+		gowdktrace.WithSurface(gowdktrace.SurfaceBackend),
+		gowdktrace.WithLane(gowdktrace.LaneGuard),
+		gowdktrace.WithAttributes(map[string]any{"gowdk.guard": name}),
+	)
 }
 
 // IsNativeRBACGuard reports whether name is a built-in role or permission guard.

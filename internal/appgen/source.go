@@ -96,6 +96,9 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
 		imports["gowdkrealtime"] = "github.com/cssbruno/gowdk/addons/realtime"
 	}
+	if generatedObservabilityEnabled(options) {
+		imports["gowdktrace"] = "github.com/cssbruno/gowdk/runtime/trace"
+	}
 	if generatedRealtimeStreamUsesRouteMatching(options) {
 		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 		imports["neturl"] = "net/url"
@@ -283,9 +286,10 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(direct), generatedRealtimeQueryInvalidationsEnabled(direct))...)
 	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
 	decls = append(decls, realtimeDecls(direct)...)
+	decls = append(decls, observabilityDecls(full)...)
 	switch {
 	case adapter.HasRegistrations():
-		decls = append(decls, newBackendRouterDecl(adapter))
+		decls = append(decls, newBackendRouterDecl(adapter, generatedObservabilityEnabled(full)))
 	case !full.ProxyBackend || !hasBackendRoutes(full):
 		decls = append(decls, emptyBackendHandlerDecl())
 	}
@@ -314,8 +318,9 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(options), generatedRealtimeQueryInvalidationsEnabled(options))...)
 	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
 	decls = append(decls, realtimeDecls(options)...)
+	decls = append(decls, observabilityDecls(options)...)
 	if adapter.HasRegistrations() {
-		decls = append(decls, newBackendRouterDecl(adapter))
+		decls = append(decls, newBackendRouterDecl(adapter, generatedObservabilityEnabled(options)))
 	} else {
 		decls = append(decls, emptyBackendHandlerDecl())
 	}
@@ -471,6 +476,13 @@ func embeddedHandlerFields(options Options) []ast.Expr {
 	}
 	if csrfEnabled(options) {
 		fields = append(fields, keyValue("CSRF", id("csrfTokenSource")))
+	}
+	if generatedObservabilityEnabled(options) {
+		fields = append(fields,
+			keyValue("Tracer", id("traceTracer")),
+			keyValue("TraceHandler", call(selExpr(id("traceCollector"), "ViewerHandler"))),
+			keyValue("TraceAccess", sel("gowdkruntime", "LocalTraceAccess")),
+		)
 	}
 	fields = append(fields,
 		keyValue("SSRExact", id("ssrExact")),
@@ -681,6 +693,18 @@ func backendOnlyHandlerExpr(options Options) ast.Expr {
 
 func backendOnlyBaseHandlerExpr(options Options) ast.Expr {
 	if hasBackendRoutes(options) {
+		if generatedObservabilityEnabled(options) {
+			return &ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{
+				Type: sel("gowdkruntime", "Handler"),
+				Elts: []ast.Expr{
+					keyValue("Backend", call(selExpr(id("backendRouter"), "HandlerFunc"))),
+					keyValue("Tracer", id("traceTracer")),
+					keyValue("TraceHandler", call(selExpr(id("traceCollector"), "ViewerHandler"))),
+					keyValue("TraceAccess", sel("gowdkruntime", "LocalTraceAccess")),
+					keyValue("RequestTimeout", sel("gowdkruntime", "DefaultRequestTimeout")),
+				},
+			}}
+		}
 		return id("backendRouter")
 	}
 	return call(sel("http", "HandlerFunc"), backendOnlyHandlerFunc())

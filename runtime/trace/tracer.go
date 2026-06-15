@@ -67,6 +67,7 @@ func (tracer *Tracer) Start(ctx context.Context, name string, options ...StartOp
 	if static, ok := cfg.tracer.sampler.(staticSampler); ok && !static.value {
 		return ctx, nil
 	}
+	ctx = ContextWithTracer(ctx, cfg.tracer)
 	parent, hasParent := TraceContextFromContext(ctx)
 	traceID := parent.TraceID
 	if !traceID.Valid() {

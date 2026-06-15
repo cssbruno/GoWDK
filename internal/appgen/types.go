@@ -48,6 +48,8 @@ type ActionEndpoint struct {
 	ErrorPage        string
 	Binding          source.BackendBinding
 	BackendAlias     string
+	Source           string
+	SourceSpan       source.SourceSpan
 }
 
 // ActionValidationRule describes one generated server-side form constraint.
@@ -71,6 +73,8 @@ type APIEndpoint struct {
 	ErrorPage    string
 	Binding      source.BackendBinding
 	BackendAlias string
+	Source       string
+	SourceSpan   source.SourceSpan
 }
 
 // FragmentEndpoint describes a generated server fragment handler.
@@ -87,6 +91,8 @@ type FragmentEndpoint struct {
 	Guards       []string
 	Binding      source.BackendBinding
 	BackendAlias string
+	Source       string
+	SourceSpan   source.SourceSpan
 }
 
 // ActionFragment describes a generated partial response fragment.
@@ -108,6 +114,8 @@ type SSRRoute struct {
 	HasLoad          bool
 	LoadBinding      source.BackendBinding
 	LoadBackendAlias string
+	Source           string
+	SourceSpan       source.SourceSpan
 	HTML             string
 	Replacements     []SSRReplacement
 	LoadReplacements []SSRLoadReplacement

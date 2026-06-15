@@ -48,6 +48,8 @@ func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
 				Fragments:        fragments,
 				ErrorPage:        action.ErrorPage,
 				Binding:          bindings[irEndpointKey(gwdkir.EndpointAction, page.ID, action.Name, method, route)],
+				Source:           page.Source,
+				SourceSpan:       action.Span,
 			})
 		}
 	}
@@ -64,6 +66,8 @@ func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
 			ErrorPage:   endpoint.ErrorPage,
 			InputFields: bindingInputFieldNames(binding.InputFields),
 			Binding:     binding,
+			Source:      endpoint.SourceFile,
+			SourceSpan:  endpoint.Span,
 		})
 	}
 	if err := validateActionEndpoints(endpoints); err != nil {
@@ -93,13 +97,15 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 				route = page.Route
 			}
 			endpoints = append(endpoints, APIEndpoint{
-				PageID:    page.ID,
-				APIName:   api.Name,
-				Method:    method,
-				Route:     route,
-				Guards:    append([]string(nil), page.Guards...),
-				ErrorPage: api.ErrorPage,
-				Binding:   bindings[irEndpointKey(gwdkir.EndpointAPI, page.ID, api.Name, method, route)],
+				PageID:     page.ID,
+				APIName:    api.Name,
+				Method:     method,
+				Route:      route,
+				Guards:     append([]string(nil), page.Guards...),
+				ErrorPage:  api.ErrorPage,
+				Binding:    bindings[irEndpointKey(gwdkir.EndpointAPI, page.ID, api.Name, method, route)],
+				Source:     page.Source,
+				SourceSpan: api.Span,
 			})
 		}
 	}
@@ -108,12 +114,14 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 			continue
 		}
 		endpoints = append(endpoints, APIEndpoint{
-			PageID:    endpoint.PageID,
-			APIName:   endpoint.Symbol,
-			Method:    endpoint.Method,
-			Route:     endpoint.Path,
-			ErrorPage: endpoint.ErrorPage,
-			Binding:   bindings[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)],
+			PageID:     endpoint.PageID,
+			APIName:    endpoint.Symbol,
+			Method:     endpoint.Method,
+			Route:      endpoint.Path,
+			ErrorPage:  endpoint.ErrorPage,
+			Binding:    bindings[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)],
+			Source:     endpoint.SourceFile,
+			SourceSpan: endpoint.Span,
 		})
 	}
 	if err := validateAPIEndpoints(endpoints); err != nil {
@@ -149,6 +157,8 @@ func fragmentEndpointsFromIR(ir gwdkir.Program) ([]FragmentEndpoint, error) {
 				Uses:         uses,
 				Guards:       append([]string(nil), page.Guards...),
 				Binding:      bindings[irEndpointKey(gwdkir.EndpointFragment, page.ID, fragment.Name, method, strings.TrimSpace(fragment.Route))],
+				Source:       page.Source,
+				SourceSpan:   fragment.Span,
 			})
 		}
 	}

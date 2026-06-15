@@ -41,7 +41,8 @@ current controls, and open follow-up areas for review.
 | Embedded build output to generated server | Embedded SPA assets, generated error pages, health endpoint | Generated server uses HTTP timeouts and `MaxHeaderBytes`; embedded output skips known secret/private/temp artifacts | Broader asset policy remains planned. |
 | VS Code extension to workspace | LSP/editor commands and workspace file access | Dependency-light local tooling; no production runtime authority | Extension command/file threat model needs focused review before broader editor automation. |
 | WASM islands to browser runtime | `go client {}`, component WASM assets, host loader | WASM is explicit and separate from backend handlers; browser-unsafe import validation exists | Production ABI hardening and user-code runtime validation remain planned. |
-| Contracts and realtime adapters | Command/query web adapters, workers, outbox, broker, fanout | Web-role validation, CSRF before command decoding, guard/rate-limit preflight, local default dispatch, worker ack/nack, seen-store deduplication, and nacked-batch backoff hooks | Worker/cron binary generators, managed deployment recipes, durable retry operations, and realtime security policy remain planned. |
+| Contracts and realtime adapters | Command/query web adapters, workers, outbox, broker, fanout | Web-role validation, CSRF before command decoding, guard/rate-limit preflight, local default dispatch, worker ack/nack, seen-store deduplication, and nacked-batch backoff hooks | Worker/cron binary generators, durable retry operations, and realtime security policy remain planned. |
+| Playground source to sandbox execution | `gowdk playground policy`, `export`, and opt-in `run`; future hosted website runners | Hosted execution is disabled by default; export/staging require `gowdk.config.go`, exclude generated output, dependency vendor folders, local env files, secrets, private keys, temp files, and reports; local run uses disposable workspaces, isolated Go caches, `GOPROXY=off`, `GOSUMDB=off`, and `GOWORK=off` | Hosted infrastructure still needs process, CPU, memory, network, rate-limit, log, cleanup, and version-pinning enforcement outside the repository. |
 
 ## Abuse Paths
 
@@ -57,6 +58,7 @@ current controls, and open follow-up areas for review.
 | Treat guards as full backend authorization. | Authorization bypass in user domain code. | Docs state guards are route gates and backend authorization stays in app Go. | High if users rely on guards alone for protected resources. |
 | Replay contract or realtime events incorrectly. | Duplicate state changes or stale UI state. | Local default dispatch, worker ack/nack helpers, seen-store deduplication, and nacked-batch backoff hooks exist. | Medium until durable retry/dead-letter/realtime deployment policies are complete. |
 | Let editor automation operate on untrusted workspaces without review. | Local file or command abuse. | Current editor surface is limited. | Medium before adding broader workspace automation. |
+| Run playground submissions with host secrets, network access, or unbounded output. | Secret exposure, dependency supply-chain abuse, or host resource exhaustion. | Current CLI execution is opt-in, stages filtered files into a disposable workspace, rejects secret-looking sandbox env names, and disables Go network dependency lookup by default. | High for any future hosted runner until infrastructure-level isolation and abuse controls are implemented. |
 
 ## Review Triggers
 
@@ -67,6 +69,8 @@ Apply the `security review` GitHub label to issues or pull requests that touch:
 - request body/header limits, file uploads, parsing, or decoding;
 - generated logs, diagnostics, error pages, or panic boundaries;
 - embedded assets, source maps, release artifacts, or secret exclusion;
+- playground export, hosted execution, sandbox policy, or website-runner
+  infrastructure;
 - VS Code commands, workspace file access, WASM islands, contracts, workers,
   queues, brokers, SSE, WebSocket, or realtime behavior.
 

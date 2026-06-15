@@ -21,7 +21,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
+const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
 
 func build(args []string) error {
 	started := time.Now()
@@ -50,6 +50,7 @@ type buildRequest struct {
 	BackendBinaryPath string
 	Docker            bool
 	DockerBase        string
+	DeployRecipes     []string
 	Modules           []string
 	Paths             []string
 	TimingsPath       string
@@ -65,6 +66,7 @@ type buildOptions struct {
 	BackendBinaryPath string
 	Docker            bool
 	DockerBase        string
+	DeployRecipes     []string
 	ConfigPath        string
 	TargetNames       []string
 	ModuleNames       []string
@@ -82,7 +84,7 @@ func loadBuildOptions(args []string) (buildOptions, error) {
 		return buildOptions{}, err
 	}
 	if len(plan.TargetNames) > 0 && plan.hasAdHocArgs() {
-		return buildOptions{}, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --docker, --docker-base, --wasm, --backend-app, --backend-bin, or explicit files")
+		return buildOptions{}, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --docker, --docker-base, --deploy-recipe, --wasm, --backend-app, --backend-bin, or explicit files")
 	}
 	return plan, nil
 }
@@ -97,6 +99,7 @@ func (plan buildOptions) request() buildRequest {
 		BackendBinaryPath: plan.BackendBinaryPath,
 		Docker:            plan.Docker,
 		DockerBase:        plan.DockerBase,
+		DeployRecipes:     plan.DeployRecipes,
 		Modules:           plan.ModuleNames,
 		Paths:             plan.Paths,
 		TimingsPath:       plan.TimingsPath,
@@ -104,11 +107,11 @@ func (plan buildOptions) request() buildRequest {
 }
 
 func (plan buildOptions) hasAdHocArgs() bool {
-	return hasAdHocBuildArgs(plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.Docker, plan.DockerBase, plan.ModuleNames, plan.Paths)
+	return hasAdHocBuildArgs(plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.Docker, plan.DockerBase, plan.DeployRecipes, plan.ModuleNames, plan.Paths)
 }
 
 func (plan buildOptions) shouldBuildConfiguredTargets() bool {
-	return shouldBuildConfiguredTargets(plan.Options.Config, plan.TargetNames, plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.Docker, plan.DockerBase, plan.ModuleNames, plan.Paths)
+	return shouldBuildConfiguredTargets(plan.Options.Config, plan.TargetNames, plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.Docker, plan.DockerBase, plan.DeployRecipes, plan.ModuleNames, plan.Paths)
 }
 
 func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRecorder) error {
@@ -126,6 +129,11 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		}
 		request.DockerBase = base
 	}
+	recipes, err := normalizeDeploymentRecipes(request.DeployRecipes)
+	if err != nil {
+		return err
+	}
+	request.DeployRecipes = recipes
 	if strings.TrimSpace(request.BinaryPath) != "" && strings.TrimSpace(request.AppDir) == "" {
 		return fmt.Errorf("gowdk build --bin requires --app <dir>")
 	}
@@ -373,9 +381,6 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			fmt.Println(built)
 		}
 	}
-	if err := appendBuildReportEvents(result.BuildReportPath, buildReportEvents...); err != nil {
-		return err
-	}
 	if strings.TrimSpace(backendAppDir) != "" {
 		var app appgen.Result
 		if err := timings.measure("backend_app_generation", func() error {
@@ -400,13 +405,35 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			fmt.Println(built)
 		}
 	}
+	if len(request.DeployRecipes) > 0 {
+		var recipeArtifacts []deploymentRecipeArtifact
+		if err := timings.measure("deploy_recipes", func() error {
+			var recipeErr error
+			recipeArtifacts, recipeErr = writeDeploymentRecipes(deploymentRecipeRequest{
+				OutputDir:         outputDir,
+				BinaryPath:        binaryPath,
+				BackendBinaryPath: backendBinaryPath,
+				Recipes:           request.DeployRecipes,
+			})
+			return recipeErr
+		}); err != nil {
+			return err
+		}
+		for _, artifact := range recipeArtifacts {
+			fmt.Println(artifact.Path)
+		}
+		buildReportEvents = append(buildReportEvents, deploymentRecipeBuildEvents(recipeArtifacts)...)
+	}
+	if err := appendBuildReportEvents(result.BuildReportPath, buildReportEvents...); err != nil {
+		return err
+	}
 	if _, err := timings.write(outputDir, request.TimingsPath); err != nil {
 		return err
 	}
 	return nil
 }
 
-func shouldBuildConfiguredTargets(config gowdk.Config, targetNames []string, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, docker bool, dockerBase string, moduleNames, paths []string) bool {
+func shouldBuildConfiguredTargets(config gowdk.Config, targetNames []string, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, docker bool, dockerBase string, deployRecipes []string, moduleNames, paths []string) bool {
 	if len(targetNames) > 0 {
 		return true
 	}
@@ -421,11 +448,12 @@ func shouldBuildConfiguredTargets(config gowdk.Config, targetNames []string, out
 		strings.TrimSpace(backendBinaryPath) == "" &&
 		!docker &&
 		strings.TrimSpace(dockerBase) == "" &&
+		len(deployRecipes) == 0 &&
 		len(moduleNames) == 0 &&
 		len(paths) == 0
 }
 
-func hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, docker bool, dockerBase string, moduleNames, paths []string) bool {
+func hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, docker bool, dockerBase string, deployRecipes, moduleNames, paths []string) bool {
 	return strings.TrimSpace(outputDir) != "" ||
 		strings.TrimSpace(appDir) != "" ||
 		strings.TrimSpace(binaryPath) != "" ||
@@ -434,6 +462,7 @@ func hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, b
 		strings.TrimSpace(backendBinaryPath) != "" ||
 		docker ||
 		strings.TrimSpace(dockerBase) != "" ||
+		len(deployRecipes) > 0 ||
 		len(moduleNames) > 0 ||
 		len(paths) > 0
 }
@@ -456,6 +485,7 @@ func buildConfiguredTargets(plan buildOptions, timings *buildTimingRecorder) err
 			WASMPath:          target.WASM,
 			BackendAppDir:     target.BackendApp,
 			BackendBinaryPath: target.BackendBinary,
+			DeployRecipes:     target.DeployRecipes,
 			Modules:           target.Modules,
 			TimingsPath:       plan.TimingsPath,
 		}, timings.clone()); err != nil {
@@ -478,6 +508,11 @@ func selectBuildTargets(targets []gowdk.BuildTargetConfig, targetNames []string)
 		}
 		target.Name = name
 		target.Modules = cleanNames(target.Modules)
+		recipes, err := normalizeDeploymentRecipes(target.DeployRecipes)
+		if err != nil {
+			return nil, fmt.Errorf("build target %q: %w", name, err)
+		}
+		target.DeployRecipes = recipes
 		if strings.TrimSpace(target.Output) == "" {
 			target.Output = defaultBuildTargetOutput(name)
 		}
@@ -653,6 +688,14 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 			if strings.TrimSpace(plan.DockerBase) == "" {
 				return buildOptions{}, fmt.Errorf("Docker base is required")
 			}
+		case arg == "--deploy-recipe":
+			i++
+			if i >= len(args) {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.DeployRecipes = appendNames(plan.DeployRecipes, args[i])
+		case strings.HasPrefix(arg, "--deploy-recipe="):
+			plan.DeployRecipes = appendNames(plan.DeployRecipes, strings.TrimPrefix(arg, "--deploy-recipe="))
 		case arg == "--wasm":
 			i++
 			if i >= len(args) {

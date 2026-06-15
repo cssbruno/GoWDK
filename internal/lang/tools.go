@@ -324,11 +324,13 @@ func CheckFilesWithOptions(config gowdk.Config, paths []string, options CheckOpt
 	if diagnostics.HasErrors() {
 		return CheckResult{}, diagnostics
 	}
-	result := CheckResult{IR: gwdkanalysis.BuildProgram(config, sources)}
-	if err := compiler.DiscoverGoEndpoints(config, &result.IR); err != nil {
-		diagnostics = append(diagnostics, compilerDiagnostics(err, result.IR)...)
+	ir, bindings, err := compiler.AssembleProgram(config, sources)
+	result := CheckResult{IR: ir}
+	if err != nil {
+		diagnostics = append(diagnostics, compilerDiagnostics(err, ir)...)
 		return result, diagnostics
 	}
+	result.Bindings = bindings
 	validate := compiler.ValidateProgramReport
 	if len(paths) == 1 {
 		// A single file can never satisfy cross-file checks (use packages,
@@ -337,12 +339,11 @@ func CheckFilesWithOptions(config gowdk.Config, paths []string, options CheckOpt
 		validate = compiler.ValidateSourceProgramReport
 	}
 	diagnostics = append(diagnostics, compilerDiagnostics(validate(config, result.IR), result.IR)...)
+	if bindingDiagnostics := compiler.BackendBindingDiagnostics(result.Bindings); len(bindingDiagnostics) > 0 {
+		diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidationErrors(bindingDiagnostics), result.IR)...)
+	}
 	diagnostics = append(diagnostics, accessibilityDiagnostics(result.IR)...)
 	if !diagnostics.HasErrors() {
-		result.Bindings = compiler.BindBackendHandlers(&result.IR)
-		if bindingDiagnostics := compiler.BackendBindingDiagnostics(result.Bindings); len(bindingDiagnostics) > 0 {
-			diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidationErrors(bindingDiagnostics), result.IR)...)
-		}
 		diagnostics = append(diagnostics, validateContractReferences(config, result.IR, options.ProjectRoot)...)
 	}
 	return result, diagnostics

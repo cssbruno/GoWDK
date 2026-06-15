@@ -79,11 +79,24 @@ func renderNodes(nodes []Node, ctx *renderContext) (string, error) {
 			chainMatched = false
 			chainIndex = 0
 		}
-		if err := node.render(nodeCtx, &out); err != nil {
+		if err := renderNode(node, nodeCtx, &out); err != nil {
 			return "", err
 		}
 	}
 	return out.string(), nil
+}
+
+func renderNode(node Node, ctx *renderContext, out *renderOutput) error {
+	switch typed := node.(type) {
+	case Text:
+		return renderTextNode(typed, ctx, out)
+	case Element:
+		return renderElement(typed, ctx, out)
+	case ComponentCall:
+		return renderComponentCall(typed, ctx, out)
+	default:
+		return fmt.Errorf("unsupported view node %T", node)
+	}
 }
 
 type conditionalRender struct {

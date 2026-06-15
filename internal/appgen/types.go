@@ -29,13 +29,10 @@ type Options struct {
 	IR           *gwdkir.Program
 }
 
-// OptionsFromIR returns the default generated-app options for compiler IR.
+// OptionsFromIR returns the production generator options for compiler IR-driven
+// route generation.
 func OptionsFromIR(config gowdk.Config, ir *gwdkir.Program) Options {
-	return Options{
-		AutoRoutes: true,
-		Config:     config,
-		IR:         ir,
-	}
+	return Options{AutoRoutes: true, Config: config, IR: ir}
 }
 
 // ActionEndpoint describes a generated action handler.

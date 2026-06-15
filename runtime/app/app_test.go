@@ -17,6 +17,7 @@ import (
 	"github.com/cssbruno/gowdk/runtime/asset"
 	"github.com/cssbruno/gowdk/runtime/form"
 	"github.com/cssbruno/gowdk/runtime/response"
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
 func TestHandlerServesAppIndexAndIdentityHeaders(t *testing.T) {
@@ -1584,5 +1585,61 @@ func TestBoundaryAbortsConnectionAfterResponseStarted(t *testing.T) {
 	}
 	if body := recorder.Body.String(); body != "partial" {
 		t.Fatalf("expected truncated body to stay as written, got %q", body)
+	}
+}
+
+func TestLocalTraceAccessRejectsForwardedLoopbackProxyRequest(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/_gowdk/traces", nil)
+	request.RemoteAddr = "127.0.0.1:4567"
+	request.Header.Set("X-Forwarded-For", "203.0.113.10")
+
+	if LocalTraceAccess(request) {
+		t.Fatal("expected forwarded loopback proxy request to be rejected")
+	}
+}
+
+func TestLocalTraceAccessRejectsAnyXForwardedProxyHeader(t *testing.T) {
+	for _, header := range []string{"X-Forwarded-Host", "X-Forwarded-Proto"} {
+		t.Run(header, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "http://localhost:8080/_gowdk/traces", nil)
+			request.RemoteAddr = "127.0.0.1:4567"
+			request.Header.Set(header, "localhost")
+
+			if LocalTraceAccess(request) {
+				t.Fatalf("expected request with %s to be rejected", header)
+			}
+		})
+	}
+}
+
+func TestLocalTraceAccessAllowsDirectLocalhostRequest(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://localhost:8080/_gowdk/traces", nil)
+	request.RemoteAddr = "127.0.0.1:4567"
+
+	if !LocalTraceAccess(request) {
+		t.Fatal("expected direct localhost request to be allowed")
+	}
+}
+
+func TestTracedBackendRouteMarksServerStatusError(t *testing.T) {
+	ring := gowdktrace.NewRingSink(4)
+	tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring))
+	handler := traceBackendRoute("api", "/api/fail", gowdktrace.SourceRef{}, func(writer http.ResponseWriter, request *http.Request) bool {
+		http.Error(writer, "failed", http.StatusInternalServerError)
+		return true
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/fail", nil)
+	request = request.WithContext(gowdktrace.ContextWithTracer(request.Context(), tracer))
+	recorder := httptest.NewRecorder()
+
+	if !handler(recorder, request) {
+		t.Fatal("expected backend handler to handle request")
+	}
+	spans := ring.Spans()
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d, want 1", len(spans))
+	}
+	if spans[0].Status.Code != gowdktrace.StatusError {
+		t.Fatalf("endpoint span status = %q, want error", spans[0].Status.Code)
 	}
 }

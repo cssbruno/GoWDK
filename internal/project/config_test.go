@@ -114,6 +114,7 @@ var Config = gowdk.Config{
 				App: ".gowdk/admin",
 				Binary: "bin/admin",
 				WASM: "bin/admin.wasm",
+				DeployRecipes: []string{"systemd", "caddy"},
 			},
 			{
 				Name: "public-admin",
@@ -219,6 +220,9 @@ var Config = gowdk.Config{
 	}
 	if len(config.Build.Targets[0].Modules) != 1 || config.Build.Targets[0].Modules[0] != "admin" {
 		t.Fatalf("unexpected admin target modules: %#v", config.Build.Targets[0].Modules)
+	}
+	if strings.Join(config.Build.Targets[0].DeployRecipes, ",") != "systemd,caddy" {
+		t.Fatalf("unexpected admin deploy recipes: %#v", config.Build.Targets[0].DeployRecipes)
 	}
 	if config.Build.Targets[1].Name != "public-admin" || len(config.Build.Targets[1].Modules) != 2 || config.Build.Targets[1].Modules[0] != "public" || config.Build.Targets[1].Modules[1] != "admin" {
 		t.Fatalf("unexpected combined build target: %#v", config.Build.Targets[1])

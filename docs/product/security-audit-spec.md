@@ -31,8 +31,9 @@ posture acceptable?" from one artifact.
 
 - Owning authentication, sessions, RBAC storage, or backend resource
   authorization — those stay in app Go. Guards and audits are defense-in-depth.
-- Running the audit as part of `gowdk build`. The audit is always a separate,
-  explicit command so it can never fail a build implicitly.
+- Running generated-app audit tests as part of `gowdk build`. The build command
+  runs the static baseline gate, but runtime audit tests stay explicit through
+  `gowdk audit --run`.
 - Browser/E2E testing or testing user domain logic.
 - Full data-flow/taint analysis of raw-HTML sinks (M8 flags sinks; it does not
   trace tainted inputs).
@@ -55,7 +56,8 @@ only from the diagnostic registry, so the baseline never hardcodes severity.
 
 - The posture manifest is a pure projection (like `gowdk-routes.json`); it
   describes, never acts.
-- `gowdk audit` is explicit and never part of `gowdk build`.
+- `gowdk build` runs only the static baseline gate. The full report surface and
+  generated runtime audit tests stay explicit through `gowdk audit`.
 - Every finding cites a named rule, a diagnostic code, and a source `file:line`;
   `gowdk explain <code>` gives the reasoning.
 - The baseline is the gates already written in `security.md`, made executable —

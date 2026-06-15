@@ -1,4 +1,4 @@
-package view
+package viewparse
 
 import (
 	"fmt"
@@ -10,6 +10,20 @@ import (
 type parser struct {
 	source []rune
 	index  int
+}
+
+// Parse parses a view markup fragment into the pure view model.
+func Parse(source string) ([]Node, error) {
+	parser := parser{source: []rune(source)}
+	nodes, err := parser.nodes("")
+	if err != nil {
+		return nil, err
+	}
+	parser.skipSpace()
+	if !parser.done() {
+		return nil, parser.errorf("unexpected content")
+	}
+	return nodes, nil
 }
 
 func (parser *parser) nodes(until string) ([]Node, error) {

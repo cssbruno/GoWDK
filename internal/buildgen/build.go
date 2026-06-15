@@ -572,16 +572,20 @@ func reportQueryInvalidations(reporter *buildReporter, invalidations []gwdkir.Qu
 }
 
 func BuildIncremental(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string, changedPageSources []string) (Result, error) {
-	return buildIncrementalFromIR(config, gwdkanalysis.BuildProgram(config, sources), outputDir, changedPageSources)
+	ir, bindings, err := compiler.AssembleProgram(config, sources)
+	if err != nil {
+		return Result{}, err
+	}
+	return buildIncrementalFromIR(config, ir, bindings, outputDir, changedPageSources)
 }
 
 // BuildIncrementalFromIR incrementally renders changed SPA page outputs from
 // normalized compiler IR.
 func BuildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
-	return buildIncrementalFromIR(config, ir, outputDir, changedPageSources)
+	return buildIncrementalFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, changedPageSources)
 }
 
-func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
+func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, outputDir string, changedPageSources []string) (Result, error) {
 	reporter := newBuildReporter("incremental", outputDir)
 	reporter.info("start", "build_started", "incremental SPA build started", BuildEvent{
 		Data: map[string]string{
@@ -596,6 +600,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 		return Result{}, reporter.fail("validate", err)
 	}
 	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
+	reportBackendBindings(reporter, backendBindings)
 	reportContractReferences(reporter, ir.ContractRefs)
 	reportRealtimeSubscriptions(reporter, ir.RealtimeSubscriptions)
 	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
@@ -800,7 +805,11 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 }
 
 func plan(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (buildPlan, error) {
-	return planFromIR(config, gwdkanalysis.BuildProgram(config, sources), outputDir)
+	ir, _, err := compiler.AssembleProgram(config, sources)
+	if err != nil {
+		return buildPlan{}, err
+	}
+	return planFromIR(config, ir, outputDir)
 }
 
 // reportSkippedPrerenderPages records a build-report event for every

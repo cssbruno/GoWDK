@@ -629,7 +629,7 @@ func parseBuildTargets(expression ast.Expr) []gowdk.BuildTargetConfig {
 	var targets []gowdk.BuildTargetConfig
 	for _, element := range literal.Elts {
 		target := parseBuildTarget(element)
-		if target.Name == "" && len(target.Modules) == 0 && target.Output == "" && target.App == "" && target.Binary == "" && target.WASM == "" && target.BackendApp == "" && target.BackendBinary == "" {
+		if target.Name == "" && len(target.Modules) == 0 && target.Output == "" && target.App == "" && target.Binary == "" && target.WASM == "" && target.BackendApp == "" && target.BackendBinary == "" && len(target.DeployRecipes) == 0 {
 			continue
 		}
 		targets = append(targets, target)
@@ -662,6 +662,8 @@ func parseBuildTarget(expression ast.Expr) gowdk.BuildTargetConfig {
 			target.BackendApp = parseString(field.Value)
 		case "BackendBinary":
 			target.BackendBinary = parseString(field.Value)
+		case "DeployRecipes":
+			target.DeployRecipes = parseStringList(field.Value)
 		}
 	}
 	return target

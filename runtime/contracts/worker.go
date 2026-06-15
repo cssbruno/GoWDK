@@ -69,8 +69,9 @@ func WithEventWorkerBackoff(backoff EventWorkerBackoff) EventWorkerOption {
 	}
 }
 
-// WithEventWorkerSeenStore sets the duplicate event store used before
-// dispatching batches. Nil preserves the default at-least-once behavior.
+// WithEventWorkerSeenStore skips duplicate event IDs already present in seen.
+// Duplicate-only batches are acknowledged without invoking subscribers. A nil
+// seen store preserves the default at-least-once worker behavior.
 func WithEventWorkerSeenStore(seen SeenStore) EventWorkerOption {
 	return func(options *eventWorkerOptions) {
 		options.seen = seen

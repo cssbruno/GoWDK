@@ -39,6 +39,7 @@ main{display:grid;grid-template-columns:minmax(260px,360px) 1fr;min-height:calc(
   const detail = document.getElementById("json");
   const count = document.getElementById("count");
   const dropped = document.getElementById("dropped");
+  const mount = window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/";
   function render() {
     count.textContent = String(spans.length);
     if (spans.length === 0) {
@@ -66,12 +67,12 @@ main{display:grid;grid-template-columns:minmax(260px,360px) 1fr;min-height:calc(
       list.appendChild(button);
     });
   }
-  fetch("data").then((response) => response.json()).then((payload) => {
+  fetch(mount + "data").then((response) => response.json()).then((payload) => {
     dropped.textContent = String(payload.dropped || 0);
     (payload.spans || []).forEach((span) => spans.push(span));
     render();
   }).catch(() => {});
-  const source = new EventSource("events");
+  const source = new EventSource(mount + "events");
   source.addEventListener("gowdk-trace", (event) => {
     spans.push(JSON.parse(event.data));
     render();

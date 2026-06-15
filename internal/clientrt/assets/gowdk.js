@@ -470,8 +470,10 @@
       traceparent: function () {
         var ctx = activeTraceContext();
         if (!ctx) {
-          var span = startTraceSpan('browser root', 'user');
-          return span ? traceparentFor(span) : '';
+          if (!traceEnabled()) {
+            return '';
+          }
+          return '00-' + traceHex(16) + '-' + traceHex(8) + '-01';
         }
         return '00-' + ctx.traceId + '-' + ctx.spanId + '-01';
       },
@@ -580,6 +582,34 @@
     } catch (error) {}
   }
 
+  function traceInputURL(url) {
+    if (typeof Request !== 'undefined' && url instanceof Request) {
+      return url.url || '';
+    }
+    if (url && typeof url === 'object' && typeof url.url === 'string') {
+      return url.url;
+    }
+    return url;
+  }
+
+  function traceInputHeaders(url, options) {
+    if (options && options.headers) {
+      return options.headers;
+    }
+    if (url && typeof url === 'object' && url.headers) {
+      return url.headers;
+    }
+    return {};
+  }
+
+  function sameOriginURL(url) {
+    try {
+      return new URL(traceInputURL(url), window.location.href).origin === window.location.origin;
+    } catch (error) {
+      return false;
+    }
+  }
+
   async function traceFetch(url, options, meta) {
     if (!traceEnabled()) {
       return fetch(url, options);
@@ -588,8 +618,11 @@
       { key: 'url.path', value: String(url || '') }
     ]);
     var traced = Object.assign({}, options || {});
-    traced.headers = Object.assign({}, traced.headers || {});
-    traced.headers.traceparent = traceparentFor(span);
+    if (sameOriginURL(url)) {
+      var headers = new Headers(traceInputHeaders(url, traced));
+      headers.set('traceparent', traceparentFor(span));
+      traced.headers = headers;
+    }
     try {
       var response = await fetch(url, traced);
       endTraceSpan(span, response.ok ? 'ok' : 'error', response.ok ? '' : 'HTTP ' + response.status);

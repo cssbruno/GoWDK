@@ -85,6 +85,7 @@ var Config = gowdk.Config{
 				App: ".gowdk/admin",
 				Binary: "bin/admin",
 				WASM: "bin/admin.wasm",
+				DeployRecipes: []string{"systemd"},
 			},
 			{
 				Name: "public-admin",
@@ -364,6 +365,7 @@ type BuildTargetConfig struct {
 	WASM          string
 	BackendApp    string
 	BackendBinary string
+	DeployRecipes []string
 }
 ```
 
@@ -441,6 +443,11 @@ feature-bound action/API endpoints. `BackendBinary` is optional, requires
 `App`/`Binary` and `BackendApp`/`BackendBinary`, the frontend binary proxies
 generated backend routes to `GOWDK_BACKEND_ORIGIN`.
 
+`DeployRecipes` is optional and accepts `static`, `systemd`, `caddy`, `nginx`,
+and `split`. The values map to `gowdk build --deploy-recipe` and emit starter
+deployment files for the target shape. They do not add secrets, domains, TLS
+policy, platform-specific rollout logic, storage, backups, or CDN settings.
+
 When `Build.Targets` is present, `gowdk build` runs every configured target
 unless ad hoc build flags or explicit files are passed. Use `gowdk build
 --target <name>` to run one or more named targets; `--target` may be repeated or
@@ -483,12 +490,13 @@ realtime, and other compiler checks; SPA builds invoke addons that implement
 DB helper usage is ordinary Go code around `database/sql`; see [db.md](db.md)
 for migrations, transactions, readiness, and sqlc usage.
 
-Use `gowdk add --list` to print built-in addon names, and `gowdk add <name>` to
-insert the canonical import and `<name>.Addon()` constructor into
-`gowdk.config.go`. `gowdk add seo` requires `--base-url <url>` because SEO
-build output requires `seo.Options.BaseURL`. The command rewrites literal
-`Config.Addons` lists only; if `Addons` is computed by Go code, edit the config
-manually.
+Use `gowdk add --list` to print addable built-in addon names, and
+`gowdk add --list --registry` to inspect the local discovery metadata. Use
+`gowdk add <name>` to insert the canonical import and `<name>.Addon()`
+constructor into `gowdk.config.go`. `gowdk add seo` requires
+`--base-url <url>` because SEO build output requires `seo.Options.BaseURL`. The
+command rewrites literal `Config.Addons` lists only; if `Addons` is computed by
+Go code, edit the config manually.
 
 The literal config loader recognizes built-in addon constructors when they are
 imported from their canonical package paths. Most are no-argument constructors;

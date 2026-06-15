@@ -6274,6 +6274,52 @@ view {
 	}
 }
 
+func TestBuildCommandProductionBlocksInsecureAuditFindings(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "newsletter.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Mode: gowdk.Production,
+		CSRF: gowdk.CSRFConfig{Disabled: true},
+	},
+}
+`)
+	writeCLIFile(t, page, `package app
+
+page newsletter
+route "/newsletter"
+
+act Subscribe POST "/newsletter"
+
+view {
+  <form g:post={Subscribe}>
+    <input name="email" required />
+    <button type="submit">Subscribe</button>
+  </form>
+}
+`)
+
+	err := run([]string{"build", "--config", config, "--allow-missing-backend", "--out", outputDir, page})
+	if err == nil {
+		t.Fatal("expected production build to be blocked by error-severity security findings")
+	}
+	if !strings.Contains(err.Error(), "build blocked by") {
+		t.Fatalf("unexpected build audit error: %v", err)
+	}
+
+	// --allow-insecure downgrades the production gate to a warning so the build
+	// proceeds for 0.x experimentation.
+	if err := run([]string{"build", "--config", config, "--allow-missing-backend", "--allow-insecure", "--out", outputDir, page}); err != nil {
+		t.Fatalf("expected --allow-insecure to override the security gate: %v", err)
+	}
+}
+
 func TestBuildCommandBuildsBinaryWithFeatureBoundActionAndAPI(t *testing.T) {
 	root := t.TempDir()
 	moduleRoot, err := filepath.Abs("../..")

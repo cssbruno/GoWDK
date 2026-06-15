@@ -146,6 +146,7 @@ type cliOptions struct {
 	JSON                bool
 	Debug               bool
 	AllowMissingBackend bool
+	AllowInsecure       bool
 	ObfuscateAssets     bool
 	WarningsAsErrors    bool
 }

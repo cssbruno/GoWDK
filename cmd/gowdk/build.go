@@ -21,7 +21,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
+const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
 
 func build(args []string) error {
 	started := time.Now()
@@ -226,6 +226,12 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			return newDevDiagnosticError("build failed", devOverlayDiagnosticsFromCompiler(report))
 		}
 		return fmt.Errorf("build failed")
+	}
+
+	if err := timings.measure("security_audit", func() error {
+		return enforceBuildSecurityAudit(options, ir)
+	}); err != nil {
+		return err
 	}
 
 	var result buildgen.Result
@@ -595,6 +601,8 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		case arg == "--allow-missing-backend":
 			plan.Options.AllowMissingBackend = true
 			plan.Options.Config.Build.AllowMissingBackend = true
+		case arg == "--allow-insecure":
+			plan.Options.AllowInsecure = true
 		case arg == "--obfuscate-assets":
 			plan.Options.ObfuscateAssets = true
 			plan.Options.Config.Build.ObfuscateAssets = true

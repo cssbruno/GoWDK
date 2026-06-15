@@ -28,12 +28,12 @@ func ExecuteCommandForRole[C, R any](ctx context.Context, registry *Registry, ro
 }
 
 func executeCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, error) {
-	result, recorder, err := runCommand[C, R](ctx, registry, command, role)
+	result, recorder, commandCtx, err := runCommand[C, R](ctx, registry, command, role)
 	if err != nil {
 		var zero R
 		return zero, err
 	}
-	if err := recorder.dispatchForRole(ctx, registry, role); err != nil {
+	if err := recorder.dispatchForRole(commandCtx, registry, role); err != nil {
 		var zero R
 		return zero, err
 	}
@@ -53,12 +53,12 @@ func CaptureCommandEventsForRole[C, R any](ctx context.Context, registry *Regist
 }
 
 func captureCommandEvents[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, []EventEnvelope, error) {
-	result, recorder, err := runCommand[C, R](ctx, registry, command, role)
+	result, recorder, commandCtx, err := runCommand[C, R](ctx, registry, command, role)
 	if err != nil {
 		var zero R
 		return zero, nil, err
 	}
-	return result, recorder.envelopes(ctx), nil
+	return result, recorder.envelopes(commandCtx), nil
 }
 
 // ExecuteCommandToOutbox runs a command and stores emitted events in outbox
@@ -145,7 +145,7 @@ func executeCommandToPresentationFanout[C, R any](ctx context.Context, registry 
 	return result, nil
 }
 
-func runCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, *eventRecorder, error) {
+func runCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, *eventRecorder, context.Context, error) {
 	var zero R
 	contract := typeName[C]()
 	ctx, span := startContractSpan(ctx, string(ObservationExecuteCommand),
@@ -157,24 +157,24 @@ func runCommand[C, R any](ctx context.Context, registry *Registry, command C, ro
 	entry, ok := registry.command(typeName[C]())
 	if !ok {
 		spanErr = missingHandlerError(Command, contract)
-		return zero, nil, missingHandlerError(Command, typeName[C]())
+		return zero, nil, ctx, missingHandlerError(Command, typeName[C]())
 	}
 	if !roleMayExecute(entry.roles, role) {
 		spanErr = roleNotAllowedError(Command, contract, role)
-		return zero, nil, spanErr
+		return zero, nil, ctx, spanErr
 	}
 	handler, ok := entry.handler.(CommandHandler[C, R])
 	if !ok {
 		spanErr = unsupportedHandlerError(Command, contract)
-		return zero, nil, spanErr
+		return zero, nil, ctx, spanErr
 	}
 	commandCtx, recorder := withRecorder(ctx)
 	result, err := handler(commandCtx, command)
 	if err != nil {
 		spanErr = err
-		return zero, nil, err
+		return zero, nil, commandCtx, err
 	}
-	return result, recorder, nil
+	return result, recorder, commandCtx, nil
 }
 
 func (registry *Registry) registerCommand(command, result string, handler any, roles []Role) error {

@@ -123,12 +123,12 @@ func backendProxySource(options Options) (source string, err error) {
 		return "", nil
 	}
 	return printActionDecls([]ast.Decl{
-		backendProxyDecl(false),
+		backendProxyDecl(false, generatedObservabilityEnabled(options)),
 		isBackendRouteDecl(backendAdapterIR(options)),
 	})
 }
 
-func backendProxyDecl(rateLimit bool) *ast.FuncDecl {
+func backendProxyDecl(rateLimit bool, trace bool) *ast.FuncDecl {
 	stmts := []ast.Stmt{
 		&ast.IfStmt{
 			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(id("isBackendRoute"), selExpr(id("request"), "Method"), selExpr(selExpr(id("request"), "URL"), "Path"))},
@@ -162,6 +162,22 @@ func backendProxyDecl(rateLimit bool) *ast.FuncDecl {
 			),
 		},
 		define([]ast.Expr{id("proxy")}, call(sel("httputil", "NewSingleHostReverseProxy"), id("target"))),
+	)
+	if trace {
+		stmts = append(stmts,
+			define([]ast.Expr{id("proxyDirector")}, selExpr(id("proxy"), "Director")),
+			assign([]ast.Expr{selExpr(id("proxy"), "Director")}, &ast.FuncLit{
+				Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{
+					{Names: []*ast.Ident{id("outbound")}, Type: &ast.StarExpr{X: sel("http", "Request")}},
+				}}},
+				Body: block(
+					exprStmt(call(id("proxyDirector"), id("outbound"))),
+					exprStmt(call(sel("gowdktrace", "Inject"), selExpr(id("request"), "Context"), selExpr(id("outbound"), "Header"))),
+				),
+			}),
+		)
+	}
+	stmts = append(stmts,
 		exprStmt(call(selExpr(id("proxy"), "ServeHTTP"), id("response"), id("request"))),
 		returnBool(true),
 	)

@@ -4,6 +4,7 @@ package otel
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 
 	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
@@ -56,6 +57,13 @@ type Sink struct {
 	tracer   oteltrace.Tracer
 }
 
+type snapshotIDContextKey struct{}
+
+type snapshotIDs struct {
+	traceID oteltrace.TraceID
+	spanID  oteltrace.SpanID
+}
+
 // NewSink creates an OTLP HTTP-backed sink.
 func NewSink(ctx context.Context, options ...Option) (*Sink, error) {
 	var cfg config
@@ -78,15 +86,20 @@ func NewSink(ctx context.Context, options ...Option) (*Sink, error) {
 	if err != nil {
 		return nil, err
 	}
-	provider := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exporter))
+	provider := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithIDGenerator(snapshotIDGenerator{}),
+	)
 	return NewSinkWithProvider(provider), nil
 }
 
 // NewSinkWithProvider creates a sink backed by an existing provider. It is
 // useful when applications already own OpenTelemetry lifecycle and resources.
+// Providers should be configured with snapshotIDGenerator when exact GOWDK
+// trace/span identity preservation is required.
 func NewSinkWithProvider(provider *sdktrace.TracerProvider) *Sink {
 	if provider == nil {
-		provider = sdktrace.NewTracerProvider()
+		provider = sdktrace.NewTracerProvider(sdktrace.WithIDGenerator(snapshotIDGenerator{}))
 	}
 	return &Sink{provider: provider, tracer: provider.Tracer("github.com/cssbruno/gowdk/runtime/trace")}
 }
@@ -104,10 +117,15 @@ func (sink *Sink) RecordSpan(ctx context.Context, span gowdktrace.Snapshot) erro
 	if sink == nil || sink.tracer == nil {
 		return nil
 	}
+	ids, err := snapshotIDsFromSpan(span)
+	if err != nil {
+		return err
+	}
 	parent, err := parentContext(ctx, span)
 	if err != nil {
 		return err
 	}
+	parent = context.WithValue(parent, snapshotIDContextKey{}, ids)
 	attrs := spanAttributes(span)
 	_, otelSpan := sink.tracer.Start(parent, span.Name,
 		oteltrace.WithTimestamp(span.StartTime),
@@ -127,6 +145,18 @@ func (sink *Sink) RecordSpan(ctx context.Context, span gowdktrace.Snapshot) erro
 	}
 	otelSpan.End(oteltrace.WithTimestamp(span.EndTime))
 	return nil
+}
+
+func snapshotIDsFromSpan(span gowdktrace.Snapshot) (snapshotIDs, error) {
+	traceID, err := oteltrace.TraceIDFromHex(string(span.TraceID))
+	if err != nil {
+		return snapshotIDs{}, err
+	}
+	spanID, err := oteltrace.SpanIDFromHex(string(span.SpanID))
+	if err != nil {
+		return snapshotIDs{}, err
+	}
+	return snapshotIDs{traceID: traceID, spanID: spanID}, nil
 }
 
 func parentContext(ctx context.Context, span gowdktrace.Snapshot) (context.Context, error) {
@@ -151,6 +181,40 @@ func parentContext(ctx context.Context, span gowdktrace.Snapshot) (context.Conte
 		Remote:     true,
 	})
 	return oteltrace.ContextWithRemoteSpanContext(ctx, spanContext), nil
+}
+
+type snapshotIDGenerator struct{}
+
+func (snapshotIDGenerator) NewIDs(ctx context.Context) (oteltrace.TraceID, oteltrace.SpanID) {
+	if ids, ok := ctx.Value(snapshotIDContextKey{}).(snapshotIDs); ok {
+		return ids.traceID, ids.spanID
+	}
+	return randomTraceID(), randomSpanID()
+}
+
+func (snapshotIDGenerator) NewSpanID(ctx context.Context, traceID oteltrace.TraceID) oteltrace.SpanID {
+	if ids, ok := ctx.Value(snapshotIDContextKey{}).(snapshotIDs); ok && ids.traceID == traceID {
+		return ids.spanID
+	}
+	return randomSpanID()
+}
+
+func randomTraceID() oteltrace.TraceID {
+	for {
+		var id oteltrace.TraceID
+		if _, err := rand.Read(id[:]); err == nil && id.IsValid() {
+			return id
+		}
+	}
+}
+
+func randomSpanID() oteltrace.SpanID {
+	for {
+		var id oteltrace.SpanID
+		if _, err := rand.Read(id[:]); err == nil && id.IsValid() {
+			return id
+		}
+	}
 }
 
 func spanAttributes(span gowdktrace.Snapshot) []attribute.KeyValue {

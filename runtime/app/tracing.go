@@ -32,12 +32,26 @@ func LocalTraceAccess(request *http.Request) bool {
 	if request == nil {
 		return false
 	}
-	host, _, err := net.SplitHostPort(request.RemoteAddr)
+	if request.Header.Get("Forwarded") != "" || request.Header.Get("X-Forwarded-For") != "" || request.Header.Get("X-Real-IP") != "" {
+		return false
+	}
+	if !loopbackHost(request.Host) {
+		return false
+	}
+	return loopbackHost(request.RemoteAddr)
+}
+
+func loopbackHost(address string) bool {
+	host, _, err := net.SplitHostPort(address)
 	if err != nil {
-		host = request.RemoteAddr
+		host = address
 	}
 	if host == "" {
 		return false
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
@@ -45,7 +59,6 @@ func LocalTraceAccess(request *http.Request) bool {
 
 func (handler Handler) startRequestTrace(response http.ResponseWriter, request *http.Request) (http.ResponseWriter, *http.Request, *gowdktrace.Span) {
 	ctx := gowdktrace.Extract(request.Context(), request.Header)
-	ctx = gowdktrace.ContextWithTracer(ctx, handler.Tracer)
 	ctx, span := handler.Tracer.Start(ctx, request.Method+" "+request.URL.Path,
 		gowdktrace.WithSurface(gowdktrace.SurfaceBackend),
 		gowdktrace.WithLane(gowdktrace.LaneRoute),

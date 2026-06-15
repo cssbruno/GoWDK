@@ -470,8 +470,7 @@
       traceparent: function () {
         var ctx = activeTraceContext();
         if (!ctx) {
-          var span = startTraceSpan('browser root', 'user');
-          return span ? traceparentFor(span) : '';
+          return '00-' + traceHex(16) + '-' + traceHex(8) + '-01';
         }
         return '00-' + ctx.traceId + '-' + ctx.spanId + '-01';
       },
@@ -580,6 +579,14 @@
     } catch (error) {}
   }
 
+  function sameOriginURL(url) {
+    try {
+      return new URL(url, window.location.href).origin === window.location.origin;
+    } catch (error) {
+      return false;
+    }
+  }
+
   async function traceFetch(url, options, meta) {
     if (!traceEnabled()) {
       return fetch(url, options);
@@ -588,8 +595,11 @@
       { key: 'url.path', value: String(url || '') }
     ]);
     var traced = Object.assign({}, options || {});
-    traced.headers = Object.assign({}, traced.headers || {});
-    traced.headers.traceparent = traceparentFor(span);
+    if (sameOriginURL(url)) {
+      var headers = new Headers(traced.headers || {});
+      headers.set('traceparent', traceparentFor(span));
+      traced.headers = headers;
+    }
     try {
       var response = await fetch(url, traced);
       endTraceSpan(span, response.ok ? 'ok' : 'error', response.ok ? '' : 'HTTP ' + response.status);

@@ -294,7 +294,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 		decls = append(decls, emptyBackendHandlerDecl())
 	}
 	if full.ProxyBackend {
-		decls = append(decls, backendProxyDecl(generatedUsesRateLimit(full)), isBackendRouteDecl(backendAdapterIR(full)))
+		decls = append(decls, backendProxyDecl(generatedUsesRateLimit(full), generatedObservabilityEnabled(full)), isBackendRouteDecl(backendAdapterIR(full)))
 	}
 	csrf := csrfEnabled(csrfOptions)
 	if csrf {

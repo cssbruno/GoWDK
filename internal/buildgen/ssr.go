@@ -36,7 +36,11 @@ type SSRReplacement = source.SSRReplacement
 type SSRLoadReplacement = source.SSRLoadReplacement
 
 func SSRArtifacts(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) ([]SSRArtifact, error) {
-	return SSRArtifactsFromIR(config, gwdkanalysis.BuildProgram(config, sources), outputDir)
+	ir, _, err := compiler.AssembleProgram(config, sources)
+	if err != nil {
+		return nil, err
+	}
+	return SSRArtifactsFromIR(config, ir, outputDir)
 }
 
 // SSRArtifactsFromIR renders request-time page artifacts from normalized

@@ -16,8 +16,11 @@ import (
 )
 
 func Build(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (Result, error) {
-	ir := gwdkanalysis.BuildProgram(config, sources)
-	return buildFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, true)
+	ir, bindings, err := compiler.AssembleProgram(config, sources)
+	if err != nil {
+		return Result{}, err
+	}
+	return buildFromIR(config, ir, bindings, outputDir, true)
 }
 
 // BuildFromIR writes SPA build artifacts from normalized compiler IR.

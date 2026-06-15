@@ -182,11 +182,9 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	timings.counter("endpoints", len(ir.Endpoints))
 	var bindings []source.BackendBinding
 	if err := timings.measure("go_binding", func() error {
-		if err := compiler.DiscoverGoEndpoints(options.Config, &ir); err != nil {
-			return err
-		}
-		bindings = compiler.BindBackendHandlers(&ir)
-		return nil
+		var bindErr error
+		bindings, bindErr = compiler.EnrichProgram(options.Config, &ir)
+		return bindErr
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return fmt.Errorf("build failed")

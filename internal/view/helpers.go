@@ -1,9 +1,9 @@
 package view
 
 import (
-	"github.com/cssbruno/gowdk/internal/clientlang"
 	"sort"
-	"strings"
+
+	"github.com/cssbruno/gowdk/internal/clientlang"
 )
 
 func keys(input map[string]string) []string {
@@ -30,16 +30,4 @@ func boolSet(values []string) map[string]bool {
 		out[value] = true
 	}
 	return out
-}
-
-func stripLineComments(source string) string {
-	var lines []string
-	for _, rawLine := range strings.Split(source, "\n") {
-		line := strings.TrimSpace(rawLine)
-		if strings.HasPrefix(line, "//") {
-			continue
-		}
-		lines = append(lines, rawLine)
-	}
-	return strings.Join(lines, "\n")
 }

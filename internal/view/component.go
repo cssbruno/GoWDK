@@ -9,28 +9,10 @@ import (
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 
-// ComponentCall invokes a parsed component with literal string props.
-type ComponentCall struct {
-	Name     string
-	Attrs    []Attr
-	Children []Node
-	Start    int
-	End      int
-}
-
 type slotContent struct {
 	Nodes []Node
 	Ctx   renderContext
 	Lets  map[string]string
-}
-
-// Identity is the package-qualified component identity used for compiler-time
-// resolution and recursion checks. The public call name can be an import alias.
-func (component Component) Identity() string {
-	if component.Package == "" {
-		return component.Name
-	}
-	return component.Package + "." + component.Name
 }
 
 func (ctx *renderContext) lookupComponent(name string) (Component, bool) {
@@ -69,7 +51,7 @@ func (ctx *renderContext) lookupComponent(name string) (Component, bool) {
 	return component, ok
 }
 
-func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
+func renderComponentCall(node ComponentCall, ctx *renderContext, out *renderOutput) error {
 	component, ok := ctx.lookupComponent(node.Name)
 	if !ok {
 		return fmt.Errorf("missing component %q", node.Name)
@@ -79,7 +61,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 		return fmt.Errorf("recursive component %q", node.Name)
 	}
 
-	mode, err := node.islandMode()
+	mode, err := componentCallIslandMode(node)
 	if err != nil {
 		return err
 	}
@@ -117,7 +99,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 				continue
 			}
 			if strings.HasPrefix(attr.Name, "g:on:") {
-				listener, err := node.parentListener(attr, component, ctx)
+				listener, err := componentCallParentListener(node, attr, component, ctx)
 				if err != nil {
 					return err
 				}
@@ -540,7 +522,7 @@ type parentComponentListener struct {
 	Modifiers  string
 }
 
-func (node ComponentCall) parentListener(attr Attr, component Component, ctx *renderContext) (parentComponentListener, error) {
+func componentCallParentListener(node ComponentCall, attr Attr, component Component, ctx *renderContext) (parentComponentListener, error) {
 	if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
 		return parentComponentListener{}, fmt.Errorf("%s requires an expression value", attr.Name)
 	}
@@ -600,7 +582,7 @@ func eventPayloadSymbols(event clientlang.Emit) map[string]clientlang.ValueType 
 	return out
 }
 
-func (node ComponentCall) islandMode() (string, error) {
+func componentCallIslandMode(node ComponentCall) (string, error) {
 	mode := ""
 	for _, attr := range node.Attrs {
 		if attr.Name != "g:island" {

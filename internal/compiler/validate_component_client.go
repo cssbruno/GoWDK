@@ -3,14 +3,14 @@ package compiler
 import (
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
-	"strings"
 )
 
-func validateComponentClient(component gwdkir.Component, stateTypes map[string]clientlang.ValueType, symbolTypes map[string]clientlang.ValueType) (map[string]clientlang.Handler, map[string]clientlang.Helper, map[string]clientlang.Ref, map[string]bool, map[string]clientlang.ValueType, []ValidationError) {
+func validateComponentClient(component gwdkir.Component, stateTypes map[string]clientlang.ValueType, symbolTypes map[string]clientlang.ValueType) (map[string]clientlang.Handler, map[string]clientlang.Helper, map[string]clientlang.Ref, map[string]source.SourceSpan, map[string]clientlang.ValueType, []ValidationError) {
 	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
 		return nil, nil, nil, nil, nil, nil
 	}
@@ -29,7 +29,11 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 	helperFuncs := helperExprFunctions(helpers)
 	emits := componentEmitMap(component)
 	refs := program.RefMap()
-	usedRefs := map[string]bool{}
+	usedStores := map[string]bool{}
+	for name := range program.UseMap() {
+		usedStores[name] = true
+	}
+	usedRefs := map[string]source.SourceSpan{}
 	computedTypes := map[string]clientlang.ValueType{}
 	var diagnostics []ValidationError
 	readSymbols := mergeTypeSymbols(nil, symbolTypes)
@@ -150,10 +154,8 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 		for _, param := range function.Params {
 			readFields[param.Name] = clientlang.NormalizeType(param.Type)
 		}
-		functionRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(function.Statements, stateTypes, readFields, refs, helperFuncs, function.Async, emits)
-		for refName := range functionRefs {
-			usedRefs[refName] = true
-		}
+		recordClientRefSpans(usedRefs, component, function.Statements, function.StatementSpans)
+		_, err := clientlang.ValidateIslandClientStatementsTypedWithEvents(function.Statements, stateTypes, readFields, refs, helperFuncs, function.Async, emits, usedStores)
 		if err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_client_error",
@@ -164,10 +166,8 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 			})
 		}
 	}
-	mountRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(program.Mount, stateTypes, readSymbols, refs, helperFuncs, false, emits)
-	for refName := range mountRefs {
-		usedRefs[refName] = true
-	}
+	recordClientRefSpans(usedRefs, component, program.Mount, program.MountSpans)
+	_, err = clientlang.ValidateIslandClientStatementsTypedWithEvents(program.Mount, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 	if err != nil {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:          "component_client_error",
@@ -177,10 +177,8 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 			Message:       fmt.Sprintf("component %s mount block is invalid: %v", component.Name, err),
 		})
 	}
-	destroyRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(program.Destroy, stateTypes, readSymbols, refs, helperFuncs, false, emits)
-	for refName := range destroyRefs {
-		usedRefs[refName] = true
-	}
+	recordClientRefSpans(usedRefs, component, program.Destroy, program.DestroySpans)
+	_, err = clientlang.ValidateIslandClientStatementsTypedWithEvents(program.Destroy, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 	if err != nil {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:          "component_client_error",
@@ -200,10 +198,8 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 				Message:       fmt.Sprintf("component %s effect dependency %q must be a state field", component.Name, effect.Field),
 			})
 		}
-		effectRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(effect.Statements, stateTypes, readSymbols, refs, helperFuncs, false, emits)
-		for refName := range effectRefs {
-			usedRefs[refName] = true
-		}
+		recordClientRefSpans(usedRefs, component, effect.Statements, effect.StatementSpans)
+		_, err := clientlang.ValidateIslandClientStatementsTypedWithEvents(effect.Statements, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 		if err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_client_error",
@@ -213,10 +209,8 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 				Message:       fmt.Sprintf("component %s effect block for %q is invalid: %v", component.Name, effect.Field, err),
 			})
 		}
-		cleanupRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(effect.Cleanup, stateTypes, readSymbols, refs, helperFuncs, false, emits)
-		for refName := range cleanupRefs {
-			usedRefs[refName] = true
-		}
+		recordClientRefSpans(usedRefs, component, effect.Cleanup, effect.CleanupSpans)
+		_, err = clientlang.ValidateIslandClientStatementsTypedWithEvents(effect.Cleanup, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 		if err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_client_error",
@@ -228,6 +222,23 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 		}
 	}
 	return handlers, helpers, refs, usedRefs, computedTypes, diagnostics
+}
+
+func recordClientRefSpans(out map[string]source.SourceSpan, component gwdkir.Component, statements []string, spans []clientlang.Span) {
+	for index, statement := range statements {
+		refName, ok := clientlang.IslandRefStatement(statement)
+		if !ok {
+			continue
+		}
+		if _, exists := out[refName]; exists {
+			continue
+		}
+		span := firstSpan(component.Blocks.Spans.Client, component.Span)
+		if index < len(spans) {
+			span = clientSpan(component, spans[index])
+		}
+		out[refName] = span
+	}
 }
 
 func componentEmitMap(component gwdkir.Component) map[string]clientlang.Emit {
@@ -248,7 +259,7 @@ func componentEmitMap(component gwdkir.Component) map[string]clientlang.Emit {
 }
 
 func clientStatementErrorSpan(component gwdkir.Component, statements []string, spans []clientlang.Span, err error) source.SourceSpan {
-	var statementErr view.StatementValidationError
+	var statementErr clientlang.StatementValidationError
 	if errors.As(err, &statementErr) && statementErr.Index >= 0 && statementErr.Index < len(spans) {
 		if statementErr.Index < len(statements) {
 			return clientExpressionErrorSpan(component, statements[statementErr.Index], spans[statementErr.Index], statementErr.Err)

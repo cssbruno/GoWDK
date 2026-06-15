@@ -42,7 +42,7 @@
 
   function callHelper(name, args, state, helpers, stack) {
     const helper = helpers && helpers[name];
-    if (!helper) return null;
+    if (!helper) throw new Error("unknown client helper function " + JSON.stringify(name));
     stack = stack || [];
     if (stack.indexOf(name) >= 0) throw new Error("recursive GOWDK helper " + name);
     const nextScope = Object.create(null);
@@ -54,32 +54,136 @@
 
   const builtins = Object.freeze({
     len(value) {
-      if (value == null) return 0;
+      expectArgCount("len", arguments.length, 1);
       if (typeof value === "string" || Array.isArray(value)) return value.length;
-      return 0;
+      throw new Error("built-in len expects string or array");
     },
     string(value) {
+      expectArgCount("string", arguments.length, 1);
       if (value == null) return "";
-      return String(value);
+      if (typeof value === "string" || typeof value === "boolean") return String(value);
+      if (isNumber(value)) return String(value);
+      throw new Error("built-in string expects scalar");
     },
     lower(value) {
-      return String(value == null ? "" : value).toLowerCase();
+      expectArgCount("lower", arguments.length, 1);
+      if (typeof value !== "string") throw new Error("built-in lower expects string");
+      return value.toLowerCase();
     },
     upper(value) {
-      return String(value == null ? "" : value).toUpperCase();
+      expectArgCount("upper", arguments.length, 1);
+      if (typeof value !== "string") throw new Error("built-in upper expects string");
+      return value.toUpperCase();
     },
     contains(value, query) {
-      return String(value == null ? "" : value).includes(String(query == null ? "" : query));
+      expectArgCount("contains", arguments.length, 2);
+      if (typeof value !== "string") throw new Error("built-in contains argument 1 expects string");
+      if (typeof query !== "string") throw new Error("built-in contains argument 2 expects string");
+      return value.includes(query);
     },
     int(value) {
-      const next = Number.parseInt(value, 10);
-      return Number.isNaN(next) ? 0 : next;
+      expectArgCount("int", arguments.length, 1);
+      return Math.trunc(conversionNumber("int", value));
     },
     float(value) {
-      const next = Number.parseFloat(value);
-      return Number.isNaN(next) ? 0 : next;
+      expectArgCount("float", arguments.length, 1);
+      return conversionNumber("float", value);
     }
   });
+
+  function expectArgCount(name, got, want) {
+    if (got === want) return;
+    throw new Error("built-in " + name + " expects " + want + " argument" + (want === 1 ? "" : "s") + ", got " + got);
+  }
+
+  function conversionNumber(name, value) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed === "") throw new Error("built-in " + name + " cannot parse " + JSON.stringify(value));
+      const parsed = Number(trimmed);
+      if (Number.isNaN(parsed)) throw new Error("built-in " + name + " cannot parse " + JSON.stringify(value));
+      return parsed;
+    }
+    if (isNumber(value)) return value;
+    throw new Error("built-in " + name + " expects string or number");
+  }
+
+  function isNumber(value) {
+    return typeof value === "number" && !Number.isNaN(value);
+  }
+
+  function requireNumber(op, value) {
+    if (isNumber(value)) return value;
+    throw new Error("operator " + op + " requires number");
+  }
+
+  function requireBool(op, value) {
+    if (typeof value === "boolean") return value;
+    throw new Error("operator " + op + " requires bool");
+  }
+
+  function clientObject(value) {
+    return value != null && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function own(value, name) {
+    return Object.prototype.hasOwnProperty.call(value, name);
+  }
+
+  function deepEqual(left, right) {
+    if (isNumber(left) && isNumber(right)) return left === right;
+    if (left === right) return true;
+    if (left == null || right == null) return left === right;
+    if (Array.isArray(left) || Array.isArray(right)) {
+      if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+      for (let index = 0; index < left.length; index++) {
+        if (!deepEqual(left[index], right[index])) return false;
+      }
+      return true;
+    }
+    if (clientObject(left) || clientObject(right)) {
+      if (!clientObject(left) || !clientObject(right)) return false;
+      const leftKeys = Object.keys(left);
+      const rightKeys = Object.keys(right);
+      if (leftKeys.length !== rightKeys.length) return false;
+      for (const key of leftKeys) {
+        if (!own(right, key) || !deepEqual(left[key], right[key])) return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function addValues(left, right) {
+    if (typeof left === "string") {
+      if (typeof right !== "string") throw new Error("operator + requires matching types");
+      return left + right;
+    }
+    if (!isNumber(left) || !isNumber(right)) throw new Error("operator + requires numbers");
+    return left + right;
+  }
+
+  function compareValues(op, left, right) {
+    if (typeof left === "string") {
+      if (typeof right !== "string") throw new Error("operator " + op + " requires matching types");
+      if (op === "<") return left < right;
+      if (op === "<=") return left <= right;
+      if (op === ">") return left > right;
+      return left >= right;
+    }
+    if (!isNumber(left) || !isNumber(right)) throw new Error("operator " + op + " requires numbers or strings");
+    if (op === "<") return left < right;
+    if (op === "<=") return left <= right;
+    if (op === ">") return left > right;
+    return left >= right;
+  }
+
+  function moduloValues(left, right) {
+    const leftNumber = requireNumber("%", left);
+    const rightNumber = requireNumber("%", right);
+    if (Math.trunc(rightNumber) === 0) throw new Error("operator % requires a non-zero divisor");
+    return Math.trunc(leftNumber) % Math.trunc(rightNumber);
+  }
 
   const expressionCache = Object.create(null);
 
@@ -334,17 +438,22 @@
       case "literal":
         return expr.value;
       case "ident":
-        if (scope && Object.prototype.hasOwnProperty.call(scope, expr.name)) return scope[expr.name];
-        if (Object.prototype.hasOwnProperty.call(state, expr.name)) return state[expr.name];
-        return undefined;
+        if (scope && own(scope, expr.name)) return scope[expr.name];
+        if (own(state, expr.name)) return state[expr.name];
+        throw new Error("unknown client value " + JSON.stringify(expr.name));
       case "member": {
         const target = evalExpression(expr.target, state, scope, helpers, stack);
-        return target == null ? undefined : target[expr.name];
+        if (!clientObject(target)) throw new Error("cannot read field " + JSON.stringify(expr.name));
+        if (!own(target, expr.name)) throw new Error("unknown client field " + JSON.stringify(expr.name));
+        return target[expr.name];
       }
       case "index": {
         const target = evalExpression(expr.target, state, scope, helpers, stack);
         const index = evalExpression(expr.index, state, scope, helpers, stack);
-        return target == null ? undefined : target[index];
+        if (!Number.isInteger(index)) throw new Error("index expression requires int");
+        if (!Array.isArray(target)) throw new Error("cannot index expression");
+        if (index < 0 || index >= target.length) throw new Error("index " + index + " out of range");
+        return target[index];
       }
       case "object": {
         const out = {};
@@ -360,51 +469,50 @@
       }
       case "unary": {
         const value = evalExpression(expr.expr, state, scope, helpers, stack);
-        if (expr.op === "!") return !Boolean(value);
-        if (expr.op === "-") return -Number(value);
-        return undefined;
+        if (expr.op === "!") return !requireBool("!", value);
+        if (expr.op === "-") return -requireNumber("-", value);
+        throw new Error("unsupported unary operator " + JSON.stringify(expr.op));
       }
       case "binary":
         return evalBinaryExpression(expr, state, scope, helpers, stack);
       case "if":
-        return Boolean(evalExpression(expr.cond, state, scope, helpers, stack))
+        return requireBool("if", evalExpression(expr.cond, state, scope, helpers, stack))
           ? evalExpression(expr.thenExpr, state, scope, helpers, stack)
           : evalExpression(expr.elseExpr, state, scope, helpers, stack);
       default:
-        return undefined;
+        throw new Error("unknown expression node");
     }
   }
 
   function evalBinaryExpression(expr, state, scope, helpers, stack) {
-    if (expr.op === "&&") return Boolean(evalExpression(expr.left, state, scope, helpers, stack)) && Boolean(evalExpression(expr.right, state, scope, helpers, stack));
-    if (expr.op === "||") return Boolean(evalExpression(expr.left, state, scope, helpers, stack)) || Boolean(evalExpression(expr.right, state, scope, helpers, stack));
     const left = evalExpression(expr.left, state, scope, helpers, stack);
     const right = evalExpression(expr.right, state, scope, helpers, stack);
     switch (expr.op) {
       case "==":
-        return left === right;
+        return deepEqual(left, right);
       case "!=":
-        return left !== right;
+        return !deepEqual(left, right);
       case "<":
-        return left < right;
       case "<=":
-        return left <= right;
       case ">":
-        return left > right;
       case ">=":
-        return left >= right;
+        return compareValues(expr.op, left, right);
       case "+":
-        return left + right;
+        return addValues(left, right);
       case "-":
-        return Number(left) - Number(right);
+        return requireNumber("-", left) - requireNumber("-", right);
       case "*":
-        return Number(left) * Number(right);
+        return requireNumber("*", left) * requireNumber("*", right);
       case "/":
-        return Number(left) / Number(right);
+        return requireNumber("/", left) / requireNumber("/", right);
       case "%":
-        return Number(left) % Number(right);
+        return moduloValues(left, right);
+      case "&&":
+        return requireBool("&&", left) && requireBool("&&", right);
+      case "||":
+        return requireBool("||", left) || requireBool("||", right);
       default:
-        return undefined;
+        throw new Error("unsupported binary operator " + JSON.stringify(expr.op));
     }
   }
 
@@ -567,6 +675,16 @@
     let emit = expr.match(/^emit\s+([A-Za-z_][A-Za-z0-9_]*)\((.*)\)$/);
     if (emit) {
       emitComponentEvent(root, emitEvents, emit[1], splitArgs(emit[2]), state, scope, helpers);
+      return;
+    }
+    let clearStore = expr.match(/^clear\s+([A-Za-z_][A-Za-z0-9_.]*)$/);
+    if (clearStore) {
+      const registry = window.__gowdkStores;
+      // The store registry is keyed by the unqualified store name (the page
+      // store's own name); a `use alias.store` reference carries a package
+      // qualifier that is not part of the registry/storage key, so drop it.
+      const storeName = clearStore[1].slice(clearStore[1].lastIndexOf(".") + 1);
+      if (registry && typeof registry.clear === "function") registry.clear(storeName);
       return;
     }
     let refCall = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)\.(Focus|Blur|ScrollIntoView)\(\)$/);

@@ -93,12 +93,31 @@
     return bindings;
   }
 
+  function storeNamesFor(root) {
+    const client = parseJSON(root.getAttribute("data-gowdk-client"), {});
+    return Array.isArray(client.stores) ? client.stores : [];
+  }
+
+  // mergedState reads the island's seed state and merges in the current value of
+  // every page store it `use`s, so a WASM island mounts and handles events with
+  // the shared (and persisted) store value rather than its build-time seed. This
+  // mirrors the JS island read path.
+  function mergedState(root) {
+    const state = parseJSON(root.getAttribute("data-gowdk-state"), {});
+    const registry = window.__gowdkStores;
+    if (registry) {
+      storeNamesFor(root).forEach((name) => Object.assign(state, registry.get(name)));
+    }
+    return state;
+  }
+
   function bootstrap(root) {
     const client = parseJSON(root.getAttribute("data-gowdk-client"), {});
     return {
       abiVersion,
       component,
-      state: parseJSON(root.getAttribute("data-gowdk-state"), {}),
+      state: mergedState(root),
+      stores: storeNamesFor(root),
       props: parseJSON(root.getAttribute("data-gowdk-props"), {}),
       emits: client.emits || {},
       refs: collectRefs(root),
@@ -136,6 +155,22 @@
     const patches = typeof result === "string" ? parseJSON(result, []) : result;
     if (!Array.isArray(patches)) return;
     patches.forEach((patch) => applyPatch(root, patch));
+  }
+
+  // normalizeResult accepts either the legacy bare patch array (or its JSON
+  // string) or an extended { patches, stores } object. The stores map lets a
+  // WASM island surface its current store-bound state so the loader can write it
+  // back to window.__gowdkStores, completing store participation (read + write).
+  function normalizeResult(result) {
+    const value = typeof result === "string" ? parseJSON(result, null) : result;
+    if (Array.isArray(value)) return { patches: value, stores: null };
+    if (value && typeof value === "object") {
+      return {
+        patches: Array.isArray(value.patches) ? value.patches : [],
+        stores: value.stores && typeof value.stores === "object" ? value.stores : null
+      };
+    }
+    return { patches: [], stores: null };
   }
 
   function callExport(exports, name, payload) {
@@ -207,9 +242,36 @@
       if (typeof console !== "undefined") console.error("GOWDK WASM island missing exports", missing.join(", "));
       return;
     }
+    const islandRegistry = window.__gowdkIslandRegistry || (window.__gowdkIslandRegistry = { components: Object.create(null), roots: new WeakMap() });
     roots.forEach((root) => {
-      const mountPayload = bootstrap(root);
-      applyPatches(root, callExport(exports, mountExport, mountPayload));
+      const registry = window.__gowdkStores;
+      const names = storeNamesFor(root);
+      // applyingStoreUpdate guards the write-back path while this island is being
+      // re-rendered in response to an external store change, so mirroring another
+      // island's update does not echo straight back into the registry.
+      let applyingStoreUpdate = false;
+      // publishingStores guards this island's own subscription while it writes a
+      // store, so its own write-back does not re-invoke mount on itself (other
+      // islands subscribed to the same store are still notified).
+      let publishingStores = false;
+      const processResult = (result) => {
+        const normalized = normalizeResult(result);
+        if (normalized.stores && registry && !applyingStoreUpdate) {
+          publishingStores = true;
+          try {
+            names.forEach((name) => {
+              if (Object.prototype.hasOwnProperty.call(normalized.stores, name)) {
+                registry.set(name, normalized.stores[name]);
+              }
+            });
+          } finally {
+            publishingStores = false;
+          }
+        }
+        applyPatches(root, normalized.patches);
+      };
+
+      processResult(callExport(exports, mountExport, bootstrap(root)));
       root.querySelectorAll("*").forEach((node) => {
         if (!ownsNode(root, node)) return;
         Array.from(node.attributes).forEach((attr) => {
@@ -218,13 +280,15 @@
           node.addEventListener(event, (domEvent) => {
             const span = traceStart("wasm island " + event);
             try {
-              applyPatches(root, callExport(exports, handleExport, {
+              processResult(callExport(exports, handleExport, {
                 abiVersion,
                 component,
                 event,
                 binding: attr.value,
                 traceparent: currentTraceparent(),
-                detail: { value: domEvent && domEvent.target ? domEvent.target.value : undefined }
+                detail: { value: domEvent && domEvent.target ? domEvent.target.value : undefined },
+                state: mergedState(root),
+                stores: names
               }));
               traceEnd(span, "ok");
             } catch (error) {
@@ -234,9 +298,36 @@
           });
         });
       });
-      window.addEventListener("pagehide", () => {
-        applyPatches(root, callExport(exports, destroyExport, { abiVersion, component, state: parseJSON(root.getAttribute("data-gowdk-state"), {}) }));
-      }, { once: true });
+      const unsubscribes = [];
+      if (registry && names.length > 0) {
+        names.forEach((name) => {
+          unsubscribes.push(registry.subscribe(name, () => {
+            // Skip our own write-back; only re-render for external changes.
+            if (publishingStores) return;
+            applyingStoreUpdate = true;
+            try {
+              processResult(callExport(exports, mountExport, bootstrap(root)));
+            } finally {
+              applyingStoreUpdate = false;
+            }
+          }));
+        });
+      }
+      // cleanup runs once on page unload (pagehide) and on SPA navigation teardown
+      // (__gowdkDestroyIslands looks the root up in the shared island registry). It
+      // unsubscribes the store listeners so a detached root no longer re-renders on
+      // later store changes, then runs the destroy export.
+      let destroyed = false;
+      const cleanup = () => {
+        if (destroyed) return;
+        destroyed = true;
+        unsubscribes.forEach((unsubscribe) => {
+          if (typeof unsubscribe === "function") unsubscribe();
+        });
+        processResult(callExport(exports, destroyExport, { abiVersion, component, state: mergedState(root), stores: names }));
+      };
+      islandRegistry.roots.set(root, cleanup);
+      window.addEventListener("pagehide", cleanup, { once: true });
     });
   }).catch((error) => {
     if (typeof console !== "undefined") console.error("GOWDK WASM island failed to start", component, error);

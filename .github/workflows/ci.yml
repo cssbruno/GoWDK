@@ -53,12 +53,7 @@ jobs:
         run: node --test editors/vscode/*.test.js
 
       - name: Check example files
-        run: |
-          examples="examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk"
-          go run ./cmd/gowdk check --ssr $examples
-          go run ./cmd/gowdk manifest --ssr $examples
-          go run ./cmd/gowdk sitemap --ssr $examples
-          go run ./cmd/gowdk routes --ssr $examples
+        run: sh scripts/check-example-reports.sh
 
       - name: Smoke build SPA example output
         run: |

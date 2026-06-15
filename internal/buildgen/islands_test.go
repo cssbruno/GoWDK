@@ -1408,7 +1408,7 @@ func TestBuildEmitsGoishConditionalExpressionsForJSIsland(t *testing.T) {
 	for _, expected := range []string{
 		`parseConditional()`,
 		`if (this.match("ident", "if"))`,
-		`return Boolean(evalExpression(expr.cond, state, scope, helpers, stack))`,
+		`return requireBool("if", evalExpression(expr.cond, state, scope, helpers, stack))`,
 	} {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated JS island runtime:\n%s", expected, js)
@@ -2082,14 +2082,16 @@ func TestBuildEmitsWASMIslandAssetsOnlyWhenExplicit(t *testing.T) {
 		`const handleExport = "GOWDKHandle" + component;`,
 		`const destroyExport = "GOWDKDestroy" + component;`,
 		`abiVersion,`,
-		`state: parseJSON(root.getAttribute("data-gowdk-state"), {}),`,
+		`state: mergedState(root),`,
+		`stores: storeNamesFor(root),`,
 		`props: parseJSON(root.getAttribute("data-gowdk-props"), {}),`,
 		`bindings: collectBindings(root)`,
-		`applyPatches(root, callExport(exports, mountExport, mountPayload));`,
+		`processResult(callExport(exports, mountExport, bootstrap(root)));`,
 		`node.addEventListener(event`,
 		`binding: attr.value,`,
-		`applyPatches(root, callExport(exports, handleExport`,
-		`applyPatches(root, callExport(exports, destroyExport`,
+		`registry.subscribe(name, () => {`,
+		`processResult(callExport(exports, handleExport`,
+		`processResult(callExport(exports, destroyExport`,
 		`if (patch.type === "setText" && node) node.textContent`,
 		`else if (patch.type === "setHidden" && node) node.hidden`,
 		`else if (patch.type === "replaceList" && node) node.innerHTML`,

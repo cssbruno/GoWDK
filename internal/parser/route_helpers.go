@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -103,55 +102,10 @@ func runeColumn(line string, byteOffset int) int {
 }
 
 func parseRouteDeclaration(route string, lineNumber int, rawLine string) (string, []source.RouteParam, []source.NamedSpan, error) {
-	matches := routeParamPattern.FindAllStringSubmatchIndex(route, -1)
-	if len(matches) == 0 {
-		return route, nil, nil, nil
-	}
-	routeStart := strings.Index(rawLine, route)
-	if routeStart < 0 {
-		routeStart = 0
-	}
-	normalizedParts := make([]string, 0, len(matches)*3+1)
-	last := 0
-	params := make([]source.RouteParam, 0, len(matches))
-	spans := make([]source.NamedSpan, 0, len(matches))
-	for _, match := range matches {
-		name := route[match[2]:match[3]]
-		paramType := "string"
-		if match[4] >= 0 && match[5] >= 0 {
-			paramType = route[match[4]:match[5]]
-		}
-		if !isSupportedRouteParamType(paramType) {
-			return "", nil, nil, fmt.Errorf("unsupported route parameter type %q for %s; supported types: string, int, int64, uint, uint64, bool, float64", paramType, name)
-		}
-		start := routeStart + match[0]
-		end := routeStart + match[1]
-		span := source.SourceSpan{
-			Start: source.SourcePosition{Line: lineNumber, Column: runeColumn(rawLine, start)},
-			End:   source.SourcePosition{Line: lineNumber, Column: runeColumn(rawLine, end)},
-		}
-		params = append(params, source.RouteParam{Name: name, Type: paramType, Span: span})
-		spans = append(spans, source.NamedSpan{
-			Name: name,
-			Span: span,
-		})
-		normalizedParts = append(normalizedParts, route[last:match[0]], "{", name, "}")
-		last = match[1]
-	}
-	normalizedParts = append(normalizedParts, route[last:])
-	return strings.Join(normalizedParts, ""), params, spans, nil
+	return source.ParseRouteDeclaration(route, lineNumber, rawLine)
 }
 
 func routeParamSpans(route string, lineNumber int, rawLine string) []source.NamedSpan {
 	_, _, spans, _ := parseRouteDeclaration(route, lineNumber, rawLine)
 	return spans
-}
-
-func isSupportedRouteParamType(value string) bool {
-	switch value {
-	case "string", "int", "int64", "uint", "uint64", "bool", "float64":
-		return true
-	default:
-		return false
-	}
 }

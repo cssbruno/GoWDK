@@ -3,100 +3,22 @@ package view
 import (
 	"sort"
 
-	"github.com/cssbruno/gowdk/internal/clientlang"
+	"github.com/cssbruno/gowdk/internal/viewanalysis"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
+	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
-// Attr is a literal HTML attribute.
-type Attr struct {
-	Name       string
-	Value      string
-	Boolean    bool
-	Expression bool
-	Spread     bool
-	Start      int
-	End        int
-}
-
-// Component is a literal component template known to the view renderer.
-type Component struct {
-	Name          string
-	Package       string
-	Uses          map[string]string
-	JS            []string
-	InlineJS      []InlineScript
-	ScopeIDs      []string
-	DefaultIsland string
-	Props         []string
-	PropTypes     map[string]clientlang.ValueType
-	PropDefaults  map[string]string
-	State         map[string]string
-	StateJSON     string
-	Handlers      map[string]clientlang.Handler
-	HandlersJSON  string
-	StateTypes    map[string]clientlang.ValueType
-	Refs          map[string]clientlang.Ref
-	Emits         map[string]clientlang.Emit
-	Exports       map[string]clientlang.ValueType
-	Computed      []clientlang.Computed
-	Body          string
-	Nodes         []Node
-}
-
-// InlineScript records browser module code declared directly inside a component
-// source file.
-type InlineScript struct {
-	Name string
-	Body string
-}
-
-// HasProp reports whether a component declares a prop.
-func (component Component) HasProp(name string) bool {
-	for _, prop := range component.Props {
-		if prop == name {
-			return true
-		}
-	}
-	return false
-}
-
-// HasStateField reports whether a component declares local browser state with
-// the given name.
-func (component Component) HasStateField(name string) bool {
-	if _, ok := component.State[name]; ok {
-		return true
-	}
-	if _, ok := component.StateTypes[name]; ok {
-		return true
-	}
-	return false
-}
-
-// PropType returns the declared scalar type for a prop. Components constructed
-// by older tests only populate Props; those props remain string-typed.
-func (component Component) PropType(name string) clientlang.ValueType {
-	if component.PropTypes != nil {
-		if typ, ok := component.PropTypes[name]; ok && typ != clientlang.TypeUnknown {
-			return typ
-		}
-	}
-	if component.HasProp(name) {
-		return clientlang.TypeString
-	}
-	return clientlang.TypeUnknown
-}
+type Attr = viewmodel.Attr
+type Component = viewmodel.Component
+type ComponentCall = viewmodel.ComponentCall
+type Element = viewmodel.Element
+type InlineScript = viewmodel.InlineScript
+type Node = viewmodel.Node
+type Text = viewmodel.Text
 
 // Parse parses a view markup fragment.
 func Parse(source string) ([]Node, error) {
-	parser := parser{source: []rune(source)}
-	nodes, err := parser.nodes("")
-	if err != nil {
-		return nil, err
-	}
-	parser.skipSpace()
-	if !parser.done() {
-		return nil, parser.errorf("unexpected content")
-	}
-	return nodes, nil
+	return viewparse.Parse(source)
 }
 
 // RenderSPA renders a view markup fragment with escaped text and attrs.
@@ -151,77 +73,21 @@ type ActionFormField struct {
 	PatternMessage   string
 }
 
-// Dependencies records source dependencies visible in the first view subset.
-type Dependencies struct {
-	Assets          []string
-	CSSClasses      []string
-	StyleAttributes []string
-}
-
-// ComponentIslandUsage records one component call that explicitly selects an
-// island runtime.
-type ComponentIslandUsage struct {
-	Component string
-	Mode      string
-}
-
-// ComponentCallUsage records one component call and its optional island mode.
-type ComponentCallUsage struct {
-	Component     string
-	Island        string
-	ReactiveProps bool
-}
-
-// ComponentReference records one component call with source offsets.
-type ComponentReference struct {
-	Name  string
-	Start int
-	End   int
-}
-
-// ContractReference records one template-local backend contract intent.
-type ContractReference struct {
-	Kind   ContractReferenceKind
-	Name   string
-	Method string
-	Path   string
-	Start  int
-	End    int
-}
-
-type ContractReferenceKind string
+type Dependencies = viewanalysis.Dependencies
+type ComponentIslandUsage = viewanalysis.ComponentIslandUsage
+type ComponentCallUsage = viewanalysis.ComponentCallUsage
+type ComponentReference = viewanalysis.ComponentReference
+type ContractReference = viewanalysis.ContractReference
+type ContractReferenceKind = viewanalysis.ContractReferenceKind
 
 const (
-	ContractReferenceCommand ContractReferenceKind = "command"
-	ContractReferenceQuery   ContractReferenceKind = "query"
+	ContractReferenceCommand = viewanalysis.ContractReferenceCommand
+	ContractReferenceQuery   = viewanalysis.ContractReferenceQuery
 )
 
-// CommandReference records one form-local backend command intent.
-type CommandReference struct {
-	Command string
-	Method  string
-	Path    string
-	Start   int
-	End     int
-}
-
-// QueryReference records one template-local backend query intent.
-type QueryReference struct {
-	Query string
-	Start int
-	End   int
-}
-
-// SubscriptionReference records one query-bounded presentation-event
-// subscription intent.
-type SubscriptionReference struct {
-	Query      string
-	QueryStart int
-	QueryEnd   int
-	Event      string
-	EventStart int
-	EventEnd   int
-}
+type CommandReference = viewanalysis.CommandReference
+type QueryReference = viewanalysis.QueryReference
+type SubscriptionReference = viewanalysis.SubscriptionReference
 
 // RenderWithOptions renders a view markup fragment with component support,
 // interpolation data, and page-scoped action endpoints.
@@ -278,25 +144,13 @@ func ActionFormFields(source string) (map[string][]string, error) {
 // ViewDependencies returns direct literal asset and style references from a
 // view markup fragment. Interpolated and external URLs are not reported.
 func ViewDependencies(source string) (Dependencies, error) {
-	nodes, err := Parse(source)
-	if err != nil {
-		return Dependencies{}, err
-	}
-	return ViewDependenciesFromNodes(nodes), nil
+	return viewanalysis.ViewDependencies(source)
 }
 
 // ViewDependenciesFromNodes returns direct literal asset and style references
 // from an already-parsed view fragment.
 func ViewDependenciesFromNodes(nodes []Node) Dependencies {
-	assets := map[string]bool{}
-	classes := map[string]bool{}
-	styles := map[string]bool{}
-	collectViewDependencies(nodes, assets, classes, styles)
-	return Dependencies{
-		Assets:          sortedKeys(assets),
-		CSSClasses:      sortedKeys(classes),
-		StyleAttributes: sortedKeys(styles),
-	}
+	return viewanalysis.ViewDependenciesFromNodes(nodes)
 }
 
 // ActionFormSchema returns direct literal HTML controls grouped by g:post action
@@ -334,175 +188,98 @@ func ActionFormSchemaFromNodes(nodes []Node) (map[string][]ActionFormField, erro
 // ComponentReferences returns unique component names directly referenced by a
 // view markup fragment.
 func ComponentReferences(source string) ([]string, error) {
-	refs, err := ComponentReferenceSpans(source)
-	if err != nil {
-		return nil, err
-	}
-	return componentReferenceNames(refs), nil
+	return viewanalysis.ComponentReferences(source)
 }
 
 // ComponentReferencesFromNodes returns unique component names directly
 // referenced by an already-parsed view fragment.
 func ComponentReferencesFromNodes(nodes []Node) []string {
-	return componentReferenceNames(ComponentReferenceSpansFromNodes(nodes))
-}
-
-func componentReferenceNames(refs []ComponentReference) []string {
-	if len(refs) == 0 {
-		return nil
-	}
-	names := map[string]bool{}
-	for _, ref := range refs {
-		names[ref.Name] = true
-	}
-	out := make([]string, 0, len(names))
-	for name := range names {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
+	return viewanalysis.ComponentReferencesFromNodes(nodes)
 }
 
 // ComponentReferenceSpans returns component calls directly referenced by a view
 // markup fragment, preserving source offsets for diagnostics.
 func ComponentReferenceSpans(source string) ([]ComponentReference, error) {
-	nodes, err := Parse(source)
-	if err != nil {
-		return nil, err
-	}
-	return ComponentReferenceSpansFromNodes(nodes), nil
+	return viewanalysis.ComponentReferenceSpans(source)
 }
 
 // ComponentReferenceSpansFromNodes returns component calls from an already-
 // parsed view fragment, preserving source offsets for diagnostics.
 func ComponentReferenceSpansFromNodes(nodes []Node) []ComponentReference {
-	var refs []ComponentReference
-	collectComponentReferences(nodes, &refs)
-	if len(refs) == 0 {
-		return nil
-	}
-	return refs
+	return viewanalysis.ComponentReferenceSpansFromNodes(nodes)
 }
 
 // ComponentIslandUsages returns component calls that explicitly set g:island.
 func ComponentIslandUsages(source string) ([]ComponentIslandUsage, error) {
-	nodes, err := Parse(source)
-	if err != nil {
-		return nil, err
-	}
-	return ComponentIslandUsagesFromNodes(nodes)
+	return viewanalysis.ComponentIslandUsages(source)
 }
 
 // ComponentIslandUsagesFromNodes returns component calls that explicitly set
 // g:island in an already-parsed view fragment.
 func ComponentIslandUsagesFromNodes(nodes []Node) ([]ComponentIslandUsage, error) {
-	var usages []ComponentIslandUsage
-	if err := collectComponentIslandUsages(nodes, &usages); err != nil {
-		return nil, err
-	}
-	return usages, nil
+	return viewanalysis.ComponentIslandUsagesFromNodes(nodes)
 }
 
 // ComponentCallUsages returns component calls with optional g:island metadata.
 func ComponentCallUsages(source string) ([]ComponentCallUsage, error) {
-	nodes, err := Parse(source)
-	if err != nil {
-		return nil, err
-	}
-	return ComponentCallUsagesFromNodes(nodes)
+	return viewanalysis.ComponentCallUsages(source)
 }
 
 // ComponentCallUsagesFromNodes returns component calls with optional g:island
 // metadata from an already-parsed view fragment.
 func ComponentCallUsagesFromNodes(nodes []Node) ([]ComponentCallUsage, error) {
-	var usages []ComponentCallUsage
-	if err := collectComponentCallUsages(nodes, &usages); err != nil {
-		return nil, err
-	}
-	return usages, nil
+	return viewanalysis.ComponentCallUsagesFromNodes(nodes)
 }
 
 // CommandReferences returns package-qualified command references declared by
 // g:command on direct form elements in a view fragment.
 func CommandReferences(source string) ([]CommandReference, error) {
-	nodes, err := Parse(source)
-	if err != nil {
-		return nil, err
-	}
-	return CommandReferencesFromNodes(nodes)
+	return viewanalysis.CommandReferences(source)
 }
 
 // CommandReferencesFromNodes returns package-qualified command references
 // declared by g:command on direct form elements in an already-parsed view
 // fragment.
 func CommandReferencesFromNodes(nodes []Node) ([]CommandReference, error) {
-	var refs []CommandReference
-	if err := collectCommandReferences(nodes, &refs); err != nil {
-		return nil, err
-	}
-	return refs, nil
+	return viewanalysis.CommandReferencesFromNodes(nodes)
 }
 
 // QueryReferences returns package-qualified query references declared by
 // g:query on direct HTML elements in a view fragment.
 func QueryReferences(source string) ([]QueryReference, error) {
-	nodes, err := Parse(source)
-	if err != nil {
-		return nil, err
-	}
-	return QueryReferencesFromNodes(nodes)
+	return viewanalysis.QueryReferences(source)
 }
 
 // QueryReferencesFromNodes returns package-qualified query references declared
 // by g:query on direct HTML elements in an already-parsed view fragment.
 func QueryReferencesFromNodes(nodes []Node) ([]QueryReference, error) {
-	var refs []QueryReference
-	if err := collectQueryReferences(nodes, &refs); err != nil {
-		return nil, err
-	}
-	return refs, nil
+	return viewanalysis.QueryReferencesFromNodes(nodes)
 }
 
 // SubscriptionReferences returns package-qualified presentation-event
 // references declared by g:subscribe on query-owned elements.
 func SubscriptionReferences(source string) ([]SubscriptionReference, error) {
-	nodes, err := Parse(source)
-	if err != nil {
-		return nil, err
-	}
-	return SubscriptionReferencesFromNodes(nodes)
+	return viewanalysis.SubscriptionReferences(source)
 }
 
 // SubscriptionReferencesFromNodes returns package-qualified presentation-event
 // references declared by g:subscribe on query-owned elements in an
 // already-parsed view fragment.
 func SubscriptionReferencesFromNodes(nodes []Node) ([]SubscriptionReference, error) {
-	var refs []SubscriptionReference
-	if err := collectSubscriptionReferences(nodes, &refs); err != nil {
-		return nil, err
-	}
-	return refs, nil
+	return viewanalysis.SubscriptionReferencesFromNodes(nodes)
 }
 
 // ContractReferences returns package-qualified command and query references
 // declared by GOWDK view directives.
 func ContractReferences(source string) ([]ContractReference, error) {
-	nodes, err := Parse(source)
-	if err != nil {
-		return nil, err
-	}
-	return ContractReferencesFromNodes(nodes)
+	return viewanalysis.ContractReferences(source)
 }
 
 // ContractReferencesFromNodes returns package-qualified command and query
 // references declared by GOWDK view directives in an already-parsed view
 // fragment.
 func ContractReferencesFromNodes(nodes []Node) ([]ContractReference, error) {
-	var refs []ContractReference
-	if err := collectContractReferences(nodes, &refs); err != nil {
-		return nil, err
-	}
-	return refs, nil
+	return viewanalysis.ContractReferencesFromNodes(nodes)
 }
 
 // Canonical returns a deterministic AST-backed representation of a view body.

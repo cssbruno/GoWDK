@@ -504,9 +504,9 @@ including nacked-batch backoff, through to `runtime/contracts`.
 
 These helpers are deliberately local process APIs. Use them from the generated
 binary, a user-owned worker or cron command, or a test fixture. Generated
-worker/cron binaries, supervisor configs, queue topology, and managed
-deployment recipes are future platform tooling, not part of the milestone-14
-runtime contract.
+worker/cron binaries, supervisor configs, queue topology, and deployment
+recipe starters are platform tooling, not part of the milestone-14 runtime
+contract.
 
 ## Worker Backoff
 
@@ -1041,8 +1041,8 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Page-owned generated query routes use JSON/query request negotiation so they
   do not replace normal static, SPA, or SSR page responses.
 - Cross-package contract input field discovery remains planned.
-- Separate web/worker/cron binary generators and managed deployment recipes
-  remain planned platform tooling. User-owned worker and cron commands can use
+- Separate web/worker/cron binary generators remain planned platform tooling.
+  User-owned worker and cron commands can use
   `NewContractRegistry`, `RunContractEventWorker*`, and
   `contracts.ExecuteJobForRole` with the same registrations today. Schedule
   ownership, overlap prevention, durable retry operations, failure reporting,

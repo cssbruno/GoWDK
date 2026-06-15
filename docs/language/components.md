@@ -320,6 +320,32 @@ client store reference such as `client { use stores.cart }`. Cross-package
 stores are validated by alias and store name, not discovered globally.
 App-global stores are deferred.
 
+A `use` can carry the store's Go type so the component can reference the store's
+fields directly, without redeclaring a matching `state` shape:
+
+```gwdk
+component CartBadge
+
+client {
+  use cart ui.CartState
+
+  computed Label string { return string(Count) }
+}
+
+view {
+  <span>{Label}</span>
+}
+```
+
+`use cart ui.CartState` binds `CartState`'s fields (here `Count`) into the
+component's client scope. The type is resolved against the component's own
+imports, so a reusable component stays self-describing even when different pages
+declare a same-named store; the annotated type is the component's contract for
+the store's shape, exactly as a local `state` declaration was. The island seeds
+those fields with the type's zero values for SSR and adopts the store's real
+(init or persisted) value on mount; keep a local `state <Type> = <init>` if you
+need the store's init value reflected in the server-rendered HTML.
+
 A page store can opt into browser persistence with a `persist` modifier:
 
 ```gwdk
@@ -346,10 +372,24 @@ state server-side. An unknown scope is rejected — see
 on the origin mirror the value through the browser `storage` event. `persist
 "session"` stores are deliberately tab-local — `sessionStorage` is partitioned
 per top-level tab, so session-scoped stores do not (and cannot) sync across tabs.
-To drop a persisted
-store (for example after checkout or logout), call
-`window.__gowdkStores.clear("<name>")`, which removes the stored copy and resets
-the store to its build-time init value. If two pages persist a store with the
+To drop a persisted store (for example after checkout or logout), use the
+bounded `clear <store>` statement inside a client function, mount, destroy, or
+effect block:
+
+```gwdk
+client {
+  use cart
+
+  func Checkout() {
+    clear cart
+  }
+}
+```
+
+`clear cart` lowers to `window.__gowdkStores.clear("cart")`, which removes the
+stored copy and resets the store to its build-time init value, notifying every
+island that uses it. A component may only clear a store it `use`s; clearing an
+unused store is a compile error. If two pages persist a store with the
 same name but different shapes, they share one storage key and discard each
 other's data on navigation; the compiler warns with
 `page_store_persist_key_conflict`. If they share the same shape but declare
@@ -362,13 +402,16 @@ Persistence survives SPA navigation: when the client runtime swaps page content
 it re-scans store seeds, so a store first declared on a later client-side route
 hydrates without a full page load, and a store already in memory keeps its value.
 
-Current limits. Persistence is a JS-island/store-runtime feature: WASM islands
-do not yet participate in page stores, so a WASM-only island will not read or
-write a persisted store. Because a component references store fields through its
-own `state` declaration (`use <name>` syncs that field with the store), a
-component that reads a persisted store still declares a matching `state` shape.
-Invalid scopes are reported but not auto-fixed, because choosing `local` vs
-`session` is a deliberate decision.
+WASM islands participate in page stores too. The host loader merges every used
+store's current (and persisted) value into the mount/handle/destroy payload's
+`state`, writes back any store values an export returns in the extended
+`{ patches, stores }` result shape, and re-invokes the island when another island
+changes a used store. Surfacing serialized state from the Go `uint32` export
+contract — so a Go island can return that `stores` map — is the remaining Go-side
+ABI work; see `examples/components/wasm/README.md`.
+
+Current limits. Invalid persist scopes are reported but not auto-fixed, because
+choosing `local` vs `session` is a deliberate decision.
 
 Exports must reference a declared prop, state field, or computed value and the
 declared type must match that local symbol. Generated JavaScript islands emit

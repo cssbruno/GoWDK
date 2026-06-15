@@ -1,6 +1,9 @@
 package validation
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestResultOK(t *testing.T) {
 	if !(Result{}).OK() {
@@ -60,6 +63,9 @@ func TestMatchPattern(t *testing.T) {
 		{`\w+@\w+[.]\w{2,4}`, "me@example.dev", true},
 		{`[\dA-F]+`, "19AF", true},
 		{`[\dA-F]+`, "19AG", false},
+		{`\b`, "b", true},
+		{`\q`, "q", true},
+		{`[A-F0-9]{1024}`, strings.Repeat("A", 1024), true},
 	}
 
 	for _, test := range tests {
@@ -74,7 +80,82 @@ func TestMatchPattern(t *testing.T) {
 }
 
 func TestValidatePatternRejectsUnsupportedOperators(t *testing.T) {
-	if err := ValidatePattern(`(?=a)`); err == nil {
-		t.Fatal("expected unsupported lookahead pattern to fail")
+	tests := []string{
+		`(?=a)`,
+		`(?P<name>a)`,
+		`a+?`,
+		`[\D]`,
+		`\pL+`,
+		`[[:alpha:]]+`,
+	}
+	for _, test := range tests {
+		if err := ValidatePattern(test); err == nil {
+			t.Fatalf("expected unsupported pattern %q to fail", test)
+		}
+	}
+}
+
+func TestMatchPatternTreatsInnerAnchorsAsLiterals(t *testing.T) {
+	tests := []struct {
+		pattern string
+		value   string
+		want    bool
+	}{
+		{`a^b`, "a^b", true},
+		{`a^b`, "ab", false},
+		{`a$b`, "a$b", true},
+		{`a$b`, "ab", false},
+	}
+	for _, test := range tests {
+		got, err := MatchPattern(test.pattern, test.value)
+		if err != nil {
+			t.Fatalf("MatchPattern(%q, %q) error: %v", test.pattern, test.value, err)
+		}
+		if got != test.want {
+			t.Fatalf("MatchPattern(%q, %q) = %v, want %v", test.pattern, test.value, got, test.want)
+		}
+	}
+	if err := ValidatePattern(`(?P<name>a)`); err == nil {
+		t.Fatal("expected unsupported named capture pattern to fail")
+	}
+	if err := ValidatePattern(`a+?`); err == nil {
+		t.Fatal("expected unsupported lazy quantifier pattern to fail")
+	}
+	if err := ValidatePattern(`[\D]`); err == nil {
+		t.Fatal("expected unsupported class shorthand pattern to fail")
+	}
+}
+
+func TestMatchPatternSupportsLongRepeatQuantifiers(t *testing.T) {
+	if err := ValidatePattern(`[A-Za-z0-9]{2048}`); err != nil {
+		t.Fatalf("validate long exact repeat: %v", err)
+	}
+	got, err := MatchPattern(`[A-Za-z0-9]{2048}`, strings.Repeat("A", 2048))
+	if err != nil {
+		t.Fatalf("match long exact repeat: %v", err)
+	}
+	if !got {
+		t.Fatal("expected 2048-character value to match")
+	}
+	got, err = MatchPattern(`[A-Za-z0-9]{2048}`, strings.Repeat("A", 2047))
+	if err != nil {
+		t.Fatalf("match short exact repeat: %v", err)
+	}
+	if got {
+		t.Fatal("expected 2047-character value not to match")
+	}
+	got, err = MatchPattern(`(?:cat|dog){1001,1002}`, strings.Repeat("cat", 1002))
+	if err != nil {
+		t.Fatalf("match long grouped repeat: %v", err)
+	}
+	if !got {
+		t.Fatal("expected grouped repeat to match")
+	}
+	got, err = MatchPattern(`a{1001,}`, strings.Repeat("a", 1200))
+	if err != nil {
+		t.Fatalf("match long open repeat: %v", err)
+	}
+	if !got {
+		t.Fatal("expected open repeat to match")
 	}
 }

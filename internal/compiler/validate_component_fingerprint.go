@@ -2,12 +2,13 @@ package compiler
 
 import (
 	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/view"
-	"sort"
-	"strings"
+	"github.com/cssbruno/gowdk/internal/viewanalysis"
 )
 
 func validateRedundantComponents(components []gwdkir.Component) []ValidationError {
@@ -83,7 +84,7 @@ func componentStateFingerprint(component gwdkir.Component) string {
 }
 
 func componentViewFingerprint(component gwdkir.Component) string {
-	canonical, err := view.Canonical(component.Blocks.ViewBody)
+	canonical, err := viewanalysis.Canonical(component.Blocks.ViewBody)
 	if err == nil {
 		return canonical
 	}

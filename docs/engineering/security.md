@@ -63,14 +63,14 @@ CSRF, and APIs must not be public by omission. Findings carry a stable
 diagnostic code, a `file:line`, and remediation; run `gowdk explain <code>` for
 details.
 
-`gowdk audit` is a standalone command. `gowdk build` never runs it, so it cannot
-fail a build implicitly; run it on demand or in CI, where its non-zero exit on
-error findings gates the pipeline. It is the auditable, human- and
-LLM-readable view of how close generated output is to these gates. The audit
-also reads declared `*.audit.gwdk` policies, checks frontend risks such as
-bundle secrets and raw-HTML sinks, can emit readable standalone runtime tests
-with `gowdk audit --emit-tests`, and can run generated-app runtime tests with
-`gowdk audit --run`.
+`gowdk build` evaluates the same static baseline before writing output.
+Production builds fail on error-severity findings unless `--allow-insecure` is
+set; non-production builds print a prominent warning summary without blocking
+local iteration. `gowdk audit` remains the explicit report and CI surface: it
+prints the full human/JSON report, reads declared `*.audit.gwdk` policies,
+checks frontend risks such as bundle secrets and raw-HTML sinks, can emit
+readable standalone runtime tests with `gowdk audit --emit-tests`, and can run
+generated-app runtime tests with `gowdk audit --run`.
 
 ## Security Review Triggers
 

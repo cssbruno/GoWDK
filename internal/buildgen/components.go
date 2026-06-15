@@ -342,39 +342,121 @@ func componentProps(component gwdkir.Component) ([]string, map[string]clientlang
 }
 
 func componentInitialState(component gwdkir.Component) (map[string]string, map[string]clientlang.ValueType, string, error) {
-	if component.State.Type.Name == "" {
-		return nil, nil, "", nil
-	}
-	resolved, err := gotypes.ResolveStruct(component.Imports, component.State.Type)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	rawJSON, err := gotypes.RunStateInitJSON(component.Imports, component.State)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	var raw map[string]any
-	if err := json.Unmarshal(rawJSON, &raw); err != nil {
-		return nil, nil, "", fmt.Errorf("decode state JSON: %w", err)
-	}
 	state := map[string]string{}
 	stateTypes := map[string]clientlang.ValueType{}
-	for _, field := range resolved.Fields {
-		value, ok := raw[field.Name]
-		if !ok {
-			return nil, nil, "", fmt.Errorf("init JSON missing field %q", field.Name)
+	raw := map[string]any{}
+	stateJSON := ""
+
+	if component.State.Type.Name != "" {
+		resolved, err := gotypes.ResolveStruct(component.Imports, component.State.Type)
+		if err != nil {
+			return nil, nil, "", err
 		}
-		scalar, ok := stateValueString(value)
-		if !ok {
-			return nil, nil, "", fmt.Errorf("field %s must initialize to JSON-compatible state", field.Name)
+		rawJSON, err := gotypes.RunStateInitJSON(component.Imports, component.State)
+		if err != nil {
+			return nil, nil, "", err
 		}
-		state[field.Name] = scalar
-		stateTypes[field.Name] = clientlang.NormalizeType(field.Type)
+		if err := json.Unmarshal(rawJSON, &raw); err != nil {
+			return nil, nil, "", fmt.Errorf("decode state JSON: %w", err)
+		}
+		for _, field := range resolved.Fields {
+			value, ok := raw[field.Name]
+			if !ok {
+				return nil, nil, "", fmt.Errorf("init JSON missing field %q", field.Name)
+			}
+			scalar, ok := stateValueString(value)
+			if !ok {
+				return nil, nil, "", fmt.Errorf("field %s must initialize to JSON-compatible state", field.Name)
+			}
+			state[field.Name] = scalar
+			stateTypes[field.Name] = clientlang.NormalizeType(field.Type)
+		}
+		for field, typ := range resolved.FieldTypes {
+			stateTypes[field] = clientlang.NormalizeType(typ)
+		}
+		stateJSON = string(rawJSON)
 	}
-	for field, typ := range resolved.FieldTypes {
-		stateTypes[field] = clientlang.NormalizeType(typ)
+
+	// A typed `use <store> <Type>` declaration contributes the store's fields to
+	// the island seed so SSR and the initial client state carry the right shape;
+	// the store registry merges its actual (init or persisted) value on mount.
+	added, err := mergeComponentStoreSeed(component, state, stateTypes, raw)
+	if err != nil {
+		return nil, nil, "", err
 	}
-	return state, stateTypes, string(rawJSON), nil
+	if len(state) == 0 && !added {
+		return nil, nil, "", nil
+	}
+	// Preserve the exact state init serialization when no store fields were added,
+	// so existing state-only components keep their generated seed verbatim.
+	if added {
+		merged, err := json.Marshal(raw)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		stateJSON = string(merged)
+	}
+	return state, stateTypes, stateJSON, nil
+}
+
+// mergeComponentStoreSeed adds zero-value seeds for the fields of any typed
+// `use <store> <Type>` declaration that are not already seeded by a local state
+// contract. It reports whether any field was added so the caller knows to
+// re-marshal the seed JSON. Type-resolution failures are reported by contract
+// validation, so they are swallowed here.
+func mergeComponentStoreSeed(component gwdkir.Component, state map[string]string, stateTypes map[string]clientlang.ValueType, raw map[string]any) (bool, error) {
+	if strings.TrimSpace(component.Blocks.ClientBody) == "" {
+		return false, nil
+	}
+	program, err := clientlang.Parse(component.Blocks.ClientBody)
+	if err != nil {
+		return false, nil
+	}
+	added := false
+	for _, use := range program.Uses {
+		if use.Type == "" {
+			continue
+		}
+		resolved, err := gotypes.ResolveStruct(component.Imports, gwdkir.GoRefFromLiteral(use.Type))
+		if err != nil {
+			continue
+		}
+		for _, field := range resolved.Fields {
+			if _, exists := raw[field.Name]; exists {
+				continue
+			}
+			typ := clientlang.NormalizeType(field.Type)
+			zero := zeroStateValue(typ)
+			raw[field.Name] = zero
+			scalar, _ := stateValueString(zero)
+			state[field.Name] = scalar
+			stateTypes[field.Name] = typ
+			added = true
+		}
+		for field, typ := range resolved.FieldTypes {
+			if _, exists := stateTypes[field]; !exists {
+				stateTypes[field] = clientlang.NormalizeType(typ)
+			}
+		}
+	}
+	return added, nil
+}
+
+func zeroStateValue(typ clientlang.ValueType) any {
+	switch typ {
+	case clientlang.TypeInt, clientlang.TypeFloat:
+		return float64(0)
+	case clientlang.TypeBool:
+		return false
+	case clientlang.TypeString:
+		return ""
+	case clientlang.TypeArray:
+		return []any{}
+	case clientlang.TypeObject:
+		return map[string]any{}
+	default:
+		return nil
+	}
 }
 
 func stateValueString(value any) (string, bool) {

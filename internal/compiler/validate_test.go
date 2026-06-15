@@ -1031,6 +1031,249 @@ func TestValidateManifestAcceptsQualifiedComponentStoreUse(t *testing.T) {
 	}
 }
 
+func TestValidateManifestAllowsTypedUseStoreFieldsWithoutState(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "shop",
+			ID:      "shop",
+			Route:   "/shop",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []gwdkir.Store{{
+				Name: "cart",
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+			}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Shop</main>`},
+		}},
+		Components: []gwdkir.Component{{
+			Package: "shop",
+			Name:    "CartBadge",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Blocks: gwdkir.Blocks{
+				Client: true,
+				// No `state` declaration: the typed `use` binds CounterState's
+				// fields (Count) into the client scope.
+				ClientBody: `use cart ui.CounterState
+
+computed Label string {
+  return string(Count)
+}`,
+				View:     true,
+				ViewBody: `<span>{Label}</span>`,
+			},
+		}},
+	}
+
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("typed use should bind store fields without a state decl, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsUnknownFieldWithoutTypedUse(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "shop",
+			ID:      "shop",
+			Route:   "/shop",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []gwdkir.Store{{
+				Name: "cart",
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+			}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Shop</main>`},
+		}},
+		Components: []gwdkir.Component{{
+			Package: "shop",
+			Name:    "CartBadge",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Blocks: gwdkir.Blocks{
+				Client: true,
+				// Plain `use cart` (no type) still does not introduce fields.
+				ClientBody: `use cart
+
+computed Label string {
+  return string(Count)
+}`,
+				View:     true,
+				ViewBody: `<span>{Label}</span>`,
+			},
+		}},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown field diagnostic without a typed use")
+	}
+	if !strings.Contains(err.Error(), "Count") {
+		t.Fatalf("expected an unknown-field error mentioning Count, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsInvalidTypedUseStoreType(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "shop",
+			ID:      "shop",
+			Route:   "/shop",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []gwdkir.Store{{
+				Name: "cart",
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+			}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Shop</main>`},
+		}},
+		Components: []gwdkir.Component{{
+			Package: "shop",
+			Name:    "CartBadge",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Blocks: gwdkir.Blocks{
+				Client:     true,
+				ClientBody: `use cart ui.NoSuchType`,
+				View:       true,
+				ViewBody:   `<span>x</span>`,
+			},
+		}},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected diagnostic for an unresolvable store type annotation")
+	}
+	if !hasDiagnosticCode(err.(ValidationErrors), "component_client_error") || !strings.Contains(err.Error(), "NoSuchType") {
+		t.Fatalf("unexpected diagnostics: %v", err)
+	}
+}
+
+func TestValidateManifestRejectsTypedUseConflictingWithLocalState(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "shop",
+			ID:      "shop",
+			Route:   "/shop",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []gwdkir.Store{{
+				Name: "cart",
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+			}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Shop</main>`},
+		}},
+		Components: []gwdkir.Component{{
+			Package: "shop",
+			Name:    "CartBadge",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			// Local state's Count is a string; the used store's CounterState
+			// declares Count as int. The overlap must be rejected, not silently
+			// overwritten.
+			State: gwdkir.StateContract{
+				Type: gwdkir.GoRef{Alias: "ui", Name: "StringCountState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewStringCountState"},
+			},
+			Blocks: gwdkir.Blocks{
+				Client:     true,
+				ClientBody: `use cart ui.CounterState`,
+				View:       true,
+				ViewBody:   `<span>{Count}</span>`,
+			},
+		}},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected diagnostic for store/state field type mismatch")
+	}
+	if !hasDiagnosticCode(err.(ValidationErrors), "component_client_error") || !strings.Contains(err.Error(), `field "Count"`) {
+		t.Fatalf("unexpected diagnostics: %v", err)
+	}
+}
+
+func TestValidateManifestAllowsClearOfUsedStore(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "shop",
+			ID:      "shop",
+			Route:   "/shop",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []gwdkir.Store{{
+				Name: "cart",
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+			}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Shop</main>`},
+		}},
+		Components: []gwdkir.Component{{
+			Package: "shop",
+			Name:    "CartButton",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			State: gwdkir.StateContract{
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+			},
+			Blocks: gwdkir.Blocks{
+				Client: true,
+				ClientBody: `use cart
+
+fn Checkout() {
+  clear cart
+}`,
+				View:     true,
+				ViewBody: `<button g:on:click={Checkout()}>Checkout</button>`,
+			},
+		}},
+	}
+
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("clear of a used store should validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsClearOfUnusedStore(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			Package: "shop",
+			ID:      "shop",
+			Route:   "/shop",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []gwdkir.Store{{
+				Name: "cart",
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+			}},
+			Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>Shop</main>`},
+		}},
+		Components: []gwdkir.Component{{
+			Package: "shop",
+			Name:    "CartButton",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			State: gwdkir.StateContract{
+				Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+			},
+			Blocks: gwdkir.Blocks{
+				Client: true,
+				ClientBody: `use cart
+
+fn Checkout() {
+  clear prefs
+}`,
+				View:     true,
+				ViewBody: `<button g:on:click={Checkout()}>Checkout</button>`,
+			},
+		}},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected diagnostic for clearing an unused store")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), `clear references store "prefs"`) {
+		t.Fatalf("unexpected diagnostics: %v", err)
+	}
+}
+
 func TestValidateManifestRejectsUnknownQualifiedComponentStoreUseAlias(t *testing.T) {
 	app := appFixture{
 		Pages: []gwdkir.Page{{
@@ -2275,6 +2518,9 @@ func TestValidateManifestRejectsUnboundUsedDOMRef(t *testing.T) {
 fn FocusSearch() {
   searchInput.Focus()
 }`,
+			Spans: gwdkir.BlockSpans{
+				Client: testSourceSpan(10, 1, 14, 2),
+			},
 			View:     true,
 			ViewBody: `<button g:on:click={FocusSearch()}>Focus</button>`,
 		},
@@ -2288,6 +2534,8 @@ fn FocusSearch() {
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
+	diagnostic := firstDiagnostic(diagnostics, "component_client_error")
+	assertSourceSpan(t, diagnostic.Span, 14, 1, 14, 2)
 }
 
 func TestValidateManifestAllowsGIfBoolExpression(t *testing.T) {

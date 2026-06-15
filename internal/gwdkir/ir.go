@@ -3,9 +3,11 @@
 package gwdkir
 
 import (
+	"strings"
+
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
 )
 
 // Program is the normalized compiler IR produced from analyzed .gwdk sources.
@@ -138,7 +140,7 @@ type Blocks struct {
 	GoBlocks     []GoBlock
 	View         bool
 	ViewBody     string
-	ViewNodes    []view.Node `json:"-"`
+	ViewNodes    []viewmodel.Node `json:"-"`
 	Style        bool
 	StyleBody    string
 	Actions      []Action
@@ -345,6 +347,17 @@ type GoRef struct {
 	Span  source.SourceSpan
 }
 
+// GoRefFromLiteral parses a Go type literal such as "ui.CartState" or
+// "CartState" into a GoRef. A single "pkg.Name" qualifier becomes the alias and
+// name; an unqualified literal sets only the name (same-package type).
+func GoRefFromLiteral(literal string) GoRef {
+	literal = strings.TrimSpace(literal)
+	if alias, name, ok := strings.Cut(literal, "."); ok {
+		return GoRef{Alias: alias, Name: name}
+	}
+	return GoRef{Name: literal}
+}
+
 // Route is page/file route metadata. Endpoint behavior is represented by
 // Endpoint, not by route kinds.
 type Route struct {
@@ -452,7 +465,7 @@ type Template struct {
 	Guards    []string
 	Imports   []Import
 	Body      string
-	Nodes     []view.Node `json:"-"`
+	Nodes     []viewmodel.Node `json:"-"`
 	Span      source.SourceSpan
 	BodyStart source.SourcePosition
 }

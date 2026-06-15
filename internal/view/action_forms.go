@@ -4,7 +4,7 @@ func collectActionFormFields(nodes []Node, fields map[string]map[string]ActionFo
 	for _, node := range nodes {
 		switch typed := node.(type) {
 		case Element:
-			action, err := typed.postActionName()
+			action, err := elementPostActionName(typed)
 			if err != nil {
 				return err
 			}

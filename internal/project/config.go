@@ -102,71 +102,67 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 	if !ok || !isConfigType(literal.Type) {
 		return gowdk.Config{}, false, false, nil
 	}
+	fields, ok := configLiteralFields(expression)
+	if !ok {
+		return gowdk.Config{}, false, false, nil
+	}
 
 	var config gowdk.Config
 	var needsExecutableLoad bool
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "AppName":
-			if needsConfigExpressionEvaluation(keyValue.Value) {
+			if needsConfigExpressionEvaluation(field.Value) {
 				needsExecutableLoad = true
 				continue
 			}
-			config.AppName = parseString(keyValue.Value)
+			config.AppName = parseString(field.Value)
 		case "Source":
-			if needsConfigExpressionEvaluation(keyValue.Value) {
+			if needsConfigExpressionEvaluation(field.Value) {
 				needsExecutableLoad = true
 				continue
 			}
-			config.Source = parseSourceConfig(keyValue.Value)
+			config.Source = parseSourceConfig(field.Value)
 		case "Modules":
-			if needsConfigExpressionEvaluation(keyValue.Value) {
+			if needsConfigExpressionEvaluation(field.Value) {
 				needsExecutableLoad = true
 				continue
 			}
-			config.Modules = parseModuleConfigs(keyValue.Value)
+			config.Modules = parseModuleConfigs(field.Value)
 		case "Build":
-			if needsConfigExpressionEvaluation(keyValue.Value) {
+			if needsConfigExpressionEvaluation(field.Value) {
 				needsExecutableLoad = true
 				continue
 			}
-			config.Build = parseBuildConfig(keyValue.Value)
+			config.Build = parseBuildConfig(field.Value)
 		case "CSS":
-			if needsConfigExpressionEvaluation(keyValue.Value) {
+			if needsConfigExpressionEvaluation(field.Value) {
 				needsExecutableLoad = true
 				continue
 			}
-			config.CSS = parseCSSConfig(keyValue.Value)
+			config.CSS = parseCSSConfig(field.Value)
 		case "Render":
-			if needsConfigExpressionEvaluation(keyValue.Value) {
+			if needsConfigExpressionEvaluation(field.Value) {
 				needsExecutableLoad = true
 				continue
 			}
-			config.Render = parseRenderConfig(keyValue.Value)
+			config.Render = parseRenderConfig(field.Value)
 		case "Env":
-			if needsConfigExpressionEvaluation(keyValue.Value) {
+			if needsConfigExpressionEvaluation(field.Value) {
 				needsExecutableLoad = true
 				continue
 			}
 			var err error
-			config.Env, err = parseEnvConfig(keyValue.Value)
+			config.Env, err = parseEnvConfig(field.Value)
 			if err != nil {
 				return gowdk.Config{}, false, false, err
 			}
 		case "Addons":
-			addons, addonsNeedExecutableLoad := parseAddons(keyValue.Value, imports)
+			addons, addonsNeedExecutableLoad := parseAddons(field.Value, imports)
 			config.Addons = addons
 			needsExecutableLoad = needsExecutableLoad || addonsNeedExecutableLoad
 		default:
-			return gowdk.Config{}, false, false, fmt.Errorf("unsupported Config field %q", key.Name)
+			return gowdk.Config{}, false, false, fmt.Errorf("unsupported Config field %q", field.Name)
 		}
 	}
 	return config, needsExecutableLoad, true, nil
@@ -229,27 +225,58 @@ func importNames(file *ast.File) map[string]string {
 	return imports
 }
 
-func parseSourceConfig(expression ast.Expr) gowdk.SourceConfig {
+type configLiteralField struct {
+	Name  string
+	Value ast.Expr
+}
+
+func configLiteralFields(expression ast.Expr) ([]configLiteralField, bool) {
+	return parseConfigLiteralFields(expression, false)
+}
+
+func strictConfigLiteralFields(expression ast.Expr) ([]configLiteralField, bool) {
+	return parseConfigLiteralFields(expression, true)
+}
+
+func parseConfigLiteralFields(expression ast.Expr, strict bool) ([]configLiteralField, bool) {
 	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil, false
+	}
+	fields := make([]configLiteralField, 0, len(literal.Elts))
+	for _, element := range literal.Elts {
+		keyValue, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			if strict {
+				return nil, false
+			}
+			continue
+		}
+		key, ok := keyValue.Key.(*ast.Ident)
+		if !ok {
+			if strict {
+				return nil, false
+			}
+			continue
+		}
+		fields = append(fields, configLiteralField{Name: key.Name, Value: keyValue.Value})
+	}
+	return fields, true
+}
+
+func parseSourceConfig(expression ast.Expr) gowdk.SourceConfig {
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.SourceConfig{}
 	}
 
 	var source gowdk.SourceConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Include":
-			source.Include = parseStringList(keyValue.Value)
+			source.Include = parseStringList(field.Value)
 		case "Exclude":
-			source.Exclude = parseStringList(keyValue.Value)
+			source.Exclude = parseStringList(field.Value)
 		}
 	}
 	return source
@@ -273,50 +300,36 @@ func parseModuleConfigs(expression ast.Expr) []gowdk.ModuleConfig {
 }
 
 func parseModuleConfig(expression ast.Expr) gowdk.ModuleConfig {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.ModuleConfig{}
 	}
 
 	var module gowdk.ModuleConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Name":
-			module.Name = parseString(keyValue.Value)
+			module.Name = parseString(field.Value)
 		case "Type":
-			module.Type = parseString(keyValue.Value)
+			module.Type = parseString(field.Value)
 		case "Source":
-			module.Source = parseSourceConfig(keyValue.Value)
+			module.Source = parseSourceConfig(field.Value)
 		}
 	}
 	return module
 }
 
 func parseRenderConfig(expression ast.Expr) gowdk.RenderConfig {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.RenderConfig{}
 	}
 
 	var render gowdk.RenderConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
+	for _, field := range fields {
+		if field.Name == "Default" {
+			render.Default = parseRenderMode(field.Value)
 		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok || key.Name != "Default" {
-			continue
-		}
-		render.Default = parseRenderMode(keyValue.Value)
 	}
 	return render
 }
@@ -355,26 +368,18 @@ func renderModeByName(name string) gowdk.RenderMode {
 }
 
 func parseEnvConfig(expression ast.Expr) (gowdk.EnvConfig, error) {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.EnvConfig{}, nil
 	}
 
 	var env gowdk.EnvConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Vars":
-			env.Vars = parseEnvVars(keyValue.Value)
+			env.Vars = parseEnvVars(field.Value)
 		case "Secrets":
-			secrets, err := parseSecretEnvs(keyValue.Value)
+			secrets, err := parseSecretEnvs(field.Value)
 			if err != nil {
 				return gowdk.EnvConfig{}, err
 			}
@@ -402,28 +407,20 @@ func parseEnvVars(expression ast.Expr) []gowdk.EnvVar {
 }
 
 func parseEnvVar(expression ast.Expr) (gowdk.EnvVar, bool) {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.EnvVar{}, false
 	}
 
 	var variable gowdk.EnvVar
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Name":
-			variable.Name = parseString(keyValue.Value)
+			variable.Name = parseString(field.Value)
 		case "Required":
-			variable.Required = parseBool(keyValue.Value)
+			variable.Required = parseBool(field.Value)
 		case "Default":
-			variable.Default = parseString(keyValue.Value)
+			variable.Default = parseString(field.Value)
 		}
 	}
 	return variable, true
@@ -450,192 +447,144 @@ func parseSecretEnvs(expression ast.Expr) ([]gowdk.SecretEnv, error) {
 }
 
 func parseSecretEnv(expression ast.Expr) (gowdk.SecretEnv, bool, error) {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.SecretEnv{}, false, nil
 	}
 
 	var secret gowdk.SecretEnv
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Name":
-			secret.Name = parseString(keyValue.Value)
+			secret.Name = parseString(field.Value)
 		case "Required":
-			secret.Required = parseBool(keyValue.Value)
+			secret.Required = parseBool(field.Value)
 		case "MinBytes":
-			secret.MinBytes = parseInt(keyValue.Value)
+			secret.MinBytes = parseInt(field.Value)
 		case "Default", "Value":
-			return gowdk.SecretEnv{}, false, fmt.Errorf("Env.Secrets entries cannot declare %s; secret values must come from the runtime environment", key.Name)
+			return gowdk.SecretEnv{}, false, fmt.Errorf("Env.Secrets entries cannot declare %s; secret values must come from the runtime environment", field.Name)
 		}
 	}
 	return secret, true, nil
 }
 
 func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.BuildConfig{}
 	}
 
 	var build gowdk.BuildConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Output":
-			build.Output = parseString(keyValue.Value)
+			build.Output = parseString(field.Value)
 		case "Mode":
-			build.Mode = parseBuildMode(keyValue.Value)
+			build.Mode = parseBuildMode(field.Value)
 		case "ObfuscateAssets":
-			build.ObfuscateAssets = parseBool(keyValue.Value)
+			build.ObfuscateAssets = parseBool(field.Value)
 		case "Head":
-			build.Head = parseHeadConfig(keyValue.Value)
+			build.Head = parseHeadConfig(field.Value)
 		case "CSRF":
-			build.CSRF = parseCSRFConfig(keyValue.Value)
+			build.CSRF = parseCSRFConfig(field.Value)
 		case "SecurityHeaders":
-			build.SecurityHeaders = parseSecurityHeadersConfig(keyValue.Value)
+			build.SecurityHeaders = parseSecurityHeadersConfig(field.Value)
 		case "BodyLimits":
-			build.BodyLimits = parseBodyLimitsConfig(keyValue.Value)
+			build.BodyLimits = parseBodyLimitsConfig(field.Value)
 		case "AllowMissingBackend":
-			build.AllowMissingBackend = parseBool(keyValue.Value)
+			build.AllowMissingBackend = parseBool(field.Value)
 		case "Stylesheets":
-			build.Stylesheets = parseStylesheets(keyValue.Value)
+			build.Stylesheets = parseStylesheets(field.Value)
 		case "Scripts":
-			build.Scripts = parseScripts(keyValue.Value)
+			build.Scripts = parseScripts(field.Value)
 		case "Targets":
-			build.Targets = parseBuildTargets(keyValue.Value)
+			build.Targets = parseBuildTargets(field.Value)
 		}
 	}
 	return build
 }
 
 func parseSecurityHeadersConfig(expression ast.Expr) gowdk.SecurityHeadersConfig {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.SecurityHeadersConfig{}
 	}
 
 	var headers gowdk.SecurityHeadersConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Enabled":
-			headers.Enabled = parseBool(keyValue.Value)
+			headers.Enabled = parseBool(field.Value)
 		case "Headers":
-			headers.Headers = parseStringMap(keyValue.Value)
+			headers.Headers = parseStringMap(field.Value)
 		}
 	}
 	return headers
 }
 
 func parseBodyLimitsConfig(expression ast.Expr) gowdk.BodyLimitsConfig {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.BodyLimitsConfig{}
 	}
 
 	var limits gowdk.BodyLimitsConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "ActionBytes":
-			limits.ActionBytes = parseInt64(keyValue.Value)
+			limits.ActionBytes = parseInt64(field.Value)
 		case "APIBytes":
-			limits.APIBytes = parseInt64(keyValue.Value)
+			limits.APIBytes = parseInt64(field.Value)
 		}
 	}
 	return limits
 }
 
 func parseHeadConfig(expression ast.Expr) gowdk.HeadConfig {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.HeadConfig{}
 	}
 
 	var head gowdk.HeadConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "SiteName":
-			head.SiteName = parseString(keyValue.Value)
+			head.SiteName = parseString(field.Value)
 		case "Favicon":
-			head.Favicon = parseString(keyValue.Value)
+			head.Favicon = parseString(field.Value)
 		case "Image":
-			head.Image = parseString(keyValue.Value)
+			head.Image = parseString(field.Value)
 		case "TwitterCard":
-			head.TwitterCard = parseString(keyValue.Value)
+			head.TwitterCard = parseString(field.Value)
 		}
 	}
 	return head
 }
 
 func parseCSRFConfig(expression ast.Expr) gowdk.CSRFConfig {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.CSRFConfig{}
 	}
 
 	var csrf gowdk.CSRFConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Enabled":
-			csrf.Enabled = parseBool(keyValue.Value)
+			csrf.Enabled = parseBool(field.Value)
 		case "Disabled":
-			csrf.Disabled = parseBool(keyValue.Value)
+			csrf.Disabled = parseBool(field.Value)
 		case "SecretEnv":
-			csrf.SecretEnv = parseString(keyValue.Value)
+			csrf.SecretEnv = parseString(field.Value)
 		case "CookieName":
-			csrf.CookieName = parseString(keyValue.Value)
+			csrf.CookieName = parseString(field.Value)
 		case "FieldName":
-			csrf.FieldName = parseString(keyValue.Value)
+			csrf.FieldName = parseString(field.Value)
 		case "HeaderName":
-			csrf.HeaderName = parseString(keyValue.Value)
+			csrf.HeaderName = parseString(field.Value)
 		case "Insecure":
-			csrf.Insecure = parseBool(keyValue.Value)
+			csrf.Insecure = parseBool(field.Value)
 		}
 	}
 	return csrf
@@ -680,7 +629,7 @@ func parseBuildTargets(expression ast.Expr) []gowdk.BuildTargetConfig {
 	var targets []gowdk.BuildTargetConfig
 	for _, element := range literal.Elts {
 		target := parseBuildTarget(element)
-		if target.Name == "" && len(target.Modules) == 0 && target.Output == "" && target.App == "" && target.Binary == "" && target.WASM == "" && target.BackendApp == "" && target.BackendBinary == "" {
+		if target.Name == "" && len(target.Modules) == 0 && target.Output == "" && target.App == "" && target.Binary == "" && target.WASM == "" && target.BackendApp == "" && target.BackendBinary == "" && len(target.DeployRecipes) == 0 {
 			continue
 		}
 		targets = append(targets, target)
@@ -689,38 +638,32 @@ func parseBuildTargets(expression ast.Expr) []gowdk.BuildTargetConfig {
 }
 
 func parseBuildTarget(expression ast.Expr) gowdk.BuildTargetConfig {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.BuildTargetConfig{}
 	}
 
 	var target gowdk.BuildTargetConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Name":
-			target.Name = parseString(keyValue.Value)
+			target.Name = parseString(field.Value)
 		case "Modules":
-			target.Modules = parseStringList(keyValue.Value)
+			target.Modules = parseStringList(field.Value)
 		case "Output":
-			target.Output = parseString(keyValue.Value)
+			target.Output = parseString(field.Value)
 		case "App":
-			target.App = parseString(keyValue.Value)
+			target.App = parseString(field.Value)
 		case "Binary":
-			target.Binary = parseString(keyValue.Value)
+			target.Binary = parseString(field.Value)
 		case "WASM", "Wasm":
-			target.WASM = parseString(keyValue.Value)
+			target.WASM = parseString(field.Value)
 		case "BackendApp":
-			target.BackendApp = parseString(keyValue.Value)
+			target.BackendApp = parseString(field.Value)
 		case "BackendBinary":
-			target.BackendBinary = parseString(keyValue.Value)
+			target.BackendBinary = parseString(field.Value)
+		case "DeployRecipes":
+			target.DeployRecipes = parseStringList(field.Value)
 		}
 	}
 	return target
@@ -768,21 +711,15 @@ func parseStylesheets(expression ast.Expr) []gowdk.Stylesheet {
 }
 
 func parseStylesheet(expression ast.Expr) gowdk.Stylesheet {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.Stylesheet{}
 	}
 	var stylesheet gowdk.Stylesheet
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
+	for _, field := range fields {
+		if field.Name == "Href" {
+			stylesheet.Href = parseString(field.Value)
 		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok || key.Name != "Href" {
-			continue
-		}
-		stylesheet.Href = parseString(keyValue.Value)
 	}
 	return stylesheet
 }
@@ -805,81 +742,57 @@ func parseScripts(expression ast.Expr) []gowdk.Script {
 }
 
 func parseScript(expression ast.Expr) gowdk.Script {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.Script{}
 	}
 	var script gowdk.Script
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Src":
-			script.Src = parseString(keyValue.Value)
+			script.Src = parseString(field.Value)
 		case "Type":
-			script.Type = parseString(keyValue.Value)
+			script.Type = parseString(field.Value)
 		}
 	}
 	return script
 }
 
 func parseCSSConfig(expression ast.Expr) gowdk.CSSConfig {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.CSSConfig{}
 	}
 
 	var css gowdk.CSSConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Include":
-			css.Include = parseStringList(keyValue.Value)
+			css.Include = parseStringList(field.Value)
 		case "Exclude":
-			css.Exclude = parseStringList(keyValue.Value)
+			css.Exclude = parseStringList(field.Value)
 		case "Default":
-			css.Default = parseStringList(keyValue.Value)
+			css.Default = parseStringList(field.Value)
 		case "Output":
-			css.Output = parseCSSOutputConfig(keyValue.Value)
+			css.Output = parseCSSOutputConfig(field.Value)
 		}
 	}
 	return css
 }
 
 func parseCSSOutputConfig(expression ast.Expr) gowdk.CSSOutputConfig {
-	literal, ok := expression.(*ast.CompositeLit)
+	fields, ok := configLiteralFields(expression)
 	if !ok {
 		return gowdk.CSSOutputConfig{}
 	}
 
 	var output gowdk.CSSOutputConfig
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Dir":
-			output.Dir = parseString(keyValue.Value)
+			output.Dir = parseString(field.Value)
 		case "HrefPrefix":
-			output.HrefPrefix = parseString(keyValue.Value)
+			output.HrefPrefix = parseString(field.Value)
 		}
 	}
 	return output
@@ -993,31 +906,27 @@ func parseSEOOptions(expression ast.Expr, imports map[string]string) (seo.Option
 		return seo.Options{}, false
 	}
 
+	fields, ok := strictConfigLiteralFields(expression)
+	if !ok {
+		return seo.Options{}, false
+	}
 	var options seo.Options
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			return seo.Options{}, false
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			return seo.Options{}, false
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "BaseURL":
-			value, ok := parseLiteralString(keyValue.Value)
+			value, ok := parseLiteralString(field.Value)
 			if !ok {
 				return seo.Options{}, false
 			}
 			options.BaseURL = value
 		case "Disallow":
-			values, ok := parseLiteralStringList(keyValue.Value)
+			values, ok := parseLiteralStringList(field.Value)
 			if !ok {
 				return seo.Options{}, false
 			}
 			options.Disallow = values
 		case "ExtraURLs":
-			values, ok := parseSEOURLList(keyValue.Value, imports)
+			values, ok := parseSEOURLList(field.Value, imports)
 			if !ok {
 				return seo.Options{}, false
 			}
@@ -1060,37 +969,33 @@ func parseSEOURL(expression ast.Expr, imports map[string]string) (gowdk.SEOURL, 
 		return gowdk.SEOURL{}, false
 	}
 
+	fields, ok := strictConfigLiteralFields(expression)
+	if !ok {
+		return gowdk.SEOURL{}, false
+	}
 	var url gowdk.SEOURL
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			return gowdk.SEOURL{}, false
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			return gowdk.SEOURL{}, false
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Loc":
-			value, ok := parseLiteralString(keyValue.Value)
+			value, ok := parseLiteralString(field.Value)
 			if !ok {
 				return gowdk.SEOURL{}, false
 			}
 			url.Loc = value
 		case "LastMod":
-			value, ok := parseLiteralString(keyValue.Value)
+			value, ok := parseLiteralString(field.Value)
 			if !ok {
 				return gowdk.SEOURL{}, false
 			}
 			url.LastMod = value
 		case "ChangeFreq":
-			value, ok := parseLiteralString(keyValue.Value)
+			value, ok := parseLiteralString(field.Value)
 			if !ok {
 				return gowdk.SEOURL{}, false
 			}
 			url.ChangeFreq = value
 		case "Priority":
-			value, ok := parseLiteralString(keyValue.Value)
+			value, ok := parseLiteralString(field.Value)
 			if !ok {
 				return gowdk.SEOURL{}, false
 			}
@@ -1148,27 +1053,23 @@ func parseTailwindOptions(expression ast.Expr, imports map[string]string) (tailw
 		return tailwind.Options{}, false
 	}
 
+	fields, ok := strictConfigLiteralFields(expression)
+	if !ok {
+		return tailwind.Options{}, false
+	}
 	var options tailwind.Options
-	for _, element := range literal.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := keyValue.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		switch key.Name {
+	for _, field := range fields {
+		switch field.Name {
 		case "Input":
-			options.Input = parseString(keyValue.Value)
+			options.Input = parseString(field.Value)
 		case "OutputPath":
-			options.OutputPath = parseString(keyValue.Value)
+			options.OutputPath = parseString(field.Value)
 		case "Href":
-			options.Href = parseString(keyValue.Value)
+			options.Href = parseString(field.Value)
 		case "Command":
-			options.Command = parseString(keyValue.Value)
+			options.Command = parseString(field.Value)
 		case "Minify":
-			options.Minify = parseBool(keyValue.Value)
+			options.Minify = parseBool(field.Value)
 		default:
 			return tailwind.Options{}, false
 		}

@@ -2,28 +2,22 @@ package view
 
 import (
 	"fmt"
+
 	"github.com/cssbruno/gowdk/internal/clientlang"
+	"github.com/cssbruno/gowdk/internal/viewvalidation"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
 	"strconv"
 	"strings"
 )
 
-type Element struct {
-	Name     string
-	Attrs    []Attr
-	Children []Node
-	Start    int
-	End      int
-}
-
-func (node Element) render(ctx *renderContext, out *renderOutput) error {
+func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 	if node.Name == "slot" {
-		return node.renderSlot(ctx, out)
+		return renderSlotElement(node, ctx, out)
 	}
-	if loop, keyExpr, ok, err := node.forDirective(ctx); err != nil {
+	if loop, keyExpr, ok, err := elementForDirective(node, ctx); err != nil {
 		return err
 	} else if ok {
-		return node.renderFor(ctx, out, loop, keyExpr)
+		return renderForElement(node, ctx, out, loop, keyExpr)
 	}
 	if ctx.conditional != nil {
 		out.write(`<!--gowdk-if:`)
@@ -32,27 +26,27 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 	}
 	out.writeByte('<')
 	out.write(node.Name)
-	directives, err := node.postDirectives(ctx)
+	directives, err := elementPostDirectives(node, ctx)
 	if err != nil {
 		return err
 	}
-	valueBinding, err := node.valueBinding(ctx)
+	valueBinding, err := elementValueBinding(node, ctx)
 	if err != nil {
 		return err
 	}
-	rawHTML, hasRawHTML, err := node.rawHTMLContent(ctx)
+	rawHTML, hasRawHTML, err := elementRawHTMLContent(node, ctx)
 	if err != nil {
 		return err
 	}
-	checkedBinding, err := node.checkedBinding(ctx)
+	checkedBinding, err := elementCheckedBinding(node, ctx)
 	if err != nil {
 		return err
 	}
-	styleBindings, err := node.styleBindings(ctx)
+	styleBindings, err := elementStyleBindings(node, ctx)
 	if err != nil {
 		return err
 	}
-	classToggles, err := node.classToggles(ctx)
+	classToggles, err := elementClassToggles(node, ctx)
 	if err != nil {
 		return err
 	}
@@ -85,12 +79,12 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 		out.write(ctx.nextBindingID())
 		out.writeByte('"')
 	}
-	if classValue := node.initialClassValue(ctx, classToggles); classValue != "" {
+	if classValue := elementInitialClassValue(node, ctx, classToggles); classValue != "" {
 		out.write(` class="`)
 		out.write(gowhtml.Escape(classValue))
 		out.writeByte('"')
 	}
-	styleValue, err := node.initialStyleValue(ctx, styleBindings)
+	styleValue, err := elementInitialStyleValue(node, ctx, styleBindings)
 	if err != nil {
 		return err
 	}
@@ -227,7 +221,7 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 		if node.Name == "option" && ctx.selectBound && attr.Name == "selected" {
 			continue
 		}
-		if valueBinding != "" && node.SPAInputType("radio") && attr.Name == "checked" {
+		if valueBinding != "" && elementSPAInputType(node, "radio") && attr.Name == "checked" {
 			continue
 		}
 		if isClassToggleAttr(attr.Name) {
@@ -236,7 +230,7 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 		if isStyleBindingAttr(attr.Name) {
 			continue
 		}
-		if valueBinding != "" && attr.Name == "value" && !node.SPAInputType("radio") {
+		if valueBinding != "" && attr.Name == "value" && !elementSPAInputType(node, "radio") {
 			return fmt.Errorf("element with g:bind:value must not declare value")
 		}
 		if checkedBinding != "" && attr.Name == "checked" {
@@ -293,13 +287,13 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 			out.writeByte('"')
 		}
 	}
-	node.writeActionInputAttrs(ctx, out)
-	if selected, err := node.optionSelected(ctx); err != nil {
+	writeActionInputAttrs(node, ctx, out)
+	if selected, err := elementOptionSelected(node, ctx); err != nil {
 		return err
 	} else if selected {
 		out.write(` selected`)
 	}
-	if checked, err := node.radioChecked(ctx, valueBinding); err != nil {
+	if checked, err := elementRadioChecked(node, ctx, valueBinding); err != nil {
 		return err
 	} else if checked {
 		out.write(` checked`)
@@ -392,7 +386,7 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 		out.write(gowhtml.Escape(ctx.values[valueBinding]))
 	} else {
 		for _, child := range node.Children {
-			if err := child.render(childCtx, out); err != nil {
+			if err := renderNode(child, childCtx, out); err != nil {
 				return err
 			}
 		}
@@ -416,7 +410,7 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 // HTML is rejected inside stateful component views and g:for loops because the
 // island runtime re-renders bound content as escaped text and cannot honor
 // raw HTML.
-func (node Element) rawHTMLContent(ctx *renderContext) (string, bool, error) {
+func elementRawHTMLContent(node Element, ctx *renderContext) (string, bool, error) {
 	expr := ""
 	for _, attr := range node.Attrs {
 		if attr.Name == "g:html" {
@@ -466,22 +460,14 @@ var voidElements = map[string]bool{
 // DOMEventSymbols returns the compiler-owned scalar DOM event scope exposed to
 // g:on:* expressions.
 func DOMEventSymbols() map[string]clientlang.ValueType {
-	return map[string]clientlang.ValueType{
-		"event":         clientlang.TypeObject,
-		"event.value":   clientlang.TypeString,
-		"event.checked": clientlang.TypeBool,
-		"event.key":     clientlang.TypeString,
-		"event.code":    clientlang.TypeString,
-		"event.clientX": clientlang.TypeFloat,
-		"event.clientY": clientlang.TypeFloat,
-	}
+	return viewvalidation.DOMEventSymbols()
 }
 
 func domEventSymbols() map[string]clientlang.ValueType {
 	return DOMEventSymbols()
 }
 
-func (node Element) renderSlot(ctx *renderContext, out *renderOutput) error {
+func renderSlotElement(node Element, ctx *renderContext, out *renderOutput) error {
 	name := ""
 	scopedValues := map[string]string{}
 	for _, attr := range node.Attrs {
@@ -526,25 +512,25 @@ func (node Element) renderSlot(ctx *renderContext, out *renderOutput) error {
 		return nil
 	}
 	for _, child := range node.Children {
-		if err := child.render(ctx, out); err != nil {
+		if err := renderNode(child, ctx, out); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (node Element) optionSelected(ctx *renderContext) (bool, error) {
+func elementOptionSelected(node Element, ctx *renderContext) (bool, error) {
 	if node.Name != "option" || !ctx.selectBound {
 		return false, nil
 	}
-	value, err := node.optionValue(ctx)
+	value, err := elementOptionValue(node, ctx)
 	if err != nil {
 		return false, err
 	}
 	return value == ctx.selectValue, nil
 }
 
-func (node Element) optionValue(ctx *renderContext) (string, error) {
+func elementOptionValue(node Element, ctx *renderContext) (string, error) {
 	for _, attr := range node.Attrs {
 		if attr.Name != "value" || attr.Boolean {
 			continue
@@ -570,11 +556,11 @@ func (node Element) optionValue(ctx *renderContext) (string, error) {
 	return strings.TrimSpace(text.string()), nil
 }
 
-func (node Element) radioChecked(ctx *renderContext, field string) (bool, error) {
-	if field == "" || node.Name != "input" || !node.SPAInputType("radio") {
+func elementRadioChecked(node Element, ctx *renderContext, field string) (bool, error) {
+	if field == "" || node.Name != "input" || !elementSPAInputType(node, "radio") {
 		return false, nil
 	}
-	value, ok, err := node.SPAAttrInterpolated(ctx, "value")
+	value, ok, err := elementSPAAttrInterpolated(node, ctx, "value")
 	if err != nil {
 		return false, err
 	}
@@ -584,7 +570,7 @@ func (node Element) radioChecked(ctx *renderContext, field string) (bool, error)
 	return value == ctx.values[field], nil
 }
 
-func (node Element) SPAAttrInterpolated(ctx *renderContext, name string) (string, bool, error) {
+func elementSPAAttrInterpolated(node Element, ctx *renderContext, name string) (string, bool, error) {
 	for _, attr := range node.Attrs {
 		if attr.Name != name || attr.Boolean {
 			continue

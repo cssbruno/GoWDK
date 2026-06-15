@@ -3,7 +3,7 @@ package gwdkast
 
 import (
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
 )
 
 // File is the typed AST for the currently supported .gwdk syntax subset.
@@ -194,7 +194,7 @@ type Block struct {
 	Body      string
 	Span      source.SourceSpan
 	BodyStart source.SourcePosition
-	View      []view.Node
+	View      []viewmodel.Node
 	StyleBody string
 	Records   []LiteralRecord
 	Call      *BuildCall

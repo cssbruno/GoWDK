@@ -20,6 +20,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/embed"
 	"github.com/cssbruno/gowdk/addons/partial"
 	"github.com/cssbruno/gowdk/addons/ratelimit"
+	"github.com/cssbruno/gowdk/addons/realtime"
 	"github.com/cssbruno/gowdk/addons/spa"
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/addons/static"
@@ -931,6 +932,8 @@ func parseBuiltInAddon(expression ast.Expr, imports map[string]string) (gowdk.Ad
 		return partial.Addon(), true
 	case ratelimit.ImportPath:
 		return ratelimit.Addon(), true
+	case realtime.ImportPath:
+		return realtime.Addon(), true
 	case spa.ImportPath:
 		return spa.Addon(), true
 	case ssr.ImportPath:

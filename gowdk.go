@@ -346,6 +346,7 @@ const (
 	FeatureCSS       Feature = "css"
 	FeatureRateLimit Feature = "ratelimit"
 	FeatureContracts Feature = "contracts"
+	FeatureRealtime  Feature = "realtime"
 	FeatureAuth      Feature = "auth"
 	FeatureDB        Feature = "db"
 )

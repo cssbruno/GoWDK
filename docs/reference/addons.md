@@ -14,6 +14,86 @@ importable Go module, the loader uses an executable config bridge so
 GitHub-hosted addons can return real `gowdk.Addon` values and preserve supported
 extension interfaces.
 
+## Addon Lifecycle
+
+An addon participates in up to four ordered phases. Each phase corresponds to a
+specific interface, and an addon implements only the interfaces for the phases
+it needs. The base `gowdk.Addon` (`Name()`, `Features()`) is always required;
+the rest are opt-in extension points.
+
+1. **Config loading** — `gowdk.Addon`. The loader resolves the constructor from
+   `gowdk.config.go` (Go AST for built-ins, executable bridge for external
+   modules) and reads `Features()`. Feature IDs gate compiler and generator
+   logic through `Config.HasFeature`.
+2. **Compiler validation** — `gowdk.GoBlockConsumer.ValidateGoBlock` validates
+   `go addon.<name> {}` blocks and may return addon-owned diagnostics. Built-in
+   feature gates also run here (for example, a page using `load {}` or
+   `go ssr {}` requires the `ssr` feature).
+3. **Generated output** — build-time emitters run while writing output:
+   `gowdk.CSSProcessor.ProcessCSS` (CSS), `gowdk.SEOProvider.SEOOptions`
+   (`sitemap.xml`/`robots.txt`), and `gowdk.GoBlockConsumer.GeneratedGo` (files
+   relative to the generated app directory, formatted before writing).
+4. **Runtime hook registration** — generated apps register runtime hooks from
+   user-owned Go in the generated package, for example
+   `RegisterRateLimiter(*ratelimit.Limiter)`, `GOWDKAuthProvider() auth.Provider`,
+   or `RegisterContractEventSink(...)`. GOWDK never calls third-party runtime
+   code implicitly; the app wires it.
+
+### Addon categories
+
+The contract distinguishes addon categories by which interfaces they implement.
+The registry records this in each entry's `publicInterfaces`:
+
+| Category | Interface(s) | Phase |
+| --- | --- | --- |
+| Marker / feature addon | `gowdk.Addon` only | config loading (feature gate) |
+| Compiler addon | `gowdk.GoBlockConsumer` | compiler validation + generated output |
+| CSS processor | `gowdk.CSSProcessor` | generated output |
+| Build-time provider | `gowdk.SEOProvider` | generated output |
+| Runtime addon | generated-app registration hooks | runtime hook registration |
+
+A single addon can span categories (for example `addons/css` implements both
+`gowdk.Addon` and `gowdk.CSSProcessor`).
+
+## Version and Feature Handshake
+
+Addons declare what they target two ways:
+
+- **Feature handshake.** `Features()` declares feature IDs (see below).
+  `Config.HasFeature` gates the matching compiler and generator logic; a page
+  that uses a capability without its feature addon is reported by a diagnostic
+  (for example `missing_ssr_addon`).
+- **Version handshake.** A registry entry declares the GOWDK line it supports
+  with `minGOWDK` and optional `maxGOWDK`. `addonregistry.Entry.SupportsVersion`
+  checks a concrete CLI version against those inclusive bounds and returns
+  `VersionSupported`, `VersionUnsupported`, or `VersionUnknown` (when a bound or
+  the queried version is unset or unparseable, so tooling warns rather than
+  wrongly blocking). `Registry.UnsupportedFor(version)` lists entries a given
+  CLI version excludes. The curated `compatibility` field
+  (`compatible`/`incompatible`/`unknown`) is the human-reviewed signal that
+  complements the computed bound check. Both are covered by
+  `internal/addonregistry` tests.
+
+## Failure Modes
+
+- **Unsupported addon go block** — `go addon.<name> {}` targeting an enabled
+  addon that does not implement `gowdk.GoBlockConsumer`, or whose
+  `GoBlockTargets` omits the exact target, fails `gowdk check` and builds with
+  `unsupported_addon_go_block_target`.
+- **Missing required external tool** — an addon that shells out to a tool (for
+  example `addons/tailwind`) fails the build with an install-required error when
+  the tool is absent; GOWDK does not download it.
+- **Missing feature addon** — using a capability without enabling its addon is a
+  compiler diagnostic, not a silent no-op.
+- **Version-incompatible addon** — `SupportsVersion` returns `VersionUnsupported`
+  for a CLI version outside an entry's `minGOWDK`/`maxGOWDK`. Tooling can surface
+  this; build-time auto-enforcement of the version bound remains a deliberate
+  follow-up (see Discovery Policy).
+- **Deprecated or experimental lifecycle** — surfaced in `gowdk add --list
+  --registry` output so users see stability before wiring an addon.
+- **External addon resolution** — external addons resolve through normal Go
+  module tooling; missing modules surface as ordinary Go build errors.
+
 Current feature IDs:
 
 - `spa`
@@ -114,12 +194,16 @@ non-addable built-in distinctions such as `addons/tailwind`. The schema and CLI
 table are ready for documented external, deprecated, and incompatible entries
 when the project has real entries to publish.
 
-Until that metadata, trust policy, and compatibility check exist, GOWDK must not
-scan GitHub or module proxies for addons, execute unknown constructors to build
-a list, download hidden dependencies, auto-add external modules, or enable an
-external addon that is not already present in project Go code. Remote registry
-sync and automatic compatibility enforcement remain out of scope for the local
-registry slice.
+The registry now provides a computed version handshake
+(`addonregistry.Entry.SupportsVersion` / `Registry.UnsupportedFor`, see
+[Version and Feature Handshake](#version-and-feature-handshake)) on top of the
+curated `compatibility` field. Even so, GOWDK must not scan GitHub or module
+proxies for addons, execute unknown constructors to build a list, download
+hidden dependencies, auto-add external modules, or enable an external addon that
+is not already present in project Go code. Remote registry sync and *build-time*
+automatic compatibility enforcement (failing a build on an out-of-range
+`minGOWDK`) remain out of scope for the local registry slice; the handshake is
+available for tooling to warn.
 
 `gowdk.NewAddon(name, features...)` creates a marker addon for feature checks.
 It does not by itself make the compiler, app generator, or runtime call

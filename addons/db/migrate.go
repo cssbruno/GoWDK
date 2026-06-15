@@ -12,11 +12,17 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // DefaultMigrationTable is the table used to track applied migrations when
 // MigrationOptions.Table is empty.
 const DefaultMigrationTable = "gowdk_schema_migrations"
+
+const (
+	migrationNameMaxLength       = 255
+	migrationPendingChecksumFlag = "pending:"
+)
 
 var migrationTablePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
@@ -98,7 +104,7 @@ func ApplyMigrations(ctx context.Context, database *sql.DB, source fs.FS, option
 		return MigrationResult{}, err
 	}
 
-	var result MigrationResult
+	var txResult MigrationResult
 	err = WithTx(ctx, database, options.TxOptions, func(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, migrationTrackingDDL(table)); err != nil {
 			return fmt.Errorf("gowdk db: prepare migration tracking table %q: %w", table, err)
@@ -113,23 +119,31 @@ func ApplyMigrations(ctx context.Context, database *sql.DB, source fs.FS, option
 				return err
 			}
 			if applied {
-				result.Skipped = append(result.Skipped, record)
+				txResult.Skipped = append(txResult.Skipped, record)
 				continue
+			}
+			pendingChecksum := migrationPendingChecksum(record)
+			if _, err := tx.ExecContext(ctx, migrationReserveSQL(table, placeholder), record.Name, pendingChecksum, now().UTC()); err != nil {
+				return fmt.Errorf("gowdk db: reserve migration %q: %w", record.Name, err)
 			}
 			if _, err := tx.ExecContext(ctx, statement); err != nil {
 				return fmt.Errorf("gowdk db: apply migration %q: %w", record.Name, err)
 			}
-			if _, err := tx.ExecContext(ctx, migrationInsertSQL(table, placeholder), record.Name, record.Checksum, now().UTC()); err != nil {
+			result, err := tx.ExecContext(ctx, migrationFinalizeSQL(table, placeholder), record.Checksum, now().UTC(), record.Name, pendingChecksum)
+			if err != nil {
 				return fmt.Errorf("gowdk db: record migration %q: %w", record.Name, err)
 			}
-			result.Applied = append(result.Applied, record)
+			if rows, err := result.RowsAffected(); err == nil && rows != 1 {
+				return fmt.Errorf("gowdk db: record migration %q: reserved row was not finalized", record.Name)
+			}
+			txResult.Applied = append(txResult.Applied, record)
 		}
 		return nil
 	})
 	if err != nil {
-		return result, err
+		return MigrationResult{}, err
 	}
-	return result, nil
+	return txResult, nil
 }
 
 func migrationFiles(source fs.FS, dir string) ([]string, error) {
@@ -165,9 +179,15 @@ func readMigration(source fs.FS, path string) (MigrationRecord, string, error) {
 }
 
 func migrationApplied(ctx context.Context, tx *sql.Tx, table string, placeholder PlaceholderFunc, record MigrationRecord) (bool, error) {
+	if utf8.RuneCountInString(record.Name) > migrationNameMaxLength {
+		return false, fmt.Errorf("gowdk db: migration name %q exceeds %d characters", record.Name, migrationNameMaxLength)
+	}
 	var stored string
 	err := tx.QueryRowContext(ctx, migrationSelectSQL(table, placeholder), record.Name).Scan(&stored)
 	if err == nil {
+		if strings.HasPrefix(stored, migrationPendingChecksumFlag) {
+			return false, fmt.Errorf("gowdk db: migration %q is reserved or incomplete", record.Name)
+		}
 		if stored != record.Checksum {
 			return false, fmt.Errorf("gowdk db: migration %q checksum mismatch: applied %s, current %s", record.Name, stored, record.Checksum)
 		}
@@ -179,14 +199,22 @@ func migrationApplied(ctx context.Context, tx *sql.Tx, table string, placeholder
 	return false, fmt.Errorf("gowdk db: check migration %q: %w", record.Name, err)
 }
 
+func migrationPendingChecksum(record MigrationRecord) string {
+	return migrationPendingChecksumFlag + record.Checksum
+}
+
 func migrationTrackingDDL(table string) string {
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (name TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMP NOT NULL)`, table)
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (name VARCHAR(%d) PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMP NOT NULL)`, table, migrationNameMaxLength)
 }
 
 func migrationSelectSQL(table string, placeholder PlaceholderFunc) string {
 	return fmt.Sprintf(`SELECT checksum FROM %s WHERE name = %s`, table, placeholder(1))
 }
 
-func migrationInsertSQL(table string, placeholder PlaceholderFunc) string {
+func migrationReserveSQL(table string, placeholder PlaceholderFunc) string {
 	return fmt.Sprintf(`INSERT INTO %s (name, checksum, applied_at) VALUES (%s, %s, %s)`, table, placeholder(1), placeholder(2), placeholder(3))
+}
+
+func migrationFinalizeSQL(table string, placeholder PlaceholderFunc) string {
+	return fmt.Sprintf(`UPDATE %s SET checksum = %s, applied_at = %s WHERE name = %s AND checksum = %s`, table, placeholder(1), placeholder(2), placeholder(3), placeholder(4))
 }

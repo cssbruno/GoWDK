@@ -61,9 +61,18 @@ Tracking contract:
 
 - The default tracking table is `gowdk_schema_migrations`.
 - Each row stores migration file name, SHA-256 checksum, and applied timestamp.
+  Migration names are limited to 255 characters so the tracking table can use a
+  bounded primary key on MySQL-compatible drivers.
 - Re-running the same file with the same checksum skips it.
 - Re-running the same file name with different content fails with a checksum
   mismatch.
+- Before user SQL runs, `ApplyMigrations` reserves the migration name in the
+  tracking table and finalizes the checksum after the SQL succeeds. Concurrent
+  runners are serialized by that primary-key reservation; a runner that sees an
+  incomplete reservation fails closed instead of executing the same file again.
+- `MigrationResult` is returned only after the transaction commits. If a
+  migration, reservation, tracking update, or commit fails, the returned result
+  is empty.
 - `MigrationOptions.Table` can rename the tracking table, but only simple SQL
   identifiers are accepted.
 - `QuestionPlaceholder` is the default. Use `DollarPlaceholder` for
@@ -115,7 +124,9 @@ func DatabaseReady(ctx context.Context, _ *http.Request) (response.Response, err
 ```
 
 Do not return DSNs, credentials, tenant IDs, or query results from readiness
-endpoints.
+endpoints. `CheckReadiness` returns a generic public error string on failure;
+use `Ping` directly when server-side startup or logging code needs the wrapped
+database error.
 
 ## sqlc Walkthrough
 

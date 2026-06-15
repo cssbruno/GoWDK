@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const readinessDatabaseUnavailable = "database unavailable"
+
 // Readiness reports the outcome of a database readiness check.
 type Readiness struct {
 	Ready     bool          `json:"ready"`
@@ -35,7 +37,7 @@ func CheckReadiness(ctx context.Context, database *sql.DB) Readiness {
 	}
 	if err := Ping(ctx, database); err != nil {
 		result.Duration = time.Since(start)
-		result.Error = err.Error()
+		result.Error = readinessDatabaseUnavailable
 		return result
 	}
 	result.Ready = true

@@ -66,7 +66,7 @@ func TestPingAndReadiness(t *testing.T) {
 	if err := Ping(context.Background(), failing); err == nil || !strings.Contains(err.Error(), "offline") {
 		t.Fatalf("expected ping failure, got %v", err)
 	}
-	if readiness := CheckReadiness(context.Background(), failing); readiness.Ready || !strings.Contains(readiness.Error, "offline") {
+	if readiness := CheckReadiness(context.Background(), failing); readiness.Ready || readiness.Error != readinessDatabaseUnavailable {
 		t.Fatalf("unexpected failing readiness: %#v", readiness)
 	}
 }
@@ -169,6 +169,100 @@ func TestApplyMigrationsAppliesAndSkipsInOrder(t *testing.T) {
 	}
 }
 
+func TestApplyMigrationsReservesBeforeRunningMigrationSQL(t *testing.T) {
+	state := &fakeDBState{migrations: map[string]string{}}
+	database := newFakeDB(t, state)
+	source := fstest.MapFS{
+		"001_schema.sql": {Data: []byte("CREATE TABLE widgets (name TEXT);")},
+	}
+
+	if _, err := ApplyMigrations(context.Background(), database, source, MigrationOptions{}); err != nil {
+		t.Fatalf("ApplyMigrations: %v", err)
+	}
+
+	reserve := executedIndex(state.executed, "INSERT INTO "+DefaultMigrationTable)
+	migration := executedIndex(state.executed, "CREATE TABLE widgets")
+	finalize := executedIndex(state.executed, "UPDATE "+DefaultMigrationTable)
+	if reserve < 0 || migration < 0 || finalize < 0 {
+		t.Fatalf("did not find reservation, migration, and finalize statements in %#v", state.executed)
+	}
+	if !(reserve < migration && migration < finalize) {
+		t.Fatalf("migration was not reserved before user SQL and finalized after it: %#v", state.executed)
+	}
+}
+
+func TestApplyMigrationsDoesNotRunSQLWhenReservationFails(t *testing.T) {
+	state := &fakeDBState{
+		migrations: map[string]string{},
+		execErr:    errors.New("duplicate migration reservation"),
+		execErrOn:  "INSERT INTO " + DefaultMigrationTable,
+	}
+	database := newFakeDB(t, state)
+	source := fstest.MapFS{
+		"001_schema.sql": {Data: []byte("CREATE TABLE widgets (name TEXT);")},
+	}
+
+	result, err := ApplyMigrations(context.Background(), database, source, MigrationOptions{})
+	if err == nil || !strings.Contains(err.Error(), `reserve migration "001_schema.sql"`) {
+		t.Fatalf("expected reservation failure, got result=%#v err=%v", result, err)
+	}
+	if len(result.Applied) != 0 || len(result.Skipped) != 0 {
+		t.Fatalf("failed reservation should not publish transaction-local result: %#v", result)
+	}
+	if executedIndex(state.executed, "CREATE TABLE widgets") >= 0 {
+		t.Fatalf("migration SQL should not run after reservation failure: %#v", state.executed)
+	}
+}
+
+func TestApplyMigrationsDoesNotReportAppliedWhenTransactionFails(t *testing.T) {
+	state := &fakeDBState{
+		migrations: map[string]string{},
+		execErr:    errors.New("boom"),
+		execErrOn:  "BROKEN MIGRATION",
+	}
+	database := newFakeDB(t, state)
+	source := fstest.MapFS{
+		"001_schema.sql": {Data: []byte("CREATE TABLE widgets (name TEXT);")},
+		"002_broken.sql": {Data: []byte("BROKEN MIGRATION;")},
+	}
+
+	result, err := ApplyMigrations(context.Background(), database, source, MigrationOptions{})
+	if err == nil || !strings.Contains(err.Error(), "002_broken.sql") {
+		t.Fatalf("expected second migration failure, got result=%#v err=%v", result, err)
+	}
+	if len(result.Applied) != 0 || len(result.Skipped) != 0 {
+		t.Fatalf("failed migration should not publish transaction-local result: %#v", result)
+	}
+	if len(state.migrations) != 0 {
+		t.Fatalf("rollback should discard reserved migration rows, got %#v", state.migrations)
+	}
+	if state.commits != 0 || state.rollbacks != 1 {
+		t.Fatalf("expected rollback, got commits=%d rollbacks=%d", state.commits, state.rollbacks)
+	}
+}
+
+func TestApplyMigrationsDoesNotReportAppliedWhenCommitFails(t *testing.T) {
+	state := &fakeDBState{
+		migrations: map[string]string{},
+		commitErr:  errors.New("commit failed"),
+	}
+	database := newFakeDB(t, state)
+	source := fstest.MapFS{
+		"001_schema.sql": {Data: []byte("CREATE TABLE widgets (name TEXT);")},
+	}
+
+	result, err := ApplyMigrations(context.Background(), database, source, MigrationOptions{})
+	if err == nil || !strings.Contains(err.Error(), "commit transaction") {
+		t.Fatalf("expected commit failure, got result=%#v err=%v", result, err)
+	}
+	if len(result.Applied) != 0 || len(result.Skipped) != 0 {
+		t.Fatalf("failed commit should not publish transaction-local result: %#v", result)
+	}
+	if len(state.migrations) != 0 {
+		t.Fatalf("failed commit should not publish migration rows, got %#v", state.migrations)
+	}
+}
+
 func TestApplyMigrationsDetectsChecksumDrift(t *testing.T) {
 	state := &fakeDBState{migrations: map[string]string{}}
 	database := newFakeDB(t, state)
@@ -181,6 +275,48 @@ func TestApplyMigrationsDetectsChecksumDrift(t *testing.T) {
 	_, err := ApplyMigrations(context.Background(), database, second, MigrationOptions{})
 	if err == nil || !strings.Contains(err.Error(), "001.sql") || !strings.Contains(err.Error(), "checksum mismatch") {
 		t.Fatalf("expected checksum mismatch with file name, got %v", err)
+	}
+}
+
+func TestApplyMigrationsRejectsPendingReservation(t *testing.T) {
+	source := fstest.MapFS{"001.sql": {Data: []byte("CREATE TABLE widgets (name TEXT);")}}
+	record, _, err := readMigration(source, "001.sql")
+	if err != nil {
+		t.Fatalf("readMigration: %v", err)
+	}
+	state := &fakeDBState{migrations: map[string]string{
+		record.Name: migrationPendingChecksum(record),
+	}}
+	database := newFakeDB(t, state)
+
+	result, err := ApplyMigrations(context.Background(), database, source, MigrationOptions{})
+	if err == nil || !strings.Contains(err.Error(), "reserved or incomplete") {
+		t.Fatalf("expected pending reservation error, got result=%#v err=%v", result, err)
+	}
+	if len(result.Applied) != 0 || len(result.Skipped) != 0 {
+		t.Fatalf("pending reservation should not publish result: %#v", result)
+	}
+}
+
+func TestApplyMigrationsRejectsOverlongMigrationName(t *testing.T) {
+	name := strings.Repeat("a", migrationNameMaxLength+1) + ".sql"
+	database := newFakeDB(t, &fakeDBState{})
+
+	result, err := ApplyMigrations(context.Background(), database, fstest.MapFS{
+		name: {Data: []byte("CREATE TABLE widgets (name TEXT);")},
+	}, MigrationOptions{})
+	if err == nil || !strings.Contains(err.Error(), "exceeds 255 characters") {
+		t.Fatalf("expected overlong migration name error, got result=%#v err=%v", result, err)
+	}
+}
+
+func TestMigrationTrackingDDLUsesBoundedNameKey(t *testing.T) {
+	ddl := migrationTrackingDDL(DefaultMigrationTable)
+	if !strings.Contains(ddl, "name VARCHAR(255) PRIMARY KEY") {
+		t.Fatalf("tracking DDL should use a bounded primary key column: %s", ddl)
+	}
+	if strings.Contains(ddl, "TEXT PRIMARY KEY") {
+		t.Fatalf("tracking DDL should not use a MySQL-incompatible TEXT primary key: %s", ddl)
 	}
 }
 
@@ -200,12 +336,23 @@ func migrationNames(records []MigrationRecord) []string {
 	return names
 }
 
+func executedIndex(executed []string, prefix string) int {
+	for index, query := range executed {
+		if strings.HasPrefix(query, prefix) {
+			return index
+		}
+	}
+	return -1
+}
+
 var fakeDriverCounter atomic.Int64
 
 type fakeDBState struct {
 	mu         sync.Mutex
 	pingErr    error
 	execErr    error
+	execErrOn  string
+	commitErr  error
 	commits    int
 	rollbacks  int
 	executed   []string
@@ -237,6 +384,7 @@ func (drv fakeDriver) Open(string) (driver.Conn, error) {
 
 type fakeConn struct {
 	state *fakeDBState
+	tx    *fakeTx
 }
 
 func (conn *fakeConn) Prepare(string) (driver.Stmt, error) {
@@ -248,14 +396,20 @@ func (conn *fakeConn) Close() error {
 }
 
 func (conn *fakeConn) Begin() (driver.Tx, error) {
-	return &fakeTx{state: conn.state}, nil
+	return conn.BeginTx(context.Background(), driver.TxOptions{})
 }
 
 func (conn *fakeConn) BeginTx(ctx context.Context, _ driver.TxOptions) (driver.Tx, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return &fakeTx{state: conn.state}, nil
+	tx := &fakeTx{
+		state:      conn.state,
+		conn:       conn,
+		migrations: map[string]string{},
+	}
+	conn.tx = tx
+	return tx, nil
 }
 
 func (conn *fakeConn) Ping(ctx context.Context) error {
@@ -271,14 +425,29 @@ func (conn *fakeConn) ExecContext(ctx context.Context, query string, args []driv
 	}
 	conn.state.mu.Lock()
 	defer conn.state.mu.Unlock()
-	if conn.state.execErr != nil {
+	trimmed := strings.TrimSpace(query)
+	if conn.state.execErr != nil && (conn.state.execErrOn == "" || strings.Contains(trimmed, conn.state.execErrOn)) {
 		return nil, conn.state.execErr
 	}
-	conn.state.executed = append(conn.state.executed, strings.TrimSpace(query))
-	if strings.Contains(query, "checksum") && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(query)), "INSERT INTO") && len(args) >= 2 {
+	conn.state.executed = append(conn.state.executed, trimmed)
+	upper := strings.ToUpper(trimmed)
+	if strings.Contains(query, "checksum") && strings.HasPrefix(upper, "INSERT INTO") && len(args) >= 2 {
 		name, _ := args[0].Value.(string)
 		checksum, _ := args[1].Value.(string)
-		conn.state.migrations[name] = checksum
+		if _, ok := conn.lookupMigrationLocked(name); ok {
+			return nil, errors.New("duplicate migration")
+		}
+		conn.setMigrationLocked(name, checksum)
+	}
+	if strings.Contains(query, "checksum") && strings.HasPrefix(upper, "UPDATE") && len(args) >= 4 {
+		checksum, _ := args[0].Value.(string)
+		name, _ := args[2].Value.(string)
+		pending, _ := args[3].Value.(string)
+		stored, ok := conn.lookupMigrationLocked(name)
+		if !ok || stored != pending {
+			return fakeResult(0), nil
+		}
+		conn.setMigrationLocked(name, checksum)
 	}
 	return fakeResult(1), nil
 }
@@ -291,21 +460,49 @@ func (conn *fakeConn) QueryContext(ctx context.Context, query string, args []dri
 	defer conn.state.mu.Unlock()
 	if strings.Contains(query, "checksum") && len(args) >= 1 {
 		name, _ := args[0].Value.(string)
-		if checksum, ok := conn.state.migrations[name]; ok {
+		if checksum, ok := conn.lookupMigrationLocked(name); ok {
 			return &fakeRows{values: []driver.Value{checksum}}, nil
 		}
 	}
 	return &fakeRows{}, nil
 }
 
+func (conn *fakeConn) lookupMigrationLocked(name string) (string, bool) {
+	if conn.tx != nil {
+		if checksum, ok := conn.tx.migrations[name]; ok {
+			return checksum, true
+		}
+	}
+	checksum, ok := conn.state.migrations[name]
+	return checksum, ok
+}
+
+func (conn *fakeConn) setMigrationLocked(name string, checksum string) {
+	if conn.tx != nil {
+		conn.tx.migrations[name] = checksum
+		return
+	}
+	conn.state.migrations[name] = checksum
+}
+
 type fakeTx struct {
-	state *fakeDBState
+	state      *fakeDBState
+	conn       *fakeConn
+	migrations map[string]string
 }
 
 func (tx *fakeTx) Commit() error {
 	tx.state.mu.Lock()
 	defer tx.state.mu.Unlock()
+	if tx.state.commitErr != nil {
+		tx.finish()
+		return tx.state.commitErr
+	}
+	for name, checksum := range tx.migrations {
+		tx.state.migrations[name] = checksum
+	}
 	tx.state.commits++
+	tx.finish()
 	return nil
 }
 
@@ -313,7 +510,14 @@ func (tx *fakeTx) Rollback() error {
 	tx.state.mu.Lock()
 	defer tx.state.mu.Unlock()
 	tx.state.rollbacks++
+	tx.finish()
 	return nil
+}
+
+func (tx *fakeTx) finish() {
+	if tx.conn != nil && tx.conn.tx == tx {
+		tx.conn.tx = nil
+	}
 }
 
 type fakeResult int64

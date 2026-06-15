@@ -52,9 +52,12 @@ and real-driver verification.
 - Re-running unchanged migrations skips them; changing an already-applied file
   fails with a checksum mismatch.
 - Migration errors include the file name or tracking step.
+- Migration tracking reserves a file name before running user SQL so concurrent
+  runners do not execute the same pending file twice.
 - `WithTx` commits on nil, rolls back on function error or panic, and accepts
   context plus `*sql.TxOptions`.
-- Readiness helpers work with a standard `*sql.DB`.
+- Readiness helpers work with a standard `*sql.DB` and return a generic public
+  error status from `CheckReadiness`.
 - A nested real-driver module verifies the helpers without changing root
   dependencies.
 - Docs include setup, query generation, handler usage, and test commands for a
@@ -75,6 +78,8 @@ and real-driver verification.
 - [x] Migration helper applies ordered SQL files and documents the tracking
   contract.
 - [x] Migration errors include file names or step information.
+- [x] Concurrent migration runners reserve before user SQL and do not report
+  uncommitted migrations as applied.
 - [x] Transaction helper commit, rollback, and canceled-context behavior are
   tested.
 - [x] Readiness helpers cover healthy and failing databases.
@@ -88,6 +93,8 @@ and real-driver verification.
 
 - Existing migration name with different checksum fails instead of silently
   reapplying.
+- Existing incomplete migration reservation fails closed instead of re-running
+  user SQL.
 - Unsafe migration tracking table names are rejected before SQL execution.
 - Missing database or migration source fails before opening a transaction.
 - Context cancellation before `BeginTx` prevents the transaction body from

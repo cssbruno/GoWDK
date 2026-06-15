@@ -30,3 +30,5 @@ Recommended naming:
   dependency stance for PBKDF2 defaults, custom hashers, and session secrets.
 - `0012-realtime-subscribe-surface.md`: accepted explicit `g:subscribe` on
   query-owned elements as the first realtime reactivity source contract.
+- `0013-built-in-tracing-observability.md`: accepted dependency-free
+  `runtime/trace` primitives before generated app auto-instrumentation.

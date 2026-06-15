@@ -63,6 +63,13 @@ executable contract registrations. Event workers can apply explicit
 nacked-batch backoff options while adapters retain durable retry and
 dead-letter policy ownership.
 
+`runtime/trace` provides the first dependency-free GOWDK Trace core. It owns
+W3C-compatible trace/span IDs, `traceparent` propagation, context spans,
+GOWDK surface/lane/source metadata, attributes, events, status, sampling,
+console/JSONL/ring/multi/exporter sinks, and a bounded in-process JSON/SSE
+collector. Generated app auto-instrumentation, durable storage, a browser trace
+viewer, and concrete OTLP transport are later integration work.
+
 Still partial: broad local client-side reactivity, richer hybrid streaming and
 data refresh, non-HTTP revalidation, generated worker/cron binary scaffolding,
 and managed deployment recipes.
@@ -192,6 +199,7 @@ manifest report (`internal/lang/testdata/manifest_golden`).
 | `runtime/security` | Runtime-safe security text helpers. | Runtime | Provides conservative secret-like text redaction for generated app panic/error logging without importing compiler-private `internal/` packages. |
 | `runtime/testkit` | Generated audit test helpers. | Runtime | Provides small `httptest` helpers used by generated `gowdk_audit_test.go` files and `gowdk audit --run` to verify route status, method rejection, and configured response headers in-process against generated app handlers. |
 | `runtime/contracts` | Typed contract registry and in-process dispatch. | Runtime | Implemented for queries, commands, backend-owned domain and integration events, presentation events, jobs, metadata, stable observation names and labels for logs/metrics/traces, local command-buffered event dispatch, event-envelope capture/replay with stable IDs, dependency-free outbox/broker/presentation-fanout/event-source/seen-store interfaces, command event sinks, an event worker loop with ack/nack, context cancellation, optional post-ack deduplication windows, explicit nacked-batch backoff options, a dependency-free file outbox adapter, dependency-free in-memory broker/EventSource adapter, dependency-free in-memory and file-backed seen stores, and dependency-free SSE presentation fanout adapter with retry hints and drop-on-full per-client buffers. Concrete Redis Streams, Redis TTL seen-store, NATS, and WebSocket adapters are nested optional modules. Separate worker/cron binary generators and managed deployment recipes are platform tooling, not runtime core. |
+| `runtime/trace` | Dependency-free runtime tracing core. | Runtime | Provides W3C-compatible trace/span IDs, `traceparent` inject/extract helpers, context spans, GOWDK surface/lane/source metadata, attributes, events, status, always-on/off and ratio sampling, console/JSONL/ring/multi/exporter sinks, OTLP-shaped snapshots without an OpenTelemetry dependency, and a bounded JSON/SSE collector. Generated app auto-instrumentation, durable trace storage, a browser trace viewer, and concrete OTLP transport remain follow-up integration work. |
 | `addons/static` | Build-time static page output. | Addon | Capability boundary implemented; build-time output uses `runtime/render` through the compiler view renderer. |
 | `addons/spa` | Static-first SPA navigation compatibility surface. | Addon | Keeps the existing SPA feature package and aliases build-time route output types from `addons/static`. |
 | `addons/actions` | Typed backend actions, form decoding, CSRF. | Addon | Capability boundary, generated request-shape validation for direct literal required/minlength/maxlength/pattern controls, escaped live-region validation fragments for partial requests, signed CSRF validator, and generated action CSRF wiring implemented; user-defined domain validation helpers remain planned. |

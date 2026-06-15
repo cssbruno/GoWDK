@@ -32,7 +32,7 @@ func pageRouteArtifacts(outputDir string, page gwdkir.Page) ([]Artifact, error) 
 	return artifacts, nil
 }
 
-func pageOutputArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, realtimeEventTypeNames map[string]string) ([]plannedArtifact, error) {
+func pageOutputArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string) ([]plannedArtifact, error) {
 	outputs, err := pageOutputs(page)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", page.ID, err)
@@ -47,7 +47,7 @@ func pageOutputArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
-		html, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, realtimeEventTypeNames, renderModeSPA)
+		html, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, realtimeEventTypeNames, queryTypeNames, renderModeSPA)
 		if err != nil {
 			return nil, err
 		}

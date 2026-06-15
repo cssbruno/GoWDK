@@ -39,3 +39,25 @@ func realtimeSubscriptionEventType(subscription gwdkir.RealtimeSubscription) str
 	}
 	return importPath + "." + eventType
 }
+
+func queryInvalidationTypeNames(invalidations []gwdkir.QueryInvalidation) map[string]string {
+	if len(invalidations) == 0 {
+		return nil
+	}
+	types := map[string]string{}
+	for _, invalidation := range invalidations {
+		if invalidation.Status != gwdkir.ContractBindingBound {
+			continue
+		}
+		query := strings.TrimSpace(invalidation.Query)
+		queryType := strings.TrimSpace(invalidation.QueryType)
+		if query == "" || queryType == "" {
+			continue
+		}
+		types[query] = queryType
+	}
+	if len(types) == 0 {
+		return nil
+	}
+	return types
+}

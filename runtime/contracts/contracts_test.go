@@ -559,6 +559,73 @@ func TestPresentationFanoutCommandEventSinkSendsOnlyPresentationEvents(t *testin
 	}
 }
 
+func TestRegisterInvalidationRecordsDomainEventToQueryEdge(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterInvalidation[patientCreated, patientPageQuery](registry))
+	must(t, RegisterInvalidation[patientCreated, patientPageQuery](registry))
+
+	invalidations := registry.Invalidations()
+	if len(invalidations) != 1 {
+		t.Fatalf("invalidations = %#v, want one deduplicated edge", invalidations)
+	}
+	if invalidations[0] != (QueryInvalidation{EventCategory: DomainEvent, EventType: typeName[patientCreated](), QueryType: typeName[patientPageQuery]()}) {
+		t.Fatalf("unexpected invalidation edge: %#v", invalidations[0])
+	}
+}
+
+func TestQueryInvalidationCommandEventSinkSendsGeneratedPresentationEvent(t *testing.T) {
+	fanout := &recordingFanout{}
+	sink := QueryInvalidationCommandEventSink(fanout, []QueryInvalidation{{
+		EventCategory: DomainEvent,
+		EventType:     typeName[patientCreated](),
+		QueryType:     typeName[patientPageQuery](),
+	}})
+
+	err := DispatchCommandEvents(context.Background(), sink, NewRegistry(), RoleWeb, []EventEnvelope{{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}})
+	if err != nil {
+		t.Fatalf("query invalidation sink: %v", err)
+	}
+	if fanout.calls != 1 || len(fanout.events) != 1 {
+		t.Fatalf("fanout calls/events = %d/%#v, want one event", fanout.calls, fanout.events)
+	}
+	event := fanout.events[0]
+	if event.Category != PresentationEvent || event.Type != QueryInvalidationPresentationEventType {
+		t.Fatalf("unexpected invalidation presentation event: %#v", event)
+	}
+	notice, ok := event.Value.(QueryInvalidationNotice)
+	if !ok {
+		t.Fatalf("event value type = %T, want QueryInvalidationNotice", event.Value)
+	}
+	if !reflect.DeepEqual(notice.Queries, []string{typeName[patientPageQuery]()}) {
+		t.Fatalf("notice queries = %#v", notice.Queries)
+	}
+}
+
+func TestQueryInvalidationCommandEventSinkIgnoresFanoutErrors(t *testing.T) {
+	fanout := &recordingFanout{err: errors.New("offline")}
+	sink := QueryInvalidationCommandEventSink(fanout, []QueryInvalidation{{
+		EventCategory: DomainEvent,
+		EventType:     typeName[patientCreated](),
+		QueryType:     typeName[patientPageQuery](),
+	}})
+
+	err := DispatchCommandEvents(context.Background(), sink, NewRegistry(), RoleWeb, []EventEnvelope{{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}})
+	if err != nil {
+		t.Fatalf("query invalidation sink error = %v, want nil", err)
+	}
+	if fanout.calls != 1 {
+		t.Fatalf("fanout.calls = %d, want 1", fanout.calls)
+	}
+}
+
 func TestPublishEnvelopeDispatchesCapturedEvent(t *testing.T) {
 	registry := NewRegistry()
 	var handled []string

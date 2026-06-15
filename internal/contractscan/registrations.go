@@ -59,6 +59,47 @@ func scanContractRegistrations(fset *token.FileSet, file *ast.File, aliases map[
 	return contracts
 }
 
+func scanInvalidationRegistrations(fset *token.FileSet, file *ast.File, aliases map[string]bool, imports map[string]string, source string) []Invalidation {
+	var invalidations []Invalidation
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		register := contractRegisterFunction(fn, aliases)
+		ast.Inspect(fn.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, typeArgs := registrationSelector(call.Fun)
+			if selector == nil || selector.Sel.Name != "RegisterInvalidation" || len(typeArgs) < 2 {
+				return true
+			}
+			ident, ok := selector.X.(*ast.Ident)
+			if !ok || !aliases[ident.Name] {
+				return true
+			}
+			position := fset.Position(call.Pos())
+			eventType, eventImportPath := contractTypeName(fset, typeArgs[0], imports)
+			queryType, queryImportPath := contractTypeName(fset, typeArgs[1], imports)
+			invalidations = append(invalidations, Invalidation{
+				EventCategory:       runtimecontracts.DomainEvent,
+				EventType:           eventType,
+				EventTypeImportPath: eventImportPath,
+				QueryType:           queryType,
+				QueryTypeImportPath: queryImportPath,
+				Register:            register,
+				Source:              source,
+				Line:                position.Line,
+				Column:              position.Column,
+			})
+			return true
+		})
+	}
+	return invalidations
+}
+
 func contractTypeName(fset *token.FileSet, expr ast.Expr, imports map[string]string) (string, string) {
 	name := exprString(fset, expr)
 	selector, ok := expr.(*ast.SelectorExpr)

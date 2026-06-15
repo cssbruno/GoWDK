@@ -285,8 +285,14 @@ func NewContractRegistry() *gowdkcontracts.Registry {
 func RunContractEventWorker(ctx context.Context, source gowdkcontracts.EventSource) error {
 	return gowdkcontracts.RunEventWorker(ctx, NewContractRegistry(), source)
 }
+func RunContractEventWorkerWithOptions(ctx context.Context, source gowdkcontracts.EventSource, options ...gowdkcontracts.EventWorkerOption) error {
+	return gowdkcontracts.RunEventWorkerWithOptions(ctx, NewContractRegistry(), source, options...)
+}
 func RunContractEventWorkerWithSeenStore(ctx context.Context, source gowdkcontracts.EventSource, seen gowdkcontracts.SeenStore) error {
 	return gowdkcontracts.RunEventWorkerWithSeenStore(ctx, NewContractRegistry(), source, seen)
+}
+func RunContractEventWorkerWithSeenStoreAndOptions(ctx context.Context, source gowdkcontracts.EventSource, seen gowdkcontracts.SeenStore, options ...gowdkcontracts.EventWorkerOption) error {
+	return gowdkcontracts.RunEventWorkerWithSeenStoreAndOptions(ctx, NewContractRegistry(), source, seen, options...)
 }
 func newBackendRouter() (*gowdkruntime.BackendRouter, error) {
 	contractRegistry := NewContractRegistry()

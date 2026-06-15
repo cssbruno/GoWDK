@@ -12,7 +12,7 @@ Reference docs describe current command and data contracts.
 - `deployment.md`: current output shapes and operations recipes.
 - `pwa-offline.md`: optional user-owned service worker and manifest guidance.
 - `testing.md`: scaffolded smoke tests, browser smoke, accessibility, and performance checks.
-- `contracts.md`: current runtime contract registry and planned compiler integration.
+- `contracts.md`: current runtime contract registry and generated command/query adapters.
 - `realtime.md`: current presentation-event fanout setup, SSE default, and WebSocket opt-in behavior.
 - `css.md`: current CSS extension point.
 - `images.md`: image optimization patterns and current non-goals.

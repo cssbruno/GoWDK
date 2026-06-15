@@ -20,6 +20,7 @@ type Program struct {
 	Templates             []Template
 	ContractRefs          []ContractReference
 	RealtimeSubscriptions []RealtimeSubscription
+	QueryInvalidations    []QueryInvalidation
 	AuditSpecs            []AuditSpec
 	ClientBehaviors       []ClientBehavior
 	Assets                []Asset
@@ -522,6 +523,27 @@ type RealtimeSubscription struct {
 	Source           string
 	Span             source.SourceSpan
 	QuerySpan        source.SourceSpan
+}
+
+// QueryInvalidation records a bound query region that should refresh when a
+// backend event type is emitted by a successful command.
+type QueryInvalidation struct {
+	Query            string
+	QueryImportAlias string
+	QueryImportPath  string
+	QueryType        string
+	Event            string
+	EventImportPath  string
+	EventType        string
+	EventCategory    string
+	Guards           []string
+	Status           ContractBindingStatus
+	Message          string
+	OwnerKind        SourceKind
+	OwnerID          string
+	Package          string
+	Source           string
+	Span             source.SourceSpan
 }
 
 // AuditSpec is the normalized IR for one *.audit.gwdk source.

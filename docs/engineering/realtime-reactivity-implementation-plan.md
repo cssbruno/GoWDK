@@ -6,21 +6,25 @@ Relevant sources:
 
 - Issue #130: ADR plus bounded `.gwdk` subscribe surface, IR, and validation.
 - Issue #131: server-side fanout codegen in `internal/appgen`.
-- Issue #147: derived invalidation design input, deferred by ADR 0012.
+- Issue #147: explicit Go invalidation registration plus generated query
+  refresh wiring.
 - ADR 0012: explicit `g:subscribe` on query-owned elements.
 - `docs/product/realtime-reactivity-spec.md`.
 
 ## Assumptions
 
 - The first slices implement validation, metadata, generated SSE fanout,
-  explicit `replaceHTML` client patches, one-second SSE retry hints,
-  drop-on-full per-client SSE buffers, and guard checks before generated
-  streams open. Custom backoff/replay, active session-change stream revocation,
-  richer patch shapes, and broader examples are still follow-up work.
+  explicit `replaceHTML` client patches, explicit domain-event to query
+  invalidation registrations, one-second SSE retry hints, drop-on-full
+  per-client SSE buffers, and guard checks before generated streams open.
+  Custom backoff/replay, active session-change stream revocation, richer patch
+  shapes, and broader examples are still follow-up work.
 - `g:subscribe` is only valid on an element that also declares `g:query`.
 - Subscriptions target presentation events registered through
   `runtime/contracts`.
 - `realtime.Addon()` is required for any subscription.
+- `realtime.Addon()` is required for generated invalidation refresh wiring.
+- `RegisterInvalidation[event, query]` uses domain events only in this slice.
 
 ## Proposed Changes
 
@@ -48,6 +52,18 @@ Relevant sources:
 - Run inherited subscribed-page guards before generated SSE stream responses
   open, using the requested page path or referer path when available and a
   fail-closed guard union otherwise.
+- Add `contracts.RegisterInvalidation[event, query]` runtime metadata.
+- Scan invalidation registrations and reject unknown queries, unknown domain
+  events, or domain events no command emits.
+- Join invalidation edges with bound `g:query` references into
+  `Program.QueryInvalidations`.
+- Add build-report and `gowdk graph` invalidation metadata.
+- Generate `gowdk.query.invalidate` presentation events after command event
+  dispatch for matching domain events.
+- Emit validated `data-gowdk-query-type` markers and load `gowdk.js` for
+  invalidated query regions.
+- Refetch the current document and replace only matching non-subscribed query
+  regions on invalidation.
 - Update language/reference docs and focused tests.
 
 ## Files Expected To Change
@@ -65,18 +81,24 @@ Relevant sources:
 - `internal/buildgen/*`
 - `internal/appgen/*`
 - `internal/diagnostics/*`
+- `runtime/contracts/*`
 - `docs/language/*`
 - `docs/reference/*`
 
 ## Data And API Impact
 
 - Internal IR gains a `RealtimeSubscriptions` slice.
+- Internal IR gains a `QueryInvalidations` slice.
 - Generated HTML can include `data-gowdk-subscribe`.
+- Generated HTML can include `data-gowdk-query-type`.
 - Build reports can include `realtime_subscription` events.
+- Build reports can include `query_invalidation` events.
 - Generated apps can mount `/_gowdk/realtime/events`, expose
   `RealtimeEventsPath`, and expose
   `RegisterRealtimeFanout(realtime.PresentationFanout)`.
+- Generated apps can synthesize `gowdk.query.invalidate` presentation events.
 - Public diagnostic registry gains realtime subscription codes.
+- Public diagnostic registry gains contract invalidation codes.
 - No new production dependency is introduced.
 
 ## Tests
@@ -92,9 +114,11 @@ Relevant sources:
   before opening SSE responses.
 - Runtime: SSE coverage pins the retry directive and bounded drop-on-full
   backpressure behavior.
+- Runtime: invalidation registration and best-effort invalidation fanout sink.
 - Client runtime: Node DOM harness covers EventSource mount, deterministic
-  patching, unsupported patch rejection, island cleanup/remount, and stream
-  cleanup when subscribed regions leave the page.
+  patching, unsupported patch rejection, invalidation document refetch, island
+  cleanup/remount, and stream cleanup when subscribed/invalidated regions leave
+  the page.
 - Manual: inspect generated HTML/build report from a small realtime fixture.
 
 ## Verification Commands
@@ -102,6 +126,7 @@ Relevant sources:
 ```sh
 go test ./internal/view ./internal/gwdkir ./internal/gwdkanalysis ./internal/contractscan ./internal/compiler ./internal/diagnostics ./internal/buildgen ./internal/lang ./cmd/gowdk
 go test ./runtime/contracts/sse
+go test ./runtime/contracts
 go test ./internal/appgen -run 'TestGenerateWritesRealtimeFanoutForSubscriptions|TestGenerateGuardsRealtimeStreamForSubscribedPages|TestGeneratedBinaryRealtimeFanoutStreamsSubscribedPresentationEvents|TestGeneratedBinaryRealtimeStreamGuardDenialClosesStream'
 go build ./cmd/gowdk
 ```
@@ -111,6 +136,8 @@ go build ./cmd/gowdk
 - Remove `g:subscribe` from the supported directive set.
 - Remove `RealtimeSubscriptions` from IR and downstream validators/reporters.
 - Remove generated realtime declarations and mux registration from appgen.
+- Remove invalidation scan/link/report metadata and the
+  `gowdk.query.invalidate` client path.
 - Keep ADR 0012 updated with the replacement decision if the surface changes.
 
 ## Risks

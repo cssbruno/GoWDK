@@ -41,6 +41,7 @@ func Register(r *gowdkcontracts.Registry) {
 	gowdkcontracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient, gowdkcontracts.RoleWeb)
 	gowdkcontracts.RegisterDomainEvent[PatientCreated](r, SendWelcomeEmail, gowdkcontracts.RoleWorker)
 	gowdkcontracts.RegisterPresentationEvent[PatientNotice](r, NotifyBrowser, gowdkcontracts.RoleWeb)
+	gowdkcontracts.RegisterInvalidation[PatientCreated, GetPatient](r)
 	gowdkcontracts.RegisterJob[SyncPatients](r, Sync, gowdkcontracts.RoleCron)
 }
 
@@ -114,6 +115,12 @@ func RegisterTest(r *c.Registry) {
 	}
 	if len(report.Diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %#v", report.Diagnostics)
+	}
+	if len(report.Invalidations) != 1 {
+		t.Fatalf("len(report.Invalidations) = %d, want 1: %#v", len(report.Invalidations), report.Invalidations)
+	}
+	if report.Invalidations[0].EventType != "PatientCreated" || report.Invalidations[0].QueryType != "GetPatient" || report.Invalidations[0].Register != "Register" {
+		t.Fatalf("unexpected invalidation edge: %#v", report.Invalidations[0])
 	}
 }
 
@@ -584,6 +591,51 @@ func SendWelcomeEmail(ctx context.Context, event PatientCreated) error {
 	}
 }
 
+func TestScanReportsInvalidationEventNoCommandEmits(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "patients.go"), `package patients
+
+import (
+	"context"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type GetPatientPage struct{}
+type PatientPageData struct{}
+type CreatePatient struct{}
+type CreatePatientResult struct{}
+type PatientCreated struct{}
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterQuery[GetPatientPage, PatientPageData](r, LoadPatientPage)
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient)
+	contracts.RegisterDomainEvent[PatientCreated](r, SendWelcomeEmail)
+	contracts.RegisterInvalidation[PatientCreated, GetPatientPage](r)
+}
+
+func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData, error) {
+	return PatientPageData{}, nil
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	return CreatePatientResult{}, nil
+}
+
+func SendWelcomeEmail(ctx context.Context, event PatientCreated) error {
+	return nil
+}
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagnostic := findDiagnostic(t, report.Diagnostics, "contract_invalidation_invalid")
+	if !strings.Contains(diagnostic.Message, "is not emitted by any scanned command") {
+		t.Fatalf("unexpected diagnostic message: %s", diagnostic.Message)
+	}
+}
+
 func TestScanReportsGeneratedAppImportCycles(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "patients.go"), `package patients
@@ -799,6 +851,44 @@ func TestReportJSONCanFilterByKind(t *testing.T) {
 	}
 	if len(decoded.Contracts) != 1 || decoded.Contracts[0].Kind != runtimecontracts.Command {
 		t.Fatalf("unexpected filtered JSON: %s", payload)
+	}
+}
+
+func TestLinkQueryInvalidationsJoinsBoundQueryRefs(t *testing.T) {
+	linkedRefs := LinkReferences([]gwdkir.ContractReference{{
+		Kind:        gwdkir.ContractQuery,
+		Name:        "patients.GetPatientPage",
+		ImportAlias: "patients",
+		ImportPath:  "github.com/acme/clinic/patients",
+		Type:        "GetPatientPage",
+		OwnerKind:   gwdkir.SourcePage,
+		OwnerID:     "patients",
+		Source:      "pages/patients.page.gwdk",
+	}}, Report{Contracts: []Contract{{
+		Kind:           runtimecontracts.Query,
+		Package:        "patients",
+		Type:           "GetPatientPage",
+		TypeImportPath: "github.com/acme/clinic/patients",
+		Result:         "PatientPageData",
+		Handler:        "LoadPatientPage",
+		Register:       "Register",
+	}}})
+	invalidations := LinkQueryInvalidations(linkedRefs, Report{Invalidations: []Invalidation{{
+		EventCategory:       runtimecontracts.DomainEvent,
+		EventType:           "PatientCreated",
+		EventTypeImportPath: "github.com/acme/clinic/patients",
+		QueryType:           "GetPatientPage",
+		QueryTypeImportPath: "github.com/acme/clinic/patients",
+	}}})
+	if len(invalidations) != 1 {
+		t.Fatalf("expected one linked invalidation, got %#v", invalidations)
+	}
+	invalidation := invalidations[0]
+	if invalidation.Query != "patients.GetPatientPage" ||
+		invalidation.QueryType != "github.com/acme/clinic/patients.GetPatientPage" ||
+		invalidation.EventType != "github.com/acme/clinic/patients.PatientCreated" ||
+		invalidation.Status != gwdkir.ContractBindingBound {
+		t.Fatalf("unexpected linked invalidation: %#v", invalidation)
 	}
 }
 

@@ -51,6 +51,23 @@ type EventEnvelope struct {
 	Value    any
 }
 
+// QueryInvalidationPresentationEventType is the browser-facing presentation
+// event type generated when backend events invalidate query-owned regions.
+const QueryInvalidationPresentationEventType = "gowdk.query.invalidate"
+
+// QueryInvalidation records that a backend event invalidates a query type.
+type QueryInvalidation struct {
+	EventCategory EventCategory
+	EventType     string
+	QueryType     string
+}
+
+// QueryInvalidationNotice is the browser payload sent for invalidated queries.
+type QueryInvalidationNotice struct {
+	Queries []string `json:"queries"`
+	Events  []string `json:"events,omitempty"`
+}
+
 // EventDecoder converts a stored JSON event value back into the typed Go value
 // expected by subscribers.
 type EventDecoder func(json.RawMessage) (any, error)

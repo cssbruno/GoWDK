@@ -140,6 +140,21 @@ func CheckInvariants(program Program) error {
 		reportOwnerReference("realtime subscription", subscription.OwnerKind, subscription.OwnerID, pages, components, layouts, report)
 	}
 
+	for _, invalidation := range program.QueryInvalidations {
+		switch invalidation.Status {
+		case "", ContractBindingUnknown, ContractBindingBound, ContractBindingMissing, ContractBindingInvalid:
+		default:
+			report("query invalidation %q has unknown binding status %q", invalidation.Query, invalidation.Status)
+		}
+		if strings.TrimSpace(invalidation.Query) == "" {
+			report("query invalidation for event %q has no query boundary", invalidation.Event)
+		}
+		if strings.TrimSpace(invalidation.Event) == "" {
+			report("query invalidation has no event reference")
+		}
+		reportOwnerReference("query invalidation", invalidation.OwnerKind, invalidation.OwnerID, pages, components, layouts, report)
+	}
+
 	if len(violations) == 0 {
 		return nil
 	}

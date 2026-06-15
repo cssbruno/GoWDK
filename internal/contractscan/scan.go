@@ -37,6 +37,19 @@ type Contract struct {
 	Column           int                            `json:"column"`
 }
 
+// Invalidation describes one explicit event-to-query invalidation edge.
+type Invalidation struct {
+	EventCategory       runtimecontracts.EventCategory `json:"eventCategory"`
+	EventType           string                         `json:"eventType"`
+	EventTypeImportPath string                         `json:"eventTypeImportPath,omitempty"`
+	QueryType           string                         `json:"queryType"`
+	QueryTypeImportPath string                         `json:"queryTypeImportPath,omitempty"`
+	Register            string                         `json:"register,omitempty"`
+	Source              string                         `json:"source"`
+	Line                int                            `json:"line"`
+	Column              int                            `json:"column"`
+}
+
 // Diagnostic describes a validation issue found while scanning contracts.
 type Diagnostic struct {
 	Severity       string                `json:"severity"`
@@ -61,10 +74,11 @@ type EventRef struct {
 
 // Report is the full discovery output.
 type Report struct {
-	Version     int          `json:"version"`
-	Root        string       `json:"root"`
-	Contracts   []Contract   `json:"contracts"`
-	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
+	Version       int            `json:"version"`
+	Root          string         `json:"root"`
+	Contracts     []Contract     `json:"contracts"`
+	Invalidations []Invalidation `json:"invalidations,omitempty"`
+	Diagnostics   []Diagnostic   `json:"diagnostics,omitempty"`
 }
 
 // Scan walks root and reports registrations that call runtime/contracts helpers.
@@ -94,6 +108,7 @@ func Scan(root string) (Report, error) {
 	sort.Strings(files)
 	fset := token.NewFileSet()
 	var contracts []Contract
+	var invalidations []Invalidation
 	var diagnostics []Diagnostic
 	packages, err := parseScanPackages(fset, absRoot, files)
 	if err != nil {
@@ -103,10 +118,12 @@ func Scan(root string) (Report, error) {
 	for _, pkg := range packages {
 		discovered := scanPackage(fset, pkg, inspectionCache)
 		contracts = append(contracts, discovered.Contracts...)
+		invalidations = append(invalidations, discovered.Invalidations...)
 		diagnostics = append(diagnostics, discovered.Diagnostics...)
 	}
 	diagnostics = append(diagnostics, duplicateCommandDiagnostics(contracts)...)
 	diagnostics = append(diagnostics, emittedEventCategoryDiagnostics(contracts)...)
+	diagnostics = append(diagnostics, invalidationDiagnostics(invalidations, contracts)...)
 	sort.Slice(contracts, func(i, j int) bool {
 		if contracts[i].Kind != contracts[j].Kind {
 			return contracts[i].Kind < contracts[j].Kind
@@ -134,7 +151,22 @@ func Scan(root string) (Report, error) {
 		}
 		return diagnostics[i].Column < diagnostics[j].Column
 	})
-	return Report{Version: 1, Root: absRoot, Contracts: contracts, Diagnostics: diagnostics}, nil
+	sort.Slice(invalidations, func(i, j int) bool {
+		if invalidations[i].EventCategory != invalidations[j].EventCategory {
+			return invalidations[i].EventCategory < invalidations[j].EventCategory
+		}
+		if invalidations[i].EventType != invalidations[j].EventType {
+			return invalidations[i].EventType < invalidations[j].EventType
+		}
+		if invalidations[i].QueryType != invalidations[j].QueryType {
+			return invalidations[i].QueryType < invalidations[j].QueryType
+		}
+		if invalidations[i].Source != invalidations[j].Source {
+			return invalidations[i].Source < invalidations[j].Source
+		}
+		return invalidations[i].Line < invalidations[j].Line
+	})
+	return Report{Version: 1, Root: absRoot, Contracts: contracts, Invalidations: invalidations, Diagnostics: diagnostics}, nil
 }
 
 // Filter returns contracts of kind. Empty kind returns a copy of all contracts.
@@ -151,15 +183,17 @@ func (report Report) Filter(kind runtimecontracts.Kind) []Contract {
 // JSON returns deterministic indented JSON.
 func (report Report) JSON(kind runtimecontracts.Kind) ([]byte, error) {
 	out := struct {
-		Version     int          `json:"version"`
-		Root        string       `json:"root"`
-		Contracts   []Contract   `json:"contracts"`
-		Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
+		Version       int            `json:"version"`
+		Root          string         `json:"root"`
+		Contracts     []Contract     `json:"contracts"`
+		Invalidations []Invalidation `json:"invalidations,omitempty"`
+		Diagnostics   []Diagnostic   `json:"diagnostics,omitempty"`
 	}{
-		Version:     report.Version,
-		Root:        report.Root,
-		Contracts:   report.Filter(kind),
-		Diagnostics: report.Diagnostics,
+		Version:       report.Version,
+		Root:          report.Root,
+		Contracts:     report.Filter(kind),
+		Invalidations: report.Invalidations,
+		Diagnostics:   report.Diagnostics,
 	}
 	return json.MarshalIndent(out, "", "  ")
 }

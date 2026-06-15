@@ -318,6 +318,11 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 		out.write(` data-gowdk-query="`)
 		out.write(gowhtml.Escape(directives.Query))
 		out.writeByte('"')
+		if queryType := ctx.queryTypeNames[directives.Query]; queryType != "" {
+			out.write(` data-gowdk-query-type="`)
+			out.write(gowhtml.Escape(queryType))
+			out.writeByte('"')
+		}
 	}
 	if directives.Subscribe != "" {
 		out.write(` data-gowdk-subscribe="`)

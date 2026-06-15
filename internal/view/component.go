@@ -191,6 +191,7 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 			ownerPackage:           component.Package,
 			uses:                   component.Uses,
 			realtimeEventTypeNames: ctx.realtimeEventTypeNames,
+			queryTypeNames:         ctx.queryTypeNames,
 			stack:                  cloneStack(ctx.stack),
 			slotHTML:               slotHTML,
 			slots:                  slots,

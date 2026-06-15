@@ -1713,6 +1713,21 @@ func TestRenderWithOptionsMarksGQueryElement(t *testing.T) {
 	}
 }
 
+func TestRenderWithOptionsMarksGQueryElementType(t *testing.T) {
+	got, err := RenderWithOptions(`<section g:query="patients.GetPatientPage"><h1>Patients</h1></section>`, nil, nil, Options{
+		QueryTypeNames: map[string]string{
+			"patients.GetPatientPage": "github.com/acme/clinic/patients.GetPatientPage",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<section data-gowdk-query="patients.GetPatientPage" data-gowdk-query-type="github.com/acme/clinic/patients.GetPatientPage"><h1>Patients</h1></section>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
 func TestRenderWithOptionsMarksGQuerySubscription(t *testing.T) {
 	got, err := RenderWithOptions(`<section g:query="patients.GetPatientPage" g:subscribe="patients.PatientNotice"><h1>Patients</h1></section>`, nil, nil, Options{})
 	if err != nil {

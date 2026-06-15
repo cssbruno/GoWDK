@@ -10,6 +10,7 @@ import (
 )
 
 func clientRuntimeArtifacts(config gowdk.Config, ir gwdkir.Program, outputDir string, layouts map[string]gwdkir.Layout, components map[string]view.Component) ([]plannedAssetArtifact, error) {
+	queryTypeNames := queryInvalidationTypeNames(ir.QueryInvalidations)
 	for _, page := range ir.Pages {
 		viewSource, err := composePageViewSource(page, layouts)
 		if err != nil {
@@ -20,7 +21,7 @@ func clientRuntimeArtifacts(config gowdk.Config, ir gwdkir.Program, outputDir st
 		if err != nil {
 			return nil, err
 		}
-		usesRealtime, err := pageUsesRealtimeRuntime(page, viewSource, viewNodes, components)
+		usesRealtime, err := pageUsesRealtimeRuntime(page, viewSource, viewNodes, components, queryTypeNames)
 		if err != nil {
 			return nil, err
 		}

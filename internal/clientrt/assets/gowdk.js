@@ -457,7 +457,7 @@
   }
 
   function hasRealtimeRegions() {
-    return !!(document.querySelector && document.querySelector('[data-gowdk-subscribe]'));
+    return !!(document.querySelector && document.querySelector('[data-gowdk-subscribe], [data-gowdk-query-type]'));
   }
 
   function handleRealtimeEvent(event) {
@@ -479,6 +479,12 @@
     var category = envelope.category || envelope.Category || '';
     var eventType = envelope.type || envelope.Type || '';
     if (category !== 'presentation' || !eventType) {
+      return;
+    }
+    if (eventType === 'gowdk.query.invalidate') {
+      refreshInvalidatedQueries(normalizeInvalidatedQueries(envelope.value || envelope.Value), envelope).catch(function (error) {
+        dispatchRealtimeError(error, { envelope: envelope });
+      });
       return;
     }
     var regions = realtimeRegionsForEvent(eventType);
@@ -506,6 +512,98 @@
       }
     });
     return regions;
+  }
+
+  function normalizeInvalidatedQueries(value) {
+    if (!value || typeof value !== 'object') {
+      throw new Error('query invalidation event value must contain queries');
+    }
+    var queries = Array.isArray(value.queries) ? value.queries : Array.isArray(value.Queries) ? value.Queries : null;
+    if (!queries || !queries.length) {
+      throw new Error('query invalidation event value must contain queries');
+    }
+    return queries.filter(function (query) {
+      return typeof query === 'string' && query;
+    });
+  }
+
+  async function refreshInvalidatedQueries(queries, envelope) {
+    var regions = queryRegionsForInvalidation(document, queries);
+    if (!regions.length || typeof DOMParser === 'undefined') {
+      return;
+    }
+    var focused = focusTarget(document.activeElement);
+    var fetched = await fetchDocument(window.location.href, false);
+    if (!fetched || !fetched.html) {
+      return;
+    }
+    var next = new DOMParser().parseFromString(fetched.html, 'text/html');
+    if (!next || !next.querySelectorAll) {
+      return;
+    }
+    var replacements = queryRegionsForInvalidation(next, queries);
+    regions.forEach(function (region, index) {
+      var replacement = replacementQueryRegion(region, replacements, index);
+      if (!replacement) {
+        return;
+      }
+      if (typeof window !== 'undefined' && window.__gowdkDestroyIslands) {
+        window.__gowdkDestroyIslands(region, true);
+      }
+      region.outerHTML = replacement.outerHTML;
+    });
+    if (typeof window !== 'undefined' && window.__gowdkStores && window.__gowdkStores.hydrate) {
+      window.__gowdkStores.hydrate();
+    }
+    if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
+      window.__gowdkMountIslands();
+    }
+    if (typeof window !== 'undefined' && window.__gowdkMountClientGoBlocks) {
+      window.__gowdkMountClientGoBlocks();
+    }
+    ensureRealtime();
+    restoreFocus(focused);
+    document.dispatchEvent(new CustomEvent('gowdk:query-refresh', {
+      detail: { queries: queries, envelope: envelope }
+    }));
+  }
+
+  function replacementQueryRegion(region, replacements, index) {
+    if (region.id) {
+      for (var i = 0; i < replacements.length; i++) {
+        if (replacements[i].id === region.id) {
+          return replacements[i];
+        }
+      }
+    }
+    return replacements[index] || null;
+  }
+
+  function queryRegionsForInvalidation(root, queries) {
+    if (!root.querySelectorAll) {
+      return [];
+    }
+    var regions = [];
+    Array.prototype.forEach.call(root.querySelectorAll('[data-gowdk-query]'), function (region) {
+      if (queryRegionMatches(region, queries)) {
+        regions.push(region);
+      }
+    });
+    return regions;
+  }
+
+  function queryRegionMatches(region, queries) {
+    if (region.getAttribute('data-gowdk-subscribe')) {
+      return false;
+    }
+    var queryType = region.getAttribute('data-gowdk-query-type') || '';
+    var queryRef = region.getAttribute('data-gowdk-query') || '';
+    for (var i = 0; i < queries.length; i++) {
+      if (queries[i] === queryType || queries[i] === queryRef) {
+        return true;
+      }
+    }
+    return false;
   }
 
   function subscriptionMatchesEventType(sourceRef, eventType) {

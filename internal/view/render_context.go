@@ -17,6 +17,7 @@ type renderComponentContext struct {
 	ownerPackage           string
 	uses                   map[string]string
 	realtimeEventTypeNames map[string]string
+	queryTypeNames         map[string]string
 	stack                  map[string]bool
 	slotHTML               string
 	slots                  map[string]slotContent

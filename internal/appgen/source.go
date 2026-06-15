@@ -280,7 +280,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(direct)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(direct), generatedUsesRateLimit(direct))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
-	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(direct))...)
+	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(direct), generatedRealtimeQueryInvalidationsEnabled(direct))...)
 	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
 	decls = append(decls, realtimeDecls(direct)...)
 	switch {
@@ -311,7 +311,7 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(options)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(options), generatedUsesRateLimit(options))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
-	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(options))...)
+	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(options), generatedRealtimeQueryInvalidationsEnabled(options))...)
 	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
 	decls = append(decls, realtimeDecls(options)...)
 	if adapter.HasRegistrations() {

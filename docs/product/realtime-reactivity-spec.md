@@ -11,6 +11,7 @@ own server data policy.
 ## Goals
 
 - Add an explicit `.gwdk` subscription surface for presentation-event driven UI.
+- Add explicit Go invalidation registration for domain-event to query refresh.
 - Lower subscriptions into compiler IR with source spans and owner metadata.
 - Validate subscription events against scanned Go contract registrations.
 - Keep live regions bounded to query-owned elements for the first slice.
@@ -18,7 +19,7 @@ own server data policy.
 
 ## Non-Goals
 
-- No implicit domain-event to query invalidation in the first slice.
+- No inferred domain-event to query invalidation from handler bodies.
 - No payload diffing or arbitrary DOM patch language in `.gwdk`.
 - No user-written JavaScript ownership of trusted app behavior.
 - No direct template subscription to domain or integration events.
@@ -40,11 +41,14 @@ own server data policy.
 1. The app enables `realtime.Addon()` in `gowdk.config.go`.
 2. Go code registers a presentation event through `runtime/contracts`.
 3. A `.gwdk` view declares a query region with `g:query`.
-4. The same element declares `g:subscribe` for the presentation event.
-5. The compiler validates the event reference and emits subscription IR.
-6. Generated apps stream subscribed presentation events to the browser.
-7. Generated `gowdk.js` applies explicit bounded patches to the subscribed
-   query region.
+4. The app either declares `g:subscribe` for a presentation event or registers
+   `contracts.RegisterInvalidation[DomainEvent, Query](registry)` in Go.
+5. The compiler validates the event reference or invalidation edge and emits
+   IR metadata.
+6. Generated apps stream subscribed presentation events and generated query
+   invalidation events to the browser.
+7. Generated `gowdk.js` applies explicit bounded patches to subscribed regions
+   and refetches the current document for matching invalidated query regions.
 
 ## Requirements
 
@@ -63,6 +67,15 @@ own server data policy.
 - Generated client runtime applies explicit `replaceHTML` patches from
   presentation event payloads to the matching query region.
 - Unsupported realtime patch payloads fail safely without mutating the DOM.
+- `RegisterInvalidation[event, query]` edges are scanned, validated, joined to
+  `g:query` bindings, and reported.
+- Invalidation edges naming an unknown query, unknown domain event, or domain
+  event no scanned command emits are diagnostics.
+- Generated command adapters send a `gowdk.query.invalidate` presentation event
+  after successful command event dispatch when captured domain events invalidate
+  bound query regions.
+- Generated client runtime refetches the current document and swaps only
+  matching non-subscribed `data-gowdk-query-type` regions.
 - Generated SSE streams run inherited page guards before opening the response.
 - SSE reconnect timing and slow-client drop behavior are explicit.
 
@@ -74,7 +87,7 @@ own server data policy.
 - Accessibility: no-JavaScript output remains the normal rendered query region.
 - Security/privacy: only presentation events can cross the browser boundary.
 - Observability: build reports should include discovered realtime
-  subscriptions when present.
+  subscriptions and query invalidations when present.
 
 ## Acceptance Criteria
 
@@ -102,6 +115,15 @@ own server data policy.
 - [x] Guard denial rejects generated realtime streams safely before SSE opens.
 - [x] `examples/contracts` builds a live-updating `g:subscribe` flow and
   documents setup, expected behavior, no-JavaScript fallback, and known limits.
+- [x] `RegisterInvalidation[event, query]` registers explicit domain-event to
+  query invalidation edges in Go.
+- [x] Scanner diagnostics reject invalidation edges with unknown queries,
+  unknown domain events, or events no scanned command emits.
+- [x] Build reports and `gowdk graph` expose the joined invalidation graph.
+- [x] Generated apps send `gowdk.query.invalidate` presentation events for
+  matching command-emitted domain events.
+- [x] Generated clients refetch the current document and replace only matching
+  non-subscribed query regions.
 
 ## Edge Cases
 
@@ -120,9 +142,6 @@ own server data policy.
 
 ## Open Questions
 
-- Whether #147's derived invalidation graph should layer on top of explicit
-  subscriptions or become a separate source declaration.
-- Whether later client update shapes should re-fetch query JSON or request a
-  server fragment; the first supported shape is an explicit event-payload
-  `replaceHTML` patch.
+- Whether later invalidation refresh should use query JSON, server fragments, or
+  route-specific HTML endpoints instead of current-document refetch.
 - How server-side session changes should actively revoke already-open streams.

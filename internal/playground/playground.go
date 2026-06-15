@@ -242,6 +242,8 @@ func UnsafeExportFile(rel string) bool {
 		return true
 	case privateKeyFile(base):
 		return true
+	case SecretLikePathName(rel):
+		return true
 	case ext == ".key" || ext == ".pem" || ext == ".p12" || ext == ".pfx":
 		return true
 	case ext == ".tmp" || ext == ".temp" || strings.HasSuffix(base, "~"):
@@ -251,6 +253,20 @@ func UnsafeExportFile(rel string) bool {
 	default:
 		return false
 	}
+}
+
+func SecretLikePathName(rel string) bool {
+	for _, segment := range strings.Split(filepath.ToSlash(rel), "/") {
+		segment = strings.ToLower(strings.TrimSpace(segment))
+		if segment == "" {
+			continue
+		}
+		name := strings.TrimSuffix(segment, path.Ext(segment))
+		if SecretLikeEnvName(segment) || SecretLikeEnvName(name) {
+			return true
+		}
+	}
+	return false
 }
 
 func SanitizedEnvironment(cacheRoot string) []string {

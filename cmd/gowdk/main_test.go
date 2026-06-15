@@ -2289,6 +2289,18 @@ func TestPlaygroundRunBuildsFromStagedWorkspace(t *testing.T) {
 	}
 }
 
+func TestRunPlaygroundBuildWithTimeoutReturnsWallClockError(t *testing.T) {
+	block := make(chan struct{})
+	err := runPlaygroundBuildWithTimeout(10*time.Millisecond, func() error {
+		<-block
+		return nil
+	})
+	close(block)
+	if err == nil || !strings.Contains(err.Error(), "wall-clock limit") {
+		t.Fatalf("expected playground timeout error, got %v", err)
+	}
+}
+
 func writeMinimalPlaygroundProject(t *testing.T, root string) {
 	t.Helper()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
@@ -6259,6 +6271,34 @@ func TestWriteDeploymentRecipesEmitsBinaryAndSplitRecipes(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestSystemdDeploymentRecipeUsesAbsoluteBinaryPath(t *testing.T) {
+	root := t.TempDir()
+	withWorkingDir(t, root, func() {
+		artifacts, err := writeDeploymentRecipes(deploymentRecipeRequest{
+			BinaryPath: "bin/site",
+			Recipes:    []string{"systemd"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		servicePath := filepath.Join(root, "bin", "gowdk-site.service")
+		if len(artifacts) != 1 || artifacts[0].Path != servicePath {
+			t.Fatalf("unexpected artifacts: %#v, want %s", artifacts, servicePath)
+		}
+		payload, err := os.ReadFile(servicePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		absoluteBinaryPath := filepath.ToSlash(filepath.Join(root, "bin", "site"))
+		if !strings.Contains(string(payload), "ExecStart="+absoluteBinaryPath) {
+			t.Fatalf("expected absolute ExecStart for %s:\n%s", absoluteBinaryPath, payload)
+		}
+		if strings.Contains(string(payload), "ExecStart=bin/site") {
+			t.Fatalf("systemd recipe used relative ExecStart:\n%s", payload)
+		}
+	})
 }
 
 func TestDeploymentRecipesRejectUnknownAndUnsupportedShapes(t *testing.T) {

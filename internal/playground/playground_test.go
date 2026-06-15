@@ -16,6 +16,9 @@ func TestCollectFilesExcludesGeneratedAndSecretFiles(t *testing.T) {
 	writeFile(t, filepath.Join(root, ".gowdk", "app", "main.go"), "package main\n")
 	writeFile(t, filepath.Join(root, "dist", "index.html"), "<html></html>")
 	writeFile(t, filepath.Join(root, "secrets", "private.pem"), "secret")
+	writeFile(t, filepath.Join(root, "api_token.json"), "{}")
+	writeFile(t, filepath.Join(root, "config", "credentials.txt"), "secret")
+	writeFile(t, filepath.Join(root, "src", "private_session.gwdk"), "package app\n")
 
 	files, err := CollectFiles(root, Options{})
 	if err != nil {
@@ -31,7 +34,7 @@ func TestCollectFilesExcludesGeneratedAndSecretFiles(t *testing.T) {
 			t.Fatalf("expected %s in collected files: %#v", expected, paths)
 		}
 	}
-	for _, forbidden := range []string{".env", ".gowdk", "dist", "secrets"} {
+	for _, forbidden := range []string{".env", ".gowdk", "dist", "secrets", "api_token.json", "credentials.txt", "private_session.gwdk"} {
 		if strings.Contains(joined, forbidden) {
 			t.Fatalf("did not expect %s in collected files: %#v", forbidden, paths)
 		}

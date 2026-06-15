@@ -142,8 +142,12 @@ func writeSystemdRecipe(binaryPath string) (deploymentRecipeArtifact, error) {
 	if strings.TrimSpace(binaryPath) == "" {
 		return deploymentRecipeArtifact{}, fmt.Errorf("deploy recipe systemd requires --bin <file> or --backend-bin <file>")
 	}
-	unit := deploymentServiceName(binaryPath)
-	path := filepath.Join(filepath.Dir(binaryPath), unit+".service")
+	absoluteBinaryPath, err := filepath.Abs(binaryPath)
+	if err != nil {
+		return deploymentRecipeArtifact{}, err
+	}
+	unit := deploymentServiceName(absoluteBinaryPath)
+	path := filepath.Join(filepath.Dir(absoluteBinaryPath), unit+".service")
 	payload := fmt.Sprintf(`[Unit]
 Description=GOWDK %s
 After=network.target
@@ -165,7 +169,7 @@ WantedBy=multi-user.target
 
 # Starting point only. Keep secrets in app-owned drop-ins, an environment file
 # with correct filesystem permissions, or the host secret manager.
-`, unit, filepath.ToSlash(filepath.Dir(binaryPath)), filepath.ToSlash(binaryPath))
+`, unit, filepath.ToSlash(filepath.Dir(absoluteBinaryPath)), filepath.ToSlash(absoluteBinaryPath))
 	if err := writeDeploymentRecipeFile(path, payload); err != nil {
 		return deploymentRecipeArtifact{}, err
 	}

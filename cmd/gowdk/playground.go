@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cssbruno/gowdk/internal/playground"
 )
@@ -119,8 +120,28 @@ func playgroundRun(args []string) error {
 		return err
 	}
 	return withPlaygroundEnvironment(env, func() error {
-		return build([]string{"--config", filepath.Join(workspace.Root, "gowdk.config.go"), "--out", outputDir})
+		return runPlaygroundBuildWithTimeout(playground.ExecutionTimeout(), func() error {
+			return build([]string{"--config", filepath.Join(workspace.Root, "gowdk.config.go"), "--out", outputDir})
+		})
 	})
+}
+
+func runPlaygroundBuildWithTimeout(timeout time.Duration, fn func() error) error {
+	if timeout <= 0 {
+		return fn()
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- fn()
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		return err
+	case <-timer.C:
+		return fmt.Errorf("playground execution exceeded %s wall-clock limit", timeout)
+	}
 }
 
 type playgroundFileOptions struct {

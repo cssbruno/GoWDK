@@ -30,6 +30,16 @@ var rules = []rule{
 		pattern:     regexp.MustCompile(`(?i)\b(password|passwd|pwd|secret|token|_?gowdk[_-]?csrf|_?csrf(?:[_-]?token)?|cookie|set-cookie|auth[_-]?token|session(?:[_-]?id)?|jwt|api[_-]?key|access(?:[_-]?(?:key|token))?|refresh[_-]?token|id[_-]?token|client[_-]?secret|private[_-]?key)\b(\s*[:=]\s*)("?)[^\s"',;)]+`),
 		replacement: `${1}${2}${3}` + RedactionMask,
 	},
+	{
+		// signed-token masks bare HMAC/JWT-shaped tokens that carry no preceding
+		// keyword — e.g. a gowdk session cookie value (<b64payload>.<b64tag>) or a
+		// JWT (<b64>.<b64>.<b64>) that surfaces inside a panic message or stack
+		// frame. Two base64url runs of >= 20 chars joined by a dot effectively
+		// never occur in ordinary text, so this stays high precision.
+		kind:        "signed-token",
+		pattern:     regexp.MustCompile(`[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}(?:\.[A-Za-z0-9_-]{10,})?`),
+		replacement: RedactionMask,
+	},
 }
 
 // RedactSecrets masks values that commonly carry credentials.

@@ -188,6 +188,40 @@ func TestCSRFRejectsMissingMismatchAndInvalidTokens(t *testing.T) {
 	}
 }
 
+func TestCSRFBindsTokenToPrincipal(t *testing.T) {
+	binding := func(r *http.Request) []byte { return []byte(r.Header.Get("X-Principal")) }
+	csrf, err := NewCSRF(CSRFOptions{Secret: []byte(strings.Repeat("s", 32)), Binding: binding})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mint := httptest.NewRequest(http.MethodGet, "/", nil)
+	mint.Header.Set("X-Principal", "alice")
+	response := httptest.NewRecorder()
+	token, err := csrf.Token(response, mint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := response.Result().Cookies()[0]
+
+	same := httptest.NewRequest(http.MethodPost, "/signup", nil)
+	same.Header.Set("X-Principal", "alice")
+	same.Header.Set(defaultCSRFHeader, token)
+	same.AddCookie(cookie)
+	if err := csrf.Validate(same); err != nil {
+		t.Fatalf("expected token to validate for the same principal: %v", err)
+	}
+
+	// A different principal must be rejected even though cookie == submitted.
+	other := httptest.NewRequest(http.MethodPost, "/signup", nil)
+	other.Header.Set("X-Principal", "mallory")
+	other.Header.Set(defaultCSRFHeader, token)
+	other.AddCookie(cookie)
+	if err := csrf.Validate(other); err == nil || !strings.Contains(err.Error(), "csrf token signature is invalid") {
+		t.Fatalf("expected token bound to alice to be rejected for mallory, got %v", err)
+	}
+}
+
 func tamperToken(token string) string {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil || len(raw) == 0 {

@@ -209,6 +209,13 @@ func WriteHTTP(writer http.ResponseWriter, result Response) error {
 	}
 	switch result.Kind {
 	case Redirect:
+		if err := ValidateLocalRedirect(result.URL); err != nil {
+			// Fail closed: never emit an attacker-influenced Location header.
+			// This matches the guard and SSR redirect lanes, which only allow
+			// local absolute paths.
+			http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return err
+		}
 		writer.Header().Set("Location", result.URL)
 		writer.WriteHeader(status)
 	case Reload:
@@ -321,4 +328,28 @@ func validSwapMode(swap SwapMode) bool {
 	default:
 		return false
 	}
+}
+
+// ValidateLocalRedirect reports whether url is a safe same-origin redirect
+// target. Only local absolute paths are allowed; protocol-relative URLs,
+// backslash tricks browsers normalize to "//", and CRLF header-injection
+// attempts are rejected. It is the single redirect-safety contract shared by
+// the response, guard, and SSR lanes so an attacker-influenced "next"/"return_to"
+// value cannot become an open redirect.
+func ValidateLocalRedirect(url string) error {
+	if url == "" || url[0] != '/' {
+		return fmt.Errorf("redirect %q must be a local absolute path", url)
+	}
+	if len(url) > 1 && (url[1] == '/' || url[1] == '\\') {
+		return fmt.Errorf("redirect %q must not be protocol-relative", url)
+	}
+	// Browsers normalize "\" to "/" before navigating, so "/\evil.com" is
+	// treated like the protocol-relative "//evil.com".
+	if strings.Contains(url, "\\") {
+		return fmt.Errorf("redirect %q must not contain backslashes", url)
+	}
+	if strings.ContainsAny(url, "\r\n") {
+		return fmt.Errorf("redirect %q must not contain newlines", url)
+	}
+	return nil
 }

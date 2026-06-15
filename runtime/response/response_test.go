@@ -142,6 +142,35 @@ func TestWriteHTTPWritesRedirect(t *testing.T) {
 	}
 }
 
+func TestWriteHTTPRejectsOpenRedirect(t *testing.T) {
+	for _, target := range []string{"//evil.com", "https://evil.com", "/\\evil.com", "/ok\r\nSet-Cookie: x=1", ""} {
+		recorder := httptest.NewRecorder()
+		err := WriteHTTP(recorder, RedirectTo(target))
+		if err == nil {
+			t.Fatalf("expected error for unsafe redirect %q", target)
+		}
+		if location := recorder.Header().Get("Location"); location != "" {
+			t.Fatalf("unsafe redirect %q leaked Location header: %q", target, location)
+		}
+		if recorder.Code != http.StatusInternalServerError {
+			t.Fatalf("unsafe redirect %q: unexpected status %d", target, recorder.Code)
+		}
+	}
+}
+
+func TestValidateLocalRedirect(t *testing.T) {
+	for _, ok := range []string{"/", "/dashboard", "/a/b?c=1#d"} {
+		if err := ValidateLocalRedirect(ok); err != nil {
+			t.Fatalf("expected %q to be valid: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "//evil.com", "https://evil.com", "/\\x", "a/b", "/x\ry"} {
+		if err := ValidateLocalRedirect(bad); err == nil {
+			t.Fatalf("expected %q to be rejected", bad)
+		}
+	}
+}
+
 func TestWriteNoStoreHTTP(t *testing.T) {
 	recorder := httptest.NewRecorder()
 

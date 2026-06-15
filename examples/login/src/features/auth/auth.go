@@ -29,10 +29,21 @@ func NewLoginViewState() LoginViewState {
 }
 
 func Login(_ context.Context, values form.Values) (response.Response, error) {
+	// Fail closed: refuse to authenticate unless the signing secret and the
+	// demo password are configured. Without a configured secret an attacker
+	// could forge session cookies; without a configured password an empty
+	// submitted password would match an empty fallback.
+	if len(loginSecret()) == 0 {
+		return response.RedirectTo("/login/error"), nil
+	}
+	wantEmail, wantPassword, ok := configuredCredentials()
+	if !ok {
+		return response.RedirectTo("/login/error"), nil
+	}
+
 	email := strings.TrimSpace(values.First("email"))
 	password := values.First("password")
-	if !constantEqual(email, env("GOWDK_LOGIN_EMAIL", "demo@example.com")) ||
-		!constantEqual(password, env("GOWDK_LOGIN_PASSWORD", "demo-password")) {
+	if !constantEqual(email, wantEmail) || !constantEqual(password, wantPassword) {
 		return response.RedirectTo("/login/error"), nil
 	}
 
@@ -50,7 +61,7 @@ func Login(_ context.Context, values form.Values) (response.Response, error) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   env("GOWDK_COOKIE_SECURE", "false") == "true",
+		Secure:   secureCookies(),
 		MaxAge:   int(sessionDuration().Seconds()),
 	}), nil
 }
@@ -62,7 +73,7 @@ func Logout(context.Context, form.Values) (response.Response, error) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   env("GOWDK_COOKIE_SECURE", "false") == "true",
+		Secure:   secureCookies(),
 	}), nil
 }
 
@@ -89,6 +100,9 @@ var sessions = struct {
 }{Values: map[string]session{}}
 
 func currentSession(request *http.Request) (session, bool) {
+	if len(loginSecret()) == 0 {
+		return session{}, false
+	}
 	cookie, err := request.Cookie(sessionCookie)
 	if err != nil {
 		return session{}, false
@@ -112,9 +126,33 @@ func sign(value string) string {
 }
 
 func signature(value string) string {
-	mac := hmac.New(sha256.New, []byte(env("GOWDK_LOGIN_SECRET", "development-login-secret-change-me")))
+	mac := hmac.New(sha256.New, loginSecret())
 	_, _ = mac.Write([]byte(value))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// loginSecret returns the HMAC signing key from the environment with no
+// literal fallback. An unset secret means the example refuses to issue or
+// accept sessions, so a publicly known key can never sign forgeable cookies.
+func loginSecret() []byte {
+	return []byte(strings.TrimSpace(os.Getenv("GOWDK_LOGIN_SECRET")))
+}
+
+// configuredCredentials returns the demo login email and password. The email
+// keeps a non-secret default for the demo UI, but the password must be set
+// explicitly so there is no hardcoded credential and an empty submitted
+// password cannot match an empty fallback.
+func configuredCredentials() (email, password string, ok bool) {
+	email = env("GOWDK_LOGIN_EMAIL", "demo@example.com")
+	password = strings.TrimSpace(os.Getenv("GOWDK_LOGIN_PASSWORD"))
+	return email, password, password != ""
+}
+
+// secureCookies reports whether the session cookie should carry the Secure
+// flag. It defaults to true; set GOWDK_COOKIE_INSECURE=true only for local
+// HTTP development.
+func secureCookies() bool {
+	return strings.TrimSpace(os.Getenv("GOWDK_COOKIE_INSECURE")) != "true"
 }
 
 func sessionDuration() time.Duration {

@@ -19,6 +19,7 @@ even when explicit `.gwdk` files are passed.
 | `pages/layout-stack.page.gwdk` | Page that demonstrates ordered layout metadata. | `go run ./cmd/gowdk check examples/pages/layout-stack.page.gwdk` |
 | `actions/signup.page.gwdk` | Buildable action page with the first POST redirect action subset. | `go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/actions/signup.page.gwdk` |
 | `actions/newsletter.page.gwdk` | Action-form syntax example with `g:post` and imported component markup. | `go run ./cmd/gowdk check examples/actions/newsletter.page.gwdk examples/components/base/button.cmp.gwdk examples/components/base/text-field.cmp.gwdk` |
+| `auth-guard/` | Auth addon guard example with public login, session-backed RBAC, protected SSR dashboard, and logout action. | `cd examples/auth-guard && make build` |
 | `login/` | Integrated auth-feature GWDK login with generated frontend binary plus feature-owned Go backend binary. | `cd examples/login && make serve` |
 | `flagship/` | Full-stack native GOWDK vertical slice with static output, endpoints, fragments, SSR load, contracts, islands, CSS/assets, guards, rate limiting, and one generated binary. | `cd examples/flagship && make build` |
 | `endpoints/` | Endpoint cookbook with action redirects, validation fragments, partial responses, APIs, JSON CRUD, webhooks, and standalone fragments. | `cd examples/endpoints && make build` |
@@ -77,6 +78,16 @@ Run the current login backend example:
 ```sh
 cd examples/login
 make serve
+```
+
+Build the auth guard addon example:
+
+```sh
+cd examples/auth-guard
+make check
+make routes
+make build
+test -x bin/auth-guard
 ```
 
 Build the flagship full-stack generated binary:

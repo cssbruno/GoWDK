@@ -166,6 +166,9 @@ func actionRequestPathDecl() *ast.FuncDecl {
 }
 
 func actionCaseStmts(action BackendActionAdapter, csrf bool, rateLimit bool) []ast.Stmt {
+	if endpointDeniedByOmission(action.Guards) {
+		return denyByOmissionStmts()
+	}
 	stmts := endpointContextStmts("action", action.PageID, action.ActionName, actionAdapterMethod(action), action.Route, action.ErrorPage)
 	if action.ErrorPage != "" {
 		stmts = append(stmts, endpointPanicBoundaryStmt())

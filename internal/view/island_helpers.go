@@ -141,6 +141,16 @@ func cloneValues(input map[string]string) map[string]string {
 	return output
 }
 
+func cloneTaintSet(input map[string]bool) map[string]bool {
+	output := map[string]bool{}
+	for key, value := range input {
+		if value {
+			output[key] = true
+		}
+	}
+	return output
+}
+
 func cloneActionInputFields(input map[string][]ActionInputField) map[string][]ActionInputField {
 	output := map[string][]ActionInputField{}
 	for key, fields := range input {

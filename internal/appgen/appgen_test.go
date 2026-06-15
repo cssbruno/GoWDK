@@ -194,6 +194,7 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 			},
 		},
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "home",
 			ActionName: "Submit",
 			Route:      "/submit",
@@ -515,6 +516,7 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		Guards:           []string{"public"},
 		PageID:           "newsletter",
 		ActionName:       "Subscribe",
 		Route:            "/newsletter",
@@ -796,6 +798,7 @@ func TestGeneratedGoMatchesGoldenFixture(t *testing.T) {
 		},
 	}
 	actions := []ActionEndpoint{{
+		Guards:      []string{"public"},
 		PageID:      "newsletter",
 		ActionName:  "Subscribe",
 		Method:      "POST",
@@ -852,12 +855,14 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 			},
 		}},
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Route:      "/newsletter",
 			Redirect:   "/newsletter?ok=1",
 		}},
 		Fragments: []FragmentEndpoint{{
+			Guards:       []string{"public"},
 			PageID:       "patients",
 			FragmentName: "List",
 			Method:       "GET",
@@ -916,6 +921,7 @@ func TestGenerateRenamesBackendAliasReservedByGeneratedRuntime(t *testing.T) {
 		ActionName: "Subscribe",
 		Method:     "POST",
 		Route:      "/newsletter",
+		Guards:     []string{"public"},
 		Binding: source.BackendBinding{
 			Status:       source.BackendBindingBound,
 			ImportPath:   "example.com/app/sync",
@@ -951,6 +957,7 @@ func TestGenerateRenamesBackendAliasReservedByGeneratedRuntime(t *testing.T) {
 		APIName: "Health",
 		Method:  "GET",
 		Route:   "/api/health",
+		Guards:  []string{"public"},
 		Binding: source.BackendBinding{
 			Status:       source.BackendBindingBound,
 			ImportPath:   "example.com/app/sync",
@@ -993,6 +1000,7 @@ func TestGenerateBackendAppWiresSecurityHeaders(t *testing.T) {
 			},
 		}},
 		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
 			PageID:  "status",
 			APIName: "Health",
 			Method:  "GET",
@@ -1033,18 +1041,21 @@ func TestGenerateSplitFrontendProxyMatchesAdapterRoutes(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		ProxyBackend: true,
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Method:     "POST",
 			Route:      "/newsletter",
 		}},
 		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
 			PageID:  "status",
 			APIName: "Health",
 			Method:  "GET",
 			Route:   "/api/health",
 		}},
 		Fragments: []FragmentEndpoint{{
+			Guards:       []string{"public"},
 			PageID:       "patients",
 			FragmentName: "List",
 			Method:       "GET",
@@ -1111,6 +1122,7 @@ func TestGenerateSplitFrontendProxyKeepsBackendAdaptersRemote(t *testing.T) {
 			Insecure:  true,
 		}}},
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Method:     http.MethodPost,
@@ -1169,6 +1181,7 @@ func TestGenerateWiresCSRFByDefault(t *testing.T) {
 			Insecure:   true,
 		}}},
 		Actions: []ActionEndpoint{{
+			Guards:      []string{"public"},
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Route:       "/newsletter",
@@ -1479,6 +1492,7 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{
 		{
+			Guards:      []string{"public"},
 			PageID:      "Login",
 			ActionName:  "Login",
 			Route:       "/Login",
@@ -1503,6 +1517,7 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 			},
 		},
 		{
+			Guards:      []string{"public"},
 			PageID:      "Login",
 			ActionName:  "save",
 			Route:       "/Login/save",
@@ -1521,6 +1536,7 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 			},
 		},
 		{
+			Guards:     []string{"public"},
 			PageID:     "Login",
 			ActionName: "Ping",
 			Route:      "/Login/Ping",
@@ -1608,6 +1624,7 @@ func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) 
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "home",
 			ActionName: "Submit",
 			Route:      "/",
@@ -1621,6 +1638,7 @@ func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) 
 			},
 		}},
 		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
 			PageID:  "home",
 			APIName: "Status",
 			Method:  "GET",
@@ -1673,6 +1691,7 @@ func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		Actions: []ActionEndpoint{
 			{
+				Guards:     []string{"public"},
 				PageID:     "z",
 				ActionName: "Zed",
 				Route:      "/z",
@@ -1685,6 +1704,7 @@ func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
 				},
 			},
 			{
+				Guards:     []string{"public"},
 				PageID:     "a",
 				ActionName: "Alpha",
 				Route:      "/a",
@@ -1699,6 +1719,7 @@ func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
 		},
 		APIs: []APIEndpoint{
 			{
+				Guards:  []string{"public"},
 				PageID:  "z",
 				APIName: "ZedAPI",
 				Method:  http.MethodGet,
@@ -1712,6 +1733,7 @@ func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
 				},
 			},
 			{
+				Guards:  []string{"public"},
 				PageID:  "a",
 				APIName: "AlphaAPI",
 				Method:  http.MethodGet,
@@ -1923,6 +1945,7 @@ func TestGeneratedPackageSourceIsGoFormatted(t *testing.T) {
 
 func TestGeneratedDeclarationSnippetIsGoFormatted(t *testing.T) {
 	source, err := actionHandlerSource([]ActionEndpoint{{
+		Guards:      []string{"public"},
 		PageID:      "newsletter",
 		ActionName:  "Subscribe",
 		Method:      http.MethodPost,
@@ -1951,6 +1974,7 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "status", "index.html"), "<main>Status</main>")
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{APIs: []APIEndpoint{{
+		Guards:  []string{"public"},
 		PageID:  "status",
 		APIName: "Health",
 		Method:  http.MethodGet,
@@ -2004,11 +2028,13 @@ func TestGenerateUsesConfiguredBodyLimits(t *testing.T) {
 			APIBytes:    4096,
 		}}},
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Route:      "/newsletter",
 		}},
 		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
 			PageID:  "newsletter",
 			APIName: "Health",
 			Method:  http.MethodPost,
@@ -2052,12 +2078,14 @@ func TestGenerateWritesEndpointErrorPages(t *testing.T) {
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Route:      "/newsletter",
 			ErrorPage:  "/errors/subscribe.html",
 		}},
 		APIs: []APIEndpoint{{
+			Guards:    []string{"public"},
 			PageID:    "status",
 			APIName:   "Health",
 			Method:    http.MethodGet,
@@ -2101,6 +2129,7 @@ func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		Guards:      []string{"public"},
 		PageID:      "patients",
 		ActionName:  "Refresh",
 		Route:       "/patients",
@@ -2198,6 +2227,7 @@ func TestGenerateInjectsCSRFIntoSSRForms(t *testing.T) {
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Route:       "/newsletter",
+			Guards:      []string{"public"},
 			InputFields: []string{"email"},
 			Redirect:    "/newsletter?ok=1",
 		}},
@@ -2347,6 +2377,7 @@ func TestGenerateKeepsActionHandlersIndependentFromSSRLoad(t *testing.T) {
 			}},
 		}},
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "dashboard",
 			ActionName: "Save",
 			Method:     http.MethodPost,
@@ -2541,6 +2572,7 @@ func TestGenerateWritesDynamicFragmentRouteParamBindings(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		Guards:       []string{"public"},
 		PageID:       "patients",
 		FragmentName: "Vitals",
 		Method:       "GET",
@@ -3106,6 +3138,7 @@ func TestGenerateRejectsUnsafeActionRedirect(t *testing.T) {
 			writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 			_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+				Guards:     []string{"public"},
 				PageID:     "newsletter",
 				ActionName: "Subscribe",
 				Route:      "/newsletter",
@@ -3128,6 +3161,7 @@ func TestGenerateRejectsEmptyActionValidationRule(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		Guards:          []string{"public"},
 		PageID:          "newsletter",
 		ActionName:      "Subscribe",
 		Route:           "/newsletter",
@@ -3151,6 +3185,7 @@ func TestGenerateRejectsDynamicActionEndpoint(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "blog", "hello", "index.html"), "<main>Post</main>")
 
 	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		Guards:     []string{"public"},
 		PageID:     "blog.post",
 		ActionName: "save",
 		Route:      "/blog/{slug}",
@@ -4268,6 +4303,7 @@ func TestGeneratedBinaryUsesCustomAPIErrorPage(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "errors", "health.html"), "<main>Health Error</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{APIs: []APIEndpoint{{
+		Guards:    []string{"public"},
 		PageID:    "status",
 		APIName:   "Health",
 		Method:    http.MethodGet,
@@ -4346,6 +4382,7 @@ func TestGeneratedBinaryHandlesEndpointErrorsAndMissingErrorPage(t *testing.T) {
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: csrfDisabledConfig(),
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Method:     http.MethodPost,
@@ -4358,6 +4395,7 @@ func TestGeneratedBinaryHandlesEndpointErrorsAndMissingErrorPage(t *testing.T) {
 				Signature:    source.BackendSignatureAction0,
 			},
 		}, {
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Explode",
 			Method:     http.MethodPost,
@@ -4372,6 +4410,7 @@ func TestGeneratedBinaryHandlesEndpointErrorsAndMissingErrorPage(t *testing.T) {
 			},
 		}},
 		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
 			PageID:  "session",
 			APIName: "Session",
 			Method:  http.MethodGet,
@@ -5363,6 +5402,7 @@ func TestGeneratedBinaryAppliesRegisteredRateLimiter(t *testing.T) {
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: withCSRFDisabled(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ratelimit", gowdk.FeatureRateLimit)}}),
 		Actions: []ActionEndpoint{{
+			Guards:      []string{"public"},
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Method:      "POST",
@@ -5624,6 +5664,7 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), Actions: []ActionEndpoint{{
+		Guards:           []string{"public"},
 		PageID:           "newsletter",
 		ActionName:       "Subscribe",
 		Route:            "/newsletter",
@@ -5642,6 +5683,7 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 		ValidatesInput: true,
 		Redirect:       "/newsletter?ok=1",
 	}, {
+		Guards:     []string{"public"},
 		PageID:     "newsletter",
 		ActionName: "Ping",
 		Route:      "/newsletter/ping",
@@ -5797,6 +5839,7 @@ func TestGeneratedBinaryValidatesCSRFByDefault(t *testing.T) {
 			Insecure:  true,
 		}}},
 		Actions: []ActionEndpoint{{
+			Guards:      []string{"public"},
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Route:       "/newsletter",
@@ -5888,6 +5931,7 @@ func TestGeneratedBinaryInjectsCSRFIntoSSRForms(t *testing.T) {
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Route:       "/newsletter",
+			Guards:      []string{"public"},
 			InputFields: []string{"email"},
 			Redirect:    "/newsletter?ok=1",
 		}},
@@ -5968,6 +6012,7 @@ func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), Actions: []ActionEndpoint{{
+		Guards:      []string{"public"},
 		PageID:      "patients",
 		ActionName:  "Refresh",
 		Route:       "/patients",
@@ -6041,6 +6086,7 @@ func TestGeneratedBinaryServesStandaloneFragmentRoute(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		Guards:       []string{"public"},
 		PageID:       "patients",
 		FragmentName: "List",
 		Method:       "GET",
@@ -6102,6 +6148,7 @@ func TestGeneratedBinaryExecutesFragmentUserHook(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		Guards:       []string{"public"},
 		PageID:       "patients",
 		FragmentName: "List",
 		Method:       "GET",
@@ -6181,6 +6228,7 @@ func TestGeneratedBinaryExecutesDynamicFragmentUserHook(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		Guards:       []string{"public"},
 		PageID:       "patients",
 		FragmentName: "Vitals",
 		Method:       "GET",
@@ -6357,6 +6405,7 @@ func TestGeneratedBinaryDoesNotValidateRequiredFieldsWithoutValidMetadata(t *tes
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), Actions: []ActionEndpoint{{
+		Guards:         []string{"public"},
 		PageID:         "newsletter",
 		ActionName:     "Subscribe",
 		Route:          "/newsletter",
@@ -6587,5 +6636,35 @@ func TestDeniedPageRoutePatternsSelectsGuardlessDynamicPages(t *testing.T) {
 	// Dynamic routes must not leak into the exact deny set.
 	if denied := deniedPageRoutes(options); len(denied) != 1 || denied[0] != "/" {
 		t.Fatalf("expected only the static route / in exact deny set, got %#v", denied)
+	}
+}
+
+func TestGuardlessActionAndAPIAreDeniedByOmission(t *testing.T) {
+	const deny = `gowdkresponse.WriteNoStoreError(response, http.StatusForbidden, "403 forbidden")`
+
+	actionSrc, err := actionHandlerSource([]ActionEndpoint{{PageID: "p", ActionName: "Sub", Route: "/sub"}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(actionSrc, deny) {
+		t.Fatalf("guardless action must be denied by omission:\n%s", actionSrc)
+	}
+
+	apiSrc, err := apiHandlerSource([]APIEndpoint{{PageID: "p", APIName: "Show", Method: "GET", Route: "/show"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(apiSrc, deny) {
+		t.Fatalf("guardless api must be denied by omission:\n%s", apiSrc)
+	}
+
+	// An endpoint that declares `guard public` is intentionally reachable and
+	// must NOT be denied by omission.
+	publicSrc, err := actionHandlerSource([]ActionEndpoint{{PageID: "p", ActionName: "Sub", Route: "/sub", Guards: []string{"public"}}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(publicSrc, deny) {
+		t.Fatalf("public action must not be denied by omission:\n%s", publicSrc)
 	}
 }

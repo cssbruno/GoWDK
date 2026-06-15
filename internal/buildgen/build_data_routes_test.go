@@ -688,7 +688,7 @@ func TestBuildRejectsRouteParamInDangerousAttributeBeforeWriting(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected dangerous route param attribute error")
 	}
-	if !strings.Contains(err.Error(), `route param interpolation is not allowed in "href" attributes`) {
+	if !strings.Contains(err.Error(), `is not allowed in "href" attributes`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if entries, err := os.ReadDir(outputDir); err != nil {

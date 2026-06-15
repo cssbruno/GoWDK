@@ -51,6 +51,7 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 		Actions:           actionRoutes(page, data),
 		ActionInputFields: actionFields,
 		Package:           page.Package,
+		Tainted:           requestTimeTaintedFields(page, policy),
 	})
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
@@ -78,6 +79,28 @@ func renderPageView(source string, nodes []view.Node, components map[string]view
 		return view.RenderNodesWithOptions(nodes, components, data, options)
 	}
 	return view.RenderWithOptions(source, components, data, options)
+}
+
+// requestTimeTaintedFields returns the interpolation names that carry
+// request-time, attacker-influenceable data for a page. Currently this is the
+// set of SSR load {} field paths, which must be treated like route params:
+// rejected in URL/event/style/srcdoc attributes so an attacker-controlled value
+// cannot inject a javascript:/data: URL past HTML-text escaping. Build {} data
+// is trusted and route params taint syntactically via param("..."), so neither
+// is included here.
+func requestTimeTaintedFields(page gwdkir.Page, policy renderModePolicy) map[string]bool {
+	if policy != renderModeRequestTime || !page.Blocks.Load {
+		return nil
+	}
+	fields, err := parseLoadFields(page.Blocks.LoadBody)
+	if err != nil {
+		return nil
+	}
+	tainted := make(map[string]bool, len(fields))
+	for _, path := range fields {
+		tainted[path] = true
+	}
+	return tainted
 }
 
 func composePageViewSource(page gwdkir.Page, layouts map[string]gwdkir.Layout) (string, error) {

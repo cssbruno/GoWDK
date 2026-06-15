@@ -51,7 +51,12 @@ func DecodeJSON[T any](request *http.Request) (T, error) {
 func requireJSONContentType(request *http.Request) error {
 	contentType := strings.TrimSpace(request.Header.Get("Content-Type"))
 	if contentType == "" {
-		return nil
+		// Require an explicit JSON content type. A missing Content-Type is a
+		// common cross-site request-forgery vector: a browser form post sends a
+		// non-JSON default type, and accepting an empty type would let such a
+		// request reach a JSON handler. Demanding application/json forces a
+		// CORS preflight for cross-origin callers.
+		return fmt.Errorf("%w: missing Content-Type", ErrUnsupportedContentType)
 	}
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {

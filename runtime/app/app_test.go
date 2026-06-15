@@ -1598,6 +1598,20 @@ func TestLocalTraceAccessRejectsForwardedLoopbackProxyRequest(t *testing.T) {
 	}
 }
 
+func TestLocalTraceAccessRejectsAnyXForwardedProxyHeader(t *testing.T) {
+	for _, header := range []string{"X-Forwarded-Host", "X-Forwarded-Proto"} {
+		t.Run(header, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "http://localhost:8080/_gowdk/traces", nil)
+			request.RemoteAddr = "127.0.0.1:4567"
+			request.Header.Set(header, "localhost")
+
+			if LocalTraceAccess(request) {
+				t.Fatalf("expected request with %s to be rejected", header)
+			}
+		})
+	}
+}
+
 func TestLocalTraceAccessAllowsDirectLocalhostRequest(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "http://localhost:8080/_gowdk/traces", nil)
 	request.RemoteAddr = "127.0.0.1:4567"

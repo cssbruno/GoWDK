@@ -13,8 +13,8 @@ var Config = gowdk.Config{
 	},
 	Env: gowdk.EnvConfig{
 		Secrets: []gowdk.SecretEnv{
-			{Name: "GOWDK_AUTH_SESSION_SECRET", Required: true},
-			{Name: "GOWDK_CSRF_SECRET", Required: true},
+			{Name: "GOWDK_AUTH_SESSION_SECRET", Required: true, MinBytes: 32},
+			{Name: "GOWDK_CSRF_SECRET", Required: true, MinBytes: 32},
 		},
 	},
 	Build: gowdk.BuildConfig{

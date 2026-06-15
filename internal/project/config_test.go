@@ -268,6 +268,35 @@ var Config = gowdk.Config{
 	}
 }
 
+func TestLoadConfigFileEnforcesSecretMinBytes(t *testing.T) {
+	const name = "GOWDK_TEST_SESSION_SECRET"
+	t.Setenv(name, "too-short")
+
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Env: gowdk.EnvConfig{
+		Secrets: []gowdk.SecretEnv{
+			{Name: "GOWDK_TEST_SESSION_SECRET", Required: true, MinBytes: 32},
+		},
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// The AST config path must carry MinBytes through to validation; without it
+	// a non-empty short secret would pass the contract and only fail at runtime.
+	_, err := LoadConfigFile(path)
+	if err == nil || !strings.Contains(err.Error(), "GOWDK_TEST_SESSION_SECRET must be at least 32 bytes") {
+		t.Fatalf("expected short-secret validation error, got %v", err)
+	}
+}
+
 func TestLoadConfigFileRejectsSecretEnvMisuse(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, DefaultConfigFile)

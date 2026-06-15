@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -113,12 +114,21 @@ func RequireSession(ctx guard.Context) error {
 	return nil
 }
 
-func MustAuthProvider() gowdkauth.Provider {
-	sessions, err := Sessions()
-	if err != nil {
-		panic(err)
-	}
-	return sessions.Provider()
+// AuthProvider returns a Provider that resolves the session manager lazily on
+// the first request. The generated app registers the provider from its init()
+// hook, which runs before the app's env-contract validation. Building Sessions
+// here (as the previous MustAuthProvider did) would panic on a missing or
+// too-short GOWDK_AUTH_SESSION_SECRET and crash with a stack trace instead of
+// the clean startup error. Deferring construction to Principal keeps secret
+// misconfiguration on the normal validation path.
+func AuthProvider() gowdkauth.Provider {
+	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
+		sessions, err := Sessions()
+		if err != nil {
+			return nil, err
+		}
+		return sessions.Principal(request)
+	})
 }
 
 func Sessions() (*gowdkauth.Sessions, error) {

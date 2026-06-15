@@ -13,5 +13,8 @@ func GOWDKGuardRegistry() gowdkguard.Registry {
 }
 
 func GOWDKAuthProvider() gowdkauth.Provider {
-	return authguard.MustAuthProvider()
+	// Lazy provider: never construct Sessions at init time, so a missing or
+	// too-short GOWDK_AUTH_SESSION_SECRET surfaces as the generated env-contract
+	// startup error rather than an init-time panic.
+	return authguard.AuthProvider()
 }

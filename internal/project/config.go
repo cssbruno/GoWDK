@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"math"
 	"os"
 	"path"
 	"strconv"
@@ -467,6 +468,8 @@ func parseSecretEnv(expression ast.Expr) (gowdk.SecretEnv, bool, error) {
 			secret.Name = parseString(keyValue.Value)
 		case "Required":
 			secret.Required = parseBool(keyValue.Value)
+		case "MinBytes":
+			secret.MinBytes = parseInt(keyValue.Value)
 		case "Default", "Value":
 			return gowdk.SecretEnv{}, false, fmt.Errorf("Env.Secrets entries cannot declare %s; secret values must come from the runtime environment", key.Name)
 		}
@@ -1048,6 +1051,21 @@ func parseString(expression ast.Expr) string {
 func parseBool(expression ast.Expr) bool {
 	identifier, ok := expression.(*ast.Ident)
 	return ok && identifier.Name == "true"
+}
+
+// parseInt narrows a parsed integer literal to int, clamping values that fall
+// outside the platform int range so a malformed config value cannot wrap into a
+// small or negative length on 32-bit platforms.
+func parseInt(expression ast.Expr) int {
+	value := parseInt64(expression)
+	switch {
+	case value > math.MaxInt:
+		return math.MaxInt
+	case value < math.MinInt:
+		return math.MinInt
+	default:
+		return int(value)
+	}
 }
 
 func parseInt64(expression ast.Expr) int64 {

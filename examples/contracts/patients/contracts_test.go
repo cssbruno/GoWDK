@@ -20,4 +20,12 @@ func TestCreatePatientCapturesDomainEvent(t *testing.T) {
 			t.Fatalf("event ID = %q, want patient-1", event.ID)
 		}
 	})
+	testkit.AssertEmitted[PatientNotice](t, events, contracts.PresentationEvent, func(event PatientNotice) {
+		if event.Patch.Op != "replaceHTML" || event.Patch.Swap != "innerHTML" {
+			t.Fatalf("unexpected presentation patch metadata: %#v", event.Patch)
+		}
+		if event.Patch.HTML != `<p role="status">Patient Ada was queued.</p>` {
+			t.Fatalf("presentation patch HTML = %q", event.Patch.HTML)
+		}
+	})
 }

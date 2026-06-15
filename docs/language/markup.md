@@ -133,6 +133,13 @@ Implemented today:
 - Local form bindings can be used inside normal `g:post` action forms. Binding
   listeners do not add submit interception; the action form still posts through
   its lowered `method` and `action`.
+- `g:subscribe="pkg.PresentationEvent"` on the same element as `g:query`.
+  This declares realtime subscription metadata for a query-owned region,
+  renders `data-gowdk-subscribe` plus a validated event-type marker, requires
+  `realtime.Addon()`, and validates the referenced Go contract as a
+  browser-facing presentation event. Generated apps mount subscription-filtered
+  SSE fanout, and generated `gowdk.js` can apply explicit `replaceHTML`
+  presentation-event patches to the query-owned region.
 - Component-call bindings use the component contract described in
   [components.md](components.md): `g:bind:<ExportedState>={ParentState}` binds
   parent UI state to an exported child state field.
@@ -201,6 +208,10 @@ These are the supported `g:` directives in `view {}` markup:
 - `g:slot="name"` on caller-side `<template>` elements for named and scoped
   slots.
 - `g:island="wasm"` on component calls when a call-site WASM override is needed.
+- `g:command="pkg.Command"` on forms and `g:query="pkg.Query"` on HTML
+  elements for contract web adapters.
+- `g:subscribe="pkg.PresentationEvent"` beside `g:query` for realtime
+  subscription metadata.
 - `g:html={Expr}` on non-void HTML elements without markup children, in pages
   and stateless component views. See "Raw HTML (`g:html`)" below.
 

@@ -89,6 +89,27 @@ func TestSourceEmitsSPANavigationRuntime(t *testing.T) {
 	}
 }
 
+func TestSourceEmitsRealtimePatchRuntime(t *testing.T) {
+	source := string(Source())
+	for _, expected := range []string{
+		`new window.EventSource(realtimeEventsPath)`,
+		`addEventListener('gowdk-presentation', handleRealtimeEvent)`,
+		`data-gowdk-subscribe`,
+		`data-gowdk-subscribe-type`,
+		`normalizeRealtimePatches(envelope.value || envelope.Value)`,
+		`patch.op !== 'replaceHTML'`,
+		`region.innerHTML = patch.html`,
+		`region.outerHTML = patch.html`,
+		`gowdk:realtime-patch`,
+		`gowdk:realtime-error`,
+		`closeRealtime()`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected runtime source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestFilename(t *testing.T) {
 	if Filename != "gowdk.js" {
 		t.Fatalf("unexpected runtime filename %q", Filename)

@@ -357,7 +357,7 @@ func validateContractReferences(config gowdk.Config, ir gwdkir.Program, projectR
 		return Diagnostics{{Severity: "error", Message: fmt.Sprintf("scan Go contracts: %v", err)}}
 	}
 	diagnostics := contractScanDiagnostics(report.Diagnostics)
-	if len(ir.ContractRefs) == 0 {
+	if len(ir.ContractRefs) == 0 && len(ir.RealtimeSubscriptions) == 0 {
 		return diagnostics
 	}
 	diagnostics = append(diagnostics, validateLinkedContractReferences(ir, report)...)
@@ -365,7 +365,7 @@ func validateContractReferences(config gowdk.Config, ir gwdkir.Program, projectR
 }
 
 func validateContractReferenceBindings(ir gwdkir.Program, projectRoot string) Diagnostics {
-	if len(ir.ContractRefs) == 0 {
+	if len(ir.ContractRefs) == 0 && len(ir.RealtimeSubscriptions) == 0 {
 		return nil
 	}
 	if strings.TrimSpace(projectRoot) == "" {
@@ -379,11 +379,19 @@ func validateContractReferenceBindings(ir gwdkir.Program, projectRoot string) Di
 }
 
 func validateLinkedContractReferences(ir gwdkir.Program, report contractscan.Report) Diagnostics {
-	if len(ir.ContractRefs) == 0 {
+	if len(ir.ContractRefs) == 0 && len(ir.RealtimeSubscriptions) == 0 {
 		return nil
 	}
 	ir.ContractRefs = contractscan.LinkReferences(ir.ContractRefs, report)
+	ir.RealtimeSubscriptions = contractscan.LinkRealtimeSubscriptions(ir.RealtimeSubscriptions, report)
 	if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
+		diagnostics := compilerDiagnostics(err, ir)
+		if subscriptionErr := compiler.ValidateRealtimeSubscriptionBindings(ir.RealtimeSubscriptions); subscriptionErr != nil {
+			diagnostics = append(diagnostics, compilerDiagnostics(subscriptionErr, ir)...)
+		}
+		return diagnostics
+	}
+	if err := compiler.ValidateRealtimeSubscriptionBindings(ir.RealtimeSubscriptions); err != nil {
 		return compilerDiagnostics(err, ir)
 	}
 	return nil
@@ -572,6 +580,8 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 		return "Move this use declaration to the page or component that uses the imported GOWDK package."
 	case "missing_ssr_addon":
 		return "Enable ssr.Addon() in gowdk.config.go or remove request-time page behavior."
+	case "missing_realtime_addon":
+		return "Enable realtime.Addon() in gowdk.config.go or remove g:subscribe."
 	case "spa_dynamic_route_missing_paths":
 		return "Add paths { ... } for the dynamic spa route or declare request-time page behavior with load { ... } or go ssr { ... }."
 	case "load_requires_request_render":

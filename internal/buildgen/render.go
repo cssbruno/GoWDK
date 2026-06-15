@@ -23,7 +23,7 @@ const (
 	renderModeRequestTime renderModePolicy = "request-time"
 )
 
-func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, policy renderModePolicy) (string, error) {
+func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, realtimeEventTypeNames map[string]string, policy renderModePolicy) (string, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if policy == renderModeSPA && mode != gowdk.SPA && mode != gowdk.Action {
 		return "", fmt.Errorf("%s: SPA build cannot emit request-time %s pages yet", page.ID, mode)
@@ -48,10 +48,11 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 
 	pageComponents := componentRegistryForPage(page, components)
 	body, err := renderPageView(viewSource, viewNodes, pageComponents, data, view.Options{
-		Actions:           actionRoutes(page, data),
-		ActionInputFields: actionFields,
-		Package:           page.Package,
-		Tainted:           requestTimeTaintedFields(page, policy),
+		Actions:                actionRoutes(page, data),
+		ActionInputFields:      actionFields,
+		Package:                page.Package,
+		Tainted:                requestTimeTaintedFields(page, policy),
+		RealtimeEventTypeNames: realtimeEventTypeNames,
 	})
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
@@ -247,7 +248,11 @@ func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewN
 	if err != nil {
 		return nil, err
 	}
-	if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation {
+	usesRealtime, err := pageUsesRealtimeRuntime(page, viewSource, viewNodes, components)
+	if err != nil {
+		return nil, err
+	}
+	if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation || usesRealtime {
 		scripts = append(scripts, gowdk.Script{Src: clientRuntimeHref})
 	}
 	if len(page.Stores) > 0 {
@@ -271,6 +276,34 @@ func pageUsesPartialRuntime(page gwdkir.Page, viewSource string) bool {
 		return false
 	}
 	return len(page.Blocks.Actions) > 0
+}
+
+func pageUsesRealtimeRuntime(page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) (bool, error) {
+	if viewHasRealtimeSubscription(viewSource, viewNodes) {
+		return true, nil
+	}
+	usages, err := recursiveViewComponentCallUsagesForView(viewSource, viewNodes, components, page.Package, componentUses(page.Uses))
+	if err != nil {
+		return false, err
+	}
+	for _, usage := range usages {
+		if viewHasRealtimeSubscription(usage.component.Body, usage.component.Nodes) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func viewHasRealtimeSubscription(source string, nodes []view.Node) bool {
+	if !strings.Contains(source, "g:subscribe") && len(nodes) == 0 {
+		return false
+	}
+	if len(nodes) > 0 {
+		refs, err := view.SubscriptionReferencesFromNodes(nodes)
+		return err == nil && len(refs) > 0
+	}
+	refs, err := view.SubscriptionReferences(source)
+	return err == nil && len(refs) > 0
 }
 
 func pageUsesSPANavigationRuntime(config gowdk.Config, page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) (bool, error) {

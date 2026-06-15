@@ -581,6 +581,95 @@ func TestBuildReportIncludesBoundContractReferenceRoles(t *testing.T) {
 	}
 }
 
+func TestBuildReportIncludesRealtimeSubscriptions(t *testing.T) {
+	outputDir := t.TempDir()
+	result, err := BuildFromIR(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Source: "pages/patients.page.gwdk",
+			ID:     "patients",
+			Route:  "/patients",
+			Render: gowdk.SPA,
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main>Patients</main>`,
+			},
+		}},
+		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
+			Query:            "patients.GetPatientPage",
+			QueryImportAlias: "patients",
+			QueryType:        "GetPatientPage",
+			Event:            "patients.PatientNotice",
+			EventImportAlias: "patients",
+			EventType:        "PatientNotice",
+			EventCategory:    "presentation",
+			Roles:            []string{"web"},
+			Status:           gwdkir.ContractBindingBound,
+			Handler:          "NotifyBrowser",
+			Register:         "Register",
+			OwnerKind:        gwdkir.SourcePage,
+			OwnerID:          "patients",
+			Source:           "pages/patients.page.gwdk",
+		}},
+	}, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := findBuildReportEvent(result.Report, "bind", "realtime_subscription")
+	if event == nil {
+		t.Fatalf("missing realtime_subscription event in %#v", result.Report.Events)
+	}
+	if event.Data["query"] != "patients.GetPatientPage" || event.Data["event"] != "patients.PatientNotice" || event.Data["status"] != "bound" {
+		t.Fatalf("unexpected realtime subscription data: %#v", event.Data)
+	}
+	if event.Data["eventCategory"] != "presentation" || event.Data["roles"] != "web" || event.Data["handler"] != "NotifyBrowser" {
+		t.Fatalf("unexpected realtime binding data: %#v", event.Data)
+	}
+}
+
+func TestBuildEmitsRealtimeRuntimeForSubscribedRegions(t *testing.T) {
+	outputDir := t.TempDir()
+	result, err := BuildFromValidatedIR(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Source: "pages/patients.page.gwdk",
+			ID:     "patients",
+			Route:  "/patients",
+			Render: gowdk.SPA,
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><section g:query="patients.GetPatientPage" g:subscribe="patients.PatientNotice">Patients</section></main>`,
+			},
+		}},
+		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
+			Query:           "patients.GetPatientPage",
+			Event:           "patients.PatientNotice",
+			EventImportPath: "github.com/acme/clinic/patients",
+			EventType:       "PatientNotice",
+			EventCategory:   "presentation",
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourcePage,
+			OwnerID:         "patients",
+			Source:          "pages/patients.page.gwdk",
+		}},
+	}, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.AssetArtifacts) != 1 || result.AssetArtifacts[0].Path != filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath)) {
+		t.Fatalf("expected realtime client runtime asset, got %#v", result.AssetArtifacts)
+	}
+	html := readFile(t, filepath.Join(outputDir, "patients", "index.html"))
+	for _, expected := range []string{
+		`data-gowdk-query="patients.GetPatientPage"`,
+		`data-gowdk-subscribe="patients.PatientNotice"`,
+		`data-gowdk-subscribe-type="github.com/acme/clinic/patients.PatientNotice"`,
+		`<script src="` + clientRuntimeHref + `" defer></script>`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in realtime page:\n%s", expected, html)
+		}
+	}
+}
+
 func TestBuildReportIncludesCachePolicySummary(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{

@@ -11,6 +11,9 @@ func generatedUsesGuards(options Options) bool {
 	if adapterUsesRuntimeGuards(backendAdapterIR(options)) {
 		return true
 	}
+	if generatedRealtimeStreamUsesGuards(options) {
+		return true
+	}
 	for _, route := range options.SSR {
 		if len(runtimeGuardNames(route.Guards)) > 0 {
 			return true
@@ -165,6 +168,9 @@ func generatedGuardNames(options Options) []string {
 	guards := backendAdapterIR(options).GuardNames()
 	for _, route := range options.SSR {
 		guards = append(guards, route.Guards...)
+	}
+	for _, subscription := range boundRealtimeSubscriptions(options) {
+		guards = append(guards, subscription.Guards...)
 	}
 	return guards
 }

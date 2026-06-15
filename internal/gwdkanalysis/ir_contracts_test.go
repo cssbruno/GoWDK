@@ -5,6 +5,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestBuildProgramDerivesPageOwnedContractRoutes(t *testing.T) {
@@ -82,10 +83,59 @@ func TestBuildProgramKeepsComponentQueryNonRoutable(t *testing.T) {
 	}
 }
 
+func TestBuildProgramLowersRealtimeSubscriptions(t *testing.T) {
+	program := BuildProgram(gowdk.Config{}, Sources{Pages: []gwdkir.Page{{
+		Source:  "pages/patients.page.gwdk",
+		Package: "pages",
+		ID:      "patients",
+		Route:   "/patients",
+		Imports: []gwdkir.Import{{
+			Alias: "patientcontracts",
+			Path:  "example.com/app/contracts/patients",
+		}},
+		Blocks: gwdkir.Blocks{
+			View: true,
+			Spans: gwdkir.BlockSpans{
+				ViewBodyStart: sourcePosition(7, 1),
+			},
+			ViewBody: `<main>
+  <section g:query="patientcontracts.GetPatientPage" g:subscribe="patientcontracts.PatientNotice"></section>
+</main>`,
+		},
+	}}})
+
+	if len(program.RealtimeSubscriptions) != 1 {
+		t.Fatalf("expected one realtime subscription, got %#v", program.RealtimeSubscriptions)
+	}
+	subscription := program.RealtimeSubscriptions[0]
+	if subscription.Query != "patientcontracts.GetPatientPage" || subscription.QueryType != "GetPatientPage" || subscription.QueryImportAlias != "patientcontracts" {
+		t.Fatalf("unexpected query metadata: %#v", subscription)
+	}
+	if subscription.QueryImportPath != "example.com/app/contracts/patients" {
+		t.Fatalf("unexpected query import path: %#v", subscription)
+	}
+	if subscription.Event != "patientcontracts.PatientNotice" || subscription.EventType != "PatientNotice" || subscription.EventImportAlias != "patientcontracts" {
+		t.Fatalf("unexpected event metadata: %#v", subscription)
+	}
+	if subscription.EventImportPath != "example.com/app/contracts/patients" {
+		t.Fatalf("unexpected event import path: %#v", subscription)
+	}
+	if subscription.OwnerKind != gwdkir.SourcePage || subscription.OwnerID != "patients" || subscription.Source != "pages/patients.page.gwdk" {
+		t.Fatalf("unexpected owner metadata: %#v", subscription)
+	}
+	if subscription.Span.Start.Line != 8 || subscription.QuerySpan.Start.Line != 8 {
+		t.Fatalf("unexpected subscription spans: %#v", subscription)
+	}
+}
+
 func contractRefsByName(refs []gwdkir.ContractReference) map[string]gwdkir.ContractReference {
 	out := make(map[string]gwdkir.ContractReference, len(refs))
 	for _, ref := range refs {
 		out[ref.Name] = ref
 	}
 	return out
+}
+
+func sourcePosition(line, column int) source.SourcePosition {
+	return source.SourcePosition{Line: line, Column: column}
 }

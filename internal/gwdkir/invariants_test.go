@@ -30,6 +30,9 @@ func validProgram() Program {
 			{Kind: ContractQuery, Name: "shop.ListProducts", OwnerKind: SourcePage, OwnerID: "home"},
 			{Kind: ContractCommand, Name: "shop.AddToCart", Status: ContractBindingBound, OwnerKind: SourceComponent, OwnerID: "ProductCard"},
 		},
+		RealtimeSubscriptions: []RealtimeSubscription{
+			{Query: "shop.ListProducts", Event: "shop.ProductNotice", Status: ContractBindingBound, OwnerKind: SourcePage, OwnerID: "home"},
+		},
 		ClientBehaviors: []ClientBehavior{{Component: "ProductCard"}},
 		Assets: []Asset{
 			{Kind: AssetCSS, OwnerID: "home", Path: "home.css"},
@@ -163,6 +166,26 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 			name:    "contract reference to missing owner",
 			corrupt: func(p *Program) { p.ContractRefs[0].OwnerID = "ghost" },
 			want:    `contract reference references unknown page "ghost"`,
+		},
+		{
+			name:    "unknown realtime subscription status",
+			corrupt: func(p *Program) { p.RealtimeSubscriptions[0].Status = "maybe" },
+			want:    `realtime subscription "shop.ProductNotice" has unknown binding status "maybe"`,
+		},
+		{
+			name:    "realtime subscription without query",
+			corrupt: func(p *Program) { p.RealtimeSubscriptions[0].Query = "" },
+			want:    `realtime subscription "shop.ProductNotice" has no query boundary`,
+		},
+		{
+			name:    "realtime subscription without event",
+			corrupt: func(p *Program) { p.RealtimeSubscriptions[0].Event = "" },
+			want:    `realtime subscription has no event reference`,
+		},
+		{
+			name:    "realtime subscription to missing owner",
+			corrupt: func(p *Program) { p.RealtimeSubscriptions[0].OwnerID = "ghost" },
+			want:    `realtime subscription references unknown page "ghost"`,
 		},
 	}
 	for _, test := range tests {

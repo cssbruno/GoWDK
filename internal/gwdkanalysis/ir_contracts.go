@@ -61,11 +61,52 @@ func appendContractReferences(program *gwdkir.Program, template gwdkir.Template)
 	}
 }
 
+func appendRealtimeSubscriptions(program *gwdkir.Program, template gwdkir.Template) {
+	refs, err := templateSubscriptionReferences(template)
+	if err != nil {
+		program.Diagnostics = append(program.Diagnostics, gwdkir.Diagnostic{
+			Code:    "realtime_subscription_parse_error",
+			Source:  template.Source,
+			Span:    template.Span,
+			Message: fmt.Sprintf("parse realtime subscriptions in %s %s view: %v", template.OwnerKind, template.OwnerID, err),
+		})
+		return
+	}
+	for _, ref := range refs {
+		queryAlias, queryType := splitContractReferenceName(ref.Query)
+		eventAlias, eventType := splitContractReferenceName(ref.Event)
+		program.RealtimeSubscriptions = append(program.RealtimeSubscriptions, gwdkir.RealtimeSubscription{
+			Query:            ref.Query,
+			QueryImportAlias: queryAlias,
+			QueryImportPath:  contractReferenceImportPath(template.Imports, queryAlias),
+			QueryType:        queryType,
+			Event:            ref.Event,
+			EventImportAlias: eventAlias,
+			EventImportPath:  contractReferenceImportPath(template.Imports, eventAlias),
+			EventType:        eventType,
+			Guards:           append([]string(nil), template.Guards...),
+			OwnerKind:        template.OwnerKind,
+			OwnerID:          template.OwnerID,
+			Package:          template.Package,
+			Source:           template.Source,
+			Span:             templateOffsetSpan(template, ref.EventStart, ref.EventEnd),
+			QuerySpan:        templateOffsetSpan(template, ref.QueryStart, ref.QueryEnd),
+		})
+	}
+}
+
 func templateContractReferences(template gwdkir.Template) ([]view.ContractReference, error) {
 	if len(template.Nodes) > 0 {
 		return view.ContractReferencesFromNodes(template.Nodes)
 	}
 	return view.ContractReferences(template.Body)
+}
+
+func templateSubscriptionReferences(template gwdkir.Template) ([]view.SubscriptionReference, error) {
+	if len(template.Nodes) > 0 {
+		return view.SubscriptionReferencesFromNodes(template.Nodes)
+	}
+	return view.SubscriptionReferences(template.Body)
 }
 
 func routeHasDynamicParams(route string) bool {

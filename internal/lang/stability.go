@@ -75,6 +75,7 @@ func ConstructStabilities() []ConstructStability {
 		{Name: "g:island", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:command", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:query", Kind: ConstructDirective, Tier: TierPartial},
+		{Name: "g:subscribe", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:event", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:ref", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:slot", Kind: ConstructDirective, Tier: TierPartial},

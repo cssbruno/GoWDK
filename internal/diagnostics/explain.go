@@ -122,6 +122,23 @@ view {
 }
 `,
 	},
+	"missing_realtime_addon": {
+		Details: "The source declares g:subscribe for a browser-facing presentation event, but the loaded config does not enable the realtime addon.",
+		NextSteps: []string{
+			"Enable realtime.Addon() in gowdk.config.go when browser presentation-event fanout is intentional.",
+			"Remove g:subscribe when the query region should stay static or update through normal fragments/actions.",
+		},
+		Invalid: `view {
+  <section g:query="patients.GetPatientPage" g:subscribe="patients.PatientNotice"></section>
+}
+`,
+		Fixed: `var Config = gowdk.Config{
+  Addons: []gowdk.Addon{
+    realtime.Addon(),
+  },
+}
+`,
+	},
 	"spa_dynamic_route_missing_paths": {
 		Details: "Build-time SPA pages with dynamic route params need concrete paths at build time. Request-time pages can skip paths because params are decoded per request.",
 		NextSteps: []string{

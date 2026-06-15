@@ -51,6 +51,9 @@ func linkIRContractReferencesFromReport(ir *gwdkir.Program, report contractscan.
 	if ir != nil && len(ir.ContractRefs) > 0 {
 		ir.ContractRefs = contractscan.LinkReferences(ir.ContractRefs, report)
 	}
+	if ir != nil && len(ir.RealtimeSubscriptions) > 0 {
+		ir.RealtimeSubscriptions = contractscan.LinkRealtimeSubscriptions(ir.RealtimeSubscriptions, report)
+	}
 }
 
 func validateContractScanReport(report contractscan.Report) error {

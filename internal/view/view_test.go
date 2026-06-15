@@ -1713,6 +1713,32 @@ func TestRenderWithOptionsMarksGQueryElement(t *testing.T) {
 	}
 }
 
+func TestRenderWithOptionsMarksGQuerySubscription(t *testing.T) {
+	got, err := RenderWithOptions(`<section g:query="patients.GetPatientPage" g:subscribe="patients.PatientNotice"><h1>Patients</h1></section>`, nil, nil, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<section data-gowdk-query="patients.GetPatientPage" data-gowdk-subscribe="patients.PatientNotice"><h1>Patients</h1></section>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderWithOptionsMarksGQuerySubscriptionEventType(t *testing.T) {
+	got, err := RenderWithOptions(`<section g:query="patients.GetPatientPage" g:subscribe="patients.PatientNotice"><h1>Patients</h1></section>`, nil, nil, Options{
+		RealtimeEventTypeNames: map[string]string{
+			"patients.PatientNotice": "github.com/acme/clinic/patients.PatientNotice",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<section data-gowdk-query="patients.GetPatientPage" data-gowdk-subscribe="patients.PatientNotice" data-gowdk-subscribe-type="github.com/acme/clinic/patients.PatientNotice"><h1>Patients</h1></section>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
 func TestCommandReferencesFindsGCommandForms(t *testing.T) {
 	refs, err := CommandReferences(`<main><form method="patch" action="/patients" g:command="patients.CreatePatient"></form><form g:command={billing.PayInvoice}></form></main>`)
 	if err != nil {
@@ -1761,6 +1787,32 @@ func TestContractReferencesFindsCommandsAndQueries(t *testing.T) {
 	}
 }
 
+func TestSubscriptionReferencesFindsQueryBoundSubscriptions(t *testing.T) {
+	refs, err := SubscriptionReferences(`<main><section g:query="patients.GetPatientPage" g:subscribe={patients.PatientNotice}></section></main>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("expected one subscription ref, got %#v", refs)
+	}
+	if refs[0].Query != "patients.GetPatientPage" || refs[0].Event != "patients.PatientNotice" {
+		t.Fatalf("unexpected subscription ref: %#v", refs[0])
+	}
+	if refs[0].QueryStart == 0 || refs[0].EventStart == 0 {
+		t.Fatalf("expected query and event spans, got %#v", refs[0])
+	}
+}
+
+func TestSubscriptionReferencesRejectsComponentSubscriptions(t *testing.T) {
+	_, err := SubscriptionReferences(`<main><PatientList g:subscribe="patients.PatientNotice" /></main>`)
+	if err == nil {
+		t.Fatal("expected component g:subscribe rejection")
+	}
+	if !strings.Contains(err.Error(), `must not declare g:subscribe`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRenderWithOptionsRejectsFrontendDomainEventDirective(t *testing.T) {
 	_, err := RenderWithOptions(`<form g:event="PatientCreated"></form>`, nil, nil, Options{})
 	if err == nil {
@@ -1787,6 +1839,26 @@ func TestRenderWithOptionsRejectsInvalidGQuery(t *testing.T) {
 		t.Fatal("expected invalid g:query error")
 	}
 	if !strings.Contains(err.Error(), `must be a package-qualified Go contract reference`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithOptionsRejectsInvalidGSubscribe(t *testing.T) {
+	_, err := RenderWithOptions(`<section g:query="patients.GetPatientPage" g:subscribe="PatientNotice"></section>`, nil, nil, Options{})
+	if err == nil {
+		t.Fatal("expected invalid g:subscribe error")
+	}
+	if !strings.Contains(err.Error(), `must be a package-qualified Go presentation event reference`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithOptionsRejectsUnboundedGSubscribe(t *testing.T) {
+	_, err := RenderWithOptions(`<section g:subscribe="patients.PatientNotice"></section>`, nil, nil, Options{})
+	if err == nil {
+		t.Fatal("expected unbounded g:subscribe error")
+	}
+	if !strings.Contains(err.Error(), `g:subscribe requires g:query`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

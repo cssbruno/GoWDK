@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -30,6 +31,28 @@ func ValidateContractReferences(refs []gwdkir.ContractReference) error {
 	return normalizeValidationErrors(diagnostics)
 }
 
+// ValidateRealtimeSubscriptionBindings converts linked realtime subscription
+// metadata into compiler diagnostics for CLI validation paths.
+func ValidateRealtimeSubscriptionBindings(subscriptions []gwdkir.RealtimeSubscription) error {
+	var diagnostics []ValidationError
+	for _, subscription := range subscriptions {
+		switch subscription.Status {
+		case gwdkir.ContractBindingMissing:
+			diagnostics = append(diagnostics, realtimeSubscriptionDiagnostic(subscription, "realtime_subscription_missing"))
+		case gwdkir.ContractBindingInvalid:
+			diagnostics = append(diagnostics, realtimeSubscriptionDiagnostic(subscription, "realtime_subscription_invalid"))
+		case gwdkir.ContractBindingBound:
+			if !realtimeSubscriptionAllowsWeb(subscription) {
+				diagnostics = append(diagnostics, realtimeSubscriptionRoleDiagnostic(subscription))
+			}
+		}
+	}
+	if len(diagnostics) == 0 {
+		return nil
+	}
+	return normalizeValidationErrors(diagnostics)
+}
+
 func contractReferenceAllowsWeb(ref gwdkir.ContractReference) bool {
 	if len(ref.Roles) == 0 {
 		return true
@@ -40,6 +63,36 @@ func contractReferenceAllowsWeb(ref gwdkir.ContractReference) bool {
 		}
 	}
 	return false
+}
+
+func realtimeSubscriptionAllowsWeb(subscription gwdkir.RealtimeSubscription) bool {
+	if len(subscription.Roles) == 0 {
+		return true
+	}
+	for _, role := range subscription.Roles {
+		if role == "web" {
+			return true
+		}
+	}
+	return false
+}
+
+func validateRealtimeSubscriptions(config gowdk.Config, subscriptions []gwdkir.RealtimeSubscription) []ValidationError {
+	if len(subscriptions) == 0 || config.HasFeature(gowdk.FeatureRealtime) {
+		return nil
+	}
+	diagnostics := make([]ValidationError, 0, len(subscriptions))
+	for _, subscription := range subscriptions {
+		diagnostics = append(diagnostics, ValidationError{
+			Code:          "missing_realtime_addon",
+			PageID:        contractSubscriptionPageID(subscription),
+			ComponentName: contractSubscriptionComponentName(subscription),
+			Source:        subscription.Source,
+			Span:          subscription.Span,
+			Message:       fmt.Sprintf("g:subscribe %s requires realtime.Addon() in gowdk.config.go", subscription.Event),
+		})
+	}
+	return diagnostics
 }
 
 func validateContractReferenceRoutes(refs []gwdkir.ContractReference) []ValidationError {
@@ -82,6 +135,17 @@ func contractReferenceRoleDiagnostic(ref gwdkir.ContractReference) ValidationErr
 	}
 }
 
+func realtimeSubscriptionRoleDiagnostic(subscription gwdkir.RealtimeSubscription) ValidationError {
+	return ValidationError{
+		Code:          "realtime_subscription_role_not_allowed",
+		PageID:        contractSubscriptionPageID(subscription),
+		ComponentName: contractSubscriptionComponentName(subscription),
+		Source:        subscription.Source,
+		Span:          subscription.Span,
+		Message:       fmt.Sprintf("presentation event %s is registered for roles %s, but generated web subscriptions execute with role web", subscription.Event, strings.Join(subscription.Roles, ", ")),
+	}
+}
+
 func contractReferenceDiagnostic(ref gwdkir.ContractReference, code string) ValidationError {
 	message := ref.Message
 	if message == "" {
@@ -97,6 +161,21 @@ func contractReferenceDiagnostic(ref gwdkir.ContractReference, code string) Vali
 	}
 }
 
+func realtimeSubscriptionDiagnostic(subscription gwdkir.RealtimeSubscription, code string) ValidationError {
+	message := subscription.Message
+	if message == "" {
+		message = fmt.Sprintf("presentation event %s is not bound to a valid Go registration", subscription.Event)
+	}
+	return ValidationError{
+		Code:          code,
+		PageID:        contractSubscriptionPageID(subscription),
+		ComponentName: contractSubscriptionComponentName(subscription),
+		Source:        subscription.Source,
+		Span:          subscription.Span,
+		Message:       message,
+	}
+}
+
 func contractReferencePageID(ref gwdkir.ContractReference) string {
 	if ref.OwnerKind == gwdkir.SourcePage {
 		return ref.OwnerID
@@ -104,9 +183,23 @@ func contractReferencePageID(ref gwdkir.ContractReference) string {
 	return ""
 }
 
+func contractSubscriptionPageID(subscription gwdkir.RealtimeSubscription) string {
+	if subscription.OwnerKind == gwdkir.SourcePage {
+		return subscription.OwnerID
+	}
+	return ""
+}
+
 func contractReferenceComponentName(ref gwdkir.ContractReference) string {
 	if ref.OwnerKind == gwdkir.SourceComponent {
 		return ref.OwnerID
+	}
+	return ""
+}
+
+func contractSubscriptionComponentName(subscription gwdkir.RealtimeSubscription) string {
+	if subscription.OwnerKind == gwdkir.SourceComponent {
+		return subscription.OwnerID
 	}
 	return ""
 }

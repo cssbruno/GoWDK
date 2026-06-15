@@ -8,6 +8,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	contractsaddon "github.com/cssbruno/gowdk/addons/contracts"
+	"github.com/cssbruno/gowdk/addons/realtime"
 	"github.com/cssbruno/gowdk/addons/ssr"
 )
 
@@ -113,7 +114,7 @@ func TestSiteMapJSONIncludesContractReferenceEndpoints(t *testing.T) {
 	page := filepath.Join(repoRoot, "examples", "contracts", "patients.page.gwdk")
 
 	payload, diagnostics := SiteMapJSONWithOptions(
-		gowdk.Config{Addons: []gowdk.Addon{contractsaddon.Addon()}},
+		gowdk.Config{Addons: []gowdk.Addon{contractsaddon.Addon(), realtime.Addon()}},
 		[]string{page},
 		CheckOptions{ProjectRoot: repoRoot},
 	)

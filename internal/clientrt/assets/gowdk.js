@@ -63,6 +63,7 @@
       if (typeof window !== 'undefined' && window.__gowdkMountClientGoBlocks) {
         window.__gowdkMountClientGoBlocks();
       }
+      ensureRealtime();
       restoreFocus(focused);
       form.dispatchEvent(new CustomEvent('gowdk:after-swap', {
         detail: { form: form, target: target, swap: swap }
@@ -96,6 +97,15 @@
     return false;
   }
 
+  var prefetchedDocuments = {};
+  var prefetchOrder = [];
+  var prefetchLimit = 8;
+  var hoverPrefetchDelay = 65;
+  var hoverPrefetchTimer = 0;
+  var hoverPrefetchURL = '';
+  var realtimeEventsPath = '/_gowdk/realtime/events';
+  var realtimeSource = null;
+
   document.addEventListener('submit', submitPartial);
   document.addEventListener('click', navigateLink);
   document.addEventListener('mouseover', prefetchLink);
@@ -107,13 +117,7 @@
       loadDocument(window.location.href, false, null);
     });
   }
-
-  var prefetchedDocuments = {};
-  var prefetchOrder = [];
-  var prefetchLimit = 8;
-  var hoverPrefetchDelay = 65;
-  var hoverPrefetchTimer = 0;
-  var hoverPrefetchURL = '';
+  ensureRealtime();
 
   async function navigateLink(event) {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
@@ -297,6 +301,7 @@
       if (typeof window !== 'undefined' && window.__gowdkMountClientGoBlocks) {
         window.__gowdkMountClientGoBlocks();
       }
+      ensureRealtime();
       restoreFocus(focused);
       if (window.location.hash) {
         var target = document.getElementById(window.location.hash.slice(1));
@@ -414,6 +419,159 @@
       script.parentNode.replaceChild(active, script);
     });
     return Promise.all(pending);
+  }
+
+  function ensureRealtime() {
+    if (!hasRealtimeRegions()) {
+      closeRealtime();
+      return;
+    }
+    if (realtimeSource || typeof window === 'undefined' || !window.EventSource) {
+      return;
+    }
+    try {
+      realtimeSource = new window.EventSource(realtimeEventsPath);
+    } catch (error) {
+      realtimeSource = null;
+      dispatchRealtimeError(error, { source: null });
+      return;
+    }
+    if (realtimeSource.addEventListener) {
+      realtimeSource.addEventListener('gowdk-presentation', handleRealtimeEvent);
+    } else {
+      realtimeSource.onmessage = handleRealtimeEvent;
+    }
+    realtimeSource.onerror = function (event) {
+      dispatchRealtimeError(new Error('realtime stream error'), { source: realtimeSource, event: event });
+    };
+  }
+
+  function closeRealtime() {
+    if (!realtimeSource) {
+      return;
+    }
+    if (typeof realtimeSource.close === 'function') {
+      realtimeSource.close();
+    }
+    realtimeSource = null;
+  }
+
+  function hasRealtimeRegions() {
+    return !!(document.querySelector && document.querySelector('[data-gowdk-subscribe]'));
+  }
+
+  function handleRealtimeEvent(event) {
+    var envelope;
+    try {
+      envelope = JSON.parse(event.data || '{}');
+    } catch (error) {
+      dispatchRealtimeError(error, { event: event });
+      return;
+    }
+    try {
+      applyRealtimeEnvelope(envelope);
+    } catch (error) {
+      dispatchRealtimeError(error, { event: event, envelope: envelope });
+    }
+  }
+
+  function applyRealtimeEnvelope(envelope) {
+    var category = envelope.category || envelope.Category || '';
+    var eventType = envelope.type || envelope.Type || '';
+    if (category !== 'presentation' || !eventType) {
+      return;
+    }
+    var regions = realtimeRegionsForEvent(eventType);
+    if (!regions.length) {
+      return;
+    }
+    var patches = normalizeRealtimePatches(envelope.value || envelope.Value);
+    regions.forEach(function (region) {
+      patches.forEach(function (patch) {
+        applyRealtimePatch(region, patch, envelope);
+      });
+    });
+  }
+
+  function realtimeRegionsForEvent(eventType) {
+    if (!document.querySelectorAll) {
+      return [];
+    }
+    var regions = [];
+    Array.prototype.forEach.call(document.querySelectorAll('[data-gowdk-subscribe]'), function (region) {
+      var boundType = region.getAttribute('data-gowdk-subscribe-type') || '';
+      var sourceRef = region.getAttribute('data-gowdk-subscribe') || '';
+      if ((boundType && boundType === eventType) || (!boundType && subscriptionMatchesEventType(sourceRef, eventType))) {
+        regions.push(region);
+      }
+    });
+    return regions;
+  }
+
+  function subscriptionMatchesEventType(sourceRef, eventType) {
+    return sourceRef === eventType || eventType.slice(-sourceRef.length - 1) === '.' + sourceRef || eventType.slice(-sourceRef.length - 1) === '/' + sourceRef;
+  }
+
+  function normalizeRealtimePatches(value) {
+    if (!value || typeof value !== 'object') {
+      throw new Error('realtime event value must contain a patch object');
+    }
+    var patches = Array.isArray(value.patches) ? value.patches : null;
+    if (!patches && value.patch) {
+      patches = [value.patch];
+    }
+    if (!patches || !patches.length) {
+      throw new Error('realtime event value must contain patch or patches');
+    }
+    return patches.map(normalizeRealtimePatch);
+  }
+
+  function normalizeRealtimePatch(patch) {
+    if (!patch || typeof patch !== 'object') {
+      throw new Error('realtime patch must be an object');
+    }
+    if (patch.op !== 'replaceHTML') {
+      throw new Error('unsupported realtime patch operation');
+    }
+    if (typeof patch.html !== 'string') {
+      throw new Error('realtime replaceHTML patch requires html');
+    }
+    var swap = patch.swap || 'innerHTML';
+    if (swap !== 'innerHTML' && swap !== 'outerHTML') {
+      throw new Error('unsupported realtime patch swap');
+    }
+    return { op: patch.op, html: patch.html, swap: swap };
+  }
+
+  function applyRealtimePatch(region, patch, envelope) {
+    var focused = focusTarget(document.activeElement);
+    if (typeof window !== 'undefined' && window.__gowdkDestroyIslands) {
+      window.__gowdkDestroyIslands(region, patch.swap === 'outerHTML');
+    }
+    if (patch.swap === 'outerHTML') {
+      region.outerHTML = patch.html;
+    } else {
+      region.innerHTML = patch.html;
+    }
+    if (typeof window !== 'undefined' && window.__gowdkStores && window.__gowdkStores.hydrate) {
+      window.__gowdkStores.hydrate();
+    }
+    if (typeof window !== 'undefined' && window.__gowdkMountIslands) {
+      window.__gowdkMountIslands();
+    }
+    if (typeof window !== 'undefined' && window.__gowdkMountClientGoBlocks) {
+      window.__gowdkMountClientGoBlocks();
+    }
+    restoreFocus(focused);
+    region.dispatchEvent(new CustomEvent('gowdk:realtime-patch', {
+      detail: { region: region, patch: patch, envelope: envelope }
+    }));
+  }
+
+  function dispatchRealtimeError(error, detail) {
+    document.dispatchEvent(new CustomEvent('gowdk:realtime-error', {
+      detail: Object.assign({ error: error }, detail || {})
+    }));
   }
 
   function focusTarget(element) {

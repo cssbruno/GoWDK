@@ -19,18 +19,19 @@ var supportedDirectiveNames = map[string]bool{
 	"g:else-if":      true,
 	// g:event parses so the renderer can explain that domain events are
 	// backend-owned facts instead of emitting a generic unknown-directive error.
-	"g:event":  true,
-	"g:for":    true,
-	"g:html":   true,
-	"g:if":     true,
-	"g:island": true,
-	"g:key":    true,
-	"g:post":   true,
-	"g:query":  true,
-	"g:ref":    true,
-	"g:slot":   true,
-	"g:swap":   true,
-	"g:target": true,
+	"g:event":     true,
+	"g:for":       true,
+	"g:html":      true,
+	"g:if":        true,
+	"g:island":    true,
+	"g:key":       true,
+	"g:post":      true,
+	"g:query":     true,
+	"g:ref":       true,
+	"g:slot":      true,
+	"g:subscribe": true,
+	"g:swap":      true,
+	"g:target":    true,
 }
 
 // supportedMessageDirectives are the g:message:* validation-message rules.

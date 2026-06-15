@@ -1,6 +1,7 @@
 package appgen
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"go/format"
@@ -691,6 +692,116 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 	}
 	if strings.Contains(source, `gowdkcontracts.ExecuteCommandForRole[patients.CreatePatient, patients.CreatePatientResult]`) {
 		t.Fatalf("generated command contract must capture events instead of direct command execution:\n%s", source)
+	}
+}
+
+func TestGenerateWritesRealtimeFanoutForSubscriptions(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
+
+	program := &gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Method:      http.MethodPost,
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		}},
+		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
+			Query:           "patients.GetPatientPage",
+			Event:           "patients.PatientNotice",
+			EventImportPath: "example.com/app/contracts/patients",
+			EventType:       "PatientNotice",
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourcePage,
+			OwnerID:         "patients",
+		}},
+	}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkrealtime "github.com/cssbruno/gowdk/addons/realtime"`,
+		`const RealtimeEventsPath = "/_gowdk/realtime/events"`,
+		`mux.Handle(RealtimeEventsPath, realtimeEventsHandler())`,
+		`var realtimeFanout gowdkrealtime.PresentationFanout = gowdkrealtime.NewSSE()`,
+		`func RegisterRealtimeFanout(fanout gowdkrealtime.PresentationFanout)`,
+		`"example.com/app/contracts/patients.PatientNotice": true`,
+		`event.Category == gowdkcontracts.PresentationEvent`,
+		`gowdkcontracts.PresentationFanoutCommandEventSink(realtimeSubscriptionFanout{inner: fanout})`,
+		`gowdkcontracts.CompositeCommandEventSink(gowdkcontracts.InProcessCommandEventSink(), fanoutSink)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated realtime app source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateGuardsRealtimeStreamForSubscribedPages(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "dashboard", "index.html"), "<main>Dashboard</main>")
+
+	program := &gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			ID:     "dashboard",
+			Route:  "/dashboard",
+			Guards: []string{"auth.required"},
+		}},
+		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
+			Query:           "patients.GetPatientPage",
+			Event:           "patients.PatientNotice",
+			EventImportPath: "example.com/app/contracts/patients",
+			EventType:       "PatientNotice",
+			Guards:          []string{"auth.required"},
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourcePage,
+			OwnerID:         "dashboard",
+		}},
+	}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`neturl "net/url"`,
+		`gowdkroute "github.com/cssbruno/gowdk/runtime/route"`,
+		`func realtimeStreamGuards(request *http.Request) []string`,
+		`request.URL.Query().Get("path")`,
+		`referer := request.Referer()`,
+		`neturl.Parse(referer)`,
+		`gowdkroute.Match("/dashboard", requestPath)`,
+		`return []string{"auth.required"}`,
+		`if !runGuards(response, request, realtimeStreamGuards(request))`,
+		`RegisterGuards(GOWDKGuardRegistry())`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated guarded realtime source to contain %q:\n%s", expected, source)
+		}
 	}
 }
 
@@ -4888,6 +4999,257 @@ func init() {
 		if !strings.Contains(string(eventPayload), expected) {
 			t.Fatalf("expected event sink output to contain %q, got %s", expected, eventPayload)
 		}
+	}
+}
+
+func TestGeneratedBinaryRealtimeFanoutStreamsSubscribedPresentationEvents(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients page</main>")
+
+	program := &gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "gowdk-generated-app/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			InputFields: []source.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
+			Method:      http.MethodPost,
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		}},
+		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
+			Query:           "patients.GetPatientPage",
+			Event:           "patients.PatientNotice",
+			EventImportPath: "gowdk-generated-app/patients",
+			EventType:       "PatientNotice",
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourcePage,
+			OwnerID:         "patients",
+		}},
+	}
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct {
+	Name string
+}
+
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+type PatientNotice struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+type OtherNotice struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+type PatientCreated struct {
+	ID string
+}
+
+func Register(registry *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	if err := contracts.EmitPresentation(ctx, PatientNotice{ID: "patient-1"}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	if err := contracts.EmitPresentation(ctx, OtherNotice{ID: "other-1"}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	if err := contracts.EmitDomain(ctx, PatientCreated{ID: "domain-1"}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	return CreatePatientResult{ID: "patient-1"}, nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+	if _, err := waitForHTTPStatus("http://"+addr+"/_gowdk/health", http.MethodGet, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	streamCtx, cancelStream := context.WithCancel(context.Background())
+	defer cancelStream()
+	streamRequest, err := http.NewRequestWithContext(streamCtx, http.MethodGet, "http://"+addr+"/_gowdk/realtime/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	streamResponse, err := http.DefaultClient.Do(streamRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer streamResponse.Body.Close()
+	if streamResponse.StatusCode != http.StatusOK {
+		t.Fatalf("expected realtime stream status 200, got %d", streamResponse.StatusCode)
+	}
+	lines := make(chan string, 8)
+	readErrs := make(chan error, 1)
+	go func() {
+		reader := bufio.NewReader(streamResponse.Body)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				readErrs <- err
+				return
+			}
+			lines <- line
+		}
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/patients", http.MethodPost, "name=Ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected command response status 200, got %d: %s", response.StatusCode, payload)
+	}
+
+	deadline := time.After(5 * time.Second)
+	var dataLine string
+	for dataLine == "" {
+		select {
+		case line := <-lines:
+			if strings.HasPrefix(line, "data: ") {
+				dataLine = line
+			}
+		case err := <-readErrs:
+			t.Fatalf("read realtime stream: %v", err)
+		case <-deadline:
+			t.Fatal("timed out waiting for realtime event")
+		}
+	}
+	if !strings.Contains(dataLine, `"Category":"presentation"`) ||
+		!strings.Contains(dataLine, `"Type":"gowdk-generated-app/patients.PatientNotice"`) ||
+		!strings.Contains(dataLine, `"id":"patient-1"`) {
+		t.Fatalf("expected subscribed presentation event, got %s", dataLine)
+	}
+	for _, unexpected := range []string{"OtherNotice", "PatientCreated", "domain-1"} {
+		if strings.Contains(dataLine, unexpected) {
+			t.Fatalf("realtime stream included unsubscribed event %q in %s", unexpected, dataLine)
+		}
+	}
+}
+
+func TestGeneratedBinaryRealtimeStreamGuardDenialClosesStream(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "dashboard", "index.html"), "<main>Dashboard</main>")
+
+	program := &gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			ID:     "dashboard",
+			Route:  "/dashboard",
+			Guards: []string{"auth.required"},
+		}},
+		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
+			Query:           "patients.GetPatientPage",
+			Event:           "patients.PatientNotice",
+			EventImportPath: "gowdk-generated-app/patients",
+			EventType:       "PatientNotice",
+			Guards:          []string{"auth.required"},
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourcePage,
+			OwnerID:         "dashboard",
+		}},
+	}
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, appPackageDirName, "guards_register.go"), `package gowdkapp
+
+import (
+	"errors"
+
+	gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
+)
+
+func GOWDKGuardRegistry() gowdkguard.Registry {
+	return gowdkguard.Registry{
+		"auth.required": func(ctx gowdkguard.Context) error {
+			return errors.New("denied")
+		},
+	}
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+	if _, err := waitForHTTPStatus("http://"+addr+"/_gowdk/health", http.MethodGet, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	response, err := waitForHTTPStatus("http://"+addr+"/_gowdk/realtime/events?path=/dashboard", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected realtime stream guard denial to return 403, got %d: %s", response.StatusCode, payload)
+	}
+	if response.Header.Get("Content-Type") == "text/event-stream" {
+		t.Fatalf("guard-denied realtime stream must not open SSE response: headers=%v body=%s", response.Header, payload)
+	}
+	if cache := response.Header.Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected guard-denied realtime stream to be no-store, got %q", cache)
+	}
+	if !strings.Contains(string(payload), "guard") {
+		t.Fatalf("expected guard denial response, got %s", payload)
 	}
 }
 

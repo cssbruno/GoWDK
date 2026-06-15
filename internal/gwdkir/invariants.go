@@ -125,6 +125,21 @@ func CheckInvariants(program Program) error {
 		reportOwnerReference("contract reference", ref.OwnerKind, ref.OwnerID, pages, components, layouts, report)
 	}
 
+	for _, subscription := range program.RealtimeSubscriptions {
+		switch subscription.Status {
+		case "", ContractBindingUnknown, ContractBindingBound, ContractBindingMissing, ContractBindingInvalid:
+		default:
+			report("realtime subscription %q has unknown binding status %q", subscription.Event, subscription.Status)
+		}
+		if strings.TrimSpace(subscription.Query) == "" {
+			report("realtime subscription %q has no query boundary", subscription.Event)
+		}
+		if strings.TrimSpace(subscription.Event) == "" {
+			report("realtime subscription has no event reference")
+		}
+		reportOwnerReference("realtime subscription", subscription.OwnerKind, subscription.OwnerID, pages, components, layouts, report)
+	}
+
 	if len(violations) == 0 {
 		return nil
 	}

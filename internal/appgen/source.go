@@ -90,6 +90,15 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["context"] = "context"
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
 	}
+	if generatedRealtimeEnabled(options) {
+		imports["context"] = "context"
+		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
+		imports["gowdkrealtime"] = "github.com/cssbruno/gowdk/addons/realtime"
+	}
+	if generatedRealtimeStreamUsesRouteMatching(options) {
+		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
+		imports["neturl"] = "net/url"
+	}
 	if len(executableCommandContractExposures(executableContracts)) > 0 {
 		imports["sync"] = "sync"
 	}
@@ -270,8 +279,9 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(direct)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(direct), generatedUsesRateLimit(direct))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
-	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(direct))...)
 	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
+	decls = append(decls, realtimeDecls(direct)...)
 	switch {
 	case adapter.HasRegistrations():
 		decls = append(decls, newBackendRouterDecl(adapter))
@@ -300,8 +310,9 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(options)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(options), generatedUsesRateLimit(options))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
-	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(options))...)
 	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
+	decls = append(decls, realtimeDecls(options)...)
 	if adapter.HasRegistrations() {
 		decls = append(decls, newBackendRouterDecl(adapter))
 	} else {
@@ -395,6 +406,9 @@ func serveMuxDecl(options Options, embedded bool) ast.Decl {
 		)
 	}
 	stmts = append(stmts, define([]ast.Expr{id("mux")}, call(sel("http", "NewServeMux"))))
+	if generatedRealtimeEnabled(options) {
+		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), id("RealtimeEventsPath"), call(id("realtimeEventsHandler")))))
+	}
 	if embedded {
 		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), &ast.CallExpr{
 			Fun: sel("gowdkruntime", "ApplyMiddlewares"),

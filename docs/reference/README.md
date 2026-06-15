@@ -14,6 +14,7 @@ Reference docs describe current command and data contracts.
 - `testing.md`: scaffolded smoke tests, browser smoke, accessibility, and performance checks.
 - `contracts.md`: current runtime contract registry and generated command/query adapters.
 - `realtime.md`: current presentation-event fanout setup, SSE default, and WebSocket opt-in behavior.
+- `tracing.md`: dependency-free runtime trace IDs, spans, sinks, sampling, propagation, and local collection.
 - `css.md`: current CSS extension point.
 - `images.md`: image optimization patterns and current non-goals.
 - `seo.md`: optional sitemap.xml and robots.txt emission.

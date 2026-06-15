@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 )
 
 // ErrEventSourceClosed tells RunEventWorker that the source drained cleanly.
@@ -37,10 +38,55 @@ type EventSource interface {
 	ReceiveEventBatch(context.Context) (EventBatch, error)
 }
 
+// EventWorkerRetry describes one nacked worker delivery attempt. Attempt is a
+// one-based count of consecutive nacked batches for the running worker.
+type EventWorkerRetry struct {
+	Role       Role
+	Attempt    int
+	EventCount int
+	Cause      error
+}
+
+// EventWorkerBackoff returns the delay before a worker consumes the next batch
+// after EventSource accepts a Nack. Non-positive durations mean no delay.
+type EventWorkerBackoff func(EventWorkerRetry) time.Duration
+
+// EventWorkerOption configures RunEventWorker option variants.
+type EventWorkerOption func(*eventWorkerOptions)
+
+type eventWorkerOptions struct {
+	backoff EventWorkerBackoff
+}
+
+// WithEventWorkerBackoff sets the retry delay policy used after EventSource
+// accepts a nacked batch. Nil preserves the default immediate retry behavior.
+func WithEventWorkerBackoff(backoff EventWorkerBackoff) EventWorkerOption {
+	return func(options *eventWorkerOptions) {
+		options.backoff = backoff
+	}
+}
+
+// ConstantEventWorkerBackoff returns a backoff policy with the same delay for
+// every nacked batch. Non-positive delays result in immediate retry.
+func ConstantEventWorkerBackoff(delay time.Duration) EventWorkerBackoff {
+	return func(EventWorkerRetry) time.Duration {
+		if delay <= 0 {
+			return 0
+		}
+		return delay
+	}
+}
+
 // RunEventWorker reads batches from source and dispatches them to worker-role
 // subscribers until ctx is canceled or source returns ErrEventSourceClosed.
 func RunEventWorker(ctx context.Context, registry *Registry, source EventSource) error {
 	return RunEventWorkerForRole(ctx, registry, RoleWorker, source)
+}
+
+// RunEventWorkerWithOptions reads worker-role batches with explicit worker
+// options such as retry backoff.
+func RunEventWorkerWithOptions(ctx context.Context, registry *Registry, source EventSource, options ...EventWorkerOption) error {
+	return RunEventWorkerForRoleWithOptions(ctx, registry, RoleWorker, source, options...)
 }
 
 // RunEventWorkerForRole reads batches from source and dispatches them to
@@ -51,11 +97,23 @@ func RunEventWorkerForRole(ctx context.Context, registry *Registry, role Role, s
 	return runEventWorkerForRole(ctx, registry, role, source, nil)
 }
 
+// RunEventWorkerForRoleWithOptions reads batches for role with explicit worker
+// options such as retry backoff.
+func RunEventWorkerForRoleWithOptions(ctx context.Context, registry *Registry, role Role, source EventSource, options ...EventWorkerOption) error {
+	return runEventWorkerForRole(ctx, registry, role, source, nil, options...)
+}
+
 // RunEventWorkerWithSeenStore reads worker-role batches and skips duplicate
 // event IDs already present in seen. Duplicate-only batches are acknowledged
 // without invoking subscribers.
 func RunEventWorkerWithSeenStore(ctx context.Context, registry *Registry, source EventSource, seen SeenStore) error {
 	return RunEventWorkerForRoleWithSeenStore(ctx, registry, RoleWorker, source, seen)
+}
+
+// RunEventWorkerWithSeenStoreAndOptions reads worker-role batches with a seen
+// store and explicit worker options such as retry backoff.
+func RunEventWorkerWithSeenStoreAndOptions(ctx context.Context, registry *Registry, source EventSource, seen SeenStore, options ...EventWorkerOption) error {
+	return RunEventWorkerForRoleWithSeenStoreAndOptions(ctx, registry, RoleWorker, source, seen, options...)
 }
 
 // RunEventWorkerForRoleWithSeenStore reads batches for role and skips duplicate
@@ -65,10 +123,18 @@ func RunEventWorkerForRoleWithSeenStore(ctx context.Context, registry *Registry,
 	return runEventWorkerForRole(ctx, registry, role, source, seen)
 }
 
-func runEventWorkerForRole(ctx context.Context, registry *Registry, role Role, source EventSource, seen SeenStore) error {
+// RunEventWorkerForRoleWithSeenStoreAndOptions reads batches for role with a
+// seen store and explicit worker options such as retry backoff.
+func RunEventWorkerForRoleWithSeenStoreAndOptions(ctx context.Context, registry *Registry, role Role, source EventSource, seen SeenStore, options ...EventWorkerOption) error {
+	return runEventWorkerForRole(ctx, registry, role, source, seen, options...)
+}
+
+func runEventWorkerForRole(ctx context.Context, registry *Registry, role Role, source EventSource, seen SeenStore, optionFns ...EventWorkerOption) error {
 	if source == nil {
 		return Error{Kind: ErrNilHandler, Message: "event source cannot be nil"}
 	}
+	options := newEventWorkerOptions(optionFns)
+	nackedAttempts := 0
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -83,39 +149,60 @@ func runEventWorkerForRole(ctx context.Context, registry *Registry, role Role, s
 			}
 			return err
 		}
-		if err := dispatchEventBatch(ctx, registry, role, batch, seen); err != nil {
+		result, err := dispatchEventBatch(ctx, registry, role, batch, seen)
+		if err != nil {
 			return err
 		}
+		if result.nacked {
+			nackedAttempts++
+			delay := options.retryDelay(EventWorkerRetry{
+				Role:       role,
+				Attempt:    nackedAttempts,
+				EventCount: result.eventCount,
+				Cause:      result.cause,
+			})
+			if err := waitEventWorkerBackoff(ctx, delay); err != nil {
+				return err
+			}
+			continue
+		}
+		nackedAttempts = 0
 	}
 }
 
-func dispatchEventBatch(ctx context.Context, registry *Registry, role Role, batch EventBatch, seen SeenStore) error {
+type eventWorkerDispatchResult struct {
+	nacked     bool
+	eventCount int
+	cause      error
+}
+
+func dispatchEventBatch(ctx context.Context, registry *Registry, role Role, batch EventBatch, seen SeenStore) (eventWorkerDispatchResult, error) {
 	if len(batch.Events) == 0 {
-		return ackEventBatch(ctx, batch)
+		return eventWorkerDispatchResult{}, ackEventBatch(ctx, batch)
 	}
 	events, deliveredIDs, err := unseenEvents(ctx, role, batch.Events, seen)
 	if err != nil {
-		return err
+		return eventWorkerDispatchResult{}, err
 	}
 	if len(events) == 0 {
-		return ackEventBatch(ctx, batch)
+		return eventWorkerDispatchResult{}, ackEventBatch(ctx, batch)
 	}
 	if err := PublishEnvelopesForRole(ctx, registry, role, events); err != nil {
 		if batch.Nack == nil {
-			return err
+			return eventWorkerDispatchResult{}, err
 		}
 		if nackErr := batch.Nack(ctx, err); nackErr != nil {
-			return errors.Join(err, nackErr)
+			return eventWorkerDispatchResult{}, errors.Join(err, nackErr)
 		}
 		// The source accepted the Nack and owns redelivery, so the worker
 		// records the failure and keeps consuming instead of exiting.
 		logWorkerDispatchFailure(err)
-		return nil
+		return eventWorkerDispatchResult{nacked: true, eventCount: len(events), cause: err}, nil
 	}
 	if err := ackEventBatch(ctx, batch); err != nil {
-		return err
+		return eventWorkerDispatchResult{}, err
 	}
-	return markSeenEvents(ctx, seen, deliveredIDs)
+	return eventWorkerDispatchResult{}, markSeenEvents(ctx, seen, deliveredIDs)
 }
 
 func unseenEvents(ctx context.Context, role Role, events []EventEnvelope, seen SeenStore) ([]EventEnvelope, []string, error) {
@@ -175,4 +262,39 @@ func ackEventBatch(ctx context.Context, batch EventBatch) error {
 		return nil
 	}
 	return batch.Ack(ctx)
+}
+
+func newEventWorkerOptions(optionFns []EventWorkerOption) eventWorkerOptions {
+	var options eventWorkerOptions
+	for _, option := range optionFns {
+		if option != nil {
+			option(&options)
+		}
+	}
+	return options
+}
+
+func (options eventWorkerOptions) retryDelay(retry EventWorkerRetry) time.Duration {
+	if options.backoff == nil {
+		return 0
+	}
+	delay := options.backoff(retry)
+	if delay <= 0 {
+		return 0
+	}
+	return delay
+}
+
+func waitEventWorkerBackoff(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

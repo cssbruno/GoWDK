@@ -24,7 +24,7 @@ frontend <- result or presentation event
 
 ## Runtime API
 
-Enable future compiler integration with:
+Enable compiler integration with:
 
 ```go
 Addons: []gowdk.Addon{
@@ -33,8 +33,11 @@ Addons: []gowdk.Addon{
 ```
 
 Enable `addons/realtime` alongside `addons/contracts` when the app wants an
-explicit config feature for browser presentation-event fanout. The implemented
-runtime registry is currently independent from compiler integration.
+explicit config feature for browser presentation-event fanout.
+
+The runtime registry, generated `g:command` / `g:query` adapters, and generated
+worker helper APIs are implemented for the current contract-driven runtime
+slice.
 
 Go does not support generic methods, so the API uses generic functions over a
 registry. Keep this shape while the repository targets Go 1.26; revisit it when
@@ -86,10 +89,11 @@ route that fails later.
 
 ## Local Single-Binary App Path
 
-The supported M6 path is local-first: one generated binary can serve the page,
-execute `g:command` and `g:query` web adapters through the web role, and replay
-captured backend events through local runtime helpers. Split worker binaries
-and cron generation remain planned, not production-ready behavior.
+The supported milestone-14 path is local-first: one generated binary can serve
+the page, execute `g:command` and `g:query` web adapters through the web role,
+and replay captured backend events through local runtime helpers. User-owned
+worker and cron commands can run the same generated registry helpers; separate
+worker/cron binary generators remain future deployment tooling.
 
 Minimal page:
 
@@ -477,19 +481,65 @@ Generated packages with executable contract registrations also expose:
 ```go
 registry := gowdkapp.NewContractRegistry()
 err := gowdkapp.RunContractEventWorker(ctx, source)
+err = gowdkapp.RunContractEventWorkerWithOptions(
+    ctx,
+    source,
+    contracts.WithEventWorkerBackoff(backoff),
+)
 err = gowdkapp.RunContractEventWorkerWithSeenStore(ctx, source, seen)
+err = gowdkapp.RunContractEventWorkerWithSeenStoreAndOptions(
+    ctx,
+    source,
+    seen,
+    contracts.WithEventWorkerBackoff(backoff),
+)
 ```
 
 `NewContractRegistry` creates a fresh registry using the scanned registration
 functions. `RunContractEventWorker` replays an `EventSource` through the same
 registrations with the worker role. `RunContractEventWorkerWithSeenStore` uses
 the same worker role and skips duplicate event IDs through the provided
-`contracts.SeenStore`.
+`contracts.SeenStore`. The `WithOptions` variants pass runtime worker options,
+including nacked-batch backoff, through to `runtime/contracts`.
 
-These helpers are deliberately local process APIs. Generated apps do not yet
-emit separate worker or cron binaries, supervisor configs, queue topology, or
-managed deployment recipes. Use them from the generated binary, a user-owned
-command, or a test fixture until split worker generation is designed.
+These helpers are deliberately local process APIs. Use them from the generated
+binary, a user-owned worker or cron command, or a test fixture. Generated
+worker/cron binaries, supervisor configs, queue topology, and managed
+deployment recipes are future platform tooling, not part of the milestone-14
+runtime contract.
+
+## Worker Backoff
+
+By default, an event worker immediately asks the source for another batch after
+the source accepts `Nack`. Pass `contracts.WithEventWorkerBackoff` when a
+worker should wait after nacked subscriber delivery:
+
+```go
+backoff := func(retry contracts.EventWorkerRetry) time.Duration {
+    delay := 250 * time.Millisecond
+    for i := 1; i < retry.Attempt && delay < 5*time.Second; i++ {
+        delay *= 2
+    }
+    if delay > 5*time.Second {
+        return 5 * time.Second
+    }
+    return delay
+}
+
+err := gowdkapp.RunContractEventWorkerWithSeenStoreAndOptions(
+    ctx,
+    source,
+    seen,
+    contracts.WithEventWorkerBackoff(backoff),
+)
+```
+
+Use `contracts.ConstantEventWorkerBackoff(duration)` for a fixed delay.
+Backoff runs only after subscriber replay fails and the `EventSource` accepts
+`Nack`; ack failures, receive failures, missing `Nack`, and context
+cancellation still return errors. Durable adapters still own their persistent
+attempt counters, dead-letter files, pending-message behavior, and operational
+retry policy.
 
 Dependency-free adapters:
 
@@ -951,10 +1001,10 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Page-owned generated query routes use JSON/query request negotiation so they
   do not replace normal static, SPA, or SSR page responses.
 - Cross-package contract input field discovery remains planned.
-- Retry backoff policy, split web/worker/cron binaries, and managed deployment
-  recipes remain planned. Split worker generation is blocked on stable local
-  command/query adapters, generated registry/replay helper usage, durable
-  outbox/broker policy, retry/backoff semantics, and deployment supervision
-  docs. Cron generation is blocked on the same runtime role policy plus
-  schedule ownership, overlap prevention, failure reporting, and restart
-  behavior. M6 does not make a production-readiness claim for either path.
+- Separate web/worker/cron binary generators and managed deployment recipes
+  remain planned platform tooling. User-owned worker and cron commands can use
+  `NewContractRegistry`, `RunContractEventWorker*`, and
+  `contracts.ExecuteJobForRole` with the same registrations today. Schedule
+  ownership, overlap prevention, durable retry operations, failure reporting,
+  restart behavior, and production supervision stay app-owned until platform
+  tooling is designed.

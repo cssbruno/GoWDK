@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 type scriptedEventSource struct {
@@ -295,6 +296,78 @@ func TestRunEventWorkerNacksSubscriberFailureAndContinues(t *testing.T) {
 	}
 	if len(logged) != 1 || !strings.Contains(logged[0], subscriberErr.Error()) {
 		t.Fatalf("logged = %#v, want one recovered dispatch failure", logged)
+	}
+}
+
+func TestRunEventWorkerWithOptionsAppliesBackoffAfterNack(t *testing.T) {
+	registry := NewRegistry()
+	subscriberErr := errors.New("subscriber unavailable")
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		return subscriberErr
+	}, RoleWorker))
+	previousLogger := WorkerLogger
+	WorkerLogger = nil
+	defer func() { WorkerLogger = previousLogger }()
+	source := &scriptedEventSource{
+		batches: []EventBatch{{
+			Events: []EventEnvelope{{
+				Category: DomainEvent,
+				Type:     typeName[patientCreated](),
+				Value:    patientCreated{ID: "patient-1"},
+			}},
+			Nack: func(ctx context.Context, err error) error {
+				return nil
+			},
+		}},
+		err: ErrEventSourceClosed,
+	}
+	var retries []EventWorkerRetry
+
+	err := RunEventWorkerWithOptions(context.Background(), registry, source, WithEventWorkerBackoff(func(retry EventWorkerRetry) time.Duration {
+		retries = append(retries, retry)
+		return 0
+	}))
+	if err != nil {
+		t.Fatalf("run event worker error = %v, want nil after successful nack", err)
+	}
+	if len(retries) != 1 {
+		t.Fatalf("retries = %#v, want one retry callback", retries)
+	}
+	retry := retries[0]
+	if retry.Role != RoleWorker || retry.Attempt != 1 || retry.EventCount != 1 || !Is(retry.Cause, ErrSubscriberFailed) {
+		t.Fatalf("unexpected retry metadata: %#v", retry)
+	}
+}
+
+func TestRunEventWorkerWithOptionsBackoffHonorsContextCancellation(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		return errors.New("subscriber unavailable")
+	}, RoleWorker))
+	previousLogger := WorkerLogger
+	WorkerLogger = nil
+	defer func() { WorkerLogger = previousLogger }()
+	source := &scriptedEventSource{
+		batches: []EventBatch{{
+			Events: []EventEnvelope{{
+				Category: DomainEvent,
+				Type:     typeName[patientCreated](),
+				Value:    patientCreated{ID: "patient-1"},
+			}},
+			Nack: func(ctx context.Context, err error) error {
+				return nil
+			},
+		}},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := RunEventWorkerWithOptions(ctx, registry, source, WithEventWorkerBackoff(func(EventWorkerRetry) time.Duration {
+		cancel()
+		return time.Hour
+	}))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("run event worker error = %v, want context canceled", err)
 	}
 }
 

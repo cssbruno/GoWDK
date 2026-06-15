@@ -41,7 +41,7 @@ current controls, and open follow-up areas for review.
 | Embedded build output to generated server | Embedded SPA assets, generated error pages, health endpoint | Generated server uses HTTP timeouts and `MaxHeaderBytes`; embedded output skips known secret/private/temp artifacts | Broader asset policy remains planned. |
 | VS Code extension to workspace | LSP/editor commands and workspace file access | Dependency-light local tooling; no production runtime authority | Extension command/file threat model needs focused review before broader editor automation. |
 | WASM islands to browser runtime | `go client {}`, component WASM assets, host loader | WASM is explicit and separate from backend handlers; browser-unsafe import validation exists | Production ABI hardening and user-code runtime validation remain planned. |
-| Contracts and realtime adapters | Command/query web adapters, workers, outbox, broker, fanout | Web-role validation, CSRF before command decoding, guard/rate-limit preflight, local default dispatch | Split worker/cron wiring, retry policy, managed deployment recipes, and realtime security policy remain planned. |
+| Contracts and realtime adapters | Command/query web adapters, workers, outbox, broker, fanout | Web-role validation, CSRF before command decoding, guard/rate-limit preflight, local default dispatch, worker ack/nack, seen-store deduplication, and nacked-batch backoff hooks | Worker/cron binary generators, managed deployment recipes, durable retry operations, and realtime security policy remain planned. |
 
 ## Abuse Paths
 
@@ -55,7 +55,7 @@ current controls, and open follow-up areas for review.
 | Embed local secrets into generated output. | Secret exposure in release artifacts. | Docs require generated output to avoid local env/private files. | High until exclusion tests cover `.env`, source maps, private files, and temp artifacts. |
 | Expose public APIs without auth, rate limits, or validation. | Data exposure, mutation, or availability loss. | Generated adapters stay framework-neutral and can use guard/rate-limit hooks. | High until public API helper and policy work is complete. |
 | Treat guards as full backend authorization. | Authorization bypass in user domain code. | Docs state guards are route gates and backend authorization stays in app Go. | High if users rely on guards alone for protected resources. |
-| Replay contract or realtime events incorrectly. | Duplicate state changes or stale UI state. | Local default dispatch and worker ack/nack helpers exist. | Medium until retry/dead-letter/realtime deployment policies are complete. |
+| Replay contract or realtime events incorrectly. | Duplicate state changes or stale UI state. | Local default dispatch, worker ack/nack helpers, seen-store deduplication, and nacked-batch backoff hooks exist. | Medium until durable retry/dead-letter/realtime deployment policies are complete. |
 | Let editor automation operate on untrusted workspaces without review. | Local file or command abuse. | Current editor surface is limited. | Medium before adding broader workspace automation. |
 
 ## Review Triggers

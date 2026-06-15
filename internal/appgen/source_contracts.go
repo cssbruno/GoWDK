@@ -298,7 +298,9 @@ func contractRegistryDecls(exposures []BackendContractExposure) []ast.Decl {
 	return []ast.Decl{
 		newContractRegistryDecl(exposures),
 		runContractEventWorkerDecl(),
+		runContractEventWorkerWithOptionsDecl(),
 		runContractEventWorkerWithSeenStoreDecl(),
+		runContractEventWorkerWithSeenStoreAndOptionsDecl(),
 	}
 }
 
@@ -326,6 +328,25 @@ func runContractEventWorkerDecl() ast.Decl {
 	})
 }
 
+func runContractEventWorkerWithOptionsDecl() ast.Decl {
+	return funcDecl("RunContractEventWorkerWithOptions", []*ast.Field{
+		{Names: []*ast.Ident{id("ctx")}, Type: sel("context", "Context")},
+		{Names: []*ast.Ident{id("source")}, Type: sel("gowdkcontracts", "EventSource")},
+		{Names: []*ast.Ident{id("options")}, Type: &ast.Ellipsis{Elt: sel("gowdkcontracts", "EventWorkerOption")}},
+	}, []*ast.Field{{Type: id("error")}}, []ast.Stmt{
+		&ast.ReturnStmt{Results: []ast.Expr{&ast.CallExpr{
+			Fun: sel("gowdkcontracts", "RunEventWorkerWithOptions"),
+			Args: []ast.Expr{
+				id("ctx"),
+				call(id("NewContractRegistry")),
+				id("source"),
+				id("options"),
+			},
+			Ellipsis: token.Pos(1),
+		}}},
+	})
+}
+
 func runContractEventWorkerWithSeenStoreDecl() ast.Decl {
 	return funcDecl("RunContractEventWorkerWithSeenStore", []*ast.Field{
 		{Names: []*ast.Ident{id("ctx")}, Type: sel("context", "Context")},
@@ -335,6 +356,27 @@ func runContractEventWorkerWithSeenStoreDecl() ast.Decl {
 		&ast.ReturnStmt{Results: []ast.Expr{
 			call(sel("gowdkcontracts", "RunEventWorkerWithSeenStore"), id("ctx"), call(id("NewContractRegistry")), id("source"), id("seen")),
 		}},
+	})
+}
+
+func runContractEventWorkerWithSeenStoreAndOptionsDecl() ast.Decl {
+	return funcDecl("RunContractEventWorkerWithSeenStoreAndOptions", []*ast.Field{
+		{Names: []*ast.Ident{id("ctx")}, Type: sel("context", "Context")},
+		{Names: []*ast.Ident{id("source")}, Type: sel("gowdkcontracts", "EventSource")},
+		{Names: []*ast.Ident{id("seen")}, Type: sel("gowdkcontracts", "SeenStore")},
+		{Names: []*ast.Ident{id("options")}, Type: &ast.Ellipsis{Elt: sel("gowdkcontracts", "EventWorkerOption")}},
+	}, []*ast.Field{{Type: id("error")}}, []ast.Stmt{
+		&ast.ReturnStmt{Results: []ast.Expr{&ast.CallExpr{
+			Fun: sel("gowdkcontracts", "RunEventWorkerWithSeenStoreAndOptions"),
+			Args: []ast.Expr{
+				id("ctx"),
+				call(id("NewContractRegistry")),
+				id("source"),
+				id("seen"),
+				id("options"),
+			},
+			Ellipsis: token.Pos(1),
+		}}},
 	})
 }
 

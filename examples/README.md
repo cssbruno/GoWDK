@@ -170,7 +170,7 @@ Build the SEO addon example:
 go run ./cmd/gowdk build --config examples/seo/gowdk.config.go --out /tmp/gowdk-seo-build examples/seo/*.gwdk
 test -f /tmp/gowdk-seo-build/sitemap.xml
 test -f /tmp/gowdk-seo-build/robots.txt
-grep -F 'https://example.com/blog/hello-gowdk' /tmp/gowdk-seo-build/sitemap.xml
+grep -F 'https://example.com/seo/blog/hello-gowdk' /tmp/gowdk-seo-build/sitemap.xml
 grep -F 'Sitemap: https://example.com/sitemap.xml' /tmp/gowdk-seo-build/robots.txt
 ```
 

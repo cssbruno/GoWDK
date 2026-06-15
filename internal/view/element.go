@@ -280,7 +280,7 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 			return err
 		}
 		if tainted && unsafeRouteParamAttr(attr.Name) {
-			return fmt.Errorf("route param interpolation is not allowed in %q attributes", attr.Name)
+			return fmt.Errorf("request-time interpolation (route param or load field) is not allowed in %q attributes", attr.Name)
 		}
 		if err := validateRenderedHTMLAttrSafety(attr.Name, value); err != nil {
 			return err

@@ -1431,10 +1431,25 @@ func TestRenderWithDataRejectsRouteParamsInDangerousAttributes(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected dangerous route param attribute error")
 			}
-			if !strings.Contains(err.Error(), "route param interpolation is not allowed") {
+			if !strings.Contains(err.Error(), "is not allowed in") {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestRenderRejectsTaintedLoadFieldInDangerousAttribute(t *testing.T) {
+	source := `<a href="{user.website}">Profile</a>`
+	// An untainted (build-time/trusted) value renders fine.
+	if _, err := RenderWithOptions(source, nil, map[string]string{"user.website": "/ok"}, Options{}); err != nil {
+		t.Fatalf("untainted value should render: %v", err)
+	}
+	// The same value marked tainted (an SSR load {} field) is rejected, so an
+	// attacker-controlled value can never carry a javascript:/data: URL past
+	// HTML-text escaping.
+	_, err := RenderWithOptions(source, nil, map[string]string{"user.website": "/ok"}, Options{Tainted: map[string]bool{"user.website": true}})
+	if err == nil || !strings.Contains(err.Error(), `is not allowed in "href" attributes`) {
+		t.Fatalf("expected tainted load field to be rejected in href, got %v", err)
 	}
 }
 
@@ -1588,7 +1603,7 @@ func TestRenderWithDataRejectsRouteParamPassedToDangerousComponentAttribute(t *t
 	if err == nil {
 		t.Fatal("expected dangerous route param component prop error")
 	}
-	if !strings.Contains(err.Error(), `route param interpolation is not allowed in "href" attributes`) {
+	if !strings.Contains(err.Error(), `is not allowed in "href" attributes`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -81,6 +81,18 @@ func TestRedactSecretsMasksCredentials(t *testing.T) {
 			leaked:  "refresh-secret-token",
 			wantSub: "refresh_token=[REDACTED]",
 		},
+		{
+			name:    "bare session token in panic message",
+			in:      "panic: rejected session eyJpZCI6ImFsaWNlIiwiZXhwIjoxNzB9.c2lnbmF0dXJlYnl0ZXNoZXJlMDEyMzQ1Njc4OQ at handler",
+			leaked:  "eyJpZCI6ImFsaWNlIiwiZXhwIjoxNzB9.c2lnbmF0dXJlYnl0ZXNoZXJlMDEyMzQ1Njc4OQ",
+			wantSub: "[REDACTED]",
+		},
+		{
+			name:    "bare jwt in stack frame",
+			in:      "token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r wong",
+			leaked:  "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r",
+			wantSub: "[REDACTED]",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

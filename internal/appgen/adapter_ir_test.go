@@ -108,6 +108,7 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 
 func TestBackendAdapterIRCapturesFallbackMetadata(t *testing.T) {
 	ir := backendAdapterIR(Options{Actions: []ActionEndpoint{{
+		Guards:     []string{"public"},
 		PageID:     "newsletter",
 		ActionName: "Subscribe",
 		Method:     "POST",

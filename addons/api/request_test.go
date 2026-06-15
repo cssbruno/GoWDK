@@ -58,11 +58,22 @@ func TestDecodeJSONRejectsTrailingValues(t *testing.T) {
 
 func TestDecodeJSONRejectsNilBody(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/patients", nil)
+	request.Header.Set("Content-Type", "application/json")
 	request.Body = nil
 
 	_, err := DecodeJSON[decodeFixture](request)
 	if err == nil || !strings.Contains(err.Error(), "EOF") {
 		t.Fatalf("expected EOF error, got %v", err)
+	}
+}
+
+func TestDecodeJSONRejectsMissingContentType(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/patients", strings.NewReader(`{"name":"Ada"}`))
+	request.Header.Del("Content-Type")
+
+	_, err := DecodeJSON[decodeFixture](request)
+	if !errors.Is(err, ErrUnsupportedContentType) {
+		t.Fatalf("expected unsupported content type error for missing Content-Type, got %v", err)
 	}
 }
 

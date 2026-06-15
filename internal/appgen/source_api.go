@@ -58,6 +58,9 @@ func apiCaseExpr(api BackendAPIAdapter) ast.Expr {
 }
 
 func apiCaseStmts(api BackendAPIAdapter, rateLimit bool) []ast.Stmt {
+	if endpointDeniedByOmission(api.Guards) {
+		return denyByOmissionStmts()
+	}
 	stmts := endpointContextStmts("api", api.PageID, api.APIName, api.Method, api.Route, api.ErrorPage)
 	if api.ErrorPage != "" {
 		stmts = append(stmts, endpointPanicBoundaryStmt())

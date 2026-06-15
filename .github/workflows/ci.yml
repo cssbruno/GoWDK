@@ -52,6 +52,9 @@ jobs:
       - name: Run VS Code extension unit tests
         run: node --test editors/vscode/*.test.js
 
+      - name: Check documentation links
+        run: sh scripts/check-docs-links.sh
+
       - name: Check example files
         run: sh scripts/check-example-reports.sh
 

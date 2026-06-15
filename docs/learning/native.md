@@ -62,7 +62,7 @@ Use installed `gowdk` commands inside an initialized app. Use
 ## Lesson 8: Add CSRF
 
 - Generated action adapters wire CSRF by default; see
-  [actions](../language/actions.md#current-contract).
+  [actions](../language/actions.md#production-notes).
 - Run generated endpoint examples with a dev secret after building from
   `examples/endpoints`:
   `GOWDK_CSRF_SECRET=development-endpoints-csrf-secret-32b GOWDK_ADDR=127.0.0.1:8093 bin/endpoints`.

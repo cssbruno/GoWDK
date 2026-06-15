@@ -231,6 +231,8 @@ client {
 }
 ```
 
+### WASM Islands
+
 WASM islands are declared on the component:
 
 ```gwdk

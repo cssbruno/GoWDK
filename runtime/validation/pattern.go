@@ -296,6 +296,8 @@ func (parser *patternParser) parseEscape() (patternNode, error) {
 	switch current {
 	case 'd', 'D', 'w', 'W', 's', 'S':
 		return shorthandNode(current), nil
+	case 'p', 'P':
+		return nil, fmt.Errorf("Unicode character class escapes are not supported")
 	default:
 		return literalNode(current), nil
 	}
@@ -344,6 +346,9 @@ func (parser *patternParser) parseClassPart() (classPart, bool, error) {
 	}
 	current := parser.source[parser.index]
 	parser.index++
+	if current == '[' && parser.index < len(parser.source) && parser.source[parser.index] == ':' {
+		return nil, false, fmt.Errorf("POSIX character classes are not supported")
+	}
 	if current != '\\' {
 		return literalClassPart(current), true, nil
 	}
@@ -357,6 +362,8 @@ func (parser *patternParser) parseClassPart() (classPart, bool, error) {
 		return nil, false, fmt.Errorf("negated shorthand escapes are not supported inside character classes")
 	case 'd', 'w', 's':
 		return shorthandClassPart(escaped), false, nil
+	case 'p', 'P':
+		return nil, false, fmt.Errorf("Unicode character class escapes are not supported")
 	default:
 		return literalClassPart(escaped), true, nil
 	}

@@ -63,6 +63,9 @@ func TestMatchPattern(t *testing.T) {
 		{`\w+@\w+[.]\w{2,4}`, "me@example.dev", true},
 		{`[\dA-F]+`, "19AF", true},
 		{`[\dA-F]+`, "19AG", false},
+		{`\b`, "b", true},
+		{`\q`, "q", true},
+		{`[A-F0-9]{1024}`, strings.Repeat("A", 1024), true},
 	}
 
 	for _, test := range tests {
@@ -77,8 +80,40 @@ func TestMatchPattern(t *testing.T) {
 }
 
 func TestValidatePatternRejectsUnsupportedOperators(t *testing.T) {
-	if err := ValidatePattern(`(?=a)`); err == nil {
-		t.Fatal("expected unsupported lookahead pattern to fail")
+	tests := []string{
+		`(?=a)`,
+		`(?P<name>a)`,
+		`a+?`,
+		`[\D]`,
+		`\pL+`,
+		`[[:alpha:]]+`,
+	}
+	for _, test := range tests {
+		if err := ValidatePattern(test); err == nil {
+			t.Fatalf("expected unsupported pattern %q to fail", test)
+		}
+	}
+}
+
+func TestMatchPatternTreatsInnerAnchorsAsLiterals(t *testing.T) {
+	tests := []struct {
+		pattern string
+		value   string
+		want    bool
+	}{
+		{`a^b`, "a^b", true},
+		{`a^b`, "ab", false},
+		{`a$b`, "a$b", true},
+		{`a$b`, "ab", false},
+	}
+	for _, test := range tests {
+		got, err := MatchPattern(test.pattern, test.value)
+		if err != nil {
+			t.Fatalf("MatchPattern(%q, %q) error: %v", test.pattern, test.value, err)
+		}
+		if got != test.want {
+			t.Fatalf("MatchPattern(%q, %q) = %v, want %v", test.pattern, test.value, got, test.want)
+		}
 	}
 	if err := ValidatePattern(`(?P<name>a)`); err == nil {
 		t.Fatal("expected unsupported named capture pattern to fail")
@@ -88,16 +123,6 @@ func TestValidatePatternRejectsUnsupportedOperators(t *testing.T) {
 	}
 	if err := ValidatePattern(`[\D]`); err == nil {
 		t.Fatal("expected unsupported class shorthand pattern to fail")
-	}
-}
-
-func TestMatchPatternTreatsInnerAnchorsAsLiterals(t *testing.T) {
-	got, err := MatchPattern(`a$b`, "a$b")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !got {
-		t.Fatal("expected inner $ to match literally")
 	}
 }
 

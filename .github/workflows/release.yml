@@ -48,6 +48,7 @@ jobs:
           node --check editors/vscode/extension.js
           node --check editors/vscode/extension-core.js
           node --test editors/vscode/*.test.js
+          # --extended runs gowdk endpoints, inspect tree, and inspect endpoint-graph.
           sh scripts/check-example-reports.sh --extended
           (
             set -euxo pipefail

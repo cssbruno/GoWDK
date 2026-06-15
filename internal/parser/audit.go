@@ -308,6 +308,10 @@ func parseAuditDenyRule(tokens []syntax.Token, lineNumber int, rawLine string) (
 		rule.Kind = "deny_raw_html_sinks"
 		rule.Code = "audit_raw_html_sink"
 		return finishAuditRule(rule, tokens[2:], lineNumber)
+	case "roleless_contract":
+		rule.Kind = "deny_roleless_contract"
+		rule.Code = "audit_contract_roleless"
+		return finishAuditRule(rule, tokens[2:], lineNumber)
 	default:
 		return gwdkast.AuditRule{}, true, fmt.Errorf("line %d: unsupported deny rule %q", lineNumber, tokens[1].Lexeme)
 	}

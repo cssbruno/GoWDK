@@ -205,15 +205,21 @@ func finalizeAssetArtifact(artifact *plannedAssetArtifact) {
 }
 
 func BuildMemory(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (MemoryResult, error) {
-	ir := gwdkanalysis.BuildProgram(config, sources)
-	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, true)
+	ir, bindings, err := compiler.AssembleProgram(config, sources)
+	if err != nil {
+		return MemoryResult{}, err
+	}
+	return buildMemoryFromIR(config, ir, bindings, outputDir, true)
 }
 
 // BuildMemoryWithOptions plans SPA build artifacts without requiring a real
 // output directory. Empty MemoryBuildOptions.OutputBase defaults to ".".
 func BuildMemoryWithOptions(config gowdk.Config, sources gwdkanalysis.Sources, options MemoryBuildOptions) (MemoryResult, error) {
-	ir := gwdkanalysis.BuildProgram(config, sources)
-	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), memoryOutputBase(options), false)
+	ir, bindings, err := compiler.AssembleProgram(config, sources)
+	if err != nil {
+		return MemoryResult{}, err
+	}
+	return buildMemoryFromIR(config, ir, bindings, memoryOutputBase(options), false)
 }
 
 // BuildMemoryFromIR plans SPA build artifacts from normalized compiler IR

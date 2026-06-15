@@ -41,6 +41,30 @@ func TestParseAuditFileGolden(t *testing.T) {
 	}
 }
 
+func TestParseAuditDenyRolelessContractRule(t *testing.T) {
+	file, err := ParseAuditSyntax([]byte(`policy contracts {
+  apply to "contract:*"
+  deny roleless_contract
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Policies) != 1 {
+		t.Fatalf("len(policies) = %d, want 1", len(file.Policies))
+	}
+	policy := file.Policies[0]
+	if len(policy.Applies) != 1 || policy.Applies[0].Selector != "contract:*" {
+		t.Fatalf("unexpected applies: %#v", policy.Applies)
+	}
+	if len(policy.Rules) != 1 {
+		t.Fatalf("len(rules) = %d, want 1", len(policy.Rules))
+	}
+	if policy.Rules[0].Kind != "deny_roleless_contract" || policy.Rules[0].Code != "audit_contract_roleless" {
+		t.Fatalf("unexpected rule: %#v", policy.Rules[0])
+	}
+}
+
 func TestParseAuditSyntaxReportsUnsupportedPolicyLine(t *testing.T) {
 	_, err := ParseAuditSyntax([]byte(`policy bad {
   surprise now

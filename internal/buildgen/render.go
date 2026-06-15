@@ -569,8 +569,12 @@ func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []
 	}
 	head = append(head, "</head>")
 
+	htmlAttrs := ""
+	if config.HasFeature(gowdk.FeatureObservability) && config.Build.DebugAssets() {
+		htmlAttrs += " data-gowdk-trace"
+	}
 	return "<!doctype html>\n" +
-		"<html>\n" +
+		"<html" + htmlAttrs + ">\n" +
 		strings.Join(head, "\n") + "\n" +
 		"<body>\n" +
 		body + "\n" +

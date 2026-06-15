@@ -355,19 +355,20 @@ func (mode RenderMode) IsBuildTime() bool {
 type Feature string
 
 const (
-	FeatureSPA       Feature = "spa"
-	FeatureActions   Feature = "actions"
-	FeaturePartial   Feature = "partial"
-	FeatureSSR       Feature = "ssr"
-	FeatureAPI       Feature = "api"
-	FeatureEmbed     Feature = "embed"
-	FeatureCSS       Feature = "css"
-	FeatureRateLimit Feature = "ratelimit"
-	FeatureContracts Feature = "contracts"
-	FeatureRealtime  Feature = "realtime"
-	FeatureAuth      Feature = "auth"
-	FeatureDB        Feature = "db"
-	FeatureSEO       Feature = "seo"
+	FeatureSPA           Feature = "spa"
+	FeatureActions       Feature = "actions"
+	FeaturePartial       Feature = "partial"
+	FeatureSSR           Feature = "ssr"
+	FeatureAPI           Feature = "api"
+	FeatureEmbed         Feature = "embed"
+	FeatureCSS           Feature = "css"
+	FeatureRateLimit     Feature = "ratelimit"
+	FeatureContracts     Feature = "contracts"
+	FeatureRealtime      Feature = "realtime"
+	FeatureAuth          Feature = "auth"
+	FeatureDB            Feature = "db"
+	FeatureSEO           Feature = "seo"
+	FeatureObservability Feature = "observability"
 )
 
 // Addon is the minimal contract every optional GOWDK capability implements.

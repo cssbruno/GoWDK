@@ -26,6 +26,7 @@ Current feature IDs:
 - `ratelimit`
 - `contracts`
 - `realtime`
+- `observability`
 - `auth`
 - `db`
 - `seo`
@@ -44,6 +45,7 @@ Current packages:
 - `addons/ratelimit`
 - `addons/contracts`
 - `addons/realtime`
+- `addons/observability`
 - `addons/auth`
 - `addons/db`
 - `addons/seo`
@@ -57,7 +59,7 @@ Use `gowdk add --list` to print the built-in names the CLI can wire into
 
 ```sh
 gowdk add --list
-gowdk add ssr actions partial realtime
+gowdk add ssr actions partial realtime observability
 gowdk add seo --base-url https://example.com
 ```
 
@@ -117,11 +119,12 @@ Addons: []gowdk.Addon{
 	embed.Addon(),
 	css.Addon(),
 	db.Addon(),
-	ratelimit.Addon(),
-	contracts.Addon(),
-	seo.Addon(seo.Options{
-		BaseURL: "https://example.com",
-	}),
+		ratelimit.Addon(),
+		contracts.Addon(),
+		observability.Addon(),
+		seo.Addon(seo.Options{
+			BaseURL: "https://example.com",
+		}),
 	realtime.Addon(),
 }
 ```
@@ -141,6 +144,12 @@ Use dependency-free `runtime/contracts/sse` through `realtime.NewSSE` for
 one-way browser notifications, or opt into the nested
 `runtime/contracts/websocketfanout` module when the app needs WebSocket
 sessions. See `docs/reference/realtime.md`.
+
+`addons/observability` registers the generated trace instrumentation feature.
+Debug builds wire route, endpoint, guard, browser navigation, and island spans
+to the dependency-free `runtime/trace` collector and local viewer. Optional OTLP
+export is isolated in the nested `runtime/trace/otel` module. See
+`docs/reference/observability.md`.
 
 ## Auth Addon
 

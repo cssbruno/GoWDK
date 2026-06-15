@@ -27,6 +27,19 @@
     });
   };
 
+  function traceStart(name, lane) {
+    if (window.__gowdkTrace && window.__gowdkTrace.enabled && window.__gowdkTrace.enabled()) {
+      return window.__gowdkTrace.start(name, lane || "island");
+    }
+    return null;
+  }
+
+  function traceEnd(span, status, message) {
+    if (window.__gowdkTrace && window.__gowdkTrace.end) {
+      window.__gowdkTrace.end(span, status || "ok", message || "");
+    }
+  }
+
   function callHelper(name, args, state, helpers, stack) {
     const helper = helpers && helpers[name];
     if (!helper) return null;
@@ -283,7 +296,8 @@
   }
 
   async function fetchJSON(url, signal) {
-    const response = await fetch(String(url), { headers: { "Accept": "application/json" }, signal });
+    const fetcher = window.__gowdkTrace && window.__gowdkTrace.fetch ? window.__gowdkTrace.fetch : fetch;
+    const response = await fetcher(String(url), { headers: { "Accept": "application/json" }, signal }, { name: "island fetch", lane: "island" });
     if (!response.ok) throw new Error("GOWDK fetchJSON failed with HTTP " + response.status);
     const contentType = response.headers.get("content-type") || "";
     if (!/\bapplication\/json\b|\+json\b/i.test(contentType)) {
@@ -1071,16 +1085,19 @@
             if (node.hasAttribute(boundAttr)) return;
             node.setAttribute(boundAttr, "");
             const modifiers = eventModifiers(node.getAttribute("data-gowdk-parent-event-" + event));
-            let debounceTimer = 0;
-            let throttleUntil = 0;
-            const invoke = async (customEvent) => {
-              const eventScope = Object.create(null);
-              eventScope.event = customEvent.detail || {};
-              try {
-                await applyStatements(splitStatements(attr.value), state, handlers, helpers, eventScope, refs, computeds, asyncTokens, root, emitEvents);
-              } catch (error) {
-                if (error !== staleAsyncResult) recordAsyncError(state, error);
-              } finally {
+          let debounceTimer = 0;
+          let throttleUntil = 0;
+          const invoke = async (customEvent) => {
+            const span = traceStart("island parent " + event, "island");
+            const eventScope = Object.create(null);
+            eventScope.event = customEvent.detail || {};
+            try {
+              await applyStatements(splitStatements(attr.value), state, handlers, helpers, eventScope, refs, computeds, asyncTokens, root, emitEvents);
+              traceEnd(span, "ok");
+            } catch (error) {
+              if (error !== staleAsyncResult) recordAsyncError(state, error);
+              traceEnd(span, "error", error && error.message || String(error || "island event failed"));
+            } finally {
                 recomputeComputed(state, computeds, helpers);
                 await settleEffects();
                 recomputeComputed(state, computeds, helpers);
@@ -1122,10 +1139,13 @@
           let debounceTimer = 0;
           let throttleUntil = 0;
           const invoke = async (domEvent) => {
+            const span = traceStart("island " + event, "island");
             try {
               await applyExpression(attr.value, state, handlers, helpers, domEventScope(domEvent), refs, computeds, asyncTokens, root, emitEvents);
+              traceEnd(span, "ok");
             } catch (error) {
               if (error !== staleAsyncResult) recordAsyncError(state, error);
+              traceEnd(span, "error", error && error.message || String(error || "island event failed"));
             } finally {
               recomputeComputed(state, computeds, helpers);
               await settleEffects();

@@ -115,6 +115,7 @@ type TraceContext struct {
 }
 
 type contextKey struct{}
+type tracerContextKey struct{}
 
 var idSequence uint64
 
@@ -204,6 +205,33 @@ func ContextWithTraceContext(ctx context.Context, traceContext TraceContext) con
 		return ctx
 	}
 	return context.WithValue(ctx, contextKey{}, traceContext)
+}
+
+// ContextWithTracer returns a context carrying tracer for child spans started
+// by helper packages such as runtime/app and runtime/contracts.
+func ContextWithTracer(ctx context.Context, tracer *Tracer) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if tracer == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, tracerContextKey{}, tracer)
+}
+
+// TracerFromContext returns the tracer stored in ctx, or the tracer that owns
+// the active sampled span.
+func TracerFromContext(ctx context.Context) (*Tracer, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	if span := SpanFrom(ctx); span != nil {
+		if tracer := span.tracerRef(); tracer != nil {
+			return tracer, true
+		}
+	}
+	tracer, ok := ctx.Value(tracerContextKey{}).(*Tracer)
+	return tracer, ok && tracer != nil
 }
 
 // ParseTraceparent parses a W3C traceparent header.

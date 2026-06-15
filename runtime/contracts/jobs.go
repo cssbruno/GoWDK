@@ -1,6 +1,10 @@
 package contracts
 
-import "context"
+import (
+	"context"
+
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
+)
 
 // RegisterJob registers one background or scheduled job handler.
 func RegisterJob[J any](registry *Registry, handler JobHandler[J], roles ...Role) error {
@@ -21,18 +25,29 @@ func ExecuteJobForRole[J any](ctx context.Context, registry *Registry, role Role
 }
 
 func executeJob[J any](ctx context.Context, registry *Registry, job J, role Role) error {
-	entry, ok := registry.job(typeName[J]())
+	contract := typeName[J]()
+	ctx, span := startContractSpan(ctx, string(ObservationExecuteJob),
+		gowdktrace.LaneJob,
+		map[string]any{"gowdk.contract.kind": string(Job), "gowdk.contract.type": contract, "gowdk.contract.role": string(role)},
+	)
+	var spanErr error
+	defer func() { finishContractSpan(span, spanErr) }()
+	entry, ok := registry.job(contract)
 	if !ok {
-		return missingHandlerError(Job, typeName[J]())
+		spanErr = missingHandlerError(Job, contract)
+		return spanErr
 	}
 	if !rolesAllow(entry.roles, role) {
-		return roleNotAllowedError(Job, typeName[J](), role)
+		spanErr = roleNotAllowedError(Job, contract, role)
+		return spanErr
 	}
 	handler, ok := entry.handler.(JobHandler[J])
 	if !ok {
-		return unsupportedHandlerError(Job, typeName[J]())
+		spanErr = unsupportedHandlerError(Job, contract)
+		return spanErr
 	}
-	return handler(ctx, job)
+	spanErr = handler(ctx, job)
+	return spanErr
 }
 
 func (registry *Registry) registerJob(job string, handler any, roles []Role) error {

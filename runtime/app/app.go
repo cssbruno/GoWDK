@@ -20,6 +20,7 @@ import (
 
 	"github.com/cssbruno/gowdk/runtime/asset"
 	"github.com/cssbruno/gowdk/runtime/route"
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
 // HandlerFunc handles a generated request-time route and reports whether it
@@ -55,6 +56,9 @@ type Handler struct {
 	CSRF            CSRFTokenSource
 	ErrorPages      ErrorPages
 	Metrics         *Metrics
+	Tracer          *gowdktrace.Tracer
+	TraceHandler    http.Handler
+	TraceAccess     TraceAccess
 	SSRExact        HandlerFunc
 	SSRDynamic      HandlerFunc
 
@@ -173,6 +177,19 @@ func (handler *Handler) serveHTTP(response http.ResponseWriter, request *http.Re
 	}
 	handler.writeSecurityHeaders(response)
 	handler.writeIdentityHeaders(response)
+	if handler.TraceHandler != nil && isTracePath(request.URL.Path) {
+		if !handler.traceAccessAllowed(request) {
+			http.NotFound(response, request)
+			return
+		}
+		http.StripPrefix(tracePathPrefix, handler.TraceHandler).ServeHTTP(response, request)
+		return
+	}
+	if handler.Tracer != nil {
+		var span *gowdktrace.Span
+		response, request, span = handler.startRequestTrace(response, request)
+		defer finishRequestTrace(response, span)
+	}
 	if len(handler.ErrorPages.NotFound) > 0 || len(handler.ErrorPages.InternalServerError) > 0 || len(handler.ErrorPages.Custom) > 0 {
 		request = request.WithContext(withErrorPages(request.Context(), handler.ErrorPages))
 	}

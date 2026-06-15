@@ -8,6 +8,7 @@ the fastest pre-handoff gate.
 - `scripts/test-go-modules.sh`
 - `scripts/check-root-deps.sh`
 - `scripts/vulncheck-go-modules.sh`
+- `scripts/check-docs-links.sh`
 - `go build ./cmd/gowdk`
 - `node --check editors/vscode/extension.js`
 - `node --check editors/vscode/extension-core.js`
@@ -35,6 +36,36 @@ the fastest pre-handoff gate.
   These commands run from the repository root and rely on the root
   `gowdk.config.go`. Any smoke command run from another directory must pass
   `--config <file>`.
+
+## Documentation Links
+
+`scripts/check-docs-links.sh` runs the stdlib-only `internal/doclint` checker
+over every Markdown file in the repository. It is a targeted gate: a broken
+in-repo link fails CI instead of rotting silently.
+
+It checks only local references and stays offline:
+
+- Relative file and directory links must resolve to an existing path.
+- `#fragment` anchors (same-file or `file.md#fragment`) must resolve to a
+  GitHub-style heading slug in the target Markdown file.
+- External links (`http`, `https`, `mailto`, `tel`, protocol-relative `//`) are
+  skipped — the check never makes network calls.
+- Links inside fenced or inline code are ignored because they are documentation
+  examples, not live references.
+
+Generated, vendored, and local-output directories are excluded by default
+(`.git`, `.gowdk`, `node_modules`, `vendor`, `dist`, `bin`, `tmp`). Override the
+set with `-exclude` and scope a run with `-root`:
+
+```sh
+scripts/check-docs-links.sh -root docs -exclude .git,node_modules
+```
+
+Markdown *style* linting is intentionally not part of this gate. The available
+formatters flagged mostly cosmetic line-wrap and list-indent differences across
+the existing docs — high churn, low signal — so the gate is limited to link and
+anchor correctness, which catches real breakage. Revisit if a style check earns
+its keep without mass reformatting.
 
 ## Cache Maintenance
 

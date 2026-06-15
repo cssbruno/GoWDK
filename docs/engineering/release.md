@@ -68,6 +68,7 @@ below still have to pass before publishing.
 ```sh
 scripts/test-go-modules.sh
 scripts/vulncheck-go-modules.sh
+scripts/check-docs-links.sh
 go build ./cmd/gowdk
 ./gowdk version --json
 node --check editors/vscode/extension.js

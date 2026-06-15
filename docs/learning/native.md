@@ -105,10 +105,13 @@ Use installed `gowdk` commands inside an initialized app. Use
 - GOWDK does not own schemas, queries, models, migrations, or domain logic.
 - Use normal Go packages with `database/sql`, sqlc, or a driver such as pgx.
 - The optional `addons/db` package is thin plumbing around `database/sql`; see
-  [the addon source](../../addons/db/db.go).
+  [DB addon](../reference/db.md) for migrations, transactions, readiness, and a
+  sqlc walkthrough.
+- From this repository, run `go test ./addons/db` and
+  `cd addons/db/sqlitetest && go test ./...` to exercise the helper package and
+  isolated real-driver module.
 - Broader real-world Go interop examples are tracked in
-  [#329](https://github.com/cssbruno/GOWDK/issues/329), and migration helpers
-  are tracked in [#122](https://github.com/cssbruno/GOWDK/issues/122).
+  [#329](https://github.com/cssbruno/GOWDK/issues/329).
 
 ## Lesson 14: Build One Binary
 

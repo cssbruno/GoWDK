@@ -439,6 +439,11 @@ func Login(context.Context) (response.Response, error) {
 func Session(context.Context, *http.Request) (response.Response, error) {
 	return response.Response{}, nil
 }
+
+//gowdk:api POST /api/session/refresh
+func Refresh(context.Context, *http.Request) (response.Response, error) {
+	return response.Response{}, nil
+}
 `)
 	app := appFixture{Pages: []gwdkir.Page{{
 		ID:     "home",
@@ -452,8 +457,8 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 	if err := DiscoverGoEndpoints(gowdk.Config{}, &ir); err != nil {
 		t.Fatal(err)
 	}
-	if len(ir.GoEndpoints) != 2 {
-		t.Fatalf("expected two Go comment endpoints, got %#v", ir.GoEndpoints)
+	if len(ir.GoEndpoints) != 3 {
+		t.Fatalf("expected three Go comment endpoints, got %#v", ir.GoEndpoints)
 	}
 	for _, endpoint := range ir.Endpoints {
 		switch endpoint.Symbol {
@@ -463,7 +468,11 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 			}
 		case "Session":
 			if endpoint.CSRF {
-				t.Fatalf("expected discovered API endpoint not to be CSRF protected: %#v", endpoint)
+				t.Fatalf("expected discovered safe API endpoint not to be CSRF protected: %#v", endpoint)
+			}
+		case "Refresh":
+			if !endpoint.CSRF {
+				t.Fatalf("expected discovered state-changing API endpoint to default to CSRF protected: %#v", endpoint)
 			}
 		}
 	}
@@ -473,6 +482,7 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 	bindings := compilerBindingsByBlock(BindBackendHandlers(&ir))
 	assertBinding(t, bindings["Login"], source.BackendBindingBound, source.BackendSignatureAction0, "", false)
 	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["Refresh"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
 }
 
 func TestDiscoverGoEndpointCommentsRejectsMalformedComments(t *testing.T) {

@@ -238,7 +238,8 @@ declarative posture from validated IR — every route, backend endpoint, and
 contract with its guards, CSRF state, body limit, and source location — and
 evaluates the built-in security baseline against it. The baseline encodes the
 production-readiness gates from `docs/engineering/security.md` (for example:
-actions and commands must enforce CSRF, APIs must not be public by omission).
+actions, commands, and state-changing APIs must enforce CSRF, and APIs must not
+be public by omission).
 Findings carry a diagnostic code, a `file:line`, and remediation; run
 `gowdk explain <code>` for details. `audit` never runs as part of `gowdk build`,
 so it cannot fail a build implicitly; run it on demand or wire it into CI,
@@ -368,7 +369,8 @@ responses for partial requests.
 Current generated binary limitations: it serves embedded build output files for
 the selected build output and local POST endpoints for the supported action
 subset, including form input decoder wrappers, required-field validation, CSRF
-validation by default for generated action/command POSTs, action fragment responses for
+validation by default for generated action POSTs, command POSTs, and
+state-changing APIs, action fragment responses for
 `X-GOWDK-Partial` requests, standalone fragment routes, feature-bound API
 handlers, guards, and concrete or dynamic SSR pages rendered from `view {}`
 and literal or imported `build {}` data. Hybrid pages use the same generated

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 func appPackageSource(options Options) (source string, err error) {
@@ -275,7 +276,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 		csrfOptions = full
 	}
 	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
-	decls = append(decls, apiFuncDecl(adapter.APIs, generatedUsesRateLimit(direct)))
+	decls = append(decls, apiFuncDecl(adapter.APIs, csrfEnabled(direct), generatedUsesRateLimit(direct)))
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(direct)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(direct), generatedUsesRateLimit(direct))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
@@ -306,7 +307,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 func backendGeneratedDecls(options Options) []ast.Decl {
 	adapter := backendAdapterIR(options)
 	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(options), generatedUsesRateLimit(options))
-	decls = append(decls, apiFuncDecl(adapter.APIs, generatedUsesRateLimit(options)))
+	decls = append(decls, apiFuncDecl(adapter.APIs, csrfEnabled(options), generatedUsesRateLimit(options)))
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(options)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(options), generatedUsesRateLimit(options))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
@@ -750,7 +751,16 @@ func importSpecSource(imports map[string]string) string {
 
 func csrfEnabled(options Options) bool {
 	adapter := backendAdapterIR(options)
-	return options.Config.Build.CSRF.EnabledForGeneratedEndpoints() && (adapter.HasEndpointKind(BackendEndpointAction) || contractExposuresParseForm(executableContractExposures(adapter.ContractExposures)))
+	return options.Config.Build.CSRF.EnabledForGeneratedEndpoints() && (adapter.HasEndpointKind(BackendEndpointAction) || adapter.HasCSRFSensitiveAPI() || contractExposuresParseForm(executableContractExposures(adapter.ContractExposures)))
+}
+
+func (ir BackendAdapterIR) HasCSRFSensitiveAPI() bool {
+	for _, api := range ir.APIs {
+		if gwdkir.HTTPMethodRequiresCSRF(api.Method) {
+			return true
+		}
+	}
+	return false
 }
 
 func csrfHelperSource(options Options) (source string, err error) {

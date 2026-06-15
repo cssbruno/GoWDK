@@ -77,8 +77,7 @@ func CreatePatient(ctx context.Context, request *http.Request) (response.Respons
 
 `DecodeJSON[T]` decodes the capped request body into `T`, accepts
 `application/json` and `+json` content types, rejects unknown object fields,
-and rejects trailing JSON values. Empty `Content-Type` is accepted so simple
-clients can still post JSON bodies.
+rejects trailing JSON values, and rejects an empty or non-JSON `Content-Type`.
 
 Query helpers read from `request.URL.Query()`:
 
@@ -138,9 +137,11 @@ rendering; build-time SPA HTML cannot enforce frontend page access.
 - Missing or unsupported generated API bindings return HTTP 501 only in
   development/default mode or when an explicit missing-backend migration flag is
   set.
-- Generated action CSRF wiring does not protect API endpoints. State-changing
-  APIs need normal Go auth/session checks and an explicit CSRF, same-site, or
-  token strategy appropriate to the API client.
+- Generated state-changing API endpoints validate the generated CSRF token by
+  default. Browser clients must send the token in the configured CSRF header
+  such as `X-GOWDK-CSRF`; non-browser API designs can opt out with
+  `Build.CSRF.Disabled` only when they enforce another cross-site request
+  strategy.
 
 Future API behavior must define:
 

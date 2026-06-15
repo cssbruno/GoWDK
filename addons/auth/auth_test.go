@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,6 +32,53 @@ func TestHashPasswordRoundTrip(t *testing.T) {
 	}
 	if VerifyPassword("wrong password", encoded) {
 		t.Fatal("VerifyPassword accepted a wrong password")
+	}
+}
+
+func TestPBKDF2HasherWithCustomIterations(t *testing.T) {
+	hasher := PBKDF2Hasher{Iterations: 2}
+	encoded, err := hasher.HashPassword("same")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	if !strings.HasPrefix(encoded, "pbkdf2-sha256$2$") {
+		t.Fatalf("expected encoded iterations, got %q", encoded)
+	}
+	if !hasher.VerifyPassword("same", encoded) {
+		t.Fatal("VerifyPassword rejected the correct password")
+	}
+}
+
+func TestPBKDF2KnownVector(t *testing.T) {
+	key, err := pbkdf2SHA256("password", []byte("salt"), 1, 32)
+	if err != nil {
+		t.Fatalf("pbkdf2SHA256: %v", err)
+	}
+	if got, want := hex.EncodeToString(key), "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b"; got != want {
+		t.Fatalf("unexpected PBKDF2 key: got %s want %s", got, want)
+	}
+}
+
+type fixedPasswordHasher struct {
+	hash string
+}
+
+func (hasher fixedPasswordHasher) HashPassword(string) (string, error) {
+	return hasher.hash, nil
+}
+
+func (hasher fixedPasswordHasher) VerifyPassword(_, encoded string) bool {
+	return encoded == hasher.hash
+}
+
+func TestCustomPasswordHasherSatisfiesInterface(t *testing.T) {
+	var hasher PasswordHasher = fixedPasswordHasher{hash: "custom"}
+	encoded, err := hasher.HashPassword("ignored")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	if !hasher.VerifyPassword("ignored", encoded) {
+		t.Fatal("custom hasher did not verify its encoded hash")
 	}
 }
 
@@ -69,7 +118,7 @@ func fixedClock(at time.Time) func() time.Time {
 func newTestSessions(t *testing.T, now time.Time) *Sessions {
 	t.Helper()
 	sessions, err := New(Options{
-		Secret:   []byte("test-secret-value"),
+		Secret:   []byte(strings.Repeat("s", MinSessionSecretBytes)),
 		Insecure: true,
 		Now:      fixedClock(now),
 	})
@@ -151,7 +200,7 @@ func TestSessionRejectsForeignSecret(t *testing.T) {
 		t.Fatalf("Issue: %v", err)
 	}
 
-	other, err := New(Options{Secret: []byte("a-different-secret"), Insecure: true, Now: fixedClock(now)})
+	other, err := New(Options{Secret: []byte(strings.Repeat("x", MinSessionSecretBytes)), Insecure: true, Now: fixedClock(now)})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -206,12 +255,59 @@ func TestSessionClearLogsOut(t *testing.T) {
 	}
 }
 
+func TestSessionCookieHelpers(t *testing.T) {
+	sessions := newTestSessions(t, time.Unix(1_700_000_000, 0))
+	cookie, err := sessions.Cookie(Principal{ID: "user-1"})
+	if err != nil {
+		t.Fatalf("Cookie: %v", err)
+	}
+	if cookie.Name != DefaultSessionCookie || cookie.Value == "" || !cookie.HttpOnly {
+		t.Fatalf("unexpected issued cookie: %#v", cookie)
+	}
+	clear := sessions.ClearCookie()
+	if clear.Name != DefaultSessionCookie || clear.MaxAge >= 0 {
+		t.Fatalf("unexpected clear cookie: %#v", clear)
+	}
+}
+
 func TestNewRequiresSecret(t *testing.T) {
 	if _, err := New(Options{}); err == nil {
 		t.Fatal("expected New to fail without a secret")
 	}
 }
 
+func TestNewRejectsUnsafeDirectSecret(t *testing.T) {
+	if _, err := New(Options{Secret: []byte("short")}); err == nil || !strings.Contains(err.Error(), "at least 32 bytes") {
+		t.Fatalf("expected short-secret error, got %v", err)
+	}
+}
+
+func TestNewReadsSecretFromEnv(t *testing.T) {
+	t.Setenv("GOWDK_TEST_AUTH_SECRET", strings.Repeat("s", MinSessionSecretBytes))
+	sessions, err := New(Options{SecretEnv: "GOWDK_TEST_AUTH_SECRET", Insecure: true})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if sessions == nil {
+		t.Fatal("expected sessions")
+	}
+}
+
+func TestNewReportsEnvNameWithoutLeakingSecret(t *testing.T) {
+	t.Setenv("GOWDK_TEST_AUTH_SECRET", "too-short-secret-value")
+	_, err := New(Options{SecretEnv: "GOWDK_TEST_AUTH_SECRET"})
+	if err == nil {
+		t.Fatal("expected short env secret error")
+	}
+	if !strings.Contains(err.Error(), "GOWDK_TEST_AUTH_SECRET") {
+		t.Fatalf("expected env name in error, got %v", err)
+	}
+	if strings.Contains(err.Error(), "too-short-secret-value") {
+		t.Fatalf("secret value leaked in error: %v", err)
+	}
+}
+
 // Sessions must satisfy the Provider interface so it can be registered with the
 // generated RegisterAuthProvider hook.
 var _ Provider = (*Sessions)(nil)
+var _ PasswordHasher = PBKDF2Hasher{}

@@ -133,6 +133,81 @@ one-way browser notifications, or opt into the nested
 `runtime/contracts/websocketfanout` module when the app needs WebSocket
 sessions. See `docs/reference/realtime.md`.
 
+## Auth Addon
+
+`addons/auth` is experimental 0.x authentication plumbing. It enables the
+`auth` feature and provides:
+
+- `PasswordHasher`, with `PBKDF2Hasher` as the default.
+- `HashPassword`, `HashPasswordWithIterations`, and `VerifyPassword` helpers
+  backed by Go standard-library PBKDF2-HMAC-SHA256.
+- Signed-cookie `Sessions` that implement `runtime/auth.Provider` for native
+  `role:` and `permission:` guards.
+
+The cryptography and dependency stance is recorded in
+[ADR 0011](../engineering/decisions/0011-auth-addon-cryptography.md).
+
+Use the default hasher:
+
+```go
+encoded, err := auth.HashPassword(password)
+if err != nil {
+	return err
+}
+if !auth.VerifyPassword(password, encoded) {
+	return errors.New("invalid credentials")
+}
+```
+
+Or replace it behind the small interface:
+
+```go
+type PasswordStore struct {
+	Hasher auth.PasswordHasher
+}
+```
+
+Session secrets fail closed. Pass a direct `Secret` or read from a runtime
+environment variable with `SecretEnv`; either value must be at least 32 bytes.
+Errors name the setting, never the secret value.
+
+```go
+sessions, err := auth.New(auth.Options{
+	SecretEnv:  auth.DefaultSessionSecretEnv,
+	CookieName: "myapp_session",
+	TTL:        12 * time.Hour,
+})
+if err != nil {
+	return err
+}
+```
+
+Register the session provider from generated app hook code when using native
+RBAC guard IDs:
+
+```go
+func GOWDKAuthProvider() gowdkauth.Provider {
+	return sessions.Provider()
+}
+```
+
+GOWDK owns generated guard dispatch, CSRF validation, signed session cookie
+helpers, and native RBAC checks. Application Go owns user lookup, credential
+policy, MFA, OAuth, account recovery, durable storage, session lifetime,
+custom guard decisions, and backend resource authorization.
+
+For generated actions, ordering matters:
+
+- A public login action has no guard, so generated CSRF validation runs before
+  form decoding and before the login handler.
+- A protected action, such as logout, runs rate limiting and guards first. A
+  missing or invalid session fails at the guard step before CSRF validation.
+- If the guard succeeds but the CSRF token is missing or invalid, generated
+  code returns HTTP 403 `invalid csrf token` with `Cache-Control: no-store`.
+
+See `examples/auth-guard` for a small public-login and protected-dashboard
+flow.
+
 External addons use normal Go imports:
 
 ```go

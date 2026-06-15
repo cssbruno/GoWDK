@@ -1,0 +1,36 @@
+package authguard
+
+page dashboard
+route "/dashboard"
+guard auth.required, role:user
+css authguard
+
+act Logout POST "/logout"
+
+load {
+  => { dashboard.email, dashboard.role, dashboard.expiresAt }
+}
+
+view {
+  <main class="dashboard-shell">
+    <nav>
+      <a href="/">Public login</a>
+      <form g:post={Logout}>
+        <button type="submit">Sign out</button>
+      </form>
+    </nav>
+
+    <section class="dashboard-panel">
+      <p class="eyebrow">Protected route</p>
+      <h1>Dashboard</h1>
+      <dl>
+        <dt>Email</dt>
+        <dd>{dashboard.email}</dd>
+        <dt>Role</dt>
+        <dd>{dashboard.role}</dd>
+        <dt>Session window</dt>
+        <dd>{dashboard.expiresAt}</dd>
+      </dl>
+    </section>
+  </main>
+}

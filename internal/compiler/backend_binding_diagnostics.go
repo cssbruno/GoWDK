@@ -44,6 +44,7 @@ func backendBindingDiagnostic(code string, binding source.BackendBinding) Valida
 		Code:     code,
 		PageID:   binding.PageID,
 		Source:   binding.Source,
+		Span:     binding.Span,
 		Message:  binding.Message,
 		Severity: SeverityWarning,
 	}

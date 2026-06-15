@@ -393,6 +393,7 @@ type BackendBinding struct {
 	Kind         string
 	PageID       string
 	Source       string
+	Span         SourceSpan
 	BlockName    string
 	Method       string
 	Route        string

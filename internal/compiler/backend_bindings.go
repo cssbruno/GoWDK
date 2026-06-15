@@ -106,7 +106,7 @@ func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {
 	// of falling back to an inline go ssr {} block and reporting a misleading
 	// bound status. The broken package itself is reported by go_package_error.
 	if pkg.LoadError != "" {
-		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
+		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, page.Blocks.Spans.Load, pkg)
 		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s could not be inspected: %s", bindingPackageLabel(binding, pkg), functionName, pkg.LoadError)
 		return binding
@@ -125,7 +125,7 @@ func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {
 	case inInline:
 		return bindLoadFromPackage(page, functionName, inlinePkg)
 	default:
-		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
+		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, page.Blocks.Spans.Load, pkg)
 		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), functionName)
 		binding = markUnexportedCandidate(binding, pkg)
@@ -137,7 +137,7 @@ func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {
 }
 
 func bindLoadFromPackage(page gwdkir.Page, functionName string, pkg featurePackage) source.BackendBinding {
-	binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, pkg)
+	binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, page.Blocks.Spans.Load, pkg)
 	function := pkg.Functions[functionName]
 	if !function.Load() {
 		binding.Status = source.BackendBindingUnsupportedSignature
@@ -225,7 +225,7 @@ func bindAction(page gwdkir.Page, action gwdkir.Action, pkg featurePackage) sour
 	if route == "" {
 		route = page.Route
 	}
-	return bindActionEndpoint(baseBackendBinding(page, actionHandlerKind, action.Name, method, route, pkg), pkg)
+	return bindActionEndpoint(baseBackendBinding(page, actionHandlerKind, action.Name, method, route, action.Span, pkg), pkg)
 }
 
 func bindAPI(page gwdkir.Page, api gwdkir.API, pkg featurePackage) source.BackendBinding {
@@ -237,7 +237,7 @@ func bindAPI(page gwdkir.Page, api gwdkir.API, pkg featurePackage) source.Backen
 	if route == "" {
 		route = page.Route
 	}
-	return bindAPIEndpoint(baseBackendBinding(page, apiHandlerKind, api.Name, method, route, pkg), pkg)
+	return bindAPIEndpoint(baseBackendBinding(page, apiHandlerKind, api.Name, method, route, api.Span, pkg), pkg)
 }
 
 func bindFragment(page gwdkir.Page, fragment gwdkir.FragmentEndpoint, pkg featurePackage) (source.BackendBinding, bool) {
@@ -245,7 +245,7 @@ func bindFragment(page gwdkir.Page, fragment gwdkir.FragmentEndpoint, pkg featur
 	if method == "" {
 		method = "GET"
 	}
-	binding := baseBackendBinding(page, fragmentHandlerKind, fragment.Name, method, strings.TrimSpace(fragment.Route), pkg)
+	binding := baseBackendBinding(page, fragmentHandlerKind, fragment.Name, method, strings.TrimSpace(fragment.Route), fragment.Span, pkg)
 	function, ok := pkg.Functions[binding.FunctionName]
 	if !ok {
 		return source.BackendBinding{}, false
@@ -272,7 +272,7 @@ func bindMissingFragmentCandidate(page gwdkir.Page, fragment gwdkir.FragmentEndp
 		method = "GET"
 	}
 	for _, pkg := range pkgs {
-		binding := baseBackendBinding(page, fragmentHandlerKind, fragment.Name, method, strings.TrimSpace(fragment.Route), pkg)
+		binding := baseBackendBinding(page, fragmentHandlerKind, fragment.Name, method, strings.TrimSpace(fragment.Route), fragment.Span, pkg)
 		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK fragment handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), binding.FunctionName)
 		if binding = markUnexportedCandidate(binding, pkg); binding.UnexportedCandidate {
@@ -282,11 +282,12 @@ func bindMissingFragmentCandidate(page gwdkir.Page, fragment gwdkir.FragmentEndp
 	return source.BackendBinding{}, false
 }
 
-func baseBackendBinding(page gwdkir.Page, kind, blockName, method, route string, pkg featurePackage) source.BackendBinding {
+func baseBackendBinding(page gwdkir.Page, kind, blockName, method, route string, span source.SourceSpan, pkg featurePackage) source.BackendBinding {
 	return source.BackendBinding{
 		Kind:         kind,
 		PageID:       page.ID,
 		Source:       page.Source,
+		Span:         span,
 		BlockName:    blockName,
 		Method:       method,
 		Route:        route,
@@ -302,6 +303,7 @@ func baseStandaloneBackendBinding(endpoint gwdkir.GoEndpoint, kind, method strin
 		Kind:         kind,
 		PageID:       standaloneEndpointPageID(endpoint.Package, endpoint.Name),
 		Source:       endpoint.Source,
+		Span:         endpoint.Span,
 		BlockName:    endpoint.Name,
 		Method:       method,
 		Route:        endpoint.Route,

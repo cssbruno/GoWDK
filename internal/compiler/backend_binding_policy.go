@@ -76,6 +76,7 @@ func backendBindingRequiredDiagnostic(binding source.BackendBinding) ValidationE
 		Code:    "backend_binding_required",
 		PageID:  binding.PageID,
 		Source:  binding.Source,
+		Span:    binding.Span,
 		Message: message,
 	}
 }

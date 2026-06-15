@@ -57,7 +57,7 @@ func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 		"if-no-files-found: error",
 		"fail_on_unmatched_files: true",
 		"draft: false",
-		"prerelease: true",
+		"prerelease: false",
 		"Verify release assets",
 		"scripts/check-example-reports.sh --extended",
 	} {

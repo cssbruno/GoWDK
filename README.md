@@ -18,8 +18,8 @@ request time. Your logic stays in Go.
 
 <!-- TODO: short GIF of `gowdk dev` rebuilding + live-reloading goes here. -->
 
-**Status:** experimental 0.x pre-release. Public contracts can still change.
-Not production-ready.
+**Status:** experimental 0.x release. Public contracts can still change. Not
+production-ready.
 
 **Website warning:** the public project page is not updated yet and is
 currently only a placeholder. Treat this README and the docs in this repository
@@ -40,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install
 Pin the current CLI release:
 
 ```sh
-GOWDK_VERSION=v0.3.0 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+GOWDK_VERSION=v0.5.0 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
 ```
 

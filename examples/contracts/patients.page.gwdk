@@ -13,8 +13,9 @@ view {
       <label>Name <input name="name" /></label>
       <button>Create patient</button>
     </form>
-    <section g:query="patients.GetPatientPage">
+    <section g:query="patients.GetPatientPage" g:subscribe="patients.PatientNotice">
       <p>Patient query data is available through the generated JSON adapter.</p>
+      <p role="status">Create a patient to receive a live presentation patch.</p>
     </section>
   </main>
 }

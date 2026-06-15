@@ -62,6 +62,20 @@ literalField  = ident ":" string
 buildCall     = "=>" whitespace* ident "." ident "()"
 ```
 
+The current `view {}` parser accepts the supported markup subset documented in
+[Markup](markup.md). Contract and realtime directives use package-qualified Go
+references:
+
+```text
+contractRef = ident "." ident
+g:command   = "g:command" "=" (string | "{" contractRef "}")
+g:query     = "g:query" "=" (string | "{" contractRef "}")
+g:subscribe = "g:subscribe" "=" (string | "{" contractRef "}")
+```
+
+`g:subscribe` must appear on the same element as `g:query` and must reference a
+presentation-event contract.
+
 Unknown or malformed legacy metadatas fail at parse time. Unsupported top-level block
 declarations fail when they have an identifier-like first token and a trailing
 `{`. SPA builds also accept the first imported `buildCall` subset when the

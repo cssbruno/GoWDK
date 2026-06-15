@@ -63,6 +63,14 @@ Implemented today:
   fragments, SSR load functions, build-time Go calls, and web command/query
   references. `gowdk generate stubs` can write missing action/API handler
   stubs as normal Go code beside the owning source package.
+- Query-owned realtime subscription regions render `data-gowdk-query`,
+  `data-gowdk-subscribe`, and validated `data-gowdk-subscribe-type` markers
+  after `g:subscribe` validation. Generated apps mount
+  `/_gowdk/realtime/events`, expose `RealtimeEventsPath` and
+  `RegisterRealtimeFanout`, and dispatch command-emitted presentation events to
+  subscription-filtered SSE fanout. Generated `gowdk.js` connects subscribed
+  pages to the stream and applies explicit `replaceHTML` patches to the
+  matching query-owned region.
 - Generated apps pass one backend hook into `runtime/app.Handler`; generated
   action and API dispatch are internal details behind that hook.
 - Generated app creation auto-detects supported action endpoints and supported

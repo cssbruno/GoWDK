@@ -196,7 +196,10 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		}
 		contractReport = scanned
 		linkIRContractReferencesFromReport(&ir, contractReport)
-		return compiler.ValidateContractReferences(ir.ContractRefs)
+		if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
+			return err
+		}
+		return compiler.ValidateRealtimeSubscriptionBindings(ir.RealtimeSubscriptions)
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		var report compiler.ValidationErrors

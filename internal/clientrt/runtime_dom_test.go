@@ -119,9 +119,16 @@ class Document extends EventTarget {
     this.activeElement = this.body;
     this.bySelector = {};
     this.byID = {};
+    this.realtimeRegions = [];
   }
   querySelector(selector) {
     return this.bySelector[selector] || null;
+  }
+  querySelectorAll(selector) {
+    if (selector === '[data-gowdk-subscribe]') {
+      return this.realtimeRegions.slice();
+    }
+    return [];
   }
   getElementById(id) {
     return this.byID[id] || null;
@@ -140,6 +147,23 @@ class Headers {
 global.CustomEvent = CustomEvent;
 global.document = new Document();
 const islandLifecycle = [];
+const eventSources = [];
+class EventSourceStub extends EventTarget {
+  constructor(url) {
+    super();
+    this.url = url;
+    this.closed = false;
+    eventSources.push(this);
+  }
+  close() {
+    this.closed = true;
+  }
+  emit(type, data) {
+    const event = new CustomEvent(type);
+    event.data = JSON.stringify(data);
+    this.dispatchEvent(event);
+  }
+}
 global.window = {
   location: {
     reloaded: false,
@@ -148,6 +172,7 @@ global.window = {
       this.reloaded = true;
     }
   },
+  EventSource: EventSourceStub,
   __gowdkDestroyIslands(target, includeRoot) {
     islandLifecycle.push(['destroy', target.id, includeRoot]);
   },
@@ -171,11 +196,20 @@ form.dataset.gowdkSwap = 'innerHTML';
 const target = new Element('section');
 target.id = 'newsletter';
 target.innerHTML = '<p>Old</p>';
+const liveRegion = new Element('section');
+liveRegion.id = 'live-patients';
+liveRegion.innerHTML = '<p>Waiting</p>';
+liveRegion.setAttribute('data-gowdk-query', 'patients.GetPatientPage');
+liveRegion.setAttribute('data-gowdk-subscribe', 'patients.PatientNotice');
+liveRegion.setAttribute('data-gowdk-subscribe-type', 'gowdk-generated-app/patients.PatientNotice');
 const input = new Element('input');
 input.id = 'email';
 
 document.bySelector['#newsletter'] = target;
+document.bySelector['[data-gowdk-subscribe]'] = liveRegion;
+document.realtimeRegions = [liveRegion];
 document.byID.newsletter = target;
+document.byID['live-patients'] = liveRegion;
 document.byID.email = input;
 document.activeElement = input;
 
@@ -222,6 +256,48 @@ async function submit() {
 }
 
 (async function() {
+  assert.equal(eventSources.length, 1);
+  assert.equal(eventSources[0].url, '/_gowdk/realtime/events');
+
+  let realtimePatch;
+  liveRegion.addEventListener('gowdk:realtime-patch', event => {
+    realtimePatch = event.detail;
+  });
+  eventSources[0].emit('gowdk-presentation', {
+    Category: 'presentation',
+    Type: 'gowdk-generated-app/patients.PatientNotice',
+    Value: {
+      patch: {
+        op: 'replaceHTML',
+        html: '<p>Live</p>',
+        swap: 'innerHTML'
+      }
+    }
+  });
+  assert.equal(liveRegion.innerHTML, '<p>Live</p>');
+  assert.deepEqual(islandLifecycle.shift(), ['destroy', 'live-patients', false]);
+  assert.deepEqual(islandLifecycle.shift(), ['mount']);
+  assert.equal(document.activeElement, input);
+  assert.equal(realtimePatch.region, liveRegion);
+  assert.equal(realtimePatch.patch.html, '<p>Live</p>');
+
+  let realtimeError;
+  document.addEventListener('gowdk:realtime-error', event => {
+    realtimeError = event.detail;
+  });
+  eventSources[0].emit('gowdk-presentation', {
+    Category: 'presentation',
+    Type: 'gowdk-generated-app/patients.PatientNotice',
+    Value: {
+      patch: {
+        op: 'setText',
+        text: 'Unsafe'
+      }
+    }
+  });
+  assert.equal(liveRegion.innerHTML, '<p>Live</p>');
+  assert.match(realtimeError.error.message, /unsupported realtime patch operation/);
+
   let afterSwap;
   form.addEventListener('gowdk:after-swap', event => {
     afterSwap = event.detail;
@@ -289,6 +365,12 @@ async function submit() {
   assert.equal(window.location.reloaded, true);
   assert.equal(target.innerHTML, '<p>Updated</p>');
   assert.equal(form.attributes['aria-busy'], undefined);
+
+  document.realtimeRegions = [];
+  document.bySelector['[data-gowdk-subscribe]'] = null;
+  reload = false;
+  await submit();
+  assert.equal(eventSources[0].closed, true);
 }()).catch(error => {
   console.error(error && error.stack || error);
   process.exitCode = 1;

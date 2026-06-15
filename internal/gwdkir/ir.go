@@ -10,19 +10,20 @@ import (
 
 // Program is the normalized compiler IR produced from analyzed .gwdk sources.
 type Program struct {
-	Packages        []Package
-	Pages           []Page
-	Components      []Component
-	Layouts         []Layout
-	Routes          []Route
-	Endpoints       []Endpoint
-	GoEndpoints     []GoEndpoint
-	Templates       []Template
-	ContractRefs    []ContractReference
-	AuditSpecs      []AuditSpec
-	ClientBehaviors []ClientBehavior
-	Assets          []Asset
-	Diagnostics     []Diagnostic
+	Packages              []Package
+	Pages                 []Page
+	Components            []Component
+	Layouts               []Layout
+	Routes                []Route
+	Endpoints             []Endpoint
+	GoEndpoints           []GoEndpoint
+	Templates             []Template
+	ContractRefs          []ContractReference
+	RealtimeSubscriptions []RealtimeSubscription
+	AuditSpecs            []AuditSpec
+	ClientBehaviors       []ClientBehavior
+	Assets                []Asset
+	Diagnostics           []Diagnostic
 }
 
 // Diagnostic records an author-facing problem found while assembling IR.
@@ -495,6 +496,33 @@ const (
 	ContractBindingMissing ContractBindingStatus = "missing"
 	ContractBindingInvalid ContractBindingStatus = "invalid"
 )
+
+// RealtimeSubscription records a query-bounded browser subscription to a
+// presentation-event contract. Binding to Go contract metadata is a later
+// analyzer step.
+type RealtimeSubscription struct {
+	Query            string
+	QueryImportAlias string
+	QueryImportPath  string
+	QueryType        string
+	Event            string
+	EventImportAlias string
+	EventImportPath  string
+	EventType        string
+	EventCategory    string
+	Roles            []string
+	Guards           []string
+	Status           ContractBindingStatus
+	Handler          string
+	Register         string
+	Message          string
+	OwnerKind        SourceKind
+	OwnerID          string
+	Package          string
+	Source           string
+	Span             source.SourceSpan
+	QuerySpan        source.SourceSpan
+}
 
 // AuditSpec is the normalized IR for one *.audit.gwdk source.
 type AuditSpec struct {

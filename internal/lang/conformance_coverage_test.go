@@ -57,6 +57,7 @@ var integrationCoverage = map[string]string{
 	"g:message:*":    "../compiler/validate_test.go",
 	"g:command":      "../compiler/validate_contract_refs_test.go",
 	"g:query":        "../compiler/validate_contract_refs_test.go",
+	"g:subscribe":    "../compiler/validate_contract_refs_test.go",
 
 	// Planned g: directives rejected by internal/view markup validation.
 	"g:transition": "../view/view_test.go",

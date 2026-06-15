@@ -736,6 +736,48 @@ func TestLinkReferencesUsesCapturedTypeForImportAliases(t *testing.T) {
 	}
 }
 
+func TestLinkRealtimeSubscriptionsRequiresPresentationEvents(t *testing.T) {
+	report := Report{
+		Contracts: []Contract{
+			{Kind: runtimecontracts.Event, EventCategory: runtimecontracts.DomainEvent, Package: "patients", Type: "PatientCreated", Handler: "AuditPatientCreated"},
+			{Kind: runtimecontracts.Event, EventCategory: runtimecontracts.PresentationEvent, Package: "patients", Type: "PatientNotice", TypeImportPath: "example.com/app/contracts/patients", Handler: "NotifyBrowser", Register: "Register", Roles: []string{"web"}},
+			{Kind: runtimecontracts.Event, EventCategory: runtimecontracts.PresentationEvent, Package: "billing", Type: "InvoiceNotice", Handler: "NotifyInvoice"},
+		},
+		Diagnostics: []Diagnostic{
+			{Severity: "error", Kind: runtimecontracts.Event, Package: "billing", Type: "InvoiceNotice", Handler: "NotifyInvoice", Message: "bad event handler"},
+		},
+	}
+	linked := LinkRealtimeSubscriptions([]gwdkir.RealtimeSubscription{
+		{Event: "patients.PatientNotice"},
+		{Event: "patients.PatientCreated"},
+		{Event: "patients.MissingNotice"},
+		{Event: "p.PatientNotice", EventImportAlias: "p", EventImportPath: "example.com/app/contracts/patients", EventType: "PatientNotice"},
+		{Event: "billing.InvoiceNotice"},
+	}, report)
+
+	if len(linked) != 5 {
+		t.Fatalf("expected five linked subscriptions, got %#v", linked)
+	}
+	if linked[0].Status != gwdkir.ContractBindingBound || linked[0].Handler != "NotifyBrowser" || linked[0].EventCategory != "presentation" {
+		t.Fatalf("expected bound presentation event, got %#v", linked[0])
+	}
+	if len(linked[0].Roles) != 1 || linked[0].Roles[0] != "web" {
+		t.Fatalf("expected role metadata, got %#v", linked[0].Roles)
+	}
+	if linked[1].Status != gwdkir.ContractBindingInvalid || !strings.Contains(linked[1].Message, "domain event") {
+		t.Fatalf("expected invalid domain event, got %#v", linked[1])
+	}
+	if linked[2].Status != gwdkir.ContractBindingMissing || !strings.Contains(linked[2].Message, "no scanned Go registration") {
+		t.Fatalf("expected missing event, got %#v", linked[2])
+	}
+	if linked[3].Status != gwdkir.ContractBindingBound || linked[3].Handler != "NotifyBrowser" {
+		t.Fatalf("expected import-alias presentation event to bind, got %#v", linked[3])
+	}
+	if linked[4].Status != gwdkir.ContractBindingInvalid || linked[4].Message != "bad event handler" {
+		t.Fatalf("expected invalid event diagnostic, got %#v", linked[4])
+	}
+}
+
 func TestReportJSONCanFilterByKind(t *testing.T) {
 	report := Report{
 		Version: 1,

@@ -137,6 +137,10 @@ level, the current baseline already includes:
   standalone fragment routes, and concrete or dynamic request-time SSR pages
   with declared `load {}` fields through buildgen, appgen, `runtime/app`, and
   `runtime/route`.
+- compiler-validated query-bounded `g:subscribe` metadata for presentation
+  events, including IR records, build-report events, exact event-type HTML
+  markers, generated client `replaceHTML` patches, and
+  missing/invalid/non-web-role diagnostics.
 - `gowdk audit` posture and policy evaluation for routes, backend endpoints,
   command/query contract web endpoints, and frontend audit surfaces, with
   declared `*.audit.gwdk` policies, generated runtime audit tests,
@@ -173,7 +177,7 @@ are stable.
 | 11 | Guards and runtime context | Generated guards work for SSR, actions, and APIs. The request context helper contract is documented around `context.Context`, `app.Request(ctx)`, `app.Params(ctx)`, `app.CSRF(ctx)`, and `app.Session(ctx)`, or the project deliberately switches to an explicit app context. |
 | 12 | Request-time page rendering | Generated SSR handlers execute `load {}`, enforce guards, decode typed route params, expose route-level metadata, support redirects and error pages, and run full request-time user logic through the integrated request-time page lane. |
 | 13 | Errors, cache, and hybrid | SSR/action/API error boundaries are defined. Static files, SPA routes, backend endpoints, partial responses, SSR routes, and hybrid pages get cache and revalidation policy. Hybrid pages use the explicit request-time lane while streaming, data refresh, and non-HTTP revalidation remain separate planned capabilities. |
-| 14 | Contract-driven runtime | Queries, commands, domain events, integration events, presentation events, and jobs are typed Go contracts. Frontend UI events trigger commands or queries. Commands have one owner. Domain and integration events are backend-owned facts emitted after backend success. Presentation events notify realtime UI. Local in-process dispatch is default, optional worker/cron roles can run the same registrations, and CLI tooling can list, trace, or graph contracts. |
+| 14 | Contract-driven runtime | Queries, commands, domain events, integration events, presentation events, and jobs are typed Go contracts. Frontend UI events trigger commands or queries. Commands have one owner. Domain and integration events are backend-owned facts emitted after backend success. Presentation events notify realtime UI through explicit, query-bounded subscription metadata, generated subscription-filtered SSE fanout, and generated bounded client patches. Local in-process dispatch is default, optional worker/cron roles can run the same registrations, and CLI tooling can list, trace, or graph contracts. |
 | 15 | Static-first SPA navigation | SPA routes remain real URLs that work on direct open and refresh. Generated JS may intercept internal links, fetch built page shells or fragments, swap page regions, preserve scroll/focus, prefetch static route assets, and show loading/error UI, but it must not own routing, auth, business rules, validation, backend behavior, global app state, loading policy, or cache policy. |
 | 16 | Components and client language | Components gain real `g:if` mount/unmount, richer expression props, child-to-parent events, bindable state, typed exports, named/scoped slots, scoped CSS/assets, a documented component contract, a proper reactive dependency graph, predictable batching, and cycle diagnostics. |
 | 17 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Component-level WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |

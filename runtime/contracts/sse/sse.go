@@ -12,7 +12,10 @@ import (
 	"github.com/cssbruno/gowdk/runtime/contracts"
 )
 
-const defaultBufferSize = 16
+const (
+	defaultBufferSize     = 16
+	defaultRetryDirective = "retry: 1000\n"
+)
 
 // Hub fans presentation events out to connected server-sent events clients.
 type Hub struct {
@@ -65,7 +68,7 @@ func (hub *Hub) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	hub.add(client)
 	defer hub.remove(client)
 
-	_, _ = response.Write([]byte(": gowdk presentation stream\n\n"))
+	_, _ = response.Write([]byte(defaultRetryDirective + ": gowdk presentation stream\n\n"))
 	flusher.Flush()
 
 	for {

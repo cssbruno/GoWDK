@@ -397,6 +397,7 @@ func AddStandaloneEndpoints(config gowdk.Config, program *gwdkir.Program, endpoi
 func (builder *irBuilder) addTemplate(template gwdkir.Template) {
 	builder.program.Templates = append(builder.program.Templates, template)
 	appendContractReferences(&builder.program, template)
+	appendRealtimeSubscriptions(&builder.program, template)
 }
 
 func (builder *irBuilder) finishPackages() {

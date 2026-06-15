@@ -319,6 +319,16 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 		out.write(gowhtml.Escape(directives.Query))
 		out.writeByte('"')
 	}
+	if directives.Subscribe != "" {
+		out.write(` data-gowdk-subscribe="`)
+		out.write(gowhtml.Escape(directives.Subscribe))
+		out.writeByte('"')
+		if eventType := ctx.realtimeEventTypeNames[directives.Subscribe]; eventType != "" {
+			out.write(` data-gowdk-subscribe-type="`)
+			out.write(gowhtml.Escape(eventType))
+			out.writeByte('"')
+		}
+	}
 	if directives.Target != "" {
 		out.write(` data-gowdk-target="`)
 		out.write(gowhtml.Escape(directives.Target))

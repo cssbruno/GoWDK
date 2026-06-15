@@ -236,19 +236,27 @@ func ValidateIslandClientStatementTyped(expr string, writeSymbols map[string]cli
 // ValidateIslandClientStatementTypedWithFunctions validates a client statement
 // that may mutate state, call a safe DOM ref method, or read helper functions.
 func ValidateIslandClientStatementTypedWithFunctions(expr string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction) error {
-	return ValidateIslandClientStatementTypedWithEvents(expr, writeSymbols, readSymbols, refs, helpers, nil)
+	return ValidateIslandClientStatementTypedWithEvents(expr, writeSymbols, readSymbols, refs, helpers, nil, nil)
 }
 
 // ValidateIslandClientStatementTypedWithEvents validates a client statement
-// that may mutate state, call a safe DOM ref method, read helper functions, or
-// dispatch declared component events.
-func ValidateIslandClientStatementTypedWithEvents(expr string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction, emits map[string]clientlang.Emit) error {
+// that may mutate state, call a safe DOM ref method, read helper functions,
+// dispatch declared component events, or clear a used page store. stores is the
+// set of store names the component declares with `use`; a `clear <store>`
+// statement is rejected unless the store is in that set.
+func ValidateIslandClientStatementTypedWithEvents(expr string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction, emits map[string]clientlang.Emit, stores map[string]bool) error {
 	if refName, ok := IslandRefStatement(expr); ok {
 		if refs == nil {
 			return fmt.Errorf("unknown DOM ref %q", refName)
 		}
 		if _, exists := refs[refName]; !exists {
 			return fmt.Errorf("unknown DOM ref %q", refName)
+		}
+		return nil
+	}
+	if store, ok := clientlang.ParseClearStatement(expr); ok {
+		if !stores[store] {
+			return fmt.Errorf("clear references store %q, but this component does not `use` it", store)
 		}
 		return nil
 	}
@@ -277,12 +285,14 @@ func ValidateIslandClientStatementsTypedWithFunctions(statements []string, write
 // ValidateIslandClientStatementsTypedWithFunctions. Async blocks may use
 // compiler-owned await expressions.
 func ValidateIslandClientStatementsTypedWithOptions(statements []string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction, async bool) (map[string]bool, error) {
-	return ValidateIslandClientStatementsTypedWithEvents(statements, writeSymbols, readSymbols, refs, helpers, async, nil)
+	return ValidateIslandClientStatementsTypedWithEvents(statements, writeSymbols, readSymbols, refs, helpers, async, nil, nil)
 }
 
 // ValidateIslandClientStatementsTypedWithEvents validates an ordered client
-// statement block with optional component event dispatch support.
-func ValidateIslandClientStatementsTypedWithEvents(statements []string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction, async bool, emits map[string]clientlang.Emit) (map[string]bool, error) {
+// statement block with optional component event dispatch support. stores is the
+// set of store names the component declares with `use`, used to validate
+// `clear <store>` statements.
+func ValidateIslandClientStatementsTypedWithEvents(statements []string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction, async bool, emits map[string]clientlang.Emit, stores map[string]bool) (map[string]bool, error) {
 	locals := mergeClientSymbols(nil, readSymbols)
 	usedRefs := map[string]bool{}
 	for index, statement := range statements {
@@ -327,7 +337,7 @@ func ValidateIslandClientStatementsTypedWithEvents(statements []string, writeSym
 			}
 			continue
 		}
-		if err := ValidateIslandClientStatementTypedWithEvents(statement, writeSymbols, locals, refs, helpers, emits); err != nil {
+		if err := ValidateIslandClientStatementTypedWithEvents(statement, writeSymbols, locals, refs, helpers, emits, stores); err != nil {
 			return usedRefs, StatementValidationError{Index: index, Err: err}
 		}
 	}

@@ -555,6 +555,12 @@
       emitComponentEvent(root, emitEvents, emit[1], splitArgs(emit[2]), state, scope, helpers);
       return;
     }
+    let clearStore = expr.match(/^clear\s+([A-Za-z_][A-Za-z0-9_.]*)$/);
+    if (clearStore) {
+      const registry = window.__gowdkStores;
+      if (registry && typeof registry.clear === "function") registry.clear(clearStore[1]);
+      return;
+    }
     let refCall = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)\.(Focus|Blur|ScrollIntoView)\(\)$/);
     if (refCall) {
       const node = refs && refs[refCall[1]];

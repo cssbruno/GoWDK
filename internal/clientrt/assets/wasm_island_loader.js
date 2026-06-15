@@ -70,12 +70,31 @@
     return bindings;
   }
 
+  function storeNamesFor(root) {
+    const client = parseJSON(root.getAttribute("data-gowdk-client"), {});
+    return Array.isArray(client.stores) ? client.stores : [];
+  }
+
+  // mergedState reads the island's seed state and merges in the current value of
+  // every page store it `use`s, so a WASM island mounts and handles events with
+  // the shared (and persisted) store value rather than its build-time seed. This
+  // mirrors the JS island read path.
+  function mergedState(root) {
+    const state = parseJSON(root.getAttribute("data-gowdk-state"), {});
+    const registry = window.__gowdkStores;
+    if (registry) {
+      storeNamesFor(root).forEach((name) => Object.assign(state, registry.get(name)));
+    }
+    return state;
+  }
+
   function bootstrap(root) {
     const client = parseJSON(root.getAttribute("data-gowdk-client"), {});
     return {
       abiVersion,
       component,
-      state: parseJSON(root.getAttribute("data-gowdk-state"), {}),
+      state: mergedState(root),
+      stores: storeNamesFor(root),
       props: parseJSON(root.getAttribute("data-gowdk-props"), {}),
       emits: client.emits || {},
       refs: collectRefs(root),
@@ -113,6 +132,22 @@
     const patches = typeof result === "string" ? parseJSON(result, []) : result;
     if (!Array.isArray(patches)) return;
     patches.forEach((patch) => applyPatch(root, patch));
+  }
+
+  // normalizeResult accepts either the legacy bare patch array (or its JSON
+  // string) or an extended { patches, stores } object. The stores map lets a
+  // WASM island surface its current store-bound state so the loader can write it
+  // back to window.__gowdkStores, completing store participation (read + write).
+  function normalizeResult(result) {
+    const value = typeof result === "string" ? parseJSON(result, null) : result;
+    if (Array.isArray(value)) return { patches: value, stores: null };
+    if (value && typeof value === "object") {
+      return {
+        patches: Array.isArray(value.patches) ? value.patches : [],
+        stores: value.stores && typeof value.stores === "object" ? value.stores : null
+      };
+    }
+    return { patches: [], stores: null };
   }
 
   function callExport(exports, name, payload) {
@@ -185,26 +220,56 @@
       return;
     }
     roots.forEach((root) => {
-      const mountPayload = bootstrap(root);
-      applyPatches(root, callExport(exports, mountExport, mountPayload));
+      const registry = window.__gowdkStores;
+      const names = storeNamesFor(root);
+      // Guards the write-back path while the island is being re-rendered in
+      // response to an external store change, so mirroring another island's
+      // update does not echo straight back into the registry.
+      let applyingStoreUpdate = false;
+      const processResult = (result) => {
+        const normalized = normalizeResult(result);
+        if (normalized.stores && registry && !applyingStoreUpdate) {
+          names.forEach((name) => {
+            if (Object.prototype.hasOwnProperty.call(normalized.stores, name)) {
+              registry.set(name, normalized.stores[name]);
+            }
+          });
+        }
+        applyPatches(root, normalized.patches);
+      };
+
+      processResult(callExport(exports, mountExport, bootstrap(root)));
       root.querySelectorAll("*").forEach((node) => {
         if (!ownsNode(root, node)) return;
         Array.from(node.attributes).forEach((attr) => {
           if (!attr.name.startsWith("data-gowdk-binding-on-")) return;
           const event = attr.name.slice("data-gowdk-binding-on-".length);
           node.addEventListener(event, (domEvent) => {
-            applyPatches(root, callExport(exports, handleExport, {
+            processResult(callExport(exports, handleExport, {
               abiVersion,
               component,
               event,
               binding: attr.value,
-              detail: { value: domEvent && domEvent.target ? domEvent.target.value : undefined }
+              detail: { value: domEvent && domEvent.target ? domEvent.target.value : undefined },
+              state: mergedState(root)
             }));
           });
         });
       });
+      if (registry && names.length > 0) {
+        names.forEach((name) => {
+          registry.subscribe(name, () => {
+            applyingStoreUpdate = true;
+            try {
+              processResult(callExport(exports, mountExport, bootstrap(root)));
+            } finally {
+              applyingStoreUpdate = false;
+            }
+          });
+        });
+      }
       window.addEventListener("pagehide", () => {
-        applyPatches(root, callExport(exports, destroyExport, { abiVersion, component, state: parseJSON(root.getAttribute("data-gowdk-state"), {}) }));
+        processResult(callExport(exports, destroyExport, { abiVersion, component, state: mergedState(root) }));
       }, { once: true });
     });
   }).catch((error) => {

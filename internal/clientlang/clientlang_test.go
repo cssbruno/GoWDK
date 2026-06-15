@@ -42,6 +42,65 @@ fn Reset() {
 	}
 }
 
+func TestParseClearStatement(t *testing.T) {
+	cases := []struct {
+		in    string
+		want  string
+		valid bool
+	}{
+		{"clear cart", "cart", true},
+		{"clear cart;", "cart", true},
+		{"clear  prefs", "prefs", true},
+		{"clear shop.cart", "shop.cart", true},
+		{"clear", "", false},
+		{"clear ", "", false},
+		{"clearcart", "", false},
+		{"clear cart now", "", false},
+		{"Count = clear", "", false},
+	}
+	for _, tc := range cases {
+		got, ok := ParseClearStatement(tc.in)
+		if ok != tc.valid {
+			t.Fatalf("ParseClearStatement(%q) ok = %v, want %v", tc.in, ok, tc.valid)
+		}
+		if ok && got != tc.want {
+			t.Fatalf("ParseClearStatement(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestParseUseStoreTypeAnnotation(t *testing.T) {
+	program, err := Parse(`
+use cart ui.CartState
+use prefs
+use shop.wishlist ui.Wishlist
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uses := program.UseMap()
+	if got := uses["cart"]; got.Type != "ui.CartState" || got.StoreName != "cart" || got.PackageAlias != "" {
+		t.Fatalf("unexpected cart use: %#v", got)
+	}
+	if got := uses["prefs"]; got.Type != "" {
+		t.Fatalf("untyped use should have empty type: %#v", got)
+	}
+	if got := uses["shop.wishlist"]; got.Type != "ui.Wishlist" || got.PackageAlias != "shop" || got.StoreName != "wishlist" {
+		t.Fatalf("unexpected qualified use: %#v", got)
+	}
+}
+
+func TestParseRejectsClearAsFunctionName(t *testing.T) {
+	_, err := Parse(`
+fn clear() {
+  Count = 0
+}
+`)
+	if err == nil || !strings.Contains(err.Error(), "reserved built-in name") {
+		t.Fatalf("expected reserved name error, got %v", err)
+	}
+}
+
 func TestParseClientFunctionsAllowsFuncAlias(t *testing.T) {
 	program, err := Parse(`
 func Increment() {

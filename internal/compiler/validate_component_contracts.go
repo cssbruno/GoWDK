@@ -128,7 +128,49 @@ func resolveComponentContracts(component gwdkir.Component) (componentContracts, 
 		diagnostics = append(diagnostics, componentContractDiagnostic(component, "component_contract_error", component.State.Init.Span, fmt.Errorf("component %s declares state init without a state type", component.Name)))
 	}
 
+	diagnostics = append(diagnostics, resolveComponentStoreFields(component, &contracts)...)
+
 	return contracts, diagnostics
+}
+
+// resolveComponentStoreFields binds the fields of a typed `use <store> <Type>`
+// declaration into the component's state scope, so a component can reference a
+// used store's fields without redeclaring a matching state contract. The type is
+// resolved against the component's own imports, which keeps a reusable component
+// self-describing even when it is mounted on pages whose same-named store has a
+// different shape. The annotated type is the component author's contract for the
+// store's shape (as the local state declaration was before); a page whose store
+// has a different shape is the author's responsibility, exactly as a mismatched
+// local state declaration was.
+func resolveComponentStoreFields(component gwdkir.Component, contracts *componentContracts) []ValidationError {
+	if strings.TrimSpace(component.Blocks.ClientBody) == "" {
+		return nil
+	}
+	program, err := clientlang.Parse(component.Blocks.ClientBody)
+	if err != nil {
+		// A malformed client block is reported with a precise span by
+		// validateComponentClient; skip store-field binding here.
+		return nil
+	}
+	var diagnostics []ValidationError
+	for _, use := range program.Uses {
+		if use.Type == "" {
+			continue
+		}
+		resolved, err := gotypes.ResolveStruct(component.Imports, gwdkir.GoRefFromLiteral(use.Type))
+		if err != nil {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:          "component_client_error",
+				ComponentName: component.Name,
+				Source:        component.Source,
+				Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+				Message:       fmt.Sprintf("component %s store %q type %q is invalid: %v", component.Name, use.Name, use.Type, err),
+			})
+			continue
+		}
+		addResolvedFields(contracts.State, contracts.StateTypes, resolved)
+	}
+	return diagnostics
 }
 
 func addResolvedFields(names map[string]bool, types map[string]clientlang.ValueType, resolved gotypes.Struct) {

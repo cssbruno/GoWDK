@@ -29,6 +29,10 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 	helperFuncs := helperExprFunctions(helpers)
 	emits := componentEmitMap(component)
 	refs := program.RefMap()
+	usedStores := map[string]bool{}
+	for name := range program.UseMap() {
+		usedStores[name] = true
+	}
 	usedRefs := map[string]bool{}
 	computedTypes := map[string]clientlang.ValueType{}
 	var diagnostics []ValidationError
@@ -150,7 +154,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 		for _, param := range function.Params {
 			readFields[param.Name] = clientlang.NormalizeType(param.Type)
 		}
-		functionRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(function.Statements, stateTypes, readFields, refs, helperFuncs, function.Async, emits)
+		functionRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(function.Statements, stateTypes, readFields, refs, helperFuncs, function.Async, emits, usedStores)
 		for refName := range functionRefs {
 			usedRefs[refName] = true
 		}
@@ -164,7 +168,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 			})
 		}
 	}
-	mountRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(program.Mount, stateTypes, readSymbols, refs, helperFuncs, false, emits)
+	mountRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(program.Mount, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 	for refName := range mountRefs {
 		usedRefs[refName] = true
 	}
@@ -177,7 +181,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 			Message:       fmt.Sprintf("component %s mount block is invalid: %v", component.Name, err),
 		})
 	}
-	destroyRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(program.Destroy, stateTypes, readSymbols, refs, helperFuncs, false, emits)
+	destroyRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(program.Destroy, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 	for refName := range destroyRefs {
 		usedRefs[refName] = true
 	}
@@ -200,7 +204,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 				Message:       fmt.Sprintf("component %s effect dependency %q must be a state field", component.Name, effect.Field),
 			})
 		}
-		effectRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(effect.Statements, stateTypes, readSymbols, refs, helperFuncs, false, emits)
+		effectRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(effect.Statements, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 		for refName := range effectRefs {
 			usedRefs[refName] = true
 		}
@@ -213,7 +217,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 				Message:       fmt.Sprintf("component %s effect block for %q is invalid: %v", component.Name, effect.Field, err),
 			})
 		}
-		cleanupRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(effect.Cleanup, stateTypes, readSymbols, refs, helperFuncs, false, emits)
+		cleanupRefs, err := view.ValidateIslandClientStatementsTypedWithEvents(effect.Cleanup, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 		for refName := range cleanupRefs {
 			usedRefs[refName] = true
 		}

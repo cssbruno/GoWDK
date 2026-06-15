@@ -10,8 +10,11 @@ store cart ui.CartState = ui.NewCartState() persist "local"
 - `ui/cart.go` — the user-owned Go state. GOWDK serializes only its declared
   fields; it adds no opinions to the struct.
 - `shop.page.gwdk` — declares the persisted store and renders the two islands.
-- `add-button.cmp.gwdk` / `cart-badge.cmp.gwdk` — share the store via
-  `client { use cart }`.
+- `add-button.cmp.gwdk` — shares the store via `client { use cart }`, mutates it
+  (`Count++`), and resets it with the bounded `clear cart` statement.
+- `cart-badge.cmp.gwdk` — references the store's fields through a typed
+  `use cart ui.CartState`, so it needs no separate `state` declaration of the
+  same shape.
 
 ## Build it
 

@@ -481,13 +481,22 @@ client {
 }
 ```
 
+A `use` may carry the store's Go type — `use cart ui.CartState` — to bind the
+store's fields into the component's client scope so they can be referenced
+without redeclaring a matching `state`. The type is resolved against the
+component's imports. A `clear <store>` statement (valid inside client functions,
+mount, destroy, and effect blocks) resets a used store to its build-time init
+value and drops any persisted copy; clearing a store the component does not
+`use` is a compile error.
+
 Store types and init functions are validated with the same Go type machinery
 as component state. Store names are page-local unless a component uses a
 qualified GOWDK source alias such as `use stores.cart`. Store state is
 serialized into browser-visible enhancement state and must not contain secrets
-or trusted authorization, validation, database, or action state. Runtime
-cross-island subscriptions are planned; the current contract validates
-declarations and explicit uses, but does not make stores global app state.
+or trusted authorization, validation, database, or action state. JS and WASM
+islands both share a store through the browser store registry and re-render on
+cross-island changes; the current contract validates declarations and explicit
+uses, but does not make stores global app state.
 
 A page store may opt into browser persistence with a trailing `persist` scope:
 
